@@ -26,12 +26,12 @@ import {
   hasRateLimitError,
   isTerminalSyncStatus,
   mergeScrapingChannels,
-  shouldFallBackToPolling,
 } from "@/lib/sync/job-state"
 import {
-  followUntilTerminal,
   runServerSync as runServerSyncWith,
+  SYNC_TIMED_OUT_MESSAGE,
   type SyncMode,
+  waitSyncJob as waitSyncJobWith,
 } from "@/lib/sync/run-server-sync"
 import type { ChannelStats } from "@/types"
 
@@ -113,42 +113,24 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
         )
       }
       await api.cancelSyncJob(jobId)
-      throw new Error("Sync job timed out")
+      throw new Error(SYNC_TIMED_OUT_MESSAGE)
     },
     [applySyncJobStatus],
   )
 
   const waitSyncJob = useCallback(
-    async (jobId: string) => {
-      const abortController = new AbortController()
-      const timeoutId = window.setTimeout(
-        () => abortController.abort(),
-        env.syncJobTimeoutMs,
-      )
-
-      try {
-        const terminal = await followUntilTerminal(
-          subscribeSyncJobEvents(jobId, abortController.signal),
-          applySyncJobStatus,
-        )
-        if (terminal) return terminal
-        const finalStatus = await api.getSyncJobStatus(jobId)
-        applySyncJobStatus(finalStatus)
-        return finalStatus
-      } catch (err) {
-        if (!shouldFallBackToPolling(abortController.signal.aborted)) {
-          await api.cancelSyncJob(jobId)
-          throw new Error("Sync job timed out")
-        }
-        console.warn(
-          "[Scraper] SSE sync progress failed, falling back to polling:",
-          err,
-        )
-        return pollSyncJobFallback(jobId)
-      } finally {
-        window.clearTimeout(timeoutId)
-      }
-    },
+    (jobId: string) =>
+      waitSyncJobWith(
+        {
+          subscribe: subscribeSyncJobEvents,
+          getStatus: api.getSyncJobStatus,
+          cancel: api.cancelSyncJob,
+          apply: applySyncJobStatus,
+          pollFallback: pollSyncJobFallback,
+          timeoutMs: env.syncJobTimeoutMs,
+        },
+        jobId,
+      ),
     [applySyncJobStatus, pollSyncJobFallback],
   )
 

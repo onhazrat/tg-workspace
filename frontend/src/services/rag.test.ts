@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 
 import type { Post } from "@/types"
 
-import { type RagSearchResult, resolveRagPosts } from "./rag"
+import { embeddingProgress, type RagSearchResult, resolveRagPosts } from "./rag"
 
 const post = (channelName: string, id: number): Post =>
   ({ channelName, id, text: `${channelName}#${id}`, timestamp: 0 }) as Post
@@ -53,5 +53,34 @@ describe("resolveRagPosts", () => {
       async () => [post("gamma", 5), post("beta", 6)],
     )
     expect(posts.map((p) => `${p.channelName}#${p.id}`)).toEqual(["beta#6"])
+  })
+})
+
+describe("embeddingProgress", () => {
+  it("counts the embedded rows as done and syncs while any are pending", () => {
+    expect(embeddingProgress({ pending: 30, total: 100 })).toEqual({
+      isSyncing: true,
+      progress: { current: 70, total: 100 },
+    })
+  })
+
+  it("is idle and complete once nothing is pending", () => {
+    expect(embeddingProgress({ pending: 0, total: 100 })).toEqual({
+      isSyncing: false,
+      progress: { current: 100, total: 100 },
+    })
+  })
+
+  it("reads absent counts as zero", () => {
+    expect(embeddingProgress({})).toEqual({
+      isSyncing: false,
+      progress: { current: 0, total: 0 },
+    })
+  })
+
+  it("never reports a negative count when pending exceeds total", () => {
+    expect(embeddingProgress({ pending: 12, total: 10 }).progress.current).toBe(
+      0,
+    )
   })
 })

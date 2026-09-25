@@ -8,6 +8,7 @@ import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import type { Post } from "@/types"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -234,8 +235,9 @@ export function usePostsFeed(): PostsFeed {
         if (cancelled) return
         // Preserve the old handleFilterPosts fallback: on a failed
         // semantic/related search, toast and clear the search that triggered it.
-        const message = error instanceof Error ? error.message : "Search failed"
-        toast.error(`${message}. Falling back to normal view.`)
+        toast.error(
+          `${errorText(error, "Search failed")}. Falling back to normal view.`,
+        )
         if (relatedPostSearch) setRelatedPostSearch(null)
         else setSemanticSearchQuery("")
       })

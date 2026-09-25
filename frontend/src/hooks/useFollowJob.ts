@@ -65,6 +65,35 @@ export interface FollowJob {
   ) => Promise<FollowJobStatus | null>
 }
 
+/**
+ * The toast a finished follow job gets. Only nothing added is bad news: an
+ * error if anything failed, a warning if the rest were unavailable. Any
+ * channel added makes it a success, whatever else happened.
+ */
+export function followSummary(status: FollowJobStatus): {
+  message: string
+  level: "error" | "warning" | "success"
+} {
+  const parts = (
+    [
+      [status.added, "added"],
+      [status.unavailable, "unavailable"],
+      [status.skipped, "skipped"],
+      [status.failed, "failed"],
+    ] as const
+  )
+    .filter(([count]) => count > 0)
+    .map(([count, label]) => `${count} ${label}`)
+  const message =
+    parts.length > 0
+      ? `Follow finished: ${parts.join(", ")}`
+      : "Follow finished"
+  if (status.added > 0) return { message, level: "success" }
+  if (status.failed > 0) return { message, level: "error" }
+  if (status.unavailable > 0) return { message, level: "warning" }
+  return { message, level: "success" }
+}
+
 export function useFollowJob(deps: FollowJobDeps): FollowJob {
   const {
     isOffline,
@@ -258,24 +287,11 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
 
         await loadChannels()
 
-        const parts: string[] = []
-        if (followStatus.added > 0) parts.push(`${followStatus.added} added`)
-        if (followStatus.unavailable > 0)
-          parts.push(`${followStatus.unavailable} unavailable`)
-        if (followStatus.skipped > 0)
-          parts.push(`${followStatus.skipped} skipped`)
-        if (followStatus.failed > 0) parts.push(`${followStatus.failed} failed`)
-        const summary =
-          parts.length > 0
-            ? `Follow finished: ${parts.join(", ")}`
-            : "Follow finished"
-
-        if (followStatus.failed > 0 && followStatus.added === 0) {
-          toast.error(summary)
-        } else if (followStatus.unavailable > 0 && followStatus.added === 0) {
-          toast.warning(summary, { duration: 8000 })
+        const summary = followSummary(followStatus)
+        if (summary.level === "warning") {
+          toast.warning(summary.message, { duration: 8000 })
         } else {
-          toast.success(summary)
+          toast[summary.level](summary.message)
         }
 
         if (followStatus.syncJobId) {

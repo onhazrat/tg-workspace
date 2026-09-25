@@ -7,6 +7,8 @@ import type { Channel } from "@/types"
 import type { CommandContext, EntityFlowType } from "./types"
 import {
   getEntityCandidates,
+  runBulkFreezeSelected,
+  runBulkUnfreezeSelected,
   runEntityChannelAction,
 } from "./useChannelEntityFlow"
 
@@ -180,5 +182,35 @@ describe("runEntityChannelAction", () => {
     expect(upserted).toEqual([])
     expect(state.channels).toEqual(channels)
     expect(state.scraped).toEqual([])
+  })
+})
+
+describe("bulk freeze and unfreeze", () => {
+  // "gone" cannot be reached on the web view, so even selected it is skipped.
+  const selected = ["zeta", "gone", "alpha"]
+
+  it("freeze saves each reachable selected channel frozen and clears the selection", async () => {
+    const { ctx, state } = fakeContext(selected)
+    const { client, upserted } = fakeApi()
+    await runBulkFreezeSelected(ctx, client)
+    expect(upserted.map((channel) => channel.name)).toEqual(["zeta", "alpha"])
+    expect(upserted.every((channel) => channel.isFrozen)).toBe(true)
+    expect(state.channels.map((channel) => !!channel.isFrozen)).toEqual([
+      true,
+      true,
+      false,
+      true,
+    ])
+    expect(state.selectedChannels.size).toBe(0)
+  })
+
+  it("unfreeze saves the same channels unfrozen and keeps the selection", async () => {
+    const { ctx, state } = fakeContext(["frozen", "gone"])
+    const { client, upserted } = fakeApi()
+    await runBulkUnfreezeSelected(ctx, client)
+    expect(upserted).toEqual([{ ...channels[1], isFrozen: false }])
+    expect(state.channels[1].isFrozen).toBe(false)
+    expect(state.channels[2]).toEqual(channels[2])
+    expect([...state.selectedChannels]).toEqual(["frozen", "gone"])
   })
 })

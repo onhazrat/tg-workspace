@@ -3,7 +3,7 @@
  * plain variables, so a test reads what the hook's state would hold after the
  * sync, including while it runs.
  */
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import type { SetStateAction } from "react"
 
 import type { SyncJobStatus } from "@/api"
@@ -19,6 +19,9 @@ import {
   type RunServerSyncArgs,
   type RunServerSyncIO,
   runServerSync,
+  SYNC_TIMED_OUT_MESSAGE,
+  type WaitSyncJobIO,
+  waitSyncJob,
 } from "./run-server-sync"
 
 type Ch = SyncJobStatus["channels"][number]
@@ -278,5 +281,89 @@ describe("followUntilTerminal", () => {
     )
     expect(done).toBeNull()
     expect(seen).toEqual(["running"])
+  })
+})
+
+describe("waitSyncJob", () => {
+  let warn: ReturnType<typeof spyOn>
+  beforeEach(() => {
+    warn = spyOn(console, "warn").mockImplementation(() => {})
+  })
+  afterEach(() => warn.mockRestore())
+
+  async function* events(statuses: SyncJobStatus[]) {
+    for (const s of statuses) yield s
+  }
+
+  function harness(overrides: Partial<WaitSyncJobIO> = {}) {
+    const calls = { applied: [] as string[], cancelled: 0, polled: 0 }
+    const io: WaitSyncJobIO = {
+      subscribe: () => events([job([], "completed")]),
+      getStatus: async () => job([], "completed"),
+      cancel: async () => {
+        calls.cancelled++
+      },
+      apply: (s) => calls.applied.push(s.status),
+      pollFallback: async () => {
+        calls.polled++
+        return job([], "failed")
+      },
+      timeoutMs: 1_000,
+      ...overrides,
+    }
+    return { io, calls }
+  }
+
+  test("answers the terminal event from the stream", async () => {
+    const { io, calls } = harness({
+      subscribe: () => events([job([], "running"), job([], "completed")]),
+      getStatus: () => Promise.reject(new Error("not needed")),
+    })
+    expect((await waitSyncJob(io, "job-1")).status).toBe("completed")
+    expect(calls.applied).toEqual(["running", "completed"])
+  })
+
+  test("a stream that ends early is settled by one status read, applied too", async () => {
+    const { io, calls } = harness({
+      subscribe: () => events([job([], "running")]),
+      getStatus: async () => job([], "partial"),
+    })
+    expect((await waitSyncJob(io, "job-1")).status).toBe("partial")
+    expect(calls.applied).toEqual(["running", "partial"])
+  })
+
+  test("a stream that fails falls back to polling and leaves the job running", async () => {
+    const { io, calls } = harness({
+      // biome-ignore lint/correctness/useYield: a stream that fails at once
+      subscribe: async function* () {
+        throw new Error("connection reset")
+      },
+    })
+    expect((await waitSyncJob(io, "job-1")).status).toBe("failed")
+    expect(calls.polled).toBe(1)
+    expect(calls.cancelled).toBe(0)
+  })
+
+  test("the deadline cancels the job server-side instead of polling", async () => {
+    const { io, calls } = harness({
+      timeoutMs: 5,
+      // A stream that stays open until the deadline aborts it. The 200 ms
+      // backstop only fires if nothing aborts, so a missing deadline fails
+      // this test instead of hanging it.
+      subscribe: (_jobId, signal) => ({
+        async *[Symbol.asyncIterator]() {
+          await new Promise((resolve) => {
+            signal.addEventListener("abort", resolve)
+            setTimeout(resolve, 200)
+          })
+          throw new Error("stream closed")
+        },
+      }),
+    })
+    await expect(waitSyncJob(io, "job-1")).rejects.toThrow(
+      SYNC_TIMED_OUT_MESSAGE,
+    )
+    expect(calls.cancelled).toBe(1)
+    expect(calls.polled).toBe(0)
   })
 })
