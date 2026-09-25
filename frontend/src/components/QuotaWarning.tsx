@@ -1,5 +1,6 @@
 import { AlertTriangle, Ban } from "lucide-react"
 
+import type { MyBudgetUsage } from "@/client"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { budgetLabel, exhaustedBudgets, useMyQuota } from "@/hooks/useMyQuota"
 
@@ -22,7 +23,12 @@ import { budgetLabel, exhaustedBudgets, useMyQuota } from "@/hooks/useMyQuota"
  */
 export default function QuotaWarning() {
   const { data } = useMyQuota()
-  const exhausted = exhaustedBudgets(data?.budgets ?? [])
+  return <QuotaWarningAlert budgets={data?.budgets ?? []} />
+}
+
+/** The warning itself, for whichever Budgets the server reported. */
+export function QuotaWarningAlert({ budgets }: { budgets: MyBudgetUsage[] }) {
+  const exhausted = exhaustedBudgets(budgets)
 
   if (exhausted.length === 0) return null
 
