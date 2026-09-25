@@ -8,6 +8,7 @@ import { hasSession, scopedStorage } from "@/lib/storage/scoped"
 import { parseProxyList } from "@/lib/syncSettings"
 import {
   buildNetworkSavePayload,
+  legacyNetworkFlags,
   mergeNetworkSettings,
   NETWORK_SETTINGS_DEFAULTS,
   type NetworkSettingSetters,
@@ -67,15 +68,7 @@ export function useNetworkSettings(): {
 
     loadNetworkSettings()
       .then((value) => {
-        const legacy: Record<string, unknown> = {}
-        const legacyProxyEnabled = scopedStorage.getItem("proxyEnabled")
-        if (legacyProxyEnabled !== null && value.proxyEnabled === undefined) {
-          legacy.proxyEnabled = legacyProxyEnabled === "true"
-        }
-        const legacyTorEnabled = scopedStorage.getItem("torEnabled")
-        if (legacyTorEnabled !== null && value.torEnabled === undefined) {
-          legacy.torEnabled = legacyTorEnabled === "true"
-        }
+        const legacy = legacyNetworkFlags(value, scopedStorage)
         const merged = { ...value, ...legacy }
         const next = mergeNetworkSettings(NETWORK_SETTINGS_DEFAULTS, merged)
         setNetwork((prev) => mergeNetworkSettings(prev, merged))

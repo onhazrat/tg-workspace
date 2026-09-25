@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import {
   buildNetworkSavePayload,
+  legacyNetworkFlags,
   mergeNetworkSettings,
   NETWORK_SETTINGS_DEFAULTS,
 } from "./network"
@@ -53,5 +54,29 @@ describe("buildNetworkSavePayload", () => {
     expect("envFallbackConfigured" in payload).toBe(false)
     expect("torAvailable" in payload).toBe(false)
     expect("defaultProxyUrls" in payload).toBe(false)
+  })
+})
+
+describe("legacyNetworkFlags", () => {
+  const storage = (record: Record<string, string>) => ({
+    getItem: (key: string) => record[key] ?? null,
+  })
+
+  it("takes stored flags the server lacks, as booleans", () => {
+    expect(
+      legacyNetworkFlags(
+        {},
+        storage({ proxyEnabled: "true", torEnabled: "false" }),
+      ),
+    ).toEqual({ proxyEnabled: true, torEnabled: false })
+  })
+
+  it("lets the server win and ignores absent keys", () => {
+    expect(
+      legacyNetworkFlags(
+        { proxyEnabled: false },
+        storage({ proxyEnabled: "true" }),
+      ),
+    ).toEqual({})
   })
 })

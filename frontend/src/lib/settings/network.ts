@@ -129,3 +129,21 @@ export function buildNetworkSavePayload(
     torRotationThreshold: state.torRotationThreshold,
   }
 }
+
+/**
+ * `proxyEnabled`/`torEnabled` an older build kept in browser storage, for the
+ * ones the server row does not have yet. Empty means nothing to write back.
+ */
+export function legacyNetworkFlags(
+  server: Record<string, unknown>,
+  storage: { getItem(key: string): string | null },
+): Record<string, unknown> {
+  const legacy: Record<string, unknown> = {}
+  for (const key of ["proxyEnabled", "torEnabled"]) {
+    const stored = storage.getItem(key)
+    if (stored !== null && server[key] === undefined) {
+      legacy[key] = stored === "true"
+    }
+  }
+  return legacy
+}
