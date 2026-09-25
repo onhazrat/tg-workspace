@@ -40,6 +40,31 @@ export function budgetLabel(budget: string): string {
   return BUDGET_LABELS[budget] ?? budget
 }
 
+function limitText(value: number | null | undefined): string {
+  // `null` is unlimited on the wire — a negative setting resolved. Zero is a
+  // real limit, so it must not be rendered as "no limit"; that distinction is
+  // exactly what decision 18 turns on.
+  return value === null || value === undefined ? "no limit" : String(value)
+}
+
+const STATUS_TEXT: Record<string, string> = {
+  normal: "Normal priority",
+  degraded: "Low priority",
+  blocked: "Paused until UTC midnight",
+}
+
+/** One row of the settings panel's usage table, as the text it shows. */
+export function budgetRow(budget: MyBudgetUsage) {
+  const status = STATUS_TEXT[budget.status ?? "normal"] ?? budget.status
+  return {
+    label: budgetLabel(budget.budget),
+    spent: budget.spent ?? 0,
+    allowance: limitText(budget.allowance),
+    ceiling: limitText(budget.ceiling),
+    status: budget.lifted ? `${status} (limit lifted today)` : status,
+  }
+}
+
 /**
  * The Budgets that have run out, worst first.
  *
