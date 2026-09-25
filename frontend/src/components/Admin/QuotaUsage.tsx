@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 
-import { quotaReadQuotaUsage } from "@/client"
+import { type QuotaUsageResponse, quotaReadQuotaUsage } from "@/client"
 import {
   Card,
   CardContent,
@@ -53,8 +53,6 @@ export default function QuotaUsage() {
     queryFn: () => quotaReadQuotaUsage({ query: { day: requestedDay } }),
   })
 
-  const entries = data?.entries ?? []
-
   return (
     <Card>
       <CardHeader>
@@ -75,56 +73,75 @@ export default function QuotaUsage() {
         </div>
       </CardHeader>
       <CardContent>
-        {isPending ? (
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ) : isError ? (
-          <p className="text-muted-foreground text-sm">
-            Usage could not be loaded.
-          </p>
-        ) : entries.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No Requests were made on {data?.day ?? day}.
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Account</TableHead>
-                <TableHead className="text-right">Auto sync</TableHead>
-                <TableHead className="text-right">Manual bulk</TableHead>
-                <TableHead className="text-right">Manual single</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* Sorted by total: the reason to open this page is "who is
-                  using the most", and the server returns ledger order. */}
-              {[...entries]
-                .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
-                .map((entry) => (
-                  <TableRow key={entry.userId}>
-                    <TableCell className="font-medium">{entry.email}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {entry.autoSync ?? 0}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {entry.manualBulk ?? 0}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {entry.manualSingle ?? 0}
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {entry.total ?? 0}
-                    </TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        )}
+        <QuotaUsageBody
+          isPending={isPending}
+          isError={isError}
+          data={data}
+          day={day}
+        />
       </CardContent>
     </Card>
+  )
+}
+
+/** The day's table, or why there is none. */
+export function QuotaUsageBody({
+  isPending,
+  isError,
+  data,
+  day,
+}: {
+  isPending: boolean
+  isError: boolean
+  data: QuotaUsageResponse | undefined
+  day: string
+}) {
+  const entries = data?.entries ?? []
+  return isPending ? (
+    <div className="flex flex-col gap-2">
+      <Skeleton className="h-8 w-full" />
+      <Skeleton className="h-8 w-full" />
+    </div>
+  ) : isError ? (
+    <p className="text-muted-foreground text-sm">Usage could not be loaded.</p>
+  ) : entries.length === 0 ? (
+    <p className="text-muted-foreground text-sm">
+      No Requests were made on {data?.day ?? day}.
+    </p>
+  ) : (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Account</TableHead>
+          <TableHead className="text-right">Auto sync</TableHead>
+          <TableHead className="text-right">Manual bulk</TableHead>
+          <TableHead className="text-right">Manual single</TableHead>
+          <TableHead className="text-right">Total</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {/* Sorted by total: the reason to open this page is "who is
+                  using the most", and the server returns ledger order. */}
+        {[...entries]
+          .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
+          .map((entry) => (
+            <TableRow key={entry.userId}>
+              <TableCell className="font-medium">{entry.email}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {entry.autoSync ?? 0}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {entry.manualBulk ?? 0}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {entry.manualSingle ?? 0}
+              </TableCell>
+              <TableCell className="text-right font-medium tabular-nums">
+                {entry.total ?? 0}
+              </TableCell>
+            </TableRow>
+          ))}
+      </TableBody>
+    </Table>
   )
 }

@@ -1,0 +1,191 @@
+import type React from "react"
+import { useMemo, useState } from "react"
+
+import {
+  partitionPreviewRows,
+  proposedTagState,
+  type TagPreviewMode,
+  type TagPreviewRow,
+  unchangedToggleLabel,
+} from "@/lib/channels/tag-preview-rows"
+import { tagPreviewScopeNote } from "@/lib/channels/tag-preview-scope"
+import { countOf } from "@/lib/plural"
+import type { TagRun } from "@/types"
+
+export interface TagViewBodyProps {
+  rows: TagPreviewRow[]
+  previewMode: TagPreviewMode
+  selectedCount: number
+  selectedRun: TagRun | null
+  /** `ArtifactScopeLine`, a slot because it reads the workspace contexts. */
+  scopeLine: (run: TagRun) => React.ReactNode
+  /** Shown when no run is selected; a slot because it reads `useUI`. */
+  emptyState: React.ReactNode
+}
+
+/** Everything on the Tag tab below the apply bar, from props alone. */
+export function TagViewBody({
+  rows,
+  previewMode,
+  selectedCount,
+  selectedRun,
+  scopeLine,
+  emptyState,
+}: TagViewBodyProps) {
+  const [showUnchanged, setShowUnchanged] = useState(false)
+
+  /**
+   * Changed rows first, unchanged behind a toggle.
+   *
+   * Both halves stay in `rows` — the counts above the table describe the whole
+   * run, and hiding a row must not change what the run covers.
+   */
+  const { changed: changedPreviewRows, unchanged: unchangedPreviewRows } =
+    useMemo(() => partitionPreviewRows(rows), [rows])
+
+  const visiblePreviewRows = showUnchanged
+    ? [...changedPreviewRows, ...unchangedPreviewRows]
+    : changedPreviewRows
+
+  const previewScopeNote = tagPreviewScopeNote(rows.length, selectedCount)
+
+  return (
+    <>
+      {/*
+       * The Scope the selected run was made from (AW-08), and only once one is
+       * selected — the preview below a fresh run has no frozen window yet.
+       */}
+      {selectedRun && scopeLine(selectedRun)}
+
+      <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
+        <div className="mb-3">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-app-ink/70">
+            Preview
+            {rows.length > 0 ? (
+              <span className="ml-2 font-normal normal-case tracking-normal text-app-ink/60">
+                ({countOf(rows.length, "channel")} with suggestions)
+              </span>
+            ) : null}
+          </h3>
+          {/* The preview counts channels the suggestions cover; the header above
+              counts channels currently selected. They are different sets, and
+              two bare numbers read as a contradiction — say so when they diverge,
+              e.g. after changing the selection following a run. */}
+          {previewScopeNote ? (
+            <p
+              className="mt-1 text-xs text-app-ink/50"
+              data-testid="tag-preview-scope-note"
+            >
+              {previewScopeNote}
+            </p>
+          ) : null}
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-sm text-app-ink/60">
+            Generate or paste tag suggestions to preview changes.
+          </p>
+        ) : (
+          <>
+            {/* Changed rows first and unchanged hidden by default: an unchanged
+                run rendered every selected channel with "No changes", burying
+                the one or two rows that mattered in ~50 that did not. */}
+            <div className="max-h-[28rem] overflow-auto">
+              <table className="w-full min-w-[700px] text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-app-card text-[11px] uppercase tracking-wider text-app-ink/50">
+                  <tr>
+                    <th className="pb-2">Channel</th>
+                    <th className="pb-2">Current Tags</th>
+                    <th className="pb-2">Proposed</th>
+                    <th className="pb-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visiblePreviewRows.map((row) => (
+                    <tr
+                      key={row.channel}
+                      data-changed={row.toApply.length > 0}
+                      className="border-t border-app-ink/10"
+                    >
+                      <td className="py-2 font-mono">@{row.channel}</td>
+                      <td className="py-2">
+                        {row.currentTags.join(", ") || "—"}
+                      </td>
+                      <td className="py-2">
+                        {row.proposed.length === 0
+                          ? "—"
+                          : row.proposed.map((tag, index) => {
+                              const state = proposedTagState(
+                                tag,
+                                row.currentTags,
+                                previewMode,
+                              )
+                              return (
+                                <span key={tag}>
+                                  {index > 0 ? ", " : null}
+                                  <span
+                                    data-tag-state={state}
+                                    className={
+                                      state === "adding"
+                                        ? "text-green-600 dark:text-green-400 font-medium"
+                                        : state === "removing"
+                                          ? "text-red-600 dark:text-red-400 font-medium line-through"
+                                          : "text-app-ink/40"
+                                    }
+                                  >
+                                    {tag}
+                                  </span>
+                                </span>
+                              )
+                            })}
+                      </td>
+                      <td className="py-2">
+                        {row.toApply.length === 0 ? (
+                          <span className="text-app-ink/40">No changes</span>
+                        ) : (
+                          row.toApply
+                            .map((tag) =>
+                              previewMode === "add" ? `+${tag}` : `-${tag}`,
+                            )
+                            .join(", ")
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {unchangedPreviewRows.length > 0 ? (
+              <button
+                type="button"
+                data-testid="tag-preview-unchanged-toggle"
+                onClick={() => setShowUnchanged((shown) => !shown)}
+                aria-expanded={showUnchanged}
+                className="mt-3 text-[11px] font-bold uppercase tracking-widest text-app-ink/50 hover:text-app-ink/80 focus-visible:text-app-ink/80 transition-colors"
+              >
+                {unchangedToggleLabel(
+                  unchangedPreviewRows.length,
+                  showUnchanged,
+                )}
+              </button>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      {/*
+        The Tag History panel is gone: History lists tag runs alongside every
+        other artifact now, and a per-tab copy of the same list is one more
+        place to keep in step. The prompt of the selected run stays, because
+        that is about the run on screen rather than about finding one.
+      */}
+      {selectedRun?.promptText ? (
+        <pre className="max-h-56 overflow-y-auto rounded-lg border border-app-ink/10 bg-app-muted/10 p-3 font-mono text-xs text-app-ink/80">
+          {selectedRun.promptText}
+        </pre>
+      ) : null}
+
+      {!selectedRun && emptyState}
+    </>
+  )
+}

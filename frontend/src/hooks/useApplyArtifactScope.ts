@@ -22,6 +22,19 @@ import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { parseMediaFilterValue } from "@/lib/posts/post-media"
 
+/** The workspace filters a frozen Scope puts back, with each absent field reset. */
+export function workspaceFromScope(scope: FrozenScope) {
+  return {
+    channels: new Set(scope.channels ?? []),
+    keyword: scope.keyword ?? "",
+    forwarded: scope.forwarded ?? "all",
+    media: parseMediaFilterValue(scope.media ?? null),
+    maxPerChannel: scope.maxPerChannel ?? 0,
+    maxPerChannelMode: scope.maxPerChannelMode ?? "latest",
+    sort: scope.sort ?? "time",
+  }
+}
+
 export function useApplyArtifactScope(): (scope: FrozenScope) => void {
   const { setSelectedChannels } = useData()
   const { setFixedRange } = useScope()
@@ -38,14 +51,15 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
 
   return useCallback(
     (scope: FrozenScope) => {
-      setSelectedChannels(new Set(scope.channels ?? []))
+      const next = workspaceFromScope(scope)
+      setSelectedChannels(next.channels)
       setFixedRange(scope.start, scope.end)
-      setPostSearch(scope.keyword ?? "")
-      setForwardedFilter(scope.forwarded ?? "all")
-      setMediaFilter(parseMediaFilterValue(scope.media ?? null))
-      setMaxPostsPerChannel(scope.maxPerChannel ?? 0)
-      setMaxPostsPerChannelMode(scope.maxPerChannelMode ?? "latest")
-      setPostSortOrder(scope.sort ?? "time")
+      setPostSearch(next.keyword)
+      setForwardedFilter(next.forwarded)
+      setMediaFilter(next.media)
+      setMaxPostsPerChannel(next.maxPerChannel)
+      setMaxPostsPerChannelMode(next.maxPerChannelMode)
+      setPostSortOrder(next.sort)
       // The ranked Post selection a Semantic or related-Post Artifact froze is
       // not a filter, so there is nothing in the workspace to restore it into.
       // Leaving a live semantic query running instead would mean the restored

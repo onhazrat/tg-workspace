@@ -69,6 +69,22 @@ import type { ArtifactListItem, TabType } from "./types"
 
 const THEME_ICONS = { system: Monitor, light: Moon, dark: Sun }
 
+/** What focus mode changes in the shell's chrome. */
+const FULLSCREEN_CHROME = {
+  on: {
+    label: "Exit full screen",
+    Icon: Minimize2,
+    main: "w-full p-0",
+    header: "hidden",
+  },
+  off: {
+    label: "Full screen",
+    Icon: Maximize2,
+    main: "app-shell p-4 md:p-8",
+    header: "flex",
+  },
+}
+
 const TAB_ICONS = {
   Database,
   List,
@@ -116,12 +132,9 @@ export default function App() {
   const { setOpen: setCommandPaletteOpen } = useCommandPaletteContext()
   const { isFullscreen, toggle: toggleFullscreen } = useWorkspaceFullscreen()
 
-  const fullscreenLabel = isFullscreen ? "Exit full screen" : "Full screen"
-  const fullscreenIcon = isFullscreen ? (
-    <Minimize2 size={14} />
-  ) : (
-    <Maximize2 size={14} />
-  )
+  const chrome = FULLSCREEN_CHROME[isFullscreen ? "on" : "off"]
+  const fullscreenLabel = chrome.label
+  const fullscreenIcon = <chrome.Icon size={14} />
 
   // Server job status for the auto-sync pause banner (Phase 6 scheduler). The
   // poll lives in `useJobsStatusQuery` so this and `useCanManageJobs` read one
@@ -215,6 +228,7 @@ export default function App() {
 
   /** The view for `?tab=`; anything unrecognised falls through to Posts. */
   const tabView = () => {
+    if (summarizing) return <GeneratingSummary key="loading" />
     const views: Partial<Record<TabType, () => React.ReactNode>> = {
       history: () => (
         <HistoryView openArtifact={openArtifact} setActiveTab={setActiveTab} />
@@ -252,9 +266,7 @@ export default function App() {
       </a>
       <main
         id="main-content"
-        className={`flex min-h-0 flex-1 flex-col ${
-          isFullscreen ? "w-full p-0" : "app-shell p-4 md:p-8"
-        }`}
+        className={`flex min-h-0 flex-1 flex-col ${chrome.main}`}
       >
         <StatusBanners
           offline={isOffline}
@@ -266,7 +278,7 @@ export default function App() {
         <div className="w-full flex min-h-0 flex-1 flex-col">
           <div
             className={`flex-col sm:flex-row justify-between items-end mb-4 gap-4 ${
-              isFullscreen ? "hidden" : "flex"
+              chrome.header
             }`}
           >
             <div>
@@ -455,11 +467,7 @@ export default function App() {
                       </TooltipContent>
                     </Tooltip>
                   )}
-                  <div
-                    className={`items-center gap-6 ${
-                      isFullscreen ? "hidden" : "flex"
-                    }`}
-                  >
+                  <div className={`items-center gap-6 ${chrome.header}`}>
                     <WorkspaceStats
                       lastSync={oldestSync(channels, selectedChannels)}
                       activeChannels={selectedChannels.size}
@@ -479,9 +487,7 @@ export default function App() {
               data-tab={activeTab}
               className="min-h-0 flex-1 overflow-y-auto p-8"
             >
-              <AnimatePresence mode="wait">
-                {summarizing ? <GeneratingSummary key="loading" /> : tabView()}
-              </AnimatePresence>
+              <AnimatePresence mode="wait">{tabView()}</AnimatePresence>
             </div>
           </div>
         </div>

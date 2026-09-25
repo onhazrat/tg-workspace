@@ -3,6 +3,10 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useState } from "react"
 import { AnalysisWindowLink } from "@/components/AnalysisWindowControl"
+import {
+  discoverButton,
+  startChatButton,
+} from "@/components/action/action-view-model"
 import { RunSettingsBar } from "@/components/action/RunSettingsBar"
 import { PasteTagsModal } from "@/components/PasteTagsModal"
 import { SummaryConfig } from "@/components/SummaryConfig"
@@ -83,6 +87,17 @@ export const ActionView: React.FC = () => {
   // Chat spends the caller's Key; Discover is a server-side aggregation with no
   // inference in it, so it stays runnable with none.
   const noKey = useSelectedAiKeyId() === null
+  const reportButton = discoverButton({
+    isGenerating,
+    isOffline,
+    channelCount,
+  })
+  const chatButton = startChatButton({
+    draft: chatDraft,
+    isChatting,
+    isOffline,
+    noKey,
+  })
 
   const [pasteOpen, setPasteOpen] = useState(false)
 
@@ -195,10 +210,10 @@ export const ActionView: React.FC = () => {
         <div className="flex flex-wrap items-center justify-end gap-3">
           <TgButton
             data-testid="action-generate-report"
-            disabled={isGenerating || isOffline || channelCount === 0}
+            disabled={reportButton.disabled}
             onClick={() => void generateAndShow()}
           >
-            {isGenerating ? "Generating…" : "Generate report"}
+            {reportButton.label}
           </TgButton>
         </div>
       </ActionCard>
@@ -250,8 +265,8 @@ export const ActionView: React.FC = () => {
             <TgButton
               data-testid="action-start-chat"
               onClick={startChat}
-              disabled={!chatDraft.trim() || isChatting || isOffline || noKey}
-              title={noKey ? "Add an AI key above to run this." : undefined}
+              disabled={chatButton.disabled}
+              title={chatButton.title}
               loading={isChatting}
               loadingLabel="Starting…"
             >

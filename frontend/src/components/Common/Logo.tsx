@@ -2,10 +2,13 @@ import { Link } from "@tanstack/react-router"
 
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
-import icon from "/assets/images/fastapi-icon.svg"
-import iconLight from "/assets/images/fastapi-icon-light.svg"
-import logo from "/assets/images/fastapi-logo.svg"
-import logoLight from "/assets/images/fastapi-logo-light.svg"
+
+// `public/` files, by the URL Vite serves them at. Importing them compiled to
+// these same strings, and bun's test runner cannot resolve a `public/` import.
+const icon = "/assets/images/fastapi-icon.svg"
+const iconLight = "/assets/images/fastapi-icon-light.svg"
+const logo = "/assets/images/fastapi-logo.svg"
+const logoLight = "/assets/images/fastapi-logo-light.svg"
 
 interface LogoProps {
   variant?: "full" | "icon" | "responsive"
