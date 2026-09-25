@@ -329,6 +329,92 @@ def _sweep_logs(
     return deleted_logs, deleted_payloads
 
 
+def _sweep_posts(session: Session, cutoff: int) -> int:
+    """Delete non-anchor Posts older than `cutoff`, then repair what pointed at them.
+
+    Returns the Posts deleted. Batched delete of each Post with its embeddings,
+    translations and sync state, then, per touched Channel, sync state below the
+    oldest surviving Post and an `anchor_post_id` naming a Post that is gone.
+    """
+    deleted_posts = 0
+    # No owner filter. The corpus is shared — one scrape serves every
+    # follower — so there is no account whose Posts these are, and the
+    # `user_id` the sweep used to narrow on is the stamp of whoever
+    # scraped the row first, which ticket 22 drops.
+    affected_channels: set[str] = set()
+    # Page through the backlog: select a bounded batch, delete it and its
+    # dependents in bulk, commit, repeat. Memory stays flat regardless of
+    # how far behind retention is.
+    while True:
+        batch_stmt = select(Post).where(
+            col(Post.timestamp) < cutoff,
+            col(Post.is_anchor) == False,  # noqa: E712
+        )
+        batch = session.exec(batch_stmt.limit(POST_DELETE_BATCH)).all()
+        if not batch:
+            break
+
+        ids_by_channel: dict[str, list[int]] = {}
+        for post in batch:
+            ids_by_channel.setdefault(post.channel_name, []).append(post.post_id)
+            # Thumbnails live on disk, so they still have to be cleared one
+            # by one; everything else is deleted per channel in bulk below.
+            delete_cached_thumb(post.channel_name, post.post_id)
+
+        for channel_name, post_ids in ids_by_channel.items():
+            session.execute(
+                sa_delete(PostEmbedding).where(
+                    col(PostEmbedding.channel_name) == channel_name,
+                    col(PostEmbedding.post_id).in_(post_ids),
+                )
+            )
+            session.execute(
+                sa_delete(PostTranslation).where(
+                    col(PostTranslation.channel_name) == channel_name,
+                    col(PostTranslation.post_id).in_(post_ids),
+                )
+            )
+            prune_sync_state_for_post_ids(session, channel_name, post_ids)
+            result = session.execute(
+                sa_delete(Post).where(
+                    col(Post.channel_name) == channel_name,
+                    col(Post.post_id).in_(post_ids),
+                )
+            )
+            deleted_posts += cast(Any, result).rowcount or 0
+            affected_channels.add(channel_name)
+        session.commit()
+
+    if affected_channels:
+        for channel_name in affected_channels:
+            min_remaining = session.exec(
+                select(func.min(Post.post_id)).where(Post.channel_name == channel_name)
+            ).one()
+            if min_remaining is not None:
+                prune_sync_state_below(session, channel_name, min_remaining)
+            # Drop a dangling anchor whose post was pruned so the channel
+            # does not point at a row that no longer exists.
+            channel = session.exec(
+                select(Channel).where(Channel.name == channel_name)
+            ).first()
+            if channel and channel.anchor_post_id is not None:
+                anchor_exists = session.exec(
+                    select(Post.post_id).where(
+                        Post.channel_name == channel_name,
+                        Post.post_id == channel.anchor_post_id,
+                    )
+                ).first()
+                if anchor_exists is None:
+                    channel.anchor_post_id = None
+                    session.add(channel)
+        session.commit()
+        touch_sync(session, "posts")
+        touch_sync(session, "embeddings")
+        touch_sync(session, "translations")
+        touch_sync(session, "channels")
+    return deleted_posts
+
+
 def run_retention_cleanup(session: Session) -> dict[str, int]:
     policy = load_retention_policy(session)
     post_days = int(policy.get("postRetentionDays") or 0)
@@ -359,84 +445,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
             touch_sync(session, "sync_logs")
 
     if post_days > 0:
-        # No owner filter. The corpus is shared — one scrape serves every
-        # follower — so there is no account whose Posts these are, and the
-        # `user_id` the sweep used to narrow on is the stamp of whoever
-        # scraped the row first, which ticket 22 drops.
-        cutoff = _cutoff_ms(post_days)
-        affected_channels: set[str] = set()
-        # Page through the backlog: select a bounded batch, delete it and its
-        # dependents in bulk, commit, repeat. Memory stays flat regardless of
-        # how far behind retention is.
-        while True:
-            batch_stmt = select(Post).where(
-                col(Post.timestamp) < cutoff,
-                col(Post.is_anchor) == False,  # noqa: E712
-            )
-            batch = session.exec(batch_stmt.limit(POST_DELETE_BATCH)).all()
-            if not batch:
-                break
-
-            ids_by_channel: dict[str, list[int]] = {}
-            for post in batch:
-                ids_by_channel.setdefault(post.channel_name, []).append(post.post_id)
-                # Thumbnails live on disk, so they still have to be cleared one
-                # by one; everything else is deleted per channel in bulk below.
-                delete_cached_thumb(post.channel_name, post.post_id)
-
-            for channel_name, post_ids in ids_by_channel.items():
-                session.execute(
-                    sa_delete(PostEmbedding).where(
-                        col(PostEmbedding.channel_name) == channel_name,
-                        col(PostEmbedding.post_id).in_(post_ids),
-                    )
-                )
-                session.execute(
-                    sa_delete(PostTranslation).where(
-                        col(PostTranslation.channel_name) == channel_name,
-                        col(PostTranslation.post_id).in_(post_ids),
-                    )
-                )
-                prune_sync_state_for_post_ids(session, channel_name, post_ids)
-                result = session.execute(
-                    sa_delete(Post).where(
-                        col(Post.channel_name) == channel_name,
-                        col(Post.post_id).in_(post_ids),
-                    )
-                )
-                deleted_posts += cast(Any, result).rowcount or 0
-                affected_channels.add(channel_name)
-            session.commit()
-
-        if affected_channels:
-            for channel_name in affected_channels:
-                min_remaining = session.exec(
-                    select(func.min(Post.post_id)).where(
-                        Post.channel_name == channel_name
-                    )
-                ).one()
-                if min_remaining is not None:
-                    prune_sync_state_below(session, channel_name, min_remaining)
-                # Drop a dangling anchor whose post was pruned so the channel
-                # does not point at a row that no longer exists.
-                channel = session.exec(
-                    select(Channel).where(Channel.name == channel_name)
-                ).first()
-                if channel and channel.anchor_post_id is not None:
-                    anchor_exists = session.exec(
-                        select(Post.post_id).where(
-                            Post.channel_name == channel_name,
-                            Post.post_id == channel.anchor_post_id,
-                        )
-                    ).first()
-                    if anchor_exists is None:
-                        channel.anchor_post_id = None
-                        session.add(channel)
-            session.commit()
-            touch_sync(session, "posts")
-            touch_sync(session, "embeddings")
-            touch_sync(session, "translations")
-            touch_sync(session, "channels")
+        deleted_posts += _sweep_posts(session, _cutoff_ms(post_days))
 
     # After the post sweep, before the avatar sweep: collecting a channel
     # removes its posts, and the avatar sweep below builds its keep-set from the

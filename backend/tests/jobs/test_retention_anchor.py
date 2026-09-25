@@ -9,8 +9,9 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import save_settings_section
-from app.models_tg import Post, PostEmbedding, PostSyncState, PostTranslation
+from app.models_tg import Channel, Post, PostEmbedding, PostSyncState, PostTranslation
 from app.services.follows import get_operator_user_id
+from tests.utils.setting_groups import add_test_channel
 
 
 def test_retention_keeps_anchor_posts() -> None:
@@ -126,3 +127,59 @@ def test_retention_batches_and_cascades(monkeypatch) -> None:
             ).all()
             == []
         ), "sync state not pruned"
+
+
+def test_retention_repairs_what_the_sweep_left_pointing_at_nothing() -> None:
+    """After the sweep, each touched Channel's anchor and sync state are repaired.
+
+    A Channel whose `anchor_post_id` named a swept Post loses it, one whose
+    anchor survived keeps it, and sync-state rows below the oldest surviving
+    Post go even when no swept Post carried them. A Channel swept empty has no
+    oldest Post to measure from, so its stray sync state stays.
+    """
+    old_ts = 1_000_000_000_000
+    recent_ts = int(time.time() * 1000)
+
+    with Session(engine) as session:
+        save_settings_section(
+            session, "retention", {"postRetentionDays": 30, "sharedLogRetentionDays": 0}
+        )
+        add_test_channel(session, "ret-dangle", anchor_post_id=2)
+        add_test_channel(session, "ret-kept", anchor_post_id=10)
+        add_test_channel(session, "ret-empty")
+        for ch, pid, ts, is_anchor in [
+            ("ret-dangle", 1, old_ts, False),
+            ("ret-dangle", 2, old_ts, False),
+            ("ret-dangle", 5, recent_ts, False),
+            ("ret-kept", 9, old_ts, False),
+            ("ret-kept", 10, old_ts, True),
+            ("ret-empty", 1, old_ts, False),
+        ]:
+            session.add(
+                Post(
+                    channel_name=ch,
+                    post_id=pid,
+                    text="x",
+                    timestamp=ts,
+                    is_anchor=is_anchor,
+                )
+            )
+        # Gap rows no swept Post carries: 3 is below the oldest survivor (5),
+        # 7 is above it, and the empty Channel's 50 has nothing to compare to.
+        session.add(PostSyncState(channel_name="ret-dangle", post_id=3, state="gap"))
+        session.add(PostSyncState(channel_name="ret-dangle", post_id=7, state="gap"))
+        session.add(PostSyncState(channel_name="ret-empty", post_id=50, state="gap"))
+        session.commit()
+
+        result = run_retention_cleanup(session)
+        assert result["deletedPosts"] == 4
+
+    with Session(engine) as check:
+        dangling = check.get(Channel, "ret-dangle")
+        kept = check.get(Channel, "ret-kept")
+        assert dangling is not None and dangling.anchor_post_id is None
+        assert kept is not None and kept.anchor_post_id == 10
+        states = check.exec(
+            select(PostSyncState.channel_name, PostSyncState.post_id)
+        ).all()
+        assert sorted(states) == [("ret-dangle", 7), ("ret-empty", 50)]

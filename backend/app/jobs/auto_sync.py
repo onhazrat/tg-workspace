@@ -88,6 +88,125 @@ class _OwnerPlan(NamedTuple):
     partial_count: int
 
 
+#: One partial-history candidate: the follower it is attributed to, then the
+#: Channel's id and name as plain values.
+_PartialCandidate = tuple[uuid.UUID, str, str]
+
+
+def _classify_owner(
+    owner_id: uuid.UUID,
+    pairs: list[FollowedChannel],
+    groups_by_id: dict[str, Any],
+    stats_by_channel: dict[str, dict[str, Any]],
+    now_ms: int,
+) -> tuple[list[tuple[str, str]], dict[str, str], list[_PartialCandidate]]:
+    """Sort one owner's follows into due, partial-history, and neither.
+
+    Returns (due, due reason by channel id, partial candidates), all plain
+    values. A follow whose setting group does not resolve is neither, and a due
+    Channel is never also a partial candidate. Reads only what the planning
+    session already loaded, so it issues no query.
+    """
+    due: list[tuple[str, str]] = []
+    reasons: dict[str, str] = {}
+    partial: list[_PartialCandidate] = []
+    for channel, follow in pairs:
+        group_id = schedule_group_id(follow)
+        group = groups_by_id.get(group_id) if group_id is not None else None
+        if group is None:
+            continue
+        schedule_view = _schedule_view(
+            channel, group, stats_by_channel.get(channel.name)
+        )
+        if is_channel_due(schedule_view, now_ms):
+            reason = due_reason(schedule_view, now_ms)
+            if reason is not None:
+                due.append((channel.id, channel.name))
+                reasons[channel.id] = reason
+                continue
+        if not group.is_frozen and not channel.history_complete_to_cutoff:
+            partial.append((owner_id, channel.id, channel.name))
+    return due, reasons, partial
+
+
+def _partial_batch(
+    candidates: list[_PartialCandidate], cursor: int, batch_size: int
+) -> list[_PartialCandidate]:
+    """The slice of partial-history candidates this tick takes.
+
+    One cursor for the whole deployment, over the union of every owner's
+    candidates. Per-owner cursors would be the obvious move and would change
+    what `autoSyncPartialCursor` means, splitting one setting into N pieces of
+    scheduler state nothing reads back — so the rotation stays global and only
+    the *attribution* is per owner. Sorted by `(channel id, owner)` so the order
+    is stable across ticks, which is what makes the rotation a rotation.
+
+    Takes at most one lap: a batch larger than the candidates takes each once,
+    and the caller advances the cursor by what was taken, not by the batch size.
+    """
+    ordered = sorted(candidates, key=lambda c: (c[1], str(c[0])))
+    return [
+        ordered[(cursor + i) % len(ordered)]
+        for i in range(min(max(1, batch_size), len(ordered)))
+    ]
+
+
+def _merge_owner_plan(
+    owner_id: uuid.UUID,
+    due: list[tuple[str, str]],
+    partial: list[tuple[str, str]],
+    reasons: dict[str, str],
+) -> _OwnerPlan | None:
+    """One owner's due Channels, then its partial ones, each Channel once.
+
+    `None` when the owner has nothing to sync, so it files no job.
+    """
+    entries: list[tuple[str, str]] = []
+    seen_ids: set[str] = set()
+    for channel_id, name in due + partial:
+        if channel_id not in seen_ids:
+            seen_ids.add(channel_id)
+            entries.append((channel_id, name))
+    if not entries:
+        return None
+    return _OwnerPlan(
+        owner_id=owner_id,
+        entries=entries,
+        reasons=reasons,
+        due_count=len(due),
+        partial_count=len(partial),
+    )
+
+
+def _tick_summary(
+    plans: list[_OwnerPlan], job_ids: list[str], statuses: list[str], checked: int
+) -> dict[str, Any]:
+    """What a tick that filed at least one job reports.
+
+    Counts run over every plan, including an owner the ceiling skipped after
+    planning, so `owners` and `channels` describe what was due rather than what
+    was enqueued.
+    """
+    all_reasons = [r for plan in plans for r in plan.reasons.values()]
+    return {
+        # `jobId` stays singular and names the first job, because the Jobs panel
+        # and `test_scheduler_jobs.py` both read it and a tick still produces
+        # one job on the single-account deployment this ships to. `jobIds` is
+        # the honest answer once there are two accounts.
+        "jobId": job_ids[0],
+        "jobIds": job_ids,
+        "owners": len(plans),
+        "channels": sum(len(plan.entries) for plan in plans),
+        "checked": checked,
+        "dueChannels": sum(plan.due_count for plan in plans),
+        "partialChannels": sum(plan.partial_count for plan in plans),
+        "dueRegular": all_reasons.count("regular"),
+        "dueDynamic": all_reasons.count("dynamic"),
+        "dueBoth": all_reasons.count("both"),
+        "status": statuses[0],
+    }
+
+
 def _stats_for_scheduling(
     session: Session,
     channels: list[Channel],
@@ -196,15 +315,13 @@ async def run_auto_sync() -> dict[str, Any]:
             return {"skipped": True, "reason": "sync_job_active"}
 
         groups_by_id = load_groups_by_id(session)
-        due_by_owner: dict[uuid.UUID, list[Channel]] = {}
+        due_by_owner: dict[uuid.UUID, list[tuple[str, str]]] = {}
         reason_by_owner: dict[uuid.UUID, dict[str, str]] = {}
-        partial_candidates: list[tuple[uuid.UUID, Channel]] = []
+        partial_candidates: list[_PartialCandidate] = []
 
         for owner_id in owners:
             pairs = followed_channels_for(session, user_id=owner_id)
             checked += len(pairs)
-            owner_due: list[Channel] = []
-            owner_reasons: dict[str, str] = {}
 
             # Stats are per Channel, not per follower, so they are fetched once
             # for this owner's set. Two accounts following the same Channel each
@@ -216,70 +333,35 @@ async def run_auto_sync() -> dict[str, Any]:
                 session, owner_channels, groups_by_id, now, pairs
             )
 
-            for channel, follow in pairs:
-                group_id = schedule_group_id(follow)
-                group = groups_by_id.get(group_id) if group_id is not None else None
-                if group is None:
-                    continue
-                schedule_view = _schedule_view(
-                    channel, group, stats_by_channel.get(channel.name)
-                )
-                if is_channel_due(schedule_view, now):
-                    reason = due_reason(schedule_view, now)
-                    if reason is not None:
-                        owner_due.append(channel)
-                        owner_reasons[channel.id] = reason
-                        continue
-                if not group.is_frozen and not channel.history_complete_to_cutoff:
-                    partial_candidates.append((owner_id, channel))
-
-            due_by_owner[owner_id] = owner_due
-            reason_by_owner[owner_id] = owner_reasons
+            due, reasons, partial = _classify_owner(
+                owner_id, pairs, groups_by_id, stats_by_channel, now
+            )
+            due_by_owner[owner_id] = due
+            reason_by_owner[owner_id] = reasons
+            partial_candidates.extend(partial)
 
         partial_candidate_count = len(partial_candidates)
-        partial_by_owner: dict[uuid.UUID, list[Channel]] = {}
+        partial_by_owner: dict[uuid.UUID, list[tuple[str, str]]] = {}
         if partial_candidates:
-            # One cursor for the whole deployment, over the union of every
-            # owner's candidates. Per-owner cursors would be the obvious move
-            # and would change what `autoSyncPartialCursor` means, splitting one
-            # setting into N pieces of scheduler state nothing reads back — so
-            # the rotation stays global and only the *attribution* is per owner.
-            # Sorted by `(channel id, owner)` so the order is stable across
-            # ticks, which is what makes the rotation a rotation.
-            partial_sorted = sorted(
-                partial_candidates, key=lambda pair: (pair[1].id, str(pair[0]))
-            )
             cursor = int(sync_cfg.get("autoSyncPartialCursor") or 0)
-            batch_size = max(1, int(sync_cfg.get("autoSyncPartialBatchSize") or 1))
-            taken = 0
-            for i in range(min(batch_size, len(partial_sorted))):
-                idx = (cursor + i) % len(partial_sorted)
-                owner_id, channel = partial_sorted[idx]
-                partial_by_owner.setdefault(owner_id, []).append(channel)
-                taken += 1
-            _update_sync_state(session, {"autoSyncPartialCursor": cursor + taken})
+            batch = _partial_batch(
+                partial_candidates,
+                cursor,
+                int(sync_cfg.get("autoSyncPartialBatchSize") or 1),
+            )
+            for owner_id, channel_id, name in batch:
+                partial_by_owner.setdefault(owner_id, []).append((channel_id, name))
+            _update_sync_state(session, {"autoSyncPartialCursor": cursor + len(batch)})
 
         for owner_id in owners:
-            to_sync: list[Channel] = []
-            seen_ids: set[str] = set()
-            for channel in due_by_owner.get(owner_id, []) + partial_by_owner.get(
-                owner_id, []
-            ):
-                if channel.id in seen_ids:
-                    continue
-                seen_ids.add(channel.id)
-                to_sync.append(channel)
-            if not to_sync:
-                continue
-            plans.append(
-                _OwnerPlan(
-                    owner_id=owner_id,
-                    entries=[(ch.id, ch.name) for ch in to_sync],
-                    reasons=reason_by_owner.get(owner_id, {}),
-                    due_count=len(due_by_owner.get(owner_id, [])),
-                    partial_count=len(partial_by_owner.get(owner_id, [])),
-                )
+            plan = _merge_owner_plan(
+                owner_id,
+                due_by_owner.get(owner_id, []),
+                partial_by_owner.get(owner_id, []),
+                reason_by_owner.get(owner_id, {}),
             )
+            if plan is not None:
+                plans.append(plan)
 
     if not plans:
         return {
@@ -356,24 +438,7 @@ async def run_auto_sync() -> dict[str, Any]:
             "owners": skipped_owners,
         }
 
-    all_reasons = [r for plan in plans for r in plan.reasons.values()]
-    return {
-        # `jobId` stays singular and names the first job, because the Jobs panel
-        # and `test_scheduler_jobs.py` both read it and a tick still produces
-        # one job on the single-account deployment this ships to. `jobIds` is
-        # the honest answer once there are two accounts.
-        "jobId": job_ids[0],
-        "jobIds": job_ids,
-        "owners": len(plans),
-        "channels": sum(len(plan.entries) for plan in plans),
-        "checked": checked,
-        "dueChannels": sum(plan.due_count for plan in plans),
-        "partialChannels": sum(plan.partial_count for plan in plans),
-        "dueRegular": sum(1 for reason in all_reasons if reason == "regular"),
-        "dueDynamic": sum(1 for reason in all_reasons if reason == "dynamic"),
-        "dueBoth": sum(1 for reason in all_reasons if reason == "both"),
-        "status": statuses[0],
-    }
+    return _tick_summary(plans, job_ids, statuses, checked)
 
 
 def _schedulable_channel_count(session: Session) -> int:
