@@ -94,13 +94,16 @@ for (const file of new Glob("src/**/*.{ts,tsx}").scanSync(root)) {
   const da = hits.get(file)
   const line = (pos: number) => sf.getLineAndCharacterOfPosition(pos).line + 1
 
-  const visitFn = (fn: ts.Node) => {
+  // A nested function's name is qualified by its parents' (`Card.<arg of
+  // useCallback>`), as radon does on the backend, so ratchet.py keys stay stable.
+  const visitFn = (fn: ts.Node, prefix = "") => {
+    const name = prefix + fnName(fn, sf)
     let cc = 1
     const nestedLines = new Set<number>()
     const walk = (n: ts.Node) => {
       if (n !== fn && isFn(n)) {
         for (let l = line(n.getStart(sf)); l <= line(n.getEnd()); l++) nestedLines.add(l)
-        visitFn(n)
+        visitFn(n, `${name}.`)
         return
       }
       if (BRANCH_NODES.has(n.kind)) cc++
@@ -123,7 +126,7 @@ for (const file of new Glob("src/**/*.{ts,tsx}").scanSync(root)) {
       }
     // A file no test imports is absent from lcov, so 0% by definition.
     const cov = !da || total === 0 ? 0 : covered / total
-    rows.push({ file: `frontend/${file}`, line: start, name: fnName(fn, sf), cc, cov })
+    rows.push({ file: `frontend/${file}`, line: start, name, cc, cov })
   }
 
   const top = (n: ts.Node) => {

@@ -4,6 +4,12 @@
 #   bash scripts/crap/run.sh [out.html]               # unit tests only: crap-report/crap-scores.html
 #   bash scripts/crap/run.sh --with-e2e [out.html]    # plus Playwright: crap-report/crap-scores-e2e.html
 #   bash scripts/crap/run.sh --reuse-e2e [out.html]   # plus the Playwright dump already on disk
+#   bash scripts/crap/run.sh --update-baseline        # unit only, then rewrite baseline.json
+#
+# A unit-only run ends with the CRAP ratchet CI runs (ratchet.py check), so a red
+# CI check reproduces here. --update-baseline instead rewrites
+# scripts/crap/baseline.json to the functions above 30 now, keeping every
+# existing reason, and exits 1 until each new entry has one written in.
 #
 # --with-e2e runs the whole Playwright suite serially with E2E_COVERAGE=1, which
 # writes one lcov file per test into frontend/coverage-e2e (see
@@ -23,14 +29,20 @@ ROOT=$(git rev-parse --show-toplevel)
 HERE="$ROOT/scripts/crap"
 E2E=""
 OUT=""
+RATCHET=check
 for arg in "$@"; do
   case "$arg" in
     --with-e2e) E2E=run ;;
     --reuse-e2e) E2E=reuse ;;
+    --update-baseline) RATCHET=update ;;
     -*) echo "unknown flag: $arg" >&2; exit 2 ;;
     *) OUT="$arg" ;;
   esac
 done
+if [ -n "$E2E" ] && [ "$RATCHET" = update ]; then
+  echo "the baseline is unit-only; --update-baseline cannot take Playwright coverage" >&2
+  exit 2
+fi
 OUT="${OUT:-$ROOT/crap-report/crap-scores${E2E:+-e2e}.html}"
 E2E_DIR="$ROOT/frontend/coverage-e2e"
 if [ "$E2E" = reuse ] && ! ls "$E2E_DIR"/*.info >/dev/null 2>&1; then
@@ -38,6 +50,8 @@ if [ "$E2E" = reuse ] && ! ls "$E2E_DIR"/*.info >/dev/null 2>&1; then
   exit 1
 fi
 WORK=$(mktemp -d)
+ROWS=$(dirname "$OUT")
+mkdir -p "$ROWS"
 DB="app_test_crap_$$"
 
 testdb() {
@@ -84,7 +98,7 @@ testdb create
 BACKEND_TESTS=$(grep -E "^[0-9]+ (passed|failed)" "$WORK/pytest.log" | tail -1 | sed -E 's/, [0-9]+ warnings?//; s/ in [0-9.]+s.*//')
 (cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" uv run coverage json -q -o "$WORK/coverage.json")
 BACKEND_LINE_COV=$(python3 -c "import json,sys; print(f\"{json.load(open(sys.argv[1]))['totals']['percent_covered']:.0f}%\")" "$WORK/coverage.json")
-python3 "$HERE/backend_crap.py" "$WORK/radon.json" "$WORK/coverage.json" "$WORK/backend.json"
+python3 "$HERE/backend_crap.py" "$WORK/radon.json" "$WORK/coverage.json" "$ROWS/backend.json"
 
 echo "==> frontend: coverage over bun test src"
 (cd "$ROOT/frontend" && bun test src --coverage --coverage-reporter=lcov \
@@ -106,12 +120,17 @@ if [ -n "$E2E" ]; then
   [ -e "${E2E_FILES[0]}" ] || { echo "Playwright left no coverage in $E2E_DIR; is the backend up on :8000?" >&2; exit 1; }
   E2E_TESTS="${#E2E_FILES[@]} Playwright tests"
 fi
-bun "$HERE/frontend_crap.ts" "$ROOT/frontend" "$WORK/fecov/lcov.info" "$WORK/frontend.json" ${E2E_FILES[@]+"${E2E_FILES[@]}"}
+bun "$HERE/frontend_crap.ts" "$ROOT/frontend" "$WORK/fecov/lcov.info" "$ROWS/frontend.json" ${E2E_FILES[@]+"${E2E_FILES[@]}"}
 
 echo "==> backend tests: $BACKEND_TESTS ($BACKEND_LINE_COV of lines); frontend tests: $FRONTEND_TESTS${E2E_TESTS:+; merged with $E2E_TESTS}"
-python3 "$HERE/build_report.py" "$WORK/backend.json" "$WORK/frontend.json" "$OUT" \
+python3 "$HERE/build_report.py" "$ROWS/backend.json" "$ROWS/frontend.json" "$OUT" \
   --commit "$(git -C "$ROOT" rev-parse --short HEAD)" \
   --backend-tests "$BACKEND_TESTS" \
   --backend-line-cov "$BACKEND_LINE_COV" \
   --frontend-tests "$FRONTEND_TESTS" \
   ${E2E_TESTS:+--e2e-tests "$E2E_TESTS"}
+
+# The baseline is unit-only, as in CI, so Playwright-merged rows are not judged.
+if [ -z "$E2E" ]; then
+  python3 "$HERE/ratchet.py" "$RATCHET" "$ROWS/backend.json" "$ROWS/frontend.json"
+fi
