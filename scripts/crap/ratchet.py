@@ -5,8 +5,12 @@ the tests it has. The ratchet fails when
 
   (a) a function missing from the baseline scores above THRESHOLD,
   (b) a baseline function scores more than TOLERANCE above its recorded score,
-  (c) a baseline entry names no function scoring above THRESHOLD any more, or
-  (d) a baseline entry has no reason.
+  (c) a baseline entry names no function scoring above THRESHOLD any more,
+  (d) a baseline entry has no reason, or
+  (e) a baseline function scores more than TOLERANCE below its recorded score.
+
+(e) keeps the recorded score tight. Without it a function that improved could
+slide back up to its old score and pass.
 
 (c) is the same rule as the PROBED inventory in test_account_isolation.py: an
 exception nothing exercises is a leftover, and a leftover here is headroom a
@@ -47,7 +51,8 @@ THRESHOLD = 30.0
 # is one more branch, and a unit of cc adds at least 1.0 to the score. 0.75 sits
 # between the two: it absorbs one flipped line and still fails a second line or
 # a new branch, including on compute_discover_candidates, whose 100% coverage
-# leaves nothing but its cc to regress.
+# leaves nothing but its cc to regress. It is symmetric: one flipped line the
+# other way is noise too, and a real gain beyond it must be recorded (rule e).
 TOLERANCE = 0.75
 FIX = (
     "Fix it by adding tests that run it or by splitting it to cut its complexity. "
@@ -78,12 +83,11 @@ def _describe(key: str, r: dict[str, Any]) -> str:
 
 def check(
     rows: list[dict[str, Any]], baseline: dict[str, dict[str, Any]], sides: set[str]
-) -> tuple[list[str], list[str]]:
-    """Return (failures, notices) for the baseline entries under `sides`."""
+) -> list[str]:
+    """Return the failures for the baseline entries under `sides`."""
     fns = keyed(rows)
     mine = {k: v for k, v in baseline.items() if k.split("/", 1)[0] in sides}
     failures: list[str] = []
-    notices: list[str] = []
     for key, r in fns.items():
         score = crap(r["cc"], r["cov"])
         if score <= THRESHOLD:
@@ -100,9 +104,10 @@ def check(
                 "raise the recorded score only with a reason."
             )
         elif score < entry["score"] - TOLERANCE:
-            notices.append(
-                f"improved: {_describe(key, r)}, recorded {entry['score']}. "
-                "Run --update-baseline to lock the gain in."
+            failures.append(
+                f"(e) improved: {_describe(key, r)} is below its recorded "
+                f"{entry['score']} by more than {TOLERANCE:g}. Run "
+                "bash scripts/crap/run.sh --update-baseline to lock in the gain."
             )
     for key, entry in sorted(mine.items()):
         r = fns.get(key)
@@ -120,7 +125,7 @@ def check(
             failures.append(
                 f"(d) no reason: {key} needs a one-line reason in {BASELINE.name}."
             )
-    return failures, notices
+    return failures
 
 
 def update(
@@ -157,9 +162,7 @@ def main(argv: list[str]) -> int:
             print(f"write a one-line reason for {k} in {BASELINE}", file=sys.stderr)
         print(f"baseline: {len(new)} entries")
         return 1 if missing else 0
-    failures, notices = check(rows, baseline, sides)
-    for n in notices:
-        print(f"note: {n}")
+    failures = check(rows, baseline, sides)
     for f in failures:
         print(f"CRAP ratchet {f}", file=sys.stderr)
     checked = sum(k.split("/", 1)[0] in sides for k in baseline)

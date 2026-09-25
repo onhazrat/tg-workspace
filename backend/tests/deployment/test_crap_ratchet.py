@@ -52,7 +52,7 @@ def entry(score: float, reason: str = "deliberate") -> dict[str, Any]:
 def test_a_new_function_above_the_threshold_fails_with_its_numbers_and_the_fix() -> (
     None
 ):
-    failures, _ = ratchet.check([row("f", 8, 0.0, line=12)], {}, BACKEND)
+    failures = ratchet.check([row("f", 8, 0.0, line=12)], {}, BACKEND)
 
     assert len(failures) == 1
     message = failures[0]
@@ -64,16 +64,21 @@ def test_a_new_function_above_the_threshold_fails_with_its_numbers_and_the_fix()
 
 def test_a_function_at_the_threshold_passes() -> None:
     # cc 30 fully covered is exactly 30: the threshold is "above", not "at".
-    assert ratchet.check([row("f", 30, 1.0)], {}, BACKEND) == ([], [])
+    assert ratchet.check([row("f", 30, 1.0)], {}, BACKEND) == []
 
 
-def test_a_baseline_function_may_drift_within_the_tolerance_and_not_past_it() -> None:
-    base = {f"{FILE}::f": entry(32.0)}
-    within = row("f", 32, 1.0)
-    one_more_branch = row("f", 33, 1.0)
+@pytest.mark.parametrize("drift", [-0.75, -0.5, 0.0, 0.5, 0.75])
+def test_a_baseline_function_may_drift_either_way_within_the_tolerance(
+    drift: float,
+) -> None:
+    # cc 32 fully covered scores exactly 32.0; the recorded score moves instead.
+    base = {f"{FILE}::f": entry(32.0 - drift)}
+    assert ratchet.check([row("f", 32, 1.0)], base, BACKEND) == []
 
-    assert ratchet.check([within], base, BACKEND) == ([], [])
-    failures, _ = ratchet.check([one_more_branch], base, BACKEND)
+
+def test_a_baseline_function_past_the_tolerance_upward_fails() -> None:
+    failures = ratchet.check([row("f", 33, 1.0)], {f"{FILE}::f": entry(32.0)}, BACKEND)
+
     assert len(failures) == 1 and failures[0].startswith("(b) rose")
     assert "recorded 32.0" in failures[0]
 
@@ -92,29 +97,31 @@ def test_the_tolerance_is_smaller_than_one_branch() -> None:
 def test_a_baseline_entry_nothing_scores_above_the_threshold_is_stale(
     rows: list[dict[str, Any]], now: str
 ) -> None:
-    failures, _ = ratchet.check(rows, {f"{FILE}::f": entry(40.0)}, BACKEND)
+    failures = ratchet.check(rows, {f"{FILE}::f": entry(40.0)}, BACKEND)
 
     assert len(failures) == 1 and failures[0].startswith("(c) stale")
     assert now in failures[0]
 
 
 def test_a_baseline_entry_needs_a_reason() -> None:
-    failures, _ = ratchet.check(
+    failures = ratchet.check(
         [row("f", 32, 1.0)], {f"{FILE}::f": entry(32.0, reason=" ")}, BACKEND
     )
     assert [f[:3] for f in failures] == ["(d)"]
 
 
-def test_an_improvement_is_a_note_not_a_failure() -> None:
-    failures, notices = ratchet.check(
-        [row("f", 31, 1.0)], {f"{FILE}::f": entry(40.0)}, BACKEND
-    )
-    assert failures == [] and len(notices) == 1
+def test_an_improvement_past_the_tolerance_fails_until_it_is_recorded() -> None:
+    # Unrecorded, the gain is headroom the function could slide back into.
+    failures = ratchet.check([row("f", 31, 1.0)], {f"{FILE}::f": entry(40.0)}, BACKEND)
+
+    assert len(failures) == 1 and failures[0].startswith("(e) improved")
+    for part in ("CRAP 31.0", "recorded 40.0", "run.sh --update-baseline"):
+        assert part in failures[0]
 
 
 def test_one_side_never_judges_the_other_sides_entries() -> None:
     fe = "frontend/src/a.ts::g"
-    assert ratchet.check([], {fe: entry(40.0)}, BACKEND) == ([], [])
+    assert ratchet.check([], {fe: entry(40.0)}, BACKEND) == []
 
 
 def test_a_repeated_name_is_numbered_in_source_order_regardless_of_row_order() -> None:
@@ -147,7 +154,7 @@ def test_update_keeps_reasons_drops_stale_entries_and_leaves_new_ones_to_explain
         f"{FILE}::new": {"score": 72.0, "reason": ""},
         **other_side,
     }
-    assert ratchet.check(rows, new, BACKEND)[0] == [
+    assert ratchet.check(rows, new, BACKEND) == [
         f"(d) no reason: {FILE}::new needs a one-line reason in baseline.json."
     ]
 
