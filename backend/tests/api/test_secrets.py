@@ -174,3 +174,78 @@ def test_publish_by_credential_id(mock_fetch: AsyncMock, client: TestClient) -> 
     assert "777:PUBTOKEN" in call_url
 
     client.delete(f"{PREFIX}/bot-credentials/pub-bot-1", headers=headers)
+
+
+@pytest.mark.parametrize(
+    ("content_type", "served_as"),
+    [("image/jpeg", "image/jpeg"), (None, "application/octet-stream")],
+)
+@patch("app.api.routes.telegram.fetch_with_retry", new_callable=AsyncMock)
+def test_bot_file_is_fetched_as_bytes_through_the_lane(
+    mock_fetch: AsyncMock,
+    client: TestClient,
+    content_type: str | None,
+    served_as: str,
+) -> None:
+    """The file proxy decrypts the stored token server-side and streams back
+    whatever Telegram sent, typed, so the browser never holds the token.
+
+    **Mutation:** drop `binary=True` and the payload is decoded as text, which
+    corrupts every image.
+    """
+    headers = _auth(client)
+    client.put(
+        f"{PREFIX}/bot-credentials/file-bot-1",
+        json={"name": "File Bot", "token": "888:FILETOKEN"},
+        headers=headers,
+    )
+    mock_fetch.return_value = ((b"\xff\xd8jpeg", content_type), [])
+
+    r = client.get(
+        f"{TELEGRAM}/bot-file/file-bot-1",
+        params={"path": "photos/file_1.jpg"},
+        headers=headers,
+    )
+
+    assert r.status_code == 200
+    assert r.content == b"\xff\xd8jpeg"
+    assert r.headers["content-type"] == served_as
+    assert mock_fetch.call_args[0][0] == (
+        "https://api.telegram.org/file/bot888:FILETOKEN/photos/file_1.jpg"
+    )
+    assert mock_fetch.call_args.kwargs["binary"] is True
+    assert mock_fetch.call_args.kwargs["retries"] == settings.TELEGRAM_API_RETRIES
+
+    client.delete(f"{PREFIX}/bot-credentials/file-bot-1", headers=headers)
+
+
+@patch("app.api.routes.telegram.fetch_with_retry", new_callable=AsyncMock)
+def test_a_failed_bot_file_fetch_is_a_502_that_does_not_echo_the_token(
+    mock_fetch: AsyncMock, client: TestClient
+) -> None:
+    """The fetch URL embeds the token, and an `httpx` error's message quotes
+    its URL, so passing the exception text through would leak the credential
+    into the browser.
+
+    **Mutation:** put `str(exc)` in the 502 detail and the token assertion goes
+    red.
+    """
+    headers = _auth(client)
+    client.put(
+        f"{PREFIX}/bot-credentials/file-bot-2",
+        json={"name": "File Bot", "token": "999:LEAKME"},
+        headers=headers,
+    )
+    mock_fetch.side_effect = RuntimeError(
+        "GET https://api.telegram.org/file/bot999:LEAKME/x failed"
+    )
+
+    r = client.get(
+        f"{TELEGRAM}/bot-file/file-bot-2", params={"path": "x"}, headers=headers
+    )
+
+    assert r.status_code == 502
+    assert r.json() == {"detail": "Failed to fetch bot file"}
+    assert "LEAKME" not in r.text
+
+    client.delete(f"{PREFIX}/bot-credentials/file-bot-2", headers=headers)
