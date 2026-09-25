@@ -19,7 +19,10 @@ import {
   toggleSelectAllUnfollowed,
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
-import { candidateStatistics } from "@/lib/posts/discover-statistics"
+import {
+  type CandidateStatistics,
+  candidateStatistics,
+} from "@/lib/posts/discover-statistics"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import { DiscoverMediaMixBar } from "./DiscoverMediaMixBar"
 
@@ -99,6 +102,343 @@ const ProbeBadge: React.FC<{ candidate: DiscoveryCandidate }> = ({
     >
       {DISCOVER_PROBE_KIND_LABELS[probe.kind]}
     </span>
+  )
+}
+
+/**
+ * The row a shift-click extends a range from, or `null` for a plain toggle.
+ *
+ * A range needs shift held, an anchor that is still on screen, and a click on
+ * some other row. Clicking the anchor itself with shift is an ordinary toggle.
+ */
+export function rangeAnchorIndex(
+  candidates: DiscoveryCandidate[],
+  anchorName: string | null,
+  index: number,
+  shiftHeld: boolean,
+): number | null {
+  if (!shiftHeld || anchorName === null) return null
+  const anchorIndex = candidates.findIndex((c) => c.name === anchorName)
+  return anchorIndex >= 0 && anchorIndex !== index ? anchorIndex : null
+}
+
+/** The display name (the report's, else the probe's) and a formatted subscriber count. */
+export function candidateMeta(row: DiscoveryCandidate): {
+  metaName: string
+  subscribers: string
+} {
+  const subscribers = row.probe?.subscribers
+  return {
+    metaName: row.displayName || row.probe?.displayName || "",
+    subscribers: subscribers == null ? "" : formatCount(subscribers),
+  }
+}
+
+/**
+ * Name and count are separate bidi isolates.
+ *
+ * A Persian channel name is an RTL run inside an LTR line. As one concatenated
+ * string the neutral separator and the ASCII count get absorbed into that run
+ * and reorder — the count lands to the left of the name, and punctuation at the
+ * edge of the name jumps sides. `dir="auto"` resolves each run's direction from
+ * its own first strong character and, per HTML's default stylesheet, isolates
+ * it, so the line always reads name · count regardless of script. Same
+ * treatment as `PostCard` and `ChannelCard`.
+ *
+ * The count also renders when the name is missing, which the single combined
+ * condition used to suppress.
+ */
+export function CandidateMetaLine({
+  metaName,
+  subscribers,
+}: {
+  metaName: string
+  subscribers: string
+}) {
+  if (!metaName && !subscribers) return null
+  return (
+    <div className="text-xs text-app-ink/60">
+      {metaName ? <span dir="auto">{metaName}</span> : null}
+      {metaName && subscribers ? " · " : null}
+      {subscribers ? <span dir="auto">{subscribers} subscribers</span> : null}
+    </div>
+  )
+}
+
+/**
+ * A follow job's per-row result, while the job runs. `pending` is left out
+ * because the Follow button's spinner already says it.
+ */
+export function RowFollowStatus({
+  status,
+  isFollowJobRunning,
+}: {
+  status: string | undefined
+  isFollowJobRunning: boolean
+}) {
+  if (!status || status === "pending" || !isFollowJobRunning) return null
+  return (
+    <div className="mt-0.5 text-[10px] uppercase tracking-wider text-app-ink/50">
+      {status}
+    </div>
+  )
+}
+
+const SIGNAL_COLUMNS: DiscoverySignalKind[] = ["forward", "mention", "link"]
+
+/** The followed Channels that pointed at this handle, each with its count. */
+function SeenInLinks({ seenIn }: { seenIn: DiscoveryCandidate["seenIn"] }) {
+  return seenIn.map((entry, index) => (
+    <span key={entry.channelName}>
+      {index > 0 ? ", " : null}
+      <a
+        href={telegramWebViewChannelUrl(entry.channelName)}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid={`discover-seen-in-link-${entry.channelName}`}
+        className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+      >
+        @{entry.channelName}
+      </a>
+      {` (${entry.total})`}
+    </span>
+  ))
+}
+
+function LastPost({ stats }: { stats: CandidateStatistics }) {
+  if (stats.lastPostAt === null)
+    return (
+      <span className="text-app-ink/30" title={stats.placeholderTitle}>
+        –
+      </span>
+    )
+  return <RelativeTime timestamp={stats.lastPostAt} />
+}
+
+interface CandidateActionsProps {
+  row: DiscoveryCandidate
+  isOffline: boolean
+  /** A follow for this handle is running. */
+  isFollowPending: boolean
+  isSyncing: boolean
+  isRecheckPending: boolean
+  onFollow: (name: string) => void
+  onInspect: (candidate: DiscoveryCandidate) => void
+  onSetIgnored: (name: string, ignored: boolean) => void
+  onRecheck: (name: string) => void
+}
+
+/** Follow (or the Following badge), Details, Dismiss/Restore and Recheck. */
+export function CandidateActions({
+  row,
+  isOffline,
+  isFollowPending,
+  isSyncing,
+  isRecheckPending,
+  onFollow,
+  onInspect,
+  onSetIgnored,
+  onRecheck,
+}: CandidateActionsProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {row.isFollowed ? (
+        <span className="rounded-full bg-app-muted/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-app-ink/60">
+          {isSyncing ? "Syncing…" : "Following"}
+        </span>
+      ) : (
+        <TgButton
+          type="button"
+          variant="secondary"
+          size="sm"
+          data-testid={`discover-follow-${row.name}`}
+          disabled={isOffline}
+          loading={isFollowPending}
+          loadingLabel="Follow"
+          onClick={() => onFollow(row.name)}
+          className="rounded-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+        >
+          <Plus size={12} />
+          Follow
+        </TgButton>
+      )}
+      <TgButton
+        type="button"
+        variant="secondary"
+        size="sm"
+        data-testid={`discover-inspect-${row.name}`}
+        onClick={() => onInspect(row)}
+        className="rounded-full text-app-ink/70"
+      >
+        Details
+      </TgButton>
+      {/*
+       * Dismissing is offered even for followed candidates: a channel can be
+       * worth following and still be noise in the report you scan each week.
+       */}
+      <TgButton
+        type="button"
+        variant="secondary"
+        size="sm"
+        data-testid={`discover-ignore-${row.name}`}
+        onClick={() => onSetIgnored(row.name, !row.isIgnored)}
+        title={
+          row.isIgnored
+            ? "Show this channel in reports again"
+            : "Hide this channel from future reports"
+        }
+        className="rounded-full text-app-ink/60"
+      >
+        {row.isIgnored ? (
+          <>
+            <Undo2 size={12} />
+            Restore
+          </>
+        ) : (
+          <>
+            <EyeOff size={12} />
+            Dismiss
+          </>
+        )}
+      </TgButton>
+      {/*
+       * Offered only where a verdict exists to overturn. On an unprobed row
+       * there is nothing cached to discard, and the sweep will reach it on its
+       * own.
+       */}
+      {row.probe ? (
+        <TgButton
+          type="button"
+          variant="secondary"
+          size="sm"
+          data-testid={`discover-recheck-${row.name}`}
+          disabled={isOffline || isRecheckPending}
+          onClick={() => onRecheck(row.name)}
+          title="Check this handle on Telegram again"
+          className="rounded-full text-app-ink/60"
+        >
+          <RefreshCw size={12} />
+          Recheck
+        </TgButton>
+      ) : null}
+    </div>
+  )
+}
+
+interface CandidateRowProps
+  extends Omit<CandidateActionsProps, "isFollowPending" | "isSyncing"> {
+  isSelected: boolean
+  isFollowPending: boolean
+  isSyncing: boolean
+  isFollowJobRunning: boolean
+  followStatus: string | undefined
+  weights: DiscoverSignalWeights
+  showScore: boolean
+  /** Fires before `onToggle`, with whether shift was held for this click. */
+  onCheckboxClick: (shiftKey: boolean) => void
+  onToggle: () => void
+}
+
+/** One Candidate as a table row. */
+export function CandidateRow({
+  row,
+  isSelected,
+  isFollowJobRunning,
+  followStatus,
+  weights,
+  showScore,
+  onCheckboxClick,
+  onToggle,
+  ...actions
+}: CandidateRowProps) {
+  const stats = candidateStatistics(row.probe)
+  return (
+    <tr className="border-t border-app-ink/10">
+      <td className="py-2 align-middle">
+        <input
+          type="checkbox"
+          data-testid={`discover-select-${row.name}`}
+          checked={isSelected}
+          disabled={
+            actions.isOffline ||
+            isRowCheckboxDisabled(row.isFollowed, actions.isFollowPending)
+          }
+          onClick={(event) => onCheckboxClick(event.shiftKey)}
+          onChange={onToggle}
+          className="accent-blue-600"
+          title="Shift-click to select a range"
+          aria-label={
+            row.isFollowed
+              ? `@${row.name} already followed`
+              : `Select @${row.name} to follow`
+          }
+        />
+      </td>
+      <td className="py-2">
+        <a
+          href={telegramWebViewChannelUrl(row.name)}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid={`discover-channel-link-${row.name}`}
+          className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+        >
+          @{row.name}
+        </a>
+        <ProbeBadge candidate={row} />
+        <CandidateMetaLine {...candidateMeta(row)} />
+        <RowFollowStatus
+          status={followStatus}
+          isFollowJobRunning={isFollowJobRunning}
+        />
+      </td>
+      {SIGNAL_COLUMNS.map((kind) => (
+        <CountCell
+          key={kind}
+          value={row.counts[kind]}
+          testId={`discover-count-${kind}-${row.name}`}
+        />
+      ))}
+      <td
+        className="py-2 font-bold tabular-nums"
+        data-testid={`discover-count-total-${row.name}`}
+      >
+        {row.total}
+      </td>
+      {showScore ? (
+        <td
+          className="py-2 font-bold tabular-nums text-blue-600 dark:text-blue-400"
+          data-testid={`discover-score-${row.name}`}
+        >
+          {weightedScore(row, weights)}
+        </td>
+      ) : null}
+      <td className="py-2">
+        <SeenInLinks seenIn={row.seenIn} />
+      </td>
+      <td className="py-2">
+        <RelativeTime timestamp={row.lastSeen} />
+      </td>
+      <td className="py-2" data-testid={`discover-last-post-${row.name}`}>
+        <LastPost stats={stats} />
+      </td>
+      <StatCell
+        value={stats.postsPerWeek}
+        aside={stats.sampleNote}
+        placeholderTitle={stats.placeholderTitle}
+        testId={`discover-posts-per-week-${row.name}`}
+      />
+      <StatCell
+        value={stats.medianViews}
+        placeholderTitle={stats.placeholderTitle}
+        testId={`discover-median-views-${row.name}`}
+      />
+      <td className="py-2">
+        <DiscoverMediaMixBar mix={row.probe?.mediaMix} handle={row.name} />
+      </td>
+      <td className="py-2">
+        <CandidateActions row={row} {...actions} />
+      </td>
+    </tr>
   )
 }
 
@@ -188,12 +528,14 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   const [anchorName, setAnchorName] = useState<string | null>(null)
 
   const handleRowToggle = (row: DiscoveryCandidate, index: number) => {
-    const anchorIndex =
-      anchorName === null
-        ? -1
-        : candidates.findIndex((c) => c.name === anchorName)
+    const anchorIndex = rangeAnchorIndex(
+      candidates,
+      anchorName,
+      index,
+      shiftHeldRef.current,
+    )
 
-    if (shiftHeldRef.current && anchorIndex >= 0 && anchorIndex !== index) {
+    if (anchorIndex !== null) {
       const shouldSelect = !selectedForFollow.has(row.name)
       setSelectedForFollow((prev) =>
         selectRange(candidates, anchorIndex, index, prev, shouldSelect),
@@ -282,251 +624,33 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
           </tr>
         </thead>
         <tbody>
-          {candidates.map((row, index) => {
-            const rowStatus = resultStatusByName.get(row.name)
-            const metaName = row.displayName || row.probe?.displayName || ""
-            const subscribers =
-              row.probe?.subscribers != null
-                ? formatCount(row.probe.subscribers)
-                : ""
-            const stats = candidateStatistics(row.probe)
-            return (
-              <tr key={row.name} className="border-t border-app-ink/10">
-                <td className="py-2 align-middle">
-                  <input
-                    type="checkbox"
-                    data-testid={`discover-select-${row.name}`}
-                    checked={isRowCheckboxChecked(
-                      row.name,
-                      row.isFollowed,
-                      selectedForFollow,
-                    )}
-                    disabled={
-                      isOffline ||
-                      isRowCheckboxDisabled(
-                        row.isFollowed,
-                        activeFollowNames.includes(row.name),
-                      )
-                    }
-                    onClick={(event) => {
-                      shiftHeldRef.current = event.shiftKey
-                    }}
-                    onChange={() => handleRowToggle(row, index)}
-                    className="accent-blue-600"
-                    title="Shift-click to select a range"
-                    aria-label={
-                      row.isFollowed
-                        ? `@${row.name} already followed`
-                        : `Select @${row.name} to follow`
-                    }
-                  />
-                </td>
-                <td className="py-2">
-                  <a
-                    href={telegramWebViewChannelUrl(row.name)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid={`discover-channel-link-${row.name}`}
-                    className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-                  >
-                    @{row.name}
-                  </a>
-                  <ProbeBadge candidate={row} />
-                  {/*
-                   * Name and count are separate bidi isolates.
-                   *
-                   * A Persian channel name is an RTL run inside an LTR line. As
-                   * one concatenated string the neutral separator and the ASCII
-                   * count get absorbed into that run and reorder — the count
-                   * lands to the left of the name, and punctuation at the edge
-                   * of the name jumps sides. `dir="auto"` resolves each run's
-                   * direction from its own first strong character and, per
-                   * HTML's default stylesheet, isolates it, so the line always
-                   * reads name · count regardless of script. Same treatment as
-                   * `PostCard` and `ChannelCard`.
-                   *
-                   * The count also renders when the name is missing, which the
-                   * single combined condition used to suppress.
-                   */}
-                  {metaName || subscribers ? (
-                    <div className="text-xs text-app-ink/60">
-                      {metaName ? <span dir="auto">{metaName}</span> : null}
-                      {metaName && subscribers ? " · " : null}
-                      {subscribers ? (
-                        <span dir="auto">{subscribers} subscribers</span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {rowStatus &&
-                  rowStatus !== "pending" &&
-                  isFollowJobRunning ? (
-                    <div className="mt-0.5 text-[10px] uppercase tracking-wider text-app-ink/50">
-                      {rowStatus}
-                    </div>
-                  ) : null}
-                </td>
-                {(["forward", "mention", "link"] as DiscoverySignalKind[]).map(
-                  (kind) => (
-                    <CountCell
-                      key={kind}
-                      value={row.counts[kind]}
-                      testId={`discover-count-${kind}-${row.name}`}
-                    />
-                  ),
-                )}
-                <td
-                  className="py-2 font-bold tabular-nums"
-                  data-testid={`discover-count-total-${row.name}`}
-                >
-                  {row.total}
-                </td>
-                {showScore ? (
-                  <td
-                    className="py-2 font-bold tabular-nums text-blue-600 dark:text-blue-400"
-                    data-testid={`discover-score-${row.name}`}
-                  >
-                    {weightedScore(row, weights)}
-                  </td>
-                ) : null}
-                <td className="py-2">
-                  {row.seenIn.map((entry, index) => (
-                    <span key={entry.channelName}>
-                      {index > 0 ? ", " : null}
-                      <a
-                        href={telegramWebViewChannelUrl(entry.channelName)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-testid={`discover-seen-in-link-${entry.channelName}`}
-                        className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-                      >
-                        @{entry.channelName}
-                      </a>
-                      {` (${entry.total})`}
-                    </span>
-                  ))}
-                </td>
-                <td className="py-2">
-                  <RelativeTime timestamp={row.lastSeen} />
-                </td>
-                <td
-                  className="py-2"
-                  data-testid={`discover-last-post-${row.name}`}
-                >
-                  {stats.lastPostAt === null ? (
-                    <span
-                      className="text-app-ink/30"
-                      title={stats.placeholderTitle}
-                    >
-                      –
-                    </span>
-                  ) : (
-                    <RelativeTime timestamp={stats.lastPostAt} />
-                  )}
-                </td>
-                <StatCell
-                  value={stats.postsPerWeek}
-                  aside={stats.sampleNote}
-                  placeholderTitle={stats.placeholderTitle}
-                  testId={`discover-posts-per-week-${row.name}`}
-                />
-                <StatCell
-                  value={stats.medianViews}
-                  placeholderTitle={stats.placeholderTitle}
-                  testId={`discover-median-views-${row.name}`}
-                />
-                <td className="py-2">
-                  <DiscoverMediaMixBar
-                    mix={row.probe?.mediaMix}
-                    handle={row.name}
-                  />
-                </td>
-                <td className="py-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {row.isFollowed ? (
-                      <span className="rounded-full bg-app-muted/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-app-ink/60">
-                        {syncingNames.has(row.name) ? "Syncing…" : "Following"}
-                      </span>
-                    ) : (
-                      <TgButton
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        data-testid={`discover-follow-${row.name}`}
-                        disabled={isOffline}
-                        loading={activeFollowNames.includes(row.name)}
-                        loadingLabel="Follow"
-                        onClick={() => onFollow(row.name)}
-                        className="rounded-full border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
-                      >
-                        <Plus size={12} />
-                        Follow
-                      </TgButton>
-                    )}
-                    <TgButton
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      data-testid={`discover-inspect-${row.name}`}
-                      onClick={() => onInspect(row)}
-                      className="rounded-full text-app-ink/70"
-                    >
-                      Details
-                    </TgButton>
-                    {/*
-                     * Dismissing is offered even for followed candidates: a
-                     * channel can be worth following and still be noise in the
-                     * report you scan each week.
-                     */}
-                    <TgButton
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      data-testid={`discover-ignore-${row.name}`}
-                      onClick={() => onSetIgnored(row.name, !row.isIgnored)}
-                      title={
-                        row.isIgnored
-                          ? "Show this channel in reports again"
-                          : "Hide this channel from future reports"
-                      }
-                      className="rounded-full text-app-ink/60"
-                    >
-                      {row.isIgnored ? (
-                        <>
-                          <Undo2 size={12} />
-                          Restore
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff size={12} />
-                          Dismiss
-                        </>
-                      )}
-                    </TgButton>
-                    {/*
-                     * Offered only where a verdict exists to overturn. On an
-                     * unprobed row there is nothing cached to discard, and the
-                     * sweep will reach it on its own.
-                     */}
-                    {row.probe ? (
-                      <TgButton
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        data-testid={`discover-recheck-${row.name}`}
-                        disabled={isOffline || isRecheckPending}
-                        onClick={() => onRecheck(row.name)}
-                        title="Check this handle on Telegram again"
-                        className="rounded-full text-app-ink/60"
-                      >
-                        <RefreshCw size={12} />
-                        Recheck
-                      </TgButton>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
+          {candidates.map((row, index) => (
+            <CandidateRow
+              key={row.name}
+              row={row}
+              isSelected={isRowCheckboxChecked(
+                row.name,
+                row.isFollowed,
+                selectedForFollow,
+              )}
+              isOffline={isOffline}
+              isFollowPending={activeFollowNames.includes(row.name)}
+              isSyncing={syncingNames.has(row.name)}
+              isRecheckPending={isRecheckPending}
+              isFollowJobRunning={isFollowJobRunning}
+              followStatus={resultStatusByName.get(row.name)}
+              weights={weights}
+              showScore={showScore}
+              onCheckboxClick={(shiftKey) => {
+                shiftHeldRef.current = shiftKey
+              }}
+              onToggle={() => handleRowToggle(row, index)}
+              onFollow={onFollow}
+              onInspect={onInspect}
+              onSetIgnored={onSetIgnored}
+              onRecheck={onRecheck}
+            />
+          ))}
         </tbody>
       </table>
     </div>

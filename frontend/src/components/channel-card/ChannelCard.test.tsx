@@ -8,18 +8,23 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type { Channel, ChannelStats } from "@/types"
+import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
   ChannelCardBadges,
   ChannelCardSyncingOverlay,
 } from "./ChannelCardChrome"
 import { ChannelCardFooter } from "./ChannelCardFooter"
+import { ChannelCardHeader } from "./ChannelCardHeader"
 import { ChannelCardMeta, type ChannelMetaVisibility } from "./ChannelCardMeta"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
+  channelCardFrameClass,
   channelSyncStatus,
+  freezeTargetGroup,
   parseStartId,
+  queuePosition,
+  settingGroupHints,
   syncProgress,
 } from "./channel-card-status"
 
@@ -392,5 +397,120 @@ describe("ChannelCardFooter", () => {
     cleanup()
     renderFooter(base, { showStartId: false })
     expect(screen.queryByText("Start ID")).toBeNull()
+  })
+})
+
+describe("the card shell's rules", () => {
+  const group = (id: string, isDefault = false) =>
+    ({ id, name: id, isDefault }) as unknown as ChannelSettingGroup
+  const groups = [group("default", true), group("frozen-1"), group("slow")]
+
+  test("freezing moves to the Frozen group, thawing to the default", () => {
+    expect(freezeTargetGroup(base, groups)?.id).toBe("frozen-1")
+    expect(freezeTargetGroup({ ...base, isFrozen: true }, groups)?.id).toBe(
+      "default",
+    )
+    expect(freezeTargetGroup(base, [group("default", true)])).toBeUndefined()
+    expect(
+      freezeTargetGroup({ ...base, isFrozen: true }, [group("frozen-1")]),
+    ).toBeUndefined()
+  })
+
+  test("queue position is 1-based, null when not queued", () => {
+    const queue = [{ channel: { id: "x" } }, { channel: { id: "c1" } }]
+    expect(queuePosition(queue, "c1")).toBe(2)
+    expect(queuePosition(queue, "x")).toBe(1)
+    expect(queuePosition(queue, "nope")).toBeNull()
+  })
+
+  test("the frame reflects frozen, selected and syncing", () => {
+    const plain = channelCardFrameClass({
+      isFrozen: false,
+      isSelected: false,
+      isScraping: false,
+    })
+    expect(plain).not.toContain("opacity-80")
+    expect(plain).toContain("border-app-ink/10")
+    expect(plain).not.toContain("ring-2")
+    const all = channelCardFrameClass({
+      isFrozen: true,
+      isSelected: true,
+      isScraping: true,
+    })
+    expect(all).toContain("opacity-80")
+    expect(all).toContain("border-app-ink shadow-md")
+    expect(all).not.toContain("border-app-ink/10")
+    expect(all).toContain("ring-2 ring-app-ink/20")
+  })
+
+  test("each frame flag changes only its own class", () => {
+    const frame = (flag: "isFrozen" | "isSelected" | "isScraping") =>
+      channelCardFrameClass({
+        isFrozen: false,
+        isSelected: false,
+        isScraping: false,
+        [flag]: true,
+      })
+    expect(frame("isFrozen")).toContain("opacity-80")
+    expect(frame("isFrozen")).not.toContain("ring-2")
+    expect(frame("isFrozen")).toContain("border-app-ink/10")
+    expect(frame("isSelected")).not.toContain("opacity-80")
+    expect(frame("isSelected")).not.toContain("ring-2")
+    expect(frame("isScraping")).toContain("ring-2")
+    expect(frame("isScraping")).not.toContain("opacity-80")
+    expect(frame("isScraping")).toContain("border-app-ink/10")
+  })
+
+  test("a named group becomes a tag and names itself in the hint", () => {
+    expect(settingGroupHints("Slow Feed")).toEqual({
+      virtualGroupTagName: "group:Slow Feed",
+      inheritedSettingsHint: 'Inherited from setting group "Slow Feed"',
+    })
+    expect(settingGroupHints(undefined)).toEqual({
+      virtualGroupTagName: null,
+      inheritedSettingsHint: "Inherited from channel setting group",
+    })
+    expect(settingGroupHints("").virtualGroupTagName).toBeNull()
+  })
+})
+
+describe("ChannelCardHeader", () => {
+  test("titles by display name, falling back to the handle", () => {
+    render(
+      <ChannelCardHeader
+        channel={{ ...base, displayName: "Pavel" }}
+        showBio={false}
+      />,
+    )
+    expect(screen.getByTitle("Pavel").textContent).toBe("Pavel")
+    expect(screen.getByText("@durov")).toBeTruthy()
+    cleanup()
+    render(<ChannelCardHeader channel={base} showBio={false} />)
+    expect(screen.getByTitle("durov").textContent).toBe("durov")
+  })
+
+  test("marks a frozen channel", () => {
+    render(<ChannelCardHeader channel={base} showBio={false} />)
+    expect(screen.queryByTestId("channel-card-frozen-mark")).toBeNull()
+    cleanup()
+    render(
+      <ChannelCardHeader
+        channel={{ ...base, isFrozen: true }}
+        showBio={false}
+      />,
+    )
+    expect(screen.getByTestId("channel-card-frozen-mark")).toBeTruthy()
+  })
+
+  test("the bio shows only when the setting is on and there is one", () => {
+    const withBio = { ...base, bio: "about" }
+    render(<ChannelCardHeader channel={withBio} showBio />)
+    expect(screen.getByTitle("about").getAttribute("dir")).toBe("auto")
+    cleanup()
+    render(<ChannelCardHeader channel={withBio} showBio={false} />)
+    expect(screen.queryByTitle("about")).toBeNull()
+    cleanup()
+    render(<ChannelCardHeader channel={base} showBio />)
+    expect(screen.queryByText("about")).toBeNull()
   })
 })

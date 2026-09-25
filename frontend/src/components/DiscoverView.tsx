@@ -4,15 +4,18 @@ import { useMemo, useState } from "react"
 import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
 import { DiscoverCandidatePanel } from "@/components/discover/DiscoverCandidatePanel"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
-import { DiscoverEmptyState } from "@/components/discover/DiscoverEmptyState"
 import { DiscoverFilterBar } from "@/components/discover/DiscoverFilterBar"
 import { DiscoverProbeBar } from "@/components/discover/DiscoverProbeBar"
 import { DiscoverReportBar } from "@/components/discover/DiscoverReportBar"
 import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
-import { DiscoverSortChips } from "@/components/discover/DiscoverSortChips"
-import { DiscoverWeightsEditor } from "@/components/discover/DiscoverWeightsEditor"
+import {
+  CandidatesHeading,
+  DiscoverReportBody,
+  discoverBulkState,
+  FollowProgressLine,
+  followConfirmDescription,
+} from "@/components/discover/DiscoverViewSections"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
-import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import {
   useDiscoverIgnoreMutation,
@@ -230,6 +233,13 @@ export const DiscoverView: React.FC = () => {
     follow.setSelectedForFollow(new Set())
   }
 
+  const bulk = discoverBulkState({
+    candidateCount: candidates.length,
+    selected: follow.selectedForFollow,
+    activeFollowNames: follow.activeFollowNames,
+    followState: discoverFollowState,
+  })
+
   const toggleSignal = (kind: DiscoverySignalKind) => {
     setDiscoverSignals(
       discoverSignals.includes(kind)
@@ -281,31 +291,13 @@ export const DiscoverView: React.FC = () => {
       />
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-app-ink/70">
-            Channel Candidates
-            {candidates.length > 0 ? (
-              <span className="ml-2 font-normal normal-case tracking-normal text-app-ink/60">
-                ({candidates.length} candidate
-                {candidates.length === 1 ? "" : "s"})
-              </span>
-            ) : null}
-          </h3>
-          {candidates.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              {discoverSortKey === "weighted" ? (
-                <DiscoverWeightsEditor
-                  weights={discoverSignalWeights}
-                  onChange={setDiscoverSignalWeights}
-                />
-              ) : null}
-              <DiscoverSortChips
-                sortKey={discoverSortKey}
-                onSortKeyChange={setDiscoverSortKey}
-              />
-            </div>
-          ) : null}
-        </div>
+        <CandidatesHeading
+          count={candidates.length}
+          sortKey={discoverSortKey}
+          onSortKeyChange={setDiscoverSortKey}
+          weights={discoverSignalWeights}
+          onWeightsChange={setDiscoverSignalWeights}
+        />
 
         {/*
          * Only the *result* filters are gated. Signals configures the next run —
@@ -333,75 +325,55 @@ export const DiscoverView: React.FC = () => {
           />
         ) : null}
 
-        {candidates.length > 0 && follow.selectedForFollow.size > 0 ? (
+        {bulk ? (
           <DiscoverBulkBar
-            selectedCount={follow.selectedForFollow.size}
+            {...bulk}
             isOffline={isOffline}
-            isFollowJobRunning={[...follow.selectedForFollow].some((name) =>
-              follow.activeFollowNames.includes(name),
-            )}
             followProgress={follow.followProgress}
             onFollowSelected={() => void follow.followSelected()}
             onClearSelection={() => follow.setSelectedForFollow(new Set())}
             onDismissSelected={dismissSelected}
-            dismissMode={
-              discoverFollowState === "ignored" ? "restore" : "dismiss"
-            }
             isDismissPending={setIgnored.isPending}
             onRecheckSelected={recheckSelected}
-            showRecheck={discoverFollowState === "unavailable"}
             isRecheckPending={probe.isRecheckPending}
           />
         ) : null}
 
-        {follow.isFollowJobRunning &&
-        follow.followProgress &&
-        follow.selectedForFollow.size === 0 ? (
-          <div
-            className="mb-3 text-xs text-app-ink/60"
-            data-testid="discover-follow-progress"
-          >
-            Following… {follow.followProgress.completed}/
-            {follow.followProgress.total}
-          </div>
-        ) : null}
+        <FollowProgressLine
+          isFollowJobRunning={follow.isFollowJobRunning}
+          followProgress={follow.followProgress}
+          selectedCount={follow.selectedForFollow.size}
+        />
 
-        {isLoadingReport ? (
-          <p className="py-12 text-center text-sm text-app-ink/50">
-            Loading report…
-          </p>
-        ) : view === null ? (
-          <GoToActionEmptyState
-            what="discovery report"
-            description="Reports are saved with the scope they were made from, so changing your selection later won't affect them. Open one from History, or generate a new one."
-          />
-        ) : candidates.length === 0 && emptyState ? (
-          <DiscoverEmptyState
-            state={emptyState}
-            onQuickAction={runQuickAction}
-          />
-        ) : (
-          <DiscoverCandidateTable
-            candidates={candidates}
-            selectedForFollow={follow.selectedForFollow}
-            setSelectedForFollow={follow.setSelectedForFollow}
-            unfollowedCount={unfollowedCount}
-            isOffline={isOffline}
-            isFollowJobRunning={follow.isFollowJobRunning}
-            activeFollowNames={follow.activeFollowNames}
-            syncingNames={scrapingChannels}
-            resultStatusByName={follow.resultStatusByName}
-            onFollow={(name) => void follow.followOne(name)}
-            onInspect={(candidate) => setInspectingName(candidate.name)}
-            onSetIgnored={(name, ignored) =>
-              setIgnored.mutate({ handles: [name], ignored })
-            }
-            onRecheck={(name) => probe.recheck([name])}
-            isRecheckPending={probe.isRecheckPending}
-            weights={discoverSignalWeights}
-            showScore={discoverSortKey === "weighted"}
-          />
-        )}
+        <DiscoverReportBody
+          isLoadingReport={isLoadingReport}
+          hasReport={view !== null}
+          candidateCount={candidates.length}
+          emptyState={emptyState}
+          onQuickAction={runQuickAction}
+          table={
+            <DiscoverCandidateTable
+              candidates={candidates}
+              selectedForFollow={follow.selectedForFollow}
+              setSelectedForFollow={follow.setSelectedForFollow}
+              unfollowedCount={unfollowedCount}
+              isOffline={isOffline}
+              isFollowJobRunning={follow.isFollowJobRunning}
+              activeFollowNames={follow.activeFollowNames}
+              syncingNames={scrapingChannels}
+              resultStatusByName={follow.resultStatusByName}
+              onFollow={(name) => void follow.followOne(name)}
+              onInspect={(candidate) => setInspectingName(candidate.name)}
+              onSetIgnored={(name, ignored) =>
+                setIgnored.mutate({ handles: [name], ignored })
+              }
+              onRecheck={(name) => probe.recheck([name])}
+              isRecheckPending={probe.isRecheckPending}
+              weights={discoverSignalWeights}
+              showScore={discoverSortKey === "weighted"}
+            />
+          }
+        />
       </div>
 
       <DiscoverCandidatePanel
@@ -420,11 +392,7 @@ export const DiscoverView: React.FC = () => {
           if (!open) follow.setPendingFollowNames(null)
         }}
         title="Follow channels?"
-        description={
-          follow.pendingFollowNames
-            ? `Follow ${follow.pendingFollowNames.length} channels? This will scrape and add each selected source.`
-            : ""
-        }
+        description={followConfirmDescription(follow.pendingFollowNames)}
         confirmLabel="Follow"
         onConfirm={() => {
           const names = follow.pendingFollowNames ?? []
