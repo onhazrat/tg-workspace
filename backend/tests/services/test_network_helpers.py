@@ -83,6 +83,30 @@ from app.services.telegram_web import telegram_channel_post_url
             ],
             id="offsets-follow-the-stripped-text-and-keep-the-tail",
         ),
+        pytest.param(
+            # The Bot API counts UTF-16 code units, and an emoji outside the
+            # BMP is two of them: one unit for the emoji, one for the space.
+            "🎉 **bold** x",
+            "🎉 bold x",
+            [{"type": "bold", "offset": 3, "length": 4}],
+            id="emoji-before-bold-counts-two-units",
+        ),
+        pytest.param(
+            # "go " + two units + " now" is nine units, and the bold after the
+            # link inherits the extra one.
+            "a [go 🚀 now](https://example.test/p) **b**",
+            "a go 🚀 now b",
+            [
+                {
+                    "type": "text_link",
+                    "offset": 2,
+                    "length": 9,
+                    "url": "https://example.test/p",
+                },
+                {"type": "bold", "offset": 12, "length": 1},
+            ],
+            id="emoji-inside-link-label-shifts-later-entities",
+        ),
     ],
 )
 def test_parse_telegram_entities(
