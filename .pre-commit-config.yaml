@@ -34,7 +34,7 @@ repos:
         entry: bun run lint
         language: system
         types: [text]
-        files: ^frontend/
+        files: ^(frontend|scripts/crap)/
 
       - id: local-ruff-check
         name: ruff check
@@ -52,7 +52,7 @@ repos:
 
       - id: local-mypy
         name: mypy check
-        entry: bash -c 'cd backend && uv run mypy app'
+        entry: bash -c 'cd backend && uv run mypy app ../scripts/crap'
         require_serial: true
         language: unsupported
         pass_filenames: false
