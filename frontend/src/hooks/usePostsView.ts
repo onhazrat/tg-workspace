@@ -128,6 +128,18 @@ export interface PostsFeed {
 }
 
 /**
+ * Whether the feed takes the client RAG path instead of the server feed: only
+ * with embeddings on, and only while a related-post or semantic search is set.
+ */
+export function isSemanticFeed(
+  embeddingsEnabled: boolean,
+  relatedPostSearch: Post | null,
+  semanticQuery: string,
+): boolean {
+  return embeddingsEnabled && (!!relatedPostSearch || !!semanticQuery.trim())
+}
+
+/**
  * The Posts-tab feed. For the normal path it pages the server feed
  * (`POST /data/posts` with filters + cap + sort) via an infinite query — only
  * `FEED_PAGE_SIZE` rows per page, more on scroll. When a semantic/related
@@ -155,8 +167,11 @@ export function usePostsFeed(): PostsFeed {
   const debouncedSemantic = useDebouncedValue(semanticSearchQuery, 300)
   const selectedChannelNames = useSelectedChannelNames()
 
-  const semanticActive =
-    embeddingsEnabled && (!!relatedPostSearch || !!debouncedSemantic.trim())
+  const semanticActive = isSemanticFeed(
+    embeddingsEnabled,
+    relatedPostSearch,
+    debouncedSemantic,
+  )
 
   const filters = {
     channelNames: selectedChannelNames,
