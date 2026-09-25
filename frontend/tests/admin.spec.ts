@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
+import { expect, test } from "./fixtures.ts"
 import { replaceFieldValue } from "./utils/form"
 import { createUser } from "./utils/privateApi"
 import { randomEmail, randomPassword } from "./utils/random"

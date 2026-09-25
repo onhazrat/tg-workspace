@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test"
-import { expect, test } from "@playwright/test"
+import { expect, test } from "./fixtures.ts"
 
 async function gotoSettings(page: Page, search = "") {
   const qs = search.startsWith("?") ? search.slice(1) : search

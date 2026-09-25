@@ -1,5 +1,6 @@
-import { expect, type Page, test } from "@playwright/test"
+import type { Page } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
+import { expect, test } from "./fixtures.ts"
 import { createUser } from "./utils/privateApi.ts"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser, logOutUser } from "./utils/user"

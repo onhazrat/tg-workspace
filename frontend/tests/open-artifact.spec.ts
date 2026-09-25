@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test } from "./fixtures.ts"
 
 import { seedArtifacts, WIDE_SUMMARY_ID } from "./utils/seed-artifacts"
 

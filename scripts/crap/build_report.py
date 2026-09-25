@@ -4,6 +4,7 @@ CRAP = cc^2 * (1 - cov)^3 + cc, per function; above 30 is the usual threshold.
 
 Usage: python3 scripts/crap/build_report.py <backend.json> <frontend.json> <out.html>
          --commit SHA --backend-tests TEXT --backend-line-cov TEXT --frontend-tests TEXT
+         [--e2e-tests TEXT]   # frontend coverage includes Playwright's
 """
 
 import argparse
@@ -14,6 +15,10 @@ from typing import Any
 
 TEMPLATE = Path(__file__).with_name("report.template.html")
 THRESHOLD = 30
+UNIT_ONLY = (
+    "Playwright runs are not counted, so components that only e2e exercises "
+    "show as 0% covered and their scores overstate the risk."
+)
 
 
 def crap(r: dict[str, Any]) -> float:
@@ -47,6 +52,7 @@ def main() -> None:
     ap.add_argument("--backend-tests", required=True)
     ap.add_argument("--backend-line-cov", required=True)
     ap.add_argument("--frontend-tests", required=True)
+    ap.add_argument("--e2e-tests")
     a = ap.parse_args()
 
     sides = [
@@ -75,6 +81,16 @@ def main() -> None:
         "__BACKEND_TESTS__": a.backend_tests,
         "__BACKEND_LINE_COV__": a.backend_line_cov,
         "__FRONTEND_TESTS__": a.frontend_tests,
+        "__LEDE_COVERAGE__": " Frontend coverage counts unit tests and Playwright together."
+        if a.e2e_tests
+        else "",
+        "__FRONTEND_E2E__": (
+            f"It is merged line by line with Chromium's V8 coverage from {a.e2e_tests}, mapped back "
+            "to <code>frontend/src</code> through Vite's source maps: a line bun counts is covered if "
+            "either suite ran it, and a file no unit test loads takes its lines from Playwright alone."
+            if a.e2e_tests
+            else UNIT_ONLY
+        ),
     }.items():
         assert key in html, f"template lost its {key} placeholder"
         html = html.replace(key, value)

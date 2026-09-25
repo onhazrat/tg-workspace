@@ -3,28 +3,48 @@
 // on their own and their lines don't count toward the enclosing function,
 // which is how radon treats closures on the backend.
 //
-// Usage: bun scripts/crap/frontend_crap.ts <frontend-dir> <lcov.info> <out.json>
+// Any extra lcov files are Playwright's (frontend/tests/fixtures.ts), merged as
+// a per-line union: a line bun reports is covered if either side ran it, and a
+// file bun never loaded takes its lines from e2e alone. Lines only e2e reports
+// in a file bun has are dropped, so e2e can raise a function's coverage but
+// never lower it.
+//
+// Usage: bun scripts/crap/frontend_crap.ts <frontend-dir> <lcov.info> <out.json> [e2e.info...]
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { Glob } from "bun"
 import ts from "typescript"
 
-const [root, lcovPath, outPath] = process.argv.slice(2)
+const [root, lcovPath, outPath, ...e2ePaths] = process.argv.slice(2)
 
-const hits = new Map<string, Map<number, number>>()
-let cur: Map<number, number> | null = null
-const lcov = existsSync(lcovPath) ? readFileSync(lcovPath, "utf8") : ""
-for (const line of lcov.split("\n")) {
-  if (line.startsWith("SF:")) {
-    cur = new Map()
-    hits.set(line.slice(3), cur)
-  } else if (line.startsWith("DA:") && cur) {
-    const [n, c] = line.slice(3).split(",").map(Number)
-    cur.set(n, c)
+function parseLcov(path: string) {
+  const out = new Map<string, Map<number, number>>()
+  let cur: Map<number, number> | null = null
+  const lcov = existsSync(path) ? readFileSync(path, "utf8") : ""
+  for (const line of lcov.split("\n")) {
+    if (line.startsWith("SF:")) {
+      cur = new Map()
+      out.set(line.slice(3), cur)
+    } else if (line.startsWith("DA:") && cur) {
+      const [n, c] = line.slice(3).split(",").map(Number)
+      cur.set(n, c)
+    }
   }
+  return out
 }
 
-const skip = /(^src\/client\/|\.test\.tsx?$|\.conform\.ts$|routeTree\.gen\.ts$|\.d\.ts$)/
+const hits = parseLcov(lcovPath)
+const unitFiles = new Set(hits.keys())
+for (const path of e2ePaths)
+  for (const [file, e2e] of parseLcov(path)) {
+    const da = hits.get(file) ?? new Map<number, number>()
+    hits.set(file, da)
+    for (const [n, c] of e2e)
+      if (!unitFiles.has(file) || da.has(n)) da.set(n, (da.get(n) ?? 0) + c)
+  }
+
+// The generated client and the vendored shadcn components are not ours to test.
+const skip = /(^src\/client\/|^src\/components\/ui\/|\.test\.tsx?$|\.conform\.ts$|routeTree\.gen\.ts$|\.d\.ts$)/
 const rows: object[] = []
 
 const isFn = (n: ts.Node) =>

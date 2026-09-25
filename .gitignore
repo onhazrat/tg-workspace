@@ -34,3 +34,4 @@ _template_tmp/
 
 # CRAP score report (scripts/crap/run.sh)
 crap-report/
+frontend/coverage-e2e/
