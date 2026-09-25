@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, setSystemTime, test } from "bun:test"
 import type { CommandContext } from "@/lib/commands/types"
 import {
   buildSettingCommands,
@@ -314,5 +314,81 @@ describe("the catalog→settings binding actually fires", () => {
     expect(calls).toHaveLength(1)
     expect(calls[0][0]).toBe("setAiTemperature")
     expect(calls[0][1]).toBe(cmd?.editorField?.max)
+  })
+})
+
+/**
+ * The default start time is one value read two ways: an ISO timestamp in
+ * `absolute` mode, a day count otherwise. The badge, the editor's initial
+ * value and the write all have to agree on which mode is live.
+ */
+describe("the global start time editor", () => {
+  const cmd = buildSettingCommands().find(
+    (c) => c.id === "edit-global-start-time-value",
+  )
+
+  const run = (
+    settings: Partial<CommandContext["settings"]>,
+    input?: string,
+  ) => {
+    const written: unknown[] = []
+    const ctx = makeContext({
+      ...settings,
+      setGlobalStartTimeValue: (value: unknown) => written.push(value),
+    } as Partial<CommandContext["settings"]>)
+    if (input !== undefined) cmd?.editorField?.apply?.(ctx, input)
+    return {
+      badge: cmd?.getBadge?.(ctx),
+      value: cmd?.editorField?.getValue?.(ctx),
+      written,
+    }
+  }
+
+  test("absolute mode shows the stored timestamp, cut to a date and a minute", () => {
+    const { badge, value } = run({
+      globalStartTimeMode: "absolute",
+      globalStartTimeValue: "2026-03-04T05:06:07.000Z",
+    })
+    expect(badge).toBe("2026-03-04")
+    expect(value).toBe("2026-03-04T05:06")
+  })
+
+  test("absolute mode with no stored timestamp falls back to now", () => {
+    setSystemTime(new Date("2026-05-06T07:08:09Z"))
+    try {
+      const { badge, value } = run({
+        globalStartTimeMode: "absolute",
+        globalStartTimeValue: 7,
+      })
+      expect(badge).toBe("2026-05-06")
+      expect(value).toBe("2026-05-06T07:08")
+    } finally {
+      setSystemTime()
+    }
+  })
+
+  test("relative mode shows the day count, defaulting to 7", () => {
+    expect(run({ globalStartTimeValue: 30 })).toMatchObject({
+      badge: "30d",
+      value: 30,
+    })
+    expect(run({ globalStartTimeValue: "2026-03-04" })).toMatchObject({
+      badge: "7d",
+      value: 7,
+    })
+  })
+
+  test("absolute mode writes an ISO timestamp", () => {
+    const { written } = run(
+      { globalStartTimeMode: "absolute" },
+      "2026-03-04T05:06Z",
+    )
+    expect(written).toEqual(["2026-03-04T05:06:00.000Z"])
+  })
+
+  test("relative mode writes a positive whole day count and ignores the rest", () => {
+    expect(run({}, "14").written).toEqual([14])
+    expect(run({}, "0").written).toEqual([])
+    expect(run({}, "soon").written).toEqual([])
   })
 })

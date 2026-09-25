@@ -1,9 +1,16 @@
-import { describe, expect, it } from "bun:test"
+import { afterEach, describe, expect, it } from "bun:test"
+
+import { scopedStorage } from "@/lib/storage/scoped"
 
 import {
+  AFFINITY_MAX_ENTRIES,
+  AFFINITY_STORAGE_KEY,
   AFFINITY_WEIGHT,
   filterAndRank,
+  loadAffinityEntries,
   querySimilarity,
+  recordAffinityPick,
+  saveAffinityEntries,
 } from "./rank-commands"
 import type { CommandDef } from "./types"
 
@@ -116,5 +123,67 @@ describe("filterAndRank", () => {
     expect(logs?.score).toBeCloseTo(0.9 + Math.log1p(3) * AFFINITY_WEIGHT, 3)
     // 0.9 plus the boost now beats the 1.15 of the navigate-tab exact match.
     expect(ranked[0].command.id).toBe("open-logs")
+  })
+})
+
+/**
+ * The stored affinity list is read inside the palette's render path, so a bad
+ * value must come back as "no history" rather than throw.
+ */
+describe("loadAffinityEntries", () => {
+  afterEach(() => scopedStorage.removeItem(AFFINITY_STORAGE_KEY))
+
+  it("round-trips what saveAffinityEntries wrote", () => {
+    const entries = [{ query: "log", commandId: "x", count: 2, lastUsedAt: 5 }]
+    saveAffinityEntries(entries)
+    expect(loadAffinityEntries()).toEqual(entries)
+  })
+
+  it.each([
+    ["nothing stored", null],
+    ["malformed JSON", "{not json"],
+    ["a non-array value", '{"query":"log"}'],
+  ])("answers an empty list for %s", (_label, raw) => {
+    if (raw !== null) scopedStorage.setItem(AFFINITY_STORAGE_KEY, raw)
+    expect(loadAffinityEntries()).toEqual([])
+  })
+})
+
+describe("recordAffinityPick", () => {
+  it("ignores a blank query", () => {
+    const entries = [{ query: "a", commandId: "x", count: 1, lastUsedAt: 0 }]
+    expect(recordAffinityPick("   ", "x", entries)).toBe(entries)
+  })
+
+  it("counts a repeat pick under the normalised query and adds a new one", () => {
+    const entries = [
+      { query: "sync all", commandId: "sync-all", count: 1, lastUsedAt: 0 },
+    ]
+    const repeated = recordAffinityPick("  Sync   ALL ", "sync-all", entries)
+    expect(repeated).toHaveLength(1)
+    expect(repeated[0].count).toBe(2)
+    expect(repeated[0].lastUsedAt).toBeGreaterThan(0)
+
+    // Same query, different command: a separate entry.
+    const added = recordAffinityPick("sync all", "open-logs", repeated)
+    expect(added.map((e) => [e.commandId, e.count])).toEqual([
+      ["sync-all", 2],
+      ["open-logs", 1],
+    ])
+  })
+
+  it("drops the weakest entry once the list is past its cap", () => {
+    const now = Date.now()
+    const entries = Array.from({ length: AFFINITY_MAX_ENTRIES }, (_, i) => ({
+      query: `q${i}`,
+      commandId: "x",
+      // Entry 0 is the weakest: one use, a year ago.
+      count: i === 0 ? 1 : 5,
+      lastUsedAt: i === 0 ? now - 365 * 24 * 60 * 60 * 1000 : now,
+    }))
+    const next = recordAffinityPick("fresh", "y", entries)
+    expect(next).toHaveLength(AFFINITY_MAX_ENTRIES)
+    expect(next.some((e) => e.query === "q0")).toBe(false)
+    expect(next.some((e) => e.query === "fresh")).toBe(true)
   })
 })

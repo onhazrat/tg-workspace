@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
+import { toast } from "sonner"
+
+import { api } from "@/api"
 import {
   isNonChannelEntityFlow,
   isSettingGroupEntityFlow,
@@ -7,6 +10,7 @@ import {
   buildGroupCommands,
   formatSettingGroupCandidateLabel,
   getSettingGroupEntityCandidates,
+  moveSelectedChannelsToSettingGroup,
 } from "@/lib/commands/group-commands"
 import type { CommandContext } from "@/lib/commands/types"
 import type { Channel, ChannelSettingGroup } from "@/types"
@@ -175,6 +179,86 @@ describe("setting group entity candidates", () => {
     expect(
       formatSettingGroupCandidateLabel(sampleGroups[2]!, sampleChannels),
     ).toBe("News (1 channel)")
+  })
+})
+
+describe("moveSelectedChannelsToSettingGroup", () => {
+  /**
+   * Run a move with `api.bulkAssignSettingGroup` and `toast.success` stubbed,
+   * and hand back what reached the server, the updated channel list, how many
+   * times the groups were invalidated and what was toasted.
+   */
+  async function move(groupId: string, selected: string[]) {
+    const original = api.bulkAssignSettingGroup
+    const toastSpy = spyOn(toast, "success")
+    const sent: unknown[] = []
+    let channels = sampleChannels
+    let invalidated = 0
+    api.bulkAssignSettingGroup = (async (body: unknown) => {
+      sent.push(body)
+    }) as never
+    try {
+      await moveSelectedChannelsToSettingGroup(
+        makeContext({
+          selectedChannels: new Set(selected),
+          setChannels: ((update: (prev: Channel[]) => Channel[]) => {
+            channels = update(channels)
+          }) as CommandContext["setChannels"],
+          invalidateSettingGroups: async () => {
+            invalidated++
+          },
+        }),
+        groupId,
+      )
+      return {
+        sent,
+        channels,
+        invalidated,
+        toasts: toastSpy.mock.calls.map((c) => c[0]),
+      }
+    } finally {
+      api.bulkAssignSettingGroup = original
+      toastSpy.mockRestore()
+    }
+  }
+
+  test("assigns only the selected channels and copies the group's policy onto them", async () => {
+    const { sent, channels, invalidated, toasts } = await move(
+      "slow-feed-global",
+      ["alpha"],
+    )
+    expect(sent).toEqual([
+      { channelIds: ["c1"], settingGroupId: "slow-feed-global" },
+    ])
+    expect(channels[0]).toMatchObject({
+      settingGroupId: "slow-feed-global",
+      settingGroupName: "Slow feed",
+      dynamicSyncEnabled: true,
+      autoSyncIntervalMinutes: 1440,
+    })
+    expect(channels[1]).toBe(sampleChannels[1])
+    expect(invalidated).toBe(1)
+    expect(toasts).toEqual(['Moved 1 channel to "Slow feed"'])
+  })
+
+  test("pluralises the toast for several channels", async () => {
+    const { toasts } = await move("custom-1", ["alpha", "beta"])
+    expect(toasts).toEqual(['Moved 2 channels to "News"'])
+  })
+
+  test("does nothing for an unknown group or a selection with no channels", async () => {
+    for (const [groupId, selected] of [
+      ["missing", ["alpha"]],
+      ["custom-1", ["not-a-channel"]],
+    ] as const) {
+      const result = await move(groupId, [...selected])
+      expect(result).toEqual({
+        sent: [],
+        channels: sampleChannels,
+        invalidated: 0,
+        toasts: [],
+      })
+    }
   })
 })
 

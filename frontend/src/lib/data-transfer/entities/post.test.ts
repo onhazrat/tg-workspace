@@ -14,13 +14,18 @@
  * the loop must terminate rather than growing the browser until it dies.
  */
 
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
+import { toast } from "sonner"
 
+import { api } from "@/api"
 import type { PostFeedQuery } from "@/api/data"
+import type { CommandContext } from "@/lib/commands/types"
 import {
   EXPORT_PAGE_SIZE,
   fetchAllPostsFromServer,
+  listPostsForFilter,
 } from "@/lib/data-transfer/entities/post"
+import type { ExportFilter } from "@/lib/data-transfer/types"
 import type { Post } from "@/types"
 
 function post(id: number): Post {
@@ -168,5 +173,77 @@ describe("fetchAllPostsFromServer", () => {
     )
 
     expect(progress).toEqual([EXPORT_PAGE_SIZE, EXPORT_PAGE_SIZE + 7])
+  })
+})
+
+/**
+ * Which posts an export asks for. `selected` is the selection inside the
+ * Posts-tab window; `all` is every channel over all time, whatever window the
+ * tab has; an empty selection asks for nothing rather than for everything.
+ */
+describe("listPostsForFilter", () => {
+  async function list(
+    filter: ExportFilter,
+    ctx: Partial<CommandContext>,
+    answer: Post[] | Error = [post(1)],
+  ) {
+    const original = api.getPostsFeed
+    const dismiss = spyOn(toast, "dismiss")
+    const info = spyOn(toast, "info")
+    const calls: PostFeedQuery[] = []
+    api.getPostsFeed = (async (query: PostFeedQuery) => {
+      calls.push(query)
+      if (answer instanceof Error) throw answer
+      return answer
+    }) as never
+    try {
+      const result = await listPostsForFilter(
+        filter,
+        ctx as CommandContext,
+      ).catch((err: Error) => err)
+      return { result, calls, dismissed: dismiss.mock.calls.length }
+    } finally {
+      api.getPostsFeed = original
+      dismiss.mockRestore()
+      info.mockRestore()
+    }
+  }
+  const window = { startDate: 100, endDate: 200 }
+
+  test("selected asks for the selection inside the Posts-tab window", async () => {
+    const { result, calls } = await list("selected", {
+      selectedChannels: new Set(["alpha"]),
+      postDateRange: window,
+    })
+    expect(result).toEqual([post(1)])
+    expect(calls[0]).toMatchObject({ channelNames: ["alpha"], ...window })
+  })
+
+  test("all ignores the selection and the window", async () => {
+    const { calls } = await list("all", {
+      selectedChannels: new Set(["alpha"]),
+      postDateRange: window,
+    })
+    expect(calls[0].channelNames).toBeUndefined()
+    expect(calls[0].startDate).toBe(0)
+    expect(calls[0].endDate).toBeGreaterThan(Date.now())
+  })
+
+  test("an empty selection asks for nothing", async () => {
+    const { result, calls } = await list("selected", {
+      selectedChannels: new Set(),
+    })
+    expect(result).toEqual([])
+    expect(calls).toEqual([])
+  })
+
+  test("the progress toast is dismissed even when the fetch fails", async () => {
+    const { result, dismissed } = await list(
+      "selected",
+      { selectedChannels: new Set(["alpha"]) },
+      new Error("offline"),
+    )
+    expect(result).toBeInstanceOf(Error)
+    expect(dismissed).toBe(1)
   })
 })

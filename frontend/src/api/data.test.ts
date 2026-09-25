@@ -172,3 +172,58 @@ describe("deleteLogs", () => {
     expect(sent[0].url).toBe("/api/v1/data/logs")
   })
 })
+
+describe("getPosts", () => {
+  it("sends an empty body when nothing is set, dropping an empty selection", async () => {
+    await dataApi.getPosts()
+    await dataApi.getPosts({ channelNames: [] })
+    expect(sent.map((s) => s.body)).toEqual([{}, {}])
+  })
+
+  it("sends the selection, a window for the dates, and a zero offset", async () => {
+    await dataApi.getPosts({
+      channelNames: ["alpha"],
+      startDate: 60_000,
+      endDate: 120_000,
+      limit: 10,
+      offset: 0,
+    })
+    expect(sent[0]).toMatchObject({
+      url: "/api/v1/data/posts",
+      method: "POST",
+      body: {
+        channelNames: ["alpha"],
+        window: expect.any(Object),
+        limit: 10,
+        offset: 0,
+      },
+    })
+  })
+})
+
+/**
+ * The three paged list reads share one rule: an empty `search` is omitted,
+ * `limit` and `offset` survive a zero, and the bare path carries no `?`.
+ */
+describe.each([
+  ["listDiscoverReports", "/api/v1/data/discover/reports"],
+  ["listSummaries", "/api/v1/data/summaries"],
+  ["listChatSessions", "/api/v1/data/chat-sessions"],
+] as const)("%s", (name, path) => {
+  it("requests the bare path when nothing is set", async () => {
+    await dataApi[name]()
+    await dataApi[name]({ search: "" })
+    expect(sent.map((s) => s.url)).toEqual([path, path])
+  })
+
+  it("puts search, limit and a zero offset in the query string", async () => {
+    await dataApi[name]({ search: "iran war", limit: 20, offset: 0 })
+    const [base, query] = sent[0].url.split("?")
+    expect(base).toBe(path)
+    expect(Object.fromEntries(new URLSearchParams(query))).toEqual({
+      search: "iran war",
+      limit: "20",
+      offset: "0",
+    })
+  })
+})
