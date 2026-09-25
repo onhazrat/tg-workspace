@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures.ts"
 import { toPlaywrightAppUrl } from "./utils/appUrl"
-import { findLastEmail } from "./utils/mailcatcher"
+import { findLastEmail, mailcatcherHost } from "./utils/mailcatcher"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser, signUpNewUser } from "./utils/user"
 
@@ -51,9 +51,7 @@ test("User can reset password successfully using the link", async ({
     timeout: 5000,
   })
 
-  await page.goto(
-    `${process.env.MAILCATCHER_HOST}/messages/${emailData.id}.html`,
-  )
+  await page.goto(`${mailcatcherHost}/messages/${emailData.id}.html`)
 
   const selector = 'a[href*="/reset-password?token="]'
 
@@ -102,9 +100,7 @@ test("Weak new password validation", async ({ page, request }) => {
     timeout: 5000,
   })
 
-  await page.goto(
-    `${process.env.MAILCATCHER_HOST}/messages/${emailData.id}.html`,
-  )
+  await page.goto(`${mailcatcherHost}/messages/${emailData.id}.html`)
 
   const selector = 'a[href*="/reset-password?token="]'
   const url = await page.getAttribute(selector, "href")

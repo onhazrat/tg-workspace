@@ -2,7 +2,8 @@ import type { APIRequestContext } from "@playwright/test"
 
 // `compose.override.yml` sets this inside the container; a run from the host
 // reaches the published port instead.
-const mailcatcherHost = process.env.MAILCATCHER_HOST || "http://localhost:1080"
+export const mailcatcherHost =
+  process.env.MAILCATCHER_HOST || "http://localhost:1080"
 
 type Email = {
   id: number
