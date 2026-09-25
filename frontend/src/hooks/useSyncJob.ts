@@ -22,17 +22,20 @@ import { toast } from "sonner"
 import { api, type SyncJobStatus, subscribeSyncJobEvents } from "@/api"
 import { getChannelStats } from "@/lib/channels/store"
 import { env } from "@/lib/env"
-import { logger } from "@/lib/logger"
 import {
   hasRateLimitError,
   isTerminalSyncStatus,
   mergeScrapingChannels,
   shouldFallBackToPolling,
 } from "@/lib/sync/job-state"
+import {
+  followUntilTerminal,
+  runServerSync as runServerSyncWith,
+  type SyncMode,
+} from "@/lib/sync/run-server-sync"
 import type { ChannelStats } from "@/types"
 
-/** How the sync was triggered; the server records it on the job. */
-export type SyncMode = "sync_all" | "bulk" | "individual" | "recheck_restricted"
+export type { SyncMode }
 
 export interface SyncJobDeps {
   isOffline: boolean
@@ -124,15 +127,11 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
       )
 
       try {
-        for await (const status of subscribeSyncJobEvents(
-          jobId,
-          abortController.signal,
-        )) {
-          applySyncJobStatus(status)
-          if (isTerminalSyncStatus(status.status)) {
-            return status
-          }
-        }
+        const terminal = await followUntilTerminal(
+          subscribeSyncJobEvents(jobId, abortController.signal),
+          applySyncJobStatus,
+        )
+        if (terminal) return terminal
         const finalStatus = await api.getSyncJobStatus(jobId)
         applySyncJobStatus(finalStatus)
         return finalStatus
@@ -154,113 +153,31 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
   )
 
   const runServerSync = useCallback(
-    async (
+    (
       channelIds: string[],
       channelNames: string[],
       source: string,
       refresh = true,
       syncMode: SyncMode = "bulk",
-    ) => {
-      if (isOffline) {
-        toast.warning(
-          "Server offline — sync disabled. Browsing cached data only.",
-        )
-        return
-      }
-      if (channelIds.length === 0) return
-
-      logger.debug(
-        `[Scraper] Starting server sync for ${channelIds.length} channel(s) from ${source}`,
-      )
-      setScrapingChannels((prev) => {
-        const next = new Set(prev)
-        channelNames.forEach((n) => next.add(n))
-        return next
-      })
-
-      try {
-        let jobId: string
-        try {
-          ;({ jobId } = await api.startSyncJob({
-            channelIds,
-            source,
-            syncMode,
-          }))
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          if (message.includes("No channels to sync")) {
-            toast.error(
-              "No channels available to sync. Try re-adding the channel or run the user_id backfill script.",
-            )
-          }
-          throw err
-        }
-        const result = await waitSyncJob(jobId)
-
-        const failures = result.channels.filter((ch) => ch.status === "failed")
-        const successes = result.channels.filter(
-          (ch) => ch.status === "success",
-        )
-
-        if (successes.length > 0) {
-          setConsecutiveFailures(0)
-          setAutoSyncPauseUntil(null)
-          for (const ch of successes) {
-            const s = await getChannelStats(ch.channelId)
-            if (s) {
-              setChannelStats((prev) => ({
-                ...prev,
-                // `newLatestId` is genuinely nullable — `sync_orchestrator`
-                // sends `final_latest_id or None`. The hand-written type used
-                // to declare it `number | undefined`, so a null landed in
-                // `ChannelStats.latestId` in violation of its own type.
-                [ch.channelName]: {
-                  ...s,
-                  latestId: ch.newLatestId ?? undefined,
-                },
-              }))
-            }
-          }
-        }
-
-        if (failures.length > 0) {
-          setConsecutiveFailures((prev) => {
-            const next = prev + failures.length
-            if (next >= Math.max(3, channelCount)) {
-              setAutoSyncPauseUntil(Date.now() + 10 * 60 * 1000)
-              toast.error(
-                "Auto-sync paused for 10 minutes due to consecutive failures.",
-              )
-            }
-            return next
-          })
-          const firstErr = failures[0]?.error || "Sync failed"
-          if (failures.length === 1) {
-            toast.error(
-              `Sync failed for @${failures[0].channelName}: ${firstErr}`,
-            )
-          } else {
-            toast.error(`${failures.length} channel sync(s) failed`)
-          }
-        }
-
-        // Always reload channels so resolved startId appears after first sync.
-        await loadChannels()
-        if (refresh) {
-          invalidatePostViews()
-        }
-
-        if (failures.length > 0 && successes.length === 0) {
-          throw new Error(failures[0].error || "Sync failed")
-        }
-      } finally {
-        setScrapingChannels((prev) => {
-          const next = new Set(prev)
-          channelNames.forEach((n) => next.delete(n))
-          return next
-        })
-      }
-    },
+    ) =>
+      runServerSyncWith(
+        {
+          isOffline,
+          channelCount,
+          startSyncJob: api.startSyncJob,
+          waitSyncJob,
+          getChannelStats: (channelId) => getChannelStats(channelId),
+          loadChannels,
+          invalidatePostViews,
+          setScrapingChannels,
+          setChannelStats,
+          setConsecutiveFailures,
+          setAutoSyncPauseUntil,
+          notify: toast,
+          now: Date.now,
+        },
+        { channelIds, channelNames, source, refresh, syncMode },
+      ),
     [
       isOffline,
       channelCount,
