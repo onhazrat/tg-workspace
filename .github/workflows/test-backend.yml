@@ -165,7 +165,7 @@ jobs:
             exit 1
           fi
           uv run coverage combine "${parts[@]}"
-          uv run coverage report --fail-under=70
+          uv run coverage report --fail-under=90
           if [ "$EVENT_NAME" = "push" ] && [ "$GIT_REF" = "refs/heads/main" ]; then
             uv run coverage html --title "Coverage for ${GIT_SHA}"
           fi
