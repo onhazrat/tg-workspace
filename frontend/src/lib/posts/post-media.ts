@@ -91,8 +91,8 @@ export function formatPostMediaHints(post: Post): string {
   if (media.durationSec != null && media.durationSec > 0) {
     parts.push(`Duration: ${formatDurationLabel(media.durationSec)}`)
   }
-  if (media.viewsCount != null) {
-    parts.push(`Views: ${formatCount(media.viewsCount)}`)
+  if (post.viewsCount != null) {
+    parts.push(`Views: ${formatCount(post.viewsCount)}`)
   }
   if (media.groupedCount != null && media.groupedCount > 1) {
     parts.push(`Album: ${media.groupedCount} items`)

@@ -12,6 +12,7 @@ from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post, utc_now
+from app.schemas.post_media import MEDIA_COUNTER_KEYS
 from app.services.channels import relabel_channels
 from app.services.follows import visible_channel_names
 from app.services.language import own_words, read_language
@@ -34,7 +35,50 @@ FEED_CAP_MODES: frozenset[str] = frozenset({"latest", "random"})
 
 def _post_media_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
     media = item.get("media")
-    return media if isinstance(media, dict) else None
+    if not isinstance(media, dict):
+        return None
+    return {k: v for k, v in media.items() if k not in MEDIA_COUNTER_KEYS}
+
+
+def _int_or_none(value: object) -> int | None:
+    # bool is an int subclass, and import delivers whatever JSON it was given.
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _reaction_chips(value: object) -> list[Any] | None:
+    # `PostResponse` declares `count` on every chip, so one bad entry kept here
+    # would 500 every read of a Post every Follower shares.
+    if not isinstance(value, list):
+        return None
+    return [
+        chip
+        for chip in value
+        if isinstance(chip, dict) and _int_or_none(chip.get("count")) is not None
+    ]
+
+
+def _counter_fields(item: dict[str, Any], now_ms: int) -> dict[str, Any]:
+    """The three counter columns a payload item sets (REACH-01, ADR-024).
+
+    An export carries them at the top level; the scraper carries them inside
+    media, and this is the one place that lifts them out. A scraped Post was
+    observed now, which for a new one is its retrieval time. An item with
+    neither leaves the columns alone.
+    """
+    if any(k in item for k in ("viewsCount", "reactionCounts", "viewsObservedAt")):
+        return {
+            "views_count": _int_or_none(item.get("viewsCount")),
+            "reaction_counts": _reaction_chips(item.get("reactionCounts")),
+            "views_observed_at": _int_or_none(item.get("viewsObservedAt")) or now_ms,
+        }
+    media = item.get("media")
+    if not isinstance(media, dict):
+        return {}
+    return {
+        "views_count": _int_or_none(media.get("viewsCount")),
+        "reaction_counts": _reaction_chips(media.get("reactionCounts")),
+        "views_observed_at": now_ms,
+    }
 
 
 def _post_links_from_item(item: dict[str, Any]) -> list[Any] | None:
@@ -75,8 +119,7 @@ def _post_reply_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
 def _post_int_from_item(item: dict[str, Any], camel: str, snake: str) -> int | None:
     # `isinstance` rather than a truth test: the JSON import path can deliver a
     # string here, and bool is an int subclass.
-    value = item.get(camel, item.get(snake))
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
+    return _int_or_none(item.get(camel, item.get(snake)))
 
 
 def _item_fields(item: dict[str, Any]) -> dict[str, Any]:
@@ -175,7 +218,7 @@ def bulk_upsert_posts_impl(
             )
             was_words = own_words(existing)
             was_text = existing.text
-            fields = _item_fields(item)
+            fields = _item_fields(item) | _counter_fields(item, now_ms)
             for column, value in fields.items():
                 setattr(existing, column, value)
             # Positions measured against other words link the wrong ones, and
@@ -227,7 +270,10 @@ def bulk_upsert_posts_impl(
             columns: dict[str, Any] = {
                 **_INSERT_DEFAULTS,
                 "reply_to": _post_reply_from_item(item),
+                # Observed when retrieved, counters or none (REACH-01).
+                "views_observed_at": now_ms,
                 **_item_fields(item),
+                **_counter_fields(item, now_ms),
             }
             post = Post(
                 channel_name=channel,

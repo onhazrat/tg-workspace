@@ -256,7 +256,16 @@ export type LLMLogHasServerFields = NoMismatches<
 export type PostHasServerFields = NoMismatches<
   MissingServerFields<
     PostResponse,
-    "id" | "channelName" | "text" | "timestamp" | "date"
+    // The counters became Post fields in REACH-01 (ADR-024); the card reads
+    // `viewsCount`, so losing any of the three is a rename to catch here.
+    | "id"
+    | "channelName"
+    | "text"
+    | "timestamp"
+    | "date"
+    | "viewsCount"
+    | "reactionCounts"
+    | "viewsObservedAt"
   >
 >
 export type ChannelHasServerFields = NoMismatches<

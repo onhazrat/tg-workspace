@@ -49,6 +49,20 @@ class PostLinkSpan(BaseModel):
     url: str
 
 
+class PostReactionChip(BaseModel):
+    """One reaction chip, as the parser wrote it (ADR-023).
+
+    Open, with only `count` declared, because the other three keys are
+    conditional: `emoji` for an ordinary chip, `customEmojiId` for a premium
+    one, `isPaid` for the Stars chip. Declaring them would emit a `null` for
+    each on every chip, which stored chips never had.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    count: int
+
+
 class PostResponse(BaseModel):
     """One post, as `post_to_camel` builds it."""
 
@@ -79,6 +93,13 @@ class PostResponse(BaseModel):
     # An ISO 639 code, "zxx" (no words) or "und" (undetermined); null while
     # the Post is unread (LANG-01).
     language: str | None = None
+    # Columns since REACH-01 (ADR-024), media keys before it. Null for a count
+    # means the page showed none, never zero.
+    views_count: int | None = Field(default=None, alias="viewsCount")
+    reaction_counts: list[PostReactionChip] | None = Field(
+        default=None, alias="reactionCounts"
+    )
+    views_observed_at: int | None = Field(default=None, alias="viewsObservedAt")
 
 
 class BulkUpsertPostsResponse(BaseModel):

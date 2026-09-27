@@ -3234,6 +3234,24 @@ export type PostLookupRequest = {
 };
 
 /**
+ * PostReactionChip
+ *
+ * One reaction chip, as the parser wrote it (ADR-023).
+ *
+ * Open, with only `count` declared, because the other three keys are
+ * conditional: `emoji` for an ordinary chip, `customEmojiId` for a premium
+ * one, `isPaid` for the Stars chip. Declaring them would emit a `null` for
+ * each on every chip, which stored chips never had.
+ */
+export type PostReactionChip = {
+    /**
+     * Count
+     */
+    count: number;
+    [key: string]: unknown;
+};
+
+/**
  * PostResponse
  *
  * One post, as `post_to_camel` builds it.
@@ -3315,6 +3333,18 @@ export type PostResponse = {
      * Language
      */
     language?: string | null;
+    /**
+     * Viewscount
+     */
+    viewsCount?: number | null;
+    /**
+     * Reactioncounts
+     */
+    reactionCounts?: Array<PostReactionChip> | null;
+    /**
+     * Viewsobservedat
+     */
+    viewsObservedAt?: number | null;
 };
 
 /**
