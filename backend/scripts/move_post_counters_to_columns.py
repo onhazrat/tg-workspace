@@ -11,8 +11,9 @@ JSON, beside the `reactionsCount` total. This copies the two counters into
 strips all three keys from media. A column already set is kept, because the
 write path only sets one from a newer observation.
 
-Until this has run the readers fall back to the media keys, so it can run at
-any time after the deploy. A script rather than the migration for ADR-023's
+Since REACH-08 the readers use the columns only, so a deployment that has not
+run this shows no View count or reaction chip on its older Posts until it does.
+Run it after the deploy that carries REACH-01. A script rather than the migration for ADR-023's
 reason: it rewrites the TOASTed media of every Post. It walks `tg_posts` by
 primary key and commits per batch, so an interrupted run resumes where it
 stopped and a re-run finds nothing to do. Directory samples keep their

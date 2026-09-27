@@ -1,8 +1,8 @@
 """A Post's View count and reaction chips are columns (REACH-01, ADR-024).
 
 The parser still writes them into media; the Post write path is the one place
-that lifts them out, and the read path falls back to the media keys for a Post
-the backfill script has not reached. The script is
+that lifts them out, and the read path reads the columns and nothing else
+(REACH-08). The backfill that emptied the media keys is
 `tests/scripts/test_move_post_counters_to_columns.py`; a Directory sample keeps
 its counters in media, which `test_directory_samples.py` pins.
 
@@ -12,13 +12,19 @@ its counters in media, which `test_directory_samples.py` pins.
 * drop `**_counter_fields(...)` from the insert branch -> the scraped-Post test;
   from the update branch -> the re-scrape test
 * drop the insert default for `views_observed_at` -> the no-counters test
-* drop the media fallback in `_post_counters` -> the legacy-row test
+* restore REACH-01's media fallback in `post_to_camel` -> the leftover-key
+  test and the guard; fall back to `retrieved_at` -> the leftover-key test
+* read `post["media"]["viewsCount"]` in `prompts/posts.py`, or name
+  `MEDIA_COUNTER_KEYS` outside the write path -> the guard
+* delete `views_of` -> the guard's stale-excuse check
 * drop a field from `post_to_camel` or `PostResponse` -> the round-trip test
 * keep a chip with no integer `count` -> the malformed-chip test
 """
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -27,6 +33,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Post
+from app.schemas.post_media import MEDIA_COUNTER_KEYS
 from app.services.posts import bulk_upsert_posts_impl
 from app.services.sync_orchestrator import _posts_to_save
 
@@ -120,9 +127,10 @@ def test_a_malformed_chip_is_dropped_on_write() -> None:
     assert _upsert(item)["reaction_counts"] == CHIPS
 
 
-def test_a_legacy_row_answers_from_its_media_until_the_backfill_runs(
+def test_a_leftover_media_key_is_ignored(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
+    """A `NULL` column answers `null`, whatever media still holds."""
     with Session(engine) as session:
         session.add(
             Post(
@@ -147,10 +155,9 @@ def test_a_legacy_row_answers_from_its_media_until_the_backfill_runs(
 
     post = _lookup(client, superuser_token_headers)
 
-    assert post["viewsCount"] == 3_860
-    assert post["reactionCounts"] == CHIPS
-    assert post["viewsObservedAt"] == 1_700_000_000_000
-    assert post["media"] == {"kinds": ["photo"]}
+    assert post["viewsCount"] is None
+    assert post["reactionCounts"] is None
+    assert post["viewsObservedAt"] is None
 
 
 def test_a_post_with_no_counters_anywhere_answers_null(
@@ -203,3 +210,76 @@ def test_counters_travel_through_import_the_api_and_export(
     row = next(p for p in exported.json()["data"]["posts"] if p["id"] == 9)
     assert {k: row[k] for k in counters} == counters
     assert row["media"] == {"kinds": ["photo"]}
+
+
+APP_DIR = Path(__file__).resolve().parents[2] / "app"
+
+#: Modules that may name a counter key however they like, each with a reason.
+COUNTER_KEY_MODULES: dict[str, str] = {
+    "services/post_media_parser.py": "the parser writes the keys into media",
+    "services/posts.py": "the Post write path lifts them out of media",
+    "schemas/post_media.py": "the parser's media shape and the key tuple",
+    "schemas/posts.py": "the three columns' wire names on `PostResponse`",
+}
+
+#: Single reads anywhere else, keyed by module and the expression that reads.
+#: Neither is a Post's media, and each says what it reads instead.
+COUNTER_KEY_READS: dict[tuple[str, str], str] = {
+    ("services/directory_statistics.py", "post.media.get('viewsCount')"): (
+        "a Directory sample keeps its counters in media; it is not a Post"
+    ),
+    ("prompts/posts.py", "post.get('viewsCount')"): (
+        "the top-level field `post_to_camel` builds from the column"
+    ),
+}
+
+
+def _is_counter_key(node: ast.AST) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id == "MEDIA_COUNTER_KEYS"
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and any(key in node.value for key in MEDIA_COUNTER_KEYS)
+    )
+
+
+def _counter_key_reads() -> set[tuple[str, str]]:
+    """Every use of a counter key in `app/` that is not a dict literal's key.
+
+    A dict literal's key is a write (`post_to_camel` builds its response that
+    way). Anything else is a read: a `.get`, a subscript, a SQL `->>` inside a
+    string, or the key tuple itself.
+    """
+    found: set[tuple[str, str]] = set()
+    for path in APP_DIR.rglob("*.py"):
+        module = path.relative_to(APP_DIR).as_posix()
+        if module.startswith("alembic/") or module in COUNTER_KEY_MODULES:
+            continue
+        for parent in ast.walk(ast.parse(path.read_text())):
+            if isinstance(parent, ast.Expr):
+                continue  # a docstring names a key; it reads nothing
+            keys = parent.keys if isinstance(parent, ast.Dict) else []
+            found.update(
+                (module, ast.unparse(parent))
+                for node in ast.iter_child_nodes(parent)
+                if _is_counter_key(node) and not any(node is k for k in keys)
+            )
+    return found
+
+
+def test_nothing_reads_the_counter_keys_from_post_media() -> None:
+    """REACH-08: the columns are a Post's only View count and reaction chips.
+
+    REACH-01 read the media keys as a fallback while its backfill ran. The
+    backfill has emptied them on staging, so a reader of Post media now finds
+    nothing and shows a blank; a new one is refused here rather than found in
+    the feed.
+    """
+    reads = _counter_key_reads()
+
+    assert reads - COUNTER_KEY_READS.keys() == set()
+    # Both directions: an excuse nothing needs any more is a leftover.
+    assert COUNTER_KEY_READS.keys() - reads == set()
+    for module in COUNTER_KEY_MODULES:
+        assert (APP_DIR / module).exists(), module
