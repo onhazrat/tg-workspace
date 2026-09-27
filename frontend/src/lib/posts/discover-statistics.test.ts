@@ -26,7 +26,8 @@ function probe(measured: Partial<DiscoveryProbe> = {}): DiscoveryProbe {
     lastPostAt: null,
     sampleCount: null,
     postsPerWeek: null,
-    medianViews: null,
+    reach: null,
+    reachEstimated: false,
     forwardShare: null,
     language: null,
     mediaMix: null,
@@ -40,9 +41,11 @@ describe("candidateStatistics", () => {
     const stats = candidateStatistics(undefined)
     expect(stats.lastPostAt).toBeNull()
     expect(stats.postsPerWeek).toBeNull()
-    expect(stats.medianViews).toBeNull()
+    expect(stats.reach).toBeNull()
+    expect(stats.reachNote).toBeNull()
     expect(stats.sampleNote).toBeNull()
     expect(stats.placeholderTitle).toContain("Not probed yet")
+    expect(stats.reachTitle).toContain("Not probed yet")
   })
 
   test("a measured candidate shows its numbers", () => {
@@ -51,14 +54,23 @@ describe("candidateStatistics", () => {
         lastPostAt: 1_767_225_600_000,
         sampleCount: 20,
         postsPerWeek: 4.25,
-        medianViews: 12_400,
+        reach: 12_400,
       }),
     )
     expect(stats.lastPostAt).toBe(1_767_225_600_000)
     expect(stats.postsPerWeek).toBe("4.3")
-    expect(stats.medianViews).toBe("12.4K")
+    expect(stats.reach).toBe("12.4K")
+    expect(stats.reachTitle).toContain("once they settled")
     // Nothing to explain: the rate is showing.
     expect(stats.sampleNote).toBeNull()
+  })
+
+  test("an estimated Reach carries its marker", () => {
+    const stats = candidateStatistics(
+      probe({ reach: 12_400, reachEstimated: true }),
+    )
+    expect(stats.reach).toBe("~12.4K")
+    expect(stats.reachTitle).toContain("estimated")
   })
 
   test("a fast channel drops the decimal the sample cannot support", () => {
@@ -96,9 +108,11 @@ describe("candidateStatistics", () => {
      * either.
      */
     const stats = candidateStatistics(
-      probe({ sampleCount: 20, postsPerWeek: 4, medianViews: null }),
+      probe({ sampleCount: 20, postsPerWeek: 4, reach: null }),
     )
-    expect(stats.medianViews).toBeNull()
+    expect(stats.reach).toBeNull()
+    expect(stats.reachNote).toBe("not measured")
+    expect(stats.reachTitle).toContain("Reach not measured")
     expect(stats.sampleNote).toBeNull()
     expect(stats.placeholderTitle).not.toContain("Not probed")
     expect(stats.placeholderTitle).toContain("nothing to measure")

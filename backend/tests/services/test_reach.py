@@ -15,18 +15,25 @@ let through the floor, a curve left unanchored, an absent Reach reported as 0.
 * accept a floor equal to the settling age, or a settling age of 168
 * `bisect_left` in the seed lookup, which puts an age on a step boundary in the
   younger step
+* gate a sample's Reach on the sample count rather than on the samples carrying
+  a View count -> twenty samples with one view between them measure it
+* read the oldest samples, or keep a sample with no publication time -> the
+  sample size and timestamp cases
 """
 
 from __future__ import annotations
 
 import pytest
 
+from app.models_tg import DirectorySample
 from app.services.reach import (
     DEFAULT_REACH_SETTINGS,
     REFRESH_HORIZON_HOURS,
     Reach,
+    ReachSettings,
     compute_reach,
     reach_settings_from,
+    sample_reach,
     seed_curve,
 )
 
@@ -91,8 +98,8 @@ def test_nothing_to_read_is_not_measured_rather_than_zero() -> None:
     assert compute_reach([], SETTINGS) == Reach(None, estimated=False)
 
 
-def test_an_even_set_rounds_its_median_as_the_directory_statistic_does() -> None:
-    """504.5 goes to the even integer, as `compute_sample_statistics` does."""
+def test_an_even_set_rounds_its_median_to_the_even_integer() -> None:
+    """504.5 goes to 504: half a view is below the precision of the input."""
     pairs = [(500, 30.0), (502, 30.0), (507, 30.0), (509, 30.0), (1, 30.0), (600, 30)]
 
     assert compute_reach(pairs, SETTINGS) == Reach(504)
@@ -143,3 +150,64 @@ def test_contradictory_settings_are_refused(
 ) -> None:
     with pytest.raises(ValueError, match=fragment):
         reach_settings_from(stored)
+
+
+#: A probe two days after the samples below, so every one of them is Settled.
+PROBED_AT = 1_767_225_600_000
+_TWO_DAYS_MS = 48 * 3_600_000
+
+
+def _sample(
+    post_id: int, views: int | None, *, age_ms: int = _TWO_DAYS_MS
+) -> DirectorySample:
+    media = None if views is None else {"kinds": [], "viewsCount": views}
+    return DirectorySample(
+        handle="h",
+        post_id=post_id,
+        text="",
+        timestamp=PROBED_AT - age_ms - post_id,
+        media=media,
+    )
+
+
+def test_a_sample_counts_its_measured_views_not_its_posts() -> None:
+    """Twenty samples carrying one view between them measure nothing.
+
+    Telegram stops rendering a view counter on older Posts, so this is the
+    common shape, and gating on the sample count would let that one view be
+    the Channel's Reach. Moved from the median statistic Reach replaced.
+    """
+    samples = [_sample(i, None) for i in range(20)]
+    samples[0] = _sample(0, 99_000)
+
+    assert sample_reach(samples, PROBED_AT, SETTINGS) == Reach()
+
+
+def test_one_viral_sample_does_not_move_reach() -> None:
+    """Median, not mean: the mean of these is 20,180."""
+    samples = [_sample(i, v) for i, v in enumerate([100, 110, 120, 130, 100_000])]
+
+    assert sample_reach(samples, PROBED_AT, SETTINGS) == Reach(120)
+
+
+def test_a_sample_reads_its_newest_posts_up_to_the_sample_size() -> None:
+    """The five newest are at 10 views, the older ones at 1000."""
+    newest = [_sample(i, 10, age_ms=_TWO_DAYS_MS) for i in range(5)]
+    older = [_sample(10 + i, 1000, age_ms=2 * _TWO_DAYS_MS) for i in range(6)]
+    narrow = ReachSettings(sample_size=5)
+
+    assert sample_reach(older + newest, PROBED_AT, SETTINGS) == Reach(1000)
+    assert sample_reach(older + newest, PROBED_AT, narrow) == Reach(10)
+
+
+def test_a_sample_with_no_publication_time_is_left_out() -> None:
+    """A zero timestamp would read as decades old, and so as the fifth Settled
+    count of a Channel that has four."""
+    samples = [_sample(i, 100) for i in range(4)]
+    undated = DirectorySample(
+        handle="h", post_id=99, text="", timestamp=0, media={"viewsCount": 5}
+    )
+
+    reach = sample_reach([*samples, undated], PROBED_AT, SETTINGS)
+
+    assert reach == Reach()

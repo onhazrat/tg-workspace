@@ -22,7 +22,7 @@ import {
  */
 
 type Measured = Partial<
-  Pick<DiscoveryProbe, "lastPostAt" | "postsPerWeek" | "medianViews">
+  Pick<DiscoveryProbe, "lastPostAt" | "postsPerWeek" | "reach">
 >
 
 function probe(measured: Measured): DiscoveryProbe {
@@ -40,7 +40,8 @@ function probe(measured: Measured): DiscoveryProbe {
     lastPostAt: null,
     sampleCount: null,
     postsPerWeek: null,
-    medianViews: null,
+    reach: null,
+    reachEstimated: false,
     forwardShare: null,
     language: null,
     mediaMix: null,
@@ -72,7 +73,7 @@ function candidate(
 const KEYS: { key: DiscoverSortKey; field: keyof Measured }[] = [
   { key: "lastPostAt", field: "lastPostAt" },
   { key: "postsPerWeek", field: "postsPerWeek" },
-  { key: "medianViews", field: "medianViews" },
+  { key: "reach", field: "reach" },
 ]
 
 describe.each(KEYS)("sortDiscoveryCandidates — $key", ({ key, field }) => {

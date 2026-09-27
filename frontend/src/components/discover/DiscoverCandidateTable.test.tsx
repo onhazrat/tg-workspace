@@ -33,7 +33,8 @@ const probe = {
   lastPostAt: null,
   sampleCount: 3,
   postsPerWeek: null,
-  medianViews: 1200,
+  reach: 1200,
+  reachEstimated: true,
   forwardShare: null,
   language: null,
   mediaMix: null,
@@ -357,9 +358,7 @@ describe("DiscoverCandidateTable", () => {
     expect(screen.getByTestId("discover-posts-per-week-a").textContent).toBe(
       "3 posts",
     )
-    expect(screen.getByTestId("discover-median-views-a").textContent).toBe(
-      "1.2K",
-    )
+    expect(screen.getByTestId("discover-reach-a").textContent).toBe("~1.2K")
     expect(screen.getByText("created")).toBeTruthy()
     expect(screen.getByText("Probe name")).toBeTruthy()
   })

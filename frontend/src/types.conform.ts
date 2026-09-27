@@ -337,7 +337,8 @@ export type DiscoveryProbeHasServerFields = NoMismatches<
     | "lastPostAt"
     | "sampleCount"
     | "postsPerWeek"
-    | "medianViews"
+    | "reach"
+    | "reachEstimated"
     | "mediaMix"
   >
 >

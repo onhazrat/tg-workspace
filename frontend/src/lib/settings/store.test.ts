@@ -41,6 +41,13 @@ describe("loadAppSettings", () => {
     expect(settings.postRetentionDays).toBe(RETENTION_POST_DAYS_DEFAULT)
   })
 
+  it("reads a saved Median views sort as the Reach sort (REACH-04)", () => {
+    const saved = readerFromRecord({ discoverSortKey: "medianViews" })
+    expect(loadAppSettings(saved).discoverSortKey).toBe("reach")
+    const current = readerFromRecord({ discoverSortKey: "postsPerWeek" })
+    expect(loadAppSettings(current).discoverSortKey).toBe("postsPerWeek")
+  })
+
   it("decodes stored values using the historical formats", () => {
     const settings = loadAppSettings(
       readerFromRecord({

@@ -281,7 +281,9 @@ def test_a_resolved_probe_is_joined_into_the_report_read(client: TestClient) -> 
         "lastPostAt",
         "sampleCount",
         "postsPerWeek",
-        "medianViews",
+        # REACH-04: `medianViews` became Reach and its estimate marker.
+        "reach",
+        "reachEstimated",
         "forwardShare",
         "language",
         "mediaMix",
@@ -440,7 +442,9 @@ def test_the_probe_listing_keeps_its_key_set(client: TestClient) -> None:
         "lastPostAt",
         "sampleCount",
         "postsPerWeek",
-        "medianViews",
+        # REACH-04: `medianViews` became Reach and its estimate marker.
+        "reach",
+        "reachEstimated",
         "forwardShare",
         "language",
         "mediaMix",

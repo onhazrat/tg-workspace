@@ -3,8 +3,10 @@
 A **pure transform**: no `Session`, no network, no clock. Two halves that are
 deliberately not the same kind of thing.
 
-`compute_sample_statistics` takes a list of Posts and returns the six values
-stored on a Directory entry at probe time. It takes Posts rather than a
+`compute_sample_statistics` takes a list of Posts and returns the five values
+stored on a Directory entry at probe time. The sixth, Reach, is
+`reach.sample_reach`, because it needs the probe time and the Reach settings
+(REACH-04). It takes Posts rather than a
 Directory entry so the Channels tab can later point it at the corpus — where
 `Post` carries the same four attributes `DirectorySample` does — without a
 second implementation of these formulas.
@@ -24,14 +26,6 @@ snapshot of a page and a stale one is a lie; a sample-derived statistic is a
 claim about what the Channel *did*, which stays true after it goes away.
 
 ## The arithmetic, and why the obvious version is wrong each time
-
-**Median, not mean**, so one viral Post cannot relabel a Channel nobody reads.
-
-**The view threshold counts measured views, not samples.** A view count is
-optional on a sample Post, so twenty samples can carry one measured view between
-them. Gating the median on the sample count would let that single observation
-become a median and rank the Channel on it, which is the exact failure the
-threshold exists to prevent.
 
 **Posts per week counts intervals, not Posts.** N Posts spanning oldest to
 newest give **N-1** intervals. Five Posts one week apart span four weeks and
@@ -72,7 +66,6 @@ week and no measurement are different claims.
 
 from __future__ import annotations
 
-import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -112,7 +105,7 @@ class SamplePost(HasWords, Protocol):
 
 @dataclass(frozen=True)
 class SampleStatistics:
-    """The six values stored on a Directory entry.
+    """Five of the values stored on a Directory entry; Reach is the sixth.
 
     Every one is optional, and `None` always means *not measured* rather than
     zero. `sample_count` is `None` only for an empty set — a set below
@@ -123,7 +116,6 @@ class SampleStatistics:
     last_post_at: datetime | None = None
     sample_count: int | None = None
     posts_per_week: float | None = None
-    median_views: int | None = None
     forward_share: float | None = None
     language: str | None = None
 
@@ -143,11 +135,11 @@ def _sample_language(posts: Sequence[SamplePost]) -> str | None:
 def views_of(post: SamplePost) -> int | None:
     """Telegram's view counter for one sample Post, `None` where it showed none.
 
-    Public because the panel shows the same number per Post that the median is
-    computed from (ticket 03), and the two must not disagree about where it
-    lives: `viewsCount` is a key inside the parsed media block, so a second
-    reader spelling it differently would show a blank beside a median derived
-    from a value it could not find.
+    Public because the panel shows the same number per Post that Reach is
+    computed from (ticket 03, REACH-04), and the two must not disagree about
+    where it lives: `viewsCount` is a key inside the parsed media block, so a
+    second reader spelling it differently would show a blank beside a Reach
+    derived from a value it could not find.
     """
     if post.media is None:
         return None
@@ -155,12 +147,8 @@ def views_of(post: SamplePost) -> int | None:
     return count if isinstance(count, int) else None
 
 
-def _measured_views(posts: Sequence[SamplePost]) -> list[int]:
-    return [count for post in posts if (count := views_of(post)) is not None]
-
-
 def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:
-    """The six sample-derived statistics, or absent ones for an empty set."""
+    """Five sample-derived statistics, or absent ones for an empty set."""
     if not posts:
         return SampleStatistics()
 
@@ -175,24 +163,6 @@ def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:
     if count >= MIN_SAMPLES and span_ms > 0:
         posts_per_week = (count - 1) / (span_ms / _WEEK_MS)
 
-    views = _measured_views(posts)
-    # Rounded, not widened: the counts are themselves parsed from Telegram's
-    # abbreviated display strings, where `9.74K` becomes 9,740, so the half view
-    # an even set produces sits below the precision of the input.
-    #
-    # **`round`, and a tie goes to the even integer** — which matters only
-    # because this formula is written twice. The migration's backfill restates
-    # it in SQL, and PostgreSQL's `round(double precision)` is `rint`, so it
-    # breaks a tie the same way. The two agree, including on `504.5`.
-    #
-    # Worth naming because it is not obvious and is easy to break from either
-    # side: half-up here (`floor(x + 0.5)`) would diverge, and so would casting
-    # the SQL to `numeric`, whose `round` goes away from zero. Both directions
-    # are pinned by the tie cases in the two test files.
-    median_views = (
-        round(statistics.median(views)) if len(views) >= MIN_SAMPLES else None
-    )
-
     forward_share: float | None = None
     if count >= MIN_SAMPLES:
         forward_share = sum(1 for p in posts if p.forwarded_from) / count
@@ -203,7 +173,6 @@ def compute_sample_statistics(posts: Sequence[SamplePost]) -> SampleStatistics:
         ),
         sample_count=count,
         posts_per_week=posts_per_week,
-        median_views=median_views,
         forward_share=forward_share,
         language=_sample_language(posts),
     )

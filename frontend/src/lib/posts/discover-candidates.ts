@@ -92,7 +92,11 @@ export interface DiscoveryProbe {
    * a lifetime average — the row labels it as one, because on its own it would
    * read as current activity for a Channel that stopped a year ago. */
   postsPerWeek: number | null
-  medianViews: number | null
+  /** Reach (REACH-04, ADR-024): the median Settled View count, from the
+   * Channel's stored Posts when anybody follows it, else from the probe
+   * sample. `reachEstimated` marks one derived through the Settling curve. */
+  reach: number | null
+  reachEstimated: boolean
   forwardShare: number | null
   /** The sample's Language as a code (`fa`, `ar`). Panel-only. */
   language: string | null
@@ -229,7 +233,7 @@ export type DiscoverSortKey =
   | "subscribers"
   | "lastPostAt"
   | "postsPerWeek"
-  | "medianViews"
+  | "reach"
 
 export const DISCOVER_SORT_OPTIONS: {
   label: string
@@ -248,7 +252,7 @@ export const DISCOVER_SORT_OPTIONS: {
   // carry no value and migrate up the list as verdicts land.
   { label: "Last post", value: "lastPostAt" },
   { label: "Posts/week", value: "postsPerWeek" },
-  { label: "Median views", value: "medianViews" },
+  { label: "Reach", value: "reach" },
 ]
 
 /**
@@ -325,7 +329,7 @@ function sortValue(
   if (sortKey === "subscribers") return candidateSubscriberCount(candidate)
   if (sortKey === "lastPostAt") return candidate.probe?.lastPostAt ?? null
   if (sortKey === "postsPerWeek") return candidate.probe?.postsPerWeek ?? null
-  if (sortKey === "medianViews") return candidate.probe?.medianViews ?? null
+  if (sortKey === "reach") return candidate.probe?.reach ?? null
   return candidate.counts[sortKey]
 }
 

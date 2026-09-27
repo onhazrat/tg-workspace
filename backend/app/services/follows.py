@@ -590,8 +590,14 @@ def followed_channels_for(
     return [(channel, follow) for channel, follow in rows]
 
 
-def followed_channel_names(session: Session) -> set[str]:
+def followed_channel_names(
+    session: Session, *, among: set[str] | None = None
+) -> set[str]:
     """The names of every Channel *somebody* follows, across all accounts.
+
+    `among` narrows it to the Channels whose lowercased name is one of those
+    handles, for a Directory read that asks about one page of entries
+    (REACH-04) rather than paying for every followed name.
 
     The corpus-wide counterpart to `visible_channel_names`, for the work that is
     genuinely deployment-level rather than per account: translation (ticket 21).
@@ -603,12 +609,14 @@ def followed_channel_names(session: Session) -> set[str]:
     retention's queue (ticket 05), and spending provider quota on posts about to
     be collected is the case worth excluding.
     """
-    rows = session.exec(
+    statement = (
         select(Channel.name)
         .join(ChannelFollow, col(Channel.id) == col(ChannelFollow.channel_id))
         .distinct()
-    ).all()
-    return {str(name) for name in rows}
+    )
+    if among is not None:
+        statement = statement.where(func.lower(Channel.name).in_(among))
+    return {str(name) for name in session.exec(statement).all()}
 
 
 def count_followed_channels(session: Session) -> int:

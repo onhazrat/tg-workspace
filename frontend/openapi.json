@@ -7503,9 +7503,14 @@
             "anyOf": [{ "type": "number" }, { "type": "null" }],
             "title": "Postsperweek"
           },
-          "medianViews": {
+          "reach": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Medianviews"
+            "title": "Reach"
+          },
+          "reachEstimated": {
+            "type": "boolean",
+            "title": "Reachestimated",
+            "default": false
           },
           "forwardShare": {
             "anyOf": [{ "type": "number" }, { "type": "null" }],

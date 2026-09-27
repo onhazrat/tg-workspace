@@ -871,7 +871,14 @@ class DirectoryEntry(SQLModel, table=True):
     last_post_at: datetime | None = None
     sample_count: int | None = Field(default=None, sa_column=Column(SmallInteger))
     posts_per_week: float | None = None
-    median_views: int | None = None
+    #: Reach from the sample, by the rule a followed Channel's is computed with
+    #: (REACH-04, ADR-024): each sample's age is the probe time minus its
+    #: publication time, and `reach_estimated` says the value came through the
+    #: Settling curve. Written at probe time under the settings then in force,
+    #: so a settling-age change reaches it at the entry's next probe. A read
+    #: answers the Post-based Reach instead when anybody follows the Channel.
+    reach: int | None = None
+    reach_estimated: bool = False
     forward_share: float | None = None
     #: The sample's Language by the Channel rule (LANG-05, ADR-021): a code, or
     #: `None` where no sample carried readable words. Entries older than it
