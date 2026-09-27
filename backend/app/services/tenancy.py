@@ -103,6 +103,7 @@ from app.models_tg import (
     PublishLog,
     QuotaLimit,
     QuotaUsage,
+    SettlingCurveFit,
     Summary,
     SummaryPayload,
     SyncJob,
@@ -234,6 +235,10 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # correlate a Follow on, and what it discloses about a followed Post, its
     # View count, is what that Post's own row already shows every Follower.
     ViewObservation: Scope.CORPUS,
+    # REACH-07's Settling curve fits: one global curve fitted from every
+    # observed Post, read by every account's Reach. Nobody owns it and there is
+    # no Channel to correlate a Follow on.
+    SettlingCurveFit: Scope.CORPUS,
 }
 
 #: The column naming the Channel a follow-scoped row belongs to, for the EXISTS

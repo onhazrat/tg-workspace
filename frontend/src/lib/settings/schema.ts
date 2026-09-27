@@ -310,6 +310,10 @@ export const appSettingsSpec = {
     section: "reach",
   }),
   reachSampleSize: intSetting("reachSampleSize", 100, { section: "reach" }),
+  // REACH-07: how often the worker refits the Settling curve.
+  curveRefitIntervalHours: intSetting("curveRefitIntervalHours", 24, {
+    section: "reach",
+  }),
   // Discover tab candidate filters (local only — never mirrored to the backend).
   discoverSignals: jsonSetting(
     "discoverSignals",

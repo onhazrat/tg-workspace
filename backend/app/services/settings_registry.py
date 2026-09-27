@@ -61,6 +61,11 @@ VIEW_OBSERVATIONS_KEY = "view_observations"
 #: to move. Named here because the script and the catalog have to agree on it.
 POST_COUNTERS_MOVED_KEY = "post_counters_moved"
 
+#: REACH-07's last Settling curve fit that learned nothing,
+#: `{"failedAt": ISO time, "settlingAgeHours": int}`. Named here because the
+#: job, the catalog and the guard have to agree on it.
+SETTLING_CURVE_RUNTIME_KEY = "settling_curve_runtime"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -156,9 +161,10 @@ QUOTA_KEY = "quota"
 #: default, the loader and the write path all have to agree on the spelling.
 DIRECTORY_KEY = "directory"
 
-#: REACH-03's three Reach settings: the settling age, the estimation floor and
-#: the sample size, one row because two of them are validated against each
-#: other. Named here for the same reason as the two above.
+#: The Reach settings: REACH-03's settling age, estimation floor and sample
+#: size, and REACH-07's curve refit interval, one row because two of them are
+#: validated against each other. Named here for the same reason as the two
+#: above.
 REACH_KEY = "reach"
 
 #: Deployment-wide keys: one row, shared by every account.
@@ -201,6 +207,12 @@ GLOBAL_KEYS: dict[str, str] = {
         "about the database, not about anybody — and retention reads it before "
         "collecting channels, with no User in hand."
     ),
+    SETTLING_CURVE_RUNTIME_KEY: (
+        "When the Settling curve fit last learned nothing, and at which "
+        "settling age (REACH-07), so the worker waits an hour before reading "
+        "every View observation again. Deployment state the app writes, like "
+        "`sync_runtime`: the curve is one corpus fact nobody owns."
+    ),
     POST_COUNTERS_MOVED_KEY: (
         "A marker recording that no Post's media still holds a counter key "
         "(REACH-10), so `prestart.sh` skips the scan on every later deploy. A "
@@ -226,8 +238,9 @@ GLOBAL_KEYS: dict[str, str] = {
     ),
     REACH_KEY: (
         "How old a View count must be to count as Settled, how young one may "
-        "be and still be corrected through the Settling curve, and how many of "
-        "a Channel's newest Posts Reach reads (REACH-03, ADR-024). Deployment "
+        "be and still be corrected through the Settling curve, how many of "
+        "a Channel's newest Posts Reach reads (REACH-03, ADR-024), and how "
+        "often the worker refits that curve (REACH-07). Deployment "
         "policy because Reach is computed over the corpus every Follower "
         "shares: a per-account settling age would give one Channel two Reach "
         "values depending on who asked."

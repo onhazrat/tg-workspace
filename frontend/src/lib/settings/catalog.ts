@@ -272,6 +272,26 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     control: { kind: "number", min: 5, integer: true },
   },
   {
+    id: "curveRefitIntervalHours",
+    label: "Settling Curve Refit Interval",
+    description:
+      "Hours between fits of the Settling curve Reach estimates through. " +
+      "Changing the settling age refits at once. Admin only.",
+    keywords: ["reach", "settling", "curve", "fit", "refit", "hours"],
+    group: "channels-sync",
+    source: "app",
+    defaultValue: appSettingsSpec.curveRefitIntervalHours.defaultValue,
+    editorCommandId: "edit-curve-refit-interval-hours",
+    editorFieldId: "curveRefitIntervalHours",
+    editorFieldLabel: "Settling Curve Refit Interval (hours)",
+    control: {
+      kind: "number",
+      min: 1,
+      integer: true,
+      formatBadge: (v) => `${v}h`,
+    },
+  },
+  {
     id: "globalStartTimeMode",
     label: "Default Channel Start Time Mode",
     description: "How new channels pick their scrape start time.",

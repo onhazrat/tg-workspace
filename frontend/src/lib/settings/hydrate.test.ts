@@ -56,7 +56,7 @@ describe("hydrateAppSettings", () => {
     expect("embeddingsEnabled" in off.updates).toBe(false)
   })
 
-  it("takes the three Reach settings from the server's reach row", () => {
+  it("takes the four Reach settings from the server's reach row", () => {
     const { updates } = hydrateAppSettings(
       {
         ...empty,
@@ -64,6 +64,7 @@ describe("hydrateAppSettings", () => {
           settlingAgeHours: 48,
           estimationFloorHours: 6,
           reachSampleSize: 50,
+          curveRefitIntervalHours: 6,
         },
       },
       readerFromRecord({}),
@@ -71,6 +72,7 @@ describe("hydrateAppSettings", () => {
     expect(updates.settlingAgeHours).toBe(48)
     expect(updates.estimationFloorHours).toBe(6)
     expect(updates.reachSampleSize).toBe(50)
+    expect(updates.curveRefitIntervalHours).toBe(6)
   })
 })
 

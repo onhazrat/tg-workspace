@@ -158,6 +158,7 @@ def test_a_contradictory_setting_is_refused_with_its_reason(
         "settlingAgeHours": 24,
         "estimationFloorHours": 10,
         "reachSampleSize": 100,
+        "curveRefitIntervalHours": 24,
     }
 
 

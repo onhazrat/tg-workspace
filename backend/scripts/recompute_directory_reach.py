@@ -7,7 +7,8 @@
 REACH-04's migration renamed `median_views` to `reach`, so until this runs an
 entry still holds the old median of hours-old View counts. This applies the new
 rule (`services/reach.py`) to each entry's stored samples, aging each sample
-from the moment its probe captured it, under the Reach settings in force now.
+from the moment its probe captured it, under the Reach settings and the
+Settling curve in force now.
 
 An entry that is not `ok` gets no Reach. That is every `unavailable` entry: its
 samples were cleared with the verdict, so its old median cannot be recomputed,
@@ -41,7 +42,14 @@ from sqlmodel import Session, col, select
 from app.core.db import engine
 from app.jobs.settings import load_reach_settings
 from app.models_tg import DirectoryEntry, DirectorySample
-from app.services.reach import Reach, ReachSettings, reach_settings_from, sample_reach
+from app.services.reach import (
+    Curve,
+    Reach,
+    ReachSettings,
+    reach_settings_from,
+    sample_reach,
+)
+from app.services.settling_curve import current_curve
 
 logger = logging.getLogger("recompute_directory_reach")
 
@@ -49,12 +57,15 @@ DEFAULT_BATCH_SIZE = 500
 
 
 def _reach(
-    entry: DirectoryEntry, samples: list[DirectorySample], settings: ReachSettings
+    entry: DirectoryEntry,
+    samples: list[DirectorySample],
+    settings: ReachSettings,
+    curve: Curve,
 ) -> Reach:
     if entry.status != "ok" or not samples:
         return Reach()
     probed_at = samples[0].captured_at.replace(tzinfo=UTC)
-    return sample_reach(samples, int(probed_at.timestamp() * 1000), settings)
+    return sample_reach(samples, int(probed_at.timestamp() * 1000), settings, curve)
 
 
 def _batch(session: Session, after: str, size: int) -> list[DirectoryEntry]:
@@ -74,6 +85,7 @@ def recompute(*, dry_run: bool, batch_size: int) -> int:
     after = ""
     with Session(engine) as session:
         settings = reach_settings_from(load_reach_settings(session))
+        curve = current_curve(session)
         while entries := _batch(session, after, batch_size):
             after = entries[-1].handle
             samples: dict[str, list[DirectorySample]] = defaultdict(list)
@@ -84,7 +96,7 @@ def recompute(*, dry_run: bool, batch_size: int) -> int:
             ):
                 samples[sample.handle].append(sample)
             for entry in entries:
-                reach = _reach(entry, samples[entry.handle], settings)
+                reach = _reach(entry, samples[entry.handle], settings, curve)
                 if (entry.reach, entry.reach_estimated) == (
                     reach.value,
                     reach.estimated,

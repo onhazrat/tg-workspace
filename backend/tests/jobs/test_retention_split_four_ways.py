@@ -42,6 +42,7 @@ own docstring: it survives its mutation, because SQLAlchemy renders an empty
 
 from __future__ import annotations
 
+import pathlib
 import time
 import uuid
 from datetime import timedelta
@@ -704,6 +705,24 @@ def test_view_observations_go_14_days_after_publication_on_no_window() -> None:
         assert result["deletedViewObservations"] == 2
         assert remaining == [kept_uuid, kept_uuid]
         assert len(session.exec(select(Post.id)).all()) == 2
+
+
+def test_the_settling_curve_fits_are_kept_forever() -> None:
+    """Excused from every window, the way the quota ledger is (REACH-07).
+
+    A fit is a few hundred bytes a day, and each row says what the curve
+    learned from; an Operator explaining why an estimated Reach moved reads
+    the old ones. Retention works from an explicit list of models, so this
+    asserts the fits are not on it.
+
+    Mutation watched: prune `SettlingCurveFit` in `run_retention_cleanup`.
+    """
+    from app.jobs import retention
+
+    source = pathlib.Path(retention.__file__).read_text()
+    assert "SettlingCurveFit" not in source
+    assert "tg_settling_curve_fits" not in source
+    assert "settling_curve" not in source
 
 
 def test_asset_pruning_stays_deployment_wide() -> None:
