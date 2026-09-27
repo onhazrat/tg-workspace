@@ -45,6 +45,11 @@ from app.jobs.settings import (
 )
 from app.jobs.sync_queue import job_sync_queue
 from app.jobs.translation_batch import run_translation_batch
+from app.jobs.view_observation_stride import (
+    VIEW_OBSERVATION_STRIDE_INTERVAL_SECONDS,
+    VIEW_OBSERVATION_STRIDE_JOB_ID,
+    run_view_observation_stride,
+)
 from app.services.embeddings import backfill_embeddings
 from app.services.follows import resolve_follow_owner
 
@@ -240,6 +245,10 @@ async def job_post_language() -> None:
     await _run_guarded(POST_LANGUAGE_JOB_ID, run_post_language_walk)
 
 
+async def job_view_observation_stride() -> None:
+    await _run_guarded(VIEW_OBSERVATION_STRIDE_JOB_ID, run_view_observation_stride)
+
+
 _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     "auto_sync": job_auto_sync,
     "embeddings": job_embeddings,
@@ -249,6 +258,7 @@ _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     DISCOVER_PROBE_JOB_ID: job_discover_probe,
     DIRECTORY_HARVEST_JOB_ID: job_directory_harvest,
     POST_LANGUAGE_JOB_ID: job_post_language,
+    VIEW_OBSERVATION_STRIDE_JOB_ID: job_view_observation_stride,
 }
 
 
@@ -531,6 +541,17 @@ def start_scheduler() -> None:
         # Same reasoning as the harvest above. A backfill tick reads a page of
         # Posts, which can outlast a 1s grace, and a dropped tick only delays
         # the walk.
+        misfire_grace_time=None,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        job_view_observation_stride,
+        "interval",
+        seconds=VIEW_OBSERVATION_STRIDE_INTERVAL_SECONDS,
+        id=VIEW_OBSERVATION_STRIDE_JOB_ID,
+        replace_existing=True,
+        # A tick counts a table of up to `VIEW_OBSERVATION_ROW_CAP` rows. Late
+        # is fine; a dropped tick waits an hour for the next forecast.
         misfire_grace_time=None,
         coalesce=True,
     )
