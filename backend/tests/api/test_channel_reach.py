@@ -4,13 +4,16 @@ Reach rides `GET /channels/stats` (the list) and `GET /channels/{id}/stats` (the
 detail) rather than the grid's own list: it is a Post aggregate like the other
 four, and the grid paints without those on purpose.
 
-The corpus case is the ticket's: Posts carry no owner, so what it pins is that
-Reach is read by Channel name and not through anybody's Follow, including an
-Account that followed after the Posts arrived.
+Reach reads a Channel's Posts by name, over the corpus. There is no test that
+it does rather than reading through the caller's Follow, because no request can
+tell the two apart: a Post has no owner, the follow-scoped `EXISTS` asks only
+whether the caller follows the Channel, and both stats reads answer only for a
+Channel the caller follows. REACH-03 shipped one that could not fail (REACH-10).
 
 ## Watched to fail
 
-* answer every Channel not measured -> the corpus case
+* answer every Channel not measured, or the mean rather than the median -> the
+  settled case
 * compute Reach per Channel in the list rather than in one query -> the list
   and the detail still agree, so only the query-count case catches it
 * ignore the sample size setting -> the narrowing case
@@ -20,9 +23,6 @@ Account that followed after the Posts arrived.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from sqlmodel import Session
@@ -31,7 +31,6 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Post
 from tests.utils.setting_groups import add_test_channel
-from tests.utils.user import create_random_user
 
 PREFIX = f"{settings.API_V1_STR}/data"
 HOUR_MS = 3_600_000
@@ -56,29 +55,21 @@ def _seed_posts(channel: str, rows: list[tuple[int | None, int]]) -> None:
         session.commit()
 
 
-@pytest.fixture
-def shared_channel() -> Iterator[str]:
-    """Followed by a second Account first, whose sync brought the Posts in,
-    then by the superuser the tests read as."""
-    with Session(engine) as session:
-        other = create_random_user(session)
-        add_test_channel(session, "reach-shared", user_id=other.id)
-        add_test_channel(session, "reach-shared")
-    _seed_posts("reach-shared", [(100, 48), (200, 30), (300, 25), (400, 72), (500, 24)])
-    yield "reach-shared"
-
-
-def test_reach_comes_from_the_corpus(
-    client: TestClient, superuser_token_headers: dict[str, str], shared_channel: str
+def test_settled_counts_answer_their_median_on_both_reads(
+    client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    listed = client.get(f"{PREFIX}/channels/stats", headers=superuser_token_headers)
-    detail = client.get(
-        f"{PREFIX}/channels/{shared_channel}/stats", headers=superuser_token_headers
+    add_test_channel_and_posts(
+        "reach-settled", [(100, 48), (200, 30), (900, 25), (400, 72), (500, 24)]
     )
 
-    assert listed.json()[shared_channel]["reach"] == 300
-    assert listed.json()[shared_channel]["reachEstimated"] is False
-    assert detail.json()["reach"] == 300
+    listed = client.get(f"{PREFIX}/channels/stats", headers=superuser_token_headers)
+    detail = client.get(
+        f"{PREFIX}/channels/reach-settled/stats", headers=superuser_token_headers
+    )
+
+    assert listed.json()["reach-settled"]["reach"] == 400
+    assert listed.json()["reach-settled"]["reachEstimated"] is False
+    assert detail.json()["reach"] == 400
     assert detail.json()["reachEstimated"] is False
 
 

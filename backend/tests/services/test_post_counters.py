@@ -16,6 +16,8 @@ its counters in media, which `test_directory_samples.py` pins.
   test and the guard; fall back to `retrieved_at` -> the leftover-key test
 * read `post["media"]["viewsCount"]` in `prompts/posts.py`, or name
   `MEDIA_COUNTER_KEYS` outside the write path -> the guard
+* read `p.media.get("viewsCount")` in `posts.py::lookup_posts` -> the guard,
+  because `posts.py` is excused read by read rather than whole (REACH-10)
 * delete `views_of` -> the guard's stale-excuse check
 * drop a field from `post_to_camel` or `PostResponse` -> the round-trip test
 * keep a chip with no integer `count` -> the malformed-chip test
@@ -217,7 +219,6 @@ APP_DIR = Path(__file__).resolve().parents[2] / "app"
 #: Modules that may name a counter key however they like, each with a reason.
 COUNTER_KEY_MODULES: dict[str, str] = {
     "services/post_media_parser.py": "the parser writes the keys into media",
-    "services/posts.py": "the Post write path lifts them out of media",
     "schemas/post_media.py": "the parser's media shape and the key tuple",
     "schemas/posts.py": "the three columns' wire names on `PostResponse`",
 }
@@ -230,6 +231,27 @@ COUNTER_KEY_READS: dict[tuple[str, str], str] = {
     ),
     ("prompts/posts.py", "post.get('viewsCount')"): (
         "the top-level field `post_to_camel` builds from the column"
+    ),
+    # `posts.py` is listed read by read rather than excused whole: it holds the
+    # feed and the lookup beside the write path (REACH-10).
+    ("services/posts.py", "k not in MEDIA_COUNTER_KEYS"): (
+        "`_post_media_from_item` strips the keys from media on write"
+    ),
+    ("services/posts.py", "media.get('viewsCount')"): (
+        "`_counter_fields` lifts a scraped Post's View count out of media"
+    ),
+    ("services/posts.py", "media.get('reactionCounts')"): (
+        "`_counter_fields` lifts a scraped Post's chips out of media"
+    ),
+    ("services/posts.py", "('viewsCount', 'reactionCounts', 'viewsObservedAt')"): (
+        "`_counter_fields` asks whether an import item carries the top-level "
+        "fields an export writes; not media"
+    ),
+    ("services/posts.py", "item.get('viewsCount')"): (
+        "`_counter_fields` reads an import item's top-level field; not media"
+    ),
+    ("services/posts.py", "item.get('reactionCounts')"): (
+        "`_counter_fields` reads an import item's top-level field; not media"
     ),
 }
 

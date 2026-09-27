@@ -22,6 +22,7 @@ from app.services.post_filters import (
     apply_analysis_window,
     apply_post_filters,
 )
+from app.services.reach import MS_PER_HOUR, REFRESH_HORIZON_HOURS
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import scoped_select, unscoped_select
@@ -35,8 +36,9 @@ FEED_SORTS: frozenset[str] = frozenset({"time", "channel_time"})
 FEED_CAP_MODES: frozenset[str] = frozenset({"latest", "random"})
 
 #: A stored Post's counters are refreshed until it is this old (REACH-02,
-#: ADR-024). A constant, not a setting: the settling age is validated below it.
-COUNTER_REFRESH_HORIZON_MS = 7 * 24 * 60 * 60 * 1000
+#: ADR-024). Derived from the one the settling age is validated against, so the
+#: validation and the refresh cannot disagree (REACH-10).
+COUNTER_REFRESH_HORIZON_MS = REFRESH_HORIZON_HOURS * MS_PER_HOUR
 
 
 def _post_media_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -278,7 +280,16 @@ def bulk_upsert_posts_impl(
     retrieval_pass: str | None = None,
     retrieval_source: str | None = None,
     announce_relabels: bool = True,
+    stored_counters: bool = True,
 ) -> int:
+    """Insert or overwrite each Post the payload names, and label its Channels.
+
+    `stored_counters=False` leaves an already-stored Post's View count,
+    reaction chips and observation time alone. Sync passes it because it
+    re-observes those through `refresh_post_counters`, under the refresh
+    horizon (REACH-10); an import restores an export's counters whatever the
+    Post's age, so it keeps the default.
+    """
     count = 0
     now_ms = int(time.time() * 1000)
     touched: set[str] = set()
@@ -290,7 +301,9 @@ def bulk_upsert_posts_impl(
         existing = session.exec(
             select(Post).where(Post.channel_name == channel, Post.post_id == post_id)
         ).first()
-        counters = _counter_fields(item, now_ms)
+        counters = (
+            _counter_fields(item, now_ms) if stored_counters or not existing else {}
+        )
         if existing:
             # What the reference extractor reads, captured before the
             # overwrite so an edit that changes a reference can send the row
