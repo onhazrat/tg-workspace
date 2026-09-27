@@ -107,6 +107,7 @@ from app.services.directory_statistics import (
 from app.services.follows import followed_channel_names
 from app.services.post_references import extract_sample_references
 from app.services.reach import Reach, reach_settings_from, sample_reach
+from app.services.settling_curve import current_curve
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -946,6 +947,7 @@ def record_probe_result(
                     stored_samples,
                     _ms(now),
                     reach_settings_from(load_reach_settings(session)),
+                    current_curve(session),
                 ),
             )
     # A conclusive answer clears the failure history: the backoff exists to

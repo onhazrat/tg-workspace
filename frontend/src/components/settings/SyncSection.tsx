@@ -21,6 +21,7 @@ const SYNC_CATALOG_IDS = [
   "settlingAgeHours",
   "estimationFloorHours",
   "reachSampleSize",
+  "curveRefitIntervalHours",
 ] as const
 
 export const SyncSection: React.FC<{

@@ -43,6 +43,11 @@ from app.jobs.settings import (
     load_jobs_settings,
     set_job_enabled,
 )
+from app.jobs.settling_curve_fit import (
+    SETTLING_CURVE_CHECK_SECONDS,
+    SETTLING_CURVE_FIT_JOB_ID,
+    run_settling_curve_fit,
+)
 from app.jobs.sync_queue import job_sync_queue
 from app.jobs.translation_batch import run_translation_batch
 from app.jobs.view_observation_stride import (
@@ -249,6 +254,10 @@ async def job_view_observation_stride() -> None:
     await _run_guarded(VIEW_OBSERVATION_STRIDE_JOB_ID, run_view_observation_stride)
 
 
+async def job_settling_curve_fit() -> None:
+    await _run_guarded(SETTLING_CURVE_FIT_JOB_ID, run_settling_curve_fit)
+
+
 _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     "auto_sync": job_auto_sync,
     "embeddings": job_embeddings,
@@ -259,6 +268,7 @@ _JOB_RUNNERS: dict[str, Callable[[], Awaitable[None]]] = {
     DIRECTORY_HARVEST_JOB_ID: job_directory_harvest,
     POST_LANGUAGE_JOB_ID: job_post_language,
     VIEW_OBSERVATION_STRIDE_JOB_ID: job_view_observation_stride,
+    SETTLING_CURVE_FIT_JOB_ID: job_settling_curve_fit,
 }
 
 
@@ -552,6 +562,17 @@ def start_scheduler() -> None:
         replace_existing=True,
         # A tick counts a table of up to `VIEW_OBSERVATION_ROW_CAP` rows. Late
         # is fine; a dropped tick waits an hour for the next forecast.
+        misfire_grace_time=None,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        job_settling_curve_fit,
+        "interval",
+        seconds=SETTLING_CURVE_CHECK_SECONDS,
+        id=SETTLING_CURVE_FIT_JOB_ID,
+        replace_existing=True,
+        # A due tick reads every View observation and fits, which can outlast
+        # a 1s grace; a dropped tick only delays the check a minute.
         misfire_grace_time=None,
         coalesce=True,
     )

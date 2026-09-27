@@ -358,6 +358,28 @@ class ViewObservation(SQLModel, table=True):
     published_at: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
 
 
+class SettlingCurveFit(SQLModel, table=True):
+    """One daily fit of the global Settling curve (REACH-07, ADR-024).
+
+    `knots` is `[[age_hours, share], ...]`, share 1 at `settling_age_hours`.
+    The newest row is the curve Reach estimates through; before the first,
+    the seed in `services/reach.py`. Kept forever: each row also says what it
+    learned from (the pair, Post and Channel counts and the Observation stride
+    in force), which is how an Operator explains why an estimate moved.
+    """
+
+    __tablename__ = "tg_settling_curve_fits"
+
+    id: int | None = Field(default=None, primary_key=True)
+    fitted_at: datetime = Field(default_factory=utc_now)
+    knots: list[list[float]] = Field(sa_column=Column(JSONB, nullable=False))
+    settling_age_hours: int
+    observation_stride: int
+    pair_count: int
+    post_count: int
+    channel_count: int
+
+
 class PostSyncState(SQLModel, table=True):
     __tablename__ = "tg_post_sync_state"
     __table_args__ = (UniqueConstraint("channel_name", "post_id"),)

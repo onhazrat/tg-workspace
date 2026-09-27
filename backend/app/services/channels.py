@@ -48,6 +48,7 @@ from app.services.logs import collect_channel_sync_logs
 from app.services.post_sync_state import clear_channel_sync_state
 from app.services.reach import MS_PER_HOUR, Reach, compute_reach, reach_settings_from
 from app.services.serialization import channel_to_camel, normalize_body
+from app.services.settling_curve import current_curve
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
     compute_next_regular_sync_at_from_last_updated,
@@ -319,7 +320,8 @@ def reach_by_channel(session: Session, channel_names: list[str]) -> dict[str, Re
     for name, views, age_ms in rows:
         if views is not None and age_ms is not None:
             pairs[name].append((views, age_ms / MS_PER_HOUR))
-    return {name: compute_reach(obs, settings) for name, obs in pairs.items()}
+    curve = current_curve(session)
+    return {name: compute_reach(obs, settings, curve) for name, obs in pairs.items()}
 
 
 def _with_reach(stats: dict[str, Any], reach: Reach) -> dict[str, Any]:

@@ -56,6 +56,9 @@ ALL_TEST_CHANNEL_KEYS: frozenset[str] = TEST_CHANNEL_IDS | TEST_CHANNEL_NAMES
 
 TG_TABLES: tuple[str, ...] = (
     "tg_post_sync_state",
+    # REACH-07's curve fits. No foreign key; listed early so the next test
+    # estimates through the seed curve rather than a fit a test left behind.
+    "tg_settling_curve_fits",
     # REACH-05's sightings, child of `tg_posts`, listed before it like the rest.
     "tg_view_observations",
     "tg_post_embeddings",

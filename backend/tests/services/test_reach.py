@@ -142,6 +142,7 @@ def test_settings_default_when_nothing_is_stored() -> None:
         ({"estimationFloorHours": -1}, "at least 0"),
         ({"reachSampleSize": 4}, "at least 5"),
         ({"reachSampleSize": "100"}, "whole number"),
+        ({"curveRefitIntervalHours": 0}, "at least 1 hour"),
         ({"settlingAgeHours": True}, "whole number"),
     ],
 )

@@ -254,13 +254,15 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
     # `tg_post_references` (CRG-01) is the same case again, further out still:
     # the reference graph is corpus by ADR-019 and was created without an owner
     # column, long after this revision ran. `tg_view_observations` (REACH-05)
-    # likewise: corpus sightings, created without an owner column.
+    # likewise: corpus sightings, created without an owner column, and
+    # `tg_settling_curve_fits` (REACH-07), the curve fitted from them.
     never_had_one = derived - frozen
     assert never_had_one <= {
         "tg_channel_directory",
         "tg_channel_directory_samples",
         "tg_directory_probe_usage",
         "tg_post_references",
+        "tg_settling_curve_fits",
         "tg_sync_meta",
         "tg_view_observations",
     }, (

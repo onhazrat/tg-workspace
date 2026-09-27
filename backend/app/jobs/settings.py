@@ -72,6 +72,7 @@ JOB_IDS = (
     "directory_harvest",
     "post_language",
     "view_observation_stride",
+    "settling_curve_fit",
 )
 
 

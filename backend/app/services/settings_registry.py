@@ -156,9 +156,10 @@ QUOTA_KEY = "quota"
 #: default, the loader and the write path all have to agree on the spelling.
 DIRECTORY_KEY = "directory"
 
-#: REACH-03's three Reach settings: the settling age, the estimation floor and
-#: the sample size, one row because two of them are validated against each
-#: other. Named here for the same reason as the two above.
+#: The Reach settings: REACH-03's settling age, estimation floor and sample
+#: size, and REACH-07's curve refit interval, one row because two of them are
+#: validated against each other. Named here for the same reason as the two
+#: above.
 REACH_KEY = "reach"
 
 #: Deployment-wide keys: one row, shared by every account.
@@ -226,8 +227,9 @@ GLOBAL_KEYS: dict[str, str] = {
     ),
     REACH_KEY: (
         "How old a View count must be to count as Settled, how young one may "
-        "be and still be corrected through the Settling curve, and how many of "
-        "a Channel's newest Posts Reach reads (REACH-03, ADR-024). Deployment "
+        "be and still be corrected through the Settling curve, how many of "
+        "a Channel's newest Posts Reach reads (REACH-03, ADR-024), and how "
+        "often the worker refits that curve (REACH-07). Deployment "
         "policy because Reach is computed over the corpus every Follower "
         "shares: a per-account settling age would give one Channel two Reach "
         "values depending on who asked."

@@ -1425,6 +1425,12 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "unextracted, so a restore re-derives the edges its Posts name rather "
         "than trusting another install's copy."
     ),
+    "SettlingCurveFit": (
+        "The Settling curve fits (REACH-07). Corpus, one curve fitted from "
+        "this deployment's View observations rather than an Account's data; a "
+        "restored install refits its own within a day and uses the seed curve "
+        "until then."
+    ),
     "SyncMeta": "Cache etags. Corpus, and meaningless in another install.",
     "ViewObservation": (
         "Sampled sightings of View counts that the Settling curve is fitted "

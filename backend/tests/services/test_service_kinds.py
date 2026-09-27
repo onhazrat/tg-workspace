@@ -81,6 +81,10 @@ INVENTORY: dict[str, str] = {
     # it owns a table of its own that the stride controller and the curve fit
     # also reach, not a companion payload of `tg_posts`.
     "view_observations.py": AGGREGATE,
+    # Owns `tg_settling_curve_fits` (REACH-07). Gathers the pairs it fits from
+    # `tg_view_observations` but writes only the fits; the fit itself is the
+    # pure `reach.fit_settling_curve`.
+    "settling_curve.py": AGGREGATE,
     # Owns `tg_post_references` (CRG-01) and is its only writer. Holds the
     # extractor as well as the writes: the pure half is a few functions over
     # one Post and splitting it out would be a module whose only caller is the

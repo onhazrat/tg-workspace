@@ -29,10 +29,13 @@ median it was measured against.
 from __future__ import annotations
 
 import bisect
+import math
 import statistics
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
+
+import numpy as np
 
 from app.services.directory_statistics import MIN_SAMPLES, SamplePost, views_of
 
@@ -70,11 +73,13 @@ REFRESH_HORIZON_HOURS = 7 * 24
 
 @dataclass(frozen=True)
 class ReachSettings:
-    """The three deployment settings Reach reads, stored under `reach`."""
+    """The deployment settings Reach reads, stored under `reach`."""
 
     settling_age_hours: int = 24
     estimation_floor_hours: int = 3
     sample_size: int = 100
+    # How often the worker refits the Settling curve (REACH-07).
+    refit_interval_hours: int = 24
 
 
 DEFAULT_REACH_SETTINGS = ReachSettings()
@@ -84,6 +89,7 @@ REACH_SETTING_FIELDS = {
     "settlingAgeHours": "settling_age_hours",
     "estimationFloorHours": "estimation_floor_hours",
     "reachSampleSize": "sample_size",
+    "curveRefitIntervalHours": "refit_interval_hours",
 }
 
 
@@ -117,6 +123,8 @@ def reach_settings_from(stored: Mapping[str, Any]) -> ReachSettings:
             f"Reach needs at least {MIN_SAMPLES} Posts to read; "
             f"the sample size cannot be below that."
         )
+    if result.refit_interval_hours < 1:
+        raise ValueError("The curve refit interval must be at least 1 hour.")
     return result
 
 
@@ -186,4 +194,95 @@ def sample_reach(
         ),
         settings,
         curve,
+    )
+
+
+# --------------------------------------------------------------------------
+# Fitting the Settling curve (REACH-07)
+# --------------------------------------------------------------------------
+
+#: The fitted curve's knots: ages log-spaced from 30 minutes to the refresh
+#: horizon, the last age sync sees a View count at.
+KNOT_AGES_HOURS: tuple[float, ...] = tuple(
+    float(age) for age in np.geomspace(0.5, REFRESH_HORIZON_HOURS, 16)
+)
+
+#: A span between two knots learns its shape from the data only when at
+#: least this many pairs cross it; below, it takes the seed's.
+MIN_PAIRS_PER_SPAN = 30
+
+#: `(age in hours, share)` per knot, share 1 at the settling age.
+Knots = tuple[tuple[float, float], ...]
+
+
+class ObservationPair(NamedTuple):
+    """Two consecutive sightings of one Post, `early_age < late_age` (hours)."""
+
+    early_age: float
+    early_views: int
+    late_age: float
+    late_views: int
+
+
+def curve_from_knots(knots: Sequence[Sequence[float]]) -> Curve:
+    """Piecewise-linear log share over log age, flat outside the knots."""
+    log_ages = [math.log(age) for age, _share in knots]
+    log_shares = [math.log(share) for _age, share in knots]
+
+    def curve(age_hours: float) -> float:
+        at = math.log(max(age_hours, knots[0][0]))
+        return math.exp(float(np.interp(at, log_ages, log_shares)))
+
+    return curve
+
+
+def _non_decreasing(values: Sequence[float]) -> list[float]:
+    """Pool-adjacent-violators: the nearest non-decreasing sequence."""
+    blocks: list[tuple[float, int]] = []  # (mean, size)
+    for value in values:
+        mean, size = value, 1
+        while blocks and blocks[-1][0] > mean:
+            prev_mean, prev_size = blocks.pop()
+            mean = (prev_mean * prev_size + mean * size) / (prev_size + size)
+            size += prev_size
+        blocks.append((mean, size))
+    return [mean for mean, size in blocks for _ in range(size)]
+
+
+def fit_settling_curve(
+    pairs: Iterable[ObservationPair], settling_age_hours: float, seed: Curve
+) -> Knots | None:
+    """The Settling curve the pairs describe, or `None` when no span has data.
+
+    The unknowns are the curve's log rise across each span between knots. A
+    pair says `log F(late) - log F(early) = log(late_views / early_views)`, and
+    the left side is each span's rise times the share of that span, in log
+    age, the pair covers: one equation however many knots it crosses. Spans
+    crossed by fewer than `MIN_PAIRS_PER_SPAN` pairs keep the seed's rise, the
+    rest are solved by least squares; the knot values are then made
+    non-decreasing and shifted so the share at the settling age is 1. Every
+    pair weighs the same, whichever Channel it came from.
+    """
+    rows = [
+        (p.early_age, p.late_age, math.log(p.late_views / p.early_views))
+        for p in pairs
+        if p.early_views > 0 and p.late_views > 0
+    ]
+    data = np.array(rows, dtype=float).reshape(-1, 3)
+    log_knots = np.log(KNOT_AGES_HOURS)
+    starts, ends = log_knots[:-1], log_knots[1:]
+    ages = np.log(np.clip(data[:, :2], KNOT_AGES_HOURS[0], KNOT_AGES_HOURS[-1]))
+    covered = np.minimum(ages[:, 1:2], ends) - np.maximum(ages[:, 0:1], starts)
+    cover = np.clip(covered, 0.0, None) / (ends - starts)
+    learned = (cover > 0).sum(axis=0) >= MIN_PAIRS_PER_SPAN
+    if not learned.any():
+        return None
+    rises = np.diff(np.log([seed(age) for age in KNOT_AGES_HOURS]))
+    target = data[:, 2] - cover[:, ~learned] @ rises[~learned]
+    rises[learned] = np.linalg.lstsq(cover[:, learned], target, rcond=None)[0]
+    log_shares = _non_decreasing([0.0, *np.cumsum(rises).tolist()])
+    anchor = float(np.interp(math.log(settling_age_hours), log_knots, log_shares))
+    return tuple(
+        (age, math.exp(share - anchor))
+        for age, share in zip(KNOT_AGES_HOURS, log_shares, strict=True)
     )

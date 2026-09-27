@@ -207,6 +207,8 @@ def test_corpus_models_are_the_ones_the_plan_names() -> None:
         # plausibly argued into `FOLLOW_SCOPED`; it must not be, because its
         # only reader is the one global Settling curve fit over every Post.
         "ViewObservation",
+        # REACH-07's curve fits: one global curve, read by every account.
+        "SettlingCurveFit",
     }
 
 
