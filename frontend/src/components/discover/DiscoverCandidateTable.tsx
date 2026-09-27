@@ -428,9 +428,10 @@ export function CandidateRow({
         testId={`discover-posts-per-week-${row.name}`}
       />
       <StatCell
-        value={stats.medianViews}
-        placeholderTitle={stats.placeholderTitle}
-        testId={`discover-median-views-${row.name}`}
+        value={stats.reach}
+        aside={stats.reachNote}
+        placeholderTitle={stats.reachTitle}
+        testId={`discover-reach-${row.name}`}
       />
       <td className="py-2">
         <DiscoverMediaMixBar mix={row.probe?.mediaMix} handle={row.name} />
@@ -610,9 +611,9 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
             </th>
             <th
               className="pb-2"
-              title="Median views across the sample posts, so one viral post cannot relabel the channel"
+              title="Reach: the median settled View count of recent Posts, so one viral post cannot relabel the channel. ~ marks an estimate from younger counts"
             >
-              Views
+              Reach
             </th>
             <th
               className="pb-2"

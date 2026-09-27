@@ -2,7 +2,9 @@
 
 Every case here is a way the obvious implementation is wrong, which is why this
 file exists at all: the formulas are three lines each, and three lines each is
-exactly how "Posts divided by span" and "median over three numbers" get written.
+exactly how "Posts divided by span" gets written. The median View count this
+file used to hold became Reach (REACH-04), and its cases moved to
+`test_reach.py`.
 
 The transform is pure, so this needs no database and no fixtures. The Posts are
 real `DirectorySample` rows built in memory rather than stand-in objects,
@@ -13,14 +15,10 @@ a stub would let those two drift apart silently.
 
 * `count / span` instead of `(count - 1) / span` -> the weekly case reads 1.25
   and the year-old case 8.75
-* gate the median on `count` rather than on how many samples carry a view ->
-  twenty samples with one view between them report that one view as a median
 * read `post.text` instead of the parsed caption -> a set of `[photo]`
   placeholders reports a Language where it has none
 * derive over the samples as stored rather than newest first -> the tie test
   reads `en` in one of its two orders
-* `floor(x + 0.5)` instead of `round` -> the tie test reads 11, and the
-  write-path file's agreement test fails against the migration's own SQL
 """
 
 from __future__ import annotations
@@ -89,7 +87,6 @@ class TestEmpty:
         assert stats.last_post_at is None
         assert stats.sample_count is None
         assert stats.posts_per_week is None
-        assert stats.median_views is None
         assert stats.forward_share is None
         assert stats.language is None
 
@@ -132,56 +129,6 @@ class TestPostsPerWeek:
         long_ago = ORIGIN - 400 * DAY_MS
         rows = [sample(i, timestamp=long_ago + i * DAY_MS) for i in range(5)]
         assert compute_sample_statistics(rows).posts_per_week == 7.0
-
-
-class TestMedianViews:
-    def test_the_threshold_counts_measured_views_not_samples(self) -> None:
-        """Twenty samples carrying one view between them measure nothing.
-
-        Gating on the sample count would let that single observation *be* the
-        median and rank the Channel on it, which is the failure the threshold
-        exists to prevent — and it is the common shape, because Telegram stops
-        rendering a view counter on older Posts.
-        """
-        rows = weekly(20)
-        rows[0].media = {"kinds": [], "viewsCount": 99_000}
-        stats = compute_sample_statistics(rows)
-        assert stats.median_views is None
-        assert stats.sample_count == 20
-
-    def test_one_viral_post_does_not_move_the_median(self) -> None:
-        """Median, not mean: the mean of these is 20,180."""
-        rows = [sample(i, views=v) for i, v in enumerate([100, 110, 120, 130, 100_000])]
-        assert compute_sample_statistics(rows).median_views == 120
-
-    def test_an_even_set_rounds(self) -> None:
-        """An even set has a fractional median — 30 and 41 give 35.5 — and the
-        column is an int. Rounding rather than widening the type: the counts are
-        themselves parsed from Telegram's abbreviated display strings, where
-        `9.74K` becomes 9,740, so half a view is below the precision of the
-        input. Which way a tie breaks is `round`'s business and nobody's
-        concern at this precision."""
-        rows = [sample(i, views=v) for i, v in enumerate([10, 20, 30, 41, 50, 60])]
-        assert compute_sample_statistics(rows).median_views == 36
-
-    def test_a_tie_goes_to_the_even_integer_because_the_migration_does(
-        self,
-    ) -> None:
-        """The one input where the two implementations of this could disagree.
-
-        `[10, 11]` has a median of 10.5, and which way that breaks is invisible
-        until you notice the backfill says this formula a second time in SQL.
-        Python's `round` and PostgreSQL's `round(double precision)` are both
-        `rint` and both answer 10, so they agree — but half-up here, or a
-        `::numeric` cast there, would part them. Pinned from this side; the
-        write-path file pins the same tie through the migration's own statement.
-        """
-        rows = [sample(i, views=v) for i, v in enumerate([8, 9, 10, 11, 12, 13])]
-        assert compute_sample_statistics(rows).median_views == 10
-
-    def test_exactly_the_threshold_measures(self) -> None:
-        rows = [sample(i, views=(i + 1) * 10) for i in range(MIN_SAMPLES)]
-        assert compute_sample_statistics(rows).median_views == 30
 
 
 class TestForwardShare:

@@ -316,23 +316,28 @@ export const appSettingsSpec = {
     z.array(z.enum(["forward", "mention", "link"])),
     ["forward", "mention", "link"] as DiscoverySignalKind[],
   ),
-  discoverSortKey: enumSetting<DiscoverSortKey>(
-    "discoverSortKey",
-    z.enum([
+  // REACH-04 renamed the "medianViews" sort to "reach"; a saved one is read
+  // as the new key so the preference survives rather than falling back.
+  discoverSortKey: {
+    ...enumSetting<DiscoverSortKey>(
+      "discoverSortKey",
+      z.enum([
+        "total",
+        "weighted",
+        "forward",
+        "mention",
+        "link",
+        "lastSeen",
+        "seenInCount",
+        "subscribers",
+        "lastPostAt",
+        "postsPerWeek",
+        "reach",
+      ]),
       "total",
-      "weighted",
-      "forward",
-      "mention",
-      "link",
-      "lastSeen",
-      "seenInCount",
-      "subscribers",
-      "lastPostAt",
-      "postsPerWeek",
-      "medianViews",
-    ]),
-    "total",
-  ),
+    ),
+    decode: (raw: string) => (raw === "medianViews" ? "reach" : raw),
+  },
   // Per-kind weights for the "Weighted" sort. Editable because the right
   // trade-off is corpus-specific: a forward is normally the strongest
   // endorsement and a bare @mention the weakest, but how much stronger is a

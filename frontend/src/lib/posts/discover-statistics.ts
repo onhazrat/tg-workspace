@@ -18,6 +18,11 @@
  * * **Nothing to measure.** Probed, enough samples, but Telegram rendered no
  *   view counter on five of them, which is ordinary on older Posts.
  *
+ * Reach is the exception to the shared blank (REACH-04): a probed entry with no
+ * Reach says "not measured" in words, because it has its own rule (five
+ * Settled View counts, or five past the estimation floor) and a dash beside a
+ * sample count reads as a missing number rather than a missing measurement.
+ *
  * One function rather than three, because all three cells answer the first two
  * causes identically and splitting them is how one of them comes to answer
  * differently.
@@ -37,7 +42,12 @@ export interface CandidateStatistics {
   lastPostAt: number | null
   /** Formatted rate, or `null` when there is none to show. */
   postsPerWeek: string | null
-  medianViews: string | null
+  /** Formatted Reach, `~` marking an estimate, or `null`. */
+  reach: string | null
+  /** Shown where Reach would be on a probed entry that has none. */
+  reachNote: string | null
+  /** What the Reach cell means, as its tooltip. */
+  reachTitle: string
   /**
    * Shown where the rate would be, when the sample set was too small for one.
    * `null` whenever a rate is showing or nothing was measured at all.
@@ -61,6 +71,13 @@ const NOT_MEASURED = "Probed, but Telegram showed nothing to measure here"
 const NO_RATE = (count: number) =>
   `${count} sample ${count === 1 ? "Post" : "Posts"} — not enough to time a rate`
 
+const REACH_MEASURED =
+  "Reach: the median View count of the Channel's recent Posts once they settled"
+const REACH_ESTIMATED =
+  "Reach, estimated: too few recent Posts have settled, so younger View counts were corrected for their age"
+const REACH_NOT_MEASURED =
+  "Reach not measured: fewer than five recent Posts old enough to count or to estimate from"
+
 export function candidateStatistics(
   probe: DiscoveryProbe | null | undefined,
 ): CandidateStatistics {
@@ -68,13 +85,15 @@ export function candidateStatistics(
     return {
       lastPostAt: null,
       postsPerWeek: null,
-      medianViews: null,
+      reach: null,
+      reachNote: null,
+      reachTitle: NOT_PROBED,
       sampleNote: null,
       placeholderTitle: NOT_PROBED,
     }
   }
 
-  const { lastPostAt, postsPerWeek, medianViews, sampleCount } = probe
+  const { lastPostAt, postsPerWeek, reach, reachEstimated, sampleCount } = probe
   return {
     lastPostAt,
     // One decimal below 10, none above: "0.4/week" and "31/week" are both
@@ -83,7 +102,17 @@ export function candidateStatistics(
       postsPerWeek === null
         ? null
         : postsPerWeek.toFixed(postsPerWeek < 10 ? 1 : 0),
-    medianViews: medianViews === null ? null : COMPACT.format(medianViews),
+    reach:
+      reach === null
+        ? null
+        : `${reachEstimated ? "~" : ""}${COMPACT.format(reach)}`,
+    reachNote: reach === null ? "not measured" : null,
+    reachTitle:
+      reach === null
+        ? REACH_NOT_MEASURED
+        : reachEstimated
+          ? REACH_ESTIMATED
+          : REACH_MEASURED,
     sampleNote:
       postsPerWeek === null && sampleCount !== null
         ? `${sampleCount} ${sampleCount === 1 ? "post" : "posts"}`

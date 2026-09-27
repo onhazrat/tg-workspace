@@ -166,7 +166,12 @@ class HandleProbeResponse(BaseModel):
     #: divided by the span — N Posts give N-1 intervals — and a recent rate
     #: rather than a lifetime average, which is why the UI labels it as one.
     posts_per_week: float | None = Field(default=None, alias="postsPerWeek")
-    median_views: int | None = Field(default=None, alias="medianViews")
+    #: Reach, by the rule a followed Channel's is computed with (REACH-04,
+    #: ADR-024): from the probe sample, or from the stored Posts when anybody
+    #: follows the Channel. `reachEstimated` says it came through the Settling
+    #: curve from View counts too young to have settled.
+    reach: int | None = None
+    reach_estimated: bool = Field(default=False, alias="reachEstimated")
     forward_share: float | None = Field(default=None, alias="forwardShare")
     #: The sample's Language as a code (`fa`, `ar`), by the Channel rule.
     #: Panel-only: it appears on no row and in no sort.

@@ -46,7 +46,7 @@ from app.services.follows import (
 from app.services.language import LANGUAGE_WINDOW, derive_language
 from app.services.logs import collect_channel_sync_logs
 from app.services.post_sync_state import clear_channel_sync_state
-from app.services.reach import Reach, compute_reach, reach_settings_from
+from app.services.reach import MS_PER_HOUR, Reach, compute_reach, reach_settings_from
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
@@ -286,9 +286,6 @@ def _wanted_names(channel_names: list[str]) -> Any:
     ).subquery("wanted")
 
 
-_MS_PER_HOUR = 3_600_000
-
-
 def reach_by_channel(session: Session, channel_names: list[str]) -> dict[str, Reach]:
     """Each Channel's Reach over the corpus, in one query (REACH-03, ADR-024).
 
@@ -321,7 +318,7 @@ def reach_by_channel(session: Session, channel_names: list[str]) -> dict[str, Re
     pairs: dict[str, list[tuple[int, float]]] = {name: [] for name in channel_names}
     for name, views, age_ms in rows:
         if views is not None and age_ms is not None:
-            pairs[name].append((views, age_ms / _MS_PER_HOUR))
+            pairs[name].append((views, age_ms / MS_PER_HOUR))
     return {name: compute_reach(obs, settings) for name, obs in pairs.items()}
 
 

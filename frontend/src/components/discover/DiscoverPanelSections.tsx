@@ -143,9 +143,9 @@ export function ChannelStatistics({
               title={stats.placeholderTitle}
             />
             <Stat
-              label="Median views"
-              value={stats.medianViews}
-              title={stats.placeholderTitle}
+              label="Reach"
+              value={stats.reach ?? stats.reachNote}
+              title={stats.reachTitle}
             />
           </div>
           {/*

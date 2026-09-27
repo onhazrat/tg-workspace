@@ -2425,9 +2425,13 @@ export type HandleProbeResponse = {
      */
     postsPerWeek?: number | null;
     /**
-     * Medianviews
+     * Reach
      */
-    medianViews?: number | null;
+    reach?: number | null;
+    /**
+     * Reachestimated
+     */
+    reachEstimated?: boolean;
     /**
      * Forwardshare
      */

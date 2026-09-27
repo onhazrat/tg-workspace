@@ -30,11 +30,11 @@ from __future__ import annotations
 
 import bisect
 import statistics
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from app.services.directory_statistics import MIN_SAMPLES
+from app.services.directory_statistics import MIN_SAMPLES, SamplePost, views_of
 
 #: A Settling curve: the share of its reference View count a Post typically
 #: holds at an age in hours.
@@ -129,8 +129,9 @@ class Reach:
 
 
 def _median(counts: list[float]) -> int:
-    # `round`, a tie to the even integer, as `compute_sample_statistics` rounds
-    # its median: the two are the same statistic and must agree on 504.5.
+    # `round`, a tie to the even integer. The counts are parsed from Telegram's
+    # abbreviated display (`9.74K` is 9,740), so the half view an even set
+    # produces sits below the precision of the input.
     return round(statistics.median(counts))
 
 
@@ -159,3 +160,30 @@ def compute_reach(
     if len(counts) >= MIN_SAMPLES:
         return Reach(_median(counts), estimated=True)
     return Reach()
+
+
+MS_PER_HOUR = 3_600_000
+
+
+def sample_reach(
+    posts: Sequence[SamplePost],
+    probed_at_ms: int,
+    settings: ReachSettings,
+    curve: Curve = seed_curve,
+) -> Reach:
+    """A Directory entry's Reach from its probe sample (REACH-04).
+
+    Each sample's age is the probe time minus its publication time, and the
+    newest `settings.sample_size` samples are read, as `reach_by_channel` reads
+    a followed Channel's newest Posts.
+    """
+    newest = sorted(posts, key=lambda post: post.timestamp, reverse=True)
+    return compute_reach(
+        (
+            (views, (probed_at_ms - post.timestamp) / MS_PER_HOUR)
+            for post in newest[: settings.sample_size]
+            if post.timestamp > 0 and (views := views_of(post)) is not None
+        ),
+        settings,
+        curve,
+    )

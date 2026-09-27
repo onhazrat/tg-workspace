@@ -95,7 +95,9 @@ def test_a_conclusive_probe_stores_the_statistics_of_the_samples_it_stored() -> 
         assert after["sampleCount"] == 5
         # Five Posts a week apart span four weeks: one per week, not 1.25.
         assert after["postsPerWeek"] == 1.0
-        assert after["medianViews"] == 1002
+        # A year-old sample is Settled, so Reach is measured (REACH-04).
+        assert after["reach"] == 1002
+        assert after["reachEstimated"] is False
         assert after["forwardShare"] == 0.0
         assert after["lastPostAt"] is not None
         assert after["language"] == "en"
@@ -110,7 +112,7 @@ def test_the_next_conclusive_probe_replaces_them() -> None:
         # One Post is below the threshold: the rates go, the count stays, and
         # that is what lets a blank cadence explain itself on the row.
         assert after["postsPerWeek"] is None
-        assert after["medianViews"] is None
+        assert after["reach"] is None
 
 
 def test_an_inconclusive_fetch_leaves_them_alone() -> None:
@@ -162,7 +164,7 @@ def test_an_unavailable_entry_keeps_its_statistics_and_loses_its_mix() -> None:
 
         assert after["sampleCount"] == 5
         assert after["postsPerWeek"] == 1.0
-        assert after["medianViews"] == 1002
+        assert after["reach"] == 1002
         assert after["forwardShare"] == 0.0
         assert after["lastPostAt"] is not None
 
@@ -191,7 +193,8 @@ def test_a_recheck_discards_them_with_the_verdict() -> None:
         assert row is not None
         assert row.sample_count is None
         assert row.posts_per_week is None
-        assert row.median_views is None
+        assert row.reach is None
+        assert row.reach_estimated is False
         assert row.forward_share is None
         assert row.last_post_at is None
         assert row.language is None
@@ -207,39 +210,34 @@ def test_the_migration_backfill_agrees_with_the_transform() -> None:
     columns, run the migration's own statement, and require the answer the pure
     transform gives.
 
-    The Language is out of the comparison because the backfill does not compute
-    it: the detector lives in Python, and the next probe fills it in.
+    Its `median_views` leg is left out: REACH-04 renamed the column to `reach`
+    and replaced the rule, and `scripts/recompute_directory_reach.py` rewrites
+    every stored value, so the old median has no transform left to agree with.
+    The Language is out too, because the backfill does not compute it: the
+    detector lives in Python, and the next probe fills it in.
     """
     module = importlib.import_module(
         "app.alembic.versions.d1e2f3a4b5c6_directory_statistics"
     )
+    median_leg = "    median_views  = s.median_views,\n"
+    assert median_leg in module._BACKFILL
+    backfill = module._BACKFILL.replace(median_leg, "")
     with Session(engine) as session:
-        # An **even** number of measured views whose median lands on a half,
-        # and one whose floor is even. That is the single input where the two
-        # roundings could differ: Python's `round` breaks a tie to the even
-        # integer and PostgreSQL's `round(double precision)` breaks it away from
-        # zero, so `10.5` would be 10 in the transform and 11 in the backfill.
-        # The transform floors `x + 0.5` for that reason, and a set with an odd
-        # count or identical views — which is what this test used to seed —
-        # steps around the disagreement instead of pinning it.
         record_probe_result(session, HANDLE, _page(samples=_weekly(10, views=500)))
         expected = compute_sample_statistics(samples_for(session, HANDLE))
-        assert expected.median_views == 504, "the seed must land on a tie"
 
         session.execute(
             sa_text(
                 "UPDATE tg_channel_directory SET last_post_at = NULL, "
-                "sample_count = NULL, posts_per_week = NULL, "
-                "median_views = NULL, forward_share = NULL"
+                "sample_count = NULL, posts_per_week = NULL, forward_share = NULL"
             )
         )
-        session.execute(sa_text(module._BACKFILL))
+        session.execute(sa_text(backfill))
         session.commit()
 
         row = session.get(DirectoryEntry, HANDLE)
         assert row is not None
         assert row.sample_count == expected.sample_count
         assert row.last_post_at == expected.last_post_at
-        assert row.median_views == expected.median_views
         assert row.posts_per_week == pytest.approx(expected.posts_per_week)
         assert row.forward_share == pytest.approx(expected.forward_share)

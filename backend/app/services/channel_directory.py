@@ -94,16 +94,19 @@ from typing import Any
 from sqlalchemy import and_, func, or_
 from sqlmodel import Session, col, select
 
-from app.jobs.settings import load_directory_settings
+from app.jobs.settings import load_directory_settings, load_reach_settings
 from app.models_tg import DirectoryEntry, utc_now
 from app.services.channel_directory_samples import replace_samples, samples_for
+from app.services.channels import reach_by_channel
 from app.services.directory_statistics import (
     SampleStatistics,
     compute_sample_statistics,
     media_density,
     media_mix,
 )
+from app.services.follows import followed_channel_names
 from app.services.post_references import extract_sample_references
+from app.services.reach import Reach, reach_settings_from, sample_reach
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -252,6 +255,10 @@ def _epoch_ms(moment: datetime | None) -> int | None:
     """
     if moment is None:
         return None
+    return _ms(moment)
+
+
+def _ms(moment: datetime) -> int:
     return int(moment.replace(tzinfo=UTC).timestamp() * 1000)
 
 
@@ -283,7 +290,8 @@ def probe_to_camel(row: DirectoryEntry) -> dict[str, Any]:
         "lastPostAt": _epoch_ms(row.last_post_at),
         "sampleCount": row.sample_count,
         "postsPerWeek": row.posts_per_week,
-        "medianViews": row.median_views,
+        "reach": row.reach,
+        "reachEstimated": row.reach_estimated,
         "forwardShare": row.forward_share,
         "language": row.language,
         # The two derived at read, from four columns already selected above
@@ -292,6 +300,35 @@ def probe_to_camel(row: DirectoryEntry) -> dict[str, Any]:
         "mediaMix": media_mix(counters),
         "mediaDensity": media_density(counters, row.latest_id),
     }
+
+
+def _with_followed_reach(
+    session: Session, rows: list[DirectoryEntry]
+) -> list[dict[str, Any]]:
+    """`probe_to_camel` for each row, with the Post-based Reach wherever
+    anybody follows the Channel (REACH-04).
+
+    A followed Channel's stored Posts are the better sample: sync refreshes
+    their View counts until they settle, where a probe sees one page of mostly
+    young ones. Answering from the Posts also means one Channel never shows
+    two Reach values, one here and one on the Channels tab. Any Account's
+    Follow counts, because Reach describes the Channel and the Posts are
+    shared by every Follower.
+    """
+    probes = [probe_to_camel(row) for row in rows]
+    followed = {
+        name.lower(): name
+        for name in followed_channel_names(session, among={row.handle for row in rows})
+    }
+    if not followed:
+        return probes
+    reach = reach_by_channel(session, list(followed.values()))
+    for probe in probes:
+        name = followed.get(probe["handle"])
+        if name is not None:
+            probe["reach"] = reach[name].value
+            probe["reachEstimated"] = reach[name].estimated
+    return probes
 
 
 def probe_map(session: Session, handles: set[str]) -> dict[str, dict[str, Any]]:
@@ -316,7 +353,8 @@ def probe_map(session: Session, handles: set[str]) -> dict[str, dict[str, Any]]:
         ),
         reason=PROBE_SCOPE_REASON,
     )
-    return {row.handle: probe_to_camel(row) for row in session.exec(statement).all()}
+    probes = _with_followed_reach(session, list(session.exec(statement).all()))
+    return {probe["handle"]: probe for probe in probes}
 
 
 def list_probes(
@@ -338,7 +376,7 @@ def list_probes(
     statement = (
         statement.order_by(col(DirectoryEntry.handle)).offset(offset).limit(limit)
     )
-    return [probe_to_camel(row) for row in session.exec(statement).all()]
+    return _with_followed_reach(session, list(session.exec(statement).all()))
 
 
 def queue_counts(session: Session) -> dict[str, int]:
@@ -548,14 +586,16 @@ def handles_needing_probe(
     return out
 
 
-def _store_statistics(row: DirectoryEntry, stats: SampleStatistics) -> None:
-    """Copy the six sample-derived statistics onto the entry.
+def _store_statistics(
+    row: DirectoryEntry, stats: SampleStatistics, reach: Reach
+) -> None:
+    """Copy the six sample-derived statistics onto the entry, Reach among them.
 
     One function rather than the assignment written twice, for the reason
     `_apply_page_metadata` is one: the two writers are a conclusive probe and a
     recheck, and a second copy of this list is how one of them comes to miss a
-    column. A recheck passes an empty `SampleStatistics()`, which says what it
-    means — the row holds no answer, so it measures nothing — rather than six
+    column. A recheck passes an empty `SampleStatistics()` and `Reach()`, which say
+    what they mean — the row holds no answer, so it measures nothing — rather than six
     `None`s that a reader has to recognise as a set.
 
     Assignment by name rather than a loop over `fields()`: mypy checks these six
@@ -564,7 +604,8 @@ def _store_statistics(row: DirectoryEntry, stats: SampleStatistics) -> None:
     row.last_post_at = stats.last_post_at
     row.sample_count = stats.sample_count
     row.posts_per_week = stats.posts_per_week
-    row.median_views = stats.median_views
+    row.reach = reach.value
+    row.reach_estimated = reach.estimated
     row.forward_share = stats.forward_share
     row.language = stats.language
 
@@ -815,7 +856,7 @@ def record_probe_result(
             row.refresh_due_at = row.retry_after
         session.commit()
         session.refresh(row)
-        return probe_to_camel(row)
+        return _with_followed_reach(session, [row])[0]
 
     payload: dict[str, Any] = info or {}
     # **An `unavailable` that overturns an `ok` is provisional** (ticket 03).
@@ -896,7 +937,17 @@ def record_probe_result(
             session, key, stored_samples, source_chat_id=row.telegram_chat_id
         )
         if row.status == "ok":
-            _store_statistics(row, compute_sample_statistics(stored_samples))
+            # Reach reads the settings in force now, so a settling-age change
+            # reaches this entry at its next probe and needs no sweep.
+            _store_statistics(
+                row,
+                compute_sample_statistics(stored_samples),
+                sample_reach(
+                    stored_samples,
+                    _ms(now),
+                    reach_settings_from(load_reach_settings(session)),
+                ),
+            )
     # A conclusive answer clears the failure history: the backoff exists to
     # throttle retries of an unresolved handle, and this one is now resolved.
     row.attempts = 0
@@ -906,7 +957,7 @@ def record_probe_result(
     _schedule_refresh(session, row, now=now, provisional=provisional_downgrade)
     session.commit()
     session.refresh(row)
-    return probe_to_camel(row)
+    return _with_followed_reach(session, [row])[0]
 
 
 def requeue_probes(
@@ -960,7 +1011,7 @@ def requeue_probes(
         # a row still showing "4.2 posts/week" beside "not checked" would be
         # claiming a measurement it has disowned. An `unavailable` verdict is
         # the opposite case and keeps them — see `record_probe_result`.
-        _store_statistics(row, SampleStatistics())
+        _store_statistics(row, SampleStatistics(), Reach())
         row.attempts = 0
         row.last_error = None
         row.checked_at = None
