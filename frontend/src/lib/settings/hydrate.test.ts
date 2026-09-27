@@ -42,7 +42,7 @@ describe("hydrateAppSettings", () => {
   })
 
   it("tolerates null rows and reads the embeddings toggle only when boolean", () => {
-    const rows = { sync: null, retention: null, translation: null }
+    const rows = { sync: null, retention: null, translation: null, reach: null }
     const on = hydrateAppSettings(
       { ...rows, jobsStatus: { embeddings: { enabled: true } } },
       readerFromRecord({}),

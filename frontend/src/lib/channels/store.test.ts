@@ -31,7 +31,11 @@ import {
 const channel = (name: string): Channel =>
   ({ id: `id-${name}`, name, startTime: 0 }) as Channel
 
-const stats = (posts: number): ChannelStats => ({ count: posts })
+const stats = (posts: number): ChannelStats => ({
+  count: posts,
+  reach: null,
+  reachEstimated: false,
+})
 
 let listed: Array<Record<string, unknown> | undefined> = []
 let statsListed = 0

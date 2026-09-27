@@ -35,9 +35,30 @@ const channels: Channel[] = [
 ]
 
 const channelStats: Record<string, ChannelStats> = {
-  alpha: { count: 100, minId: 1, maxId: 100, velocity: 1 },
-  beta: { count: 10, minId: 1, maxId: 10, velocity: 5 },
-  gamma: { count: 50, minId: 1, maxId: 50, velocity: 3 },
+  alpha: {
+    count: 100,
+    minId: 1,
+    maxId: 100,
+    velocity: 1,
+    reach: null,
+    reachEstimated: false,
+  },
+  beta: {
+    count: 10,
+    minId: 1,
+    maxId: 10,
+    velocity: 5,
+    reach: null,
+    reachEstimated: false,
+  },
+  gamma: {
+    count: 50,
+    minId: 1,
+    maxId: 50,
+    velocity: 3,
+    reach: null,
+    reachEstimated: false,
+  },
 }
 
 const selectedChannels = new Set(["alpha", "beta", "gamma"])

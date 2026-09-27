@@ -27,11 +27,46 @@ const channels: Channel[] = [
 ]
 
 const channelStats: Record<string, ChannelStats> = {
-  "low-activity": { count: 1, minId: 1, maxId: 1, velocity: 1 },
-  "mid-activity": { count: 2, minId: 1, maxId: 2, velocity: 5 },
-  "high-activity": { count: 3, minId: 1, maxId: 3, velocity: 10 },
-  "hidden-selected": { count: 4, minId: 1, maxId: 4, velocity: 7 },
-  unselected: { count: 5, minId: 1, maxId: 5, velocity: 20 },
+  "low-activity": {
+    count: 1,
+    minId: 1,
+    maxId: 1,
+    velocity: 1,
+    reach: null,
+    reachEstimated: false,
+  },
+  "mid-activity": {
+    count: 2,
+    minId: 1,
+    maxId: 2,
+    velocity: 5,
+    reach: null,
+    reachEstimated: false,
+  },
+  "high-activity": {
+    count: 3,
+    minId: 1,
+    maxId: 3,
+    velocity: 10,
+    reach: null,
+    reachEstimated: false,
+  },
+  "hidden-selected": {
+    count: 4,
+    minId: 1,
+    maxId: 4,
+    velocity: 7,
+    reach: null,
+    reachEstimated: false,
+  },
+  unselected: {
+    count: 5,
+    minId: 1,
+    maxId: 5,
+    velocity: 20,
+    reach: null,
+    reachEstimated: false,
+  },
 }
 
 const selectedChannels = new Set([
