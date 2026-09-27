@@ -61,9 +61,37 @@ counter the page does not show is absent, which is not the same as zero.
 _Avoid_: stats, metadata, subscriber string
 
 **View count**:
-How many times a Post was seen, as a number rounded the way Channel counters
-are. Reactions are counted per chip, never as one flattened line.
+How many times a Post was seen as of one observation, as a number rounded the
+way Channel counters are. A View count without the time it was observed says
+little, because a young Post's count keeps climbing. Reactions are counted per
+chip, as of the same observation, never as one flattened line.
 _Avoid_: views string, impressions
+
+**Settled View count**:
+A View count observed at least the deployment's settling age (24 hours unless
+changed) after its Post was published, by which point it has stopped climbing
+in any way that matters.
+_Avoid_: final views, mature views
+
+**Reach**:
+The median Settled View count of a Channel's recent Posts: how many people a
+Post from that Channel typically gets in front of. It says nothing about
+whether they should believe it. When too few of those Posts are Settled, Reach
+is estimated from younger View counts through the Settling curve, and is shown
+as an estimate.
+_Avoid_: median views, average views, popularity
+
+**Settling curve**:
+How far along its climb a View count typically is at a given age, measured
+across the corpus. It is what turns a young View count into an estimate of the
+Settled one.
+_Avoid_: decay curve, growth model
+
+**View observation**:
+One View count of one Post, recorded with the Post's age at that moment. Kept
+for a sample of Posts and only for a fixed window after publication, because
+its one use is fitting the Settling curve.
+_Avoid_: view snapshot, view history, view log
 
 **Candidate**:
 A Directory entry that a Discovery report's scan surfaced. The distinction is
