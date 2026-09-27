@@ -96,6 +96,7 @@ the curve is refitted.
 - The refresh writes nothing else: not `retrieval_*`, not `updated_at`, not `language`, not `references_extracted`, and it never runs the full Post upsert.
 - The refresh does not bump the posts etag. The incremental pass still stops on the overlap page exactly as today.
 - The refresh horizon is a code constant, not a setting. The settling age setting is validated to be below it.
+- The initial pass is different. It re-upserts every Post on its page through the full Post upsert, stored ones included, so as shipped in REACH-02 it refreshes a stored Post's counters whatever the Post's age. REACH-10 applies the 7-day horizon there too, so no pass refreshes a Post older than the horizon.
 
 ### View observations
 
@@ -121,14 +122,16 @@ the curve is refitted.
 
 - One pure function computes Reach from a list of (View count, age at observation) pairs, the settings and the current curve, and returns the value and whether it was estimated. Both sources call it.
 - Reach reads a Channel's newest N Posts (setting, default 100). If at least five are Settled (observed at or past the settling age), Reach is their median. Otherwise the Posts aged between the estimation floor and the settling age are each divided by the curve's share at their age, and Reach is the median of the Settled and corrected counts, marked as an estimate, provided at least five such Posts exist. Otherwise Reach is not measured.
-- A followed Channel's Reach is computed on read from its stored Posts over the corpus, not only the caller's Follows, because Posts are shared by every Follower. The Channel list and detail responses carry `reach` and `reachEstimated`.
+- A followed Channel's Reach is computed on read from its stored Posts over the corpus, not only the caller's Follows, because Posts are shared by every Follower. The Channel stats reads carry `reach` and `reachEstimated`: `GET /data/channels/stats` for the list and `GET /data/channels/{id}/stats` for one Channel. The plain Channel list `GET /data/channels` does not, because Reach is a Post aggregate like the other stats and the grid paints before they load. The scheduler's `compute_channel_stats_batch` does not compute Reach.
 - An unfollowed Directory entry's Reach is computed at probe time from its sample (each sample's age is its probe time minus its publication time) and stored on the entry. `median_views` is renamed `reach`, and a boolean `reach_estimated` is added. A Directory entry whose Channel is followed by any Account shows the Post-based Reach instead of the stored one.
 - Existing entries' Reach is recomputed from their stored samples by a batched script after deploy. When the settling age changes, stored Directory Reach catches up at each entry's next probe, with no recompute sweep.
 - The wire field `medianViews` becomes `reach` plus `reachEstimated`. The Discover sort key and its label change to Reach, and the settings schema maps the stored legacy sort value to the new key.
 
 ### Settings
 
-- Four deployment settings in `tg_app_settings`, classified in the settings registry: settling age (hours, default 24, must be below 168), estimation floor (hours, default 3, must be below the settling age), Reach sample size (Posts, default 100) and curve refit interval (hours, default 24). The row cap is an environment variable, not a setting.
+- The Reach settings are one `reach` row in `tg_app_settings`, classified in the settings registry, holding `settlingAgeHours` (default 24, must be below 168), `estimationFloorHours` (default 3, must be below the settling age) and `reachSampleSize` (Posts, default 100, at least 5). One row rather than three keys, because the settling age and the floor are validated against each other and the store merges a PUT into the stored row. `PUT /data/settings/reach` validates the merged row and answers 422 with the reason.
+- The curve refit interval (hours, default 24) arrives with REACH-07 as a fourth field of the same row.
+- The row cap is an environment variable, not a setting.
 
 ## Testing Decisions
 
@@ -138,7 +141,7 @@ the curve is refitted.
 - Seam 3, the Channel and Directory API responses (prior art: `tests/api/test_*_projection.py` and `tests/api/test_account_isolation.py`): a followed Channel's Reach comes from the corpus, a Directory entry of a followed Channel shows the Post-based Reach, and response key sets are updated rather than the projection guards deleted.
 - Seam 4, the Reach function (prior art: `tests/services/test_directory_statistics.py`): measured, estimated and not measured, the floor excluding young Posts, the five-Post minimum on each path, the median of an even set rounding as the existing statistic does.
 - Seam 5, the curve fit and the stride decision as pure functions, each driven by a thin job (prior art: `tests/jobs/test_post_language_walk.py`, `tests/jobs/test_retention_split_four_ways.py`). The fit recovers a known curve from synthetic pairs, is monotone, is anchored at the settling age, falls back per span below 30 pairs, and returns nothing when every span falls back. The stride doubles above the cap, halves only when doubled inflow stays under half, and holds in between; a doubling deletes exactly the rows no longer selected.
-- Existing guards that must be updated, not deleted: the settings-table split guard (four new keys and a runtime row), the tenancy seam classification and the cleanup inventory (two new tables), the retention inventories (the observation prune is its own rule, the fits table is excused), the export coverage guard (counters travel with Posts, the two new tables are omissions with reasons), `types.conform.ts`, `client-split.conform.ts`, the `.env.example` defaults guard, and the CLAUDE.md budget guard if a rule is added.
+- Existing guards that must be updated, not deleted: the settings-table split guard (the `reach` row and a runtime row), the tenancy seam classification and the cleanup inventory (two new tables), the retention inventories (the observation prune is its own rule, the fits table is excused), the export coverage guard (counters travel with Posts, the two new tables are omissions with reasons), `types.conform.ts`, `client-split.conform.ts`, the `.env.example` defaults guard, and the CLAUDE.md budget guard if a rule is added.
 - Every new guard is mutation-tested: watch it go red before trusting it.
 
 ## Out of Scope
