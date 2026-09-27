@@ -895,6 +895,14 @@ export type ChannelStatsResponse = {
      * Velocity
      */
     velocity?: number;
+    /**
+     * Reach
+     */
+    reach: number | null;
+    /**
+     * Reachestimated
+     */
+    reachEstimated: boolean;
 };
 
 /**

@@ -21,8 +21,20 @@ import type { Channel, ChannelStats } from "@/types"
 
 const channelA: Channel = { id: "1", name: "alpha" }
 const channelB: Channel = { id: "2", name: "beta" }
-const statsA: ChannelStats = { count: 3, minId: 1, maxId: 3 }
-const statsB: ChannelStats = { count: 5, minId: 2, maxId: 9 }
+const statsA: ChannelStats = {
+  count: 3,
+  minId: 1,
+  maxId: 3,
+  reach: null,
+  reachEstimated: false,
+}
+const statsB: ChannelStats = {
+  count: 5,
+  minId: 2,
+  maxId: 9,
+  reach: null,
+  reachEstimated: false,
+}
 
 const readChannels = (qc: QueryClient) =>
   qc.getQueryData<Channel[]>(queryKeys.channels)

@@ -216,6 +216,62 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     },
   },
   {
+    id: "settlingAgeHours",
+    label: "Reach Settling Age",
+    description:
+      "Hours after publication a View count counts as Settled for Reach. " +
+      "Must be below 168, when sync stops refreshing it. Admin only.",
+    keywords: ["reach", "views", "settled", "settling", "age", "hours"],
+    group: "channels-sync",
+    source: "app",
+    defaultValue: appSettingsSpec.settlingAgeHours.defaultValue,
+    editorCommandId: "edit-settling-age-hours",
+    editorFieldId: "settlingAgeHours",
+    editorFieldLabel: "Reach Settling Age (hours)",
+    control: {
+      kind: "number",
+      min: 1,
+      max: 167,
+      integer: true,
+      formatBadge: (v) => `${v}h`,
+    },
+  },
+  {
+    id: "estimationFloorHours",
+    label: "Reach Estimation Floor",
+    description:
+      "Hours below which a View count is too young to estimate Reach from. " +
+      "Must be below the settling age. Admin only.",
+    keywords: ["reach", "views", "estimate", "floor", "hours"],
+    group: "channels-sync",
+    source: "app",
+    defaultValue: appSettingsSpec.estimationFloorHours.defaultValue,
+    editorCommandId: "edit-estimation-floor-hours",
+    editorFieldId: "estimationFloorHours",
+    editorFieldLabel: "Reach Estimation Floor (hours)",
+    control: {
+      kind: "number",
+      min: 0,
+      integer: true,
+      formatBadge: (v) => `${v}h`,
+    },
+  },
+  {
+    id: "reachSampleSize",
+    label: "Reach Sample Size",
+    description:
+      "How many of a Channel's newest Posts Reach reads (at least 5). " +
+      "Admin only.",
+    keywords: ["reach", "views", "sample", "posts"],
+    group: "channels-sync",
+    source: "app",
+    defaultValue: appSettingsSpec.reachSampleSize.defaultValue,
+    editorCommandId: "edit-reach-sample-size",
+    editorFieldId: "reachSampleSize",
+    editorFieldLabel: "Reach Sample Size (Posts)",
+    control: { kind: "number", min: 5, integer: true },
+  },
+  {
     id: "globalStartTimeMode",
     label: "Default Channel Start Time Mode",
     description: "How new channels pick their scrape start time.",

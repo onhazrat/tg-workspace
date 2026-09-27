@@ -19,6 +19,7 @@ from app.jobs.settings import (
     load_directory_settings,
     load_jobs_settings,
     load_media_settings,
+    load_reach_settings,
     load_retention_policy,
     load_retention_settings,
     load_sync_settings,
@@ -214,6 +215,8 @@ def _effective_global(
         return load_network_settings(session)
     if key == "directory":
         return load_directory_settings(session)
+    if key == "reach":
+        return load_reach_settings(session)
     return get_global_setting(session, key)
 
 

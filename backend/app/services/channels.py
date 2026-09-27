@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Session, col, func, select
 
 from app.core.db import engine
+from app.jobs.settings import load_reach_settings
 from app.models_tg import (
     Channel,
     Post,
@@ -45,6 +46,7 @@ from app.services.follows import (
 from app.services.language import LANGUAGE_WINDOW, derive_language
 from app.services.logs import collect_channel_sync_logs
 from app.services.post_sync_state import clear_channel_sync_state
+from app.services.reach import Reach, compute_reach, reach_settings_from
 from app.services.serialization import channel_to_camel, normalize_body
 from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
@@ -248,14 +250,7 @@ def _fetch_recent_timestamps_by_channel(
     if not channel_names:
         return {}
 
-    wanted = sa_select(
-        func.unnest(
-            sa_cast(
-                bindparam("names", value=list(dict.fromkeys(channel_names))),
-                ARRAY(String),
-            )
-        ).label("name")
-    ).subquery("wanted")
+    wanted = _wanted_names(channel_names)
     newest = (
         sa_select(col(Post.timestamp).label("timestamp"))
         .where(
@@ -277,6 +272,61 @@ def _fetch_recent_timestamps_by_channel(
     for name in by_channel:
         by_channel[name].sort()
     return by_channel
+
+
+def _wanted_names(channel_names: list[str]) -> Any:
+    """The names as one array parameter, de-duplicated; see the caller above."""
+    return sa_select(
+        func.unnest(
+            sa_cast(
+                bindparam("names", value=list(dict.fromkeys(channel_names))),
+                ARRAY(String),
+            )
+        ).label("name")
+    ).subquery("wanted")
+
+
+_MS_PER_HOUR = 3_600_000
+
+
+def reach_by_channel(session: Session, channel_names: list[str]) -> dict[str, Reach]:
+    """Each Channel's Reach over the corpus, in one query (REACH-03, ADR-024).
+
+    Reads every stored Post of the Channel, not only those the caller's Follow
+    brought in: Posts are shared by every Follower, and Reach describes the
+    Channel. The same LATERAL top-N as `_fetch_recent_timestamps_by_channel`,
+    because the sample is the newest N Posts. A Post with no View count, or
+    none yet lifted out of its media (REACH-01's backfill), is absent rather
+    than zero. A Channel with no Posts answers not measured.
+    """
+    settings = reach_settings_from(load_reach_settings(session))
+    if not channel_names:
+        return {}
+    wanted = _wanted_names(channel_names)
+    newest = (
+        sa_select(
+            col(Post.views_count).label("views"),
+            (col(Post.views_observed_at) - col(Post.timestamp)).label("age_ms"),
+        )
+        .where(col(Post.channel_name) == wanted.c.name, col(Post.timestamp) > 0)
+        .order_by(col(Post.timestamp).desc())
+        .limit(settings.sample_size)
+        .lateral("newest")
+    )
+    rows = session.execute(
+        sa_select(wanted.c.name, newest.c.views, newest.c.age_ms).select_from(
+            wanted.join(newest, true())
+        )
+    ).all()
+    pairs: dict[str, list[tuple[int, float]]] = {name: [] for name in channel_names}
+    for name, views, age_ms in rows:
+        if views is not None and age_ms is not None:
+            pairs[name].append((views, age_ms / _MS_PER_HOUR))
+    return {name: compute_reach(obs, settings) for name, obs in pairs.items()}
+
+
+def _with_reach(stats: dict[str, Any], reach: Reach) -> dict[str, Any]:
+    return {**stats, "reach": reach.value, "reachEstimated": reach.estimated}
 
 
 def compute_channel_stats(session: Session, channel_name: str) -> dict[str, Any] | None:
@@ -320,7 +370,11 @@ def list_all_channel_stats(
         list[str],
         session.exec(scoped_select(select(Channel.name), Channel, user_id)).all(),
     )
-    return compute_channel_stats_batch(session, names)
+    reach = reach_by_channel(session, names)
+    return {
+        name: _with_reach(stats, reach[name])
+        for name, stats in compute_channel_stats_batch(session, names).items()
+    }
 
 
 def channel_names_for_user(session: Session, user_id: uuid.UUID) -> set[str]:
@@ -693,7 +747,7 @@ def get_channel_stats(
     stats = compute_channel_stats(session, ch.name)
     if not stats:
         raise HTTPException(status_code=404, detail="No posts for channel")
-    return stats
+    return _with_reach(stats, reach_by_channel(session, [ch.name])[ch.name])
 
 
 def bulk_update_sync_settings(

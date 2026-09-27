@@ -64,7 +64,9 @@ function harness(
       return result
     },
     getChannelStats: async (id) =>
-      id === "id-nostats" ? null : { count: 5, latestId: 1 },
+      id === "id-nostats"
+        ? null
+        : { count: 5, latestId: 1, reach: null, reachEstimated: false },
     loadChannels: async () => {
       state.loads++
     },
@@ -170,8 +172,8 @@ describe("a sync that runs", () => {
     expect(state.failures).toBe(0)
     expect(state.pauseUntil).toBeNull()
     expect(state.stats).toEqual({
-      a: { count: 5, latestId: 42 },
-      b: { count: 5, latestId: undefined },
+      a: { count: 5, latestId: 42, reach: null, reachEstimated: false },
+      b: { count: 5, latestId: undefined, reach: null, reachEstimated: false },
     })
     expect(state.errors).toEqual([])
   })

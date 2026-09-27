@@ -6092,10 +6092,15 @@
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Maxid"
           },
-          "velocity": { "type": "number", "title": "Velocity", "default": 0.0 }
+          "velocity": { "type": "number", "title": "Velocity", "default": 0.0 },
+          "reach": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Reach"
+          },
+          "reachEstimated": { "type": "boolean", "title": "Reachestimated" }
         },
         "type": "object",
-        "required": ["count"],
+        "required": ["count", "reach", "reachEstimated"],
         "title": "ChannelStatsResponse",
         "description": "Post aggregates for one channel, as `compute_channel_stats` builds it."
       },

@@ -13,6 +13,7 @@ export type HydrationRows = {
   sync: Section | null | undefined
   retention: Section | null | undefined
   translation: Section | null | undefined
+  reach: Section | null | undefined
   jobsStatus: Record<string, { enabled?: unknown }> | null
 }
 
@@ -68,6 +69,7 @@ export function hydrateAppSettings(
       ...legacyRetention,
     }),
     ...decodeServerSection("translation", rows.translation ?? {}),
+    ...decodeServerSection("reach", rows.reach ?? {}),
   }
   const embeddings = rows.jobsStatus?.embeddings?.enabled
   if (typeof embeddings === "boolean") updates.embeddingsEnabled = embeddings

@@ -1,3 +1,4 @@
+import { ApiError } from "@/api/base"
 import {
   type AppSettingKey,
   type AppSettings,
@@ -121,6 +122,16 @@ export function decodeServerSection(
     }
   }
   return updates
+}
+
+/**
+ * The server's reason for refusing a section save, or `null` for any other
+ * failure. Only a 422 is a refusal of the value (REACH-03's `reach` checks):
+ * a 403 is a non-Admin whose browser pushed a deployment section it cannot
+ * write, which is not news to show them.
+ */
+export function refusalMessage(err: unknown): string | null {
+  return err instanceof ApiError && err.status === 422 ? err.message : null
 }
 
 export type AppSettingSetters = {

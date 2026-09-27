@@ -18,6 +18,9 @@ const SYNC_CATALOG_IDS = [
   "dynamicSyncEnabledDefault",
   "dynamicSyncExpectedPostsDefault",
   "syncFailureBackoffMinutes",
+  "settlingAgeHours",
+  "estimationFloorHours",
+  "reachSampleSize",
 ] as const
 
 export const SyncSection: React.FC<{
