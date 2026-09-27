@@ -253,7 +253,8 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
     # spends on nobody's behalf, so there is no stamp for a revision to drop.
     # `tg_post_references` (CRG-01) is the same case again, further out still:
     # the reference graph is corpus by ADR-019 and was created without an owner
-    # column, long after this revision ran.
+    # column, long after this revision ran. `tg_view_observations` (REACH-05)
+    # likewise: corpus sightings, created without an owner column.
     never_had_one = derived - frozen
     assert never_had_one <= {
         "tg_channel_directory",
@@ -261,6 +262,7 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
         "tg_directory_probe_usage",
         "tg_post_references",
         "tg_sync_meta",
+        "tg_view_observations",
     }, (
         f"{sorted(never_had_one)} are owner-free in `SCOPES` but the ticket 22 "
         f"migration does not drop a `user_id` from them. If one of these grew a "

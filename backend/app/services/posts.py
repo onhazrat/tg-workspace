@@ -25,6 +25,7 @@ from app.services.post_filters import (
 from app.services.serialization import post_to_camel
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import scoped_select, unscoped_select
+from app.services.view_observations import Sighting, record_view_observations
 
 DEFAULT_POST_PAGE_SIZE = 500
 MAX_POST_PAGE_SIZE = 5000
@@ -105,6 +106,8 @@ def refresh_post_counters(
       first capture stores them.
     * It moves no etag. A View count is not a feed change, and a sync that
       found nothing new must not make every browser refetch. Does not commit.
+    * Each refreshed Post is a sighting, which REACH-05 keeps as a View
+      observation when the Observation stride selects it.
     """
     if not items:
         return
@@ -125,7 +128,7 @@ def refresh_post_counters(
         column("reaction_counts", JSONB(none_as_null=True)),
         name="seen",
     ).data(rows)
-    session.execute(
+    refreshed = session.execute(
         update(Post)
         .where(
             col(Post.channel_name) == channel_name,
@@ -139,7 +142,17 @@ def refresh_post_counters(
             reaction_counts=cast(seen.c.reaction_counts, JSONB(none_as_null=True)),
             views_observed_at=now_ms,
         )
+        .returning(
+            col(Post.id), col(Post.post_id), col(Post.views_count), col(Post.timestamp)
+        )
         .execution_options(synchronize_session=False)
+    )
+    record_view_observations(
+        session,
+        (
+            Sighting(uuid_, post_id, views, ts, now_ms)
+            for uuid_, post_id, views, ts in refreshed
+        ),
     )
 
 
@@ -247,6 +260,16 @@ _INSERT_DEFAULTS: dict[str, Any] = {
 }
 
 
+def _sighting(post: Post) -> Sighting:
+    return Sighting(
+        post.id,
+        post.post_id,
+        post.views_count,
+        post.timestamp,
+        post.views_observed_at or 0,
+    )
+
+
 def bulk_upsert_posts_impl(
     body: list[dict[str, Any]],
     session: Session,
@@ -259,6 +282,7 @@ def bulk_upsert_posts_impl(
     count = 0
     now_ms = int(time.time() * 1000)
     touched: set[str] = set()
+    sightings: list[Sighting] = []
     for item in body:
         channel = item.get("channelName") or item.get("channel_name", "")
         touched.add(channel)
@@ -266,6 +290,7 @@ def bulk_upsert_posts_impl(
         existing = session.exec(
             select(Post).where(Post.channel_name == channel, Post.post_id == post_id)
         ).first()
+        counters = _counter_fields(item, now_ms)
         if existing:
             # What the reference extractor reads, captured before the
             # overwrite so an edit that changes a reference can send the row
@@ -280,7 +305,7 @@ def bulk_upsert_posts_impl(
             )
             was_words = own_words(existing)
             was_text = existing.text
-            fields = _item_fields(item) | _counter_fields(item, now_ms)
+            fields = _item_fields(item) | counters
             for column, value in fields.items():
                 setattr(existing, column, value)
             # Positions measured against other words link the wrong ones, and
@@ -335,7 +360,7 @@ def bulk_upsert_posts_impl(
                 # Observed when retrieved, counters or none (REACH-01).
                 "views_observed_at": now_ms,
                 **_item_fields(item),
-                **_counter_fields(item, now_ms),
+                **counters,
             }
             post = Post(
                 channel_name=channel,
@@ -351,7 +376,13 @@ def bulk_upsert_posts_impl(
             # from the one detector (LANG-01).
             post.language = read_language(own_words(post))
             session.add(post)
+            existing = post
+        # Any write of counters is a sighting (REACH-05): a first capture, a
+        # first pass meeting its page again, an import restoring one.
+        if counters:
+            sightings.append(_sighting(existing))
         count += 1
+    record_view_observations(session, sightings)
     relabel_channels(session, touched, announce=announce_relabels)
     return count
 

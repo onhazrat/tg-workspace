@@ -203,6 +203,10 @@ def test_corpus_models_are_the_ones_the_plan_names() -> None:
         # from samples whose handles have no `tg_channels` row at all.
         "PostReference",
         "SyncMeta",
+        # REACH-05's View observations. Hangs off a Post, so the one most
+        # plausibly argued into `FOLLOW_SCOPED`; it must not be, because its
+        # only reader is the one global Settling curve fit over every Post.
+        "ViewObservation",
     }
 
 

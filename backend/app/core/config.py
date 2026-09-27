@@ -439,6 +439,13 @@ class Settings(BaseSettings):
     # link-heavy Posts would previously have aborted the tick outright.
     POST_REFERENCE_SCAN_LIMIT: int = 10000
 
+    # The most View observations `tg_view_observations` may hold (REACH-05,
+    # ADR-024). The stride controller (REACH-06) thins the sample to stay under
+    # it. Measured 2026-09-27: 1,000,000 rows inserted in random order into a
+    # local Postgres 18 table are 126 MB with indexes (65 MB heap, 50 MB
+    # primary key, 11 MB `published_at` index), so about 130 bytes a row.
+    VIEW_OBSERVATION_ROW_CAP: int = 1_000_000
+
     # The Language walk (LANG-03)
     #
     # How many stored Posts one tick of the walk reads, newest first, for the

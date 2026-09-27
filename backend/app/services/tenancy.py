@@ -111,6 +111,7 @@ from app.models_tg import (
     SyncMeta,
     TagRun,
     UserSetting,
+    ViewObservation,
 )
 from app.models_view_as import ViewAsSession
 
@@ -226,6 +227,13 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # Directory entry already discloses.
     PostReference: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
+    # A sampled sighting of a Post's View count (REACH-05, ADR-024). Corpus
+    # rather than `FOLLOW_SCOPED` like the Post it hangs off: nothing lists it
+    # to an Account, and its only reader is the Settling curve fit, which is
+    # one global curve over every observed Post. It carries no Channel name to
+    # correlate a Follow on, and what it discloses about a followed Post, its
+    # View count, is what that Post's own row already shows every Follower.
+    ViewObservation: Scope.CORPUS,
 }
 
 #: The column naming the Channel a follow-scoped row belongs to, for the EXISTS

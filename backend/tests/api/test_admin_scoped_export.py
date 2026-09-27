@@ -79,7 +79,7 @@ from app.services.data_import_export import (
 )
 from app.services.follows import ensure_follow_for_channel
 from app.services.settings_registry import SYNC_PREFS_KEY
-from app.services.tenancy import SCOPES, Scope
+from app.services.tenancy import SCOPES
 from tests.utils.discover import stored_report_scope
 from tests.utils.user import user_authentication_headers
 from tests.utils.utils import random_lower_string
@@ -415,13 +415,18 @@ def test_the_document_carries_the_subjects_personal_settings(
     assert [row["value"]["defaultStartId"] for row in settings_rows] == ["theirs"]
 
 
-def test_every_user_owned_table_is_exported_or_excused() -> None:
+def test_every_classified_table_is_exported_or_excused() -> None:
     """A table nobody placed is a table nobody decided a backup's shape for.
 
     The same argument `tenancy.SCOPES` makes about the schema and
     `IMPORT_WRITES` about the write door, applied to what a restore can bring
     back. It walks `SCOPES` rather than a list, so a table added next quarter
     fails here until somebody says whether it belongs in an export.
+
+    Every scope, corpus included, since REACH-05: a corpus table was excused
+    only by habit, so `PostReference` and `DirectoryProbeUsage` shipped with no
+    decision recorded and a new one (`ViewObservation`) could have too. An
+    excuse naming no classified model is stale and fails as well.
     """
     from app.services.data_import_export import export_sections
 
@@ -435,12 +440,8 @@ def test_every_user_owned_table_is_exported_or_excused() -> None:
             )
         }
 
-    owned = {
-        model.__name__
-        for model, scope in SCOPES.items()
-        if scope in (Scope.USER_OWNED, Scope.FOLLOW_SCOPED)
-    }
-    unplaced = owned - exported - set(EXPORT_OMISSIONS)
+    classified = {model.__name__ for model in SCOPES}
+    unplaced = classified - exported - set(EXPORT_OMISSIONS)
     assert not unplaced, (
         f"{sorted(unplaced)} are tenancy-scoped tables that an export neither "
         f"carries nor excuses. Add a section, or an EXPORT_OMISSIONS entry "
@@ -450,6 +451,8 @@ def test_every_user_owned_table_is_exported_or_excused() -> None:
         assert reason, f"{name} is excused with no reason"
     stale = set(EXPORT_OMISSIONS) & exported
     assert not stale, f"excused and exported at once: {sorted(stale)}"
+    unknown = set(EXPORT_OMISSIONS) - classified
+    assert not unknown, f"excused but classified nowhere: {sorted(unknown)}"
 
 
 def _subject_for_guard() -> Any:

@@ -331,6 +331,33 @@ class Post(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ViewObservation(SQLModel, table=True):
+    """One sighting of a sampled Post's View count (REACH-05, ADR-024).
+
+    Written at a Post's first capture and at every counter refresh, for the
+    Posts the Observation stride selects, and kept until the Post is 14 days
+    past publication. `published_at` is denormalised from the Post so the
+    prune deletes all of one Post's rows together by one indexed predicate,
+    and so a sighting's age is `observed_at - published_at` without a join.
+
+    The primary key is the sighting itself, `(post_uuid, observed_at)`: it
+    leads with the Post, so the cascade from a deleted Post and the fit's
+    walk over one Post's sightings in order both read it, and a replayed
+    sighting (an import of an export from this deployment) is a conflict
+    rather than a duplicate. `post_uuid` rather than `post_id`, because
+    `post_id` means Telegram's per-Channel id everywhere else.
+    """
+
+    __tablename__ = "tg_view_observations"
+
+    post_uuid: uuid.UUID = Field(
+        foreign_key="tg_posts.id", primary_key=True, ondelete="CASCADE"
+    )
+    observed_at: int = Field(sa_column=Column(BigInteger, primary_key=True))
+    views_count: int
+    published_at: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
+
+
 class PostSyncState(SQLModel, table=True):
     __tablename__ = "tg_post_sync_state"
     __table_args__ = (UniqueConstraint("channel_name", "post_id"),)

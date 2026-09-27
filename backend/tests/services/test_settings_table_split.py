@@ -94,6 +94,7 @@ from app.services.settings_registry import (
     SYNC_RUNTIME_FIELDS,
     SYNC_RUNTIME_KEY,
     USER_KEYS,
+    VIEW_OBSERVATIONS_KEY,
     Home,
     home_for,
 )
@@ -102,6 +103,7 @@ from app.services.settings_store import (
     put_global_setting,
 )
 from app.services.user_settings import get_user_setting, put_user_setting
+from app.services.view_observations import observation_stride
 from tests.utils.user import create_random_user
 
 BACKEND_DIR = pathlib.Path(__file__).resolve().parents[2]
@@ -222,6 +224,32 @@ def test_scheduler_runtime_state_is_global() -> None:
             "autoSyncPartialBatchSize",
         }
     )
+
+
+def test_the_observation_stride_is_deployment_state(db: Session) -> None:
+    """REACH-05's runtime row, placed where `sync_runtime` is.
+
+    The stride samples one corpus-wide table under one row cap, and the app's
+    own controller writes it, so it is global and the catalog does not offer it
+    for editing. It is read on every sync page, so a row nobody wrote reads as
+    stride 1 and a hand-edited one that is not a positive integer does too.
+
+    Mutations watched: move the key to `USER_KEYS`; drop it from the catalog's
+    non-editable set; accept any stored value as the stride.
+    """
+    from app.services.configuration_catalog import _global_entries
+
+    assert home_for(VIEW_OBSERVATIONS_KEY) is Home.GLOBAL
+    editable = {entry.key: entry.editable for entry in _global_entries(db)}
+    assert editable[SYNC_RUNTIME_KEY] is False
+    assert editable[VIEW_OBSERVATIONS_KEY] is False
+
+    assert observation_stride(db) == 1
+    put_global_setting(db, VIEW_OBSERVATIONS_KEY, {"stride": 4})
+    assert observation_stride(db) == 4
+    for garbage in ("4", 0, -2, True, None):
+        put_global_setting(db, VIEW_OBSERVATIONS_KEY, {"stride": garbage})
+        assert observation_stride(db) == 1
 
 
 def test_every_sync_field_has_exactly_one_home() -> None:

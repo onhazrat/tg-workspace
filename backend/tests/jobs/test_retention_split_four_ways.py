@@ -64,6 +64,7 @@ from app.models_tg import (
     PublishLog,
     SyncLog,
     SyncLogPayload,
+    ViewObservation,
     utc_now,
 )
 from app.services.channel_directory import probe_map, record_probe_result
@@ -73,6 +74,7 @@ from app.services.logs import (
     SHARED_LOG_TYPES,
     delete_owned_logs_before,
 )
+from app.services.view_observations import Sighting, record_view_observations
 from tests.utils.discover import stored_report_scope
 from tests.utils.user import create_random_user
 
@@ -654,6 +656,54 @@ def test_directory_samples_run_on_their_own_deployment_window() -> None:
             probe_map(session, {"windowed_handle"})["windowed_handle"]["subscribers"]
             == 1200
         )
+
+
+def test_view_observations_go_14_days_after_publication_on_no_window() -> None:
+    """REACH-05's own rule, not a window on any of the four above.
+
+    Every window is off, so nothing but the observation prune can account for
+    a deletion, and the Posts themselves survive. A Post 15 days past
+    publication loses all of its sightings together; one 13 days past keeps
+    both of its own.
+
+    Mutations watched: remove the prune from the job, or measure it on
+    `observed_at` instead of `published_at` (the old Post's second sighting,
+    one day later, would survive).
+    """
+    now = _now()
+    with Session(engine) as session:
+        me = _account(session)
+        _policy(session)
+        _prefs(session, me)
+        posts = {
+            days: Post(
+                channel_name="observed_channel",
+                post_id=days,
+                text="",
+                timestamp=now - days * DAY_MS,
+            )
+            for days in (15, 13)
+        }
+        session.add_all(posts.values())
+        record_view_observations(
+            session,
+            [
+                Sighting(
+                    post.id, 1, 100 * day, post.timestamp, post.timestamp + day * DAY_MS
+                )
+                for post in posts.values()
+                for day in (1, 2)
+            ],
+        )
+        session.commit()
+        kept_uuid = posts[13].id
+
+        result = run_retention_cleanup(session)
+
+        remaining = session.exec(select(ViewObservation.post_uuid)).all()
+        assert result["deletedViewObservations"] == 2
+        assert remaining == [kept_uuid, kept_uuid]
+        assert len(session.exec(select(Post.id)).all()) == 2
 
 
 def test_asset_pruning_stays_deployment_wide() -> None:
