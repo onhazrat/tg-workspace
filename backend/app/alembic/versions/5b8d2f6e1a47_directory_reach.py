@@ -7,7 +7,7 @@ script rather than this migration because the rule lives in Python
 (`services/reach.py`) and an applied revision must keep meaning what it meant.
 
 Revision ID: 5b8d2f6e1a47
-Revises: 4e7a1c9b3d20
+Revises: c770921c22d6
 Create Date: 2026-09-27
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "5b8d2f6e1a47"
-down_revision: str | None = "4e7a1c9b3d20"
+down_revision: str | None = "c770921c22d6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
