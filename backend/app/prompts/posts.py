@@ -48,7 +48,7 @@ def _format_media_hints(post: dict[str, Any]) -> str:
     duration = media.get("durationSec")
     if duration is not None and duration > 0:
         parts.append(f"Duration: {_format_duration_label(duration)}")
-    views = media.get("viewsCount")
+    views = post.get("viewsCount")
     if isinstance(views, int):
         parts.append(f"Views: {format_abbreviated_count(views)}")
     grouped = media.get("groupedCount")

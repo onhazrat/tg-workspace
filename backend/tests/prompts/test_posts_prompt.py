@@ -27,9 +27,10 @@ def test_matches_frontend_golden_reference() -> None:
             "id": 522,
             "date": "2024-01-01T00:00:00.000Z",
             "text": "[photo]",
+            # A column since REACH-01, so `post_to_camel` sends it here.
+            "viewsCount": 2_230_000,
             "media": {
                 "kinds": ["photo"],
-                "viewsCount": 2_230_000,
                 "isMediaOnly": True,
                 "thumbApiPath": "/api/v1/telegram/post-thumb/durov/522",
             },

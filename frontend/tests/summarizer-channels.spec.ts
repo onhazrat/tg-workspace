@@ -138,10 +138,10 @@ test.describe("TG Workspace channels and posts", () => {
         text: "[photo]",
         date: new Date(now - 1000).toISOString(),
         timestamp: now - 1000,
+        viewsCount: 1_200,
         media: {
           kinds: ["photo"],
           isMediaOnly: true,
-          viewsCount: 1_200,
           thumbApiPath: "/api/v1/telegram/post-thumb/demo/2",
         },
       },

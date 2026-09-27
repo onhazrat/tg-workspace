@@ -158,11 +158,8 @@ describe("PostCardMedia", () => {
         post={
           {
             ...post,
-            media: {
-              kinds: ["photo", "grouped"],
-              groupedCount: 4,
-              viewsCount: 1500,
-            },
+            media: { kinds: ["photo", "grouped"], groupedCount: 4 },
+            viewsCount: 1500,
           } as Post
         }
       />,
@@ -172,6 +169,26 @@ describe("PostCardMedia", () => {
       screen.getByTestId("post-card-media-badge-grouped").textContent,
     ).toContain("(4)")
     expect(screen.getByText("1.5K")).toBeTruthy()
+  })
+
+  test("shows the view count of a text-only post", () => {
+    render(<PostCardMedia post={{ ...post, viewsCount: 1500 }} />)
+    expect(screen.getByText("1.5K")).toBeTruthy()
+  })
+
+  test("a null view count renders no count", () => {
+    const { container } = render(
+      <PostCardMedia
+        post={{
+          ...post,
+          media: { kinds: ["photo"] },
+          viewsCount: null,
+          reactionCounts: null,
+        }}
+      />,
+    )
+    expect(screen.getByTestId("post-card-media-badge-photo")).toBeTruthy()
+    expect(container.querySelector("svg.lucide-eye")).toBeNull()
   })
 })
 

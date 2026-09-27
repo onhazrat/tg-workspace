@@ -22,6 +22,7 @@ from app.models_tg import (
     SyncLog,
     SyncLogPayload,
 )
+from app.schemas.post_media import MEDIA_COUNTER_KEYS
 from app.services.channel_photos import channel_photo_api_path, has_cached_photo
 from app.services.channel_tags import normalize_channel_tags
 
@@ -190,7 +191,34 @@ def channel_to_camel(
     return row
 
 
+def _post_counters(p: Post) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """The media to send and the three counter fields, read off the columns.
+
+    A Post the REACH-01 backfill has not reached yet still holds its counters
+    in media, so a `NULL` column falls back to the media key and the
+    observation time to the retrieval time, which is what the backfill will
+    write. Either way the counters leave media on the wire. REACH-08 removes
+    the fallback once the backfill has run.
+    """
+    media = p.media if isinstance(p.media, dict) else None
+    legacy = media or {}
+    views = p.views_count
+    if views is None and isinstance(legacy.get("viewsCount"), int):
+        views = legacy["viewsCount"]
+    chips = p.reaction_counts
+    if chips is None and isinstance(legacy.get("reactionCounts"), list):
+        chips = legacy["reactionCounts"]
+    if media is not None:
+        media = {k: v for k, v in media.items() if k not in MEDIA_COUNTER_KEYS}
+    return media, {
+        "viewsCount": views,
+        "reactionCounts": chips,
+        "viewsObservedAt": p.views_observed_at or p.retrieved_at,
+    }
+
+
 def post_to_camel(p: Post) -> dict[str, Any]:
+    media, counters = _post_counters(p)
     return {
         "id": p.post_id,
         "channelName": p.channel_name,
@@ -204,12 +232,13 @@ def post_to_camel(p: Post) -> dict[str, Any]:
         "retrievalJobId": p.retrieval_job_id,
         "retrievalPass": p.retrieval_pass,
         "retrievalSource": p.retrieval_source,
-        "media": p.media,
+        "media": media,
         "links": p.links,
         "linkSpans": p.link_spans,
         "replyToPostId": p.reply_to_post_id,
         "replyTo": p.reply_to,
         "language": p.language,
+        **counters,
     }
 
 

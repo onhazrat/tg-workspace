@@ -39,6 +39,12 @@ class ReactionCount(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+#: The counters the parser writes into media. A Directory sample keeps them
+#: there, because it is written once; the Post write path lifts them into
+#: `tg_posts` columns and stores media without them (REACH-01, ADR-024).
+MEDIA_COUNTER_KEYS: tuple[str, ...] = ("viewsCount", "reactionCounts", "reactionsCount")
+
+
 class PostMedia(BaseModel):
     kinds: list[MediaKind]
     caption: str | None = None

@@ -16,6 +16,7 @@ from sqlalchemy import (
     false,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
 
@@ -313,6 +314,20 @@ class Post(SQLModel, table=True):
     #: Post has no words, `und` when its words cannot be placed, and null only
     #: while it is unread. Written by the Post write path and nothing else.
     language: str | None = None
+    #: The View count, reaction chips and when they were observed (REACH-01,
+    #: ADR-024). Columns rather than media keys because a later sync refreshes
+    #: them in place, and unindexed so that refresh can be a HOT update (the
+    #: table has `fillfactor = 90` for the same reason). NULL means the page
+    #: showed none, never zero. The chips keep the parser's shape,
+    #: `{emoji | customEmojiId, count, isPaid}`; the paid Stars chip stays its
+    #: own chip and the total is never stored. Written by the Post write path.
+    views_count: int | None = None
+    # `none_as_null`, or a Post with no chips would store JSON `null`, which
+    # `IS NULL` does not match.
+    reaction_counts: list[Any] | None = Field(
+        default=None, sa_column=Column(JSONB(none_as_null=True))
+    )
+    views_observed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     updated_at: datetime = Field(default_factory=utc_now)
 
 

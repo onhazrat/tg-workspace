@@ -28,7 +28,7 @@ const MEDIA_ICONS: Partial<Record<PostMediaKind, LucideIcon>> = {
 /** Media badges, the view count and the thumbnail; nothing when the post has none of them. */
 export function PostCardMedia({ post }: { post: Post }) {
   const kinds = getPostMediaKinds(post)
-  const views = post.media?.viewsCount
+  const views = post.viewsCount
   const thumbApiPath = post.media?.thumbApiPath
   const hasBadges = kinds.length > 0 || views != null
   if (!hasBadges && !thumbApiPath) return null

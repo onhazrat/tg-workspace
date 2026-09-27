@@ -82,8 +82,12 @@ export interface PostPollMedia {
   [key: string]: unknown
 }
 
-/** One reaction chip. Mirrors the backend ReactionCount schema. */
-export interface PostReactionCount {
+/**
+ * One reaction chip. Mirrors the backend ReactionCount schema. A `type` so it
+ * is assignable to the server's open `PostReactionChip`, for the reason given
+ * on `PostMedia` below.
+ */
+export type PostReactionCount = {
   /** Absent for the paid-stars chip and for custom (premium) emoji. */
   emoji?: string | null
   customEmojiId?: string | null
@@ -106,10 +110,6 @@ export type PostMedia = {
   caption?: string | null
   durationSec?: number | null
   thumbApiPath?: string | null
-  /** A number (ADR-023); render it with `formatCount`. */
-  viewsCount?: number | null
-  reactionCounts?: PostReactionCount[] | null
-  reactionsCount?: number | null
   linkPreview?: PostLinkPreview | null
   poll?: PostPollMedia | null
   groupedCount?: number | null
@@ -157,6 +157,15 @@ export interface Post {
   retrievalSource?: string
   /** ISO 639 code, "zxx" (no words) or "und" (undetermined); null while unread. */
   language?: string | null
+  /**
+   * Post fields since ADR-024, no longer media keys. A number (ADR-023);
+   * render it with `formatCount`. Null means Telegram showed none, never zero.
+   */
+  viewsCount?: number | null
+  /** The paid Stars chip is its own chip with `isPaid`, never merged. */
+  reactionCounts?: PostReactionCount[] | null
+  /** When the counters were read, in epoch milliseconds. */
+  viewsObservedAt?: number | null
 }
 
 export interface PostEmbedding {

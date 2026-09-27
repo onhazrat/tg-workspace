@@ -8193,6 +8193,14 @@
         "title": "PostLookupRequest",
         "description": "Batch of `(channelName, postId)` refs to resolve.\n\nCapped so this cannot become another way to ask for unbounded rows."
       },
+      "PostReactionChip": {
+        "properties": { "count": { "type": "integer", "title": "Count" } },
+        "additionalProperties": true,
+        "type": "object",
+        "required": ["count"],
+        "title": "PostReactionChip",
+        "description": "One reaction chip, as the parser wrote it (ADR-023).\n\nOpen, with only `count` declared, because the other three keys are\nconditional: `emoji` for an ordinary chip, `customEmojiId` for a premium\none, `isPaid` for the Stars chip. Declaring them would emit a `null` for\neach on every chip, which stored chips never had."
+      },
       "PostResponse": {
         "properties": {
           "id": { "type": "integer", "title": "Id" },
@@ -8268,6 +8276,24 @@
           "language": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Language"
+          },
+          "viewsCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Viewscount"
+          },
+          "reactionCounts": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/PostReactionChip" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Reactioncounts"
+          },
+          "viewsObservedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Viewsobservedat"
           }
         },
         "type": "object",

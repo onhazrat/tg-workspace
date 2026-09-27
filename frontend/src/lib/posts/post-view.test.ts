@@ -177,9 +177,9 @@ describe("post-view pipeline", () => {
       makePost("alpha", 1, 1704067200000, { text: "First post body" }),
       makePost("durov", 522, 1704067200000, {
         text: "[photo]",
+        viewsCount: 2_230_000,
         media: {
           kinds: ["photo"],
-          viewsCount: 2_230_000,
           isMediaOnly: true,
           thumbApiPath: "/api/v1/telegram/post-thumb/durov/522",
         },
@@ -204,9 +204,9 @@ describe("post-view pipeline", () => {
     const posts = [
       makePost("durov", 522, 100, {
         text: "[photo]",
+        viewsCount: 2_230_000,
         media: {
           kinds: ["photo"],
-          viewsCount: 2_230_000,
           isMediaOnly: true,
           thumbApiPath: "/api/v1/telegram/post-thumb/durov/522",
         },
@@ -306,7 +306,8 @@ describe("post-view pipeline", () => {
       makePost("alpha", 1, 100, { text: "Plain text" }),
       makePost("alpha", 2, 200, {
         text: "Text with views",
-        media: { kinds: [], viewsCount: 1_200 },
+        media: { kinds: [] },
+        viewsCount: 1_200,
       }),
       makePost("alpha", 3, 300, {
         text: "[sticker]",
