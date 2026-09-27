@@ -21,7 +21,7 @@ import { DEFAULT_DISCOVER_SIGNAL_WEIGHTS } from "@/lib/posts/discover-candidates
 import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
 /** Backend settings sections pushed via api.putSetting(section, payload). */
-export type BackendSection = "sync" | "retention" | "translation"
+export type BackendSection = "sync" | "retention" | "translation" | "reach"
 
 export interface SettingSpec<T> {
   /** Storage key — must stay identical to the historical key for back-compat.
@@ -302,6 +302,14 @@ export const appSettingsSpec = {
     DEFAULT_AI_LANGUAGE,
     { section: "translation" },
   ),
+  // Reach (REACH-03, ADR-024). Deployment policy stored under the `reach` key,
+  // so only an Admin's save is honoured. The server validates the three
+  // together and refuses a contradiction with a 422 whose message is shown.
+  settlingAgeHours: intSetting("settlingAgeHours", 24, { section: "reach" }),
+  estimationFloorHours: intSetting("estimationFloorHours", 3, {
+    section: "reach",
+  }),
+  reachSampleSize: intSetting("reachSampleSize", 100, { section: "reach" }),
   // Discover tab candidate filters (local only — never mirrored to the backend).
   discoverSignals: jsonSetting(
     "discoverSignals",

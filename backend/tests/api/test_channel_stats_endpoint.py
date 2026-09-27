@@ -105,7 +105,14 @@ def test_stats_is_not_captured_as_a_channel_id(client: TestClient) -> None:
     assert isinstance(body, dict)
     assert "stats-ep-order" in body
     # A captured id would have produced a channel payload, not a stats map.
-    assert set(body["stats-ep-order"]) == {"count", "minId", "maxId", "velocity"}
+    assert set(body["stats-ep-order"]) == {
+        "count",
+        "minId",
+        "maxId",
+        "velocity",
+        "reach",
+        "reachEstimated",
+    }
 
 
 def test_stats_requires_auth(client: TestClient) -> None:

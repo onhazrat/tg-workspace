@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { toast } from "sonner"
 import { api } from "@/api"
 import { type Theme, useTheme } from "@/components/theme-provider"
 import type {
@@ -25,6 +26,7 @@ import {
   createAppSettingSetters,
   loadAppSettings,
   persistAppSettings,
+  refusalMessage,
   sectionValues,
 } from "@/lib/settings/store"
 import { useNetworkSettings } from "@/lib/settings/use-network-settings"
@@ -190,6 +192,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       api.getSetting("sync"),
       api.getSetting("retention"),
       api.getSetting("translation"),
+      api.getSetting("reach"),
       // Optional, and the `catch` is the point. `GET /jobs/status` became
       // Admin-only in ticket 18, and one rejection inside `Promise.all` rejects
       // the whole thing: sync, retention and translation would never be
@@ -199,12 +202,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       // the only thing this call feeds, so a non-Admin simply does not get it.
       api.jobsStatus().catch(() => null),
     ])
-      .then(([syncRow, retentionRow, translationRow, jobsStatus]) => {
+      .then(([syncRow, retentionRow, translationRow, reachRow, jobsStatus]) => {
         const { updates, writeBack } = hydrateAppSettings(
           {
             sync: syncRow.value,
             retention: retentionRow.value,
             translation: translationRow.value,
+            reach: reachRow.value,
             jobsStatus,
           },
           scopedStorage,
@@ -254,6 +258,24 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         )
     },
     sectionValues("translation", settings),
+  )
+
+  // Reach (REACH-03). The one section the server validates, so a refusal is
+  // shown with the server's reason; one toast id so typing through an invalid
+  // value on the way to a valid one replaces the message instead of stacking.
+  useEffect(
+    () => {
+      if (!hasSession() || !appSettingsHydrated.current) return
+      api
+        .putSetting("reach", buildSectionPayload("reach", settings))
+        .then(() => toast.dismiss("reach-settings"))
+        .catch((err) => {
+          const refused = refusalMessage(err)
+          if (refused) toast.error(refused, { id: "reach-settings" })
+          else console.warn("[Settings] Failed to sync reach settings:", err)
+        })
+    },
+    sectionValues("reach", settings),
   )
 
   // Embeddings toggle maps onto the "embeddings" job rather than a section.

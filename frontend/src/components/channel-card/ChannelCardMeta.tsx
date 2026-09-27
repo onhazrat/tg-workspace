@@ -1,6 +1,7 @@
 import {
   Activity,
   Clock,
+  Eye,
   File,
   Image as ImageIcon,
   Link as LinkIcon,
@@ -88,6 +89,8 @@ export function ChannelCardMeta({
         </ChipWithTooltip>
       )}
 
+      {stats && <ReachChip stats={stats} />}
+
       {show.subscribers && channel.subscribers != null && (
         <Counter label="Subscribers" Icon={Users} value={channel.subscribers} />
       )}
@@ -140,6 +143,37 @@ export function ChannelCardMeta({
         </Tooltip>
       )}
     </div>
+  )
+}
+
+/**
+ * The Channel's Reach (REACH-03): the median Settled View count of its newest
+ * Posts. Shown for every Channel whose stats have loaded, because "not
+ * measured" is an answer and a missing chip would read as zero. An estimate is
+ * marked with `~`, since it was corrected up from View counts still climbing.
+ */
+export function ReachChip({
+  stats,
+}: {
+  stats: Pick<ChannelStats, "reach" | "reachEstimated">
+}) {
+  const { reach, reachEstimated } = stats
+  const tooltip =
+    reach == null
+      ? "Reach not measured: fewer than five recent Posts old enough to count."
+      : reachEstimated
+        ? "Reach, estimated: too few recent Posts have settled, so younger " +
+          "View counts were corrected through the Settling curve."
+        : "Reach: the median View count of recent Posts once they settled."
+  return (
+    <ChipWithTooltip tooltip={<p>{tooltip}</p>}>
+      <Eye size={10} className="opacity-50" />
+      <span>
+        {reach == null
+          ? "Reach not measured"
+          : `Reach ${reachEstimated ? "~" : ""}${formatCount(reach)}`}
+      </span>
+    </ChipWithTooltip>
   )
 }
 

@@ -42,6 +42,7 @@ from app.core.permissions import Permission
 from app.jobs.settings import (
     load_directory_settings,
     load_jobs_settings,
+    load_reach_settings,
     load_retention_settings,
     load_sync_settings,
     load_translation_settings,
@@ -71,8 +72,10 @@ from app.services.network_settings import (
     merge_network_put,
     network_settings_payload,
 )
+from app.services.reach import reach_settings_from
 from app.services.settings_registry import (
     DIRECTORY_KEY,
+    REACH_KEY,
     RETENTION_KEY,
     RETENTION_PREF_FIELDS,
     SYNC_KEY,
@@ -101,6 +104,7 @@ _SETTING_LOADERS: dict[str, Callable[[Session, uuid.UUID], dict[str, Any]]] = {
     ),
     "translation": lambda session, _user_id: load_translation_settings(session),
     DIRECTORY_KEY: lambda session, _user_id: load_directory_settings(session),
+    REACH_KEY: lambda session, _user_id: load_reach_settings(session),
 }
 
 #: The facade keys, and which of their fields the registry calls personal.
@@ -286,9 +290,25 @@ def put_setting(
         value = put_user_setting(session, key, body, user_id=current_user.id)
     else:
         ADMIN_ONLY_CALLABLE(session, current_user)
+        _refuse_invalid_reach(session, key, body)
         value = put_global_setting(session, key, body)
     touch_sync(session, "settings")
     return AppSettingResponse(key=key, value=value)
+
+
+def _refuse_invalid_reach(session: Session, key: str, body: dict[str, Any]) -> None:
+    """422 with the reason when a `reach` write would store a contradiction.
+
+    Validated against the merged row, because the store merges: a body carrying
+    only a lower settling age must still be refused when it falls below the
+    floor already stored.
+    """
+    if key != REACH_KEY:
+        return
+    try:
+        reach_settings_from({**load_reach_settings(session), **body})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _writable_facade_fields(

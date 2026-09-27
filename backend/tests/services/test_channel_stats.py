@@ -172,7 +172,9 @@ def test_single_channel_stats_delegates_to_batch() -> None:
             ]
             stats = get_channel_stats(session, "delegate-ch", user_id=_SOME_USER)
 
-        assert stats == batch_entry
+        # The detail adds Reach (REACH-03), which the batch leaves out because
+        # the scheduler calls it every tick and reads no Reach.
+        assert stats == {**batch_entry, "reach": None, "reachEstimated": False}
 
 
 def test_get_channel_stats_no_posts_raises() -> None:

@@ -1,9 +1,16 @@
 import { describe, expect, it } from "bun:test"
+import { ApiError } from "@/api/base"
 import { RETENTION_LOG_DAYS_DEFAULT } from "@/constants"
 import { hydrateAppSettings } from "./hydrate"
-import { readerFromRecord } from "./store"
+import { readerFromRecord, refusalMessage } from "./store"
 
-const empty = { sync: {}, retention: {}, translation: {}, jobsStatus: null }
+const empty = {
+  sync: {},
+  retention: {},
+  translation: {},
+  reach: {},
+  jobsStatus: null,
+}
 
 describe("hydrateAppSettings", () => {
   it("takes legacy stored values the server lacks and asks for a write-back", () => {
@@ -47,5 +54,31 @@ describe("hydrateAppSettings", () => {
       readerFromRecord({}),
     )
     expect("embeddingsEnabled" in off.updates).toBe(false)
+  })
+
+  it("takes the three Reach settings from the server's reach row", () => {
+    const { updates } = hydrateAppSettings(
+      {
+        ...empty,
+        reach: {
+          settlingAgeHours: 48,
+          estimationFloorHours: 6,
+          reachSampleSize: 50,
+        },
+      },
+      readerFromRecord({}),
+    )
+    expect(updates.settlingAgeHours).toBe(48)
+    expect(updates.estimationFloorHours).toBe(6)
+    expect(updates.reachSampleSize).toBe(50)
+  })
+})
+
+describe("refusalMessage", () => {
+  it("is the server's detail for a refused value and nothing else", () => {
+    const refused = new ApiError(422, "The estimation floor must be below.")
+    expect(refusalMessage(refused)).toBe("The estimation floor must be below.")
+    expect(refusalMessage(new ApiError(403, "Forbidden"))).toBeNull()
+    expect(refusalMessage(new Error("network"))).toBeNull()
   })
 })

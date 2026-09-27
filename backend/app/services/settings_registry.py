@@ -147,6 +147,11 @@ QUOTA_KEY = "quota"
 #: default, the loader and the write path all have to agree on the spelling.
 DIRECTORY_KEY = "directory"
 
+#: REACH-03's three Reach settings: the settling age, the estimation floor and
+#: the sample size, one row because two of them are validated against each
+#: other. Named here for the same reason as the two above.
+REACH_KEY = "reach"
+
 #: Deployment-wide keys: one row, shared by every account.
 GLOBAL_KEYS: dict[str, str] = {
     "jobs": (
@@ -204,6 +209,14 @@ GLOBAL_KEYS: dict[str, str] = {
         "which is one deployment's proxies and one deployment's standing with "
         "Telegram. A per-account copy would let the shortest window chosen by "
         "anyone set the load everybody pays for."
+    ),
+    REACH_KEY: (
+        "How old a View count must be to count as Settled, how young one may "
+        "be and still be corrected through the Settling curve, and how many of "
+        "a Channel's newest Posts Reach reads (REACH-03, ADR-024). Deployment "
+        "policy because Reach is computed over the corpus every Follower "
+        "shares: a per-account settling age would give one Channel two Reach "
+        "values depending on who asked."
     ),
     SYNC_LANES_KEY: (
         "Which sync lanes an Admin has paused (ticket 12). A lane is a queue "

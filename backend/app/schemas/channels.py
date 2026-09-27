@@ -44,6 +44,10 @@ class ChannelStatsResponse(BaseModel):
     min_id: int | None = Field(default=None, alias="minId")
     max_id: int | None = Field(default=None, alias="maxId")
     velocity: float = 0.0
+    # No defaults: both routes that answer this always compute Reach, and a
+    # default would let one that forgot answer "not measured" instead of failing.
+    reach: int | None
+    reach_estimated: bool = Field(alias="reachEstimated")
 
 
 class ChannelResponse(BaseModel):

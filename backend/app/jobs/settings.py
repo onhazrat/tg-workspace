@@ -36,8 +36,10 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.models import User
+from app.services.reach import DEFAULT_REACH_SETTINGS, REACH_SETTING_FIELDS
 from app.services.settings_registry import (
     DIRECTORY_KEY,
+    REACH_KEY,
     RETENTION_KEY,
     RETENTION_PREFS_KEY,
     SYNC_KEY,
@@ -260,6 +262,23 @@ def load_jobs_settings(session: Session) -> dict[str, Any]:
 def load_directory_settings(session: Session) -> dict[str, Any]:
     """The Directory's refresh window, merged over its default (ticket 03)."""
     return load_setting(session, DIRECTORY_KEY, _default_directory())
+
+
+def load_reach_settings(session: Session) -> dict[str, Any]:
+    """The three Reach settings, merged over their defaults (REACH-03).
+
+    Defaults live in `services/reach.py` rather than `config.py`: they are
+    Operator-tunable at run time, and nothing reads them before the database is
+    up.
+    """
+    return load_setting(
+        session,
+        REACH_KEY,
+        {
+            wire: getattr(DEFAULT_REACH_SETTINGS, attr)
+            for wire, attr in REACH_SETTING_FIELDS.items()
+        },
+    )
 
 
 def load_sync_settings(

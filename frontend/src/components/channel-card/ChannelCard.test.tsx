@@ -40,6 +40,8 @@ const stats = (maxId: number, latestId?: number): ChannelStats => ({
   count: 10,
   maxId,
   latestId,
+  reach: null,
+  reachEstimated: false,
 })
 
 describe("channel-card-status", () => {
@@ -224,7 +226,12 @@ describe("ChannelCardMeta", () => {
     render(
       <ChannelCardMeta
         channel={base}
-        stats={{ count: 1234, velocity: 0.4 }}
+        stats={{
+          count: 1234,
+          velocity: 0.4,
+          reach: null,
+          reachEstimated: false,
+        }}
         inScopeCount={12}
         show={all}
       />,
@@ -261,6 +268,42 @@ describe("ChannelCardMeta", () => {
     )
     for (const text of ["777", "2", "3", "4", "5"])
       expect(screen.queryByText(text)).toBeNull()
+  })
+
+  test("reach reads measured, estimated or not measured", () => {
+    const withReach = (reach: number | null, reachEstimated: boolean) =>
+      render(
+        <ChannelCardMeta
+          channel={base}
+          stats={{ count: 5, reach, reachEstimated }}
+          inScopeCount={0}
+          show={all}
+        />,
+      )
+    withReach(12300, false)
+    expect(screen.getByText("Reach 12.3K")).toBeTruthy()
+    cleanup()
+    withReach(12300, true)
+    expect(screen.getByText("Reach ~12.3K")).toBeTruthy()
+    cleanup()
+    withReach(null, false)
+    expect(screen.getByText("Reach not measured")).toBeTruthy()
+    cleanup()
+    // Zero is a measurement, not an absence.
+    withReach(0, false)
+    expect(screen.getByText("Reach 0")).toBeTruthy()
+  })
+
+  test("no reach chip before the stats have loaded", () => {
+    render(
+      <ChannelCardMeta
+        channel={base}
+        stats={undefined}
+        inScopeCount={0}
+        show={all}
+      />,
+    )
+    expect(screen.queryByText(/Reach/)).toBeNull()
   })
 
   test("auto-followed channels say so", () => {

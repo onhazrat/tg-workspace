@@ -161,6 +161,10 @@ INVENTORY: dict[str, str] = {
     "post_links_parser.py": PURE_TRANSFORM,
     "post_media_parser.py": PURE_TRANSFORM,
     "post_reply_parser.py": PURE_TRANSFORM,
+    # Reach from (View count, age) pairs and the seed Settling curve (REACH-03,
+    # ADR-024). Its own module because two sources call it, followed Channels
+    # on read and Directory entries at probe time, and neither owns the other.
+    "reach.py": PURE_TRANSFORM,
     "serialization.py": PURE_TRANSFORM,
     # PGMQ lane naming (ticket 09) — string constants and one function, no
     # Session, no network. See its module docstring.
