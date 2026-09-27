@@ -52,6 +52,11 @@ SYNC_LANES_KEY = "sync_lanes"
 #: the Post's own. See `post_references.grace_cutoff_ms`.
 REFERENCE_GRAPH_KEY = "reference_graph"
 
+#: REACH-05's Observation stride, `{"stride": int}`. Named here for the reason
+#: the lane key is: the aggregate, the registry and the guard all have to agree
+#: on the spelling.
+VIEW_OBSERVATIONS_KEY = "view_observations"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -233,6 +238,14 @@ GLOBAL_KEYS: dict[str, str] = {
         "by the migration and not expected to change; it lives here rather "
         "than in `config.py` so an Operator looking at a skipped Post can see "
         "which instant the seven days ran from."
+    ),
+    VIEW_OBSERVATIONS_KEY: (
+        "The Observation stride: which Posts' View counts are kept as View "
+        "observations (REACH-05, ADR-024). Deployment state in exactly the way "
+        "`sync_runtime` is: written by the app's own stride controller to keep "
+        "one corpus-wide table under the deployment's row cap, and read by "
+        "nothing a person edits. A per-account stride would be a sample rate "
+        "for a table no account owns."
     ),
 }
 

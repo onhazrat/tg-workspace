@@ -42,6 +42,7 @@ from app.services.settings_registry import (
     SYNC_RUNTIME_FIELDS,
     SYNC_RUNTIME_KEY,
     USER_KEYS,
+    VIEW_OBSERVATIONS_KEY,
 )
 from app.services.settings_store import get_global_setting
 from app.services.user_settings import get_user_setting
@@ -238,7 +239,8 @@ def _global_entries(session: Session) -> list[ConfigurationEntry]:
                 description=description,
                 sensitive=sensitive,
                 configured=bool(stored),
-                editable=key not in {SYNC_RUNTIME_KEY, "follows_backfill"},
+                editable=key
+                not in {SYNC_RUNTIME_KEY, "follows_backfill", VIEW_OBSERVATIONS_KEY},
             )
         )
     return entries

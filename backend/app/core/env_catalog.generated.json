@@ -828,6 +828,13 @@
       "sensitive": false
     },
     {
+      "default": 1000000,
+      "name": "VIEW_OBSERVATION_ROW_CAP",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
       "default": null,
       "name": "CF_DNS_API_TOKEN",
       "required": false,

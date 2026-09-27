@@ -1414,7 +1414,25 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "another install weeks ago. Nothing is lost by omitting it — the "
         "refresh window fills it back in."
     ),
+    "DirectoryProbeUsage": (
+        "What this deployment's probe lane spent per day (ticket 04). A meter "
+        "of this install's traffic, meaningless on another, and a restore "
+        "would rewrite it for the reason `QuotaUsage` is never imported."
+    ),
+    "PostReference": (
+        "The reference graph (CRG-01), corpus about which Channel named which. "
+        "Derived by the extraction walk, and an imported Post arrives "
+        "unextracted, so a restore re-derives the edges its Posts name rather "
+        "than trusting another install's copy."
+    ),
     "SyncMeta": "Cache etags. Corpus, and meaningless in another install.",
+    "ViewObservation": (
+        "Sampled sightings of View counts that the Settling curve is fitted "
+        "from (REACH-05). Corpus, a statistic about this deployment's syncs "
+        "rather than an Account's data, and gone 14 days after each Post's "
+        "publication anyway. A Post's latest View count and its observation "
+        "time travel with the Post."
+    ),
 }
 
 

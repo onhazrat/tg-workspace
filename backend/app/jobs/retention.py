@@ -35,6 +35,10 @@ away the fact that the Channel exists, which is the whole map. Only its sample
 Posts expire, on `directorySampleRetentionDays`, a window of its own so that
 tuning the corpus or the log ones does not silently move it.
 
+**View observations are not a window at all** (REACH-05): a Post's sightings go
+14 days after its publication, fixed in code, because that is the span the
+Settling curve is fitted over.
+
 Channel collection and the asset sweeps stay deployment-wide and are not
 windows at all: a Channel is collected when nobody follows it, and an orphaned
 avatar is garbage by definition rather than by age.
@@ -95,6 +99,7 @@ from app.services.post_thumbnails import (
 )
 from app.services.scraper_jobs import prune_finished_jobs
 from app.services.sync_meta import touch_sync
+from app.services.view_observations import prune_view_observations
 
 logger = logging.getLogger(__name__)
 
@@ -488,6 +493,16 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         )
         session.commit()
 
+    # View observations on their own fixed 14 days after publication (REACH-05),
+    # not a window anybody sets: the Settling curve is fitted from exactly that
+    # span, and the row cap, not a window, is what bounds the table's size.
+    # Every window above can be set to 0; this one cannot. No `touch_sync`:
+    # nothing a browser caches reads the table.
+    deleted_observations = prune_view_observations(
+        session, int(utc_now().timestamp() * 1000)
+    )
+    session.commit()
+
     # Sync jobs are the one table here with no operator-facing window: nothing
     # lists them, so the horizon is a deployment constant. See
     # `prune_finished_jobs` — terminal rows only, so a long sync is never
@@ -521,7 +536,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     logger.info(
         "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
         "%s reports, %s sync jobs, %s unfollowed channels, %s orphaned avatars, "
-        "%s directory samples "
+        "%s directory samples, %s view observations "
         "(postDays=%s, sharedLogDays=%s, payloadDays=%s, sampleDays=%s, "
         "syncJobDays=%s, accounts=%s)",
         deleted_posts,
@@ -532,6 +547,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         deleted_channels,
         deleted_photos,
         deleted_samples,
+        deleted_observations,
         post_days,
         shared_log_days,
         payload_days,
@@ -548,4 +564,5 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         "deletedChannels": deleted_channels,
         "deletedPhotos": deleted_photos,
         "deletedDirectorySamples": deleted_samples,
+        "deletedViewObservations": deleted_observations,
     }
