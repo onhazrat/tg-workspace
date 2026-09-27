@@ -57,6 +57,10 @@ REFERENCE_GRAPH_KEY = "reference_graph"
 #: on the spelling.
 VIEW_OBSERVATIONS_KEY = "view_observations"
 
+#: REACH-10's marker that `move_post_counters_to_columns.py` found nothing left
+#: to move. Named here because the script and the catalog have to agree on it.
+POST_COUNTERS_MOVED_KEY = "post_counters_moved"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -196,6 +200,11 @@ GLOBAL_KEYS: dict[str, str] = {
         "A marker recording that the ticket 04 backfill completed. A fact "
         "about the database, not about anybody — and retention reads it before "
         "collecting channels, with no User in hand."
+    ),
+    POST_COUNTERS_MOVED_KEY: (
+        "A marker recording that no Post's media still holds a counter key "
+        "(REACH-10), so `prestart.sh` skips the scan on every later deploy. A "
+        "fact about the corpus, which nobody owns."
     ),
     QUOTA_KEY: (
         "The default Request allowance and ceiling for each of the three "

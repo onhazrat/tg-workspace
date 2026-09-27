@@ -34,6 +34,7 @@ from app.services.network_settings import load_network_settings, redact_proxy_ur
 from app.services.quota_limits import all_limits
 from app.services.settings_registry import (
     GLOBAL_KEYS,
+    POST_COUNTERS_MOVED_KEY,
     RETENTION_PREF_FIELDS,
     RETENTION_PREFS_KEY,
     SYNC_POLICY_FIELDS,
@@ -240,7 +241,12 @@ def _global_entries(session: Session) -> list[ConfigurationEntry]:
                 sensitive=sensitive,
                 configured=bool(stored),
                 editable=key
-                not in {SYNC_RUNTIME_KEY, "follows_backfill", VIEW_OBSERVATIONS_KEY},
+                not in {
+                    SYNC_RUNTIME_KEY,
+                    "follows_backfill",
+                    VIEW_OBSERVATIONS_KEY,
+                    POST_COUNTERS_MOVED_KEY,
+                },
             )
         )
     return entries

@@ -892,15 +892,16 @@ def _persist_page_posts(
         result.break_incremental = True
 
     posts_to_save = _posts_to_save(channel.name, posts)
-    if ctx.retrieval_pass in ("incremental", "backfill") and existing_on_page:
-        # The dropped Posts still get their counters re-observed (REACH-02).
-        # Only on these passes: an initial pass re-upserts what it holds, and
-        # that write already takes the page's counters.
-        refresh_post_counters(
-            session,
-            channel.name,
-            [p for p in posts_to_save if p["id"] in existing_on_page],
-        )
+    # Every pass re-observes the counters of the stored Posts on the page, and
+    # only through the refresh, so no pass refreshes a Post past the horizon
+    # (REACH-02, REACH-10). The initial pass still re-upserts them, which is
+    # why that upsert is told to leave their counters alone.
+    refresh_post_counters(
+        session,
+        channel.name,
+        [p for p in posts_to_save if p["id"] in existing_on_page],
+    )
+    if ctx.retrieval_pass in ("incremental", "backfill"):
         posts_to_save = [p for p in posts_to_save if p["id"] not in existing_on_page]
 
     if not posts_to_save:
@@ -912,6 +913,7 @@ def _persist_page_posts(
         retrieval_job_id=job_id,
         retrieval_pass=ctx.retrieval_pass,
         retrieval_source=job_source,
+        stored_counters=False,
     )
     touch_sync(session, "posts", commit=False)
     session.commit()

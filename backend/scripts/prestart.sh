@@ -29,6 +29,18 @@ alembic upgrade head
 # anyway is worse than a deploy that stops and says why.
 python scripts/backfill_chat_sessions.py
 
+# Move each Post's View count and reaction chips out of media into columns.
+#
+# REACH-08 made every reader use the columns only, so a deployment that never
+# ran this by hand shows no counters on its older Posts and exports none. Here
+# rather than by hand for the chat move's reasons: idempotent, batched and
+# resumable, and it touches only rows whose media still holds a counter key.
+#
+# `--if-needed` returns on one primary-key lookup once a completed run is
+# recorded. The first run on a converged database is one existence probe, a
+# full read of `tg_posts` (2.4s over 4.7M Posts on a laptop); REACH-10.
+python scripts/move_post_counters_to_columns.py --if-needed
+
 # Create initial data in DB
 python app/initial_data.py
 

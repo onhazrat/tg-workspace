@@ -4,7 +4,7 @@ A stored Post's View count used to be whatever it was the moment sync first
 met it, usually within hours of publication, when it holds about a fifth of
 what it settles at (ADR-024). Now every overlapping page re-observes the View
 count, reaction chips and observation time of the stored Posts on it, until a
-Post is 7 days old, and touches nothing else about the Post: not its
+Post is 7 days old, on every pass, and touches nothing else about the Post: not its
 provenance, not its Language, not its reference state, and not the posts etag,
 so a sync that found nothing new costs no browser a refetch.
 
@@ -27,7 +27,6 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.models_tg import Post
 from app.services.follows import get_operator_user_id
-from app.services.posts import COUNTER_REFRESH_HORIZON_MS
 from app.services.sync_meta import get_sync_meta
 from app.services.sync_orchestrator import _apply_scrape_page
 from app.services.telegram_web import telegram_web_view_channel_url
@@ -35,6 +34,7 @@ from tests.services.test_sync_orchestrator import _ctx
 from tests.utils.setting_groups import upsert_sync_test_channel
 
 HOUR_MS = 60 * 60 * 1000
+DAY_MS = 24 * HOUR_MS
 OLD_UPDATED_AT = datetime(2026, 1, 1)
 CHIPS = [{"emoji": "👍", "count": 40, "isPaid": False}]
 
@@ -129,18 +129,35 @@ def test_an_overlapping_page_refreshes_the_stored_counters(retrieval_pass: str) 
     assert post.views_observed_at >= before
 
 
-def test_a_post_past_the_horizon_is_not_refreshed() -> None:
+@pytest.mark.parametrize("retrieval_pass", ["incremental", "backfill", "initial"])
+def test_the_horizon_is_seven_days_on_every_pass(retrieval_pass: str) -> None:
+    """Literal ages, not the constant: a test that reads its expectation from
+    the value it checks passes whatever that value is.
+
+    The initial pass is the one REACH-02 missed (REACH-10): it re-upserts every
+    stored Post on its page, and that upsert used to take the page's counters
+    whatever the Post's age.
+    """
     now = int(time.time() * 1000)
-    channel_id, name = _seed({10: now - COUNTER_REFRESH_HORIZON_MS - HOUR_MS})
+    six_days, eight_days = now - 6 * DAY_MS, now - 8 * DAY_MS
+    channel_id, name = _seed({10: six_days, 11: eight_days})
 
-    _apply(channel_id, name, [_page_post(10, now, 900)], retrieval_pass="incremental")
-
-    post = _stored(name)[10]
-    assert (post.views_count, post.reaction_counts, post.views_observed_at) == (
-        100,
-        None,
-        1,
+    _apply(
+        channel_id,
+        name,
+        [_page_post(10, six_days, 900), _page_post(11, eight_days, 900)],
+        retrieval_pass=retrieval_pass,
     )
+
+    stored = _stored(name)
+    assert stored[10].views_count == 900
+    assert stored[10].reaction_counts == CHIPS
+    assert (stored[10].views_observed_at or 0) > 1
+    assert (
+        stored[11].views_count,
+        stored[11].reaction_counts,
+        stored[11].views_observed_at,
+    ) == (100, None, 1)
 
 
 def test_a_page_showing_no_counters_stores_none() -> None:

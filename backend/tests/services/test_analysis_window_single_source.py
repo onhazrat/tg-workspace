@@ -13,9 +13,10 @@ the same Scope mean something different again.
 
 So this walks the AST of `app/` instead and requires every comparison against
 `Post.timestamp` to be either the shared predicate or a declared exception
-saying which *other* window it is. Four exist, and they are genuinely other
-windows — retention's cutoff, the scraper's backward walk — not the Account's
-Analysis window under another name.
+saying which *other* window it is. Four exist, one narrowed to a function, and
+they are genuinely other windows — retention's cutoff, the scraper's backward
+walk, the counter refresh horizon — not the Account's Analysis window under
+another name.
 """
 
 from __future__ import annotations
@@ -45,14 +46,21 @@ NOT_THE_ANALYSIS_WINDOW: dict[str, str] = {
         "a sync reaches, and `> 0` excludes rows with no usable timestamp. "
         "Neither is a window a person chose."
     ),
-    "services/posts.py": (
-        "The counter refresh horizon (REACH-02): sync re-observes a stored "
-        "Post's View count only while it is younger than 7 days. A code "
-        "constant about when a count stops changing, not a Scope."
-    ),
     "services/sync_orchestrator.py": (
         "`> 0` again, finding a Channel's newest real Post to resume from. A "
         "sync cursor, not a Scope."
+    ),
+}
+
+#: The same, narrowed to one function, for a module that also holds a path the
+#: Analysis window governs. `posts.py` holds the feed and the counts beside the
+#: write path, so excusing the module would excuse a hand-rolled window in
+#: `list_feed` too (REACH-10).
+NOT_THE_ANALYSIS_WINDOW_IN: dict[tuple[str, str], str] = {
+    ("services/posts.py", "refresh_post_counters"): (
+        "The counter refresh horizon (REACH-02): sync re-observes a stored "
+        "Post's View count only while it is younger than 7 days. A code "
+        "constant about when a count stops changing, not a Scope."
     ),
 }
 
@@ -121,23 +129,42 @@ def _modules() -> list[pathlib.Path]:
     )
 
 
-def _comparison_sites() -> dict[str, int]:
-    """`module path relative to app/ -> how many ordered comparisons it makes`."""
-    found: dict[str, int] = {}
+def _is_window_comparison(node: ast.AST, aliases: frozenset[str]) -> bool:
+    return (
+        isinstance(node, ast.Compare)
+        and any(isinstance(op, _ORDER_OPS) for op in node.ops)
+        and any(
+            _is_post_timestamp(operand, aliases)
+            for operand in [node.left, *node.comparators]
+        )
+    )
+
+
+def _enclosing_functions(
+    node: ast.AST, aliases: frozenset[str], function: str = "<module>"
+) -> list[str]:
+    """The nearest enclosing function of each comparison under `node`."""
+    found: list[str] = []
+    for child in ast.iter_child_nodes(node):
+        if _is_window_comparison(child, aliases):
+            found.append(function)
+        inner = (
+            child.name
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            else function
+        )
+        found.extend(_enclosing_functions(child, aliases, inner))
+    return found
+
+
+def _comparison_sites() -> dict[str, list[str]]:
+    """`module path relative to app/ -> the function of each ordered comparison`."""
+    found: dict[str, list[str]] = {}
     for path in _modules():
         tree = ast.parse(path.read_text())
-        aliases = frozenset(_post_aliases(tree))
-        count = 0
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Compare):
-                continue
-            if not any(isinstance(op, _ORDER_OPS) for op in node.ops):
-                continue
-            operands = [node.left, *node.comparators]
-            if any(_is_post_timestamp(operand, aliases) for operand in operands):
-                count += 1
-        if count:
-            found[str(path.relative_to(APP_ROOT))] = count
+        functions = _enclosing_functions(tree, frozenset(_post_aliases(tree)))
+        if functions:
+            found[str(path.relative_to(APP_ROOT))] = functions
     return found
 
 
@@ -145,9 +172,11 @@ def test_every_post_timestamp_comparison_is_the_predicate_or_declared() -> None:
     sites = _comparison_sites()
 
     undeclared = {
-        module: count
-        for module, count in sites.items()
-        if module != THE_PREDICATE and module not in NOT_THE_ANALYSIS_WINDOW
+        module: functions
+        for module, functions in sites.items()
+        if module != THE_PREDICATE
+        and module not in NOT_THE_ANALYSIS_WINDOW
+        and any((module, f) not in NOT_THE_ANALYSIS_WINDOW_IN for f in functions)
     }
 
     assert undeclared == {}, (
@@ -155,7 +184,8 @@ def test_every_post_timestamp_comparison_is_the_predicate_or_declared() -> None:
         f"{sorted(undeclared)}. If this is the Account's Analysis window, use "
         "`post_filters.apply_analysis_window` — five separate copies of it is "
         "what AW-01 removed, and every one of them had an inclusive end. If it "
-        "is a different window, add it to NOT_THE_ANALYSIS_WINDOW saying which."
+        "is a different window, add it to NOT_THE_ANALYSIS_WINDOW (or, for one "
+        "function, NOT_THE_ANALYSIS_WINDOW_IN) saying which."
     )
 
 
@@ -167,7 +197,7 @@ def test_the_shared_predicate_still_writes_the_comparison() -> None:
     `text()`, or a column object built somewhere else, and every assertion here
     goes green over a codebase with no half-open window left in it.
     """
-    assert _comparison_sites().get(THE_PREDICATE, 0) >= 2, (
+    assert len(_comparison_sites().get(THE_PREDICATE, [])) >= 2, (
         "`post_filters.py` no longer compares `Post.timestamp` on both sides — "
         "the window has moved somewhere this guard cannot see"
     )
@@ -184,4 +214,13 @@ def test_a_declared_exception_still_makes_its_comparison(module: str) -> None:
     assert module in _comparison_sites(), (
         f"{module} no longer compares `Post.timestamp`; drop its entry from "
         "NOT_THE_ANALYSIS_WINDOW rather than leaving a standing exemption"
+    )
+
+
+@pytest.mark.parametrize("site", sorted(NOT_THE_ANALYSIS_WINDOW_IN))
+def test_a_declared_function_still_makes_its_comparison(site: tuple[str, str]) -> None:
+    module, function = site
+    assert function in _comparison_sites().get(module, []), (
+        f"{module}::{function} no longer compares `Post.timestamp`; drop its "
+        "entry from NOT_THE_ANALYSIS_WINDOW_IN"
     )
