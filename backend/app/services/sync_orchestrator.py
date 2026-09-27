@@ -70,7 +70,7 @@ from app.services.post_thumbnails import (
     cache_post_thumb,
     enforce_thumb_cache_size_limit_throttled,
 )
-from app.services.posts import bulk_upsert_posts_impl
+from app.services.posts import bulk_upsert_posts_impl, refresh_post_counters
 from app.services.proxy_pool import (
     SLOT_WAIT_SECONDS,
     SlotLost,
@@ -893,6 +893,14 @@ def _persist_page_posts(
 
     posts_to_save = _posts_to_save(channel.name, posts)
     if ctx.retrieval_pass in ("incremental", "backfill") and existing_on_page:
+        # The dropped Posts still get their counters re-observed (REACH-02).
+        # Only on these passes: an initial pass re-upserts what it holds, and
+        # that write already takes the page's counters.
+        refresh_post_counters(
+            session,
+            channel.name,
+            [p for p in posts_to_save if p["id"] in existing_on_page],
+        )
         posts_to_save = [p for p in posts_to_save if p["id"] not in existing_on_page]
 
     if not posts_to_save:

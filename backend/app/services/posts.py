@@ -7,7 +7,8 @@ import uuid
 from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import func, literal, or_, update
+from sqlalchemy import Integer, cast, column, func, literal, or_, update, values
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
@@ -31,6 +32,10 @@ MAX_POST_LOOKUP_BATCH = 200
 
 FEED_SORTS: frozenset[str] = frozenset({"time", "channel_time"})
 FEED_CAP_MODES: frozenset[str] = frozenset({"latest", "random"})
+
+#: A stored Post's counters are refreshed until it is this old (REACH-02,
+#: ADR-024). A constant, not a setting: the settling age is validated below it.
+COUNTER_REFRESH_HORIZON_MS = 7 * 24 * 60 * 60 * 1000
 
 
 def _post_media_from_item(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -79,6 +84,63 @@ def _counter_fields(item: dict[str, Any], now_ms: int) -> dict[str, Any]:
         "reaction_counts": _reaction_chips(media.get("reactionCounts")),
         "views_observed_at": now_ms,
     }
+
+
+def refresh_post_counters(
+    session: Session, channel_name: str, items: list[dict[str, Any]]
+) -> None:
+    """Re-observe the counters of stored Posts a scraped page met again (REACH-02).
+
+    One `UPDATE` for the page, setting the View count, reaction chips and
+    observation time and nothing else: not `retrieval_*`, not `updated_at`,
+    not `language`, not `references_extracted`. The counters are unindexed and
+    `tg_posts` has `fillfactor = 90`, so the write can be a HOT update.
+
+    * Only Posts younger than `COUNTER_REFRESH_HORIZON_MS`; an id the page
+      carries that is not stored simply matches nothing.
+    * The observation time moves even when the count did not: Telegram's
+      rounded display holds one value for hours, and a skipped stamp would
+      make a Settled Post look young.
+    * The counters are what the page shows, `NULL` included, exactly as a
+      first capture stores them.
+    * It moves no etag. A View count is not a feed change, and a sync that
+      found nothing new must not make every browser refetch. Does not commit.
+    """
+    if not items:
+        return
+    now_ms = int(time.time() * 1000)
+    rows = []
+    for item in items:
+        counters = _counter_fields(item, now_ms)
+        rows.append(
+            (
+                int(item["id"]),
+                counters.get("views_count"),
+                counters.get("reaction_counts"),
+            )
+        )
+    seen = values(
+        column("post_id", Integer),
+        column("views_count", Integer),
+        column("reaction_counts", JSONB(none_as_null=True)),
+        name="seen",
+    ).data(rows)
+    session.execute(
+        update(Post)
+        .where(
+            col(Post.channel_name) == channel_name,
+            col(Post.post_id) == seen.c.post_id,
+            col(Post.timestamp) >= now_ms - COUNTER_REFRESH_HORIZON_MS,
+        )
+        # Cast, because a column that is NULL on every row of the page types
+        # as text inside `VALUES`, and Postgres refuses text for either column.
+        .values(
+            views_count=cast(seen.c.views_count, Integer),
+            reaction_counts=cast(seen.c.reaction_counts, JSONB(none_as_null=True)),
+            views_observed_at=now_ms,
+        )
+        .execution_options(synchronize_session=False)
+    )
 
 
 def _post_links_from_item(item: dict[str, Any]) -> list[Any] | None:

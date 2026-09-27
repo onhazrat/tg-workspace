@@ -45,6 +45,11 @@ NOT_THE_ANALYSIS_WINDOW: dict[str, str] = {
         "a sync reaches, and `> 0` excludes rows with no usable timestamp. "
         "Neither is a window a person chose."
     ),
+    "services/posts.py": (
+        "The counter refresh horizon (REACH-02): sync re-observes a stored "
+        "Post's View count only while it is younger than 7 days. A code "
+        "constant about when a count stops changing, not a Scope."
+    ),
     "services/sync_orchestrator.py": (
         "`> 0` again, finding a Channel's newest real Post to resume from. A "
         "sync cursor, not a Scope."
