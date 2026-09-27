@@ -143,6 +143,21 @@ def test_a_post_past_the_horizon_is_not_refreshed() -> None:
     )
 
 
+def test_a_page_showing_no_counters_stores_none() -> None:
+    # The parser's `media` is None when the page shows no counter at all, so
+    # every row of the refresh is NULL; stored exactly as a first capture.
+    now = int(time.time() * 1000)
+    channel_id, name = _seed({10: now - 2 * HOUR_MS})
+    bare = {"id": 10, "text": "x", "timestamp": now, "media": None}
+
+    _apply(channel_id, name, [bare], retrieval_pass="incremental")
+
+    post = _stored(name)[10]
+    assert (post.views_count, post.reaction_counts) == (None, None)
+    assert post.views_observed_at is not None
+    assert post.views_observed_at > 1
+
+
 def test_an_unchanged_count_still_moves_the_observation_time() -> None:
     # Telegram shows "1.2K" for hours; the sighting is still a new one.
     now = int(time.time() * 1000)

@@ -7,7 +7,7 @@ import uuid
 from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import Integer, column, func, literal, or_, update, values
+from sqlalchemy import Integer, cast, column, func, literal, or_, update, values
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
@@ -132,9 +132,11 @@ def refresh_post_counters(
             col(Post.post_id) == seen.c.post_id,
             col(Post.timestamp) >= now_ms - COUNTER_REFRESH_HORIZON_MS,
         )
+        # Cast, because a column that is NULL on every row of the page types
+        # as text inside `VALUES`, and Postgres refuses text for either column.
         .values(
-            views_count=seen.c.views_count,
-            reaction_counts=seen.c.reaction_counts,
+            views_count=cast(seen.c.views_count, Integer),
+            reaction_counts=cast(seen.c.reaction_counts, JSONB(none_as_null=True)),
             views_observed_at=now_ms,
         )
         .execution_options(synchronize_session=False)
