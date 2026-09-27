@@ -61,6 +61,11 @@ VIEW_OBSERVATIONS_KEY = "view_observations"
 #: to move. Named here because the script and the catalog have to agree on it.
 POST_COUNTERS_MOVED_KEY = "post_counters_moved"
 
+#: REACH-07's last Settling curve fit that learned nothing,
+#: `{"failedAt": ISO time, "settlingAgeHours": int}`. Named here because the
+#: job, the catalog and the guard have to agree on it.
+SETTLING_CURVE_RUNTIME_KEY = "settling_curve_runtime"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -201,6 +206,12 @@ GLOBAL_KEYS: dict[str, str] = {
         "A marker recording that the ticket 04 backfill completed. A fact "
         "about the database, not about anybody — and retention reads it before "
         "collecting channels, with no User in hand."
+    ),
+    SETTLING_CURVE_RUNTIME_KEY: (
+        "When the Settling curve fit last learned nothing, and at which "
+        "settling age (REACH-07), so the worker waits an hour before reading "
+        "every View observation again. Deployment state the app writes, like "
+        "`sync_runtime`: the curve is one corpus fact nobody owns."
     ),
     POST_COUNTERS_MOVED_KEY: (
         "A marker recording that no Post's media still holds a counter key "

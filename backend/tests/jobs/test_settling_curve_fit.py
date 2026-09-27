@@ -14,6 +14,8 @@ due, and Reach then estimates through the newest stored fit.
 * store a fit with no learned span -> the empty-table case gains a row
 * pair every sighting with every other rather than the next -> the count case
 * compare the fit's age alone, not its settling age -> the settling-age case
+* retry a fit that learned nothing every minute, or never after an hour, or
+  ignore a settling-age change during the wait -> the retry case
 * keep the seed in `reach_by_channel` or the probe -> the two Reach cases
 """
 
@@ -42,7 +44,11 @@ from app.services.reach import (
     fit_settling_curve,
     seed_curve,
 )
-from app.services.settings_registry import REACH_KEY, VIEW_OBSERVATIONS_KEY
+from app.services.settings_registry import (
+    REACH_KEY,
+    SETTLING_CURVE_RUNTIME_KEY,
+    VIEW_OBSERVATIONS_KEY,
+)
 from app.services.settings_store import put_global_setting
 from tests.utils.setting_groups import add_test_channel
 
@@ -250,11 +256,42 @@ def test_a_settling_age_change_refits_at_once() -> None:
 def test_an_empty_observation_table_leaves_the_previous_fit_current() -> None:
     _store_fit([[1.0, 0.5], [24.0, 1.0]], hours_ago=48)
 
-    assert _run() == {"fitted": 0}
+    assert _run() == {"fitted": 0, "attempted": 1}
     with Session(engine) as session:
         assert (
             session.exec(select(func.count()).select_from(SettlingCurveFit)).one() == 1
         )
+
+
+def _failed_minutes_ago(minutes: int, settling: int = 24) -> None:
+    with Session(engine) as session:
+        put_global_setting(
+            session,
+            SETTLING_CURVE_RUNTIME_KEY,
+            {
+                "failedAt": (utc_now() - timedelta(minutes=minutes)).isoformat(),
+                "settlingAgeHours": settling,
+            },
+        )
+
+
+def test_a_fit_that_learned_nothing_waits_an_hour_to_retry() -> None:
+    """A thin table is read once an hour, not every minute, until the settling
+    age changes."""
+    first = _run()
+    again = _run()
+    _failed_minutes_ago(59)
+    within_the_hour = _run()
+    _failed_minutes_ago(61)
+    after_the_hour = _run()
+    _failed_minutes_ago(1)
+    with Session(engine) as session:
+        put_global_setting(session, REACH_KEY, {"settlingAgeHours": 12})
+    new_settling_age = _run()
+
+    assert first == {"fitted": 0, "attempted": 1}
+    assert again == within_the_hour == {"fitted": 0}
+    assert after_the_hour == new_settling_age == {"fitted": 0, "attempted": 1}
 
 
 @pytest.mark.parametrize(
@@ -274,7 +311,7 @@ def test_a_fit_is_due_at_the_interval_or_a_new_settling_age(
     last = None if newest is None else (newest[0], now - timedelta(hours=newest[1]))
     settings = ReachSettings(refit_interval_hours=interval)
 
-    assert fit_is_due(last, settings, now) is due
+    assert fit_is_due(last, None, settings, now) is due
 
 
 # --------------------------------------------------------------------------

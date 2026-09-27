@@ -37,6 +37,7 @@ from app.services.settings_registry import (
     POST_COUNTERS_MOVED_KEY,
     RETENTION_PREF_FIELDS,
     RETENTION_PREFS_KEY,
+    SETTLING_CURVE_RUNTIME_KEY,
     SYNC_POLICY_FIELDS,
     SYNC_PREF_FIELDS,
     SYNC_PREFS_KEY,
@@ -246,6 +247,7 @@ def _global_entries(session: Session) -> list[ConfigurationEntry]:
                     "follows_backfill",
                     VIEW_OBSERVATIONS_KEY,
                     POST_COUNTERS_MOVED_KEY,
+                    SETTLING_CURVE_RUNTIME_KEY,
                 },
             )
         )
