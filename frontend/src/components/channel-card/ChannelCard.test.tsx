@@ -8,13 +8,18 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type { ChannelMetaVisibility } from "@/lib/channels/card-zoom"
+import {
+  type CardZoom,
+  type ChannelMetaVisibility,
+  cardFace,
+} from "@/lib/channels/card-zoom"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
   ChannelCardBadges,
   ChannelCardSyncingOverlay,
 } from "./ChannelCardChrome"
+import { ChannelCardFace } from "./ChannelCardFace"
 import { ChannelCardFooter } from "./ChannelCardFooter"
 import { ChannelCardHeader } from "./ChannelCardHeader"
 import { ChannelCardMeta } from "./ChannelCardMeta"
@@ -30,6 +35,8 @@ import {
 } from "./channel-card-status"
 
 afterEach(cleanup)
+
+const noop = () => {}
 
 const base: Channel = {
   id: "c1",
@@ -569,5 +576,77 @@ describe("ChannelCardHeader", () => {
     cleanup()
     render(<ChannelCardHeader linkToTelegram channel={base} showBio />)
     expect(screen.queryByText("about")).toBeNull()
+  })
+})
+
+describe("ChannelCardFace", () => {
+  const settingsOff = {
+    showChannelBio: false,
+    showChannelSubscribers: false,
+    showChannelTelegramChatId: false,
+    showChannelPhotos: false,
+    showChannelVideos: false,
+    showChannelFiles: false,
+    showChannelLinks: false,
+    showChannelStartId: false,
+  }
+  const renderFace = (zoom: CardZoom, isScraping = false) => {
+    const handlers = {
+      onToggleSelected: mock(),
+      onSync: mock(),
+      onRemove: mock(),
+    }
+    render(
+      <ChannelCardFace
+        channel={base}
+        stats={stats(5, 9)}
+        face={cardFace(zoom, settingsOff)}
+        inScopeCount={0}
+        isSelected={false}
+        isScraping={isScraping}
+        busy={false}
+        queuePosition={null}
+        onToggleFreeze={noop}
+        onResetAndSync={noop}
+        onSaveChannel={noop}
+        {...handlers}
+      />,
+    )
+    return handlers
+  }
+
+  test("at zoom -1 the card body selects and Sync does not", () => {
+    const h = renderFace(-1)
+    const toggles = screen.getAllByLabelText("Select durov")
+    expect(toggles).toHaveLength(1)
+    fireEvent.click(toggles[0])
+    expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole("button", { name: /Sync/ }))
+    expect(h.onSync).toHaveBeenCalledTimes(1)
+    expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
+  })
+
+  test("at zoom -1 tags, status, hover actions and the Telegram link are gone", () => {
+    renderFace(-1)
+    expect(screen.queryByText("Add Tag")).toBeNull()
+    expect(screen.queryByText("Status")).toBeNull()
+    expect(screen.queryByLabelText("Remove Channel")).toBeNull()
+    expect(document.querySelector("a[href]")).toBeNull()
+  })
+
+  test("at zoom 0 the checkbox selects and the card keeps its full face", () => {
+    const h = renderFace(0)
+    fireEvent.click(screen.getByLabelText("Select durov"))
+    expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
+    expect(screen.getByText("Add Tag")).toBeTruthy()
+    expect(screen.getByText("Status")).toBeTruthy()
+    fireEvent.click(screen.getByLabelText("Remove Channel"))
+    expect(h.onRemove).toHaveBeenCalledTimes(1)
+  })
+
+  test("a syncing compact card lets clicks through its overlay", () => {
+    renderFace(-1, true)
+    const overlay = screen.getByText(/Syncing/).closest(".absolute.inset-0")
+    expect(overlay?.className).toContain("pointer-events-none")
   })
 })
