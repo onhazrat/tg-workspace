@@ -27,6 +27,7 @@ describe("ChannelGridBody", () => {
         postsInScopeCounts={{}}
         onRemoveChannel={noop}
         onResetAndSync={noop}
+        onSelectChannel={noop}
         hasMore={false}
         onLoadMore={noop}
         scrollContainerRef={{ current: null }}
@@ -121,6 +122,8 @@ describe("ChannelGridFilterBar", () => {
         onSortByChange={noop}
         sortDirection="desc"
         onToggleSortDirection={noop}
+        groupBySelection
+        onToggleGroupBySelection={noop}
         showChannelSubscribers={false}
         trimCount=""
         onTrimCountChange={noop}
