@@ -7,29 +7,39 @@ and nothing outside it changes. See `.scratch/channel-card-zoom/spec.md`, user s
 
 **Blocked by:** ZOOM-01 (both write the per-card selection callback).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ### Range selection rule
 
-- [ ] One pure function takes the current selection, the handles in on-screen order, the anchor (or none), the clicked handle, and whether shift is held. It returns the new selection and the new anchor
-- [ ] A plain click toggles the clicked Channel
-- [ ] A shift-click with the anchor on screen sets every Channel from the anchor to the clicked one, both ends included, to the clicked Channel's new state, in either direction
-- [ ] Selections outside the run are untouched
-- [ ] No anchor, or an anchor no longer on screen, makes a shift-click a plain toggle
-- [ ] The anchor becomes the clicked Channel on every click, plain or shift
-- [ ] Frozen and Unavailable Channels inside the run are treated like any other
+- [x] One pure function takes the current selection, the handles in on-screen order, the anchor (or none), the clicked handle, and whether shift is held. It returns the new selection and the new anchor
+- [x] A plain click toggles the clicked Channel
+- [x] A shift-click with the anchor on screen sets every Channel from the anchor to the clicked one, both ends included, to the clicked Channel's new state, in either direction
+- [x] Selections outside the run are untouched
+- [x] No anchor, or an anchor no longer on screen, makes a shift-click a plain toggle
+- [x] The anchor becomes the clicked Channel on every click, plain or shift
+- [x] Frozen and Unavailable Channels inside the run are treated like any other
 
 ### Wiring
 
-- [ ] The anchor lives in the channel grid beside the selection, not in `DataContext` (its field set is pinned)
-- [ ] The grid passes each card one selection callback carrying the clicked handle and whether shift was held. The checkbox (0 and +1) and the card toggle (-1 and -2) both call it, including from the keyboard
-- [ ] The on-screen order is the grid's filtered and sorted list, the same one it renders
-- [ ] All, None and Revert leave the anchor alone
-- [ ] Shift-click does not highlight text on the selection controls. Tag and Start ID text stays selectable
+- [x] The anchor lives in the channel grid beside the selection, not in `DataContext` (its field set is pinned)
+- [x] The grid passes each card one selection callback carrying the clicked handle and whether shift was held. The checkbox (0 and +1) and the card toggle (-1 and -2) both call it, including from the keyboard
+- [x] The on-screen order is the grid's filtered and sorted list, the same one it renders
+- [x] All, None and Revert leave the anchor alone
+- [x] Shift-click does not highlight text on the selection controls. Tag and Start ID text stays selectable
 
 ### Tests
 
-- [ ] Unit tests for the range function: plain toggle, run forward, run backward, deselecting a run, outside selections untouched, anchor off screen, no anchor, anchor equal to the clicked Channel, anchor moving on every click
-- [ ] Mutation-test them: break the function and watch the tests go red
-- [ ] Extend the ZOOM-01 Playwright journey: shift-click selects a run at 0 (on the checkbox) and at -2 (on the tile), and a second shift-click on a selected Channel deselects the run
-- [ ] Frontend lint, typecheck and unit tests pass
+- [x] Unit tests for the range function: plain toggle, run forward, run backward, deselecting a run, outside selections untouched, anchor off screen, no anchor, anchor equal to the clicked Channel, anchor moving on every click
+- [x] Mutation-test them: break the function and watch the tests go red
+- [x] Extend the ZOOM-01 Playwright journey: shift-click selects a run at 0 (on the checkbox) and at -2 (on the tile), and a second shift-click on a selected Channel deselects the run
+- [x] Frontend lint, typecheck and unit tests pass
+
+### Decided during implementation
+
+The grid sorts selected Channels first and frozen ones last, so a plain click lifts its card to the
+top and "between, in screen order" then runs from the top of the grid. The user chose a toggle
+beside Sort By over changing the rule: grouped (today's view, the default) or one flat list in sort
+order, where selecting or freezing moves nothing and a run stays where it was drawn. The choice is a
+settings-schema entry (`channelGridGroupBySelection`), remembered per account in one browser like
+the zoom level. Trim and its rank badges stay grouped whichever view is on, so a selected frozen
+Channel is still trimmed first; both callers pass `groupBySelection: true` to say so.

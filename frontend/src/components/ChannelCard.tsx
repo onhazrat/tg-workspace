@@ -24,6 +24,8 @@ interface ChannelCardProps {
   inScopeCount: number
   handleRemoveChannel: (channel: Channel) => void
   handleResetAndSync: (channel: Channel) => void
+  /** One click on this card's selection control; the grid owns range select. */
+  onSelectChannel: (name: string, shift: boolean) => void
   sortRank?: number
 }
 
@@ -32,6 +34,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   inScopeCount,
   handleRemoveChannel,
   handleResetAndSync,
+  onSelectChannel,
   sortRank,
 }) => {
   const {
@@ -52,13 +55,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   const busy = isScraping || summarizing
   const isSelected = selectedChannels.has(channel.name)
 
-  const setSelected = (selected: boolean) =>
-    setSelectedChannels((prev) => {
-      const next = new Set(prev)
-      if (selected) next.add(channel.name)
-      else next.delete(channel.name)
-      return next
-    })
+  const onToggleSelected = (shift: boolean) =>
+    onSelectChannel(channel.name, shift)
 
   const saveChannel = async (patch: Partial<Channel>) => {
     const updatedChannel = { ...channel, ...patch }
@@ -77,7 +75,12 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     })
     await loadChannels()
     await invalidateSettingGroups()
-    if (!channel.isFrozen) setSelected(false)
+    if (!channel.isFrozen)
+      setSelectedChannels((prev) => {
+        const next = new Set(prev)
+        next.delete(channel.name)
+        return next
+      })
   }
 
   const face = cardFace(settings.channelCardZoom, settings)
@@ -88,7 +91,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         channel={channel}
         isSelected={isSelected}
         isScraping={isScraping}
-        onToggleSelected={() => setSelected(!isSelected)}
+        onToggleSelected={onToggleSelected}
       />
     )
   }
@@ -104,7 +107,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       busy={busy}
       queuePosition={queuePosition(syncQueue, channel.id)}
       sortRank={sortRank}
-      onToggleSelected={() => setSelected(!isSelected)}
+      onToggleSelected={onToggleSelected}
       onToggleFreeze={handleToggleFreeze}
       onResetAndSync={() => handleResetAndSync(channel)}
       onRemove={() => handleRemoveChannel(channel)}

@@ -29,6 +29,7 @@ import {
   collectChannelLanguages,
   filterChannelsForGrid,
 } from "@/lib/channels/filter-channels-for-grid"
+import { rangeSelect } from "@/lib/channels/range-select"
 import { buildSelectedTrimRanks } from "@/lib/channels/selected-trim-ranks"
 import { sortChannelsForGrid } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
@@ -72,8 +73,13 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setShowSortRank,
   } = useChannelGridSortState()
 
-  const { showChannelSubscribers, channelCardZoom, setChannelCardZoom } =
-    useSettings()
+  const {
+    showChannelSubscribers,
+    channelCardZoom,
+    setChannelCardZoom,
+    channelGridGroupBySelection,
+    setChannelGridGroupBySelection,
+  } = useSettings()
 
   const { isOffline } = useApiStatus()
 
@@ -113,8 +119,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         selectedChannels,
         sortBy,
         sortDirection,
+        groupBySelection: channelGridGroupBySelection,
       }),
     [
+      channelGridGroupBySelection,
       channelStats,
       filteredChannels,
       postsInScopeCounts,
@@ -189,6 +197,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const hasMoreChannels = visibleChannels < filteredChannels.length
 
+  // The cards on screen, and the order a shift-click run is measured in.
+  // Load-more resets to one page on a sort or search change, which can leave
+  // the anchor past the last of them.
+  const renderedChannels = useMemo(
+    () => sortedFilteredChannels.slice(0, visibleChannels),
+    [sortedFilteredChannels, visibleChannels],
+  )
+
   const loadMoreChannels = useCallback(() => {
     setVisibleChannels((prev) => Math.min(prev + 20, filteredChannels.length))
   }, [filteredChannels.length])
@@ -222,6 +238,22 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     () => collectChannelLanguages(channels),
     [channels],
   )
+
+  // The last Channel clicked, plain or shift. It lives here rather than in
+  // DataContext, whose field set is pinned, and All, None and Revert leave it.
+  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null)
+
+  const handleSelectChannel = (name: string, shift: boolean) => {
+    const result = rangeSelect({
+      selection: selectedChannels,
+      order: renderedChannels.map((channel) => channel.name),
+      anchor: selectionAnchor,
+      clicked: name,
+      shift,
+    })
+    setSelectedChannels(result.selection)
+    setSelectionAnchor(result.anchor)
+  }
 
   const handleSelectAll = () => {
     setSelectedChannels(new Set(filteredChannels.map((c) => c.name)))
@@ -335,6 +367,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 onToggleSortDirection={() =>
                   setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
                 }
+                groupBySelection={channelGridGroupBySelection}
+                onToggleGroupBySelection={() =>
+                  setChannelGridGroupBySelection(!channelGridGroupBySelection)
+                }
                 showChannelSubscribers={showChannelSubscribers}
                 trimCount={trimCount}
                 onTrimCountChange={setTrimCount}
@@ -375,8 +411,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         isLoading={isInitialChannelsLoading}
         totalChannelCount={channels.length}
         filteredChannelCount={filteredChannels.length}
-        channels={sortedFilteredChannels}
-        visibleCount={visibleChannels}
+        channels={renderedChannels}
         showSortRank={showSortRank}
         zoom={channelCardZoom}
         selectedChannels={selectedChannels}
@@ -384,6 +419,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         postsInScopeCounts={postsInScopeCounts}
         onRemoveChannel={actions.handleRemoveChannel}
         onResetAndSync={actions.handleResetAndSync}
+        onSelectChannel={handleSelectChannel}
         hasMore={hasMoreChannels}
         onLoadMore={loadMoreChannels}
         scrollContainerRef={scrollContainerRef}

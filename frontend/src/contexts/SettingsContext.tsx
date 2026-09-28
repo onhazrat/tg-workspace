@@ -127,6 +127,8 @@ interface SettingsContextType {
   setShowChannelStartId: (show: boolean) => void
   channelCardZoom: CardZoom
   setChannelCardZoom: (zoom: CardZoom) => void
+  channelGridGroupBySelection: boolean
+  setChannelGridGroupBySelection: (group: boolean) => void
   discoverSignals: DiscoverySignalKind[]
   setDiscoverSignals: (kinds: DiscoverySignalKind[]) => void
   discoverSortKey: DiscoverSortKey

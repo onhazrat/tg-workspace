@@ -10,8 +10,8 @@ type ChannelGridBodyProps = {
   isLoading: boolean
   totalChannelCount: number
   filteredChannelCount: number
+  /** The Channels to render, already cut to the loaded page. */
   channels: Channel[]
-  visibleCount: number
   showSortRank: boolean
   zoom: CardZoom
   selectedChannels: Set<string>
@@ -20,6 +20,8 @@ type ChannelGridBodyProps = {
   postsInScopeCounts: Record<string, number>
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
+  /** One click on a card's selection control, and whether shift was held. */
+  onSelectChannel: (name: string, shift: boolean) => void
   hasMore: boolean
   /** Loads the next page; called when the last virtual row comes into range. */
   onLoadMore: () => void
@@ -33,7 +35,6 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   totalChannelCount,
   filteredChannelCount,
   channels,
-  visibleCount,
   showSortRank,
   zoom,
   selectedChannels,
@@ -41,6 +42,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   postsInScopeCounts,
   onRemoveChannel,
   onResetAndSync,
+  onSelectChannel,
   hasMore,
   onLoadMore,
   scrollContainerRef,
@@ -100,7 +102,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   }
 
   const countLabel = channelGridCountLabel({
-    shown: Math.min(visibleCount, channels.length),
+    shown: channels.length,
     filtered: filteredChannelCount,
     total: totalChannelCount,
   })
@@ -108,7 +110,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   return (
     <>
       <VirtualizedChannelGrid
-        channels={channels.slice(0, visibleCount)}
+        channels={channels}
         scrollContainerRef={scrollContainerRef}
         postsInScopeCounts={postsInScopeCounts}
         showSortRank={showSortRank}
@@ -117,6 +119,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         selectedTrimRanks={selectedTrimRanks}
         onRemoveChannel={onRemoveChannel}
         onResetAndSync={onResetAndSync}
+        onSelectChannel={onSelectChannel}
         hasMore={hasMore}
         onLoadMore={onLoadMore}
       />

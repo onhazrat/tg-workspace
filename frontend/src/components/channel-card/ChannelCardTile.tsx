@@ -1,7 +1,11 @@
 import { Loader2, Snowflake } from "lucide-react"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import type { Channel } from "@/types"
-import { channelCardFrameClass, selectLabel } from "./channel-card-status"
+import {
+  channelCardFrameClass,
+  selectionHandlers,
+  selectLabel,
+} from "./channel-card-status"
 
 /**
  * The channel card at zoom -2: the avatar alone, and the whole tile toggles
@@ -18,7 +22,7 @@ export function ChannelCardTile({
   channel: Channel
   isSelected: boolean
   isScraping: boolean
-  onToggleSelected: () => void
+  onToggleSelected: (shift: boolean) => void
 }) {
   return (
     <button
@@ -27,7 +31,7 @@ export function ChannelCardTile({
       aria-pressed={isSelected}
       aria-label={selectLabel(channel.name, isSelected)}
       title={`${channel.displayName || channel.name}\n@${channel.name}`}
-      onClick={onToggleSelected}
+      {...selectionHandlers(onToggleSelected)}
       className={`${channelCardFrameClass({
         isFrozen: channel.isFrozen,
         isSelected,

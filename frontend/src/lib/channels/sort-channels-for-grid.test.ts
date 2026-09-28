@@ -93,6 +93,7 @@ describe("sortChannelsForGrid posts_in_scope", () => {
       selectedChannels,
       sortBy: "posts_in_scope",
       sortDirection: "asc",
+      groupBySelection: true,
     })
 
     expect(sorted.map((channel) => channel.name)).toEqual([
@@ -110,6 +111,7 @@ describe("sortChannelsForGrid posts_in_scope", () => {
       selectedChannels,
       sortBy: "posts_in_scope",
       sortDirection: "desc",
+      groupBySelection: true,
     })
 
     expect(sorted.map((channel) => channel.name)).toEqual([
@@ -127,6 +129,7 @@ describe("sortChannelsForGrid posts_in_scope", () => {
       selectedChannels,
       sortBy: "total_posts",
       sortDirection: "desc",
+      groupBySelection: true,
     })
     const byPostsInScope = sortChannelsForGrid({
       channels,
@@ -135,6 +138,7 @@ describe("sortChannelsForGrid posts_in_scope", () => {
       selectedChannels,
       sortBy: "posts_in_scope",
       sortDirection: "desc",
+      groupBySelection: true,
     })
 
     expect(byTotalPosts.map((channel) => channel.name)).toEqual([
@@ -162,6 +166,7 @@ function sortNames(
     selectedChannels: selected,
     sortBy,
     sortDirection,
+    groupBySelection: true,
   }).map((channel) => channel.name)
 }
 
@@ -238,6 +243,7 @@ describe("sortChannelsForGrid sort options", () => {
         selectedChannels: new Set(),
         sortBy: "reach",
         sortDirection,
+        groupBySelection: true,
       }).map((channel) => channel.name)
 
     expect(reachSort("desc")).toEqual([
@@ -334,5 +340,22 @@ describe("sortChannelsForGrid sort options", () => {
       "other",
       "frozen",
     ])
+  })
+
+  it("ungrouped sorts selected and frozen Channels in with the rest", () => {
+    const list = [
+      makeChannel("frozen", { isFrozen: true, lastUpdated: 9 }),
+      makeChannel("other", { lastUpdated: 8 }),
+      makeChannel("picked", { lastUpdated: 1 }),
+    ]
+    const order = sortChannelsForGrid({
+      channels: list,
+      channelStats,
+      selectedChannels: new Set(["picked", "frozen"]),
+      sortBy: "last_updated",
+      sortDirection: "desc",
+      groupBySelection: false,
+    }).map((channel) => channel.name)
+    expect(order).toEqual(["frozen", "other", "picked"])
   })
 })
