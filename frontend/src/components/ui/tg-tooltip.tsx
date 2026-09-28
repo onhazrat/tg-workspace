@@ -79,7 +79,9 @@ function TooltipContent({
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow className="bg-foreground fill-foreground size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
+          {/* Base UI sets the arrow's offset along the edge only, so each
+              side puts its centre on the popup's edge here. */}
+          <TooltipPrimitive.Arrow className="bg-foreground size-2.5 rotate-45 rounded-[2px] data-[side=top]:-bottom-[5px] data-[side=bottom]:-top-[5px] data-[side=left]:-right-[5px] data-[side=right]:-left-[5px]" />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

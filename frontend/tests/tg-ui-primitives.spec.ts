@@ -277,6 +277,39 @@ test.describe("TG UI primitives", () => {
     await expect(focused).toBeVisible()
   })
 
+  /**
+   * The arrow's classes came from the Radix tooltip, which places the arrow on
+   * the popup's edge itself. Base UI only sets its offset along the edge, so
+   * the arrow sat inside the popup and a dark diamond covered the text.
+   */
+  test("a tooltip's arrow sits on the edge facing its trigger", async ({
+    page,
+  }) => {
+    await gotoWorkspace(page, "channels")
+    await page.getByRole("button", { name: "Compact cards" }).hover()
+
+    const popup = page.locator('[data-slot="tooltip-content"]')
+    await expect(popup).toHaveText("Compact cards")
+    const side = await popup.getAttribute("data-side")
+    const arrow = popup.locator("[data-side]")
+    await expect(arrow).toBeVisible()
+    const box = await popup.boundingBox()
+    const tip = await arrow.boundingBox()
+    if (!box || !tip) throw new Error("tooltip or arrow has no box")
+
+    // The arrow's centre is on the popup's edge, give or take a pixel.
+    const centre = { x: tip.x + tip.width / 2, y: tip.y + tip.height / 2 }
+    const edge = {
+      top: box.y + box.height,
+      bottom: box.y,
+      left: box.x + box.width,
+      right: box.x,
+    }[side ?? ""]
+    expect(edge, `unexpected side ${side}`).toBeDefined()
+    const onAxis = side === "top" || side === "bottom" ? centre.y : centre.x
+    expect(Math.abs(onAxis - (edge ?? 0))).toBeLessThanOrEqual(1.5)
+  })
+
   test("group filter chips and post filter chips use primitives", async ({
     page,
   }) => {
