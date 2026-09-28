@@ -111,12 +111,23 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   // Row heights depend on the column count and the zoom level, so a change to
   // either invalidates every measurement taken before it.
   //
+  // `measure()` alone is not enough. It drops every cached height, and a
+  // mounted row is measured again only when its ResizeObserver reports a
+  // change. A row that kept its height (a plain card is the same height at +1
+  // and 0) reports none, and stayed at the estimate, overlapping or leaving a
+  // gap. So every mounted row is measured again here.
+  //
   // Keyed on `lanes` and `zoom` alone: `virtualizer` is a fresh object every render, so
   // depending on it would re-measure each render, and each measure re-renders —
   // a loop that hangs the page under scroll.
   // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   useEffect(() => {
     virtualizer.measure()
+    for (const row of gridRef.current?.querySelectorAll<HTMLElement>(
+      ":scope > [data-index]",
+    ) ?? []) {
+      virtualizer.measureElement(row)
+    }
   }, [lanes, zoom])
 
   const virtualRows = virtualizer.getVirtualItems()
