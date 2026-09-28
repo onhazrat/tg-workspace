@@ -10,8 +10,8 @@ type ChannelGridBodyProps = {
   isLoading: boolean
   totalChannelCount: number
   filteredChannelCount: number
+  /** The Channels to render, already cut to the loaded page. */
   channels: Channel[]
-  visibleCount: number
   showSortRank: boolean
   zoom: CardZoom
   selectedChannels: Set<string>
@@ -35,7 +35,6 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   totalChannelCount,
   filteredChannelCount,
   channels,
-  visibleCount,
   showSortRank,
   zoom,
   selectedChannels,
@@ -103,7 +102,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   }
 
   const countLabel = channelGridCountLabel({
-    shown: Math.min(visibleCount, channels.length),
+    shown: channels.length,
     filtered: filteredChannelCount,
     total: totalChannelCount,
   })
@@ -111,7 +110,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   return (
     <>
       <VirtualizedChannelGrid
-        channels={channels.slice(0, visibleCount)}
+        channels={channels}
         scrollContainerRef={scrollContainerRef}
         postsInScopeCounts={postsInScopeCounts}
         showSortRank={showSortRank}

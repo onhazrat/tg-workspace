@@ -197,6 +197,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const hasMoreChannels = visibleChannels < filteredChannels.length
 
+  // The cards on screen, and the order a shift-click run is measured in.
+  // Load-more resets to one page on a sort or search change, which can leave
+  // the anchor past the last of them.
+  const renderedChannels = useMemo(
+    () => sortedFilteredChannels.slice(0, visibleChannels),
+    [sortedFilteredChannels, visibleChannels],
+  )
+
   const loadMoreChannels = useCallback(() => {
     setVisibleChannels((prev) => Math.min(prev + 20, filteredChannels.length))
   }, [filteredChannels.length])
@@ -238,11 +246,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const handleSelectChannel = (name: string, shift: boolean) => {
     const result = rangeSelect({
       selection: selectedChannels,
-      // The rendered cards only: load-more resets to one page on a sort or
-      // search change, which can leave the anchor past the last rendered card.
-      order: sortedFilteredChannels
-        .slice(0, visibleChannels)
-        .map((channel) => channel.name),
+      order: renderedChannels.map((channel) => channel.name),
       anchor: selectionAnchor,
       clicked: name,
       shift,
@@ -407,8 +411,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         isLoading={isInitialChannelsLoading}
         totalChannelCount={channels.length}
         filteredChannelCount={filteredChannels.length}
-        channels={sortedFilteredChannels}
-        visibleCount={visibleChannels}
+        channels={renderedChannels}
         showSortRank={showSortRank}
         zoom={channelCardZoom}
         selectedChannels={selectedChannels}

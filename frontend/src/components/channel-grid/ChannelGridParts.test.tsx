@@ -20,7 +20,6 @@ describe("ChannelGridBody", () => {
         totalChannelCount={0}
         filteredChannelCount={0}
         channels={[]}
-        visibleCount={0}
         showSortRank={false}
         zoom={0}
         selectedChannels={new Set()}
