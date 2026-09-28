@@ -36,6 +36,9 @@ export function buildSelectedTrimRanks({
     selectedChannels,
     sortBy,
     sortDirection,
+    // Grouped whatever the grid shows, so a frozen Channel ranks last and
+    // Trim drops it first. It stays in step with trimSelectedChannelsToCount.
+    groupBySelection: true,
   })
   const ranks = new Map<string, number>()
   sorted.forEach((channel, index) => {

@@ -58,6 +58,8 @@ export function trimSelectedChannelsToCount({
     selectedChannels,
     sortBy,
     sortDirection,
+    // Grouped whatever the grid shows, so a frozen Channel is trimmed first.
+    groupBySelection: true,
   })
 
   if (count >= sorted.length) {

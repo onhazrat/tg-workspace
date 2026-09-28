@@ -224,6 +224,11 @@ export const appSettingsSpec = {
   showChannelLinks: booleanSetting("showChannelLinks", false),
   showChannelStartId: booleanSetting("showChannelStartId", false),
   channelCardZoom: channelCardZoomSetting,
+  // Local only: the Channels grid puts selected first and frozen last (ZOOM-02).
+  channelGridGroupBySelection: booleanSetting(
+    "channelGridGroupBySelection",
+    true,
+  ),
   regularSyncIntervalMinutes: intSetting(
     "regularSyncIntervalMinutes",
     AUTO_SYNC_INTERVAL_DEFAULT,

@@ -5,7 +5,6 @@ import {
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
 import { cardFace } from "@/lib/channels/card-zoom"
-import { toggleNamesInSelection } from "@/lib/channels/channel-grid-chips"
 import { upsertChannel } from "@/lib/channels/store"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -77,9 +76,11 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     await loadChannels()
     await invalidateSettingGroups()
     if (!channel.isFrozen)
-      setSelectedChannels((prev) =>
-        toggleNamesInSelection(prev, [channel.name], true),
-      )
+      setSelectedChannels((prev) => {
+        const next = new Set(prev)
+        next.delete(channel.name)
+        return next
+      })
   }
 
   const face = cardFace(settings.channelCardZoom, settings)

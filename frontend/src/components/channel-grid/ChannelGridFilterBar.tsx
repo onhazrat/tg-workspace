@@ -41,8 +41,8 @@ type ChannelGridFilterBarProps = {
   sortDirection: "asc" | "desc"
   onToggleSortDirection: () => void
   /** Selected Channels first and frozen last, or one flat list. */
-  groupSelected: boolean
-  onToggleGroupSelected: () => void
+  groupBySelection: boolean
+  onToggleGroupBySelection: () => void
   showChannelSubscribers: boolean
   trimCount: string
   onTrimCountChange: (value: string) => void
@@ -69,8 +69,8 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
   onSortByChange,
   sortDirection,
   onToggleSortDirection,
-  groupSelected,
-  onToggleGroupSelected,
+  groupBySelection,
+  onToggleGroupBySelection,
   showChannelSubscribers,
   trimCount,
   onTrimCountChange,
@@ -193,16 +193,16 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
           <TgIconButton
             variant="ghost"
             aria-label="Group selected and frozen channels"
-            aria-pressed={groupSelected}
+            aria-pressed={groupBySelection}
             tooltip={
-              groupSelected
+              groupBySelection
                 ? "Grouped: selected first, frozen last"
                 : "Not grouped: one list in sort order"
             }
-            onClick={onToggleGroupSelected}
+            onClick={onToggleGroupBySelection}
             className={`${controlGroupItemClassName} w-7 p-0 text-app-ink/70 hover:bg-app-ink/10 hover:text-app-ink`}
           >
-            {groupSelected ? <Group size={12} /> : <Ungroup size={12} />}
+            {groupBySelection ? <Group size={12} /> : <Ungroup size={12} />}
           </TgIconButton>
         </div>
         <div className={controlSeparatorClassName} />

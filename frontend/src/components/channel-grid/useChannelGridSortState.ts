@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
 import { scopedStorage } from "@/lib/storage/scoped"
 
-/** Sort option, direction, grouping, trim count, and rank visibility for the Channels tab, persisted to scopedStorage. */
+/** Sort option, direction, trim count, and rank visibility for the Channels tab, persisted to scopedStorage. */
 export function useChannelGridSortState() {
   const [sortBy, setSortBy] = useState<ChannelGridSortOption>(() => {
     const saved = scopedStorage.getItem("channelGrid_sortBy")
@@ -11,9 +11,6 @@ export function useChannelGridSortState() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">(() => {
     const saved = scopedStorage.getItem("channelGrid_sortDirection")
     return (saved as "asc" | "desc") || "desc"
-  })
-  const [groupSelected, setGroupSelected] = useState(() => {
-    return scopedStorage.getItem("channelGrid_groupSelected") !== "false"
   })
   const [trimCount, setTrimCount] = useState(() => {
     return scopedStorage.getItem("channelGrid_trimCount") ?? ""
@@ -31,10 +28,6 @@ export function useChannelGridSortState() {
   }, [sortDirection])
 
   useEffect(() => {
-    scopedStorage.setItem("channelGrid_groupSelected", String(groupSelected))
-  }, [groupSelected])
-
-  useEffect(() => {
     if (trimCount.trim()) {
       scopedStorage.setItem("channelGrid_trimCount", trimCount)
     }
@@ -49,8 +42,6 @@ export function useChannelGridSortState() {
     setSortBy,
     sortDirection,
     setSortDirection,
-    groupSelected,
-    setGroupSelected,
     trimCount,
     setTrimCount,
     showSortRank,

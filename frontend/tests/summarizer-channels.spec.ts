@@ -366,14 +366,14 @@ test.describe("TG Workspace channels and posts", () => {
 
     // Grouped, a click lifts its card to the top, so a run from mid-grid
     // would reach the top. Ungrouped, nothing moves and the run stays put.
+    // The grid stays ungrouped from here, so the reload below checks it is
+    // remembered.
     const grouping = page.getByRole("button", {
       name: "Group selected and frozen channels",
     })
     await grouping.click()
     await expect(grouping).toHaveAttribute("aria-pressed", "false")
     await shiftRun(checkboxOf, 1)
-    await grouping.click()
-    await expect(grouping).toHaveAttribute("aria-pressed", "true")
 
     const zoomIn = page.getByRole("button", { name: "Detailed cards" })
     const zoomOut = page.getByRole("button", { name: "Compact cards" })
@@ -420,10 +420,11 @@ test.describe("TG Workspace channels and posts", () => {
     await expect(
       page.getByRole("button", { name: "Compact cards" }),
     ).toBeDisabled()
+    await expect(grouping).toHaveAttribute("aria-pressed", "false")
 
-    // -2: the tile takes the shift-click.
+    // -2: the tile takes the shift-click, from mid-grid since still ungrouped.
     await none.click()
-    await shiftRun((name) => page.locator(`[data-channel-name="${name}"]`))
+    await shiftRun((name) => page.locator(`[data-channel-name="${name}"]`), 1)
   })
 
   /**

@@ -39,5 +39,7 @@ and nothing outside it changes. See `.scratch/channel-card-zoom/spec.md`, user s
 The grid sorts selected Channels first and frozen ones last, so a plain click lifts its card to the
 top and "between, in screen order" then runs from the top of the grid. The user chose a toggle
 beside Sort By over changing the rule: grouped (today's view, the default) or one flat list in sort
-order, where selecting or freezing moves nothing and a run stays where it was drawn. The choice is
-remembered per account like the other sort controls. Trim still ranks within the grouped order.
+order, where selecting or freezing moves nothing and a run stays where it was drawn. The choice is a
+settings-schema entry (`channelGridGroupBySelection`), remembered per account in one browser like
+the zoom level. Trim and its rank badges stay grouped whichever view is on, so a selected frozen
+Channel is still trimmed first; both callers pass `groupBySelection: true` to say so.

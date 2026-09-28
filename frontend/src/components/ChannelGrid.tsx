@@ -67,16 +67,19 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setSortBy,
     sortDirection,
     setSortDirection,
-    groupSelected,
-    setGroupSelected,
     trimCount,
     setTrimCount,
     showSortRank,
     setShowSortRank,
   } = useChannelGridSortState()
 
-  const { showChannelSubscribers, channelCardZoom, setChannelCardZoom } =
-    useSettings()
+  const {
+    showChannelSubscribers,
+    channelCardZoom,
+    setChannelCardZoom,
+    channelGridGroupBySelection,
+    setChannelGridGroupBySelection,
+  } = useSettings()
 
   const { isOffline } = useApiStatus()
 
@@ -116,12 +119,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         selectedChannels,
         sortBy,
         sortDirection,
-        groupBySelection: groupSelected,
+        groupBySelection: channelGridGroupBySelection,
       }),
     [
+      channelGridGroupBySelection,
       channelStats,
       filteredChannels,
-      groupSelected,
       postsInScopeCounts,
       selectedChannels,
       sortBy,
@@ -360,8 +363,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 onToggleSortDirection={() =>
                   setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
                 }
-                groupSelected={groupSelected}
-                onToggleGroupSelected={() => setGroupSelected((prev) => !prev)}
+                groupBySelection={channelGridGroupBySelection}
+                onToggleGroupBySelection={() =>
+                  setChannelGridGroupBySelection(!channelGridGroupBySelection)
+                }
                 showChannelSubscribers={showChannelSubscribers}
                 trimCount={trimCount}
                 onTrimCountChange={setTrimCount}

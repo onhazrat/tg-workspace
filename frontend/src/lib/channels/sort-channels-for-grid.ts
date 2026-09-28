@@ -153,7 +153,7 @@ export type SortChannelsForGridParams = {
    * Selected Channels first and frozen ones last, each group sorted on its
    * own. Off gives one flat list, so selecting or freezing moves nothing.
    */
-  groupBySelection?: boolean
+  groupBySelection: boolean
 }
 
 export function sortChannelsForGrid({
@@ -163,7 +163,7 @@ export function sortChannelsForGrid({
   selectedChannels,
   sortBy,
   sortDirection,
-  groupBySelection = true,
+  groupBySelection,
 }: SortChannelsForGridParams): Channel[] {
   const tier = (channel: Channel) =>
     groupBySelection ? getSelectionTier(channel, selectedChannels) : 0
