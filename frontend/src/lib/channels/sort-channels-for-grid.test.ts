@@ -219,6 +219,41 @@ describe("sortChannelsForGrid sort options", () => {
     expect(sortNames(list, "activity_rate")).toEqual(["unknown", "alpha"])
   })
 
+  it("reach ranks estimates by value and an unmeasured Reach as zero", () => {
+    const stat = (reach: number | null, reachEstimated = false) => ({
+      count: 1,
+      reach,
+      reachEstimated,
+    })
+    const reachSort = (sortDirection: "asc" | "desc") =>
+      sortChannelsForGrid({
+        channels: ["measured", "estimated", "unmeasured", "nostats"].map(
+          (name) => makeChannel(name),
+        ),
+        channelStats: {
+          measured: stat(500),
+          estimated: stat(2000, true),
+          unmeasured: stat(null),
+        },
+        selectedChannels: new Set(),
+        sortBy: "reach",
+        sortDirection,
+      }).map((channel) => channel.name)
+
+    expect(reachSort("desc")).toEqual([
+      "estimated",
+      "measured",
+      "unmeasured",
+      "nostats",
+    ])
+    expect(reachSort("asc")).toEqual([
+      "nostats",
+      "unmeasured",
+      "measured",
+      "estimated",
+    ])
+  })
+
   it("puts a missing sync time last in ascending order", () => {
     const list = [
       makeChannel("none"),
