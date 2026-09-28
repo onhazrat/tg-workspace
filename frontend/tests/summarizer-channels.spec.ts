@@ -363,4 +363,50 @@ test.describe("TG Workspace channels and posts", () => {
       page.getByRole("button", { name: "Compact cards" }),
     ).toBeDisabled()
   })
+
+  /**
+   * Regression guard: zooming from +1 back to 0 left rows at the grid's
+   * starting estimate, so tall cards overlapped the row below and short ones
+   * left gaps. `measure()` clears every row height, and a row is measured again
+   * only when it mounts or its ResizeObserver reports a change. A plain card is
+   * the same height at +1 and 0, so its row never reported one. -1 to 0 hid the
+   * bug because every row changes height there.
+   */
+  test("rows sit flush after zooming into +1 and back to normal", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const prefix = `rowfit${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 16, prefix)
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(16, { timeout: 30_000 })
+
+    // Each row must start exactly where the one above it ends.
+    const expectRowsFlush = async () => {
+      await page.waitForTimeout(500)
+      const rows = await page
+        .locator("#tour-channel-grid > [data-index]")
+        .evaluateAll((elements) =>
+          elements.map((el) => ({
+            top: new DOMMatrix(getComputedStyle(el).transform).m42,
+            height: (el as HTMLElement).offsetHeight,
+          })),
+        )
+      expect(rows.length).toBeGreaterThan(2)
+      for (let i = 1; i < rows.length; i++) {
+        expect(rows[i].top).toBeCloseTo(rows[i - 1].top + rows[i - 1].height, 0)
+      }
+    }
+
+    await page.getByRole("button", { name: "Detailed cards" }).click()
+    await expect(cards.first().getByText("Start ID")).toBeVisible()
+    await expectRowsFlush()
+    await page.getByRole("button", { name: "Compact cards" }).click()
+    await expect(cards.first().getByText("Start ID")).toHaveCount(0)
+    await expectRowsFlush()
+  })
 })
