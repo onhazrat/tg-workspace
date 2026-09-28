@@ -155,6 +155,7 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
               <SelectItem value="last_updated">Last Updated</SelectItem>
               <SelectItem value="followed_at">Followed At</SelectItem>
               <SelectItem value="activity_rate">Activity Rate</SelectItem>
+              <SelectItem value="reach">Reach</SelectItem>
               <SelectItem value="total_posts">Total Posts</SelectItem>
               <SelectItem value="posts_in_scope">Posts in Scope</SelectItem>
               <SelectItem value="channel_id">Channel ID</SelectItem>

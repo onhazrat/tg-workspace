@@ -10,6 +10,7 @@ export type ChannelGridSortOption =
   | "channel_name"
   | "followed_at"
   | "subscribers"
+  | "reach"
   | "next_regular_sync"
   | "next_dynamic_sync"
   | "next_auto_sync"
@@ -23,6 +24,7 @@ export const CHANNEL_GRID_SORT_LABELS: Record<ChannelGridSortOption, string> = {
   channel_name: "Channel Name",
   followed_at: "Followed At",
   subscribers: "Subscribers",
+  reach: "Reach",
   next_regular_sync: "Next Regular Sync",
   next_dynamic_sync: "Next Dynamic Sync",
   next_auto_sync: "Next Auto Sync",
@@ -116,6 +118,10 @@ const SORT_COMPARATORS: Record<ChannelGridSortOption, ChannelComparator> = {
   // (see `sortDiscoveryCandidates`) — because a freshly generated report is
   // normally half unprobed, so zeros would dominate the top or the bottom.
   subscribers: (a, b) => (a.subscribers ?? 0) - (b.subscribers ?? 0),
+  // An estimated Reach ranks by its value, and an unmeasured one as 0, like
+  // `subscribers` above.
+  reach: (a, b, { channelStats }) =>
+    (channelStats[a.name]?.reach ?? 0) - (channelStats[b.name]?.reach ?? 0),
   next_regular_sync: (a, b) =>
     compareNullableSyncAt(a.nextRegularSyncAt, b.nextRegularSyncAt),
   next_dynamic_sync: (a, b) =>
