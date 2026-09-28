@@ -26,3 +26,34 @@ describe("gridLanesForWidth", () => {
     }
   })
 })
+
+describe("gridLanesForWidth at a zoom level", () => {
+  it("keeps today's breakpoints at zoom 0", () => {
+    for (const width of [320, 767, 768, 1023, 1024, 1279, 1280, 2560]) {
+      expect(gridLanesForWidth(width, 0)).toBe(gridLanesForWidth(width))
+    }
+  })
+
+  it("packs more cards per row when zoomed out", () => {
+    // A 1280px grid holds 4 normal cards; compact cards are about 220px and
+    // avatar tiles about 72px, each with a 16px gap.
+    expect(gridLanesForWidth(1280, -1)).toBe(5)
+    expect(gridLanesForWidth(1280, -2)).toBe(14)
+    expect(gridLanesForWidth(767, -1)).toBe(3)
+  })
+
+  it("gives detailed cards no more columns than normal ones", () => {
+    expect(gridLanesForWidth(1280, 1)).toBe(3)
+    for (const width of [320, 768, 1024, 1280, 2560]) {
+      expect(gridLanesForWidth(width, 1)).toBeLessThanOrEqual(
+        gridLanesForWidth(width, 0),
+      )
+    }
+  })
+
+  it("never returns zero at any zoom level", () => {
+    for (const zoom of [-2, -1, 0, 1] as const) {
+      expect(gridLanesForWidth(0, zoom)).toBe(1)
+    }
+  })
+})

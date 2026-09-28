@@ -1,16 +1,18 @@
-import { RefreshCw, Search, Tag } from "lucide-react"
+import { RefreshCw, Search, Tag, ZoomIn, ZoomOut } from "lucide-react"
 import type React from "react"
 import {
   controlRowItemClassName,
   controlSeparatorClassName,
 } from "@/components/channel-grid/control-styles"
 import { TgButton } from "@/components/ui/tg-button"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { TgInput } from "@/components/ui/tg-input"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
+import { CARD_ZOOM_LEVELS, type CardZoom } from "@/lib/channels/card-zoom"
 
 type ChannelGridToolbarProps = {
   inlineChannelName: string
@@ -30,7 +32,12 @@ type ChannelGridToolbarProps = {
   isScrapeAllDisabled: boolean
   onScrapeSelected: () => void
   onScrapeAll: () => void
+  zoom: CardZoom
+  onZoomChange: (zoom: CardZoom) => void
 }
+
+const MIN_ZOOM = CARD_ZOOM_LEVELS[0]
+const MAX_ZOOM = CARD_ZOOM_LEVELS[CARD_ZOOM_LEVELS.length - 1]
 
 /** Top control row: add-channel input, channel/tag search, selection shortcuts, sync buttons. */
 export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
@@ -51,6 +58,8 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
   isScrapeAllDisabled,
   onScrapeSelected,
   onScrapeAll,
+  zoom,
+  onZoomChange,
 }) => {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -213,6 +222,25 @@ export const ChannelGridToolbar: React.FC<ChannelGridToolbarProps> = ({
               <p>Sync All Channels</p>
             </TooltipContent>
           </Tooltip>
+
+          <div className={`${controlSeparatorClassName} mx-1`} />
+
+          <TgIconButton
+            aria-label="Compact cards"
+            tooltip="Compact cards"
+            onClick={() => onZoomChange((zoom - 1) as CardZoom)}
+            disabled={zoom <= MIN_ZOOM}
+          >
+            <ZoomOut size={14} />
+          </TgIconButton>
+          <TgIconButton
+            aria-label="Detailed cards"
+            tooltip="Detailed cards"
+            onClick={() => onZoomChange((zoom + 1) as CardZoom)}
+            disabled={zoom >= MAX_ZOOM}
+          >
+            <ZoomIn size={14} />
+          </TgIconButton>
         </div>
       )}
     </div>

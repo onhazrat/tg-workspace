@@ -4,27 +4,18 @@ import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
+import { cardFace } from "@/lib/channels/card-zoom"
 import { upsertChannel } from "@/lib/channels/store"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import type { Channel } from "../types"
+import { ChannelCardFace } from "./channel-card/ChannelCardFace"
+import { ChannelCardTile } from "./channel-card/ChannelCardTile"
 import {
-  ChannelCardActions,
-  ChannelCardBadges,
-  ChannelCardSyncingOverlay,
-} from "./channel-card/ChannelCardChrome"
-import { ChannelCardFooter } from "./channel-card/ChannelCardFooter"
-import { ChannelCardHeader } from "./channel-card/ChannelCardHeader"
-import { ChannelCardMeta } from "./channel-card/ChannelCardMeta"
-import { ChannelCardTags } from "./channel-card/ChannelCardTags"
-import {
-  channelCardFrameClass,
   freezeTargetGroup,
   queuePosition,
-  settingGroupHints,
-  syncProgress,
 } from "./channel-card/channel-card-status"
 
 interface ChannelCardProps {
@@ -89,78 +80,36 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     if (!channel.isFrozen) setSelected(false)
   }
 
-  const { virtualGroupTagName, inheritedSettingsHint } = settingGroupHints(
-    channel.settingGroupName,
-  )
+  const face = cardFace(settings.channelCardZoom, settings)
 
-  return (
-    <div
-      data-channel-name={channel.name}
-      className={channelCardFrameClass({
-        isFrozen: channel.isFrozen,
-        isSelected,
-        isScraping,
-      })}
-    >
-      {isScraping && (
-        <ChannelCardSyncingOverlay progress={syncProgress(stats)} />
-      )}
-
-      <ChannelCardActions
-        channel={channel}
-        busy={busy}
-        onToggleFreeze={handleToggleFreeze}
-        onResetAndSync={() => handleResetAndSync(channel)}
-        onRemove={() => handleRemoveChannel(channel)}
-      />
-
-      <ChannelCardBadges
+  if (face.layout === "tile") {
+    return (
+      <ChannelCardTile
         channel={channel}
         isSelected={isSelected}
+        isScraping={isScraping}
         onToggleSelected={() => setSelected(!isSelected)}
-        queuePosition={queuePosition(syncQueue, channel.id)}
-        sortRank={sortRank}
       />
+    )
+  }
 
-      <div className="p-5 pt-12 flex flex-col h-full">
-        <ChannelCardHeader
-          channel={channel}
-          showBio={settings.showChannelBio}
-        />
-        <ChannelCardMeta
-          channel={channel}
-          stats={stats}
-          inScopeCount={inScopeCount}
-          show={{
-            subscribers: settings.showChannelSubscribers,
-            telegramChatId: settings.showChannelTelegramChatId,
-            photos: settings.showChannelPhotos,
-            videos: settings.showChannelVideos,
-            files: settings.showChannelFiles,
-            links: settings.showChannelLinks,
-          }}
-        />
-
-        <ChannelCardTags
-          tags={channel.tags}
-          virtualGroupTagName={virtualGroupTagName}
-          inheritedSettingsHint={inheritedSettingsHint}
-          onSave={(tags) => saveChannel({ tags })}
-        />
-
-        <ChannelCardFooter
-          channel={channel}
-          stats={stats}
-          showStartId={settings.showChannelStartId}
-          isScraping={isScraping}
-          busy={busy}
-          inheritedSettingsHint={inheritedSettingsHint}
-          onSaveStartId={(startId) => saveChannel({ startId })}
-          onSync={() =>
-            addToSyncQueue(channel, "Manual (Single Sync)", () => {})
-          }
-        />
-      </div>
-    </div>
+  return (
+    <ChannelCardFace
+      channel={channel}
+      stats={stats}
+      face={face}
+      inScopeCount={inScopeCount}
+      isSelected={isSelected}
+      isScraping={isScraping}
+      busy={busy}
+      queuePosition={queuePosition(syncQueue, channel.id)}
+      sortRank={sortRank}
+      onToggleSelected={() => setSelected(!isSelected)}
+      onToggleFreeze={handleToggleFreeze}
+      onResetAndSync={() => handleResetAndSync(channel)}
+      onRemove={() => handleRemoveChannel(channel)}
+      onSaveChannel={saveChannel}
+      onSync={() => addToSyncQueue(channel, "Manual (Single Sync)", () => {})}
+    />
   )
 }

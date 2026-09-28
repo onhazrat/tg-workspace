@@ -12,6 +12,7 @@ import {
   RETENTION_REPORT_MAX_DEFAULT,
   RETENTION_SHARED_LOG_DAYS_DEFAULT,
 } from "@/constants"
+import { CARD_ZOOM_LEVELS, type CardZoom } from "@/lib/channels/card-zoom"
 import type {
   DiscoverFollowState,
   DiscoverSortKey,
@@ -196,6 +197,15 @@ const globalStartTimeValueSetting: SettingSpec<GlobalStartTimeValue> = {
   section: "sync",
 }
 
+/** Local only: how dense the Channels tab cards are (ZOOM-01). */
+const channelCardZoomSetting: SettingSpec<CardZoom> = {
+  storageKey: "channelCardZoom",
+  schema: z.literal(CARD_ZOOM_LEVELS),
+  defaultValue: 0,
+  decode: (raw) => Number.parseInt(raw, 10),
+  encode: (value) => String(value),
+}
+
 // Persistence note: historically only some of these keys had a persist-to-storage
 // effect; the store now persists EVERY key on change (benign unification — the
 // backend-synced keys still hydrate from the server, browser storage is a fallback).
@@ -213,6 +223,7 @@ export const appSettingsSpec = {
   showChannelFiles: booleanSetting("showChannelFiles", false),
   showChannelLinks: booleanSetting("showChannelLinks", false),
   showChannelStartId: booleanSetting("showChannelStartId", false),
+  channelCardZoom: channelCardZoomSetting,
   regularSyncIntervalMinutes: intSetting(
     "regularSyncIntervalMinutes",
     AUTO_SYNC_INTERVAL_DEFAULT,

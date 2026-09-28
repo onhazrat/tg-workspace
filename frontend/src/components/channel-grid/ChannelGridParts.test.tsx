@@ -22,6 +22,7 @@ describe("ChannelGridBody", () => {
         channels={[]}
         visibleCount={0}
         showSortRank={false}
+        zoom={0}
         selectedChannels={new Set()}
         selectedTrimRanks={new Map()}
         postsInScopeCounts={{}}

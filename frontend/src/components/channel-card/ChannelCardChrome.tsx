@@ -13,15 +13,21 @@ import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
 import { TgIconButton } from "../ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
+import { selectLabel } from "./channel-card-status"
 
 /** Covers the card while it syncs; `progress` is null when the channel's newest id is unknown. */
 export function ChannelCardSyncingOverlay({
   progress,
+  clickThrough,
 }: {
   progress: number | null
+  /** Let clicks reach the card underneath, where the card body selects. */
+  clickThrough: boolean
 }) {
   return (
-    <div className="absolute inset-0 bg-app-bg/60 backdrop-blur-[2px] flex items-center justify-center z-30">
+    <div
+      className={`absolute inset-0 bg-app-bg/60 backdrop-blur-[2px] flex items-center justify-center z-30 ${clickThrough ? "pointer-events-none" : ""}`}
+    >
       <div className="flex flex-col items-center gap-3 w-full px-8">
         <div className="relative">
           <Loader2 size={32} className="animate-spin text-app-ink opacity-80" />
@@ -125,6 +131,8 @@ export function ChannelCardBadges({
   onToggleSelected,
   queuePosition,
   sortRank,
+  showCheckbox,
+  showDetails,
 }: {
   channel: Channel
   isSelected: boolean
@@ -132,24 +140,30 @@ export function ChannelCardBadges({
   /** 1-based place in the sync queue, or null when not queued. */
   queuePosition: number | null
   sortRank?: number
+  /** Off where the card body is the selection toggle. */
+  showCheckbox: boolean
+  /** Sort rank, language and partial-history badges. */
+  showDetails: boolean
 }) {
   return (
-    <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
-      <button
-        type="button"
-        onClick={onToggleSelected}
-        aria-label={
-          isSelected ? `Deselect ${channel.name}` : `Select ${channel.name}`
-        }
-        aria-pressed={isSelected}
-        className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${
-          isSelected
-            ? "bg-app-ink border-app-ink text-app-bg"
-            : "border-app-ink/20 bg-app-bg/50 text-transparent hover:border-app-ink/40"
-        }`}
-      >
-        <Check size={12} strokeWidth={3} />
-      </button>
+    <div
+      className={`absolute flex items-center gap-2 z-20 ${showCheckbox ? "top-4 left-4" : "top-2.5 left-4 pointer-events-none"}`}
+    >
+      {showCheckbox && (
+        <button
+          type="button"
+          onClick={onToggleSelected}
+          aria-label={selectLabel(channel.name, isSelected)}
+          aria-pressed={isSelected}
+          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${
+            isSelected
+              ? "bg-app-ink border-app-ink text-app-bg"
+              : "border-app-ink/20 bg-app-bg/50 text-transparent hover:border-app-ink/40"
+          }`}
+        >
+          <Check size={12} strokeWidth={3} />
+        </button>
+      )}
 
       {queuePosition !== null && (
         <div className="bg-app-ink text-app-bg text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
@@ -158,7 +172,7 @@ export function ChannelCardBadges({
         </div>
       )}
 
-      {sortRank != null && (
+      {showDetails && sortRank != null && (
         <Tooltip>
           <TooltipTrigger asChild>
             <div
@@ -194,13 +208,13 @@ export function ChannelCardBadges({
         </Tooltip>
       )}
 
-      {channel.language && (
+      {showDetails && channel.language && (
         <div className="bg-app-ink/5 text-app-ink/70 border border-app-ink/10 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
           <span>{languageName(channel.language)}</span>
         </div>
       )}
 
-      {channel.historyCompleteToCutoff === false && (
+      {showDetails && channel.historyCompleteToCutoff === false && (
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="bg-amber-500/10 text-amber-700 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm cursor-help">

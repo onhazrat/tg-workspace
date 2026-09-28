@@ -10,21 +10,12 @@ import {
   Video,
 } from "lucide-react"
 import type { ReactNode } from "react"
+import type { ChannelMetaVisibility } from "@/lib/channels/card-zoom"
 import { formatCount } from "@/lib/format-count"
 import type { Channel, ChannelStats } from "@/types"
 import { RelativeTime } from "../RelativeTime"
 import { TgMetaChip } from "../ui/tg-chips"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
-
-/** Which optional channel counters the user's settings put on the card. */
-export interface ChannelMetaVisibility {
-  subscribers: boolean
-  telegramChatId: boolean
-  photos: boolean
-  videos: boolean
-  files: boolean
-  links: boolean
-}
 
 const COUNTERS: {
   key: "photos" | "videos" | "files" | "links"

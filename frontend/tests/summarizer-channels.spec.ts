@@ -296,4 +296,71 @@ test.describe("TG Workspace channels and posts", () => {
     await expect(page.getByText(/Already 2 or fewer selected/i)).toBeVisible()
     await expect(page.getByText("2 Selected")).toBeVisible()
   })
+
+  /**
+   * ZOOM-01: the card zoom buttons step through four levels, the compact
+   * levels select on a body click, Sync never selects, and the level survives
+   * a reload. The per-level rules live in `lib/channels/card-zoom.ts` and are
+   * unit-tested there; this pins the wiring they cannot see.
+   */
+  test("channel card zoom levels select on click and survive a reload", async ({
+    page,
+  }) => {
+    const prefix = `zoom${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 3, prefix)
+    // A Sync click must not reach Telegram; refusing the enqueue is enough.
+    await page.route("**/api/v1/jobs/sync", (route) => route.abort())
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+
+    const zoomIn = page.getByRole("button", { name: "Detailed cards" })
+    const zoomOut = page.getByRole("button", { name: "Compact cards" })
+    // Pin cards by handle: selection can reorder the grid, so `first()` and
+    // `nth()` would re-resolve to a different card after a toggle.
+    const cardNamed = async (index: number) => {
+      const name = await cards.nth(index).getAttribute("data-channel-name")
+      return page.locator(`[data-channel-name="${name}"]`)
+    }
+    const first = await cardNamed(0)
+
+    // +1 shows fields the default settings hide, such as Start ID.
+    await zoomIn.click()
+    await expect(zoomIn).toBeDisabled()
+    await expect(first.getByText("Start ID")).toBeVisible()
+
+    // -1: no checkbox, the body selects, Sync does not. New channels may start
+    // selected, so each step asserts a flip rather than a count.
+    await zoomOut.click()
+    await zoomOut.click()
+    await expect(first.getByText("Start ID")).toHaveCount(0)
+    const toggle = first.locator("button[aria-pressed]")
+    await expect(toggle).toHaveCount(1)
+    const before = await toggle.getAttribute("aria-pressed")
+    const after = before === "true" ? "false" : "true"
+    await first.click()
+    await expect(toggle).toHaveAttribute("aria-pressed", after)
+    await first.getByRole("button", { name: "Sync" }).click()
+    await expect(toggle).toHaveAttribute("aria-pressed", after)
+
+    // -2: the tile is the toggle.
+    await zoomOut.click()
+    await expect(zoomOut).toBeDisabled()
+    const tile = await cardNamed(1)
+    const tileBefore = await tile.getAttribute("aria-pressed")
+    await tile.click()
+    await expect(tile).not.toHaveAttribute("aria-pressed", tileBefore ?? "")
+    await tile.click()
+    await expect(tile).toHaveAttribute("aria-pressed", tileBefore ?? "")
+
+    await page.reload()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+    await expect(
+      page.getByRole("button", { name: "Compact cards" }),
+    ).toBeDisabled()
+  })
 })

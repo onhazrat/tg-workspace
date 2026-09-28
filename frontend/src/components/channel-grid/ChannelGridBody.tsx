@@ -2,6 +2,7 @@ import { Send } from "lucide-react"
 import type React from "react"
 import { VirtualizedChannelGrid } from "@/components/channel-grid/VirtualizedChannelGrid"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { CardZoom } from "@/lib/channels/card-zoom"
 import { channelGridCountLabel } from "@/lib/channels/grid-count-label"
 import type { Channel } from "@/types"
 
@@ -12,6 +13,7 @@ type ChannelGridBodyProps = {
   channels: Channel[]
   visibleCount: number
   showSortRank: boolean
+  zoom: CardZoom
   selectedChannels: Set<string>
   selectedTrimRanks: Map<string, number>
   /** Per-channel in-scope post counts, shared from one query in ChannelGrid. */
@@ -33,6 +35,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   channels,
   visibleCount,
   showSortRank,
+  zoom,
   selectedChannels,
   selectedTrimRanks,
   postsInScopeCounts,
@@ -109,6 +112,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         scrollContainerRef={scrollContainerRef}
         postsInScopeCounts={postsInScopeCounts}
         showSortRank={showSortRank}
+        zoom={zoom}
         selectedChannels={selectedChannels}
         selectedTrimRanks={selectedTrimRanks}
         onRemoveChannel={onRemoveChannel}
