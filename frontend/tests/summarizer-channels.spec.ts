@@ -300,22 +300,60 @@ test.describe("TG Workspace channels and posts", () => {
   /**
    * ZOOM-01: the card zoom buttons step through four levels, the compact
    * levels select on a body click, Sync never selects, and the level survives
-   * a reload. The per-level rules live in `lib/channels/card-zoom.ts` and are
-   * unit-tested there; this pins the wiring they cannot see.
+   * a reload. ZOOM-02: shift-click selects a run and a second shift-click
+   * deselects it, on the checkbox at 0 and on the tile at -2. The rules live in
+   * `lib/channels/card-zoom.ts` and `range-select.ts` and are unit-tested
+   * there; this pins the wiring they cannot see.
    */
   test("channel card zoom levels select on click and survive a reload", async ({
     page,
   }) => {
     const prefix = `zoom${Date.now()}`
     await gotoWorkspace(page, "summary")
-    await seedBulkChannels(page, 3, prefix)
+    await seedBulkChannels(page, 4, prefix)
     // A Sync click must not reach Telegram; refusing the enqueue is enough.
     await page.route("**/api/v1/jobs/sync", (route) => route.abort())
 
     await page.goto("/workspace?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
-    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+    await expect(cards).toHaveCount(4, { timeout: 30_000 })
+
+    // With nothing selected the grid is in plain sort order. A selected run at
+    // the top keeps that order, so these handles stay the on-screen order.
+    const none = page.getByRole("button", { name: "None", exact: true })
+    await none.click()
+    await expect(
+      page.locator(`[data-channel-name^="${prefix}"] [aria-pressed="true"]`),
+    ).toHaveCount(0)
+    const names = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+    const expectSelected = async (
+      toggleOf: (name: string) => ReturnType<typeof page.locator>,
+      selected: boolean[],
+    ) => {
+      for (const [i, name] of names.entries()) {
+        await expect(toggleOf(name)).toHaveAttribute(
+          "aria-pressed",
+          String(selected[i]),
+        )
+      }
+    }
+    const shiftRun = async (
+      toggleOf: (name: string) => ReturnType<typeof page.locator>,
+    ) => {
+      await toggleOf(names[0]).click()
+      await toggleOf(names[2]).click({ modifiers: ["Shift"] })
+      await expectSelected(toggleOf, [true, true, true, false])
+      await toggleOf(names[0]).click({ modifiers: ["Shift"] })
+      await expectSelected(toggleOf, [false, false, false, false])
+    }
+
+    // 0: the checkbox takes the shift-click.
+    await shiftRun((name) =>
+      page.locator(`[data-channel-name="${name}"] button[aria-pressed]`),
+    )
 
     const zoomIn = page.getByRole("button", { name: "Detailed cards" })
     const zoomOut = page.getByRole("button", { name: "Compact cards" })
@@ -358,10 +396,14 @@ test.describe("TG Workspace channels and posts", () => {
 
     await page.reload()
     await page.getByPlaceholder("Search channels...").fill(prefix)
-    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+    await expect(cards).toHaveCount(4, { timeout: 30_000 })
     await expect(
       page.getByRole("button", { name: "Compact cards" }),
     ).toBeDisabled()
+
+    // -2: the tile takes the shift-click.
+    await none.click()
+    await shiftRun((name) => page.locator(`[data-channel-name="${name}"]`))
   })
 
   /**

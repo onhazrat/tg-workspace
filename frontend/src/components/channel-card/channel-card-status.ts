@@ -55,11 +55,27 @@ export function queuePosition(
   return index === -1 ? null : index + 1
 }
 
-/** The card frame: dimmed when frozen, outlined when selected, ringed while syncing. */
 /** The accessible name of whatever toggles a channel's selection. */
 export function selectLabel(channelName: string, isSelected: boolean): string {
   return isSelected ? `Deselect ${channelName}` : `Select ${channelName}`
 }
+
+/**
+ * Click handlers for whatever toggles a channel's selection, passing on
+ * whether shift was held. A shift-press would otherwise extend the page's text
+ * selection to the control, so the press is swallowed here, on the selection
+ * controls only, and tag and Start ID text stays selectable.
+ */
+export function selectionHandlers(onToggleSelected: (shift: boolean) => void) {
+  return {
+    onClick: (event: { shiftKey: boolean }) => onToggleSelected(event.shiftKey),
+    onMouseDown: (event: { shiftKey: boolean; preventDefault: () => void }) => {
+      if (event.shiftKey) event.preventDefault()
+    },
+  }
+}
+
+/** The card frame: dimmed when frozen, outlined when selected, ringed while syncing. */
 
 export function channelCardFrameClass({
   isFrozen,

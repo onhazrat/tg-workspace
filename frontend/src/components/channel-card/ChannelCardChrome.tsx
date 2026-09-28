@@ -13,7 +13,7 @@ import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
 import { TgIconButton } from "../ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
-import { selectLabel } from "./channel-card-status"
+import { selectionHandlers, selectLabel } from "./channel-card-status"
 
 /** Covers the card while it syncs; `progress` is null when the channel's newest id is unknown. */
 export function ChannelCardSyncingOverlay({
@@ -136,7 +136,7 @@ export function ChannelCardBadges({
 }: {
   channel: Channel
   isSelected: boolean
-  onToggleSelected: () => void
+  onToggleSelected: (shift: boolean) => void
   /** 1-based place in the sync queue, or null when not queued. */
   queuePosition: number | null
   sortRank?: number
@@ -152,7 +152,7 @@ export function ChannelCardBadges({
       {showCheckbox && (
         <button
           type="button"
-          onClick={onToggleSelected}
+          {...selectionHandlers(onToggleSelected)}
           aria-label={selectLabel(channel.name, isSelected)}
           aria-pressed={isSelected}
           className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${

@@ -20,6 +20,8 @@ type ChannelGridBodyProps = {
   postsInScopeCounts: Record<string, number>
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
+  /** One click on a card's selection control, and whether shift was held. */
+  onSelectChannel: (name: string, shift: boolean) => void
   hasMore: boolean
   /** Loads the next page; called when the last virtual row comes into range. */
   onLoadMore: () => void
@@ -41,6 +43,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   postsInScopeCounts,
   onRemoveChannel,
   onResetAndSync,
+  onSelectChannel,
   hasMore,
   onLoadMore,
   scrollContainerRef,
@@ -117,6 +120,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         selectedTrimRanks={selectedTrimRanks}
         onRemoveChannel={onRemoveChannel}
         onResetAndSync={onResetAndSync}
+        onSelectChannel={onSelectChannel}
         hasMore={hasMore}
         onLoadMore={onLoadMore}
       />

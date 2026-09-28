@@ -11,6 +11,7 @@ import { ChannelCardMeta } from "./ChannelCardMeta"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
   channelCardFrameClass,
+  selectionHandlers,
   selectLabel,
   settingGroupHints,
   syncProgress,
@@ -49,7 +50,7 @@ export function ChannelCardFace({
   /** 1-based place in the sync queue, or null when not queued. */
   queuePosition: number | null
   sortRank?: number
-  onToggleSelected: () => void
+  onToggleSelected: (shift: boolean) => void
   onToggleFreeze: () => void
   onResetAndSync: () => void
   onRemove: () => void
@@ -83,7 +84,7 @@ export function ChannelCardFace({
           type="button"
           aria-pressed={isSelected}
           aria-label={selectLabel(channel.name, isSelected)}
-          onClick={onToggleSelected}
+          {...selectionHandlers(onToggleSelected)}
           className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         />
       )}

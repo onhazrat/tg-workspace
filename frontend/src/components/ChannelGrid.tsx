@@ -29,6 +29,7 @@ import {
   collectChannelLanguages,
   filterChannelsForGrid,
 } from "@/lib/channels/filter-channels-for-grid"
+import { rangeSelect } from "@/lib/channels/range-select"
 import { buildSelectedTrimRanks } from "@/lib/channels/selected-trim-ranks"
 import { sortChannelsForGrid } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
@@ -223,6 +224,22 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     [channels],
   )
 
+  // The last Channel clicked, plain or shift. It lives here rather than in
+  // DataContext, whose field set is pinned, and All, None and Revert leave it.
+  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null)
+
+  const handleSelectChannel = (name: string, shift: boolean) => {
+    const result = rangeSelect({
+      selection: selectedChannels,
+      order: sortedFilteredChannels.map((channel) => channel.name),
+      anchor: selectionAnchor,
+      clicked: name,
+      shift,
+    })
+    setSelectedChannels(result.selection)
+    setSelectionAnchor(result.anchor)
+  }
+
   const handleSelectAll = () => {
     setSelectedChannels(new Set(filteredChannels.map((c) => c.name)))
   }
@@ -384,6 +401,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         postsInScopeCounts={postsInScopeCounts}
         onRemoveChannel={actions.handleRemoveChannel}
         onResetAndSync={actions.handleResetAndSync}
+        onSelectChannel={handleSelectChannel}
         hasMore={hasMoreChannels}
         onLoadMore={loadMoreChannels}
         scrollContainerRef={scrollContainerRef}

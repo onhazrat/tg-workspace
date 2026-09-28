@@ -31,6 +31,7 @@ type VirtualizedChannelGridProps = {
   selectedTrimRanks: Map<string, number>
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
+  onSelectChannel: (name: string, shift: boolean) => void
   /** Whether more channels exist beyond the ones passed in. */
   hasMore: boolean
   /** Called when the last virtual row comes into range. */
@@ -64,6 +65,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   selectedTrimRanks,
   onRemoveChannel,
   onResetAndSync,
+  onSelectChannel,
   hasMore,
   onLoadMore,
 }) => {
@@ -194,6 +196,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
                   inScopeCount={postsInScopeCounts[channel.name] ?? 0}
                   handleRemoveChannel={onRemoveChannel}
                   handleResetAndSync={onResetAndSync}
+                  onSelectChannel={onSelectChannel}
                   sortRank={
                     showSortRank && selectedChannels.has(channel.name)
                       ? selectedTrimRanks.get(channel.name)
