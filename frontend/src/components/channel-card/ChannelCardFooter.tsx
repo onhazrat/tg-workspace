@@ -14,6 +14,7 @@ export function ChannelCardFooter({
   channel,
   stats,
   showStartId,
+  showStatus = true,
   isScraping,
   busy,
   inheritedSettingsHint,
@@ -23,6 +24,8 @@ export function ChannelCardFooter({
   channel: Channel
   stats: ChannelStats | undefined
   showStartId: boolean
+  /** The status and schedule line; off on the compact card. */
+  showStatus?: boolean
   isScraping: boolean
   /** A sync or summary is running, so a manual sync must wait. */
   busy: boolean
@@ -32,37 +35,41 @@ export function ChannelCardFooter({
 }) {
   const status = channelSyncStatus(channel, stats)
   return (
-    <div className="mt-auto flex items-center justify-between pt-4 border-t border-app-ink/5 gap-3">
+    <div
+      className={`mt-auto flex items-center gap-3 ${showStatus ? "justify-between pt-4 border-t border-app-ink/5" : "justify-end"}`}
+    >
       <div className="flex items-start gap-4 flex-wrap">
         {showStartId && (
           <StartIdField startId={channel.startId} onSave={onSaveStartId} />
         )}
 
-        <div>
-          <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
-            Status
-          </p>
-          <div className="flex items-center gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${status.dotClass}`} />
-            <p className="text-[10px] font-bold uppercase tracking-tight text-app-ink/70">
-              {status.label}
+        {showStatus && (
+          <div>
+            <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
+              Status
             </p>
-          </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <p className="text-[9px] text-app-ink/50 mt-1 max-w-[220px] truncate cursor-help">
-                {syncScheduleSummary(channel)}
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${status.dotClass}`} />
+              <p className="text-[10px] font-bold uppercase tracking-tight text-app-ink/70">
+                {status.label}
               </p>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-[260px] text-center">
-              {/* The card face shows relative times; the exact schedule only
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="text-[9px] text-app-ink/50 mt-1 max-w-[220px] truncate cursor-help">
+                  {syncScheduleSummary(channel)}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px] text-center">
+                {/* The card face shows relative times; the exact schedule only
                   fits here. It used to be missing entirely — this tooltip
                   showed the inherited-group hint and nothing about sync. */}
-              <p>{syncScheduleDetail(channel)}</p>
-              <p className="mt-1 opacity-70">{inheritedSettingsHint}</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
+                <p>{syncScheduleDetail(channel)}</p>
+                <p className="mt-1 opacity-70">{inheritedSettingsHint}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
       </div>
 
       <Tooltip>
@@ -74,7 +81,7 @@ export function ChannelCardFooter({
               onSync()
             }}
             disabled={busy || !channelAllows(channel, "individual")}
-            className="h-8 px-3 text-[10px] uppercase font-bold flex items-center justify-center gap-1.5 bg-app-ink/5 hover:bg-app-ink text-app-ink hover:text-app-bg transition-all disabled:opacity-30 rounded-lg border border-app-ink/10 hover:border-app-ink"
+            className="relative z-20 h-8 px-3 text-[10px] uppercase font-bold flex items-center justify-center gap-1.5 bg-app-ink/5 hover:bg-app-ink text-app-ink hover:text-app-bg transition-all disabled:opacity-30 rounded-lg border border-app-ink/10 hover:border-app-ink"
           >
             <RefreshCw size={12} className={isScraping ? "animate-spin" : ""} />
             {channel.isUnavailableOnWebView ? "Recheck" : "Sync"}

@@ -72,7 +72,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setShowSortRank,
   } = useChannelGridSortState()
 
-  const { showChannelSubscribers } = useSettings()
+  const { showChannelSubscribers, channelCardZoom, setChannelCardZoom } =
+    useSettings()
 
   const { isOffline } = useApiStatus()
 
@@ -290,6 +291,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           isScrapeAllDisabled={isScrapeAllDisabled}
           onScrapeSelected={handleScrapeSelected}
           onScrapeAll={handleScrapeAll}
+          zoom={channelCardZoom}
+          onZoomChange={setChannelCardZoom}
         />
 
         {/* Group & tag filter rows */}
@@ -375,6 +378,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         channels={sortedFilteredChannels}
         visibleCount={visibleChannels}
         showSortRank={showSortRank}
+        zoom={channelCardZoom}
         selectedChannels={selectedChannels}
         selectedTrimRanks={selectedTrimRanks}
         postsInScopeCounts={postsInScopeCounts}

@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import type React from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ChannelCard } from "@/components/ChannelCard"
+import type { CardZoom } from "@/lib/channels/card-zoom"
 import { gridLanesForWidth } from "@/lib/channels/grid-lanes"
 import type { Channel } from "@/types"
 
@@ -25,6 +26,7 @@ type VirtualizedChannelGridProps = {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   postsInScopeCounts: Record<string, number>
   showSortRank: boolean
+  zoom: CardZoom
   selectedChannels: Set<string>
   selectedTrimRanks: Map<string, number>
   onRemoveChannel: (channel: Channel) => void
@@ -37,8 +39,13 @@ type VirtualizedChannelGridProps = {
 
 /** Matches the `gap-4` the grid used. */
 const GAP_PX = 16
-/** Starting row height; measured heights replace this as rows mount. */
-const ESTIMATED_ROW_PX = 360
+/** Starting row height per zoom level; measured heights replace it as rows mount. */
+const ESTIMATED_ROW_PX: Record<CardZoom, number> = {
+  1: 440,
+  0: 360,
+  [-1]: 140,
+  [-2]: 72,
+}
 /**
  * Rows kept mounted beyond the viewport.
  *
@@ -54,6 +61,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   scrollContainerRef,
   postsInScopeCounts,
   showSortRank,
+  zoom,
   selectedChannels,
   selectedTrimRanks,
   onRemoveChannel,
@@ -62,9 +70,10 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   onLoadMore,
 }) => {
   const gridRef = useRef<HTMLDivElement>(null)
-  const [lanes, setLanes] = useState(() =>
-    gridLanesForWidth(typeof window === "undefined" ? 1280 : window.innerWidth),
+  const [width, setWidth] = useState(() =>
+    typeof window === "undefined" ? 1280 : window.innerWidth,
   )
+  const lanes = gridLanesForWidth(width, zoom)
   /**
    * Distance from the top of the scroll container to the top of the grid — the
    * filter bar sits above it, so this is not zero. Held in state rather than
@@ -80,7 +89,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
     if (!element) return
 
     const apply = () => {
-      setLanes(gridLanesForWidth(element.clientWidth))
+      setWidth(element.clientWidth)
       setScrollMargin(element.offsetTop)
     }
     apply()
@@ -96,21 +105,21 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: () => ESTIMATED_ROW_PX + GAP_PX,
+    estimateSize: () => ESTIMATED_ROW_PX[zoom] + GAP_PX,
     overscan: OVERSCAN_ROWS,
     scrollMargin,
   })
 
-  // Row heights depend on the column count, so a breakpoint change invalidates
-  // every measurement taken at the previous width.
+  // Row heights depend on the column count and the zoom level, so a change to
+  // either invalidates every measurement taken before it.
   //
-  // Keyed on `lanes` alone: `virtualizer` is a fresh object every render, so
+  // Keyed on `lanes` and `zoom` alone: `virtualizer` is a fresh object every render, so
   // depending on it would re-measure each render, and each measure re-renders —
   // a loop that hangs the page under scroll.
   // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   useEffect(() => {
     virtualizer.measure()
-  }, [lanes])
+  }, [lanes, zoom])
 
   const virtualRows = virtualizer.getVirtualItems()
 

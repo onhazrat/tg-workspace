@@ -4,6 +4,7 @@ import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
+import { cardFace } from "@/lib/channels/card-zoom"
 import { upsertChannel } from "@/lib/channels/store"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -19,6 +20,7 @@ import { ChannelCardFooter } from "./channel-card/ChannelCardFooter"
 import { ChannelCardHeader } from "./channel-card/ChannelCardHeader"
 import { ChannelCardMeta } from "./channel-card/ChannelCardMeta"
 import { ChannelCardTags } from "./channel-card/ChannelCardTags"
+import { ChannelCardTile } from "./channel-card/ChannelCardTile"
 import {
   channelCardFrameClass,
   freezeTargetGroup,
@@ -92,6 +94,21 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   const { virtualGroupTagName, inheritedSettingsHint } = settingGroupHints(
     channel.settingGroupName,
   )
+  const face = cardFace(settings.channelCardZoom, settings)
+  const selectLabel = isSelected
+    ? `Deselect ${channel.name}`
+    : `Select ${channel.name}`
+
+  if (face.layout === "tile") {
+    return (
+      <ChannelCardTile
+        channel={channel}
+        isSelected={isSelected}
+        isScraping={isScraping}
+        onToggleSelected={() => setSelected(!isSelected)}
+      />
+    )
+  }
 
   return (
     <div
@@ -103,16 +120,33 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       })}
     >
       {isScraping && (
-        <ChannelCardSyncingOverlay progress={syncProgress(stats)} />
+        <ChannelCardSyncingOverlay
+          progress={syncProgress(stats)}
+          clickThrough={face.bodySelects}
+        />
       )}
 
-      <ChannelCardActions
-        channel={channel}
-        busy={busy}
-        onToggleFreeze={handleToggleFreeze}
-        onResetAndSync={() => handleResetAndSync(channel)}
-        onRemove={() => handleRemoveChannel(channel)}
-      />
+      {face.bodySelects && (
+        // The whole card is the selection toggle. It sits under Sync and the
+        // Telegram link rather than around them: a button may not hold a button.
+        <button
+          type="button"
+          aria-pressed={isSelected}
+          aria-label={selectLabel}
+          onClick={() => setSelected(!isSelected)}
+          className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
+        />
+      )}
+
+      {face.hoverActions && (
+        <ChannelCardActions
+          channel={channel}
+          busy={busy}
+          onToggleFreeze={handleToggleFreeze}
+          onResetAndSync={() => handleResetAndSync(channel)}
+          onRemove={() => handleRemoveChannel(channel)}
+        />
+      )}
 
       <ChannelCardBadges
         channel={channel}
@@ -120,38 +154,37 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         onToggleSelected={() => setSelected(!isSelected)}
         queuePosition={queuePosition(syncQueue, channel.id)}
         sortRank={sortRank}
+        showCheckbox={face.checkbox}
+        showDetails={face.detailBadges}
       />
 
-      <div className="p-5 pt-12 flex flex-col h-full">
-        <ChannelCardHeader
-          channel={channel}
-          showBio={settings.showChannelBio}
-        />
-        <ChannelCardMeta
-          channel={channel}
-          stats={stats}
-          inScopeCount={inScopeCount}
-          show={{
-            subscribers: settings.showChannelSubscribers,
-            telegramChatId: settings.showChannelTelegramChatId,
-            photos: settings.showChannelPhotos,
-            videos: settings.showChannelVideos,
-            files: settings.showChannelFiles,
-            links: settings.showChannelLinks,
-          }}
-        />
+      <div
+        className={`flex flex-col h-full ${face.bodySelects ? "p-4 pt-9" : "p-5 pt-12"}`}
+      >
+        <ChannelCardHeader channel={channel} showBio={face.bio} />
+        {face.meta && (
+          <ChannelCardMeta
+            channel={channel}
+            stats={stats}
+            inScopeCount={inScopeCount}
+            show={face.meta}
+          />
+        )}
 
-        <ChannelCardTags
-          tags={channel.tags}
-          virtualGroupTagName={virtualGroupTagName}
-          inheritedSettingsHint={inheritedSettingsHint}
-          onSave={(tags) => saveChannel({ tags })}
-        />
+        {face.tags && (
+          <ChannelCardTags
+            tags={channel.tags}
+            virtualGroupTagName={virtualGroupTagName}
+            inheritedSettingsHint={inheritedSettingsHint}
+            onSave={(tags) => saveChannel({ tags })}
+          />
+        )}
 
         <ChannelCardFooter
           channel={channel}
           stats={stats}
-          showStartId={settings.showChannelStartId}
+          showStartId={face.startId}
+          showStatus={face.syncStatus}
           isScraping={isScraping}
           busy={busy}
           inheritedSettingsHint={inheritedSettingsHint}
