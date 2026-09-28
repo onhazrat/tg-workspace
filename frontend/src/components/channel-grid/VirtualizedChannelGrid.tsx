@@ -3,7 +3,7 @@ import type React from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ChannelCard } from "@/components/ChannelCard"
 import type { CardZoom } from "@/lib/channels/card-zoom"
-import { gridLanesForWidth } from "@/lib/channels/grid-lanes"
+import { GAP_PX, gridLanesForWidth } from "@/lib/channels/grid-lanes"
 import type { Channel } from "@/types"
 
 /**
@@ -37,8 +37,6 @@ type VirtualizedChannelGridProps = {
   onLoadMore: () => void
 }
 
-/** Matches the `gap-4` the grid used. */
-const GAP_PX = 16
 /** Starting row height per zoom level; measured heights replace it as rows mount. */
 const ESTIMATED_ROW_PX: Record<CardZoom, number> = {
   1: 440,

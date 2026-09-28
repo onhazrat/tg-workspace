@@ -13,15 +13,16 @@ import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
 import { TgIconButton } from "../ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
+import { selectLabel } from "./channel-card-status"
 
 /** Covers the card while it syncs; `progress` is null when the channel's newest id is unknown. */
 export function ChannelCardSyncingOverlay({
   progress,
-  clickThrough = false,
+  clickThrough,
 }: {
   progress: number | null
   /** Let clicks reach the card underneath, where the card body selects. */
-  clickThrough?: boolean
+  clickThrough: boolean
 }) {
   return (
     <div
@@ -130,8 +131,8 @@ export function ChannelCardBadges({
   onToggleSelected,
   queuePosition,
   sortRank,
-  showCheckbox = true,
-  showDetails = true,
+  showCheckbox,
+  showDetails,
 }: {
   channel: Channel
   isSelected: boolean
@@ -139,21 +140,20 @@ export function ChannelCardBadges({
   /** 1-based place in the sync queue, or null when not queued. */
   queuePosition: number | null
   sortRank?: number
-  showCheckbox?: boolean
+  /** Off where the card body is the selection toggle. */
+  showCheckbox: boolean
   /** Sort rank, language and partial-history badges. */
-  showDetails?: boolean
+  showDetails: boolean
 }) {
   return (
     <div
-      className={`absolute flex items-center gap-2 z-20 ${showCheckbox ? "top-4 left-4" : "top-2.5 left-4"}`}
+      className={`absolute flex items-center gap-2 z-20 ${showCheckbox ? "top-4 left-4" : "top-2.5 left-4 pointer-events-none"}`}
     >
       {showCheckbox && (
         <button
           type="button"
           onClick={onToggleSelected}
-          aria-label={
-            isSelected ? `Deselect ${channel.name}` : `Select ${channel.name}`
-          }
+          aria-label={selectLabel(channel.name, isSelected)}
           aria-pressed={isSelected}
           className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${
             isSelected

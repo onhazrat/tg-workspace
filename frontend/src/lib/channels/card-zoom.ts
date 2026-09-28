@@ -47,7 +47,10 @@ export interface CardFace {
   bodySelects: boolean
 }
 
-export function cardFace(zoom: CardZoom, s: CardFieldSettings): CardFace {
+export function cardFace(
+  zoom: CardZoom,
+  settings: CardFieldSettings,
+): CardFace {
   if (zoom < 0) {
     return {
       layout: zoom === -2 ? "tile" : "card",
@@ -63,18 +66,19 @@ export function cardFace(zoom: CardZoom, s: CardFieldSettings): CardFace {
     }
   }
   // +1 overrides the settings for display only; nothing is written back.
-  const all = zoom === 1
+  const detailed = zoom === 1
+  const s = settings
   return {
     layout: "card",
-    bio: all || s.showChannelBio,
-    startId: all || s.showChannelStartId,
+    bio: detailed || s.showChannelBio,
+    startId: detailed || s.showChannelStartId,
     meta: {
-      subscribers: all || s.showChannelSubscribers,
-      telegramChatId: all || s.showChannelTelegramChatId,
-      photos: all || s.showChannelPhotos,
-      videos: all || s.showChannelVideos,
-      files: all || s.showChannelFiles,
-      links: all || s.showChannelLinks,
+      subscribers: detailed || s.showChannelSubscribers,
+      telegramChatId: detailed || s.showChannelTelegramChatId,
+      photos: detailed || s.showChannelPhotos,
+      videos: detailed || s.showChannelVideos,
+      files: detailed || s.showChannelFiles,
+      links: detailed || s.showChannelLinks,
     },
     tags: true,
     syncStatus: true,

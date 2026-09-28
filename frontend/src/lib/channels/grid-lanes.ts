@@ -18,8 +18,8 @@ const XL = 1280
 /** The most columns at zoom 0; other zoom levels derive theirs from card width. */
 export const MAX_GRID_LANES = 4
 
-/** Matches the grid's `gap-4`. */
-const GAP_PX = 16
+/** The grid's `gap-4`, shared with the virtualised grid that renders it. */
+export const GAP_PX = 16
 
 /** Narrowest a card may get at each zoom level other than 0. Tuned by eye. */
 const MIN_CARD_WIDTH_PX: Record<Exclude<CardZoom, 0>, number> = {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { type CardFieldSettings, cardFace } from "./card-zoom"
+import { type CardFace, type CardFieldSettings, cardFace } from "./card-zoom"
 
 const allOff: CardFieldSettings = {
   showChannelBio: false,
@@ -11,6 +11,10 @@ const allOff: CardFieldSettings = {
   showChannelLinks: false,
   showChannelStartId: false,
 }
+
+const allOn = Object.fromEntries(
+  Object.keys(allOff).map((key) => [key, true]),
+) as unknown as CardFieldSettings
 
 describe("cardFace", () => {
   test("zoom 0 shows exactly the fields the settings turn on", () => {
@@ -52,9 +56,6 @@ describe("cardFace", () => {
   })
 
   test("zoom -1 keeps the header and Sync, and the body selects", () => {
-    const allOn = Object.fromEntries(
-      Object.keys(allOff).map((key) => [key, true]),
-    ) as unknown as CardFieldSettings
     expect(cardFace(-1, allOn)).toEqual({
       layout: "card",
       bio: false,
@@ -81,9 +82,29 @@ describe("cardFace", () => {
   })
 
   test("zoom -2 is an avatar tile whose body selects", () => {
-    const face = cardFace(-2, allOff)
-    expect(face.layout).toBe("tile")
-    expect(face.bodySelects).toBe(true)
-    expect(face.checkbox).toBe(false)
+    expect(cardFace(-2, allOn)).toEqual({
+      ...cardFace(-1, allOn),
+      layout: "tile",
+    })
+  })
+
+  test("zoom 0 ties each setting to its own field and no other", () => {
+    const fieldOf: Record<keyof CardFieldSettings, (f: CardFace) => boolean> = {
+      showChannelBio: (f) => f.bio,
+      showChannelStartId: (f) => f.startId,
+      showChannelSubscribers: (f) => f.meta?.subscribers ?? false,
+      showChannelTelegramChatId: (f) => f.meta?.telegramChatId ?? false,
+      showChannelPhotos: (f) => f.meta?.photos ?? false,
+      showChannelVideos: (f) => f.meta?.videos ?? false,
+      showChannelFiles: (f) => f.meta?.files ?? false,
+      showChannelLinks: (f) => f.meta?.links ?? false,
+    }
+    const keys = Object.keys(fieldOf) as (keyof CardFieldSettings)[]
+    for (const on of keys) {
+      const face = cardFace(0, { ...allOff, [on]: true })
+      for (const key of keys) {
+        expect([on, key, fieldOf[key](face)]).toEqual([on, key, key === on])
+      }
+    }
   })
 })

@@ -25,6 +25,7 @@ import {
   channelCardFrameClass,
   freezeTargetGroup,
   queuePosition,
+  selectLabel,
   settingGroupHints,
   syncProgress,
 } from "./channel-card/channel-card-status"
@@ -95,9 +96,6 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     channel.settingGroupName,
   )
   const face = cardFace(settings.channelCardZoom, settings)
-  const selectLabel = isSelected
-    ? `Deselect ${channel.name}`
-    : `Select ${channel.name}`
 
   if (face.layout === "tile") {
     return (
@@ -127,12 +125,12 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       )}
 
       {face.bodySelects && (
-        // The whole card is the selection toggle. It sits under Sync and the
-        // Telegram link rather than around them: a button may not hold a button.
+        // The whole card is the selection toggle. It sits under Sync rather
+        // than around it, because a button may not hold a button.
         <button
           type="button"
           aria-pressed={isSelected}
-          aria-label={selectLabel}
+          aria-label={selectLabel(channel.name, isSelected)}
           onClick={() => setSelected(!isSelected)}
           className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         />
@@ -161,7 +159,11 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       <div
         className={`flex flex-col h-full ${face.bodySelects ? "p-4 pt-9" : "p-5 pt-12"}`}
       >
-        <ChannelCardHeader channel={channel} showBio={face.bio} />
+        <ChannelCardHeader
+          channel={channel}
+          showBio={face.bio}
+          linkToTelegram={!face.bodySelects}
+        />
         {face.meta && (
           <ChannelCardMeta
             channel={channel}

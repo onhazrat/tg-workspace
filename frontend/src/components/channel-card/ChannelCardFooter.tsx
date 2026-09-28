@@ -14,7 +14,7 @@ export function ChannelCardFooter({
   channel,
   stats,
   showStartId,
-  showStatus = true,
+  showStatus,
   isScraping,
   busy,
   inheritedSettingsHint,
@@ -25,7 +25,7 @@ export function ChannelCardFooter({
   stats: ChannelStats | undefined
   showStartId: boolean
   /** The status and schedule line; off on the compact card. */
-  showStatus?: boolean
+  showStatus: boolean
   isScraping: boolean
   /** A sync or summary is running, so a manual sync must wait. */
   busy: boolean

@@ -17,8 +17,6 @@ import { RelativeTime } from "../RelativeTime"
 import { TgMetaChip } from "../ui/tg-chips"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
 
-export type { ChannelMetaVisibility }
-
 const COUNTERS: {
   key: "photos" | "videos" | "files" | "links"
   label: string

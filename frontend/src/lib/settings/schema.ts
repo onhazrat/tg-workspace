@@ -197,20 +197,18 @@ const globalStartTimeValueSetting: SettingSpec<GlobalStartTimeValue> = {
   section: "sync",
 }
 
-// Persistence note: historically only some of these keys had a persist-to-storage
-// effect; the store now persists EVERY key on change (benign unification — the
-// backend-synced keys still hydrate from the server, browser storage is a fallback).
 /** Local only: how dense the Channels tab cards are (ZOOM-01). */
 const channelCardZoomSetting: SettingSpec<CardZoom> = {
   storageKey: "channelCardZoom",
-  schema: z.custom<CardZoom>((value) =>
-    (CARD_ZOOM_LEVELS as readonly unknown[]).includes(value),
-  ),
+  schema: z.literal(CARD_ZOOM_LEVELS),
   defaultValue: 0,
   decode: (raw) => Number.parseInt(raw, 10),
   encode: (value) => String(value),
 }
 
+// Persistence note: historically only some of these keys had a persist-to-storage
+// effect; the store now persists EVERY key on change (benign unification — the
+// backend-synced keys still hydrate from the server, browser storage is a fallback).
 export const appSettingsSpec = {
   aiLanguage: oneOfSetting("aiLanguage", LANGUAGES, DEFAULT_AI_LANGUAGE),
   selectedModel: modelSetting("selectedModel", DEFAULT_MODEL),

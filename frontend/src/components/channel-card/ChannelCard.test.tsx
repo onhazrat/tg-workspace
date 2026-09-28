@@ -8,6 +8,7 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import type { ChannelMetaVisibility } from "@/lib/channels/card-zoom"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
@@ -16,7 +17,7 @@ import {
 } from "./ChannelCardChrome"
 import { ChannelCardFooter } from "./ChannelCardFooter"
 import { ChannelCardHeader } from "./ChannelCardHeader"
-import { ChannelCardMeta, type ChannelMetaVisibility } from "./ChannelCardMeta"
+import { ChannelCardMeta } from "./ChannelCardMeta"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
   channelCardFrameClass,
@@ -79,12 +80,14 @@ describe("channel-card-status", () => {
 
 describe("ChannelCardSyncingOverlay", () => {
   test("shows a rounded percent and caps the bar at 100", () => {
-    render(<ChannelCardSyncingOverlay progress={123.4} />)
+    render(<ChannelCardSyncingOverlay progress={123.4} clickThrough={false} />)
     expect(screen.getByText("Syncing 123%")).toBeTruthy()
   })
 
   test("falls back to a plain label with no progress bar", () => {
-    const { container } = render(<ChannelCardSyncingOverlay progress={null} />)
+    const { container } = render(
+      <ChannelCardSyncingOverlay progress={null} clickThrough={false} />,
+    )
     expect(screen.getByText("Syncing Data")).toBeTruthy()
     expect(container.querySelector(".max-w-\\[120px\\]")).toBeNull()
   })
@@ -156,6 +159,8 @@ describe("ChannelCardBadges", () => {
     const onToggle = mock()
     render(
       <ChannelCardBadges
+        showCheckbox
+        showDetails
         channel={base}
         isSelected
         onToggleSelected={onToggle}
@@ -171,6 +176,8 @@ describe("ChannelCardBadges", () => {
   test("renders only the badges the channel earns", () => {
     render(
       <ChannelCardBadges
+        showCheckbox
+        showDetails
         channel={{
           ...base,
           isUnavailableOnWebView: true,
@@ -191,6 +198,8 @@ describe("ChannelCardBadges", () => {
     cleanup()
     render(
       <ChannelCardBadges
+        showCheckbox
+        showDetails
         channel={{ ...base, historyCompleteToCutoff: true }}
         isSelected={false}
         onToggleSelected={() => {}}
@@ -382,6 +391,7 @@ describe("ChannelCardFooter", () => {
       channel,
       stats: stats(9, 9),
       showStartId: true,
+      showStatus: true,
       isScraping: false,
       busy: false,
       inheritedSettingsHint: "hint",
@@ -521,6 +531,7 @@ describe("ChannelCardHeader", () => {
   test("titles by display name, falling back to the handle", () => {
     render(
       <ChannelCardHeader
+        linkToTelegram
         channel={{ ...base, displayName: "Pavel" }}
         showBio={false}
       />,
@@ -528,16 +539,17 @@ describe("ChannelCardHeader", () => {
     expect(screen.getByTitle("Pavel").textContent).toBe("Pavel")
     expect(screen.getByText("@durov")).toBeTruthy()
     cleanup()
-    render(<ChannelCardHeader channel={base} showBio={false} />)
+    render(<ChannelCardHeader linkToTelegram channel={base} showBio={false} />)
     expect(screen.getByTitle("durov").textContent).toBe("durov")
   })
 
   test("marks a frozen channel", () => {
-    render(<ChannelCardHeader channel={base} showBio={false} />)
+    render(<ChannelCardHeader linkToTelegram channel={base} showBio={false} />)
     expect(screen.queryByTestId("channel-card-frozen-mark")).toBeNull()
     cleanup()
     render(
       <ChannelCardHeader
+        linkToTelegram
         channel={{ ...base, isFrozen: true }}
         showBio={false}
       />,
@@ -547,13 +559,15 @@ describe("ChannelCardHeader", () => {
 
   test("the bio shows only when the setting is on and there is one", () => {
     const withBio = { ...base, bio: "about" }
-    render(<ChannelCardHeader channel={withBio} showBio />)
+    render(<ChannelCardHeader linkToTelegram channel={withBio} showBio />)
     expect(screen.getByTitle("about").getAttribute("dir")).toBe("auto")
     cleanup()
-    render(<ChannelCardHeader channel={withBio} showBio={false} />)
+    render(
+      <ChannelCardHeader linkToTelegram channel={withBio} showBio={false} />,
+    )
     expect(screen.queryByTitle("about")).toBeNull()
     cleanup()
-    render(<ChannelCardHeader channel={base} showBio />)
+    render(<ChannelCardHeader linkToTelegram channel={base} showBio />)
     expect(screen.queryByText("about")).toBeNull()
   })
 })

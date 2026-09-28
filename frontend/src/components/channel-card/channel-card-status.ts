@@ -56,6 +56,11 @@ export function queuePosition(
 }
 
 /** The card frame: dimmed when frozen, outlined when selected, ringed while syncing. */
+/** The accessible name of whatever toggles a channel's selection. */
+export function selectLabel(channelName: string, isSelected: boolean): string {
+  return isSelected ? `Deselect ${channelName}` : `Select ${channelName}`
+}
+
 export function channelCardFrameClass({
   isFrozen,
   isSelected,

@@ -12,9 +12,12 @@ import type { Channel } from "@/types"
 export function ChannelCardHeader({
   channel,
   showBio,
+  linkToTelegram,
 }: {
   channel: Channel
   showBio: boolean
+  /** Off where the card body selects, since the link would sit under it. */
+  linkToTelegram: boolean
 }) {
   const channelTitle = channel.displayName || channel.name
   return (
@@ -22,22 +25,24 @@ export function ChannelCardHeader({
       <div className="flex items-start gap-4 mb-4">
         <div className="relative flex-shrink-0">
           <ChannelAvatar channel={channel} />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={telegramWebViewChannelUrl(channel.name)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="absolute z-20 -bottom-1 -right-1 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
-              >
-                <ExternalLink size={10} />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Open in Telegram</p>
-            </TooltipContent>
-          </Tooltip>
+          {linkToTelegram && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={telegramWebViewChannelUrl(channel.name)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute -bottom-1 -right-1 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
+                >
+                  <ExternalLink size={10} />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Open in Telegram</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         <div className="flex-1 min-w-0 pt-1">
