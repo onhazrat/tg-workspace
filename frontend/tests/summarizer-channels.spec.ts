@@ -340,20 +340,40 @@ test.describe("TG Workspace channels and posts", () => {
         )
       }
     }
+    // Selects the three Channels from `start` with a click and a shift-click,
+    // then deselects them with a shift-click back on `start`.
     const shiftRun = async (
       toggleOf: (name: string) => ReturnType<typeof page.locator>,
+      start = 0,
     ) => {
-      await toggleOf(names[0]).click()
-      await toggleOf(names[2]).click({ modifiers: ["Shift"] })
-      await expectSelected(toggleOf, [true, true, true, false])
-      await toggleOf(names[0]).click({ modifiers: ["Shift"] })
-      await expectSelected(toggleOf, [false, false, false, false])
+      await toggleOf(names[start]).click()
+      await toggleOf(names[start + 2]).click({ modifiers: ["Shift"] })
+      await expectSelected(
+        toggleOf,
+        names.map((_, i) => i >= start && i <= start + 2),
+      )
+      await toggleOf(names[start]).click({ modifiers: ["Shift"] })
+      await expectSelected(
+        toggleOf,
+        names.map(() => false),
+      )
     }
+    const checkboxOf = (name: string) =>
+      page.locator(`[data-channel-name="${name}"] button[aria-pressed]`)
 
     // 0: the checkbox takes the shift-click.
-    await shiftRun((name) =>
-      page.locator(`[data-channel-name="${name}"] button[aria-pressed]`),
-    )
+    await shiftRun(checkboxOf)
+
+    // Grouped, a click lifts its card to the top, so a run from mid-grid
+    // would reach the top. Ungrouped, nothing moves and the run stays put.
+    const grouping = page.getByRole("button", {
+      name: "Group selected and frozen channels",
+    })
+    await grouping.click()
+    await expect(grouping).toHaveAttribute("aria-pressed", "false")
+    await shiftRun(checkboxOf, 1)
+    await grouping.click()
+    await expect(grouping).toHaveAttribute("aria-pressed", "true")
 
     const zoomIn = page.getByRole("button", { name: "Detailed cards" })
     const zoomOut = page.getByRole("button", { name: "Compact cards" })

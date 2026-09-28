@@ -335,4 +335,21 @@ describe("sortChannelsForGrid sort options", () => {
       "frozen",
     ])
   })
+
+  it("ungrouped sorts selected and frozen Channels in with the rest", () => {
+    const list = [
+      makeChannel("frozen", { isFrozen: true, lastUpdated: 9 }),
+      makeChannel("other", { lastUpdated: 8 }),
+      makeChannel("picked", { lastUpdated: 1 }),
+    ]
+    const order = sortChannelsForGrid({
+      channels: list,
+      channelStats,
+      selectedChannels: new Set(["picked", "frozen"]),
+      sortBy: "last_updated",
+      sortDirection: "desc",
+      groupBySelection: false,
+    }).map((channel) => channel.name)
+    expect(order).toEqual(["frozen", "other", "picked"])
+  })
 })

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp } from "lucide-react"
+import { ArrowDown, ArrowUp, Group, Ungroup } from "lucide-react"
 import type React from "react"
 import {
   controlGroupItemClassName,
@@ -40,6 +40,9 @@ type ChannelGridFilterBarProps = {
   onSortByChange: (value: ChannelGridSortOption) => void
   sortDirection: "asc" | "desc"
   onToggleSortDirection: () => void
+  /** Selected Channels first and frozen last, or one flat list. */
+  groupSelected: boolean
+  onToggleGroupSelected: () => void
   showChannelSubscribers: boolean
   trimCount: string
   onTrimCountChange: (value: string) => void
@@ -66,6 +69,8 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
   onSortByChange,
   sortDirection,
   onToggleSortDirection,
+  groupSelected,
+  onToggleGroupSelected,
   showChannelSubscribers,
   trimCount,
   onTrimCountChange,
@@ -184,6 +189,20 @@ export const ChannelGridFilterBar: React.FC<ChannelGridFilterBarProps> = ({
             ) : (
               <ArrowDown size={12} />
             )}
+          </TgIconButton>
+          <TgIconButton
+            variant="ghost"
+            aria-label="Group selected and frozen channels"
+            aria-pressed={groupSelected}
+            tooltip={
+              groupSelected
+                ? "Grouped: selected first, frozen last"
+                : "Not grouped: one list in sort order"
+            }
+            onClick={onToggleGroupSelected}
+            className={`${controlGroupItemClassName} w-7 p-0 text-app-ink/70 hover:bg-app-ink/10 hover:text-app-ink`}
+          >
+            {groupSelected ? <Group size={12} /> : <Ungroup size={12} />}
           </TgIconButton>
         </div>
         <div className={controlSeparatorClassName} />

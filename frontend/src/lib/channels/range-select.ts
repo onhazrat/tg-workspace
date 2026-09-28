@@ -1,3 +1,5 @@
+import { toggleNamesInSelection } from "./channel-grid-chips"
+
 /**
  * One click on a Channel's selection control, plain or shift.
  *
@@ -22,18 +24,15 @@ export function rangeSelect({
   clicked: string
   shift: boolean
 }): { selection: Set<string>; anchor: string } {
-  const select = !selection.has(clicked)
+  const wasSelected = selection.has(clicked)
   const from = shift && anchor !== null ? order.indexOf(anchor) : -1
   const to = order.indexOf(clicked)
   const run =
     from === -1 || to === -1
       ? [clicked]
       : order.slice(Math.min(from, to), Math.max(from, to) + 1)
-
-  const next = new Set(selection)
-  for (const name of run) {
-    if (select) next.add(name)
-    else next.delete(name)
+  return {
+    selection: toggleNamesInSelection(selection, run, wasSelected),
+    anchor: clicked,
   }
-  return { selection: next, anchor: clicked }
 }

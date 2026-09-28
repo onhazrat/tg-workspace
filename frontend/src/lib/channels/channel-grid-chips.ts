@@ -46,8 +46,8 @@ export function areAllNamesSelected(
  * selected, remove them all; otherwise add them all.
  */
 export function toggleNamesInSelection(
-  prev: Set<string>,
-  names: string[],
+  prev: ReadonlySet<string>,
+  names: readonly string[],
   allSelected: boolean,
 ): Set<string> {
   const next = new Set(prev)

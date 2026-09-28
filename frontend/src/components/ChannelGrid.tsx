@@ -67,6 +67,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setSortBy,
     sortDirection,
     setSortDirection,
+    groupSelected,
+    setGroupSelected,
     trimCount,
     setTrimCount,
     showSortRank,
@@ -114,10 +116,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         selectedChannels,
         sortBy,
         sortDirection,
+        groupBySelection: groupSelected,
       }),
     [
       channelStats,
       filteredChannels,
+      groupSelected,
       postsInScopeCounts,
       selectedChannels,
       sortBy,
@@ -231,7 +235,11 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const handleSelectChannel = (name: string, shift: boolean) => {
     const result = rangeSelect({
       selection: selectedChannels,
-      order: sortedFilteredChannels.map((channel) => channel.name),
+      // The rendered cards only: load-more resets to one page on a sort or
+      // search change, which can leave the anchor past the last rendered card.
+      order: sortedFilteredChannels
+        .slice(0, visibleChannels)
+        .map((channel) => channel.name),
       anchor: selectionAnchor,
       clicked: name,
       shift,
@@ -352,6 +360,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                 onToggleSortDirection={() =>
                   setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
                 }
+                groupSelected={groupSelected}
+                onToggleGroupSelected={() => setGroupSelected((prev) => !prev)}
                 showChannelSubscribers={showChannelSubscribers}
                 trimCount={trimCount}
                 onTrimCountChange={setTrimCount}

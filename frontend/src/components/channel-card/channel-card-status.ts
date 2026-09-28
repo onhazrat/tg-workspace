@@ -76,7 +76,6 @@ export function selectionHandlers(onToggleSelected: (shift: boolean) => void) {
 }
 
 /** The card frame: dimmed when frozen, outlined when selected, ringed while syncing. */
-
 export function channelCardFrameClass({
   isFrozen,
   isSelected,
