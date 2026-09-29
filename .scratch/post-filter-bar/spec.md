@@ -4,10 +4,11 @@ Status: needs-triage
 
 Ticket prefix: `PFB`.
 
-Settled by a UI prototype on 2026-09-29. The prototype is the primary source: branch
-`prototype/post-filter-ui` (local), commits `d06f661` (round 1), `cf5cd8c` (round 2), `3250b56`
-(multi-select media), `fdcf03c` (the winner's final layout). Run it with
-`cd frontend && bun run dev`, then open `/workspace?tab=posts&variant=A1`; `?variant=current` is
+Settled by a UI prototype on 2026-09-29 and 2026-09-30. The prototype is the primary source:
+branch `prototype/post-filter-ui` (local), commits `d06f661` (round 1), `cf5cd8c` (round 2),
+`3250b56` (multi-select media), `fdcf03c` (group toggle last), `a6274ee` (round 3's three Reach
+and Per channel forms), `3bdbe9f` (the winner, with the cap following the order). Run it with
+`cd frontend && bun run dev`, then open `/workspace?tab=posts&variant=A1b`; `?variant=current` is
 today's panel for comparison. It stays off `main`.
 
 ## Question the prototype answered
@@ -21,15 +22,16 @@ labels on every group, chips for everything, and nothing that said which filters
 **Variant A1, "pills with forms".** Round 1 compared a command bar (A), a facet rail beside the
 feed (B) and a filter sentence (C); A won. Round 2 compared three revisions of A: pills that open
 small forms (A1), a typed query line (A2) and two inline Filter/View rows (A3); A1 won, with the
-group toggle moved to the end of the bar.
+group toggle moved to the end of the bar. Round 3 varied only the copy and the insides of the
+Reach and Per channel pills: plain sentences (A1a), guided (A1b) and compact (A1c). **A1b won.**
 
 ## The layout
 
 1. One search box, with a Keyword / Meaning switch inside it (Meaning only when embeddings are
    on). Keyword filters as you type; Meaning runs on Enter. It replaces the two inputs.
 2. The Analysis window control beside the search box, unchanged.
-3. One row of pills, in this order: **Type**, **Media**, **Language**, **Reach**, a divider,
-   **Order**, **Per channel**, then the **Group by channel** toggle last. A pill reads
+3. One row of pills, in this order: **Type**, **Media**, **Language**, **Audience** (Reach), a
+   divider, **Order**, **Per channel**, then the **Grouped by channel** toggle last. A pill reads
    `Label value` and fills in when it is not the default. Each opens a small popover form, not a
    menu.
 4. A footer strip: the post count, the existing subtitle, one removable chip per active filter,
@@ -47,16 +49,35 @@ Labels are sentence case; the uppercase `tracking-widest` treatment goes.
   and `und` "Undetermined". A Post whose language is unread (null) never matches a language filter.
 - **Reach** has three parts. The measure is **Channel reach** (the Channel's Reach, REACH-03) or
   **Post views** (the Post's `views_count`), default Channel reach. The direction is **At least**
-  or **At most**. The threshold is any number, typed as `25000`, `25k`, `2,500` or `1.5M`, with
-  1K / 10K / 100K shortcuts. A Post with no measurement never matches a Reach filter.
+  or **At most**. The threshold is any number, typed as `25000`, `25k`, `2,500` or `1.5M`. A Post
+  with no measurement never matches a Reach filter.
+- **The Reach form is A1b's.** The pill is labelled **Audience** and reads `Any`, or
+  `Popular, 10K readers` / `Niche, 1K views` (readers for Channel reach, views for Post views).
+  Inside: two underline tabs, Channel reach and Post views, each with a one-line explanation
+  ("How many views a channel's posts typically settle at. Judges the source." / "How many views
+  this post has. Judges the post itself, but young posts read low."). Then two cards,
+  **Popular** (at least this many) and **Niche** (at most this many). Then the number box with the
+  unit word and a Clear link, and a slider under it on a log scale from 100 to 1M that snaps to
+  100, 250, 500, 1K, 2.5K, 5K, 10K, 25K, 50K, 100K, 250K, 500K, 1M. Typing any number is still
+  allowed; the slider shows the nearest step.
 - **Order** has four options: Newest first, Oldest first, Most reach, Least reach. Reach orders use
   the same measure the Reach filter is set to. Unmeasured Posts go last in both reach orders.
   Ties fall back to newest first.
 - **Group by channel is a separate toggle**, not an order. Grouped, each Channel's block sits where
   that Channel's first Post falls under the chosen order, and Posts inside a block keep that
   order. This replaces `postSortOrder = "channel_time"`.
-- **Per channel** takes any number (blank means no cap), plus Latest / Random for which Posts the
-  cap keeps.
+- **Per channel** takes any number (blank means no cap). **The cap follows the Order.** Its first
+  choice keeps each channel's first N **in the chosen order**, not the newest N: under Most reach a
+  cap of 10 keeps each channel's 10 with the most reach. The other choice is N at random. Found in
+  round 3: the prototype first capped "newest 10" on the server and ordered afterwards, so under
+  Most reach it showed the newest 10 re-sorted and labelled them "Newest 10".
+- **The Per channel form is A1b's.** The pill reads `No limit`, `Newest 10`, `Oldest 10`,
+  `Top 10 by reach`, `Lowest 10 by reach` or `Random 10`. Inside: "Posts from each channel", a
+  − [n] + stepper, 1 / 3 / 5 / 10 / 20 shortcuts and a No limit chip; then "Which ones", two cards.
+  The first card's title and line follow the Order (Newest, "The 10 most recent"; Oldest, "The 10
+  earliest"; Top by reach, "The 10 with the most reach"; Lowest by reach, "The 10 with the least
+  reach"), the second is Random, "10 picked at random". A note under them says "The first choice
+  follows the Order." The cards grey out while there is no cap.
 
 ## What the prototype faked, and the real build must not
 
@@ -73,10 +94,13 @@ the loaded page:
 - `sort: "newest" | "oldest" | "most_reach" | "least_reach"` and `group_by_channel: bool`,
   replacing `sort: "time" | "channel_time"`. `usePromptPosts` reads the same order, so a Summary's
   input follows the chosen order too; decide whether that is wanted.
-- The per-channel cap is already server-side. Settle how "Latest" interacts with a reach order
-  (keep the latest N and then order them, or keep the top N by reach).
+- The per-channel cap is server-side today as "latest" (newest N) or "random". It becomes
+  "first N in the chosen order" or "random": a window partitioned by channel and ordered by the
+  chosen order, the same order the page is sorted by. `max_per_channel_mode: "latest"` is renamed
+  or remapped, and the prompt path's cap follows too.
 
-The prototype also moved the Order and Media state out of the scraper context into local state.
+The prototype also moved the Order, Media and cap state out of the scraper context into local
+state.
 The real build puts the new filters in the settings schema (`lib/settings/schema.ts`) with the
 others, so they persist the same way.
 
