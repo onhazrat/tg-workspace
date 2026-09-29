@@ -92,6 +92,8 @@ test("× and middle-click close a tab; a Fixed tab has no ×", async ({
   context,
 }) => {
   await page.goto(`/workspace?tab=summary&summary=${OPEN_SUMMARY_ID}`)
+  // Stored once the strip renders it; a reload before then starts without it.
+  await expect.poll(() => tabs(page)).toContain(OPEN)
   await page.goto(`/workspace?tab=summary&summary=${WIDE_SUMMARY_ID}`)
   await expect.poll(() => tabs(page)).toContain(WIDE)
   await expect.poll(() => tabs(page)).toContain(OPEN)
