@@ -152,3 +152,67 @@ test("a deep link opens its Artifact in a tab", async ({ page }) => {
     "page",
   )
 })
+
+test("dragging a tab past another reorders it, and the order is kept", async ({
+  page,
+}) => {
+  await page.goto(`/workspace?tab=summary&summary=${OPEN_SUMMARY_ID}`)
+  await expect.poll(() => tabs(page)).toContain(OPEN)
+  await page.goto(`/workspace?tab=summary&summary=${WIDE_SUMMARY_ID}`)
+  await expect.poll(() => tabs(page)).toContain(WIDE)
+  const summaries = async () =>
+    (await tabs(page)).filter((tab) => tab.startsWith("summary:"))
+  await expect.poll(summaries).toEqual([OPEN, WIDE])
+
+  // The mouse sensor waits for a 5px move, so a click stays a click.
+  const from = await tabLink(page, WIDE_SUMMARY_ID).boundingBox()
+  const to = await tabLink(page, OPEN_SUMMARY_ID).boundingBox()
+  if (!from || !to) throw new Error("tabs not laid out")
+  // The drop's click once fell through to the anchor and reloaded the page.
+  await page.evaluate(() => {
+    ;(window as { sameDocument?: boolean }).sameDocument = true
+  })
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + from.width / 2 - 10, from.y + from.height / 2)
+  await page.mouse.move(to.x + 4, to.y + to.height / 2, { steps: 10 })
+  await page.mouse.up()
+
+  await expect.poll(summaries).toEqual([WIDE, OPEN])
+  expect((await tabs(page)).slice(0, 3)).toEqual(FIXED)
+  expect(
+    await page.evaluate(
+      () => (window as { sameDocument?: boolean }).sameDocument,
+    ),
+  ).toBe(true)
+
+  await page.reload()
+  await expect.poll(summaries).toEqual([WIDE, OPEN])
+})
+
+test("Space picks a tab up and the arrow keys move it", async ({ page }) => {
+  await page.goto(`/workspace?tab=summary&summary=${OPEN_SUMMARY_ID}`)
+  await expect.poll(() => tabs(page)).toContain(OPEN)
+  await page.goto(`/workspace?tab=summary&summary=${WIDE_SUMMARY_ID}`)
+  const summaries = async () =>
+    (await tabs(page)).filter((tab) => tab.startsWith("summary:"))
+  await expect.poll(summaries).toEqual([OPEN, WIDE])
+
+  // dnd-kit announces each step, and measures the strip between them.
+  const live = page.locator("[id^=DndLiveRegion]")
+  await tabLink(page, WIDE_SUMMARY_ID).focus()
+  await page.keyboard.press("Space")
+  await expect(live).toContainText(`item ${WIDE}`)
+  await page.keyboard.press("ArrowLeft")
+  await expect(live).toContainText(`over droppable area ${OPEN}`)
+  await page.keyboard.press("Space")
+  await expect(live).toContainText("was dropped")
+
+  await expect.poll(summaries).toEqual([WIDE, OPEN])
+  // The moved tab keeps focus, and then Enter still follows a link rather
+  // than picking its tab up.
+  await expect(tabLink(page, WIDE_SUMMARY_ID)).toBeFocused()
+  await tabLink(page, OPEN_SUMMARY_ID).focus()
+  await page.keyboard.press("Enter")
+  await expect(page).toHaveURL(new RegExp(`summary=${OPEN_SUMMARY_ID}`))
+})

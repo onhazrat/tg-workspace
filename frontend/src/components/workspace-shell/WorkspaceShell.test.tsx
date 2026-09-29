@@ -181,13 +181,15 @@ describe("the tab strip (TABS-01)", () => {
 
   test("the active tab is marked and a Fixed tab has no close", () => {
     const active = tabPresentation(summary, 1, all, summary, row)
-    expect(active.isActive).toBe(true)
+    expect(active.ariaCurrent).toBe("page")
+    expect(active.itemClass).toContain("@container")
     expect(active.closable).toBe(true)
     expect(active.linkClass).toContain("border-app-ink")
     expect(active.closeClass).toBe("opacity-70")
 
     const fixed = tabPresentation(all[0], 0, all, summary, undefined)
-    expect(fixed.isActive).toBe(false)
+    expect(fixed.ariaCurrent).toBe(undefined)
+    expect(fixed.itemClass).toBe("shrink-0")
     expect(fixed.closable).toBe(false)
     expect(fixed.label).toBe("Posts")
     expect(fixed.closeClass).toContain("group-hover")

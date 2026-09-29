@@ -176,6 +176,26 @@ export function close(set: TabSet, active: Tab, target: Tab): Step {
   }
 }
 
+/**
+ * Drag `target` onto `over`'s place (TABS-02).
+ *
+ * Only Closable tabs move, and only among themselves: a Fixed `target` stays,
+ * and a drop onto a Fixed tab clamps to the first Closable place, so the
+ * Fixed tabs are never passed.
+ */
+export function move(set: TabSet, target: Tab, over: Tab): TabSet {
+  const from = set.tabs.findIndex((t) => sameTab(t, target))
+  if (from === -1) return set
+  const to = Math.max(
+    set.tabs.findIndex((t) => sameTab(t, over)),
+    0,
+  )
+  if (from === to) return set
+  const tabs = [...set.tabs]
+  tabs.splice(to, 0, ...tabs.splice(from, 1))
+  return { ...set, tabs }
+}
+
 /** Bring back the most recently closed tab, with its Artifact. */
 export function reopenLast(set: TabSet, active: Tab): Step {
   const last = set.closed.at(-1)

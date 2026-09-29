@@ -128,12 +128,17 @@ export function tabPresentation(
 ) {
   const meta = TAB_META[tab.kind]
   const isActive = sameTab(tab, active)
+  const closable = !isFixed(tab.kind)
   return {
     key: tabKey(tab),
     meta,
     label: tabLabel(meta.label, artifact),
-    isActive,
-    closable: !isFixed(tab.kind),
+    ariaCurrent: isActive ? ("page" as const) : undefined,
+    closable,
+    // A Closable tab shrinks, down to icon width, before the strip scrolls
+    // (TABS-02). It is a size container so its × can tell it has shrunk, and
+    // a size container has no content width, hence the explicit one.
+    itemClass: closable ? "@container w-40 min-w-6" : "shrink-0",
     // The tour and the specs address the first tab of a kind.
     anchorId:
       all.findIndex((t) => t.kind === tab.kind) === index

@@ -18,6 +18,13 @@ import { join } from "node:path"
  */
 
 const APP = join(import.meta.dir, "..", "App.tsx")
+const STRIP = join(
+  import.meta.dir,
+  "..",
+  "components",
+  "workspace-shell",
+  "WorkspaceTabStrip.tsx",
+)
 
 /** The icon-only controls in the header, by the icon each renders. */
 const HEADER_ICON_BUTTONS = [
@@ -40,6 +47,7 @@ function stripComments(source: string): string {
 describe("header accessibility", () => {
   const source = readFileSync(APP, "utf8")
   const code = stripComments(source)
+  const stripCode = stripComments(readFileSync(STRIP, "utf8"))
 
   it("names every icon-only header button", () => {
     // One `aria-label` per icon-only button. Without a text child there is
@@ -82,13 +90,23 @@ describe("header accessibility", () => {
   })
 
   it("navigates tabs with links, not click handlers", () => {
-    expect(source).not.toContain("onClick={() => setActiveTab(tab.id")
-    expect(source).toContain('to="/workspace"')
-    expect(source).toContain('aria-current={isActive ? "page" : undefined}')
+    expect(stripCode).not.toContain("onClick={() => setActiveTab(tab.id")
+    expect(stripCode).toContain('to="/workspace"')
+    expect(stripCode).toContain("aria-current={view.ariaCurrent}")
   })
 
   it("groups the tab links in a named nav landmark", () => {
-    expect(source).toMatch(/<nav\s+aria-label="Workspace sections"/)
+    expect(stripCode).toMatch(/<nav\s+aria-label="Workspace sections"/)
+  })
+
+  /**
+   * `useSortable`'s `attributes` carry `role="button"`, `aria-pressed` and
+   * `aria-roledescription="sortable"`. Spread onto a tab they would announce a
+   * link as a button (TABS-02), so the strip takes only the drag instructions.
+   */
+  it("keeps the sortable tabs links rather than buttons", () => {
+    expect(stripCode).not.toMatch(/\{\.\.\.[\w.]*attributes\}/)
+    expect(stripCode).toContain('attributes["aria-describedby"]')
   })
 
   /**
@@ -98,10 +116,11 @@ describe("header accessibility", () => {
    * role later, this fails and points at the obligation that comes with it.
    */
   it("does not claim the ARIA tab pattern without implementing it", () => {
+    const both = code + stripCode
     const claimsTabRole =
-      code.includes('role="tab"') || code.includes('role="tablist"')
+      both.includes('role="tab"') || both.includes('role="tablist"')
     const implementsRovingFocus =
-      code.includes("ArrowRight") || code.includes("ArrowLeft")
+      both.includes("ArrowRight") || both.includes("ArrowLeft")
     if (claimsTabRole) {
       expect(implementsRovingFocus).toBe(true)
     }

@@ -9,6 +9,7 @@ import {
   emptyTabSet,
   findTabArtifacts,
   goTo,
+  move,
   open,
   reconcile,
   reopenLast,
@@ -138,6 +139,49 @@ describe("close", () => {
     const step = close(set, POSTS, POSTS)
     expect(names(step.set)).toEqual(names(set))
     expect(step.active).toEqual(POSTS)
+  })
+})
+
+describe("move", () => {
+  const a: Tab = { kind: "summary", id: "a" }
+  const b: Tab = { kind: "summary", id: "b" }
+  const c: Tab = { kind: "chat", id: "c" }
+
+  it("moves a tab rightwards onto another's place", () => {
+    expect(names(move(withTabs(a, b, c), a, c))).toEqual([
+      ...FIXED,
+      "summary:b",
+      "chat:c",
+      "summary:a",
+    ])
+  })
+
+  it("moves a tab leftwards onto another's place", () => {
+    expect(names(move(withTabs(a, b, c), c, a))).toEqual([
+      ...FIXED,
+      "chat:c",
+      "summary:a",
+      "summary:b",
+    ])
+  })
+
+  it("clamps a drop onto a Fixed tab to the first Closable place", () => {
+    expect(names(move(withTabs(a, b, c), c, POSTS))).toEqual([
+      ...FIXED,
+      "chat:c",
+      "summary:a",
+      "summary:b",
+    ])
+  })
+
+  it("never moves a Fixed tab", () => {
+    const set = withTabs(a, b)
+    expect(names(move(set, ACTION, b))).toEqual(names(set))
+  })
+
+  it("ignores a tab that is not open", () => {
+    const set = withTabs(a, b)
+    expect(move(set, c, a)).toBe(set)
   })
 })
 
