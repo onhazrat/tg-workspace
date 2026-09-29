@@ -16,7 +16,8 @@ import {
 test.describe("TG Workspace discover", () => {
   test("discover tab opens Discover view", async ({ page }) => {
     await page.goto("/workspace?tab=summary")
-    await page.locator("#tour-tab-discover").click()
+    await page.getByTestId("workspace-tab-add").click()
+    await page.getByRole("menuitem", { name: "Discover" }).click()
 
     await expect(page).toHaveURL(/tab=discover/)
     await expect(page.locator("#tour-tab-discover")).toHaveClass(

@@ -387,7 +387,6 @@ export const appSettingsSpec = {
   // collapsed chrome without the browser being fullscreen. That asymmetry is
   // deliberate — see `hooks/useWorkspaceFullscreen.ts`.
   workspaceFocusMode: booleanSetting("workspaceFocusMode", false),
-  compactWorkspaceTabs: booleanSetting("compactWorkspaceTabs", false),
 }
 
 /** State shape derived from the schema — one property per setting. */

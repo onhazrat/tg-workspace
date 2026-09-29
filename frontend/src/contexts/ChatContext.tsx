@@ -86,7 +86,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const {
     activeTab,
     currentChatSessionId,
-    setCurrentChatSessionId,
+    workspaceTabs,
     includeChannelBioInPrompt,
     includeChannelTagsInPrompt,
   } = useUI()
@@ -127,7 +127,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const loadedSessionRef = useRef<string | null>(null)
   const { data: openedSession } = useChatSessionQuery(currentChatSessionId)
 
+  // Only on a Chat tab: every other tab reads a null session id (TABS-01), and
+  // treating that as an empty Chat tab would wipe a turn still streaming.
   useEffect(() => {
+    if (activeTab !== "chat") return
     const load = transcriptLoad(
       currentChatSessionId,
       loadedSessionRef.current,
@@ -136,7 +139,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!load) return
     loadedSessionRef.current = load.loadedId
     if (load.messages) setChatMessages(load.messages)
-  }, [currentChatSessionId, openedSession])
+  }, [activeTab, currentChatSessionId, openedSession])
 
   useEffect(() => {
     if (chatInputRef.current) {
@@ -370,7 +373,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     // this session as already-loaded and never refetches over the turns we
     // are appending live.
     loadedSessionRef.current = sessionId
-    if (currentChatSessionId !== sessionId) setCurrentChatSessionId(sessionId)
+    // A new conversation gets its own tab (TABS-01): the empty Chat tab it
+    // started in, or a new one if that was closed mid-run.
+    if (!send.sessionId) workspaceTabs.createTab("chat", sessionId)
     await loadHistory()
   }
 

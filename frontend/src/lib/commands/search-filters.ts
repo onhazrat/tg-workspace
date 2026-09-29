@@ -122,11 +122,5 @@ export function pickSearchSummary(
   ctx: CommandContext,
   summary: SummaryListItem,
 ): void {
-  ctx.setActiveTab("history")
-  ctx.setCurrentSummaryId(summary.id)
-  requestAnimationFrame(() => {
-    document
-      .querySelector(`[data-artifact-id="${summary.id}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" })
-  })
+  ctx.workspaceTabs.openTab("summary", summary.id)
 }

@@ -140,10 +140,15 @@ describe("chatSessionRecord", () => {
 describe("transcriptLoad", () => {
   const turns: ChatMessage[] = [{ role: "user", text: "hi" }]
 
-  it("forgets the loaded session when the chat is closed, keeping the turns", () => {
+  it("clears the transcript for an empty Chat tab after a filled one", () => {
     expect(transcriptLoad(null, "c1", { messages: turns })).toEqual({
       loadedId: null,
+      messages: [],
     })
+  })
+
+  it("keeps a first turn's buffer in the empty tab it streams into", () => {
+    expect(transcriptLoad(null, null, undefined)).toEqual({ loadedId: null })
   })
 
   it("does nothing while the opened transcript is still loading", () => {

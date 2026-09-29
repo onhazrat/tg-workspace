@@ -38,8 +38,7 @@ export const ChatView: React.FC = () => {
     resolvedTheme: theme,
     embeddingsEnabled,
   } = useSettings()
-  const { currentChatSessionId, setCurrentSummaryId, setCurrentChatSessionId } =
-    useUI()
+  const { currentChatSessionId, workspaceTabs } = useUI()
   const { data: chatSession } = useChatSessionQuery(currentChatSessionId)
   const { isSyncing, progress } = useRAG()
   const {
@@ -67,12 +66,10 @@ export const ChatView: React.FC = () => {
 
   const clearConversation = () => {
     setChatMessages([])
-    // Both ids, or the next message writes the new turns over the
-    // transcript of the conversation just cleared:
-    // `handleSendMessage` reuses `currentChatSessionId` and the
-    // payload write replaces `messages` wholesale.
-    setCurrentChatSessionId(null)
-    setCurrentSummaryId(null)
+    // The empty Chat tab, or a new one. The conversation stays in its own
+    // tab, and the next message cannot write over its transcript, because
+    // `handleSendMessage` reads the session id from the tab it is sent in.
+    workspaceTabs.openTab("chat")
     setExpandedSources({})
   }
 

@@ -46,31 +46,13 @@ export type TabType = (typeof WORKSPACE_TABS)[number]["id"]
 /**
  * Every tab id, for validating `?tab=`.
  *
- * Deliberately the *unfiltered* list. `compactWorkspaceTabs` hides tabs from the
- * nav, but a hidden tab must stay reachable by URL — otherwise every deep link,
- * palette command and `setActiveTab` call breaks the moment the setting is
- * flipped.
+ * Deliberately the *unfiltered* list. A closed tab must stay reachable by URL,
+ * because opening one is how every deep link, History row and palette command
+ * gets a tab in the first place (TABS-01).
  */
 export const VALID_TABS: readonly TabType[] = WORKSPACE_TABS.map(
   (tab) => tab.id,
 )
-
-/**
- * The tabs `compactWorkspaceTabs` leaves in the nav.
- *
- * Channels and Posts are how you set the scope, Action is how you make
- * something from it, History is what you made, Settings is everything else.
- * The four feature tabs render results and are reached by opening an artifact,
- * so they do not need to be in the nav — but they stay in `VALID_TABS`, because
- * hiding a tab must not make it unreachable.
- */
-export const COMPACT_WORKSPACE_TAB_IDS: readonly TabType[] = [
-  "channels",
-  "posts",
-  "action",
-  "history",
-  "settings",
-]
 
 export const SETTINGS_TABS = [
   { id: "commonly-used", label: "Commonly Used", icon: "Star" },

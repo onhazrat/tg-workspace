@@ -69,7 +69,7 @@ const ActionCard: React.FC<ActionCardProps> = ({
  * inference in it.
  */
 export const ActionView: React.FC = () => {
-  const { setActiveTab, setCurrentChatSessionId } = useUI()
+  const { workspaceTabs } = useUI()
   const {
     chatMode,
     setChatMode,
@@ -101,33 +101,12 @@ export const ActionView: React.FC = () => {
 
   const [pasteOpen, setPasteOpen] = useState(false)
 
-  /**
-   * Generate a report, then go and look at it.
-   *
-   * `generate()` pins the new report in `?report=` but does not navigate, so
-   * without this the button returns to "Generate report" and nothing visibly
-   * happens — the result is sitting on a tab you are not on. The summary path
-   * already hops (`AIContext` calls `setActiveTab("summary")`), and four create
-   * paths that disagree about whether they show you the result is worse than
-   * any one of the behaviours.
+  /*
+   * Generating a report and saving a pasted tag response both show the result:
+   * each goes through `workspaceTabs.createTab`, which focuses the new tab when
+   * it was started from here (TABS-01). Four create paths that disagree about
+   * whether they show you the result is worse than any one of the behaviours.
    */
-  const generateAndShow = async () => {
-    await generate()
-    setActiveTab("discover")
-  }
-
-  /**
-   * Save a pasted tag response, then go and review it.
-   *
-   * The suggestions render on the Tag tab; pasting happens here. Without the
-   * hop the modal closes and nothing visibly happens — the same gap the
-   * Discover button had, and the summary path has always hopped.
-   */
-  const savePastedTags = async (text: string, modelName?: string) => {
-    const ok = await completePendingTagRun(text, modelName)
-    if (ok) setActiveTab("tag")
-    return ok
-  }
 
   /**
    * Open a conversation with its first question already asked.
@@ -149,8 +128,8 @@ export const ActionView: React.FC = () => {
     setChatDraft("")
     setChatInput("")
     setChatMessages([])
-    setCurrentChatSessionId(null)
-    setActiveTab("chat")
+    // The empty Chat tab, or a new one; the first turn fills it.
+    workspaceTabs.openTab("chat")
     void handleSendMessage({ message: question, history: [], sessionId: null })
   }
 
@@ -211,7 +190,7 @@ export const ActionView: React.FC = () => {
           <TgButton
             data-testid="action-generate-report"
             disabled={reportButton.disabled}
-            onClick={() => void generateAndShow()}
+            onClick={() => void generate()}
           >
             {reportButton.label}
           </TgButton>
@@ -280,7 +259,7 @@ export const ActionView: React.FC = () => {
       <PasteTagsModal
         isOpen={pasteOpen}
         onClose={() => setPasteOpen(false)}
-        onSave={savePastedTags}
+        onSave={completePendingTagRun}
       />
     </motion.div>
   )

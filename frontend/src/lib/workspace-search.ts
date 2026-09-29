@@ -1,6 +1,7 @@
 import { VALID_TABS } from "@/constants"
 import type { SettingsSection } from "@/lib/settingsSection"
 import { normalizeSettingsSection } from "@/lib/settingsSection"
+import { tabFromSearch, tabSearch } from "@/lib/workspace-tabs"
 import type { TabType } from "@/types"
 
 export type WorkspaceSearch = {
@@ -68,5 +69,8 @@ export function validateWorkspaceSearch(
     const value = trimmedString(search[key])
     if (value) result[key] = value
   }
-  return result
+  // Only the active tab's Artifact param means anything (TABS-01). An old
+  // `?summary=` riding along on `?tab=posts` would otherwise reopen that
+  // Summary the next time the Summary tab was focused.
+  return tabSearch(result, tabFromSearch(result))
 }

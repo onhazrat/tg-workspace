@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import {
   Activity,
   Command as CommandIcon,
@@ -14,11 +14,13 @@ import {
   Minimize2,
   Monitor,
   Moon,
+  Plus,
   Send,
   Settings,
   Sparkles,
   Sun,
   Tag,
+  X,
   Zap,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
@@ -36,6 +38,12 @@ import { SummaryView } from "./components/SummaryView"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu"
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -52,7 +60,9 @@ import {
   opensShortcuts,
   routingMode,
   THEME_TOOLTIPS,
+  tabLabel,
 } from "./components/workspace-shell/workspace-shell-model"
+import { WORKSPACE_TABS } from "./constants"
 import { useData } from "./contexts/DataContext"
 import { useScraper } from "./contexts/ScraperContext"
 import { useSettings } from "./contexts/SettingsContext"
@@ -64,7 +74,7 @@ import { useScopedPostCounts } from "./hooks/usePostsView"
 import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
 import { artifactDestination } from "./lib/history/open-artifact"
-import { visibleWorkspaceTabs } from "./lib/workspace-tabs"
+import { isFixed, sameTab, tabSearch } from "./lib/workspace-tabs"
 import type { ArtifactListItem, TabType } from "./types"
 
 const THEME_ICONS = { system: Monitor, light: Moon, dark: Sun }
@@ -100,12 +110,20 @@ const TAB_ICONS = {
   Zap,
 }
 
+const TAB_META = Object.fromEntries(
+  WORKSPACE_TABS.map((tab) => [tab.id, tab]),
+) as Record<TabType, (typeof WORKSPACE_TABS)[number]>
+
+/** What the "+" menu offers: every kind that can be closed. */
+const CLOSABLE_TABS = WORKSPACE_TABS.filter((tab) => !isFixed(tab.id))
+
 export default function App() {
   const { isOffline } = useApiStatus()
 
   const { channels, selectedChannels } = useData()
 
-  const { activeTab, setActiveTab, isRateLimited, summarizing } = useUI()
+  const { activeTab, setActiveTab, workspaceTabs, isRateLimited, summarizing } =
+    useUI()
 
   const {
     postSearch,
@@ -124,10 +142,8 @@ export default function App() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
-  const { theme, setTheme, proxyEnabled, torEnabled, compactWorkspaceTabs } =
-    useSettings()
+  const { theme, setTheme, proxyEnabled, torEnabled } = useSettings()
 
-  const navigate = useNavigate()
   const { startTour } = useGuidedTour()
   const { setOpen: setCommandPaletteOpen } = useCommandPaletteContext()
   const { isFullscreen, toggle: toggleFullscreen } = useWorkspaceFullscreen()
@@ -155,7 +171,7 @@ export default function App() {
   const routing = routingMode({ torEnabled, proxyEnabled })
 
   /**
-   * Open an artifact from History: go where it renders, and change nothing else.
+   * Open an artifact from History in its own tab, and change nothing else.
    *
    * Opening one used to replace the channel selection and the date range, and
    * announce that in a banner. Inspecting history is not editing it (AW-08), so
@@ -163,16 +179,11 @@ export default function App() {
    * a look at an old result. `ArtifactScopeLine` offers **Use this Scope** on
    * the artifact itself for the times restoring it is what somebody wants.
    *
-   * Which tab, and which URL param, is `artifactDestination`'s call. Every kind
-   * is deep-linked now; only Discover reports were before.
+   * An Artifact that already has a tab is switched to rather than opened
+   * twice (TABS-01).
    */
   const openArtifact = (artifact: ArtifactListItem) => {
-    const { tab, param } = artifactDestination(artifact)
-    void navigate({
-      to: "/workspace",
-      search: (prev) => ({ ...prev, tab, [param]: artifact.id }),
-      replace: true,
-    })
+    workspaceTabs.openTab(artifactDestination(artifact).tab, artifact.id)
   }
 
   useEffect(() => {
@@ -408,37 +419,99 @@ export default function App() {
                  * `replace` preserves the previous behaviour — tab switches
                  * did not stack history entries, and still do not.
                  */}
-                <nav aria-label="Workspace sections" className="flex gap-4">
-                  {visibleWorkspaceTabs(compactWorkspaceTabs, activeTab).map(
-                    (tab) => {
-                      const Icon =
-                        TAB_ICONS[tab.icon as keyof typeof TAB_ICONS] ??
-                        Database
+                <nav
+                  aria-label="Workspace sections"
+                  className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
+                >
+                  {workspaceTabs.tabs.map((tab, index, all) => {
+                    const meta = TAB_META[tab.kind]
+                    const Icon =
+                      TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ?? Database
+                    const isActive = sameTab(tab, workspaceTabs.active)
+                    const closable = !isFixed(tab.kind)
+                    const label = tabLabel(
+                      meta.label,
+                      workspaceTabs.artifactFor(tab),
+                    )
+                    // The tour and the specs address the first tab of a kind.
+                    const first =
+                      all.findIndex((t) => t.kind === tab.kind) === index
 
-                      const isActive = activeTab === tab.id
-
-                      return (
+                    return (
+                      <span
+                        key={`${tab.kind}:${tab.id ?? ""}`}
+                        className="group flex min-w-0 items-center gap-1"
+                      >
                         <Link
-                          key={tab.id}
-                          id={`tour-tab-${tab.id}`}
+                          id={first ? `tour-tab-${tab.kind}` : undefined}
                           to="/workspace"
-                          search={(prev) => ({
-                            ...prev,
-                            tab: tab.id as TabType,
-                          })}
+                          search={(prev) => tabSearch(prev, tab)}
                           replace
+                          title={label}
                           aria-current={isActive ? "page" : undefined}
-                          className={`text-xs font-mono uppercase tracking-widest flex items-center gap-2 pb-1 border-b-2 transition-all ${
+                          // Middle-click closes a Closable tab, as in a
+                          // browser. On a Fixed tab it still opens a new one.
+                          onAuxClick={(event) => {
+                            if (event.button !== 1 || !closable) return
+                            event.preventDefault()
+                            workspaceTabs.closeTab(tab)
+                          }}
+                          className={`text-xs font-mono uppercase tracking-widest flex min-w-0 items-center gap-2 pb-1 border-b-2 transition-all ${
                             isActive
                               ? "border-app-ink opacity-100"
                               : "border-transparent opacity-40"
                           }`}
                         >
-                          <Icon size={14} /> {tab.label}
+                          <Icon size={14} className="shrink-0" />
+                          <span className="max-w-[14rem] truncate">
+                            {label}
+                          </span>
                         </Link>
-                      )
-                    },
-                  )}
+                        {closable && (
+                          <button
+                            type="button"
+                            aria-label={`Close ${label}`}
+                            data-testid="workspace-tab-close"
+                            onClick={() => workspaceTabs.closeTab(tab)}
+                            className={`rounded p-0.5 transition-opacity hover:bg-app-ink/10 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${
+                              isActive
+                                ? "opacity-70"
+                                : "opacity-0 group-hover:opacity-70"
+                            }`}
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </span>
+                    )
+                  })}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Open a tab"
+                        data-testid="workspace-tab-add"
+                        className="rounded p-1 opacity-60 transition-opacity hover:bg-app-ink/10 hover:opacity-100"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {CLOSABLE_TABS.map((meta) => {
+                        const Icon =
+                          TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ??
+                          Database
+                        return (
+                          <DropdownMenuItem
+                            key={meta.id}
+                            onSelect={() => workspaceTabs.openTab(meta.id)}
+                          >
+                            <Icon size={14} /> {meta.label}
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </nav>
                 <div className="flex items-center gap-6">
                   {/*

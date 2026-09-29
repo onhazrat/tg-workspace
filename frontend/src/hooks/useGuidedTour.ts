@@ -1,13 +1,21 @@
 import { driver } from "driver.js"
 import { useCallback, useEffect, useState } from "react"
 import "driver.js/dist/driver.css"
+import { WORKSPACE_TABS } from "@/constants"
 import { scopedStorage } from "@/lib/storage/scoped"
+import { isFixed } from "@/lib/workspace-tabs"
 import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
 
+const TOUR_TABS = WORKSPACE_TABS.map((tab) => tab.id).filter(
+  (id) => !isFixed(id),
+)
+
 export const useGuidedTour = () => {
   const { channels } = useData()
-  const { setActiveTab } = useUI()
+  const {
+    workspaceTabs: { setActiveTab, openTabs, snapshot, restore },
+  } = useUI()
   const [hasSeenTour, setHasSeenTour] = useState(() => {
     if (typeof window !== "undefined") {
       return scopedStorage.getItem("hasSeenTour") === "true"
@@ -16,6 +24,11 @@ export const useGuidedTour = () => {
   })
 
   const startTour = useCallback(() => {
+    // The tour points at every tab, most of which a user may have closed. It
+    // opens them for the tour and puts the user's own strip back when it ends
+    // or is dismissed (TABS-01).
+    const saved = snapshot()
+    openTabs(TOUR_TABS)
     const driverObj = driver({
       showProgress: true,
       animate: true,
@@ -32,6 +45,7 @@ export const useGuidedTour = () => {
           setHasSeenTour(true)
         }
         driverObj.destroy()
+        restore(saved)
       },
       steps: [
         {
@@ -168,7 +182,7 @@ export const useGuidedTour = () => {
     setTimeout(() => {
       driverObj.drive()
     }, 100)
-  }, [hasSeenTour, setActiveTab])
+  }, [hasSeenTour, setActiveTab, openTabs, snapshot, restore])
 
   // Auto-start tour on first visit if no channels exist
   useEffect(() => {

@@ -72,5 +72,35 @@ export function buildNavigateCommands(): CommandDef[] {
     },
   ]
 
-  return [...workspaceCommands, ...settingsCommands, ...legacyAliases]
+  // The browser keeps Cmd+W and Cmd+Shift+T, so closing and reopening a tab
+  // without the mouse lives here (TABS-01).
+  const tabCommands: CommandDef[] = [
+    {
+      id: "tab-close",
+      kind: "action",
+      label: "Close tab",
+      keywords: ["close", "tab"],
+      group: "Navigate",
+      run: (ctx) => {
+        ctx.workspaceTabs.closeTab(ctx.workspaceTabs.active)
+      },
+    },
+    {
+      id: "tab-reopen",
+      kind: "action",
+      label: "Reopen closed tab",
+      keywords: ["reopen", "restore", "undo", "closed", "tab"],
+      group: "Navigate",
+      run: (ctx) => {
+        ctx.workspaceTabs.reopenLastTab()
+      },
+    },
+  ]
+
+  return [
+    ...workspaceCommands,
+    ...tabCommands,
+    ...settingsCommands,
+    ...legacyAliases,
+  ]
 }

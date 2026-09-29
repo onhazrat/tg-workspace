@@ -88,7 +88,7 @@ describe("header accessibility", () => {
   })
 
   it("groups the tab links in a named nav landmark", () => {
-    expect(source).toContain('<nav aria-label="Workspace sections"')
+    expect(source).toMatch(/<nav\s+aria-label="Workspace sections"/)
   })
 
   /**

@@ -166,36 +166,15 @@ describe("One declaration of the workspace tabs", () => {
   })
 
   /**
-   * The route validator must accept every tab, including ones
-   * `compactWorkspaceTabs` hides from the nav.
+   * The route validator must accept every tab, including closed ones.
    *
-   * Hiding a tab is a decluttering choice, not a capability removal: History
-   * deep-links into hidden tabs, the command palette still offers them, and
-   * `setActiveTab("summary")` is called from several places that know nothing
-   * about the setting. If `VALID_TABS` were ever derived from the *filtered*
-   * list, every one of those would silently redirect to `channels`.
+   * Closing a tab is a decluttering choice, not a capability removal: History,
+   * the logs and the palette open Artifacts into tabs that may not exist yet,
+   * and a pasted link names a tab the reader never opened. `visit` opens a tab
+   * for whatever the URL names, so it only works if the validator lets the
+   * name through. Derived from the *open* list, every one of those would
+   * silently redirect to `channels`.
    */
-  /**
-   * `compactWorkspaceTabs` hides tabs from the *nav*, and only from the nav.
-   *
-   * Every other consumer must keep seeing all of them: the route validator, the
-   * command palette's "Go to {label}" generator, and every `setActiveTab` call.
-   * Filtering any of those turns a decluttering preference into a capability
-   * removal, and the failure is silent — a deep link from History would land on
-   * `channels` instead of the artifact you clicked.
-   */
-  it("filters only the nav, never the palette or the validator", () => {
-    const palette = readFileSync(join(SRC, "lib/commands/navigate.ts"), "utf8")
-    expect(palette).not.toContain("compactWorkspaceTabs")
-
-    const app = readFileSync(join(SRC, "App.tsx"), "utf8")
-    // The nav is the one place the filter is applied.
-    expect(app).toContain("visibleWorkspaceTabs(compactWorkspaceTabs")
-
-    const route = readFileSync(join(SRC, "routes/_tg/workspace.tsx"), "utf8")
-    expect(route).not.toContain("compactWorkspaceTabs")
-  })
-
   it("validates against the unfiltered tab list", () => {
     const constants = readFileSync(join(SRC, "constants.ts"), "utf8")
     const declaration = /export const VALID_TABS[\s\S]*?\n\)\n/.exec(

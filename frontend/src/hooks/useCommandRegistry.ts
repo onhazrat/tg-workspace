@@ -65,7 +65,7 @@ export function useCommandRegistry(): {
   const { startDate, endDate, setFixedRange: setDateRange } = useScope()
   const {
     setActiveTab,
-    setCurrentSummaryId,
+    workspaceTabs,
     currentSummaryId,
     historySearchQuery,
     setHistorySearchQuery,
@@ -201,7 +201,7 @@ export function useCommandRegistry(): {
       setSummary,
       setDateRange,
       setChatMessages,
-      setCurrentSummaryId,
+      workspaceTabs,
       currentSummaryId,
       settings: {
         theme: settings.theme,
@@ -340,7 +340,7 @@ export function useCommandRegistry(): {
       setAutoSyncPauseUntil,
       setChannels,
       setChatMessages,
-      setCurrentSummaryId,
+      workspaceTabs,
       setDateRange,
       setForwardedFilter,
       setMaxPostsPerChannel,

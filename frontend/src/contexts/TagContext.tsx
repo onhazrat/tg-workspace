@@ -65,8 +65,8 @@ interface TagContextType {
   isApplying: boolean
   /** Metadata only — `selectedRun` carries the heavy fields. */
   tagRuns: TagRunSummary[]
+  /** The active tab's run; null on any other tab or an empty Tag tab. */
   currentRunId: string | null
-  setCurrentRunId: React.Dispatch<React.SetStateAction<string | null>>
   suggestions: Record<string, string[]>
   selectedRun: TagRun | null
   copyTagPrompt: () => Promise<void>
@@ -76,7 +76,6 @@ interface TagContextType {
     modelName?: string,
   ) => Promise<boolean>
   applyCurrentSuggestions: () => Promise<void>
-  deleteRun: (id: string) => Promise<void>
 }
 
 const TagContext = createContext<TagContextType | undefined>(undefined)
@@ -87,8 +86,12 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   const { channels, selectedChannels, setChannels } = useData()
   const { getPromptPostsInput, getScopeSubmission } = useScraper()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
-  const { activeTab, includeChannelBioInPrompt, includeChannelTagsInPrompt } =
-    useUI()
+  const {
+    activeTab,
+    workspaceTabs,
+    includeChannelBioInPrompt,
+    includeChannelTagsInPrompt,
+  } = useUI()
   const queryClient = useQueryClient()
 
   const [mode, setMode] = useState<TagMode>("add")
@@ -96,8 +99,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isApplying, setIsApplying] = useState(false)
   // In the URL, so History's `?tagRun=` deep link actually opens a run — see
   // the note on `currentSummaryId` in `UIContext`.
-  const { tagRunId: currentRunId, openTagRun: setCurrentRunId } =
-    useTagRunParam()
+  const { tagRunId: currentRunId } = useTagRunParam()
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({})
 
   // TagProvider is mounted unconditionally, so an unguarded fetch here ran on
@@ -147,15 +149,9 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     [queryClient],
   )
 
-  // Default the selection to the newest run once the list arrives.
+  // Each Tag tab shows its own run's suggestions, and an empty one none.
   useEffect(() => {
-    if (!currentRunId && tagRuns.length > 0) {
-      setCurrentRunId(tagRuns[0].id)
-    }
-  }, [tagRuns, currentRunId])
-
-  useEffect(() => {
-    if (selectedRun?.suggestions) setSuggestions(selectedRun.suggestions)
+    setSuggestions(selectedRun?.suggestions ?? {})
   }, [selectedRun])
 
   const buildPromptParts = async () => {
@@ -257,7 +253,8 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         ...tagRunSnapshot(allTags, channelContextOptions()),
       })
       applySavedRun(saved)
-      setCurrentRunId(saved.id)
+      // Its tab opens without leaving Action, where the paste box is.
+      workspaceTabs.createTab("tag", saved.id, { background: true })
       await tryWriteTextToClipboard(prompt)
       toast.success("Tag prompt copied. Paste the AI response when ready.")
     } catch (error) {
@@ -323,7 +320,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     })
     row.keep()
     applySavedRun(saved)
-    setCurrentRunId(saved.id)
+    workspaceTabs.createTab("tag", saved.id)
     toast.success("Tag suggestions generated.")
   }
 
@@ -344,7 +341,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         completedTagRun(pending, responseText, parsed, modelName, Date.now()),
       )
       applySavedRun(saved)
-      setCurrentRunId(saved.id)
+      workspaceTabs.createTab("tag", saved.id)
       toast.success(
         `Parsed tag suggestions for ${Object.keys(parsed).length} channel(s).`,
       )
@@ -409,19 +406,6 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
-  const handleDeleteRun = async (id: string) => {
-    await deleteTagRun(id)
-    const next = queryClient.setQueryData<TagRunSummary[]>(
-      queryKeys.tagRuns,
-      (prev = []) => prev.filter((entry) => entry.id !== id),
-    )
-    queryClient.removeQueries({ queryKey: queryKeys.tagRun(id) })
-    if (currentRunId === id) {
-      setCurrentRunId(next?.[0]?.id ?? null)
-      setSuggestions({})
-    }
-  }
-
   return (
     <TagContext.Provider
       value={{
@@ -431,14 +415,12 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
         isApplying,
         tagRuns,
         currentRunId,
-        setCurrentRunId,
         suggestions,
         selectedRun,
         copyTagPrompt,
         generateTags,
         completePendingTagRun,
         applyCurrentSuggestions,
-        deleteRun: handleDeleteRun,
       }}
     >
       {children}

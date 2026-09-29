@@ -2,8 +2,9 @@
  * The workspace shell's small decisions, with no React, so they can be tested.
  * `App` renders them.
  */
+import { artifactChannelsLine } from "@/components/history/artifact-presentation"
 import type { Theme } from "@/components/theme-provider"
-import type { Channel } from "@/types"
+import type { ArtifactListItem, Channel } from "@/types"
 
 /** What the theme button says: the current mode and where a click goes next. */
 export const THEME_TOOLTIPS: Record<Theme, string> = {
@@ -91,4 +92,22 @@ export function shortcutGroups(commandKey: string) {
       ],
     },
   ]
+}
+
+/**
+ * What a workspace tab says (TABS-01): its kind, or a short name for the
+ * Artifact it holds, so five Summary tabs are told apart. The scope and date
+ * for most kinds, the first question for a Chat.
+ */
+export function tabLabel(
+  kindLabel: string,
+  artifact: ArtifactListItem | undefined,
+): string {
+  if (!artifact) return kindLabel
+  if (artifact.kind === "chat" && artifact.title) return artifact.title
+  const date = new Date(artifact.timestamp ?? 0).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })
+  return `${artifactChannelsLine(artifact)} · ${date}`
 }
