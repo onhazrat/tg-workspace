@@ -189,6 +189,29 @@ describe("sseTextStream", () => {
     expect(got).toEqual(["Good ", "news"])
   })
 
+  it("throws the reason an error frame carries, after the text before it", async () => {
+    // The server ends a failed Provider stream on this frame, never `[DONE]`.
+    respond = () =>
+      new Response(
+        streamOf(
+          'data: {"text":"partial"}\n',
+          'data: {"error":"The AI model is overloaded right now."}\n',
+        ),
+      )
+    const got: string[] = []
+    let thrown: unknown
+    try {
+      for await (const t of sseTextStream("http://sse.test/ai", {}, "text"))
+        got.push(t)
+    } catch (err) {
+      thrown = err
+    }
+    expect(got).toEqual(["partial"])
+    expect((thrown as Error).message).toBe(
+      "The AI model is overloaded right now.",
+    )
+  })
+
   it("POSTs the body as JSON", async () => {
     respond = () => new Response(streamOf())
     await collect(sseTextStream("http://sse.test/ai", { q: 1 }, "text"))

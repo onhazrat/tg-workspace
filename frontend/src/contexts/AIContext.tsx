@@ -248,9 +248,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     row: ProvisionalRow,
   ) => {
     const newId = crypto.randomUUID()
-    const scope = await openSummary(newId, names, posts, row, {})
-    const startTime = Date.now()
-    const { stream, prompt, config } = await generateSummaryStream(
+    // File exactly what Copy files, before the model is asked: a `pending`
+    // row holding its prompt. From here a failed run leaves an item that can
+    // still be finished by pasting any model's answer, rather than nothing.
+    const scope = await openSummary(newId, names, posts, row, {
+      status: "pending",
+    })
+    const pendingPrompt = await getSummaryPrompt(
       names,
       channelsText(),
       posts.postsText,
@@ -259,36 +263,118 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       aiTemperature,
       scope,
     )
-    setChatMessages([]) // Clear chat when new summary starts
-    const { text, lastChunk } = await readStream(stream, setSummary)
-    await saveLLMLog(
-      summaryLLMLog({
-        id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-        model: selectedModel,
-        prompt,
-        config,
-        text,
-        lastChunk,
-        now: Date.now(),
-        durationMs: Date.now() - startTime,
-      }),
-    )
-    if (!text) return
-
-    // Only what the run produced. The Scope is already on the row and the
-    // server refuses to take it again, so sending it back would be a second
-    // copy of a fact that is settled.
-    await saveSummary({
-      id: newId,
-      text,
-      model: selectedModel,
-      postCount: posts.postCount,
-      timestamp: Date.now(),
-      status: null,
-      citedPosts: await resolveCitedPosts(text, posts.posts, lookupPosts),
-    } as unknown as Summary)
+    await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
     row.keep()
-    workspaceTabs.createTab("summary", newId)
+    // Generating, not waiting: while the run is live the item shows as
+    // running and refuses a paste, which the finished run would overwrite.
+    setRegeneratingSummaries((prev) => new Set(prev).add(newId))
+    try {
+      await loadHistory()
+      await fillPendingSummary(newId, posts, scope, pendingPrompt, names)
+    } finally {
+      setRegeneratingSummaries((prev) => {
+        const next = new Set(prev)
+        next.delete(newId)
+        return next
+      })
+    }
+  }
+
+  /** Ask the model the stored prompt and fill the pending Summary with it. */
+  const fillPendingSummary = async (
+    id: string,
+    posts: PromptPosts,
+    scope: PromptScope | undefined,
+    pendingPrompt: string,
+    names: string[],
+  ) => {
+    /** Show the item that is waiting, not the half-streamed buffer. */
+    const leftPending = (reason: string) => {
+      setSummary(null)
+      workspaceTabs.createTab("summary", id)
+      return new Error(
+        `${reason} The prompt is saved in History, waiting for a response you can paste.`,
+      )
+    }
+    const startTime = Date.now()
+    /**
+     * Never fatal: losing the log must not cost the Summary. It keeps the
+     * `channels=…` placeholder as its prompt, as it always has, rather than a
+     * second corpus-sized copy of the prompt per run.
+     */
+    const log = (
+      prompt: string,
+      config: unknown,
+      text: string,
+      lastChunk: unknown,
+    ) =>
+      saveLLMLog(
+        summaryLLMLog({
+          id:
+            Date.now().toString() + Math.random().toString(36).substring(2, 7),
+          model: selectedModel,
+          prompt,
+          config,
+          text,
+          lastChunk,
+          now: Date.now(),
+          durationMs: Date.now() - startTime,
+        }),
+      ).then(
+        () => true,
+        (err: unknown) => {
+          console.error(err)
+          return false
+        },
+      )
+
+    setChatMessages([]) // Clear chat when new summary starts
+    const { stream, prompt, config } = await generateSummaryStream(
+      names,
+      channelsText(),
+      posts.postsText,
+      aiLanguage,
+      selectedModel,
+      aiTemperature,
+      scope,
+      pendingPrompt,
+    )
+    let run: Awaited<ReturnType<typeof readStream>>
+    try {
+      run = await readStream(stream, setSummary)
+    } catch (err: unknown) {
+      const reason = errorText(err, "The AI provider failed.")
+      // A failed log row with the reason, like the scheduled path files.
+      await log(prompt, config, "", { error: reason })
+      throw leftPending(reason)
+    }
+    const { text, lastChunk } = run
+    const logged = await log(prompt, config, text, lastChunk)
+    if (!text) throw leftPending("The model returned an empty response.")
+
+    try {
+      // Only what the run produced. The Scope is already on the row and the
+      // server refuses to take it again. `promptText: null` drops the prompt
+      // once it is answered: it is a whole post corpus, and a finished
+      // Summary kept one only when it came from Copy.
+      await saveSummary({
+        id,
+        text,
+        model: selectedModel,
+        postCount: posts.postCount,
+        timestamp: Date.now(),
+        status: null,
+        promptText: null,
+        citedPosts: await resolveCitedPosts(text, posts.posts, lookupPosts),
+      } as unknown as Summary)
+    } catch (err: unknown) {
+      throw leftPending(
+        `Saving the summary failed: ${errorText(err, "unknown error")}.${
+          logged ? " The model's answer is in the AI logs." : ""
+        }`,
+      )
+    }
+    workspaceTabs.createTab("summary", id)
     // The stream buffer belongs to no tab: left set, it would stand in for the
     // body of whichever Summary tab opened next. The new tab reads the row.
     setSummary(null)
@@ -358,6 +444,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     text: string,
     modelName?: string,
   ): Promise<boolean> => {
+    // A Generate still running would overwrite the pasted text when it ends.
+    if (regeneratingSummaries.has(summaryId)) {
+      toast.error("This summary is still generating.")
+      return false
+    }
     const pasted = checkPastedSummary(
       summariesHistory.find((s) => s.id === summaryId),
       text,

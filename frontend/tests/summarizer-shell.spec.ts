@@ -195,6 +195,77 @@ test.describe("TG Workspace shell", () => {
     await expect(page).toHaveURL(/section=network/)
   })
 
+  /**
+   * Generate files the same pending, prompt-carrying item Copy does, before
+   * the model is asked, so a failed run leaves something to paste into.
+   *
+   * The model is the only thing mocked: the Summary row is written to the real
+   * backend, which is where "it survived the failure" has to be true.
+   * **Mutation:** keep the old flow (no pending row, delete on failure) and the
+   * URL never names a Summary.
+   */
+  test("a failed Generate keeps the prompt as a pending summary", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const overloaded =
+      "The AI model is overloaded right now. Try again in a minute, or pick another model."
+
+    await gotoWorkspace(page, "channels")
+    await seedAiKey(page)
+    // Synced a moment ago, so Generate does not sync it first.
+    const channel = await seedTestChannel(page, undefined, [], {
+      lastUpdated: Date.now(),
+    })
+    await page.route("**/api/v1/data/posts/counts**", (route) =>
+      route.fulfill({ json: { [channel]: 3 } }),
+    )
+    await page.route("**/api/v1/ai/summary/prompt", (route) =>
+      route.fulfill({ json: { prompt: "summary prompt for e2e" } }),
+    )
+    await page.route("**/api/v1/ai/summary/stream", (route) =>
+      route.fulfill({
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify({ error: overloaded })}\n\n`,
+      }),
+    )
+
+    await page.getByPlaceholder("Search channels...").fill("")
+    await openPaletteKeyboard(page)
+    await runPaletteCommand(page, "clear selection")
+    await closePaletteKeyboard(page)
+    await selectChannelsKeyboard(page, [channel])
+    await page.locator("#tour-tab-action").click()
+    await page.getByRole("button", { name: "Generate summary" }).click()
+
+    // The provider's reason, and where the prompt went.
+    await expect(page.getByText(/overloaded right now/)).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByText(/prompt is saved in History/)).toBeVisible()
+    await expect(page).toHaveURL(/[?&]summary=[^&]+/, { timeout: 15_000 })
+
+    const id = new URL(page.url()).searchParams.get("summary")
+    const stored = await page.evaluate(async (summaryId) => {
+      const token = localStorage.getItem("access_token")
+      const r = await fetch(`/api/v1/data/summaries/${summaryId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return r.ok ? await r.json() : null
+    }, id)
+    expect(stored?.status).toBe("pending")
+    expect(stored?.promptText).toBe("summary prompt for e2e")
+
+    // The suite appends to a shared database; take back the row this made.
+    await page.evaluate(async (summaryId) => {
+      const token = localStorage.getItem("access_token")
+      await fetch(`/api/v1/data/summaries/${summaryId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    }, id)
+  })
+
   test("action tab shows the summary create controls", async ({ page }) => {
     // They were on the Summary tab until Action became the one place work
     // starts; the feature tabs render results only now.

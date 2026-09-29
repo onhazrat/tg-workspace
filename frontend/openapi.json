@@ -9566,6 +9566,10 @@
           "aiKeyId": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Aikeyid"
+          },
+          "prompt": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Prompt"
           }
         },
         "type": "object",
