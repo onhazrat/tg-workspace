@@ -31,6 +31,7 @@ import {
   X,
   Zap,
 } from "lucide-react"
+import type { KeyboardEventHandler } from "react"
 
 import {
   DropdownMenu,
@@ -42,7 +43,7 @@ import { WORKSPACE_TABS } from "@/constants"
 import type { WorkspaceTabs } from "@/hooks/useWorkspaceTabs"
 import { isFixed, type Tab, tabKey, tabSearch } from "@/lib/workspace-tabs"
 
-import { tabPresentation } from "./workspace-shell-model"
+import { tabAnnouncements, tabPresentation } from "./workspace-shell-model"
 
 const TAB_ICONS = {
   Database,
@@ -69,12 +70,13 @@ const CLOSABLE_TABS = WORKSPACE_TABS.filter((tab) => !isFixed(tab.id))
 /**
  * Space picks a tab up, as the spec asks. Not Enter: on a link Enter follows
  * it, and taking it for the drag would leave keyboard users unable to switch
- * tabs.
+ * tabs. Mid-drag Enter drops instead, so it cannot follow a link while the
+ * drag is still live.
  */
 const KEYBOARD_CODES = {
   start: ["Space"],
   cancel: ["Escape"],
-  end: ["Space"],
+  end: ["Space", "Enter"],
 }
 
 /**
@@ -85,6 +87,7 @@ const KEYBOARD_CODES = {
  * Held for the 50ms dnd-kit holds its own listener. A keyboard drop has no
  * click to cancel, and an Enter pressed straight after it must still work.
  */
+// ponytail: mirrors dnd-kit's 50ms hold; if dnd-kit changes it, match it here.
 function cancelDropClick(activator: Event) {
   if (activator instanceof KeyboardEvent) return
   const cancel = (event: MouseEvent) => event.preventDefault()
@@ -131,6 +134,16 @@ export function WorkspaceTabStrip({
   const { tabs } = workspaceTabs
   const closable = tabs.filter((tab) => !isFixed(tab.kind))
   const byKey = new Map(tabs.map((tab) => [tabKey(tab), tab]))
+  const views = tabs.map((tab, index) =>
+    tabPresentation(
+      tab,
+      index,
+      tabs,
+      workspaceTabs.active,
+      workspaceTabs.artifactFor(tab),
+    ),
+  )
+  const labels = new Map(views.map((view) => [view.key, view.label]))
 
   const onDragEnd = ({ active, over, activatorEvent }: DragEndEvent) => {
     cancelDropClick(activatorEvent)
@@ -149,6 +162,11 @@ export function WorkspaceTabStrip({
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
+          accessibility={{
+            announcements: tabAnnouncements(
+              (id) => labels.get(String(id)) ?? "",
+            ),
+          }}
         >
           <SortableContext
             items={closable.map(tabKey)}
@@ -156,10 +174,10 @@ export function WorkspaceTabStrip({
           >
             {tabs.map((tab, index) => (
               <StripTab
-                key={tabKey(tab)}
+                key={views[index].key}
                 tab={tab}
-                index={index}
-                workspaceTabs={workspaceTabs}
+                view={views[index]}
+                onClose={() => workspaceTabs.closeTab(tab)}
               />
             ))}
           </SortableContext>
@@ -201,26 +219,23 @@ export function WorkspaceTabStrip({
  */
 function StripTab({
   tab,
-  index,
-  workspaceTabs,
+  view,
+  onClose,
 }: {
   tab: Tab
-  index: number
-  workspaceTabs: WorkspaceTabs
+  view: ReturnType<typeof tabPresentation>
+  onClose: () => void
 }) {
-  const view = tabPresentation(
-    tab,
-    index,
-    workspaceTabs.tabs,
-    workspaceTabs.active,
-    workspaceTabs.artifactFor(tab),
-  )
   const Icon = tabIcon(view.meta)
   const sortable = useSortable({ id: view.key, disabled: !view.closable })
   // Only the drag instructions. The rest would make the link a button
   // (`role`, `aria-pressed`) or rename it ("sortable").
   const describedBy = sortable.attributes["aria-describedby"]
   const x = sortable.transform?.x ?? 0
+  // A press anywhere on the tab drags it, × included, so a touch hold works
+  // on a shrunk active tab whose × covers its icon. The keys stay on the link:
+  // Space on a focused × must press it, not pick its tab up.
+  const { onKeyDown, ...pointer } = sortable.listeners ?? {}
 
   return (
     <span
@@ -231,10 +246,11 @@ function StripTab({
         transition: sortable.transition,
       }}
       className={`group relative flex min-w-0 items-center gap-1 ${view.itemClass}`}
+      {...pointer}
     >
       <Link
         ref={sortable.setActivatorNodeRef}
-        {...sortable.listeners}
+        onKeyDown={onKeyDown as KeyboardEventHandler | undefined}
         aria-describedby={view.closable ? describedBy : undefined}
         draggable={false}
         id={view.anchorId}
@@ -248,7 +264,7 @@ function StripTab({
         onAuxClick={(event) => {
           if (event.button !== 1 || !view.closable) return
           event.preventDefault()
-          workspaceTabs.closeTab(tab)
+          onClose()
         }}
         className={`text-xs font-mono flex min-w-0 flex-1 select-none items-center gap-2 pb-1 border-b-2 transition-all [-webkit-touch-callout:none] ${view.linkClass}`}
       >
@@ -262,7 +278,7 @@ function StripTab({
           type="button"
           aria-label={`Close ${view.label}`}
           data-testid="workspace-tab-close"
-          onClick={() => workspaceTabs.closeTab(tab)}
+          onClick={onClose}
           className={`shrink-0 rounded p-0.5 transition-opacity hover:bg-app-ink/10 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 @max-[4.5rem]:absolute @max-[4.5rem]:left-0 @max-[4.5rem]:top-0 @max-[4.5rem]:bg-app-muted ${view.closeClass}`}
         >
           <X size={12} />

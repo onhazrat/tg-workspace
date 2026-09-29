@@ -179,9 +179,10 @@ describe("move", () => {
     expect(names(move(set, ACTION, b))).toEqual(names(set))
   })
 
-  it("ignores a tab that is not open", () => {
+  it("ignores a tab that is not open, whichever side it is on", () => {
     const set = withTabs(a, b)
     expect(move(set, c, a)).toBe(set)
+    expect(move(set, a, c)).toBe(set)
   })
 })
 

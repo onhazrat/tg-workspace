@@ -2,6 +2,7 @@
  * The workspace shell's small decisions, with no React, so they can be tested.
  * `App` renders them.
  */
+import type { Announcements, UniqueIdentifier } from "@dnd-kit/core"
 import { artifactChannelsLine } from "@/components/history/artifact-presentation"
 import type { Theme } from "@/components/theme-provider"
 import { WORKSPACE_TABS } from "@/constants"
@@ -147,6 +148,29 @@ export function tabPresentation(
     linkClass: isActive
       ? "border-app-ink opacity-100"
       : "border-transparent opacity-40",
-    closeClass: isActive ? "opacity-70" : "opacity-0 group-hover:opacity-70",
+    // Shrunk to icon width, an inactive tab shows no × at all: there it
+    // would be the whole tab, and a click meant to switch to it would close it.
+    closeClass: isActive
+      ? "opacity-70"
+      : "opacity-0 group-hover:opacity-70 @max-[4.5rem]:hidden",
+  }
+}
+
+/**
+ * What a screen reader hears while a tab is dragged (TABS-02): the tabs'
+ * labels, where dnd-kit's defaults would read out their internal keys.
+ */
+export function tabAnnouncements(
+  labelOf: (id: UniqueIdentifier) => string,
+): Announcements {
+  const place = (over: { id: UniqueIdentifier } | null) =>
+    over ? ` beside ${labelOf(over.id)}` : ""
+  return {
+    onDragStart: ({ active }) => `Picked up ${labelOf(active.id)}.`,
+    onDragOver: ({ active, over }) =>
+      `${labelOf(active.id)} moved${place(over)}.`,
+    onDragEnd: ({ active, over }) =>
+      `${labelOf(active.id)} dropped${place(over)}.`,
+    onDragCancel: ({ active }) => `Moving ${labelOf(active.id)} was cancelled.`,
   }
 }
