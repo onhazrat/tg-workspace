@@ -3,7 +3,8 @@
 The Provider is a fake handed back from `_provider_for`, so who pays is not
 under test here (`test_ai_key_payment_rule.py` owns that). What is: the system
 prompt a chat is grounded in, and the one rule every stream route shares, that
-a failure must never end with the `[DONE]` frame the browser reads as success.
+a failure must never end with the `[DONE]` frame the browser reads as success,
+and must end with an `error` frame saying why.
 """
 
 from __future__ import annotations
@@ -25,10 +26,20 @@ from tests.utils.utils import get_superuser_token_headers
 URL = f"{settings.API_V1_STR}/ai/chat/stream"
 
 
+class _ProviderError(Exception):
+    """Shaped like the SDKs' errors: a `code` and a `message`."""
+
+    def __init__(self, code: int | None, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
 class _FakeProvider:
     def __init__(self, chunks: list[str], fail_after: bool = False) -> None:
         self.chunks = chunks
         self.fail_after = fail_after
+        self.error: BaseException = RuntimeError("API key not valid")
         self.calls: list[dict[str, Any]] = []
 
     async def stream(self, prompt: str, **kwargs: Any) -> AsyncIterator[str]:
@@ -36,13 +47,15 @@ class _FakeProvider:
         for chunk in self.chunks:
             yield chunk
         if self.fail_after:
-            raise RuntimeError("API key not valid")
+            raise self.error
 
 
 @pytest.fixture
 def provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[_FakeProvider]:
     fake = _FakeProvider(["one ", "two"])
-    key = ResolvedKey(provider="gemini", api_key="k", credential_id="cred-1")
+    key = ResolvedKey(
+        provider="gemini", api_key="sk-secret-123", credential_id="cred-1"
+    )
     monkeypatch.setattr(ai_routes, "_provider_for", lambda *_a, **_k: (fake, key))
     yield fake
 
@@ -113,11 +126,12 @@ def test_a_provider_failure_mid_stream_never_sends_done(
     monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider
 ) -> None:
     """`sseTextStream` reads `[DONE]` as a clean end, so a revoked Key would
-    otherwise render its partial answer as a finished one. The rejection is
-    noted against the Key that was spent.
+    otherwise render its partial answer as a finished one. The stream ends on
+    an `error` frame instead, and the rejection is noted against the Key that
+    was spent.
 
-    **Mutation:** swallow the exception instead of re-raising and `[DONE]`
-    arrives after the partial text.
+    **Mutation:** yield `[DONE]` after the error frame and the first assertion
+    goes red; drop the error frame and the last one does.
     """
     provider.fail_after = True
     noted: list[tuple[str | None, str]] = []
@@ -127,14 +141,81 @@ def test_a_provider_failure_mid_stream_never_sends_done(
         return True
 
     monkeypatch.setattr(ai_routes, "_note_rejection", note)
-    lenient = TestClient(app, raise_server_exceptions=False)
 
-    r = lenient.post(
+    r = client_post(
         URL,
-        headers=get_superuser_token_headers(lenient),
-        json={"message": "q", "postsText": "p"},
+        {"message": "q", "postsText": "p"},
     )
 
     assert "[DONE]" not in r.text
-    assert json.dumps({"text": "one "}) in r.text
+    assert _frames(r.text)[0] == json.dumps({"text": "one "})
     assert noted == [("cred-1", "API key not valid")]
+    assert "error" in json.loads(_frames(r.text)[-1])
+
+
+SUMMARY_URL = f"{settings.API_V1_STR}/ai/summary/stream"
+
+
+@pytest.mark.parametrize(
+    ("url", "body"),
+    [
+        (URL, {"message": "q", "postsText": "p"}),
+        (SUMMARY_URL, {"channels": ["chan_a"], "postsText": "p"}),
+    ],
+)
+@pytest.mark.parametrize(
+    ("error", "says"),
+    [
+        (_ProviderError(503, "high demand"), "overloaded"),
+        (_ProviderError(429, "slow down"), "rate limiting"),
+        (_ProviderError(401, "bad key"), "rejected by its provider"),
+        (_ProviderError(404, "model gemini-9 not found"), "model gemini-9 not found"),
+    ],
+)
+def test_a_failed_stream_ends_with_the_reason(
+    provider: _FakeProvider,
+    url: str,
+    body: dict[str, Any],
+    error: BaseException,
+    says: str,
+) -> None:
+    """The last frame names what went wrong, on every stream route.
+
+    A busy model used to cut the connection, and the browser could only say
+    "an unexpected error occurred" about something that needed a retry.
+
+    **Mutation:** return the Provider message for every code and the first
+    two cases go red.
+    """
+    provider.fail_after = True
+    provider.error = error
+
+    r = client_post(url, body)
+
+    frames = _frames(r.text)
+    assert "[DONE]" not in frames
+    assert says in json.loads(frames[-1])["error"]
+
+
+def test_the_key_never_reaches_the_error_frame_or_the_log(
+    provider: _FakeProvider, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An endpoint may echo the credential back in its error message.
+
+    **Mutation:** drop the scrub and the secret appears in the frame; log `exc`
+    instead of the scrubbed sentence and it appears in the server log.
+    """
+    provider.fail_after = True
+    provider.error = _ProviderError(400, "bad request for key sk-secret-123")
+
+    r = client_post(URL, {"message": "q", "postsText": "p"})
+
+    assert "sk-secret-123" not in r.text
+    assert "***" in json.loads(_frames(r.text)[-1])["error"]
+    assert "sk-secret-123" not in caplog.text
+    assert "AI provider stream failed" in caplog.text
+
+
+def client_post(url: str, body: dict[str, Any]) -> Any:
+    lenient = TestClient(app, raise_server_exceptions=False)
+    return lenient.post(url, headers=get_superuser_token_headers(lenient), json=body)

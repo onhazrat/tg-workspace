@@ -223,7 +223,12 @@ export async function* sseJsonStream<T>(
   }
 }
 
-/** Parse SSE `data:` lines and yield JSON payload fields. */
+/**
+ * Parse SSE `data:` lines and yield JSON payload fields.
+ *
+ * An `{"error": "..."}` frame is the server saying the Provider failed, and
+ * why; it throws that sentence so the toast can show it.
+ */
 export async function* sseTextStream(
   path: string,
   body: Record<string, unknown>,
@@ -235,11 +240,15 @@ export async function* sseTextStream(
     body: JSON.stringify(body),
   })
   for await (const payload of sseDataPayloads(response.body)) {
+    let parsed: Record<string, unknown> | null
     try {
-      const parsed = JSON.parse(payload)
-      if (parsed[field]) yield parsed[field]
+      parsed = JSON.parse(payload)
     } catch {
-      /* ignore malformed SSE chunks */
+      continue /* ignore malformed SSE chunks */
     }
+    if (!parsed || typeof parsed !== "object") continue
+    if (typeof parsed.error === "string") throw new Error(parsed.error)
+    if (typeof parsed[field] === "string" && parsed[field])
+      yield parsed[field] as string
   }
 }

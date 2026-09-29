@@ -28,11 +28,13 @@ export async function seedTestChannel(
   page: Page,
   channelName?: string,
   tags: string[] = [],
+  /** Extra writable Channel fields, e.g. `lastUpdated` to skip a pre-run sync. */
+  extra: Record<string, unknown> = {},
 ): Promise<string> {
   const name = channelName ?? `e2e${Date.now()}`
 
   await page.evaluate(
-    async ({ seedName, seedTags }) => {
+    async ({ seedName, seedTags, seedExtra }) => {
       const token = localStorage.getItem("access_token")
       if (!token) {
         throw new Error("seedTestChannel: missing access_token")
@@ -44,7 +46,12 @@ export async function seedTestChannel(
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ id: seedName, name: seedName, tags: seedTags }),
+        body: JSON.stringify({
+          id: seedName,
+          name: seedName,
+          tags: seedTags,
+          ...seedExtra,
+        }),
       })
 
       if (!response.ok) {
@@ -53,7 +60,7 @@ export async function seedTestChannel(
         )
       }
     },
-    { seedName: name, seedTags: tags },
+    { seedName: name, seedTags: tags, seedExtra: extra },
   )
 
   await expect

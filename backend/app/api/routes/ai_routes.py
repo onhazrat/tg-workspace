@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator
 
@@ -50,6 +51,11 @@ from app.services.prompt_assembly import (
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+logger = logging.getLogger(__name__)
+
+#: Status codes that mean "busy or briefly broken, try again", not "no".
+#: 529 is Anthropic-compatible gateways' "overloaded".
+_RETRYABLE_CODES = frozenset({500, 502, 503, 504, 529})
 
 
 def _provider_for(
@@ -94,6 +100,58 @@ def _note_rejection(session: Session, key: ResolvedKey, exc: BaseException) -> b
         return False
     record_validation(session, key.credential_id, valid=False)
     return True
+
+
+def _failure_detail(exc: BaseException, key: ResolvedKey) -> str:
+    """One sentence for the Account about a Provider call that failed.
+
+    A busy model and a rate limit get their own answers because the fix is
+    "wait", which the Account cannot know from a generic error. Anything else
+    passes the Provider's own message through, truncated and with the Key
+    itself scrubbed out in case an endpoint echoes it back.
+    """
+    if is_credential_rejection(exc):
+        return AI_KEY_REJECTED_DETAIL
+    code = getattr(exc, "code", None)
+    if code == 429:
+        return "The AI provider is rate limiting this key. Wait a minute and try again."
+    if code in _RETRYABLE_CODES:
+        return (
+            "The AI model is overloaded right now. "
+            "Try again in a minute, or pick another model."
+        )
+    message = str(getattr(exc, "message", "") or exc)[:300]
+    if key.api_key:
+        message = message.replace(key.api_key, "***")
+    if not message:
+        return "The AI provider could not be reached. Try again in a minute."
+    return f"The AI provider refused the request: {message}"
+
+
+async def _sse_text(
+    chunks: AsyncIterator[str], session: Session, key: ResolvedKey
+) -> AsyncIterator[str]:
+    """Frame a Provider's text stream as SSE for `sseTextStream`.
+
+    A failure ends with an `error` frame and **never** with `[DONE]`, which the
+    browser reads as a clean end: swallowing the exception into `[DONE]` once
+    rendered a revoked Key's empty answer as a finished Summary. Re-raising
+    instead kept that rule but cut the connection, so the browser could only
+    say "an unexpected error occurred" about a model that was merely busy. The
+    `error` frame keeps the rule and says why.
+    """
+    try:
+        async for chunk in chunks:
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+    except Exception as exc:
+        _note_rejection(session, key, exc)
+        detail = _failure_detail(exc, key)
+        # The scrubbed sentence, not `exc`: the raw message is what may carry
+        # the Key, and a server log is a worse place for it than the frame.
+        logger.warning("AI provider stream failed: %s", detail)
+        yield f"data: {json.dumps({'error': detail})}\n\n"
+        return
+    yield "data: [DONE]\n\n"
 
 
 def _resolve_posts_text(
@@ -277,23 +335,14 @@ async def api_summary_stream(
         ),
     )
 
-    async def event_stream() -> AsyncIterator[str]:
-        try:
-            async for chunk in provider.stream(
-                prompt, model=model, temperature=body.temperature
-            ):
-                yield f"data: {json.dumps({'text': chunk})}\n\n"
-        except Exception as exc:
-            # Note the rejection, then let it propagate either way. Swallowing
-            # it fell through to the `[DONE]` below, which `sseTextStream`
-            # reads as a *clean* end — so a revoked key rendered an empty
-            # summary with no error anywhere, and a key revoked mid-run
-            # presented partial output as a finished Artifact.
-            _note_rejection(session, ai_key, exc)
-            raise
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _sse_text(
+            provider.stream(prompt, model=model, temperature=body.temperature),
+            session,
+            ai_key,
+        ),
+        media_type="text/event-stream",
+    )
 
 
 @router.post("/chat/stream")
@@ -321,27 +370,16 @@ async def api_chat_stream(
         ),
     )
 
-    async def event_stream() -> AsyncIterator[str]:
-        try:
-            async for chunk in provider.stream(
-                body.message,
-                model=model,
-                temperature=body.temperature,
-                system_instruction=system,
-                history=body.history,
-            ):
-                yield f"data: {json.dumps({'text': chunk})}\n\n"
-        except Exception as exc:
-            # Note the rejection, then let it propagate either way. Swallowing
-            # it fell through to the `[DONE]` below, which `sseTextStream`
-            # reads as a *clean* end — so a revoked key rendered an empty
-            # summary with no error anywhere, and a key revoked mid-run
-            # presented partial output as a finished Artifact.
-            _note_rejection(session, ai_key, exc)
-            raise
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    chunks = provider.stream(
+        body.message,
+        model=model,
+        temperature=body.temperature,
+        system_instruction=system,
+        history=body.history,
+    )
+    return StreamingResponse(
+        _sse_text(chunks, session, ai_key), media_type="text/event-stream"
+    )
 
 
 @router.post("/tag/prompt")
@@ -395,23 +433,14 @@ async def api_tag_stream(
         tags_per_channel_max=body.tags_per_channel_max,
     )
 
-    async def event_stream() -> AsyncIterator[str]:
-        try:
-            async for chunk in provider.stream(
-                prompt, model=model, temperature=body.temperature
-            ):
-                yield f"data: {json.dumps({'text': chunk})}\n\n"
-        except Exception as exc:
-            # Note the rejection, then let it propagate either way. Swallowing
-            # it fell through to the `[DONE]` below, which `sseTextStream`
-            # reads as a *clean* end — so a revoked key rendered an empty
-            # summary with no error anywhere, and a key revoked mid-run
-            # presented partial output as a finished Artifact.
-            _note_rejection(session, ai_key, exc)
-            raise
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _sse_text(
+            provider.stream(prompt, model=model, temperature=body.temperature),
+            session,
+            ai_key,
+        ),
+        media_type="text/event-stream",
+    )
 
 
 @router.post("/embeddings")

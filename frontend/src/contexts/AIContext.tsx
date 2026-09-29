@@ -248,8 +248,36 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     row: ProvisionalRow,
   ) => {
     const newId = crypto.randomUUID()
-    const scope = await openSummary(newId, names, posts, row, {})
+    // File exactly what Copy files, before the model is asked: a `pending`
+    // row holding its prompt. From here a failed run leaves an item that can
+    // still be finished by pasting any model's answer, rather than nothing.
+    const scope = await openSummary(newId, names, posts, row, {
+      status: "pending",
+    })
+    const pendingPrompt = await getSummaryPrompt(
+      names,
+      channelsText(),
+      posts.postsText,
+      aiLanguage,
+      selectedModel,
+      aiTemperature,
+      scope,
+    )
+    await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
+    row.keep()
+    await loadHistory()
+
+    /** Show the item that is waiting, not the half-streamed buffer. */
+    const leftPending = (reason: string) => {
+      setSummary(null)
+      workspaceTabs.createTab("summary", newId)
+      return new Error(
+        `${reason} The prompt is saved in History, waiting for a response you can paste.`,
+      )
+    }
+
     const startTime = Date.now()
+    setChatMessages([]) // Clear chat when new summary starts
     const { stream, prompt, config } = await generateSummaryStream(
       names,
       channelsText(),
@@ -259,8 +287,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       aiTemperature,
       scope,
     )
-    setChatMessages([]) // Clear chat when new summary starts
-    const { text, lastChunk } = await readStream(stream, setSummary)
+    const { text, lastChunk } = await readStream(stream, setSummary).catch(
+      (err: unknown) => {
+        throw leftPending(errorText(err, "The AI provider failed."))
+      },
+    )
     await saveLLMLog(
       summaryLLMLog({
         id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
@@ -273,7 +304,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         durationMs: Date.now() - startTime,
       }),
     )
-    if (!text) return
+    if (!text) throw leftPending("The model returned an empty response.")
 
     // Only what the run produced. The Scope is already on the row and the
     // server refuses to take it again, so sending it back would be a second
@@ -287,7 +318,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       status: null,
       citedPosts: await resolveCitedPosts(text, posts.posts, lookupPosts),
     } as unknown as Summary)
-    row.keep()
     workspaceTabs.createTab("summary", newId)
     // The stream buffer belongs to no tab: left set, it would stand in for the
     // body of whichever Summary tab opened next. The new tab reads the row.
