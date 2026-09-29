@@ -18,6 +18,7 @@ import {
   opensShortcuts,
   routingMode,
   THEME_TOOLTIPS,
+  tabAnnouncements,
   tabLabel,
   tabPresentation,
 } from "./workspace-shell-model"
@@ -181,16 +182,38 @@ describe("the tab strip (TABS-01)", () => {
 
   test("the active tab is marked and a Fixed tab has no close", () => {
     const active = tabPresentation(summary, 1, all, summary, row)
-    expect(active.isActive).toBe(true)
+    expect(active.ariaCurrent).toBe("page")
+    expect(active.itemClass).toContain("@container")
     expect(active.closable).toBe(true)
     expect(active.linkClass).toContain("border-app-ink")
     expect(active.closeClass).toBe("opacity-70")
 
     const fixed = tabPresentation(all[0], 0, all, summary, undefined)
-    expect(fixed.isActive).toBe(false)
+    expect(fixed.ariaCurrent).toBe(undefined)
+    expect(fixed.itemClass).toBe("shrink-0")
     expect(fixed.closable).toBe(false)
     expect(fixed.label).toBe("Posts")
     expect(fixed.closeClass).toContain("group-hover")
+    // A shrunk inactive tab has no ×, so a click on it switches to it.
+    expect(fixed.closeClass).toContain("@max-[4.5rem]:hidden")
+    expect(active.closeClass).not.toContain("hidden")
     expect(fixed.key).toBe("posts")
+  })
+
+  test("drag announcements name tabs by label, not by key", () => {
+    const labels: Record<string, string> = {
+      "summary:a": "Alpha",
+      chat: "Chat",
+    }
+    const say = tabAnnouncements((id) => labels[String(id)])
+    const active = { id: "summary:a" }
+    const over = { id: "chat" }
+    const args = { active, over } as unknown as Parameters<
+      typeof say.onDragOver
+    >[0]
+    expect(say.onDragStart(args)).toBe("Picked up Alpha.")
+    expect(say.onDragOver(args)).toBe("Alpha moved beside Chat.")
+    expect(say.onDragEnd({ ...args, over: null })).toBe("Alpha dropped.")
+    expect(say.onDragCancel(args)).toBe("Moving Alpha was cancelled.")
   })
 })

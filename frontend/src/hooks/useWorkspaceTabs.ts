@@ -11,6 +11,7 @@ import {
   emptyTabSet,
   goTo,
   isFixed,
+  move,
   open,
   reconcile,
   reopenLast,
@@ -162,6 +163,9 @@ export function useWorkspaceTabs() {
           return options?.background ? { ...step, active: a } : step
         }),
       closeTab: (target: Tab) => apply((s, a) => close(s, a, target)),
+      /** Drag `target` onto `over`'s place; the active tab stays. */
+      moveTab: (target: Tab, over: Tab) =>
+        apply((s, a) => ({ set: move(s, target, over), active: a })),
       reopenLastTab: () => apply((s, a) => reopenLast(s, a)),
       /** Open these kinds' tabs without leaving the active one. */
       openTabs: (kinds: readonly TabType[]) =>

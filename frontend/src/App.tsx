@@ -1,27 +1,12 @@
-import { Link } from "@tanstack/react-router"
 import {
-  Activity,
   Command as CommandIcon,
-  Compass,
-  Database,
-  FileText,
   HelpCircle,
-  History,
   Keyboard,
-  List,
   Maximize2,
-  MessageSquare,
   Minimize2,
   Monitor,
   Moon,
-  Plus,
-  Send,
-  Settings,
-  Sparkles,
   Sun,
-  Tag,
-  X,
-  Zap,
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
@@ -38,12 +23,6 @@ import { SummaryView } from "./components/SummaryView"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./components/ui/dropdown-menu"
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -54,15 +33,14 @@ import {
   StatusBanners,
   WorkspaceStats,
 } from "./components/workspace-shell/WorkspaceShellParts"
+import { WorkspaceTabStrip } from "./components/workspace-shell/WorkspaceTabStrip"
 import {
   commandKeyFor,
   oldestSync,
   opensShortcuts,
   routingMode,
   THEME_TOOLTIPS,
-  tabPresentation,
 } from "./components/workspace-shell/workspace-shell-model"
-import { WORKSPACE_TABS } from "./constants"
 import { useData } from "./contexts/DataContext"
 import { useScraper } from "./contexts/ScraperContext"
 import { useSettings } from "./contexts/SettingsContext"
@@ -74,7 +52,6 @@ import { useScopedPostCounts } from "./hooks/usePostsView"
 import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
 import { artifactDestination } from "./lib/history/open-artifact"
-import { isFixed, tabSearch } from "./lib/workspace-tabs"
 import type { ArtifactListItem, TabType } from "./types"
 
 const THEME_ICONS = { system: Monitor, light: Moon, dark: Sun }
@@ -94,28 +71,6 @@ const FULLSCREEN_CHROME = {
     header: "flex",
   },
 }
-
-const TAB_ICONS = {
-  Database,
-  List,
-  MessageSquare,
-  History,
-  Send,
-  Settings,
-  Sparkles,
-  FileText,
-  Activity,
-  Tag,
-  Compass,
-  Zap,
-}
-
-function tabIcon(meta: (typeof WORKSPACE_TABS)[number]) {
-  return TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ?? Database
-}
-
-/** What the "+" menu offers: every kind that can be closed. */
-const CLOSABLE_TABS = WORKSPACE_TABS.filter((tab) => !isFixed(tab.id))
 
 export default function App() {
   const { isOffline } = useApiStatus()
@@ -400,106 +355,7 @@ export default function App() {
           <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
               <div className="flex justify-between items-center">
-                {/*
-                 * Real links, not buttons with click handlers.
-                 *
-                 * These are URL-addressable views — `setActiveTab` already did
-                 * nothing but navigate to `?tab=` — so as `<button onClick>`
-                 * they were unreachable by the things links give you free:
-                 * middle-click, open-in-new-tab, "copy link address", and an
-                 * announced destination.
-                 *
-                 * `aria-current="page"` rather than `role="tab"`: the ARIA tab
-                 * pattern obliges a roving tabindex and arrow-key navigation,
-                 * and claiming the role without implementing those leaves
-                 * assistive-tech users worse off than plain links, because the
-                 * keys they are told to use would do nothing. A `<nav>` of
-                 * links marking the current one is honest about what this is.
-                 *
-                 * `replace` preserves the previous behaviour — tab switches
-                 * did not stack history entries, and still do not.
-                 */}
-                <nav
-                  aria-label="Workspace sections"
-                  className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
-                >
-                  {workspaceTabs.tabs.map((tab, index, all) => {
-                    const view = tabPresentation(
-                      tab,
-                      index,
-                      all,
-                      workspaceTabs.active,
-                      workspaceTabs.artifactFor(tab),
-                    )
-                    const { isActive, label } = view
-                    const Icon = tabIcon(view.meta)
-
-                    return (
-                      <span
-                        key={view.key}
-                        className="group flex min-w-0 items-center gap-1"
-                      >
-                        <Link
-                          id={view.anchorId}
-                          to="/workspace"
-                          search={(prev) => tabSearch(prev, tab)}
-                          replace
-                          title={label}
-                          aria-current={isActive ? "page" : undefined}
-                          // Middle-click closes a Closable tab, as in a
-                          // browser. On a Fixed tab it still opens a new one.
-                          onAuxClick={(event) => {
-                            if (event.button !== 1 || !view.closable) return
-                            event.preventDefault()
-                            workspaceTabs.closeTab(tab)
-                          }}
-                          className={`text-xs font-mono flex min-w-0 items-center gap-2 pb-1 border-b-2 transition-all ${view.linkClass}`}
-                        >
-                          <Icon size={14} className="shrink-0" />
-                          <span className="max-w-[14rem] truncate">
-                            {label}
-                          </span>
-                        </Link>
-                        {view.closable && (
-                          <button
-                            type="button"
-                            aria-label={`Close ${label}`}
-                            data-testid="workspace-tab-close"
-                            onClick={() => workspaceTabs.closeTab(tab)}
-                            className={`rounded p-0.5 transition-opacity hover:bg-app-ink/10 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${view.closeClass}`}
-                          >
-                            <X size={12} />
-                          </button>
-                        )}
-                      </span>
-                    )
-                  })}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Open a tab"
-                        data-testid="workspace-tab-add"
-                        className="rounded p-1 opacity-60 transition-opacity hover:bg-app-ink/10 hover:opacity-100"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      {CLOSABLE_TABS.map((meta) => {
-                        const Icon = tabIcon(meta)
-                        return (
-                          <DropdownMenuItem
-                            key={meta.id}
-                            onSelect={() => workspaceTabs.openTab(meta.id)}
-                          >
-                            <Icon size={14} /> {meta.label}
-                          </DropdownMenuItem>
-                        )
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </nav>
+                <WorkspaceTabStrip workspaceTabs={workspaceTabs} />
                 <div className="flex items-center gap-6">
                   {/*
                    * The way out of focus mode.
