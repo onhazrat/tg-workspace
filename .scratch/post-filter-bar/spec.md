@@ -7,7 +7,8 @@ Ticket prefix: `PFB`.
 Settled by a UI prototype on 2026-09-29 and 2026-09-30. The prototype is the primary source:
 branch `prototype/post-filter-ui` (local), commits `d06f661` (round 1), `cf5cd8c` (round 2),
 `3250b56` (multi-select media), `fdcf03c` (group toggle last), `a6274ee` (round 3's three Reach
-and Per channel forms), `3bdbe9f` (the winner, with the cap following the order). Run it with
+and Per channel forms), `3bdbe9f` (the cap following the order), `daf345e` (round 4's three top
+rows), `85af9d6` (the winner's final top row). Run it with
 `cd frontend && bun run dev`, then open `/workspace?tab=posts&variant=A1b`; `?variant=current` is
 today's panel for comparison. It stays off `main`.
 
@@ -24,12 +25,20 @@ feed (B) and a filter sentence (C); A won. Round 2 compared three revisions of A
 small forms (A1), a typed query line (A2) and two inline Filter/View rows (A3); A1 won, with the
 group toggle moved to the end of the bar. Round 3 varied only the copy and the insides of the
 Reach and Per channel pills: plain sentences (A1a), guided (A1b) and compact (A1c). **A1b won.**
+Round 4 varied where the search box and the time range sit: search first and large (S1), the time
+range as the card's title with separate keyword and meaning boxes (S2), and both inside the pill
+row (S3). A1b's single row won, with the two swapped and resized.
 
 ## The layout
 
-1. One search box, with a Keyword / Meaning switch inside it (Meaning only when embeddings are
-   on). Keyword filters as you type; Meaning runs on Enter. It replaces the two inputs.
-2. The Analysis window control beside the search box, unchanged.
+1. One row: the **time range** (the Analysis window control, unchanged) on the left, small, only as
+   wide as its one-line summary; the **search box** on the right, large (`text-sm`, taller than
+   the pills), taking the rest of the row. Both stretch to one height. On narrow screens they
+   stack, time range first.
+2. The search box searches by keyword as you type. **When the account has semantic features on**
+   (`embeddingsEnabled`), a Keyword / Meaning switch sits inside the box; Meaning runs on Enter.
+   With semantic features off there is no switch and no meaning mode. It replaces today's two
+   inputs.
 3. One row of pills, in this order: **Type**, **Media**, **Language**, **Audience** (Reach), a
    divider, **Order**, **Per channel**, then the **Grouped by channel** toggle last. A pill reads
    `Label value` and fills in when it is not the default. Each opens a small popover form, not a
