@@ -287,6 +287,22 @@ _Avoid_: create, new, studio, workbench
 The workspace tab listing every Artifact of every kind, newest first.
 _Avoid_: archive, library, past runs
 
+**Fixed tab**:
+A workspace tab that is always open and cannot be closed. There are exactly
+three: Channels, Posts and Action.
+_Avoid_: pinned tab, permanent tab, core tab
+
+**Closable tab**:
+A workspace tab the Account can close and reopen, like a browser tab: History,
+Settings, and every Artifact tab. History and Settings are open at most once.
+_Avoid_: hidden tab, optional tab, compact tabs
+
+**Artifact tab**:
+A closable tab showing at most one Artifact of one kind. Any number can be open
+at once, but never two for the same Artifact and never two empty ones of the
+same kind. A newly opened one shows no Artifact until one is opened in it.
+_Avoid_: result tab, feature tab, summary tab (for the general case)
+
 **Focus mode**:
 The workspace with its chrome collapsed — no title block, no stats strip, no
 width cap. Independent of native browser fullscreen, which is requested at the
