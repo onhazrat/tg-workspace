@@ -315,7 +315,7 @@ export async function mockDiscoverForwardPosts(
           ...discoverReport.scope,
           signals: body.signals ?? discoverReport.scope.signals,
           forwarded: body.forwarded ?? "all",
-          media: body.media ?? "all",
+          media: body.media ?? [],
           keyword: body.keyword ?? null,
         },
       }
