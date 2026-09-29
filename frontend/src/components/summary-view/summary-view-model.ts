@@ -49,7 +49,13 @@ export function summaryViewState(input: {
      * the URL alone.
      */
     summaryBody: input.streamed ?? input.detail?.text ?? null,
-    isPending: currentSummary ? isPendingSummary(currentSummary) : false,
+    // A Generate files its item as `pending` before asking the model; while
+    // that run is live the item is generating, and offering a paste box
+    // would invite a response the run then overwrites.
+    isPending: currentSummary
+      ? isPendingSummary(currentSummary) &&
+        !input.regenerating.has(currentSummary.id)
+      : false,
     running:
       input.summarizing ||
       (currentSummary ? input.regenerating.has(currentSummary.id) : false),

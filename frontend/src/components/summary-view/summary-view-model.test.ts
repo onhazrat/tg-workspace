@@ -72,6 +72,16 @@ describe("summaryViewState", () => {
       state({ detail: saved({}), regenerating: new Set(["s2"]) }).running,
     ).toBe(false)
   })
+
+  test("a pending item its own Generate is still filling offers no paste", () => {
+    // Generate files the item as pending before asking the model; a paste
+    // accepted now would be overwritten when the run finishes.
+    const detail = saved({ status: "pending" })
+    const live = state({ detail, regenerating: new Set(["s1"]) })
+    expect(live.isPending).toBe(false)
+    expect(live.running).toBe(true)
+    expect(state({ detail }).isPending).toBe(true)
+  })
 })
 
 const bot = { id: "b1", name: "Bot" } as BotCredential

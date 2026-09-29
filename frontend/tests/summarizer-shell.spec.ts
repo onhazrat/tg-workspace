@@ -255,6 +255,15 @@ test.describe("TG Workspace shell", () => {
     }, id)
     expect(stored?.status).toBe("pending")
     expect(stored?.promptText).toBe("summary prompt for e2e")
+
+    // The suite appends to a shared database; take back the row this made.
+    await page.evaluate(async (summaryId) => {
+      const token = localStorage.getItem("access_token")
+      await fetch(`/api/v1/data/summaries/${summaryId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    }, id)
   })
 
   test("action tab shows the summary create controls", async ({ page }) => {

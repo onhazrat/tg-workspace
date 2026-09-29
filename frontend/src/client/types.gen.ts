@@ -4769,6 +4769,10 @@ export type SummaryRequest = {
      * Aikeyid
      */
     aiKeyId?: string | null;
+    /**
+     * Prompt
+     */
+    prompt?: string | null;
 };
 
 /**

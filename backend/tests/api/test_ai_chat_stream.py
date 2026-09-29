@@ -167,9 +167,14 @@ SUMMARY_URL = f"{settings.API_V1_STR}/ai/summary/stream"
     ("error", "says"),
     [
         (_ProviderError(503, "high demand"), "overloaded"),
-        (_ProviderError(429, "slow down"), "rate limiting"),
+        # A spent daily quota is a 429 too, so the Provider's words travel.
+        (_ProviderError(429, "quota exceeded for the day"), "quota exceeded"),
         (_ProviderError(401, "bad key"), "rejected by its provider"),
-        (_ProviderError(404, "model gemini-9 not found"), "model gemini-9 not found"),
+        (_ProviderError(404, "model gemini-9 not found"), "(404): model gemini-9"),
+        (_ProviderError(500, "cannot parse body"), "internal error (500)"),
+        (_ProviderError(502, "<!DOCTYPE html><html>"), "overloaded"),
+        (_ProviderError(400, "<html><body>login</body>"), "an HTML error page"),
+        (KeyError("choices"), "failed unexpectedly"),
     ],
 )
 def test_a_failed_stream_ends_with_the_reason(
@@ -184,8 +189,8 @@ def test_a_failed_stream_ends_with_the_reason(
     A busy model used to cut the connection, and the browser could only say
     "an unexpected error occurred" about something that needed a retry.
 
-    **Mutation:** return the Provider message for every code and the first
-    two cases go red.
+    **Mutation:** return the Provider message for every code and the busy
+    cases go red; put 500 back among the busy codes and its case does.
     """
     provider.fail_after = True
     provider.error = error
@@ -214,6 +219,56 @@ def test_the_key_never_reaches_the_error_frame_or_the_log(
     assert "***" in json.loads(_frames(r.text)[-1])["error"]
     assert "sk-secret-123" not in caplog.text
     assert "AI provider stream failed" in caplog.text
+
+
+def test_a_key_straddling_the_cut_is_still_scrubbed(provider: _FakeProvider) -> None:
+    """The message is truncated for the toast; the Key must go before that.
+
+    **Mutation:** truncate before scrubbing and the Key's first characters
+    survive the cut.
+    """
+    provider.fail_after = True
+    # The Key starts at character 296, so a cut at 300 keeps "sk-s".
+    provider.error = _ProviderError(400, "x" * 295 + " sk-secret-123 tail")
+
+    r = client_post(URL, {"message": "q", "postsText": "p"})
+
+    assert "sk-s" not in r.text
+
+
+def test_a_failure_nothing_answered_keeps_its_traceback(
+    provider: _FakeProvider, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A code-less exception may be a bug in this process, so the operator
+    gets the stack while the Account gets a sentence that blames nobody.
+
+    **Mutation:** log every failure as the one-line warning and the traceback
+    assertion goes red.
+    """
+    provider.fail_after = True
+    provider.error = KeyError("choices")
+
+    client_post(URL, {"message": "q", "postsText": "p"})
+
+    failed = [r for r in caplog.records if r.getMessage().startswith("AI stream")]
+    assert failed and failed[0].exc_info is not None
+
+
+def test_the_summary_stream_sends_the_prompt_it_was_given(
+    provider: _FakeProvider,
+) -> None:
+    """Generate stores its prompt on the pending Summary first, then sends it
+    back so the model answers exactly that prompt, built once.
+
+    **Mutation:** ignore `prompt` and rebuild it, and the call carries the
+    template instead.
+    """
+    client_post(
+        SUMMARY_URL,
+        {"channels": ["chan_a"], "postsText": "p", "prompt": "stored prompt"},
+    )
+
+    assert provider.calls[0]["prompt"] == "stored prompt"
 
 
 def client_post(url: str, body: dict[str, Any]) -> Any:

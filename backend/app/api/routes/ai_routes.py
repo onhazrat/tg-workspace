@@ -53,9 +53,10 @@ from app.services.prompt_assembly import (
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
 
-#: Status codes that mean "busy or briefly broken, try again", not "no".
-#: 529 is Anthropic-compatible gateways' "overloaded".
-_RETRYABLE_CODES = frozenset({500, 502, 503, 504, 529})
+#: Status codes that mean "busy, try again": an overloaded model or a gateway
+#: that timed out. 529 is Anthropic-compatible gateways' "overloaded". Not 500,
+#: which is as often a request the endpoint cannot handle as a passing fault.
+_BUSY_CODES = frozenset({502, 503, 504, 529})
 
 
 def _provider_for(
@@ -102,30 +103,60 @@ def _note_rejection(session: Session, key: ResolvedKey, exc: BaseException) -> b
     return True
 
 
+def _provider_code(exc: BaseException) -> int | None:
+    """The HTTP status a Provider answered with, or `None` if it never did.
+
+    Both Providers' errors carry an int `code` (the same duck typing
+    `is_credential_rejection` relies on). Anything without one is not the
+    Provider saying no: a dropped connection, or a bug in this process.
+    """
+    code = getattr(exc, "code", None)
+    return code if isinstance(code, int) else None
+
+
+def _provider_message(exc: BaseException, key: ResolvedKey) -> str:
+    """The Provider's own words, safe to show.
+
+    The Key is scrubbed **before** truncating: a Key straddling the cut would
+    otherwise survive as a prefix the replace no longer matches. A gateway that
+    answers with a whole HTML page is named rather than pasted into a toast.
+    """
+    message = str(getattr(exc, "message", "") or exc)
+    if key.api_key:
+        message = message.replace(key.api_key, "***")
+    message = " ".join(message.split())
+    if message.startswith("<"):
+        return "an HTML error page"
+    return message[:300] or "no details"
+
+
 def _failure_detail(exc: BaseException, key: ResolvedKey) -> str:
     """One sentence for the Account about a Provider call that failed.
 
-    A busy model and a rate limit get their own answers because the fix is
-    "wait", which the Account cannot know from a generic error. Anything else
-    passes the Provider's own message through, truncated and with the Key
-    itself scrubbed out in case an endpoint echoes it back.
+    Only a busy model gets a fixed answer, because its fix is "wait" and the
+    Provider's words rarely say so. Everything else carries the Provider's own
+    message, since a 429 may be a per-minute limit or a spent daily quota and
+    only the Provider knows which.
     """
     if is_credential_rejection(exc):
         return AI_KEY_REJECTED_DETAIL
-    code = getattr(exc, "code", None)
-    if code == 429:
-        return "The AI provider is rate limiting this key. Wait a minute and try again."
-    if code in _RETRYABLE_CODES:
+    code = _provider_code(exc)
+    if code is None:
+        return (
+            "The AI request failed unexpectedly. "
+            "Try again, and report it if it keeps happening."
+        )
+    if code in _BUSY_CODES:
         return (
             "The AI model is overloaded right now. "
             "Try again in a minute, or pick another model."
         )
-    message = str(getattr(exc, "message", "") or exc)[:300]
-    if key.api_key:
-        message = message.replace(key.api_key, "***")
-    if not message:
-        return "The AI provider could not be reached. Try again in a minute."
-    return f"The AI provider refused the request: {message}"
+    message = _provider_message(exc, key)
+    if code == 429:
+        return f"The AI provider is limiting this key: {message}"
+    if code >= 500:
+        return f"The AI provider had an internal error ({code}): {message}"
+    return f"The AI provider refused the request ({code}): {message}"
 
 
 async def _sse_text(
@@ -146,9 +177,15 @@ async def _sse_text(
     except Exception as exc:
         _note_rejection(session, key, exc)
         detail = _failure_detail(exc, key)
-        # The scrubbed sentence, not `exc`: the raw message is what may carry
-        # the Key, and a server log is a worse place for it than the frame.
-        logger.warning("AI provider stream failed: %s", detail)
+        if _provider_code(exc) is not None:
+            # The Provider said no. Log the scrubbed sentence, not `exc`: the
+            # raw message is what may echo the Key.
+            logger.warning("AI provider stream failed: %s", detail)
+        else:
+            # Nothing answered with a status, so this may be a bug here, and
+            # the traceback is what finds it. Keys travel in headers, never in
+            # URLs or messages this process builds.
+            logger.error("AI stream failed unexpectedly", exc_info=exc)
         yield f"data: {json.dumps({'error': detail})}\n\n"
         return
     yield "data: [DONE]\n\n"
@@ -322,7 +359,10 @@ async def api_summary_stream(
         purpose=Purpose.SUMMARY,
         key_id=body.ai_key_id,
     )
-    prompt = format_summary_prompt(
+    # The client's copy wins when it sent one: it is the prompt already stored
+    # on the pending Summary, so rebuilding it here would read the posts again
+    # and could answer a prompt that differs from the one saved.
+    prompt = body.prompt or format_summary_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
         language=body.language,
