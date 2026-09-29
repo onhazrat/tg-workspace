@@ -31,7 +31,7 @@ const SELECTED_AI_KEY = "selected_ai_key"
  * `RunSettingsBar` — and only the third re-rendered anything. That held while
  * the only reader on screen was the chooser itself and its own child. It stops
  * holding now that three run buttons in three separate subtrees gate on whether
- * a Key is selected: `TagConfig` is not below the bar, so a bar-local `useState`
+ * a Key is selected: `TagAction` is not below the bar, so a bar-local `useState`
  * could never have reached it.
  */
 const listeners = new Set<() => void>()

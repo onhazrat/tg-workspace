@@ -20,6 +20,12 @@ import { rememberAiKeyId } from "@/lib/aiKeys/selection"
 /**
  * Model, key and language, once, for the whole Action tab.
  *
+ * Bare chips with no card of its own: it sits in the Action card's header,
+ * beside the Analysis window, and says only "Run with". The sentence it used to
+ * carry ("Applies to summaries, tag runs and chats") is what the header's
+ * position now says; the zero-Key sentence stays, because it is the only
+ * instruction on the page an account with no Key can act on.
+ *
  * These selectors sat inside the Summary card while `AIContext`, `TagContext`
  * and `ChatContext` all read the same `useSettings` values — so changing the
  * model for a tag run meant opening the summary form and setting it there. The
@@ -103,18 +109,18 @@ export const RunSettingsBar: React.FC = () => {
   )
 
   return (
-    <section
+    <div
       data-testid="action-run-settings"
-      className="flex flex-wrap items-center gap-3 rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm"
+      className="flex flex-wrap items-center gap-3"
     >
-      <div className="mr-auto">
-        <h3 className="text-sm font-bold uppercase tracking-tight">Run with</h3>
-        <p className="mt-0.5 text-[11px] text-app-ink/60">
-          {aiKeys.length === 0
-            ? "No AI keys saved yet. Add one to create summaries."
-            : "Applies to summaries, tag runs and chats."}
+      <span className="text-[10px] font-bold uppercase tracking-widest text-app-ink/50">
+        Run with
+      </span>
+      {aiKeys.length === 0 && (
+        <p className="text-[11px] text-app-ink/60">
+          No AI keys saved yet. Add one to create summaries.
         </p>
-      </div>
+      )}
 
       {/*
        * Key first, then model, then language — the order the choices depend on
@@ -195,6 +201,6 @@ export const RunSettingsBar: React.FC = () => {
           <AiKeyAddForm onSaved={() => setAddOpen(false)} />
         </DialogContent>
       </Dialog>
-    </section>
+    </div>
   )
 }

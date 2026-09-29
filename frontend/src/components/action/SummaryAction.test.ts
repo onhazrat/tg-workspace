@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { summaryActionsDisabled } from "./SummaryConfig"
+import { summaryActionsDisabled } from "./SummaryAction"
 
 const ready = {
   scraping: false,
