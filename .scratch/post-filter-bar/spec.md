@@ -282,10 +282,12 @@ the whole filter set.
 - The prototype's losing layouts: a facet rail beside the feed, a filter sentence, a typed query
   line (`lang:fa views:>=10k`), inline Filter/View rows, and the other Reach and cap forms.
 - Moving post filters into the settings schema.
-- Tickets: PFB-01 (the Scope takes its new shape), PFB-02 (the filter bar), PFB-03 (views and Estimated views), in `issues/`, in that order.
 
 ## Further Notes
 
+- Tickets, in `issues/`, each blocked by the one before: PFB-01 (the Scope takes its new
+  shape, a behaviour-preserving prefactor), PFB-02 (the filter bar), PFB-03 (Views and Estimated
+  views).
 - The prototype is the primary source for the layout and copy: local branch
   `prototype/post-filter-ui`. Rounds: `d06f661` (three layouts, command bar won), `cf5cd8c` (three
   command-bar revisions, pills with forms won), `3250b56` (multi-select media), `fdcf03c` (grouping
