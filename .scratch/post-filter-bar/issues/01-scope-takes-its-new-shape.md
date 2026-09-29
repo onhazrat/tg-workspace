@@ -78,4 +78,3 @@ client, so it lands alone and green. See `.scratch/post-filter-bar/spec.md`, "Sc
   `time` and `channel_time` are read once and written back in the new shape.
 - **Not run here:** Playwright. Its spec and helper were moved to the new shape
   (`tests/summarizer-channels.spec.ts`, `tests/utils/summarizer-helpers.ts`) and typecheck.
-
