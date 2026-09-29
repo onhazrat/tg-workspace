@@ -41,27 +41,33 @@ describe("validateWorkspaceSearch", () => {
   })
 
   test("every id param is trimmed, and blank or non-string ones are dropped", () => {
+    // Each Artifact param is checked on its own tab, where it survives.
     const keys = [
-      "setting",
-      "channelGroup",
-      "settingGroup",
-      "report",
-      "summary",
-      "chatSession",
-      "tagRun",
-    ]
-    for (const key of keys) {
-      expect(validateWorkspaceSearch({ [key]: "  id-1 " })).toEqual({
-        tab: "channels",
+      ["setting", "channels"],
+      ["channelGroup", "channels"],
+      ["settingGroup", "channels"],
+      ["report", "discover"],
+      ["summary", "summary"],
+      ["chatSession", "chat"],
+      ["tagRun", "tag"],
+    ] as const
+    for (const [key, tab] of keys) {
+      expect(validateWorkspaceSearch({ tab, [key]: "  id-1 " })).toEqual({
+        tab,
         [key]: "id-1",
       })
-      expect(validateWorkspaceSearch({ [key]: "   " })).toEqual({
-        tab: "channels",
-      })
-      expect(validateWorkspaceSearch({ [key]: 7 })).toEqual({
-        tab: "channels",
-      })
+      expect(validateWorkspaceSearch({ tab, [key]: "   " })).toEqual({ tab })
+      expect(validateWorkspaceSearch({ tab, [key]: 7 })).toEqual({ tab })
     }
+  })
+
+  test("only the active tab's Artifact param survives (TABS-01)", () => {
+    expect(
+      validateWorkspaceSearch({ tab: "posts", summary: "s", report: "r" }),
+    ).toEqual({ tab: "posts" })
+    expect(
+      validateWorkspaceSearch({ tab: "summary", summary: "s", report: "r" }),
+    ).toEqual({ tab: "summary", summary: "s" })
   })
 
   test("unknown params do not survive", () => {

@@ -137,16 +137,19 @@ export function chatSessionRecord(
  * What the transcript loader does when the open chat or its query changes.
  *
  * `null` is "leave everything alone": the transcript is already loaded, or has
- * not arrived yet. Closing the chat forgets which one was loaded but keeps the
- * turns on screen. Otherwise it loads the opened session's transcript once, so
- * a live conversation's own turns are never overwritten by a refetch.
+ * not arrived yet. An empty Chat tab clears whatever a filled one had loaded,
+ * but not the turns of a first message streaming into it. Otherwise it loads
+ * the opened session's transcript once, so a live conversation's own turns are
+ * never overwritten by a refetch.
  */
 export function transcriptLoad(
   sessionId: string | null,
   loadedId: string | null,
   session: { messages?: ChatMessage[] | null } | undefined,
 ): { loadedId: string | null; messages?: ChatMessage[] } | null {
-  if (!sessionId) return { loadedId: null }
+  if (!sessionId) {
+    return loadedId ? { loadedId: null, messages: [] } : { loadedId: null }
+  }
   if (loadedId === sessionId || !session) return null
   return { loadedId: sessionId, messages: session.messages ?? [] }
 }

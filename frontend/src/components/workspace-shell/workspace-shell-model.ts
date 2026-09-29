@@ -2,8 +2,11 @@
  * The workspace shell's small decisions, with no React, so they can be tested.
  * `App` renders them.
  */
+import { artifactChannelsLine } from "@/components/history/artifact-presentation"
 import type { Theme } from "@/components/theme-provider"
-import type { Channel } from "@/types"
+import { WORKSPACE_TABS } from "@/constants"
+import { isFixed, sameTab, type Tab, tabKey } from "@/lib/workspace-tabs"
+import type { ArtifactListItem, Channel, TabType } from "@/types"
 
 /** What the theme button says: the current mode and where a click goes next. */
 export const THEME_TOOLTIPS: Record<Theme, string> = {
@@ -91,4 +94,54 @@ export function shortcutGroups(commandKey: string) {
       ],
     },
   ]
+}
+
+/**
+ * What a workspace tab says (TABS-01): its kind, or a short name for the
+ * Artifact it holds, so five Summary tabs are told apart. The scope and date
+ * for most kinds, the first question for a Chat.
+ */
+export function tabLabel(
+  kindLabel: string,
+  artifact: ArtifactListItem | undefined,
+): string {
+  if (!artifact) return kindLabel
+  if (artifact.kind === "chat" && artifact.title) return artifact.title
+  const date = new Date(artifact.timestamp ?? 0).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })
+  return `${artifactChannelsLine(artifact)} · ${date}`
+}
+
+const TAB_META = Object.fromEntries(
+  WORKSPACE_TABS.map((tab) => [tab.id, tab]),
+) as Record<TabType, (typeof WORKSPACE_TABS)[number]>
+
+/** Everything the strip decides about one tab, so `App` only renders it. */
+export function tabPresentation(
+  tab: Tab,
+  index: number,
+  all: readonly Tab[],
+  active: Tab,
+  artifact: ArtifactListItem | undefined,
+) {
+  const meta = TAB_META[tab.kind]
+  const isActive = sameTab(tab, active)
+  return {
+    key: tabKey(tab),
+    meta,
+    label: tabLabel(meta.label, artifact),
+    isActive,
+    closable: !isFixed(tab.kind),
+    // The tour and the specs address the first tab of a kind.
+    anchorId:
+      all.findIndex((t) => t.kind === tab.kind) === index
+        ? `tour-tab-${tab.kind}`
+        : undefined,
+    linkClass: isActive
+      ? "border-app-ink opacity-100"
+      : "border-transparent opacity-40",
+    closeClass: isActive ? "opacity-70" : "opacity-0 group-hover:opacity-70",
+  }
 }

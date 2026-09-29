@@ -113,7 +113,7 @@ export const LogsView: React.FC = () => {
     embedding: embedding.loading,
   }
 
-  const { setActiveTab, setCurrentSummaryId } = useUI()
+  const { workspaceTabs } = useUI()
   // Five unconditional calls in a fixed order — one per panel — because hooks
   // cannot be called from the `logActions` lookup below.
   const deletePublish = useDeleteLogsMutation("publish")
@@ -276,9 +276,9 @@ export const LogsView: React.FC = () => {
     toast.success(`All ${noun} logs cleared.`)
   }
 
+  // The Summary itself in its tab, not its row in History (TABS-01).
   const handleViewSummary = (summaryId: string) => {
-    setCurrentSummaryId(summaryId)
-    setActiveTab("history")
+    workspaceTabs.openTab("summary", summaryId)
   }
 
   const clearLogsNoun = LOG_TAB_META[activeLogTab].noun

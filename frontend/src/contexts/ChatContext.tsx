@@ -86,7 +86,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const {
     activeTab,
     currentChatSessionId,
-    setCurrentChatSessionId,
+    workspaceTabs,
     includeChannelBioInPrompt,
     includeChannelTagsInPrompt,
   } = useUI()
@@ -127,7 +127,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const loadedSessionRef = useRef<string | null>(null)
   const { data: openedSession } = useChatSessionQuery(currentChatSessionId)
 
+  /*
+   * The Chat tab a run belongs to: its session id, or null for the empty tab a
+   * new conversation streams into. There is one live buffer (TABS-03 would
+   * give each tab its own), so while a run streams, every other Chat tab shows
+   * its saved transcript instead of the buffer, and the loader leaves the
+   * buffer alone until the run ends. Loading another tab's transcript into it
+   * mid-run would let the stream write over that tab's turns, and the next
+   * send there would save the mix.
+   */
+  const [runSessionId, setRunSessionId] = useState<string | null>(null)
+  const ownsRun = runSessionId === currentChatSessionId
+
+  // Only on a Chat tab: every other tab reads a null session id (TABS-01), and
+  // treating that as an empty Chat tab would wipe a turn still streaming.
   useEffect(() => {
+    if (activeTab !== "chat" || isChatting) return
     const load = transcriptLoad(
       currentChatSessionId,
       loadedSessionRef.current,
@@ -136,7 +151,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!load) return
     loadedSessionRef.current = load.loadedId
     if (load.messages) setChatMessages(load.messages)
-  }, [currentChatSessionId, openedSession])
+  }, [activeTab, isChatting, currentChatSessionId, openedSession])
 
   useEffect(() => {
     if (chatInputRef.current) {
@@ -282,6 +297,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!send.message) return
 
     setChatInput("")
+    setRunSessionId(send.sessionId)
     setIsChatting(true)
     try {
       // Only ever the row *this* call created: a failure on turn nine does
@@ -370,7 +386,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     // this session as already-loaded and never refetches over the turns we
     // are appending live.
     loadedSessionRef.current = sessionId
-    if (currentChatSessionId !== sessionId) setCurrentChatSessionId(sessionId)
+    setRunSessionId(sessionId)
+    // A new conversation gets its own tab (TABS-01): the empty Chat tab it
+    // started in, or a new one if that was closed mid-run.
+    if (!send.sessionId) workspaceTabs.createTab("chat", sessionId)
     await loadHistory()
   }
 
@@ -432,7 +451,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <ChatContext.Provider
       value={{
-        chatMessages,
+        chatMessages:
+          isChatting && !ownsRun
+            ? (openedSession?.messages ?? [])
+            : chatMessages,
         setChatMessages,
         chatInput,
         setChatInput,

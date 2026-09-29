@@ -4,10 +4,10 @@ import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import { useUI } from "@/contexts/UIContext"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import type { DiscoverCandidatesParams } from "@/hooks/useDiscover"
 import { useCreateDiscoverReportMutation } from "@/hooks/useDiscover"
-import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
 import { RANDOM_CAP_SEED } from "@/lib/posts/discover-candidates"
 
 /**
@@ -31,7 +31,7 @@ export function useDiscoverGenerate() {
   } = useScraper()
   const { startDate, endDate } = useScope()
   const { discoverSignals } = useSettings()
-  const { openReport } = useDiscoverReportParam()
+  const { workspaceTabs } = useUI()
   const createReport = useCreateDiscoverReportMutation()
 
   const debouncedPostSearch = useDebouncedValue(postSearch, 300)
@@ -85,8 +85,8 @@ export function useDiscoverGenerate() {
       }))
     }
     const report = await createReport.mutateAsync(params)
-    // Pin the new report so it stays on screen even as newer ones appear.
-    openReport(report.id)
+    // Its own tab, shown when this was started from Action (TABS-01).
+    workspaceTabs.createTab("discover", report.id)
     return report
   }
 

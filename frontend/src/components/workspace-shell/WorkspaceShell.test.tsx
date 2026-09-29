@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type { Channel } from "@/types"
+import type { ArtifactListItem, Channel } from "@/types"
 import {
   ShortcutsDialog,
   StatusBanners,
@@ -18,6 +18,8 @@ import {
   opensShortcuts,
   routingMode,
   THEME_TOOLTIPS,
+  tabLabel,
+  tabPresentation,
 } from "./workspace-shell-model"
 
 afterEach(cleanup)
@@ -147,5 +149,48 @@ describe("WorkspaceStats", () => {
     expect(screen.getByText("—")).toBeTruthy()
     expect(screen.getByTestId("header-active-channels").textContent).toBe("3")
     expect(screen.getByText("12,345")).toBeTruthy()
+  })
+})
+
+describe("the tab strip (TABS-01)", () => {
+  const summary = { kind: "summary" as const, id: "s1" }
+  const other = { kind: "summary" as const, id: "s2" }
+  const all = [{ kind: "posts" as const }, summary, other]
+  const row = {
+    kind: "summary",
+    id: "s1",
+    timestamp: Date.UTC(2026, 8, 29, 12),
+    scope: { channels: ["alpha", "beta"] },
+  } as unknown as ArtifactListItem
+
+  test("an empty tab says its kind, a filled one names its Artifact", () => {
+    expect(tabLabel("Summary", undefined)).toBe("Summary")
+    expect(tabLabel("Summary", row)).toMatch(/^alpha, beta · /)
+    const chat = { ...row, kind: "chat", title: "What changed?" }
+    expect(tabLabel("Chat", chat as ArtifactListItem)).toBe("What changed?")
+  })
+
+  test("only the first tab of a kind carries the tour anchor", () => {
+    expect(tabPresentation(summary, 1, all, other, row).anchorId).toBe(
+      "tour-tab-summary",
+    )
+    expect(tabPresentation(other, 2, all, other, undefined).anchorId).toBe(
+      undefined,
+    )
+  })
+
+  test("the active tab is marked and a Fixed tab has no close", () => {
+    const active = tabPresentation(summary, 1, all, summary, row)
+    expect(active.isActive).toBe(true)
+    expect(active.closable).toBe(true)
+    expect(active.linkClass).toContain("border-app-ink")
+    expect(active.closeClass).toBe("opacity-70")
+
+    const fixed = tabPresentation(all[0], 0, all, summary, undefined)
+    expect(fixed.isActive).toBe(false)
+    expect(fixed.closable).toBe(false)
+    expect(fixed.label).toBe("Posts")
+    expect(fixed.closeClass).toContain("group-hover")
+    expect(fixed.key).toBe("posts")
   })
 })

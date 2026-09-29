@@ -1,8 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query"
 import type React from "react"
 import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
+import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
   useInvalidateSummaries,
@@ -87,6 +89,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { channels, selectedChannels } = useData()
   const summariesHistory = useSummariesHistory()
+  const queryClient = useQueryClient()
   const loadHistory = useInvalidateSummaries()
   const botCredentials = useBotCredentials()
   const chatDestinations = useChatDestinations()
@@ -95,9 +98,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   // which channels to sync before generating.
   const { endDate } = useScope()
   const {
-    setActiveTab,
+    workspaceTabs,
     setSummarizing,
-    setCurrentSummaryId,
     includeChannelBioInPrompt,
     includeChannelTagsInPrompt,
   } = useUI()
@@ -224,7 +226,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setSummarizing(true)
     setSummary(null)
-    setActiveTab("summary")
+    // The empty Summary tab (or a new one), which the finished run fills.
+    workspaceTabs.openTab("summary")
     try {
       await withProvisionalRow(deleteSummary, (row) =>
         streamSummary(names, posts, row),
@@ -285,7 +288,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       citedPosts: await resolveCitedPosts(text, posts.posts, lookupPosts),
     } as unknown as Summary)
     row.keep()
-    setCurrentSummaryId(newId)
+    workspaceTabs.createTab("summary", newId)
+    // The stream buffer belongs to no tab: left set, it would stand in for the
+    // body of whichever Summary tab opened next. The new tab reads the row.
+    setSummary(null)
     await loadHistory()
   }
 
@@ -340,11 +346,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     await navigator.clipboard.writeText(prompt)
     await saveSummary({ id: newId, promptText: prompt } as Summary)
     row.keep()
-    setCurrentSummaryId(newId)
+    workspaceTabs.createTab("summary", newId)
     setSummary(null)
     setChatMessages([])
     await loadHistory()
-    setActiveTab("summary")
     toast.success("Prompt copied. Paste the AI response when ready.")
   }
 
@@ -370,11 +375,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       await saveSummary(
         pastedSummaryRecord(pasted.pending, pasted.text, modelName, citedPosts),
       )
-      setCurrentSummaryId(summaryId)
-      setSummary(pasted.text)
+      workspaceTabs.createTab("summary", summaryId)
+      // Its tab may hold the pending row already; refetch it with its text.
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.summary(summaryId),
+      })
       setChatMessages([])
       await loadHistory()
-      setActiveTab("summary")
       toast.success("External AI response saved.")
       return true
     } catch (err: unknown) {

@@ -1,4 +1,4 @@
-import { WORKSPACE_TABS } from "../src/constants"
+import { FIXED_TABS } from "../src/lib/workspace-tabs"
 import { expect, test } from "./fixtures.ts"
 import { seedAiKey } from "./utils/seed-ai-key"
 import { seedTestChannel } from "./utils/seed-channel"
@@ -17,12 +17,15 @@ test.describe("TG Workspace shell", () => {
     await expect(page).toHaveURL(/\/workspace\?.*tab=posts/)
   })
 
-  test("workspace shell renders workspace tabs", async ({ page }) => {
+  test("workspace shell renders the Fixed tabs and the + menu", async ({
+    page,
+  }) => {
     await page.goto("/workspace")
 
-    for (const tab of WORKSPACE_TABS) {
-      await expect(page.locator(`#tour-tab-${tab.id}`)).toBeVisible()
+    for (const tab of FIXED_TABS) {
+      await expect(page.locator(`#tour-tab-${tab}`)).toBeVisible()
     }
+    await expect(page.getByTestId("workspace-tab-add")).toBeVisible()
   })
 
   /**
@@ -71,7 +74,8 @@ test.describe("TG Workspace shell", () => {
 
   test("tag tab opens Tag view", async ({ page }) => {
     await page.goto("/workspace?tab=summary")
-    await page.locator("#tour-tab-tag").click()
+    await page.getByTestId("workspace-tab-add").click()
+    await page.getByRole("menuitem", { name: "Tag" }).click()
 
     await expect(page).toHaveURL(/tab=tag/)
     await expect(page.locator("#tour-tab-tag")).toHaveClass(/border-app-ink/)
@@ -181,10 +185,9 @@ test.describe("TG Workspace shell", () => {
       page.getByRole("link", { name: "Summary", exact: true }).first(),
     ).toBeVisible()
 
-    await page
-      .getByRole("link", { name: "Settings", exact: true })
-      .first()
-      .click()
+    // Settings starts closed (TABS-01); the "+" menu opens it.
+    await page.getByTestId("workspace-tab-add").click()
+    await page.getByRole("menuitem", { name: "Settings" }).click()
     await page.getByRole("button", { name: "Network", exact: true }).click()
 
     await expect(page.getByTestId("settings-search")).toBeVisible()

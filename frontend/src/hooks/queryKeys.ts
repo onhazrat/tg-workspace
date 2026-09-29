@@ -37,6 +37,9 @@ export const queryKeys = {
    */
   artifacts: (kind: string | null, search: string, starred: boolean) =>
     ["artifacts", kind ?? "all", search, starred] as const,
+  /** Under `artifacts`, so a History delete re-runs tab reconcile too. */
+  artifactTabs: (keys: readonly string[]) =>
+    ["artifacts", "tabs", ...keys] as const,
   tagRuns: ["tagRuns"] as const,
   tagRun: (id: string) => ["tagRun", id] as const,
   discoverCandidates: (scope: unknown) =>

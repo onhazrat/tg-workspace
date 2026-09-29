@@ -17,12 +17,12 @@ import {
 } from "@/components/discover/DiscoverViewSections"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
+import { useDiscoverReportParam } from "@/hooks/useArtifactParams"
 import {
   useDiscoverIgnoreMutation,
   useDiscoverReportQuery,
 } from "@/hooks/useDiscover"
 import { useDiscoverProbeQueue } from "@/hooks/useDiscoverProbeQueue"
-import { useDiscoverReportParam } from "@/hooks/useDiscoverReportParam"
 import { useCanManageJobs } from "@/hooks/useJobsStatus"
 import {
   countUnfollowedCandidates,
@@ -95,7 +95,7 @@ export const DiscoverView: React.FC = () => {
    */
   const [inspectingName, setInspectingName] = useState<string | null>(null)
 
-  const { reportId, openReport } = useDiscoverReportParam()
+  const { reportId } = useDiscoverReportParam()
 
   /*
    * Only the pinned report. There is deliberately no "open the latest one"
@@ -116,10 +116,6 @@ export const DiscoverView: React.FC = () => {
   )
 
   const isLoadingReport = reportId !== null && pinnedQuery.isLoading
-
-  const showLatest = () => {
-    openReport(null)
-  }
 
   const rawCandidates = useMemo(() => view?.candidates ?? [], [view])
 
@@ -270,11 +266,7 @@ export const DiscoverView: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <DiscoverReportBar
-        view={view}
-        isPinned={reportId !== null}
-        onShowLatest={showLatest}
-      />
+      <DiscoverReportBar view={view} />
 
       <DiscoverScopeCard
         view={view}

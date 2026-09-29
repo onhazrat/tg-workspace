@@ -12,18 +12,21 @@ import {
   useSummaryParam,
 } from "../hooks/useArtifactParams"
 import { useLazyTabData } from "../hooks/useLazyTabData"
-import { useWorkspaceTab } from "../hooks/useWorkspaceTab"
+import { useWorkspaceTabs, type WorkspaceTabs } from "../hooks/useWorkspaceTabs"
 import type { TabType } from "../types"
 
 interface UIContextType {
   activeTab: TabType
-  setActiveTab: React.Dispatch<React.SetStateAction<TabType>>
+  /** "Go to <kind>": see `useWorkspaceTabs`. */
+  setActiveTab: (tab: TabType) => void
+  /** The tab strip and its operations (TABS-01). */
+  workspaceTabs: WorkspaceTabs
   isRateLimited: boolean
   setIsRateLimited: React.Dispatch<React.SetStateAction<boolean>>
   summarizing: boolean
   setSummarizing: React.Dispatch<React.SetStateAction<boolean>>
+  /** The active tab's Summary; null on any other tab or an empty one. */
   currentSummaryId: string | null
-  setCurrentSummaryId: (id: string | null) => void
   /**
    * The chat being written to, distinct from the summary being viewed.
    *
@@ -32,7 +35,6 @@ interface UIContextType {
    * its own. A chat depends on its scope, not on a summary.
    */
   currentChatSessionId: string | null
-  setCurrentChatSessionId: (id: string | null) => void
   historySearchQuery: string
   setHistorySearchQuery: React.Dispatch<React.SetStateAction<string>>
   starredOnly: boolean
@@ -46,27 +48,20 @@ interface UIContextType {
 const UIContext = createContext<UIContextType | undefined>(undefined)
 
 export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { activeTab, setActiveTab } = useWorkspaceTab()
+  const workspaceTabs = useWorkspaceTabs()
+  const { activeTab, setActiveTab } = workspaceTabs
   useLazyTabData(activeTab)
 
   const [isRateLimited, setIsRateLimited] = useState<boolean>(false)
   const [summarizing, setSummarizing] = useState<boolean>(false)
   /*
-   * Both ids live in the URL, not in state.
-   *
-   * They were `useState`, which meant History's `?summary=` / `?chatSession=`
-   * deep links wrote a param nothing read: clicking a row switched tab and
-   * scope and then showed an empty view, because the view still resolved its
-   * selection from context. Backing them with the param — the same trick
-   * `useWorkspaceTab` plays for `activeTab` — makes every existing consumer
-   * work unchanged *and* makes the artifact reopenable from a URL.
+   * Both ids live in the URL, not in state, and only the active tab's is
+   * there (TABS-01), so each is exactly "the Artifact the active tab holds".
+   * Opening or creating one goes through `workspaceTabs`, which is what gives
+   * it a tab of its own.
    */
-  const { summaryId: currentSummaryId, openSummary: setCurrentSummaryId } =
-    useSummaryParam()
-  const {
-    chatSessionId: currentChatSessionId,
-    openChatSession: setCurrentChatSessionId,
-  } = useChatSessionParam()
+  const { summaryId: currentSummaryId } = useSummaryParam()
+  const { chatSessionId: currentChatSessionId } = useChatSessionParam()
   const [historySearchQuery, setHistorySearchQuery] = useState("")
   const [starredOnly, setStarredOnly] = useState(false)
   const [includeChannelBioInPrompt, setIncludeChannelBioInPrompt] =
@@ -99,14 +94,13 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       value={{
         activeTab,
         setActiveTab,
+        workspaceTabs,
         isRateLimited,
         setIsRateLimited,
         summarizing,
         setSummarizing,
         currentSummaryId,
-        setCurrentSummaryId,
         currentChatSessionId,
-        setCurrentChatSessionId,
         historySearchQuery,
         setHistorySearchQuery,
         starredOnly,

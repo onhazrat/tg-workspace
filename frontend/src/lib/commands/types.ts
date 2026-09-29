@@ -173,7 +173,11 @@ export interface CommandContext {
   setChatMessages: (
     messages: { role: "user" | "model"; text: string }[],
   ) => void
-  setCurrentSummaryId: (id: string | null) => void
+  /** The tab strip's operations (TABS-01). */
+  workspaceTabs: Pick<
+    import("@/hooks/useWorkspaceTabs").WorkspaceTabs,
+    "active" | "openTab" | "closeTab" | "reopenLastTab"
+  >
   forwardedFilter: "all" | "forwarded" | "original" | "unfollowed_forwarded"
   setForwardedFilter: (
     value: "all" | "forwarded" | "original" | "unfollowed_forwarded",
