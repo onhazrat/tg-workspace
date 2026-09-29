@@ -138,8 +138,9 @@ export function chatSessionRecord(
  *
  * `null` is "leave everything alone": the transcript is already loaded, or has
  * not arrived yet. An empty Chat tab clears whatever a filled one had loaded,
- * but not the turns of a first message streaming into it. Otherwise it loads the opened session's transcript once, so
- * a live conversation's own turns are never overwritten by a refetch.
+ * but not the turns of a first message streaming into it. Otherwise it loads
+ * the opened session's transcript once, so a live conversation's own turns are
+ * never overwritten by a refetch.
  */
 export function transcriptLoad(
   sessionId: string | null,

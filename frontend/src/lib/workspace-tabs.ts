@@ -76,6 +76,11 @@ export function artifactKey(kind: TabType, id: string): string {
   return `${kind}:${id}`
 }
 
+/** A tab's identity as one string: `kind:id`, or the kind of an empty tab. */
+export function tabKey(t: Tab): string {
+  return t.id ? artifactKey(t.kind, t.id) : t.kind
+}
+
 /** A tab as it may exist: an id only where the kind holds an Artifact. */
 function tab(kind: TabType, id?: string | null): Tab {
   return isArtifactKind(kind) && id ? { kind, id } : { kind }
@@ -113,7 +118,7 @@ export function open(set: TabSet, kind: TabType, id?: string | null): Step {
 /**
  * A new Artifact of `kind` exists: fill that kind's empty tab, or append.
  *
- * Shown only when that is where the user still is — on Action where they
+ * Shown only when that is where the user still is: on Action where they
  * started it, or on the tab it fills. A run that finishes after they moved on
  * lands in its tab without pulling them back to it.
  */
@@ -138,11 +143,20 @@ export function create(
   return { set: { ...set, tabs }, active: shown }
 }
 
-/** The tab `close` would activate: right of `target`, else left of it. */
-function neighbour(set: TabSet, target: Tab): Tab {
+/** The tab to activate instead of `target`: the nearest kept one to its
+ * right, else to its left. */
+function neighbour(
+  set: TabSet,
+  target: Tab,
+  kept: (t: Tab) => boolean = (t) => !sameTab(t, target),
+): Tab {
   const all = strip(set)
   const at = all.findIndex((t) => sameTab(t, target))
-  return all[at + 1] ?? all[at - 1] ?? all[0]
+  return (
+    all.slice(at + 1).find(kept) ??
+    all.slice(0, at).reverse().find(kept) ??
+    FIXED_ACTION
+  )
 }
 
 /** Close a Closable tab; a Fixed tab stays. */
@@ -179,18 +193,12 @@ export function reconcile(
   active: Tab,
   artifacts: { known: ReadonlySet<string>; hasArtifacts: boolean },
 ): Step {
-  const exists = (t: Tab) =>
-    !t.id || artifacts.known.has(artifactKey(t.kind, t.id))
+  const exists = (t: Tab) => !t.id || artifacts.known.has(tabKey(t))
   const dropped = set.tabs.some((t) => !exists(t))
-  let next = active
-  if (set.tabs.some((t) => sameTab(t, active)) && !exists(active)) {
-    const all = strip(set)
-    const at = all.findIndex((t) => sameTab(t, active))
-    next =
-      all.slice(at + 1).find(exists) ??
-      all.slice(0, at).reverse().find(exists) ??
-      FIXED_ACTION
-  }
+  const next =
+    set.tabs.some((t) => sameTab(t, active)) && !exists(active)
+      ? neighbour(set, active, exists)
+      : active
   let tabs = set.tabs.filter(exists)
   const addHistory =
     artifacts.hasArtifacts &&

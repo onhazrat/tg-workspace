@@ -332,6 +332,30 @@ export async function mockDiscoverForwardPosts(
     await route.fulfill({ json: [] })
   })
 
+  // The generated report only exists in this mock, and the tab strip closes
+  // any Artifact tab whose Artifact is missing from the History list
+  // (TABS-01). So once one is generated, the list carries it too.
+  await page.route("**/api/v1/data/artifacts**", async (route) => {
+    const response = await route.fetch()
+    const rows = (await response.json()) as unknown[]
+    const generated = storedReport !== discoverReport
+    const listed = {
+      kind: "discovery",
+      id: storedReport.id,
+      title: "Discover",
+      timestamp: storedReport.timestamp,
+      candidateCount: storedReport.candidateCount,
+      scope: storedReport.scope,
+    }
+    const offset = Number(
+      new URL(route.request().url()).searchParams.get("offset") ?? 0,
+    )
+    await route.fulfill({
+      response,
+      json: generated && offset === 0 ? [listed, ...rows] : rows,
+    })
+  })
+
   await page.route("**/api/v1/data/posts/counts**", async (route) => {
     // Per-channel scope counts; the carrier is the only channel in scope here.
     await route.fulfill({

@@ -12,7 +12,7 @@ import {
   useSummaryParam,
 } from "../hooks/useArtifactParams"
 import { useLazyTabData } from "../hooks/useLazyTabData"
-import { useWorkspaceTabs, type WorkspaceTabs } from "../hooks/useWorkspaceTab"
+import { useWorkspaceTabs, type WorkspaceTabs } from "../hooks/useWorkspaceTabs"
 import type { TabType } from "../types"
 
 interface UIContextType {

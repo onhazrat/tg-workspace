@@ -114,6 +114,10 @@ const TAB_META = Object.fromEntries(
   WORKSPACE_TABS.map((tab) => [tab.id, tab]),
 ) as Record<TabType, (typeof WORKSPACE_TABS)[number]>
 
+function tabIcon(meta: (typeof WORKSPACE_TABS)[number]) {
+  return TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ?? Database
+}
+
 /** What the "+" menu offers: every kind that can be closed. */
 const CLOSABLE_TABS = WORKSPACE_TABS.filter((tab) => !isFixed(tab.id))
 
@@ -425,8 +429,7 @@ export default function App() {
                 >
                   {workspaceTabs.tabs.map((tab, index, all) => {
                     const meta = TAB_META[tab.kind]
-                    const Icon =
-                      TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ?? Database
+                    const Icon = tabIcon(meta)
                     const isActive = sameTab(tab, workspaceTabs.active)
                     const closable = !isFixed(tab.kind)
                     const label = tabLabel(
@@ -498,9 +501,7 @@ export default function App() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
                       {CLOSABLE_TABS.map((meta) => {
-                        const Icon =
-                          TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ??
-                          Database
+                        const Icon = tabIcon(meta)
                         return (
                           <DropdownMenuItem
                             key={meta.id}

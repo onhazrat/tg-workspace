@@ -6,7 +6,6 @@ import { useArtifactTabLookup } from "@/hooks/useArtifacts"
 import { scopedStorage } from "@/lib/storage/scoped"
 import {
   type ArtifactTabKind,
-  artifactKey,
   close,
   create,
   emptyTabSet,
@@ -21,6 +20,7 @@ import {
   type Tab,
   type TabSet,
   tabFromSearch,
+  tabKey,
   tabSearch,
   visit,
 } from "@/lib/workspace-tabs"
@@ -28,7 +28,13 @@ import type { TabType } from "@/types"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
-/** Per account (through `scopedStorage`) and per device, like every preference. */
+/**
+ * Per account (through `scopedStorage`) and per device, like every preference.
+ *
+ * Not a schema setting: the open set is the current selection, which the
+ * browser keeps as state of its own, like `hasSeenTour`. It has no default a
+ * user picks, no catalog entry, and nothing for the backend to mirror.
+ */
 const STORAGE_KEY = "workspaceTabs"
 
 /**
@@ -72,9 +78,7 @@ export function useWorkspaceTabs() {
   const search = workspaceRoute.useSearch()
   const navigate = workspaceRoute.useNavigate()
   const active = tabFromSearch(search)
-  const activeKey = active.id
-    ? artifactKey(active.kind, active.id)
-    : active.kind
+  const activeKey = tabKey(active)
 
   const [set, setSet] = useState(loadTabSet)
   // Operations read these rather than render-time values, so two calls in one
@@ -117,7 +121,10 @@ export function useWorkspaceTabs() {
 
   const keys = useMemo(
     () =>
-      set.tabs.flatMap((t) => (t.id ? [artifactKey(t.kind, t.id)] : [])).sort(),
+      set.tabs
+        .filter((t) => t.id)
+        .map(tabKey)
+        .sort(),
     [set.tabs],
   )
   const { data: lookup } = useArtifactTabLookup(keys)
@@ -127,9 +134,7 @@ export function useWorkspaceTabs() {
       // A tab opened after this lookup started is not the lookup's to judge.
       const known = new Set(lookup.found.keys())
       for (const t of current.tabs) {
-        if (!t.id) continue
-        const key = artifactKey(t.kind, t.id)
-        if (!lookup.wanted.has(key)) known.add(key)
+        if (t.id && !lookup.wanted.has(tabKey(t))) known.add(tabKey(t))
       }
       return reconcile(current, now, { known, hasArtifacts: lookup.any })
     })
@@ -144,7 +149,7 @@ export function useWorkspaceTabs() {
         apply((s) => open(s, kind, id)),
       /**
        * A new Artifact exists. `background` keeps the user where they are
-       * whatever `create` would choose — for a prompt copied from Action,
+       * whatever `create` would choose, for a prompt copied from Action,
        * whose paste box is on Action.
        */
       createTab: (
@@ -179,8 +184,7 @@ export function useWorkspaceTabs() {
     active,
     activeTab: active.kind,
     tabs: strip(set),
-    artifactFor: (t: Tab) =>
-      t.id ? lookup?.found.get(artifactKey(t.kind, t.id)) : undefined,
+    artifactFor: (t: Tab) => lookup?.found.get(tabKey(t)),
   }
 }
 

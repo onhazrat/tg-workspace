@@ -89,7 +89,7 @@ export function useInvalidateArtifacts() {
  */
 export function useArtifactTabLookup(keys: readonly string[]) {
   return useQuery({
-    queryKey: ["artifacts", "tabs", ...keys],
+    queryKey: queryKeys.artifactTabs(keys),
     queryFn: async () => {
       const wanted = new Set(keys)
       const found = new Map<string, ArtifactListItem>()

@@ -101,13 +101,6 @@ export const ActionView: React.FC = () => {
 
   const [pasteOpen, setPasteOpen] = useState(false)
 
-  /*
-   * Generating a report and saving a pasted tag response both show the result:
-   * each goes through `workspaceTabs.createTab`, which focuses the new tab when
-   * it was started from here (TABS-01). Four create paths that disagree about
-   * whether they show you the result is worse than any one of the behaviours.
-   */
-
   /**
    * Open a conversation with its first question already asked.
    *

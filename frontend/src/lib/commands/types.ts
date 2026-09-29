@@ -175,7 +175,7 @@ export interface CommandContext {
   ) => void
   /** The tab strip's operations (TABS-01). */
   workspaceTabs: Pick<
-    import("@/hooks/useWorkspaceTab").WorkspaceTabs,
+    import("@/hooks/useWorkspaceTabs").WorkspaceTabs,
     "active" | "openTab" | "closeTab" | "reopenLastTab"
   >
   forwardedFilter: "all" | "forwarded" | "original" | "unfollowed_forwarded"
