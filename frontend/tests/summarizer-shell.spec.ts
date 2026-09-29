@@ -200,11 +200,12 @@ test.describe("TG Workspace shell", () => {
     // starts; the feature tabs render results only now.
     await page.goto("/workspace?tab=action")
 
+    // Copy is an icon button, so it is found by its accessible name.
     await expect(
-      page.locator("button").filter({ hasText: "Copy Summary Prompt" }).first(),
+      page.getByRole("button", { name: "Copy summary prompt" }),
     ).toBeVisible()
     await expect(
-      page.locator("button").filter({ hasText: "Generate Summary" }).first(),
+      page.getByRole("button", { name: "Generate summary" }),
     ).toBeVisible()
   })
 })

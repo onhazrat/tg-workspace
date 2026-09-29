@@ -263,16 +263,19 @@ _Avoid_: AI language, summary language, target language
 
 ### Chat modes
 
-**Full scope**:
-The Chat mode that sends every Post in the Scope to the model.
-_Avoid_: summary mode, direct, standard
+**Selected posts**:
+The Chat mode that sends every Post in the Scope to the model, and nothing
+outside it. Stored as `full_scope`.
+_Avoid_: full scope (reads as "everything", when it is only what the Scope
+selects), summary mode, direct, standard
 
 **Semantic**:
 The Chat mode that sends only the Posts a vector search retrieved for the
 question. It still has a Scope, which it optionally respects.
 _Avoid_: history mode, RAG mode, retrieval
 
-Note: `LLMLog.log_type` carries `chat_full_scope` and `chat_semantic` to match.
+Note: `LLMLog.log_type` carries `chat_full_scope` and `chat_semantic` to match;
+the stored values kept the old name when the label changed.
 That field classifies *what kind of model call was made* (alongside `summary`
 and `analysis`) — a different axis from the Chat's own mode, which is why they
 are separate fields that happen to agree.

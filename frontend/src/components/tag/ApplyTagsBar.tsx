@@ -10,7 +10,7 @@ import { useTagContext } from "@/contexts/TagContext"
  * Lives on the Tag tab, not on Action, even though every other tag control
  * moved. Apply *confirms what the preview shows* — separating the button from
  * the thing it confirms would be a worse UI than the inconsistency of leaving
- * one control behind. Moving `TagConfig` wholesale took this with it once; the
+ * one control behind. Moving the tag controls wholesale took this with it once; the
  * e2e suite is what noticed.
  */
 export const ApplyTagsBar: React.FC = () => {

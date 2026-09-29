@@ -37,7 +37,7 @@ export function artifactDetail(artifact: ArtifactListItem): string {
         : `${artifact.postCount ?? 0} posts`
     case "chat":
       return `${artifact.messageCount ?? 0} messages · ${
-        artifact.mode === "semantic" ? "Semantic" : "Full scope"
+        artifact.mode === "semantic" ? "Semantic" : "Selected posts"
       }`
     case "tag":
       return `${artifact.mode === "remove" ? "Remove" : "Add"} mode · ${

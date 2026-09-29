@@ -114,10 +114,10 @@ describe("ChatModeToggle", () => {
       />,
     )
     expect(screen.getByText("Semantic").className).toContain("bg-app-card")
-    expect(screen.getByText("Full Scope").className).not.toContain(
+    expect(screen.getByText("Selected posts").className).not.toContain(
       "bg-app-card",
     )
-    fireEvent.click(screen.getByText("Full Scope"))
+    fireEvent.click(screen.getByText("Selected posts"))
     expect(onChange).toHaveBeenCalledWith("full_scope")
     fireEvent.click(screen.getByText("Semantic"))
     expect(onChange).toHaveBeenCalledWith("semantic")

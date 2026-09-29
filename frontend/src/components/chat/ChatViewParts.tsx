@@ -38,7 +38,7 @@ const modeButtonClass = (active: boolean) =>
       : "text-app-ink opacity-60 hover:opacity-100 hover:bg-app-ink/5"
   }`
 
-/** Full Scope, and Semantic only where embeddings are on. */
+/** Selected posts, and Semantic only where embeddings are on. */
 export const ChatModeToggle: React.FC<{
   chatMode: ChatMode
   onChange: (mode: ChatMode) => void
@@ -51,7 +51,7 @@ export const ChatModeToggle: React.FC<{
       className={modeButtonClass(chatMode === "full_scope")}
     >
       <FileText size={12} />
-      Full Scope
+      Selected posts
     </button>
     {embeddingsEnabled && (
       <button

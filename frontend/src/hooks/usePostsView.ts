@@ -67,7 +67,7 @@ function useSelectedChannelNames(): string[] {
  * when no semantic search is active and a selection exists; otherwise counted
  * from the client scoped posts (semantic/related results aren't reproducible
  * server-side). Replaces the render-time reads of the eager `filteredPosts`
- * array in App/SummaryConfig/ChannelCard/ChannelGrid.
+ * array in App/SummaryAction/ChannelCard/ChannelGrid.
  */
 export function useScopedPostCounts(): Record<string, number> {
   const { selectedChannels } = useData()
