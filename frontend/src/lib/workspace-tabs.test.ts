@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test"
 
 import { VALID_TABS, WORKSPACE_TABS } from "@/constants"
+import type { ArtifactListItem } from "@/types"
 
 import {
   close,
   create,
   emptyTabSet,
+  findTabArtifacts,
   goTo,
   open,
   reconcile,
@@ -300,4 +302,42 @@ describe("tabSearch", () => {
 it("never narrows what the router accepts", () => {
   // A closed tab is still reachable by URL.
   for (const tab of WORKSPACE_TABS) expect(VALID_TABS).toContain(tab.id)
+})
+
+describe("findTabArtifacts", () => {
+  const rows = (ids: string[]) =>
+    ids.map((id) => ({ kind: "summary", id })) as unknown as ArtifactListItem[]
+  const pages = [rows(["a", "b"]), rows(["c", "d"]), rows(["e"])]
+
+  it("walks pages only until every key is found", async () => {
+    const asked: number[] = []
+    const result = await findTabArtifacts(["summary:c"], 2, async (offset) => {
+      asked.push(offset)
+      return pages[offset / 2] ?? []
+    })
+    expect(asked).toEqual([0, 2])
+    expect([...result.found.keys()]).toEqual(["summary:c"])
+    expect(result.any).toBe(true)
+  })
+
+  it("walks to the end for a key that is gone", async () => {
+    const asked: number[] = []
+    const result = await findTabArtifacts(["summary:x"], 2, async (offset) => {
+      asked.push(offset)
+      return pages[offset / 2] ?? []
+    })
+    expect(asked).toEqual([0, 2, 4])
+    expect(result.found.size).toBe(0)
+  })
+
+  it("answers whether the account has any Artifact", async () => {
+    const empty = await findTabArtifacts([], 2, async () => [])
+    expect(empty.any).toBe(false)
+  })
+
+  it("keys a Discover report by its tab kind", async () => {
+    const report = [{ kind: "discovery", id: "r" }] as ArtifactListItem[]
+    const result = await findTabArtifacts(["discover:r"], 2, async () => report)
+    expect(result.found.has("discover:r")).toBe(true)
+  })
 })

@@ -4,7 +4,9 @@
  */
 import { artifactChannelsLine } from "@/components/history/artifact-presentation"
 import type { Theme } from "@/components/theme-provider"
-import type { ArtifactListItem, Channel } from "@/types"
+import { WORKSPACE_TABS } from "@/constants"
+import { isFixed, sameTab, type Tab, tabKey } from "@/lib/workspace-tabs"
+import type { ArtifactListItem, Channel, TabType } from "@/types"
 
 /** What the theme button says: the current mode and where a click goes next. */
 export const THEME_TOOLTIPS: Record<Theme, string> = {
@@ -110,4 +112,36 @@ export function tabLabel(
     day: "numeric",
   })
   return `${artifactChannelsLine(artifact)} · ${date}`
+}
+
+const TAB_META = Object.fromEntries(
+  WORKSPACE_TABS.map((tab) => [tab.id, tab]),
+) as Record<TabType, (typeof WORKSPACE_TABS)[number]>
+
+/** Everything the strip decides about one tab, so `App` only renders it. */
+export function tabPresentation(
+  tab: Tab,
+  index: number,
+  all: readonly Tab[],
+  active: Tab,
+  artifact: ArtifactListItem | undefined,
+) {
+  const meta = TAB_META[tab.kind]
+  const isActive = sameTab(tab, active)
+  return {
+    key: tabKey(tab),
+    meta,
+    label: tabLabel(meta.label, artifact),
+    isActive,
+    closable: !isFixed(tab.kind),
+    // The tour and the specs address the first tab of a kind.
+    anchorId:
+      all.findIndex((t) => t.kind === tab.kind) === index
+        ? `tour-tab-${tab.kind}`
+        : undefined,
+    linkClass: isActive
+      ? "border-app-ink opacity-100"
+      : "border-transparent opacity-40",
+    closeClass: isActive ? "opacity-70" : "opacity-0 group-hover:opacity-70",
+  }
 }

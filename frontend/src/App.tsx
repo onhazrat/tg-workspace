@@ -60,7 +60,7 @@ import {
   opensShortcuts,
   routingMode,
   THEME_TOOLTIPS,
-  tabLabel,
+  tabPresentation,
 } from "./components/workspace-shell/workspace-shell-model"
 import { WORKSPACE_TABS } from "./constants"
 import { useData } from "./contexts/DataContext"
@@ -74,7 +74,7 @@ import { useScopedPostCounts } from "./hooks/usePostsView"
 import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
 import { artifactDestination } from "./lib/history/open-artifact"
-import { isFixed, sameTab, tabSearch } from "./lib/workspace-tabs"
+import { isFixed, tabSearch } from "./lib/workspace-tabs"
 import type { ArtifactListItem, TabType } from "./types"
 
 const THEME_ICONS = { system: Monitor, light: Moon, dark: Sun }
@@ -109,10 +109,6 @@ const TAB_ICONS = {
   Compass,
   Zap,
 }
-
-const TAB_META = Object.fromEntries(
-  WORKSPACE_TABS.map((tab) => [tab.id, tab]),
-) as Record<TabType, (typeof WORKSPACE_TABS)[number]>
 
 function tabIcon(meta: (typeof WORKSPACE_TABS)[number]) {
   return TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ?? Database
@@ -428,25 +424,23 @@ export default function App() {
                   className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
                 >
                   {workspaceTabs.tabs.map((tab, index, all) => {
-                    const meta = TAB_META[tab.kind]
-                    const Icon = tabIcon(meta)
-                    const isActive = sameTab(tab, workspaceTabs.active)
-                    const closable = !isFixed(tab.kind)
-                    const label = tabLabel(
-                      meta.label,
+                    const view = tabPresentation(
+                      tab,
+                      index,
+                      all,
+                      workspaceTabs.active,
                       workspaceTabs.artifactFor(tab),
                     )
-                    // The tour and the specs address the first tab of a kind.
-                    const first =
-                      all.findIndex((t) => t.kind === tab.kind) === index
+                    const { isActive, label } = view
+                    const Icon = tabIcon(view.meta)
 
                     return (
                       <span
-                        key={`${tab.kind}:${tab.id ?? ""}`}
+                        key={view.key}
                         className="group flex min-w-0 items-center gap-1"
                       >
                         <Link
-                          id={first ? `tour-tab-${tab.kind}` : undefined}
+                          id={view.anchorId}
                           to="/workspace"
                           search={(prev) => tabSearch(prev, tab)}
                           replace
@@ -455,32 +449,24 @@ export default function App() {
                           // Middle-click closes a Closable tab, as in a
                           // browser. On a Fixed tab it still opens a new one.
                           onAuxClick={(event) => {
-                            if (event.button !== 1 || !closable) return
+                            if (event.button !== 1 || !view.closable) return
                             event.preventDefault()
                             workspaceTabs.closeTab(tab)
                           }}
-                          className={`text-xs font-mono uppercase tracking-widest flex min-w-0 items-center gap-2 pb-1 border-b-2 transition-all ${
-                            isActive
-                              ? "border-app-ink opacity-100"
-                              : "border-transparent opacity-40"
-                          }`}
+                          className={`text-xs font-mono uppercase tracking-widest flex min-w-0 items-center gap-2 pb-1 border-b-2 transition-all ${view.linkClass}`}
                         >
                           <Icon size={14} className="shrink-0" />
                           <span className="max-w-[14rem] truncate">
                             {label}
                           </span>
                         </Link>
-                        {closable && (
+                        {view.closable && (
                           <button
                             type="button"
                             aria-label={`Close ${label}`}
                             data-testid="workspace-tab-close"
                             onClick={() => workspaceTabs.closeTab(tab)}
-                            className={`rounded p-0.5 transition-opacity hover:bg-app-ink/10 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${
-                              isActive
-                                ? "opacity-70"
-                                : "opacity-0 group-hover:opacity-70"
-                            }`}
+                            className={`rounded p-0.5 transition-opacity hover:bg-app-ink/10 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${view.closeClass}`}
                           >
                             <X size={12} />
                           </button>

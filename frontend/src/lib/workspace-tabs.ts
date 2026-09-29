@@ -1,5 +1,7 @@
 import type { TabType } from "@/constants"
+import { artifactDestination } from "@/lib/history/open-artifact"
 import type { WorkspaceSearch } from "@/lib/workspace-search"
+import type { ArtifactListItem } from "@/types"
 
 /**
  * The workspace tab strip as a value: which tabs are open, in what order, and
@@ -249,4 +251,30 @@ export function tabSearch(prev: WorkspaceSearch, target: Tab): WorkspaceSearch {
 export function tabFromSearch(search: WorkspaceSearch): Tab {
   const kind = search.tab ?? "channels"
   return tab(kind, isArtifactKind(kind) ? search[ARTIFACT_PARAMS[kind]] : null)
+}
+
+/**
+ * Look the open tabs' Artifacts up in the History list, which is paged: walk
+ * pages until every key is found or the list ends. `any` says whether the
+ * account has an Artifact at all.
+ */
+export async function findTabArtifacts(
+  keys: readonly string[],
+  pageSize: number,
+  listPage: (offset: number) => Promise<ArtifactListItem[]>,
+) {
+  const wanted = new Set(keys)
+  const found = new Map<string, ArtifactListItem>()
+  let any = false
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await listPage(offset)
+    any ||= page.length > 0
+    for (const row of page) {
+      const key = artifactKey(artifactDestination(row).tab, row.id)
+      if (wanted.has(key)) found.set(key, row)
+    }
+    if (page.length < pageSize || found.size === wanted.size) {
+      return { wanted, found, any }
+    }
+  }
 }

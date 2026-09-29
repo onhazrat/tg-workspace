@@ -6,8 +6,7 @@ import {
 import { useCallback } from "react"
 
 import { api } from "@/api"
-import { artifactDestination } from "@/lib/history/open-artifact"
-import { artifactKey } from "@/lib/workspace-tabs"
+import { findTabArtifacts } from "@/lib/workspace-tabs"
 import type { ArtifactKind, ArtifactListItem } from "@/types"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -90,25 +89,10 @@ export function useInvalidateArtifacts() {
 export function useArtifactTabLookup(keys: readonly string[]) {
   return useQuery({
     queryKey: queryKeys.artifactTabs(keys),
-    queryFn: async () => {
-      const wanted = new Set(keys)
-      const found = new Map<string, ArtifactListItem>()
-      let any = false
-      for (let offset = 0; ; offset += ARTIFACT_PAGE_SIZE) {
-        const page = await api.listArtifacts({
-          limit: ARTIFACT_PAGE_SIZE,
-          offset,
-        })
-        any ||= page.length > 0
-        for (const row of page) {
-          const key = artifactKey(artifactDestination(row).tab, row.id)
-          if (wanted.has(key)) found.set(key, row)
-        }
-        if (page.length < ARTIFACT_PAGE_SIZE || found.size === wanted.size) {
-          return { wanted, found, any }
-        }
-      }
-    },
+    queryFn: () =>
+      findTabArtifacts(keys, ARTIFACT_PAGE_SIZE, (offset) =>
+        api.listArtifacts({ limit: ARTIFACT_PAGE_SIZE, offset }),
+      ),
     staleTime: SUMMARIZER_STALE_TIME,
   })
 }
