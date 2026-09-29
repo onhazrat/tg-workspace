@@ -55,7 +55,7 @@ export async function searchPostsForPalette(
     startDate: range.startDate,
     endDate: range.endDate,
     keyword: query.trim(),
-    sort: "time",
+    sort: "newest",
     limit: SEARCH_RESULTS_CAP,
   })
 }

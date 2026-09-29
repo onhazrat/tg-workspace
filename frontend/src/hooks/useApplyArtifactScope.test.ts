@@ -15,10 +15,11 @@ describe("workspaceFromScope", () => {
       channels: new Set(),
       keyword: "",
       forwarded: "all",
-      media: "all",
+      media: [],
       maxPerChannel: 0,
-      maxPerChannelMode: "latest",
-      sort: "time",
+      maxPerChannelMode: "ordered",
+      sort: "newest",
+      groupByChannel: false,
     })
   })
 
@@ -29,19 +30,21 @@ describe("workspaceFromScope", () => {
         channels: ["a", "b"],
         keyword: "rates",
         forwarded: "original",
-        media: "photo",
+        media: ["photo", "video"],
         maxPerChannel: 5,
         maxPerChannelMode: "random",
-        sort: "channel_time",
+        sort: "oldest",
+        groupByChannel: true,
       }),
     ).toEqual({
       channels: new Set(["a", "b"]),
       keyword: "rates",
       forwarded: "original",
-      media: "photo",
+      media: ["photo", "video"],
       maxPerChannel: 5,
       maxPerChannelMode: "random",
-      sort: "channel_time",
+      sort: "oldest",
+      groupByChannel: true,
     })
   })
 })

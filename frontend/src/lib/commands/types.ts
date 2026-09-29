@@ -187,8 +187,13 @@ export interface CommandContext {
     value: import("@/lib/posts/post-media").MediaFilterValue,
   ) => void
   setMaxPostsPerChannel: (value: number) => void
-  setMaxPostsPerChannelMode: (value: "latest" | "random") => void
-  setPostSortOrder: (value: "time" | "channel_time") => void
+  setMaxPostsPerChannelMode: (
+    value: import("@/lib/posts/post-view").MaxPostsPerChannelMode,
+  ) => void
+  setPostSortOrder: (
+    value: import("@/lib/posts/post-view").PostSortOrder,
+  ) => void
+  setGroupByChannel: (value: boolean) => void
   /** Fetch the scoped, filtered posts on demand (for the post picker). */
   getScopedPosts: () => Promise<import("@/types").Post[]>
   /** Per-channel in-scope post counts on demand (server-side when eligible). */

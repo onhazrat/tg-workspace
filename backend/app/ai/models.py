@@ -1,6 +1,14 @@
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
+from app.schemas.scope import (
+    CapMode,
+    MediaKind,
+    SortOrder,
+    upgrade_legacy_scope_fields,
+)
 
 
 class ChatMessage(BaseModel):
@@ -17,11 +25,22 @@ class PromptScopeInput(BaseModel):
     window: AnalysisWindowInput | None = None
     keyword: str | None = None
     forwarded: str = "all"
-    media: str = "all"
+    # PFB-01: the Scope's filter half, spelled as `_ScopeFilters` spells it, so
+    # a value it refuses is refused here too rather than 200ing a prompt over a
+    # Scope nobody can record.
+    languages: list[str] = Field(default_factory=list, max_length=0)
+    media: list[MediaKind] = Field(default_factory=list)
     max_per_channel: int = Field(0, alias="maxPerChannel")
-    max_per_channel_mode: str = Field("latest", alias="maxPerChannelMode")
-    sort: str = "time"
+    max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
+    sort: SortOrder = "newest"
+    group_by_channel: bool = Field(False, alias="groupByChannel")
     seed: int = 0
+
+    # The previous bundle's spelling, for one release: see `PostScopeRequest`.
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_legacy_shape(cls, data: Any) -> Any:
+        return upgrade_legacy_scope_fields(data)
 
     # `extra="forbid"`: see `PostScopeRequest`. The blast radius is largest
     # here. A stale client posting the pre-AW-02 pair would resolve to an

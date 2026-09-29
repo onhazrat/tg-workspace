@@ -273,14 +273,16 @@ export async function mockDiscoverForwardPosts(
       start: 0,
       end: now,
       durationMinutes: Math.floor(now / 60_000),
-      sort: "time",
+      sort: "newest",
+      groupByChannel: false,
       posts: null,
       signals: ["forward", "mention", "link"],
       keyword: null,
       forwarded: "all",
-      media: "all",
+      languages: [],
+      media: [],
       maxPerChannel: 0,
-      maxPerChannelMode: "latest",
+      maxPerChannelMode: "ordered",
       seed: 0,
       scopedPostCount: null,
     },
@@ -369,7 +371,7 @@ export async function mockDiscoverForwardPosts(
     endDateTs: String(now + 60_000),
     postFilter_maxPerChannel: "0",
     // Persisted across specs; a leftover media filter would empty the scope.
-    postFilter_media: "all",
+    postFilter_media: "[]",
   })
 }
 

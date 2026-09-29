@@ -109,7 +109,7 @@ describe("searchPostsForPalette", () => {
         startDate: 1_000,
         endDate: 2_000,
         keyword: "markets",
-        sort: "time",
+        sort: "newest",
         limit: SEARCH_RESULTS_CAP,
       },
     ])

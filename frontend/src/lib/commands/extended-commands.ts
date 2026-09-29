@@ -33,7 +33,7 @@ import {
   applyPostDateRangeHours,
   clearPostFilters,
   FORWARDED_FILTER_OPTIONS,
-  MEDIA_FILTER_OPTIONS,
+  MEDIA_KIND_OPTIONS,
   POST_DATE_RANGE_PRESETS,
 } from "@/lib/commands/post-filters"
 import { pickSearchPost } from "@/lib/commands/search-filters"
@@ -622,17 +622,18 @@ export function buildExtendedCommands(): CommandDef[] {
     })
   }
 
-  for (const option of MEDIA_FILTER_OPTIONS) {
-    if (option.value === "all") continue
+  for (const option of MEDIA_KIND_OPTIONS) {
     commands.push({
       id: `set-media-filter-${option.value}`,
       kind: "action",
       label: `Set Media Filter → ${option.label}`,
       keywords: ["post", "media", "filter", option.value, option.label],
       group: "Posts",
-      getBadge: (ctx) => (ctx.mediaFilter === option.value ? "ON" : null),
+      // The set holds one kind until PFB-02's bar can tick several; "ON" is
+      // "this kind is in the set" either way.
+      getBadge: (ctx) => (ctx.mediaFilter.includes(option.value) ? "ON" : null),
       run: async (ctx) => {
-        applyMediaFilter(ctx, option.value)
+        applyMediaFilter(ctx, [option.value])
         toast.success(`Media filter: ${option.label}`)
       },
     })

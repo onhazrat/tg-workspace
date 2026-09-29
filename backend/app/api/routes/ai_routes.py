@@ -220,10 +220,11 @@ def _resolve_posts_text(
         end_date=window.end,
         keyword=scope.keyword,
         forwarded=scope.forwarded,
-        media=scope.media,
+        media=tuple(scope.media),
         max_per_channel=scope.max_per_channel,
         max_per_channel_mode=scope.max_per_channel_mode,
         sort=scope.sort,
+        group_by_channel=scope.group_by_channel,
         seed=scope.seed,
     )
     if tag_format:

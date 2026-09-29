@@ -42,7 +42,7 @@ from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
 from app.schemas.posts import PostScopeRequest
-from app.schemas.scope import CapMode, FrozenScope, ScopeSubmission
+from app.schemas.scope import CapMode, FrozenScope, ScopeSubmission, SortOrder
 
 
 class SignalCountsResponse(BaseModel):
@@ -430,7 +430,13 @@ class DiscoverCandidatesRequest(PostScopeRequest):
 
     channel_names: list[str] = PydanticField(alias="channelNames")
     signals: list[str] | None = None
-    max_per_channel_mode: str = PydanticField("latest", alias="maxPerChannelMode")
+    max_per_channel_mode: CapMode = PydanticField("ordered", alias="maxPerChannelMode")
+    # The feed's order, which the `ordered` cap keeps the first N of (PFB-01).
+    # Discover aggregates rather than lists, so the order changes which Posts a
+    # capped report reads and nothing else; grouping changes nothing at all
+    # and is carried so the report records the Scope the Posts tab showed.
+    sort: SortOrder = "newest"
+    group_by_channel: bool = PydanticField(False, alias="groupByChannel")
     seed: int = 0
     post_ids: list[DiscoverPostRef] | None = PydanticField(None, alias="postIds")
 
@@ -450,9 +456,10 @@ class DiscoverCandidatesRequest(PostScopeRequest):
         second spelling of what they already send would have been churn with no
         claim behind it.
 
-        `sort` is the one field with no counterpart, and it takes its default:
-        Discover aggregates rather than lists, so no order was chosen and none
-        is recorded.
+        `sort` and `groupByChannel` took their defaults here until PFB-01,
+        when the cap began following the order: a capped report under `oldest`
+        reads each channel's earliest N, so the order is part of which Posts it
+        read and has to be recorded like any other filter.
         """
         return ScopeSubmission.model_validate(
             {
@@ -460,9 +467,12 @@ class DiscoverCandidatesRequest(PostScopeRequest):
                 "window": self.window,
                 "keyword": self.keyword,
                 "forwarded": self.forwarded,
+                "languages": self.languages,
                 "media": self.media,
                 "maxPerChannel": self.max_per_channel,
                 "maxPerChannelMode": self.max_per_channel_mode,
+                "sort": self.sort,
+                "groupByChannel": self.group_by_channel,
                 "seed": self.seed,
                 "posts": (
                     None
@@ -496,8 +506,3 @@ class DiscoverReportCreateRequest(DiscoverCandidatesRequest):
     """
 
     window: AnalysisWindowInput
-    #: Re-declared as the closed set `ScopeSubmission` uses. The stateless twin
-    #: leaves it a `str` and the route checks it by hand; doing that here as
-    #: well meant one validation written twice in one module, and the hand
-    #: check ran *after* the model had already accepted the value.
-    max_per_channel_mode: CapMode = PydanticField("latest", alias="maxPerChannelMode")

@@ -7,7 +7,7 @@ path and operation id is unchanged.
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.routes.data._shared import parse_post_filters
@@ -19,11 +19,7 @@ from app.schemas.posts import (
     PostScopeRequest,
 )
 from app.services.analysis_window import resolve_analysis_window
-from app.services.posts import (
-    FEED_CAP_MODES,
-    FEED_SORTS,
-    bulk_upsert_posts,
-)
+from app.services.posts import bulk_upsert_posts
 from app.services.posts import count_posts_in_scope as count_posts_in_scope_impl
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -39,7 +35,7 @@ def list_posts(
 ) -> list[PostResponse]:
     """One page of posts for a channel/date scope.
 
-    With no filters, no cap and ``sort=time`` this is the newest-first page the
+    With no filters, no cap and ``sort=newest`` this is the newest-first page the
     export/lookup fallbacks and language detection rely on. The Posts feed also
     passes keyword/forwarded/media filters, a per-channel cap, a sort order and
     ``offset`` so the whole view is assembled server-side instead of paging a
@@ -49,13 +45,6 @@ def list_posts(
     can be the entire account — see `PostScopeRequest`. This is a read expressed
     as a POST purely so the selection travels in the body.
     """
-    if body.sort not in FEED_SORTS:
-        raise HTTPException(status_code=422, detail=f"unknown sort: {body.sort}")
-    if body.max_per_channel_mode not in FEED_CAP_MODES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
-        )
     window = resolve_analysis_window(body.window)
     return [
         PostResponse.model_validate(row)
@@ -69,6 +58,7 @@ def list_posts(
             max_per_channel=body.max_per_channel,
             max_per_channel_mode=body.max_per_channel_mode,
             sort=body.sort,
+            group_by_channel=body.group_by_channel,
             seed=body.seed,
             limit=body.limit,
             offset=body.offset,

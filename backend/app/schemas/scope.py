@@ -25,24 +25,68 @@ the schema description in `openapi.json` and a JSDoc block in
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
-from app.services.post_filters import ForwardedFilter, MediaFilter
+from app.services.post_filters import CapMode as CapMode
+from app.services.post_filters import FeedSort, ForwardedFilter
+from app.services.post_filters import MediaKind as MediaKind
 
-#: The feed's two orders and the cap's two modes, as `services/posts.py` reads
-#: them. Declared rather than left as `str` because a frozen Scope claims to be
-#: reproducible, and a typo'd `sort` that silently falls through to `time` is a
-#: reproduction that quietly is not one.
-SortOrder = Literal["time", "channel_time"]
-CapMode = Literal["latest", "random"]
+#: The feed's orders and the cap's modes, as `services/posts.py` reads them.
+#: Declared rather than left as `str` because a frozen Scope claims to be
+#: reproducible, and a typo'd `sort` that silently falls through to `newest` is
+#: a reproduction that quietly is not one.
+#: `CapMode` and `MediaKind` are re-exported for the same reason.
+SortOrder = FeedSort
 
 #: A semantic or related-Post selection can run to the whole page of matches.
 #: Bounded for the reason `PostLookupRequest` is bounded: without a ceiling this
 #: is another way to ask the server to store an unbounded list.
 MAX_SCOPED_POSTS = 5000
+
+
+def upgrade_legacy_scope_fields(data: Any) -> Any:
+    """Read a filter half written in the shape before PFB-01 as the one after it.
+
+    Two callers need it and it is the same mapping for both. A **stored** Scope
+    has to keep meaning what it meant, forever: every Artifact and scheduled
+    Summary written before the change holds `media: "all"` and `sort: "time"`.
+    An **incoming** one is a browser still running the previous bundle, which
+    keeps posting the old spelling until it reloads; that half is for one
+    release, and it is the same function because the two must not disagree
+    about what an old value meant.
+
+    * `media: "all"` is `[]`, and a single kind is `[kind]`.
+    * `maxPerChannelMode: "latest"` is `"ordered"`. Every old order was newest
+      first within a channel, so "the first N in the order" keeps exactly the
+      Posts "the latest N" kept.
+    * `sort: "time"` is `"newest"`, and `sort: "channel_time"` is `"newest"`
+      with `groupByChannel: true` — grouping stopped being an order.
+
+    Anything else passes through untouched, so a value neither shape knows is
+    still the validator's 422 rather than something this quietly rewrote. Both
+    the alias and the field name are read, because every model it runs on
+    populates by name as well.
+    """
+    if not isinstance(data, dict):
+        return data
+    upgraded = dict(data)
+    media = upgraded.get("media")
+    if isinstance(media, str):
+        upgraded["media"] = [] if media == "all" else [media]
+    for key in ("maxPerChannelMode", "max_per_channel_mode"):
+        if upgraded.get(key) == "latest":
+            upgraded[key] = "ordered"
+    sort = upgraded.get("sort")
+    if sort == "time":
+        upgraded["sort"] = "newest"
+    elif sort == "channel_time":
+        upgraded["sort"] = "newest"
+        upgraded.pop("group_by_channel", None)
+        upgraded["groupByChannel"] = True
+    return upgraded
 
 
 def scope_key(scope: FrozenScope | None) -> dict[str, Any]:
@@ -85,15 +129,29 @@ class _ScopeFilters(BaseModel):
     channels: list[str] = Field(default_factory=list)
     keyword: str | None = None
     forwarded: ForwardedFilter = "all"
-    media: MediaFilter = "all"
+    # PFB-01 carries the Language set without filtering on it yet, so anything
+    # but the empty set is a Scope this server does not implement and is
+    # refused rather than recorded as if it had been applied. PFB-02 lifts the
+    # bound when the filter exists.
+    languages: list[str] = Field(default_factory=list, max_length=0)
+    media: list[MediaKind] = Field(default_factory=list)
     max_per_channel: int = Field(0, alias="maxPerChannel", ge=0)
-    max_per_channel_mode: CapMode = Field("latest", alias="maxPerChannelMode")
-    sort: SortOrder = "time"
+    max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
+    sort: SortOrder = "newest"
+    group_by_channel: bool = Field(False, alias="groupByChannel")
     # The `random` cap's seed. Stored because the same seed picks the same
     # Posts, which is the only thing that makes a randomly-capped Artifact
     # reproducible rather than a one-off — the argument `DiscoverReport.seed`
     # already makes one table over.
     seed: int = 0
+
+    # Before, so a Scope stored in the old shape reads as the new one and never
+    # reaches the literals above as a value they refuse (PFB-01). It runs on
+    # both subclasses: the record for history, the submission for one release.
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_legacy_shape(cls, data: Any) -> Any:
+        return upgrade_legacy_scope_fields(data)
 
 
 class ScopeSubmission(_ScopeFilters):

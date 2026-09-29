@@ -300,15 +300,25 @@ def test_the_record_carries_the_whole_filter_set_a_submission_named(
     sent = _scope(
         keyword="tehran",
         forwarded="original",
-        media="photo",
+        languages=[],
+        media=["photo", "video"],
         maxPerChannel=25,
         maxPerChannelMode="random",
-        sort="channel_time",
+        sort="oldest",
+        groupByChannel=True,
         seed=4242,
     )
     body = _submit(client, _auth(client), scope=sent).json()
 
-    for key in ("keyword", "forwarded", "media", "sort", "seed"):
+    for key in (
+        "keyword",
+        "forwarded",
+        "languages",
+        "media",
+        "sort",
+        "groupByChannel",
+        "seed",
+    ):
         assert body["scope"][key] == sent[key]
     assert body["scope"]["maxPerChannel"] == 25
     assert body["scope"]["maxPerChannelMode"] == "random"

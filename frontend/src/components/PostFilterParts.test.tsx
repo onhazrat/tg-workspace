@@ -31,7 +31,7 @@ describe("PostCapControl", () => {
       <PostCapControl
         maxPostsPerChannel={maxPostsPerChannel}
         setMaxPostsPerChannel={(value) => set.push(value)}
-        maxPostsPerChannelMode="latest"
+        maxPostsPerChannelMode="ordered"
         setMaxPostsPerChannelMode={() => {}}
       />,
     )

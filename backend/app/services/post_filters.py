@@ -11,16 +11,15 @@ Parity targets (keep in lockstep with the frontend):
   - forwarded → `applyForwardedFilter`      (post-view.ts:88)
   - media     → `matchesMediaFilter`        (post-media.ts:46)
 
-The per-channel cap's `latest` mode is reproduced by `latest_per_channel_cap`;
-its `random` mode uses a browser-seeded PRNG and is deliberately *not* ported
-(the caller falls back to the client path when random mode is active). See
-`docs/architecture-remediation-plan.md` step 2 and the phase-4 scope decision.
+The Scope's vocabulary lives here too: the media kinds, the feed's orders and
+the cap's modes, so the schemas that accept a Scope and the services that read
+one name one set of values (PFB-01).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from sqlalchemy import (
     Boolean,
@@ -40,8 +39,11 @@ from app.models_tg import Post
 from app.services.post_media_parser import LEGACY_MEDIA_PLACEHOLDER
 
 ForwardedFilter = Literal["all", "forwarded", "original", "unfollowed_forwarded"]
-MediaFilter = Literal[
-    "all",
+#: One media kind. A Scope carries a *set* of them (PFB-01): empty means any
+#: media, and a Post matches when it matches any kind in the set. The set
+#: replaced a single value whose `"all"` meant what the empty set means now;
+#: `app/schemas/scope.py::upgrade_legacy_scope_fields` reads the old spelling.
+MediaKind = Literal[
     "text_only",
     "media_only",
     "photo",
@@ -50,12 +52,21 @@ MediaFilter = Literal[
     "grouped",
 ]
 
+#: The feed's orders. Grouping by channel is a separate switch rather than an
+#: order of its own, so it can combine with either (PFB-01).
+FeedSort = Literal["newest", "oldest"]
+
+#: The per-channel cap's modes. `ordered` keeps each channel's first N **in the
+#: chosen order**; it was `latest`, and renamed rather than reinterpreted so a
+#: cap under `oldest` can never be labelled "newest" (PFB-01).
+CapMode = Literal["ordered", "random"]
+
 FORWARDED_FILTERS: frozenset[str] = frozenset(
     ("all", "forwarded", "original", "unfollowed_forwarded")
 )
-MEDIA_FILTERS: frozenset[str] = frozenset(
-    ("all", "text_only", "media_only", "photo", "video", "link_preview", "grouped")
-)
+MEDIA_KINDS: frozenset[str] = frozenset(get_args(MediaKind))
+FEED_SORTS: frozenset[str] = frozenset(get_args(FeedSort))
+FEED_CAP_MODES: frozenset[str] = frozenset(get_args(CapMode))
 
 # Mirrors MEDIA_ONLY_TEXT_RE in frontend/src/lib/posts/post-media.ts, as a
 # POSIX pattern for `~*`. The frontend tests `post.text.trim()` against
@@ -75,13 +86,14 @@ class PostFilters:
 
     keyword: str | None = None
     forwarded: ForwardedFilter = "all"
-    media: MediaFilter = "all"
+    #: Empty is any media; otherwise a Post matching any one kind is kept.
+    media: tuple[MediaKind, ...] = ()
 
     def is_noop(self) -> bool:
         return (
             not (self.keyword and self.keyword.strip())
             and self.forwarded == "all"
-            and self.media == "all"
+            and not self.media
         )
 
 
@@ -140,7 +152,7 @@ def _forwarded_clause(
     return None
 
 
-def _media_clause(value: MediaFilter) -> ColumnElement[bool] | None:
+def _media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
     if value == "text_only":
         return not_(_has_media())
     if value == "media_only":
@@ -156,7 +168,14 @@ def _media_clause(value: MediaFilter) -> ColumnElement[bool] | None:
             _has_media(),
             or_(_kinds_contains("grouped"), grouped_count > 1),
         )
-    return None
+    raise ValueError(f"unknown media kind: {value}")
+
+
+def _media_clause(kinds: tuple[MediaKind, ...]) -> ColumnElement[bool] | None:
+    """Any one of `kinds`, or no predicate at all for the empty set."""
+    if not kinds:
+        return None
+    return or_(*(_media_kind_clause(kind) for kind in dict.fromkeys(kinds)))
 
 
 def post_filter_clauses(

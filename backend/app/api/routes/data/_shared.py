@@ -9,29 +9,34 @@ Keep this module small. It is not a dumping ground: anything used by one family
 belongs in that family's module.
 """
 
+from collections.abc import Sequence
 from typing import Any, cast
 
 from fastapi import HTTPException
 
 from app.services.post_filters import (
     FORWARDED_FILTERS,
-    MEDIA_FILTERS,
+    MEDIA_KINDS,
     PostFilters,
 )
 
 
-def parse_post_filters(keyword: str | None, forwarded: str, media: str) -> PostFilters:
+def parse_post_filters(
+    keyword: str | None, forwarded: str, media: Sequence[str]
+) -> PostFilters:
     """Validate the shared Posts-tab filter query params into a PostFilters.
 
     Rejecting unknown enum values with 422 mirrors how the frontend can only
-    ever send its own filter constants.
+    ever send its own filter constants. `media` is a set of kinds, empty for
+    any (PFB-01).
     """
     if forwarded not in FORWARDED_FILTERS:
         raise HTTPException(status_code=422, detail=f"unknown forwarded: {forwarded}")
-    if media not in MEDIA_FILTERS:
-        raise HTTPException(status_code=422, detail=f"unknown media: {media}")
+    unknown_media = sorted(set(media) - MEDIA_KINDS)
+    if unknown_media:
+        raise HTTPException(status_code=422, detail=f"unknown media: {unknown_media}")
     return PostFilters(
         keyword=keyword,
         forwarded=cast("Any", forwarded),
-        media=cast("Any", media),
+        media=cast("Any", tuple(media)),
     )

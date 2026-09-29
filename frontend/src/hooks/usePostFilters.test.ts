@@ -1,14 +1,15 @@
 /**
  * The Posts tab's filter state and what survives a reload (G1).
  *
- * Four of these ten values persist to browser storage by hand, outside
+ * Five of these eleven values persist to browser storage by hand, outside
  * `lib/settings/schema.ts`. That is deliberate (see the hook's docstring) but
  * it means the parse-and-fall-back logic is hand-rolled, and hand-rolled
  * hydration is where a bad stored value turns into `NaN` posts per channel or
  * an unknown sort the server rejects.
  *
- * So these tests care about two things: that exactly the four intended keys
- * persist, and that every one of them survives a hostile stored value.
+ * So these tests care about three things: that exactly the five intended keys
+ * persist, that every one of them survives a hostile stored value, and that a
+ * value the previous bundle stored is read into PFB-01's shape once.
  */
 
 import { beforeEach, describe, expect, test } from "bun:test"
@@ -18,6 +19,7 @@ import {
   POST_FILTER_STORAGE_KEYS,
   usePostFilters,
 } from "@/hooks/usePostFilters"
+import type { MediaKind } from "@/lib/posts/post-media"
 import { scopedKey, scopedStorage } from "@/lib/storage/scoped"
 
 // Ticket 02: these four keys live under the signed-in account's namespace, so
@@ -33,25 +35,31 @@ describe("usePostFilters — hydration", () => {
   test("defaults when nothing is stored", () => {
     const { result } = renderHook(() => usePostFilters())
 
-    expect(result.current.mediaFilter).toBe("all")
+    expect(result.current.mediaFilter).toEqual([])
     expect(result.current.maxPostsPerChannel).toBe(0)
-    expect(result.current.maxPostsPerChannelMode).toBe("latest")
-    expect(result.current.postSortOrder).toBe("time")
+    expect(result.current.maxPostsPerChannelMode).toBe("ordered")
+    expect(result.current.postSortOrder).toBe("newest")
+    expect(result.current.groupByChannel).toBe(false)
     expect(result.current.forwardedFilter).toBe("all")
   })
 
   test("reads back what was stored", () => {
     scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannel, "25")
     scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode, "random")
-    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "channel_time")
-    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, "photo")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "oldest")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.groupByChannel, "true")
+    scopedStorage.setItem(
+      POST_FILTER_STORAGE_KEYS.media,
+      JSON.stringify(["photo", "video"]),
+    )
 
     const { result } = renderHook(() => usePostFilters())
 
     expect(result.current.maxPostsPerChannel).toBe(25)
     expect(result.current.maxPostsPerChannelMode).toBe("random")
-    expect(result.current.postSortOrder).toBe("channel_time")
-    expect(result.current.mediaFilter).toBe("photo")
+    expect(result.current.postSortOrder).toBe("oldest")
+    expect(result.current.groupByChannel).toBe(true)
+    expect(result.current.mediaFilter).toEqual(["photo", "video"])
   })
 
   test("a non-numeric cap falls back to 0 rather than NaN", () => {
@@ -74,7 +82,7 @@ describe("usePostFilters — hydration", () => {
     ).toBe(0)
   })
 
-  test("an unknown cap mode falls back to latest", () => {
+  test("an unknown cap mode falls back to ordered", () => {
     scopedStorage.setItem(
       POST_FILTER_STORAGE_KEYS.maxPerChannelMode,
       "alphabetical",
@@ -82,36 +90,122 @@ describe("usePostFilters — hydration", () => {
 
     expect(
       renderHook(() => usePostFilters()).result.current.maxPostsPerChannelMode,
-    ).toBe("latest")
+    ).toBe("ordered")
   })
 
-  test("an unknown sort falls back to time", () => {
-    // The server's FEED_SORTS is {time, channel_time}; anything else is a 422.
+  test("an unknown sort falls back to newest", () => {
+    // The server's FEED_SORTS is {newest, oldest}; anything else is a 422.
     scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "relevance")
 
     expect(
       renderHook(() => usePostFilters()).result.current.postSortOrder,
-    ).toBe("time")
+    ).toBe("newest")
   })
 
-  test("an unknown media filter falls back to all", () => {
+  test("an unknown media filter falls back to any media", () => {
     scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, "hologram")
 
-    expect(renderHook(() => usePostFilters()).result.current.mediaFilter).toBe(
-      "all",
+    expect(
+      renderHook(() => usePostFilters()).result.current.mediaFilter,
+    ).toEqual([])
+  })
+
+  test("an unknown kind inside a stored set is dropped, not sent", () => {
+    // A kind the server does not implement is a 422 for the whole feed.
+    scopedStorage.setItem(
+      POST_FILTER_STORAGE_KEYS.media,
+      JSON.stringify(["photo", "hologram", 7]),
     )
+
+    expect(
+      renderHook(() => usePostFilters()).result.current.mediaFilter,
+    ).toEqual(["photo"])
+  })
+
+  test("an unreadable grouping flag reads as ungrouped", () => {
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.groupByChannel, "sideways")
+
+    expect(
+      renderHook(() => usePostFilters()).result.current.groupByChannel,
+    ).toBe(false)
+  })
+})
+
+describe("usePostFilters — values the previous bundle stored (PFB-01)", () => {
+  test.each<[string, MediaKind[]]>([
+    ["all", []],
+    ["photo", ["photo"]],
+    ["link_preview", ["link_preview"]],
+  ])("a stored media value %p reads as %p", (stored, expected) => {
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, stored)
+
+    expect(
+      renderHook(() => usePostFilters()).result.current.mediaFilter,
+    ).toEqual(expected)
+  })
+
+  test("a stored `latest` reads as `ordered`", () => {
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode, "latest")
+
+    expect(
+      renderHook(() => usePostFilters()).result.current.maxPostsPerChannelMode,
+    ).toBe("ordered")
+  })
+
+  test("a stored `time` reads as newest, ungrouped", () => {
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "time")
+
+    const { result } = renderHook(() => usePostFilters())
+
+    expect(result.current.postSortOrder).toBe("newest")
+    expect(result.current.groupByChannel).toBe(false)
+  })
+
+  test("a stored `channel_time` reads as newest, grouped", () => {
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "channel_time")
+
+    const { result } = renderHook(() => usePostFilters())
+
+    expect(result.current.postSortOrder).toBe("newest")
+    expect(result.current.groupByChannel).toBe(true)
+  })
+
+  test("the old spelling is read once and written back in the new shape", () => {
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, "photo")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode, "latest")
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.sortOrder, "channel_time")
+
+    renderHook(() => usePostFilters())
+
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.media)).toBe(
+      JSON.stringify(["photo"]),
+    )
+    expect(
+      scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode),
+    ).toBe("ordered")
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)).toBe(
+      "newest",
+    )
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.groupByChannel)).toBe(
+      "true",
+    )
+    // And a remount reads the new shape, not the old one again.
+    const second = renderHook(() => usePostFilters())
+    expect(second.result.current.groupByChannel).toBe(true)
+    expect(second.result.current.mediaFilter).toEqual(["photo"])
   })
 })
 
 describe("usePostFilters — persistence", () => {
-  test("the cap, its mode, the sort and the media filter persist", () => {
+  test("the cap, its mode, the order, grouping and the media set persist", () => {
     const { result } = renderHook(() => usePostFilters())
 
     act(() => {
       result.current.setMaxPostsPerChannel(12)
       result.current.setMaxPostsPerChannelMode("random")
-      result.current.setPostSortOrder("channel_time")
-      result.current.setMediaFilter("video")
+      result.current.setPostSortOrder("oldest")
+      result.current.setGroupByChannel(true)
+      result.current.setMediaFilter(["video"])
     })
 
     expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannel)).toBe(
@@ -121,9 +215,14 @@ describe("usePostFilters — persistence", () => {
       scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.maxPerChannelMode),
     ).toBe("random")
     expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)).toBe(
-      "channel_time",
+      "oldest",
     )
-    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.media)).toBe("video")
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.groupByChannel)).toBe(
+      "true",
+    )
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.media)).toBe(
+      JSON.stringify(["video"]),
+    )
   })
 
   test("searches and the forwarded filter do NOT persist", () => {
@@ -156,19 +255,21 @@ describe("usePostFilters — persistence", () => {
 })
 
 describe("usePostFilters — postViewOptions", () => {
-  test("mirrors the three view fields", () => {
+  test("mirrors the four view fields", () => {
     const { result } = renderHook(() => usePostFilters())
 
     act(() => {
       result.current.setMaxPostsPerChannel(5)
       result.current.setMaxPostsPerChannelMode("random")
-      result.current.setPostSortOrder("channel_time")
+      result.current.setPostSortOrder("oldest")
+      result.current.setGroupByChannel(true)
     })
 
     expect(result.current.postViewOptions).toEqual({
       maxPostsPerChannel: 5,
       maxPostsPerChannelMode: "random",
-      postSortOrder: "channel_time",
+      postSortOrder: "oldest",
+      groupByChannel: true,
     })
   })
 })

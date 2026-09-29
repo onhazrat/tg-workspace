@@ -1,8 +1,8 @@
 import { formatCount } from "@/lib/format-count"
 import type { Post, PostMediaKind } from "@/types"
 
-export type MediaFilterValue =
-  | "all"
+/** One media kind a Post can be filtered on. Mirrors `MediaKind` server-side. */
+export type MediaKind =
   | "text_only"
   | "media_only"
   | "photo"
@@ -10,11 +10,18 @@ export type MediaFilterValue =
   | "link_preview"
   | "grouped"
 
-export const MEDIA_FILTER_OPTIONS: {
+/**
+ * The media filter: a set of kinds (PFB-01). Empty is any media; otherwise a
+ * Post matching any one kind is kept, so ticking more widens the feed. It was a
+ * single value whose `"all"` meant what the empty set means now;
+ * `parseMediaFilterValue` reads that old spelling out of storage.
+ */
+export type MediaFilterValue = MediaKind[]
+
+export const MEDIA_KIND_OPTIONS: {
   label: string
-  value: MediaFilterValue
+  value: MediaKind
 }[] = [
-  { label: "All", value: "all" },
   { label: "Text-only", value: "text_only" },
   { label: "Media-only", value: "media_only" },
   { label: "Photo", value: "photo" },
@@ -22,6 +29,14 @@ export const MEDIA_FILTER_OPTIONS: {
   { label: "Links", value: "link_preview" },
   { label: "Grouped", value: "grouped" },
 ]
+
+const MEDIA_KINDS = new Set<string>(
+  MEDIA_KIND_OPTIONS.map((option) => option.value),
+)
+
+export function isMediaKind(value: unknown): value is MediaKind {
+  return typeof value === "string" && MEDIA_KINDS.has(value)
+}
 
 // Keep in sync with _MEDIA_ONLY_TEXT_RE in backend/app/services/post_filters.py.
 const MEDIA_ONLY_TEXT_RE =
@@ -45,33 +60,33 @@ export function postHasMediaKind(post: Post, kind: PostMediaKind): boolean {
   return getPostMediaKinds(post).includes(kind)
 }
 
-export function matchesMediaFilter(
-  post: Post,
-  filter: MediaFilterValue,
-): boolean {
-  if (filter === "all") return true
-
+function matchesMediaKind(post: Post, kind: MediaKind): boolean {
   const kinds = getPostMediaKinds(post)
   const hasMedia = kinds.length > 0
 
-  if (filter === "text_only") return !hasMedia
+  if (kind === "text_only") return !hasMedia
 
-  if (filter === "media_only") {
+  if (kind === "media_only") {
     if (!hasMedia) return false
     return isMediaOnlyPost(post)
   }
 
-  if (filter === "photo") return postHasMediaKind(post, "photo")
-  if (filter === "video") return postHasMediaKind(post, "video")
-  if (filter === "link_preview") return postHasMediaKind(post, "link_preview")
-  if (filter === "grouped") {
-    return (
-      postHasMediaKind(post, "grouped") ||
-      (post.media?.groupedCount != null && post.media.groupedCount > 1)
-    )
-  }
+  if (kind === "photo") return postHasMediaKind(post, "photo")
+  if (kind === "video") return postHasMediaKind(post, "video")
+  if (kind === "link_preview") return postHasMediaKind(post, "link_preview")
+  return (
+    postHasMediaKind(post, "grouped") ||
+    (post.media?.groupedCount != null && post.media.groupedCount > 1)
+  )
+}
 
-  return true
+/** Keep in sync with `_media_clause` in backend/app/services/post_filters.py. */
+export function matchesMediaFilter(
+  post: Post,
+  filter: MediaFilterValue,
+): boolean {
+  if (filter.length === 0) return true
+  return filter.some((kind) => matchesMediaKind(post, kind))
 }
 
 function formatDurationLabel(durationSec: number): string {
@@ -144,10 +159,22 @@ export function getMediaKindLabel(kind: PostMediaKind): string {
   }
 }
 
+/**
+ * The stored media filter, read into the set shape.
+ *
+ * Stored as a JSON array since PFB-01. A value written by the previous bundle
+ * is a bare string, `"all"` or one kind, and is read as `[]` or `[kind]`; the
+ * hook writes the set back, so the old spelling is read exactly once. Anything
+ * unreadable is any media, as it always was.
+ */
 export function parseMediaFilterValue(raw: string | null): MediaFilterValue {
-  const allowed = new Set<string>(
-    MEDIA_FILTER_OPTIONS.map((option) => option.value),
-  )
-  if (raw && allowed.has(raw)) return raw as MediaFilterValue
-  return "all"
+  if (!raw || raw === "all") return []
+  if (isMediaKind(raw)) return [raw]
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return [...new Set(parsed.filter(isMediaKind))]
+  } catch {
+    return []
+  }
 }

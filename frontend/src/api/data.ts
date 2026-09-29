@@ -69,11 +69,13 @@ export type PostScopeQuery = {
 
 /**
  * A single page of the Posts feed: the scope filters plus the per-channel cap
- * mode + seed (both used server-side for `random`), the sort order, and paging.
+ * mode + seed (both used server-side for `random`), the order, grouping, and
+ * paging.
  */
 export type PostFeedQuery = PostScopeQuery & {
   maxPerChannelMode?: MaxPostsPerChannelMode
   sort?: PostSortOrder
+  groupByChannel?: boolean
   seed?: number
   limit?: number
   offset?: number
@@ -120,7 +122,8 @@ export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
   if (params.keyword?.trim()) body.keyword = params.keyword.trim()
   if (params.forwarded && params.forwarded !== "all")
     body.forwarded = params.forwarded
-  if (params.media && params.media !== "all") body.media = params.media
+  // Empty is any media and is the server's default, so it is omitted.
+  if (params.media?.length) body.media = params.media
   if (params.maxPerChannel != null && params.maxPerChannel > 0)
     body.maxPerChannel = params.maxPerChannel
   return body
@@ -165,6 +168,9 @@ export function promptScopeBody(scope: PromptScope): Record<string, unknown> {
 export type DiscoverScopeQuery = PostScopeQuery & {
   signals?: string[]
   maxPerChannelMode?: MaxPostsPerChannelMode
+  /** The order the `ordered` cap keeps the first N of (PFB-01). */
+  sort?: PostSortOrder
+  groupByChannel?: boolean
   seed?: number
   /** Omit for no restriction; `[]` means the search matched nothing. */
   postIds?: { channelName: string; postId: number }[]
@@ -180,6 +186,8 @@ function discoverScopeBody(
   if (params.signals) body.signals = params.signals
   if (params.maxPerChannelMode)
     body.maxPerChannelMode = params.maxPerChannelMode
+  if (params.sort) body.sort = params.sort
+  if (params.groupByChannel) body.groupByChannel = true
   if (params.seed != null) body.seed = params.seed
   // Sent even when empty: `[]` and "absent" mean different things here.
   if (params.postIds != null) body.postIds = params.postIds
@@ -202,9 +210,12 @@ export type DiscoverReportScope = {
   signals: string[]
   keyword: string | null
   forwarded: ForwardedFilterValue
+  languages: string[]
   media: MediaFilterValue
   maxPerChannel: number
   maxPerChannelMode: MaxPostsPerChannelMode
+  sort: PostSortOrder
+  groupByChannel: boolean
   seed: number
   /** Posts the scope was explicitly restricted to; `null` when unrestricted. */
   scopedPostCount: number | null
@@ -468,8 +479,9 @@ export const dataApi = {
 
   /**
    * One page of the server-side Posts feed. The backend applies the
-   * keyword/forwarded/media filters, the per-channel cap (`latest` or a
-   * deterministic seeded `random`), and the sort — so the browser fetches only
+   * keyword/forwarded/media filters, the per-channel cap (`ordered` or a
+   * deterministic seeded `random`), the order and grouping — so the browser
+   * fetches only
    * `limit` rows per page instead of a channel's whole history.
    */
   getPostsFeed: (params: PostFeedQuery) => {
@@ -482,6 +494,7 @@ export const dataApi = {
       if (params.seed != null) body.seed = params.seed
     }
     if (params.sort) body.sort = params.sort
+    if (params.groupByChannel) body.groupByChannel = true
     if (params.limit != null) body.limit = params.limit
     if (params.offset != null) body.offset = params.offset
     return request<Post[]>("/api/v1/data/posts", {

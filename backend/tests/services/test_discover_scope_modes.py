@@ -73,30 +73,50 @@ def test_random_cap_is_stable_for_a_seed() -> None:
         ]
 
 
-def test_random_cap_differs_from_latest_cap() -> None:
+def test_random_cap_differs_from_ordered_cap() -> None:
     """Otherwise the mode is not actually being applied."""
     with Session(engine) as session:
         _seed_posts(session, count=30)
-        latest = _run(session, max_per_channel=5, max_per_channel_mode="latest")
+        ordered = _run(session, max_per_channel=5, max_per_channel_mode="ordered")
         random_pick = _run(
             session, max_per_channel=5, max_per_channel_mode="random", seed=3
         )
-        assert latest["postsInScope"] == random_pick["postsInScope"] == 5
-        # `latest` takes the newest five; a seeded shuffle almost certainly
+        assert ordered["postsInScope"] == random_pick["postsInScope"] == 5
+        # `ordered` takes the newest five; a seeded shuffle almost certainly
         # does not. Compare as sets so ordering differences alone do not pass.
-        assert {c["name"] for c in latest["candidates"]} != {
+        assert {c["name"] for c in ordered["candidates"]} != {
             c["name"] for c in random_pick["candidates"]
         }
 
 
-def test_latest_cap_takes_the_newest_posts() -> None:
+def test_ordered_cap_takes_the_newest_posts_by_default() -> None:
+    """`ordered` under the default order keeps what `latest` kept (PFB-01)."""
     with Session(engine) as session:
         _seed_posts(session, count=10)
-        result = _run(session, max_per_channel=3, max_per_channel_mode="latest")
+        result = _run(session, max_per_channel=3, max_per_channel_mode="ordered")
         assert {c["name"] for c in result["candidates"]} == {
             "source_09",
             "source_08",
             "source_07",
+        }
+
+
+def test_ordered_cap_follows_the_order() -> None:
+    """Under `oldest` the cap keeps each channel's earliest N, as the feed does.
+
+    A capped report reads the Posts the feed shows only while the two rank a
+    channel the same way; keeping the newest N here while the feed kept the
+    oldest would report on Posts nobody was looking at.
+    """
+    with Session(engine) as session:
+        _seed_posts(session, count=10)
+        result = _run(
+            session, max_per_channel=3, max_per_channel_mode="ordered", sort="oldest"
+        )
+        assert {c["name"] for c in result["candidates"]} == {
+            "source_00",
+            "source_01",
+            "source_02",
         }
 
 
@@ -189,4 +209,4 @@ def test_unrestricted_report_records_no_scoped_post_count() -> None:
             user_id=ANY_READER,
         )
         assert report["scope"]["scopedPostCount"] is None
-        assert report["scope"]["maxPerChannelMode"] == "latest"
+        assert report["scope"]["maxPerChannelMode"] == "ordered"

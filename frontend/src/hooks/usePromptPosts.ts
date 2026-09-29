@@ -106,8 +106,12 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
   const boundsRef = useRef({ startDate, endDate })
   boundsRef.current = { startDate, endDate }
 
-  const { maxPostsPerChannel, maxPostsPerChannelMode, postSortOrder } =
-    postViewOptions
+  const {
+    maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    postSortOrder,
+    groupByChannel,
+  } = postViewOptions
 
   const getScopedPosts = useCallback(
     async (
@@ -150,6 +154,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
+      groupByChannel,
     ],
   )
 
@@ -171,6 +176,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
           maxPerChannel: maxPostsPerChannel,
           maxPerChannelMode: maxPostsPerChannelMode,
           sort: postSortOrder,
+          groupByChannel,
           seed: 0,
         },
       }
@@ -187,6 +193,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
+      groupByChannel,
     ])
 
   const getScopeSubmission = useCallback(
@@ -199,6 +206,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       maxPerChannel: maxPostsPerChannel,
       maxPerChannelMode: maxPostsPerChannelMode,
       sort: postSortOrder,
+      groupByChannel,
       seed: 0,
       // The ranked selection, when there was one. `null` says the filters
       // above were the whole story, which is a different fact from "the
@@ -217,6 +225,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
+      groupByChannel,
     ],
   )
 

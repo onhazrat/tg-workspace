@@ -1960,7 +1960,7 @@
       "post": {
         "tags": ["data"],
         "summary": "List Posts",
-        "description": "One page of posts for a channel/date scope.\n\nWith no filters, no cap and ``sort=time`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses keyword/forwarded/media filters, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.",
+        "description": "One page of posts for a channel/date scope.\n\nWith no filters, no cap and ``sort=newest`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses keyword/forwarded/media filters, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.",
         "operationId": "data-list_posts",
         "requestBody": {
           "content": {
@@ -6723,7 +6723,27 @@
             "title": "Forwarded",
             "default": "all"
           },
-          "media": { "type": "string", "title": "Media", "default": "all" },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
+          "media": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -6739,8 +6759,20 @@
           },
           "maxPerChannelMode": {
             "type": "string",
+            "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
-            "default": "latest"
+            "default": "ordered"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "postIds": {
@@ -6943,7 +6975,27 @@
             "title": "Forwarded",
             "default": "all"
           },
-          "media": { "type": "string", "title": "Media", "default": "all" },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
+          "media": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -6959,9 +7011,20 @@
           },
           "maxPerChannelMode": {
             "type": "string",
-            "enum": ["latest", "random"],
+            "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
-            "default": "latest"
+            "default": "ordered"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "postIds": {
@@ -7092,19 +7155,26 @@
             "title": "Forwarded",
             "default": "all"
           },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
           "media": {
-            "type": "string",
-            "enum": [
-              "all",
-              "text_only",
-              "media_only",
-              "photo",
-              "video",
-              "link_preview",
-              "grouped"
-            ],
-            "title": "Media",
-            "default": "all"
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
           },
           "maxPerChannel": {
             "type": "integer",
@@ -7114,15 +7184,20 @@
           },
           "maxPerChannelMode": {
             "type": "string",
-            "enum": ["latest", "random"],
+            "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
-            "default": "latest"
+            "default": "ordered"
           },
           "sort": {
             "type": "string",
-            "enum": ["time", "channel_time"],
+            "enum": ["newest", "oldest"],
             "title": "Sort",
-            "default": "time"
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "start": { "type": "integer", "title": "Start" },
@@ -7348,19 +7423,26 @@
             "title": "Forwarded",
             "default": "all"
           },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
           "media": {
-            "type": "string",
-            "enum": [
-              "all",
-              "text_only",
-              "media_only",
-              "photo",
-              "video",
-              "link_preview",
-              "grouped"
-            ],
-            "title": "Media",
-            "default": "all"
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
           },
           "maxPerChannel": {
             "type": "integer",
@@ -7370,15 +7452,20 @@
           },
           "maxPerChannelMode": {
             "type": "string",
-            "enum": ["latest", "random"],
+            "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
-            "default": "latest"
+            "default": "ordered"
           },
           "sort": {
             "type": "string",
-            "enum": ["time", "channel_time"],
+            "enum": ["newest", "oldest"],
             "title": "Sort",
-            "default": "time"
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "start": { "type": "integer", "title": "Start" },
@@ -8132,7 +8219,27 @@
             "title": "Forwarded",
             "default": "all"
           },
-          "media": { "type": "string", "title": "Media", "default": "all" },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
+          "media": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -8158,10 +8265,21 @@
           },
           "maxPerChannelMode": {
             "type": "string",
+            "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
-            "default": "latest"
+            "default": "ordered"
           },
-          "sort": { "type": "string", "title": "Sort", "default": "time" },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
+          },
           "seed": { "type": "integer", "title": "Seed", "default": 0 }
         },
         "additionalProperties": false,
@@ -8348,7 +8466,27 @@
             "title": "Forwarded",
             "default": "all"
           },
-          "media": { "type": "string", "title": "Media", "default": "all" },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
+          "media": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -8417,7 +8555,27 @@
             "title": "Forwarded",
             "default": "all"
           },
-          "media": { "type": "string", "title": "Media", "default": "all" },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
+          "media": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
+          },
           "maxPerChannel": {
             "type": "integer",
             "title": "Maxperchannel",
@@ -8425,10 +8583,21 @@
           },
           "maxPerChannelMode": {
             "type": "string",
+            "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
-            "default": "latest"
+            "default": "ordered"
           },
-          "sort": { "type": "string", "title": "Sort", "default": "time" },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
+          },
           "seed": { "type": "integer", "title": "Seed", "default": 0 }
         },
         "additionalProperties": false,
@@ -9026,19 +9195,26 @@
             "title": "Forwarded",
             "default": "all"
           },
+          "languages": {
+            "items": { "type": "string" },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Languages"
+          },
           "media": {
-            "type": "string",
-            "enum": [
-              "all",
-              "text_only",
-              "media_only",
-              "photo",
-              "video",
-              "link_preview",
-              "grouped"
-            ],
-            "title": "Media",
-            "default": "all"
+            "items": {
+              "type": "string",
+              "enum": [
+                "text_only",
+                "media_only",
+                "photo",
+                "video",
+                "link_preview",
+                "grouped"
+              ]
+            },
+            "type": "array",
+            "title": "Media"
           },
           "maxPerChannel": {
             "type": "integer",
@@ -9048,15 +9224,20 @@
           },
           "maxPerChannelMode": {
             "type": "string",
-            "enum": ["latest", "random"],
+            "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
-            "default": "latest"
+            "default": "ordered"
           },
           "sort": {
             "type": "string",
-            "enum": ["time", "channel_time"],
+            "enum": ["newest", "oldest"],
             "title": "Sort",
-            "default": "time"
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "window": {

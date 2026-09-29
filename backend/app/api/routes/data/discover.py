@@ -70,9 +70,6 @@ from app.services.discover_reports import (
     list_reports,
     update_report_flags,
 )
-from app.services.posts import (
-    FEED_CAP_MODES,
-)
 
 router = APIRouter()
 
@@ -119,11 +116,6 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
     just a persisted version of the same aggregate — so the parsing lives here
     rather than being duplicated per route.
     """
-    if body.max_per_channel_mode not in FEED_CAP_MODES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"unknown maxPerChannelMode: {body.max_per_channel_mode}",
-        )
     window = resolve_analysis_window(body.window)
     return {
         "channel_names": [n.strip() for n in body.channel_names if n.strip()],
@@ -135,6 +127,7 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
         "filters": parse_post_filters(body.keyword, body.forwarded, body.media),
         "max_per_channel": body.max_per_channel,
         "max_per_channel_mode": body.max_per_channel_mode,
+        "sort": body.sort,
         "seed": body.seed,
         "post_ids": body.resolved_post_ids(),
     }

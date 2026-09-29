@@ -67,7 +67,7 @@ def _search(
     body: dict[str, Any] = {
         "channelNames": ["alpha", "beta"],
         "keyword": keyword,
-        "sort": "time",
+        "sort": "newest",
         "limit": 50,
         **over,
     }

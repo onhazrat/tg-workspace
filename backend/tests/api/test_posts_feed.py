@@ -2,8 +2,13 @@
 
 Beyond bounded paging (see test_posts_pagination.py), the feed assembles the
 whole Posts-tab view server-side: keyword/forwarded/media filters, a per-channel
-cap (latest or a deterministic random), and a sort order. This replaces the
-browser's eager `filteredPosts`.
+cap (the first N in the order, or a deterministic random N), an order, and
+grouping by channel. This replaces the browser's eager `filteredPosts`.
+
+PFB-01 reshaped the Scope under all of that without changing what an Account
+sees, so the old wire values are asserted to answer exactly what their new
+spellings do: `media: "all"` and `[]`, one kind and `[kind]`, `latest` and
+`ordered`, `time` and `newest`, `channel_time` and `newest` grouped.
 
 It is a POST because the scope carries the channel selection, which can be the
 whole account — see `PostScopeRequest`. See test_post_scope_body.py for the
@@ -15,6 +20,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -124,7 +130,7 @@ def test_forwarded_filter_server_side(client: TestClient) -> None:
     assert [row["id"] for row in body] == [2]
 
 
-def test_latest_cap_keeps_newest_n_per_channel(client: TestClient) -> None:
+def test_ordered_cap_keeps_newest_n_per_channel(client: TestClient) -> None:
     headers = _auth(client)
     base = int(time.time() * 1000)
     _seed_channel(client, headers, "feed_a", 5, base)
@@ -138,6 +144,34 @@ def test_latest_cap_keeps_newest_n_per_channel(client: TestClient) -> None:
     # newest two per channel (ids 4 and 3 given ascending timestamps)
     assert sorted(by_channel["feed_a"]) == [3, 4]
     assert sorted(by_channel["feed_b"]) == [3, 4]
+
+
+def test_ordered_cap_follows_the_order(client: TestClient) -> None:
+    """Under `oldest` the cap keeps each channel's first N in *that* order.
+
+    The reason the mode was renamed rather than reinterpreted: a cap reading
+    "newest" while the feed runs oldest first would label the wrong N.
+    """
+    headers = _auth(client)
+    base = int(time.time() * 1000)
+    _seed_channel(client, headers, "feed_a", 5, base)
+    _seed_channel(client, headers, "feed_b", 5, base + 100)
+
+    body = _feed(
+        client,
+        headers,
+        channelNames=["feed_a", "feed_b"],
+        maxPerChannel=2,
+        maxPerChannelMode="ordered",
+        sort="oldest",
+    )
+
+    assert [(row["channelName"], row["id"]) for row in body] == [
+        ("feed_a", 0),
+        ("feed_a", 1),
+        ("feed_b", 0),
+        ("feed_b", 1),
+    ]
 
 
 def test_random_cap_is_deterministic_for_a_seed(client: TestClient) -> None:
@@ -178,10 +212,9 @@ def test_random_cap_pages_without_repeats(client: TestClient) -> None:
     assert {r["id"] for r in page1}.isdisjoint({r["id"] for r in page2})
 
 
-def test_channel_time_sort_groups_by_channel(client: TestClient) -> None:
-    headers = _auth(client)
+def _seed_interleaved(client: TestClient, headers: dict[str, str]) -> None:
+    """Two channels whose timestamps alternate, and a collision to break."""
     base = int(time.time() * 1000)
-    # Interleave timestamps so a global "time" sort would alternate channels.
     _bulk(
         client,
         headers,
@@ -190,34 +223,203 @@ def test_channel_time_sort_groups_by_channel(client: TestClient) -> None:
             {"id": 2, "channelName": "feed_b", "text": "x", "timestamp": base + 2},
             {"id": 3, "channelName": "feed_a", "text": "x", "timestamp": base + 3},
             {"id": 4, "channelName": "feed_b", "text": "x", "timestamp": base + 4},
+            {"id": 5, "channelName": "feed_a", "text": "x", "timestamp": base + 4},
         ],
     )
 
-    body = _feed(
-        client, headers, channelNames=["feed_a", "feed_b"], sort="channel_time"
-    )
 
-    names = [row["channelName"] for row in body]
-    # All of one channel's posts come before the other's (grouped, not interleaved).
-    assert names == sorted(names)
+def _keys(rows: list[dict[str, Any]]) -> list[tuple[str, int]]:
+    return [(row["channelName"], row["id"]) for row in rows]
 
 
-def test_invalid_sort_and_mode_are_422(client: TestClient) -> None:
+def test_grouped_newest_groups_by_channel(client: TestClient) -> None:
     headers = _auth(client)
-    assert (
-        client.post(
-            f"{PREFIX}/posts", json={"sort": "nonsense"}, headers=headers
-        ).status_code
-        == 422
+    _seed_interleaved(client, headers)
+
+    body = _feed(
+        client,
+        headers,
+        channelNames=["feed_a", "feed_b"],
+        sort="newest",
+        groupByChannel=True,
     )
-    assert (
-        client.post(
-            f"{PREFIX}/posts",
-            json={"maxPerChannelMode": "nonsense"},
-            headers=headers,
-        ).status_code
-        == 422
+
+    # Channels alphabetical, newest first inside: what `channel_time` was.
+    assert _keys(body) == [
+        ("feed_a", 5),
+        ("feed_a", 3),
+        ("feed_a", 1),
+        ("feed_b", 4),
+        ("feed_b", 2),
+    ]
+
+
+def test_oldest_orders_oldest_first_with_the_stable_tiebreak(
+    client: TestClient,
+) -> None:
+    """Nothing in today's panel sends it; the server already answers it."""
+    headers = _auth(client)
+    _seed_interleaved(client, headers)
+
+    body = _feed(client, headers, channelNames=["feed_a", "feed_b"], sort="oldest")
+
+    # The timestamp collision between feed_a/5 and feed_b/4 breaks on the
+    # channel name, as it does under `newest`.
+    assert _keys(body) == [
+        ("feed_a", 1),
+        ("feed_b", 2),
+        ("feed_a", 3),
+        ("feed_a", 5),
+        ("feed_b", 4),
+    ]
+
+
+#: Each pre-PFB-01 wire value beside the new spelling that must answer
+#: identically. The cap cases carry a cap so the mode is actually exercised.
+LEGACY_EQUIVALENTS: list[tuple[str, dict[str, Any], dict[str, Any]]] = [
+    ("media all", {"media": "all"}, {"media": []}),
+    ("media one kind", {"media": "photo"}, {"media": ["photo"]}),
+    ("sort time", {"sort": "time"}, {"sort": "newest", "groupByChannel": False}),
+    (
+        "sort channel_time",
+        {"sort": "channel_time"},
+        {"sort": "newest", "groupByChannel": True},
+    ),
+    (
+        "cap latest",
+        {"maxPerChannel": 2, "maxPerChannelMode": "latest"},
+        {"maxPerChannel": 2, "maxPerChannelMode": "ordered"},
+    ),
+    (
+        "cap latest grouped",
+        {"maxPerChannel": 2, "maxPerChannelMode": "latest", "sort": "channel_time"},
+        {
+            "maxPerChannel": 2,
+            "maxPerChannelMode": "ordered",
+            "sort": "newest",
+            "groupByChannel": True,
+        },
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [(old, new) for _, old, new in LEGACY_EQUIVALENTS],
+    ids=[name for name, _, _ in LEGACY_EQUIVALENTS],
+)
+def test_an_old_wire_value_returns_what_its_new_spelling_does(
+    client: TestClient, old: dict[str, Any], new: dict[str, Any]
+) -> None:
+    """A browser still on the previous bundle sees the same feed until it reloads."""
+    headers = _auth(client)
+    _seed_interleaved(client, headers)
+    _bulk(
+        client,
+        headers,
+        [
+            {
+                "id": 9,
+                "channelName": "feed_a",
+                "text": "a photo",
+                "timestamp": int(time.time() * 1000) + 9,
+                "media": {"kinds": ["photo"]},
+            }
+        ],
     )
+    scope = {"channelNames": ["feed_a", "feed_b"]}
+
+    before = _feed(client, headers, **scope, **old)
+    after = _feed(client, headers, **scope, **new)
+
+    assert _keys(before) == _keys(after)
+    assert before, "an empty feed would make the parity vacuous"
+
+
+def test_the_counts_read_an_old_media_value_as_its_new_spelling(
+    client: TestClient,
+) -> None:
+    headers = _auth(client)
+    _seed_interleaved(client, headers)
+    scope = {"channelNames": ["feed_a", "feed_b"], "maxPerChannel": 2}
+
+    def counts(**media: Any) -> Any:
+        response = client.post(
+            f"{PREFIX}/posts/counts", json={**scope, **media}, headers=headers
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    assert counts(media="all") == counts(media=[]) == {"feed_a": 2, "feed_b": 2}
+
+
+def test_a_media_set_keeps_a_post_matching_any_kind(client: TestClient) -> None:
+    """The panel cannot send one yet; the server already answers it."""
+    headers = _auth(client)
+    base = int(time.time() * 1000)
+    _bulk(
+        client,
+        headers,
+        [
+            {"id": 1, "channelName": "ms", "text": "plain", "timestamp": base + 1},
+            {
+                "id": 2,
+                "channelName": "ms",
+                "text": "photo",
+                "timestamp": base + 2,
+                "media": {"kinds": ["photo"]},
+            },
+            {
+                "id": 3,
+                "channelName": "ms",
+                "text": "video",
+                "timestamp": base + 3,
+                "media": {"kinds": ["video"]},
+            },
+        ],
+    )
+
+    both = _feed(client, headers, channelName="ms", media=["photo", "video"])
+    one = _feed(client, headers, channelName="ms", media=["photo"])
+    any_media = _feed(client, headers, channelName="ms", media=[])
+
+    assert [row["id"] for row in both] == [3, 2]
+    assert [row["id"] for row in one] == [2]
+    assert [row["id"] for row in any_media] == [3, 2, 1]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"sort": "nonsense"},
+        {"sort": "most_views"},
+        {"maxPerChannelMode": "nonsense"},
+        {"media": ["nonsense"]},
+        {"media": "nonsense"},
+        {"languages": ["fa"]},
+        {"groupByChannel": "sideways"},
+    ],
+    ids=lambda body: next(iter(body.items())).__repr__(),
+)
+def test_a_value_this_server_does_not_implement_is_422(
+    client: TestClient, body: dict[str, Any]
+) -> None:
+    """Refused rather than dropped, for every field of the new shape.
+
+    `most_views` is PFB-03's and a Language set PFB-02's; until they land a
+    request naming one is asking for something this server would not do.
+    """
+    headers = _auth(client)
+    assert client.post(f"{PREFIX}/posts", json=body, headers=headers).status_code == 422
+
+
+@pytest.mark.parametrize("body", [{"media": ["nonsense"]}, {"languages": ["fa"]}])
+def test_the_counts_refuse_what_the_feed_refuses(
+    client: TestClient, body: dict[str, Any]
+) -> None:
+    headers = _auth(client)
+    response = client.post(f"{PREFIX}/posts/counts", json=body, headers=headers)
+    assert response.status_code == 422
 
 
 def test_channel_names_wins_over_singular_channel_name(client: TestClient) -> None:

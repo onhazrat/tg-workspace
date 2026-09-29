@@ -171,7 +171,7 @@ test.describe("TG Workspace channels and posts", () => {
 
     await expect
       .poll(() => readScopedStorage(page, "postFilter_media"))
-      .toBe("photo")
+      .toBe(JSON.stringify(["photo"]))
 
     await expect(page.getByTestId("post-card-media-badge-photo")).toBeVisible()
     await expect(page.getByText("Caption only")).not.toBeVisible()

@@ -1,6 +1,6 @@
 import type { CommandContext } from "@/lib/commands/types"
 import {
-  MEDIA_FILTER_OPTIONS,
+  MEDIA_KIND_OPTIONS,
   type MediaFilterValue,
 } from "@/lib/posts/post-media"
 
@@ -30,17 +30,18 @@ export const FORWARDED_FILTER_OPTIONS = [
   },
 ] as const
 
-export { MEDIA_FILTER_OPTIONS }
+export { MEDIA_KIND_OPTIONS }
 
 export function clearPostFilters(ctx: CommandContext): void {
   ctx.setPostSearch("")
   ctx.setSemanticSearchQuery("")
   ctx.setRelatedPostSearch(null)
   ctx.setForwardedFilter("all")
-  ctx.setMediaFilter("all")
+  ctx.setMediaFilter([])
   ctx.setMaxPostsPerChannel(0)
-  ctx.setMaxPostsPerChannelMode("latest")
-  ctx.setPostSortOrder("time")
+  ctx.setMaxPostsPerChannelMode("ordered")
+  ctx.setPostSortOrder("newest")
+  ctx.setGroupByChannel(false)
 }
 
 export function applyPostDateRangeHours(

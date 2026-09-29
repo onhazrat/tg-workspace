@@ -5,13 +5,20 @@
  * `ScraperContext`. This is genuinely UI state — it describes what the operator
  * has asked to see, and nothing here talks to the network.
  *
- * **These four keys are deliberately *not* in `lib/settings/schema.ts`.** That
+ * **These five keys are deliberately *not* in `lib/settings/schema.ts`.** That
  * schema owns durable *preferences*; these are a transient view state that
  * happens to survive a reload. Folding them in would put every filter tweak
  * through the settings write path and expose them in the settings UI, which is
  * not what they are. The distinction is worth keeping — but the hand-rolled
  * browser-storage round-trip below is the price, and it is why the parse
- * fallbacks (`"random" ? … : "latest"`) live here rather than in a zod schema.
+ * fallbacks (`"random" ? … : "ordered"`) live here rather than in a zod schema.
+ *
+ * PFB-01 reshaped three of them without moving any: media is a JSON array of
+ * kinds, the order is `newest`/`oldest`, and grouping has a key of its own. A
+ * value the previous bundle stored is read into the new shape once and
+ * written back in it by the effects below; `sort: "channel_time"` is where
+ * grouping came from, so a stored `channel_time` with no grouping key yet
+ * reads as grouped.
  */
 
 import { useEffect, useState } from "react"
@@ -33,6 +40,7 @@ export const POST_FILTER_STORAGE_KEYS = {
   maxPerChannel: "postFilter_maxPerChannel",
   maxPerChannelMode: "postFilter_maxPerChannelMode",
   sortOrder: "postFilter_sortOrder",
+  groupByChannel: "postFilter_groupByChannel",
   media: "postFilter_media",
 } as const
 
@@ -62,6 +70,8 @@ export interface PostFilters {
   >
   postSortOrder: PostSortOrder
   setPostSortOrder: React.Dispatch<React.SetStateAction<PostSortOrder>>
+  groupByChannel: boolean
+  setGroupByChannel: React.Dispatch<React.SetStateAction<boolean>>
   postViewOptions: PostViewOptions
   /** Debounced, so a keystroke does not become a query key. */
   debouncedPostSearch: string
@@ -78,12 +88,24 @@ export function readStoredMaxPerChannelMode(): MaxPostsPerChannelMode {
   const saved = scopedStorage.getItem(
     POST_FILTER_STORAGE_KEYS.maxPerChannelMode,
   )
-  return saved === "random" ? "random" : "latest"
+  // `"latest"`, the previous bundle's spelling, is `"ordered"` like anything
+  // else that is not `"random"`.
+  return saved === "random" ? "random" : "ordered"
 }
 
 export function readStoredSortOrder(): PostSortOrder {
   const saved = scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)
-  return saved === "channel_time" ? "channel_time" : "time"
+  // `"time"` and `"channel_time"` were both newest first.
+  return saved === "oldest" ? "oldest" : "newest"
+}
+
+export function readStoredGroupByChannel(): boolean {
+  const saved = scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.groupByChannel)
+  if (saved === "true" || saved === "false") return saved === "true"
+  // No key yet: a previous bundle's `channel_time` was "newest, grouped".
+  return (
+    scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder) === "channel_time"
+  )
 }
 
 export function readStoredMediaFilter(): MediaFilterValue {
@@ -115,6 +137,9 @@ export function usePostFilters(): PostFilters {
     useState<MaxPostsPerChannelMode>(readStoredMaxPerChannelMode)
   const [postSortOrder, setPostSortOrder] =
     useState<PostSortOrder>(readStoredSortOrder)
+  const [groupByChannel, setGroupByChannel] = useState<boolean>(
+    readStoredGroupByChannel,
+  )
 
   useEffect(() => {
     scopedStorage.setItem(
@@ -135,7 +160,17 @@ export function usePostFilters(): PostFilters {
   }, [postSortOrder])
 
   useEffect(() => {
-    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.media, mediaFilter)
+    scopedStorage.setItem(
+      POST_FILTER_STORAGE_KEYS.groupByChannel,
+      String(groupByChannel),
+    )
+  }, [groupByChannel])
+
+  useEffect(() => {
+    scopedStorage.setItem(
+      POST_FILTER_STORAGE_KEYS.media,
+      JSON.stringify(mediaFilter),
+    )
   }, [mediaFilter])
 
   const debouncedPostSearch = useDebouncedValue(
@@ -151,6 +186,7 @@ export function usePostFilters(): PostFilters {
     maxPostsPerChannel,
     maxPostsPerChannelMode,
     postSortOrder,
+    groupByChannel,
   }
 
   return {
@@ -172,6 +208,8 @@ export function usePostFilters(): PostFilters {
     setMaxPostsPerChannelMode,
     postSortOrder,
     setPostSortOrder,
+    groupByChannel,
+    setGroupByChannel,
     postViewOptions,
     debouncedPostSearch,
     debouncedSemanticSearchQuery,

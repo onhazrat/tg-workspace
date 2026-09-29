@@ -92,7 +92,9 @@ export const PostCapControl: React.FC<PostCapControlProps> = ({
       className={`flex flex-wrap gap-2 ${maxPostsPerChannel === 0 ? "opacity-40 pointer-events-none" : ""}`}
     >
       {[
-        { label: "Latest", value: "latest" as const },
+        // "Latest" while the panel only orders newest first, which is what
+        // `ordered` keeps under it (PFB-01).
+        { label: "Latest", value: "ordered" as const },
         { label: "Random", value: "random" as const },
       ].map((mode) => (
         <TgFilterChip

@@ -26,10 +26,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
+from app.schemas.scope import (
+    CapMode,
+    MediaKind,
+    SortOrder,
+    upgrade_legacy_scope_fields,
+)
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
     MAX_POST_LOOKUP_BATCH,
@@ -138,8 +144,22 @@ class PostScopeRequest(BaseModel):
     window: AnalysisWindowInput | None = None
     keyword: str | None = None
     forwarded: str = "all"
-    media: str = "all"
+    # Carried, not yet filtered on: see `_ScopeFilters.languages` (PFB-01).
+    languages: list[str] = PydanticField(default_factory=list, max_length=0)
+    # A set of kinds, empty for any; a Post matching any one is kept (PFB-01).
+    media: list[MediaKind] = PydanticField(default_factory=list)
     max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)
+
+    # A browser still on the previous bundle posts `media: "all"`, `sort:
+    # "time"` and `maxPerChannelMode: "latest"` until it reloads. Read as the
+    # new shape for one release, by the same mapping a stored Scope takes, so
+    # the two can never disagree about what an old value meant. It runs before
+    # `extra="forbid"` looks, which is what lets `sort` reach a subclass that
+    # declares it.
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_legacy_shape(cls, data: Any) -> Any:
+        return upgrade_legacy_scope_fields(data)
 
     def cleaned_channel_names(self) -> list[str] | None:
         """Non-empty, trimmed handles — matching the old comma-split behaviour."""
@@ -159,8 +179,9 @@ class PostFeedRequest(PostScopeRequest):
     channel_name: str | None = PydanticField(None, alias="channelName")
     limit: int = PydanticField(DEFAULT_POST_PAGE_SIZE, ge=1, le=MAX_POST_PAGE_SIZE)
     offset: int = PydanticField(0, ge=0)
-    max_per_channel_mode: str = PydanticField("latest", alias="maxPerChannelMode")
-    sort: str = "time"
+    max_per_channel_mode: CapMode = PydanticField("ordered", alias="maxPerChannelMode")
+    sort: SortOrder = "newest"
+    group_by_channel: bool = PydanticField(False, alias="groupByChannel")
     seed: int = 0
 
     def resolved_channel_names(self) -> list[str] | None:

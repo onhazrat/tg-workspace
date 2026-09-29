@@ -435,7 +435,7 @@ def create_report(
     signal the report describes, not which Posts it reads.
     """
     filters = PostFilters(
-        keyword=scope.keyword, forwarded=scope.forwarded, media=scope.media
+        keyword=scope.keyword, forwarded=scope.forwarded, media=tuple(scope.media)
     )
     post_ids = (
         None
@@ -452,6 +452,7 @@ def create_report(
         filters=filters,
         max_per_channel=scope.max_per_channel,
         max_per_channel_mode=scope.max_per_channel_mode,
+        sort=scope.sort,
         seed=scope.seed,
         post_ids=post_ids,
     )

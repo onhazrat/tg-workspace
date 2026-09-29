@@ -87,12 +87,14 @@ SCOPE_KEYS = {
     "signals",
     "keyword",
     "forwarded",
+    "languages",
     "media",
     "maxPerChannel",
     "maxPerChannelMode",
     "seed",
     "scopedPostCount",
     "sort",
+    "groupByChannel",
 }
 
 

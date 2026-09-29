@@ -152,6 +152,7 @@ export async function computeScopedPosts(
     maxPerChannel: postViewOptions.maxPostsPerChannel,
     maxPerChannelMode: postViewOptions.maxPostsPerChannelMode,
     sort: postViewOptions.postSortOrder,
+    groupByChannel: postViewOptions.groupByChannel,
     seed: 0,
     limit: SCOPED_POSTS_LIMIT,
   })

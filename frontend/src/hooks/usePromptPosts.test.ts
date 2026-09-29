@@ -49,9 +49,13 @@ const CHANNELS: PromptPostsDeps["channels"] = []
 const SELECTED = new Set(["alpha"])
 const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
   maxPostsPerChannel: 0,
-  maxPostsPerChannelMode: "latest",
-  postSortOrder: "time",
+  maxPostsPerChannelMode: "ordered",
+  postSortOrder: "newest",
+  groupByChannel: false,
 }
+// A constant for the reason `VIEW_OPTIONS` is one: the provider hands the set
+// down from `useState`, so a fresh `[]` per render would fake a changed filter.
+const ANY_MEDIA: PromptPostsDeps["mediaFilter"] = []
 const NO_SEARCH: PromptPostsDeps["searchSimilarPosts"] = async () => {
   throw new Error("searchSimilarPosts should not be called")
 }
@@ -71,7 +75,7 @@ function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
     debouncedSemanticSearchQuery: "",
     relatedPostSearch: null,
     forwardedFilter: "all",
-    mediaFilter: "all",
+    mediaFilter: ANY_MEDIA,
     postViewOptions: VIEW_OPTIONS,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: NO_SEARCH,
@@ -97,11 +101,12 @@ describe("getPromptPostsInput", () => {
     const input = await render({
       debouncedPostSearch: "crypto",
       forwardedFilter: "unfollowed_forwarded",
-      mediaFilter: "photo",
+      mediaFilter: ["photo", "video"],
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
-        postSortOrder: "channel_time",
+        postSortOrder: "oldest",
+        groupByChannel: true,
       },
     }).getPromptPostsInput()
 
@@ -110,10 +115,11 @@ describe("getPromptPostsInput", () => {
       endDate: 9000,
       keyword: "crypto",
       forwarded: "unfollowed_forwarded",
-      media: "photo",
+      media: ["photo", "video"],
       maxPerChannel: 7,
       maxPerChannelMode: "random",
-      sort: "channel_time",
+      sort: "oldest",
+      groupByChannel: true,
       seed: 0,
     })
   })

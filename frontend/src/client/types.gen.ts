@@ -1606,9 +1606,13 @@ export type DiscoverCandidatesRequest = {
      */
     forwarded?: string;
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: string;
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -1620,7 +1624,15 @@ export type DiscoverCandidatesRequest = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: string;
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest';
+    /**
+     * Groupbychannel
+     */
+    groupByChannel?: boolean;
     /**
      * Seed
      */
@@ -1848,9 +1860,13 @@ export type DiscoverReportCreateRequest = {
      */
     forwarded?: string;
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: string;
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -1862,7 +1878,15 @@ export type DiscoverReportCreateRequest = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: 'latest' | 'random';
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest';
+    /**
+     * Groupbychannel
+     */
+    groupByChannel?: boolean;
     /**
      * Seed
      */
@@ -2006,9 +2030,13 @@ export type DiscoverReportScopeResponse = {
      */
     forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: 'all' | 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -2016,11 +2044,15 @@ export type DiscoverReportScopeResponse = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: 'latest' | 'random';
+    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
-    sort?: 'time' | 'channel_time';
+    sort?: 'newest' | 'oldest';
+    /**
+     * Groupbychannel
+     */
+    groupByChannel?: boolean;
     /**
      * Seed
      */
@@ -2273,9 +2305,13 @@ export type FrozenScope = {
      */
     forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: 'all' | 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -2283,11 +2319,15 @@ export type FrozenScope = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: 'latest' | 'random';
+    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
-    sort?: 'time' | 'channel_time';
+    sort?: 'newest' | 'oldest';
+    /**
+     * Groupbychannel
+     */
+    groupByChannel?: boolean;
     /**
      * Seed
      */
@@ -3161,9 +3201,13 @@ export type PostFeedRequest = {
      */
     forwarded?: string;
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: string;
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -3183,11 +3227,15 @@ export type PostFeedRequest = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: string;
+    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
-    sort?: string;
+    sort?: 'newest' | 'oldest';
+    /**
+     * Groupbychannel
+     */
+    groupByChannel?: boolean;
     /**
      * Seed
      */
@@ -3390,9 +3438,13 @@ export type PostScopeRequest = {
      */
     forwarded?: string;
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: string;
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -3471,9 +3523,13 @@ export type PromptScopeInput = {
      */
     forwarded?: string;
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: string;
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -3481,11 +3537,15 @@ export type PromptScopeInput = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: string;
+    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
-    sort?: string;
+    sort?: 'newest' | 'oldest';
+    /**
+     * Groupbychannel
+     */
+    groupByChannel?: boolean;
     /**
      * Seed
      */
@@ -4207,9 +4267,13 @@ export type ScopeSubmission = {
      */
     forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
     /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
      * Media
      */
-    media?: 'all' | 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
      * Maxperchannel
      */
@@ -4217,11 +4281,15 @@ export type ScopeSubmission = {
     /**
      * Maxperchannelmode
      */
-    maxPerChannelMode?: 'latest' | 'random';
+    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
-    sort?: 'time' | 'channel_time';
+    sort?: 'newest' | 'oldest';
+    /**
+     * Groupbychannel
+     */
+    groupByChannel?: boolean;
     /**
      * Seed
      */

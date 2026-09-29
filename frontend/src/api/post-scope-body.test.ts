@@ -27,7 +27,7 @@ describe("postScopeBody", () => {
       postScopeBody({
         channelNames: [],
         forwarded: "all",
-        media: "all",
+        media: [],
         maxPerChannel: 0,
         keyword: "   ",
       }),
@@ -42,7 +42,7 @@ describe("postScopeBody", () => {
         endDate: MINUTE_AGO,
         keyword: "  war  ",
         forwarded: "original",
-        media: "photo",
+        media: ["photo"],
         maxPerChannel: 25,
       }),
     ).toEqual({
@@ -50,7 +50,7 @@ describe("postScopeBody", () => {
       window: { mode: "fixed", start: HOUR_AGO, end: MINUTE_AGO },
       keyword: "war",
       forwarded: "original",
-      media: "photo",
+      media: ["photo"],
       maxPerChannel: 25,
     })
   })
