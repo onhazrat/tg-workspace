@@ -22,13 +22,14 @@ from app.prompts.posts import (
     format_posts_for_prompt,
     format_posts_for_tag_prompt,
 )
-from app.services.post_filters import FORWARDED_FILTERS, MEDIA_FILTERS, PostFilters
-from app.services.posts import (
+from app.services.post_filters import (
     FEED_CAP_MODES,
     FEED_SORTS,
-    count_posts_in_scope,
-    list_feed,
+    FORWARDED_FILTERS,
+    MEDIA_KINDS,
+    PostFilters,
 )
+from app.services.posts import count_posts_in_scope, list_feed
 
 # Upper bound on how many posts one prompt assembles. The token budget is the
 # real user-facing limit; this is a generous fetch-safety bound so a pathological
@@ -47,10 +48,12 @@ class PromptScope:
     end_date: int | None = None
     keyword: str | None = None
     forwarded: str = "all"
-    media: str = "all"
+    #: Empty is any media (PFB-01).
+    media: tuple[str, ...] = ()
     max_per_channel: int = 0
-    max_per_channel_mode: str = "latest"
-    sort: str = "time"
+    max_per_channel_mode: str = "ordered"
+    sort: str = "newest"
+    group_by_channel: bool = False
     seed: int = 0
 
 
@@ -70,8 +73,9 @@ def _fetch_scoped_posts(
     """
     if scope.forwarded not in FORWARDED_FILTERS:
         raise HTTPException(422, detail=f"unknown forwarded: {scope.forwarded}")
-    if scope.media not in MEDIA_FILTERS:
-        raise HTTPException(422, detail=f"unknown media: {scope.media}")
+    unknown_media = sorted(set(scope.media) - MEDIA_KINDS)
+    if unknown_media:
+        raise HTTPException(422, detail=f"unknown media: {unknown_media}")
     if scope.sort not in FEED_SORTS:
         raise HTTPException(422, detail=f"unknown sort: {scope.sort}")
     if scope.max_per_channel_mode not in FEED_CAP_MODES:
@@ -113,8 +117,9 @@ def _fetch_scoped_posts(
         end_date=scope.end_date,
         filters=filters,
         max_per_channel=scope.max_per_channel,
-        max_per_channel_mode=scope.max_per_channel_mode,
-        sort=scope.sort,
+        max_per_channel_mode=cast("Any", scope.max_per_channel_mode),
+        sort=cast("Any", scope.sort),
+        group_by_channel=scope.group_by_channel,
         seed=scope.seed,
         limit=MAX_PROMPT_POSTS,
         offset=0,

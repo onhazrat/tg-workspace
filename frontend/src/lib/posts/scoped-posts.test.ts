@@ -48,8 +48,9 @@ function makeChannel(name: string): Channel {
 
 const view: PostViewOptions = {
   maxPostsPerChannel: 0,
-  maxPostsPerChannelMode: "latest",
-  postSortOrder: "time",
+  maxPostsPerChannelMode: "ordered",
+  postSortOrder: "newest",
+  groupByChannel: false,
 }
 
 const channels = [makeChannel("alpha"), makeChannel("beta")]
@@ -65,7 +66,7 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     startDate: 1000,
     endDate: 9000,
     forwardedFilter: "all",
-    mediaFilter: "all",
+    mediaFilter: [],
     channels,
     postViewOptions: view,
     semanticSearchRespectsChannels: false,
@@ -96,11 +97,12 @@ describe("computeScopedPosts", () => {
     const deps = baseDeps({
       searchText: "Post",
       forwardedFilter: "unfollowed_forwarded",
-      mediaFilter: "photo",
+      mediaFilter: ["photo", "video"],
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
-        postSortOrder: "channel_time",
+        postSortOrder: "oldest",
+        groupByChannel: true,
       },
       getPostsFeed: async (query) => {
         calls.push(query)
@@ -119,10 +121,11 @@ describe("computeScopedPosts", () => {
         endDate: 9000,
         keyword: "Post",
         forwarded: "unfollowed_forwarded",
-        media: "photo",
+        media: ["photo", "video"],
         maxPerChannel: 7,
         maxPerChannelMode: "random",
-        sort: "channel_time",
+        sort: "oldest",
+        groupByChannel: true,
         seed: 0,
         limit: SCOPED_POSTS_LIMIT,
       },

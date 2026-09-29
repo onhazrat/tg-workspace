@@ -97,6 +97,7 @@ export function useCommandRegistry(): {
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
     setPostSortOrder,
+    setGroupByChannel,
   } = useScraper()
   const {
     setSummary,
@@ -290,6 +291,7 @@ export function useCommandRegistry(): {
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       setPostSortOrder,
+      setGroupByChannel,
       getScopedPosts,
       getPostsInScopeCounts,
       starredOnly,
@@ -346,6 +348,7 @@ export function useCommandRegistry(): {
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       setPostSortOrder,
+      setGroupByChannel,
       setHistorySearchQuery,
       setPostSearch,
       setRelatedPostSearch,

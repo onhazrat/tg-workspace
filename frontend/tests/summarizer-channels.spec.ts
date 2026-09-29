@@ -152,10 +152,13 @@ test.describe("TG Workspace channels and posts", () => {
     await page.route("**/api/v1/data/posts**", async (route) => {
       // `media` moved from the query string into the request body along with
       // the rest of the scope.
-      const body = route.request().postDataJSON() as { media?: string } | null
-      const media = body?.media
+      // `media` is a set of kinds since PFB-01; empty or absent is any media.
+      const body = route.request().postDataJSON() as {
+        media?: string[]
+      } | null
+      const media = body?.media ?? []
       const json =
-        media === "photo" || media === "media_only"
+        media.includes("photo") || media.includes("media_only")
           ? mediaPosts.filter((post) => post.media?.kinds?.includes("photo"))
           : mediaPosts
       await route.fulfill({ json })
@@ -171,7 +174,7 @@ test.describe("TG Workspace channels and posts", () => {
 
     await expect
       .poll(() => readScopedStorage(page, "postFilter_media"))
-      .toBe("photo")
+      .toBe(JSON.stringify(["photo"]))
 
     await expect(page.getByTestId("post-card-media-badge-photo")).toBeVisible()
     await expect(page.getByText("Caption only")).not.toBeVisible()

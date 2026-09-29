@@ -8,13 +8,20 @@ import type { Channel, Post } from "@/types"
 export type { MediaFilterValue } from "@/lib/posts/post-media"
 export { getPostEmbeddingText } from "@/lib/posts/post-media"
 
-export type MaxPostsPerChannelMode = "latest" | "random"
-export type PostSortOrder = "time" | "channel_time"
+/**
+ * Which Posts the per-channel cap keeps (PFB-01). `ordered` is each channel's
+ * first N **in the chosen order**; it was `latest`, renamed rather than
+ * reinterpreted so a cap under `oldest` can never be labelled "newest".
+ */
+export type MaxPostsPerChannelMode = "ordered" | "random"
+/** The feed's order. Grouping by channel is its own switch (PFB-01). */
+export type PostSortOrder = "newest" | "oldest"
 
 export interface PostViewOptions {
   maxPostsPerChannel: number
   maxPostsPerChannelMode: MaxPostsPerChannelMode
   postSortOrder: PostSortOrder
+  groupByChannel: boolean
 }
 
 export type ForwardedFilterValue =
@@ -140,8 +147,8 @@ export function applyMaxPostsPerChannel(
       continue
     }
 
-    if (view.maxPostsPerChannelMode === "latest") {
-      const sorted = [...channelPosts].sort((a, b) => b.timestamp - a.timestamp)
+    if (view.maxPostsPerChannelMode === "ordered") {
+      const sorted = [...channelPosts].sort(byOrder(view.postSortOrder))
       capped.push(...sorted.slice(0, limit))
       continue
     }
@@ -158,11 +165,25 @@ export function applyMaxPostsPerChannel(
   return capped
 }
 
+/**
+ * The chosen order within one channel: the timestamp, newest or oldest first.
+ * Also what the `ordered` cap keeps the first N of. Mirrors
+ * `channel_time_order` in backend/app/services/posts.py.
+ */
+function byOrder(order: PostSortOrder): (a: Post, b: Post) => number {
+  return order === "oldest"
+    ? (a, b) => a.timestamp - b.timestamp
+    : (a, b) => b.timestamp - a.timestamp
+}
+
 export function sortPosts(posts: Post[], view: PostViewOptions): Post[] {
-  if (view.postSortOrder === "time") {
-    return [...posts].sort((a, b) => b.timestamp - a.timestamp)
+  const compare = byOrder(view.postSortOrder)
+  if (!view.groupByChannel) {
+    return [...posts].sort(compare)
   }
 
+  // Channels alphabetical, the chosen order inside each. Placing a channel's
+  // block where its first Post falls is PFB-02's.
   const groups = groupPostsByChannel(posts)
   const sortedChannelNames = [...groups.keys()].sort((a, b) =>
     a.localeCompare(b),
@@ -171,7 +192,7 @@ export function sortPosts(posts: Post[], view: PostViewOptions): Post[] {
   const sorted: Post[] = []
   for (const channelName of sortedChannelNames) {
     const channelPosts = groups.get(channelName) ?? []
-    channelPosts.sort((a, b) => b.timestamp - a.timestamp)
+    channelPosts.sort(compare)
     sorted.push(...channelPosts)
   }
   return sorted
@@ -190,7 +211,7 @@ export function applyMediaFilter(
   posts: Post[],
   mediaFilter: MediaFilterValue,
 ): Post[] {
-  if (mediaFilter === "all") return posts
+  if (mediaFilter.length === 0) return posts
   return posts.filter((post) => matchesMediaFilter(post, mediaFilter))
 }
 

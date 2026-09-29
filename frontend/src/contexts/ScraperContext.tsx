@@ -132,6 +132,8 @@ interface ScraperContextType {
   >
   postSortOrder: PostSortOrder
   setPostSortOrder: React.Dispatch<React.SetStateAction<PostSortOrder>>
+  groupByChannel: boolean
+  setGroupByChannel: React.Dispatch<React.SetStateAction<boolean>>
   postViewOptions: PostViewOptions
 }
 
@@ -200,6 +202,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setMaxPostsPerChannelMode,
     postSortOrder,
     setPostSortOrder,
+    groupByChannel,
+    setGroupByChannel,
     postViewOptions,
     debouncedPostSearch,
     debouncedSemanticSearchQuery,
@@ -422,6 +426,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setMaxPostsPerChannelMode,
         postSortOrder,
         setPostSortOrder,
+        groupByChannel,
+        setGroupByChannel,
         postViewOptions,
       }}
     >

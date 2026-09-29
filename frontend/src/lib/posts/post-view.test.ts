@@ -29,7 +29,7 @@ function makePost(
 }
 
 describe("post-view pipeline", () => {
-  test("unlimited + by time matches global timestamp desc sort", () => {
+  test("unlimited + newest matches global timestamp desc sort", () => {
     const posts = [
       makePost("alpha", 1, 100),
       makePost("beta", 2, 300),
@@ -37,8 +37,9 @@ describe("post-view pipeline", () => {
     ]
     const view = {
       maxPostsPerChannel: 0,
-      maxPostsPerChannelMode: "latest" as const,
-      postSortOrder: "time" as const,
+      maxPostsPerChannelMode: "ordered" as const,
+      postSortOrder: "newest" as const,
+      groupByChannel: false,
     }
 
     expect(applyPostViewPipeline(posts, view)).toEqual([
@@ -48,7 +49,7 @@ describe("post-view pipeline", () => {
     ])
   })
 
-  test("max latest keeps top N per channel by timestamp", () => {
+  test("max ordered keeps top N per channel by timestamp under newest", () => {
     const posts = [
       makePost("alpha", 1, 100),
       makePost("alpha", 2, 300),
@@ -61,8 +62,9 @@ describe("post-view pipeline", () => {
     ]
     const view = {
       maxPostsPerChannel: 2,
-      maxPostsPerChannelMode: "latest" as const,
-      postSortOrder: "time" as const,
+      maxPostsPerChannelMode: "ordered" as const,
+      postSortOrder: "newest" as const,
+      groupByChannel: false,
     }
 
     const result = applyPostViewPipeline(posts, view, seedContext)
@@ -88,7 +90,8 @@ describe("post-view pipeline", () => {
     const view = {
       maxPostsPerChannel: 2,
       maxPostsPerChannelMode: "random" as const,
-      postSortOrder: "time" as const,
+      postSortOrder: "newest" as const,
+      groupByChannel: false,
     }
 
     const first = applyMaxPostsPerChannel(posts, view, seedContext)
@@ -97,7 +100,7 @@ describe("post-view pipeline", () => {
     expect(first).toHaveLength(2)
   })
 
-  test("sort channel_time groups alphabetically with newest first within group", () => {
+  test("grouped newest groups alphabetically with newest first within group", () => {
     const posts = [
       makePost("zebra", 1, 100),
       makePost("alpha", 2, 300),
@@ -106,8 +109,9 @@ describe("post-view pipeline", () => {
     ]
     const view = {
       maxPostsPerChannel: 0,
-      maxPostsPerChannelMode: "latest" as const,
-      postSortOrder: "channel_time" as const,
+      maxPostsPerChannelMode: "ordered" as const,
+      postSortOrder: "newest" as const,
+      groupByChannel: true,
     }
 
     expect(sortPosts(posts, view)).toEqual([
@@ -127,8 +131,9 @@ describe("post-view pipeline", () => {
     ]
     const view = {
       maxPostsPerChannel: 1,
-      maxPostsPerChannelMode: "latest" as const,
-      postSortOrder: "channel_time" as const,
+      maxPostsPerChannelMode: "ordered" as const,
+      postSortOrder: "newest" as const,
+      groupByChannel: true,
     }
 
     expect(applyPostViewPipeline(posts, view, seedContext)).toEqual([
@@ -147,12 +152,13 @@ describe("post-view pipeline", () => {
     const result = buildFilteredPostsFromRaw(posts, {
       searchText: "Post",
       forwardedFilter: "original",
-      mediaFilter: "all",
+      mediaFilter: [],
       channels: [],
       view: {
         maxPostsPerChannel: 0,
-        maxPostsPerChannelMode: "latest",
-        postSortOrder: "time",
+        maxPostsPerChannelMode: "ordered",
+        postSortOrder: "newest",
+        groupByChannel: false,
       },
       startDate: 0,
       endDate: 9999,
@@ -270,12 +276,13 @@ describe("post-view pipeline", () => {
     const photoOnly = buildFilteredPostsFromRaw(posts, {
       searchText: "",
       forwardedFilter: "all",
-      mediaFilter: "photo",
+      mediaFilter: ["photo"],
       channels: [],
       view: {
         maxPostsPerChannel: 0,
-        maxPostsPerChannelMode: "latest",
-        postSortOrder: "time",
+        maxPostsPerChannelMode: "ordered",
+        postSortOrder: "newest",
+        groupByChannel: false,
       },
       startDate: 0,
       endDate: 9999,
@@ -285,12 +292,13 @@ describe("post-view pipeline", () => {
     const textOnly = buildFilteredPostsFromRaw(posts, {
       searchText: "",
       forwardedFilter: "all",
-      mediaFilter: "text_only",
+      mediaFilter: ["text_only"],
       channels: [],
       view: {
         maxPostsPerChannel: 0,
-        maxPostsPerChannelMode: "latest",
-        postSortOrder: "time",
+        maxPostsPerChannelMode: "ordered",
+        postSortOrder: "newest",
+        groupByChannel: false,
       },
       startDate: 0,
       endDate: 9999,
@@ -315,16 +323,17 @@ describe("post-view pipeline", () => {
       }),
     ]
 
-    const filterBy = (mediaFilter: "text_only" | "media_only") =>
+    const filterBy = (kind: "text_only" | "media_only") =>
       buildFilteredPostsFromRaw(posts, {
         searchText: "",
         forwardedFilter: "all",
-        mediaFilter,
+        mediaFilter: [kind],
         channels: [],
         view: {
           maxPostsPerChannel: 0,
-          maxPostsPerChannelMode: "latest",
-          postSortOrder: "time",
+          maxPostsPerChannelMode: "ordered",
+          postSortOrder: "newest",
+          groupByChannel: false,
         },
         startDate: 0,
         endDate: 9999,
@@ -334,5 +343,91 @@ describe("post-view pipeline", () => {
 
     expect(filterBy("text_only")).toEqual([1, 2])
     expect(filterBy("media_only")).toEqual([3])
+  })
+})
+
+// PFB-01: the Scope's new shape through the browser pipeline, which is the
+// path a semantic result takes. Each case mirrors one in
+// backend/tests/api/test_posts_feed.py, so the two halves answer the same
+// question the same way; the server's fixture has no timestamp ties inside a
+// channel, which is the one place their tiebreaks could differ.
+describe("post-view pipeline — the PFB-01 shape", () => {
+  const view = (overrides: Partial<Parameters<typeof sortPosts>[1]> = {}) => ({
+    maxPostsPerChannel: 0,
+    maxPostsPerChannelMode: "ordered" as const,
+    postSortOrder: "newest" as const,
+    groupByChannel: false,
+    ...overrides,
+  })
+  const keys = (posts: Post[]) => posts.map((p) => `${p.channelName}/${p.id}`)
+  // `_seed_interleaved` in test_posts_feed.py, minus its cross-channel tie.
+  const interleaved = [
+    makePost("feed_a", 1, 1),
+    makePost("feed_b", 2, 2),
+    makePost("feed_a", 3, 3),
+    makePost("feed_b", 4, 4),
+    makePost("feed_a", 5, 5),
+  ]
+
+  test("oldest orders oldest first", () => {
+    expect(
+      keys(
+        applyPostViewPipeline(interleaved, view({ postSortOrder: "oldest" })),
+      ),
+    ).toEqual(["feed_a/1", "feed_b/2", "feed_a/3", "feed_b/4", "feed_a/5"])
+  })
+
+  test("grouped keeps the chosen order inside each channel", () => {
+    expect(
+      keys(
+        applyPostViewPipeline(
+          interleaved,
+          view({ postSortOrder: "oldest", groupByChannel: true }),
+        ),
+      ),
+    ).toEqual(["feed_a/1", "feed_a/3", "feed_a/5", "feed_b/2", "feed_b/4"])
+  })
+
+  test("the ordered cap keeps each channel's first N in the chosen order", () => {
+    // `test_ordered_cap_follows_the_order`: under oldest, the earliest N.
+    const oldest = applyPostViewPipeline(
+      interleaved,
+      view({
+        maxPostsPerChannel: 1,
+        postSortOrder: "oldest",
+        groupByChannel: true,
+      }),
+      seedContext,
+    )
+    const newest = applyPostViewPipeline(
+      interleaved,
+      view({ maxPostsPerChannel: 1, groupByChannel: true }),
+      seedContext,
+    )
+
+    expect(keys(oldest)).toEqual(["feed_a/1", "feed_b/2"])
+    expect(keys(newest)).toEqual(["feed_a/5", "feed_b/4"])
+  })
+
+  test("a media set keeps a Post matching any kind; empty keeps all", () => {
+    const posts = [
+      makePost("ms", 1, 1, { text: "plain" }),
+      makePost("ms", 2, 2, { text: "photo", media: { kinds: ["photo"] } }),
+      makePost("ms", 3, 3, { text: "video", media: { kinds: ["video"] } }),
+    ]
+    const filtered = (mediaFilter: ("photo" | "video")[]) =>
+      buildFilteredPostsFromRaw(posts, {
+        searchText: "",
+        forwardedFilter: "all",
+        mediaFilter,
+        channels: [],
+        view: view(),
+        startDate: 0,
+        endDate: 9999,
+      }).map((p) => p.id)
+
+    expect(filtered(["photo", "video"])).toEqual([3, 2])
+    expect(filtered(["photo"])).toEqual([2])
+    expect(filtered([])).toEqual([3, 2, 1])
   })
 })

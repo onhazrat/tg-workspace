@@ -93,20 +93,59 @@ DAY_MS = 24 * 60 * MINUTE_MS
 #: One filter set, sent by every family, so "the same contract" is asserted
 #: rather than described. Every value is deliberately non-default: a filter that
 #: silently failed to travel would otherwise read back as the value it was
-#: given.
+#: given. `languages` is the one exception, because PFB-01 carries the set
+#: without filtering on it and so refuses every value but the empty one.
 FILTERS: dict[str, Any] = {
+    "keyword": "tehran",
+    "forwarded": "original",
+    "languages": [],
+    "media": ["photo", "video"],
+    "maxPerChannel": 25,
+    "maxPerChannelMode": "random",
+    "sort": "oldest",
+    "groupByChannel": True,
+    "seed": 4242,
+}
+
+#: What every family's frozen Scope must agree on: the whole filter set,
+#: Discover's included since PFB-01 made its capped reads follow the order.
+#: `channels`, `start` and `end` are asserted separately.
+SHARED_KEYS = tuple(FILTERS)
+
+#: The filter half as it was spelled before PFB-01, and what each value reads
+#: as now. Every Artifact and scheduled Summary written before the change holds
+#: the left-hand shape; a browser on the previous bundle sends it for a release.
+LEGACY_FILTERS: dict[str, Any] = {
     "keyword": "tehran",
     "forwarded": "original",
     "media": "photo",
     "maxPerChannel": 25,
-    "maxPerChannelMode": "random",
+    "maxPerChannelMode": "latest",
+    "sort": "channel_time",
+    "seed": 4242,
+}
+LEGACY_READS_AS: dict[str, Any] = {
+    "keyword": "tehran",
+    "forwarded": "original",
+    "languages": [],
+    "media": ["photo"],
+    "maxPerChannel": 25,
+    "maxPerChannelMode": "ordered",
+    "sort": "newest",
+    "groupByChannel": True,
     "seed": 4242,
 }
 
-#: What every family's frozen Scope must agree on. `sort` is absent because
-#: Discover aggregates rather than lists, so it has no order to state and takes
-#: the default; `channels`, `start` and `end` are asserted separately.
-SHARED_KEYS = tuple(FILTERS)
+#: One value per field that this server does not implement. Each must be a 422,
+#: never a Scope recorded as if it had been applied.
+UNIMPLEMENTED: list[tuple[str, Any]] = [
+    ("languages", ["fa"]),
+    ("media", ["nonsense"]),
+    ("media", "nonsense"),
+    ("sort", "relevance"),
+    ("maxPerChannelMode", "alphabetical"),
+    ("groupByChannel", "sideways"),
+]
 
 
 def _live(duration: int = 24 * 60, gap: int = 0) -> dict[str, Any]:
@@ -549,24 +588,96 @@ def test_an_impossible_window_is_refused_at_every_submission_door(
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(
+    ("field", "value"), UNIMPLEMENTED, ids=[f"{f}={v}" for f, v in UNIMPLEMENTED]
+)
 @pytest.mark.parametrize("family", FAMILIES, ids=IDS)
 def test_a_filter_value_this_server_does_not_implement_is_refused(
-    client: TestClient, at_now: None, family: Family
+    client: TestClient, at_now: None, family: Family, field: str, value: Any
 ) -> None:
     """A frozen Scope claims to be reproducible.
 
     A typo'd cap mode falling through to the default would record a Scope that
-    does not describe what happened, which is worse than no Scope at all.
+    does not describe what happened, which is worse than no Scope at all. So
+    would a Language set the server does not filter on yet (PFB-01).
     """
     response = client.post(
         family.path,
-        json=family.body(
-            str(uuid.uuid4()), _live(), {**FILTERS, "maxPerChannelMode": "alphabetical"}
-        ),
+        json=family.body(str(uuid.uuid4()), _live(), {**FILTERS, field: value}),
         headers=_auth(client),
     )
 
     assert response.status_code == 422
+
+
+# --------------------------------------------------------------------------
+# The shape before PFB-01
+# --------------------------------------------------------------------------
+
+
+def _overwrite_stored_filters(family: Family, artifact_id: str) -> None:
+    """Put the filter half back into the shape a pre-PFB-01 row holds.
+
+    The new keys are removed rather than left beside the old ones, because a
+    row written before the change never had them.
+    """
+    with Session(engine) as session:
+        row = session.get(family.model, artifact_id)
+        assert row is not None
+        stored = dict(row.scope or {})
+        for key in ("languages", "groupByChannel", *LEGACY_FILTERS):
+            stored.pop(key, None)
+        row.scope = {**stored, **LEGACY_FILTERS}
+        session.add(row)
+        session.commit()
+
+
+@pytest.mark.parametrize("family", FAMILIES, ids=IDS)
+def test_a_scope_stored_in_the_old_shape_reads_back_mapped(
+    client: TestClient, at_now: None, family: Family
+) -> None:
+    """History is not reinterpreted (PFB-01, user story 61).
+
+    `media: "photo"` is `["photo"]`, `latest` is `ordered`, and `channel_time`
+    is `newest` grouped by channel, on the detail read, on the family's list
+    and on History alike. Without the mapping each read would 500, because the
+    old values are exactly what the new literals refuse.
+    """
+    headers = _auth(client)
+    created = _create(client, family, headers)
+    _overwrite_stored_filters(family, created["id"])
+
+    detail = client.get(family.detail(created["id"]), headers=headers)
+    assert detail.status_code == 200, detail.text
+    listed = next(
+        item
+        for item in client.get(family.list_path, headers=headers).json()
+        if item["id"] == created["id"]
+    )
+    history = next(
+        item
+        for item in client.get(f"{PREFIX}/artifacts", headers=headers).json()
+        if item["id"] == created["id"]
+    )
+
+    for read in (detail.json(), listed, history):
+        for key, expected in LEGACY_READS_AS.items():
+            assert read["scope"][key] == expected, key
+
+
+@pytest.mark.parametrize("family", FAMILIES, ids=IDS)
+def test_a_submission_in_the_old_shape_is_recorded_in_the_new_one(
+    client: TestClient, at_now: None, family: Family
+) -> None:
+    """A browser still on the previous bundle keeps working until it reloads.
+
+    Accepted for one release, mapped exactly as a stored row is, so an old tab
+    and an old row can never mean two different things by one value.
+    """
+    created = _create(client, family, _auth(client), filters=LEGACY_FILTERS)
+
+    for key, expected in LEGACY_READS_AS.items():
+        assert created["scope"][key] == expected, key
 
 
 # --------------------------------------------------------------------------

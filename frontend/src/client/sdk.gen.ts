@@ -826,7 +826,7 @@ export const dataGetChannelStats = <ThrowOnError extends boolean = true>(options
  *
  * One page of posts for a channel/date scope.
  *
- * With no filters, no cap and ``sort=time`` this is the newest-first page the
+ * With no filters, no cap and ``sort=newest`` this is the newest-first page the
  * export/lookup fallbacks and language detection rely on. The Posts feed also
  * passes keyword/forwarded/media filters, a per-channel cap, a sort order and
  * ``offset`` so the whole view is assembled server-side instead of paging a

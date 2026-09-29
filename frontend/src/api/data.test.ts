@@ -58,13 +58,15 @@ afterEach(() => {
 })
 
 describe("getPostsFeed", () => {
-  it("sends the cap mode and seed alongside a cap, with paging and sort", async () => {
+  it("sends the cap mode and seed alongside a cap, with paging, order and grouping", async () => {
     await dataApi.getPostsFeed({
       channelNames: ["alpha"],
       maxPerChannel: 5,
       maxPerChannelMode: "random",
       seed: 0,
-      sort: "channel_time",
+      sort: "oldest",
+      groupByChannel: true,
+      media: ["photo", "video"],
       limit: 50,
       offset: 0,
     })
@@ -74,10 +76,12 @@ describe("getPostsFeed", () => {
         method: "POST",
         body: {
           channelNames: ["alpha"],
+          media: ["photo", "video"],
           maxPerChannel: 5,
           maxPerChannelMode: "random",
           seed: 0,
-          sort: "channel_time",
+          sort: "oldest",
+          groupByChannel: true,
           limit: 50,
           offset: 0,
         },
@@ -112,14 +116,18 @@ describe("getDiscoverCandidates", () => {
     await dataApi.getDiscoverCandidates({
       channelNames: ["alpha"],
       signals: ["mentions"],
-      maxPerChannelMode: "latest",
+      maxPerChannelMode: "ordered",
+      sort: "oldest",
+      groupByChannel: true,
       seed: 0,
       postIds: [],
     })
     expect(sent[0].body).toEqual({
       channelNames: ["alpha"],
       signals: ["mentions"],
-      maxPerChannelMode: "latest",
+      maxPerChannelMode: "ordered",
+      sort: "oldest",
+      groupByChannel: true,
       seed: 0,
       postIds: [],
     })

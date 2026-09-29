@@ -14,7 +14,7 @@ import { useScope } from "../contexts/ScopeContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
-import { MEDIA_FILTER_OPTIONS } from "../lib/posts/post-media"
+import { MEDIA_KIND_OPTIONS } from "../lib/posts/post-media"
 import { PostCapControl, SemanticSearchBanner } from "./PostFilterParts"
 
 interface PostFilterProps {
@@ -43,6 +43,8 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     setMaxPostsPerChannelMode,
     postSortOrder,
     setPostSortOrder,
+    groupByChannel,
+    setGroupByChannel,
   } = useScraper()
   const { embeddingsEnabled } = useSettings()
   const { setActiveTab } = useUI()
@@ -203,12 +205,27 @@ export const PostFilter: React.FC<PostFilterProps> = ({
                   </label>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {MEDIA_FILTER_OPTIONS.map((type) => (
+                  {/*
+                   * One choice at a time, as before PFB-01: "All" is the empty
+                   * set and each kind a set of one. Ticking several is the
+                   * filter bar's (PFB-02); the server already answers it.
+                   */}
+                  <TgFilterChip
+                    data-testid="post-media-filter-all"
+                    selected={mediaFilter.length === 0}
+                    onClick={() => setMediaFilter([])}
+                  >
+                    All
+                  </TgFilterChip>
+                  {MEDIA_KIND_OPTIONS.map((type) => (
                     <TgFilterChip
                       key={type.value}
                       data-testid={`post-media-filter-${type.value}`}
-                      selected={mediaFilter === type.value}
-                      onClick={() => setMediaFilter(type.value)}
+                      selected={
+                        mediaFilter.length === 1 &&
+                        mediaFilter[0] === type.value
+                      }
+                      onClick={() => setMediaFilter([type.value])}
                     >
                       {type.label}
                     </TgFilterChip>
@@ -234,14 +251,25 @@ export const PostFilter: React.FC<PostFilterProps> = ({
               />
 
               <div className="flex flex-wrap gap-2">
+                {/*
+                 * The two chips this panel always had, written in the new shape:
+                 * "By Channel" is newest first, grouped. Oldest first and the
+                 * grouping toggle are the filter bar's (PFB-02).
+                 */}
                 {[
-                  { label: "By Time", value: "time" as const },
-                  { label: "By Channel", value: "channel_time" as const },
+                  { label: "By Time", grouped: false },
+                  { label: "By Channel", grouped: true },
                 ].map((sort) => (
                   <TgFilterChip
-                    key={sort.value}
-                    selected={postSortOrder === sort.value}
-                    onClick={() => setPostSortOrder(sort.value)}
+                    key={sort.label}
+                    selected={
+                      postSortOrder === "newest" &&
+                      groupByChannel === sort.grouped
+                    }
+                    onClick={() => {
+                      setPostSortOrder("newest")
+                      setGroupByChannel(sort.grouped)
+                    }}
                   >
                     {sort.label}
                   </TgFilterChip>

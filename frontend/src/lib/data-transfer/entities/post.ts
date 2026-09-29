@@ -82,7 +82,7 @@ export async function fetchAllPostsFromServer(
       channelNames,
       startDate,
       endDate,
-      sort: "time",
+      sort: "newest",
       limit: EXPORT_PAGE_SIZE,
       offset: page * EXPORT_PAGE_SIZE,
     })

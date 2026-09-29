@@ -29,12 +29,13 @@ from app.models_tg import Post
 from app.services.discover_ignored import ignored_handles
 from app.services.follows import visible_channel_names
 from app.services.post_filters import (
+    FeedSort,
     PostFilters,
     apply_analysis_window,
     apply_post_filters,
 )
 from app.services.post_links_parser import channel_from_telegram_url
-from app.services.posts import random_cap_order
+from app.services.posts import channel_time_order, random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
 from app.services.tenancy import scoped_select
 
@@ -153,7 +154,8 @@ def compute_discover_candidates(
     signals: set[SignalKind] | None = None,
     filters: PostFilters | None = None,
     max_per_channel: int = 0,
-    max_per_channel_mode: str = "latest",
+    max_per_channel_mode: str = "ordered",
+    sort: FeedSort = "newest",
     seed: int = 0,
     post_ids: list[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
@@ -165,9 +167,10 @@ def compute_discover_candidates(
 
     `filters` and the cap reproduce the Posts-tab view the frontend aggregated
     over (`buildFilteredPostsFromRaw`): keyword / forwarded / media, then the
-    per-channel cap in either `latest` or `random` mode — `random` reuses the
-    feed's seeded ordering (`posts.random_cap_order`) so the same posts are
-    chosen for the same seed.
+    per-channel cap in either `ordered` or `random` mode — `ordered` keeps each
+    channel's first N under `sort`, as the feed's cap does (PFB-01); `random`
+    reuses the feed's seeded ordering (`posts.random_cap_order`) so the same
+    posts are chosen for the same seed.
 
     `post_ids` restricts the scope to an explicit `(channel_name, post_id)` set.
     That is how a semantic (vector) query is expressed here: the caller runs the
@@ -214,13 +217,14 @@ def compute_discover_candidates(
     if filters is not None:
         stmt = apply_post_filters(stmt, filters, followed_names=frozenset(followed))
     # Order by channel first so the per-channel cap can be applied while
-    # streaming. `latest` then orders by timestamp desc, which is served by
-    # ix_tg_posts_channel_name_timestamp; `random` uses the feed's seeded
+    # streaming. `ordered` then follows the feed's order within the channel
+    # (timestamp desc under `newest`, which is served by
+    # ix_tg_posts_channel_name_timestamp); `random` uses the feed's seeded
     # ordering so the cap selects the same posts the Posts tab would show.
     if max_per_channel > 0 and max_per_channel_mode == "random":
         stmt = stmt.order_by(col(Post.channel_name), random_cap_order(seed))
     else:
-        stmt = stmt.order_by(col(Post.channel_name), col(Post.timestamp).desc())
+        stmt = stmt.order_by(col(Post.channel_name), *channel_time_order(sort, Post))
 
     by_source: dict[str, _Accumulator] = {}
     seen_per_channel: dict[str, int] = {}

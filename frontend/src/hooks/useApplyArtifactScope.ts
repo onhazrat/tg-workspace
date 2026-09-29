@@ -20,18 +20,38 @@ import type { FrozenScope } from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
-import { parseMediaFilterValue } from "@/lib/posts/post-media"
+import type {
+  MaxPostsPerChannelMode,
+  MediaFilterValue,
+  PostSortOrder,
+} from "@/lib/posts/post-view"
 
-/** The workspace filters a frozen Scope puts back, with each absent field reset. */
-export function workspaceFromScope(scope: FrozenScope) {
+/**
+ * The workspace filters a frozen Scope puts back, with each absent field reset.
+ *
+ * The server reads a Scope stored before PFB-01 into the new shape on the way
+ * out, so an old Artifact restores as `[kind]`, `ordered` and `newest` grouped
+ * without the browser knowing the old spelling existed.
+ */
+export function workspaceFromScope(scope: FrozenScope): {
+  channels: Set<string>
+  keyword: string
+  forwarded: NonNullable<FrozenScope["forwarded"]>
+  media: MediaFilterValue
+  maxPerChannel: number
+  maxPerChannelMode: MaxPostsPerChannelMode
+  sort: PostSortOrder
+  groupByChannel: boolean
+} {
   return {
     channels: new Set(scope.channels ?? []),
     keyword: scope.keyword ?? "",
     forwarded: scope.forwarded ?? "all",
-    media: parseMediaFilterValue(scope.media ?? null),
+    media: [...new Set(scope.media ?? [])],
     maxPerChannel: scope.maxPerChannel ?? 0,
-    maxPerChannelMode: scope.maxPerChannelMode ?? "latest",
-    sort: scope.sort ?? "time",
+    maxPerChannelMode: scope.maxPerChannelMode ?? "ordered",
+    sort: scope.sort ?? "newest",
+    groupByChannel: scope.groupByChannel ?? false,
   }
 }
 
@@ -47,6 +67,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
     setPostSortOrder,
+    setGroupByChannel,
   } = useScraper()
 
   return useCallback(
@@ -60,6 +81,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setMaxPostsPerChannel(next.maxPerChannel)
       setMaxPostsPerChannelMode(next.maxPerChannelMode)
       setPostSortOrder(next.sort)
+      setGroupByChannel(next.groupByChannel)
       // The ranked Post selection a Semantic or related-Post Artifact froze is
       // not a filter, so there is nothing in the workspace to restore it into.
       // Leaving a live semantic query running instead would mean the restored
@@ -76,6 +98,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       setPostSortOrder,
+      setGroupByChannel,
       setSemanticSearchQuery,
       setRelatedPostSearch,
     ],

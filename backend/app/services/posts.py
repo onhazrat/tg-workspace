@@ -18,6 +18,8 @@ from app.services.channels import relabel_channels
 from app.services.follows import visible_channel_names
 from app.services.language import own_words, read_language
 from app.services.post_filters import (
+    CapMode,
+    FeedSort,
     PostFilters,
     apply_analysis_window,
     apply_post_filters,
@@ -31,9 +33,6 @@ from app.services.view_observations import Sighting, record_view_observations
 DEFAULT_POST_PAGE_SIZE = 500
 MAX_POST_PAGE_SIZE = 5000
 MAX_POST_LOOKUP_BATCH = 200
-
-FEED_SORTS: frozenset[str] = frozenset({"time", "channel_time"})
-FEED_CAP_MODES: frozenset[str] = frozenset({"latest", "random"})
 
 #: A stored Post's counters are refreshed until it is this old (REACH-02,
 #: ADR-024). Derived from the one the settling age is validated against, so the
@@ -471,19 +470,38 @@ def random_cap_order(seed: int) -> Any:
     )
 
 
-def _feed_order_by(sort: str, entity: Any) -> list[Any]:
+def channel_time_order(sort: FeedSort, entity: Any) -> list[Any]:
+    """The chosen order within one channel: the timestamp, then `post_id`.
+
+    `post_id` runs the same way as the timestamp, so a collision still reads in
+    posting order, and `(channel_name, post_id)` is unique, which is what makes
+    offset paging deterministic. Also the ranking the `ordered` cap keeps the
+    first N of, which is the whole of "the cap follows the order" (PFB-01).
+
+    Public for the reason `random_cap_order` is: Discover applies the same cap,
+    and a capped report reads the Posts the feed shows only while the two rank
+    a channel identically.
+    """
+    if sort == "oldest":
+        return [entity.timestamp.asc(), entity.post_id.asc()]
+    return [entity.timestamp.desc(), entity.post_id.desc()]
+
+
+def _feed_order_by(sort: FeedSort, group_by_channel: bool, entity: Any) -> list[Any]:
     """Deterministic ORDER BY for the feed, with a stable tiebreak for paging.
 
-    ``time`` is global newest-first; ``channel_time`` groups by channel then
-    newest-first. ``(channel_name, post_id)`` is unique, so adding it as a
-    tiebreak makes offset paging stable even when timestamps collide.
+    Ungrouped is the chosen order across every channel, with the channel name
+    breaking a timestamp tie before `post_id` does. Grouped puts channels in
+    alphabetical order and the chosen order inside each; placing a channel's
+    block where its first Post falls is PFB-02's, not this.
+
+    `newest` ungrouped is exactly what `sort: "time"` was, and grouped exactly
+    what `"channel_time"` was: the stored and legacy spellings read as these.
     """
-    timestamp = entity.timestamp
-    channel_name = entity.channel_name
-    post_id = entity.post_id
-    if sort == "channel_time":
-        return [channel_name.asc(), timestamp.desc(), post_id.desc()]
-    return [timestamp.desc(), channel_name.asc(), post_id.desc()]
+    timestamp, post_id = channel_time_order(sort, entity)
+    if group_by_channel:
+        return [entity.channel_name.asc(), timestamp, post_id]
+    return [timestamp, entity.channel_name.asc(), post_id]
 
 
 def list_feed(
@@ -495,8 +513,9 @@ def list_feed(
     end_date: int | None = None,
     filters: PostFilters | None = None,
     max_per_channel: int = 0,
-    max_per_channel_mode: str = "latest",
-    sort: str = "time",
+    max_per_channel_mode: CapMode = "ordered",
+    sort: FeedSort = "newest",
+    group_by_channel: bool = False,
     seed: int = 0,
     limit: int = DEFAULT_POST_PAGE_SIZE,
     offset: int = 0,
@@ -507,7 +526,7 @@ def list_feed(
     than paging a channel's whole history into the browser and filtering there,
     the keyword / forwarded / media filters, the per-channel cap, and the sort
     all run server-side and only ``limit`` rows are returned. With no filters,
-    no cap, and ``sort="time"`` this is a newest-first page.
+    no cap, and ``sort="newest"`` this is a newest-first page.
 
     The read stays bounded: ``tg_posts`` holds millions of rows across hundreds
     of channels, and an unbounded select here materialised gigabytes into a
@@ -531,10 +550,13 @@ def list_feed(
         base = apply_post_filters(base, filters, followed_names=followed)
 
     if max_per_channel > 0:
+        # `ordered` ranks by the chosen order, so the N kept are the first N
+        # the feed would show; under `newest` that is the newest N, exactly
+        # what `latest` kept.
         cap_order = (
-            random_cap_order(seed)
+            [random_cap_order(seed)]
             if max_per_channel_mode == "random"
-            else col(Post.timestamp).desc()
+            else channel_time_order(sort, Post)
         )
         row_number = (
             func.row_number()
@@ -546,13 +568,17 @@ def list_feed(
         stmt = (
             select(capped)
             .where(ranked.c.rn <= max_per_channel)
-            .order_by(*_feed_order_by(sort, capped))
+            .order_by(*_feed_order_by(sort, group_by_channel, capped))
             .offset(offset)
             .limit(limit)
         )
         return [post_to_camel(p) for p in session.exec(stmt).all()]
 
-    stmt = base.order_by(*_feed_order_by(sort, Post)).offset(offset).limit(limit)
+    stmt = (
+        base.order_by(*_feed_order_by(sort, group_by_channel, Post))
+        .offset(offset)
+        .limit(limit)
+    )
     return [post_to_camel(p) for p in session.exec(stmt).all()]
 
 
@@ -605,8 +631,9 @@ def count_posts_in_scope(
     media filters as Discover so the two agree.
 
     `max_per_channel` clamps each channel's count to the cap. The cap's
-    `random` and `latest` modes select *different* posts but the same *number*
-    per channel, so a count is mode-independent and needs no client fallback.
+    `random` and `ordered` modes select *different* posts but the same *number*
+    per channel, so a count is mode- and order-independent and needs no client
+    fallback.
 
     Scoped with the same `user_id` `list_feed` takes, and it has to be: the AI
     paths sum these counts to decide whether a selection fits in one prompt and

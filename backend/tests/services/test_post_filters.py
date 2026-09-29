@@ -79,11 +79,11 @@ def test_media_text_only_vs_media_only_kinds() -> None:
         # Stickers are real media and must leave text_only.
         _add(session, 6, text="[sticker]", media={"kinds": ["sticker"]})
         session.commit()
-        assert _ids(session, PostFilters(media="text_only")) == {1, 2, 5}
-        assert _ids(session, PostFilters(media="media_only")) == {6}
-        assert _ids(session, PostFilters(media="photo")) == {3}
-        assert _ids(session, PostFilters(media="video")) == {4}
-        assert _ids(session, PostFilters(media="all")) == {1, 2, 3, 4, 5, 6}
+        assert _ids(session, PostFilters(media=("text_only",))) == {1, 2, 5}
+        assert _ids(session, PostFilters(media=("media_only",))) == {6}
+        assert _ids(session, PostFilters(media=("photo",))) == {3}
+        assert _ids(session, PostFilters(media=("video",))) == {4}
+        assert _ids(session, PostFilters(media=())) == {1, 2, 3, 4, 5, 6}
 
 
 def test_media_only_three_ways() -> None:
@@ -105,7 +105,7 @@ def test_media_only_three_ways() -> None:
         # not media-only: regex matches but there is no media at all
         _add(session, 5, text="[photo]", media=None)
         session.commit()
-        assert _ids(session, PostFilters(media="media_only")) == {1, 2, 3}
+        assert _ids(session, PostFilters(media=("media_only",))) == {1, 2, 3}
 
 
 def test_media_grouped_by_kind_or_count() -> None:
@@ -115,7 +115,7 @@ def test_media_grouped_by_kind_or_count() -> None:
         _add(session, 3, media={"kinds": ["photo"], "groupedCount": 1})
         _add(session, 4, media={"kinds": ["photo"]})
         session.commit()
-        assert _ids(session, PostFilters(media="grouped")) == {1, 2}
+        assert _ids(session, PostFilters(media=("grouped",))) == {1, 2}
 
 
 def test_link_preview_kind() -> None:
@@ -123,7 +123,29 @@ def test_link_preview_kind() -> None:
         _add(session, 1, media={"kinds": ["link_preview"]})
         _add(session, 2, media={"kinds": ["photo"]})
         session.commit()
-        assert _ids(session, PostFilters(media="link_preview")) == {1}
+        assert _ids(session, PostFilters(media=("link_preview",))) == {1}
+
+
+def test_a_media_set_keeps_a_post_matching_any_kind() -> None:
+    """PFB-01: media is a set, and ticking more widens the feed.
+
+    Each kind keeps what it kept as a single value; the set is their union,
+    including across the two kinds that are not `kinds` entries at all.
+    """
+    with Session(engine) as session:
+        _add(session, 1, text="plain text", media=None)
+        _add(session, 2, text="a photo caption", media={"kinds": ["photo"]})
+        _add(session, 3, text="a video caption", media={"kinds": ["video"]})
+        _add(session, 4, media={"kinds": ["link_preview"]})
+        _add(session, 5, text="both", media={"kinds": ["photo", "video"]})
+        session.commit()
+        assert _ids(session, PostFilters(media=("photo", "video"))) == {2, 3, 5}
+        assert _ids(session, PostFilters(media=("text_only", "link_preview"))) == {
+            1,
+            4,
+        }
+        # A repeated kind is the same set, not a narrower one.
+        assert _ids(session, PostFilters(media=("photo", "photo"))) == {2, 5}
 
 
 def test_combined_filters_intersect() -> None:
@@ -142,7 +164,7 @@ def test_combined_filters_intersect() -> None:
         session.commit()
         got = _ids(
             session,
-            PostFilters(keyword="vpn", forwarded="forwarded", media="photo"),
+            PostFilters(keyword="vpn", forwarded="forwarded", media=("photo",)),
         )
         assert got == {1}
 

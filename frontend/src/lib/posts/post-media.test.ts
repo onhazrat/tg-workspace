@@ -4,8 +4,9 @@ import type { Post, PostMediaKind } from "@/types"
 
 import {
   getMediaKindLabel,
-  type MediaFilterValue,
+  type MediaKind,
   matchesMediaFilter,
+  parseMediaFilterValue,
 } from "./post-media"
 
 describe("getMediaKindLabel", () => {
@@ -36,8 +37,9 @@ describe("getMediaKindLabel", () => {
 describe("matchesMediaFilter", () => {
   const post = (text: string, media?: Post["media"]) =>
     ({ id: 1, channelName: "a", timestamp: 0, text, media }) as Post
-  const filters: MediaFilterValue[] = [
-    "all",
+  // Each kind as a set of one, which is exactly what the single value was
+  // before PFB-01; `"all"` is the empty set.
+  const kinds: MediaKind[] = [
     "text_only",
     "media_only",
     "photo",
@@ -45,9 +47,12 @@ describe("matchesMediaFilter", () => {
     "link_preview",
     "grouped",
   ]
-  const passing = (p: Post) => filters.filter((f) => matchesMediaFilter(p, f))
+  const passing = (p: Post): ("all" | MediaKind)[] => [
+    ...(matchesMediaFilter(p, []) ? (["all"] as const) : []),
+    ...kinds.filter((k) => matchesMediaFilter(p, [k])),
+  ]
 
-  it.each<[string, Post, MediaFilterValue[]]>([
+  it.each<[string, Post, ("all" | MediaKind)[]]>([
     ["plain text", post("hello"), ["all", "text_only"]],
     [
       "a captioned photo",
@@ -93,5 +98,39 @@ describe("matchesMediaFilter", () => {
     ["a bracket label with no media", post("[Photo]"), ["all", "text_only"]],
   ])("%s", (_label, p, expected) => {
     expect(passing(p)).toEqual(expected)
+  })
+})
+
+describe("matchesMediaFilter — a set of kinds (PFB-01)", () => {
+  const post = (text: string, media?: Post["media"]) =>
+    ({ id: 1, channelName: "a", timestamp: 0, text, media }) as Post
+
+  it("keeps a Post matching any kind in the set", () => {
+    const photo = post("look", { kinds: ["photo"] })
+    const plain = post("hello")
+
+    expect(matchesMediaFilter(photo, ["video", "photo"])).toBe(true)
+    expect(matchesMediaFilter(plain, ["video", "photo"])).toBe(false)
+    expect(matchesMediaFilter(plain, ["video", "text_only"])).toBe(true)
+  })
+})
+
+describe("parseMediaFilterValue", () => {
+  it.each<[string | null, MediaKind[]]>([
+    [null, []],
+    ["", []],
+    // The previous bundle's single value.
+    ["all", []],
+    ["photo", ["photo"]],
+    // PFB-01's JSON array.
+    ['["photo","video"]', ["photo", "video"]],
+    ['["photo","photo"]', ["photo"]],
+    ['["photo","hologram",3]', ["photo"]],
+    // Anything unreadable is any media, as it always was.
+    ["hologram", []],
+    ["{not json", []],
+    ['{"kinds":["photo"]}', []],
+  ])("%p reads as %p", (raw, expected) => {
+    expect(parseMediaFilterValue(raw)).toEqual(expected)
   })
 })

@@ -10,8 +10,11 @@ and the window selects the same posts, in the same order, as the plain
 date-range read did. Every other scope field takes its default on this path, so
 these tests pin that each of those defaults is a **no-op**:
 
-    forwarded="all"  media="all"  maxPerChannel=0  maxPerChannelMode="latest"
-    sort="time"      seed=0       keyword=None
+    forwarded="all"  media=[]     maxPerChannel=0  maxPerChannelMode="ordered"
+    sort="newest"    groupByChannel=false  seed=0  keyword=None  languages=[]
+
+(PFB-01 respelled three of them: `media="all"`, `"latest"` and `sort="time"`
+read as the values above, which is `tests/api/test_prompt_scope_shape.py`.)
 
 The formatter itself is already covered — `tests/prompts/test_posts_prompt.py`
 asserts `format_posts_for_prompt` is byte-identical to the frontend's. What is
@@ -161,7 +164,7 @@ def test_the_channel_list_is_applied(client: TestClient) -> None:
 
 
 def test_default_forwarded_and_media_drop_nothing(client: TestClient) -> None:
-    """`forwarded="all"` / `media="all"` are the defaults and must not filter.
+    """`forwarded="all"` / `media=[]` are the defaults and must not filter.
 
     The old path had no notion of these filters at all, so a non-neutral default
     would silently shrink every regenerated summary.

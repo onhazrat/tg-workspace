@@ -157,6 +157,7 @@ export function usePostsFeed(): PostsFeed {
     maxPostsPerChannel,
     maxPostsPerChannelMode,
     postSortOrder,
+    groupByChannel,
     semanticSearchQuery,
     setSemanticSearchQuery,
     relatedPostSearch,
@@ -182,6 +183,7 @@ export function usePostsFeed(): PostsFeed {
     maxPerChannel: maxPostsPerChannel,
     maxPerChannelMode: maxPostsPerChannelMode,
     sort: postSortOrder,
+    groupByChannel,
     seed: 0,
   }
   const feedParams: PostFeedQuery = { ...filters, startDate, endDate }

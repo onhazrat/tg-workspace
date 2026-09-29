@@ -27,6 +27,8 @@ export function useDiscoverGenerate() {
     semanticSearchQuery,
     maxPostsPerChannel,
     maxPostsPerChannelMode,
+    postSortOrder,
+    groupByChannel,
     mediaFilter,
   } = useScraper()
   const { startDate, endDate } = useScope()
@@ -52,6 +54,8 @@ export function useDiscoverGenerate() {
       media: mediaFilter,
       maxPerChannel: maxPostsPerChannel,
       maxPerChannelMode: maxPostsPerChannelMode,
+      sort: postSortOrder,
+      groupByChannel,
       seed: RANDOM_CAP_SEED,
     }),
     [
@@ -64,6 +68,8 @@ export function useDiscoverGenerate() {
       mediaFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
+      postSortOrder,
+      groupByChannel,
     ],
   )
 
