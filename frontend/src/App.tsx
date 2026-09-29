@@ -453,7 +453,7 @@ export default function App() {
                             event.preventDefault()
                             workspaceTabs.closeTab(tab)
                           }}
-                          className={`text-xs font-mono uppercase tracking-widest flex min-w-0 items-center gap-2 pb-1 border-b-2 transition-all ${view.linkClass}`}
+                          className={`text-xs font-mono flex min-w-0 items-center gap-2 pb-1 border-b-2 transition-all ${view.linkClass}`}
                         >
                           <Icon size={14} className="shrink-0" />
                           <span className="max-w-[14rem] truncate">
