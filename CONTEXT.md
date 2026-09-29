@@ -73,6 +73,15 @@ changed) after its Post was published, by which point it has stopped climbing
 in any way that matters.
 _Avoid_: final views, mature views
 
+**Estimated View count**:
+The Settled View count a Post is expected to reach, judged from its own View
+count and its age. A Post already past the settling age is its View count; a
+younger one is its View count read through the Settling curve. A Post younger
+than the estimation floor is too new to judge and has none, which is not the
+same as a low one. Posts are filtered and ordered by it, or by their View count,
+never by their Channel's Reach.
+_Avoid_: projected views, predicted views, reach (of a Post)
+
 **Reach**:
 The median Settled View count of a Channel's recent Posts: how many people a
 Post from that Channel typically gets in front of. It says nothing about
@@ -152,9 +161,13 @@ _Avoid_: target language, translation target
 
 **Scope**:
 The slice of Posts an operation runs over: selected Channels × an Analysis
-window × the active post filters. Every Artifact freezes a snapshot of the
-Scope it was made from, so it can be inspected or explicitly restored without
-reinterpreting it against today's.
+window × the active post filters, in their chosen order. The post filters are
+the keyword, Type, media kinds, Languages and a View count or Estimated View
+count threshold; the order is newest, oldest, most or fewest views, optionally
+grouped by Channel; and a per-Channel cap keeps the first Posts in that order,
+or a random few. Every Artifact freezes a snapshot of the Scope it was made
+from, so it can be inspected or explicitly restored without reinterpreting it
+against today's.
 _Avoid_: selection, range, filter set, context
 
 **Analysis window**:
