@@ -4,17 +4,30 @@ import type React from "react"
 import { toast } from "sonner"
 import { PrototypeSwitcher } from "@/components/Common/PrototypeSwitcher"
 import type { ChannelControlsProps } from "./types"
-import { VariantA } from "./VariantA"
+import { type ALayout, VariantA } from "./VariantA"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export const PROTOTYPE_VARIANTS = [
   { key: "current", name: "Today's bar" },
-  { key: "A", name: "Command bar" },
+  { key: "A", name: "Size + AI in View" },
+  { key: "A1", name: "Size switch on row 1, AI pill" },
+  { key: "A2", name: "Size + AI toggles on row 2" },
+  { key: "A3", name: "Display strip" },
+  { key: "A4", name: "Size bar above the grid, AI pill" },
 ]
+
+const aVariant = (layout: ALayout): React.FC<ChannelControlsProps> =>
+  function AVariant(p) {
+    return <VariantA {...p} layout={layout} />
+  }
 
 const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   A: VariantA,
+  A1: aVariant({ zoom: "row1", ai: "pill" }),
+  A2: aVariant({ zoom: "row2", ai: "row2" }),
+  A3: aVariant({ zoom: "strip", ai: "strip" }),
+  A4: aVariant({ zoom: "gridbar", ai: "pill" }),
 }
 
 /** The variant key in the URL, or "current". */
