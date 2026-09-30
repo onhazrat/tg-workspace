@@ -90,7 +90,7 @@ function SearchBox({
         />
         <input
           type="text"
-          aria-label={meaning ? "Search by meaning" : "Search posts"}
+          aria-label={meaning ? "Meaning search" : "Keyword search"}
           value={meaning ? draft : postSearch}
           placeholder={
             meaning
