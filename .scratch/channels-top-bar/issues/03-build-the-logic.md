@@ -42,8 +42,11 @@ inside it. After this ticket, the spec's example
 
 ### Funnels after hand edits
 
-- [ ] The dropdown funnels still reflect every Condition anywhere in the tree, and still only
-      append or remove; they never reshape what the Account built
+- [x] The dropdown funnels still reflect every Condition anywhere in the tree, and still only
+      append or remove; they never reshape what the Account built, with one exception: a funnel
+      joins a lone, un-negated, root-level Condition of its own type in an OR group, however that
+      Condition was added. The tree does not record whether a funnel or the "+" added it, and the
+      dropdown already shows it as funnelled, so two ticks in one dropdown mean OR (story 14)
 
 ### Tests
 
