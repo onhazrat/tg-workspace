@@ -348,7 +348,7 @@ def test_the_counts_read_an_old_media_value_as_its_new_spelling(
             f"{PREFIX}/posts/counts", json={**scope, **media}, headers=headers
         )
         assert response.status_code == 200, response.text
-        return response.json()
+        return response.json()["counts"]
 
     assert counts(media="all") == counts(media=[]) == {"feed_a": 2, "feed_b": 2}
 
@@ -392,7 +392,7 @@ def test_a_media_set_keeps_a_post_matching_any_kind(client: TestClient) -> None:
     "body",
     [
         {"sort": "nonsense"},
-        {"sort": "most_views"},
+        {"sort": "most_reach"},
         {"maxPerChannelMode": "nonsense"},
         {"media": ["nonsense"]},
         {"media": "nonsense"},
@@ -406,9 +406,9 @@ def test_a_value_this_server_does_not_implement_is_422(
 ) -> None:
     """Refused rather than dropped, for every field of the new shape.
 
-    `most_views` is PFB-03's; until it lands a request naming it is asking for
-    something this server would not do. A Language set is a list, so a bare
-    string is a client speaking some other shape.
+    An order this server does not implement is asking for something it would
+    not do. A Language set is a list, so a bare string is a client speaking
+    some other shape.
     """
     headers = _auth(client)
     assert client.post(f"{PREFIX}/posts", json=body, headers=headers).status_code == 422

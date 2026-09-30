@@ -48,7 +48,7 @@ def test_counts_returns_per_channel_totals(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"alpha": 2, "beta": 1}
+    assert response.json()["counts"] == {"alpha": 2, "beta": 1}
 
 
 def test_counts_accept_a_selection_far_larger_than_a_url_could_carry(
@@ -73,7 +73,7 @@ def test_counts_accept_a_selection_far_larger_than_a_url_could_carry(
     )
 
     assert response.status_code == 200
-    assert response.json() == {names[0]: 1, names[-1]: 1}
+    assert response.json()["counts"] == {names[0]: 1, names[-1]: 1}
 
 
 def test_counts_respect_the_date_window(
@@ -100,7 +100,7 @@ def test_counts_respect_the_date_window(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"alpha": 1}
+    assert response.json()["counts"] == {"alpha": 1}
 
 
 def test_counts_treat_blank_handles_as_absent(
@@ -117,7 +117,7 @@ def test_counts_treat_blank_handles_as_absent(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"alpha": 1}
+    assert response.json()["counts"] == {"alpha": 1}
 
 
 def test_counts_reject_an_unknown_filter_value(

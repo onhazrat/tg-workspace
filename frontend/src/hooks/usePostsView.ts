@@ -5,9 +5,12 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import { type PostFeedQuery, postScopeBody } from "@/api/data"
 import {
+  dataPostsCounts,
   dataPostsFacets,
+  dataPostsViewEstimate,
   type PostFacetsResponse,
   type PostScopeRequest,
+  type ViewEstimateResponse,
 } from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
@@ -16,7 +19,11 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import type { Post } from "@/types"
-import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
+import {
+  queryKeys,
+  SUMMARIZER_STALE_TIME,
+  VIEW_ESTIMATE_STALE_TIME,
+} from "./queryKeys"
 import { useDebouncedValue } from "./useDebouncedValue"
 import { POST_SEARCH_DEBOUNCE_MS } from "./usePostFilters"
 
@@ -76,6 +83,22 @@ function useSelectedChannelNames(): string[] {
  * array in App/SummaryAction/ChannelCard/ChannelGrid.
  */
 export function useScopedPostCounts(): Record<string, number> {
+  return useScopeCounts().counts
+}
+
+/**
+ * How many Posts an Estimated views threshold hid for being too new to judge,
+ * for the footer (PFB-03). The same query as `useScopedPostCounts`, so the two
+ * cost one request. A meaning search has no server count and reports none.
+ */
+export function useTooNewToJudge(): number {
+  return useScopeCounts().tooNewToJudge
+}
+
+function useScopeCounts(): {
+  counts: Record<string, number>
+  tooNewToJudge: number
+} {
   const { selectedChannels } = useData()
   const { startDate, endDate, windowKey } = useScope()
   const {
@@ -83,6 +106,8 @@ export function useScopedPostCounts(): Record<string, number> {
     forwardedFilter,
     mediaFilter,
     languageFilter,
+    viewMeasure,
+    viewsFilter,
     maxPostsPerChannel,
     semanticSearchQuery,
     getScopedPosts,
@@ -99,6 +124,8 @@ export function useScopedPostCounts(): Record<string, number> {
     forwarded: forwardedFilter,
     media: mediaFilter,
     languages: languageFilter,
+    viewMeasure,
+    views: viewsFilter,
     maxPerChannel: maxPostsPerChannel,
   }
   const params = { ...filters, startDate, endDate }
@@ -106,7 +133,8 @@ export function useScopedPostCounts(): Record<string, number> {
     // Keyed on the window rather than the minute it currently resolves to —
     // see `usePostsFeed`, which pays for this and says why.
     queryKey: queryKeys.postsCounts({ ...filters, window: windowKey }),
-    queryFn: () => api.getPostsCounts(params),
+    queryFn: () =>
+      dataPostsCounts({ body: postScopeBody(params) as PostScopeRequest }),
     enabled: serverEligible,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
@@ -125,7 +153,11 @@ export function useScopedPostCounts(): Record<string, number> {
     }
   }, [serverEligible, getScopedPosts])
 
-  return serverEligible ? (query.data ?? {}) : clientCounts
+  if (!serverEligible) return { counts: clientCounts, tooNewToJudge: 0 }
+  return {
+    counts: query.data?.counts ?? {},
+    tooNewToJudge: query.data?.tooNewToJudge ?? 0,
+  }
 }
 
 /**
@@ -144,6 +176,8 @@ export function usePostFacets(
     forwardedFilter,
     mediaFilter,
     languageFilter,
+    viewMeasure,
+    viewsFilter,
     maxPostsPerChannel,
     semanticSearchQuery,
   } = useScraper()
@@ -158,6 +192,8 @@ export function usePostFacets(
     forwarded: forwardedFilter,
     media: mediaFilter,
     languages: languageFilter,
+    viewMeasure,
+    views: viewsFilter,
     maxPerChannel: maxPostsPerChannel,
   }
   const query = useQuery({
@@ -176,6 +212,19 @@ export function usePostFacets(
     placeholderData: (previous) => previous,
   })
   return query.data
+}
+
+/**
+ * The curve and settings an Estimated View count reads through, cached for an
+ * hour: the curve is refitted daily and the settings change by hand. Shares
+ * its cache entry with `ScraperContext.getViewEstimate`.
+ */
+export function useViewEstimate(): ViewEstimateResponse | undefined {
+  return useQuery({
+    queryKey: queryKeys.viewEstimate,
+    queryFn: () => dataPostsViewEstimate(),
+    staleTime: VIEW_ESTIMATE_STALE_TIME,
+  }).data
 }
 
 export interface PostsFeed {
@@ -213,6 +262,8 @@ export function usePostsFeed(): PostsFeed {
     forwardedFilter,
     mediaFilter,
     languageFilter,
+    viewMeasure,
+    viewsFilter,
     maxPostsPerChannel,
     maxPostsPerChannelMode,
     postSortOrder,
@@ -240,6 +291,8 @@ export function usePostsFeed(): PostsFeed {
     forwarded: forwardedFilter,
     media: mediaFilter,
     languages: languageFilter,
+    viewMeasure,
+    views: viewsFilter,
     maxPerChannel: maxPostsPerChannel,
     maxPerChannelMode: maxPostsPerChannelMode,
     sort: postSortOrder,

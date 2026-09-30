@@ -469,6 +469,8 @@ class DiscoverCandidatesRequest(PostScopeRequest):
                 "forwarded": self.forwarded,
                 "languages": self.languages,
                 "media": self.media,
+                "viewMeasure": self.view_measure,
+                "views": self.views,
                 "maxPerChannel": self.max_per_channel,
                 "maxPerChannelMode": self.max_per_channel_mode,
                 "sort": self.sort,

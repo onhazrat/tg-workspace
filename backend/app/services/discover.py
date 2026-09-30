@@ -35,7 +35,7 @@ from app.services.post_filters import (
     apply_post_filters,
 )
 from app.services.post_links_parser import channel_from_telegram_url
-from app.services.posts import channel_time_order, random_cap_order
+from app.services.posts import channel_order, random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
 from app.services.tenancy import scoped_select
 
@@ -144,6 +144,20 @@ class _Accumulator:
     reference: Post | None = None
 
 
+def _scan_order(
+    max_per_channel: int,
+    max_per_channel_mode: str,
+    sort: FeedSort,
+    seed: int,
+    filters: PostFilters | None,
+) -> list[Any]:
+    """Channel by channel, each in the order the cap keeps the first N of."""
+    if max_per_channel > 0 and max_per_channel_mode == "random":
+        return [col(Post.channel_name), random_cap_order(seed)]
+    reading = (filters or PostFilters()).reading
+    return [col(Post.channel_name), *channel_order(sort, Post, reading)]
+
+
 def compute_discover_candidates(
     session: Session,
     *,
@@ -221,10 +235,9 @@ def compute_discover_candidates(
     # (timestamp desc under `newest`, which is served by
     # ix_tg_posts_channel_name_timestamp); `random` uses the feed's seeded
     # ordering so the cap selects the same posts the Posts tab would show.
-    if max_per_channel > 0 and max_per_channel_mode == "random":
-        stmt = stmt.order_by(col(Post.channel_name), random_cap_order(seed))
-    else:
-        stmt = stmt.order_by(col(Post.channel_name), *channel_time_order(sort, Post))
+    stmt = stmt.order_by(
+        *_scan_order(max_per_channel, max_per_channel_mode, sort, seed, filters)
+    )
 
     by_source: dict[str, _Accumulator] = {}
     seen_per_channel: dict[str, int] = {}

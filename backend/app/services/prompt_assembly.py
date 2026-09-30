@@ -27,9 +27,12 @@ from app.services.post_filters import (
     FEED_SORTS,
     FORWARDED_FILTERS,
     MEDIA_KINDS,
+    VIEW_MEASURES,
     PostFilters,
+    ViewsThreshold,
 )
 from app.services.posts import count_posts_in_scope, list_feed
+from app.services.settling_curve import view_reading
 
 # Upper bound on how many posts one prompt assembles. The token budget is the
 # real user-facing limit; this is a generous fetch-safety bound so a pathological
@@ -52,6 +55,9 @@ class PromptScope:
     media: tuple[str, ...] = ()
     #: Empty is any Language (PFB-02).
     languages: tuple[str, ...] = ()
+    #: What `views` and the views orders read, and the threshold (PFB-03).
+    view_measure: str = "estimated"
+    views: ViewsThreshold | None = None
     max_per_channel: int = 0
     max_per_channel_mode: str = "ordered"
     sort: str = "newest"
@@ -80,6 +86,8 @@ def _fetch_scoped_posts(
         raise HTTPException(422, detail=f"unknown media: {unknown_media}")
     if scope.sort not in FEED_SORTS:
         raise HTTPException(422, detail=f"unknown sort: {scope.sort}")
+    if scope.view_measure not in VIEW_MEASURES:
+        raise HTTPException(422, detail=f"unknown viewMeasure: {scope.view_measure}")
     if scope.max_per_channel_mode not in FEED_CAP_MODES:
         raise HTTPException(
             422, detail=f"unknown maxPerChannelMode: {scope.max_per_channel_mode}"
@@ -89,6 +97,13 @@ def _fetch_scoped_posts(
         forwarded=cast("Any", scope.forwarded),
         media=cast("Any", scope.media),
         languages=scope.languages,
+        views=scope.views,
+        reading=view_reading(
+            session,
+            cast("Any", scope.view_measure),
+            views=scope.views,
+            sort=scope.sort,
+        ),
     )
     channel_names = scope.channels or None
 

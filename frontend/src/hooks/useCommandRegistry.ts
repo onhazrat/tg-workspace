@@ -95,6 +95,9 @@ export function useCommandRegistry(): {
     setMediaFilter,
     languageFilter,
     setLanguageFilter,
+    viewMeasure,
+    viewsFilter,
+    setViewsFilter,
     maxPostsPerChannel,
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
@@ -152,6 +155,8 @@ export function useCommandRegistry(): {
         forwarded: forwardedFilter,
         media: mediaFilter,
         languages: languageFilter,
+        viewMeasure,
+        views: viewsFilter,
         maxPerChannel: maxPostsPerChannel,
       })
     }
@@ -166,6 +171,8 @@ export function useCommandRegistry(): {
     forwardedFilter,
     mediaFilter,
     languageFilter,
+    viewMeasure,
+    viewsFilter,
     maxPostsPerChannel,
     getScopedPosts,
   ])
@@ -295,6 +302,7 @@ export function useCommandRegistry(): {
       mediaFilter,
       setMediaFilter,
       setLanguageFilter,
+      setViewsFilter,
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       postSortOrder,
@@ -356,6 +364,7 @@ export function useCommandRegistry(): {
       workspaceTabs,
       setDateRange,
       setForwardedFilter,
+      setViewsFilter,
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       setPostSortOrder,

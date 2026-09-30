@@ -1,10 +1,12 @@
 import type { PostFeedQuery } from "@/api/data"
+import type { ViewEstimate } from "@/lib/posts/estimated-views"
 import type { Channel, Post } from "@/types"
 import {
   buildFilteredPostsFromRaw,
   type ForwardedFilterValue,
   type MediaFilterValue,
   type PostViewOptions,
+  readsEstimatedViews,
 } from "./post-view"
 
 /**
@@ -58,6 +60,12 @@ export interface ScopedPostsDeps {
    * testable without a network stub at module scope.
    */
   getPostsFeed: (query: PostFeedQuery) => Promise<Post[]>
+  /**
+   * The curve and settings the browser reads an Estimated View count through,
+   * for ranked results. Asked for only when a threshold or a views order will
+   * read one (PFB-03).
+   */
+  getViewEstimate: () => Promise<ViewEstimate>
 }
 
 /**
@@ -86,19 +94,24 @@ export async function computeScopedPosts(
     semanticSearchRespectsChannels,
     searchSimilarPosts,
     getPostsFeed,
+    getViewEstimate,
   } = deps
 
   // The ranked Posts a vector search returns pass through every pill on the
   // bar, so the bar means the same thing in both modes (PFB-02). Not the
   // keyword: in meaning mode the search box holds the meaning query.
-  const filterRanked = (ranked: Post[]) =>
+  const readsEstimate = readsEstimatedViews(postViewOptions)
+  const filterRanked = async (ranked: Post[]) =>
     buildFilteredPostsFromRaw(ranked, {
       searchText: "",
       forwardedFilter,
       mediaFilter,
       languageFilter,
       channels,
-      view: postViewOptions,
+      view: {
+        ...postViewOptions,
+        viewEstimate: readsEstimate ? await getViewEstimate() : null,
+      },
       startDate,
       endDate,
     })
@@ -158,6 +171,8 @@ export async function computeScopedPosts(
     forwarded: forwardedFilter,
     media: mediaFilter,
     languages: languageFilter,
+    viewMeasure: postViewOptions.viewMeasure,
+    views: postViewOptions.viewsFilter,
     maxPerChannel: postViewOptions.maxPostsPerChannel,
     maxPerChannelMode: postViewOptions.maxPostsPerChannelMode,
     sort: postViewOptions.postSortOrder,

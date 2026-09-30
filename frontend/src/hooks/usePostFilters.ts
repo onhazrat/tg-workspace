@@ -5,7 +5,7 @@
  * `ScraperContext`. This is genuinely UI state — it describes what the operator
  * has asked to see, and nothing here talks to the network.
  *
- * **These six keys are deliberately *not* in `lib/settings/schema.ts`.** That
+ * **These keys are deliberately *not* in `lib/settings/schema.ts`.** That
  * schema owns durable *preferences*; these are a transient view state that
  * happens to survive a reload. Folding them in would put every filter tweak
  * through the settings write path and expose them in the settings UI, which is
@@ -19,10 +19,14 @@
  * written back in it by the effects below; `sort: "channel_time"` is where
  * grouping came from, so a stored `channel_time` with no grouping key yet
  * reads as grouped.
+ *
+ * PFB-03 added two more, the views measure and the views threshold, the
+ * threshold as JSON `{op, value}` and anything unreadable as no threshold.
  */
 
 import { useEffect, useState } from "react"
 
+import { POST_ORDER_OPTIONS } from "@/lib/posts/post-filter-bar"
 import { parseMediaFilterValue } from "@/lib/posts/post-media"
 import type {
   ForwardedFilterValue,
@@ -30,6 +34,8 @@ import type {
   MediaFilterValue,
   PostSortOrder,
   PostViewOptions,
+  ViewMeasure,
+  ViewsFilter,
 } from "@/lib/posts/post-view"
 import { scopedStorage } from "@/lib/storage/scoped"
 import type { Post } from "@/types"
@@ -43,6 +49,8 @@ export const POST_FILTER_STORAGE_KEYS = {
   groupByChannel: "postFilter_groupByChannel",
   media: "postFilter_media",
   languages: "postFilter_languages",
+  viewMeasure: "postFilter_viewMeasure",
+  views: "postFilter_views",
 } as const
 
 /** How long a keystroke waits before it reaches a query key. */
@@ -76,6 +84,11 @@ export interface PostFilters {
   setPostSortOrder: React.Dispatch<React.SetStateAction<PostSortOrder>>
   groupByChannel: boolean
   setGroupByChannel: React.Dispatch<React.SetStateAction<boolean>>
+  /** What the views threshold and the views orders read (PFB-03). */
+  viewMeasure: ViewMeasure
+  setViewMeasure: React.Dispatch<React.SetStateAction<ViewMeasure>>
+  viewsFilter: ViewsFilter | null
+  setViewsFilter: React.Dispatch<React.SetStateAction<ViewsFilter | null>>
   postViewOptions: PostViewOptions
   /** Debounced, so a keystroke does not become a query key. */
   debouncedPostSearch: string
@@ -97,10 +110,34 @@ export function readStoredMaxPerChannelMode(): MaxPostsPerChannelMode {
   return saved === "random" ? "random" : "ordered"
 }
 
+const SORT_ORDERS = POST_ORDER_OPTIONS.map((option) => option.value)
+
 export function readStoredSortOrder(): PostSortOrder {
   const saved = scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)
-  // `"time"` and `"channel_time"` were both newest first.
-  return saved === "oldest" ? "oldest" : "newest"
+  // `"time"` and `"channel_time"` were both newest first, like anything else
+  // this bundle does not know.
+  return SORT_ORDERS.find((order) => order === saved) ?? "newest"
+}
+
+export function readStoredViewMeasure(): ViewMeasure {
+  const saved = scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.viewMeasure)
+  return saved === "views" ? "views" : "estimated"
+}
+
+/** `{op, value}` as JSON; anything else is no threshold. */
+export function readStoredViewsFilter(): ViewsFilter | null {
+  try {
+    const parsed: unknown = JSON.parse(
+      scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.views) ?? "null",
+    )
+    if (typeof parsed !== "object" || parsed === null) return null
+    const { op, value } = parsed as Record<string, unknown>
+    if ((op !== "gte" && op !== "lte") || typeof value !== "number") return null
+    if (!Number.isInteger(value) || value < 0) return null
+    return { op, value }
+  } catch {
+    return null
+  }
 }
 
 export function readStoredGroupByChannel(): boolean {
@@ -160,6 +197,12 @@ export function usePostFilters(): PostFilters {
   const [groupByChannel, setGroupByChannel] = useState<boolean>(
     readStoredGroupByChannel,
   )
+  const [viewMeasure, setViewMeasure] = useState<ViewMeasure>(
+    readStoredViewMeasure,
+  )
+  const [viewsFilter, setViewsFilter] = useState<ViewsFilter | null>(
+    readStoredViewsFilter,
+  )
 
   useEffect(() => {
     scopedStorage.setItem(
@@ -200,6 +243,17 @@ export function usePostFilters(): PostFilters {
     )
   }, [languageFilter])
 
+  useEffect(() => {
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.viewMeasure, viewMeasure)
+  }, [viewMeasure])
+
+  useEffect(() => {
+    scopedStorage.setItem(
+      POST_FILTER_STORAGE_KEYS.views,
+      JSON.stringify(viewsFilter),
+    )
+  }, [viewsFilter])
+
   const debouncedPostSearch = useDebouncedValue(
     postSearch,
     POST_SEARCH_DEBOUNCE_MS,
@@ -214,6 +268,8 @@ export function usePostFilters(): PostFilters {
     maxPostsPerChannelMode,
     postSortOrder,
     groupByChannel,
+    viewMeasure,
+    viewsFilter,
   }
 
   return {
@@ -239,6 +295,10 @@ export function usePostFilters(): PostFilters {
     setPostSortOrder,
     groupByChannel,
     setGroupByChannel,
+    viewMeasure,
+    setViewMeasure,
+    viewsFilter,
+    setViewsFilter,
     postViewOptions,
     debouncedPostSearch,
     debouncedSemanticSearchQuery,

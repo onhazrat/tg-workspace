@@ -40,6 +40,8 @@ describe("post-view pipeline", () => {
       maxPostsPerChannelMode: "ordered" as const,
       postSortOrder: "newest" as const,
       groupByChannel: false,
+      viewMeasure: "estimated" as const,
+      viewsFilter: null,
     }
 
     expect(applyPostViewPipeline(posts, view)).toEqual([
@@ -65,6 +67,8 @@ describe("post-view pipeline", () => {
       maxPostsPerChannelMode: "ordered" as const,
       postSortOrder: "newest" as const,
       groupByChannel: false,
+      viewMeasure: "estimated" as const,
+      viewsFilter: null,
     }
 
     const result = applyPostViewPipeline(posts, view, seedContext)
@@ -92,6 +96,8 @@ describe("post-view pipeline", () => {
       maxPostsPerChannelMode: "random" as const,
       postSortOrder: "newest" as const,
       groupByChannel: false,
+      viewMeasure: "estimated" as const,
+      viewsFilter: null,
     }
 
     const first = applyMaxPostsPerChannel(posts, view, seedContext)
@@ -112,6 +118,8 @@ describe("post-view pipeline", () => {
       maxPostsPerChannelMode: "ordered" as const,
       postSortOrder: "newest" as const,
       groupByChannel: true,
+      viewMeasure: "estimated" as const,
+      viewsFilter: null,
     }
 
     expect(sortPosts(posts, view)).toEqual([
@@ -134,6 +142,8 @@ describe("post-view pipeline", () => {
       maxPostsPerChannelMode: "ordered" as const,
       postSortOrder: "newest" as const,
       groupByChannel: true,
+      viewMeasure: "estimated" as const,
+      viewsFilter: null,
     }
 
     // zebra kept its 500, so its block leads (PFB-02).
@@ -161,6 +171,8 @@ describe("post-view pipeline", () => {
         maxPostsPerChannelMode: "ordered",
         postSortOrder: "newest",
         groupByChannel: false,
+        viewMeasure: "estimated" as const,
+        viewsFilter: null,
       },
       startDate: 0,
       endDate: 9999,
@@ -286,6 +298,8 @@ describe("post-view pipeline", () => {
         maxPostsPerChannelMode: "ordered",
         postSortOrder: "newest",
         groupByChannel: false,
+        viewMeasure: "estimated" as const,
+        viewsFilter: null,
       },
       startDate: 0,
       endDate: 9999,
@@ -303,6 +317,8 @@ describe("post-view pipeline", () => {
         maxPostsPerChannelMode: "ordered",
         postSortOrder: "newest",
         groupByChannel: false,
+        viewMeasure: "estimated" as const,
+        viewsFilter: null,
       },
       startDate: 0,
       endDate: 9999,
@@ -339,6 +355,8 @@ describe("post-view pipeline", () => {
           maxPostsPerChannelMode: "ordered",
           postSortOrder: "newest",
           groupByChannel: false,
+          viewMeasure: "estimated" as const,
+          viewsFilter: null,
         },
         startDate: 0,
         endDate: 9999,
@@ -362,6 +380,8 @@ describe("post-view pipeline — the PFB-01 shape", () => {
     maxPostsPerChannelMode: "ordered" as const,
     postSortOrder: "newest" as const,
     groupByChannel: false,
+    viewMeasure: "estimated" as const,
+    viewsFilter: null,
     ...overrides,
   })
   const keys = (posts: Post[]) => posts.map((p) => `${p.channelName}/${p.id}`)
@@ -401,6 +421,8 @@ describe("post-view pipeline — the PFB-01 shape", () => {
         maxPostsPerChannel: 1,
         postSortOrder: "oldest",
         groupByChannel: true,
+        viewMeasure: "estimated" as const,
+        viewsFilter: null,
       }),
       seedContext,
     )
@@ -475,6 +497,8 @@ describe("post-view pipeline: parity with the server feed", () => {
         maxPostsPerChannelMode: "ordered",
         postSortOrder: "newest",
         groupByChannel: false,
+        viewMeasure: "estimated" as const,
+        viewsFilter: null,
         ...over.view,
       },
     }).map((p) => `${p.channelName}/${p.id}`)
@@ -535,5 +559,132 @@ describe("post-view pipeline: parity with the server feed", () => {
       "pfb_a/9",
       "pfb_b/2",
     ])
+  })
+})
+
+/**
+ * Semantic parity for Views (PFB-03): the corpus and the answers are
+ * `backend/tests/api/test_post_views_feed.py`'s, as the Operator sees them
+ * (`pv_a` and `pv_b`), read through the seed curve at the default settings.
+ * a2 is too new to judge (observed at 1h) and a3 has no View count.
+ */
+describe("post-view pipeline: parity with the server's views feed", () => {
+  const HOUR = 3_600_000
+  const SEED = {
+    curve: {
+      kind: "steps" as const,
+      points: [
+        [0, 0.2],
+        [3, 0.59],
+        [6, 0.7],
+        [12, 0.86],
+        [24, 0.89],
+      ],
+    },
+    settlingAgeHours: 24,
+    estimationFloorHours: 3,
+  }
+  const corpus: [string, number, number | null, number | null][] = [
+    ["pv_a", 1, 5000, 48],
+    ["pv_a", 2, 1000, 1],
+    ["pv_a", 3, null, null],
+    ["pv_a", 4, 2000, 6],
+    ["pv_b", 5, 3000, 30],
+    ["pv_b", 6, 800, 12],
+  ]
+  const posts = corpus.map(([channel, id, views, age]) => {
+    const timestamp = 1_000_000 + id * 60_000
+    return makePost(channel, id, timestamp, {
+      viewsCount: views,
+      viewsObservedAt: age == null ? null : timestamp + age * HOUR,
+    })
+  })
+  const run = (view: Partial<Parameters<typeof sortPosts>[1]>) =>
+    buildFilteredPostsFromRaw(posts, {
+      searchText: "",
+      forwardedFilter: "all",
+      mediaFilter: [],
+      languageFilter: [],
+      channels: [],
+      startDate: 0,
+      endDate: 0,
+      view: {
+        maxPostsPerChannel: 0,
+        maxPostsPerChannelMode: "ordered",
+        postSortOrder: "newest",
+        groupByChannel: false,
+        viewMeasure: "estimated",
+        viewsFilter: null,
+        viewEstimate: SEED,
+        ...view,
+      },
+    }).map((p) => p.id)
+
+  test.each([
+    ["estimated", "gte", 2500, [5, 4, 1]],
+    ["views", "gte", 2500, [5, 1]],
+    ["estimated", "lte", 900, [6]],
+    ["views", "lte", 900, [6]],
+  ] as const)(
+    "%s %s %d keeps what the server keeps",
+    (measure, op, value, expected) => {
+      expect(run({ viewMeasure: measure, viewsFilter: { op, value } })).toEqual(
+        [...expected],
+      )
+    },
+  )
+
+  test.each([
+    ["estimated", "most_views", [1, 5, 4, 6, 3, 2]],
+    ["estimated", "fewest_views", [6, 4, 5, 1, 3, 2]],
+    ["views", "most_views", [1, 5, 4, 2, 6, 3]],
+    ["views", "fewest_views", [6, 2, 4, 5, 1, 3]],
+  ] as const)(
+    "%s %s orders as the server does, nulls last",
+    (measure, sort, expected) => {
+      expect(run({ viewMeasure: measure, postSortOrder: sort })).toEqual([
+        ...expected,
+      ])
+    },
+  )
+
+  test("the cap keeps each channel's top N and grouping places blocks by their best", () => {
+    expect(run({ postSortOrder: "most_views", maxPostsPerChannel: 1 })).toEqual(
+      [1, 5],
+    )
+    expect(run({ postSortOrder: "most_views", groupByChannel: true })).toEqual([
+      1, 4, 3, 2, 5, 6,
+    ])
+  })
+
+  test("two blocks with an equal best value fall to the channel name, as on the server", () => {
+    // pv_z's Post is the newer, so ordering the Posts alone would lead with
+    // its block; the server breaks a tie between blocks by channel name.
+    const tied = [
+      makePost("pv_z", 1, 2_000_000, {
+        viewsCount: 100,
+        viewsObservedAt: 2_000_000 + 48 * HOUR,
+      }),
+      makePost("pv_y", 2, 1_000_000, {
+        viewsCount: 100,
+        viewsObservedAt: 1_000_000 + 48 * HOUR,
+      }),
+    ]
+    const grouped = sortPosts(tied, {
+      maxPostsPerChannel: 0,
+      maxPostsPerChannelMode: "ordered",
+      postSortOrder: "most_views",
+      groupByChannel: true,
+      viewMeasure: "estimated",
+      viewsFilter: null,
+      viewEstimate: SEED,
+    })
+    expect(grouped.map((p) => p.channelName)).toEqual(["pv_y", "pv_z"])
+  })
+
+  test("with no curve loaded an estimate is none, never a guess", () => {
+    expect(
+      run({ viewsFilter: { op: "gte", value: 0 }, viewEstimate: null }),
+    ).toEqual([])
   })
 })

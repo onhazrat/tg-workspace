@@ -13,18 +13,22 @@ from app.api.deps import CurrentUser, SessionDep
 from app.api.routes.data._shared import parse_post_filters
 from app.schemas.posts import (
     BulkUpsertPostsResponse,
+    PostCountsResponse,
     PostFacetCount,
     PostFacetsResponse,
     PostFeedRequest,
     PostLookupRequest,
     PostResponse,
     PostScopeRequest,
+    ViewCurveResponse,
+    ViewEstimateResponse,
 )
 from app.services.analysis_window import resolve_analysis_window
 from app.services.posts import bulk_upsert_posts, count_facets_in_scope
-from app.services.posts import count_posts_in_scope as count_posts_in_scope_impl
+from app.services.posts import count_scope as count_scope_impl
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
+from app.services.settling_curve import current_estimate
 
 router = APIRouter()
 
@@ -56,9 +60,7 @@ def list_posts(
             channel_names=body.resolved_channel_names(),
             start_date=window.start,
             end_date=window.end,
-            filters=parse_post_filters(
-                body.keyword, body.forwarded, body.media, body.languages
-            ),
+            filters=parse_post_filters(session, body, sort=body.sort),
             max_per_channel=body.max_per_channel,
             max_per_channel_mode=body.max_per_channel_mode,
             sort=body.sort,
@@ -75,26 +77,40 @@ def posts_counts(
     body: PostScopeRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> dict[str, int]:
+) -> PostCountsResponse:
     """Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.
 
     Replaces the client's `buildPostsInScopeCounts`, which counted the fully
-    fetched, client-filtered post array.
+    fetched, client-filtered post array. Also says how many Posts an Estimated
+    views threshold hid for being too new to judge.
 
     POST rather than GET because the scope carries the channel selection: this is
     a read expressed as a POST purely so the selection travels in the body.
     """
     window = resolve_analysis_window(body.window)
-    return count_posts_in_scope_impl(
+    counts, too_new = count_scope_impl(
         session,
         user_id=current_user.id,
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
-        filters=parse_post_filters(
-            body.keyword, body.forwarded, body.media, body.languages
-        ),
+        filters=parse_post_filters(session, body),
         max_per_channel=body.max_per_channel,
+    )
+    return PostCountsResponse(counts=counts, tooNewToJudge=too_new)
+
+
+# PFB-03. A GET: it reads the curve and two settings, nothing per account.
+@router.get("/posts/view-estimate")
+def posts_view_estimate(
+    session: SessionDep, _current_user: CurrentUser
+) -> ViewEstimateResponse:
+    """The Settling curve and settings an Estimated View count is read through."""
+    curve, reach = current_estimate(session)
+    return ViewEstimateResponse(
+        curve=ViewCurveResponse(**curve.wire()),
+        settlingAgeHours=reach.settling_age_hours,
+        estimationFloorHours=reach.estimation_floor_hours,
     )
 
 
@@ -114,9 +130,7 @@ def posts_facets(
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
-        filters=parse_post_filters(
-            body.keyword, body.forwarded, body.media, body.languages
-        ),
+        filters=parse_post_filters(session, body),
         max_per_channel=body.max_per_channel,
     )
     return PostFacetsResponse(

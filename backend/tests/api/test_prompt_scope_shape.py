@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.db import engine
@@ -194,6 +194,37 @@ def test_the_filter_bar_scope_assembles_what_the_feed_shows(
     )
     assert "beta post 2" not in prompt
     assert "alpha post 5" not in prompt
+
+
+def test_a_views_scope_assembles_what_the_feed_shows(client: TestClient) -> None:
+    """The threshold, the views order and the cap reach the prompt (PFB-03).
+
+    Every count is Settled, so both measures agree. Most views under a cap of
+    one keeps each channel's top Post, alpha 5 before beta 4; at least 800
+    views then leaves alpha 5 alone.
+    """
+    headers = get_superuser_token_headers(client)
+    _seed()
+    views = {1: 100, 2: 300, 3: 500, 4: 700, 5: 900, 6: 200}
+    with Session(engine) as session:
+        for post in session.exec(select(Post)).all():
+            post.views_count = views[post.post_id]
+            post.views_observed_at = post.timestamp + 48 * 60 * MINUTE_MS
+            session.add(post)
+        session.commit()
+    scope: dict[str, Any] = {"sort": "most_views", "maxPerChannel": 1}
+
+    ordered = _prompt_text(client, headers, **scope)
+    thresholded = _prompt_text(
+        client, headers, **scope, views={"op": "gte", "value": 800}
+    )
+
+    assert _feed_block(client, headers, **scope) in ordered
+    assert ordered.index("alpha post 5") < ordered.index("beta post 4")
+    assert "alpha post 5" in thresholded
+    for absent in ("alpha post 1", "alpha post 3", "beta post 2", "beta post 6"):
+        assert absent not in ordered
+    assert "beta post 4" not in thresholded
 
 
 def test_oldest_assembles_oldest_first_and_caps_each_channels_earliest(

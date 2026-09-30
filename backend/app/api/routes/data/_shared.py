@@ -9,38 +9,43 @@ Keep this module small. It is not a dumping ground: anything used by one family
 belongs in that family's module.
 """
 
-from collections.abc import Sequence
 from typing import Any, cast
 
 from fastapi import HTTPException
+from sqlmodel import Session
 
+from app.schemas.posts import PostScopeRequest
 from app.services.post_filters import (
     FORWARDED_FILTERS,
     MEDIA_KINDS,
     PostFilters,
 )
+from app.services.settling_curve import view_reading
 
 
 def parse_post_filters(
-    keyword: str | None,
-    forwarded: str,
-    media: Sequence[str],
-    languages: Sequence[str],
+    session: Session, body: PostScopeRequest, *, sort: str = "newest"
 ) -> PostFilters:
     """Validate the shared Posts-tab filters into a PostFilters.
 
     Rejecting unknown enum values with 422 mirrors how the frontend can only
     ever send its own filter constants. `media` is a set of kinds, empty for
-    any (PFB-01).
+    any (PFB-01). The curve an Estimated View count reads through is loaded
+    only when a threshold or a views order will read it (PFB-03).
     """
-    if forwarded not in FORWARDED_FILTERS:
-        raise HTTPException(status_code=422, detail=f"unknown forwarded: {forwarded}")
-    unknown_media = sorted(set(media) - MEDIA_KINDS)
+    if body.forwarded not in FORWARDED_FILTERS:
+        raise HTTPException(
+            status_code=422, detail=f"unknown forwarded: {body.forwarded}"
+        )
+    unknown_media = sorted(set(body.media) - MEDIA_KINDS)
     if unknown_media:
         raise HTTPException(status_code=422, detail=f"unknown media: {unknown_media}")
+    views = None if body.views is None else body.views.threshold()
     return PostFilters(
-        keyword=keyword,
-        forwarded=cast("Any", forwarded),
-        media=cast("Any", tuple(media)),
-        languages=tuple(languages),
+        keyword=body.keyword,
+        forwarded=cast("Any", body.forwarded),
+        media=tuple(body.media),
+        languages=tuple(body.languages),
+        views=views,
+        reading=view_reading(session, body.view_measure, views=views, sort=sort),
     )

@@ -218,7 +218,7 @@ def test_counts_and_the_assembled_block_agree_on_the_post_set(
         json={"channelNames": ["alpha"], "window": _window(0, 5_000)},
     )
     assert counts.status_code == 200, counts.text
-    assert sum(counts.json().values()) == 2
+    assert sum(counts.json()["counts"].values()) == 2
 
     prompt = _prompt_from_scope(client, headers, ["alpha"], 0, 5_000)
     assert "in range one" in prompt

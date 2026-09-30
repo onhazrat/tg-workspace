@@ -18,7 +18,7 @@ import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
-import { usePostFacets } from "../hooks/usePostsView"
+import { usePostFacets, useViewEstimate } from "../hooks/usePostsView"
 import {
   activeFilters,
   capPhrase,
@@ -32,6 +32,7 @@ import {
   POST_ORDER_OPTIONS,
   POST_TYPE_OPTIONS,
   type SearchMode,
+  viewsSummary,
 } from "../lib/posts/post-filter-bar"
 import {
   MEDIA_KIND_OPTIONS,
@@ -42,6 +43,8 @@ import type {
   ForwardedFilterValue,
   MaxPostsPerChannelMode,
   PostSortOrder,
+  ViewMeasure,
+  ViewsFilter,
 } from "../lib/posts/post-view"
 import type { Post } from "../types"
 import {
@@ -50,6 +53,7 @@ import {
   PerChannelForm,
   Pill,
   pillClass,
+  ViewsForm,
 } from "./PostFilterParts"
 
 /** What the bar reads and writes; `ScraperContext` provides all of it. */
@@ -66,6 +70,10 @@ export interface FilterBarControls {
   setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
   languageFilter: string[]
   setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
+  viewMeasure: ViewMeasure
+  setViewMeasure: (value: ViewMeasure) => void
+  viewsFilter: ViewsFilter | null
+  setViewsFilter: (value: ViewsFilter | null) => void
   maxPostsPerChannel: number
   setMaxPostsPerChannel: (value: number) => void
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -83,6 +91,8 @@ interface PostFilterProps {
   shownCount: number
   /** The existing subtitle's qualifiers: the cap and grouping. */
   subtitle: string
+  /** Posts an Estimated views threshold hid for being too new to judge. */
+  tooNewToJudge: number
 }
 
 export interface PostFilterBarProps extends PostFilterProps {
@@ -96,7 +106,12 @@ export interface PostFilterBarProps extends PostFilterProps {
   channelLanguages: string[]
   /** Called as a counting pill opens and closes, so counts load only then. */
   onCountingPillOpenChange: (open: boolean) => void
+  /** The deployment's estimation floor, for the Views pill's copy. */
+  estimationFloorHours: number
 }
+
+/** The floor's default in `services/reach.py`, until the server's arrives. */
+const DEFAULT_ESTIMATION_FLOOR_HOURS = 3
 
 const toggle = <T,>(list: T[], value: T): T[] =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
@@ -210,6 +225,8 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
     forwarded: s.forwardedFilter,
     media: s.mediaFilter,
     languages: s.languageFilter,
+    views: s.viewsFilter,
+    viewMeasure: s.viewMeasure,
     cap: s.maxPostsPerChannel,
     capMode: s.maxPostsPerChannelMode,
     order: s.postSortOrder,
@@ -289,6 +306,22 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
             />
           </Pill>
 
+          <Pill
+            label="Views"
+            value={viewsSummary(s.viewsFilter, s.viewMeasure)}
+            active={s.viewsFilter != null}
+            width="w-80"
+            testId="post-filter-pill-views"
+          >
+            <ViewsForm
+              measure={s.viewMeasure}
+              setMeasure={s.setViewMeasure}
+              views={s.viewsFilter}
+              setViews={s.setViewsFilter}
+              floorHours={props.estimationFloorHours}
+            />
+          </Pill>
+
           <span className="mx-1 h-5 w-px bg-app-ink/10" />
 
           <Pill
@@ -341,6 +374,11 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
         {props.subtitle && (
           <span className="text-app-ink/50">{props.subtitle}</span>
         )}
+        {props.tooNewToJudge > 0 && (
+          <span className="text-app-ink/50">
+            {props.tooNewToJudge.toLocaleString()} too new to judge
+          </span>
+        )}
         {chips.map((chip) => (
           <button
             key={chip.key}
@@ -376,6 +414,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const { setActiveTab } = useUI()
   const [openPillCount, setOpenPillCount] = React.useState(0)
   const facets = usePostFacets(openPillCount > 0)
+  const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
     () => channels.map((c) => c.language).filter((code) => !!code) as string[],
     [channels],
@@ -392,6 +431,9 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
       }
       facets={facets}
       channelLanguages={channelLanguages}
+      estimationFloorHours={
+        estimate?.estimationFloorHours ?? DEFAULT_ESTIMATION_FLOOR_HOURS
+      }
       onCountingPillOpenChange={(open) =>
         setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
       }

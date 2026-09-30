@@ -7,10 +7,21 @@
 import { ChevronDown } from "lucide-react"
 import { Popover } from "radix-ui"
 import React from "react"
-import { CAP_SHORTCUTS, capCard, parseCount } from "@/lib/posts/post-filter-bar"
+import {
+  CAP_SHORTCUTS,
+  capCard,
+  DEFAULT_VIEWS_VALUE,
+  nearestViewStep,
+  parseCount,
+  VIEW_MEASURE_OPTIONS,
+  VIEW_STEPS,
+  viewMeasureDescription,
+} from "@/lib/posts/post-filter-bar"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
+  ViewMeasure,
+  ViewsFilter,
 } from "@/lib/posts/post-view"
 
 export const pillClass = (active: boolean) =>
@@ -317,6 +328,97 @@ export function PerChannelForm({
       <p className="mt-2 text-[11px] text-app-ink/50">
         The first choice follows the Order.
       </p>
+    </>
+  )
+}
+
+/**
+ * The Views form (PFB-03): which measure, which side, and how many. A number
+ * typed or slid with no side chosen yet is Popular, and a side chosen with no
+ * number yet is 10K.
+ */
+export function ViewsForm({
+  measure,
+  setMeasure,
+  views,
+  setViews,
+  floorHours,
+}: {
+  measure: ViewMeasure
+  setMeasure: (value: ViewMeasure) => void
+  views: ViewsFilter | null
+  setViews: (value: ViewsFilter | null) => void
+  floorHours: number
+}) {
+  const op = views?.op ?? "gte"
+  const setValue = (value: number | null) =>
+    setViews(value == null ? null : { op, value })
+  return (
+    <>
+      <div className="flex gap-3 border-b border-app-ink/10" role="tablist">
+        {VIEW_MEASURE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={option.value === measure}
+            onClick={() => setMeasure(option.value)}
+            className={`-mb-px border-b-2 pb-1.5 ${option.value === measure ? "border-app-ink font-semibold" : "border-transparent text-app-ink/60"}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-app-ink/60">
+        {viewMeasureDescription(measure, floorHours)}
+      </p>
+      <div className="mt-3 flex gap-2">
+        <Card
+          on={views?.op === "gte"}
+          onClick={() =>
+            setViews({ op: "gte", value: views?.value ?? DEFAULT_VIEWS_VALUE })
+          }
+          title="Popular"
+          body="At least this many"
+        />
+        <Card
+          on={views?.op === "lte"}
+          onClick={() =>
+            setViews({ op: "lte", value: views?.value ?? DEFAULT_VIEWS_VALUE })
+          }
+          title="Niche"
+          body="At most this many"
+        />
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <CountInput
+          ariaLabel="Views"
+          className="w-24"
+          placeholder="any"
+          value={views?.value ?? null}
+          onChange={setValue}
+        />
+        <span className="text-app-ink/60">views</span>
+        {views && (
+          <button
+            type="button"
+            onClick={() => setViews(null)}
+            className="ml-auto text-app-ink/60 hover:underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <input
+        type="range"
+        aria-label="Views, on a log scale"
+        min={0}
+        max={VIEW_STEPS.length - 1}
+        step={1}
+        value={nearestViewStep(views?.value ?? DEFAULT_VIEWS_VALUE)}
+        onChange={(e) => setValue(VIEW_STEPS[Number(e.target.value)])}
+        className={`mt-3 w-full accent-app-ink ${views ? "" : "opacity-40"}`}
+      />
     </>
   )
 }

@@ -1999,7 +1999,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Counts",
-        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
+        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array. Also says how many Posts an Estimated\nviews threshold hid for being too new to judge.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
         "operationId": "data-posts_counts",
         "requestBody": {
           "content": {
@@ -2014,11 +2014,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": { "type": "integer" },
-                  "type": "object",
-                  "title": "Response Data-Posts Counts"
-                }
+                "schema": { "$ref": "#/components/schemas/PostCountsResponse" }
               }
             }
           },
@@ -2027,6 +2023,27 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/posts/view-estimate": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Posts View Estimate",
+        "description": "The Settling curve and settings an Estimated View count is read through.",
+        "operationId": "data-posts_view_estimate",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewEstimateResponse"
+                }
               }
             }
           }
@@ -6778,6 +6795,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -6799,7 +6828,7 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["newest", "oldest"],
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
             "title": "Sort",
             "default": "newest"
           },
@@ -7029,6 +7058,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -7050,7 +7091,7 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["newest", "oldest"],
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
             "title": "Sort",
             "default": "newest"
           },
@@ -7208,6 +7249,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -7222,7 +7275,7 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["newest", "oldest"],
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
             "title": "Sort",
             "default": "newest"
           },
@@ -7475,6 +7528,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -7489,7 +7554,7 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["newest", "oldest"],
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
             "title": "Sort",
             "default": "newest"
           },
@@ -8213,6 +8278,20 @@
         "required": ["token", "new_password"],
         "title": "NewPassword"
       },
+      "PostCountsResponse": {
+        "properties": {
+          "counts": {
+            "additionalProperties": { "type": "integer" },
+            "type": "object",
+            "title": "Counts"
+          },
+          "tooNewToJudge": { "type": "integer", "title": "Toonewtojudge" }
+        },
+        "type": "object",
+        "required": ["counts", "tooNewToJudge"],
+        "title": "PostCountsResponse",
+        "description": "Per-channel Post counts for a scope, and how many were too new to judge."
+      },
       "PostFacetCount": {
         "properties": {
           "value": { "type": "string", "title": "Value" },
@@ -8298,6 +8377,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -8329,7 +8420,7 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["newest", "oldest"],
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
             "title": "Sort",
             "default": "newest"
           },
@@ -8544,6 +8635,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -8632,6 +8735,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "title": "Maxperchannel",
@@ -8645,7 +8760,7 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["newest", "oldest"],
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
             "title": "Sort",
             "default": "newest"
           },
@@ -9271,6 +9386,18 @@
             "type": "array",
             "title": "Media"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "views": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -9285,7 +9412,7 @@
           },
           "sort": {
             "type": "string",
-            "enum": ["newest", "oldest"],
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
             "title": "Sort",
             "default": "newest"
           },
@@ -10798,6 +10925,52 @@
         "type": "object",
         "title": "ViewAsSessionsResponse",
         "description": "Recent View-as sessions, newest first."
+      },
+      "ViewCurveResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["steps", "knots"],
+            "title": "Kind"
+          },
+          "points": {
+            "items": { "items": { "type": "number" }, "type": "array" },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": ["kind", "points"],
+        "title": "ViewCurveResponse",
+        "description": "A Settling curve as data: the seed's steps or a fit's knots."
+      },
+      "ViewEstimateResponse": {
+        "properties": {
+          "curve": { "$ref": "#/components/schemas/ViewCurveResponse" },
+          "settlingAgeHours": {
+            "type": "integer",
+            "title": "Settlingagehours"
+          },
+          "estimationFloorHours": {
+            "type": "integer",
+            "title": "Estimationfloorhours"
+          }
+        },
+        "type": "object",
+        "required": ["curve", "settlingAgeHours", "estimationFloorHours"],
+        "title": "ViewEstimateResponse",
+        "description": "What the browser needs to read an Estimated View count."
+      },
+      "ViewsFilter": {
+        "properties": {
+          "op": { "type": "string", "enum": ["gte", "lte"], "title": "Op" },
+          "value": { "type": "integer", "minimum": 0.0, "title": "Value" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["op", "value"],
+        "title": "ViewsFilter",
+        "description": "At least or at most a number of views."
       }
     },
     "securitySchemes": {

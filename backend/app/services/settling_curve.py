@@ -19,14 +19,22 @@ from sqlalchemy import func
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
+from app.jobs.settings import load_reach_settings
 from app.models_tg import Post, SettlingCurveFit, ViewObservation
+from app.services.post_filters import (
+    VIEW_SORTS,
+    ViewMeasure,
+    ViewReading,
+    ViewsThreshold,
+)
 from app.services.reach import (
     MS_PER_HOUR,
-    Curve,
+    SEED_CURVE,
+    CurvePoints,
     ObservationPair,
     ReachSettings,
-    curve_from_knots,
     fit_settling_curve,
+    reach_settings_from,
     seed_curve,
 )
 from app.services.tenancy import unscoped_select
@@ -50,10 +58,35 @@ def newest_fit(session: Session) -> SettlingCurveFit | None:
     ).first()
 
 
-def current_curve(session: Session) -> Curve:
+def current_curve(session: Session) -> CurvePoints:
     """The newest fit's curve, else the seed."""
     fit = newest_fit(session)
-    return seed_curve if fit is None else curve_from_knots(fit.knots)
+    if fit is None:
+        return SEED_CURVE
+    return CurvePoints("knots", tuple((age, share) for age, share in fit.knots))
+
+
+def current_estimate(session: Session) -> tuple[CurvePoints, ReachSettings]:
+    """The curve and the reach settings an Estimated View count reads through."""
+    return current_curve(session), reach_settings_from(load_reach_settings(session))
+
+
+def view_reading(
+    session: Session,
+    measure: ViewMeasure,
+    *,
+    views: ViewsThreshold | None = None,
+    sort: str = "newest",
+) -> ViewReading:
+    """What "views" means for one request (PFB-03, ADR-025).
+
+    The one place that decides whether a Scope reads an Estimated View count:
+    only a threshold or a views order does, so only then are the curve and the
+    settings read. Per request, never stored, so a refit reaches the next page.
+    """
+    if measure == "views" or (views is None and sort not in VIEW_SORTS):
+        return ViewReading(measure)
+    return ViewReading(measure, *current_estimate(session))
 
 
 def observed_pairs(session: Session) -> ObservedPairs:

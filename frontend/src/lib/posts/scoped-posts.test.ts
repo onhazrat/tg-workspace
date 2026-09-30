@@ -51,9 +51,27 @@ const view: PostViewOptions = {
   maxPostsPerChannelMode: "ordered",
   postSortOrder: "newest",
   groupByChannel: false,
+  viewMeasure: "estimated" as const,
+  viewsFilter: null,
 }
 
 const channels = [makeChannel("alpha"), makeChannel("beta")]
+
+/** The seed curve at the default settings, as the server hands it over. */
+const SEED_ESTIMATE = {
+  curve: {
+    kind: "steps" as const,
+    points: [
+      [0, 0.2],
+      [3, 0.59],
+      [6, 0.7],
+      [12, 0.86],
+      [24, 0.89],
+    ],
+  },
+  settlingAgeHours: 24,
+  estimationFloorHours: 3,
+}
 
 /** A deps object with inert RAG/repository fns; individual tests override. */
 function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
@@ -77,6 +95,7 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     getPostsFeed: async () => {
       throw new Error("getPostsFeed should not be called")
     },
+    getViewEstimate: async () => SEED_ESTIMATE,
     ...overrides,
   }
 }
@@ -103,8 +122,10 @@ describe("computeScopedPosts", () => {
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
-        postSortOrder: "oldest",
+        postSortOrder: "most_views",
         groupByChannel: true,
+        viewMeasure: "views" as const,
+        viewsFilter: { op: "gte" as const, value: 2500 },
       },
       getPostsFeed: async (query) => {
         calls.push(query)
@@ -125,9 +146,11 @@ describe("computeScopedPosts", () => {
         forwarded: "unfollowed_forwarded",
         media: ["photo", "video"],
         languages: ["fa"],
+        viewMeasure: "views",
+        views: { op: "gte", value: 2500 },
         maxPerChannel: 7,
         maxPerChannelMode: "random",
-        sort: "oldest",
+        sort: "most_views",
         groupByChannel: true,
         seed: 0,
         limit: SCOPED_POSTS_LIMIT,
@@ -224,6 +247,57 @@ describe("computeScopedPosts", () => {
       "beta/5",
       "alpha/1",
     ])
+  })
+
+  test("semantic path: an Estimated views threshold reads the server's curve (PFB-03)", async () => {
+    const HOUR = 3_600_000
+    const ranked = [
+      // Settled at 5000, estimated from 2000 at 6h to 2543, too new at 1h.
+      makePost("alpha", 1, 100, {
+        viewsCount: 5000,
+        viewsObservedAt: 100 + 48 * HOUR,
+      }),
+      makePost("alpha", 2, 200, {
+        viewsCount: 2000,
+        viewsObservedAt: 200 + 6 * HOUR,
+      }),
+      makePost("beta", 3, 300, {
+        viewsCount: 9000,
+        viewsObservedAt: 300 + HOUR,
+      }),
+    ]
+    let asked = 0
+    const run = (over: Partial<typeof view>) =>
+      computeScopedPosts(
+        baseDeps({
+          embeddingsEnabled: true,
+          semanticQuery: "crypto",
+          postViewOptions: { ...view, ...over },
+          searchSimilarPosts: async () => ranked,
+          getViewEstimate: async () => {
+            asked += 1
+            return SEED_ESTIMATE
+          },
+        }),
+      ).then((posts) => posts.map((p) => p.id))
+
+    expect(
+      await run({
+        viewsFilter: { op: "gte", value: 2500 },
+        postSortOrder: "fewest_views",
+      }),
+    ).toEqual([2, 1])
+    expect(asked).toBe(1)
+    // Neither a threshold nor a views order: no curve is asked for.
+    expect(await run({})).toEqual([3, 2, 1])
+    // The raw measure never needs one either.
+    expect(
+      await run({
+        viewMeasure: "views",
+        viewsFilter: { op: "gte", value: 2500 },
+      }),
+    ).toEqual([3, 1])
+    expect(asked).toBe(1)
   })
 
   test("semantic path: the window is sent even when channels are not", async () => {

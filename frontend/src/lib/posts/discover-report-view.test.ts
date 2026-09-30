@@ -15,6 +15,8 @@ const scope: DiscoverReportScope = {
   keyword: null,
   forwarded: "all",
   languages: [],
+  viewMeasure: "estimated",
+  views: null,
   media: [],
   maxPerChannel: 0,
   maxPerChannelMode: "ordered",

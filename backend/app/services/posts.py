@@ -20,12 +20,15 @@ from app.services.follows import visible_channel_names
 from app.services.language import own_words, read_language
 from app.services.post_filters import (
     MEDIA_KIND_ORDER,
+    VIEW_SORTS,
     CapMode,
     FeedSort,
     PostFilters,
+    ViewReading,
     apply_analysis_window,
     apply_post_filters,
     media_kind_clause,
+    views_clause,
 )
 from app.services.reach import MS_PER_HOUR, REFRESH_HORIZON_HOURS
 from app.services.serialization import post_to_camel
@@ -473,13 +476,15 @@ def random_cap_order(seed: int) -> Any:
     )
 
 
-def channel_time_order(sort: FeedSort, entity: Any) -> list[Any]:
-    """The chosen order within one channel: the timestamp, then `post_id`.
+def channel_order(sort: FeedSort, entity: Any, reading: ViewReading) -> list[Any]:
+    """The chosen order within one channel, ending in a unique tiebreak.
 
-    `post_id` runs the same way as the timestamp, so a collision still reads in
-    posting order, and `(channel_name, post_id)` is unique, which is what makes
-    offset paging deterministic. Also the ranking the `ordered` cap keeps the
-    first N of, which is the whole of "the cap follows the order" (PFB-01).
+    Newest and oldest are the timestamp, then `post_id` running the same way,
+    so a collision still reads in posting order. Most and fewest views are the
+    value under `reading`, a Post with none last in both directions, then
+    newest first (PFB-03). `(channel_name, post_id)` is unique, which is what
+    makes offset paging deterministic. Also the ranking the `ordered` cap keeps
+    the first N of, which is the whole of "the cap follows the order" (PFB-01).
 
     Public for the reason `random_cap_order` is: Discover applies the same cap,
     and a capped report reads the Posts the feed shows only while the two rank
@@ -487,30 +492,47 @@ def channel_time_order(sort: FeedSort, entity: Any) -> list[Any]:
     """
     if sort == "oldest":
         return [entity.timestamp.asc(), entity.post_id.asc()]
-    return [entity.timestamp.desc(), entity.post_id.desc()]
+    newest = [entity.timestamp.desc(), entity.post_id.desc()]
+    if sort == "most_views":
+        return [reading.of(entity).desc().nulls_last(), *newest]
+    if sort == "fewest_views":
+        return [reading.of(entity).asc().nulls_last(), *newest]
+    return newest
 
 
-def _feed_order_by(sort: FeedSort, group_by_channel: bool, entity: Any) -> list[Any]:
+def _block_order(sort: FeedSort, entity: Any, reading: ViewReading) -> Any:
+    """Each channel's best key under the order, as the grouped feed leads with it."""
+    key = reading.of(entity) if sort in VIEW_SORTS else entity.timestamp
+    if sort in ("oldest", "fewest_views"):
+        return func.min(key).over(partition_by=entity.channel_name).asc().nulls_last()
+    return func.max(key).over(partition_by=entity.channel_name).desc().nulls_last()
+
+
+def _feed_order_by(
+    sort: FeedSort, group_by_channel: bool, entity: Any, reading: ViewReading
+) -> list[Any]:
     """Deterministic ORDER BY for the feed, with a stable tiebreak for paging.
 
     Ungrouped is the chosen order across every channel, with the channel name
-    breaking a timestamp tie before `post_id` does.
+    breaking a tie before `post_id` does.
 
     Grouped leads with each channel's **best** key under the chosen order (its
-    newest Post under `newest`, its oldest under `oldest`), so a channel's
-    block sits where its first Post falls, then the chosen order inside the
-    block (PFB-02). The window runs over the rows the query already kept, so
-    under a cap a block is placed by the Posts the cap kept. The channel name
-    breaks a tie between two blocks, which keeps paging deterministic.
+    newest Post under `newest`, its most viewed under `most_views`), so a
+    channel's block sits where its first Post falls, then the chosen order
+    inside the block (PFB-02). The window runs over the rows the query already
+    kept, so under a cap a block is placed by the Posts the cap kept. The
+    channel name breaks a tie between two blocks, which keeps paging
+    deterministic.
     """
-    timestamp, post_id = channel_time_order(sort, entity)
+    *keys, post_id = channel_order(sort, entity, reading)
     if group_by_channel:
-        best = (func.min if sort == "oldest" else func.max)(entity.timestamp).over(
-            partition_by=entity.channel_name
-        )
-        block = best.asc() if sort == "oldest" else best.desc()
-        return [block, entity.channel_name.asc(), timestamp, post_id]
-    return [timestamp, entity.channel_name.asc(), post_id]
+        return [
+            _block_order(sort, entity, reading),
+            entity.channel_name.asc(),
+            *keys,
+            post_id,
+        ]
+    return [*keys, entity.channel_name.asc(), post_id]
 
 
 def list_feed(
@@ -557,6 +579,7 @@ def list_feed(
         end_date=end_date,
         filters=filters,
     )
+    reading = (filters or PostFilters()).reading
 
     if max_per_channel > 0:
         # `ordered` ranks by the chosen order, so the N kept are the first N
@@ -565,7 +588,7 @@ def list_feed(
         cap_order = (
             [random_cap_order(seed)]
             if max_per_channel_mode == "random"
-            else channel_time_order(sort, Post)
+            else channel_order(sort, Post, reading)
         )
         row_number = (
             func.row_number()
@@ -577,14 +600,14 @@ def list_feed(
         stmt = (
             select(capped)
             .where(ranked.c.rn <= max_per_channel)
-            .order_by(*_feed_order_by(sort, group_by_channel, capped))
+            .order_by(*_feed_order_by(sort, group_by_channel, capped, reading))
             .offset(offset)
             .limit(limit)
         )
         return [post_to_camel(p) for p in session.exec(stmt).all()]
 
     stmt = (
-        base.order_by(*_feed_order_by(sort, group_by_channel, Post))
+        base.order_by(*_feed_order_by(sort, group_by_channel, Post, reading))
         .offset(offset)
         .limit(limit)
     )
@@ -649,21 +672,62 @@ def count_posts_in_scope(
     then call `list_feed` to assemble it, so a count over a wider set than the
     feed returns would refuse a selection that would actually have fit.
     """
-    count_expr: Any = func.count()
-    if max_per_channel > 0:
-        count_expr = func.least(count_expr, max_per_channel)
-
-    stmt = _in_scope(
+    counts, _too_new = count_scope(
         session,
-        select(col(Post.channel_name), count_expr),
         user_id=user_id,
         channel_names=channel_names,
         start_date=start_date,
         end_date=end_date,
         filters=filters,
-    ).group_by(col(Post.channel_name))
+        max_per_channel=max_per_channel,
+    )
+    return counts
 
-    return dict(session.exec(stmt).all())
+
+def count_scope(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
+) -> tuple[dict[str, int], int]:
+    """`count_posts_in_scope`, and how many Posts were too new to judge (PFB-03).
+
+    The second number is the Posts an Estimated views threshold hid for being
+    under the estimation floor, so an empty Live window can say why. It is one
+    more filtered aggregate in the same scan: the threshold moves from the
+    `WHERE` into the per-channel count's `FILTER`, so the rows it hides are
+    still there to be counted. Not clamped to the cap, which applies only to
+    the Posts the threshold kept. A channel whose count is zero is absent, as
+    it was before.
+    """
+    filters = filters or PostFilters()
+    kept: Any = func.count()
+    too_new: Any = literal(0)
+    if filters.views is not None:
+        kept = func.count().filter(views_clause(filters.views, filters.reading))
+        too_new = func.count().filter(filters.reading.too_new(Post))
+    if max_per_channel > 0:
+        kept = func.least(kept, max_per_channel)
+
+    rows = session.exec(
+        _in_scope(
+            session,
+            select(col(Post.channel_name), kept, too_new),
+            user_id=user_id,
+            channel_names=channel_names,
+            start_date=start_date,
+            end_date=end_date,
+            filters=replace(filters, views=None),
+        ).group_by(col(Post.channel_name))
+    ).all()
+    return (
+        {channel: n for channel, n, _hidden in rows if n > 0},
+        sum(hidden for _channel, _n, hidden in rows),
+    )
 
 
 def count_facets_in_scope(

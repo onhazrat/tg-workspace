@@ -7,6 +7,8 @@ from app.schemas.scope import (
     CapMode,
     MediaKind,
     SortOrder,
+    ViewMeasure,
+    ViewsFilter,
     upgrade_legacy_scope_fields,
 )
 
@@ -30,6 +32,8 @@ class PromptScopeInput(BaseModel):
     # Scope nobody can record.
     languages: list[str] = Field(default_factory=list)
     media: list[MediaKind] = Field(default_factory=list)
+    view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")
+    views: ViewsFilter | None = None
     max_per_channel: int = Field(0, alias="maxPerChannel")
     max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
     sort: SortOrder = "newest"

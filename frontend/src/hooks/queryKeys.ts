@@ -52,6 +52,8 @@ export const queryKeys = {
   /** The Directory's sample Posts for one handle — corpus-wide, not a report's. */
   directoryPosts: (handle: string) => ["directoryPosts", handle] as const,
   postsCounts: (scope: unknown) => ["postsCounts", scope] as const,
+  /** The curve and settings an Estimated View count reads through (PFB-03). */
+  viewEstimate: ["viewEstimate"] as const,
   /** Per-choice counts for the Media and Language pills (PFB-02). */
   postsFacets: (scope: unknown) => ["postsFacets", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
@@ -90,3 +92,9 @@ export const queryKeys = {
 } as const
 
 export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs
+
+/**
+ * The Settling curve is refitted daily and the reach settings change by hand,
+ * so an hour-old copy is as good as a fresh one (PFB-03).
+ */
+export const VIEW_ESTIMATE_STALE_TIME = 60 * 60 * 1000

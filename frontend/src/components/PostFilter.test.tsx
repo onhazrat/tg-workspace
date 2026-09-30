@@ -45,6 +45,8 @@ function controls(
     forwardedFilter: "all" as const,
     mediaFilter: [],
     languageFilter: [],
+    viewMeasure: "estimated" as const,
+    viewsFilter: null,
     maxPostsPerChannel: 0,
     maxPostsPerChannelMode: "ordered" as const,
     postSortOrder: "newest" as const,
@@ -59,6 +61,8 @@ function controls(
     setForwardedFilter: log("forwarded"),
     setMediaFilter: apply("media", base.mediaFilter),
     setLanguageFilter: apply("languages", base.languageFilter),
+    setViewMeasure: log("measure"),
+    setViewsFilter: log("views"),
     setMaxPostsPerChannel: log("cap"),
     setMaxPostsPerChannelMode: log("capMode"),
     setPostSortOrder: log("order"),
@@ -78,6 +82,8 @@ function mount(
       setPostSearch={(value) => calls.push(["keyword", value])}
       shownCount={1234}
       subtitle=""
+      tooNewToJudge={0}
+      estimationFloorHours={3}
       controls={controls(calls, over)}
       embeddingsEnabled={false}
       windowControl={<span>window</span>}
@@ -157,6 +163,57 @@ describe("the pills", () => {
     expect(screen.getByTestId("post-filter-pill-cap").textContent).toContain(
       "Oldest 10",
     )
+    expect(screen.getByTestId("post-filter-pill-views").textContent).toContain(
+      "Any",
+    )
+  })
+
+  test("Views picks a measure, a side and a number, and clears", () => {
+    const { calls } = mount({ viewsFilter: { op: "gte", value: 10_000 } })
+    expect(screen.getByTestId("post-filter-pill-views").textContent).toContain(
+      "Popular, 10K est. views",
+    )
+    fireEvent.click(screen.getByTestId("post-filter-pill-views"))
+    expect(
+      screen
+        .getByRole("tab", { name: "Estimated views" })
+        .getAttribute("aria-selected"),
+    ).toBe("true")
+    expect(screen.getByText(/Posts under 3 hours are too new/)).toBeTruthy()
+    fireEvent.click(screen.getByRole("tab", { name: "Views" }))
+    fireEvent.click(screen.getByText("Niche"))
+    fireEvent.change(screen.getByLabelText("Views"), {
+      target: { value: "25k" },
+    })
+    fireEvent.change(screen.getByLabelText("Views, on a log scale"), {
+      target: { value: "3" },
+    })
+    fireEvent.click(screen.getByText("Clear"))
+    expect(calls).toEqual([
+      ["measure", "views"],
+      ["views", { op: "lte", value: 10_000 }],
+      ["views", { op: "gte", value: 25_000 }],
+      ["views", { op: "gte", value: 1_000 }],
+      ["views", null],
+    ])
+  })
+
+  test("the Estimated views line names the deployment's floor", () => {
+    mount({}, { estimationFloorHours: 1 })
+    fireEvent.click(screen.getByTestId("post-filter-pill-views"))
+    expect(screen.getByText(/Posts under 1 hour are too new/)).toBeTruthy()
+  })
+
+  test("a side chosen with no number is 10K, and Order offers the views orders", () => {
+    const { calls } = mount()
+    fireEvent.click(screen.getByTestId("post-filter-pill-views"))
+    fireEvent.click(screen.getByText("Popular"))
+    fireEvent.click(screen.getByTestId("post-filter-pill-order"))
+    fireEvent.click(screen.getByRole("radio", { name: /Most views/ }))
+    expect(calls).toEqual([
+      ["views", { op: "gte", value: 10_000 }],
+      ["order", "most_views"],
+    ])
   })
 
   test("Media ticks a kind, with its count, and asks for counts on open", () => {
@@ -229,6 +286,14 @@ describe("the footer", () => {
     expect(screen.queryByText("Clear all")).toBeNull()
     fireEvent.click(screen.getByLabelText("Remove Photo"))
     expect(calls).toEqual([["media", []]])
+  })
+
+  test("says how many Posts were too new to judge, when any were", () => {
+    mount({}, { tooNewToJudge: 42 })
+    expect(screen.getByText("42 too new to judge")).toBeTruthy()
+    cleanup()
+    mount()
+    expect(screen.queryByText(/too new to judge/)).toBeNull()
   })
 
   test("Clear all once two or more are on", () => {

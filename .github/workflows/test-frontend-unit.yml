@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "frontend/**"
+      # The Estimated View count fixture the browser twin is asserted against.
+      - "backend/tests/fixtures/estimated_views.json"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/test-frontend-unit.yml"
@@ -16,6 +18,8 @@ on:
       - synchronize
     paths:
       - "frontend/**"
+      # The Estimated View count fixture the browser twin is asserted against.
+      - "backend/tests/fixtures/estimated_views.json"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/test-frontend-unit.yml"
