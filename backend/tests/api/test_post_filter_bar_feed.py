@@ -383,3 +383,27 @@ def test_the_facets_count_each_choice_under_every_other_filter(
         {"value": "de", "count": 1},
         {"value": "fa", "count": 1},
     ]
+
+
+def test_a_media_set_and_oldest_first_for_each_account(
+    client: TestClient,
+    operator: dict[str, str],
+    other: tuple[uuid.UUID, dict[str, str]],
+) -> None:
+    """Ticking more kinds widens; oldest first runs by timestamp ascending."""
+    other_id, other_headers = other
+    _seed(
+        client,
+        operator,
+        other_id,
+        [
+            _post("pfb_a", 1, 1, kinds=["photo"]),
+            _post("pfb_a", 2, 2),
+            _post("pfb_b", 3, 3, kinds=["video"]),
+            _post("pfb_c", 4, 4, kinds=["photo"]),
+        ],
+    )
+    scope = {"channelNames": ALL, "media": ["photo", "video"], "sort": "oldest"}
+
+    assert _feed(client, operator, **scope) == [("pfb_a", 1), ("pfb_b", 3)]
+    assert _feed(client, other_headers, **scope) == [("pfb_b", 3), ("pfb_c", 4)]

@@ -18,6 +18,7 @@ import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import type { Post } from "@/types"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
 import { useDebouncedValue } from "./useDebouncedValue"
+import { POST_SEARCH_DEBOUNCE_MS } from "./usePostFilters"
 
 /** One page of the infinite Posts feed. */
 export const FEED_PAGE_SIZE = 20
@@ -146,7 +147,10 @@ export function usePostFacets(
     maxPostsPerChannel,
     semanticSearchQuery,
   } = useScraper()
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
+  const debouncedPostSearch = useDebouncedValue(
+    postSearch,
+    POST_SEARCH_DEBOUNCE_MS,
+  )
   const selectedChannelNames = useSelectedChannelNames()
   const filters = {
     channelNames: selectedChannelNames,

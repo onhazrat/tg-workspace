@@ -131,7 +131,6 @@ export interface FilterBarState {
   cap: number
   capMode: MaxPostsPerChannelMode
   order: PostSortOrder
-  grouped: boolean
 }
 
 /**

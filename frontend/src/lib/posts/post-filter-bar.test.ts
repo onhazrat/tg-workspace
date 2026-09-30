@@ -75,7 +75,6 @@ describe("activeFilters", () => {
     cap: 0,
     capMode: "ordered" as const,
     order: "newest" as const,
-    grouped: false,
   }
 
   test("nothing at its default is a chip", () => {
@@ -96,7 +95,6 @@ describe("activeFilters", () => {
       cap: 5,
       capMode: "random",
       order: "oldest",
-      grouped: true,
     }).map((chip) => chip.label)
 
     expect(labels).toEqual([

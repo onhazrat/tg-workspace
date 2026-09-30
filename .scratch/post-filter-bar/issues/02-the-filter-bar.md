@@ -80,10 +80,17 @@ copy.
   channel name, then post id running with the timestamp), so a meaning search
   reads in the order the feed would give it. A meaning search now also applies
   the media set and the Language set, not only the Type.
+- **Random parity is the one gap.** The browser's random cap (mulberry32
+  seeded by the window) keeps different Posts than the server's
+  `random_cap_order` (md5 of channel, post and seed), so on a meaning search a
+  Random cap samples a different N than the feed would. The parity tests
+  cover the ordered cap only. Closing it means an md5 in the browser, which
+  nothing there has today.
 - **The order and grouping are not footer chips.** They lay the Posts out
   rather than choosing them, so they fill their pills (the prototype's call).
-- **Leaving Meaning ends the meaning search**, since the one box means one
-  search at a time. "Search every channel, not only the selected ones" moved
+- **Switching the search mode ends the other search** (entering Meaning clears
+  the keyword, leaving it clears the meaning query), since the one box means
+  one search at a time. "Search every channel, not only the selected ones" moved
   under the box in meaning mode.
 - **Not run here:** the full Playwright suite. The one spec that clicked the
   old media chip (`tests/summarizer-channels.spec.ts`) opens the Media pill

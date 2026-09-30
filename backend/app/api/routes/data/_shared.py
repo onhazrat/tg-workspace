@@ -25,7 +25,7 @@ def parse_post_filters(
     keyword: str | None,
     forwarded: str,
     media: Sequence[str],
-    languages: Sequence[str] = (),
+    languages: Sequence[str],
 ) -> PostFilters:
     """Validate the shared Posts-tab filters into a PostFilters.
 

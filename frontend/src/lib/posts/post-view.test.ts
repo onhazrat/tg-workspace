@@ -446,7 +446,7 @@ describe("post-view pipeline — the PFB-01 shape", () => {
  * them (`pfb_a` and `pfb_b`); the random cap is left out because the two
  * seeded orders were never byte-identical (see `scoped-posts.ts`).
  */
-describe("post-view pipeline — parity with the server feed", () => {
+describe("post-view pipeline: parity with the server feed", () => {
   const BASE = 1_000_000
   const at = (
     channel: string,

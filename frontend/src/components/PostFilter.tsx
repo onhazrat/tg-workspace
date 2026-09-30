@@ -113,9 +113,10 @@ function SearchBox({
             value={mode}
             onChange={(next) => {
               setMode(next)
-              // The box means one search at a time, so leaving Meaning ends
-              // the meaning search rather than leaving it running unseen.
+              // The box means one search at a time, so switching ends the
+              // other search rather than leaving it filtering unseen.
               if (next === "keyword") setSemanticSearchQuery("")
+              else setPostSearch("")
             }}
             options={[
               { value: "keyword", label: "Keyword" },
@@ -150,10 +151,10 @@ export const PostFilter: React.FC<PostFilterProps> = ({
   const s = useScraper()
   const { channels } = useData()
   const { setActiveTab } = useUI()
-  const [facetsWanted, setFacetsWanted] = React.useState(0)
-  const facets = usePostFacets(facetsWanted > 0)
-  const wantFacets = (open: boolean) =>
-    setFacetsWanted((n) => Math.max(0, n + (open ? 1 : -1)))
+  const [openPillCount, setOpenPillCount] = React.useState(0)
+  const facets = usePostFacets(openPillCount > 0)
+  const countOpenPill = (open: boolean) =>
+    setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
 
   const mediaCounts = new Map(facets?.media.map((f) => [f.value, f.count]))
   // The Languages present, most frequent first, from the server. On a meaning
@@ -185,7 +186,6 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     cap: s.maxPostsPerChannel,
     capMode: s.maxPostsPerChannelMode,
     order: s.postSortOrder,
-    grouped: s.groupByChannel,
   })
   const clear = (what: ChipClears) => {
     if (what === "keyword") setPostSearch("")
@@ -232,7 +232,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             active={s.mediaFilter.length > 0}
             width="w-56"
             testId="post-filter-pill-media"
-            onOpenChange={wantFacets}
+            onOpenChange={countOpenPill}
           >
             <CheckList
               items={MEDIA_KIND_OPTIONS.map((option) => ({
@@ -254,7 +254,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             value={languageSummary(s.languageFilter)}
             active={s.languageFilter.length > 0}
             testId="post-filter-pill-language"
-            onOpenChange={wantFacets}
+            onOpenChange={countOpenPill}
           >
             <CheckList
               items={languageCodes.map((code) => ({
