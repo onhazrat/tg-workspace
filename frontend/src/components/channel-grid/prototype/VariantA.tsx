@@ -1,7 +1,7 @@
 /**
  * PROTOTYPE A, "Command bar". Every filter is a dropdown on one row; the second
  * row swaps between the active-filter summary and the selection toolbar, so the
- * section is two rows tall whatever you are doing, and sticks to the top.
+ * section is two rows tall whatever you are doing. It scrolls away with the page, like today's bar.
  */
 import {
   ArrowDown,
@@ -54,7 +54,7 @@ const barButton =
 
 /**
  * Where card size and the AI prompt context live. Everything else in A is the
- * same across A1-A4 (none of them stick; the section scrolls away like today's bar), so flipping between them isolates those two decisions.
+ * same across A1-A4, so flipping between them isolates those two decisions.
  */
 export type ALayout = {
   zoom: "view" | "row1" | "row2" | "strip" | "gridbar"
