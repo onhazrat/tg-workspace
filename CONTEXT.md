@@ -160,8 +160,9 @@ Account's preference.
 _Avoid_: target language, translation target
 
 **Scope**:
-The slice of Posts an operation runs over: selected Channels × an Analysis
-window × the active post filters, in their chosen order. The post filters are
+The slice of Posts an operation runs over: selected Channels (the Hidden
+selection included) × an Analysis window × the active post filters, in their
+chosen order. The post filters are
 the keyword, Type, media kinds, Languages and a View count or Estimated View
 count threshold; the order is newest, oldest, most or fewest views, optionally
 grouped by Channel; and a per-Channel cap keeps the first Posts in that order,
@@ -201,6 +202,37 @@ The exact elapsed time from an Analysis window's End to the current time. Zero
 means the window ends now; a positive value deliberately excludes the newest
 period.
 _Avoid_: padding, lag, delay, end offset
+
+### Choosing Channels
+
+**Setting group**:
+A named set of sync settings an Account's Follows share. Every Follow belongs
+to exactly one, and one of an Account's Setting groups is its default.
+_Avoid_: group (unqualified, where parentheses could be meant), profile, preset
+
+**Channel filter**:
+An expression that decides which followed Channels are shown: Conditions joined
+by AND and OR, negated with NOT, and nested in parentheses to any depth. It is
+not part of the Scope and never changes which Channels are selected. The post
+filters are a different thing and belong to the Scope.
+_Avoid_: channel query, channel search, facet
+
+**Condition**:
+One test in a Channel filter: a tag, a Setting group, a Language, or a bound on
+a number such as Reach or subscribers. A Channel with no value for that number
+fails a bound on it, and a separate Condition asks whether it has one.
+_Avoid_: rule, clause, criterion, filter chip
+
+**Shown Channels**:
+The followed Channels that pass the Channel filter and the search box.
+_Avoid_: visible, filtered, matching
+
+**Hidden selection**:
+The selected Channels that are not Shown Channels. They stay selected, and the
+Scope includes them. The Channels tab can limit its own actions (edits, sync,
+trim, rank) to the Shown Channels, so that nothing changes on a Channel the
+Account cannot see; that limit reaches no other tab.
+_Avoid_: invisible selection, filtered-out selection
 
 ### Scraping
 
