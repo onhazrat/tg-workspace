@@ -185,3 +185,62 @@ export function activeFilters(state: FilterBarState): ActiveFilter[] {
     })
   return chips
 }
+
+export type SearchMode = "keyword" | "meaning"
+
+/** The meaning query Enter runs, or `null` when this key runs nothing. */
+export function meaningQueryOnKey(
+  meaning: boolean,
+  key: string,
+  draft: string,
+): string | null {
+  return meaning && key === "Enter" && draft.trim() ? draft.trim() : null
+}
+
+/** The setters a footer chip's removal reaches. */
+export interface ChipSetters {
+  setPostSearch: (value: string) => void
+  setSemanticSearchQuery: (value: string) => void
+  setRelatedPostSearch: (value: Post | null) => void
+  setForwardedFilter: (value: ForwardedFilterValue) => void
+  setMaxPostsPerChannel: (value: number) => void
+  setMediaFilter: (
+    update: (media: MediaFilterValue) => MediaFilterValue,
+  ) => void
+  setLanguageFilter: (update: (languages: string[]) => string[]) => void
+}
+
+/** Remove what one chip names, and nothing else. */
+export function clearChip(what: ChipClears, set: ChipSetters): void {
+  if (what === "keyword") set.setPostSearch("")
+  else if (what === "meaning") set.setSemanticSearchQuery("")
+  else if (what === "related") set.setRelatedPostSearch(null)
+  else if (what === "forwarded") set.setForwardedFilter("all")
+  else if (what === "cap") set.setMaxPostsPerChannel(0)
+  else if ("media" in what)
+    set.setMediaFilter((media) => media.filter((kind) => kind !== what.media))
+  else
+    set.setLanguageFilter((languages) =>
+      languages.filter((code) => code !== what.language),
+    )
+}
+
+/**
+ * The Language pill's list. With counts, the Languages present, most frequent
+ * first, as the server ordered them. Without (a meaning search, or counts not
+ * loaded), the followed Channels' Languages in code order, uncounted. A
+ * ticked Language is always listed, so it can be unticked.
+ */
+export function languageOptions(
+  counted: { value: string; count: number }[] | undefined,
+  channelLanguages: string[],
+  ticked: string[],
+): { code: string; count?: number }[] {
+  const options: { code: string; count?: number }[] = counted
+    ? counted.map((facet) => ({ code: facet.value, count: facet.count }))
+    : [...new Set(channelLanguages)].sort().map((code) => ({ code }))
+  for (const code of ticked)
+    if (!options.some((option) => option.code === code))
+      options.push(counted ? { code, count: 0 } : { code })
+  return options
+}

@@ -4,8 +4,11 @@ import {
   activeFilters,
   capCard,
   capPhrase,
+  clearChip,
   languageLabel,
+  languageOptions,
   languageSummary,
+  meaningQueryOnKey,
   mediaSummary,
   parseCount,
 } from "@/lib/posts/post-filter-bar"
@@ -116,5 +119,92 @@ describe("activeFilters", () => {
     }).map((chip) => chip.clears)
 
     expect(keys).toEqual([{ media: "photo" }, { language: "fa" }])
+  })
+})
+
+describe("clearChip", () => {
+  function setters() {
+    const calls: [string, unknown][] = []
+    const media = ["photo", "video"] as const
+    const languages = ["fa", "en"]
+    return {
+      calls,
+      set: {
+        setPostSearch: (v: string) => calls.push(["keyword", v]),
+        setSemanticSearchQuery: (v: string) => calls.push(["meaning", v]),
+        setRelatedPostSearch: (v: unknown) => calls.push(["related", v]),
+        setForwardedFilter: (v: string) => calls.push(["forwarded", v]),
+        setMaxPostsPerChannel: (v: number) => calls.push(["cap", v]),
+        setMediaFilter: (u: (m: never[]) => unknown) =>
+          calls.push(["media", u([...media] as never[])]),
+        setLanguageFilter: (u: (l: string[]) => string[]) =>
+          calls.push(["languages", u([...languages])]),
+      },
+    }
+  }
+
+  test("each chip resets its own filter to the default", () => {
+    const { calls, set } = setters()
+    for (const what of [
+      "keyword",
+      "meaning",
+      "related",
+      "forwarded",
+      "cap",
+    ] as const)
+      clearChip(what, set as never)
+    expect(calls).toEqual([
+      ["keyword", ""],
+      ["meaning", ""],
+      ["related", null],
+      ["forwarded", "all"],
+      ["cap", 0],
+    ])
+  })
+
+  test("a kind or a Language chip drops that one from its set", () => {
+    const { calls, set } = setters()
+    clearChip({ media: "photo" }, set as never)
+    clearChip({ language: "en" }, set as never)
+    expect(calls).toEqual([
+      ["media", ["video"]],
+      ["languages", ["fa"]],
+    ])
+  })
+})
+
+describe("languageOptions", () => {
+  test("counted: the server's order, a ticked absent Language at zero", () => {
+    expect(
+      languageOptions(
+        [
+          { value: "fa", count: 9 },
+          { value: "en", count: 2 },
+        ],
+        ["de"],
+        ["ru"],
+      ),
+    ).toEqual([
+      { code: "fa", count: 9 },
+      { code: "en", count: 2 },
+      { code: "ru", count: 0 },
+    ])
+  })
+
+  test("uncounted: the followed Channels' Languages, deduplicated and sorted", () => {
+    expect(languageOptions(undefined, ["fa", "en", "fa"], ["ru"])).toEqual([
+      { code: "en" },
+      { code: "fa" },
+      { code: "ru" },
+    ])
+  })
+})
+
+describe("meaningQueryOnKey", () => {
+  test("only Enter in meaning mode with words runs a search", () => {
+    expect(meaningQueryOnKey(true, "Enter", "  rates ")).toBe("rates")
+    expect(meaningQueryOnKey(true, "a", "rates")).toBeNull()
+    expect(meaningQueryOnKey(false, "Enter", "rates")).toBeNull()
+    expect(meaningQueryOnKey(true, "Enter", "   ")).toBeNull()
   })
 })

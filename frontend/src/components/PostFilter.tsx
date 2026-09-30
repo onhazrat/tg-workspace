@@ -13,6 +13,7 @@ import { Layers, Search, Sparkles, X } from "lucide-react"
 import React from "react"
 import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import type { PostFacetsResponse } from "../client"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -20,16 +21,29 @@ import { useUI } from "../contexts/UIContext"
 import { usePostFacets } from "../hooks/usePostsView"
 import {
   activeFilters,
-  type ChipClears,
   capPhrase,
+  clearChip,
   labelOf,
   languageLabel,
+  languageOptions,
   languageSummary,
+  meaningQueryOnKey,
   mediaSummary,
   POST_ORDER_OPTIONS,
   POST_TYPE_OPTIONS,
+  type SearchMode,
 } from "../lib/posts/post-filter-bar"
-import { MEDIA_KIND_OPTIONS, type MediaKind } from "../lib/posts/post-media"
+import {
+  MEDIA_KIND_OPTIONS,
+  type MediaFilterValue,
+  type MediaKind,
+} from "../lib/posts/post-media"
+import type {
+  ForwardedFilterValue,
+  MaxPostsPerChannelMode,
+  PostSortOrder,
+} from "../lib/posts/post-view"
+import type { Post } from "../types"
 import {
   CheckList,
   Options,
@@ -38,6 +52,30 @@ import {
   pillClass,
 } from "./PostFilterParts"
 
+/** What the bar reads and writes; `ScraperContext` provides all of it. */
+export interface FilterBarControls {
+  semanticSearchQuery: string
+  setSemanticSearchQuery: (value: string) => void
+  semanticSearchRespectsChannels: boolean
+  setSemanticSearchRespectsChannels: (value: boolean) => void
+  relatedPostSearch: Post | null
+  setRelatedPostSearch: (value: Post | null) => void
+  forwardedFilter: ForwardedFilterValue
+  setForwardedFilter: (value: ForwardedFilterValue) => void
+  mediaFilter: MediaFilterValue
+  setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
+  languageFilter: string[]
+  setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
+  maxPostsPerChannel: number
+  setMaxPostsPerChannel: (value: number) => void
+  maxPostsPerChannelMode: MaxPostsPerChannelMode
+  setMaxPostsPerChannelMode: (value: MaxPostsPerChannelMode) => void
+  postSortOrder: PostSortOrder
+  setPostSortOrder: (value: PostSortOrder) => void
+  groupByChannel: boolean
+  setGroupByChannel: (value: boolean) => void
+}
+
 interface PostFilterProps {
   postSearch: string
   setPostSearch: (val: string) => void
@@ -45,6 +83,19 @@ interface PostFilterProps {
   shownCount: number
   /** The existing subtitle's qualifiers: the cap and grouping. */
   subtitle: string
+}
+
+export interface PostFilterBarProps extends PostFilterProps {
+  controls: FilterBarControls
+  embeddingsEnabled: boolean
+  /** The Analysis window control, left of the search box. */
+  windowControl: React.ReactNode
+  /** Per-choice counts; `undefined` while none are known. */
+  facets: PostFacetsResponse | undefined
+  /** The followed Channels' Languages, for when no counts are known. */
+  channelLanguages: string[]
+  /** Called as a counting pill opens and closes, so counts load only then. */
+  onCountingPillOpenChange: (open: boolean) => void
 }
 
 const toggle = <T,>(list: T[], value: T): T[] =>
@@ -57,18 +108,19 @@ const toggle = <T,>(list: T[], value: T): T[] =>
 function SearchBox({
   postSearch,
   setPostSearch,
-}: {
-  postSearch: string
-  setPostSearch: (value: string) => void
-}) {
+  controls,
+  embeddingsEnabled,
+}: Pick<
+  PostFilterBarProps,
+  "postSearch" | "setPostSearch" | "controls" | "embeddingsEnabled"
+>) {
   const {
     semanticSearchQuery,
     setSemanticSearchQuery,
     semanticSearchRespectsChannels,
     setSemanticSearchRespectsChannels,
-  } = useScraper()
-  const { embeddingsEnabled } = useSettings()
-  const [mode, setMode] = React.useState<"keyword" | "meaning">(
+  } = controls
+  const [mode, setMode] = React.useState<SearchMode>(
     semanticSearchQuery ? "meaning" : "keyword",
   )
   const [draft, setDraft] = React.useState(semanticSearchQuery)
@@ -101,8 +153,8 @@ function SearchBox({
             meaning ? setDraft(e.target.value) : setPostSearch(e.target.value)
           }
           onKeyDown={(e) => {
-            if (meaning && e.key === "Enter" && draft.trim())
-              setSemanticSearchQuery(draft.trim())
+            const query = meaningQueryOnKey(meaning, e.key, draft)
+            if (query) setSemanticSearchQuery(query)
           }}
           className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
         />
@@ -142,40 +194,15 @@ function SearchBox({
   )
 }
 
-export const PostFilter: React.FC<PostFilterProps> = ({
-  postSearch,
-  setPostSearch,
-  shownCount,
-  subtitle,
-}) => {
-  const s = useScraper()
-  const { channels } = useData()
-  const { setActiveTab } = useUI()
-  const [openPillCount, setOpenPillCount] = React.useState(0)
-  const facets = usePostFacets(openPillCount > 0)
-  const countOpenPill = (open: boolean) =>
-    setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
-
+/** The bar itself, props only, so it renders without providers. */
+export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
+  const { postSearch, setPostSearch, controls: s, facets } = props
   const mediaCounts = new Map(facets?.media.map((f) => [f.value, f.count]))
-  // The Languages present, most frequent first, from the server. On a meaning
-  // search nothing is counted, so the Languages of the followed Channels stand
-  // in, without numbers. A ticked Language is always listed, so it can be
-  // unticked.
-  const languageCodes = facets
-    ? facets.languages.map((f) => f.value)
-    : [
-        ...new Set(
-          channels
-            .map((c) => c.language)
-            .filter((code): code is string => !!code),
-        ),
-      ].sort()
-  for (const code of s.languageFilter)
-    if (!languageCodes.includes(code)) languageCodes.push(code)
-  const languageCounts = new Map(
-    facets?.languages.map((f) => [f.value, f.count]),
+  const languages = languageOptions(
+    facets?.languages,
+    props.channelLanguages,
+    s.languageFilter,
   )
-
   const chips = activeFilters({
     keyword: postSearch,
     meaning: s.semanticSearchQuery,
@@ -187,28 +214,20 @@ export const PostFilter: React.FC<PostFilterProps> = ({
     capMode: s.maxPostsPerChannelMode,
     order: s.postSortOrder,
   })
-  const clear = (what: ChipClears) => {
-    if (what === "keyword") setPostSearch("")
-    else if (what === "meaning") s.setSemanticSearchQuery("")
-    else if (what === "related") s.setRelatedPostSearch(null)
-    else if (what === "forwarded") s.setForwardedFilter("all")
-    else if (what === "cap") s.setMaxPostsPerChannel(0)
-    else if ("media" in what)
-      s.setMediaFilter((m) => m.filter((k) => k !== what.media))
-    else s.setLanguageFilter((l) => l.filter((c) => c !== what.language))
-  }
+  const setters = { ...s, setPostSearch }
 
   return (
     <section className="mb-6 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
-          <div className="flex lg:shrink-0">
-            <AnalysisWindowControl
-              onReturnToAction={() => setActiveTab("action")}
-            />
-          </div>
+          <div className="flex lg:shrink-0">{props.windowControl}</div>
           <div className="lg:flex-1">
-            <SearchBox postSearch={postSearch} setPostSearch={setPostSearch} />
+            <SearchBox
+              postSearch={postSearch}
+              setPostSearch={setPostSearch}
+              controls={s}
+              embeddingsEnabled={props.embeddingsEnabled}
+            />
           </div>
         </div>
 
@@ -232,7 +251,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             active={s.mediaFilter.length > 0}
             width="w-56"
             testId="post-filter-pill-media"
-            onOpenChange={countOpenPill}
+            onOpenChange={props.onCountingPillOpenChange}
           >
             <CheckList
               items={MEDIA_KIND_OPTIONS.map((option) => ({
@@ -254,13 +273,13 @@ export const PostFilter: React.FC<PostFilterProps> = ({
             value={languageSummary(s.languageFilter)}
             active={s.languageFilter.length > 0}
             testId="post-filter-pill-language"
-            onOpenChange={countOpenPill}
+            onOpenChange={props.onCountingPillOpenChange}
           >
             <CheckList
-              items={languageCodes.map((code) => ({
+              items={languages.map(({ code, count }) => ({
                 key: code,
                 label: languageLabel(code),
-                count: facets ? (languageCounts.get(code) ?? 0) : undefined,
+                count,
                 checked: s.languageFilter.includes(code),
               }))}
               anyLabel="Any language"
@@ -317,15 +336,17 @@ export const PostFilter: React.FC<PostFilterProps> = ({
 
       <div className="flex flex-wrap items-center gap-2 border-t border-app-ink/5 bg-app-muted/30 px-4 py-2.5 text-xs">
         <span className="font-semibold">
-          {shownCount.toLocaleString()} posts
+          {props.shownCount.toLocaleString()} posts
         </span>
-        {subtitle && <span className="text-app-ink/50">{subtitle}</span>}
+        {props.subtitle && (
+          <span className="text-app-ink/50">{props.subtitle}</span>
+        )}
         {chips.map((chip) => (
           <button
             key={chip.key}
             type="button"
             aria-label={`Remove ${chip.label}`}
-            onClick={() => clear(chip.clears)}
+            onClick={() => clearChip(chip.clears, setters)}
             className="inline-flex items-center gap-1 rounded-full bg-app-ink/10 px-2 py-0.5 hover:bg-app-ink/20"
           >
             {chip.label} <X size={11} />
@@ -335,7 +356,7 @@ export const PostFilter: React.FC<PostFilterProps> = ({
           <button
             type="button"
             onClick={() => {
-              for (const chip of chips) clear(chip.clears)
+              for (const chip of chips) clearChip(chip.clears, setters)
             }}
             className="ml-auto text-app-ink/60 underline-offset-2 hover:underline"
           >
@@ -344,5 +365,36 @@ export const PostFilter: React.FC<PostFilterProps> = ({
         )}
       </div>
     </section>
+  )
+}
+
+/** The bar wired to the workspace's state. */
+export const PostFilter: React.FC<PostFilterProps> = (props) => {
+  const controls = useScraper()
+  const { channels } = useData()
+  const { embeddingsEnabled } = useSettings()
+  const { setActiveTab } = useUI()
+  const [openPillCount, setOpenPillCount] = React.useState(0)
+  const facets = usePostFacets(openPillCount > 0)
+  const channelLanguages = React.useMemo(
+    () => channels.map((c) => c.language).filter((code) => !!code) as string[],
+    [channels],
+  )
+  return (
+    <PostFilterBar
+      {...props}
+      controls={controls}
+      embeddingsEnabled={embeddingsEnabled}
+      windowControl={
+        <AnalysisWindowControl
+          onReturnToAction={() => setActiveTab("action")}
+        />
+      }
+      facets={facets}
+      channelLanguages={channelLanguages}
+      onCountingPillOpenChange={(open) =>
+        setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
+      }
+    />
   )
 }
