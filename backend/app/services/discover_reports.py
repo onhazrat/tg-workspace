@@ -435,7 +435,10 @@ def create_report(
     signal the report describes, not which Posts it reads.
     """
     filters = PostFilters(
-        keyword=scope.keyword, forwarded=scope.forwarded, media=tuple(scope.media)
+        keyword=scope.keyword,
+        forwarded=scope.forwarded,
+        media=tuple(scope.media),
+        languages=tuple(scope.languages),
     )
     post_ids = (
         None

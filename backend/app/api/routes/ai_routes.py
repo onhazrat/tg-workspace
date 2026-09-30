@@ -221,6 +221,7 @@ def _resolve_posts_text(
         keyword=scope.keyword,
         forwarded=scope.forwarded,
         media=tuple(scope.media),
+        languages=tuple(scope.languages),
         max_per_channel=scope.max_per_channel,
         max_per_channel_mode=scope.max_per_channel_mode,
         sort=scope.sort,

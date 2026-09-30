@@ -1,7 +1,7 @@
 """Helpers shared by more than one `/data` family.
 
 Only `parse_post_filters` lives here, and only because the posts feed and the
-Discover aggregate must interpret an identical filter triple identically — a
+Discover aggregate must interpret an identical filter set identically — a
 Discover report is an aggregation over exactly the Posts-tab view. Letting the
 two parse separately is the drift the server-side aggregation exists to remove.
 
@@ -22,9 +22,12 @@ from app.services.post_filters import (
 
 
 def parse_post_filters(
-    keyword: str | None, forwarded: str, media: Sequence[str]
+    keyword: str | None,
+    forwarded: str,
+    media: Sequence[str],
+    languages: Sequence[str] = (),
 ) -> PostFilters:
-    """Validate the shared Posts-tab filter query params into a PostFilters.
+    """Validate the shared Posts-tab filters into a PostFilters.
 
     Rejecting unknown enum values with 422 mirrors how the frontend can only
     ever send its own filter constants. `media` is a set of kinds, empty for
@@ -39,4 +42,5 @@ def parse_post_filters(
         keyword=keyword,
         forwarded=cast("Any", forwarded),
         media=cast("Any", tuple(media)),
+        languages=tuple(languages),
     )

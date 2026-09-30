@@ -39,7 +39,7 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 #: Mutating operations that do not mutate, each with the reason.
 #:
 #: Refusing every non-safe method is the simple rule, and on its own it is the
-#: wrong one here: five routes in this API are **reads expressed as POST**,
+#: wrong one here: six routes in this API are **reads expressed as POST**,
 #: purely so the channel selection travels in the body rather than overflowing a
 #: request line — every one of them says so in its own docstring. Refusing them
 #: would leave a View-as session unable to open the Posts tab, which is the
@@ -63,6 +63,9 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
     ),
     f"{settings.API_V1_STR}/data/posts/counts": (
         "a GROUP BY over the same scope, for the same reason"
+    ),
+    f"{settings.API_V1_STR}/data/posts/facets": (
+        "the filter pills' per-choice counts over the same scope, for the same reason"
     ),
     f"{settings.API_V1_STR}/data/posts/lookup": (
         "resolves (channel, post id) pairs a Summary cites"

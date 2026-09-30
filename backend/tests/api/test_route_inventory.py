@@ -138,11 +138,14 @@ def test_the_split_did_not_change_the_route_count() -> None:
     submittable families through the same door. Discover needed no third,
     because `POST /discover/reports` was already the one place a report is
     created — it now freezes its Scope there instead of resolving a window on
-    the way past.
+    the way past; and **83** with `POST /posts/facets`, PFB-02's per-choice
+    counts for the Media and Language pills, a sibling of `posts/counts`
+    rather than more of its answer because it counts under a different filter
+    set for each facet.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 82, (
-        f"expected 82 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 83, (
+        f"expected 83 /data endpoints, found {len(data_routes)}"
     )

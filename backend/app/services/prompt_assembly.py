@@ -50,6 +50,8 @@ class PromptScope:
     forwarded: str = "all"
     #: Empty is any media (PFB-01).
     media: tuple[str, ...] = ()
+    #: Empty is any Language (PFB-02).
+    languages: tuple[str, ...] = ()
     max_per_channel: int = 0
     max_per_channel_mode: str = "ordered"
     sort: str = "newest"
@@ -86,6 +88,7 @@ def _fetch_scoped_posts(
         keyword=scope.keyword,
         forwarded=cast("Any", scope.forwarded),
         media=cast("Any", scope.media),
+        languages=scope.languages,
     )
     channel_names = scope.channels or None
 

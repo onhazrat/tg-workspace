@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
+from dataclasses import replace
 from typing import Any
 
 from sqlalchemy import Integer, cast, column, func, literal, or_, update, values
@@ -18,11 +19,13 @@ from app.services.channels import relabel_channels
 from app.services.follows import visible_channel_names
 from app.services.language import own_words, read_language
 from app.services.post_filters import (
+    MEDIA_KIND_ORDER,
     CapMode,
     FeedSort,
     PostFilters,
     apply_analysis_window,
     apply_post_filters,
+    media_kind_clause,
 )
 from app.services.reach import MS_PER_HOUR, REFRESH_HORIZON_HOURS
 from app.services.serialization import post_to_camel
@@ -491,16 +494,22 @@ def _feed_order_by(sort: FeedSort, group_by_channel: bool, entity: Any) -> list[
     """Deterministic ORDER BY for the feed, with a stable tiebreak for paging.
 
     Ungrouped is the chosen order across every channel, with the channel name
-    breaking a timestamp tie before `post_id` does. Grouped puts channels in
-    alphabetical order and the chosen order inside each; placing a channel's
-    block where its first Post falls is PFB-02's, not this.
+    breaking a timestamp tie before `post_id` does.
 
-    `newest` ungrouped is exactly what `sort: "time"` was, and grouped exactly
-    what `"channel_time"` was: the stored and legacy spellings read as these.
+    Grouped leads with each channel's **best** key under the chosen order (its
+    newest Post under `newest`, its oldest under `oldest`), so a channel's
+    block sits where its first Post falls, then the chosen order inside the
+    block (PFB-02). The window runs over the rows the query already kept, so
+    under a cap a block is placed by the Posts the cap kept. The channel name
+    breaks a tie between two blocks, which keeps paging deterministic.
     """
     timestamp, post_id = channel_time_order(sort, entity)
     if group_by_channel:
-        return [entity.channel_name.asc(), timestamp, post_id]
+        best = (func.min if sort == "oldest" else func.max)(entity.timestamp).over(
+            partition_by=entity.channel_name
+        )
+        block = best.asc() if sort == "oldest" else best.desc()
+        return [block, entity.channel_name.asc(), timestamp, post_id]
     return [timestamp, entity.channel_name.asc(), post_id]
 
 
@@ -539,15 +548,15 @@ def list_feed(
     below, so a capped feed ranks only rows the caller can see — applying it
     outside the subquery would let another account's posts consume the cap.
     """
-    base = scoped_select(select(Post), Post, user_id)
-    if channel_names:
-        base = base.where(col(Post.channel_name).in_(channel_names))
-    base = apply_analysis_window(base, start_date, end_date)
-    if filters is not None:
-        followed: frozenset[str] | None = None
-        if filters.forwarded == "unfollowed_forwarded":
-            followed = frozenset(visible_channel_names(session, user_id=user_id))
-        base = apply_post_filters(base, filters, followed_names=followed)
+    base = _in_scope(
+        session,
+        select(Post),
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+    )
 
     if max_per_channel > 0:
         # `ordered` ranks by the chosen order, so the N kept are the first N
@@ -644,7 +653,109 @@ def count_posts_in_scope(
     if max_per_channel > 0:
         count_expr = func.least(count_expr, max_per_channel)
 
-    stmt = scoped_select(select(col(Post.channel_name), count_expr), Post, user_id)
+    stmt = _in_scope(
+        session,
+        select(col(Post.channel_name), count_expr),
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+    ).group_by(col(Post.channel_name))
+
+    return dict(session.exec(stmt).all())
+
+
+def count_facets_in_scope(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
+) -> dict[str, list[tuple[str, int]]]:
+    """How many Posts each Language and each media kind would leave (PFB-02).
+
+    The counts the Media and Language pills print beside each choice: what
+    ticking that one choice alone would show. So a facet is counted under every
+    filter of the Scope **but its own** (ticking Persian does not zero English)
+    and each channel's count is clamped to the cap, which for one choice is
+    exactly what the feed would keep.
+
+    Languages are the ones present, most frequent first, an unread Post left
+    out because it has no Language to tick. The media kinds are all six, in the
+    pill's order, zero included, and they overlap, so they are six filtered
+    aggregates over one scan rather than a `GROUP BY`.
+    """
+    filters = filters or PostFilters()
+
+    def scoped(stmt: Any, without: PostFilters) -> Any:
+        return _in_scope(
+            session,
+            stmt,
+            user_id=user_id,
+            channel_names=channel_names,
+            start_date=start_date,
+            end_date=end_date,
+            filters=without,
+        )
+
+    def clamp(n: int) -> int:
+        return min(n, max_per_channel) if max_per_channel > 0 else n
+
+    by_language: Counter[str] = Counter()
+    language_rows = session.exec(
+        scoped(
+            select(col(Post.channel_name), col(Post.language), func.count()),
+            replace(filters, languages=()),
+        )
+        .where(col(Post.language).is_not(None))
+        .group_by(col(Post.channel_name), col(Post.language))
+    ).all()
+    for _channel, language, n in language_rows:
+        by_language[language] += clamp(n)
+
+    by_kind: Counter[str] = Counter(dict.fromkeys(MEDIA_KIND_ORDER, 0))
+    media_rows = session.exec(
+        scoped(
+            select(
+                col(Post.channel_name),
+                *(
+                    func.count().filter(media_kind_clause(kind))
+                    for kind in MEDIA_KIND_ORDER
+                ),
+            ),
+            replace(filters, media=()),
+        ).group_by(col(Post.channel_name))
+    ).all()
+    for _channel, *counts in media_rows:
+        for kind, n in zip(MEDIA_KIND_ORDER, counts, strict=True):
+            by_kind[kind] += clamp(n)
+
+    return {
+        "languages": sorted(by_language.items(), key=lambda kv: (-kv[1], kv[0])),
+        "media": [(kind, by_kind[kind]) for kind in MEDIA_KIND_ORDER],
+    }
+
+
+def _in_scope(
+    session: Session,
+    stmt: Any,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None,
+    start_date: int | None,
+    end_date: int | None,
+    filters: PostFilters | None,
+) -> Any:
+    """`stmt` narrowed to the caller's Follows, the channels, window and filters.
+
+    The one spelling of "the Posts this Scope covers" the feed, the counts and
+    the facets share, so none of them can count a Post another does not show.
+    """
+    stmt = scoped_select(stmt, Post, user_id)
     if channel_names:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
     stmt = apply_analysis_window(stmt, start_date, end_date)
@@ -653,9 +764,7 @@ def count_posts_in_scope(
         if filters.forwarded == "unfollowed_forwarded":
             followed = frozenset(visible_channel_names(session, user_id=user_id))
         stmt = apply_post_filters(stmt, filters, followed_names=followed)
-    stmt = stmt.group_by(col(Post.channel_name))
-
-    return dict(session.exec(stmt).all())
+    return stmt
 
 
 def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:

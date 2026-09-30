@@ -206,6 +206,10 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("POST", f"{DATA}/posts/lookup"): (Reason.COVERED_ELSEWHERE, "same file"),
     ("POST", f"{DATA}/posts/counts"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("POST", f"{DATA}/posts/facets"): (
+        Reason.COVERED_ELSEWHERE,
+        "two live accounts; test_post_filter_bar_feed.py",
+    ),
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,
         "raw ingest; creates no Channel and no Follow, so what it writes is "

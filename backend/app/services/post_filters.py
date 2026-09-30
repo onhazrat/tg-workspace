@@ -10,6 +10,7 @@ Parity targets (keep in lockstep with the frontend):
   - keyword   → `applyKeywordFilter`        (post-view.ts:112)
   - forwarded → `applyForwardedFilter`      (post-view.ts:88)
   - media     → `matchesMediaFilter`        (post-media.ts:46)
+  - languages → `applyLanguageFilter`       (post-view.ts)
 
 The Scope's vocabulary lives here too: the media kinds, the feed's orders and
 the cap's modes, so the schemas that accept a Scope and the services that read
@@ -64,7 +65,9 @@ CapMode = Literal["ordered", "random"]
 FORWARDED_FILTERS: frozenset[str] = frozenset(
     ("all", "forwarded", "original", "unfollowed_forwarded")
 )
-MEDIA_KINDS: frozenset[str] = frozenset(get_args(MediaKind))
+#: The kinds in the order the Media pill lists them.
+MEDIA_KIND_ORDER: tuple[MediaKind, ...] = get_args(MediaKind)
+MEDIA_KINDS: frozenset[str] = frozenset(MEDIA_KIND_ORDER)
 FEED_SORTS: frozenset[str] = frozenset(get_args(FeedSort))
 FEED_CAP_MODES: frozenset[str] = frozenset(get_args(CapMode))
 
@@ -88,12 +91,16 @@ class PostFilters:
     forwarded: ForwardedFilter = "all"
     #: Empty is any media; otherwise a Post matching any one kind is kept.
     media: tuple[MediaKind, ...] = ()
+    #: Empty is any Language; otherwise the Post's own Language must be one of
+    #: these. A Post whose Language is unread (NULL) never matches (PFB-02).
+    languages: tuple[str, ...] = ()
 
     def is_noop(self) -> bool:
         return (
             not (self.keyword and self.keyword.strip())
             and self.forwarded == "all"
             and not self.media
+            and not self.languages
         )
 
 
@@ -152,7 +159,7 @@ def _forwarded_clause(
     return None
 
 
-def _media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
+def media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
     if value == "text_only":
         return not_(_has_media())
     if value == "media_only":
@@ -175,7 +182,7 @@ def _media_clause(kinds: tuple[MediaKind, ...]) -> ColumnElement[bool] | None:
     """Any one of `kinds`, or no predicate at all for the empty set."""
     if not kinds:
         return None
-    return or_(*(_media_kind_clause(kind) for kind in dict.fromkeys(kinds)))
+    return or_(*(media_kind_clause(kind) for kind in dict.fromkeys(kinds)))
 
 
 def post_filter_clauses(
@@ -191,6 +198,10 @@ def post_filter_clauses(
     media = _media_clause(filters.media)
     if media is not None:
         clauses.append(media)
+    if filters.languages:
+        # `IN` never matches NULL, which is the rule: an unread Post has no
+        # Language to be ticked.
+        clauses.append(col(Post.language).in_(filters.languages))
     return clauses
 
 

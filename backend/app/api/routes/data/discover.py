@@ -124,7 +124,9 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
         "signals": cast(
             "set[SignalKind] | None", _parse_discover_signals(body.signals)
         ),
-        "filters": parse_post_filters(body.keyword, body.forwarded, body.media),
+        "filters": parse_post_filters(
+            body.keyword, body.forwarded, body.media, body.languages
+        ),
         "max_per_channel": body.max_per_channel,
         "max_per_channel_mode": body.max_per_channel_mode,
         "sort": body.sort,

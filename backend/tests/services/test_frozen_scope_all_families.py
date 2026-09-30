@@ -93,12 +93,11 @@ DAY_MS = 24 * 60 * MINUTE_MS
 #: One filter set, sent by every family, so "the same contract" is asserted
 #: rather than described. Every value is deliberately non-default: a filter that
 #: silently failed to travel would otherwise read back as the value it was
-#: given. `languages` is the one exception, because PFB-01 carries the set
-#: without filtering on it and so refuses every value but the empty one.
+#: given.
 FILTERS: dict[str, Any] = {
     "keyword": "tehran",
     "forwarded": "original",
-    "languages": [],
+    "languages": ["fa", "en"],
     "media": ["photo", "video"],
     "maxPerChannel": 25,
     "maxPerChannelMode": "random",
@@ -139,7 +138,7 @@ LEGACY_READS_AS: dict[str, Any] = {
 #: One value per field that this server does not implement. Each must be a 422,
 #: never a Scope recorded as if it had been applied.
 UNIMPLEMENTED: list[tuple[str, Any]] = [
-    ("languages", ["fa"]),
+    ("languages", "fa"),
     ("media", ["nonsense"]),
     ("media", "nonsense"),
     ("sort", "relevance"),
