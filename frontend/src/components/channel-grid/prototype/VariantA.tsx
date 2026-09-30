@@ -43,11 +43,11 @@ import { FollowControl, type FollowLayout } from "./Follow"
 import { ActiveFiltersBar, FilterBuilder } from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
 import {
-  SelectionButtons,
   SelectionMenu,
   SelectionScopeSwitch,
   SelectionVenn,
 } from "./SelectionControls"
+import { regionsOf } from "./selection"
 import { BlocksBar } from "./TreeBars"
 import {
   type ChannelControlsProps,
@@ -79,7 +79,7 @@ export type ALayout = {
   /** T1: the nested filter expression, edited as blocks. */
   tree?: "blocks"
   /** S1-S3: how the selection is edited against what the filters show. */
-  selection?: "menu" | "buttons" | "venn"
+  selection?: "menu" | "venn"
 }
 
 export const VariantA: React.FC<
@@ -405,7 +405,6 @@ export const VariantA: React.FC<
               </button>
               {layout.selection && <SelectionScopeSwitch {...p} />}
               {layout.selection === "menu" && <SelectionMenu {...p} />}
-              {layout.selection === "buttons" && <SelectionButtons {...p} />}
               {layout.selection === "venn" && <SelectionVenn {...p} />}
               {!layout.selection && (
                 <>
@@ -429,6 +428,10 @@ export const VariantA: React.FC<
               <div className="flex items-center gap-1 rounded-md border border-app-ink/10 pl-2">
                 <span className="text-[10px] font-semibold text-app-ink/50">
                   Keep first
+                  {p.selectionScope === "shown" &&
+                    regionsOf(p.selectedChannels, p.shownNames).hidden.length >
+                      0 &&
+                    " shown"}
                 </span>
                 <input
                   type="number"

@@ -251,17 +251,30 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const handleTrimSelection = useCallback(() => {
     if (isTrimDisabled) return
+    // PROTOTYPE: with "only shown" scope, trim ranks the shown selected
+    // channels and leaves the ones the filters hide selected, untouched.
+    const shown = new Set(filteredChannels.map((c) => c.name))
+    const onlyShown = isPrototype && protoSelectionScope === "shown"
+    const hidden = onlyShown
+      ? [...selectedChannels].filter((n) => !shown.has(n))
+      : []
     applyTrimChannelSelection({
       channels,
       channelStats,
       postsInScopeCounts,
-      selectedChannels,
+      selectedChannels: onlyShown
+        ? new Set([...selectedChannels].filter((n) => shown.has(n)))
+        : selectedChannels,
       sortBy,
       sortDirection,
       count: parsedTrimCount,
-      setSelectedChannels,
+      setSelectedChannels: (kept) =>
+        setSelectedChannels(new Set([...hidden, ...kept])),
     })
   }, [
+    filteredChannels,
+    isPrototype,
+    protoSelectionScope,
     channelStats,
     channels,
     isTrimDisabled,

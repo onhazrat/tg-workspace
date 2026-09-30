@@ -1,7 +1,8 @@
 /**
  * PROTOTYPE, throwaway: three ways to change the selection relative to what
- * the filters show (S1 menu, S2 inline buttons, S3 Venn), and the scope
- * switch that decides whether bulk actions reach channels the filters hide.
+ * the filters show (S1 menu, S3 Venn; S2's inline buttons are in e9b67fb), and the scope
+ * switch that decides whether bulk actions, trim included, reach channels
+ * the filters hide.
  */
 import { ChevronDown, Eye, EyeOff } from "lucide-react"
 import type React from "react"
@@ -194,35 +195,6 @@ export const SelectionMenu: React.FC<ChannelControlsProps> = (p) => {
     </Pop>
   )
 }
-
-// ---- S2: inline buttons ---------------------------------------------------
-
-/** The operations as buttons on row 2, each saying what it will leave. */
-export const SelectionButtons: React.FC<ChannelControlsProps> = (p) => (
-  <span className="inline-flex items-center rounded-md border border-app-ink/10 p-0.5">
-    {SELECTION_OPS.filter((o) => o.key !== "replace").map((op) => {
-      const after = sizeAfter(p.selectedChannels, p.shownNames, op.regions)
-      return (
-        <button
-          key={op.key}
-          type="button"
-          disabled={isNoop(p.selectedChannels, p.shownNames, op.regions)}
-          title={`${op.detail} → ${after} selected`}
-          onClick={() =>
-            p.onSetSelection(
-              applyRegions(p.selectedChannels, p.shownNames, op.regions),
-            )
-          }
-          className="inline-flex h-7 items-center gap-1.5 rounded px-2 text-[10px] font-semibold text-app-ink/75 hover:bg-app-ink/10 hover:text-app-ink disabled:opacity-30"
-        >
-          <VennIcon keep={op.regions} size={14} />
-          {op.label}
-          <span className="tabular-nums text-app-ink/45">→{after}</span>
-        </button>
-      )
-    })}
-  </span>
-)
 
 // ---- S3: pick regions of a Venn -------------------------------------------
 
