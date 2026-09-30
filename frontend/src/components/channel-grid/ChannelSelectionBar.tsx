@@ -58,12 +58,14 @@ const plural = (n: number) => `${n} channel${n === 1 ? "" : "s"}`
 
 function TagField({
   label,
+  button,
   value,
   onChange,
   onSubmit,
   testId,
 }: {
   label: string
+  button: string
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
@@ -92,7 +94,7 @@ function TagField({
         disabled={!value.trim()}
         data-testid={`${testId}-button`}
       >
-        {label.split(" ")[0]}
+        {button}
       </TgButton>
     </form>
   )
@@ -183,6 +185,7 @@ function SelectionActions(p: ChannelSelectionBarProps) {
         <BarHeading>Add to {count}</BarHeading>
         <TagField
           label="Add tag to selected channels"
+          button="Add"
           value={p.tagInput}
           onChange={p.onTagInputChange}
           onSubmit={p.onAddTag}
@@ -191,6 +194,7 @@ function SelectionActions(p: ChannelSelectionBarProps) {
         <BarHeading>Remove from {count}</BarHeading>
         <TagField
           label="Remove tag from selected channels"
+          button="Remove"
           value={p.removeTagInput}
           onChange={p.onRemoveTagInputChange}
           onSubmit={p.onRemoveTag}

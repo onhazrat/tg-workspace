@@ -33,6 +33,7 @@ function mount(
       rows={rows}
       selectedChannels={new Set(["a", "c"])}
       funnelled={[]}
+      labelOf={(id) => (id === "__untagged__" ? "Untagged" : id)}
       onToggleSelect={(row) => calls.push(["select", row.id])}
       onFunnel={(id, on) => calls.push(["funnel", [id, on]])}
       onClearFunnels={() => calls.push(["clear", null])}
@@ -63,6 +64,11 @@ describe("the button", () => {
     mount({ funnelled: ["news", "tech", "__untagged__"] })
     expect(screen.getByTestId("channel-tags").textContent).toContain("3 tags")
   })
+})
+
+test("names a funnelled value the tag search hides by its label", () => {
+  mount({ rows: [rows[0]], funnelled: ["__untagged__"] })
+  expect(screen.getByTestId("channel-tags").textContent).toContain("Untagged")
 })
 
 describe("the list", () => {

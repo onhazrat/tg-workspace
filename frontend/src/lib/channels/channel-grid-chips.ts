@@ -92,6 +92,14 @@ export function getChannelNamesInGroup(
     .map((channel) => channel.name)
 }
 
+/** Names of channels in a Language, for the Languages dropdown. */
+export function getChannelNamesInLanguage(
+  channels: Channel[],
+  code: string,
+): string[] {
+  return channels.filter((c) => c.language === code).map((c) => c.name)
+}
+
 /** Unique tags across all channels, ordered for the Channels tab chip bar. */
 export function collectGridTags(
   channels: Channel[],

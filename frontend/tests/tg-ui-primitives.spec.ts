@@ -323,7 +323,7 @@ test.describe("TG UI primitives", () => {
     // A row carries a user-authored group name, so it must render the
     // operator's casing rather than an uppercase micro-label style.
     await expect(groupRow).toHaveCSS("text-transform", "none")
-    // Do not tick a group here — toggling a large group can stall the UI.
+    // Do not tick a group here, since toggling a large group can stall the UI.
     await page.keyboard.press("Escape")
 
     // Workspace tabs navigate to `?tab=`, so they are links, not buttons.

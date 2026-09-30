@@ -1,4 +1,10 @@
 import { VALID_TABS } from "@/constants"
+import {
+  addFunnel,
+  emptyFilter,
+  filterNames,
+  printChannelFilter,
+} from "@/lib/channels/channel-filter"
 import type { SettingsSection } from "@/lib/settingsSection"
 import { normalizeSettingsSection } from "@/lib/settingsSection"
 import { tabFromSearch, tabSearch } from "@/lib/workspace-tabs"
@@ -75,7 +81,11 @@ export function validateWorkspaceSearch(
   }
   const legacyGroup = trimmedString(search.channelGroup)
   if (legacyGroup && !result.channelFilter) {
-    result.channelFilter = `group:"${legacyGroup}"`
+    // No group names here, so it is written by id, which reads back.
+    result.channelFilter = printChannelFilter(
+      addFunnel(emptyFilter(), "group", legacyGroup),
+      filterNames([]),
+    )
   }
   // Only the active tab's Artifact param means anything (TABS-01). An old
   // `?summary=` riding along on `?tab=posts` would otherwise reopen that

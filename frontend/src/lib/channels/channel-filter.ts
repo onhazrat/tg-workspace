@@ -380,8 +380,12 @@ export const clearFunnels = (
 
 export type FilterNames = {
   groupName: (id: string) => string
-  /** A Setting group by name, or by id so a renamed group's old link resolves. */
-  groupId: (nameOrId: string) => string | undefined
+  /**
+   * A Setting group by name, or by id so a renamed group's old link resolves.
+   * One this Account lacks, or has not loaded yet, keeps its text, so it
+   * matches nothing and prints back unchanged.
+   */
+  groupId: (nameOrId: string) => string
   tagLabel: (id: string) => string
   tagId: (label: string) => string
 }
@@ -393,7 +397,8 @@ export function filterNames(
     groupName: (id) => groups.find((g) => g.id === id)?.name ?? id,
     groupId: (text) =>
       groups.find((g) => g.name.toLowerCase() === text.toLowerCase())?.id ??
-      groups.find((g) => g.id === text)?.id,
+      groups.find((g) => g.id === text)?.id ??
+      text,
     tagLabel: (id) => findChannelPseudoTag(id)?.label ?? id,
     tagId: (label) =>
       CHANNEL_PSEUDO_TAGS.find(
@@ -415,17 +420,16 @@ export function conditionLabel(cond: Cond, names: FilterNames): string {
 }
 
 const WORD = /^[\p{L}\p{N}_.-]+$/u
-const quote = (text: string) => (WORD.test(text) ? text : `"${text}"`)
+/** Quoted when not a plain word, with `"` and `\` escaped by a backslash. */
+const quote = (text: string) =>
+  WORD.test(text) ? text : `"${text.replace(/["\\]/g, "\\$&")}"`
 
 function condText(cond: Cond, names: FilterNames): string {
   switch (cond.type) {
     case "tag":
       return `tag:${quote(names.tagLabel(cond.value))}`
-    case "group": {
-      // A name holding a quote cannot be written quoted, and the id reads back.
-      const name = names.groupName(cond.value)
-      return `group:${quote(name.includes('"') ? cond.value : name)}`
-    }
+    case "group":
+      return `group:${quote(names.groupName(cond.value))}`
     case "language":
       return `lang:${quote(cond.value)}`
   }
@@ -468,12 +472,13 @@ type Token = { t: "(" | ")" | "and" | "or" | "not" } | { t: "atom"; cond: Cond }
 class ParseError extends Error {}
 
 function tokenize(raw: string, names: FilterNames): Token[] {
-  // "tag tech" reads naturally, and is the same length as "tag:".
+  // "tag tech" reads naturally, and is the same length as "tag:". Quoted
+  // names are skipped, and so is a key that is itself a value ("tag:lang").
   const src = raw.replace(
-    /\b(tag|group|lang)\s+(?=["\p{L}\p{N}_])/giu,
-    (match, key: string) => `${key}:`.padEnd(match.length),
+    /"(?:[^"\\]|\\.)*"|(?<![:\p{L}\p{N}_.-])(tag|group|lang)\s+(?=["\p{L}\p{N}_])/giu,
+    (match, key?: string) => (key ? `${key}:`.padEnd(match.length) : match),
   )
-  const word = /^([a-z]+:)?(?:"([^"]*)"|([\p{L}\p{N}_.-]+))/iu
+  const word = /^([a-z]+:)?(?:"((?:[^"\\]|\\.)*)"|([\p{L}\p{N}_.-]+))/iu
   const out: Token[] = []
   let i = 0
   while (i < src.length) {
@@ -500,7 +505,7 @@ function tokenize(raw: string, names: FilterNames): Token[] {
     const w = word.exec(src.slice(i))
     if (!w) throw new ParseError(`Unexpected ${ch}`)
     const prefix = w[1]?.slice(0, -1).toLowerCase()
-    const text = w[2] ?? w[3]
+    const text = w[2]?.replace(/\\(.)/g, "$1") ?? w[3]
     const lower = text.toLowerCase()
     if (
       !prefix &&
@@ -509,9 +514,10 @@ function tokenize(raw: string, names: FilterNames): Token[] {
     ) {
       out.push({ t: lower })
     } else if (prefix === "group") {
-      const id = names.groupId(text)
-      if (!id) throw new ParseError(`No Setting group ${text}`)
-      out.push({ t: "atom", cond: { type: "group", value: id } })
+      out.push({
+        t: "atom",
+        cond: { type: "group", value: names.groupId(text) },
+      })
     } else if (prefix === "lang") {
       out.push({ t: "atom", cond: { type: "language", value: text } })
     } else if (prefix && prefix !== "tag") {

@@ -1,12 +1,5 @@
 import { Popover } from "radix-ui"
 import type React from "react"
-import { pillClass } from "@/components/PostFilterParts"
-
-/**
- * A row 1 dropdown button, filled in while it is set, as on the Posts filter
- * bar. `data-active` says so to a test.
- */
-export const barTriggerClass = (active: boolean) => pillClass(active)
 
 /**
  * The popover every Channels bar control opens. The trigger is passed as an

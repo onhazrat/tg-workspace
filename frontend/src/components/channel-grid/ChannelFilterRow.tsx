@@ -145,7 +145,7 @@ export function ChannelFilterRow({
       </span>
       {searching && (
         <span className={`${chipClass} border-app-ink/15`}>
-          <Search size={10} aria-hidden />“{search.trim()}”
+          <Search size={10} aria-hidden />"{search.trim()}"
           <button
             type="button"
             aria-label="Clear the search"

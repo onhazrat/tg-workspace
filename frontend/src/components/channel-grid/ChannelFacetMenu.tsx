@@ -1,13 +1,9 @@
 import { ChevronDown, Filter, X } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
+import { pillClass } from "@/components/PostFilterParts"
 import { getChipSelectionState } from "@/lib/channels/channel-grid-chips"
-import {
-  BarHeading,
-  BarPopover,
-  BarSearch,
-  barTriggerClass,
-} from "./BarPopover"
+import { BarHeading, BarPopover, BarSearch } from "./BarPopover"
 
 export type FacetRow = {
   id: string
@@ -30,6 +26,8 @@ type ChannelFacetMenuProps = {
   selectedChannels: ReadonlySet<string>
   /** The row ids funnelled into the Channel filter. */
   funnelled: string[]
+  /** A funnelled id's name, including one the search has hidden. */
+  labelOf: (id: string) => string
   onToggleSelect: (row: FacetRow) => void
   onFunnel: (id: string, on: boolean) => void
   onClearFunnels: () => void
@@ -56,6 +54,7 @@ export function ChannelFacetMenu({
   rows,
   selectedChannels,
   funnelled,
+  labelOf,
   onToggleSelect,
   onFunnel,
   onClearFunnels,
@@ -72,11 +71,12 @@ export function ChannelFacetMenu({
   const withSelection = rows.filter((row) =>
     row.names.some((name) => selectedChannels.has(name)),
   ).length
-  const one = rows.find((row) => row.id === funnelled[0])?.label
   const title =
     funnelled.length > 1
       ? `${funnelled.length} ${label.toLowerCase()}`
-      : (one ?? funnelled[0] ?? label)
+      : funnelled.length === 1
+        ? labelOf(funnelled[0])
+        : label
   const active = funnelled.length > 0
 
   return (
@@ -87,7 +87,7 @@ export function ChannelFacetMenu({
           type="button"
           data-testid={testId}
           data-active={active}
-          className={barTriggerClass(active)}
+          className={pillClass(active)}
         >
           {icon}
           <span className="max-w-40 truncate">{title}</span>

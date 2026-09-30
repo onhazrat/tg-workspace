@@ -64,7 +64,7 @@ describe("validateWorkspaceSearch", () => {
   test("an old channelGroup link is a one-Condition Channel filter (CTB-01)", () => {
     expect(
       validateWorkspaceSearch({ tab: "channels", channelGroup: " g-1 " }),
-    ).toEqual({ tab: "channels", channelFilter: 'group:"g-1"' })
+    ).toEqual({ tab: "channels", channelFilter: "group:g-1" })
     // The new parameter wins over the old one, and a blank old one is nothing.
     expect(
       validateWorkspaceSearch({

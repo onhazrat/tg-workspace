@@ -27,6 +27,7 @@ import {
   type ChannelFilter,
   type CondType,
   clearFunnels,
+  conditionLabel,
   emptyFilter,
   filterNames,
   funnelledValues,
@@ -39,6 +40,7 @@ import {
   areAllNamesSelected,
   collectGridTags,
   getChannelNamesInGroup,
+  getChannelNamesInLanguage,
   getChannelNamesWithTag,
   toggleNamesInSelection,
 } from "@/lib/channels/channel-grid-chips"
@@ -116,16 +118,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   // The Channel filter lives in the URL. A text that does not parse is
   // ignored, and replaced by the next edit.
-  const names = useMemo(
+  const filterLookup = useMemo(
     () => filterNames(sortedSettingGroups),
     [sortedSettingGroups],
   )
   const channelFilter = useMemo(
-    () => parseChannelFilter(channelFilterText, names) ?? emptyFilter(),
-    [channelFilterText, names],
+    () => parseChannelFilter(channelFilterText, filterLookup) ?? emptyFilter(),
+    [channelFilterText, filterLookup],
   )
   const setChannelFilter = (next: ChannelFilter) =>
-    setChannelFilterText(printChannelFilter(next, names))
+    setChannelFilterText(printChannelFilter(next, filterLookup))
 
   const filteredChannels = useMemo(
     () =>
@@ -307,6 +309,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const facet = (type: CondType) => ({
     selectedChannels,
     funnelled: funnelledValues(channelFilter, type),
+    labelOf: (value: string) => conditionLabel({ type, value }, filterLookup),
     onToggleSelect: toggleRowSelection,
     onFunnel: (id: string, on: boolean) =>
       setChannelFilter(
@@ -351,9 +354,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         id: language.code,
         label: language.name,
         hint: language.code,
-        names: channels
-          .filter((c) => c.language === language.code)
-          .map((c) => c.name),
+        names: getChannelNamesInLanguage(channels, language.code),
       })),
     [allLanguages, channels],
   )
@@ -448,7 +449,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           search={channelSearch}
           shownCount={filteredChannels.length}
           totalCount={channels.length}
-          names={names}
+          names={filterLookup}
           onRemove={(id) => setChannelFilter(removeNode(channelFilter, id))}
           onClearSearch={() => setChannelSearch("")}
           onClearAll={() => {

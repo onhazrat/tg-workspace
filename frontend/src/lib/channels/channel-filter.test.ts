@@ -69,6 +69,8 @@ const bare = channel({ name: "bare", tags: [], settingGroupId: "g1" })
 const names = filterNames([
   { id: "g1", name: "Daily news" },
   { id: "g2", name: "slow" },
+  { id: "g3", name: "Fast group 2" },
+  { id: "g4", name: 'the "best" \\ lang' },
 ])
 
 const shown = (filter: ChannelFilter) =>
@@ -397,17 +399,39 @@ describe("the URL form", () => {
       "(tag:a",
       "tag:a)",
       "and",
-      "group:nope",
       "foo:bar",
       "a >",
+      'tag:"a',
     ]) {
       expect(parseChannelFilter(text, names)).toBeNull()
     }
   })
 
-  test("a group name holding a quote is written by id", () => {
-    const quoted = filterNames([{ id: "g9", name: 'the "best"' }])
-    const text = printChannelFilter(root("and", [atom(group("g9"))]), quoted)
-    expect(text).toBe("group:g9")
+  test("names holding keywords, spaces, quotes and backslashes round-trip", () => {
+    roundTrip(
+      root("and", [
+        atom(group("g3")),
+        atom(group("g4")),
+        atom(tag("my tag list")),
+        atom(tag("lang")),
+        atom(tag("group")),
+        atom(tag('say "hi"')),
+        atom(lang("fa")),
+      ]),
+    )
+    expect(printChannelFilter(root("and", [atom(group("g3"))]), names)).toBe(
+      'group:"Fast group 2"',
+    )
+  })
+
+  test("a Setting group nobody has is kept by its text and matches nothing", () => {
+    // Setting groups load after the URL, and a shared link may name one this
+    // Account lacks: the Condition stays, rather than the whole filter going.
+    const parsed = parseChannelFilter('group:"Not yet" and tag:tech', names)
+    expect(parsed ? shape(parsed) : parsed).toEqual(
+      shape(root("and", [atom(group("Not yet")), atom(tag("tech"))])),
+    )
+    roundTrip(parsed as ChannelFilter)
+    expect(shown(parsed as ChannelFilter)).toEqual([])
   })
 })

@@ -10,17 +10,12 @@ import {
   Sparkles,
 } from "lucide-react"
 import { useState } from "react"
-import { Options } from "@/components/PostFilterParts"
+import { Options, Pill, pillClass } from "@/components/PostFilterParts"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
-import {
-  BarHeading,
-  BarPopover,
-  BarSearch,
-  barTriggerClass,
-} from "./BarPopover"
+import { BarHeading, BarPopover, BarSearch } from "./BarPopover"
 
 /**
  * Today's single-handle follow field, moved into a popover at the start of
@@ -41,7 +36,7 @@ export function FollowControl({
         <button
           type="button"
           id="tour-add-channel"
-          className={barTriggerClass(false)}
+          className={pillClass(false)}
         >
           <Plus size={12} /> Follow
         </button>
@@ -76,7 +71,7 @@ export function FollowControl({
   )
 }
 
-export const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
+const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
   { value: "last_updated", label: "Last updated" },
   { value: "followed_at", label: "Followed at" },
   { value: "activity_rate", label: "Activity rate" },
@@ -114,19 +109,12 @@ export function SortMenu({
   const direction = sortDirection === "asc" ? "ascending" : "descending"
   return (
     <div className="flex items-center gap-0.5">
-      <BarPopover
+      <Pill
+        label="Sort"
+        value={label ?? "Last updated"}
+        active={false}
         width="w-56"
-        trigger={
-          <button
-            type="button"
-            data-testid="channel-sort"
-            className={barTriggerClass(false)}
-          >
-            <span className="text-app-ink/60">Sort</span>
-            <span className="font-semibold">{label ?? "Last updated"}</span>
-            <ChevronDown size={12} className="opacity-60" />
-          </button>
-        }
+        testId="channel-sort"
       >
         <BarSearch
           value={query}
@@ -140,7 +128,7 @@ export function SortMenu({
           value={sortBy}
           onChange={onSortByChange}
         />
-      </BarPopover>
+      </Pill>
       <TgIconButton
         aria-label={`Sort ${direction}`}
         tooltip={`Sort ${direction}`}
@@ -193,7 +181,7 @@ export function AiContextPill({
           type="button"
           data-testid="channel-ai-context"
           data-active={on > 0}
-          className={barTriggerClass(on > 0)}
+          className={pillClass(on > 0)}
         >
           <Sparkles size={12} /> AI context
           {on > 0 && (
