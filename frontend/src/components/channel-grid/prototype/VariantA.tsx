@@ -702,6 +702,7 @@ const AiPill: React.FC<ChannelControlsProps> = (p) => {
               {on}
             </span>
           )}
+          <ChevronDown size={12} className="opacity-50" />
         </button>
       }
       className="w-72"
