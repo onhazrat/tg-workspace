@@ -3,7 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { api } from "@/api"
-import type { PostFeedQuery } from "@/api/data"
+import { type PostFeedQuery, postScopeBody } from "@/api/data"
+import {
+  dataPostsFacets,
+  type PostFacetsResponse,
+  type PostScopeRequest,
+} from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
@@ -76,6 +81,7 @@ export function useScopedPostCounts(): Record<string, number> {
     postSearch,
     forwardedFilter,
     mediaFilter,
+    languageFilter,
     maxPostsPerChannel,
     semanticSearchQuery,
     getScopedPosts,
@@ -91,6 +97,7 @@ export function useScopedPostCounts(): Record<string, number> {
     keyword: debouncedPostSearch,
     forwarded: forwardedFilter,
     media: mediaFilter,
+    languages: languageFilter,
     maxPerChannel: maxPostsPerChannel,
   }
   const params = { ...filters, startDate, endDate }
@@ -118,6 +125,53 @@ export function useScopedPostCounts(): Record<string, number> {
   }, [serverEligible, getScopedPosts])
 
   return serverEligible ? (query.data ?? {}) : clientCounts
+}
+
+/**
+ * How many Posts each Language and each media kind would leave, for the
+ * pills' checklists (PFB-02). Server-side, and only while `enabled` (a pill
+ * is open) and the feed is the server's: a meaning search's ranked Posts are
+ * not a scope the server can count, so its pills show no numbers.
+ */
+export function usePostFacets(
+  enabled: boolean,
+): PostFacetsResponse | undefined {
+  const { selectedChannels } = useData()
+  const { startDate, endDate, windowKey } = useScope()
+  const {
+    postSearch,
+    forwardedFilter,
+    mediaFilter,
+    languageFilter,
+    maxPostsPerChannel,
+    semanticSearchQuery,
+  } = useScraper()
+  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
+  const selectedChannelNames = useSelectedChannelNames()
+  const filters = {
+    channelNames: selectedChannelNames,
+    keyword: debouncedPostSearch,
+    forwarded: forwardedFilter,
+    media: mediaFilter,
+    languages: languageFilter,
+    maxPerChannel: maxPostsPerChannel,
+  }
+  const query = useQuery({
+    queryKey: queryKeys.postsFacets({ ...filters, window: windowKey }),
+    queryFn: () =>
+      dataPostsFacets({
+        body: postScopeBody({
+          ...filters,
+          startDate,
+          endDate,
+        }) as PostScopeRequest,
+      }),
+    enabled:
+      enabled && !semanticSearchQuery.trim() && selectedChannels.size > 0,
+    staleTime: SUMMARIZER_STALE_TIME,
+    placeholderData: (previous) => previous,
+  })
+  return query.data
 }
 
 export interface PostsFeed {
@@ -154,6 +208,7 @@ export function usePostsFeed(): PostsFeed {
     postSearch,
     forwardedFilter,
     mediaFilter,
+    languageFilter,
     maxPostsPerChannel,
     maxPostsPerChannelMode,
     postSortOrder,
@@ -180,6 +235,7 @@ export function usePostsFeed(): PostsFeed {
     keyword: debouncedPostSearch,
     forwarded: forwardedFilter,
     media: mediaFilter,
+    languages: languageFilter,
     maxPerChannel: maxPostsPerChannel,
     maxPerChannelMode: maxPostsPerChannelMode,
     sort: postSortOrder,

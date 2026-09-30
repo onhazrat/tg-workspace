@@ -2034,6 +2034,41 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/posts/facets": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Posts Facets",
+        "description": "How many Posts each Language and each media kind would leave in a scope.",
+        "operationId": "data-posts_facets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostScopeRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PostFacetsResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/posts/lookup": {
       "post": {
         "tags": ["data"],
@@ -6726,7 +6761,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {
@@ -6978,7 +7012,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {
@@ -7158,7 +7191,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {
@@ -7426,7 +7458,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {
@@ -8182,6 +8213,34 @@
         "required": ["token", "new_password"],
         "title": "NewPassword"
       },
+      "PostFacetCount": {
+        "properties": {
+          "value": { "type": "string", "title": "Value" },
+          "count": { "type": "integer", "title": "Count" }
+        },
+        "type": "object",
+        "required": ["value", "count"],
+        "title": "PostFacetCount",
+        "description": "How many Posts one choice of a filter would leave."
+      },
+      "PostFacetsResponse": {
+        "properties": {
+          "languages": {
+            "items": { "$ref": "#/components/schemas/PostFacetCount" },
+            "type": "array",
+            "title": "Languages"
+          },
+          "media": {
+            "items": { "$ref": "#/components/schemas/PostFacetCount" },
+            "type": "array",
+            "title": "Media"
+          }
+        },
+        "type": "object",
+        "required": ["languages", "media"],
+        "title": "PostFacetsResponse",
+        "description": "Per-choice Post counts for the Language and media filters."
+      },
       "PostFeedRequest": {
         "properties": {
           "channelNames": {
@@ -8222,7 +8281,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {
@@ -8469,7 +8527,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {
@@ -8558,7 +8615,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {
@@ -9198,7 +9254,6 @@
           "languages": {
             "items": { "type": "string" },
             "type": "array",
-            "maxItems": 0,
             "title": "Languages"
           },
           "media": {

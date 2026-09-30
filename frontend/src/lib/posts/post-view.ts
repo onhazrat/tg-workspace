@@ -34,6 +34,8 @@ export interface BuildFilteredPostsContext {
   searchText: string
   forwardedFilter: ForwardedFilterValue
   mediaFilter: MediaFilterValue
+  /** The Post's own Language, any of these; empty for any (PFB-02). */
+  languageFilter: string[]
   channels: Channel[]
   view: PostViewOptions
   startDate: number
@@ -166,36 +168,31 @@ export function applyMaxPostsPerChannel(
 }
 
 /**
- * The chosen order within one channel: the timestamp, newest or oldest first.
- * Also what the `ordered` cap keeps the first N of. Mirrors
- * `channel_time_order` in backend/app/services/posts.py.
+ * The chosen order: the timestamp, newest or oldest first, then the channel
+ * name, then the post id running the same way as the timestamp. Also what the
+ * `ordered` cap keeps the first N of. Mirrors `channel_time_order` and
+ * `_feed_order_by` in backend/app/services/posts.py, tiebreak included, so a
+ * semantic result reads in the order the server feed would give it.
  */
 function byOrder(order: PostSortOrder): (a: Post, b: Post) => number {
-  return order === "oldest"
-    ? (a, b) => a.timestamp - b.timestamp
-    : (a, b) => b.timestamp - a.timestamp
+  const dir = order === "oldest" ? 1 : -1
+  return (a, b) =>
+    (a.timestamp - b.timestamp) * dir ||
+    a.channelName.localeCompare(b.channelName) ||
+    (a.id - b.id) * dir
 }
 
 export function sortPosts(posts: Post[], view: PostViewOptions): Post[] {
   const compare = byOrder(view.postSortOrder)
-  if (!view.groupByChannel) {
-    return [...posts].sort(compare)
-  }
+  const sorted = [...posts].sort(compare)
+  if (!view.groupByChannel) return sorted
 
-  // Channels alphabetical, the chosen order inside each. Placing a channel's
-  // block where its first Post falls is PFB-02's.
-  const groups = groupPostsByChannel(posts)
-  const sortedChannelNames = [...groups.keys()].sort((a, b) =>
-    a.localeCompare(b),
-  )
-
-  const sorted: Post[] = []
-  for (const channelName of sortedChannelNames) {
-    const channelPosts = groups.get(channelName) ?? []
-    channelPosts.sort(compare)
-    sorted.push(...channelPosts)
-  }
-  return sorted
+  // Each channel's block sits where its first Post falls under the order, and
+  // the order holds inside the block (PFB-02). `Map` keeps insertion order, so
+  // grouping the already-sorted list is exactly that: a block is placed by its
+  // best key, a tie between blocks broken by the channel name as `compare`
+  // already broke it.
+  return [...groupPostsByChannel(sorted).values()].flat()
 }
 
 export function applyPostViewPipeline(
@@ -205,6 +202,18 @@ export function applyPostViewPipeline(
 ): Post[] {
   const capped = applyMaxPostsPerChannel(posts, view, seedContext)
   return sortPosts(capped, view)
+}
+
+export function applyLanguageFilter(
+  posts: Post[],
+  languageFilter: string[],
+): Post[] {
+  if (languageFilter.length === 0) return posts
+  const ticked = new Set(languageFilter)
+  // An unread Post (`language` null) has no Language to be ticked.
+  return posts.filter(
+    (post) => post.language != null && ticked.has(post.language),
+  )
 }
 
 export function applyMediaFilter(
@@ -237,6 +246,7 @@ export function buildFilteredPostsFromRaw(
   let filtered = applyKeywordFilter(posts, ctx.searchText)
   filtered = applyForwardedFilter(filtered, ctx.forwardedFilter, ctx.channels)
   filtered = applyMediaFilter(filtered, ctx.mediaFilter)
+  filtered = applyLanguageFilter(filtered, ctx.languageFilter)
   return applyPostViewPipeline(filtered, ctx.view, {
     startDate: ctx.startDate,
     endDate: ctx.endDate,

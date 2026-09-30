@@ -30,6 +30,7 @@ export const FORWARDED_FILTER_OPTIONS = [
   },
 ] as const
 
+export { POST_ORDER_OPTIONS } from "@/lib/posts/post-filter-bar"
 export { MEDIA_KIND_OPTIONS }
 
 export function clearPostFilters(ctx: CommandContext): void {
@@ -38,6 +39,7 @@ export function clearPostFilters(ctx: CommandContext): void {
   ctx.setRelatedPostSearch(null)
   ctx.setForwardedFilter("all")
   ctx.setMediaFilter([])
+  ctx.setLanguageFilter([])
   ctx.setMaxPostsPerChannel(0)
   ctx.setMaxPostsPerChannelMode("ordered")
   ctx.setPostSortOrder("newest")

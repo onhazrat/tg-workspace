@@ -186,13 +186,16 @@ export interface CommandContext {
   setMediaFilter: (
     value: import("@/lib/posts/post-media").MediaFilterValue,
   ) => void
+  setLanguageFilter: (value: string[]) => void
   setMaxPostsPerChannel: (value: number) => void
   setMaxPostsPerChannelMode: (
     value: import("@/lib/posts/post-view").MaxPostsPerChannelMode,
   ) => void
+  postSortOrder: import("@/lib/posts/post-view").PostSortOrder
   setPostSortOrder: (
     value: import("@/lib/posts/post-view").PostSortOrder,
   ) => void
+  groupByChannel: boolean
   setGroupByChannel: (value: boolean) => void
   /** Fetch the scoped, filtered posts on demand (for the post picker). */
   getScopedPosts: () => Promise<import("@/types").Post[]>

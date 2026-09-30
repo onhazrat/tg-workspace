@@ -38,6 +38,7 @@ export function workspaceFromScope(scope: FrozenScope): {
   keyword: string
   forwarded: NonNullable<FrozenScope["forwarded"]>
   media: MediaFilterValue
+  languages: string[]
   maxPerChannel: number
   maxPerChannelMode: MaxPostsPerChannelMode
   sort: PostSortOrder
@@ -48,6 +49,7 @@ export function workspaceFromScope(scope: FrozenScope): {
     keyword: scope.keyword ?? "",
     forwarded: scope.forwarded ?? "all",
     media: [...new Set(scope.media ?? [])],
+    languages: [...new Set(scope.languages ?? [])],
     maxPerChannel: scope.maxPerChannel ?? 0,
     maxPerChannelMode: scope.maxPerChannelMode ?? "ordered",
     sort: scope.sort ?? "newest",
@@ -64,6 +66,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
     setRelatedPostSearch,
     setForwardedFilter,
     setMediaFilter,
+    setLanguageFilter,
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
     setPostSortOrder,
@@ -78,6 +81,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setPostSearch(next.keyword)
       setForwardedFilter(next.forwarded)
       setMediaFilter(next.media)
+      setLanguageFilter(next.languages)
       setMaxPostsPerChannel(next.maxPerChannel)
       setMaxPostsPerChannelMode(next.maxPerChannelMode)
       setPostSortOrder(next.sort)
@@ -95,6 +99,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setPostSearch,
       setForwardedFilter,
       setMediaFilter,
+      setLanguageFilter,
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       setPostSortOrder,

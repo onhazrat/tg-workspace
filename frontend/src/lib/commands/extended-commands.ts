@@ -35,6 +35,7 @@ import {
   FORWARDED_FILTER_OPTIONS,
   MEDIA_KIND_OPTIONS,
   POST_DATE_RANGE_PRESETS,
+  POST_ORDER_OPTIONS,
 } from "@/lib/commands/post-filters"
 import { pickSearchPost } from "@/lib/commands/search-filters"
 import type {
@@ -629,15 +630,52 @@ export function buildExtendedCommands(): CommandDef[] {
       label: `Set Media Filter → ${option.label}`,
       keywords: ["post", "media", "filter", option.value, option.label],
       group: "Posts",
-      // The set holds one kind until PFB-02's bar can tick several; "ON" is
-      // "this kind is in the set" either way.
+      // Ticks or unticks the kind, as the Media pill's checkbox does (PFB-02).
       getBadge: (ctx) => (ctx.mediaFilter.includes(option.value) ? "ON" : null),
       run: async (ctx) => {
-        applyMediaFilter(ctx, [option.value])
-        toast.success(`Media filter: ${option.label}`)
+        const on = !ctx.mediaFilter.includes(option.value)
+        applyMediaFilter(
+          ctx,
+          on
+            ? [...ctx.mediaFilter, option.value]
+            : ctx.mediaFilter.filter((kind) => kind !== option.value),
+        )
+        toast.success(`Media filter: ${option.label} ${on ? "on" : "off"}`)
       },
     })
   }
+
+  for (const option of POST_ORDER_OPTIONS) {
+    commands.push({
+      id: `set-post-order-${option.value}`,
+      kind: "action",
+      label: `Set Post Order → ${option.label}`,
+      keywords: ["post", "order", "sort", option.value, option.label],
+      group: "Posts",
+      getBadge: (ctx) => (ctx.postSortOrder === option.value ? "ON" : null),
+      run: async (ctx) => {
+        ctx.setPostSortOrder(option.value)
+        void ctx.handleFilterPosts(ctx.postSearch)
+        toast.success(`Post order: ${option.label}`)
+      },
+    })
+  }
+
+  commands.push({
+    id: "toggle-group-posts-by-channel",
+    kind: "action",
+    label: "Toggle Posts Grouped by Channel",
+    keywords: ["post", "group", "channel", "grouped", "order"],
+    group: "Posts",
+    getBadge: (ctx) => (ctx.groupByChannel ? "ON" : null),
+    run: async (ctx) => {
+      ctx.setGroupByChannel(!ctx.groupByChannel)
+      void ctx.handleFilterPosts(ctx.postSearch)
+      toast.success(
+        ctx.groupByChannel ? "Posts ungrouped" : "Posts grouped by channel",
+      )
+    },
+  })
 
   for (const jobId of SERVER_JOB_IDS) {
     const label = JOB_LABELS[jobId] ?? jobId
