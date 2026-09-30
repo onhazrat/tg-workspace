@@ -48,16 +48,17 @@ export type ChannelControlsProps = {
   onZoomChange: (zoom: CardZoom) => void
   // Setting groups: click selects, the filter narrows the grid
   groups: ChannelSettingGroup[]
-  activeGroupFilter: string
+  /** Funnelled groups; a channel in any of them shows. Empty shows all. */
+  groupFilters: string[]
+  onGroupFiltersChange: (ids: string[]) => void
   onToggleGroupSelection: (groupId: string) => void
-  onSetGroupFilter: (groupId: string) => void
   // Tags and pseudo-tags
   visibleTags: string[]
   pseudoTagChips: ChannelPseudoTagChip[]
   onToggleTag: (tag: string) => void
-  /** PROTOTYPE-only: "show only channels with this tag", "" for none. */
-  activeTagFilter: string
-  onSetTagFilter: (tag: string) => void
+  /** Funnelled tags (and pseudo-tags); a channel with any of them shows. */
+  tagFilters: string[]
+  onTagFiltersChange: (tags: string[]) => void
   // AI prompt context
   includeChannelBioInPrompt: boolean
   onIncludeChannelBioInPromptChange: (value: boolean) => void
@@ -65,8 +66,9 @@ export type ChannelControlsProps = {
   onIncludeChannelTagsInPromptChange: (value: boolean) => void
   // Language, sort, grouping
   allLanguages: ChannelLanguageOption[]
-  selectedLanguageFilter: string
-  onLanguageFilterChange: (value: string) => void
+  /** Funnelled language codes; a channel in any of them shows. */
+  languageFilters: string[]
+  onLanguageFiltersChange: (codes: string[]) => void
   /** PROTOTYPE-only: tick every channel in a language, like a group chip. */
   onToggleLanguageSelection: (code: string) => void
   sortBy: ChannelGridSortOption

@@ -5,22 +5,16 @@ import { toast } from "sonner"
 import { PrototypeSwitcher } from "@/components/Common/PrototypeSwitcher"
 import type { ChannelControlsProps } from "./types"
 import { VariantA } from "./VariantA"
-import { VariantB } from "./VariantB"
-import { VariantC } from "./VariantC"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export const PROTOTYPE_VARIANTS = [
   { key: "current", name: "Today's bar" },
   { key: "A", name: "Command bar" },
-  { key: "B", name: "Tabbed deck" },
-  { key: "C", name: "Sentence + action rail" },
 ]
 
 const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   A: VariantA,
-  B: VariantB,
-  C: VariantC,
 }
 
 /** The variant key in the URL, or "current". */

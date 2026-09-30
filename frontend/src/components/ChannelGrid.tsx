@@ -103,28 +103,44 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const actions = useChannelGridActions()
   const { sortedSettingGroups } = actions
 
-  // PROTOTYPE, throwaway: "show only this tag", which today's bar lacks.
-  const [prototypeTagFilter, setPrototypeTagFilter] = useState("")
+  // PROTOTYPE, throwaway: the variants funnel several values per facet. OR
+  // within a facet, AND across facets; today's single-value filters are
+  // ignored while a variant is showing.
+  const { current: prototypeVariant, setVariant } = usePrototypeVariant()
+  const isPrototype = prototypeVariant !== "current"
+  const [protoGroupFilters, setProtoGroupFilters] = useState<string[]>([])
+  const [protoTagFilters, setProtoTagFilters] = useState<string[]>([])
+  const [protoLanguageFilters, setProtoLanguageFilters] = useState<string[]>([])
 
   const filteredChannels = useMemo(() => {
     const byFacets = filterChannelsForGrid(channels, {
-      groupFilter: selectedGroupFilter,
-      languageFilter: selectedLanguageFilter,
+      groupFilter: isPrototype ? "" : selectedGroupFilter,
+      languageFilter: isPrototype ? "" : selectedLanguageFilter,
       search: channelSearch,
     })
-    if (!prototypeTagFilter) return byFacets
-    const pseudo = findChannelPseudoTag(prototypeTagFilter)
-    return byFacets.filter((c) =>
-      pseudo
-        ? pseudo.matches(c)
-        : getTagNames(c.tags).includes(prototypeTagFilter),
+    if (!isPrototype) return byFacets
+    const hasTag = (c: (typeof channels)[number], tag: string) => {
+      const pseudo = findChannelPseudoTag(tag)
+      return pseudo ? pseudo.matches(c) : getTagNames(c.tags).includes(tag)
+    }
+    return byFacets.filter(
+      (c) =>
+        (protoGroupFilters.length === 0 ||
+          protoGroupFilters.includes(c.settingGroupId ?? "")) &&
+        (protoLanguageFilters.length === 0 ||
+          protoLanguageFilters.includes(c.language ?? "")) &&
+        (protoTagFilters.length === 0 ||
+          protoTagFilters.some((t) => hasTag(c, t))),
     )
   }, [
     channels,
     channelSearch,
     selectedLanguageFilter,
     selectedGroupFilter,
-    prototypeTagFilter,
+    isPrototype,
+    protoGroupFilters,
+    protoLanguageFilters,
+    protoTagFilters,
   ])
 
   // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
@@ -235,7 +251,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     channelSearch,
     selectedLanguageFilter,
     selectedGroupFilter,
-    prototypeTagFilter,
+    protoGroupFilters,
+    protoLanguageFilters,
+    protoTagFilters,
     sortBy,
     sortDirection,
   ])
@@ -318,7 +336,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   }
 
   // PROTOTYPE, throwaway: every capability of the control section in one bag.
-  const { current: prototypeVariant, setVariant } = usePrototypeVariant()
   const prototypeControls: ChannelControlsProps = {
     inlineChannelName: actions.inlineChannelName,
     onInlineChannelNameChange: actions.setInlineChannelName,
@@ -331,7 +348,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     hasChannels: channels.length > 0,
     totalCount: channels.length,
     filteredCount: filteredChannels.length,
-    isFilteringActive: isFilteringActive || prototypeTagFilter !== "",
+    isFilteringActive:
+      channelSearch.trim() !== "" ||
+      protoGroupFilters.length +
+        protoTagFilters.length +
+        protoLanguageFilters.length >
+        0,
     selectedChannels,
     onSelectAll: handleSelectAll,
     onUnselectAll: handleUnselectAll,
@@ -345,21 +367,21 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     zoom: channelCardZoom,
     onZoomChange: setChannelCardZoom,
     groups: sortedSettingGroups,
-    activeGroupFilter: selectedGroupFilter,
+    groupFilters: protoGroupFilters,
+    onGroupFiltersChange: setProtoGroupFilters,
     onToggleGroupSelection: toggleGroupSelection,
-    onSetGroupFilter: setChannelGroupFilter,
     visibleTags,
     pseudoTagChips,
     onToggleTag: toggleTagSelection,
-    activeTagFilter: prototypeTagFilter,
-    onSetTagFilter: setPrototypeTagFilter,
+    tagFilters: protoTagFilters,
+    onTagFiltersChange: setProtoTagFilters,
     includeChannelBioInPrompt,
     onIncludeChannelBioInPromptChange: setIncludeChannelBioInPrompt,
     includeChannelTagsInPrompt,
     onIncludeChannelTagsInPromptChange: setIncludeChannelTagsInPrompt,
     allLanguages,
-    selectedLanguageFilter,
-    onLanguageFilterChange: setSelectedLanguageFilter,
+    languageFilters: protoLanguageFilters,
+    onLanguageFiltersChange: setProtoLanguageFilters,
     onToggleLanguageSelection: (code: string) => {
       const names = channels
         .filter((c) => c.language === code)

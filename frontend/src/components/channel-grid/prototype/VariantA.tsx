@@ -49,14 +49,14 @@ const barButton =
 
 export const VariantA: React.FC<ChannelControlsProps> = (p) => {
   const selectedCount = p.selectedChannels.size
-  const activeGroup = p.groups.find((g) => g.id === p.activeGroupFilter)
-  const activeLanguage = p.allLanguages.find(
-    (l) => l.code === p.selectedLanguageFilter,
-  )
-  const activeTag = p.activeTagFilter
-    ? (p.pseudoTagChips.find((c) => c.id === p.activeTagFilter)?.label ??
-      p.activeTagFilter)
-    : undefined
+  const groupName = (id: string) =>
+    p.groups.find((g) => g.id === id)?.name ?? id
+  const languageName = (code: string) =>
+    p.allLanguages.find((l) => l.code === code)?.name ?? code
+  const tagName = (id: string) =>
+    p.pseudoTagChips.find((c) => c.id === id)?.label ?? id
+  const [sortQuery, setSortQuery] = useState("")
+  const without = (list: string[], id: string) => list.filter((x) => x !== id)
 
   return (
     <div className="sticky top-0 z-20 rounded-xl border border-app-ink/10 bg-app-card/95 shadow-sm backdrop-blur">
@@ -79,7 +79,7 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
         <FacetMenu
           icon={<Layers size={13} />}
           label="Groups"
-          activeLabel={activeGroup?.name}
+          filterLabel={groupName}
           noun="group"
           rows={p.groups.map((g) => ({
             id: g.id,
@@ -88,14 +88,14 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
             names: getChannelNamesInGroup(p.channels, g.id),
           }))}
           selectedChannels={p.selectedChannels}
-          activeFilter={p.activeGroupFilter}
+          activeFilters={p.groupFilters}
           onToggleSelect={p.onToggleGroupSelection}
-          onSetFilter={p.onSetGroupFilter}
+          onFiltersChange={p.onGroupFiltersChange}
         />
         <FacetMenu
           icon={<Tag size={13} />}
           label="Tags"
-          activeLabel={activeTag}
+          filterLabel={tagName}
           noun="tag"
           search={{ value: p.tagSearch, onChange: p.onTagSearchChange }}
           rows={[
@@ -113,15 +113,15 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
             })),
           ]}
           selectedChannels={p.selectedChannels}
-          activeFilter={p.activeTagFilter}
+          activeFilters={p.tagFilters}
           onToggleSelect={p.onToggleTag}
-          onSetFilter={p.onSetTagFilter}
+          onFiltersChange={p.onTagFiltersChange}
         />
         {p.allLanguages.length > 0 && (
           <FacetMenu
             icon={<Languages size={13} />}
             label="Languages"
-            activeLabel={activeLanguage?.name}
+            filterLabel={languageName}
             noun="language"
             rows={p.allLanguages.map((l) => ({
               id: l.code,
@@ -132,9 +132,9 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
                 .map((c) => c.name),
             }))}
             selectedChannels={p.selectedChannels}
-            activeFilter={p.selectedLanguageFilter}
+            activeFilters={p.languageFilters}
             onToggleSelect={p.onToggleLanguageSelection}
-            onSetFilter={p.onLanguageFilterChange}
+            onFiltersChange={p.onLanguageFiltersChange}
           />
         )}
 
@@ -148,20 +148,32 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
             }
             className="w-56"
           >
+            <TgInput
+              autoFocus
+              variant="muted"
+              value={sortQuery}
+              onChange={(e) => setSortQuery(e.target.value)}
+              placeholder="Search sort options…"
+              className="mb-1 h-8 py-0 text-[11px]"
+            />
             <PopLabel>Sort by</PopLabel>
-            {sortOptionsFor(p.showChannelSubscribers).map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => p.onSortByChange(o.value)}
-                className={cn(
-                  "block w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold hover:bg-app-ink/5",
-                  p.sortBy === o.value && "bg-app-ink/10",
-                )}
-              >
-                {o.label}
-              </button>
-            ))}
+            {sortOptionsFor(p.showChannelSubscribers)
+              .filter((o) =>
+                o.label.toLowerCase().includes(sortQuery.trim().toLowerCase()),
+              )
+              .map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => p.onSortByChange(o.value)}
+                  className={cn(
+                    "block w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold hover:bg-app-ink/5",
+                    p.sortBy === o.value && "bg-app-ink/10",
+                  )}
+                >
+                  {o.label}
+                </button>
+              ))}
           </Pop>
           <button
             type="button"
@@ -278,21 +290,34 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
                 ? `${p.filteredCount} of ${p.totalCount} channels`
                 : `${p.totalCount} channels`}
             </span>
-            {activeGroup && (
-              <FilterPill onClear={() => p.onSetGroupFilter("")}>
-                Group: {activeGroup.name}
+            {p.groupFilters.map((id) => (
+              <FilterPill
+                key={`g-${id}`}
+                onClear={() =>
+                  p.onGroupFiltersChange(without(p.groupFilters, id))
+                }
+              >
+                Group: {groupName(id)}
               </FilterPill>
-            )}
-            {activeTag && (
-              <FilterPill onClear={() => p.onSetTagFilter("")}>
-                Tag: {activeTag}
+            ))}
+            {p.tagFilters.map((id) => (
+              <FilterPill
+                key={`t-${id}`}
+                onClear={() => p.onTagFiltersChange(without(p.tagFilters, id))}
+              >
+                Tag: {tagName(id)}
               </FilterPill>
-            )}
-            {activeLanguage && (
-              <FilterPill onClear={() => p.onLanguageFilterChange("")}>
-                Language: {activeLanguage.name}
+            ))}
+            {p.languageFilters.map((code) => (
+              <FilterPill
+                key={`l-${code}`}
+                onClear={() =>
+                  p.onLanguageFiltersChange(without(p.languageFilters, code))
+                }
+              >
+                Language: {languageName(code)}
               </FilterPill>
-            )}
+            ))}
             {p.channelSearch && (
               <FilterPill onClear={() => p.onChannelSearchChange("")}>
                 “{p.channelSearch}”
@@ -557,13 +582,13 @@ type FacetRow = {
 const FacetMenu: React.FC<{
   icon: React.ReactNode
   label: string
-  activeLabel?: string
+  filterLabel: (id: string) => string
   noun: string
   rows: FacetRow[]
   selectedChannels: Set<string>
-  activeFilter: string
+  activeFilters: string[]
   onToggleSelect: (id: string) => void
-  onSetFilter: (id: string) => void
+  onFiltersChange: (ids: string[]) => void
   /** Controlled search; the menu keeps its own when absent. */
   search?: { value: string; onChange: (value: string) => void }
 }> = (m) => {
@@ -587,10 +612,14 @@ const FacetMenu: React.FC<{
       trigger={
         <button
           type="button"
-          className={cn(trigger, m.activeLabel && activeTrigger)}
+          className={cn(trigger, m.activeFilters.length > 0 && activeTrigger)}
         >
           {m.icon}
-          {m.activeLabel ?? m.label}
+          {m.activeFilters.length === 1
+            ? m.filterLabel(m.activeFilters[0])
+            : m.activeFilters.length > 1
+              ? `${m.activeFilters.length} ${m.label.toLowerCase()}`
+              : m.label}
           {selectedInFacet > 0 && (
             <span className="rounded-full bg-app-ink/15 px-1.5 text-[9px] tabular-nums">
               {selectedInFacet}
@@ -611,9 +640,19 @@ const FacetMenu: React.FC<{
         className="mb-1 h-8 py-0 text-[11px]"
       />
       <div className="flex items-center justify-between px-2 pb-1 pt-2 text-[9px] font-bold uppercase tracking-widest text-app-ink/45">
-        <span>Tick selects · funnel shows only</span>
+        <span>Tick selects · funnels show only</span>
         <span>selected / total</span>
       </div>
+      {m.activeFilters.length > 0 && (
+        <button
+          type="button"
+          onClick={() => m.onFiltersChange([])}
+          className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-semibold text-app-ink/60 hover:bg-app-ink/5 hover:text-app-ink"
+        >
+          <X size={10} /> Clear {m.activeFilters.length} funnel
+          {m.activeFilters.length > 1 ? "s" : ""}
+        </button>
+      )}
       {rows.length === 0 && (
         <div className="px-2 py-3 text-[11px] text-app-ink/50">
           No {m.noun} matches “{query}”
@@ -621,7 +660,7 @@ const FacetMenu: React.FC<{
       )}
       {rows.map((r, i) => {
         const s = chipSelection(r.names, m.selectedChannels)
-        const filtering = m.activeFilter === r.id
+        const filtering = m.activeFilters.includes(r.id)
         const newSection = r.section && r.section !== rows[i - 1]?.section
         return (
           <div key={r.id}>
@@ -653,7 +692,13 @@ const FacetMenu: React.FC<{
                         : `Show only ${r.label}`
                     }
                     aria-pressed={filtering}
-                    onClick={() => m.onSetFilter(filtering ? "" : r.id)}
+                    onClick={() =>
+                      m.onFiltersChange(
+                        filtering
+                          ? m.activeFilters.filter((x) => x !== r.id)
+                          : [...m.activeFilters, r.id],
+                      )
+                    }
                     className={cn(
                       "mr-1 grid h-6 w-6 place-items-center rounded",
                       filtering
