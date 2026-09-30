@@ -37,12 +37,7 @@ import {
   getChannelNamesWithTag,
 } from "@/lib/channels/channel-grid-chips"
 import { cn } from "@/lib/utils"
-import {
-  FollowControl,
-  type FollowLayout,
-  FollowRow,
-  OmniSearch,
-} from "./Follow"
+import { FollowControl, type FollowLayout } from "./Follow"
 import {
   ActiveFiltersBar,
   BucketMenu,
@@ -68,8 +63,8 @@ const barButton =
  * same across A1-A4, so flipping between them isolates those two decisions.
  */
 export type ALayout = {
-  zoom: "view" | "row1" | "row2" | "strip" | "gridbar"
-  ai: "view" | "pill" | "row2" | "strip"
+  zoom: "view" | "row2" | "gridbar"
+  ai: "view" | "pill"
   /** Where "selected first" and "sort rank" go; defaults to following zoom. */
   display?: "row2"
   follow?: FollowLayout
@@ -83,21 +78,10 @@ export const VariantA: React.FC<
   ChannelControlsProps & { layout?: ALayout }
 > = ({ layout = { zoom: "view", ai: "view" }, ...p }) => {
   const selectedCount = p.selectedChannels.size
-  const [followRowOpen, setFollowRowOpen] = useState(false)
-  const followControl = (
-    <FollowControl
-      {...p}
-      layout={layout.follow ?? "pop"}
-      rowOpen={followRowOpen}
-      onRowOpenChange={setFollowRowOpen}
-    />
-  )
+  const followControl = <FollowControl {...p} layout={layout.follow ?? "pop"} />
   // Grouping and sort rank follow card size out of the View pill.
   const displayIn =
-    layout.display ??
-    (layout.zoom === "strip" || layout.zoom === "gridbar"
-      ? layout.zoom
-      : "view")
+    layout.display ?? (layout.zoom === "gridbar" ? layout.zoom : "view")
   const grouping = (
     <MiniToggle
       on={p.groupBySelection}
@@ -132,23 +116,19 @@ export const VariantA: React.FC<
         {/* Row 1: find, filter, view, follow, sync */}
         <div className="flex flex-wrap items-center gap-2 p-3">
           {layout.followAt === "start" && followControl}
-          {layout.follow === "omnibox" ? (
-            <OmniSearch {...p} />
-          ) : (
-            <div className="relative min-w-[200px] flex-1">
-              <Search
-                size={14}
-                className="pointer-events-none absolute inset-y-0 left-3 my-auto text-app-ink/40"
-              />
-              <TgInput
-                variant="muted"
-                value={p.channelSearch}
-                onChange={(e) => p.onChannelSearchChange(e.target.value)}
-                placeholder="Search channels…"
-                className="h-9 py-0 pl-9"
-              />
-            </div>
-          )}
+          <div className="relative min-w-[200px] flex-1">
+            <Search
+              size={14}
+              className="pointer-events-none absolute inset-y-0 left-3 my-auto text-app-ink/40"
+            />
+            <TgInput
+              variant="muted"
+              value={p.channelSearch}
+              onChange={(e) => p.onChannelSearchChange(e.target.value)}
+              placeholder="Search channels…"
+              className="h-9 py-0 pl-9"
+            />
+          </div>
 
           <FacetMenu
             icon={<Layers size={13} />}
@@ -268,9 +248,6 @@ export const VariantA: React.FC<
             </button>
           </div>
 
-          {layout.zoom === "row1" && (
-            <SizeSwitch zoom={p.zoom} onZoomChange={p.onZoomChange} />
-          )}
           {displayIn === "view" && (
             <Pop
               align="end"
@@ -344,25 +321,6 @@ export const VariantA: React.FC<
             editableNumbers={layout.numeric === "builder"}
           />
         )}
-        {layout.follow === "row" && followRowOpen && (
-          <FollowRow {...p} onClose={() => setFollowRowOpen(false)} />
-        )}
-        {displayIn === "strip" && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-app-ink/10 bg-app-muted/30 px-3 py-2">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-app-ink/45">
-              Cards
-            </span>
-            <SizeSwitch labels zoom={p.zoom} onZoomChange={p.onZoomChange} />
-            {grouping}
-            {rank}
-            {layout.ai === "strip" && (
-              <div className="ml-auto">
-                <AiInline {...p} />
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Row 2: summary when idle, toolbar when something is selected */}
         <div className="flex min-h-11 flex-wrap items-center gap-1 border-t border-app-ink/10 px-3 py-1.5">
           {selectedCount === 0 ? (
@@ -578,11 +536,8 @@ export const VariantA: React.FC<
               </button>
             </>
           )}
-          {(layout.zoom === "row2" ||
-            layout.ai === "row2" ||
-            displayIn === "row2") && (
+          {(layout.zoom === "row2" || displayIn === "row2") && (
             <div className="ml-2 flex items-center gap-3 border-l border-app-ink/10 pl-3">
-              {layout.ai === "row2" && <AiInline {...p} />}
               {displayIn === "row2" && (
                 <div className="flex items-center gap-1.5">
                   {grouping}
@@ -681,33 +636,6 @@ const MiniToggle: React.FC<{
     />
     {children}
   </button>
-)
-
-/** AI prompt context as two always-visible toggles. */
-const AiInline: React.FC<ChannelControlsProps> = (p) => (
-  <div className="flex items-center gap-1.5">
-    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-app-ink/50">
-      <Sparkles size={11} /> AI prompt reads
-    </span>
-    <MiniToggle
-      on={p.includeChannelBioInPrompt}
-      onClick={() =>
-        p.onIncludeChannelBioInPromptChange(!p.includeChannelBioInPrompt)
-      }
-      title="Include each channel's bio in AI prompts"
-    >
-      Bio
-    </MiniToggle>
-    <MiniToggle
-      on={p.includeChannelTagsInPrompt}
-      onClick={() =>
-        p.onIncludeChannelTagsInPromptChange(!p.includeChannelTagsInPrompt)
-      }
-      title="Include each channel's current tags in AI prompts"
-    >
-      Tags
-    </MiniToggle>
-  </div>
 )
 
 /** AI prompt context as its own pill, with a count of what is switched on. */

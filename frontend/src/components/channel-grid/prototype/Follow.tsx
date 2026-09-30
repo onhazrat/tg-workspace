@@ -1,8 +1,8 @@
 /**
- * PROTOTYPE, throwaway: four ways to follow a channel from A5's bar. Every
+ * PROTOTYPE, throwaway: three ways to follow a channel from A5's bar. Every
  * write is stubbed by `stubWrites`, so these only show what would be sent.
  */
-import { AtSign, Check as CheckIcon, Plus, Search, X } from "lucide-react"
+import { AtSign, Check as CheckIcon, Plus, X } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
@@ -13,7 +13,7 @@ import type { Channel } from "@/types"
 import { Pop, PopLabel } from "./Pop"
 import type { ChannelControlsProps } from "./types"
 
-export type FollowLayout = "pop" | "inline" | "omnibox" | "bulk" | "row"
+export type FollowLayout = "pop" | "inline" | "bulk"
 
 type Parsed = {
   raw: string
@@ -72,26 +72,8 @@ const StatusLine: React.FC<{ parsed: Parsed }> = ({ parsed }) => (
 
 /** The follow control on row 1, in whichever shape `layout` names. */
 export const FollowControl: React.FC<
-  ChannelControlsProps & {
-    layout: FollowLayout
-    rowOpen: boolean
-    onRowOpenChange: (open: boolean) => void
-  }
-> = ({ layout, rowOpen, onRowOpenChange, ...p }) => {
-  if (layout === "omnibox") return null
-  if (layout === "row")
-    return (
-      <TgButton
-        variant={rowOpen ? "primary" : "secondary"}
-        size="sm"
-        className="h-9 gap-1.5"
-        aria-expanded={rowOpen}
-        onClick={() => onRowOpenChange(!rowOpen)}
-      >
-        {rowOpen ? <X size={13} /> : <Plus size={13} />}
-        Follow
-      </TgButton>
-    )
+  ChannelControlsProps & { layout: FollowLayout }
+> = ({ layout, ...p }) => {
   if (layout === "inline") return <InlineFollow {...p} />
   if (layout === "bulk") return <BulkFollow {...p} />
   return (
@@ -246,129 +228,5 @@ const BulkFollow: React.FC<ChannelControlsProps> = (p) => {
         </TgButton>
       </div>
     </Pop>
-  )
-}
-
-/** F4: a full-width row that opens under row 1 with room to explain itself. */
-export const FollowRow: React.FC<
-  ChannelControlsProps & { onClose: () => void }
-> = ({ onClose, ...p }) => {
-  const value = p.inlineChannelName
-  const parsed = value.trim() ? parseHandle(value, p.channels) : null
-  return (
-    <form
-      id="tour-add-channel"
-      className="flex flex-wrap items-center gap-3 border-t border-app-ink/10 bg-app-muted/30 px-3 py-3"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (parsed?.status === "new") p.onAddChannel()
-      }}
-      onKeyDown={(e) => e.key === "Escape" && onClose()}
-    >
-      <div className="relative min-w-[260px] flex-1">
-        <AtSign
-          size={15}
-          className="pointer-events-none absolute left-3 top-[13px] text-app-ink/40"
-        />
-        <TgInput
-          autoFocus
-          variant="muted"
-          value={value}
-          onChange={(e) => p.onInlineChannelNameChange(e.target.value)}
-          placeholder="channel handle, @handle, t.me/handle or t.me/s/handle"
-          className="h-10 py-0 pl-9 text-[13px]"
-        />
-      </div>
-      <div className="min-w-40">
-        {parsed ? (
-          <StatusLine parsed={parsed} />
-        ) : (
-          <span className="text-[10px] text-app-ink/45">
-            Syncs its history once followed
-          </span>
-        )}
-      </div>
-      <TgButton
-        type="submit"
-        size="sm"
-        className="h-10 px-4"
-        disabled={parsed?.status !== "new"}
-      >
-        Follow
-      </TgButton>
-      <TgButton
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-10"
-        onClick={onClose}
-      >
-        Cancel
-      </TgButton>
-    </form>
-  )
-}
-
-/** F2: the search box proposes following what you typed when it names no channel you have. */
-export const OmniSearch: React.FC<ChannelControlsProps> = (p) => {
-  const [open, setOpen] = useState(false)
-  const query = p.channelSearch
-  const parsed = query.trim() ? parseHandle(query, p.channels) : null
-  const follow = () => {
-    if (parsed?.status !== "new") return
-    p.onFollowNames([parsed.handle])
-    setOpen(false)
-  }
-  return (
-    <div className="relative min-w-[200px] flex-1" id="tour-add-channel">
-      <Search
-        size={14}
-        className="pointer-events-none absolute inset-y-0 left-3 my-auto text-app-ink/40"
-      />
-      <TgInput
-        variant="muted"
-        value={query}
-        onChange={(e) => {
-          p.onChannelSearchChange(e.target.value)
-          setOpen(true)
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && p.filteredCount === 0) follow()
-          if (e.key === "Escape") setOpen(false)
-        }}
-        placeholder="Search your channels, or paste a handle to follow"
-        className="h-9 py-0 pl-9"
-      />
-      {open && parsed && (
-        <div className="absolute inset-x-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-app-ink/15 bg-app-card text-[11px] shadow-xl">
-          <div className="px-3 py-2 text-app-ink/60">
-            {p.filteredCount} of your channels match “{query}”
-          </div>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={follow}
-            disabled={parsed.status !== "new"}
-            className="flex w-full items-center gap-2 border-t border-app-ink/10 px-3 py-2 text-left font-semibold hover:bg-app-ink/5 disabled:cursor-default disabled:hover:bg-transparent"
-          >
-            <Plus size={12} />
-            {parsed.status === "new" ? (
-              <>
-                Follow @{parsed.handle}
-                {p.filteredCount === 0 && (
-                  <kbd className="ml-auto rounded border border-app-ink/20 px-1 text-[9px] text-app-ink/50">
-                    Enter
-                  </kbd>
-                )}
-              </>
-            ) : (
-              <StatusLine parsed={parsed} />
-            )}
-          </button>
-        </div>
-      )}
-    </div>
   )
 }
