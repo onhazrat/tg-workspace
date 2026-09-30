@@ -25,10 +25,12 @@ export type Cond =
   | { type: "language"; value: string }
   | { type: "metric"; metric: MetricKey; min?: number; max?: number }
 
-export type AtomNode = { kind: "atom"; id: string; cond: Cond }
+/** `not` flips the node's answer: "not tag:x", "not (a or b)". */
+export type AtomNode = { kind: "atom"; id: string; cond: Cond; not?: boolean }
 export type GroupNode = {
   kind: "group"
   id: string
+  not?: boolean
   op: Joiner
   children: FilterNode[]
 }
@@ -61,17 +63,32 @@ export function testCond(cond: Cond, c: Channel, inputs: MetricInputs) {
   }
 }
 
-/** An empty group passes everything, so an empty tree filters nothing. */
+/**
+ * An empty group passes everything, negated or not, so an empty tree (or a
+ * lone "not ()") filters nothing rather than hiding every channel.
+ */
 export function evalNode(
   n: FilterNode,
   c: Channel,
   inputs: MetricInputs,
 ): boolean {
-  if (n.kind === "atom") return testCond(n.cond, c, inputs)
-  if (n.children.length === 0) return true
-  return n.op === "and"
-    ? n.children.every((ch) => evalNode(ch, c, inputs))
-    : n.children.some((ch) => evalNode(ch, c, inputs))
+  if (n.kind === "group" && n.children.length === 0) return true
+  const r =
+    n.kind === "atom"
+      ? testCond(n.cond, c, inputs)
+      : n.op === "and"
+        ? n.children.every((ch) => evalNode(ch, c, inputs))
+        : n.children.some((ch) => evalNode(ch, c, inputs))
+  return n.not ? !r : r
+}
+
+/** Flip one node's `not`. The root may be negated too: "not (a and b)". */
+export function toggleNot(root: GroupNode, id: string): GroupNode {
+  if (root.id === id) return { ...root, not: !root.not }
+  return mapGroups(root, (g) => ({
+    ...g,
+    children: g.children.map((c) => (c.id === id ? { ...c, not: !c.not } : c)),
+  }))
 }
 
 export function atoms(n: FilterNode): AtomNode[] {
@@ -122,7 +139,10 @@ export function prune(root: GroupNode): GroupNode {
     children: g.children
       .filter((c) => c.kind === "atom" || c.children.length > 0)
       .map((c) =>
-        c.kind === "group" && c.children.length === 1 ? c.children[0] : c,
+        // "not (a)" collapses to "not a"; "not (not a)" to "a".
+        c.kind === "group" && c.children.length === 1
+          ? { ...c.children[0], not: !!c.children[0].not !== !!c.not }
+          : c,
       ),
   }))
 }
@@ -249,7 +269,11 @@ export function groupWith(
   )
 }
 
-/** Remove a group's parentheses, splicing its children into its parent. */
+/**
+ * Remove a group's parentheses, splicing its children into its parent. The
+ * editors only offer this on a group without `not`, since dropping the
+ * parentheses of "not (a or b)" would silently change what it means.
+ */
 export function unwrap(root: GroupNode, groupId: string): GroupNode {
   return prune(
     mapGroups(root, (g) => ({
@@ -360,13 +384,15 @@ export function condLabel(c: Cond, names: Names): string {
 }
 
 export function toText(n: FilterNode, names: Names, top = true): string {
-  if (n.kind === "atom") return condText(n.cond, names)
+  const not = n.not ? "not " : ""
+  if (n.kind === "atom") return `${not}${condText(n.cond, names)}`
   const inner = n.children.map((c) => toText(c, names, false)).join(` ${n.op} `)
+  if (n.not) return `not (${inner})`
   return top || n.children.length < 2 ? inner : `(${inner})`
 }
 
 type Tok =
-  | { t: "(" | ")" | "and" | "or"; at: number }
+  | { t: "(" | ")" | "and" | "or" | "not"; at: number }
   | { t: "atom"; cond: Cond; at: number; len: number }
 
 export type ParseResult =
@@ -401,6 +427,11 @@ function tokenize(raw: string, names: Names): Tok[] {
     }
     if (ch === "(" || ch === ")") {
       out.push({ t: ch, at: i })
+      i++
+      continue
+    }
+    if (ch === "!") {
+      out.push({ t: "not", at: i })
       i++
       continue
     }
@@ -442,7 +473,11 @@ function tokenize(raw: string, names: Names): Tok[] {
     const prefix = w[1]?.slice(0, -1).toLowerCase()
     const text = w[2] ?? w[3]
     const lower = text.toLowerCase()
-    if (!prefix && w[3] && (lower === "and" || lower === "or")) {
+    if (
+      !prefix &&
+      w[3] &&
+      (lower === "and" || lower === "or" || lower === "not")
+    ) {
       out.push({ t: lower, at: i })
     } else {
       let cond: Cond
@@ -470,8 +505,9 @@ function tokenize(raw: string, names: Names): Tok[] {
 /**
  * or-expr  := and-expr ("or" and-expr)*
  * and-expr := primary ("and" primary)*
- * primary  := atom | "(" or-expr ")"
- * AND binds tighter than OR, as in every query language people already know.
+ * primary  := "not" primary | atom | "(" or-expr ")"
+ * NOT binds tightest, then AND, then OR, as in every query language people
+ * already know: "not a or b and c" is "(not a) or (b and c)".
  */
 export function parse(src: string, names: Names): ParseResult {
   try {
@@ -485,6 +521,11 @@ export function parse(src: string, names: Names): ParseResult {
     const primary = (): FilterNode => {
       const t = peek()
       if (!t) throw new ParseError("Expression ends too early", src.length)
+      if (t.t === "not") {
+        i++
+        const inner = primary()
+        return { ...inner, not: !inner.not }
+      }
       if (t.t === "atom") {
         i++
         return { kind: "atom", id: newId(), cond: t.cond }
@@ -504,7 +545,7 @@ export function parse(src: string, names: Names): ParseResult {
     }
     const andExpr = (): FilterNode => {
       const parts = [primary()]
-      while (peek()?.t === "and" || peek()?.t === "atom" || peek()?.t === "(") {
+      while (["and", "atom", "(", "not"].includes(peek()?.t ?? "")) {
         if (peek()?.t === "and") i++ // two conditions side by side mean AND
         parts.push(primary())
       }

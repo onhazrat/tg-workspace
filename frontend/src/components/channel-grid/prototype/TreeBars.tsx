@@ -50,6 +50,7 @@ import {
   removeNode,
   replaceNode,
   setOp,
+  toggleNot,
   toText,
   unwrap,
   wrap,
@@ -260,6 +261,27 @@ const chip =
   "inline-flex h-6 items-center gap-1 rounded-full border border-app-ink/15 bg-app-card pl-2 pr-0.5 text-[10px] font-semibold"
 
 /** One condition: click to change it, × to remove it. */
+/** NOT on one node: faint "not" when off, a red NOT when on. */
+const NotToggle: React.FC<{ on?: boolean; onClick: () => void }> = ({
+  on,
+  onClick,
+}) => (
+  <button
+    type="button"
+    aria-pressed={!!on}
+    title={on ? "Remove NOT" : "Negate: match what this does not"}
+    onClick={onClick}
+    className={cn(
+      "rounded px-1 text-[8px] font-bold uppercase tracking-widest",
+      on
+        ? "bg-red-500 text-white"
+        : "text-app-ink/30 hover:bg-app-ink/10 hover:text-app-ink",
+    )}
+  >
+    not
+  </button>
+)
+
 const AtomChip: React.FC<{
   p: ChannelControlsProps
   node: AtomNode
@@ -275,8 +297,13 @@ const AtomChip: React.FC<{
         chip,
         dragProps?.draggable && "cursor-grab active:cursor-grabbing",
         highlight && "ring-2 ring-app-ink/50",
+        node.not && "border-red-500/50 bg-red-500/5",
       )}
     >
+      <NotToggle
+        on={node.not}
+        onClick={() => p.onFilterTreeChange(toggleNot(tree, node.id))}
+      />
       <span className="text-app-ink/45">{TYPE_ICON[node.cond.type]}</span>
       <Picker
         p={p}
@@ -494,7 +521,14 @@ export const BlocksBar: React.FC<ChannelControlsProps> = (p) => {
     )
     if (!style)
       return (
-        <span className="inline-flex flex-wrap items-center gap-1">{body}</span>
+        <span className="inline-flex flex-wrap items-center gap-1">
+          {g.children.length > 0 && (
+            <NotToggle on={g.not} onClick={() => set(toggleNot(tree, g.id))} />
+          )}
+          {g.not && <span className="text-[14px] text-red-500">(</span>}
+          {body}
+          {g.not && <span className="text-[14px] text-red-500">)</span>}
+        </span>
       )
     return (
       <span
@@ -504,8 +538,10 @@ export const BlocksBar: React.FC<ChannelControlsProps> = (p) => {
           style.border,
           style.bg,
           over === g.id && "ring-2 ring-app-ink/50",
+          g.not && "border-red-500/60 bg-red-500/5",
         )}
       >
+        <NotToggle on={g.not} onClick={() => set(toggleNot(tree, g.id))} />
         <span className={cn("text-[14px] font-light leading-none", style.text)}>
           (
         </span>
@@ -513,14 +549,16 @@ export const BlocksBar: React.FC<ChannelControlsProps> = (p) => {
         <span className={cn("text-[14px] font-light leading-none", style.text)}>
           )
         </span>
-        <button
-          type="button"
-          title="Remove these parentheses"
-          onClick={() => set(unwrap(tree, g.id))}
-          className="hidden h-5 w-5 place-items-center rounded-full text-app-ink/50 hover:bg-app-ink/15 group-hover/paren:grid"
-        >
-          <X size={10} />
-        </button>
+        {!g.not && (
+          <button
+            type="button"
+            title="Remove these parentheses"
+            onClick={() => set(unwrap(tree, g.id))}
+            className="hidden h-5 w-5 place-items-center rounded-full text-app-ink/50 hover:bg-app-ink/15 group-hover/paren:grid"
+          >
+            <X size={10} />
+          </button>
+        )}
       </span>
     )
   }
@@ -540,6 +578,29 @@ export const BlocksBar: React.FC<ChannelControlsProps> = (p) => {
 }
 
 // ---- T2: an outline you indent ------------------------------------------
+
+/** A group's op and its NOT, said the way the outline reads them. */
+const GROUP_MODES: {
+  label: string
+  op: Joiner
+  not: boolean
+  title: string
+}[] = [
+  { label: "all", op: "and", not: false, title: "Every row must match" },
+  { label: "any", op: "or", not: false, title: "At least one row must match" },
+  {
+    label: "none",
+    op: "or",
+    not: true,
+    title: "No row may match: NOT (a OR b)",
+  },
+  {
+    label: "not all",
+    op: "and",
+    not: true,
+    title: "At least one row must fail: NOT (a AND b)",
+  },
+]
 
 /**
  * A one-line summary in the bar; "Edit" opens the outline under it. Each row
@@ -612,23 +673,39 @@ export const OutlineBar: React.FC<ChannelControlsProps> = (p) => {
         <div className="flex items-center gap-2 text-[10px] font-semibold text-app-ink/60">
           {depth === 0 ? "Show channels that match" : "Match"}
           <span className="inline-flex rounded-md border border-app-ink/15 p-0.5">
-            {(["and", "or"] as const).map((op) => (
-              <button
-                key={op}
-                type="button"
-                aria-pressed={g.op === op}
-                onClick={() => set(setOp(tree, g.id, op))}
-                className={cn(
-                  "rounded px-2 py-0.5 uppercase tracking-wide",
-                  g.op === op ? "bg-app-ink text-app-bg" : "hover:text-app-ink",
-                )}
-              >
-                {op === "and" ? "all" : "any"}
-              </button>
-            ))}
+            {GROUP_MODES.map((m) => {
+              const on = g.op === m.op && !!g.not === m.not
+              return (
+                <button
+                  key={m.label}
+                  type="button"
+                  aria-pressed={on}
+                  title={m.title}
+                  onClick={() =>
+                    set(
+                      setOp(
+                        !!g.not === m.not ? tree : toggleNot(tree, g.id),
+                        g.id,
+                        m.op,
+                      ),
+                    )
+                  }
+                  className={cn(
+                    "rounded px-2 py-0.5 uppercase tracking-wide",
+                    on
+                      ? m.not
+                        ? "bg-red-500 text-white"
+                        : "bg-app-ink text-app-bg"
+                      : "hover:text-app-ink",
+                  )}
+                >
+                  {m.label}
+                </button>
+              )
+            })}
           </span>
           of the following
-          {depth > 0 && (
+          {depth > 0 && !g.not && (
             <button
               type="button"
               title="Remove these parentheses, keep the rows"
@@ -802,7 +879,7 @@ export const ExpressionBar: React.FC<ChannelControlsProps> = (p) => {
             <div>
               tag tech · tag:"Hacker News" · important (a bare word is a tag)
             </div>
-            <div>group default · lang fa</div>
+            <div>group default · lang fa · not tag spam · not (a or b)</div>
             <div>
               reach &gt; 200 · subs &lt;= 1000 · activity rate &lt; 10 · reach
               200..1000
@@ -810,9 +887,9 @@ export const ExpressionBar: React.FC<ChannelControlsProps> = (p) => {
           </div>
           <PopLabel>Combining</PopLabel>
           <div className="px-2 text-[10px] text-app-ink/70">
-            and, or, ( ). AND binds tighter than OR, so a or b and c is a or (b
-            and c). Two conditions side by side mean AND. &gt; and &lt; include
-            the number.
+            and, or, not (or !), ( ). NOT binds tightest, then AND, then OR, so
+            not a or b and c is (not a) or (b and c). Two conditions side by
+            side mean AND. &gt; and &lt; include the number.
           </div>
           <PopLabel>Numbers</PopLabel>
           <div className="px-2 font-mono text-[10px] text-app-ink/70">
@@ -867,7 +944,18 @@ export const ExpressionBar: React.FC<ChannelControlsProps> = (p) => {
 
 /** How the parser read the text: nested boxes, no editing. */
 const ReadAs: React.FC<{ p: ChannelControlsProps }> = ({ p }) => {
-  const render = (n: FilterNode, depth: number): React.ReactNode => {
+  const render = (n: FilterNode, depth: number): React.ReactNode =>
+    n.not ? (
+      <span className="inline-flex items-center gap-1">
+        <span className="rounded bg-red-500 px-1 text-[8px] font-bold uppercase text-white">
+          not
+        </span>
+        {renderBare(n, depth)}
+      </span>
+    ) : (
+      renderBare(n, depth)
+    )
+  const renderBare = (n: FilterNode, depth: number): React.ReactNode => {
     if (n.kind === "atom")
       return (
         <span className="inline-flex items-center gap-1 rounded-full border border-app-ink/10 bg-app-card px-2 py-0.5 text-[10px]">
