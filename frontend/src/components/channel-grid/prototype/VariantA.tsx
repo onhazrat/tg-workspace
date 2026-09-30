@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Filter,
   Hash,
+  Languages,
   Layers,
   Plus,
   RefreshCw,
@@ -23,6 +24,7 @@ import {
   ZoomOut,
 } from "lucide-react"
 import type React from "react"
+import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { CARD_ZOOM_LEVELS, type CardZoom } from "@/lib/channels/card-zoom"
@@ -51,6 +53,10 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
   const activeLanguage = p.allLanguages.find(
     (l) => l.code === p.selectedLanguageFilter,
   )
+  const activeTag = p.activeTagFilter
+    ? (p.pseudoTagChips.find((c) => c.id === p.activeTagFilter)?.label ??
+      p.activeTagFilter)
+    : undefined
 
   return (
     <div className="sticky top-0 z-20 rounded-xl border border-app-ink/10 bg-app-card/95 shadow-sm backdrop-blur">
@@ -70,148 +76,66 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
           />
         </div>
 
-        <Pop
-          trigger={
-            <button
-              type="button"
-              className={cn(trigger, activeGroup && activeTrigger)}
-            >
-              <Layers size={13} />
-              {activeGroup ? activeGroup.name : "Groups"}
-              <ChevronDown size={12} className="opacity-50" />
-            </button>
-          }
-          className="w-72"
-        >
-          <PopLabel>Tick to select · funnel to show only that group</PopLabel>
-          {p.groups.map((g) => {
-            const names = getChannelNamesInGroup(p.channels, g.id)
-            const s = chipSelection(names, p.selectedChannels)
-            const filtering = p.activeGroupFilter === g.id
-            return (
-              <CheckRow
-                key={g.id}
-                state={s.state}
-                onClick={() => p.onToggleGroupSelection(g.id)}
-                trailing={
-                  <>
-                    <span className="text-[10px] tabular-nums text-app-ink/50">
-                      {s.selectedCount}/{s.total}
-                    </span>
-                    <button
-                      type="button"
-                      title={filtering ? "Show all groups" : "Show only this"}
-                      onClick={() => p.onSetGroupFilter(filtering ? "" : g.id)}
-                      className={cn(
-                        "mr-1 grid h-6 w-6 place-items-center rounded",
-                        filtering
-                          ? "bg-app-ink text-app-bg"
-                          : "text-app-ink/40 opacity-0 hover:bg-app-ink/10 group-hover:opacity-100",
-                      )}
-                    >
-                      <Filter size={11} />
-                    </button>
-                  </>
-                }
-              >
-                {g.name}
-                {g.isDefault && (
-                  <span className="ml-1 text-app-ink/40">default</span>
-                )}
-              </CheckRow>
-            )
-          })}
-        </Pop>
-
-        <Pop
-          trigger={
-            <button type="button" className={trigger}>
-              <Tag size={13} />
-              Tags
-              <ChevronDown size={12} className="opacity-50" />
-            </button>
-          }
-          className="w-72"
-        >
-          <TgInput
-            variant="muted"
-            value={p.tagSearch}
-            onChange={(e) => p.onTagSearchChange(e.target.value)}
-            placeholder="Search tags…"
-            data-testid="channel-tag-search"
-            className="mb-1 h-8 py-0 text-[11px]"
-          />
-          <PopLabel>Tick to select every channel with the tag</PopLabel>
-          {p.visibleTags.map((tag) => {
-            const s = chipSelection(
-              getChannelNamesWithTag(p.channels, tag),
-              p.selectedChannels,
-            )
-            return (
-              <CheckRow
-                key={tag}
-                state={s.state}
-                onClick={() => p.onToggleTag(tag)}
-                trailing={
-                  <span className="mr-2 text-[10px] tabular-nums text-app-ink/50">
-                    {s.selectedCount}/{s.total}
-                  </span>
-                }
-              >
-                {tag}
-              </CheckRow>
-            )
-          })}
-          {p.pseudoTagChips.length > 0 && <PopLabel>Derived</PopLabel>}
-          {p.pseudoTagChips.map((chip) => {
-            const s = chipSelection(chip.channelNames, p.selectedChannels)
-            return (
-              <CheckRow
-                key={chip.id}
-                state={s.state}
-                title={chip.tooltip}
-                onClick={() => p.onToggleTag(chip.id)}
-                trailing={
-                  <span className="mr-2 text-[10px] tabular-nums text-app-ink/50">
-                    {s.selectedCount}/{s.total}
-                  </span>
-                }
-              >
-                {chip.label}
-              </CheckRow>
-            )
-          })}
-        </Pop>
-
+        <FacetMenu
+          icon={<Layers size={13} />}
+          label="Groups"
+          activeLabel={activeGroup?.name}
+          noun="group"
+          rows={p.groups.map((g) => ({
+            id: g.id,
+            label: g.name,
+            hint: g.isDefault ? "default" : undefined,
+            names: getChannelNamesInGroup(p.channels, g.id),
+          }))}
+          selectedChannels={p.selectedChannels}
+          activeFilter={p.activeGroupFilter}
+          onToggleSelect={p.onToggleGroupSelection}
+          onSetFilter={p.onSetGroupFilter}
+        />
+        <FacetMenu
+          icon={<Tag size={13} />}
+          label="Tags"
+          activeLabel={activeTag}
+          noun="tag"
+          search={{ value: p.tagSearch, onChange: p.onTagSearchChange }}
+          rows={[
+            ...p.visibleTags.map((tag) => ({
+              id: tag,
+              label: tag,
+              names: getChannelNamesWithTag(p.channels, tag),
+            })),
+            ...p.pseudoTagChips.map((chip) => ({
+              id: chip.id,
+              label: chip.label,
+              title: chip.tooltip,
+              section: "Derived",
+              names: chip.channelNames,
+            })),
+          ]}
+          selectedChannels={p.selectedChannels}
+          activeFilter={p.activeTagFilter}
+          onToggleSelect={p.onToggleTag}
+          onSetFilter={p.onSetTagFilter}
+        />
         {p.allLanguages.length > 0 && (
-          <Pop
-            trigger={
-              <button
-                type="button"
-                className={cn(trigger, activeLanguage && activeTrigger)}
-              >
-                {activeLanguage ? activeLanguage.name : "Language"}
-                <ChevronDown size={12} className="opacity-50" />
-              </button>
-            }
-            className="w-52"
-          >
-            {[{ code: "", name: "All languages" }, ...p.allLanguages].map(
-              (l) => (
-                <button
-                  key={l.code}
-                  type="button"
-                  onClick={() => p.onLanguageFilterChange(l.code)}
-                  className={cn(
-                    "block w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold hover:bg-app-ink/5",
-                    p.selectedLanguageFilter === l.code && "bg-app-ink/10",
-                  )}
-                >
-                  {l.name}
-                </button>
-              ),
-            )}
-          </Pop>
+          <FacetMenu
+            icon={<Languages size={13} />}
+            label="Languages"
+            activeLabel={activeLanguage?.name}
+            noun="language"
+            rows={p.allLanguages.map((l) => ({
+              id: l.code,
+              label: l.name,
+              hint: l.code,
+              names: p.channels
+                .filter((c) => c.language === l.code)
+                .map((c) => c.name),
+            }))}
+            selectedChannels={p.selectedChannels}
+            activeFilter={p.selectedLanguageFilter}
+            onToggleSelect={p.onToggleLanguageSelection}
+            onSetFilter={p.onLanguageFilterChange}
+          />
         )}
 
         <div className="flex">
@@ -357,6 +281,11 @@ export const VariantA: React.FC<ChannelControlsProps> = (p) => {
             {activeGroup && (
               <FilterPill onClear={() => p.onSetGroupFilter("")}>
                 Group: {activeGroup.name}
+              </FilterPill>
+            )}
+            {activeTag && (
+              <FilterPill onClear={() => p.onSetTagFilter("")}>
+                Tag: {activeTag}
               </FilterPill>
             )}
             {activeLanguage && (
@@ -611,3 +540,140 @@ export const InlineField: React.FC<{
     </TgButton>
   </form>
 )
+
+type FacetRow = {
+  id: string
+  label: string
+  names: string[]
+  hint?: string
+  title?: string
+  section?: string
+}
+
+/**
+ * One dropdown per facet (group, tag, language), all alike: search, tick to
+ * select every channel in the row, funnel to show only that row.
+ */
+const FacetMenu: React.FC<{
+  icon: React.ReactNode
+  label: string
+  activeLabel?: string
+  noun: string
+  rows: FacetRow[]
+  selectedChannels: Set<string>
+  activeFilter: string
+  onToggleSelect: (id: string) => void
+  onSetFilter: (id: string) => void
+  /** Controlled search; the menu keeps its own when absent. */
+  search?: { value: string; onChange: (value: string) => void }
+}> = (m) => {
+  const [localQuery, setLocalQuery] = useState("")
+  const query = m.search ? m.search.value : localQuery
+  const setQuery = m.search ? m.search.onChange : setLocalQuery
+  // A controlled search is already applied upstream (the tag list is filtered).
+  const rows = m.search
+    ? m.rows
+    : m.rows.filter((r) =>
+        `${r.label} ${r.hint ?? ""}`
+          .toLowerCase()
+          .includes(query.trim().toLowerCase()),
+      )
+  const selectedInFacet = m.rows.filter((r) =>
+    r.names.some((n) => m.selectedChannels.has(n)),
+  ).length
+
+  return (
+    <Pop
+      trigger={
+        <button
+          type="button"
+          className={cn(trigger, m.activeLabel && activeTrigger)}
+        >
+          {m.icon}
+          {m.activeLabel ?? m.label}
+          {selectedInFacet > 0 && (
+            <span className="rounded-full bg-app-ink/15 px-1.5 text-[9px] tabular-nums">
+              {selectedInFacet}
+            </span>
+          )}
+          <ChevronDown size={12} className="opacity-50" />
+        </button>
+      }
+      className="w-80"
+    >
+      <TgInput
+        autoFocus
+        variant="muted"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={`Search ${m.label.toLowerCase()}…`}
+        data-testid={m.noun === "tag" ? "channel-tag-search" : undefined}
+        className="mb-1 h-8 py-0 text-[11px]"
+      />
+      <div className="flex items-center justify-between px-2 pb-1 pt-2 text-[9px] font-bold uppercase tracking-widest text-app-ink/45">
+        <span>Tick selects · funnel shows only</span>
+        <span>selected / total</span>
+      </div>
+      {rows.length === 0 && (
+        <div className="px-2 py-3 text-[11px] text-app-ink/50">
+          No {m.noun} matches “{query}”
+        </div>
+      )}
+      {rows.map((r, i) => {
+        const s = chipSelection(r.names, m.selectedChannels)
+        const filtering = m.activeFilter === r.id
+        const newSection = r.section && r.section !== rows[i - 1]?.section
+        return (
+          <div key={r.id}>
+            {newSection && <PopLabel>{r.section}</PopLabel>}
+            <CheckRow
+              state={s.state}
+              title={r.title}
+              onClick={() => m.onToggleSelect(r.id)}
+              trailing={
+                <>
+                  <span className="text-[10px] tabular-nums text-app-ink/50">
+                    <span
+                      className={cn(
+                        s.selectedCount > 0 && "font-bold text-app-ink",
+                      )}
+                    >
+                      {s.selectedCount}
+                    </span>
+                    /{s.total}
+                  </span>
+                  <button
+                    type="button"
+                    title={
+                      filtering ? `Show every ${m.noun}` : "Show only this"
+                    }
+                    aria-label={
+                      filtering
+                        ? `Show every ${m.noun}`
+                        : `Show only ${r.label}`
+                    }
+                    aria-pressed={filtering}
+                    onClick={() => m.onSetFilter(filtering ? "" : r.id)}
+                    className={cn(
+                      "mr-1 grid h-6 w-6 place-items-center rounded",
+                      filtering
+                        ? "bg-app-ink text-app-bg"
+                        : "text-app-ink/40 opacity-0 hover:bg-app-ink/10 group-hover:opacity-100",
+                    )}
+                  >
+                    <Filter size={11} />
+                  </button>
+                </>
+              }
+            >
+              {r.label}
+              {r.hint && (
+                <span className="ml-1.5 text-app-ink/40">{r.hint}</span>
+              )}
+            </CheckRow>
+          </div>
+        )
+      })}
+    </Pop>
+  )
+}

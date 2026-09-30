@@ -25,6 +25,7 @@ import {
   getChannelNamesWithTag,
   toggleNamesInSelection,
 } from "@/lib/channels/channel-grid-chips"
+import { getTagNames } from "@/lib/channels/channel-tag-model"
 import {
   buildChannelPseudoTagChips,
   filterTagsBySearch,
@@ -102,15 +103,29 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const actions = useChannelGridActions()
   const { sortedSettingGroups } = actions
 
-  const filteredChannels = useMemo(
-    () =>
-      filterChannelsForGrid(channels, {
-        groupFilter: selectedGroupFilter,
-        languageFilter: selectedLanguageFilter,
-        search: channelSearch,
-      }),
-    [channels, channelSearch, selectedLanguageFilter, selectedGroupFilter],
-  )
+  // PROTOTYPE, throwaway: "show only this tag", which today's bar lacks.
+  const [prototypeTagFilter, setPrototypeTagFilter] = useState("")
+
+  const filteredChannels = useMemo(() => {
+    const byFacets = filterChannelsForGrid(channels, {
+      groupFilter: selectedGroupFilter,
+      languageFilter: selectedLanguageFilter,
+      search: channelSearch,
+    })
+    if (!prototypeTagFilter) return byFacets
+    const pseudo = findChannelPseudoTag(prototypeTagFilter)
+    return byFacets.filter((c) =>
+      pseudo
+        ? pseudo.matches(c)
+        : getTagNames(c.tags).includes(prototypeTagFilter),
+    )
+  }, [
+    channels,
+    channelSearch,
+    selectedLanguageFilter,
+    selectedGroupFilter,
+    prototypeTagFilter,
+  ])
 
   // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
   const postsInScopeCounts = useScopedPostCounts()
@@ -220,6 +235,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     channelSearch,
     selectedLanguageFilter,
     selectedGroupFilter,
+    prototypeTagFilter,
     sortBy,
     sortDirection,
   ])
@@ -315,7 +331,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     hasChannels: channels.length > 0,
     totalCount: channels.length,
     filteredCount: filteredChannels.length,
-    isFilteringActive,
+    isFilteringActive: isFilteringActive || prototypeTagFilter !== "",
     selectedChannels,
     onSelectAll: handleSelectAll,
     onUnselectAll: handleUnselectAll,
@@ -335,6 +351,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     visibleTags,
     pseudoTagChips,
     onToggleTag: toggleTagSelection,
+    activeTagFilter: prototypeTagFilter,
+    onSetTagFilter: setPrototypeTagFilter,
     includeChannelBioInPrompt,
     onIncludeChannelBioInPromptChange: setIncludeChannelBioInPrompt,
     includeChannelTagsInPrompt,
@@ -342,6 +360,15 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     allLanguages,
     selectedLanguageFilter,
     onLanguageFilterChange: setSelectedLanguageFilter,
+    onToggleLanguageSelection: (code: string) => {
+      const names = channels
+        .filter((c) => c.language === code)
+        .map((c) => c.name)
+      const allSelected = areAllNamesSelected(names, selectedChannels)
+      setSelectedChannels((prev) =>
+        toggleNamesInSelection(prev, names, allSelected),
+      )
+    },
     sortBy,
     onSortByChange: setSortBy,
     sortDirection,

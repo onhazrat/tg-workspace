@@ -55,6 +55,9 @@ export type ChannelControlsProps = {
   visibleTags: string[]
   pseudoTagChips: ChannelPseudoTagChip[]
   onToggleTag: (tag: string) => void
+  /** PROTOTYPE-only: "show only channels with this tag", "" for none. */
+  activeTagFilter: string
+  onSetTagFilter: (tag: string) => void
   // AI prompt context
   includeChannelBioInPrompt: boolean
   onIncludeChannelBioInPromptChange: (value: boolean) => void
@@ -64,6 +67,8 @@ export type ChannelControlsProps = {
   allLanguages: ChannelLanguageOption[]
   selectedLanguageFilter: string
   onLanguageFilterChange: (value: string) => void
+  /** PROTOTYPE-only: tick every channel in a language, like a group chip. */
+  onToggleLanguageSelection: (code: string) => void
   sortBy: ChannelGridSortOption
   onSortByChange: (value: ChannelGridSortOption) => void
   sortDirection: "asc" | "desc"
