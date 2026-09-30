@@ -14,6 +14,7 @@ import type { ChannelPseudoTagChip } from "@/lib/channels/channel-tags"
 import type { ChannelLanguageOption } from "@/lib/channels/filter-channels-for-grid"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
 import type { Channel, ChannelSettingGroup } from "@/types"
+import type { MetricInputs, NumericFilter } from "./metrics"
 
 export type ChannelControlsProps = {
   // Follow a channel
@@ -73,6 +74,10 @@ export type ChannelControlsProps = {
   onLanguageFiltersChange: (codes: string[]) => void
   /** PROTOTYPE-only: tick every channel in a language, like a group chip. */
   onToggleLanguageSelection: (code: string) => void
+  /** PROTOTYPE-only: bounds on numeric criteria; a channel must pass all. */
+  numericFilters: NumericFilter[]
+  onNumericFiltersChange: (filters: NumericFilter[]) => void
+  metricInputs: MetricInputs
   sortBy: ChannelGridSortOption
   onSortByChange: (value: ChannelGridSortOption) => void
   sortDirection: "asc" | "desc"

@@ -20,12 +20,23 @@ export const PROTOTYPE_VARIANTS = [
   { key: "F2", name: "A5 + search that offers to follow" },
   { key: "F3", name: "A5 + paste many to follow, left of search" },
   { key: "F4", name: "A5 + follow row that opens under the bar" },
+  { key: "N1", name: "F3 + numbers menu with ranges" },
+  { key: "N2", name: "F3 + filter builder, editable chips" },
+  { key: "N3", name: "F3 + percentile buckets" },
 ]
 
 const aVariant = (layout: ALayout): React.FC<ChannelControlsProps> =>
   function AVariant(p) {
     return <VariantA {...p} layout={layout} />
   }
+
+const F3_LAYOUT: ALayout = {
+  zoom: "row2",
+  ai: "pill",
+  display: "row2",
+  follow: "bulk",
+  followAt: "start",
+}
 
 const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   A: VariantA,
@@ -41,14 +52,11 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
     display: "row2",
     follow: "omnibox",
   }),
-  F3: aVariant({
-    zoom: "row2",
-    ai: "pill",
-    display: "row2",
-    follow: "bulk",
-    followAt: "start",
-  }),
+  F3: aVariant(F3_LAYOUT),
   F4: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "row" }),
+  N1: aVariant({ ...F3_LAYOUT, numeric: "ranges" }),
+  N2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
+  N3: aVariant({ ...F3_LAYOUT, numeric: "buckets" }),
 }
 
 /** The variant key in the URL, or "current". */

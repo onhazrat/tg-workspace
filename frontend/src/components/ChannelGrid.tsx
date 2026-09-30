@@ -13,6 +13,10 @@ import {
   PrototypeControls,
   usePrototypeVariant,
 } from "@/components/channel-grid/prototype"
+import {
+  type NumericFilter,
+  passesNumericFilters,
+} from "@/components/channel-grid/prototype/metrics"
 import type { ChannelControlsProps } from "@/components/channel-grid/prototype/types"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
@@ -111,6 +115,16 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [protoGroupFilters, setProtoGroupFilters] = useState<string[]>([])
   const [protoTagFilters, setProtoTagFilters] = useState<string[]>([])
   const [protoLanguageFilters, setProtoLanguageFilters] = useState<string[]>([])
+  const [protoNumericFilters, setProtoNumericFilters] = useState<
+    NumericFilter[]
+  >([])
+
+  // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
+  const postsInScopeCounts = useScopedPostCounts()
+  const metricInputs = useMemo(
+    () => ({ channelStats, postsInScopeCounts, now: Date.now() }),
+    [channelStats, postsInScopeCounts],
+  )
 
   const filteredChannels = useMemo(() => {
     const byFacets = filterChannelsForGrid(channels, {
@@ -130,7 +144,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         (protoLanguageFilters.length === 0 ||
           protoLanguageFilters.includes(c.language ?? "")) &&
         (protoTagFilters.length === 0 ||
-          protoTagFilters.some((t) => hasTag(c, t))),
+          protoTagFilters.some((t) => hasTag(c, t))) &&
+        passesNumericFilters(c, protoNumericFilters, metricInputs),
     )
   }, [
     channels,
@@ -141,10 +156,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     protoGroupFilters,
     protoLanguageFilters,
     protoTagFilters,
+    protoNumericFilters,
+    metricInputs,
   ])
-
-  // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
-  const postsInScopeCounts = useScopedPostCounts()
 
   const sortedFilteredChannels = useMemo(
     () =>
@@ -254,6 +268,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     protoGroupFilters,
     protoLanguageFilters,
     protoTagFilters,
+    protoNumericFilters,
     sortBy,
     sortDirection,
   ])
@@ -354,7 +369,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       channelSearch.trim() !== "" ||
       protoGroupFilters.length +
         protoTagFilters.length +
-        protoLanguageFilters.length >
+        protoLanguageFilters.length +
+        protoNumericFilters.length >
         0,
     selectedChannels,
     onSelectAll: handleSelectAll,
@@ -384,6 +400,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     allLanguages,
     languageFilters: protoLanguageFilters,
     onLanguageFiltersChange: setProtoLanguageFilters,
+    numericFilters: protoNumericFilters,
+    onNumericFiltersChange: setProtoNumericFilters,
+    metricInputs,
     onToggleLanguageSelection: (code: string) => {
       const names = channels
         .filter((c) => c.language === code)

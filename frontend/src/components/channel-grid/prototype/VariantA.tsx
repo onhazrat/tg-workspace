@@ -43,6 +43,12 @@ import {
   FollowRow,
   OmniSearch,
 } from "./Follow"
+import {
+  ActiveFiltersBar,
+  BucketMenu,
+  FilterBuilder,
+  RangeMenu,
+} from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
 import {
   type ChannelControlsProps,
@@ -69,6 +75,8 @@ export type ALayout = {
   follow?: FollowLayout
   /** "start" puts the follow control left of the search. */
   followAt?: "start"
+  /** Numeric filtering control on row 1; with it, an active-filters bar. */
+  numeric?: "ranges" | "builder" | "buckets"
 }
 
 export const VariantA: React.FC<
@@ -204,6 +212,9 @@ export const VariantA: React.FC<
             />
           )}
 
+          {layout.numeric === "ranges" && <RangeMenu {...p} />}
+          {layout.numeric === "builder" && <FilterBuilder {...p} />}
+          {layout.numeric === "buckets" && <BucketMenu {...p} />}
           <div className="flex">
             <Pop
               trigger={
@@ -327,6 +338,12 @@ export const VariantA: React.FC<
           </TgButton>
         </div>
 
+        {layout.numeric && (
+          <ActiveFiltersBar
+            {...p}
+            editableNumbers={layout.numeric === "builder"}
+          />
+        )}
         {layout.follow === "row" && followRowOpen && (
           <FollowRow {...p} onClose={() => setFollowRowOpen(false)} />
         )}
@@ -355,40 +372,47 @@ export const VariantA: React.FC<
                   ? `${p.filteredCount} of ${p.totalCount} channels`
                   : `${p.totalCount} channels`}
               </span>
-              {p.groupFilters.map((id) => (
-                <FilterPill
-                  key={`g-${id}`}
-                  onClear={() =>
-                    p.onGroupFiltersChange(without(p.groupFilters, id))
-                  }
-                >
-                  Group: {groupName(id)}
-                </FilterPill>
-              ))}
-              {p.tagFilters.map((id) => (
-                <FilterPill
-                  key={`t-${id}`}
-                  onClear={() =>
-                    p.onTagFiltersChange(without(p.tagFilters, id))
-                  }
-                >
-                  Tag: {tagName(id)}
-                </FilterPill>
-              ))}
-              {p.languageFilters.map((code) => (
-                <FilterPill
-                  key={`l-${code}`}
-                  onClear={() =>
-                    p.onLanguageFiltersChange(without(p.languageFilters, code))
-                  }
-                >
-                  Language: {languageName(code)}
-                </FilterPill>
-              ))}
-              {p.channelSearch && (
-                <FilterPill onClear={() => p.onChannelSearchChange("")}>
-                  “{p.channelSearch}”
-                </FilterPill>
+              {/* The N variants show these in the active-filters bar instead. */}
+              {!layout.numeric && (
+                <>
+                  {p.groupFilters.map((id) => (
+                    <FilterPill
+                      key={`g-${id}`}
+                      onClear={() =>
+                        p.onGroupFiltersChange(without(p.groupFilters, id))
+                      }
+                    >
+                      Group: {groupName(id)}
+                    </FilterPill>
+                  ))}
+                  {p.tagFilters.map((id) => (
+                    <FilterPill
+                      key={`t-${id}`}
+                      onClear={() =>
+                        p.onTagFiltersChange(without(p.tagFilters, id))
+                      }
+                    >
+                      Tag: {tagName(id)}
+                    </FilterPill>
+                  ))}
+                  {p.languageFilters.map((code) => (
+                    <FilterPill
+                      key={`l-${code}`}
+                      onClear={() =>
+                        p.onLanguageFiltersChange(
+                          without(p.languageFilters, code),
+                        )
+                      }
+                    >
+                      Language: {languageName(code)}
+                    </FilterPill>
+                  ))}
+                  {p.channelSearch && (
+                    <FilterPill onClear={() => p.onChannelSearchChange("")}>
+                      “{p.channelSearch}”
+                    </FilterPill>
+                  )}
+                </>
               )}
               <div className="ml-auto flex items-center gap-1">
                 <button

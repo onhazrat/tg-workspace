@@ -8,8 +8,17 @@ export const Pop: React.FC<{
   children: React.ReactNode
   className?: string
   align?: "start" | "center" | "end"
-}> = ({ trigger, children, className, align = "start" }) => (
-  <Popover.Root>
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}> = ({
+  trigger,
+  children,
+  className,
+  align = "start",
+  open,
+  onOpenChange,
+}) => (
+  <Popover.Root open={open} onOpenChange={onOpenChange}>
     <Popover.Trigger asChild>{trigger}</Popover.Trigger>
     <Popover.Portal>
       <Popover.Content
