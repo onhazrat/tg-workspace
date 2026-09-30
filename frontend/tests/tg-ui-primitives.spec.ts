@@ -310,7 +310,7 @@ test.describe("TG UI primitives", () => {
     expect(Math.abs(onAxis - (edge ?? 0))).toBeLessThanOrEqual(1.5)
   })
 
-  test("group filter chips and post filter chips use primitives", async ({
+  test("group filter chips use primitives, and a post filter pill fills when set", async ({
     page,
   }) => {
     await gotoWorkspace(page, "channels")
@@ -326,12 +326,18 @@ test.describe("TG UI primitives", () => {
 
     // Workspace tabs navigate to `?tab=`, so they are links, not buttons.
     await page.getByRole("link", { name: "Posts" }).click()
-    // Quick-range chips have no selected prop; use a post-type chip that does.
-    const filterChip = page.getByRole("button", { name: "Original Only" })
-    await expect(filterChip).toHaveAttribute("data-slot", "tg-filter-chip")
-    await expect(filterChip).toBeVisible()
-    await filterChip.click()
-    await expect(filterChip).toHaveAttribute("data-selected", "true")
+    // The post filters are pills on one bar since PFB-02, not filter chips.
+    const typePill = page.getByTestId("post-filter-pill-type")
+    await expect(typePill).toBeVisible()
+    await typePill.click()
+    const original = page.getByRole("radio", { name: /^○ Original$/ })
+    await original.click()
+    await expect(typePill).toContainText("Original")
+    await expect(typePill).toHaveClass(/bg-app-ink/)
+    // Put it back: the forwarded filter is not persisted, but later specs in
+    // this worker share the page state until a reload.
+    await typePill.click()
+    await page.getByRole("radio", { name: /All posts/ }).click()
   })
 
   test("history empty state uses TgHeroEmptyState", async ({ page }) => {
