@@ -21,6 +21,17 @@ import {
   passesLogic,
 } from "@/components/channel-grid/prototype/logic"
 import type { NumericFilter } from "@/components/channel-grid/prototype/metrics"
+import {
+  append,
+  atoms,
+  emptyTree,
+  evalNode,
+  type GroupNode,
+  makeNames,
+  removeWhere,
+  syncValues,
+  valuesOf,
+} from "@/components/channel-grid/prototype/tree"
 import type { ChannelControlsProps } from "@/components/channel-grid/prototype/types"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
@@ -35,6 +46,7 @@ import {
 } from "@/lib/channels/channel-grid-chips"
 import {
   buildChannelPseudoTagChips,
+  CHANNEL_PSEUDO_TAGS,
   filterTagsBySearch,
   findChannelPseudoTag,
 } from "@/lib/channels/channel-tags"
@@ -123,6 +135,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   >([])
   const [protoLogic, setProtoLogic] = useState<FilterLogic>(DEFAULT_LOGIC)
   const logicKind = logicKindFor(prototypeVariant)
+  const isTree = logicKind === "tree"
+  const [protoTree, setProtoTree] = useState<GroupNode>(emptyTree)
+  const treeNames = useMemo(
+    () => makeNames(sortedSettingGroups, CHANNEL_PSEUDO_TAGS),
+    [sortedSettingGroups],
+  )
 
   // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
   const postsInScopeCounts = useScopedPostCounts()
@@ -149,6 +167,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       logicKind,
       protoLogic,
     )
+    if (isTree)
+      return byFacets.filter((c) => evalNode(protoTree, c, metricInputs))
     return byFacets.filter((c) => passesLogic(c, conds, logicKind, protoLogic))
   }, [
     channels,
@@ -163,6 +183,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     metricInputs,
     logicKind,
     protoLogic,
+    isTree,
+    protoTree,
   ])
 
   const sortedFilteredChannels = useMemo(
@@ -390,23 +412,55 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     zoom: channelCardZoom,
     onZoomChange: setChannelCardZoom,
     groups: sortedSettingGroups,
-    groupFilters: protoGroupFilters,
-    onGroupFiltersChange: setProtoGroupFilters,
+    // T1-T3: the dropdowns read and write the tree instead of their lists.
+    groupFilters: isTree ? valuesOf(protoTree, "group") : protoGroupFilters,
+    onGroupFiltersChange: isTree
+      ? (next) => setProtoTree((t) => syncValues(t, "group", next))
+      : setProtoGroupFilters,
     onToggleGroupSelection: toggleGroupSelection,
     visibleTags,
     pseudoTagChips,
     onToggleTag: toggleTagSelection,
-    tagFilters: protoTagFilters,
-    onTagFiltersChange: setProtoTagFilters,
+    tagFilters: isTree ? valuesOf(protoTree, "tag") : protoTagFilters,
+    onTagFiltersChange: isTree
+      ? (next) => setProtoTree((t) => syncValues(t, "tag", next))
+      : setProtoTagFilters,
     includeChannelBioInPrompt,
     onIncludeChannelBioInPromptChange: setIncludeChannelBioInPrompt,
     includeChannelTagsInPrompt,
     onIncludeChannelTagsInPromptChange: setIncludeChannelTagsInPrompt,
     allLanguages,
-    languageFilters: protoLanguageFilters,
-    onLanguageFiltersChange: setProtoLanguageFilters,
-    numericFilters: protoNumericFilters,
-    onNumericFiltersChange: setProtoNumericFilters,
+    languageFilters: isTree
+      ? valuesOf(protoTree, "language")
+      : protoLanguageFilters,
+    onLanguageFiltersChange: isTree
+      ? (next) => setProtoTree((t) => syncValues(t, "language", next))
+      : setProtoLanguageFilters,
+    numericFilters: isTree
+      ? atoms(protoTree).flatMap((a) =>
+          a.cond.type === "metric" ? [a.cond] : [],
+        )
+      : protoNumericFilters,
+    onNumericFiltersChange: isTree
+      ? (next) =>
+          setProtoTree((t) =>
+            removeWhere(
+              t,
+              (c) =>
+                c.type === "metric" &&
+                !next.some(
+                  (f) =>
+                    f.metric === c.metric && f.min === c.min && f.max === c.max,
+                ),
+            ),
+          )
+      : setProtoNumericFilters,
+    onAddNumeric: isTree
+      ? (f) => setProtoTree((t) => append(t, "root", { type: "metric", ...f }))
+      : undefined,
+    filterTree: protoTree,
+    onFilterTreeChange: setProtoTree,
+    treeNames,
     metricInputs,
     logicKind,
     filterLogic: protoLogic,

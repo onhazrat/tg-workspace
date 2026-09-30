@@ -18,6 +18,9 @@ export const PROTOTYPE_VARIANTS = [
   { key: "F3", name: "A5 + paste many to follow, left of search" },
   { key: "N2", name: "F3 + Filters dropdown, active-filters bar" },
   { key: "L3", name: "N2 + every AND / OR is a toggle" },
+  { key: "T1", name: "L3 + nested groups: drag blocks" },
+  { key: "T2", name: "L3 + nested groups: outline you indent" },
+  { key: "T3", name: "L3 + nested groups: typed expression" },
 ]
 
 const aVariant = (layout: ALayout): React.FC<ChannelControlsProps> =>
@@ -41,11 +44,14 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   F3: aVariant(F3_LAYOUT),
   N2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
   L3: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
+  T1: aVariant({ ...F3_LAYOUT, numeric: "builder", tree: "blocks" }),
+  T2: aVariant({ ...F3_LAYOUT, numeric: "builder", tree: "outline" }),
+  T3: aVariant({ ...F3_LAYOUT, numeric: "builder", tree: "text" }),
 }
 
 /** How a variant combines its filter conditions. */
 export const logicKindFor = (variant: string): LogicKind =>
-  variant === "L3" ? "connectors" : "fixed"
+  variant === "L3" ? "connectors" : variant.startsWith("T") ? "tree" : "fixed"
 
 /** The variant key in the URL, or "current". */
 export function usePrototypeVariant() {

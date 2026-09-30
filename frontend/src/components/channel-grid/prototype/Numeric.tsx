@@ -216,7 +216,9 @@ export const NumericEditor: React.FC<{
   initial?: NumericFilter
   onDone: () => void
   onBack?: () => void
-}> = ({ p, metricKey, initial, onDone, onBack }) => {
+  /** Replaces the default "set this metric's one bound" write. */
+  onSubmit?: (f: NumericFilter) => void
+}> = ({ p, metricKey, initial, onDone, onBack, onSubmit }) => {
   const m = metric(metricKey)
   const values = metricValues(metricKey, p.channels, p.metricInputs)
   const [op, setOp] = useState<Op>(
@@ -244,9 +246,9 @@ export const NumericEditor: React.FC<{
       className="space-y-2 p-1"
       onSubmit={(e) => {
         e.preventDefault()
-        p.onNumericFiltersChange(
-          withFilter(p.numericFilters, { metric: metricKey, min, max }),
-        )
+        const f = { metric: metricKey, min, max }
+        if (onSubmit) onSubmit(f)
+        else p.onNumericFiltersChange(withFilter(p.numericFilters, f))
         onDone()
       }}
     >
@@ -359,7 +361,12 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
         <NumericEditor
           p={p}
           metricKey={picked}
-          initial={p.numericFilters.find((f) => f.metric === picked)}
+          initial={
+            p.onAddNumeric
+              ? undefined
+              : p.numericFilters.find((f) => f.metric === picked)
+          }
+          onSubmit={p.onAddNumeric}
           onDone={close}
           onBack={() => setPicked(null)}
         />
