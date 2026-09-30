@@ -278,10 +278,6 @@ class CurvePoints:
     def __call__(self, age_hours: float) -> float:
         return self._curve(age_hours)
 
-    @classmethod
-    def from_wire(cls, spec: Mapping[str, Any]) -> CurvePoints:
-        return cls(spec["kind"], tuple((float(a), float(b)) for a, b in spec["points"]))
-
     def wire(self) -> dict[str, Any]:
         return {"kind": self.kind, "points": [list(point) for point in self.points]}
 

@@ -59,7 +59,7 @@ describe("estimatedViews matches the shared fixture", () => {
 
   test("a wrong curve fails the fixture", () => {
     const wrong: ViewCurve = {
-      kind: "steps",
+      kind: "steps" as const,
       points: [
         [0, 0.5],
         [12, 0.9],

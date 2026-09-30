@@ -127,16 +127,7 @@ def _discover_kwargs(
         "signals": cast(
             "set[SignalKind] | None", _parse_discover_signals(body.signals)
         ),
-        "filters": parse_post_filters(
-            session,
-            body.keyword,
-            body.forwarded,
-            body.media,
-            body.languages,
-            view_measure=body.view_measure,
-            views=body.views,
-            sort=body.sort,
-        ),
+        "filters": parse_post_filters(session, body, sort=body.sort),
         "max_per_channel": body.max_per_channel,
         "max_per_channel_mode": body.max_per_channel_mode,
         "sort": body.sort,

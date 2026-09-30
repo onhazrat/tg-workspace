@@ -21,7 +21,12 @@ from sqlmodel import Session, col, select
 
 from app.jobs.settings import load_reach_settings
 from app.models_tg import Post, SettlingCurveFit, ViewObservation
-from app.services.post_filters import ViewMeasure, ViewReading
+from app.services.post_filters import (
+    VIEW_SORTS,
+    ViewMeasure,
+    ViewReading,
+    ViewsThreshold,
+)
 from app.services.reach import (
     MS_PER_HOUR,
     SEED_CURVE,
@@ -61,22 +66,27 @@ def current_curve(session: Session) -> CurvePoints:
     return CurvePoints("knots", tuple((age, share) for age, share in fit.knots))
 
 
+def current_estimate(session: Session) -> tuple[CurvePoints, ReachSettings]:
+    """The curve and the reach settings an Estimated View count reads through."""
+    return current_curve(session), reach_settings_from(load_reach_settings(session))
+
+
 def view_reading(
-    session: Session, measure: ViewMeasure, *, needed: bool = True
+    session: Session,
+    measure: ViewMeasure,
+    *,
+    views: ViewsThreshold | None = None,
+    sort: str = "newest",
 ) -> ViewReading:
     """What "views" means for one request (PFB-03, ADR-025).
 
-    The current curve and the reach settings are read only when an Estimated
-    View count will be: `needed` is whether the Scope has a views threshold or
-    a views order. Per request, never stored, so a refit reaches the next page.
+    The one place that decides whether a Scope reads an Estimated View count:
+    only a threshold or a views order does, so only then are the curve and the
+    settings read. Per request, never stored, so a refit reaches the next page.
     """
-    if measure == "views" or not needed:
+    if measure == "views" or (views is None and sort not in VIEW_SORTS):
         return ViewReading(measure)
-    return ViewReading(
-        measure,
-        current_curve(session),
-        reach_settings_from(load_reach_settings(session)),
-    )
+    return ViewReading(measure, *current_estimate(session))
 
 
 def observed_pairs(session: Session) -> ObservedPairs:

@@ -60,7 +60,7 @@ const channels = [makeChannel("alpha"), makeChannel("beta")]
 /** The seed curve at the default settings, as the server hands it over. */
 const SEED_ESTIMATE = {
   curve: {
-    kind: "steps",
+    kind: "steps" as const,
     points: [
       [0, 0.2],
       [3, 0.59],

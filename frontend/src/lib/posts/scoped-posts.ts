@@ -6,6 +6,7 @@ import {
   type ForwardedFilterValue,
   type MediaFilterValue,
   type PostViewOptions,
+  readsEstimatedViews,
 } from "./post-view"
 
 /**
@@ -99,11 +100,7 @@ export async function computeScopedPosts(
   // The ranked Posts a vector search returns pass through every pill on the
   // bar, so the bar means the same thing in both modes (PFB-02). Not the
   // keyword: in meaning mode the search box holds the meaning query.
-  const readsEstimate =
-    postViewOptions.viewMeasure === "estimated" &&
-    (postViewOptions.viewsFilter != null ||
-      postViewOptions.postSortOrder === "most_views" ||
-      postViewOptions.postSortOrder === "fewest_views")
+  const readsEstimate = readsEstimatedViews(postViewOptions)
   const filterRanked = async (ranked: Post[]) =>
     buildFilteredPostsFromRaw(ranked, {
       searchText: "",

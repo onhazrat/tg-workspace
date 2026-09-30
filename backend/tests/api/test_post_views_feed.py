@@ -243,6 +243,21 @@ def test_grouping_places_a_block_by_its_best_value(
     ]
 
 
+def test_the_cap_and_grouping_together_follow_a_views_order(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """A capped block is placed by the Posts the cap kept, under the views order."""
+    operator, other = seeded
+    grouped = {"groupByChannel": True, "maxPerChannel": 2}
+
+    assert _feed(client, operator, sort="most_views", **grouped) == [1, 4, 5, 6]
+    # Fewest, one each: pv_c keeps c8 (400) over the unjudged c7, pv_b keeps
+    # b6 (828), and pv_c's block leads.
+    assert _feed(
+        client, other, sort="fewest_views", groupByChannel=True, maxPerChannel=1
+    ) == [8, 6]
+
+
 def test_paging_a_views_order_neither_repeats_nor_skips(
     client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
 ) -> None:

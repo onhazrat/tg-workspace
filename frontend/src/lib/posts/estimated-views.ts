@@ -7,20 +7,14 @@
  * for semantic results, which the browser filters and orders itself; the
  * server hands it the curve and settings (`GET /data/posts/view-estimate`).
  */
+import type { ViewCurveResponse, ViewEstimateResponse } from "@/client"
 import type { Post } from "@/types"
 
 /** A Settling curve as data: the seed's steps or a fit's log-log knots. */
-export interface ViewCurve {
-  kind: string
-  points: number[][]
-}
+export type ViewCurve = ViewCurveResponse
 
-/** Everything an estimate is read through. */
-export interface ViewEstimate {
-  curve: ViewCurve
-  settlingAgeHours: number
-  estimationFloorHours: number
-}
+/** Everything an estimate is read through, as the server hands it over. */
+export type ViewEstimate = ViewEstimateResponse
 
 /** What a views threshold and the views orders compare. */
 export type ViewMeasure = "views" | "estimated"

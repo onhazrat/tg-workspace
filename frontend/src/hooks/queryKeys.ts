@@ -92,3 +92,9 @@ export const queryKeys = {
 } as const
 
 export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs
+
+/**
+ * The Settling curve is refitted daily and the reach settings change by hand,
+ * so an hour-old copy is as good as a fresh one (PFB-03).
+ */
+export const VIEW_ESTIMATE_STALE_TIME = 60 * 60 * 1000

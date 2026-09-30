@@ -20,6 +20,7 @@ from app.services.follows import visible_channel_names
 from app.services.language import own_words, read_language
 from app.services.post_filters import (
     MEDIA_KIND_ORDER,
+    VIEW_SORTS,
     CapMode,
     FeedSort,
     PostFilters,
@@ -501,10 +502,7 @@ def channel_order(sort: FeedSort, entity: Any, reading: ViewReading) -> list[Any
 
 def _block_order(sort: FeedSort, entity: Any, reading: ViewReading) -> Any:
     """Each channel's best key under the order, as the grouped feed leads with it."""
-    if sort in ("newest", "oldest"):
-        key = entity.timestamp
-    else:
-        key = reading.of(entity)
+    key = reading.of(entity) if sort in VIEW_SORTS else entity.timestamp
     if sort in ("oldest", "fewest_views"):
         return func.min(key).over(partition_by=entity.channel_name).asc().nulls_last()
     return func.max(key).over(partition_by=entity.channel_name).desc().nulls_last()

@@ -650,15 +650,13 @@ export const dataApi = {
    * channels and would have run to roughly 13 KB at the ~1,070 channels a real
    * account holds — past what proxies and servers accept in a request line.
    */
-  getPostsScopeCounts: (params: PostScopeQuery) =>
+  getPostsCounts: (params: PostScopeQuery): Promise<Record<string, number>> =>
+    // Just the per-channel map, which is all the AI paths size a selection
+    // by. The feed footer reads the whole answer through `dataPostsCounts`.
     request<PostCountsResponse>("/api/v1/data/posts/counts", {
       method: "POST",
       body: JSON.stringify(postScopeBody(params)),
-    }),
-
-  /** Just the per-channel map, which is all the AI paths size a selection by. */
-  getPostsCounts: (params: PostScopeQuery): Promise<Record<string, number>> =>
-    dataApi.getPostsScopeCounts(params).then((response) => response.counts),
+    }).then((response) => response.counts),
 
   getTranslation: (channelName: string, postId: number, language: string) => {
     const qs = new URLSearchParams({

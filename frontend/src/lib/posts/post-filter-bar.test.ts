@@ -13,6 +13,7 @@ import {
   nearestViewStep,
   parseCount,
   VIEW_STEPS,
+  viewMeasureDescription,
   viewsSummary,
 } from "@/lib/posts/post-filter-bar"
 
@@ -79,6 +80,16 @@ describe("the Views pill", () => {
     expect(viewsSummary({ op: "gte", value: 2_500 }, "views")).toBe(
       "Popular, 2.5K views",
     )
+  })
+
+  test("each measure says in one line what it reads, with the real floor", () => {
+    expect(viewMeasureDescription("views", 3)).toBe(
+      "What Telegram shows now. Young posts read low.",
+    )
+    expect(viewMeasureDescription("estimated", 3)).toBe(
+      "What a post's views are expected to settle at. Posts under 3 hours are too new to judge.",
+    )
+    expect(viewMeasureDescription("estimated", 1)).toContain("under 1 hour ")
   })
 
   test("the slider shows the stop nearest a typed number, on a log scale", () => {

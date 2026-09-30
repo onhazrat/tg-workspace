@@ -225,17 +225,52 @@ function byOrder(view: PostViewOptions): (a: Post, b: Post) => number {
   }
 }
 
+/**
+ * Each channel's best key under the order, as the server places a grouped
+ * block by: the timestamp, or the value with none last. Compares only that
+ * key, so a tie falls to the channel name as it does in `_feed_order_by`.
+ */
+function byBlockKey(view: PostViewOptions): (a: Post, b: Post) => number {
+  const order = view.postSortOrder
+  if (order === "newest" || order === "oldest") {
+    const dir = order === "oldest" ? 1 : -1
+    return (a, b) => (a.timestamp - b.timestamp) * dir
+  }
+  const dir = order === "most_views" ? -1 : 1
+  return (a, b) => {
+    const va = postViewValue(a, view.viewMeasure, view.viewEstimate)
+    const vb = postViewValue(b, view.viewMeasure, view.viewEstimate)
+    if (va == null || vb == null)
+      return (va == null ? 1 : 0) - (vb == null ? 1 : 0)
+    return (va - vb) * dir
+  }
+}
+
 export function sortPosts(posts: Post[], view: PostViewOptions): Post[] {
-  const compare = byOrder(view)
-  const sorted = [...posts].sort(compare)
+  const sorted = [...posts].sort(byOrder(view))
   if (!view.groupByChannel) return sorted
 
   // Each channel's block sits where its first Post falls under the order, and
-  // the order holds inside the block (PFB-02). `Map` keeps insertion order, so
-  // grouping the already-sorted list is exactly that: a block is placed by its
-  // best key, a tie between blocks broken by the channel name as `compare`
-  // already broke it.
-  return [...groupPostsByChannel(sorted).values()].flat()
+  // the order holds inside the block (PFB-02). A block's first Post is its
+  // best, so blocks sort by that Post's key and then by channel name, the
+  // server's tiebreak between two blocks.
+  const blockKey = byBlockKey(view)
+  return [...groupPostsByChannel(sorted).entries()]
+    .sort(
+      ([nameA, [firstA]], [nameB, [firstB]]) =>
+        blockKey(firstA, firstB) || nameA.localeCompare(nameB),
+    )
+    .flatMap(([, block]) => block)
+}
+
+/** Whether a Scope reads an Estimated View count: a threshold or a views order does. */
+export function readsEstimatedViews(view: PostViewOptions): boolean {
+  return (
+    view.viewMeasure === "estimated" &&
+    (view.viewsFilter != null ||
+      view.postSortOrder === "most_views" ||
+      view.postSortOrder === "fewest_views")
+  )
 }
 
 export function applyPostViewPipeline(

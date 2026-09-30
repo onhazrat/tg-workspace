@@ -5,9 +5,12 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import { type PostFeedQuery, postScopeBody } from "@/api/data"
 import {
+  dataPostsCounts,
   dataPostsFacets,
+  dataPostsViewEstimate,
   type PostFacetsResponse,
   type PostScopeRequest,
+  type ViewEstimateResponse,
 } from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
@@ -16,7 +19,11 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import type { Post } from "@/types"
-import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
+import {
+  queryKeys,
+  SUMMARIZER_STALE_TIME,
+  VIEW_ESTIMATE_STALE_TIME,
+} from "./queryKeys"
 import { useDebouncedValue } from "./useDebouncedValue"
 import { POST_SEARCH_DEBOUNCE_MS } from "./usePostFilters"
 
@@ -126,7 +133,8 @@ function useScopeCounts(): {
     // Keyed on the window rather than the minute it currently resolves to —
     // see `usePostsFeed`, which pays for this and says why.
     queryKey: queryKeys.postsCounts({ ...filters, window: windowKey }),
-    queryFn: () => api.getPostsScopeCounts(params),
+    queryFn: () =>
+      dataPostsCounts({ body: postScopeBody(params) as PostScopeRequest }),
     enabled: serverEligible,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
@@ -204,6 +212,19 @@ export function usePostFacets(
     placeholderData: (previous) => previous,
   })
   return query.data
+}
+
+/**
+ * The curve and settings an Estimated View count reads through, cached for an
+ * hour: the curve is refitted daily and the settings change by hand. Shares
+ * its cache entry with `ScraperContext.getViewEstimate`.
+ */
+export function useViewEstimate(): ViewEstimateResponse | undefined {
+  return useQuery({
+    queryKey: queryKeys.viewEstimate,
+    queryFn: () => dataPostsViewEstimate(),
+    staleTime: VIEW_ESTIMATE_STALE_TIME,
+  }).data
 }
 
 export interface PostsFeed {

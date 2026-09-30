@@ -83,6 +83,7 @@ function mount(
       shownCount={1234}
       subtitle=""
       tooNewToJudge={0}
+      estimationFloorHours={3}
       controls={controls(calls, over)}
       embeddingsEnabled={false}
       windowControl={<span>window</span>}
@@ -195,6 +196,12 @@ describe("the pills", () => {
       ["views", { op: "gte", value: 1_000 }],
       ["views", null],
     ])
+  })
+
+  test("the Estimated views line names the deployment's floor", () => {
+    mount({}, { estimationFloorHours: 1 })
+    fireEvent.click(screen.getByTestId("post-filter-pill-views"))
+    expect(screen.getByText(/Posts under 1 hour are too new/)).toBeTruthy()
   })
 
   test("a side chosen with no number is 10K, and Order offers the views orders", () => {

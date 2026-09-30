@@ -44,7 +44,7 @@ CASES: list[dict[str, Any]] = FIXTURE["cases"]
 
 def _curve(name: str) -> CurvePoints:
     spec = FIXTURE["curves"][name]
-    return CurvePoints.from_wire(spec)
+    return CurvePoints(spec["kind"], tuple(tuple(point) for point in spec["points"]))
 
 
 def _settings(case: dict[str, Any]) -> ReachSettings:

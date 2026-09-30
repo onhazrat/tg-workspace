@@ -95,8 +95,17 @@ channel parts of "The bar (A1b)", and user stories 30-42, 45-48, 54 and 55.
 - **The feed request carries `viewMeasure` only when it is `views`**, the
   server's default being `estimated`, and `views` only when set.
 - **Palette.** The four orders come from `POST_ORDER_OPTIONS`, so the palette
-  gained Most and Fewest views with no new code; "clear post filters" resets
-  the measure and the threshold.
+  gained Most and Fewest views with no new code; "clear post filters" clears
+  the threshold and leaves the measure, which is a choice rather than a filter.
+- **One rule for "does this Scope read an estimate".** `settling_curve.view_reading`
+  decides it on the server (a threshold or a views order), and
+  `post-view.ts::readsEstimatedViews` in the browser.
+- **The Estimated views line names the deployment's floor**, read from
+  `GET /data/posts/view-estimate`, so it stays true if an Operator moves the
+  floor off 3 hours.
+- **Grouped blocks tie by channel name in the browser too.** A meaning search
+  places a block by its best key and then its channel name, as
+  `_feed_order_by` does, rather than by whichever tied Post was newer.
 
 **2026-09-30, acceptance measurement (read-only, staging).** Run inside
 `BEGIN READ ONLY ... ROLLBACK` against `tg-summarizer-staging-db-1`, with the

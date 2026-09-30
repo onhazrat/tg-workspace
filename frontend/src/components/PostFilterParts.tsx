@@ -15,6 +15,7 @@ import {
   parseCount,
   VIEW_MEASURE_OPTIONS,
   VIEW_STEPS,
+  viewMeasureDescription,
 } from "@/lib/posts/post-filter-bar"
 import type {
   MaxPostsPerChannelMode,
@@ -341,18 +342,17 @@ export function ViewsForm({
   setMeasure,
   views,
   setViews,
+  floorHours,
 }: {
   measure: ViewMeasure
   setMeasure: (value: ViewMeasure) => void
   views: ViewsFilter | null
   setViews: (value: ViewsFilter | null) => void
+  floorHours: number
 }) {
   const op = views?.op ?? "gte"
   const setValue = (value: number | null) =>
     setViews(value == null ? null : { op, value })
-  const description = VIEW_MEASURE_OPTIONS.find(
-    (option) => option.value === measure,
-  )?.description
   return (
     <>
       <div className="flex gap-3 border-b border-app-ink/10" role="tablist">
@@ -369,7 +369,9 @@ export function ViewsForm({
           </button>
         ))}
       </div>
-      <p className="mt-2 text-[11px] text-app-ink/60">{description}</p>
+      <p className="mt-2 text-[11px] text-app-ink/60">
+        {viewMeasureDescription(measure, floorHours)}
+      </p>
       <div className="mt-3 flex gap-2">
         <Card
           on={views?.op === "gte"}

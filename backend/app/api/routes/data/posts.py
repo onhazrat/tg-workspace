@@ -28,7 +28,7 @@ from app.services.posts import bulk_upsert_posts, count_facets_in_scope
 from app.services.posts import count_scope as count_scope_impl
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
-from app.services.settling_curve import view_reading
+from app.services.settling_curve import current_estimate
 
 router = APIRouter()
 
@@ -60,16 +60,7 @@ def list_posts(
             channel_names=body.resolved_channel_names(),
             start_date=window.start,
             end_date=window.end,
-            filters=parse_post_filters(
-                session,
-                body.keyword,
-                body.forwarded,
-                body.media,
-                body.languages,
-                view_measure=body.view_measure,
-                views=body.views,
-                sort=body.sort,
-            ),
+            filters=parse_post_filters(session, body, sort=body.sort),
             max_per_channel=body.max_per_channel,
             max_per_channel_mode=body.max_per_channel_mode,
             sort=body.sort,
@@ -103,15 +94,7 @@ def posts_counts(
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
-        filters=parse_post_filters(
-            session,
-            body.keyword,
-            body.forwarded,
-            body.media,
-            body.languages,
-            view_measure=body.view_measure,
-            views=body.views,
-        ),
+        filters=parse_post_filters(session, body),
         max_per_channel=body.max_per_channel,
     )
     return PostCountsResponse(counts=counts, tooNewToJudge=too_new)
@@ -123,12 +106,11 @@ def posts_view_estimate(
     session: SessionDep, _current_user: CurrentUser
 ) -> ViewEstimateResponse:
     """The Settling curve and settings an Estimated View count is read through."""
-    reading = view_reading(session, "estimated")
-    assert reading.curve is not None and reading.settings is not None
+    curve, reach = current_estimate(session)
     return ViewEstimateResponse(
-        curve=ViewCurveResponse(**reading.curve.wire()),
-        settlingAgeHours=reading.settings.settling_age_hours,
-        estimationFloorHours=reading.settings.estimation_floor_hours,
+        curve=ViewCurveResponse(**curve.wire()),
+        settlingAgeHours=reach.settling_age_hours,
+        estimationFloorHours=reach.estimation_floor_hours,
     )
 
 
@@ -148,15 +130,7 @@ def posts_facets(
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
-        filters=parse_post_filters(
-            session,
-            body.keyword,
-            body.forwarded,
-            body.media,
-            body.languages,
-            view_measure=body.view_measure,
-            views=body.views,
-        ),
+        filters=parse_post_filters(session, body),
         max_per_channel=body.max_per_channel,
     )
     return PostFacetsResponse(

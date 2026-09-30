@@ -28,7 +28,6 @@ from app.services.post_filters import (
     FORWARDED_FILTERS,
     MEDIA_KINDS,
     VIEW_MEASURES,
-    VIEW_SORTS,
     PostFilters,
     ViewsThreshold,
 )
@@ -102,7 +101,8 @@ def _fetch_scoped_posts(
         reading=view_reading(
             session,
             cast("Any", scope.view_measure),
-            needed=scope.views is not None or scope.sort in VIEW_SORTS,
+            views=scope.views,
+            sort=scope.sort,
         ),
     )
     channel_names = scope.channels or None

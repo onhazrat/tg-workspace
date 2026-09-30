@@ -40,24 +40,25 @@ export const POST_ORDER_OPTIONS: { label: string; value: PostSortOrder }[] = [
   { label: "Fewest views", value: "fewest_views" },
 ]
 
-/** The Views pill's two measures, each with the one line it is explained by. */
-export const VIEW_MEASURE_OPTIONS: {
-  label: string
-  value: ViewMeasure
-  description: string
-}[] = [
-  {
-    label: "Views",
-    value: "views",
-    description: "What Telegram shows now. Young posts read low.",
-  },
-  {
-    label: "Estimated views",
-    value: "estimated",
-    description:
-      "What a post's views are expected to settle at. Posts under 3 hours are too new to judge.",
-  },
+/** The Views pill's two measures, in its order. */
+export const VIEW_MEASURE_OPTIONS: { label: string; value: ViewMeasure }[] = [
+  { label: "Views", value: "views" },
+  { label: "Estimated views", value: "estimated" },
 ]
+
+/**
+ * The one line each measure is explained by. The floor is the deployment's
+ * estimation floor, which an Operator can move from its default of 3 hours.
+ */
+export function viewMeasureDescription(
+  measure: ViewMeasure,
+  floorHours: number,
+): string {
+  if (measure === "views")
+    return "What Telegram shows now. Young posts read low."
+  const under = floorHours === 1 ? "1 hour" : `${floorHours} hours`
+  return `What a post's views are expected to settle at. Posts under ${under} are too new to judge.`
+}
 
 /** The slider's stops, on a log scale from 100 to 1M. */
 export const VIEW_STEPS = [

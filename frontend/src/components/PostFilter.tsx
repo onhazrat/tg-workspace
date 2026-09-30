@@ -18,7 +18,7 @@ import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
-import { usePostFacets } from "../hooks/usePostsView"
+import { usePostFacets, useViewEstimate } from "../hooks/usePostsView"
 import {
   activeFilters,
   capPhrase,
@@ -106,7 +106,12 @@ export interface PostFilterBarProps extends PostFilterProps {
   channelLanguages: string[]
   /** Called as a counting pill opens and closes, so counts load only then. */
   onCountingPillOpenChange: (open: boolean) => void
+  /** The deployment's estimation floor, for the Views pill's copy. */
+  estimationFloorHours: number
 }
+
+/** The floor's default in `services/reach.py`, until the server's arrives. */
+const DEFAULT_ESTIMATION_FLOOR_HOURS = 3
 
 const toggle = <T,>(list: T[], value: T): T[] =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
@@ -313,6 +318,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
               setMeasure={s.setViewMeasure}
               views={s.viewsFilter}
               setViews={s.setViewsFilter}
+              floorHours={props.estimationFloorHours}
             />
           </Pill>
 
@@ -408,6 +414,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const { setActiveTab } = useUI()
   const [openPillCount, setOpenPillCount] = React.useState(0)
   const facets = usePostFacets(openPillCount > 0)
+  const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
     () => channels.map((c) => c.language).filter((code) => !!code) as string[],
     [channels],
@@ -424,6 +431,9 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
       }
       facets={facets}
       channelLanguages={channelLanguages}
+      estimationFloorHours={
+        estimate?.estimationFloorHours ?? DEFAULT_ESTIMATION_FLOOR_HOURS
+      }
       onCountingPillOpenChange={(open) =>
         setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
       }

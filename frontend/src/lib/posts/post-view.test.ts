@@ -572,7 +572,7 @@ describe("post-view pipeline: parity with the server's views feed", () => {
   const HOUR = 3_600_000
   const SEED = {
     curve: {
-      kind: "steps",
+      kind: "steps" as const,
       points: [
         [0, 0.2],
         [3, 0.59],
@@ -655,6 +655,31 @@ describe("post-view pipeline: parity with the server's views feed", () => {
     expect(run({ postSortOrder: "most_views", groupByChannel: true })).toEqual([
       1, 4, 3, 2, 5, 6,
     ])
+  })
+
+  test("two blocks with an equal best value fall to the channel name, as on the server", () => {
+    // pv_z's Post is the newer, so ordering the Posts alone would lead with
+    // its block; the server breaks a tie between blocks by channel name.
+    const tied = [
+      makePost("pv_z", 1, 2_000_000, {
+        viewsCount: 100,
+        viewsObservedAt: 2_000_000 + 48 * HOUR,
+      }),
+      makePost("pv_y", 2, 1_000_000, {
+        viewsCount: 100,
+        viewsObservedAt: 1_000_000 + 48 * HOUR,
+      }),
+    ]
+    const grouped = sortPosts(tied, {
+      maxPostsPerChannel: 0,
+      maxPostsPerChannelMode: "ordered",
+      postSortOrder: "most_views",
+      groupByChannel: true,
+      viewMeasure: "estimated",
+      viewsFilter: null,
+      viewEstimate: SEED,
+    })
+    expect(grouped.map((p) => p.channelName)).toEqual(["pv_y", "pv_z"])
   })
 
   test("with no curve loaded an estimate is none, never a guess", () => {

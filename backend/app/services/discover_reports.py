@@ -39,7 +39,7 @@ from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
 from app.services.follows import visible_channel_names
-from app.services.post_filters import VIEW_SORTS, PostFilters
+from app.services.post_filters import PostFilters
 from app.services.serialization import model_to_camel
 from app.services.settling_curve import view_reading
 from app.services.tenancy import (
@@ -435,17 +435,14 @@ def create_report(
     `signals` stays an argument because it is not Scope: it picks which kinds of
     signal the report describes, not which Posts it reads.
     """
+    views = None if scope.views is None else scope.views.threshold()
     filters = PostFilters(
         keyword=scope.keyword,
         forwarded=scope.forwarded,
         media=tuple(scope.media),
         languages=tuple(scope.languages),
-        views=None if scope.views is None else scope.views.threshold(),
-        reading=view_reading(
-            session,
-            scope.view_measure,
-            needed=scope.views is not None or scope.sort in VIEW_SORTS,
-        ),
+        views=views,
+        reading=view_reading(session, scope.view_measure, views=views, sort=scope.sort),
     )
     post_ids = (
         None

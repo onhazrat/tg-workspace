@@ -16,7 +16,7 @@ import {
   planManualSync,
 } from "@/lib/channels/manual-sync"
 import { logger } from "@/lib/logger"
-import { queryKeys } from "../hooks/queryKeys"
+import { queryKeys, VIEW_ESTIMATE_STALE_TIME } from "../hooks/queryKeys"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useFollowJob } from "../hooks/useFollowJob"
 import { usePostFilters } from "../hooks/usePostFilters"
@@ -145,12 +145,6 @@ interface ScraperContextType {
   setViewsFilter: React.Dispatch<React.SetStateAction<ViewsFilter | null>>
   postViewOptions: PostViewOptions
 }
-
-/**
- * The Settling curve is refitted daily and the reach settings change by hand,
- * so an hour-old copy is as good as a fresh one for ranking a meaning search.
- */
-const VIEW_ESTIMATE_STALE_TIME = 60 * 60 * 1000
 
 /** Module-level so `useFollowJob`'s callbacks keep one identity across renders. */
 const FOLLOW_API = {

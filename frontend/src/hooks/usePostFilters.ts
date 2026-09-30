@@ -26,6 +26,7 @@
 
 import { useEffect, useState } from "react"
 
+import { POST_ORDER_OPTIONS } from "@/lib/posts/post-filter-bar"
 import { parseMediaFilterValue } from "@/lib/posts/post-media"
 import type {
   ForwardedFilterValue,
@@ -109,12 +110,7 @@ export function readStoredMaxPerChannelMode(): MaxPostsPerChannelMode {
   return saved === "random" ? "random" : "ordered"
 }
 
-const SORT_ORDERS: readonly PostSortOrder[] = [
-  "newest",
-  "oldest",
-  "most_views",
-  "fewest_views",
-]
+const SORT_ORDERS = POST_ORDER_OPTIONS.map((option) => option.value)
 
 export function readStoredSortOrder(): PostSortOrder {
   const saved = scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.sortOrder)
