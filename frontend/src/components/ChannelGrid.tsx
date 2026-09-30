@@ -9,6 +9,11 @@ import { ChannelGridToolbar } from "@/components/channel-grid/ChannelGridToolbar
 import { ChannelGroupChips } from "@/components/channel-grid/ChannelGroupChips"
 import { ChannelTagChips } from "@/components/channel-grid/ChannelTagChips"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
+import {
+  PrototypeControls,
+  usePrototypeVariant,
+} from "@/components/channel-grid/prototype"
+import type { ChannelControlsProps } from "@/components/channel-grid/prototype/types"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
@@ -296,6 +301,77 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     )
   }
 
+  // PROTOTYPE, throwaway: every capability of the control section in one bag.
+  const { current: prototypeVariant, setVariant } = usePrototypeVariant()
+  const prototypeControls: ChannelControlsProps = {
+    inlineChannelName: actions.inlineChannelName,
+    onInlineChannelNameChange: actions.setInlineChannelName,
+    onAddChannel: actions.handleAddChannel,
+    channelSearch,
+    onChannelSearchChange: setChannelSearch,
+    tagSearch,
+    onTagSearchChange: setTagSearch,
+    channels,
+    hasChannels: channels.length > 0,
+    totalCount: channels.length,
+    filteredCount: filteredChannels.length,
+    isFilteringActive,
+    selectedChannels,
+    onSelectAll: handleSelectAll,
+    onUnselectAll: handleUnselectAll,
+    onRevertSelection: handleRevertSelection,
+    isRevertDisabled: filteredChannels.length === 0,
+    isScraping: scrapingChannels.size > 0,
+    isScrapeSelectedDisabled,
+    isScrapeAllDisabled,
+    onScrapeSelected: handleScrapeSelected,
+    onScrapeAll: handleScrapeAll,
+    zoom: channelCardZoom,
+    onZoomChange: setChannelCardZoom,
+    groups: sortedSettingGroups,
+    activeGroupFilter: selectedGroupFilter,
+    onToggleGroupSelection: toggleGroupSelection,
+    onSetGroupFilter: setChannelGroupFilter,
+    visibleTags,
+    pseudoTagChips,
+    onToggleTag: toggleTagSelection,
+    includeChannelBioInPrompt,
+    onIncludeChannelBioInPromptChange: setIncludeChannelBioInPrompt,
+    includeChannelTagsInPrompt,
+    onIncludeChannelTagsInPromptChange: setIncludeChannelTagsInPrompt,
+    allLanguages,
+    selectedLanguageFilter,
+    onLanguageFilterChange: setSelectedLanguageFilter,
+    sortBy,
+    onSortByChange: setSortBy,
+    sortDirection,
+    onToggleSortDirection: () =>
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc")),
+    groupBySelection: channelGridGroupBySelection,
+    onToggleGroupBySelection: () =>
+      setChannelGridGroupBySelection(!channelGridGroupBySelection),
+    showChannelSubscribers,
+    trimCount,
+    onTrimCountChange: setTrimCount,
+    isTrimInputDisabled: selectedChannels.size === 0,
+    isTrimDisabled,
+    onTrimSelection: handleTrimSelection,
+    showSortRank,
+    onShowSortRankChange: setShowSortRank,
+    onRequestFreeze: () => actions.setConfirmBulkFreezeAction("freeze"),
+    onRequestUnfreeze: () => actions.setConfirmBulkFreezeAction("unfreeze"),
+    onRequestDelete: () => actions.setConfirmBulkDelete(true),
+    bulkTargetGroupId: actions.bulkTargetGroupId,
+    onBulkTargetGroupIdChange: actions.setBulkTargetGroupId,
+    onApplyMoveToGroup: () => void actions.applyBulkMoveToGroup(),
+    bulkTagInput: actions.bulkTagInput,
+    onBulkTagInputChange: actions.setBulkTagInput,
+    onBulkAddTag: actions.handleBulkAddTag,
+    bulkRemoveTagInput: actions.bulkRemoveTagInput,
+    onBulkRemoveTagInputChange: actions.setBulkRemoveTagInput,
+    onBulkRemoveTag: actions.handleBulkRemoveTag,
+  }
+
   return (
     <motion.div
       key="channels"
@@ -303,109 +379,122 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
+      <PrototypeControls
+        variant={prototypeVariant}
+        onVariantChange={setVariant}
+        controls={prototypeControls}
+      />
       {/* Unified Control Bar */}
-      <div className="bg-app-card rounded-xl border border-app-ink/10 shadow-sm p-4 flex flex-col gap-4">
-        <ChannelGridToolbar
-          inlineChannelName={actions.inlineChannelName}
-          onInlineChannelNameChange={actions.setInlineChannelName}
-          onAddChannel={actions.handleAddChannel}
-          channelSearch={channelSearch}
-          onChannelSearchChange={setChannelSearch}
-          tagSearch={tagSearch}
-          onTagSearchChange={setTagSearch}
-          hasChannels={channels.length > 0}
-          onSelectAll={handleSelectAll}
-          onUnselectAll={handleUnselectAll}
-          onRevertSelection={handleRevertSelection}
-          isRevertDisabled={filteredChannels.length === 0}
-          isScraping={scrapingChannels.size > 0}
-          isScrapeSelectedDisabled={isScrapeSelectedDisabled}
-          isScrapeAllDisabled={isScrapeAllDisabled}
-          onScrapeSelected={handleScrapeSelected}
-          onScrapeAll={handleScrapeAll}
-          zoom={channelCardZoom}
-          onZoomChange={setChannelCardZoom}
-        />
+      {prototypeVariant === "current" && (
+        <div className="bg-app-card rounded-xl border border-app-ink/10 shadow-sm p-4 flex flex-col gap-4">
+          <ChannelGridToolbar
+            inlineChannelName={actions.inlineChannelName}
+            onInlineChannelNameChange={actions.setInlineChannelName}
+            onAddChannel={actions.handleAddChannel}
+            channelSearch={channelSearch}
+            onChannelSearchChange={setChannelSearch}
+            tagSearch={tagSearch}
+            onTagSearchChange={setTagSearch}
+            hasChannels={channels.length > 0}
+            onSelectAll={handleSelectAll}
+            onUnselectAll={handleUnselectAll}
+            onRevertSelection={handleRevertSelection}
+            isRevertDisabled={filteredChannels.length === 0}
+            isScraping={scrapingChannels.size > 0}
+            isScrapeSelectedDisabled={isScrapeSelectedDisabled}
+            isScrapeAllDisabled={isScrapeAllDisabled}
+            onScrapeSelected={handleScrapeSelected}
+            onScrapeAll={handleScrapeAll}
+            zoom={channelCardZoom}
+            onZoomChange={setChannelCardZoom}
+          />
 
-        {/* Group & tag filter rows */}
-        {channels.length > 0 && (
-          <div className="flex flex-col gap-3 pt-4 border-t border-app-ink/5">
-            <ChannelGroupChips
-              groups={sortedSettingGroups}
-              channels={channels}
-              selectedChannels={selectedChannels}
-              activeGroupFilter={selectedGroupFilter}
-              onToggleGroupSelection={toggleGroupSelection}
-              onSetGroupFilter={setChannelGroupFilter}
-            />
-
-            <div className="flex flex-col gap-4">
-              <ChannelTagChips
+          {/* Group & tag filter rows */}
+          {channels.length > 0 && (
+            <div className="flex flex-col gap-3 pt-4 border-t border-app-ink/5">
+              <ChannelGroupChips
+                groups={sortedSettingGroups}
                 channels={channels}
                 selectedChannels={selectedChannels}
-                visibleTags={visibleTags}
-                pseudoTagChips={pseudoTagChips}
-                onToggleTag={toggleTagSelection}
+                activeGroupFilter={selectedGroupFilter}
+                onToggleGroupSelection={toggleGroupSelection}
+                onSetGroupFilter={setChannelGroupFilter}
               />
 
-              <ChannelGridFilterBar
-                includeChannelBioInPrompt={includeChannelBioInPrompt}
-                onIncludeChannelBioInPromptChange={setIncludeChannelBioInPrompt}
-                includeChannelTagsInPrompt={includeChannelTagsInPrompt}
-                onIncludeChannelTagsInPromptChange={
-                  setIncludeChannelTagsInPrompt
-                }
-                isFilteringActive={isFilteringActive}
-                filteredCount={filteredChannels.length}
-                totalCount={channels.length}
-                allLanguages={allLanguages}
-                selectedLanguageFilter={selectedLanguageFilter}
-                onLanguageFilterChange={setSelectedLanguageFilter}
-                sortBy={sortBy}
-                onSortByChange={setSortBy}
-                sortDirection={sortDirection}
-                onToggleSortDirection={() =>
-                  setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
-                groupBySelection={channelGridGroupBySelection}
-                onToggleGroupBySelection={() =>
-                  setChannelGridGroupBySelection(!channelGridGroupBySelection)
-                }
-                showChannelSubscribers={showChannelSubscribers}
-                trimCount={trimCount}
-                onTrimCountChange={setTrimCount}
-                isTrimInputDisabled={selectedChannels.size === 0}
-                isTrimDisabled={isTrimDisabled}
-                onTrimSelection={handleTrimSelection}
-                showSortRank={showSortRank}
-                onShowSortRankChange={setShowSortRank}
-              />
+              <div className="flex flex-col gap-4">
+                <ChannelTagChips
+                  channels={channels}
+                  selectedChannels={selectedChannels}
+                  visibleTags={visibleTags}
+                  pseudoTagChips={pseudoTagChips}
+                  onToggleTag={toggleTagSelection}
+                />
+
+                <ChannelGridFilterBar
+                  includeChannelBioInPrompt={includeChannelBioInPrompt}
+                  onIncludeChannelBioInPromptChange={
+                    setIncludeChannelBioInPrompt
+                  }
+                  includeChannelTagsInPrompt={includeChannelTagsInPrompt}
+                  onIncludeChannelTagsInPromptChange={
+                    setIncludeChannelTagsInPrompt
+                  }
+                  isFilteringActive={isFilteringActive}
+                  filteredCount={filteredChannels.length}
+                  totalCount={channels.length}
+                  allLanguages={allLanguages}
+                  selectedLanguageFilter={selectedLanguageFilter}
+                  onLanguageFilterChange={setSelectedLanguageFilter}
+                  sortBy={sortBy}
+                  onSortByChange={setSortBy}
+                  sortDirection={sortDirection}
+                  onToggleSortDirection={() =>
+                    setSortDirection((prev) =>
+                      prev === "asc" ? "desc" : "asc",
+                    )
+                  }
+                  groupBySelection={channelGridGroupBySelection}
+                  onToggleGroupBySelection={() =>
+                    setChannelGridGroupBySelection(!channelGridGroupBySelection)
+                  }
+                  showChannelSubscribers={showChannelSubscribers}
+                  trimCount={trimCount}
+                  onTrimCountChange={setTrimCount}
+                  isTrimInputDisabled={selectedChannels.size === 0}
+                  isTrimDisabled={isTrimDisabled}
+                  onTrimSelection={handleTrimSelection}
+                  showSortRank={showSortRank}
+                  onShowSortRankChange={setShowSortRank}
+                />
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Bulk Actions */}
-        {selectedChannels.size > 0 && (
-          <ChannelBulkActions
-            selectedCount={selectedChannels.size}
-            onRequestFreeze={() => actions.setConfirmBulkFreezeAction("freeze")}
-            onRequestUnfreeze={() =>
-              actions.setConfirmBulkFreezeAction("unfreeze")
-            }
-            settingGroups={sortedSettingGroups}
-            bulkTargetGroupId={actions.bulkTargetGroupId}
-            onBulkTargetGroupIdChange={actions.setBulkTargetGroupId}
-            onApplyMoveToGroup={() => void actions.applyBulkMoveToGroup()}
-            bulkTagInput={actions.bulkTagInput}
-            onBulkTagInputChange={actions.setBulkTagInput}
-            onBulkAddTag={actions.handleBulkAddTag}
-            bulkRemoveTagInput={actions.bulkRemoveTagInput}
-            onBulkRemoveTagInputChange={actions.setBulkRemoveTagInput}
-            onBulkRemoveTag={actions.handleBulkRemoveTag}
-            onRequestDelete={() => actions.setConfirmBulkDelete(true)}
-          />
-        )}
-      </div>
+          {/* Bulk Actions */}
+          {selectedChannels.size > 0 && (
+            <ChannelBulkActions
+              selectedCount={selectedChannels.size}
+              onRequestFreeze={() =>
+                actions.setConfirmBulkFreezeAction("freeze")
+              }
+              onRequestUnfreeze={() =>
+                actions.setConfirmBulkFreezeAction("unfreeze")
+              }
+              settingGroups={sortedSettingGroups}
+              bulkTargetGroupId={actions.bulkTargetGroupId}
+              onBulkTargetGroupIdChange={actions.setBulkTargetGroupId}
+              onApplyMoveToGroup={() => void actions.applyBulkMoveToGroup()}
+              bulkTagInput={actions.bulkTagInput}
+              onBulkTagInputChange={actions.setBulkTagInput}
+              onBulkAddTag={actions.handleBulkAddTag}
+              bulkRemoveTagInput={actions.bulkRemoveTagInput}
+              onBulkRemoveTagInputChange={actions.setBulkRemoveTagInput}
+              onBulkRemoveTag={actions.handleBulkRemoveTag}
+              onRequestDelete={() => actions.setConfirmBulkDelete(true)}
+            />
+          )}
+        </div>
+      )}
 
       <ChannelGridBody
         isLoading={isInitialChannelsLoading}

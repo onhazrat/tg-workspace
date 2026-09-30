@@ -32,6 +32,8 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** PROTOTYPE, throwaway: which Channels-tab control variant to render. */
+  variant?: string
 }
 
 /** The id-like params: kept trimmed when non-blank, dropped otherwise. */
@@ -43,6 +45,7 @@ const ID_PARAMS = [
   "summary",
   "chatSession",
   "tagRun",
+  "variant",
 ] as const
 
 function trimmedString(value: unknown): string | undefined {
