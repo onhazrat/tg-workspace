@@ -8,6 +8,7 @@ import {
   type ChannelFilter,
   conditionLabel,
   type FilterNames,
+  flip,
   type GroupNode,
   groupWith,
   type Joiner,
@@ -50,8 +51,6 @@ type ChannelFilterRowProps = Pick<
   onClearSearch: () => void
   onClearAll: () => void
 }
-
-const flip = (op: Joiner): Joiner => (op === "and" ? "or" : "and")
 
 // A colour per depth of parentheses, so matching pairs read at a glance.
 const DEPTH = [

@@ -321,6 +321,32 @@ describe("editing", () => {
     )
   })
 
+  test("parentheses put round one chip by hand survive a remove or move elsewhere", () => {
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    const c = atom(tag("c"))
+    const d = atom(tag("d"))
+    const wrapped = grp("or", [a])
+    const filter = root("and", [wrapped, b, grp("or", [c, d])])
+    // Only the parentheses an edit leaves holding one block unwrap.
+    expect(shape(removeNode(filter, b.id))).toEqual(
+      shape(root("and", [wrapped, grp("or", [c, d])])),
+    )
+    expect(shape(removeNode(filter, c.id))).toEqual(
+      shape(root("and", [wrapped, b, d])),
+    )
+    expect(shape(moveNode(filter, b.id, "root", 3))).toEqual(
+      shape(root("and", [wrapped, grp("or", [c, d]), b])),
+    )
+    expect(shape(removeFunnel(filter, "tag", "d"))).toEqual(
+      shape(root("and", [wrapped, b, c])),
+    )
+    // Emptied, they go, and a parent they leave with one block unwraps.
+    expect(
+      shape(removeNode(root("and", [grp("or", [grp("and", [a]), b])]), a.id)),
+    ).toEqual(shape(root("and", [b])))
+  })
+
   test("NOT on the root negates the whole filter, and again restores it", () => {
     const filter = root("or", [atom(tag("tech")), atom(tag("news"))])
     expect(shown(toggleNot(filter, "root"))).toEqual(["bare"])

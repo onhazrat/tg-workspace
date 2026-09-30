@@ -52,6 +52,8 @@ export type FilterNode = AtomNode | GroupNode
 /** The root is always a group, with the id `root`. */
 export type ChannelFilter = GroupNode
 
+export const flip = (op: Joiner): Joiner => (op === "and" ? "or" : "and")
+
 let seq = 0
 const newId = () => `n${++seq}`
 
@@ -153,18 +155,31 @@ const withoutNode = (root: ChannelFilter, id: string) =>
     children: group.children.filter((child) => child.id !== id),
   }))
 
+function childCounts(node: FilterNode, into = new Map<string, number>()) {
+  if (node.kind === "group") {
+    into.set(node.id, node.children.length)
+    for (const child of node.children) childCounts(child, into)
+  }
+  return into
+}
+
 /**
- * Drop empty groups and unwrap one-child groups, so a remove or a move never
- * leaves "()" or "(a)" behind. Unwrapping keeps the negation: "not (a)" is
- * "not a", and "not (not a)" is "a". The root stays a group.
+ * Drop empty groups and unwrap the groups an edit of `before` left holding
+ * one block, so a remove or a move never leaves "()" or "(a)" behind. A
+ * chip the Account put in parentheses by itself keeps them. Unwrapping keeps
+ * the negation: "not (a)" is "not a", and "not (not a)" is "a". The root
+ * stays a group.
  */
-function prune(root: ChannelFilter): ChannelFilter {
+function prune(root: ChannelFilter, before: ChannelFilter): ChannelFilter {
+  const had = childCounts(before)
   return mapGroups(root, (group) => ({
     ...group,
     children: group.children
       .filter((child) => child.kind === "atom" || child.children.length > 0)
       .map((child) =>
-        child.kind === "group" && child.children.length === 1
+        child.kind === "group" &&
+        child.children.length === 1 &&
+        (had.get(child.id) ?? 0) > 1
           ? {
               ...child.children[0],
               not: !!child.children[0].not !== !!child.not,
@@ -205,7 +220,7 @@ export function append(
 }
 
 export const removeNode = (root: ChannelFilter, id: string): ChannelFilter =>
-  prune(withoutNode(root, id))
+  prune(withoutNode(root, id), root)
 
 export function replaceNode(
   root: ChannelFilter,
@@ -262,7 +277,10 @@ export function moveNode(
   const from = parentOf(root, id)
   const shift =
     from && from.parent.id === parentId && from.index < index ? 1 : 0
-  return prune(insertAt(withoutNode(root, id), parentId, index - shift, node))
+  return prune(
+    insertAt(withoutNode(root, id), parentId, index - shift, node),
+    root,
+  )
 }
 
 /** Put `id` in parentheses of its own, where it was. */
@@ -296,8 +314,7 @@ export function groupWith(
   const target = find(root, targetId)
   if (!drag || !target || find(drag, targetId) || find(target, dragId))
     return root
-  const op: Joiner =
-    parentOf(root, targetId)?.parent.op === "and" ? "or" : "and"
+  const op = flip(parentOf(root, targetId)?.parent.op ?? "or")
   return prune(
     replaceNode(withoutNode(root, dragId), targetId, {
       kind: "group",
@@ -305,6 +322,7 @@ export function groupWith(
       op,
       children: [target, drag],
     }),
+    root,
   )
 }
 
@@ -323,6 +341,7 @@ export function unwrap(root: ChannelFilter, groupId: string): ChannelFilter {
           : [child],
       ),
     })),
+    root,
   )
 }
 
@@ -397,6 +416,7 @@ function removeWhere(
         (child) => child.kind === "group" || !drop(child.cond),
       ),
     })),
+    filter,
   )
 }
 
@@ -702,7 +722,7 @@ const opposeLoneGroups = (root: ChannelFilter): ChannelFilter =>
     ...group,
     children: group.children.map((child) =>
       child.kind === "group" && child.children.length === 1
-        ? { ...child, op: group.op === "and" ? "or" : "and" }
+        ? { ...child, op: flip(group.op) }
         : child,
     ),
   }))
