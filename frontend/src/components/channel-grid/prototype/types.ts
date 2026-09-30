@@ -14,6 +14,7 @@ import type { ChannelPseudoTagChip } from "@/lib/channels/channel-tags"
 import type { ChannelLanguageOption } from "@/lib/channels/filter-channels-for-grid"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
 import type { Channel, ChannelSettingGroup } from "@/types"
+import type { FilterLogic, LogicKind } from "./logic"
 import type { MetricInputs, NumericFilter } from "./metrics"
 
 export type ChannelControlsProps = {
@@ -78,6 +79,10 @@ export type ChannelControlsProps = {
   numericFilters: NumericFilter[]
   onNumericFiltersChange: (filters: NumericFilter[]) => void
   metricInputs: MetricInputs
+  /** PROTOTYPE-only: how the filter conditions combine. */
+  logicKind: LogicKind
+  filterLogic: FilterLogic
+  onFilterLogicChange: (logic: FilterLogic) => void
   sortBy: ChannelGridSortOption
   onSortByChange: (value: ChannelGridSortOption) => void
   sortDirection: "asc" | "desc"

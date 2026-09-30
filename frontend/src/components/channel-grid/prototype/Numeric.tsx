@@ -1,5 +1,5 @@
 /**
- * PROTOTYPE, throwaway: the Metrics filter (N2, the winner over a range menu
+ * PROTOTYPE, throwaway: the Filters dropdown (N2, the winner over a range menu
  * and percentile buckets, which live in 0c6d6e8) and the active-filters bar.
  * One bound per metric; setting a metric again replaces its bound.
  */
@@ -9,6 +9,13 @@ import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { cn } from "@/lib/utils"
+import {
+  clusters,
+  type FilterLogic,
+  type Joiner,
+  joinerBefore,
+  type Mode,
+} from "./logic"
 import {
   describeFilter,
   formatNumber,
@@ -208,7 +215,7 @@ const boundText = (f?: NumericFilter) =>
 
 type Op = "gte" | "lte" | "between"
 
-/** The Metrics editor: one metric, an operator, a value or two. */
+/** The Filters editor: one metric, an operator, a value or two. */
 export const NumericEditor: React.FC<{
   p: ChannelControlsProps
   metricKey: MetricKey
@@ -334,7 +341,7 @@ export const NumericEditor: React.FC<{
 }
 
 /**
- * "Metrics ▾" lists the numeric criteria, each with its current bound; picking
+ * "Filters ▾" lists the numeric criteria, each with its current bound; picking
  * one opens its editor in place.
  */
 export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
@@ -350,7 +357,7 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
       open={open}
       onOpenChange={(o) => (o ? setOpen(true) : close())}
       trigger={
-        <TriggerButton label="Metrics" count={p.numericFilters.length} />
+        <TriggerButton label="Filters" count={p.numericFilters.length} />
       }
       className="w-72"
     >
@@ -365,6 +372,16 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
       ) : (
         <>
           {input}
+          {p.logicKind === "within" && p.numericFilters.length > 1 && (
+            <MatchSwitch
+              label="Channel passes"
+              value={p.filterLogic.numeric}
+              onChange={(numeric) =>
+                p.onFilterLogicChange({ ...p.filterLogic, numeric })
+              }
+              order={["all", "any"]}
+            />
+          )}
           <PopLabel>Filter by</PopLabel>
           {shown.map((m) => (
             <button
@@ -385,19 +402,134 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
   )
 }
 
+/** Any/all as a two-way switch, labelled by what it decides. */
+export const MatchSwitch: React.FC<{
+  label: string
+  value: Mode
+  onChange: (m: Mode) => void
+  order?: Mode[]
+}> = ({ label, value, onChange, order = ["any", "all"] }) => (
+  <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-[10px] font-semibold text-app-ink/60">
+    {label}
+    <span className="inline-flex rounded-md border border-app-ink/15 p-0.5">
+      {order.map((m) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={value === m}
+          onClick={() => onChange(m)}
+          className={cn(
+            "rounded px-2 py-0.5 uppercase tracking-wide",
+            value === m ? "bg-app-ink text-app-bg" : "hover:text-app-ink",
+          )}
+        >
+          {m}
+        </button>
+      ))}
+    </span>
+  </div>
+)
+
+type Item = {
+  key: string
+  label: React.ReactNode
+  onClear: () => void
+  numeric?: NumericFilter
+}
+type CondView = {
+  id: string
+  kind: string
+  items: Item[]
+  /** How the values inside this one chip combine. */
+  inner: Joiner
+  onToggleInner?: () => void
+}
+
 /**
- * Every filter in force, whatever set it, each with its own ×, and one
- * "Clear all". Shown whenever anything filters the grid, selection or not.
+ * Every filter in force, one chip per condition with its values inside, the
+ * joiners between them, and Clear all. Shown whenever anything filters the
+ * grid, selection or not. In L3 the joiners are buttons and AND-runs are boxed,
+ * so the grouping OR creates is visible.
  */
-export const ActiveFiltersBar: React.FC<
-  ChannelControlsProps & { editableNumbers?: boolean }
-> = ({ editableNumbers, ...p }) => {
+export const ActiveFiltersBar: React.FC<ChannelControlsProps> = (p) => {
+  const kind = p.logicKind
+  const logic = p.filterLogic
+  const setLogic = (patch: Partial<FilterLogic>) =>
+    p.onFilterLogicChange({ ...logic, ...patch })
   const groupName = (id: string) =>
     p.groups.find((g) => g.id === id)?.name ?? id
   const languageName = (code: string) =>
     p.allLanguages.find((l) => l.code === code)?.name ?? code
   const tagName = (id: string) =>
     p.pseudoTagChips.find((c) => c.id === id)?.label ?? id
+  const drop = (list: string[], x: string) => list.filter((y) => y !== x)
+  const numItem = (f: NumericFilter): Item => ({
+    key: f.metric,
+    label: describeFilter(f),
+    numeric: f,
+    onClear: () =>
+      p.onNumericFiltersChange(withoutMetric(p.numericFilters, f.metric)),
+  })
+  const tagsToggle = kind === "within" || kind === "connectors"
+
+  const views: CondView[] = []
+  if (p.groupFilters.length)
+    views.push({
+      id: "groups",
+      kind: "Group",
+      inner: "or",
+      items: p.groupFilters.map((id) => ({
+        key: id,
+        label: groupName(id),
+        onClear: () => p.onGroupFiltersChange(drop(p.groupFilters, id)),
+      })),
+    })
+  if (p.tagFilters.length)
+    views.push({
+      id: "tags",
+      kind: "Tag",
+      inner: tagsToggle && logic.tags === "all" ? "and" : "or",
+      onToggleInner: tagsToggle
+        ? () => setLogic({ tags: logic.tags === "all" ? "any" : "all" })
+        : undefined,
+      items: p.tagFilters.map((id) => ({
+        key: id,
+        label: tagName(id),
+        onClear: () => p.onTagFiltersChange(drop(p.tagFilters, id)),
+      })),
+    })
+  if (p.languageFilters.length)
+    views.push({
+      id: "languages",
+      kind: "Language",
+      inner: "or",
+      items: p.languageFilters.map((code) => ({
+        key: code,
+        label: languageName(code),
+        onClear: () => p.onLanguageFiltersChange(drop(p.languageFilters, code)),
+      })),
+    })
+  if (kind === "global" || kind === "connectors") {
+    for (const f of p.numericFilters)
+      views.push({
+        id: `num:${f.metric}`,
+        kind: "",
+        inner: "and",
+        items: [numItem(f)],
+      })
+  } else if (p.numericFilters.length) {
+    views.push({
+      id: "numeric",
+      kind: "Filters",
+      inner: kind === "within" && logic.numeric === "any" ? "or" : "and",
+      onToggleInner:
+        kind === "within"
+          ? () => setLogic({ numeric: logic.numeric === "any" ? "all" : "any" })
+          : undefined,
+      items: p.numericFilters.map(numItem),
+    })
+  }
+
   const count =
     p.groupFilters.length +
     p.tagFilters.length +
@@ -412,63 +544,74 @@ export const ActiveFiltersBar: React.FC<
     p.onLanguageFiltersChange([])
     p.onNumericFiltersChange([])
   }
+  const flipBefore = (id: string) =>
+    setLogic({
+      before: {
+        ...logic.before,
+        [id]: joinerBefore(id, kind, logic) === "and" ? "or" : "and",
+      },
+    })
+  const conds = views.map((v) => ({ id: v.id, test: () => true }))
+  const byId = new Map(views.map((v) => [v.id, v]))
+
   return (
     <div className="flex flex-wrap items-center gap-1.5 border-t border-app-ink/10 bg-app-muted/30 px-3 py-2">
       <span className="mr-1 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-app-ink/45">
         <Search size={10} />
         {p.filteredCount} of {p.totalCount}
       </span>
-      {p.channelSearch.trim() && (
-        <Chip kind="Search" onClear={() => p.onChannelSearchChange("")}>
-          “{p.channelSearch}”
-        </Chip>
+      {kind === "global" && views.length > 1 && (
+        <MatchSwitch
+          label="Show channels matching"
+          value={logic.global === "and" ? "all" : "any"}
+          onChange={(m) => setLogic({ global: m === "all" ? "and" : "or" })}
+          order={["all", "any"]}
+        />
       )}
-      {p.groupFilters.map((id) => (
-        <Chip
-          key={`g-${id}`}
-          kind="Group"
-          onClear={() =>
-            p.onGroupFiltersChange(p.groupFilters.filter((x) => x !== id))
-          }
-        >
-          {groupName(id)}
-        </Chip>
-      ))}
-      {p.tagFilters.map((id) => (
-        <Chip
-          key={`t-${id}`}
-          kind="Tag"
-          onClear={() =>
-            p.onTagFiltersChange(p.tagFilters.filter((x) => x !== id))
-          }
-        >
-          {tagName(id)}
-        </Chip>
-      ))}
-      {p.languageFilters.map((code) => (
-        <Chip
-          key={`l-${code}`}
-          kind="Language"
-          onClear={() =>
-            p.onLanguageFiltersChange(
-              p.languageFilters.filter((x) => x !== code),
-            )
-          }
-        >
-          {languageName(code)}
-        </Chip>
-      ))}
-      {p.numericFilters.map((f) => {
-        const clear = () =>
-          p.onNumericFiltersChange(withoutMetric(p.numericFilters, f.metric))
-        return editableNumbers ? (
-          <EditableNumberChip key={f.metric} p={p} filter={f} onClear={clear} />
-        ) : (
-          <Chip key={f.metric} kind="Number" onClear={clear}>
-            {describeFilter(f)}
-          </Chip>
-        )
-      })}
+      {p.channelSearch.trim() && (
+        <span className={chipClass}>
+          <span className="text-app-ink/45">Search</span>“{p.channelSearch}”
+          <ClearX
+            label="Remove search"
+            onClick={() => p.onChannelSearchChange("")}
+          />
+        </span>
+      )}
+      {p.channelSearch.trim() && views.length > 0 && <JoinerText j="and" />}
+      {kind === "connectors"
+        ? clusters(conds, kind, logic).map((run, r) => (
+            <span key={run[0].id} className="inline-flex items-center gap-1.5">
+              {r > 0 && (
+                <JoinerButton
+                  j="or"
+                  onClick={() => flipBefore(run[0].id)}
+                  big
+                />
+              )}
+              <span
+                className={cn(
+                  "inline-flex flex-wrap items-center gap-1 rounded-lg",
+                  run.length > 1 &&
+                    "border border-dashed border-app-ink/25 p-1",
+                )}
+              >
+                {run.map((c, i) => (
+                  <span key={c.id} className="inline-flex items-center gap-1">
+                    {i > 0 && (
+                      <JoinerButton j="and" onClick={() => flipBefore(c.id)} />
+                    )}
+                    <CondChip p={p} v={byId.get(c.id) as CondView} />
+                  </span>
+                ))}
+              </span>
+            </span>
+          ))
+        : views.map((v, i) => (
+            <span key={v.id} className="inline-flex items-center gap-1.5">
+              {i > 0 && <JoinerText j={joinerBefore(v.id, kind, logic)} />}
+              <CondChip p={p} v={v} />
+            </span>
+          ))}
       <button
         type="button"
         onClick={clearAll}
@@ -481,61 +624,102 @@ export const ActiveFiltersBar: React.FC<
 }
 
 const chipClass =
-  "inline-flex h-6 items-center gap-1 rounded-full border border-app-ink/15 bg-app-card pl-2.5 pr-1 text-[10px] font-semibold"
+  "inline-flex min-h-6 flex-wrap items-center gap-1 rounded-full border border-app-ink/15 bg-app-card py-0.5 pl-2.5 pr-1 text-[10px] font-semibold"
 
-const Chip: React.FC<{
-  kind: string
-  onClear: () => void
-  children: React.ReactNode
-}> = ({ kind, onClear, children }) => (
-  <span className={chipClass}>
-    <span className="text-app-ink/45">{kind}</span>
-    {children}
-    <button
-      type="button"
-      aria-label={`Remove ${kind} filter`}
-      onClick={onClear}
-      className="grid h-4 w-4 place-items-center rounded-full hover:bg-app-ink/15"
-    >
-      <X size={10} />
-    </button>
+const ClearX: React.FC<{ label: string; onClick: () => void }> = ({
+  label,
+  onClick,
+}) => (
+  <button
+    type="button"
+    aria-label={label}
+    onClick={onClick}
+    className="grid h-4 w-4 place-items-center rounded-full hover:bg-app-ink/15"
+  >
+    <X size={10} />
+  </button>
+)
+
+const JoinerText: React.FC<{ j: Joiner }> = ({ j }) => (
+  <span className="text-[9px] font-bold uppercase tracking-widest text-app-ink/40">
+    {j}
   </span>
 )
 
-/** A numeric chip reopens its editor when clicked. */
-const EditableNumberChip: React.FC<{
+const JoinerButton: React.FC<{
+  j: Joiner
+  onClick: () => void
+  big?: boolean
+}> = ({ j, onClick, big }) => (
+  <button
+    type="button"
+    title={`Click to make this ${j === "and" ? "OR" : "AND"}`}
+    onClick={onClick}
+    className={cn(
+      "rounded-md border font-bold uppercase tracking-widest hover:border-app-ink",
+      big
+        ? "border-app-ink/40 bg-app-ink/10 px-2 py-0.5 text-[10px]"
+        : "border-app-ink/15 px-1.5 text-[9px] text-app-ink/60",
+    )}
+  >
+    {j}
+  </button>
+)
+
+/** One condition: its kind, its values joined by its inner joiner. */
+const CondChip: React.FC<{ p: ChannelControlsProps; v: CondView }> = ({
+  p,
+  v,
+}) => (
+  <span className={chipClass}>
+    {v.kind && <span className="text-app-ink/45">{v.kind}</span>}
+    {v.items.map((it, i) => (
+      <span key={it.key} className="inline-flex items-center gap-0.5">
+        {i > 0 &&
+          (v.onToggleInner ? (
+            <button
+              type="button"
+              title="Switch between matching any and all of these"
+              onClick={v.onToggleInner}
+              className="mx-0.5 rounded border border-app-ink/15 px-1 text-[8px] font-bold uppercase text-app-ink/60 hover:border-app-ink"
+            >
+              {v.inner}
+            </button>
+          ) : (
+            <span className="mx-0.5 text-[8px] font-bold uppercase text-app-ink/40">
+              {v.inner}
+            </span>
+          ))}
+        {it.numeric ? <NumberLabel p={p} filter={it.numeric} /> : it.label}
+        <ClearX label={`Remove ${v.kind || "filter"}`} onClick={it.onClear} />
+      </span>
+    ))}
+  </span>
+)
+
+/** A numeric bound reopens its editor when clicked. */
+const NumberLabel: React.FC<{
   p: ChannelControlsProps
   filter: NumericFilter
-  onClear: () => void
-}> = ({ p, filter, onClear }) => {
+}> = ({ p, filter }) => {
   const [open, setOpen] = useState(false)
   return (
-    <span className={chipClass}>
-      <Pop
-        open={open}
-        onOpenChange={setOpen}
-        trigger={
-          <button type="button" className="hover:underline">
-            {describeFilter(filter)}
-          </button>
-        }
-        className="w-72"
-      >
-        <NumericEditor
-          p={p}
-          metricKey={filter.metric}
-          initial={filter}
-          onDone={() => setOpen(false)}
-        />
-      </Pop>
-      <button
-        type="button"
-        aria-label="Remove filter"
-        onClick={onClear}
-        className="grid h-4 w-4 place-items-center rounded-full hover:bg-app-ink/15"
-      >
-        <X size={10} />
-      </button>
-    </span>
+    <Pop
+      open={open}
+      onOpenChange={setOpen}
+      trigger={
+        <button type="button" className="hover:underline">
+          {describeFilter(filter)}
+        </button>
+      }
+      className="w-72"
+    >
+      <NumericEditor
+        p={p}
+        metricKey={filter.metric}
+        initial={filter}
+        onDone={() => setOpen(false)}
+      />
+    </Pop>
   )
 }

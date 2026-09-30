@@ -10,13 +10,17 @@ import { ChannelGroupChips } from "@/components/channel-grid/ChannelGroupChips"
 import { ChannelTagChips } from "@/components/channel-grid/ChannelTagChips"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import {
+  logicKindFor,
   PrototypeControls,
   usePrototypeVariant,
 } from "@/components/channel-grid/prototype"
 import {
-  type NumericFilter,
-  passesNumericFilters,
-} from "@/components/channel-grid/prototype/metrics"
+  buildConditions,
+  DEFAULT_LOGIC,
+  type FilterLogic,
+  passesLogic,
+} from "@/components/channel-grid/prototype/logic"
+import type { NumericFilter } from "@/components/channel-grid/prototype/metrics"
 import type { ChannelControlsProps } from "@/components/channel-grid/prototype/types"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
@@ -29,7 +33,6 @@ import {
   getChannelNamesWithTag,
   toggleNamesInSelection,
 } from "@/lib/channels/channel-grid-chips"
-import { getTagNames } from "@/lib/channels/channel-tag-model"
 import {
   buildChannelPseudoTagChips,
   filterTagsBySearch,
@@ -118,6 +121,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [protoNumericFilters, setProtoNumericFilters] = useState<
     NumericFilter[]
   >([])
+  const [protoLogic, setProtoLogic] = useState<FilterLogic>(DEFAULT_LOGIC)
+  const logicKind = logicKindFor(prototypeVariant)
 
   // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
   const postsInScopeCounts = useScopedPostCounts()
@@ -133,20 +138,18 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       search: channelSearch,
     })
     if (!isPrototype) return byFacets
-    const hasTag = (c: (typeof channels)[number], tag: string) => {
-      const pseudo = findChannelPseudoTag(tag)
-      return pseudo ? pseudo.matches(c) : getTagNames(c.tags).includes(tag)
-    }
-    return byFacets.filter(
-      (c) =>
-        (protoGroupFilters.length === 0 ||
-          protoGroupFilters.includes(c.settingGroupId ?? "")) &&
-        (protoLanguageFilters.length === 0 ||
-          protoLanguageFilters.includes(c.language ?? "")) &&
-        (protoTagFilters.length === 0 ||
-          protoTagFilters.some((t) => hasTag(c, t))) &&
-        passesNumericFilters(c, protoNumericFilters, metricInputs),
+    const conds = buildConditions(
+      {
+        groups: protoGroupFilters,
+        tags: protoTagFilters,
+        languages: protoLanguageFilters,
+        numeric: protoNumericFilters,
+        metricInputs,
+      },
+      logicKind,
+      protoLogic,
     )
+    return byFacets.filter((c) => passesLogic(c, conds, logicKind, protoLogic))
   }, [
     channels,
     channelSearch,
@@ -158,6 +161,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     protoTagFilters,
     protoNumericFilters,
     metricInputs,
+    logicKind,
+    protoLogic,
   ])
 
   const sortedFilteredChannels = useMemo(
@@ -403,6 +408,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     numericFilters: protoNumericFilters,
     onNumericFiltersChange: setProtoNumericFilters,
     metricInputs,
+    logicKind,
+    filterLogic: protoLogic,
+    onFilterLogicChange: setProtoLogic,
     onToggleLanguageSelection: (code: string) => {
       const names = channels
         .filter((c) => c.language === code)

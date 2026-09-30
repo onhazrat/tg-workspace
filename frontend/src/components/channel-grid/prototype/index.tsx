@@ -3,6 +3,7 @@ import { getRouteApi } from "@tanstack/react-router"
 import type React from "react"
 import { toast } from "sonner"
 import { PrototypeSwitcher } from "@/components/Common/PrototypeSwitcher"
+import type { LogicKind } from "./logic"
 import type { ChannelControlsProps } from "./types"
 import { type ALayout, VariantA } from "./VariantA"
 
@@ -15,7 +16,10 @@ export const PROTOTYPE_VARIANTS = [
   { key: "A5", name: "Size + layout on row 2, AI pill" },
   { key: "F1", name: "A5 + always-visible follow field" },
   { key: "F3", name: "A5 + paste many to follow, left of search" },
-  { key: "N2", name: "F3 + Metrics dropdown, active-filters bar" },
+  { key: "N2", name: "F3 + Filters dropdown, active-filters bar" },
+  { key: "L1", name: "N2 + one Match all / any switch" },
+  { key: "L2", name: "N2 + any / all per dropdown (Tags, Filters)" },
+  { key: "L3", name: "N2 + every AND / OR is a toggle" },
 ]
 
 const aVariant = (layout: ALayout): React.FC<ChannelControlsProps> =>
@@ -38,7 +42,20 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   F1: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "inline" }),
   F3: aVariant(F3_LAYOUT),
   N2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
+  L1: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
+  L2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
+  L3: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
 }
+
+/** How a variant combines its filter conditions. */
+export const logicKindFor = (variant: string): LogicKind =>
+  variant === "L1"
+    ? "global"
+    : variant === "L2"
+      ? "within"
+      : variant === "L3"
+        ? "connectors"
+        : "fixed"
 
 /** The variant key in the URL, or "current". */
 export function usePrototypeVariant() {
