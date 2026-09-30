@@ -161,7 +161,9 @@ describe("number Conditions", () => {
   })
   const unmeasured = channel({ name: "u" })
   const inputs: MetricInputs = {
-    channelStats: { m: { count: 90, reach: 1200, velocity: 0.5 } },
+    channelStats: {
+      m: { count: 90, reach: 1200, reachEstimated: false, velocity: 0.5 },
+    },
     postsInScopeCounts: { m: 7 },
     now,
   }
@@ -405,13 +407,16 @@ describe("funnels", () => {
   })
 })
 
+const condValue = (cond: Cond) =>
+  cond.type === "metric" ? cond.metric : cond.value
+
 /** Root children as text, groups joined by "|", to read a shape at a glance. */
 function shared(filter: ChannelFilter): string[] {
   return filter.children.map((n) =>
     n.kind === "atom"
-      ? n.cond.value
+      ? condValue(n.cond)
       : n.children
-          .map((c) => (c.kind === "atom" ? c.cond.value : "()"))
+          .map((c) => (c.kind === "atom" ? condValue(c.cond) : "()"))
           .join("|"),
   )
 }

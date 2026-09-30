@@ -6,8 +6,8 @@
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type { MetricBound } from "@/lib/channels/channel-metrics"
-import { ChannelMetricEditor, type MetricData } from "./ChannelMetricEditor"
+import type { MetricBound, MetricData } from "@/lib/channels/channel-metrics"
+import { ChannelMetricEditor } from "./ChannelMetricEditor"
 
 afterEach(cleanup)
 
