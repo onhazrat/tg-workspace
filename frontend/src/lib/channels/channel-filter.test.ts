@@ -470,6 +470,26 @@ describe("funnels", () => {
     )
   })
 
+  test("a funnel joins a lone root-level Condition of its type with OR, even one added by hand", () => {
+    // The tree does not record who added tag:x, and the Tags dropdown
+    // already shows it funnelled, so a second tag means "x or news".
+    const big: Cond = { type: "metric", metric: "reach", min: 5 }
+    const byHand = root("and", [atom(tag("x")), atom(big)])
+    expect(shape(addFunnel(byHand, "tag", "news"))).toEqual(
+      shape(
+        root("and", [
+          grp("or", [atom(tag("x")), atom(tag("news"))]),
+          atom(big),
+        ]),
+      ),
+    )
+    // A negated or nested one is left where it is, and the funnel appends.
+    const negated = root("and", [atom(tag("x"), true), atom(big)])
+    expect(shape(addFunnel(negated, "tag", "news"))).toEqual(
+      shape(root("and", [atom(tag("x"), true), atom(big), atom(tag("news"))])),
+    )
+  })
+
   test("an existing funnel is not added twice", () => {
     const filter = addFunnel(emptyFilter(), "tag", "tech")
     expect(addFunnel(filter, "tag", "tech")).toBe(filter)

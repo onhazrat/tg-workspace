@@ -246,7 +246,9 @@ Scope and never changes which Channels are selected.
   story 14 says. The first funnel of a type appends its Condition to the root; the second wraps
   the root-level Condition of that type and itself in an OR group; later ones join that group.
   Different dropdowns' funnels join with AND at the root. Once the Account edits the tree by hand,
-  the funnels still only append to or remove from it, and never reshape it. The prototype
+  the funnels still only append to or remove from it, and never reshape it, apart from that
+  second funnel's OR group: a lone, un-negated, root-level Condition of the type is joined the same
+  way whether a funnel or the "+" added it, since the tree does not record which. The prototype
   appended every funnel to the root and so joined two tags with AND; that was a prototype shortcut, not a
   decision.
 - The Filters dropdown always adds a new metric Condition to the root, so the same criterion can
