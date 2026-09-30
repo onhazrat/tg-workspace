@@ -15,6 +15,7 @@ export const PROTOTYPE_VARIANTS = [
   { key: "A2", name: "Size + AI toggles on row 2" },
   { key: "A3", name: "Display strip" },
   { key: "A4", name: "Size bar above the grid, AI pill" },
+  { key: "A5", name: "Size + layout on row 2, AI pill" },
 ]
 
 const aVariant = (layout: ALayout): React.FC<ChannelControlsProps> =>
@@ -28,6 +29,7 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   A2: aVariant({ zoom: "row2", ai: "row2" }),
   A3: aVariant({ zoom: "strip", ai: "strip" }),
   A4: aVariant({ zoom: "gridbar", ai: "pill" }),
+  A5: aVariant({ zoom: "row2", ai: "pill", display: "row2" }),
 }
 
 /** The variant key in the URL, or "current". */

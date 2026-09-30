@@ -59,6 +59,8 @@ const barButton =
 export type ALayout = {
   zoom: "view" | "row1" | "row2" | "strip" | "gridbar"
   ai: "view" | "pill" | "row2" | "strip"
+  /** Where "selected first" and "sort rank" go; defaults to following zoom. */
+  display?: "row2"
 }
 
 export const VariantA: React.FC<
@@ -67,7 +69,10 @@ export const VariantA: React.FC<
   const selectedCount = p.selectedChannels.size
   // Grouping and sort rank follow card size out of the View pill.
   const displayIn =
-    layout.zoom === "strip" || layout.zoom === "gridbar" ? layout.zoom : "view"
+    layout.display ??
+    (layout.zoom === "strip" || layout.zoom === "gridbar"
+      ? layout.zoom
+      : "view")
   const grouping = (
     <MiniToggle
       on={p.groupBySelection}
@@ -558,9 +563,17 @@ export const VariantA: React.FC<
               </button>
             </>
           )}
-          {(layout.zoom === "row2" || layout.ai === "row2") && (
+          {(layout.zoom === "row2" ||
+            layout.ai === "row2" ||
+            displayIn === "row2") && (
             <div className="ml-2 flex items-center gap-3 border-l border-app-ink/10 pl-3">
               {layout.ai === "row2" && <AiInline {...p} />}
+              {displayIn === "row2" && (
+                <div className="flex items-center gap-1.5">
+                  {grouping}
+                  {rank}
+                </div>
+              )}
               {layout.zoom === "row2" && (
                 <SizeSwitch zoom={p.zoom} onZoomChange={p.onZoomChange} />
               )}
