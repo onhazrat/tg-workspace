@@ -21,6 +21,7 @@ import {
   passesLogic,
 } from "@/components/channel-grid/prototype/logic"
 import type { NumericFilter } from "@/components/channel-grid/prototype/metrics"
+import type { SelectionScope } from "@/components/channel-grid/prototype/selection"
 import {
   append,
   atoms,
@@ -137,6 +138,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const logicKind = logicKindFor(prototypeVariant)
   const isTree = logicKind === "tree"
   const [protoTree, setProtoTree] = useState<GroupNode>(emptyTree)
+  const [protoSelectionScope, setProtoSelectionScope] =
+    useState<SelectionScope>("all")
   const treeNames = useMemo(
     () => makeNames(sortedSettingGroups, CHANNEL_PSEUDO_TAGS),
     [sortedSettingGroups],
@@ -460,6 +463,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       : undefined,
     filterTree: protoTree,
     onFilterTreeChange: setProtoTree,
+    shownNames: filteredChannels.map((c) => c.name),
+    onSetSelection: setSelectedChannels,
+    selectionScope: protoSelectionScope,
+    onSelectionScopeChange: setProtoSelectionScope,
     treeNames,
     metricInputs,
     logicKind,

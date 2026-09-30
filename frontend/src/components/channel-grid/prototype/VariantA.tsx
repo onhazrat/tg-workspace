@@ -42,6 +42,12 @@ import type { Channel } from "@/types"
 import { FollowControl, type FollowLayout } from "./Follow"
 import { ActiveFiltersBar, FilterBuilder } from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
+import {
+  SelectionButtons,
+  SelectionMenu,
+  SelectionScopeSwitch,
+  SelectionVenn,
+} from "./SelectionControls"
 import { BlocksBar } from "./TreeBars"
 import {
   type ChannelControlsProps,
@@ -72,6 +78,8 @@ export type ALayout = {
   numeric?: "builder"
   /** T1: the nested filter expression, edited as blocks. */
   tree?: "blocks"
+  /** S1-S3: how the selection is edited against what the filters show. */
+  selection?: "menu" | "buttons" | "venn"
 }
 
 export const VariantA: React.FC<
@@ -395,21 +403,29 @@ export const VariantA: React.FC<
               >
                 {selectedCount} selected <X size={12} />
               </button>
-              <button
-                type="button"
-                className={barButton}
-                onClick={p.onSelectAll}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                className={barButton}
-                onClick={p.onRevertSelection}
-                disabled={p.isRevertDisabled}
-              >
-                Invert
-              </button>
+              {layout.selection && <SelectionScopeSwitch {...p} />}
+              {layout.selection === "menu" && <SelectionMenu {...p} />}
+              {layout.selection === "buttons" && <SelectionButtons {...p} />}
+              {layout.selection === "venn" && <SelectionVenn {...p} />}
+              {!layout.selection && (
+                <>
+                  <button
+                    type="button"
+                    className={barButton}
+                    onClick={p.onSelectAll}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className={barButton}
+                    onClick={p.onRevertSelection}
+                    disabled={p.isRevertDisabled}
+                  >
+                    Invert
+                  </button>
+                </>
+              )}
               <div className="flex items-center gap-1 rounded-md border border-app-ink/10 pl-2">
                 <span className="text-[10px] font-semibold text-app-ink/50">
                   Keep first
