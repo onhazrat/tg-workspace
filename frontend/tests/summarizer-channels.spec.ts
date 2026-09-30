@@ -583,4 +583,70 @@ test.describe("TG Workspace channels and posts", () => {
     )
     await expect(page).toHaveURL(/channelFilter=reach/)
   })
+
+  /**
+   * CTB-03: the row builds the logic by hand. A Reach bound no seeded
+   * Channel reaches, OR NOT the tag one of them has, leaves the other one;
+   * AND or no NOT would each leave a different set. The filter is the URL,
+   * so a reload finds it again.
+   */
+  test("a hand-built OR with a NOT filters the grid and survives a reload", async ({
+    page,
+  }) => {
+    const prefix = `logic${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 2, prefix)
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(2, { timeout: 30_000 })
+    const [tagged, other] = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+
+    await clearChannelSelection(page)
+    await page
+      .getByRole("button", { name: `Select ${tagged}`, exact: true })
+      .click()
+    await page.getByTestId("bulk-tags").click()
+    await page.getByTestId("bulk-add-tag-input").fill(prefix)
+    await page.getByTestId("bulk-add-tag-button").click()
+    await page.keyboard.press("Escape")
+
+    const row = page.getByTestId("channel-filter-row")
+    const picker = page.getByRole("dialog")
+    await row
+      .getByRole("button", { name: "Add a condition", exact: true })
+      .click()
+    await picker.getByRole("button", { name: "Reach", exact: true }).click()
+    await picker.getByRole("button", { name: "at least" }).click()
+    await picker.getByRole("spinbutton", { name: "Value" }).fill("1000000000")
+    await picker.getByTestId("metric-editor-submit").click()
+    await expect(cards).toHaveCount(0)
+
+    await row
+      .getByRole("button", { name: "Add a condition", exact: true })
+      .click()
+    await picker.getByRole("button", { name: /^Tag/ }).click()
+    await picker.getByPlaceholder("Search tags...").fill(prefix)
+    await picker.getByRole("button", { name: prefix, exact: true }).click()
+    await row.getByRole("button", { name: "and", exact: true }).click()
+    await row.getByRole("button", { name: `Negate ${prefix}` }).click()
+
+    await expect(cards).toHaveCount(1)
+    await expect(page.locator(`[data-channel-name="${other}"]`)).toBeVisible()
+    await expect(page).toHaveURL(/channelFilter=reach.*or.*not/)
+
+    await page.reload()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    await expect(
+      page.getByTestId(`channel-filter-chip-${prefix}`),
+    ).toHaveAttribute("data-not", "true", { timeout: 30_000 })
+    await expect(
+      row.getByRole("button", { name: "or", exact: true }),
+    ).toBeVisible()
+    await expect(page.locator(`[data-channel-name="${other}"]`)).toBeVisible()
+    await expect(page.locator(`[data-channel-name="${tagged}"]`)).toHaveCount(0)
+  })
 })

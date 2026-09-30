@@ -284,7 +284,7 @@ export function wrap(
 /**
  * Drop `dragId` onto `targetId`: both go in new parentheses where the target
  * was, joined by the opposite of the parent's operator, since that is why one
- * groups.
+ * groups. Neither may hold the other.
  */
 export function groupWith(
   root: ChannelFilter,
@@ -294,7 +294,8 @@ export function groupWith(
   if (dragId === targetId) return root
   const drag = find(root, dragId)
   const target = find(root, targetId)
-  if (!drag || !target || find(drag, targetId)) return root
+  if (!drag || !target || find(drag, targetId) || find(target, dragId))
+    return root
   const op: Joiner =
     parentOf(root, targetId)?.parent.op === "and" ? "or" : "and"
   return prune(
@@ -490,7 +491,7 @@ function nodeText(node: FilterNode, names: FilterNames, top: boolean): string {
     .map((child) => nodeText(child, names, false))
     .join(` ${node.op} `)
   if (node.not) return `not (${inner})`
-  return top || node.children.length < 2 ? inner : `(${inner})`
+  return top ? inner : `(${inner})`
 }
 
 /**
@@ -688,5 +689,20 @@ export function parseChannelFilter(
     body.kind === "group" && !wholeIsParenthesised(tokens)
       ? { ...body, id: "root" }
       : { ...emptyFilter(), children: [body] }
-  return prune(root)
+  return opposeLoneGroups(root)
 }
+
+/**
+ * Parentheses around one block ("(a)", as a chip put in parentheses by
+ * itself prints) do not write their operator. They read back with the
+ * opposite of their parent's, which is what wrapping gave them.
+ */
+const opposeLoneGroups = (root: ChannelFilter): ChannelFilter =>
+  mapGroups(root, (group) => ({
+    ...group,
+    children: group.children.map((child) =>
+      child.kind === "group" && child.children.length === 1
+        ? { ...child, op: group.op === "and" ? "or" : "and" }
+        : child,
+    ),
+  }))

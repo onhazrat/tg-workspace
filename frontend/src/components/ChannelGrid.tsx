@@ -7,6 +7,7 @@ import {
   FollowControl,
   SortMenu,
 } from "@/components/channel-grid/ChannelBarControls"
+import type { ConditionOptions } from "@/components/channel-grid/ChannelConditionPicker"
 import {
   ChannelFacetMenu,
   type FacetRow,
@@ -39,8 +40,6 @@ import {
   parseChannelFilter,
   printChannelFilter,
   removeFunnel,
-  removeNode,
-  replaceCond,
 } from "@/lib/channels/channel-filter"
 import {
   areAllNamesSelected,
@@ -57,6 +56,7 @@ import {
 } from "@/lib/channels/channel-metrics"
 import {
   buildChannelPseudoTagChips,
+  CHANNEL_PSEUDO_TAGS,
   filterTagsBySearch,
 } from "@/lib/channels/channel-tags"
 import {
@@ -387,6 +387,24 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     [allLanguages, channels],
   )
 
+  // What the filter row's "+" offers: every tag, not only the ones the Tags
+  // dropdown's search leaves.
+  const conditionOptions = useMemo<ConditionOptions>(
+    () => ({
+      tag: [
+        ...allTags.map((tag) => ({ id: tag, label: tag })),
+        ...CHANNEL_PSEUDO_TAGS.map((tag) => ({
+          id: tag.id,
+          label: tag.label,
+          hint: "derived",
+        })),
+      ],
+      group: groupRows,
+      language: languageRows,
+    }),
+    [allTags, groupRows, languageRows],
+  )
+
   return (
     <motion.div
       key="channels"
@@ -486,10 +504,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           totalCount={channels.length}
           names={filterLookup}
           metrics={metricData}
-          onRemove={(id) => setChannelFilter(removeNode(channelFilter, id))}
-          onReplace={(id, cond) =>
-            setChannelFilter(replaceCond(channelFilter, id, cond))
-          }
+          options={conditionOptions}
+          onChange={setChannelFilter}
           onClearSearch={() => setChannelSearch("")}
           onClearAll={() => {
             setChannelFilter(emptyFilter())

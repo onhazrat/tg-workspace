@@ -321,6 +321,40 @@ describe("editing", () => {
     )
   })
 
+  test("NOT on the root negates the whole filter, and again restores it", () => {
+    const filter = root("or", [atom(tag("tech")), atom(tag("news"))])
+    expect(shown(toggleNot(filter, "root"))).toEqual(["bare"])
+    expect(shown(toggleNot(toggleNot(filter, "root"), "root"))).toEqual([
+      "tech",
+      "news",
+    ])
+  })
+
+  test("groupWith joins nodes from different depths, pruning where the dragged one was", () => {
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    const c = atom(tag("c"))
+    const d = atom(tag("d"))
+    // Drag b out of (a or b) onto d at the root: (a or b) is left holding a.
+    const filter = root("and", [grp("or", [a, b]), c, d])
+    expect(shape(groupWith(filter, b.id, d.id))).toEqual(
+      shape(root("and", [a, c, grp("or", [d, b])])),
+    )
+    // Drag the root-level c onto the nested a: the new group is inside an
+    // OR, so it is an AND.
+    expect(shape(groupWith(filter, c.id, a.id))).toEqual(
+      shape(root("and", [grp("or", [grp("and", [a, c]), b]), d])),
+    )
+  })
+
+  test("a node cannot be dropped onto its own parentheses", () => {
+    const a = atom(tag("a"))
+    const inner = grp("or", [a, atom(tag("b"))])
+    const filter = root("and", [inner, atom(tag("c"))])
+    expect(groupWith(filter, a.id, inner.id)).toBe(filter)
+    expect(groupWith(filter, inner.id, a.id)).toBe(filter)
+  })
+
   test("unwrap splices a group's children into its parent", () => {
     const a = atom(tag("a"))
     const b = atom(tag("b"))
@@ -385,6 +419,29 @@ describe("funnels", () => {
     expect(
       matchesChannelFilter(filter, channel({ tags: ["a", "b"] }), noMetrics),
     ).toBe(false)
+  })
+
+  test("after a hand edit, a funnel appends and never reshapes", () => {
+    const big: Cond = { type: "metric", metric: "reach", min: 200 }
+    const built = grp("or", [
+      grp("and", [atom(tag("tech")), atom(big)]),
+      atom(lang("fa"), true),
+    ])
+    const byHand = root("and", [built, atom(group("g1"))])
+    // A tag funnel: the lone root-level tag it would join is not there, so
+    // it appends, and what was built stays as it was.
+    expect(shape(addFunnel(byHand, "tag", "news"))).toEqual(
+      shape(root("and", [built, atom(group("g1")), atom(tag("news"))])),
+    )
+    // Unfunnelling tech removes that Condition only.
+    expect(shape(removeFunnel(byHand, "tag", "tech"))).toEqual(
+      shape(
+        root("and", [
+          grp("or", [atom(big), atom(lang("fa"), true)]),
+          atom(group("g1")),
+        ]),
+      ),
+    )
   })
 
   test("an existing funnel is not added twice", () => {
@@ -459,6 +516,22 @@ describe("the URL form", () => {
         atom(tag("x y"), true),
         atom(tag(UNTAGGED_TAG_ID)),
       ]),
+    )
+  })
+
+  test("a chip put in parentheses by itself survives the URL", () => {
+    // The row's state is the URL, so a wrap that did not print would undo
+    // itself. Its operator is not written; it reads back as the opposite of
+    // its parent's, which is what wrapping gives it.
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    expect(roundTrip(wrap(root("and", [a, b]), a.id, "or"))).toBe(
+      "(tag:a) and tag:b",
+    )
+    roundTrip(wrap(root("or", [a, b]), b.id, "and"))
+    roundTrip(wrap(root("and", [a]), a.id, "or"))
+    roundTrip(
+      root("and", [grp("or", [grp("and", [atom(tag("a"))]), atom(tag("b"))])]),
     )
   })
 
