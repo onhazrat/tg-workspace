@@ -35,7 +35,7 @@ from app.services.post_filters import (
     apply_post_filters,
 )
 from app.services.post_links_parser import channel_from_telegram_url
-from app.services.posts import channel_time_order, random_cap_order
+from app.services.posts import channel_order, random_cap_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
 from app.services.tenancy import scoped_select
 
@@ -224,7 +224,10 @@ def compute_discover_candidates(
     if max_per_channel > 0 and max_per_channel_mode == "random":
         stmt = stmt.order_by(col(Post.channel_name), random_cap_order(seed))
     else:
-        stmt = stmt.order_by(col(Post.channel_name), *channel_time_order(sort, Post))
+        stmt = stmt.order_by(
+            col(Post.channel_name),
+            *channel_order(sort, Post, (filters or PostFilters()).reading),
+        )
 
     by_source: dict[str, _Accumulator] = {}
     seen_per_channel: dict[str, int] = {}

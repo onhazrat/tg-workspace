@@ -1,0 +1,239 @@
+{
+  "curves": {
+    "seed": {
+      "kind": "steps",
+      "points": [
+        [
+          0,
+          0.2
+        ],
+        [
+          3,
+          0.59
+        ],
+        [
+          6,
+          0.7
+        ],
+        [
+          12,
+          0.86
+        ],
+        [
+          24,
+          0.89
+        ]
+      ]
+    },
+    "fitted": {
+      "kind": "knots",
+      "points": [
+        [
+          1,
+          0.25
+        ],
+        [
+          4,
+          0.5
+        ],
+        [
+          16,
+          0.8
+        ],
+        [
+          64,
+          1.0
+        ]
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "seed: settled, past the settling age",
+      "views": 1000,
+      "ageHours": 30,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 1000
+    },
+    {
+      "name": "seed: exactly the settling age is settled",
+      "views": 1000,
+      "ageHours": 24,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 1000
+    },
+    {
+      "name": "seed: just under the settling age reads through the curve",
+      "views": 1000,
+      "ageHours": 23.99,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 1034.8837209302326
+    },
+    {
+      "name": "seed: a step boundary takes the older step",
+      "views": 1000,
+      "ageHours": 6,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 1271.4285714285716
+    },
+    {
+      "name": "seed: exactly the estimation floor is estimated",
+      "views": 1000,
+      "ageHours": 3,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 1508.4745762711866
+    },
+    {
+      "name": "seed: just under the estimation floor is too new",
+      "views": 1000,
+      "ageHours": 2.99,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": null
+    },
+    {
+      "name": "seed: a zero count estimates zero",
+      "views": 0,
+      "ageHours": 10,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 0.0
+    },
+    {
+      "name": "seed: no View count has none",
+      "views": null,
+      "ageHours": 10,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": null
+    },
+    {
+      "name": "seed: no observation time has none",
+      "views": 1000,
+      "ageHours": null,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": null
+    },
+    {
+      "name": "seed: other settings move the anchor and the floor",
+      "views": 1000,
+      "ageHours": 11,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 12,
+        "estimationFloorHours": 1
+      },
+      "expected": 1228.5714285714287
+    },
+    {
+      "name": "seed: other settings, at their floor",
+      "views": 1000,
+      "ageHours": 1,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 12,
+        "estimationFloorHours": 1
+      },
+      "expected": 4300.0
+    },
+    {
+      "name": "seed: other settings, under their floor",
+      "views": 1000,
+      "ageHours": 0.5,
+      "curve": "seed",
+      "settings": {
+        "settlingAgeHours": 12,
+        "estimationFloorHours": 1
+      },
+      "expected": null
+    },
+    {
+      "name": "fitted: between two knots, log-log",
+      "views": 1000,
+      "ageHours": 2,
+      "curve": "fitted",
+      "settings": {
+        "settlingAgeHours": 12,
+        "estimationFloorHours": 1
+      },
+      "expected": 2052.4673485031035
+    },
+    {
+      "name": "fitted: on a knot",
+      "views": 1000,
+      "ageHours": 4,
+      "curve": "fitted",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 1707.9074951373154
+    },
+    {
+      "name": "fitted: past the settling age is the count",
+      "views": 1000,
+      "ageHours": 100,
+      "curve": "fitted",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": 1000
+    },
+    {
+      "name": "fitted: under the first knot is flat",
+      "views": 1000,
+      "ageHours": 0.75,
+      "curve": "fitted",
+      "settings": {
+        "settlingAgeHours": 12,
+        "estimationFloorHours": 0
+      },
+      "expected": 2902.627160581035
+    },
+    {
+      "name": "fitted: under the floor is too new",
+      "views": 1000,
+      "ageHours": 2.5,
+      "curve": "fitted",
+      "settings": {
+        "settlingAgeHours": 24,
+        "estimationFloorHours": 3
+      },
+      "expected": null
+    }
+  ]
+}

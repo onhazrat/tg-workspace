@@ -52,6 +52,8 @@ const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
   maxPostsPerChannelMode: "ordered",
   postSortOrder: "newest",
   groupByChannel: false,
+  viewMeasure: "estimated" as const,
+  viewsFilter: null,
 }
 // A constant for the reason `VIEW_OPTIONS` is one: the provider hands the set
 // down from `useState`, so a fresh `[]` per render would fake a changed filter.
@@ -62,6 +64,10 @@ const NO_SEARCH: PromptPostsDeps["searchSimilarPosts"] = async () => {
 }
 const NO_FEED: PromptPostsDeps["getPostsFeed"] = async () => {
   throw new Error("getPostsFeed should not be called")
+}
+
+const NO_ESTIMATE: PromptPostsDeps["getViewEstimate"] = async () => {
+  throw new Error("getViewEstimate should not be called")
 }
 
 function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
@@ -82,6 +88,7 @@ function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: NO_SEARCH,
     getPostsFeed: NO_FEED,
+    getViewEstimate: NO_ESTIMATE,
     ...over,
   }
 }
@@ -108,8 +115,10 @@ describe("getPromptPostsInput", () => {
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
-        postSortOrder: "oldest",
+        postSortOrder: "most_views",
         groupByChannel: true,
+        viewMeasure: "views" as const,
+        viewsFilter: { op: "gte" as const, value: 2500 },
       },
     }).getPromptPostsInput()
 
@@ -120,9 +129,11 @@ describe("getPromptPostsInput", () => {
       forwarded: "unfollowed_forwarded",
       media: ["photo", "video"],
       languages: ["fa"],
+      viewMeasure: "views",
+      views: { op: "gte", value: 2500 },
       maxPerChannel: 7,
       maxPerChannelMode: "random",
-      sort: "oldest",
+      sort: "most_views",
       groupByChannel: true,
       seed: 0,
     })
@@ -254,6 +265,8 @@ describe("getScopeSubmission", () => {
         maxPostsPerChannelMode: "ordered",
         postSortOrder: "oldest",
         groupByChannel: true,
+        viewMeasure: "estimated" as const,
+        viewsFilter: null,
       },
     }).getScopeSubmission(["alpha"])
 

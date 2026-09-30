@@ -1614,6 +1614,11 @@ export type DiscoverCandidatesRequest = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -1628,7 +1633,7 @@ export type DiscoverCandidatesRequest = {
     /**
      * Sort
      */
-    sort?: 'newest' | 'oldest';
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
     /**
      * Groupbychannel
      */
@@ -1868,6 +1873,11 @@ export type DiscoverReportCreateRequest = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -1882,7 +1892,7 @@ export type DiscoverReportCreateRequest = {
     /**
      * Sort
      */
-    sort?: 'newest' | 'oldest';
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
     /**
      * Groupbychannel
      */
@@ -2038,6 +2048,11 @@ export type DiscoverReportScopeResponse = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -2048,7 +2063,7 @@ export type DiscoverReportScopeResponse = {
     /**
      * Sort
      */
-    sort?: 'newest' | 'oldest';
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
     /**
      * Groupbychannel
      */
@@ -2313,6 +2328,11 @@ export type FrozenScope = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -2323,7 +2343,7 @@ export type FrozenScope = {
     /**
      * Sort
      */
-    sort?: 'newest' | 'oldest';
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
     /**
      * Groupbychannel
      */
@@ -3172,6 +3192,24 @@ export type NewPassword = {
 };
 
 /**
+ * PostCountsResponse
+ *
+ * Per-channel Post counts for a scope, and how many were too new to judge.
+ */
+export type PostCountsResponse = {
+    /**
+     * Counts
+     */
+    counts: {
+        [key: string]: number;
+    };
+    /**
+     * Toonewtojudge
+     */
+    tooNewToJudge: number;
+};
+
+/**
  * PostFacetCount
  *
  * How many Posts one choice of a filter would leave.
@@ -3241,6 +3279,11 @@ export type PostFeedRequest = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -3263,7 +3306,7 @@ export type PostFeedRequest = {
     /**
      * Sort
      */
-    sort?: 'newest' | 'oldest';
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
     /**
      * Groupbychannel
      */
@@ -3478,6 +3521,11 @@ export type PostScopeRequest = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -3563,6 +3611,11 @@ export type PromptScopeInput = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -3573,7 +3626,7 @@ export type PromptScopeInput = {
     /**
      * Sort
      */
-    sort?: 'newest' | 'oldest';
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
     /**
      * Groupbychannel
      */
@@ -4307,6 +4360,11 @@ export type ScopeSubmission = {
      */
     media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
     /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    views?: ViewsFilter | null;
+    /**
      * Maxperchannel
      */
     maxPerChannel?: number;
@@ -4317,7 +4375,7 @@ export type ScopeSubmission = {
     /**
      * Sort
      */
-    sort?: 'newest' | 'oldest';
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
     /**
      * Groupbychannel
      */
@@ -5968,6 +6026,55 @@ export type ViewAsSessionsResponse = {
     sessions?: Array<ViewAsSessionEntry>;
 };
 
+/**
+ * ViewCurveResponse
+ *
+ * A Settling curve as data: the seed's steps or a fit's knots.
+ */
+export type ViewCurveResponse = {
+    /**
+     * Kind
+     */
+    kind: 'steps' | 'knots';
+    /**
+     * Points
+     */
+    points: Array<Array<number>>;
+};
+
+/**
+ * ViewEstimateResponse
+ *
+ * What the browser needs to read an Estimated View count.
+ */
+export type ViewEstimateResponse = {
+    curve: ViewCurveResponse;
+    /**
+     * Settlingagehours
+     */
+    settlingAgeHours: number;
+    /**
+     * Estimationfloorhours
+     */
+    estimationFloorHours: number;
+};
+
+/**
+ * ViewsFilter
+ *
+ * At least or at most a number of views.
+ */
+export type ViewsFilter = {
+    /**
+     * Op
+     */
+    op: 'gte' | 'lte';
+    /**
+     * Value
+     */
+    value: number;
+};
+
 export type LoginLoginAccessTokenData = {
     body: BodyLoginLoginAccessToken;
     path?: never;
@@ -7533,16 +7640,28 @@ export type DataPostsCountsError = DataPostsCountsErrors[keyof DataPostsCountsEr
 
 export type DataPostsCountsResponses = {
     /**
-     * Response Data-Posts Counts
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: number;
-    };
+    200: PostCountsResponse;
 };
 
 export type DataPostsCountsResponse = DataPostsCountsResponses[keyof DataPostsCountsResponses];
+
+export type DataPostsViewEstimateData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/view-estimate';
+};
+
+export type DataPostsViewEstimateResponses = {
+    /**
+     * Successful Response
+     */
+    200: ViewEstimateResponse;
+};
+
+export type DataPostsViewEstimateResponse = DataPostsViewEstimateResponses[keyof DataPostsViewEstimateResponses];
 
 export type DataPostsFacetsData = {
     body: PostScopeRequest;

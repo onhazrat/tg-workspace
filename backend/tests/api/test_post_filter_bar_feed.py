@@ -182,7 +182,7 @@ def test_the_counts_honour_the_language_set(
             headers=headers,
         )
         assert response.status_code == 200, response.text
-        return response.json()
+        return response.json()["counts"]
 
     assert counts(operator, languages=["fa"]) == {"pfb_a": 2, "pfb_b": 1}
     assert counts(operator, languages=["fa"], maxPerChannel=1) == {

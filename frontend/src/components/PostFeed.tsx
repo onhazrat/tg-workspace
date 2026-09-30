@@ -5,6 +5,7 @@ import {
   useLiveWindowRefresh,
   usePostsFeed,
   useScopedPostCounts,
+  useTooNewToJudge,
 } from "@/hooks/usePostsView"
 import type {
   MaxPostsPerChannelMode,
@@ -30,6 +31,8 @@ function capModeLabel(
   order: PostSortOrder,
 ): string {
   if (mode === "random") return "random"
+  if (order === "most_views") return "top by views"
+  if (order === "fewest_views") return "bottom by views"
   return order === "oldest" ? "earliest" : "latest"
 }
 
@@ -48,6 +51,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   const { posts, isInitialLoading, hasMore, loadMore, isLoadingMore } =
     usePostsFeed()
   const counts = useScopedPostCounts()
+  const tooNewToJudge = useTooNewToJudge()
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
   // Posts is the surface a Live window is watched on, so it is the surface that
@@ -101,6 +105,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         setPostSearch={setPostSearch}
         shownCount={totalInScope}
         subtitle={subtitle}
+        tooNewToJudge={tooNewToJudge}
       />
 
       <PostFeedResults

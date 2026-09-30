@@ -239,6 +239,36 @@ describe("usePostFilters — persistence", () => {
     expect(second.result.current.languageFilter).toEqual(["fa", "en"])
   })
 
+  test("the measure and threshold persist under keys of their own (PFB-03)", () => {
+    const first = renderHook(() => usePostFilters())
+    expect(first.result.current.viewMeasure).toBe("estimated")
+    expect(first.result.current.viewsFilter).toBeNull()
+    act(() => {
+      first.result.current.setViewMeasure("views")
+      first.result.current.setViewsFilter({ op: "lte", value: 900 })
+      first.result.current.setPostSortOrder("fewest_views")
+    })
+
+    const second = renderHook(() => usePostFilters())
+    expect(second.result.current.viewMeasure).toBe("views")
+    expect(second.result.current.viewsFilter).toEqual({ op: "lte", value: 900 })
+    expect(second.result.current.postSortOrder).toBe("fewest_views")
+  })
+
+  test("an unreadable stored threshold reads as none", () => {
+    for (const raw of [
+      "not json",
+      "10000",
+      '{"op": "gt", "value": 5}',
+      '{"op": "gte", "value": -1}',
+      '{"op": "gte", "value": "5"}',
+    ]) {
+      scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.views, raw)
+      const { result } = renderHook(() => usePostFilters())
+      expect(result.current.viewsFilter).toBeNull()
+    }
+  })
+
   test("an unreadable stored Language set reads as any Language", () => {
     for (const raw of ["not json", '"fa"', "[1, null]", '{"fa": 1}']) {
       scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.languages, raw)
@@ -295,6 +325,8 @@ describe("usePostFilters — postViewOptions", () => {
       maxPostsPerChannelMode: "random",
       postSortOrder: "oldest",
       groupByChannel: true,
+      viewMeasure: "estimated" as const,
+      viewsFilter: null,
     })
   })
 })

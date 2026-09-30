@@ -187,6 +187,10 @@ export interface CommandContext {
     value: import("@/lib/posts/post-media").MediaFilterValue,
   ) => void
   setLanguageFilter: (value: string[]) => void
+  setViewMeasure: (value: import("@/lib/posts/post-view").ViewMeasure) => void
+  setViewsFilter: (
+    value: import("@/lib/posts/post-view").ViewsFilter | null,
+  ) => void
   setMaxPostsPerChannel: (value: number) => void
   setMaxPostsPerChannelMode: (
     value: import("@/lib/posts/post-view").MaxPostsPerChannelMode,

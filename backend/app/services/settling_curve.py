@@ -19,14 +19,17 @@ from sqlalchemy import func
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
+from app.jobs.settings import load_reach_settings
 from app.models_tg import Post, SettlingCurveFit, ViewObservation
+from app.services.post_filters import ViewMeasure, ViewReading
 from app.services.reach import (
     MS_PER_HOUR,
-    Curve,
+    SEED_CURVE,
+    CurvePoints,
     ObservationPair,
     ReachSettings,
-    curve_from_knots,
     fit_settling_curve,
+    reach_settings_from,
     seed_curve,
 )
 from app.services.tenancy import unscoped_select
@@ -50,10 +53,30 @@ def newest_fit(session: Session) -> SettlingCurveFit | None:
     ).first()
 
 
-def current_curve(session: Session) -> Curve:
+def current_curve(session: Session) -> CurvePoints:
     """The newest fit's curve, else the seed."""
     fit = newest_fit(session)
-    return seed_curve if fit is None else curve_from_knots(fit.knots)
+    if fit is None:
+        return SEED_CURVE
+    return CurvePoints("knots", tuple((age, share) for age, share in fit.knots))
+
+
+def view_reading(
+    session: Session, measure: ViewMeasure, *, needed: bool = True
+) -> ViewReading:
+    """What "views" means for one request (PFB-03, ADR-025).
+
+    The current curve and the reach settings are read only when an Estimated
+    View count will be: `needed` is whether the Scope has a views threshold or
+    a views order. Per request, never stored, so a refit reaches the next page.
+    """
+    if measure == "views" or not needed:
+        return ViewReading(measure)
+    return ViewReading(
+        measure,
+        current_curve(session),
+        reach_settings_from(load_reach_settings(session)),
+    )
 
 
 def observed_pairs(session: Session) -> ObservedPairs:

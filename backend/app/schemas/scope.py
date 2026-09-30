@@ -31,8 +31,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
 from app.services.post_filters import CapMode as CapMode
-from app.services.post_filters import FeedSort, ForwardedFilter
+from app.services.post_filters import FeedSort, ForwardedFilter, ViewsOp, ViewsThreshold
 from app.services.post_filters import MediaKind as MediaKind
+from app.services.post_filters import ViewMeasure as ViewMeasure
 
 #: The feed's orders and the cap's modes, as `services/posts.py` reads them.
 #: Declared rather than left as `str` because a frozen Scope claims to be
@@ -111,6 +112,20 @@ def scope_key(scope: FrozenScope | None) -> dict[str, Any]:
     return {"scope": None if scope is None else scope.model_dump(by_alias=True)}
 
 
+class ViewsFilter(BaseModel):
+    """At least or at most a number of views."""
+
+    # `extra="forbid"` for the reason the Scope has it: a key this server does
+    # not read is a 422, never a threshold that quietly means something else.
+    model_config = ConfigDict(extra="forbid")
+
+    op: ViewsOp
+    value: int = Field(ge=0)
+
+    def threshold(self) -> ViewsThreshold:
+        return ViewsThreshold(self.op, self.value)
+
+
 class ScopedPostRef(BaseModel):
     """One Post named by its natural key."""
 
@@ -133,6 +148,11 @@ class _ScopeFilters(BaseModel):
     # whose Language is unread matches no set.
     languages: list[str] = Field(default_factory=list)
     media: list[MediaKind] = Field(default_factory=list)
+    # What `views` and the views orders read (PFB-03, ADR-025). A Scope stored
+    # before either field reads as `estimated` and no threshold, which filters
+    # nothing and changes no order.
+    view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")
+    views: ViewsFilter | None = None
     max_per_channel: int = Field(0, alias="maxPerChannel", ge=0)
     max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
     sort: SortOrder = "newest"

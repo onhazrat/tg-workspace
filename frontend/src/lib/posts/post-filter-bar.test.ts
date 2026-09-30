@@ -10,7 +10,10 @@ import {
   languageSummary,
   meaningQueryOnKey,
   mediaSummary,
+  nearestViewStep,
   parseCount,
+  VIEW_STEPS,
+  viewsSummary,
 } from "@/lib/posts/post-filter-bar"
 
 describe("parseCount", () => {
@@ -36,6 +39,9 @@ describe("the Per channel pill", () => {
     expect(capPhrase(10, "ordered", "newest")).toBe("Newest 10")
     expect(capPhrase(10, "ordered", "oldest")).toBe("Oldest 10")
     expect(capPhrase(10, "random", "oldest")).toBe("Random 10")
+    expect(capPhrase(10, "ordered", "most_views")).toBe("Top 10 by views")
+    expect(capPhrase(10, "ordered", "fewest_views")).toBe("Bottom 10 by views")
+    expect(capPhrase(10, "random", "most_views")).toBe("Random 10")
   })
 
   test("the first card is titled and described by the order", () => {
@@ -47,6 +53,42 @@ describe("the Per channel pill", () => {
       title: "Oldest",
       body: "The 3 earliest",
     })
+    expect(capCard("most_views", 10)).toEqual({
+      title: "Top by views",
+      body: "The 10 with the most views",
+    })
+    expect(capCard("fewest_views", 10)).toEqual({
+      title: "Bottom by views",
+      body: "The 10 with the fewest views",
+    })
+  })
+})
+
+describe("the Views pill", () => {
+  test("reads Any, or the side and the number under its measure", () => {
+    expect(viewsSummary(null, "estimated")).toBe("Any")
+    expect(viewsSummary({ op: "gte", value: 10_000 }, "views")).toBe(
+      "Popular, 10K views",
+    )
+    expect(viewsSummary({ op: "lte", value: 1_000 }, "views")).toBe(
+      "Niche, 1K views",
+    )
+    expect(viewsSummary({ op: "gte", value: 10_000 }, "estimated")).toBe(
+      "Popular, 10K est. views",
+    )
+    expect(viewsSummary({ op: "gte", value: 2_500 }, "views")).toBe(
+      "Popular, 2.5K views",
+    )
+  })
+
+  test("the slider shows the stop nearest a typed number, on a log scale", () => {
+    expect(VIEW_STEPS[nearestViewStep(100)]).toBe(100)
+    expect(VIEW_STEPS[nearestViewStep(25_000)]).toBe(25_000)
+    // 3,000 is nearer 2,500 than 5,000 in log distance, 4,000 nearer 5,000.
+    expect(VIEW_STEPS[nearestViewStep(3_000)]).toBe(2_500)
+    expect(VIEW_STEPS[nearestViewStep(4_000)]).toBe(5_000)
+    expect(VIEW_STEPS[nearestViewStep(0)]).toBe(100)
+    expect(VIEW_STEPS[nearestViewStep(5_000_000)]).toBe(1_000_000)
   })
 })
 
@@ -75,6 +117,8 @@ describe("activeFilters", () => {
     forwarded: "all" as const,
     media: [],
     languages: [],
+    views: null,
+    viewMeasure: "estimated" as const,
     cap: 0,
     capMode: "ordered" as const,
     order: "newest" as const,
@@ -95,6 +139,7 @@ describe("activeFilters", () => {
       forwarded: "original",
       media: ["photo", "video"],
       languages: ["zxx"],
+      views: { op: "gte", value: 10_000 },
       cap: 5,
       capMode: "random",
       order: "oldest",
@@ -107,6 +152,7 @@ describe("activeFilters", () => {
       "Photo",
       "Video",
       "No text",
+      "Popular, 10K est. views",
       "Random 5 per channel",
     ])
   })

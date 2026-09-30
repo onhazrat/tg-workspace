@@ -33,7 +33,8 @@ import math
 import statistics
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, NamedTuple
+from functools import cached_property
+from typing import Any, Literal, NamedTuple
 
 import numpy as np
 
@@ -56,13 +57,17 @@ SEED_CURVE_STEPS: tuple[tuple[float, float], ...] = (
     (24.0, 0.89),
 )
 
-_SEED_STARTS = [start for start, _share in SEED_CURVE_STEPS]
+
+def _step_share(steps: Sequence[Sequence[float]], age_hours: float) -> float:
+    """The share of the step whose range holds `age_hours`, the first below it."""
+    starts = [start for start, _share in steps]
+    index = max(bisect.bisect_right(starts, age_hours) - 1, 0)
+    return steps[index][1]
 
 
 def seed_curve(age_hours: float) -> float:
     """The seed curve's share at `age_hours`: the step whose range holds it."""
-    index = max(bisect.bisect_right(_SEED_STARTS, age_hours) - 1, 0)
-    return SEED_CURVE_STEPS[index][1]
+    return _step_share(SEED_CURVE_STEPS, age_hours)
 
 
 #: The refresh horizon: sync stops refreshing a stored Post's View count at 7
@@ -143,6 +148,30 @@ def _median(counts: list[float]) -> int:
     return round(statistics.median(counts))
 
 
+def estimated_views(
+    views: int | None,
+    age_hours: float | None,
+    settings: ReachSettings,
+    curve: Curve = seed_curve,
+) -> float | None:
+    """One Post's Estimated View count (ADR-025), `None` when too new to judge.
+
+    Its View count once it was observed at the settling age or older; between
+    the estimation floor and the settling age, the count divided by the curve's
+    share at that age, anchored at the settling age. Reach's corrected counts
+    are exactly these. `post_filters.estimated_views_sql` and the browser's
+    `lib/posts/estimated-views.ts` are the other two copies, held to this one
+    by `tests/fixtures/estimated_views.json`.
+    """
+    if views is None or age_hours is None:
+        return None
+    if age_hours < settings.estimation_floor_hours:
+        return None
+    if age_hours >= settings.settling_age_hours:
+        return float(views)
+    return views * curve(settings.settling_age_hours) / curve(age_hours)
+
+
 def compute_reach(
     observations: Iterable[tuple[int, float]],
     settings: ReachSettings,
@@ -158,11 +187,11 @@ def compute_reach(
     settled: list[float] = [views for views, age in pairs if age >= settling]
     if len(settled) >= MIN_SAMPLES:
         return Reach(_median(settled))
-    anchor = curve(settling)
     corrected = [
-        views * anchor / curve(age)
+        estimate
         for views, age in pairs
-        if settings.estimation_floor_hours <= age < settling
+        if age < settling
+        and (estimate := estimated_views(views, age, settings, curve)) is not None
     ]
     counts = settled + corrected
     if len(counts) >= MIN_SAMPLES:
@@ -224,6 +253,39 @@ class ObservationPair(NamedTuple):
     late_views: int
 
 
+#: How a curve is spelled as data: the seed's steps or a fit's knots.
+CurveKind = Literal["steps", "knots"]
+
+
+@dataclass(frozen=True)
+class CurvePoints:
+    """A Settling curve as data, so SQL and the browser can read it too (PFB-03).
+
+    `steps` is the seed's shape, `(start of the age range, share)`; `knots` a
+    fit's, piecewise-linear log share over log age. Callable, so it is a
+    `Curve` wherever one is taken.
+    """
+
+    kind: CurveKind
+    points: tuple[tuple[float, float], ...]
+
+    @cached_property
+    def _curve(self) -> Curve:
+        if self.kind == "knots":
+            return curve_from_knots(self.points)
+        return lambda age: _step_share(self.points, age)
+
+    def __call__(self, age_hours: float) -> float:
+        return self._curve(age_hours)
+
+    @classmethod
+    def from_wire(cls, spec: Mapping[str, Any]) -> CurvePoints:
+        return cls(spec["kind"], tuple((float(a), float(b)) for a, b in spec["points"]))
+
+    def wire(self) -> dict[str, Any]:
+        return {"kind": self.kind, "points": [list(point) for point in self.points]}
+
+
 def curve_from_knots(knots: Sequence[Sequence[float]]) -> Curve:
     """Piecewise-linear log share over log age, flat outside the knots."""
     log_ages = [math.log(age) for age, _share in knots]
@@ -234,6 +296,10 @@ def curve_from_knots(knots: Sequence[Sequence[float]]) -> Curve:
         return math.exp(float(np.interp(at, log_ages, log_shares)))
 
     return curve
+
+
+#: The seed curve as data (PFB-03).
+SEED_CURVE = CurvePoints("steps", SEED_CURVE_STEPS)
 
 
 def _non_decreasing(values: Sequence[float]) -> list[float]:

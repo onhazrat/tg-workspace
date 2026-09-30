@@ -39,8 +39,9 @@ from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
 from app.services.follows import visible_channel_names
-from app.services.post_filters import PostFilters
+from app.services.post_filters import VIEW_SORTS, PostFilters
 from app.services.serialization import model_to_camel
+from app.services.settling_curve import view_reading
 from app.services.tenancy import (
     assert_owner,
     assert_owner_on_write,
@@ -439,6 +440,12 @@ def create_report(
         forwarded=scope.forwarded,
         media=tuple(scope.media),
         languages=tuple(scope.languages),
+        views=None if scope.views is None else scope.views.threshold(),
+        reading=view_reading(
+            session,
+            scope.view_measure,
+            needed=scope.views is not None or scope.sort in VIEW_SORTS,
+        ),
     )
     post_ids = (
         None

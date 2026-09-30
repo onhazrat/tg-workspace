@@ -99,9 +99,11 @@ FILTERS: dict[str, Any] = {
     "forwarded": "original",
     "languages": ["fa", "en"],
     "media": ["photo", "video"],
+    "viewMeasure": "views",
+    "views": {"op": "gte", "value": 2500},
     "maxPerChannel": 25,
     "maxPerChannelMode": "random",
-    "sort": "oldest",
+    "sort": "most_views",
     "groupByChannel": True,
     "seed": 4242,
 }
@@ -128,6 +130,8 @@ LEGACY_READS_AS: dict[str, Any] = {
     "forwarded": "original",
     "languages": [],
     "media": ["photo"],
+    "viewMeasure": "estimated",
+    "views": None,
     "maxPerChannel": 25,
     "maxPerChannelMode": "ordered",
     "sort": "newest",
@@ -144,6 +148,9 @@ UNIMPLEMENTED: list[tuple[str, Any]] = [
     ("sort", "relevance"),
     ("maxPerChannelMode", "alphabetical"),
     ("groupByChannel", "sideways"),
+    ("viewMeasure", "reach"),
+    ("views", {"op": "gt", "value": 10}),
+    ("views", {"op": "gte", "value": -1}),
 ]
 
 
@@ -617,6 +624,9 @@ def test_a_filter_value_this_server_does_not_implement_is_refused(
 def _overwrite_stored_filters(family: Family, artifact_id: str) -> None:
     """Put the filter half back into the shape a pre-PFB-01 row holds.
 
+    Without PFB-03's two keys either, so the same row also proves a Scope
+    stored before the views filter reads as `estimated` with no threshold.
+
     The new keys are removed rather than left beside the old ones, because a
     row written before the change never had them.
     """
@@ -624,7 +634,13 @@ def _overwrite_stored_filters(family: Family, artifact_id: str) -> None:
         row = session.get(family.model, artifact_id)
         assert row is not None
         stored = dict(row.scope or {})
-        for key in ("languages", "groupByChannel", *LEGACY_FILTERS):
+        for key in (
+            "languages",
+            "groupByChannel",
+            "viewMeasure",
+            "views",
+            *LEGACY_FILTERS,
+        ):
             stored.pop(key, None)
         row.scope = {**stored, **LEGACY_FILTERS}
         session.add(row)

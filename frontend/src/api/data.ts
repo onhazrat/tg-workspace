@@ -1,5 +1,6 @@
 import type {
   ChatSessionSubmitRequest,
+  PostCountsResponse,
   SummarySubmitRequest,
   TagRunSubmitRequest,
 } from "../client"
@@ -13,6 +14,8 @@ import type {
   ForwardedFilterValue,
   MaxPostsPerChannelMode,
   PostSortOrder,
+  ViewMeasure,
+  ViewsFilter,
 } from "../lib/posts/post-view"
 import type {
   ArtifactKind,
@@ -66,6 +69,9 @@ export type PostScopeQuery = {
   media?: MediaFilterValue
   /** The Post's own Language, any of these; empty for any (PFB-02). */
   languages?: string[]
+  /** What `views` and the views orders read; the server's default is `estimated` (PFB-03). */
+  viewMeasure?: ViewMeasure
+  views?: ViewsFilter | null
   maxPerChannel?: number
 }
 
@@ -127,6 +133,9 @@ export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
   // Empty is any media and is the server's default, so it is omitted.
   if (params.media?.length) body.media = params.media
   if (params.languages?.length) body.languages = params.languages
+  if (params.viewMeasure && params.viewMeasure !== "estimated")
+    body.viewMeasure = params.viewMeasure
+  if (params.views) body.views = params.views
   if (params.maxPerChannel != null && params.maxPerChannel > 0)
     body.maxPerChannel = params.maxPerChannel
   return body
@@ -215,6 +224,8 @@ export type DiscoverReportScope = {
   forwarded: ForwardedFilterValue
   languages: string[]
   media: MediaFilterValue
+  viewMeasure: ViewMeasure
+  views: ViewsFilter | null
   maxPerChannel: number
   maxPerChannelMode: MaxPostsPerChannelMode
   sort: PostSortOrder
@@ -639,11 +650,15 @@ export const dataApi = {
    * channels and would have run to roughly 13 KB at the ~1,070 channels a real
    * account holds — past what proxies and servers accept in a request line.
    */
-  getPostsCounts: (params: PostScopeQuery) =>
-    request<Record<string, number>>("/api/v1/data/posts/counts", {
+  getPostsScopeCounts: (params: PostScopeQuery) =>
+    request<PostCountsResponse>("/api/v1/data/posts/counts", {
       method: "POST",
       body: JSON.stringify(postScopeBody(params)),
     }),
+
+  /** Just the per-channel map, which is all the AI paths size a selection by. */
+  getPostsCounts: (params: PostScopeQuery): Promise<Record<string, number>> =>
+    dataApi.getPostsScopeCounts(params).then((response) => response.counts),
 
   getTranslation: (channelName: string, postId: number, language: string) => {
     const qs = new URLSearchParams({

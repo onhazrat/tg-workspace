@@ -40,6 +40,8 @@ export function clearPostFilters(ctx: CommandContext): void {
   ctx.setForwardedFilter("all")
   ctx.setMediaFilter([])
   ctx.setLanguageFilter([])
+  ctx.setViewMeasure("estimated")
+  ctx.setViewsFilter(null)
   ctx.setMaxPostsPerChannel(0)
   ctx.setMaxPostsPerChannelMode("ordered")
   ctx.setPostSortOrder("newest")

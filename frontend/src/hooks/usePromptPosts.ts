@@ -23,7 +23,10 @@ import type {
   MediaFilterValue,
   PostViewOptions,
 } from "@/lib/posts/post-view"
-import { computeScopedPosts } from "@/lib/posts/scoped-posts"
+import {
+  computeScopedPosts,
+  type ScopedPostsDeps,
+} from "@/lib/posts/scoped-posts"
 import { toWireWindow, type WindowState } from "@/lib/scope/window"
 import type { Channel, Post } from "@/types"
 
@@ -58,6 +61,7 @@ export interface PromptPostsDeps {
     options: { channels?: string[]; startDate: number; endDate: number },
   ) => Promise<Post[]>
   getPostsFeed: typeof import("@/api").api.getPostsFeed
+  getViewEstimate: ScopedPostsDeps["getViewEstimate"]
 }
 
 export type PromptPostsInput =
@@ -101,6 +105,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     semanticSearchRespectsChannels,
     searchSimilarPosts,
     getPostsFeed,
+    getViewEstimate,
   } = deps
 
   // Read when the call happens, not when the memo was built, so a minute that
@@ -113,6 +118,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     maxPostsPerChannelMode,
     postSortOrder,
     groupByChannel,
+    viewMeasure,
+    viewsFilter,
   } = postViewOptions
 
   const getScopedPosts = useCallback(
@@ -136,6 +143,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         semanticSearchRespectsChannels,
         searchSimilarPosts,
         getPostsFeed,
+        getViewEstimate,
       }),
     [
       // The window, not the minute it currently resolves to — see `windowKey`.
@@ -148,6 +156,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       semanticSearchRespectsChannels,
       searchSimilarPosts,
       getPostsFeed,
+      getViewEstimate,
       forwardedFilter,
       channels,
       mediaFilter,
@@ -159,6 +168,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       maxPostsPerChannelMode,
       postSortOrder,
       groupByChannel,
+      viewMeasure,
+      viewsFilter,
     ],
   )
 
@@ -178,6 +189,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
           forwarded: forwardedFilter,
           media: mediaFilter,
           languages: languageFilter,
+          viewMeasure,
+          views: viewsFilter,
           maxPerChannel: maxPostsPerChannel,
           maxPerChannelMode: maxPostsPerChannelMode,
           sort: postSortOrder,
@@ -196,6 +209,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       forwardedFilter,
       mediaFilter,
       languageFilter,
+      viewMeasure,
+      viewsFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
@@ -210,6 +225,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       forwarded: forwardedFilter,
       media: mediaFilter,
       languages: languageFilter,
+      viewMeasure,
+      views: viewsFilter,
       maxPerChannel: maxPostsPerChannel,
       maxPerChannelMode: maxPostsPerChannelMode,
       sort: postSortOrder,
@@ -230,6 +247,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       forwardedFilter,
       mediaFilter,
       languageFilter,
+      viewMeasure,
+      viewsFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,

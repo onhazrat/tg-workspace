@@ -206,6 +206,10 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("POST", f"{DATA}/posts/lookup"): (Reason.COVERED_ELSEWHERE, "same file"),
     ("POST", f"{DATA}/posts/counts"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("GET", f"{DATA}/posts/view-estimate"): (
+        Reason.NOT_ROW_ADDRESSED,
+        "the Settling curve and two settings, one answer for every account",
+    ),
     ("POST", f"{DATA}/posts/facets"): (
         Reason.COVERED_ELSEWHERE,
         "two live accounts; test_post_filter_bar_feed.py",

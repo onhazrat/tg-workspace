@@ -8,7 +8,7 @@ import {
   streamFollowJobEvents,
 } from "@/api"
 import type { PromptScope } from "@/api/data"
-import type { ScopeSubmission } from "@/client"
+import { dataPostsViewEstimate, type ScopeSubmission } from "@/client"
 import { addForwardedChannel } from "@/lib/channels/add-channel"
 import {
   type ManualSyncMode,
@@ -16,6 +16,7 @@ import {
   planManualSync,
 } from "@/lib/channels/manual-sync"
 import { logger } from "@/lib/logger"
+import { queryKeys } from "../hooks/queryKeys"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useFollowJob } from "../hooks/useFollowJob"
 import { usePostFilters } from "../hooks/usePostFilters"
@@ -28,6 +29,8 @@ import type {
   MediaFilterValue,
   PostSortOrder,
   PostViewOptions,
+  ViewMeasure,
+  ViewsFilter,
 } from "../lib/posts/post-view"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
@@ -136,8 +139,18 @@ interface ScraperContextType {
   setPostSortOrder: React.Dispatch<React.SetStateAction<PostSortOrder>>
   groupByChannel: boolean
   setGroupByChannel: React.Dispatch<React.SetStateAction<boolean>>
+  viewMeasure: ViewMeasure
+  setViewMeasure: React.Dispatch<React.SetStateAction<ViewMeasure>>
+  viewsFilter: ViewsFilter | null
+  setViewsFilter: React.Dispatch<React.SetStateAction<ViewsFilter | null>>
   postViewOptions: PostViewOptions
 }
+
+/**
+ * The Settling curve is refitted daily and the reach settings change by hand,
+ * so an hour-old copy is as good as a fresh one for ranking a meaning search.
+ */
+const VIEW_ESTIMATE_STALE_TIME = 60 * 60 * 1000
 
 /** Module-level so `useFollowJob`'s callbacks keep one identity across renders. */
 const FOLLOW_API = {
@@ -209,10 +222,24 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setPostSortOrder,
     groupByChannel,
     setGroupByChannel,
+    viewMeasure,
+    setViewMeasure,
+    viewsFilter,
+    setViewsFilter,
     postViewOptions,
     debouncedPostSearch,
     debouncedSemanticSearchQuery,
   } = usePostFilters()
+
+  const getViewEstimate = useCallback(
+    () =>
+      queryClient.fetchQuery({
+        queryKey: queryKeys.viewEstimate,
+        queryFn: () => dataPostsViewEstimate(),
+        staleTime: VIEW_ESTIMATE_STALE_TIME,
+      }),
+    [queryClient],
+  )
 
   const {
     scrapingChannels,
@@ -268,6 +295,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       semanticSearchRespectsChannels,
       searchSimilarPosts,
       getPostsFeed: api.getPostsFeed,
+      getViewEstimate,
     })
 
   const scrapingLocksRef = React.useRef<Set<string>>(new Set())
@@ -436,6 +464,10 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setPostSortOrder,
         groupByChannel,
         setGroupByChannel,
+        viewMeasure,
+        setViewMeasure,
+        viewsFilter,
+        setViewsFilter,
         postViewOptions,
       }}
     >

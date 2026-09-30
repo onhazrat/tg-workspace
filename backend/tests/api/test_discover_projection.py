@@ -89,6 +89,8 @@ SCOPE_KEYS = {
     "forwarded",
     "languages",
     "media",
+    "viewMeasure",
+    "views",
     "maxPerChannel",
     "maxPerChannelMode",
     "seed",

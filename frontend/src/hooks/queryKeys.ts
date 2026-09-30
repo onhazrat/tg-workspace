@@ -52,6 +52,8 @@ export const queryKeys = {
   /** The Directory's sample Posts for one handle — corpus-wide, not a report's. */
   directoryPosts: (handle: string) => ["directoryPosts", handle] as const,
   postsCounts: (scope: unknown) => ["postsCounts", scope] as const,
+  /** The curve and settings an Estimated View count reads through (PFB-03). */
+  viewEstimate: ["viewEstimate"] as const,
   /** Per-choice counts for the Media and Language pills (PFB-02). */
   postsFacets: (scope: unknown) => ["postsFacets", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */

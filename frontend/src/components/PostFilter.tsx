@@ -32,6 +32,7 @@ import {
   POST_ORDER_OPTIONS,
   POST_TYPE_OPTIONS,
   type SearchMode,
+  viewsSummary,
 } from "../lib/posts/post-filter-bar"
 import {
   MEDIA_KIND_OPTIONS,
@@ -42,6 +43,8 @@ import type {
   ForwardedFilterValue,
   MaxPostsPerChannelMode,
   PostSortOrder,
+  ViewMeasure,
+  ViewsFilter,
 } from "../lib/posts/post-view"
 import type { Post } from "../types"
 import {
@@ -50,6 +53,7 @@ import {
   PerChannelForm,
   Pill,
   pillClass,
+  ViewsForm,
 } from "./PostFilterParts"
 
 /** What the bar reads and writes; `ScraperContext` provides all of it. */
@@ -66,6 +70,10 @@ export interface FilterBarControls {
   setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
   languageFilter: string[]
   setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
+  viewMeasure: ViewMeasure
+  setViewMeasure: (value: ViewMeasure) => void
+  viewsFilter: ViewsFilter | null
+  setViewsFilter: (value: ViewsFilter | null) => void
   maxPostsPerChannel: number
   setMaxPostsPerChannel: (value: number) => void
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -83,6 +91,8 @@ interface PostFilterProps {
   shownCount: number
   /** The existing subtitle's qualifiers: the cap and grouping. */
   subtitle: string
+  /** Posts an Estimated views threshold hid for being too new to judge. */
+  tooNewToJudge: number
 }
 
 export interface PostFilterBarProps extends PostFilterProps {
@@ -210,6 +220,8 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
     forwarded: s.forwardedFilter,
     media: s.mediaFilter,
     languages: s.languageFilter,
+    views: s.viewsFilter,
+    viewMeasure: s.viewMeasure,
     cap: s.maxPostsPerChannel,
     capMode: s.maxPostsPerChannelMode,
     order: s.postSortOrder,
@@ -289,6 +301,21 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
             />
           </Pill>
 
+          <Pill
+            label="Views"
+            value={viewsSummary(s.viewsFilter, s.viewMeasure)}
+            active={s.viewsFilter != null}
+            width="w-80"
+            testId="post-filter-pill-views"
+          >
+            <ViewsForm
+              measure={s.viewMeasure}
+              setMeasure={s.setViewMeasure}
+              views={s.viewsFilter}
+              setViews={s.setViewsFilter}
+            />
+          </Pill>
+
           <span className="mx-1 h-5 w-px bg-app-ink/10" />
 
           <Pill
@@ -340,6 +367,11 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
         </span>
         {props.subtitle && (
           <span className="text-app-ink/50">{props.subtitle}</span>
+        )}
+        {props.tooNewToJudge > 0 && (
+          <span className="text-app-ink/50">
+            {props.tooNewToJudge.toLocaleString()} too new to judge
+          </span>
         )}
         {chips.map((chip) => (
           <button

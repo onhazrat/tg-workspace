@@ -9,6 +9,7 @@ from datetime import timedelta
 from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.routes.data._shared import parse_post_filters
@@ -93,7 +94,7 @@ def discover_candidates(
     """
     return DiscoverCandidatesResponse.model_validate(
         compute_discover_candidates(
-            session, user_id=current_user.id, **_discover_kwargs(body)
+            session, user_id=current_user.id, **_discover_kwargs(session, body)
         )
     )
 
@@ -109,7 +110,9 @@ def _parse_discover_signals(signals: list[str] | None) -> set[str] | None:
     return kinds
 
 
-def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
+def _discover_kwargs(
+    session: Session, body: DiscoverCandidatesRequest
+) -> dict[str, Any]:
     """Validated aggregation inputs, shared by the compute and save routes.
 
     Both routes must interpret an identical request identically — a report is
@@ -125,7 +128,14 @@ def _discover_kwargs(body: DiscoverCandidatesRequest) -> dict[str, Any]:
             "set[SignalKind] | None", _parse_discover_signals(body.signals)
         ),
         "filters": parse_post_filters(
-            body.keyword, body.forwarded, body.media, body.languages
+            session,
+            body.keyword,
+            body.forwarded,
+            body.media,
+            body.languages,
+            view_measure=body.view_measure,
+            views=body.views,
+            sort=body.sort,
         ),
         "max_per_channel": body.max_per_channel,
         "max_per_channel_mode": body.max_per_channel_mode,

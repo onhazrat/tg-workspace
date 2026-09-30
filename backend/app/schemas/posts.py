@@ -34,6 +34,8 @@ from app.schemas.scope import (
     CapMode,
     MediaKind,
     SortOrder,
+    ViewMeasure,
+    ViewsFilter,
     upgrade_legacy_scope_fields,
 )
 from app.services.posts import (
@@ -41,6 +43,7 @@ from app.services.posts import (
     MAX_POST_LOOKUP_BATCH,
     MAX_POST_PAGE_SIZE,
 )
+from app.services.reach import CurveKind
 
 
 class PostLinkSpan(BaseModel):
@@ -114,6 +117,34 @@ class BulkUpsertPostsResponse(BaseModel):
     upserted: int = 0
 
 
+class PostCountsResponse(BaseModel):
+    """Per-channel Post counts for a scope, and how many were too new to judge."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    counts: dict[str, int]
+    # Posts an Estimated views threshold hid for being under the estimation
+    # floor; 0 under the raw measure or with no threshold (PFB-03).
+    too_new_to_judge: int = Field(alias="tooNewToJudge")
+
+
+class ViewCurveResponse(BaseModel):
+    """A Settling curve as data: the seed's steps or a fit's knots."""
+
+    kind: CurveKind
+    points: list[list[float]]
+
+
+class ViewEstimateResponse(BaseModel):
+    """What the browser needs to read an Estimated View count."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    curve: ViewCurveResponse
+    settling_age_hours: int = Field(alias="settlingAgeHours")
+    estimation_floor_hours: int = Field(alias="estimationFloorHours")
+
+
 class PostFacetCount(BaseModel):
     """How many Posts one choice of a filter would leave."""
 
@@ -164,6 +195,9 @@ class PostScopeRequest(BaseModel):
     languages: list[str] = PydanticField(default_factory=list)
     # A set of kinds, empty for any; a Post matching any one is kept (PFB-01).
     media: list[MediaKind] = PydanticField(default_factory=list)
+    # What `views` and the views orders read, and the threshold (PFB-03).
+    view_measure: ViewMeasure = PydanticField("estimated", alias="viewMeasure")
+    views: ViewsFilter | None = None
     max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)
 
     # A browser still on the previous bundle posts `media: "all"`, `sort:
