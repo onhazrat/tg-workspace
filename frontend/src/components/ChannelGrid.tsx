@@ -212,25 +212,33 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     ],
   )
 
-  const selectedTrimRanks = useMemo(
-    () =>
-      buildSelectedTrimRanks({
-        channels,
-        channelStats,
-        postsInScopeCounts,
-        selectedChannels,
-        sortBy,
-        sortDirection,
-      }),
-    [
-      channelStats,
+  // PROTOTYPE: with "only shown" scope the card ranks count only the shown
+  // selected channels, the same set Trim ranks, so "#3" still means "survives
+  // Keep first 3".
+  const selectedTrimRanks = useMemo(() => {
+    const shown = new Set(filteredChannels.map((c) => c.name))
+    return buildSelectedTrimRanks({
       channels,
+      channelStats,
       postsInScopeCounts,
-      selectedChannels,
+      selectedChannels:
+        isPrototype && protoSelectionScope === "shown"
+          ? new Set([...selectedChannels].filter((n) => shown.has(n)))
+          : selectedChannels,
       sortBy,
       sortDirection,
-    ],
-  )
+    })
+  }, [
+    channelStats,
+    channels,
+    filteredChannels,
+    isPrototype,
+    postsInScopeCounts,
+    protoSelectionScope,
+    selectedChannels,
+    sortBy,
+    sortDirection,
+  ])
 
   const {
     parsedTrimCount,
