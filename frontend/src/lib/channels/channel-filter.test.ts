@@ -17,16 +17,23 @@ import {
   printChannelFilter,
   removeFunnel,
   removeNode,
+  replaceCond,
   replaceNode,
   setOp,
   toggleNot,
   unwrap,
   wrap,
 } from "./channel-filter"
+import type { MetricInputs, MetricKey } from "./channel-metrics"
 import { UNTAGGED_TAG_ID } from "./channel-tags"
 
 const channel = (over: Partial<Channel>): Channel =>
   ({ name: "c", tags: [], ...over }) as Channel
+const noMetrics: MetricInputs = {
+  channelStats: {},
+  postsInScopeCounts: {},
+  now: 0,
+}
 
 const tag = (value: string): Cond => ({ type: "tag", value })
 const lang = (value: string): Cond => ({ type: "language", value })
@@ -75,7 +82,7 @@ const names = filterNames([
 
 const shown = (filter: ChannelFilter) =>
   [tech, news, bare]
-    .filter((c) => matchesChannelFilter(filter, c))
+    .filter((c) => matchesChannelFilter(filter, c, noMetrics))
     .map((c) => c.name)
 
 describe("evaluation", () => {
@@ -139,6 +146,92 @@ describe("evaluation", () => {
   })
 })
 
+describe("number Conditions", () => {
+  const DAY = 86_400_000
+  const now = 100 * DAY
+  const measured = channel({
+    name: "m",
+    subscribers: 500,
+    photos: 3,
+    videos: 4,
+    files: 5,
+    links: 6,
+    lastUpdated: now - 2 * DAY,
+    followedAt: now - 30 * DAY,
+  })
+  const unmeasured = channel({ name: "u" })
+  const inputs: MetricInputs = {
+    channelStats: {
+      m: { count: 90, reach: 1200, reachEstimated: false, velocity: 0.5 },
+    },
+    postsInScopeCounts: { m: 7 },
+    now,
+  }
+  const bound = (
+    key: MetricKey,
+    b: { min?: number; max?: number; none?: true },
+  ): ChannelFilter => root("and", [atom({ type: "metric", metric: key, ...b })])
+  const passes = (filter: ChannelFilter, c: Channel) =>
+    matchesChannelFilter(filter, c, inputs)
+
+  const VALUES: [MetricKey, number][] = [
+    ["subscribers", 500],
+    ["reach", 1200],
+    ["activity_rate", 0.5],
+    ["total_posts", 90],
+    ["posts_in_scope", 7],
+    ["days_since_update", 2],
+    ["days_followed", 30],
+    ["photos", 3],
+    ["videos", 4],
+    ["files", 5],
+    ["links", 6],
+  ]
+
+  test.each(VALUES)(
+    "%s is read from where the tab has it, both edges inclusive",
+    (key, value) => {
+      expect(passes(bound(key, { min: value }), measured)).toBe(true)
+      expect(passes(bound(key, { max: value }), measured)).toBe(true)
+      expect(passes(bound(key, { min: value, max: value }), measured)).toBe(
+        true,
+      )
+      expect(passes(bound(key, { min: value * 1.01 }), measured)).toBe(false)
+      expect(passes(bound(key, { max: value * 0.99 }), measured)).toBe(false)
+    },
+  )
+
+  test.each(VALUES.filter(([key]) => key !== "posts_in_scope"))(
+    "a Channel with no %s fails any bound, and only it passes no value",
+    (key) => {
+      expect(passes(bound(key, { min: 0 }), unmeasured)).toBe(false)
+      expect(passes(bound(key, { max: 1e12 }), unmeasured)).toBe(false)
+      expect(passes(bound(key, { none: true }), unmeasured)).toBe(true)
+      expect(passes(bound(key, { none: true }), measured)).toBe(false)
+    },
+  )
+
+  test("NOT of a bound passes a missing value; NOT of no value means has one", () => {
+    const notBound = root("and", [
+      atom({ type: "metric", metric: "reach", min: 5000 }, true),
+    ])
+    expect(passes(notBound, unmeasured)).toBe(true)
+    expect(passes(notBound, measured)).toBe(true)
+    const hasValue = root("and", [
+      atom({ type: "metric", metric: "reach", none: true }, true),
+    ])
+    expect(passes(hasValue, measured)).toBe(true)
+    expect(passes(hasValue, unmeasured)).toBe(false)
+  })
+
+  test("every Channel has Posts in the Scope, none counting as 0", () => {
+    expect(passes(bound("posts_in_scope", { max: 0 }), unmeasured)).toBe(true)
+    expect(passes(bound("posts_in_scope", { none: true }), unmeasured)).toBe(
+      false,
+    )
+  })
+})
+
 describe("editing", () => {
   test("remove drops empty groups and unwraps one-child groups", () => {
     const a = atom(tag("a"))
@@ -177,6 +270,15 @@ describe("editing", () => {
       shape(root("or", [atom(tag("b")), atom(tag("c"), true)])),
     )
     expect(toggleNot(filter, "root").not).toBe(true)
+  })
+
+  test("replaceCond swaps a Condition and keeps its NOT", () => {
+    const a = atom(tag("a"), true)
+    const next = replaceCond(root("and", [a]), a.id, tag("b"))
+    expect(shape(next)).toEqual(shape(root("and", [atom(tag("b"), true)])))
+    const g = grp("or", [atom(tag("x")), atom(tag("y"))])
+    const filter = root("and", [g])
+    expect(replaceCond(filter, g.id, tag("b"))).toBe(filter)
   })
 
   test("move reorders and prunes what it leaves behind", () => {
@@ -274,11 +376,15 @@ describe("funnels", () => {
     const filter = addFunnel(root("and", [atom(tag("a"))], true), "tag", "b")
     // "not a", then a b funnel, is "not a and b", never "not (a and b)".
     expect(filter.not).toBeFalsy()
-    expect(matchesChannelFilter(filter, channel({ tags: ["b"] }))).toBe(true)
-    expect(matchesChannelFilter(filter, channel({ tags: [] }))).toBe(false)
-    expect(matchesChannelFilter(filter, channel({ tags: ["a", "b"] }))).toBe(
+    expect(
+      matchesChannelFilter(filter, channel({ tags: ["b"] }), noMetrics),
+    ).toBe(true)
+    expect(matchesChannelFilter(filter, channel({ tags: [] }), noMetrics)).toBe(
       false,
     )
+    expect(
+      matchesChannelFilter(filter, channel({ tags: ["a", "b"] }), noMetrics),
+    ).toBe(false)
   })
 
   test("an existing funnel is not added twice", () => {
@@ -301,13 +407,16 @@ describe("funnels", () => {
   })
 })
 
+const condValue = (cond: Cond) =>
+  cond.type === "metric" ? cond.metric : cond.value
+
 /** Root children as text, groups joined by "|", to read a shape at a glance. */
 function shared(filter: ChannelFilter): string[] {
   return filter.children.map((n) =>
     n.kind === "atom"
-      ? n.cond.value
+      ? condValue(n.cond)
       : n.children
-          .map((c) => (c.kind === "atom" ? c.cond.value : "()"))
+          .map((c) => (c.kind === "atom" ? condValue(c.cond) : "()"))
           .join("|"),
   )
 }
@@ -354,7 +463,7 @@ describe("the URL form", () => {
   })
 
   test("reads the spec's example shape, AND binding tighter than OR", () => {
-    // The spec's example with its number Conditions (CTB-02) swapped for tags.
+    // The spec's example with tags in place of its numbers.
     const parsed = parseChannelFilter(
       "(tag tech and big) or (tag news and (small or popular) and (slow or important))",
       names,
@@ -380,6 +489,76 @@ describe("the URL form", () => {
         ]),
       ),
     )
+  })
+
+  const reach = (b: { min?: number; max?: number; none?: true }): Cond => ({
+    type: "metric",
+    metric: "reach",
+    ...b,
+  })
+
+  test("number Conditions print and read back", () => {
+    expect(roundTrip(root("and", [atom(reach({ min: 200 }))]))).toBe(
+      "reach >= 200",
+    )
+    expect(
+      roundTrip(
+        root("and", [
+          atom({ type: "metric", metric: "subscribers", max: 100 }),
+        ]),
+      ),
+    ).toBe("subscribers <= 100")
+    expect(roundTrip(root("and", [atom(reach({ min: 200, max: 1000 }))]))).toBe(
+      "reach 200..1000",
+    )
+    expect(roundTrip(root("and", [atom(reach({ none: true }))]))).toBe(
+      "reach = none",
+    )
+    expect(roundTrip(root("and", [atom(reach({ none: true }), true)]))).toBe(
+      "not reach = none",
+    )
+    roundTrip(
+      root("or", [
+        atom({ type: "metric", metric: "activity_rate", min: 0.25 }),
+        atom({ type: "metric", metric: "days_followed", max: 1.5e-7 }),
+        grp("and", [atom(reach({ min: -3 })), atom(tag("reach"))]),
+      ]),
+    )
+  })
+
+  test("reads the spec's own example", () => {
+    const parsed = parseChannelFilter(
+      "(tag tech and reach > 200) or (tag news and (subscribers > 100 or reach > 1000) and (activity rate < 10 or important))",
+      names,
+    )
+    const metricAtom = (metric: MetricKey, b: { min?: number; max?: number }) =>
+      atom({ type: "metric", metric, ...b })
+    const expected = root("or", [
+      grp("and", [atom(tag("tech")), metricAtom("reach", { min: 200 })]),
+      grp("and", [
+        atom(tag("news")),
+        grp("or", [
+          metricAtom("subscribers", { min: 100 }),
+          metricAtom("reach", { min: 1000 }),
+        ]),
+        grp("or", [
+          metricAtom("activity_rate", { max: 10 }),
+          atom(tag("important")),
+        ]),
+      ]),
+    ])
+    expect(parsed ? shape(parsed) : parsed).toEqual(shape(expected))
+    roundTrip(expected)
+  })
+
+  test("a number word with no comparison is a tag, and a half comparison fails", () => {
+    const parsed = parseChannelFilter("reach", names)
+    expect(parsed ? shape(parsed) : parsed).toEqual(
+      shape(root("and", [atom(tag("reach"))])),
+    )
+    for (const text of ["reach >", "reach >= x", "reach = nothing"]) {
+      expect(parseChannelFilter(text, names)).toBeNull()
+    }
   })
 
   test("Setting groups are read by name or by id, and derived tags by label", () => {

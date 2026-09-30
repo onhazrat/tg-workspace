@@ -1,30 +1,50 @@
-import { Languages, Layers, Search, Tag, X } from "lucide-react"
-import { Fragment } from "react"
 import {
+  Languages,
+  Layers,
+  Search,
+  SlidersHorizontal,
+  Tag,
+  X,
+} from "lucide-react"
+import { Fragment, useState } from "react"
+import {
+  type AtomNode,
   atoms,
   type ChannelFilter,
-  type CondType,
+  type Cond,
   conditionLabel,
   type FilterNames,
   type FilterNode,
   type Joiner,
+  type MetricCond,
 } from "@/lib/channels/channel-filter"
+import type { MetricData } from "@/lib/channels/channel-metrics"
+import { BarPopover } from "./BarPopover"
+import { ChannelMetricEditor } from "./ChannelMetricEditor"
 
-type ChannelFilterRowProps = {
+/** What every chip needs, passed down the tree as one. */
+type ChipProps = {
+  names: FilterNames
+  metrics: MetricData
+  onRemove: (id: string) => void
+  /** A number chip's editor replaces its Condition. */
+  onReplace: (id: string, cond: Cond) => void
+}
+
+type ChannelFilterRowProps = ChipProps & {
   filter: ChannelFilter
   search: string
   shownCount: number
   totalCount: number
-  names: FilterNames
-  onRemove: (id: string) => void
   onClearSearch: () => void
   onClearAll: () => void
 }
 
-const ICON: Record<CondType, typeof Tag> = {
+const ICON: Record<Cond["type"], typeof Tag> = {
   tag: Tag,
   group: Layers,
   language: Languages,
+  metric: SlidersHorizontal,
 }
 
 // A colour per depth of parentheses, so matching pairs read at a glance.
@@ -48,40 +68,85 @@ const Not = () => (
   <span className="text-[11px] font-semibold text-red-500">not</span>
 )
 
+/** A number chip's label reopens its editor, and Update replaces it. */
+function MetricLabel({
+  node,
+  cond,
+  label,
+  chips,
+}: {
+  node: AtomNode
+  cond: MetricCond
+  label: string
+  chips: ChipProps
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <BarPopover
+      open={open}
+      onOpenChange={setOpen}
+      trigger={
+        <button type="button" className="hover:underline">
+          {label}
+        </button>
+      }
+    >
+      <ChannelMetricEditor
+        metricKey={cond.metric}
+        data={chips.metrics}
+        initial={cond}
+        onSubmit={(bound) => {
+          chips.onReplace(node.id, {
+            type: "metric",
+            metric: cond.metric,
+            ...bound,
+          })
+          setOpen(false)
+        }}
+      />
+    </BarPopover>
+  )
+}
+
+function Chip({ node, chips }: { node: AtomNode; chips: ChipProps }) {
+  const { cond } = node
+  const label = conditionLabel(cond, chips.names)
+  const Icon = ICON[cond.type]
+  return (
+    <span
+      data-testid={`channel-filter-chip-${cond.type === "metric" ? `metric-${cond.metric}` : cond.value}`}
+      data-not={!!node.not}
+      className={`${chipClass} ${node.not ? "border-red-500/60" : "border-app-ink/15"}`}
+    >
+      {node.not && <Not />}
+      <Icon size={10} aria-hidden />
+      {cond.type === "metric" ? (
+        <MetricLabel node={node} cond={cond} label={label} chips={chips} />
+      ) : (
+        label
+      )}
+      <button
+        type="button"
+        aria-label={`Remove ${label}`}
+        onClick={() => chips.onRemove(node.id)}
+        className={removeClass}
+      >
+        <X size={10} />
+      </button>
+    </span>
+  )
+}
+
 function Block({
   node,
   depth,
-  names,
-  onRemove,
+  chips,
 }: {
   node: FilterNode
   depth: number
-  names: FilterNames
-  onRemove: (id: string) => void
+  chips: ChipProps
 }) {
-  if (node.kind === "atom") {
-    const label = conditionLabel(node.cond, names)
-    const Icon = ICON[node.cond.type]
-    return (
-      <span
-        data-testid={`channel-filter-chip-${node.cond.value}`}
-        data-not={!!node.not}
-        className={`${chipClass} ${node.not ? "border-red-500/60" : "border-app-ink/15"}`}
-      >
-        {node.not && <Not />}
-        <Icon size={10} aria-hidden />
-        {label}
-        <button
-          type="button"
-          aria-label={`Remove ${label}`}
-          onClick={() => onRemove(node.id)}
-          className={removeClass}
-        >
-          <X size={10} />
-        </button>
-      </span>
-    )
-  }
+  if (node.kind === "atom") return <Chip node={node} chips={chips} />
   return (
     <span
       data-testid="channel-filter-group"
@@ -89,7 +154,7 @@ function Block({
       className={`inline-flex flex-wrap items-center gap-1 rounded-lg border px-1.5 py-1 ${node.not ? "border-red-500/60" : DEPTH[depth % DEPTH.length]}`}
     >
       {node.not && <Not />}
-      <Blocks node={node} depth={depth + 1} names={names} onRemove={onRemove} />
+      <Blocks node={node} depth={depth + 1} chips={chips} />
     </span>
   )
 }
@@ -97,18 +162,16 @@ function Block({
 function Blocks({
   node,
   depth,
-  names,
-  onRemove,
+  chips,
 }: {
   node: FilterNode & { kind: "group" }
   depth: number
-  names: FilterNames
-  onRemove: (id: string) => void
+  chips: ChipProps
 }) {
   return node.children.map((child, index) => (
     <Fragment key={child.id}>
       {index > 0 && <Joined op={node.op} />}
-      <Block node={child} depth={depth} names={names} onRemove={onRemove} />
+      <Block node={child} depth={depth} chips={chips} />
     </Fragment>
   ))
 }
@@ -124,10 +187,9 @@ export function ChannelFilterRow({
   search,
   shownCount,
   totalCount,
-  names,
-  onRemove,
   onClearSearch,
   onClearAll,
+  ...chips
 }: ChannelFilterRowProps) {
   const searching = search.trim().length > 0
   const filters = atoms(filter).length + Number(searching)
@@ -162,7 +224,7 @@ export function ChannelFilterRow({
         className={`inline-flex flex-wrap items-center gap-1 ${filter.not ? "rounded-lg border border-red-500/60 px-1.5 py-1" : ""}`}
       >
         {filter.not && <Not />}
-        <Blocks node={filter} depth={0} names={names} onRemove={onRemove} />
+        <Blocks node={filter} depth={0} chips={chips} />
       </span>
       {filters >= 2 && (
         <button

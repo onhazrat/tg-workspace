@@ -2,6 +2,7 @@ import {
   type ChannelFilter,
   matchesChannelFilter,
 } from "@/lib/channels/channel-filter"
+import type { MetricInputs } from "@/lib/channels/channel-metrics"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
@@ -9,6 +10,8 @@ import type { Channel } from "@/types"
 export type ChannelGridFilters = {
   filter: ChannelFilter
   search: string
+  /** What the filter's number Conditions read. */
+  metrics: MetricInputs
 }
 
 /**
@@ -21,11 +24,13 @@ export type ChannelGridFilters = {
  */
 export function filterChannelsForGrid(
   channels: Channel[],
-  { filter, search }: ChannelGridFilters,
+  { filter, search, metrics }: ChannelGridFilters,
 ): Channel[] {
   let result =
     filter.children.length > 0
-      ? channels.filter((channel) => matchesChannelFilter(filter, channel))
+      ? channels.filter((channel) =>
+          matchesChannelFilter(filter, channel, metrics),
+        )
       : channels
   if (search.trim()) {
     const query = search.toLowerCase()

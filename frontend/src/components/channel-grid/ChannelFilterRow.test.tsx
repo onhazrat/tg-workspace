@@ -28,7 +28,9 @@ function mount(over: Partial<React.ComponentProps<typeof ChannelFilterRow>>) {
       shownCount={3}
       totalCount={9}
       names={names}
+      metrics={{ values: () => [100, 200, 300], total: 4 }}
       onRemove={(id) => calls.push(["remove", id])}
+      onReplace={(id, cond) => calls.push(["replace", [id, cond]])}
       onClearSearch={() => calls.push(["search", null])}
       onClearAll={() => calls.push(["all", null])}
       {...over}
@@ -91,5 +93,26 @@ describe("ChannelFilterRow", () => {
     expect(
       screen.getByTestId("channel-filter-blocks").getAttribute("data-not"),
     ).toBe("true")
+  })
+
+  test("a number chip reads as its bound and reopens its editor to update it", () => {
+    const filter = parse("reach >= 1200 and subscribers 500..20000")
+    const calls = mount({ filter })
+    expect(
+      screen.getByTestId("channel-filter-chip-metric-subscribers").textContent,
+    ).toContain("Subscribers 500–20K")
+    fireEvent.click(screen.getByRole("button", { name: "Reach ≥ 1.2K" }))
+    const submit = screen.getByTestId("metric-editor-submit")
+    expect(submit.textContent).toBe("Update · 0 of 3 measured")
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Value" }), {
+      target: { value: "150" },
+    })
+    fireEvent.click(submit)
+    expect(calls).toEqual([
+      [
+        "replace",
+        [filter.children[0].id, { type: "metric", metric: "reach", min: 150 }],
+      ],
+    ])
   })
 })
