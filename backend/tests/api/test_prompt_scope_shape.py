@@ -42,16 +42,16 @@ WINDOW = {"mode": "fixed", "start": 0, "end": 9_000 * MINUTE_MS}
 
 def _seed() -> None:
     """Two channels whose Posts interleave in time, one of them with a photo."""
-    rows: list[tuple[str, int, int, dict[str, Any] | None]] = [
-        ("alpha", 1, 1_000, None),
-        ("beta", 2, 1_500, {"kinds": ["photo"]}),
-        ("alpha", 3, 2_000, {"kinds": ["photo"]}),
-        ("beta", 4, 2_500, None),
-        ("alpha", 5, 3_000, None),
-        ("beta", 6, 3_500, {"kinds": ["video"]}),
+    rows: list[tuple[str, int, int, dict[str, Any] | None, str | None]] = [
+        ("alpha", 1, 1_000, None, "fa"),
+        ("beta", 2, 1_500, {"kinds": ["photo"]}, "en"),
+        ("alpha", 3, 2_000, {"kinds": ["photo"]}, "fa"),
+        ("beta", 4, 2_500, None, "fa"),
+        ("alpha", 5, 3_000, None, None),
+        ("beta", 6, 3_500, {"kinds": ["video"]}, "fa"),
     ]
     with Session(engine) as session:
-        for channel_name, post_id, minute, media in rows:
+        for channel_name, post_id, minute, media, language in rows:
             session.add(
                 Post(
                     channel_name=channel_name,
@@ -59,6 +59,7 @@ def _seed() -> None:
                     text=f"{channel_name} post {post_id}",
                     timestamp=minute * MINUTE_MS,
                     media=media,
+                    language=language,
                 )
             )
         session.commit()
@@ -160,8 +161,39 @@ def test_grouped_assembles_channel_by_channel_in_the_feeds_order(
     ungrouped = _prompt_text(client, headers)
 
     assert _feed_block(client, headers, groupByChannel=True) in grouped
-    assert grouped.index("alpha post 1") < grouped.index("beta post 6")
-    assert ungrouped.index("beta post 6") < ungrouped.index("alpha post 1")
+    # beta holds the newest Post, so its whole block comes first (PFB-02).
+    assert grouped.index("beta post 2") < grouped.index("alpha post 5")
+    assert ungrouped.index("alpha post 5") < ungrouped.index("beta post 4")
+
+
+def test_the_filter_bar_scope_assembles_what_the_feed_shows(
+    client: TestClient,
+) -> None:
+    """Languages, the order, grouping and the cap reach the prompt together.
+
+    Oldest first under a cap of two keeps each channel's two earliest Posts in
+    Persian: alpha 1 and 3, beta 4 and 6, the unread alpha 5 matching nothing.
+    Grouped, alpha's block leads because its earliest Post is the earliest.
+    """
+    headers = get_superuser_token_headers(client)
+    _seed()
+    scope = {
+        "languages": ["fa"],
+        "sort": "oldest",
+        "groupByChannel": True,
+        "maxPerChannel": 2,
+        "maxPerChannelMode": "ordered",
+    }
+
+    prompt = _prompt_text(client, headers, **scope)
+
+    assert _feed_block(client, headers, **scope) in prompt
+    order = ["alpha post 1", "alpha post 3", "beta post 4", "beta post 6"]
+    assert [prompt.index(text) for text in order] == sorted(
+        prompt.index(text) for text in order
+    )
+    assert "beta post 2" not in prompt
+    assert "alpha post 5" not in prompt
 
 
 def test_oldest_assembles_oldest_first_and_caps_each_channels_earliest(
@@ -190,7 +222,7 @@ def test_oldest_assembles_oldest_first_and_caps_each_channels_earliest(
         {"sort": "relevance"},
         {"maxPerChannelMode": "alphabetical"},
         {"media": ["nonsense"]},
-        {"languages": ["fa"]},
+        {"languages": "fa"},
     ],
     ids=lambda scope: next(iter(scope)),
 )

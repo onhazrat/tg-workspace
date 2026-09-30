@@ -100,7 +100,7 @@ describe("post-view pipeline", () => {
     expect(first).toHaveLength(2)
   })
 
-  test("grouped newest groups alphabetically with newest first within group", () => {
+  test("grouped newest places each block by its newest Post", () => {
     const posts = [
       makePost("zebra", 1, 100),
       makePost("alpha", 2, 300),
@@ -136,9 +136,10 @@ describe("post-view pipeline", () => {
       groupByChannel: true,
     }
 
+    // zebra kept its 500, so its block leads (PFB-02).
     expect(applyPostViewPipeline(posts, view, seedContext)).toEqual([
-      makePost("alpha", 3, 300),
       makePost("zebra", 1, 500),
+      makePost("alpha", 3, 300),
     ])
   })
 
@@ -153,6 +154,7 @@ describe("post-view pipeline", () => {
       searchText: "Post",
       forwardedFilter: "original",
       mediaFilter: [],
+      languageFilter: [],
       channels: [],
       view: {
         maxPostsPerChannel: 0,
@@ -277,6 +279,7 @@ describe("post-view pipeline", () => {
       searchText: "",
       forwardedFilter: "all",
       mediaFilter: ["photo"],
+      languageFilter: [],
       channels: [],
       view: {
         maxPostsPerChannel: 0,
@@ -293,6 +296,7 @@ describe("post-view pipeline", () => {
       searchText: "",
       forwardedFilter: "all",
       mediaFilter: ["text_only"],
+      languageFilter: [],
       channels: [],
       view: {
         maxPostsPerChannel: 0,
@@ -328,6 +332,7 @@ describe("post-view pipeline", () => {
         searchText: "",
         forwardedFilter: "all",
         mediaFilter: [kind],
+        languageFilter: [],
         channels: [],
         view: {
           maxPostsPerChannel: 0,
@@ -420,6 +425,7 @@ describe("post-view pipeline — the PFB-01 shape", () => {
         searchText: "",
         forwardedFilter: "all",
         mediaFilter,
+        languageFilter: [],
         channels: [],
         view: view(),
         startDate: 0,
@@ -429,5 +435,105 @@ describe("post-view pipeline — the PFB-01 shape", () => {
     expect(filtered(["photo", "video"])).toEqual([3, 2])
     expect(filtered(["photo"])).toEqual([2])
     expect(filtered([])).toEqual([3, 2, 1])
+  })
+})
+
+/**
+ * Semantic parity (PFB-02): a meaning search filters its ranked Posts in the
+ * browser, so the browser pipeline over a fixed set of Posts must give what
+ * the server gives for the same filters. The fixtures and expected rows are
+ * `backend/tests/api/test_post_filter_bar_feed.py`'s, as the Operator sees
+ * them (`pfb_a` and `pfb_b`); the random cap is left out because the two
+ * seeded orders were never byte-identical (see `scoped-posts.ts`).
+ */
+describe("post-view pipeline: parity with the server feed", () => {
+  const BASE = 1_000_000
+  const at = (
+    channel: string,
+    id: number,
+    ts: number,
+    overrides: Partial<Post> = {},
+  ) => makePost(channel, id, BASE + ts, overrides)
+  type Context = Parameters<typeof buildFilteredPostsFromRaw>[1]
+  const run = (
+    posts: Post[],
+    over: Partial<Omit<Context, "view">> & {
+      view?: Partial<Context["view"]>
+    } = {},
+  ) =>
+    buildFilteredPostsFromRaw(posts, {
+      searchText: "",
+      forwardedFilter: "all",
+      mediaFilter: [],
+      languageFilter: [],
+      channels: [],
+      startDate: 0,
+      endDate: 0,
+      ...over,
+      view: {
+        maxPostsPerChannel: 0,
+        maxPostsPerChannelMode: "ordered",
+        postSortOrder: "newest",
+        groupByChannel: false,
+        ...over.view,
+      },
+    }).map((p) => `${p.channelName}/${p.id}`)
+
+  const languages = [
+    at("pfb_a", 1, 1, { language: "fa" }),
+    at("pfb_a", 2, 2, { language: "en" }),
+    at("pfb_a", 3, 3, { language: null }),
+    at("pfb_b", 4, 4, { language: "fa" }),
+    at("pfb_b", 5, 5, { language: "zxx" }),
+  ]
+  // `_seed_blocks`: alphabetical order is neither block order.
+  const blocks = [
+    at("pfb_a", 1, 30),
+    at("pfb_a", 2, 40),
+    at("pfb_b", 3, 5),
+    at("pfb_b", 4, 90),
+  ]
+
+  test("a Language set keeps the ticked; an unread Post never matches", () => {
+    expect(run(languages, { languageFilter: ["fa"] })).toEqual([
+      "pfb_b/4",
+      "pfb_a/1",
+    ])
+    expect(run(languages, { languageFilter: ["fa", "en"] })).toEqual([
+      "pfb_b/4",
+      "pfb_a/2",
+      "pfb_a/1",
+    ])
+  })
+
+  test("a block sits where its first Post falls, under both orders", () => {
+    expect(run(blocks, { view: { groupByChannel: true } })).toEqual([
+      "pfb_b/4",
+      "pfb_b/3",
+      "pfb_a/2",
+      "pfb_a/1",
+    ])
+    expect(
+      run(blocks, { view: { groupByChannel: true, postSortOrder: "oldest" } }),
+    ).toEqual(["pfb_b/3", "pfb_b/4", "pfb_a/1", "pfb_a/2"])
+  })
+
+  test("the cap keeps the first N in the order before grouping places it", () => {
+    const capped = (postSortOrder: "newest" | "oldest") =>
+      run(blocks, {
+        view: { groupByChannel: true, maxPostsPerChannel: 1, postSortOrder },
+      })
+    expect(capped("newest")).toEqual(["pfb_b/4", "pfb_a/2"])
+    expect(capped("oldest")).toEqual(["pfb_b/3", "pfb_a/1"])
+  })
+
+  test("a tie breaks on the channel name, then the post id", () => {
+    const tied = [at("pfb_b", 2, 7), at("pfb_a", 9, 7), at("pfb_a", 3, 7)]
+    expect(run(tied)).toEqual(["pfb_a/9", "pfb_a/3", "pfb_b/2"])
+    expect(run(tied, { view: { postSortOrder: "oldest" } })).toEqual([
+      "pfb_a/3",
+      "pfb_a/9",
+      "pfb_b/2",
+    ])
   })
 })

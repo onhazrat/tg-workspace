@@ -52,6 +52,58 @@ describe("buildExtendedCommands", () => {
   })
 })
 
+describe("the post-filter commands speak the filter bar's shapes (PFB-02)", () => {
+  const commands = buildExtendedCommands()
+  const run = (id: string, ctx: CommandContext) =>
+    commands.find((command) => command.id === id)?.run(ctx)
+
+  function filterContext(over: Partial<CommandContext> = {}) {
+    const writes: Record<string, unknown> = {}
+    const ctx = {
+      postSearch: "",
+      mediaFilter: [],
+      postSortOrder: "newest",
+      groupByChannel: false,
+      setMediaFilter: (value: unknown) => {
+        writes.media = value
+      },
+      setPostSortOrder: (value: unknown) => {
+        writes.order = value
+      },
+      setGroupByChannel: (value: unknown) => {
+        writes.grouped = value
+      },
+      handleFilterPosts: async () => {},
+      ...over,
+    } as unknown as CommandContext
+    return { ctx, writes }
+  }
+
+  test("a media command ticks its kind into the set, and unticks it", async () => {
+    const toastSpy = spyOn(toast, "success").mockImplementation(() => "")
+    const adding = filterContext({ mediaFilter: ["photo"] })
+    await run("set-media-filter-video", adding.ctx)
+    expect(adding.writes.media).toEqual(["photo", "video"])
+
+    const removing = filterContext({ mediaFilter: ["photo", "video"] })
+    await run("set-media-filter-photo", removing.ctx)
+    expect(removing.writes.media).toEqual(["video"])
+    toastSpy.mockRestore()
+  })
+
+  test("both orders, and grouping as its own toggle", async () => {
+    const toastSpy = spyOn(toast, "success").mockImplementation(() => "")
+    const order = filterContext()
+    await run("set-post-order-oldest", order.ctx)
+    expect(order.writes.order).toBe("oldest")
+
+    const grouped = filterContext({ groupByChannel: true })
+    await run("toggle-group-posts-by-channel", grouped.ctx)
+    expect(grouped.writes.grouped).toBe(false)
+    toastSpy.mockRestore()
+  })
+})
+
 describe("runChainedChannelEntityPick", () => {
   const noEffects = {
     refreshChannelMetadata: async () => {

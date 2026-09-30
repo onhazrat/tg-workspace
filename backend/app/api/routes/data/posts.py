@@ -13,13 +13,15 @@ from app.api.deps import CurrentUser, SessionDep
 from app.api.routes.data._shared import parse_post_filters
 from app.schemas.posts import (
     BulkUpsertPostsResponse,
+    PostFacetCount,
+    PostFacetsResponse,
     PostFeedRequest,
     PostLookupRequest,
     PostResponse,
     PostScopeRequest,
 )
 from app.services.analysis_window import resolve_analysis_window
-from app.services.posts import bulk_upsert_posts
+from app.services.posts import bulk_upsert_posts, count_facets_in_scope
 from app.services.posts import count_posts_in_scope as count_posts_in_scope_impl
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -54,7 +56,9 @@ def list_posts(
             channel_names=body.resolved_channel_names(),
             start_date=window.start,
             end_date=window.end,
-            filters=parse_post_filters(body.keyword, body.forwarded, body.media),
+            filters=parse_post_filters(
+                body.keyword, body.forwarded, body.media, body.languages
+            ),
             max_per_channel=body.max_per_channel,
             max_per_channel_mode=body.max_per_channel_mode,
             sort=body.sort,
@@ -87,8 +91,37 @@ def posts_counts(
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
-        filters=parse_post_filters(body.keyword, body.forwarded, body.media),
+        filters=parse_post_filters(
+            body.keyword, body.forwarded, body.media, body.languages
+        ),
         max_per_channel=body.max_per_channel,
+    )
+
+
+# PFB-02. A read expressed as a POST for the reason `posts_counts` is one, and
+# on `VIEW_AS_READ_ONLY_PATHS` beside it.
+@router.post("/posts/facets")
+def posts_facets(
+    body: PostScopeRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostFacetsResponse:
+    """How many Posts each Language and each media kind would leave in a scope."""
+    window = resolve_analysis_window(body.window)
+    facets = count_facets_in_scope(
+        session,
+        user_id=current_user.id,
+        channel_names=body.cleaned_channel_names(),
+        start_date=window.start,
+        end_date=window.end,
+        filters=parse_post_filters(
+            body.keyword, body.forwarded, body.media, body.languages
+        ),
+        max_per_channel=body.max_per_channel,
+    )
+    return PostFacetsResponse(
+        languages=[PostFacetCount(value=v, count=n) for v, n in facets["languages"]],
+        media=[PostFacetCount(value=v, count=n) for v, n in facets["media"]],
     )
 
 

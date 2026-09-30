@@ -49,6 +49,7 @@ export interface PromptPostsDeps {
   relatedPostSearch: Post | null
   forwardedFilter: ForwardedFilterValue
   mediaFilter: MediaFilterValue
+  languageFilter: string[]
   postViewOptions: PostViewOptions
   semanticSearchRespectsChannels: boolean
   searchSimilarPosts: (
@@ -95,6 +96,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     relatedPostSearch,
     forwardedFilter,
     mediaFilter,
+    languageFilter,
     postViewOptions,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
@@ -128,6 +130,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         endDate: boundsRef.current.endDate,
         forwardedFilter,
         mediaFilter,
+        languageFilter,
         channels,
         postViewOptions,
         semanticSearchRespectsChannels,
@@ -148,6 +151,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       forwardedFilter,
       channels,
       mediaFilter,
+      languageFilter,
       // `postViewOptions` is rebuilt every render, so depend on its fields.
       // Depending on the object would defeat the memo entirely.
       postViewOptions,
@@ -173,6 +177,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
           keyword: debouncedPostSearch,
           forwarded: forwardedFilter,
           media: mediaFilter,
+          languages: languageFilter,
           maxPerChannel: maxPostsPerChannel,
           maxPerChannelMode: maxPostsPerChannelMode,
           sort: postSortOrder,
@@ -190,6 +195,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       debouncedPostSearch,
       forwardedFilter,
       mediaFilter,
+      languageFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
@@ -203,6 +209,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       keyword: debouncedPostSearch.trim() || null,
       forwarded: forwardedFilter,
       media: mediaFilter,
+      languages: languageFilter,
       maxPerChannel: maxPostsPerChannel,
       maxPerChannelMode: maxPostsPerChannelMode,
       sort: postSortOrder,
@@ -222,6 +229,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       debouncedPostSearch,
       forwardedFilter,
       mediaFilter,
+      languageFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,

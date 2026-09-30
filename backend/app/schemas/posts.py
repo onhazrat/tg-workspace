@@ -114,6 +114,22 @@ class BulkUpsertPostsResponse(BaseModel):
     upserted: int = 0
 
 
+class PostFacetCount(BaseModel):
+    """How many Posts one choice of a filter would leave."""
+
+    value: str
+    count: int
+
+
+# The Media and Language pills' counts (PFB-02); see
+# `services/posts.py::count_facets_in_scope` for what each number means.
+class PostFacetsResponse(BaseModel):
+    """Per-choice Post counts for the Language and media filters."""
+
+    languages: list[PostFacetCount]
+    media: list[PostFacetCount]
+
+
 class PostScopeRequest(BaseModel):
     """A post scope carried in a request body rather than a query string.
 
@@ -144,8 +160,8 @@ class PostScopeRequest(BaseModel):
     window: AnalysisWindowInput | None = None
     keyword: str | None = None
     forwarded: str = "all"
-    # Carried, not yet filtered on: see `_ScopeFilters.languages` (PFB-01).
-    languages: list[str] = PydanticField(default_factory=list, max_length=0)
+    # The Post's own Language, any of these; empty for any (PFB-02).
+    languages: list[str] = PydanticField(default_factory=list)
     # A set of kinds, empty for any; a Post matching any one is kept (PFB-01).
     media: list[MediaKind] = PydanticField(default_factory=list)
     max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)

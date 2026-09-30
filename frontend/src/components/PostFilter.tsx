@@ -1,330 +1,400 @@
-import {
-  Calendar,
-  Filter,
-  ListOrdered,
-  Search,
-  Sparkles,
-  X,
-} from "lucide-react"
+/**
+ * The Posts filter bar (PFB-02, the A1b prototype on `prototype/post-filter-ui`).
+ *
+ * One row with the Analysis window small on the left and one search box large
+ * on the right; under it one row of pills; under that a footer with the Post
+ * count and every active filter as a removable chip. It replaced four stacked
+ * panels, two search inputs side by side and two active-search banners.
+ *
+ * Every pill writes the Scope's filter half through `ScraperContext`, so the
+ * feed, the counts, every Action and its frozen Scope all see the same choice.
+ */
+import { Layers, Search, Sparkles, X } from "lucide-react"
 import React from "react"
 import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
-import { TgButton } from "@/components/ui/tg-button"
-import { TgFilterChip } from "@/components/ui/tg-chips"
-import { useScope } from "../contexts/ScopeContext"
+import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import type { PostFacetsResponse } from "../client"
+import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
-import { MEDIA_KIND_OPTIONS } from "../lib/posts/post-media"
-import { PostCapControl, SemanticSearchBanner } from "./PostFilterParts"
+import { usePostFacets } from "../hooks/usePostsView"
+import {
+  activeFilters,
+  capPhrase,
+  clearChip,
+  labelOf,
+  languageLabel,
+  languageOptions,
+  languageSummary,
+  meaningQueryOnKey,
+  mediaSummary,
+  POST_ORDER_OPTIONS,
+  POST_TYPE_OPTIONS,
+  type SearchMode,
+} from "../lib/posts/post-filter-bar"
+import {
+  MEDIA_KIND_OPTIONS,
+  type MediaFilterValue,
+  type MediaKind,
+} from "../lib/posts/post-media"
+import type {
+  ForwardedFilterValue,
+  MaxPostsPerChannelMode,
+  PostSortOrder,
+} from "../lib/posts/post-view"
+import type { Post } from "../types"
+import {
+  CheckList,
+  Options,
+  PerChannelForm,
+  Pill,
+  pillClass,
+} from "./PostFilterParts"
+
+/** What the bar reads and writes; `ScraperContext` provides all of it. */
+export interface FilterBarControls {
+  semanticSearchQuery: string
+  setSemanticSearchQuery: (value: string) => void
+  semanticSearchRespectsChannels: boolean
+  setSemanticSearchRespectsChannels: (value: boolean) => void
+  relatedPostSearch: Post | null
+  setRelatedPostSearch: (value: Post | null) => void
+  forwardedFilter: ForwardedFilterValue
+  setForwardedFilter: (value: ForwardedFilterValue) => void
+  mediaFilter: MediaFilterValue
+  setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
+  languageFilter: string[]
+  setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
+  maxPostsPerChannel: number
+  setMaxPostsPerChannel: (value: number) => void
+  maxPostsPerChannelMode: MaxPostsPerChannelMode
+  setMaxPostsPerChannelMode: (value: MaxPostsPerChannelMode) => void
+  postSortOrder: PostSortOrder
+  setPostSortOrder: (value: PostSortOrder) => void
+  groupByChannel: boolean
+  setGroupByChannel: (value: boolean) => void
+}
 
 interface PostFilterProps {
   postSearch: string
   setPostSearch: (val: string) => void
+  /** How many Posts the Scope holds, for the footer. */
+  shownCount: number
+  /** The existing subtitle's qualifiers: the cap and grouping. */
+  subtitle: string
 }
 
-export const PostFilter: React.FC<PostFilterProps> = ({
+export interface PostFilterBarProps extends PostFilterProps {
+  controls: FilterBarControls
+  embeddingsEnabled: boolean
+  /** The Analysis window control, left of the search box. */
+  windowControl: React.ReactNode
+  /** Per-choice counts; `undefined` while none are known. */
+  facets: PostFacetsResponse | undefined
+  /** The followed Channels' Languages, for when no counts are known. */
+  channelLanguages: string[]
+  /** Called as a counting pill opens and closes, so counts load only then. */
+  onCountingPillOpenChange: (open: boolean) => void
+}
+
+const toggle = <T,>(list: T[], value: T): T[] =>
+  list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
+
+/**
+ * One search box for both kinds of search. Keyword filters as you type;
+ * Meaning runs on Enter, and is offered only with semantic features on.
+ */
+function SearchBox({
   postSearch,
   setPostSearch,
-}) => {
+  controls,
+  embeddingsEnabled,
+}: Pick<
+  PostFilterBarProps,
+  "postSearch" | "setPostSearch" | "controls" | "embeddingsEnabled"
+>) {
   const {
     semanticSearchQuery,
     setSemanticSearchQuery,
     semanticSearchRespectsChannels,
     setSemanticSearchRespectsChannels,
-    relatedPostSearch,
-    setRelatedPostSearch,
-    forwardedFilter,
-    setForwardedFilter,
-    mediaFilter,
-    setMediaFilter,
-    maxPostsPerChannel,
-    setMaxPostsPerChannel,
-    maxPostsPerChannelMode,
-    setMaxPostsPerChannelMode,
-    postSortOrder,
-    setPostSortOrder,
-    groupByChannel,
-    setGroupByChannel,
-  } = useScraper()
-  const { embeddingsEnabled } = useSettings()
-  const { setActiveTab } = useUI()
-  const { clearEditorRequest } = useScope()
-
-  const [semanticInput, setSemanticInput] = React.useState(
-    semanticSearchQuery || "",
+  } = controls
+  const [mode, setMode] = React.useState<SearchMode>(
+    semanticSearchQuery ? "meaning" : "keyword",
   )
-
+  const [draft, setDraft] = React.useState(semanticSearchQuery)
   React.useEffect(() => {
-    setSemanticInput(semanticSearchQuery || "")
+    setDraft(semanticSearchQuery)
+    if (semanticSearchQuery) setMode("meaning")
   }, [semanticSearchQuery])
-
-  /*
-   * A related-post search replaces every filter, the Analysis window included,
-   * so this is the one place on Posts where the editor is not on screen to
-   * answer a request from Action (AW-09). Void the request rather than leave it
-   * standing: nothing would consume it until the search was cleared, and the
-   * popover would then open by itself on a visit nobody asked it to.
-   */
-  React.useEffect(() => {
-    if (relatedPostSearch) clearEditorRequest()
-  }, [relatedPostSearch, clearEditorRequest])
-
-  if (relatedPostSearch) {
-    return (
-      <section className="bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/20 rounded-xl overflow-hidden shadow-sm mb-6">
-        <div className="flex items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.2)]">
-              <Sparkles
-                size={18}
-                className="text-purple-500 drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]"
-              />
-            </div>
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-400">
-                Related Post Search Active
-              </h2>
-              <p className="text-sm font-serif italic text-purple-800/70 dark:text-purple-200/70 mt-0.5 max-w-2xl truncate">
-                Showing posts related to: "{relatedPostSearch.text}"
-              </p>
-            </div>
-          </div>
-          <TgButton
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setRelatedPostSearch(null)}
-            className="rounded-full border-0 bg-purple-500/10 text-purple-600 hover:bg-purple-500 hover:text-white dark:text-purple-400"
-          >
-            <X size={14} /> Clear Search
-          </TgButton>
-        </div>
-      </section>
-    )
-  }
+  const meaning = embeddingsEnabled && mode === "meaning"
+  const Icon = meaning ? Sparkles : Search
 
   return (
-    <>
-      <SemanticSearchBanner
-        query={semanticSearchQuery}
-        onClear={() => setSemanticSearchQuery("")}
-      />
+    <div className="flex flex-col gap-1.5">
+      <div
+        className={`flex h-full items-center gap-2 rounded-xl border bg-app-muted pl-3 pr-1.5 transition-colors focus-within:border-app-ink/30 ${meaning ? "border-blue-500/30" : "border-app-ink/10"}`}
+      >
+        <Icon
+          size={16}
+          className={meaning ? "text-blue-500" : "text-app-ink/50"}
+        />
+        <input
+          type="text"
+          aria-label={meaning ? "Meaning search" : "Keyword search"}
+          value={meaning ? draft : postSearch}
+          placeholder={
+            meaning
+              ? "Describe what you're looking for, then Enter"
+              : "Search posts"
+          }
+          onChange={(e) =>
+            meaning ? setDraft(e.target.value) : setPostSearch(e.target.value)
+          }
+          onKeyDown={(e) => {
+            const query = meaningQueryOnKey(meaning, e.key, draft)
+            if (query) setSemanticSearchQuery(query)
+          }}
+          className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
+        />
+        {embeddingsEnabled && (
+          <TgSegmentedControl
+            size="sm"
+            aria-label="Search mode"
+            value={mode}
+            onChange={(next) => {
+              setMode(next)
+              // The box means one search at a time, so switching ends the
+              // other search rather than leaving it filtering unseen.
+              if (next === "keyword") setSemanticSearchQuery("")
+              else setPostSearch("")
+            }}
+            options={[
+              { value: "keyword", label: "Keyword" },
+              { value: "meaning", label: "Meaning" },
+            ]}
+          />
+        )}
+      </div>
+      {meaning && (
+        <label className="flex cursor-pointer items-center gap-2 px-1 text-[11px] text-app-ink/60">
+          <input
+            type="checkbox"
+            checked={!semanticSearchRespectsChannels}
+            onChange={(e) =>
+              setSemanticSearchRespectsChannels(!e.target.checked)
+            }
+            className="accent-blue-500"
+          />
+          Search every channel, not only the selected ones
+        </label>
+      )}
+    </div>
+  )
+}
 
-      <section className="bg-app-card border border-app-ink/10 rounded-xl shadow-md overflow-hidden mb-6">
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-app-ink/5 bg-app-muted/30">
-          <div className="flex items-center gap-2.5">
-            <Filter size={14} className="text-app-ink/60" />
-            <h2 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
-              Post Filtration
-            </h2>
-          </div>
-        </div>
+/** The bar itself, props only, so it renders without providers. */
+export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
+  const { postSearch, setPostSearch, controls: s, facets } = props
+  const mediaCounts = new Map(facets?.media.map((f) => [f.value, f.count]))
+  const languages = languageOptions(
+    facets?.languages,
+    props.channelLanguages,
+    s.languageFilter,
+  )
+  const chips = activeFilters({
+    keyword: postSearch,
+    meaning: s.semanticSearchQuery,
+    relatedTo: s.relatedPostSearch,
+    forwarded: s.forwardedFilter,
+    media: s.mediaFilter,
+    languages: s.languageFilter,
+    cap: s.maxPostsPerChannel,
+    capMode: s.maxPostsPerChannelMode,
+    order: s.postSortOrder,
+  })
+  const setters = { ...s, setPostSearch }
 
-        <div className="p-5 flex flex-col gap-6">
-          {/*
-           * One control for the whole Analysis window (AW-04).
-           *
-           * This was two permanently expanded `datetime-local` fields and a row
-           * of nine quick ranges, occupying a block of page height whether or
-           * not anybody was changing the window — and saying nothing about
-           * whether that window moves with the clock. The summary says which it
-           * is; the editor behind it is the only one in the application.
-           */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <Calendar size={12} className="text-app-ink/60" />
-              <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
-                Analysis Window
-              </label>
-            </div>
-            <AnalysisWindowControl
-              onReturnToAction={() => setActiveTab("action")}
+  return (
+    <section className="mb-6 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
+      <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
+          <div className="flex lg:shrink-0">{props.windowControl}</div>
+          <div className="lg:flex-1">
+            <SearchBox
+              postSearch={postSearch}
+              setPostSearch={setPostSearch}
+              controls={s}
+              embeddingsEnabled={props.embeddingsEnabled}
             />
           </div>
-
-          {/* Bottom Row: Search Filters */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6 border-t border-app-ink/5">
-            {/* Column 1: Keyword Search & Post Type */}
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Search size={12} className="text-app-ink/60" />
-                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
-                    Keyword Search
-                  </label>
-                </div>
-                <div className="relative w-full group">
-                  <Search
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-app-ink/50 group-focus-within:text-app-ink transition-colors"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Search posts…"
-                    value={postSearch}
-                    onChange={(e) => setPostSearch(e.target.value)}
-                    className="w-full bg-app-muted border border-app-ink/10 rounded-xl pl-9 pr-4 py-2 text-[11px] font-mono focus:outline-none focus:border-app-ink/30 focus:ring-4 focus:ring-app-ink/5 transition-all placeholder:uppercase placeholder:tracking-widest shadow-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Filter size={12} className="text-app-ink/60" />
-                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
-                    Post Type
-                  </label>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: "All Posts", value: "all" as const },
-                    { label: "Original Only", value: "original" as const },
-                    { label: "Forwarded Only", value: "forwarded" as const },
-                    {
-                      label: "Unfollowed Forwarded",
-                      value: "unfollowed_forwarded" as const,
-                    },
-                  ].map((type) => (
-                    <TgFilterChip
-                      key={type.value}
-                      selected={forwardedFilter === type.value}
-                      onClick={() => setForwardedFilter(type.value)}
-                    >
-                      {type.label}
-                    </TgFilterChip>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Filter size={12} className="text-app-ink/60" />
-                  <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
-                    Media Content
-                  </label>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {/*
-                   * One choice at a time, as before PFB-01: "All" is the empty
-                   * set and each kind a set of one. Ticking several is the
-                   * filter bar's (PFB-02); the server already answers it.
-                   */}
-                  <TgFilterChip
-                    data-testid="post-media-filter-all"
-                    selected={mediaFilter.length === 0}
-                    onClick={() => setMediaFilter([])}
-                  >
-                    All
-                  </TgFilterChip>
-                  {MEDIA_KIND_OPTIONS.map((type) => (
-                    <TgFilterChip
-                      key={type.value}
-                      data-testid={`post-media-filter-${type.value}`}
-                      selected={
-                        mediaFilter.length === 1 &&
-                        mediaFilter[0] === type.value
-                      }
-                      onClick={() => setMediaFilter([type.value])}
-                    >
-                      {type.label}
-                    </TgFilterChip>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Post limit & order */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <ListOrdered size={12} className="text-app-ink/60" />
-                <label className="text-[11px] uppercase font-bold text-app-ink/70 tracking-widest">
-                  Post Limit & Order
-                </label>
-              </div>
-
-              <PostCapControl
-                maxPostsPerChannel={maxPostsPerChannel}
-                setMaxPostsPerChannel={setMaxPostsPerChannel}
-                maxPostsPerChannelMode={maxPostsPerChannelMode}
-                setMaxPostsPerChannelMode={setMaxPostsPerChannelMode}
-              />
-
-              <div className="flex flex-wrap gap-2">
-                {/*
-                 * The two chips this panel always had, written in the new shape:
-                 * "By Channel" is newest first, grouped. Oldest first and the
-                 * grouping toggle are the filter bar's (PFB-02).
-                 */}
-                {[
-                  { label: "By Time", grouped: false },
-                  { label: "By Channel", grouped: true },
-                ].map((sort) => (
-                  <TgFilterChip
-                    key={sort.label}
-                    selected={
-                      postSortOrder === "newest" &&
-                      groupByChannel === sort.grouped
-                    }
-                    onClick={() => {
-                      setPostSortOrder("newest")
-                      setGroupByChannel(sort.grouped)
-                    }}
-                  >
-                    {sort.label}
-                  </TgFilterChip>
-                ))}
-              </div>
-            </div>
-
-            {/* Column 2: Semantic Search */}
-            {embeddingsEnabled && (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={12} className="text-blue-500/80" />
-                  <label className="text-[11px] uppercase font-bold text-blue-500/80 tracking-widest">
-                    Semantic Search
-                  </label>
-                </div>
-                <div className="relative w-full group">
-                  <Sparkles
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500/70 group-focus-within:text-blue-500 transition-colors"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Find by meaning (press Enter)…"
-                    value={semanticInput}
-                    onChange={(e) => setSemanticInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && semanticInput.trim()) {
-                        setSemanticSearchQuery(semanticInput.trim())
-                      }
-                    }}
-                    className="w-full bg-blue-500/5 border border-blue-500/20 rounded-xl pl-9 pr-4 py-2 text-[11px] font-mono focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:uppercase placeholder:tracking-widest shadow-sm text-blue-600 dark:text-blue-400 placeholder:text-blue-500/60"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5 mt-1">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={!semanticSearchRespectsChannels}
-                      onChange={(e) =>
-                        setSemanticSearchRespectsChannels(!e.target.checked)
-                      }
-                      className="w-3 h-3 accent-blue-500 rounded-sm"
-                    />
-                    <span className="text-[11px] uppercase font-bold tracking-wider text-app-ink/70 group-hover:text-app-ink transition-colors">
-                      Ignore selected channels for semantic search
-                    </span>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
-      </section>
-    </>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill
+            label="Type"
+            value={labelOf(POST_TYPE_OPTIONS, s.forwardedFilter)}
+            active={s.forwardedFilter !== "all"}
+            width="w-64"
+            testId="post-filter-pill-type"
+          >
+            <Options
+              options={POST_TYPE_OPTIONS}
+              value={s.forwardedFilter}
+              onChange={s.setForwardedFilter}
+            />
+          </Pill>
+          <Pill
+            label="Media"
+            value={mediaSummary(s.mediaFilter)}
+            active={s.mediaFilter.length > 0}
+            width="w-56"
+            testId="post-filter-pill-media"
+            onOpenChange={props.onCountingPillOpenChange}
+          >
+            <CheckList
+              items={MEDIA_KIND_OPTIONS.map((option) => ({
+                key: option.value,
+                label: option.label,
+                count: mediaCounts.get(option.value),
+                checked: s.mediaFilter.includes(option.value),
+                testId: `post-media-filter-${option.value}`,
+              }))}
+              anyLabel="Any media"
+              onToggle={(key) =>
+                s.setMediaFilter((m) => toggle(m, key as MediaKind))
+              }
+              onAny={() => s.setMediaFilter([])}
+            />
+          </Pill>
+          <Pill
+            label="Language"
+            value={languageSummary(s.languageFilter)}
+            active={s.languageFilter.length > 0}
+            testId="post-filter-pill-language"
+            onOpenChange={props.onCountingPillOpenChange}
+          >
+            <CheckList
+              items={languages.map(({ code, count }) => ({
+                key: code,
+                label: languageLabel(code),
+                count,
+                checked: s.languageFilter.includes(code),
+              }))}
+              anyLabel="Any language"
+              emptyLabel="No Language read yet"
+              onToggle={(code) => s.setLanguageFilter((l) => toggle(l, code))}
+              onAny={() => s.setLanguageFilter([])}
+            />
+          </Pill>
+
+          <span className="mx-1 h-5 w-px bg-app-ink/10" />
+
+          <Pill
+            label="Order"
+            value={labelOf(POST_ORDER_OPTIONS, s.postSortOrder)}
+            active={s.postSortOrder !== "newest"}
+            width="w-48"
+            testId="post-filter-pill-order"
+          >
+            <Options
+              options={POST_ORDER_OPTIONS}
+              value={s.postSortOrder}
+              onChange={s.setPostSortOrder}
+            />
+          </Pill>
+          <Pill
+            label="Per channel"
+            value={capPhrase(
+              s.maxPostsPerChannel,
+              s.maxPostsPerChannelMode,
+              s.postSortOrder,
+            )}
+            active={s.maxPostsPerChannel > 0}
+            width="w-72"
+            testId="post-filter-pill-cap"
+          >
+            <PerChannelForm
+              cap={s.maxPostsPerChannel}
+              setCap={s.setMaxPostsPerChannel}
+              mode={s.maxPostsPerChannelMode}
+              setMode={s.setMaxPostsPerChannelMode}
+              order={s.postSortOrder}
+            />
+          </Pill>
+          <button
+            type="button"
+            aria-pressed={s.groupByChannel}
+            onClick={() => s.setGroupByChannel(!s.groupByChannel)}
+            className={pillClass(s.groupByChannel)}
+          >
+            <Layers size={12} /> Grouped by channel
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-app-ink/5 bg-app-muted/30 px-4 py-2.5 text-xs">
+        <span className="font-semibold">
+          {props.shownCount.toLocaleString()} posts
+        </span>
+        {props.subtitle && (
+          <span className="text-app-ink/50">{props.subtitle}</span>
+        )}
+        {chips.map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            aria-label={`Remove ${chip.label}`}
+            onClick={() => clearChip(chip.clears, setters)}
+            className="inline-flex items-center gap-1 rounded-full bg-app-ink/10 px-2 py-0.5 hover:bg-app-ink/20"
+          >
+            {chip.label} <X size={11} />
+          </button>
+        ))}
+        {chips.length > 1 && (
+          <button
+            type="button"
+            onClick={() => {
+              for (const chip of chips) clearChip(chip.clears, setters)
+            }}
+            className="ml-auto text-app-ink/60 underline-offset-2 hover:underline"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** The bar wired to the workspace's state. */
+export const PostFilter: React.FC<PostFilterProps> = (props) => {
+  const controls = useScraper()
+  const { channels } = useData()
+  const { embeddingsEnabled } = useSettings()
+  const { setActiveTab } = useUI()
+  const [openPillCount, setOpenPillCount] = React.useState(0)
+  const facets = usePostFacets(openPillCount > 0)
+  const channelLanguages = React.useMemo(
+    () => channels.map((c) => c.language).filter((code) => !!code) as string[],
+    [channels],
+  )
+  return (
+    <PostFilterBar
+      {...props}
+      controls={controls}
+      embeddingsEnabled={embeddingsEnabled}
+      windowControl={
+        <AnalysisWindowControl
+          onReturnToAction={() => setActiveTab("action")}
+        />
+      }
+      facets={facets}
+      channelLanguages={channelLanguages}
+      onCountingPillOpenChange={(open) =>
+        setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
+      }
+    />
   )
 }

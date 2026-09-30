@@ -56,6 +56,7 @@ const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
 // A constant for the reason `VIEW_OPTIONS` is one: the provider hands the set
 // down from `useState`, so a fresh `[]` per render would fake a changed filter.
 const ANY_MEDIA: PromptPostsDeps["mediaFilter"] = []
+const ANY_LANGUAGE: PromptPostsDeps["languageFilter"] = []
 const NO_SEARCH: PromptPostsDeps["searchSimilarPosts"] = async () => {
   throw new Error("searchSimilarPosts should not be called")
 }
@@ -76,6 +77,7 @@ function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
     relatedPostSearch: null,
     forwardedFilter: "all",
     mediaFilter: ANY_MEDIA,
+    languageFilter: ANY_LANGUAGE,
     postViewOptions: VIEW_OPTIONS,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: NO_SEARCH,
@@ -102,6 +104,7 @@ describe("getPromptPostsInput", () => {
       debouncedPostSearch: "crypto",
       forwardedFilter: "unfollowed_forwarded",
       mediaFilter: ["photo", "video"],
+      languageFilter: ["fa"],
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
@@ -116,6 +119,7 @@ describe("getPromptPostsInput", () => {
       keyword: "crypto",
       forwarded: "unfollowed_forwarded",
       media: ["photo", "video"],
+      languages: ["fa"],
       maxPerChannel: 7,
       maxPerChannelMode: "random",
       sort: "oldest",
@@ -237,5 +241,31 @@ describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () 
 
     expect(asked.at(-1)?.startDate).toBe(61_000)
     expect(asked.at(-1)?.endDate).toBe(69_000)
+  })
+})
+
+describe("getScopeSubmission", () => {
+  test("the submission an Artifact freezes carries every pill (PFB-02)", () => {
+    const submission = render({
+      mediaFilter: ["photo", "video"],
+      languageFilter: ["fa", "en"],
+      postViewOptions: {
+        maxPostsPerChannel: 3,
+        maxPostsPerChannelMode: "ordered",
+        postSortOrder: "oldest",
+        groupByChannel: true,
+      },
+    }).getScopeSubmission(["alpha"])
+
+    expect(submission).toMatchObject({
+      channels: ["alpha"],
+      media: ["photo", "video"],
+      languages: ["fa", "en"],
+      maxPerChannel: 3,
+      maxPerChannelMode: "ordered",
+      sort: "oldest",
+      groupByChannel: true,
+      posts: null,
+    })
   })
 })

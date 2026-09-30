@@ -3172,6 +3172,38 @@ export type NewPassword = {
 };
 
 /**
+ * PostFacetCount
+ *
+ * How many Posts one choice of a filter would leave.
+ */
+export type PostFacetCount = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * PostFacetsResponse
+ *
+ * Per-choice Post counts for the Language and media filters.
+ */
+export type PostFacetsResponse = {
+    /**
+     * Languages
+     */
+    languages: Array<PostFacetCount>;
+    /**
+     * Media
+     */
+    media: Array<PostFacetCount>;
+};
+
+/**
  * PostFeedRequest
  *
  * `PostScopeRequest` plus the feed's paging, cap mode and sort.
@@ -7511,6 +7543,31 @@ export type DataPostsCountsResponses = {
 };
 
 export type DataPostsCountsResponse = DataPostsCountsResponses[keyof DataPostsCountsResponses];
+
+export type DataPostsFacetsData = {
+    body: PostScopeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/facets';
+};
+
+export type DataPostsFacetsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsFacetsError = DataPostsFacetsErrors[keyof DataPostsFacetsErrors];
+
+export type DataPostsFacetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostFacetsResponse;
+};
+
+export type DataPostsFacetsResponse = DataPostsFacetsResponses[keyof DataPostsFacetsResponses];
 
 export type DataLookupPostsRouteData = {
     body: PostLookupRequest;

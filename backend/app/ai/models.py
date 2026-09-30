@@ -28,7 +28,7 @@ class PromptScopeInput(BaseModel):
     # PFB-01: the Scope's filter half, spelled as `_ScopeFilters` spells it, so
     # a value it refuses is refused here too rather than 200ing a prompt over a
     # Scope nobody can record.
-    languages: list[str] = Field(default_factory=list, max_length=0)
+    languages: list[str] = Field(default_factory=list)
     media: list[MediaKind] = Field(default_factory=list)
     max_per_channel: int = Field(0, alias="maxPerChannel")
     max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")

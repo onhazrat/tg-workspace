@@ -1,4 +1,3 @@
-import { List } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useEffect } from "react"
@@ -56,7 +55,9 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   // count above refreshes with it (AW-04).
   useLiveWindowRefresh(invalidatePostViews)
 
-  const subtitleParts = [`${totalInScope} posts in range`]
+  // What the footer adds after the count: the cap and grouping, as the
+  // subtitle always said them.
+  const subtitleParts: string[] = []
   if (maxPostsPerChannel > 0) {
     subtitleParts.push(
       `(max ${maxPostsPerChannel}/channel, ${capModeLabel(maxPostsPerChannelMode, postSortOrder)})`,
@@ -95,19 +96,12 @@ export const PostFeed: React.FC<PostFeedProps> = ({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 pb-10"
     >
-      <PostFilter postSearch={postSearch} setPostSearch={setPostSearch} />
-
-      <div className="flex items-center gap-3 mb-4 px-1">
-        <div className="w-8 h-8 rounded-lg bg-app-muted flex items-center justify-center border border-app-ink/10">
-          <List size={16} className="opacity-60" />
-        </div>
-        <div>
-          <h2 className="text-xs uppercase font-bold tracking-widest leading-none">
-            Selected Posts
-          </h2>
-          <p className="text-[10px] font-mono opacity-50 mt-1">{subtitle}</p>
-        </div>
-      </div>
+      <PostFilter
+        postSearch={postSearch}
+        setPostSearch={setPostSearch}
+        shownCount={totalInScope}
+        subtitle={subtitle}
+      />
 
       <PostFeedResults
         isInitialLoading={isInitialLoading}

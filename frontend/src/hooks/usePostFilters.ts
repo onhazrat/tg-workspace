@@ -1,11 +1,11 @@
 /**
  * The Posts tab's filter and search state (G1).
  *
- * Ten `useState`s and the four effects that persist them, lifted out of
+ * Eleven `useState`s and the effects that persist them, lifted out of
  * `ScraperContext`. This is genuinely UI state — it describes what the operator
  * has asked to see, and nothing here talks to the network.
  *
- * **These five keys are deliberately *not* in `lib/settings/schema.ts`.** That
+ * **These six keys are deliberately *not* in `lib/settings/schema.ts`.** That
  * schema owns durable *preferences*; these are a transient view state that
  * happens to survive a reload. Folding them in would put every filter tweak
  * through the settings write path and expose them in the settings UI, which is
@@ -42,6 +42,7 @@ export const POST_FILTER_STORAGE_KEYS = {
   sortOrder: "postFilter_sortOrder",
   groupByChannel: "postFilter_groupByChannel",
   media: "postFilter_media",
+  languages: "postFilter_languages",
 } as const
 
 /** How long a keystroke waits before it reaches a query key. */
@@ -62,6 +63,9 @@ export interface PostFilters {
   setForwardedFilter: React.Dispatch<React.SetStateAction<ForwardedFilterValue>>
   mediaFilter: MediaFilterValue
   setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
+  /** The Post's own Language, any of these; empty for any (PFB-02). */
+  languageFilter: string[]
+  setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
   maxPostsPerChannel: number
   setMaxPostsPerChannel: React.Dispatch<React.SetStateAction<number>>
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -114,6 +118,19 @@ export function readStoredMediaFilter(): MediaFilterValue {
   )
 }
 
+/** A JSON array of Language codes; anything else, or a non-string entry, is dropped. */
+export function readStoredLanguageFilter(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(
+      scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.languages) ?? "[]",
+    )
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((code): code is string => typeof code === "string")
+  } catch {
+    return []
+  }
+}
+
 export function usePostFilters(): PostFilters {
   const [postSearch, setPostSearch] = useState("")
   const [semanticSearchQuery, setSemanticSearchQuery] = useState("")
@@ -129,6 +146,9 @@ export function usePostFilters(): PostFilters {
 
   const [mediaFilter, setMediaFilter] = useState<MediaFilterValue>(
     readStoredMediaFilter,
+  )
+  const [languageFilter, setLanguageFilter] = useState<string[]>(
+    readStoredLanguageFilter,
   )
   const [maxPostsPerChannel, setMaxPostsPerChannel] = useState<number>(
     readStoredMaxPerChannel,
@@ -173,6 +193,13 @@ export function usePostFilters(): PostFilters {
     )
   }, [mediaFilter])
 
+  useEffect(() => {
+    scopedStorage.setItem(
+      POST_FILTER_STORAGE_KEYS.languages,
+      JSON.stringify(languageFilter),
+    )
+  }, [languageFilter])
+
   const debouncedPostSearch = useDebouncedValue(
     postSearch,
     POST_SEARCH_DEBOUNCE_MS,
@@ -202,6 +229,8 @@ export function usePostFilters(): PostFilters {
     setForwardedFilter,
     mediaFilter,
     setMediaFilter,
+    languageFilter,
+    setLanguageFilter,
     maxPostsPerChannel,
     setMaxPostsPerChannel,
     maxPostsPerChannelMode,

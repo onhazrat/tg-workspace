@@ -67,6 +67,7 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     endDate: 9000,
     forwardedFilter: "all",
     mediaFilter: [],
+    languageFilter: [],
     channels,
     postViewOptions: view,
     semanticSearchRespectsChannels: false,
@@ -98,6 +99,7 @@ describe("computeScopedPosts", () => {
       searchText: "Post",
       forwardedFilter: "unfollowed_forwarded",
       mediaFilter: ["photo", "video"],
+      languageFilter: ["fa"],
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
@@ -122,6 +124,7 @@ describe("computeScopedPosts", () => {
         keyword: "Post",
         forwarded: "unfollowed_forwarded",
         media: ["photo", "video"],
+        languages: ["fa"],
         maxPerChannel: 7,
         maxPerChannelMode: "random",
         sort: "oldest",
@@ -185,6 +188,42 @@ describe("computeScopedPosts", () => {
         { startDate: 1000, endDate: 9000 },
       ),
     )
+  })
+
+  test("semantic path: every pill on the bar applies to the ranked Posts (PFB-02)", async () => {
+    const ranked = [
+      makePost("alpha", 1, 100, {
+        language: "fa",
+        media: { kinds: ["photo"] },
+      }),
+      makePost("alpha", 2, 200, {
+        language: "en",
+        media: { kinds: ["photo"] },
+      }),
+      makePost("beta", 3, 300, { language: "fa" }),
+      makePost("beta", 4, 400, { language: null, media: { kinds: ["photo"] } }),
+      makePost("beta", 5, 50, { language: "fa", media: { kinds: ["photo"] } }),
+    ]
+    const result = await computeScopedPosts(
+      baseDeps({
+        embeddingsEnabled: true,
+        semanticQuery: "crypto",
+        languageFilter: ["fa"],
+        mediaFilter: ["photo"],
+        postViewOptions: {
+          ...view,
+          postSortOrder: "oldest",
+          groupByChannel: true,
+        },
+        searchSimilarPosts: async () => ranked,
+      }),
+    )
+
+    // Persian photos only, oldest first, beta's block first (its 50 leads).
+    expect(result.map((p) => `${p.channelName}/${p.id}`)).toEqual([
+      "beta/5",
+      "alpha/1",
+    ])
   })
 
   test("semantic path: the window is sent even when channels are not", async () => {

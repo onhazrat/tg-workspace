@@ -93,10 +93,14 @@ export function useCommandRegistry(): {
     semanticSearchQuery,
     mediaFilter,
     setMediaFilter,
+    languageFilter,
+    setLanguageFilter,
     maxPostsPerChannel,
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
+    postSortOrder,
     setPostSortOrder,
+    groupByChannel,
     setGroupByChannel,
   } = useScraper()
   const {
@@ -147,6 +151,7 @@ export function useCommandRegistry(): {
         keyword: postSearch,
         forwarded: forwardedFilter,
         media: mediaFilter,
+        languages: languageFilter,
         maxPerChannel: maxPostsPerChannel,
       })
     }
@@ -160,6 +165,7 @@ export function useCommandRegistry(): {
     postSearch,
     forwardedFilter,
     mediaFilter,
+    languageFilter,
     maxPostsPerChannel,
     getScopedPosts,
   ])
@@ -288,9 +294,12 @@ export function useCommandRegistry(): {
       setForwardedFilter,
       mediaFilter,
       setMediaFilter,
+      setLanguageFilter,
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
+      postSortOrder,
       setPostSortOrder,
+      groupByChannel,
       setGroupByChannel,
       getScopedPosts,
       getPostsInScopeCounts,
@@ -335,6 +344,8 @@ export function useCommandRegistry(): {
       mediaFilter,
       palette,
       postSearch,
+      postSortOrder,
+      groupByChannel,
       selectedChannels,
       setActiveSection,
       openConfigurationEntry,

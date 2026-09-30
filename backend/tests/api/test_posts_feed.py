@@ -396,7 +396,7 @@ def test_a_media_set_keeps_a_post_matching_any_kind(client: TestClient) -> None:
         {"maxPerChannelMode": "nonsense"},
         {"media": ["nonsense"]},
         {"media": "nonsense"},
-        {"languages": ["fa"]},
+        {"languages": "fa"},
         {"groupByChannel": "sideways"},
     ],
     ids=lambda body: next(iter(body.items())).__repr__(),
@@ -406,14 +406,15 @@ def test_a_value_this_server_does_not_implement_is_422(
 ) -> None:
     """Refused rather than dropped, for every field of the new shape.
 
-    `most_views` is PFB-03's and a Language set PFB-02's; until they land a
-    request naming one is asking for something this server would not do.
+    `most_views` is PFB-03's; until it lands a request naming it is asking for
+    something this server would not do. A Language set is a list, so a bare
+    string is a client speaking some other shape.
     """
     headers = _auth(client)
     assert client.post(f"{PREFIX}/posts", json=body, headers=headers).status_code == 422
 
 
-@pytest.mark.parametrize("body", [{"media": ["nonsense"]}, {"languages": ["fa"]}])
+@pytest.mark.parametrize("body", [{"media": ["nonsense"]}, {"languages": "fa"}])
 def test_the_counts_refuse_what_the_feed_refuses(
     client: TestClient, body: dict[str, Any]
 ) -> None:

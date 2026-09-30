@@ -300,7 +300,7 @@ def test_the_record_carries_the_whole_filter_set_a_submission_named(
     sent = _scope(
         keyword="tehran",
         forwarded="original",
-        languages=[],
+        languages=["fa", "en"],
         media=["photo", "video"],
         maxPerChannel=25,
         maxPerChannelMode="random",

@@ -64,6 +64,8 @@ export type PostScopeQuery = {
   keyword?: string
   forwarded?: ForwardedFilterValue
   media?: MediaFilterValue
+  /** The Post's own Language, any of these; empty for any (PFB-02). */
+  languages?: string[]
   maxPerChannel?: number
 }
 
@@ -124,6 +126,7 @@ export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
     body.forwarded = params.forwarded
   // Empty is any media and is the server's default, so it is omitted.
   if (params.media?.length) body.media = params.media
+  if (params.languages?.length) body.languages = params.languages
   if (params.maxPerChannel != null && params.maxPerChannel > 0)
     body.maxPerChannel = params.maxPerChannel
   return body

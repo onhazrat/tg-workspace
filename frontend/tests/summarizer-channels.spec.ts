@@ -150,6 +150,11 @@ test.describe("TG Workspace channels and posts", () => {
     // client sends (the real backend does the same) rather than returning the
     // full set regardless.
     await page.route("**/api/v1/data/posts**", async (route) => {
+      // The Media pill's per-kind counts (PFB-02) share the prefix.
+      if (route.request().url().includes("/posts/facets")) {
+        await route.fulfill({ json: { languages: [], media: [] } })
+        return
+      }
       // `media` moved from the query string into the request body along with
       // the rest of the scope.
       // `media` is a set of kinds since PFB-01; empty or absent is any media.
@@ -169,8 +174,11 @@ test.describe("TG Workspace channels and posts", () => {
     await selectChannelsKeyboard(page, [channelName])
     await gotoWorkspace(page, "posts")
 
+    // The kinds are a checklist behind the Media pill since PFB-02.
+    await page.getByTestId("post-filter-pill-media").click()
     await expect(page.getByTestId("post-media-filter-photo")).toBeVisible()
     await page.getByTestId("post-media-filter-photo").click()
+    await page.keyboard.press("Escape")
 
     await expect
       .poll(() => readScopedStorage(page, "postFilter_media"))

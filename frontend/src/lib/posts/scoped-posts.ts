@@ -1,8 +1,7 @@
 import type { PostFeedQuery } from "@/api/data"
 import type { Channel, Post } from "@/types"
 import {
-  applyForwardedFilter,
-  applyPostViewPipeline,
+  buildFilteredPostsFromRaw,
   type ForwardedFilterValue,
   type MediaFilterValue,
   type PostViewOptions,
@@ -45,6 +44,7 @@ export interface ScopedPostsDeps {
   endDate: number
   forwardedFilter: ForwardedFilterValue
   mediaFilter: MediaFilterValue
+  languageFilter: string[]
   channels: Channel[]
   postViewOptions: PostViewOptions
   semanticSearchRespectsChannels: boolean
@@ -80,12 +80,28 @@ export async function computeScopedPosts(
     endDate,
     forwardedFilter,
     mediaFilter,
+    languageFilter,
     channels,
     postViewOptions,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
     getPostsFeed,
   } = deps
+
+  // The ranked Posts a vector search returns pass through every pill on the
+  // bar, so the bar means the same thing in both modes (PFB-02). Not the
+  // keyword: in meaning mode the search box holds the meaning query.
+  const filterRanked = (ranked: Post[]) =>
+    buildFilteredPostsFromRaw(ranked, {
+      searchText: "",
+      forwardedFilter,
+      mediaFilter,
+      languageFilter,
+      channels,
+      view: postViewOptions,
+      startDate,
+      endDate,
+    })
 
   // Related-post ("more like this") search — bounded at 50 by the RAG call.
   //
@@ -104,11 +120,7 @@ export async function computeScopedPosts(
         p.id !== relatedPostSearch.id ||
         p.channelName !== relatedPostSearch.channelName,
     )
-    return applyPostViewPipeline(
-      applyForwardedFilter(otherPosts, forwardedFilter, channels),
-      postViewOptions,
-      { startDate, endDate },
-    )
+    return filterRanked(otherPosts)
   }
 
   // Semantic search — bounded at 50 by the RAG call.
@@ -121,11 +133,7 @@ export async function computeScopedPosts(
           ? selectedChannels
           : undefined,
     })
-    return applyPostViewPipeline(
-      applyForwardedFilter(results, forwardedFilter, channels),
-      postViewOptions,
-      { startDate, endDate },
-    )
+    return filterRanked(results)
   }
 
   // Normal path: one bounded server-feed call (A1c). Every stage of the old
@@ -149,6 +157,7 @@ export async function computeScopedPosts(
     keyword: searchText,
     forwarded: forwardedFilter,
     media: mediaFilter,
+    languages: languageFilter,
     maxPerChannel: postViewOptions.maxPostsPerChannel,
     maxPerChannelMode: postViewOptions.maxPostsPerChannelMode,
     sort: postViewOptions.postSortOrder,

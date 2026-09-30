@@ -129,11 +129,9 @@ class _ScopeFilters(BaseModel):
     channels: list[str] = Field(default_factory=list)
     keyword: str | None = None
     forwarded: ForwardedFilter = "all"
-    # PFB-01 carries the Language set without filtering on it yet, so anything
-    # but the empty set is a Scope this server does not implement and is
-    # refused rather than recorded as if it had been applied. PFB-02 lifts the
-    # bound when the filter exists.
-    languages: list[str] = Field(default_factory=list, max_length=0)
+    # The Post's own Language, any of these; empty for any (PFB-02). A Post
+    # whose Language is unread matches no set.
+    languages: list[str] = Field(default_factory=list)
     media: list[MediaKind] = Field(default_factory=list)
     max_per_channel: int = Field(0, alias="maxPerChannel", ge=0)
     max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")

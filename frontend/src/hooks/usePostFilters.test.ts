@@ -36,6 +36,7 @@ describe("usePostFilters — hydration", () => {
     const { result } = renderHook(() => usePostFilters())
 
     expect(result.current.mediaFilter).toEqual([])
+    expect(result.current.languageFilter).toEqual([])
     expect(result.current.maxPostsPerChannel).toBe(0)
     expect(result.current.maxPostsPerChannelMode).toBe("ordered")
     expect(result.current.postSortOrder).toBe("newest")
@@ -223,6 +224,30 @@ describe("usePostFilters — persistence", () => {
     expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.media)).toBe(
       JSON.stringify(["video"]),
     )
+  })
+
+  test("the Language set persists under a key of its own (PFB-02)", () => {
+    const first = renderHook(() => usePostFilters())
+    act(() => {
+      first.result.current.setLanguageFilter(["fa", "en"])
+    })
+
+    expect(scopedStorage.getItem(POST_FILTER_STORAGE_KEYS.languages)).toBe(
+      JSON.stringify(["fa", "en"]),
+    )
+    const second = renderHook(() => usePostFilters())
+    expect(second.result.current.languageFilter).toEqual(["fa", "en"])
+  })
+
+  test("an unreadable stored Language set reads as any Language", () => {
+    for (const raw of ["not json", '"fa"', "[1, null]", '{"fa": 1}']) {
+      scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.languages, raw)
+      const { result } = renderHook(() => usePostFilters())
+      expect(result.current.languageFilter).toEqual([])
+    }
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS.languages, '["fa", 3]')
+    const { result } = renderHook(() => usePostFilters())
+    expect(result.current.languageFilter).toEqual(["fa"])
   })
 
   test("searches and the forwarded filter do NOT persist", () => {

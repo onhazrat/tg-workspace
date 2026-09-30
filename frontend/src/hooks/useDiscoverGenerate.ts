@@ -30,6 +30,7 @@ export function useDiscoverGenerate() {
     postSortOrder,
     groupByChannel,
     mediaFilter,
+    languageFilter,
   } = useScraper()
   const { startDate, endDate } = useScope()
   const { discoverSignals } = useSettings()
@@ -52,6 +53,7 @@ export function useDiscoverGenerate() {
       keyword: debouncedPostSearch,
       forwarded: forwardedFilter,
       media: mediaFilter,
+      languages: languageFilter,
       maxPerChannel: maxPostsPerChannel,
       maxPerChannelMode: maxPostsPerChannelMode,
       sort: postSortOrder,
@@ -66,6 +68,7 @@ export function useDiscoverGenerate() {
       debouncedPostSearch,
       forwardedFilter,
       mediaFilter,
+      languageFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,

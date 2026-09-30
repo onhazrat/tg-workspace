@@ -124,6 +124,8 @@ interface ScraperContextType {
   >
   mediaFilter: MediaFilterValue
   setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
+  languageFilter: string[]
+  setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
   maxPostsPerChannel: number
   setMaxPostsPerChannel: React.Dispatch<React.SetStateAction<number>>
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -180,6 +182,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const invalidatePostViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["postsFeed"] })
     queryClient.invalidateQueries({ queryKey: ["postsCounts"] })
+    queryClient.invalidateQueries({ queryKey: ["postsFacets"] })
     queryClient.invalidateQueries({ queryKey: ["discoverCandidates"] })
   }, [queryClient])
 
@@ -196,6 +199,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setForwardedFilter,
     mediaFilter,
     setMediaFilter,
+    languageFilter,
+    setLanguageFilter,
     maxPostsPerChannel,
     setMaxPostsPerChannel,
     maxPostsPerChannelMode,
@@ -258,6 +263,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       relatedPostSearch,
       forwardedFilter,
       mediaFilter,
+      languageFilter,
       postViewOptions,
       semanticSearchRespectsChannels,
       searchSimilarPosts,
@@ -420,6 +426,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setForwardedFilter,
         mediaFilter,
         setMediaFilter,
+        languageFilter,
+        setLanguageFilter,
         maxPostsPerChannel,
         setMaxPostsPerChannel,
         maxPostsPerChannelMode,

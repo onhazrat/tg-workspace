@@ -62,9 +62,13 @@ test.describe("TG Workspace discover", () => {
     await pinSelectionToCarrier(page, carrierName)
 
     await gotoWorkspace(page, "posts")
-    const originalOnly = page.getByRole("button", { name: "Original Only" })
-    await originalOnly.click()
-    await expect(originalOnly).toHaveClass(/bg-app-ink/)
+    // Post type is a pill since PFB-02: open it, choose Original, and the pill
+    // reads and fills as the new value.
+    const typePill = page.getByTestId("post-filter-pill-type")
+    await typePill.click()
+    await page.getByRole("radio", { name: /^○ Original$/ }).click()
+    await expect(typePill).toContainText("Original")
+    await expect(typePill).toHaveClass(/bg-app-ink/)
 
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "Go to Discover")
