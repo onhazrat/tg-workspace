@@ -14,6 +14,8 @@ import {
 import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
+import type { MetricData } from "@/components/channel-grid/ChannelMetricEditor"
+import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
@@ -24,6 +26,8 @@ import { useScopedPostCounts } from "@/hooks/usePostsView"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import {
   addFunnel,
+  append,
+  atoms,
   type ChannelFilter,
   type CondType,
   clearFunnels,
@@ -31,10 +35,12 @@ import {
   emptyFilter,
   filterNames,
   funnelledValues,
+  type MetricCond,
   parseChannelFilter,
   printChannelFilter,
   removeFunnel,
   removeNode,
+  replaceNode,
 } from "@/lib/channels/channel-filter"
 import {
   areAllNamesSelected,
@@ -44,6 +50,7 @@ import {
   getChannelNamesWithTag,
   toggleNamesInSelection,
 } from "@/lib/channels/channel-grid-chips"
+import { type MetricInputs, metricValues } from "@/lib/channels/channel-metrics"
 import {
   buildChannelPseudoTagChips,
   filterTagsBySearch,
@@ -129,17 +136,34 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const setChannelFilter = (next: ChannelFilter) =>
     setChannelFilterText(printChannelFilter(next, filterLookup))
 
+  // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
+  const postsInScopeCounts = useScopedPostCounts()
+
+  // What the number Conditions read; days count from when the page loaded.
+  const metricInputs = useMemo<MetricInputs>(
+    () => ({ channelStats, postsInScopeCounts, now: performance.timeOrigin }),
+    [channelStats, postsInScopeCounts],
+  )
+  const metricData = useMemo<MetricData>(
+    () => ({
+      values: (key) => metricValues(key, channels, metricInputs),
+      total: channels.length,
+    }),
+    [channels, metricInputs],
+  )
+  const metricConditions = atoms(channelFilter).flatMap((a) =>
+    a.cond.type === "metric" ? [a.cond] : [],
+  )
+
   const filteredChannels = useMemo(
     () =>
       filterChannelsForGrid(channels, {
         filter: channelFilter,
         search: channelSearch,
+        metrics: metricInputs,
       }),
-    [channels, channelSearch, channelFilter],
+    [channels, channelSearch, channelFilter, metricInputs],
   )
-
-  // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
-  const postsInScopeCounts = useScopedPostCounts()
 
   const sortedFilteredChannels = useMemo(
     () =>
@@ -416,6 +440,13 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               {...facet("language")}
             />
           )}
+          <ChannelMetricMenu
+            conditions={metricConditions}
+            data={metricData}
+            onAdd={(cond: MetricCond) =>
+              setChannelFilter(append(channelFilter, "root", cond))
+            }
+          />
           <SortMenu
             sortBy={sortBy}
             onSortByChange={setSortBy}
@@ -450,7 +481,15 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           shownCount={filteredChannels.length}
           totalCount={channels.length}
           names={filterLookup}
+          metrics={metricData}
           onRemove={(id) => setChannelFilter(removeNode(channelFilter, id))}
+          onReplace={(id, cond) => {
+            const node = atoms(channelFilter).find((a) => a.id === id)
+            if (node)
+              setChannelFilter(
+                replaceNode(channelFilter, id, { ...node, cond }),
+              )
+          }}
           onClearSearch={() => setChannelSearch("")}
           onClearAll={() => {
             setChannelFilter(emptyFilter())

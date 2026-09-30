@@ -527,4 +527,60 @@ test.describe("TG Workspace channels and posts", () => {
     await expect(page.locator(`[data-channel-name="${tagged}"]`)).toBeVisible()
     await expect(page.locator(`[data-channel-name="${other}"]`)).toHaveCount(0)
   })
+
+  /**
+   * CTB-02: a Reach bound is a number Condition. The Filters dropdown opens
+   * Reach's editor, the bound is added, and the grid drops the Channel under
+   * it. Reach is mocked onto the channel stats.
+   */
+  test("a Reach bound drops the Channels under it", async ({ page }) => {
+    const prefix = `reach${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 2, prefix)
+
+    // Stats arrive keyed by Channel name, apart from the channel list.
+    const reach: Record<string, number> = {}
+    await page.route("**/api/v1/data/channels/stats", async (route) => {
+      const response = await route.fetch()
+      const stats = await response.json()
+      for (const [name, value] of Object.entries(reach)) {
+        stats[name] = { count: 10, ...stats[name], reach: value }
+      }
+      await route.fulfill({ response, json: stats })
+    })
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(2, { timeout: 30_000 })
+    const [big, small] = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+    reach[big] = 5000
+    reach[small] = 40
+    await page.reload()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    await expect(cards).toHaveCount(2, { timeout: 30_000 })
+
+    await page.getByTestId("channel-filters").click()
+    await page.getByPlaceholder("Search criteria...").fill("reach")
+    await page.getByTestId("channel-filters-reach").click()
+    await page.getByRole("button", { name: "at least" }).click()
+    await page.getByRole("spinbutton", { name: "Value" }).fill("1000")
+    await page.getByTestId("metric-editor-submit").click()
+
+    await expect(cards).toHaveCount(1)
+    await expect(page.locator(`[data-channel-name="${big}"]`)).toBeVisible()
+    await expect(page.getByTestId("channel-filter-count")).toContainText(
+      /^1 of /,
+    )
+    await expect(
+      page.getByTestId("channel-filter-chip-metric-reach"),
+    ).toContainText("Reach ≥ 1K")
+    await expect(page.getByTestId("channel-filters")).toHaveAttribute(
+      "data-active",
+      "true",
+    )
+    await expect(page).toHaveURL(/channelFilter=reach/)
+  })
 })

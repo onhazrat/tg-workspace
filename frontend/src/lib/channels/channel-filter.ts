@@ -8,8 +8,20 @@
  *
  * It lives in the workspace URL as the text form below. It is not part of the
  * Scope and never touches the selection. Recovered from the prototype's
- * `tree.ts` (commit e4d5002); the number Conditions arrive in CTB-02.
+ * `tree.ts` (commit e4d5002). The number Conditions (CTB-02) bound a metric,
+ * and a Channel with no value for it fails every bound.
  */
+
+import {
+  boundText,
+  inBound,
+  isMetricKey,
+  type MetricBound,
+  type MetricInputs,
+  type MetricKey,
+  metric,
+  metricValue,
+} from "@/lib/channels/channel-metrics"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import {
   CHANNEL_PSEUDO_TAGS,
@@ -20,7 +32,10 @@ import type { Channel } from "@/types"
 
 export type CondType = "tag" | "group" | "language"
 /** A `tag` value may be one of the derived tag ids. */
-export type Cond = { type: CondType; value: string }
+export type ValueCond = { type: CondType; value: string }
+/** A bound on a number; `none` passes only a Channel with no value. */
+export type MetricCond = { type: "metric"; metric: MetricKey } & MetricBound
+export type Cond = ValueCond | MetricCond
 export type Joiner = "and" | "or"
 
 export type AtomNode = { kind: "atom"; id: string; cond: Cond; not?: boolean }
@@ -47,7 +62,7 @@ export const emptyFilter = (): ChannelFilter => ({
 
 // ---- Evaluation ------------------------------------------------------------
 
-function testCond(cond: Cond, channel: Channel): boolean {
+function testCond(cond: Cond, channel: Channel, inputs: MetricInputs): boolean {
   switch (cond.type) {
     case "tag": {
       const derived = findChannelPseudoTag(cond.value)
@@ -59,24 +74,31 @@ function testCond(cond: Cond, channel: Channel): boolean {
       return channel.settingGroupId === cond.value
     case "language":
       return channel.language === cond.value
+    case "metric":
+      return inBound(metricValue(cond.metric, channel, inputs), cond)
   }
 }
 
-function evalNode(node: FilterNode, channel: Channel): boolean {
+function evalNode(
+  node: FilterNode,
+  channel: Channel,
+  inputs: MetricInputs,
+): boolean {
   if (node.kind === "group" && node.children.length === 0) return true
   const result =
     node.kind === "atom"
-      ? testCond(node.cond, channel)
+      ? testCond(node.cond, channel, inputs)
       : node.op === "and"
-        ? node.children.every((child) => evalNode(child, channel))
-        : node.children.some((child) => evalNode(child, channel))
+        ? node.children.every((child) => evalNode(child, channel, inputs))
+        : node.children.some((child) => evalNode(child, channel, inputs))
   return node.not ? !result : result
 }
 
 export const matchesChannelFilter = (
   filter: ChannelFilter,
   channel: Channel,
-): boolean => evalNode(filter, channel)
+  inputs: MetricInputs,
+): boolean => evalNode(filter, channel, inputs)
 
 // ---- Reading the tree ------------------------------------------------------
 
@@ -299,7 +321,9 @@ export const funnelledValues = (
   type: CondType,
 ): string[] => [
   ...new Set(
-    atoms(filter).flatMap((a) => (a.cond.type === type ? [a.cond.value] : [])),
+    atoms(filter).flatMap((a) =>
+      a.cond.type !== "metric" && a.cond.type === type ? [a.cond.value] : [],
+    ),
   ),
 ]
 
@@ -407,7 +431,10 @@ export function filterNames(
   }
 }
 
-/** A Condition chip's label: the tag, Setting group or Language by name. */
+/**
+ * A Condition chip's label: the tag, Setting group or Language by name, or a
+ * number's bound, "Reach ≥ 1.2K".
+ */
 export function conditionLabel(cond: Cond, names: FilterNames): string {
   switch (cond.type) {
     case "tag":
@@ -416,6 +443,8 @@ export function conditionLabel(cond: Cond, names: FilterNames): string {
       return names.groupName(cond.value)
     case "language":
       return languageName(cond.value)
+    case "metric":
+      return `${metric(cond.metric).label}${cond.none ? ":" : ""} ${boundText(cond)}`
   }
 }
 
@@ -432,6 +461,12 @@ function condText(cond: Cond, names: FilterNames): string {
       return `group:${quote(names.groupName(cond.value))}`
     case "language":
       return `lang:${quote(cond.value)}`
+    case "metric":
+      if (cond.none) return `${cond.metric} = none`
+      if (cond.min !== undefined && cond.max !== undefined)
+        return `${cond.metric} ${cond.min}..${cond.max}`
+      if (cond.min !== undefined) return `${cond.metric} >= ${cond.min}`
+      return `${cond.metric} <= ${cond.max}`
   }
 }
 
@@ -447,7 +482,8 @@ function nodeText(node: FilterNode, names: FilterNames, top: boolean): string {
 
 /**
  * The readable text form: `tag:name`, `group:"Setting group name"`,
- * `lang:fa`, `not`, `and`, `or` and parentheses. A root holding one negated
+ * `lang:fa`, `reach >= 200`, `subscribers <= 100`, `reach 200..1000`,
+ * `reach = none`, `not`, `and`, `or` and parentheses. A root holding one negated
  * group is parenthesised, so it reads back as that child and not as a
  * negated root.
  */
@@ -471,12 +507,37 @@ type Token = { t: "(" | ")" | "and" | "or" | "not" } | { t: "atom"; cond: Cond }
 
 class ParseError extends Error {}
 
+const NUM = String.raw`(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)`
+/** `reach >= 200`, `reach 200..1000` or `reach = none`. */
+const METRIC = new RegExp(
+  String.raw`^([a-z_]+)(?:\s*(>=|<=|>|<)\s*${NUM}|\s*=\s*none(?![\p{L}\p{N}_])|\s+${NUM}\s*\.\.\s*${NUM})`,
+  "iu",
+)
+
+function metricCond(m: RegExpExecArray): MetricCond {
+  const key = m[1].toLowerCase() as MetricKey
+  if (m[4] !== undefined)
+    return { type: "metric", metric: key, min: Number(m[4]), max: Number(m[5]) }
+  if (m[2] === undefined) return { type: "metric", metric: key, none: true }
+  // Every bound is inclusive, so ">" reads as ">=" and "<" as "<=". The
+  // printer writes only the inclusive forms.
+  return m[2].startsWith(">")
+    ? { type: "metric", metric: key, min: Number(m[3]) }
+    : { type: "metric", metric: key, max: Number(m[3]) }
+}
+
 function tokenize(raw: string, names: FilterNames): Token[] {
-  // "tag tech" reads naturally, and is the same length as "tag:". Quoted
-  // names are skipped, and so is a key that is itself a value ("tag:lang").
+  // "tag tech" reads naturally, and is the same length as "tag:"; so is
+  // "activity rate < 10" as "activity_rate". Quoted names are skipped, and so
+  // is a key that is itself a value ("tag:lang").
   const src = raw.replace(
-    /"(?:[^"\\]|\\.)*"|(?<![:\p{L}\p{N}_.-])(tag|group|lang)\s+(?=["\p{L}\p{N}_])/giu,
-    (match, key?: string) => (key ? `${key}:`.padEnd(match.length) : match),
+    /"(?:[^"\\]|\\.)*"|(?<![:\p{L}\p{N}_.-])(?:(tag|group|lang)\s+(?=["\p{L}\p{N}_])|(activity\s+rate)(?=\s*[<>=\d-]))/giu,
+    (match, key?: string, activity?: string) =>
+      key
+        ? `${key}:`.padEnd(match.length)
+        : activity
+          ? "activity_rate".padEnd(match.length)
+          : match,
   )
   const word = /^([a-z]+:)?(?:"((?:[^"\\]|\\.)*)"|([\p{L}\p{N}_.-]+))/iu
   const out: Token[] = []
@@ -500,6 +561,12 @@ function tokenize(raw: string, names: FilterNames): Token[] {
     if (ch === "&" || ch === "|") {
       out.push({ t: ch === "&" ? "and" : "or" })
       i += src[i + 1] === ch ? 2 : 1
+      continue
+    }
+    const m = METRIC.exec(src.slice(i))
+    if (m && isMetricKey(m[1].toLowerCase())) {
+      out.push({ t: "atom", cond: metricCond(m) })
+      i += m[0].length
       continue
     }
     const w = word.exec(src.slice(i))

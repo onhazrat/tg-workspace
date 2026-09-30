@@ -11,14 +11,19 @@ export function BarPopover({
   children,
   align = "start",
   width = "w-72",
+  open,
+  onOpenChange,
 }: {
   trigger: React.ReactElement
   children: React.ReactNode
   align?: "start" | "center" | "end"
   width?: string
+  /** Controlled, for a popover its own form closes. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

@@ -41,7 +41,8 @@ const sampleChannels: Channel[] = [
   },
 ]
 
-const noFilters = { filter: emptyFilter(), search: "" }
+const metrics = { channelStats: {}, postsInScopeCounts: {}, now: 0 }
+const noFilters = { filter: emptyFilter(), search: "", metrics }
 const funnels = (...pairs: [CondType, string][]) =>
   pairs.reduce((f, [type, value]) => addFunnel(f, type, value), emptyFilter())
 
@@ -113,17 +114,25 @@ describe("filterChannelsForGrid", () => {
   it("narrows the Channel filter with the search on top", () => {
     const filter = funnels(["tag", "Tech"], ["tag", "tech-news"])
     expect(
-      filterChannelsForGrid(sampleChannels, { filter, search: "" }).map(
-        (c) => c.name,
-      ),
+      filterChannelsForGrid(sampleChannels, {
+        filter,
+        search: "",
+        metrics,
+      }).map((c) => c.name),
     ).toEqual(["news", "quiet"])
     expect(
-      filterChannelsForGrid(sampleChannels, { filter, search: "quiet" }).map(
-        (c) => c.name,
-      ),
+      filterChannelsForGrid(sampleChannels, {
+        filter,
+        search: "quiet",
+        metrics,
+      }).map((c) => c.name),
     ).toEqual(["quiet"])
     expect(
-      filterChannelsForGrid(sampleChannels, { filter, search: "sports" }),
+      filterChannelsForGrid(sampleChannels, {
+        filter,
+        search: "sports",
+        metrics,
+      }),
     ).toEqual([])
   })
 })
