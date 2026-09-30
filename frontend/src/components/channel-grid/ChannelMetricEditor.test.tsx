@@ -104,6 +104,18 @@ describe("the axis", () => {
     expect(filled).toHaveLength(5)
   })
 
+  test("a fractional range spanning two orders of magnitude goes logarithmic too", () => {
+    // Activity rates of 0.01 to 5 posts per hour.
+    mount([0.01, 0.05, 0.2, 1, 5])
+    expect(
+      screen.getByTestId("metric-histogram-caption").textContent,
+    ).toContain("log scale")
+    const filled = Array.from({ length: 32 }, (_, i) => bar(i)).filter(
+      (b) => b.style.height !== "2%",
+    )
+    expect(filled).toHaveLength(5)
+  })
+
   test("hovering a bar says how many Channels it holds and its range", () => {
     mount(LINEAR)
     fireEvent.pointerEnter(bar(0))

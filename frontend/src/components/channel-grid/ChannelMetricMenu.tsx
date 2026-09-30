@@ -1,15 +1,16 @@
 import { ChevronDown, SlidersHorizontal } from "lucide-react"
 import { useState } from "react"
 import { pillClass } from "@/components/PostFilterParts"
-import type { MetricCond } from "@/lib/channels/channel-filter"
+import type { MetricAtom, MetricCond } from "@/lib/channels/channel-filter"
 import {
   boundText,
   METRICS,
   type MetricBound,
+  type MetricData,
   type MetricKey,
 } from "@/lib/channels/channel-metrics"
 import { BarHeading, BarPopover, BarSearch } from "./BarPopover"
-import { ChannelMetricEditor, type MetricData } from "./ChannelMetricEditor"
+import { ChannelMetricEditor } from "./ChannelMetricEditor"
 
 /**
  * The Filters dropdown (CTB-02): every number criterion with its bounds in
@@ -22,7 +23,7 @@ export function ChannelMetricMenu({
   onAdd,
 }: {
   /** The number Conditions anywhere in the Channel filter. */
-  conditions: MetricCond[]
+  conditions: MetricAtom[]
   data: MetricData
   onAdd: (cond: MetricCond) => void
 }) {
@@ -87,8 +88,8 @@ export function ChannelMetricMenu({
               {m.label}
               <span className="text-[11px] font-normal tabular-nums text-app-ink/50">
                 {conditions
-                  .filter((c) => c.metric === m.key)
-                  .map(boundText)
+                  .filter((a) => a.cond.metric === m.key)
+                  .map((a) => `${a.not ? "not " : ""}${boundText(a.cond)}`)
                   .join(", ")}
               </span>
             </button>

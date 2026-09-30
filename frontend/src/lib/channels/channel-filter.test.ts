@@ -17,6 +17,7 @@ import {
   printChannelFilter,
   removeFunnel,
   removeNode,
+  replaceCond,
   replaceNode,
   setOp,
   toggleNot,
@@ -267,6 +268,15 @@ describe("editing", () => {
       shape(root("or", [atom(tag("b")), atom(tag("c"), true)])),
     )
     expect(toggleNot(filter, "root").not).toBe(true)
+  })
+
+  test("replaceCond swaps a Condition and keeps its NOT", () => {
+    const a = atom(tag("a"), true)
+    const next = replaceCond(root("and", [a]), a.id, tag("b"))
+    expect(shape(next)).toEqual(shape(root("and", [atom(tag("b"), true)])))
+    const g = grp("or", [atom(tag("x")), atom(tag("y"))])
+    const filter = root("and", [g])
+    expect(replaceCond(filter, g.id, tag("b"))).toBe(filter)
   })
 
   test("move reorders and prunes what it leaves behind", () => {
@@ -541,12 +551,7 @@ describe("the URL form", () => {
     expect(parsed ? shape(parsed) : parsed).toEqual(
       shape(root("and", [atom(tag("reach"))])),
     )
-    for (const text of [
-      "reach >",
-      "reach >= x",
-
-      "reach = nothing",
-    ]) {
+    for (const text of ["reach >", "reach >= x", "reach = nothing"]) {
       expect(parseChannelFilter(text, names)).toBeNull()
     }
   })

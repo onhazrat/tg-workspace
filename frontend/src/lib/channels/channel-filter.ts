@@ -13,6 +13,7 @@
  */
 
 import {
+  boundKind,
   boundText,
   inBound,
   isMetricKey,
@@ -39,6 +40,7 @@ export type Cond = ValueCond | MetricCond
 export type Joiner = "and" | "or"
 
 export type AtomNode = { kind: "atom"; id: string; cond: Cond; not?: boolean }
+export type MetricAtom = AtomNode & { cond: MetricCond }
 export type GroupNode = {
   kind: "group"
   id: string
@@ -215,6 +217,16 @@ export function replaceNode(
     ...group,
     children: group.children.map((child) => (child.id === id ? next : child)),
   }))
+}
+
+/** Give Condition `id` a new Condition, keeping its NOT. */
+export function replaceCond(
+  root: ChannelFilter,
+  id: string,
+  cond: Cond,
+): ChannelFilter {
+  const node = find(root, id)
+  return node?.kind === "atom" ? replaceNode(root, id, { ...node, cond }) : root
 }
 
 export const setOp = (
@@ -462,11 +474,12 @@ function condText(cond: Cond, names: FilterNames): string {
     case "language":
       return `lang:${quote(cond.value)}`
     case "metric":
-      if (cond.none) return `${cond.metric} = none`
-      if (cond.min !== undefined && cond.max !== undefined)
-        return `${cond.metric} ${cond.min}..${cond.max}`
-      if (cond.min !== undefined) return `${cond.metric} >= ${cond.min}`
-      return `${cond.metric} <= ${cond.max}`
+      return {
+        none: `${cond.metric} = none`,
+        between: `${cond.metric} ${cond.min}..${cond.max}`,
+        gte: `${cond.metric} >= ${cond.min}`,
+        lte: `${cond.metric} <= ${cond.max}`,
+      }[boundKind(cond)]
   }
 }
 

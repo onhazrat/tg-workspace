@@ -5,12 +5,20 @@
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type { MetricCond } from "@/lib/channels/channel-filter"
+import type { MetricAtom, MetricCond } from "@/lib/channels/channel-filter"
 import { ChannelMetricMenu } from "./ChannelMetricMenu"
 
 afterEach(cleanup)
 
-function mount(conditions: MetricCond[] = []) {
+let seq = 0
+const on = (bound: Omit<MetricCond, "type">, not?: boolean): MetricAtom => ({
+  kind: "atom",
+  id: `a${++seq}`,
+  cond: { type: "metric", ...bound },
+  ...(not ? { not } : {}),
+})
+
+function mount(conditions: MetricAtom[] = []) {
   const added: MetricCond[] = []
   render(
     <ChannelMetricMenu
@@ -30,24 +38,21 @@ describe("ChannelMetricMenu", () => {
     expect(button().textContent?.trim()).toBe("Filters")
     expect(button().getAttribute("data-active")).toBe("false")
     cleanup()
-    mount([
-      { type: "metric", metric: "reach", min: 200 },
-      { type: "metric", metric: "reach", max: 50 },
-    ])
+    mount([on({ metric: "reach", min: 200 }), on({ metric: "reach", max: 50 })])
     expect(button().textContent?.trim()).toBe("Filters2")
     expect(button().getAttribute("data-active")).toBe("true")
   })
 
   test("lists all eleven criteria, each with every bound on it", () => {
     mount([
-      { type: "metric", metric: "reach", min: 1200 },
-      { type: "metric", metric: "reach", none: true },
-      { type: "metric", metric: "subscribers", min: 500, max: 20_000 },
+      on({ metric: "reach", min: 1200 }),
+      on({ metric: "reach", none: true }, true),
+      on({ metric: "subscribers", min: 500, max: 20_000 }),
     ])
     fireEvent.click(button())
     expect(screen.getAllByTestId(/^channel-filters-/)).toHaveLength(11)
     expect(screen.getByTestId("channel-filters-reach").textContent).toBe(
-      "Reach≥ 1.2K, no value",
+      "Reach≥ 1.2K, not no value",
     )
     expect(screen.getByTestId("channel-filters-subscribers").textContent).toBe(
       "Subscribers500–20K",
@@ -66,7 +71,7 @@ describe("ChannelMetricMenu", () => {
   })
 
   test("picking a criterion opens its editor, and Add appends a new Condition", () => {
-    const added = mount([{ type: "metric", metric: "reach", min: 200 }])
+    const added = mount([on({ metric: "reach", min: 200 })])
     fireEvent.click(button())
     fireEvent.click(screen.getByTestId("channel-filters-reach"))
     fireEvent.change(screen.getByRole("spinbutton", { name: "Value" }), {

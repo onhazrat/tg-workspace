@@ -1,20 +1,15 @@
 import { useMemo, useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import {
+  type BoundKind,
+  boundKind,
   inBound,
   type MetricBound,
+  type MetricData,
   type MetricKey,
   metric,
 } from "@/lib/channels/channel-metrics"
 import { formatCount } from "@/lib/format-count"
-
-/** What an editor needs of the Account's Channels. */
-export type MetricData = {
-  /** A metric's measured values across the Account's Channels, ascending. */
-  values: (key: MetricKey) => number[]
-  /** Every Channel, measured or not. */
-  total: number
-}
 
 const BINS = 32
 
@@ -26,14 +21,16 @@ const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
 /**
  * 32 bars from the lowest value to the highest. Counts such as subscribers
  * span orders of magnitude, so past two of them the axis is logarithmic, or
- * nearly every Channel would land in the first bar.
+ * nearly every Channel would land in the first bar. A range starting at 0 is
+ * measured from 1 and drawn on log(1 + x), since log 0 has no place.
  */
 function histogram(values: number[]) {
   const lo = values[0]
   const hi = values[values.length - 1]
-  const log = lo >= 0 && hi / Math.max(lo, 1) > 100
-  const f = log ? Math.log1p : (x: number) => x
-  const inv = log ? Math.expm1 : (x: number) => x
+  const log = lo >= 0 && hi / (lo > 0 ? lo : 1) > 100
+  const identity = (x: number) => x
+  const f = !log ? identity : lo > 0 ? Math.log : Math.log1p
+  const inv = !log ? identity : lo > 0 ? Math.exp : Math.expm1
   const span = f(hi) - f(lo)
   const edge = (i: number) => inv(f(lo) + (span * i) / BINS)
   const bins = new Array<number>(BINS).fill(0)
@@ -134,23 +131,12 @@ function Histogram({
   )
 }
 
-type Op = "gte" | "lte" | "between" | "none"
-
-const OPS: [Op, string][] = [
+const OPS: [BoundKind, string][] = [
   ["gte", "at least"],
   ["lte", "at most"],
   ["between", "between"],
   ["none", "no value"],
 ]
-
-const opOf = (b?: MetricBound): Op =>
-  b?.none
-    ? "none"
-    : b?.min !== undefined && b.max !== undefined
-      ? "between"
-      : b?.max !== undefined
-        ? "lte"
-        : "gte"
 
 const num = (text: string) =>
   text.trim() === "" || !Number.isFinite(Number(text))
@@ -158,7 +144,7 @@ const num = (text: string) =>
     : Number(text)
 
 /** The bound the fields spell, or null while it is incomplete. */
-function boundOf(op: Op, a: string, b: string): MetricBound | null {
+function boundOf(op: BoundKind, a: string, b: string): MetricBound | null {
   const [x, y] = [num(a), num(b)]
   if (op === "none") return { none: true }
   if (x === undefined) return null
@@ -191,7 +177,7 @@ export function ChannelMetricEditor({
 }) {
   const m = metric(metricKey)
   const values = useMemo(() => data.values(metricKey), [data, metricKey])
-  const [op, setOp] = useState<Op>(opOf(initial))
+  const [op, setOp] = useState<BoundKind>(boundKind(initial))
   const [a, setA] = useState(() => {
     const start = op === "lte" ? initial?.max : initial?.min
     return String(start ?? (values.length ? nice(median(values)) : ""))
@@ -204,7 +190,7 @@ export function ChannelMetricEditor({
       ? data.total - values.length
       : values.filter((v) => inBound(v, bound)).length
   const select = (next: MetricBound) => {
-    setOp(opOf(next))
+    setOp(boundKind(next))
     setA(String(next.min ?? next.max))
     setB(String(next.max ?? ""))
   }
@@ -284,7 +270,7 @@ export function ChannelMetricEditor({
       <p className="text-[11px] text-app-ink/50">
         A channel with no {m.label.toLowerCase()} does not match a bound.
         {op === "none"
-          ? " No value finds exactly those channels."
+          ? " No value finds exactly those channels, and NOT on it the ones that have one."
           : " Choose no value to find them."}
       </p>
       <TgButton

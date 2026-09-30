@@ -14,7 +14,6 @@ import {
 import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
-import type { MetricData } from "@/components/channel-grid/ChannelMetricEditor"
 import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
@@ -35,12 +34,13 @@ import {
   emptyFilter,
   filterNames,
   funnelledValues,
+  type MetricAtom,
   type MetricCond,
   parseChannelFilter,
   printChannelFilter,
   removeFunnel,
   removeNode,
-  replaceNode,
+  replaceCond,
 } from "@/lib/channels/channel-filter"
 import {
   areAllNamesSelected,
@@ -50,7 +50,11 @@ import {
   getChannelNamesWithTag,
   toggleNamesInSelection,
 } from "@/lib/channels/channel-grid-chips"
-import { type MetricInputs, metricValues } from "@/lib/channels/channel-metrics"
+import {
+  type MetricData,
+  type MetricInputs,
+  metricValues,
+} from "@/lib/channels/channel-metrics"
 import {
   buildChannelPseudoTagChips,
   filterTagsBySearch,
@@ -151,8 +155,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     }),
     [channels, metricInputs],
   )
-  const metricConditions = atoms(channelFilter).flatMap((a) =>
-    a.cond.type === "metric" ? [a.cond] : [],
+  const metricConditions = atoms(channelFilter).filter(
+    (a): a is MetricAtom => a.cond.type === "metric",
   )
 
   const filteredChannels = useMemo(
@@ -483,13 +487,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           names={filterLookup}
           metrics={metricData}
           onRemove={(id) => setChannelFilter(removeNode(channelFilter, id))}
-          onReplace={(id, cond) => {
-            const node = atoms(channelFilter).find((a) => a.id === id)
-            if (node)
-              setChannelFilter(
-                replaceNode(channelFilter, id, { ...node, cond }),
-              )
-          }}
+          onReplace={(id, cond) =>
+            setChannelFilter(replaceCond(channelFilter, id, cond))
+          }
           onClearSearch={() => setChannelSearch("")}
           onClearAll={() => {
             setChannelFilter(emptyFilter())

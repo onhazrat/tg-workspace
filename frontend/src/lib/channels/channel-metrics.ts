@@ -116,6 +116,26 @@ export const metricValues = (
  */
 export type MetricBound = { min?: number; max?: number; none?: true }
 
+/** Which of the four shapes a bound has. */
+export type BoundKind = "gte" | "lte" | "between" | "none"
+
+export const boundKind = (b?: MetricBound): BoundKind =>
+  b?.none
+    ? "none"
+    : b?.min !== undefined && b.max !== undefined
+      ? "between"
+      : b?.max !== undefined
+        ? "lte"
+        : "gte"
+
+/** What a bound editor needs of the Account's Channels. */
+export type MetricData = {
+  /** A metric's measured values across the Account's Channels, ascending. */
+  values: (key: MetricKey) => number[]
+  /** Every Channel, measured or not. */
+  total: number
+}
+
 /** A missing value fails every bound and passes only `none`. */
 export function inBound(value: number | null, bound: MetricBound): boolean {
   if (bound.none) return value === null
@@ -127,10 +147,12 @@ export function inBound(value: number | null, bound: MetricBound): boolean {
 }
 
 /** The bound alone, "≥ 1.2K", "500–20K" or "no value". */
-export function boundText({ min, max, none }: MetricBound): string {
-  if (none) return "no value"
-  if (min !== undefined && max !== undefined)
-    return `${formatCount(min)}–${formatCount(max)}`
-  if (min !== undefined) return `≥ ${formatCount(min)}`
-  return `≤ ${formatCount(max ?? 0)}`
+export function boundText(b: MetricBound): string {
+  const [min, max] = [formatCount(b.min ?? 0), formatCount(b.max ?? 0)]
+  return {
+    none: "no value",
+    between: `${min}–${max}`,
+    gte: `≥ ${min}`,
+    lte: `≤ ${max}`,
+  }[boundKind(b)]
 }

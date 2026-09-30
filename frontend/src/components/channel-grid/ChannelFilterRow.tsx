@@ -18,11 +18,12 @@ import {
   type Joiner,
   type MetricCond,
 } from "@/lib/channels/channel-filter"
+import type { MetricData } from "@/lib/channels/channel-metrics"
 import { BarPopover } from "./BarPopover"
-import { ChannelMetricEditor, type MetricData } from "./ChannelMetricEditor"
+import { ChannelMetricEditor } from "./ChannelMetricEditor"
 
 /** What every chip needs, passed down the tree as one. */
-type Chips = {
+type ChipProps = {
   names: FilterNames
   metrics: MetricData
   onRemove: (id: string) => void
@@ -30,7 +31,7 @@ type Chips = {
   onReplace: (id: string, cond: Cond) => void
 }
 
-type ChannelFilterRowProps = Chips & {
+type ChannelFilterRowProps = ChipProps & {
   filter: ChannelFilter
   search: string
   shownCount: number
@@ -77,7 +78,7 @@ function MetricLabel({
   node: AtomNode
   cond: MetricCond
   label: string
-  chips: Chips
+  chips: ChipProps
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -107,7 +108,7 @@ function MetricLabel({
   )
 }
 
-function Chip({ node, chips }: { node: AtomNode; chips: Chips }) {
+function Chip({ node, chips }: { node: AtomNode; chips: ChipProps }) {
   const { cond } = node
   const label = conditionLabel(cond, chips.names)
   const Icon = ICON[cond.type]
@@ -143,7 +144,7 @@ function Block({
 }: {
   node: FilterNode
   depth: number
-  chips: Chips
+  chips: ChipProps
 }) {
   if (node.kind === "atom") return <Chip node={node} chips={chips} />
   return (
@@ -165,7 +166,7 @@ function Blocks({
 }: {
   node: FilterNode & { kind: "group" }
   depth: number
-  chips: Chips
+  chips: ChipProps
 }) {
   return node.children.map((child, index) => (
     <Fragment key={child.id}>
