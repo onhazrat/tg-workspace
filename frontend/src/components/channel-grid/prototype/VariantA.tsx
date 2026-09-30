@@ -54,7 +54,7 @@ const barButton =
 
 /**
  * Where card size and the AI prompt context live. Everything else in A is the
- * same across A1-A4, so flipping between them isolates those two decisions.
+ * same across A1-A4 (none of them stick; the section scrolls away like today's bar), so flipping between them isolates those two decisions.
  */
 export type ALayout = {
   zoom: "view" | "row1" | "row2" | "strip" | "gridbar"
@@ -103,7 +103,7 @@ export const VariantA: React.FC<
 
   return (
     <>
-      <div className="sticky top-0 z-20 rounded-xl border border-app-ink/10 bg-app-card/95 shadow-sm backdrop-blur">
+      <div className="rounded-xl border border-app-ink/10 bg-app-card shadow-sm">
         {/* Row 1: find, filter, view, follow, sync */}
         <div className="flex flex-wrap items-center gap-2 p-3">
           <div className="relative min-w-[200px] flex-1">
