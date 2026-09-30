@@ -19,6 +19,12 @@ import {
 } from "@/hooks/useSettingGroups"
 import { useSettingsSection } from "@/hooks/useSettingsSection"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
+import {
+  addFunnel,
+  emptyFilter,
+  filterNames,
+  printChannelFilter,
+} from "@/lib/channels/channel-filter"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
   buildActionCommands,
@@ -117,9 +123,17 @@ export function useCommandRegistry(): {
   const { isOffline } = useApiStatus()
   const { startTour } = useGuidedTour()
   const jobToggles = useJobToggles()
-  const { setChannelGroupFilter, setSelectedSettingGroup } =
+  const { setChannelFilterText, setSelectedSettingGroup } =
     useWorkspaceGroupParams()
   const { data: settingGroups = [] } = useSettingGroupsQuery()
+  // The palette's "filter by Setting group" sets a one-Condition filter.
+  const setChannelGroupFilter = (groupId: string) =>
+    setChannelFilterText(
+      printChannelFilter(
+        addFunnel(emptyFilter(), "group", groupId),
+        filterNames(settingGroups),
+      ),
+    )
   const invalidateSettingGroups = useInvalidateSettingGroups()
   const openConfigurationEntry = useCallback(
     (id: string) => {

@@ -94,6 +94,16 @@ export async function channelHasTag(
   )
 }
 
+/**
+ * Deselect every Channel. Row 2 shows its clear button only while something
+ * is selected (CTB-01), so this clicks it only then.
+ */
+export async function clearChannelSelection(page: Page) {
+  const clear = page.getByRole("button", { name: "Clear selection" })
+  if (await clear.isVisible()) await clear.click()
+  await expect(clear).toHaveCount(0)
+}
+
 export async function gotoWorkspace(page: Page, tab = "summary") {
   await page.goto(`/workspace?tab=${tab}`)
   await expect(page.getByTestId("command-palette-button")).toBeVisible()

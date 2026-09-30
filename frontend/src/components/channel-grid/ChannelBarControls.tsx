@@ -1,0 +1,277 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  Grid2x2,
+  Grid3x3,
+  LayoutGrid,
+  LayoutList,
+  Plus,
+  Sparkles,
+} from "lucide-react"
+import { useState } from "react"
+import { Options, Pill, pillClass } from "@/components/PostFilterParts"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
+import type { CardZoom } from "@/lib/channels/card-zoom"
+import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
+import { BarHeading, BarPopover, BarSearch } from "./BarPopover"
+
+/**
+ * Today's single-handle follow field, moved into a popover at the start of
+ * row 1. CTB-05 replaces it with the paste box.
+ */
+export function FollowControl({
+  value,
+  onChange,
+  onFollow,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onFollow: () => void
+}) {
+  return (
+    <BarPopover
+      trigger={
+        <button
+          type="button"
+          id="tour-add-channel"
+          className={pillClass(false)}
+        >
+          <Plus size={12} /> Follow
+        </button>
+      }
+    >
+      <form
+        className="flex gap-1.5 p-1"
+        onSubmit={(e) => {
+          e.preventDefault()
+          onFollow()
+        }}
+      >
+        <div className="relative min-w-0 flex-1">
+          <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center font-bold text-app-ink/40">
+            @
+          </span>
+          <input
+            // biome-ignore lint/a11y/noAutofocus: the popover opens to type a handle.
+            autoFocus
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="telegram_channel"
+            aria-label="Channel to follow"
+            className="h-8 w-full rounded-lg border border-app-ink/15 bg-app-muted pl-7 pr-2 text-xs outline-none focus:border-app-ink/40"
+          />
+        </div>
+        <TgButton type="submit" size="sm" disabled={!value.trim()}>
+          Follow
+        </TgButton>
+      </form>
+    </BarPopover>
+  )
+}
+
+const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
+  { value: "last_updated", label: "Last updated" },
+  { value: "followed_at", label: "Followed at" },
+  { value: "activity_rate", label: "Activity rate" },
+  { value: "reach", label: "Reach" },
+  { value: "total_posts", label: "Total posts" },
+  { value: "posts_in_scope", label: "Posts in scope" },
+  { value: "channel_id", label: "Channel ID" },
+  { value: "channel_name", label: "Channel name" },
+  { value: "next_regular_sync", label: "Next regular sync" },
+  { value: "next_dynamic_sync", label: "Next dynamic sync" },
+  { value: "next_auto_sync", label: "Next auto sync" },
+  { value: "subscribers", label: "Subscribers" },
+]
+
+/** Sort as a dropdown with a search over its options, and its direction. */
+export function SortMenu({
+  sortBy,
+  onSortByChange,
+  sortDirection,
+  onToggleSortDirection,
+  showSubscribers,
+}: {
+  sortBy: ChannelGridSortOption
+  onSortByChange: (value: ChannelGridSortOption) => void
+  sortDirection: "asc" | "desc"
+  onToggleSortDirection: () => void
+  /** Subscribers is offered only when the setting shows them. */
+  showSubscribers: boolean
+}) {
+  const [query, setQuery] = useState("")
+  const options = SORT_OPTIONS.filter(
+    (option) => showSubscribers || option.value !== "subscribers",
+  )
+  const label = options.find((option) => option.value === sortBy)?.label
+  const direction = sortDirection === "asc" ? "ascending" : "descending"
+  return (
+    <div className="flex items-center gap-0.5">
+      <Pill
+        label="Sort"
+        value={label ?? "Last updated"}
+        active={false}
+        width="w-56"
+        testId="channel-sort"
+      >
+        <BarSearch
+          value={query}
+          onChange={setQuery}
+          placeholder="Search sort options..."
+        />
+        <Options
+          options={options.filter((option) =>
+            option.label.toLowerCase().includes(query.trim().toLowerCase()),
+          )}
+          value={sortBy}
+          onChange={onSortByChange}
+        />
+      </Pill>
+      <TgIconButton
+        aria-label={`Sort ${direction}`}
+        tooltip={`Sort ${direction}`}
+        onClick={onToggleSortDirection}
+        className="h-8 w-8"
+      >
+        {sortDirection === "asc" ? (
+          <ArrowUp size={13} />
+        ) : (
+          <ArrowDown size={13} />
+        )}
+      </TgIconButton>
+    </div>
+  )
+}
+
+/** The two AI prompt settings, and how many of them are on. */
+export function AiContextPill({
+  includeBio,
+  onIncludeBioChange,
+  includeTags,
+  onIncludeTagsChange,
+}: {
+  includeBio: boolean
+  onIncludeBioChange: (value: boolean) => void
+  includeTags: boolean
+  onIncludeTagsChange: (value: boolean) => void
+}) {
+  const on = Number(includeBio) + Number(includeTags)
+  const check = (
+    label: string,
+    checked: boolean,
+    onChange: (value: boolean) => void,
+  ) => (
+    <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-app-ink/5">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="accent-app-ink"
+      />
+      {label}
+    </label>
+  )
+  return (
+    <BarPopover
+      align="end"
+      trigger={
+        <button
+          type="button"
+          data-testid="channel-ai-context"
+          data-active={on > 0}
+          className={pillClass(on > 0)}
+        >
+          <Sparkles size={12} /> AI context
+          {on > 0 && (
+            <span className="rounded-full bg-app-bg/20 px-1.5 text-[10px] tabular-nums">
+              {on}
+            </span>
+          )}
+          <ChevronDown size={12} className="opacity-60" />
+        </button>
+      }
+    >
+      <BarHeading>What AI prompts read about each channel</BarHeading>
+      {check("Channel bio", includeBio, onIncludeBioChange)}
+      {check("Current tags", includeTags, onIncludeTagsChange)}
+    </BarPopover>
+  )
+}
+
+const SIZES: { zoom: CardZoom; label: string; Icon: typeof Grid3x3 }[] = [
+  { zoom: -2, label: "Tiles", Icon: Grid3x3 },
+  { zoom: -1, label: "Compact cards", Icon: LayoutGrid },
+  { zoom: 0, label: "Cards", Icon: Grid2x2 },
+  { zoom: 1, label: "Detailed cards", Icon: LayoutList },
+]
+
+/** The card zoom setting as a visible four-way switch. */
+export function CardSizeSwitch({
+  zoom,
+  onZoomChange,
+}: {
+  zoom: CardZoom
+  onZoomChange: (zoom: CardZoom) => void
+}) {
+  return (
+    <fieldset
+      aria-label="Card size"
+      className="m-0 inline-flex items-center gap-0.5 rounded-lg border border-app-ink/10 bg-app-muted/50 p-0.5"
+    >
+      {SIZES.map(({ zoom: size, label, Icon }) => (
+        <TgIconButton
+          key={size}
+          aria-label={label}
+          tooltip={label}
+          aria-pressed={zoom === size}
+          onClick={() => onZoomChange(size)}
+          className={
+            zoom === size
+              ? "bg-app-ink text-app-bg hover:bg-app-ink hover:text-app-bg"
+              : undefined
+          }
+        >
+          <Icon size={13} />
+        </TgIconButton>
+      ))}
+    </fieldset>
+  )
+}
+
+/** A layout setting as an on/off pill. */
+export function BarToggle({
+  on,
+  onClick,
+  label,
+  title,
+  testId,
+}: {
+  on: boolean
+  onClick: () => void
+  label: string
+  title: string
+  testId?: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      title={title}
+      data-testid={testId}
+      onClick={onClick}
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold ${
+        on
+          ? "border-app-ink/50 bg-app-ink/10 text-app-ink"
+          : "border-app-ink/10 text-app-ink/50 hover:text-app-ink"
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 rounded-full ${on ? "bg-green-500" : "bg-app-ink/25"}`}
+      />
+      {label}
+    </button>
+  )
+}

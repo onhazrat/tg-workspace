@@ -3,14 +3,15 @@ import { getRouteApi } from "@tanstack/react-router"
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export function useWorkspaceGroupParams() {
-  const { channelGroup, settingGroup } = workspaceRoute.useSearch()
+  const { channelFilter, settingGroup } = workspaceRoute.useSearch()
   const navigate = workspaceRoute.useNavigate()
 
-  const setChannelGroupFilter = (groupId: string) => {
+  /** The Channel filter's text form; blank removes it from the URL. */
+  const setChannelFilterText = (text: string) => {
     navigate({
       search: (prev) => ({
         ...prev,
-        channelGroup: groupId || undefined,
+        channelFilter: text || undefined,
       }),
       replace: true,
     })
@@ -27,8 +28,8 @@ export function useWorkspaceGroupParams() {
   }
 
   return {
-    channelGroupFilter: channelGroup ?? "",
-    setChannelGroupFilter,
+    channelFilterText: channelFilter ?? "",
+    setChannelFilterText,
     selectedSettingGroupId: settingGroup ?? "",
     setSelectedSettingGroup,
   }

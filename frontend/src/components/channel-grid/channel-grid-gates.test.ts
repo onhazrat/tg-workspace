@@ -7,9 +7,6 @@ const idle: ChannelGridFacts = {
   summarizing: false,
   scrapingCount: 0,
   isOffline: false,
-  languageFilter: "",
-  groupFilter: "",
-  search: "",
 }
 const gates = (over: Partial<ChannelGridFacts> = {}) =>
   channelGridGates({ ...idle, ...over })
@@ -21,7 +18,6 @@ describe("channelGridGates", () => {
       isTrimDisabled: false,
       isScrapeSelectedDisabled: false,
       isScrapeAllDisabled: false,
-      isFilteringActive: false,
     })
   })
 
@@ -54,12 +50,5 @@ describe("channelGridGates", () => {
     const g = gates({ selectedCount: 0 })
     expect(g.isScrapeSelectedDisabled).toBe(true)
     expect(g.isScrapeAllDisabled).toBe(false)
-  })
-
-  test("any language, group or non-blank search counts as filtering", () => {
-    expect(gates({ languageFilter: "fa" }).isFilteringActive).toBe(true)
-    expect(gates({ groupFilter: "g1" }).isFilteringActive).toBe(true)
-    expect(gates({ search: "news" }).isFilteringActive).toBe(true)
-    expect(gates({ search: "   " }).isFilteringActive).toBe(false)
   })
 })

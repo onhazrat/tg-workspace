@@ -16,7 +16,7 @@ export type ChipSelectionState = {
  */
 export function getChipSelectionState(
   names: string[],
-  selectedChannels: Set<string>,
+  selectedChannels: ReadonlySet<string>,
 ): ChipSelectionState {
   const selectedCount = names.filter((name) =>
     selectedChannels.has(name),
@@ -36,7 +36,7 @@ export function getChipSelectionState(
  */
 export function areAllNamesSelected(
   names: string[],
-  selectedChannels: Set<string>,
+  selectedChannels: ReadonlySet<string>,
 ): boolean {
   return names.every((name) => selectedChannels.has(name))
 }
@@ -90,6 +90,14 @@ export function getChannelNamesInGroup(
         (!excludeFrozen || !channel.isFrozen),
     )
     .map((channel) => channel.name)
+}
+
+/** Names of channels in a Language, for the Languages dropdown. */
+export function getChannelNamesInLanguage(
+  channels: Channel[],
+  code: string,
+): string[] {
+  return channels.filter((c) => c.language === code).map((c) => c.name)
 }
 
 /** Unique tags across all channels, ordered for the Channels tab chip bar. */

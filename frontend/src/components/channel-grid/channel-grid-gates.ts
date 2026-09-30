@@ -1,7 +1,7 @@
 /**
  * What the Channels toolbar allows right now. Every gate reads the same few
  * facts: whether the API is reachable, whether a sync or a summary is running,
- * and what is selected or filtered.
+ * and what is selected.
  */
 export interface ChannelGridFacts {
   trimCount: string
@@ -9,9 +9,6 @@ export interface ChannelGridFacts {
   summarizing: boolean
   scrapingCount: number
   isOffline: boolean
-  languageFilter: string
-  groupFilter: string
-  search: string
 }
 
 export interface ChannelGridGates {
@@ -20,7 +17,6 @@ export interface ChannelGridGates {
   isTrimDisabled: boolean
   isScrapeSelectedDisabled: boolean
   isScrapeAllDisabled: boolean
-  isFilteringActive: boolean
 }
 
 export function channelGridGates(facts: ChannelGridFacts): ChannelGridGates {
@@ -35,9 +31,5 @@ export function channelGridGates(facts: ChannelGridFacts): ChannelGridGates {
     isTrimDisabled: nothingSelected || !isTrimCountValid || working,
     isScrapeSelectedDisabled: isScrapeAllDisabled || nothingSelected,
     isScrapeAllDisabled,
-    isFilteringActive:
-      facts.languageFilter.length > 0 ||
-      facts.groupFilter.length > 0 ||
-      facts.search.trim().length > 0,
   }
 }

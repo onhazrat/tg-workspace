@@ -219,6 +219,7 @@ export interface CommandContext {
   databaseTables: string[]
   settingGroups: import("@/types").ChannelSettingGroup[]
   invalidateSettingGroups: () => Promise<void>
+  /** Sets the Channel filter to that one Setting group. */
   setChannelGroupFilter: (groupId: string) => void
   setSelectedSettingGroup: (groupId: string) => void
 }
