@@ -80,42 +80,110 @@ const TriggerButton: React.FC<
   </button>
 )
 
-/** 24 bins across the known range, the part inside the bound drawn solid. */
-const Histogram: React.FC<{ values: number[]; min?: number; max?: number }> = ({
-  values,
-  min,
-  max,
-}) => {
+const BINS = 32
+
+/** Two significant figures, so a dragged edge reads 1200, not 1187.43. */
+const nice = (v: number) => Number(v.toPrecision(2))
+
+/**
+ * The metric's spread across your channels, and a brush over it: drag (or
+ * click a bar) to set the bound. Counts like subscribers span orders of
+ * magnitude, so the axis goes logarithmic when the range is that wide, or
+ * every channel would land in the first bar.
+ */
+const HistogramBrush: React.FC<{
+  values: number[]
+  min?: number
+  max?: number
+  /** undefined at an end means that end is open. */
+  onSelect: (lo?: number, hi?: number) => void
+}> = ({ values, min, max, onSelect }) => {
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null)
+  const [hover, setHover] = useState<number | null>(null)
   if (values.length === 0)
-    return <div className="h-6 text-[9px] text-app-ink/40">no data</div>
+    return <div className="h-16 text-[10px] text-app-ink/40">no data</div>
   const lo = values[0]
   const hi = values[values.length - 1]
-  const bins = new Array(24).fill(0)
+  const log = lo >= 0 && hi / Math.max(lo, 1) > 100
+  const f = log ? Math.log1p : (x: number) => x
+  const inv = log ? Math.expm1 : (x: number) => x
+  const flo = f(lo)
+  const fhi = f(hi)
+  const edge = (i: number) => inv(flo + ((fhi - flo) * i) / BINS)
   const binOf = (v: number) =>
-    hi === lo ? 0 : Math.min(23, Math.floor(((v - lo) / (hi - lo)) * 24))
+    fhi === flo
+      ? 0
+      : Math.min(BINS - 1, Math.floor(((f(v) - flo) / (fhi - flo)) * BINS))
+  const bins = new Array(BINS).fill(0)
   for (const v of values) bins[binOf(v)]++
   const peak = Math.max(...bins)
+
+  const indexAt = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    return Math.min(
+      BINS - 1,
+      Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * BINS)),
+    )
+  }
+  const commit = (from: number, to: number) => {
+    const s = Math.min(from, to)
+    const t = Math.max(from, to)
+    onSelect(
+      s === 0 ? undefined : nice(edge(s)),
+      t === BINS - 1 ? undefined : nice(edge(t + 1)),
+    )
+  }
+  const selected = (i: number) =>
+    drag
+      ? i >= Math.min(drag.from, drag.to) && i <= Math.max(drag.from, drag.to)
+      : (min === undefined || edge(i + 1) > min) &&
+        (max === undefined || edge(i) <= max)
+  const shown = drag ? drag.to : hover
+
   return (
-    <div className="flex h-6 items-end gap-px">
-      {bins.map((n, i) => {
-        const binLo = lo + ((hi - lo) * i) / 24
-        const binHi = lo + ((hi - lo) * (i + 1)) / 24
-        const inside =
-          (min === undefined || binHi >= min) &&
-          (max === undefined || binLo <= max)
-        return (
+    <div className="space-y-1">
+      <div
+        role="presentation"
+        className="flex h-16 cursor-crosshair touch-none select-none items-end gap-px rounded-md bg-app-ink/[0.03] px-0.5"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          const i = indexAt(e)
+          setDrag({ from: i, to: i })
+        }}
+        onPointerMove={(e) => {
+          const i = indexAt(e)
+          setHover(i)
+          if (drag) setDrag({ ...drag, to: i })
+        }}
+        onPointerUp={() => {
+          if (drag) commit(drag.from, drag.to)
+          setDrag(null)
+        }}
+        onPointerLeave={() => setHover(null)}
+      >
+        {bins.map((n, i) => (
           <div
             key={i}
             className={cn(
-              "flex-1 rounded-t-[1px]",
-              inside ? "bg-app-ink/60" : "bg-app-ink/15",
+              "flex-1 rounded-t-[2px]",
+              selected(i) ? "bg-app-ink/70" : "bg-app-ink/15",
+              shown === i && "ring-1 ring-app-ink/60",
             )}
             style={{
-              height: `${n === 0 ? 0 : Math.max(8, (n / peak) * 100)}%`,
+              height: `${n === 0 ? 2 : Math.max(8, (n / peak) * 100)}%`,
             }}
           />
-        )
-      })}
+        ))}
+      </div>
+      <div className="flex justify-between text-[9px] tabular-nums text-app-ink/45">
+        <span>{formatNumber(lo)}</span>
+        <span>
+          {shown !== null
+            ? `${bins[shown]} channels · ${formatNumber(nice(edge(shown)))}–${formatNumber(nice(edge(shown + 1)))}`
+            : `drag across the bars to select${log ? " · log scale" : ""}`}
+        </span>
+        <span>{formatNumber(hi)}</span>
+      </div>
     </div>
   )
 }
@@ -196,7 +264,24 @@ export const NumericEditor: React.FC<{
           <span className="font-normal text-app-ink/45">{m.unit}</span>
         )}
       </div>
-      <Histogram values={values} min={min} max={max} />
+      <HistogramBrush
+        values={values}
+        min={min}
+        max={max}
+        onSelect={(lo, hi) => {
+          if (lo !== undefined && hi !== undefined) {
+            setOp("between")
+            setA(String(lo))
+            setB(String(hi))
+          } else if (hi !== undefined) {
+            setOp("lte")
+            setA(String(hi))
+          } else {
+            setOp("gte")
+            setA(lo === undefined ? "" : String(lo))
+          }
+        }}
+      />
       <RangeHint values={values} />
       <div className="flex gap-1">
         {(
