@@ -53,12 +53,22 @@ const useMetricSearch = () => {
   return { shown, input }
 }
 
-const TriggerButton: React.FC<{
-  label: string
-  count: number
-  icon?: React.ReactNode
-}> = ({ label, count, icon }) => (
-  <button type="button" className={cn(trigger, count > 0 && activeTrigger)}>
+/**
+ * Radix's `asChild` trigger hands its child the click handler, ref and aria
+ * state as props, so they must reach the <button> or the popover never opens.
+ */
+const TriggerButton: React.FC<
+  React.ComponentProps<"button"> & {
+    label: string
+    count: number
+    icon?: React.ReactNode
+  }
+> = ({ label, count, icon, className, ...buttonProps }) => (
+  <button
+    type="button"
+    {...buttonProps}
+    className={cn(trigger, count > 0 && activeTrigger, className)}
+  >
     {icon ?? <SlidersHorizontal size={13} />}
     {label}
     {count > 0 && (
