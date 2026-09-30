@@ -361,7 +361,10 @@ export async function mockDiscoverForwardPosts(
   await page.route("**/api/v1/data/posts/counts**", async (route) => {
     // Per-channel scope counts; the carrier is the only channel in scope here.
     await route.fulfill({
-      json: { [fixture.carrierName]: posts.length },
+      json: {
+        counts: { [fixture.carrierName]: posts.length },
+        tooNewToJudge: 0,
+      },
     })
   })
 
