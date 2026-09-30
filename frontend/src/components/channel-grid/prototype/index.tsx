@@ -18,7 +18,7 @@ export const PROTOTYPE_VARIANTS = [
   { key: "A5", name: "Size + layout on row 2, AI pill" },
   { key: "F1", name: "A5 + always-visible follow field" },
   { key: "F2", name: "A5 + search that offers to follow" },
-  { key: "F3", name: "A5 + paste many to follow" },
+  { key: "F3", name: "A5 + paste many to follow, left of search" },
   { key: "F4", name: "A5 + follow row that opens under the bar" },
 ]
 
@@ -41,7 +41,13 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
     display: "row2",
     follow: "omnibox",
   }),
-  F3: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "bulk" }),
+  F3: aVariant({
+    zoom: "row2",
+    ai: "pill",
+    display: "row2",
+    follow: "bulk",
+    followAt: "start",
+  }),
   F4: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "row" }),
 }
 

@@ -184,7 +184,7 @@ const BulkFollow: React.FC<ChannelControlsProps> = (p) => {
   const fresh = parsed.filter((x) => x.status === "new")
   return (
     <Pop
-      align="end"
+      align="start"
       trigger={
         <TgButton variant="secondary" size="sm" className="h-9 gap-1.5">
           <Plus size={13} />

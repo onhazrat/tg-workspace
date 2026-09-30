@@ -67,6 +67,8 @@ export type ALayout = {
   /** Where "selected first" and "sort rank" go; defaults to following zoom. */
   display?: "row2"
   follow?: FollowLayout
+  /** "start" puts the follow control left of the search. */
+  followAt?: "start"
 }
 
 export const VariantA: React.FC<
@@ -74,6 +76,14 @@ export const VariantA: React.FC<
 > = ({ layout = { zoom: "view", ai: "view" }, ...p }) => {
   const selectedCount = p.selectedChannels.size
   const [followRowOpen, setFollowRowOpen] = useState(false)
+  const followControl = (
+    <FollowControl
+      {...p}
+      layout={layout.follow ?? "pop"}
+      rowOpen={followRowOpen}
+      onRowOpenChange={setFollowRowOpen}
+    />
+  )
   // Grouping and sort rank follow card size out of the View pill.
   const displayIn =
     layout.display ??
@@ -113,6 +123,7 @@ export const VariantA: React.FC<
       <div className="rounded-xl border border-app-ink/10 bg-app-card shadow-sm">
         {/* Row 1: find, filter, view, follow, sync */}
         <div className="flex flex-wrap items-center gap-2 p-3">
+          {layout.followAt === "start" && followControl}
           {layout.follow === "omnibox" ? (
             <OmniSearch {...p} />
           ) : (
@@ -303,12 +314,7 @@ export const VariantA: React.FC<
 
           <div className="mx-1 h-6 w-px bg-app-ink/10" />
 
-          <FollowControl
-            {...p}
-            layout={layout.follow ?? "pop"}
-            rowOpen={followRowOpen}
-            onRowOpenChange={setFollowRowOpen}
-          />
+          {layout.followAt !== "start" && followControl}
           <TgButton
             size="sm"
             className="h-9 gap-1.5"
