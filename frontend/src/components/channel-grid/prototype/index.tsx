@@ -15,9 +15,7 @@ export const PROTOTYPE_VARIANTS = [
   { key: "A5", name: "Size + layout on row 2, AI pill" },
   { key: "F1", name: "A5 + always-visible follow field" },
   { key: "F3", name: "A5 + paste many to follow, left of search" },
-  { key: "N1", name: "F3 + numbers menu with ranges" },
-  { key: "N2", name: "F3 + filter builder, editable chips" },
-  { key: "N3", name: "F3 + percentile buckets" },
+  { key: "N2", name: "F3 + Metrics dropdown, active-filters bar" },
 ]
 
 const aVariant = (layout: ALayout): React.FC<ChannelControlsProps> =>
@@ -39,9 +37,7 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   A5: aVariant({ zoom: "row2", ai: "pill", display: "row2" }),
   F1: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "inline" }),
   F3: aVariant(F3_LAYOUT),
-  N1: aVariant({ ...F3_LAYOUT, numeric: "ranges" }),
   N2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
-  N3: aVariant({ ...F3_LAYOUT, numeric: "buckets" }),
 }
 
 /** The variant key in the URL, or "current". */

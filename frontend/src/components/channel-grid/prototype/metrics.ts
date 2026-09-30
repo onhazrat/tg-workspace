@@ -88,8 +88,6 @@ export type NumericFilter = {
   metric: MetricKey
   min?: number
   max?: number
-  /** How it was picked, e.g. "top 25%", when not typed as numbers. */
-  note?: string
 }
 
 export function passesNumericFilters(
@@ -133,7 +131,6 @@ export function formatNumber(v: number): string {
 
 export function describeFilter(f: NumericFilter): string {
   const m = metric(f.metric)
-  if (f.note) return `${m.label}: ${f.note}`
   if (f.min !== undefined && f.max !== undefined)
     return `${m.label} ${formatNumber(f.min)}–${formatNumber(f.max)}`
   if (f.min !== undefined) return `${m.label} ≥ ${formatNumber(f.min)}`

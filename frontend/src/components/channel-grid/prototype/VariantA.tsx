@@ -38,12 +38,7 @@ import {
 } from "@/lib/channels/channel-grid-chips"
 import { cn } from "@/lib/utils"
 import { FollowControl, type FollowLayout } from "./Follow"
-import {
-  ActiveFiltersBar,
-  BucketMenu,
-  FilterBuilder,
-  RangeMenu,
-} from "./Numeric"
+import { ActiveFiltersBar, FilterBuilder } from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
 import {
   type ChannelControlsProps,
@@ -71,7 +66,7 @@ export type ALayout = {
   /** "start" puts the follow control left of the search. */
   followAt?: "start"
   /** Numeric filtering control on row 1; with it, an active-filters bar. */
-  numeric?: "ranges" | "builder" | "buckets"
+  numeric?: "builder"
 }
 
 export const VariantA: React.FC<
@@ -192,9 +187,7 @@ export const VariantA: React.FC<
             />
           )}
 
-          {layout.numeric === "ranges" && <RangeMenu {...p} />}
           {layout.numeric === "builder" && <FilterBuilder {...p} />}
-          {layout.numeric === "buckets" && <BucketMenu {...p} />}
           <div className="flex">
             <Pop
               trigger={

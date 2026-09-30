@@ -1,9 +1,9 @@
 /**
- * PROTOTYPE, throwaway: three ways to filter on numbers (N1 range menu, N2
- * filter builder, N3 percentile buckets), and the active-filters bar they share.
+ * PROTOTYPE, throwaway: the Metrics filter (N2, the winner over a range menu
+ * and percentile buckets, which live in 0c6d6e8) and the active-filters bar.
  * One bound per metric; setting a metric again replaces its bound.
  */
-import { ChevronDown, Plus, Search, SlidersHorizontal, X } from "lucide-react"
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
@@ -128,115 +128,19 @@ const RangeHint: React.FC<{ values: number[] }> = ({ values }) =>
     </span>
   ) : null
 
-const MinMax: React.FC<{
-  filter?: NumericFilter
-  values: number[]
-  onChange: (min?: number, max?: number) => void
-}> = ({ filter, values, onChange }) => (
-  <div className="flex items-center gap-1">
-    <input
-      type="number"
-      aria-label="Minimum"
-      value={filter?.min ?? ""}
-      placeholder={values.length ? `min ${formatNumber(values[0])}` : "min"}
-      onChange={(e) => onChange(parseBound(e.target.value), filter?.max)}
-      className="h-7 w-24 rounded-md border border-app-ink/15 bg-app-card px-2 text-[11px] tabular-nums"
-    />
-    <span className="text-app-ink/40">–</span>
-    <input
-      type="number"
-      aria-label="Maximum"
-      value={filter?.max ?? ""}
-      placeholder={
-        values.length ? `max ${formatNumber(values[values.length - 1])}` : "max"
-      }
-      onChange={(e) => onChange(filter?.min, parseBound(e.target.value))}
-      className="h-7 w-24 rounded-md border border-app-ink/15 bg-app-card px-2 text-[11px] tabular-nums"
-    />
-  </div>
-)
-
-/** N1: every metric at once, each with its distribution and a min/max pair. */
-export const RangeMenu: React.FC<ChannelControlsProps> = (p) => {
-  const { shown, input } = useMetricSearch()
-  return (
-    <Pop
-      trigger={
-        <TriggerButton label="Numbers" count={p.numericFilters.length} />
-      }
-      className="w-[26rem]"
-    >
-      {input}
-      <div className="flex items-center justify-between px-2 pb-1 pt-1 text-[9px] font-bold uppercase tracking-widest text-app-ink/45">
-        <span>{p.filteredCount} channels match</span>
-        {p.numericFilters.length > 0 && (
-          <button
-            type="button"
-            onClick={() => p.onNumericFiltersChange([])}
-            className="normal-case tracking-normal text-app-ink/60 hover:text-app-ink"
-          >
-            Clear numbers
-          </button>
-        )}
-      </div>
-      {shown.map((m) => {
-        const values = metricValues(m.key, p.channels, p.metricInputs)
-        const f = p.numericFilters.find((x) => x.metric === m.key)
-        return (
-          <div
-            key={m.key}
-            className={cn(
-              "space-y-1 rounded-md px-2 py-2",
-              f ? "bg-app-ink/5" : "hover:bg-app-ink/[0.03]",
-            )}
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[11px] font-semibold">
-                {m.label}
-                {m.unit && (
-                  <span className="ml-1 font-normal text-app-ink/45">
-                    {m.unit}
-                  </span>
-                )}
-              </span>
-              <RangeHint values={values} />
-            </div>
-            <Histogram values={values} min={f?.min} max={f?.max} />
-            <div className="flex items-center justify-between">
-              <MinMax
-                filter={f}
-                values={values}
-                onChange={(min, max) =>
-                  p.onNumericFiltersChange(
-                    withFilter(p.numericFilters, { metric: m.key, min, max }),
-                  )
-                }
-              />
-              {f && (
-                <button
-                  type="button"
-                  aria-label={`Clear ${m.label}`}
-                  onClick={() =>
-                    p.onNumericFiltersChange(
-                      withoutMetric(p.numericFilters, m.key),
-                    )
-                  }
-                  className="grid h-6 w-6 place-items-center rounded hover:bg-app-ink/10"
-                >
-                  <X size={11} />
-                </button>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </Pop>
-  )
-}
+/** The bound alone, e.g. "≥ 1.2k", for the list; "" when unset. */
+const boundText = (f?: NumericFilter) =>
+  !f
+    ? ""
+    : f.min !== undefined && f.max !== undefined
+      ? `${formatNumber(f.min)}–${formatNumber(f.max)}`
+      : f.min !== undefined
+        ? `≥ ${formatNumber(f.min)}`
+        : `≤ ${formatNumber(f.max ?? 0)}`
 
 type Op = "gte" | "lte" | "between"
 
-/** N2's editor: one metric, an operator, a value or two. */
+/** The Metrics editor: one metric, an operator, a value or two. */
 export const NumericEditor: React.FC<{
   p: ChannelControlsProps
   metricKey: MetricKey
@@ -344,7 +248,10 @@ export const NumericEditor: React.FC<{
   )
 }
 
-/** N2: "+ Filter" picks a criterion, then an operator and a value. */
+/**
+ * "Metrics ▾" lists the numeric criteria, each with its current bound; picking
+ * one opens its editor in place.
+ */
 export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<MetricKey | null>(null)
@@ -358,10 +265,7 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
       open={open}
       onOpenChange={(o) => (o ? setOpen(true) : close())}
       trigger={
-        <button type="button" className={trigger}>
-          <Plus size={13} />
-          Filter
-        </button>
+        <TriggerButton label="Metrics" count={p.numericFilters.length} />
       }
       className="w-72"
     >
@@ -385,9 +289,9 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
               className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[11px] font-semibold hover:bg-app-ink/5"
             >
               {m.label}
-              {p.numericFilters.some((f) => f.metric === m.key) && (
-                <span className="text-[9px] text-app-ink/45">set</span>
-              )}
+              <span className="text-[10px] tabular-nums text-app-ink/50">
+                {boundText(p.numericFilters.find((f) => f.metric === m.key))}
+              </span>
             </button>
           ))}
         </>
@@ -395,108 +299,6 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
     </Pop>
   )
 }
-
-const BUCKETS: { note: string; lo?: number; hi?: number }[] = [
-  { note: "top 10%", lo: 0.9 },
-  { note: "top 25%", lo: 0.75 },
-  { note: "middle 50%", lo: 0.25, hi: 0.75 },
-  { note: "bottom 25%", hi: 0.25 },
-  { note: "bottom 10%", hi: 0.1 },
-]
-
-/** N3: relative buckets per metric, turned into numbers when picked. */
-export const BucketMenu: React.FC<ChannelControlsProps> = (p) => {
-  const { shown, input } = useMetricSearch()
-  const [custom, setCustom] = useState<MetricKey | null>(null)
-  return (
-    <Pop
-      trigger={<TriggerButton label="Ranges" count={p.numericFilters.length} />}
-      className="w-[28rem]"
-    >
-      {input}
-      <PopLabel>Relative to the channels you follow</PopLabel>
-      {shown.map((m) => {
-        const values = metricValues(m.key, p.channels, p.metricInputs)
-        const f = p.numericFilters.find((x) => x.metric === m.key)
-        const set = (next?: NumericFilter) =>
-          p.onNumericFiltersChange(
-            next
-              ? withFilter(p.numericFilters, next)
-              : withoutMetric(p.numericFilters, m.key),
-          )
-        return (
-          <div key={m.key} className="rounded-md px-2 py-1.5">
-            <div className="mb-1 flex items-baseline justify-between">
-              <span className="text-[11px] font-semibold">{m.label}</span>
-              <RangeHint values={values} />
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <Bucket on={!f} onClick={() => set()}>
-                any
-              </Bucket>
-              {BUCKETS.map((b) => (
-                <Bucket
-                  key={b.note}
-                  on={f?.note === b.note}
-                  disabled={values.length === 0}
-                  onClick={() =>
-                    set({
-                      metric: m.key,
-                      note: b.note,
-                      min:
-                        b.lo === undefined ? undefined : quantile(values, b.lo),
-                      max:
-                        b.hi === undefined ? undefined : quantile(values, b.hi),
-                    })
-                  }
-                >
-                  {b.note}
-                </Bucket>
-              ))}
-              <Bucket
-                on={custom === m.key || (!!f && !f.note)}
-                onClick={() => setCustom(custom === m.key ? null : m.key)}
-              >
-                custom…
-              </Bucket>
-            </div>
-            {custom === m.key && (
-              <div className="mt-1.5">
-                <MinMax
-                  filter={f?.note ? undefined : f}
-                  values={values}
-                  onChange={(min, max) => set({ metric: m.key, min, max })}
-                />
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </Pop>
-  )
-}
-
-const Bucket: React.FC<{
-  on: boolean
-  onClick: () => void
-  disabled?: boolean
-  children: React.ReactNode
-}> = ({ on, onClick, disabled, children }) => (
-  <button
-    type="button"
-    aria-pressed={on}
-    disabled={disabled}
-    onClick={onClick}
-    className={cn(
-      "rounded-full border px-2.5 py-0.5 text-[10px] font-semibold disabled:opacity-30",
-      on
-        ? "border-app-ink bg-app-ink text-app-bg"
-        : "border-app-ink/15 hover:border-app-ink/40",
-    )}
-  >
-    {children}
-  </button>
-)
 
 /**
  * Every filter in force, whatever set it, each with its own ×, and one
@@ -615,7 +417,7 @@ const Chip: React.FC<{
   </span>
 )
 
-/** N2: a numeric chip reopens its editor when clicked. */
+/** A numeric chip reopens its editor when clicked. */
 const EditableNumberChip: React.FC<{
   p: ChannelControlsProps
   filter: NumericFilter
