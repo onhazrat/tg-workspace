@@ -36,7 +36,9 @@ import {
   getChannelNamesInGroup,
   getChannelNamesWithTag,
 } from "@/lib/channels/channel-grid-chips"
+import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { cn } from "@/lib/utils"
+import type { Channel } from "@/types"
 import { FollowControl, type FollowLayout } from "./Follow"
 import { ActiveFiltersBar, FilterBuilder } from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
@@ -76,6 +78,7 @@ export const VariantA: React.FC<
   ChannelControlsProps & { layout?: ALayout }
 > = ({ layout = { zoom: "view", ai: "view" }, ...p }) => {
   const selectedCount = p.selectedChannels.size
+  const tagSuggestions = bulkTagSuggestions(p.channels, p.selectedChannels)
   const followControl = <FollowControl {...p} layout={layout.follow ?? "pop"} />
   // Grouping and sort rank follow card size out of the View pill.
   const displayIn =
@@ -499,6 +502,7 @@ export const VariantA: React.FC<
               >
                 <PopLabel>Add to {selectedCount} channels</PopLabel>
                 <InlineField
+                  suggestions={tagSuggestions.add}
                   value={p.bulkTagInput}
                   onChange={p.onBulkTagInputChange}
                   onSubmit={p.onBulkAddTag}
@@ -508,6 +512,7 @@ export const VariantA: React.FC<
                 />
                 <PopLabel>Remove from {selectedCount} channels</PopLabel>
                 <InlineField
+                  suggestions={tagSuggestions.remove}
                   value={p.bulkRemoveTagInput}
                   onChange={p.onBulkRemoveTagInputChange}
                   onSubmit={p.onBulkRemoveTag}
@@ -711,6 +716,44 @@ export const ZoomStepper: React.FC<{
   </div>
 )
 
+export type Suggestion = { tag: string; hint: string }
+
+/**
+ * Add: every tag in use, most used first, minus those every selected channel
+ * already has. Remove: tags on the selection, most common there first.
+ */
+export function bulkTagSuggestions(
+  channels: Channel[],
+  selected: Set<string>,
+): { add: Suggestion[]; remove: Suggestion[] } {
+  const all = new Map<string, number>()
+  const onSel = new Map<string, number>()
+  for (const c of channels)
+    for (const t of getTagNames(c.tags)) {
+      all.set(t, (all.get(t) ?? 0) + 1)
+      if (selected.has(c.name)) onSel.set(t, (onSel.get(t) ?? 0) + 1)
+    }
+  const byCount = (m: Map<string, number>) =>
+    [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  return {
+    add: byCount(all)
+      .filter(([t]) => (onSel.get(t) ?? 0) < selected.size)
+      .map(([tag, n]) => ({
+        tag,
+        hint: `on ${n} channel${n === 1 ? "" : "s"}, ${onSel.get(tag) ?? 0} of these`,
+      })),
+    remove: byCount(onSel).map(([tag, n]) => ({
+      tag,
+      hint: `on ${n} of the ${selected.size} selected`,
+    })),
+  }
+}
+
+/**
+ * A field with ghost-text completion: the best suggestion that starts with
+ * what you typed shows greyed after the caret. Tab or → at the end accepts
+ * it; Enter submits what is typed. Suggestions arrive best first.
+ */
 export const InlineField: React.FC<{
   value: string
   onChange: (v: string) => void
@@ -718,33 +761,93 @@ export const InlineField: React.FC<{
   placeholder: string
   button: string
   testId?: string
-}> = ({ value, onChange, onSubmit, placeholder, button, testId }) => (
-  <form
-    className="flex gap-1.5 px-1"
-    onSubmit={(e) => {
-      e.preventDefault()
-      onSubmit()
-    }}
-  >
-    <TgInput
-      variant="muted"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      data-testid={testId && `${testId}-input`}
-      className="h-8 py-0 text-[11px]"
-    />
-    <TgButton
-      type="submit"
-      size="sm"
-      variant="secondary"
-      disabled={!value.trim()}
-      data-testid={testId && `${testId}-button`}
+  suggestions?: Suggestion[]
+}> = ({
+  value,
+  onChange,
+  onSubmit,
+  placeholder,
+  button,
+  testId,
+  suggestions,
+}) => {
+  const typed = value.toLowerCase()
+  const match = typed
+    ? suggestions?.find(
+        (s) =>
+          s.tag.toLowerCase().startsWith(typed) && s.tag.length > value.length,
+      )
+    : undefined
+  const exact = suggestions?.find((s) => s.tag.toLowerCase() === typed.trim())
+  const accept = () => match && onChange(match.tag)
+  return (
+    <form
+      className="space-y-1 px-1"
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSubmit()
+      }}
     >
-      {button}
-    </TgButton>
-  </form>
-)
+      <div className="flex gap-1.5">
+        <div className="relative min-w-0 flex-1">
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              const atEnd = e.currentTarget.selectionStart === value.length
+              if (
+                match &&
+                (e.key === "Tab" || (e.key === "ArrowRight" && atEnd))
+              ) {
+                e.preventDefault()
+                accept()
+              }
+            }}
+            placeholder={placeholder}
+            autoComplete="off"
+            spellCheck={false}
+            data-testid={testId && `${testId}-input`}
+            className="h-8 w-full rounded-md border border-app-ink/15 bg-app-muted/40 px-2.5 text-[11px] outline-none focus:border-app-ink/40"
+          />
+          {match && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre border border-transparent px-2.5 text-[11px]"
+            >
+              <span className="invisible">{value}</span>
+              <span className="text-app-ink/35">
+                {match.tag.slice(value.length)}
+              </span>
+            </div>
+          )}
+        </div>
+        <TgButton
+          type="submit"
+          size="sm"
+          variant="secondary"
+          disabled={!value.trim()}
+          data-testid={testId && `${testId}-button`}
+        >
+          {button}
+        </TgButton>
+      </div>
+      <div className="flex h-4 items-center gap-1.5 px-0.5 text-[9px] text-app-ink/45">
+        {match ? (
+          <>
+            <kbd className="rounded border border-app-ink/20 px-1 font-sans">
+              Tab
+            </kbd>
+            {match.tag} · {match.hint}
+          </>
+        ) : exact ? (
+          exact.hint
+        ) : value.trim() && suggestions ? (
+          "no existing tag starts like this"
+        ) : null}
+      </div>
+    </form>
+  )
+}
 
 type FacetRow = {
   id: string
