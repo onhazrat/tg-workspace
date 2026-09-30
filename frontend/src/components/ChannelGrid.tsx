@@ -412,7 +412,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     zoom: channelCardZoom,
     onZoomChange: setChannelCardZoom,
     groups: sortedSettingGroups,
-    // T1-T3: the dropdowns read and write the tree instead of their lists.
+    // T1: the dropdowns read and write the tree instead of their lists.
     groupFilters: isTree ? valuesOf(protoTree, "group") : protoGroupFilters,
     onGroupFiltersChange: isTree
       ? (next) => setProtoTree((t) => syncValues(t, "group", next))

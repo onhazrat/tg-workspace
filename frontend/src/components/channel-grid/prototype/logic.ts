@@ -20,7 +20,7 @@ export type Joiner = "and" | "or"
 
 /**
  * fixed: N2 as it was, every join AND. connectors (L3): every join is its
- * own toggle. tree (T1-T3): a nested expression, see tree.ts.
+ * own toggle. tree (T1): a nested expression, see tree.ts.
  */
 export type LogicKind = "fixed" | "connectors" | "tree"
 

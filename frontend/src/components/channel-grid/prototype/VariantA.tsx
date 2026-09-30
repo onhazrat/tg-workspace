@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils"
 import { FollowControl, type FollowLayout } from "./Follow"
 import { ActiveFiltersBar, FilterBuilder } from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
-import { BlocksBar, ExpressionBar, OutlineBar } from "./TreeBars"
+import { BlocksBar } from "./TreeBars"
 import {
   type ChannelControlsProps,
   chipSelection,
@@ -68,8 +68,8 @@ export type ALayout = {
   followAt?: "start"
   /** Numeric filtering control on row 1; with it, an active-filters bar. */
   numeric?: "builder"
-  /** T1-T3: which editor shows the nested filter expression. */
-  tree?: "blocks" | "outline" | "text"
+  /** T1: the nested filter expression, edited as blocks. */
+  tree?: "blocks"
 }
 
 export const VariantA: React.FC<
@@ -313,8 +313,6 @@ export const VariantA: React.FC<
 
         {layout.numeric && !layout.tree && <ActiveFiltersBar {...p} />}
         {layout.tree === "blocks" && <BlocksBar {...p} />}
-        {layout.tree === "outline" && <OutlineBar {...p} />}
-        {layout.tree === "text" && <ExpressionBar {...p} />}
         {/* Row 2: summary when idle, toolbar when something is selected */}
         <div className="flex min-h-11 flex-wrap items-center gap-1 border-t border-app-ink/10 px-3 py-1.5">
           {selectedCount === 0 ? (

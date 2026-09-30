@@ -82,11 +82,11 @@ export type ChannelControlsProps = {
   metricInputs: MetricInputs
   /** PROTOTYPE-only: how the filter conditions combine. */
   logicKind: LogicKind
-  /** PROTOTYPE-only, T1-T3: the filter expression, and the names it prints with. */
+  /** PROTOTYPE-only, T1: the filter expression, and the names it prints with. */
   filterTree: GroupNode
   onFilterTreeChange: (tree: GroupNode) => void
   treeNames: Names
-  /** T1-T3: the Filters dropdown adds a bound rather than replacing one. */
+  /** T1: the Filters dropdown adds a bound rather than replacing one. */
   onAddNumeric?: (f: NumericFilter) => void
   filterLogic: FilterLogic
   onFilterLogicChange: (logic: FilterLogic) => void

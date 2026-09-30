@@ -1,5 +1,6 @@
 /**
- * PROTOTYPE, throwaway: filters as a nested expression, for T1-T3. A group
+ * PROTOTYPE, throwaway: filters as a nested expression, for T1. The text
+ * form and parser (T3) and the outline moves (T2) live in e4d5002. A group
  * holds conditions and other groups joined by one operator, so parentheses
  * are just groups:
  *   (tag tech AND reach ≥ 200) OR (tag news AND (subs ≥ 100 OR reach ≥ 1000))
@@ -12,7 +13,6 @@ import type { Channel } from "@/types"
 import type { Joiner } from "./logic"
 import {
   formatNumber,
-  METRICS,
   type MetricInputs,
   type MetricKey,
   metric,
@@ -285,83 +285,11 @@ export function unwrap(root: GroupNode, groupId: string): GroupNode {
   )
 }
 
-/** Outliner move: into the previous sibling if it is a group, else pair up. */
-export function indent(root: GroupNode, id: string): GroupNode {
-  const at = parentOf(root, id)
-  if (!at || at.index === 0) return root
-  const prev = at.parent.children[at.index - 1]
-  if (prev.kind === "group")
-    return moveNode(root, id, prev.id, prev.children.length)
-  return groupWith(root, id, prev.id)
-}
-
-/** Outliner move: out of its group, to just after that group. */
-export function outdent(root: GroupNode, id: string): GroupNode {
-  const at = parentOf(root, id)
-  if (!at || at.parent.id === root.id) return root
-  const up = parentOf(root, at.parent.id)
-  if (!up) return root
-  return moveNode(root, id, up.parent.id, up.index + 1)
-}
-
-export function nudge(root: GroupNode, id: string, by: -1 | 1): GroupNode {
-  const at = parentOf(root, id)
-  if (!at) return root
-  const to = at.index + by
-  if (to < 0 || to >= at.parent.children.length) return root
-  return moveNode(root, id, at.parent.id, by === 1 ? to + 1 : to)
-}
-
-// ---- Text form, for T3 and for summaries --------------------------------
+// ---- Labels ---------------------------------------------------------------
 
 export type Names = {
   groupName: (id: string) => string
-  groupId: (name: string) => string | undefined
   tagLabel: (id: string) => string
-  tagId: (label: string) => string
-}
-
-const METRIC_ALIASES: Record<string, MetricKey> = {
-  subscribers: "subscribers",
-  subs: "subscribers",
-  reach: "reach",
-  activity: "activity_rate",
-  activity_rate: "activity_rate",
-  posts: "total_posts",
-  total_posts: "total_posts",
-  scope: "posts_in_scope",
-  posts_in_scope: "posts_in_scope",
-  updated_days: "days_since_update",
-  days_since_update: "days_since_update",
-  followed_days: "days_followed",
-  days_followed: "days_followed",
-  photos: "photos",
-  videos: "videos",
-  files: "files",
-  links: "links",
-}
-
-const metricWord = (k: MetricKey) =>
-  Object.entries(METRIC_ALIASES).find(([, v]) => v === k)?.[0] ?? k
-
-const quote = (s: string) => (/^[\p{L}\p{N}_.-]+$/u.test(s) ? s : `"${s}"`)
-
-export function condText(c: Cond, names: Names): string {
-  switch (c.type) {
-    case "tag":
-      return `tag:${quote(names.tagLabel(c.value))}`
-    case "group":
-      return `group:${quote(names.groupName(c.value))}`
-    case "language":
-      return `lang:${c.value}`
-    case "metric": {
-      const w = metricWord(c.metric)
-      if (c.min !== undefined && c.max !== undefined)
-        return `${w} ${c.min}..${c.max}`
-      if (c.min !== undefined) return `${w} >= ${c.min}`
-      return `${w} <= ${c.max}`
-    }
-  }
 }
 
 /** Short human label for a condition chip. */
@@ -382,202 +310,6 @@ export function condLabel(c: Cond, names: Names): string {
     }
   }
 }
-
-export function toText(n: FilterNode, names: Names, top = true): string {
-  const not = n.not ? "not " : ""
-  if (n.kind === "atom") return `${not}${condText(n.cond, names)}`
-  const inner = n.children.map((c) => toText(c, names, false)).join(` ${n.op} `)
-  if (n.not) return `not (${inner})`
-  return top || n.children.length < 2 ? inner : `(${inner})`
-}
-
-type Tok =
-  | { t: "(" | ")" | "and" | "or" | "not"; at: number }
-  | { t: "atom"; cond: Cond; at: number; len: number }
-
-export type ParseResult =
-  | { ok: true; tree: GroupNode }
-  | { ok: false; error: string; at: number }
-
-class ParseError extends Error {
-  constructor(
-    message: string,
-    public at: number,
-  ) {
-    super(message)
-  }
-}
-
-function tokenize(raw: string, names: Names): Tok[] {
-  // "activity rate < 10" reads naturally; keep offsets so errors point right.
-  // "tag tech" and "group news" read naturally too: same length as "tag:".
-  const src = raw
-    .replace(/\b(tag|group|lang)\s+(?=["\p{L}\p{N}_])/giu, (m, k) =>
-      `${k}:`.padEnd(m.length),
-    )
-    .replace(/activity\s+rate/gi, (m) => "activity_rate".padEnd(m.length))
-  const out: Tok[] = []
-  const word = /^([a-z]+:)?(?:"([^"]*)"|([\p{L}\p{N}_.-]+))/iu
-  let i = 0
-  while (i < src.length) {
-    const ch = src[i]
-    if (/\s/.test(ch)) {
-      i++
-      continue
-    }
-    if (ch === "(" || ch === ")") {
-      out.push({ t: ch, at: i })
-      i++
-      continue
-    }
-    if (ch === "!") {
-      out.push({ t: "not", at: i })
-      i++
-      continue
-    }
-    if (ch === "&" || ch === "|") {
-      const len = src[i + 1] === ch ? 2 : 1
-      out.push({ t: ch === "&" ? "and" : "or", at: i })
-      i += len
-      continue
-    }
-    // metric comparison: reach >= 200, subs<100, reach 200..1000
-    const cmp = /^([a-z_]+)\s*(>=|<=|>|<|=)\s*(-?\d+(?:\.\d+)?)/i.exec(
-      src.slice(i),
-    )
-    const rng =
-      /^([a-z_]+)\s+(-?\d+(?:\.\d+)?)\s*\.\.\s*(-?\d+(?:\.\d+)?)/i.exec(
-        src.slice(i),
-      )
-    const m = cmp ?? rng
-    if (m && METRIC_ALIASES[m[1].toLowerCase()]) {
-      const key = METRIC_ALIASES[m[1].toLowerCase()]
-      const cond: Cond = rng
-        ? { type: "metric", metric: key, min: Number(m[2]), max: Number(m[3]) }
-        : m[2].startsWith(">")
-          ? { type: "metric", metric: key, min: Number(m[3]) }
-          : m[2].startsWith("<")
-            ? { type: "metric", metric: key, max: Number(m[3]) }
-            : {
-                type: "metric",
-                metric: key,
-                min: Number(m[3]),
-                max: Number(m[3]),
-              }
-      out.push({ t: "atom", cond, at: i, len: m[0].length })
-      i += m[0].length
-      continue
-    }
-    const w = word.exec(src.slice(i))
-    if (!w) throw new ParseError(`Unexpected “${ch}”`, i)
-    const prefix = w[1]?.slice(0, -1).toLowerCase()
-    const text = w[2] ?? w[3]
-    const lower = text.toLowerCase()
-    if (
-      !prefix &&
-      w[3] &&
-      (lower === "and" || lower === "or" || lower === "not")
-    ) {
-      out.push({ t: lower, at: i })
-    } else {
-      let cond: Cond
-      if (prefix === "group") {
-        const id = names.groupId(text)
-        if (!id) throw new ParseError(`No group named “${text}”`, i)
-        cond = { type: "group", value: id }
-      } else if (prefix === "lang") cond = { type: "language", value: text }
-      else if (prefix === "tag" || (!prefix && w[2] !== undefined))
-        cond = { type: "tag", value: names.tagId(text) }
-      else if (prefix) throw new ParseError(`Unknown “${prefix}:”`, i)
-      else if (METRIC_ALIASES[lower])
-        throw new ParseError(
-          `“${text}” needs a comparison, e.g. ${text} >= 100`,
-          i,
-        )
-      else cond = { type: "tag", value: names.tagId(text) } // a bare word is a tag
-      out.push({ t: "atom", cond, at: i, len: w[0].length })
-    }
-    i += w[0].length
-  }
-  return out
-}
-
-/**
- * or-expr  := and-expr ("or" and-expr)*
- * and-expr := primary ("and" primary)*
- * primary  := "not" primary | atom | "(" or-expr ")"
- * NOT binds tightest, then AND, then OR, as in every query language people
- * already know: "not a or b and c" is "(not a) or (b and c)".
- */
-export function parse(src: string, names: Names): ParseResult {
-  try {
-    const toks = tokenize(src, names)
-    let i = 0
-    const peek = () => toks[i]
-    const group = (op: Joiner, children: FilterNode[]): FilterNode =>
-      children.length === 1
-        ? children[0]
-        : { kind: "group", id: newId(), op, children }
-    const primary = (): FilterNode => {
-      const t = peek()
-      if (!t) throw new ParseError("Expression ends too early", src.length)
-      if (t.t === "not") {
-        i++
-        const inner = primary()
-        return { ...inner, not: !inner.not }
-      }
-      if (t.t === "atom") {
-        i++
-        return { kind: "atom", id: newId(), cond: t.cond }
-      }
-      if (t.t === "(") {
-        i++
-        const inner = orExpr()
-        const close = peek()
-        if (close?.t !== ")")
-          throw new ParseError("Missing “)”", close?.at ?? src.length)
-        i++
-        return inner.kind === "group"
-          ? inner
-          : { kind: "group", id: newId(), op: "and", children: [inner] }
-      }
-      throw new ParseError(`Unexpected “${t.t}”`, t.at)
-    }
-    const andExpr = (): FilterNode => {
-      const parts = [primary()]
-      while (["and", "atom", "(", "not"].includes(peek()?.t ?? "")) {
-        if (peek()?.t === "and") i++ // two conditions side by side mean AND
-        parts.push(primary())
-      }
-      return group("and", parts)
-    }
-    const orExpr = (): FilterNode => {
-      const parts = [andExpr()]
-      while (peek()?.t === "or") {
-        i++
-        parts.push(andExpr())
-      }
-      return group("or", parts)
-    }
-    if (toks.length === 0) return { ok: true, tree: emptyTree() }
-    const body = orExpr()
-    if (i < toks.length) throw new ParseError("Unexpected “)”", toks[i].at)
-    const tree: GroupNode =
-      body.kind === "group"
-        ? { ...body, id: "root" }
-        : { kind: "group", id: "root", op: "and", children: [body] }
-    return { ok: true, tree }
-  } catch (e) {
-    if (e instanceof ParseError)
-      return { ok: false, error: e.message, at: e.at }
-    throw e
-  }
-}
-
-export const METRIC_WORDS = METRICS.map((m) => ({
-  word: metricWord(m.key),
-  label: m.label,
-}))
 
 /** Make the tree's `type` values exactly `next`: drop the rest, append the new. */
 export function syncValues(
@@ -609,11 +341,6 @@ export function makeNames(
 ): Names {
   return {
     groupName: (id) => groups.find((g) => g.id === id)?.name ?? id,
-    groupId: (name) =>
-      groups.find((g) => g.name.toLowerCase() === name.toLowerCase())?.id,
     tagLabel: (id) => pseudo.find((c) => c.id === id)?.label ?? id,
-    tagId: (label) =>
-      pseudo.find((c) => c.label.toLowerCase() === label.toLowerCase())?.id ??
-      label,
   }
 }
