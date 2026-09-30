@@ -1,11 +1,71 @@
+import {
+  ACTION_LIMITS,
+  applyRegions,
+  isNoop,
+  SELECTION_EDITS,
+} from "@/lib/channels/selection-regions"
 import type { CommandDef } from "@/lib/commands/types"
 import {
   runBulkFreezeSelected,
   runBulkUnfreezeSelected,
 } from "@/lib/commands/useChannelEntityFlow"
 
+const LIMIT_LABEL = { shown: "Shown", all: "All" } as const
+
+/** The five selection edits and the action limit (CTB-04). */
+function buildSelectionCommands(): CommandDef[] {
+  return [
+    ...SELECTION_EDITS.map(
+      (edit): CommandDef => ({
+        id: `selection-${edit.key}`,
+        kind: "action",
+        label: `Selection: ${edit.label}`,
+        keywords: ["channels", "selection", "shown", "filter", edit.detail],
+        group: "Channels",
+        disabled: (ctx) => {
+          if (!ctx.shownChannelNames) {
+            return { disabled: true, reason: "Open the Channels tab" }
+          }
+          return isNoop(
+            ctx.selectedChannels,
+            ctx.shownChannelNames,
+            edit.regions,
+          )
+            ? { disabled: true, reason: "Would change nothing" }
+            : { disabled: false }
+        },
+        run: (ctx) => {
+          if (!ctx.shownChannelNames) return
+          ctx.setSelectedChannels(
+            applyRegions(
+              ctx.selectedChannels,
+              ctx.shownChannelNames,
+              edit.regions,
+            ),
+          )
+        },
+      }),
+    ),
+    ...ACTION_LIMITS.map(
+      (limit): CommandDef => ({
+        id: `action-limit-${limit}`,
+        kind: "action",
+        label: `Actions apply to: ${LIMIT_LABEL[limit]}`,
+        keywords: ["channels", "selection", "actions", "limit", "hidden"],
+        group: "Channels",
+        disabled: (ctx) =>
+          ctx.settings.channelActionLimit === limit
+            ? { disabled: true, reason: `Already on ${LIMIT_LABEL[limit]}` }
+            : { disabled: false },
+        run: (ctx) => ctx.settings.setChannelActionLimit(limit),
+      }),
+    ),
+  ]
+}
+
 export function buildChannelEntityCommands(): CommandDef[] {
   return [
+    ...buildSelectionCommands(),
     {
       id: "search-channel",
       kind: "entity-root",

@@ -23,6 +23,7 @@ import { useChannelGridSortState } from "@/components/channel-grid/useChannelGri
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
+import { useSettingGroupsQuery } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import {
   addFunnel,
@@ -65,6 +66,13 @@ import {
 } from "@/lib/channels/filter-channels-for-grid"
 import { rangeSelect } from "@/lib/channels/range-select"
 import { buildSelectedTrimRanks } from "@/lib/channels/selected-trim-ranks"
+import {
+  actionTargets,
+  hiddenSelection,
+  hiddenSelectionNote,
+} from "@/lib/channels/selection-regions"
+import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
+import { publishShownChannels } from "@/lib/channels/shown-channels"
 import { sortChannelsForGrid } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { useData } from "../contexts/DataContext"
@@ -113,6 +121,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setChannelCardZoom,
     channelGridGroupBySelection,
     setChannelGridGroupBySelection,
+    channelActionLimit,
+    setChannelActionLimit,
   } = useSettings()
 
   const { isOffline } = useApiStatus()
@@ -124,8 +134,11 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [tagSearch, setTagSearch] = useState("")
   const { channelFilterText, setChannelFilterText } = useWorkspaceGroupParams()
 
-  const actions = useChannelGridActions()
-  const { sortedSettingGroups } = actions
+  const { data: settingGroups = [] } = useSettingGroupsQuery()
+  const sortedSettingGroups = useMemo(
+    () => sortSettingGroupsForDisplay(settingGroups),
+    [settingGroups],
+  )
 
   // The Channel filter lives in the URL. A text that does not parse is
   // ignored, and replaced by the next edit.
@@ -169,6 +182,27 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     [channels, channelSearch, channelFilter, metricInputs],
   )
 
+  // The action limit (CTB-04): row 2's actions, Trim and the sort rank reach
+  // `targets`. The Scope, the Posts tab and every Artifact still read the
+  // whole selection from DataContext, the Hidden selection included.
+  const shownNames = useMemo(
+    () => filteredChannels.map((channel) => channel.name),
+    [filteredChannels],
+  )
+  const targets = useMemo(
+    () => actionTargets(selectedChannels, shownNames, channelActionLimit),
+    [selectedChannels, shownNames, channelActionLimit],
+  )
+  const hiddenCount = useMemo(
+    () => hiddenSelection(selectedChannels, shownNames).size,
+    [selectedChannels, shownNames],
+  )
+
+  useEffect(() => publishShownChannels(shownNames), [shownNames])
+  useEffect(() => () => publishShownChannels(null), [])
+
+  const actions = useChannelGridActions(targets)
+
   const sortedFilteredChannels = useMemo(
     () =>
       sortChannelsForGrid({
@@ -197,7 +231,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         channels,
         channelStats,
         postsInScopeCounts,
-        selectedChannels,
+        selectedChannels: targets,
         sortBy,
         sortDirection,
       }),
@@ -205,7 +239,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       channelStats,
       channels,
       postsInScopeCounts,
-      selectedChannels,
+      targets,
       sortBy,
       sortDirection,
     ],
@@ -218,7 +252,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     isScrapeAllDisabled,
   } = channelGridGates({
     trimCount,
-    selectedCount: selectedChannels.size,
+    selectedCount: targets.size,
     summarizing,
     scrapingCount: scrapingChannels.size,
     isOffline,
@@ -230,7 +264,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       channels,
       channelStats,
       postsInScopeCounts,
-      selectedChannels,
+      selectedChannels: targets,
+      keep: [...selectedChannels].filter((name) => !targets.has(name)),
       sortBy,
       sortDirection,
       count: parsedTrimCount,
@@ -246,6 +281,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setSelectedChannels,
     sortBy,
     sortDirection,
+    targets,
   ])
 
   const [visibleChannels, setVisibleChannels] = useState(20)
@@ -289,7 +325,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   )
 
   // The last Channel clicked, plain or shift. It lives here rather than in
-  // DataContext, whose field set is pinned, and All, None and Revert leave it.
+  // DataContext, whose field set is pinned, and the selection edits leave it.
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null)
 
   const handleSelectChannel = (name: string, shift: boolean) => {
@@ -304,26 +340,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setSelectionAnchor(result.anchor)
   }
 
-  const handleSelectAll = () => {
-    setSelectedChannels(new Set(filteredChannels.map((c) => c.name)))
-  }
-
   const handleUnselectAll = () => {
     setSelectedChannels(new Set())
-  }
-
-  const handleRevertSelection = () => {
-    setSelectedChannels((prev) => {
-      const next = new Set(prev)
-      for (const channel of filteredChannels) {
-        if (next.has(channel.name)) {
-          next.delete(channel.name)
-        } else {
-          next.add(channel.name)
-        }
-      }
-      return next
-    })
   }
 
   // A tick selects or deselects every Channel in a dropdown row.
@@ -514,17 +532,19 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         />
 
         <ChannelSelectionBar
-          selectedCount={selectedChannels.size}
-          shownCount={filteredChannels.length}
-          onSelectAll={handleSelectAll}
-          onInvert={handleRevertSelection}
-          isInvertDisabled={filteredChannels.length === 0}
+          selection={selectedChannels}
+          shown={shownNames}
+          onSelectAll={() => setSelectedChannels(new Set(shownNames))}
+          onSetSelection={setSelectedChannels}
+          actionLimit={channelActionLimit}
+          onActionLimitChange={setChannelActionLimit}
+          actionCount={targets.size}
           onClear={handleUnselectAll}
           trimCount={trimCount}
           onTrimCountChange={setTrimCount}
           onTrim={handleTrimSelection}
           isTrimDisabled={isTrimDisabled}
-          onSync={handleScrapeSelected}
+          onSync={() => void handleScrapeSelected(targets)}
           isSyncDisabled={isScrapeSelectedDisabled}
           isSyncing={scrapingChannels.size > 0}
           onFreeze={() => actions.setConfirmBulkFreezeAction("freeze")}
@@ -579,7 +599,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         confirmBulkDelete={actions.confirmBulkDelete}
         onBulkDeleteOpenChange={actions.setConfirmBulkDelete}
         onConfirmBulkDelete={actions.executeBulkDelete}
-        selectedCount={selectedChannels.size}
+        actionCount={targets.size}
+        hiddenNote={hiddenSelectionNote(hiddenCount, channelActionLimit)}
         confirmBulkFreezeAction={actions.confirmBulkFreezeAction}
         onCloseBulkFreezeAction={() => actions.setConfirmBulkFreezeAction(null)}
         onConfirmBulkFreezeAction={actions.handleConfirmBulkFreezeAction}

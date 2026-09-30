@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import { type Theme, useTheme } from "@/components/theme-provider"
 import type { CardZoom } from "@/lib/channels/card-zoom"
+import type { ActionLimit } from "@/lib/channels/selection-regions"
 import type {
   DiscoverFollowState,
   DiscoverSignalWeights,
@@ -129,6 +130,8 @@ interface SettingsContextType {
   setChannelCardZoom: (zoom: CardZoom) => void
   channelGridGroupBySelection: boolean
   setChannelGridGroupBySelection: (group: boolean) => void
+  channelActionLimit: ActionLimit
+  setChannelActionLimit: (limit: ActionLimit) => void
   discoverSignals: DiscoverySignalKind[]
   setDiscoverSignals: (kinds: DiscoverySignalKind[]) => void
   discoverSortKey: DiscoverSortKey

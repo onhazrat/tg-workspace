@@ -64,7 +64,8 @@ describe("ChannelGridDialogs", () => {
         confirmBulkDelete={false}
         onBulkDeleteOpenChange={noop}
         onConfirmBulkDelete={noop}
-        selectedCount={0}
+        actionCount={0}
+        hiddenNote=""
         confirmBulkFreezeAction={null}
         onCloseBulkFreezeAction={noop}
         onConfirmBulkFreezeAction={noop}
@@ -86,7 +87,8 @@ describe("ChannelGridDialogs", () => {
         confirmBulkDelete
         onBulkDeleteOpenChange={noop}
         onConfirmBulkDelete={noop}
-        selectedCount={3}
+        actionCount={3}
+        hiddenNote="40 selected Channels hidden by filters are not affected."
         confirmBulkFreezeAction="freeze"
         onCloseBulkFreezeAction={noop}
         onConfirmBulkFreezeAction={noop}
@@ -98,5 +100,10 @@ describe("ChannelGridDialogs", () => {
     expect(screen.getByText("@gone")).toBeTruthy()
     expect(screen.getByText("Remove 3 Channels")).toBeTruthy()
     expect(screen.getByText("Freeze Selected Channels?")).toBeTruthy()
+    // CTB-04: both bulk confirmations name the Hidden selection they spare.
+    expect(
+      screen.getAllByText(/40 selected Channels hidden by filters/),
+    ).toHaveLength(2)
+    expect(screen.getByText(/^Freeze 3 selected channels\./)).toBeTruthy()
   })
 })

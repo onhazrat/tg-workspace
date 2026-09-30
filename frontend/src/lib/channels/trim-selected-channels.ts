@@ -99,15 +99,19 @@ export function notifyTrimChannelSelectionResult(
 
 export type ApplyTrimChannelSelectionParams = TrimSelectedChannelsParams & {
   setSelectedChannels: (value: Set<string>) => void
+  /** Selected Channels Trim does not rank and writes back untouched: the
+   *  Hidden selection, while the action limit is on Shown (CTB-04). */
+  keep?: Iterable<string>
 }
 
 export function applyTrimChannelSelection({
   setSelectedChannels,
+  keep = [],
   ...params
 }: ApplyTrimChannelSelectionParams): TrimSelectedChannelsResult {
   const result = trimSelectedChannelsToCount(params)
   if (result.status === "applied") {
-    setSelectedChannels(new Set(result.keptNames))
+    setSelectedChannels(new Set([...keep, ...result.keptNames]))
   }
   notifyTrimChannelSelectionResult(result, params.sortBy, params.sortDirection)
   return result

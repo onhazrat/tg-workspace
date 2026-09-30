@@ -15,10 +15,7 @@ import {
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
-import {
-  findFrozenReservedGroup,
-  sortSettingGroupsForDisplay,
-} from "@/lib/channels/setting-groups"
+import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import { upsertChannel } from "@/lib/channels/store"
 import type { Channel } from "@/types"
 
@@ -26,15 +23,12 @@ import type { Channel } from "@/types"
  * Channel mutations behind the Channels tab: add channel, single/bulk delete,
  * reset-and-sync, bulk freeze/unfreeze, bulk group move, and bulk tag edits,
  * together with the input and confirm-dialog state that drives them.
+ *
+ * The bulk ones reach `targets`, which is the selection narrowed by the action
+ * limit (CTB-04), never the selection itself.
  */
-export function useChannelGridActions() {
-  const {
-    channels,
-    setChannels,
-    selectedChannels,
-    setSelectedChannels,
-    loadChannels,
-  } = useData()
+export function useChannelGridActions(targets: ReadonlySet<string>) {
+  const { channels, setChannels, setSelectedChannels, loadChannels } = useData()
   const loadDBStats = useLoadDBStats()
 
   const {
@@ -74,17 +68,12 @@ export function useChannelGridActions() {
     }
   }, [bulkTargetGroupId, settingGroups])
 
-  const sortedSettingGroups = useMemo(
-    () => sortSettingGroupsForDisplay(settingGroups),
-    [settingGroups],
-  )
-
-  const selectedChannelIds = useMemo(
+  const targetIds = useMemo(
     () =>
       channels
-        .filter((channel) => selectedChannels.has(channel.name))
+        .filter((channel) => targets.has(channel.name))
         .map((channel) => channel.id),
-    [channels, selectedChannels],
+    [channels, targets],
   )
 
   const defaultGroupId = useMemo(
@@ -98,7 +87,7 @@ export function useChannelGridActions() {
   )
 
   const applyBulkGroupAssignment = (settingGroupId: string) =>
-    assignChannelsToSettingGroup(selectedChannelIds, settingGroupId, {
+    assignChannelsToSettingGroup(targetIds, settingGroupId, {
       settingGroups,
       setChannels,
       loadChannels,
@@ -143,7 +132,7 @@ export function useChannelGridActions() {
     if (!bulkTagInput.trim()) return
     const tag = bulkTagInput.trim()
     const updatedChannels = channels.map((c) => {
-      if (selectedChannels.has(c.name)) {
+      if (targets.has(c.name)) {
         const normalizedNewTags = addManualTag(c.tags, tag)
         return { ...c, tags: normalizedNewTags }
       }
@@ -151,7 +140,7 @@ export function useChannelGridActions() {
     })
     setChannels(updatedChannels)
     for (const c of updatedChannels) {
-      if (selectedChannels.has(c.name)) {
+      if (targets.has(c.name)) {
         await upsertChannel(c)
       }
     }
@@ -162,7 +151,7 @@ export function useChannelGridActions() {
     if (!bulkRemoveTagInput.trim()) return
     const tag = bulkRemoveTagInput.trim()
     const updatedChannels = channels.map((c) => {
-      if (selectedChannels.has(c.name)) {
+      if (targets.has(c.name)) {
         const newTags = removeTagsByName(c.tags, [tag])
         return { ...c, tags: newTags }
       }
@@ -170,7 +159,7 @@ export function useChannelGridActions() {
     })
     setChannels(updatedChannels)
     for (const c of updatedChannels) {
-      if (selectedChannels.has(c.name)) {
+      if (targets.has(c.name)) {
         await upsertChannel(c)
       }
     }
@@ -178,7 +167,7 @@ export function useChannelGridActions() {
   }
 
   const executeBulkDelete = async () => {
-    for (const name of Array.from(selectedChannels)) {
+    for (const name of Array.from(targets)) {
       const channel = channels.find((entry) => entry.name === name)
       if (!channel) continue
       await deleteChannelByRecord(channel, {
@@ -187,7 +176,12 @@ export function useChannelGridActions() {
         loadDBStats,
       })
     }
-    setSelectedChannels(new Set())
+    // The Hidden selection outlives a delete limited to the Shown Channels.
+    setSelectedChannels((prev) => {
+      const next = new Set(prev)
+      for (const name of targets) next.delete(name)
+      return next
+    })
     setConfirmBulkDelete(false)
   }
 
@@ -236,7 +230,6 @@ export function useChannelGridActions() {
   }
 
   return {
-    sortedSettingGroups,
     inlineChannelName,
     setInlineChannelName,
     handleAddChannel,

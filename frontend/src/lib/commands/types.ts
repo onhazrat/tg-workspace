@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react"
 
 import type { JobStatusEntry } from "@/api/jobs"
 import type { ConfigurationCatalogResponse } from "@/client"
+import type { ActionLimit } from "@/lib/channels/selection-regions"
 import type { SettingsSection } from "@/lib/settingsSection"
 import type {
   Channel,
@@ -134,9 +135,11 @@ export interface CommandContext {
   channelStats: Record<string, ChannelStats>
   selectedChannels: Set<string>
   setSelectedChannels: Dispatch<SetStateAction<Set<string>>>
+  /** The Channels tab's Shown Channels, or null while it is not mounted. */
+  shownChannelNames: string[] | null
   setChannels: Dispatch<SetStateAction<Channel[]>>
   handleScrapeAll: () => Promise<void>
-  handleScrapeSelected: () => Promise<void>
+  handleScrapeSelected: (names?: Set<string>) => Promise<void>
   handleRecheckRestricted: () => Promise<void>
   handleScrapeChannel: (
     channel: Channel,
@@ -227,6 +230,8 @@ export interface CommandContext {
 import type { Theme } from "@/components/theme-provider"
 
 export interface CommandSettingsSlice {
+  channelActionLimit: ActionLimit
+  setChannelActionLimit: (limit: ActionLimit) => void
   theme: Theme
   setTheme: (theme: Theme) => void
   aiLanguage: string

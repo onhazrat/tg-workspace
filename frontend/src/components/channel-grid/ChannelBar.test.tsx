@@ -153,16 +153,21 @@ describe("ChannelSelectionBar", () => {
     { id: "g2", name: "Slow" },
   ] as ChannelSettingGroup[]
 
+  const shown = Array.from({ length: 12 }, (_, i) => `c${i}`)
+  const selecting = (n: number) => new Set(shown.slice(0, n))
+
   function mount(over: Partial<ChannelSelectionBarProps> = {}) {
     const calls: Calls = []
     const log = logger(calls)
     render(
       <ChannelSelectionBar
-        selectedCount={0}
-        shownCount={12}
+        selection={new Set()}
+        shown={shown}
         onSelectAll={log("all")}
-        onInvert={log("invert")}
-        isInvertDisabled={false}
+        onSetSelection={log("set")}
+        actionLimit="shown"
+        onActionLimitChange={log("limit")}
+        actionCount={over.selection?.size ?? 0}
         onClear={log("clear")}
         trimCount="3"
         onTrimCountChange={log("trimCount")}
@@ -196,23 +201,26 @@ describe("ChannelSelectionBar", () => {
     return calls
   }
 
-  test("with nothing selected: the count, Select all and Invert, no bulk actions", () => {
+  test("with nothing selected: the count and Select all, no bulk actions", () => {
     const calls = mount()
     expect(screen.getByTestId("channel-selection-summary").textContent).toBe(
       "12 channels",
     )
     expect(screen.queryByTestId("channel-trim-button")).toBeNull()
+    expect(screen.queryByTestId("adjust-selection")).toBeNull()
     expect(screen.queryByText("Delete")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Select all" }))
-    fireEvent.click(screen.getByRole("button", { name: "Invert" }))
-    expect(calls.map(([name]) => name)).toEqual(["all", "invert"])
+    expect(calls.map(([name]) => name)).toEqual(["all"])
   })
 
   test("with a selection: the count clears it, and the bulk actions reach it", () => {
-    const calls = mount({ selectedCount: 5 })
+    const calls = mount({ selection: selecting(5) })
     expect(screen.getByText("5 selected")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "All" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Invert" })).toBeNull()
+    expect(screen.getByTestId("adjust-selection")).toBeTruthy()
+    expect(screen.queryByTestId("action-limit-indicator")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Clear selection" }))
-    fireEvent.click(screen.getByRole("button", { name: "All" }))
     fireEvent.click(screen.getByTestId("channel-trim-button"))
     fireEvent.click(screen.getByRole("button", { name: "Sync" }))
     fireEvent.click(screen.getByRole("button", { name: "Freeze" }))
@@ -220,7 +228,6 @@ describe("ChannelSelectionBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }))
     expect(calls.map(([name]) => name)).toEqual([
       "clear",
-      "all",
       "trim",
       "sync",
       "freeze",
@@ -230,7 +237,7 @@ describe("ChannelSelectionBar", () => {
   })
 
   test("moves to the chosen Setting group from a popover", () => {
-    const calls = mount({ selectedCount: 1 })
+    const calls = mount({ selection: selecting(1) })
     fireEvent.click(screen.getByRole("button", { name: /Move to group/ }))
     expect(screen.getByText("Move 1 channel to")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Slow" }))
@@ -242,7 +249,7 @@ describe("ChannelSelectionBar", () => {
   })
 
   test("adds and removes tags from a popover", () => {
-    const calls = mount({ selectedCount: 2 })
+    const calls = mount({ selection: selecting(2) })
     fireEvent.click(screen.getByTestId("bulk-tags"))
     fireEvent.submit(screen.getByTestId("bulk-add-tag-input"))
     expect(
@@ -252,8 +259,8 @@ describe("ChannelSelectionBar", () => {
   })
 
   test("keeps the layout toggles and card size in both states", () => {
-    for (const selectedCount of [0, 3]) {
-      const calls = mount({ selectedCount })
+    for (const n of [0, 3]) {
+      const calls = mount({ selection: selecting(n) })
       fireEvent.click(screen.getByRole("button", { name: /Selected first/ }))
       fireEvent.click(screen.getByTestId("channel-show-sort-rank"))
       expect(screen.getByRole("group", { name: "Card size" })).toBeTruthy()
@@ -263,5 +270,28 @@ describe("ChannelSelectionBar", () => {
       ])
       cleanup()
     }
+  })
+
+  test("with part of the selection hidden, says so and counts the shown part", () => {
+    // Two selected and shown, three selected and hidden by the filters.
+    const selection = new Set(["c0", "c1", "h0", "h1", "h2"])
+    const calls = mount({ selection, actionCount: 2 })
+    expect(screen.getByText("5 selected")).toBeTruthy()
+    const indicator = screen.getByTestId("action-limit-indicator")
+    expect(indicator.textContent).toBe("acting on 2 shown")
+    expect(screen.getByText("shown")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: /Move to group/ }))
+    expect(screen.getByText("Move 2 channels to")).toBeTruthy()
+    fireEvent.click(indicator)
+    expect(calls).toEqual([["limit", "all"]])
+  })
+
+  test("on All, Trim reads plain and the indicator turns amber", () => {
+    const selection = new Set(["c0", "h0"])
+    mount({ selection, actionLimit: "all", actionCount: 2 })
+    expect(screen.getByTestId("action-limit-indicator").textContent).toBe(
+      "1 hidden by filters",
+    )
+    expect(screen.queryByText("shown")).toBeNull()
   })
 })

@@ -12,16 +12,25 @@ import { Popover } from "radix-ui"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import type { CardZoom } from "@/lib/channels/card-zoom"
+import type { ActionLimit } from "@/lib/channels/selection-regions"
 import type { ChannelSettingGroup } from "@/types"
 import { BarHeading, BarPopover } from "./BarPopover"
 import { BarToggle, CardSizeSwitch } from "./ChannelBarControls"
+import {
+  ActionLimitIndicator,
+  ChannelSelectionAdjust,
+} from "./ChannelSelectionAdjust"
 
 export type ChannelSelectionBarProps = {
-  selectedCount: number
-  shownCount: number
+  selection: ReadonlySet<string>
+  /** The Shown Channels' names. */
+  shown: string[]
   onSelectAll: () => void
-  onInvert: () => void
-  isInvertDisabled: boolean
+  onSetSelection: (next: Set<string>) => void
+  actionLimit: ActionLimit
+  onActionLimitChange: (limit: ActionLimit) => void
+  /** How many Channels the actions reach under the limit. */
+  actionCount: number
   onClear: () => void
   trimCount: string
   onTrimCountChange: (value: string) => void
@@ -102,9 +111,23 @@ function TagField({
 
 /** The bulk toolbar: what reaches the selected Channels. */
 function SelectionActions(p: ChannelSelectionBarProps) {
-  const count = plural(p.selectedCount)
+  const count = plural(p.actionCount)
+  const narrowed = p.actionCount < p.selection.size
   return (
     <>
+      <ChannelSelectionAdjust
+        selection={p.selection}
+        shown={p.shown}
+        onApply={p.onSetSelection}
+        limit={p.actionLimit}
+        onLimitChange={p.onActionLimitChange}
+      />
+      <ActionLimitIndicator
+        selection={p.selection}
+        shown={p.shown}
+        limit={p.actionLimit}
+        onLimitChange={p.onActionLimitChange}
+      />
       <div className="flex items-center gap-1 rounded-md border border-app-ink/10 pl-2">
         <span className="text-[11px] font-semibold text-app-ink/50">
           Keep first
@@ -119,6 +142,11 @@ function SelectionActions(p: ChannelSelectionBarProps) {
           aria-label="Trim selection count"
           className="h-7 w-12 bg-transparent text-center text-[11px] outline-none"
         />
+        {narrowed && (
+          <span className="text-[11px] font-semibold text-app-ink/50">
+            shown
+          </span>
+        )}
         <button
           type="button"
           onClick={p.onTrim}
@@ -217,12 +245,13 @@ const Ghost = (props: React.ComponentProps<typeof TgButton>) => (
 )
 
 /**
- * Row 2 (CTB-01): a summary with Select all and Invert while nothing is
- * selected, the bulk toolbar once something is, and the layout toggles and
- * card size at its right end in both states, so nothing moves on a select.
+ * Row 2 (CTB-01): a summary with Select all while nothing is selected, the
+ * bulk toolbar once something is, and the layout toggles and card size at its
+ * right end in both states, so nothing moves on a select. Adjust selection
+ * (CTB-04) holds what All and Invert used to do once something is selected.
  */
 export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
-  const selecting = p.selectedCount > 0
+  const selecting = p.selection.size > 0
   return (
     <div className="flex min-h-11 flex-wrap items-center gap-1 border-t border-app-ink/10 px-3 py-1.5">
       {selecting ? (
@@ -233,21 +262,22 @@ export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
           title="Clear selection"
           className="mr-1 inline-flex h-7 items-center gap-1.5 rounded-md bg-app-ink px-2.5 text-[11px] font-bold text-app-bg"
         >
-          <span>{p.selectedCount} selected</span>
+          <span>{p.selection.size} selected</span>
           <X size={12} />
         </button>
       ) : (
-        <span
-          data-testid="channel-selection-summary"
-          className="mr-1 text-[11px] font-semibold text-app-ink/60"
-        >
-          {plural(p.shownCount)}
-        </span>
+        <>
+          <span
+            data-testid="channel-selection-summary"
+            className="mr-1 text-[11px] font-semibold text-app-ink/60"
+          >
+            {plural(p.shown.length)}
+          </span>
+          <Ghost onClick={p.onSelectAll} disabled={p.shown.length === 0}>
+            Select all
+          </Ghost>
+        </>
       )}
-      <Ghost onClick={p.onSelectAll}>{selecting ? "All" : "Select all"}</Ghost>
-      <Ghost onClick={p.onInvert} disabled={p.isInvertDisabled}>
-        Invert
-      </Ghost>
       {selecting && <SelectionActions {...p} />}
       <div className="ml-auto flex flex-wrap items-center gap-1.5 pl-2">
         <BarToggle
