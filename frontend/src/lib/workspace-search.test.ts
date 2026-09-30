@@ -44,7 +44,7 @@ describe("validateWorkspaceSearch", () => {
     // Each Artifact param is checked on its own tab, where it survives.
     const keys = [
       ["setting", "channels"],
-      ["channelGroup", "channels"],
+      ["channelFilter", "channels"],
       ["settingGroup", "channels"],
       ["report", "discover"],
       ["summary", "summary"],
@@ -59,6 +59,22 @@ describe("validateWorkspaceSearch", () => {
       expect(validateWorkspaceSearch({ tab, [key]: "   " })).toEqual({ tab })
       expect(validateWorkspaceSearch({ tab, [key]: 7 })).toEqual({ tab })
     }
+  })
+
+  test("an old channelGroup link is a one-Condition Channel filter (CTB-01)", () => {
+    expect(
+      validateWorkspaceSearch({ tab: "channels", channelGroup: " g-1 " }),
+    ).toEqual({ tab: "channels", channelFilter: 'group:"g-1"' })
+    // The new parameter wins over the old one, and a blank old one is nothing.
+    expect(
+      validateWorkspaceSearch({
+        channelGroup: "g-1",
+        channelFilter: "tag:tech",
+      }),
+    ).toEqual({ tab: "channels", channelFilter: "tag:tech" })
+    expect(validateWorkspaceSearch({ channelGroup: "  " })).toEqual({
+      tab: "channels",
+    })
   })
 
   test("only the active tab's Artifact param survives (TABS-01)", () => {

@@ -16,7 +16,7 @@ export type ChipSelectionState = {
  */
 export function getChipSelectionState(
   names: string[],
-  selectedChannels: Set<string>,
+  selectedChannels: ReadonlySet<string>,
 ): ChipSelectionState {
   const selectedCount = names.filter((name) =>
     selectedChannels.has(name),
@@ -36,7 +36,7 @@ export function getChipSelectionState(
  */
 export function areAllNamesSelected(
   names: string[],
-  selectedChannels: Set<string>,
+  selectedChannels: ReadonlySet<string>,
 ): boolean {
   return names.every((name) => selectedChannels.has(name))
 }

@@ -1,4 +1,3 @@
-import { Clock, type LucideIcon, Tag } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -27,17 +26,15 @@ export function filterUntaggedChannels(channels: Channel[]): Channel[] {
 }
 
 /**
- * A pseudo-tag is a chip on the tag wall backed by a channel property rather
- * than a stored tag, so the same click-to-select gesture works for "channels
- * with no tags" and "channels still missing history". Adding one here is enough
- * to give it a chip, tag-search matching, and command-palette selection.
+ * A pseudo-tag (a derived tag) is backed by a channel property rather than a
+ * stored tag, so the same tick and funnel work for "channels with no tags" and
+ * "channels still missing history". Adding one here is enough to give it a row
+ * in the Tags dropdown, tag-search matching, a Channel filter Condition and
+ * command-palette selection.
  */
 export type ChannelPseudoTag = {
   id: string
   label: string
-  /** Stable hook for tests; also the chip's `data-testid`. */
-  testId: string
-  icon: LucideIcon
   /** Explains what the chip selects, since the label alone is ambiguous. */
   tooltip: string
   matches: (channel: Channel) => boolean
@@ -47,8 +44,6 @@ export const CHANNEL_PSEUDO_TAGS: readonly ChannelPseudoTag[] = [
   {
     id: UNTAGGED_TAG_ID,
     label: UNTAGGED_TAG_LABEL,
-    testId: "channel-tag-untagged",
-    icon: Tag,
     tooltip: "Channels that have no tags yet",
     matches: isUntaggedChannel,
   },
@@ -56,8 +51,6 @@ export const CHANNEL_PSEUDO_TAGS: readonly ChannelPseudoTag[] = [
     // Mirrors the amber "Partial history" badge on the channel card.
     id: PARTIAL_HISTORY_TAG_ID,
     label: PARTIAL_HISTORY_TAG_LABEL,
-    testId: "channel-tag-partial-history",
-    icon: Clock,
     tooltip: "Channels whose history does not reach the retention window",
     matches: isPartialHistoryChannel,
   },

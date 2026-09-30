@@ -126,7 +126,6 @@ describe("partial history pseudo-tag", () => {
       PARTIAL_HISTORY_TAG_ID,
     ])
     expect(chips[1].channelNames).toEqual(["partial"])
-    expect(chips[1].testId).toBe("channel-tag-partial-history")
   })
 
   it("hides chips that match no channel", () => {

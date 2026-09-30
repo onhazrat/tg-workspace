@@ -5,6 +5,7 @@ import {
   seedTestChannel,
 } from "./utils/seed-channel"
 import {
+  clearChannelSelection,
   entityChannelInputPlaceholder,
   gotoWorkspace,
 } from "./utils/summarizer-helpers.ts"
@@ -84,7 +85,7 @@ test.describe("TG Workspace palette", () => {
     await gotoWorkspace(page, "channels")
     const channelName = await seedTestChannel(page)
 
-    await page.getByRole("button", { name: "None", exact: true }).click()
+    await clearChannelSelection(page)
     await page
       .getByRole("button", { name: `Select ${channelName}`, exact: true })
       .click()

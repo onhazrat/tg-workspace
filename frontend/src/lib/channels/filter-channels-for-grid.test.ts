@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test"
 
 import {
+  addFunnel,
+  type CondType,
+  emptyFilter,
+} from "@/lib/channels/channel-filter"
+import {
   collectChannelLanguages,
   filterChannelsForGrid,
 } from "@/lib/channels/filter-channels-for-grid"
@@ -36,7 +41,9 @@ const sampleChannels: Channel[] = [
   },
 ]
 
-const noFilters = { groupFilter: "", languageFilter: "", search: "" }
+const noFilters = { filter: emptyFilter(), search: "" }
+const funnels = (...pairs: [CondType, string][]) =>
+  pairs.reduce((f, [type, value]) => addFunnel(f, type, value), emptyFilter())
 
 describe("filterChannelsForGrid", () => {
   it("returns all channels when no filters are active", () => {
@@ -45,22 +52,19 @@ describe("filterChannelsForGrid", () => {
     )
   })
 
-  it("filters by setting group id", () => {
+  it("shows the Channels the Channel filter passes", () => {
     expect(
       filterChannelsForGrid(sampleChannels, {
         ...noFilters,
-        groupFilter: "group-a",
+        filter: funnels(["group", "group-a"]),
       }).map((c) => c.name),
     ).toEqual(["news"])
-  })
-
-  it("filters by language", () => {
     expect(
       filterChannelsForGrid(sampleChannels, {
         ...noFilters,
-        languageFilter: "fa",
+        filter: funnels(["language", "fa"], ["language", "en"]),
       }).map((c) => c.name),
-    ).toEqual(["sports"])
+    ).toEqual(["news", "sports"])
   })
 
   it("matches search against name, display name, and tags case-insensitively", () => {
@@ -106,20 +110,20 @@ describe("filterChannelsForGrid", () => {
     ).toEqual([])
   })
 
-  it("combines group, language, and search filters", () => {
+  it("narrows the Channel filter with the search on top", () => {
+    const filter = funnels(["tag", "Tech"], ["tag", "tech-news"])
     expect(
-      filterChannelsForGrid(sampleChannels, {
-        groupFilter: "group-a",
-        languageFilter: "en",
-        search: "news",
-      }).map((c) => c.name),
-    ).toEqual(["news"])
+      filterChannelsForGrid(sampleChannels, { filter, search: "" }).map(
+        (c) => c.name,
+      ),
+    ).toEqual(["news", "quiet"])
     expect(
-      filterChannelsForGrid(sampleChannels, {
-        groupFilter: "group-b",
-        languageFilter: "en",
-        search: "",
-      }),
+      filterChannelsForGrid(sampleChannels, { filter, search: "quiet" }).map(
+        (c) => c.name,
+      ),
+    ).toEqual(["quiet"])
+    expect(
+      filterChannelsForGrid(sampleChannels, { filter, search: "sports" }),
     ).toEqual([])
   })
 })

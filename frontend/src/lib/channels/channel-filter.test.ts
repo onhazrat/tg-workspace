@@ -1,0 +1,413 @@
+import { describe, expect, test } from "bun:test"
+import type { Channel } from "@/types"
+import {
+  addFunnel,
+  append,
+  type ChannelFilter,
+  type Cond,
+  clearFunnels,
+  emptyFilter,
+  type FilterNode,
+  filterNames,
+  funnelledValues,
+  groupWith,
+  matchesChannelFilter,
+  moveNode,
+  parseChannelFilter,
+  printChannelFilter,
+  removeFunnel,
+  removeNode,
+  replaceNode,
+  setOp,
+  toggleNot,
+  unwrap,
+  wrap,
+} from "./channel-filter"
+import { UNTAGGED_TAG_ID } from "./channel-tags"
+
+const channel = (over: Partial<Channel>): Channel =>
+  ({ name: "c", tags: [], ...over }) as Channel
+
+const tag = (value: string): Cond => ({ type: "tag", value })
+const lang = (value: string): Cond => ({ type: "language", value })
+const group = (value: string): Cond => ({ type: "group", value })
+
+let seq = 0
+const atom = (cond: Cond, not?: boolean): FilterNode => ({
+  kind: "atom",
+  id: `a${++seq}`,
+  cond,
+  ...(not ? { not } : {}),
+})
+const grp = (
+  op: "and" | "or",
+  children: FilterNode[],
+  not?: boolean,
+): FilterNode & { kind: "group" } => ({
+  kind: "group",
+  id: `g${++seq}`,
+  op,
+  children,
+  ...(not ? { not } : {}),
+})
+const root = (
+  op: "and" | "or",
+  children: FilterNode[],
+  not?: boolean,
+): ChannelFilter => ({ ...grp(op, children, not), id: "root" })
+
+/** The tree with every id dropped, so two trees compare by shape. */
+const shape = (n: FilterNode): unknown =>
+  n.kind === "atom"
+    ? { cond: n.cond, not: !!n.not }
+    : { op: n.op, not: !!n.not, children: n.children.map(shape) }
+
+const tech = channel({ name: "tech", tags: ["tech"], language: "en" })
+const news = channel({ name: "news", tags: ["news"], language: "fa" })
+const bare = channel({ name: "bare", tags: [], settingGroupId: "g1" })
+
+const names = filterNames([
+  { id: "g1", name: "Daily news" },
+  { id: "g2", name: "slow" },
+])
+
+const shown = (filter: ChannelFilter) =>
+  [tech, news, bare]
+    .filter((c) => matchesChannelFilter(filter, c))
+    .map((c) => c.name)
+
+describe("evaluation", () => {
+  test("an empty filter passes every Channel, negated or not", () => {
+    expect(shown(emptyFilter())).toEqual(["tech", "news", "bare"])
+    expect(shown({ ...emptyFilter(), not: true })).toEqual([
+      "tech",
+      "news",
+      "bare",
+    ])
+  })
+
+  test("AND needs every child, OR any", () => {
+    expect(shown(root("and", [atom(tag("tech")), atom(lang("en"))]))).toEqual([
+      "tech",
+    ])
+    expect(shown(root("and", [atom(tag("tech")), atom(lang("fa"))]))).toEqual(
+      [],
+    )
+    expect(shown(root("or", [atom(tag("tech")), atom(lang("fa"))]))).toEqual([
+      "tech",
+      "news",
+    ])
+  })
+
+  test("NOT flips a Condition, a group and the whole filter", () => {
+    expect(shown(root("and", [atom(tag("tech"), true)]))).toEqual([
+      "news",
+      "bare",
+    ])
+    expect(
+      shown(
+        root("and", [grp("or", [atom(tag("tech")), atom(tag("news"))], true)]),
+      ),
+    ).toEqual(["bare"])
+    expect(shown(root("and", [atom(tag("tech"))], true))).toEqual([
+      "news",
+      "bare",
+    ])
+  })
+
+  test("nesting evaluates inside out", () => {
+    // (tech and en) or (news and not en)
+    const filter = root("or", [
+      grp("and", [atom(tag("tech")), atom(lang("en"))]),
+      grp("and", [atom(tag("news")), atom(lang("en"), true)]),
+    ])
+    expect(shown(filter)).toEqual(["tech", "news"])
+  })
+
+  test("an empty nested group passes, even negated", () => {
+    expect(
+      shown(root("and", [grp("or", [], true), atom(tag("news"))])),
+    ).toEqual(["news"])
+  })
+
+  test("Setting group, Language and the derived tags are Conditions", () => {
+    expect(shown(root("and", [atom(group("g1"))]))).toEqual(["bare"])
+    expect(shown(root("and", [atom(lang("fa"))]))).toEqual(["news"])
+    expect(shown(root("and", [atom(tag(UNTAGGED_TAG_ID))]))).toEqual(["bare"])
+  })
+})
+
+describe("editing", () => {
+  test("remove drops empty groups and unwraps one-child groups", () => {
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    const c = atom(tag("c"))
+    const filter = root("and", [grp("or", [a, b]), c])
+    expect(shape(removeNode(filter, a.id))).toEqual(shape(root("and", [b, c])))
+    const lone = root("and", [grp("or", [a]), c])
+    expect(shape(removeNode(lone, a.id))).toEqual(shape(root("and", [c])))
+  })
+
+  test("unwrapping keeps the negation: not (a) is not a, not (not a) is a", () => {
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    const na = atom(tag("a"), true)
+    const nb = atom(tag("b"))
+    expect(
+      shape(removeNode(root("and", [grp("or", [a, b], true)]), b.id)),
+    ).toEqual(shape(root("and", [atom(tag("a"), true)])))
+    expect(
+      shape(removeNode(root("and", [grp("or", [na, nb], true)]), nb.id)),
+    ).toEqual(shape(root("and", [atom(tag("a"))])))
+  })
+
+  test("append, replace, setOp and toggleNot", () => {
+    let filter = append(emptyFilter(), "root", tag("a"))
+    const [first] = filter.children
+    filter = replaceNode(filter, first.id, {
+      ...first,
+      cond: tag("b"),
+    } as FilterNode)
+    filter = append(filter, "root", tag("c"))
+    filter = setOp(filter, "root", "or")
+    filter = toggleNot(filter, filter.children[1].id)
+    expect(shape(filter)).toEqual(
+      shape(root("or", [atom(tag("b")), atom(tag("c"), true)])),
+    )
+    expect(toggleNot(filter, "root").not).toBe(true)
+  })
+
+  test("move reorders and prunes what it leaves behind", () => {
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    const c = atom(tag("c"))
+    const inner = grp("or", [a, b])
+    const filter = root("and", [inner, c])
+    // Move a out, after c: the group left with b alone is unwrapped.
+    expect(shape(moveNode(filter, a.id, "root", 2))).toEqual(
+      shape(root("and", [b, c, a])),
+    )
+    // Move c to the front.
+    expect(shape(moveNode(filter, c.id, "root", 0))).toEqual(
+      shape(root("and", [c, inner])),
+    )
+  })
+
+  test("a group cannot move into itself", () => {
+    const inner = grp("or", [
+      atom(tag("a")),
+      grp("and", [atom(tag("b")), atom(tag("c"))]),
+    ])
+    const filter = root("and", [inner, atom(tag("d"))])
+    const deeper = (inner.children[1] as { id: string }).id
+    expect(moveNode(filter, inner.id, inner.id, 0)).toBe(filter)
+    expect(moveNode(filter, inner.id, deeper, 0)).toBe(filter)
+  })
+
+  test("wrap puts a node in parentheses; groupWith takes the opposite operator", () => {
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    const c = atom(tag("c"))
+    const filter = root("and", [a, b, c])
+    expect(shape(wrap(filter, a.id, "or"))).toEqual(
+      shape(root("and", [grp("or", [a]), b, c])),
+    )
+    expect(shape(groupWith(filter, c.id, a.id))).toEqual(
+      shape(root("and", [grp("or", [a, c]), b])),
+    )
+  })
+
+  test("unwrap splices a group's children into its parent", () => {
+    const a = atom(tag("a"))
+    const b = atom(tag("b"))
+    const c = atom(tag("c"))
+    const inner = grp("or", [a, b])
+    expect(shape(unwrap(root("and", [inner, c]), inner.id))).toEqual(
+      shape(root("and", [a, b, c])),
+    )
+  })
+})
+
+describe("funnels", () => {
+  test("the first funnel of a type appends to the root", () => {
+    const filter = addFunnel(emptyFilter(), "tag", "tech")
+    expect(shape(filter)).toEqual(shape(root("and", [atom(tag("tech"))])))
+  })
+
+  test("a second of the same type makes an OR group, later ones join it", () => {
+    let filter = addFunnel(emptyFilter(), "tag", "tech")
+    filter = addFunnel(filter, "language", "fa")
+    filter = addFunnel(filter, "tag", "news")
+    expect(shape(filter)).toEqual(
+      shape(
+        root("and", [
+          grp("or", [atom(tag("tech")), atom(tag("news"))]),
+          atom(lang("fa")),
+        ]),
+      ),
+    )
+    filter = addFunnel(filter, "tag", "spam")
+    expect(shape(filter)).toEqual(
+      shape(
+        root("and", [
+          grp("or", [atom(tag("tech")), atom(tag("news")), atom(tag("spam"))]),
+          atom(lang("fa")),
+        ]),
+      ),
+    )
+    expect(funnelledValues(filter, "tag")).toEqual(["tech", "news", "spam"])
+  })
+
+  test("a different type joins with AND even when the root is an OR", () => {
+    const filter = addFunnel(
+      root("or", [atom(tag("a")), atom(lang("en"))]),
+      "group",
+      "g1",
+    )
+    expect(filter.op).toBe("and")
+    expect(shared(filter)).toEqual(["a|en", "g1"])
+  })
+
+  test("a funnel never ANDs into a negated root", () => {
+    const filter = addFunnel(root("and", [atom(tag("a"))], true), "tag", "b")
+    // "not a", then a b funnel, is "not a and b", never "not (a and b)".
+    expect(filter.not).toBeFalsy()
+    expect(matchesChannelFilter(filter, channel({ tags: ["b"] }))).toBe(true)
+    expect(matchesChannelFilter(filter, channel({ tags: [] }))).toBe(false)
+    expect(matchesChannelFilter(filter, channel({ tags: ["a", "b"] }))).toBe(
+      false,
+    )
+  })
+
+  test("an existing funnel is not added twice", () => {
+    const filter = addFunnel(emptyFilter(), "tag", "tech")
+    expect(addFunnel(filter, "tag", "tech")).toBe(filter)
+  })
+
+  test("unfunnelling removes every Condition with that value, anywhere", () => {
+    const filter = root("and", [
+      grp("or", [atom(tag("tech")), atom(tag("news"))]),
+      atom(tag("tech"), true),
+      atom(lang("fa")),
+    ])
+    expect(shape(removeFunnel(filter, "tag", "tech"))).toEqual(
+      shape(root("and", [atom(tag("news")), atom(lang("fa"))])),
+    )
+    expect(shape(clearFunnels(filter, "tag"))).toEqual(
+      shape(root("and", [atom(lang("fa"))])),
+    )
+  })
+})
+
+/** Root children as text, groups joined by "|", to read a shape at a glance. */
+function shared(filter: ChannelFilter): string[] {
+  return filter.children.map((n) =>
+    n.kind === "atom"
+      ? n.cond.value
+      : n.children
+          .map((c) => (c.kind === "atom" ? c.cond.value : "()"))
+          .join("|"),
+  )
+}
+
+describe("the URL form", () => {
+  const roundTrip = (filter: ChannelFilter) => {
+    const text = printChannelFilter(filter, names)
+    const parsed = parseChannelFilter(text, names)
+    expect(parsed ? shape(parsed) : parsed).toEqual(shape(filter))
+    return text
+  }
+
+  test("prints readable text", () => {
+    expect(
+      printChannelFilter(
+        root("or", [
+          grp("and", [atom(tag("tech")), atom(lang("fa"))]),
+          atom(group("g1"), true),
+        ]),
+        names,
+      ),
+    ).toBe('(tag:tech and lang:fa) or not group:"Daily news"')
+  })
+
+  test("printing then parsing gives back the same tree", () => {
+    roundTrip(emptyFilter())
+    roundTrip(root("and", [atom(tag("tech"))]))
+    roundTrip(root("and", [atom(tag("tech"), true)]))
+    roundTrip(root("or", [atom(tag("a")), atom(tag("b"))]))
+    roundTrip(root("and", [grp("or", [atom(tag("a")), atom(tag("b"))])]))
+    roundTrip(root("and", [grp("or", [atom(tag("a")), atom(tag("b"))], true)]))
+    roundTrip(root("and", [atom(tag("a")), atom(tag("b"))], true))
+    roundTrip(root("and", [atom(tag("a"))], true))
+    roundTrip(
+      root("and", [
+        grp("or", [
+          atom(tag("a")),
+          grp("and", [atom(group("g2")), atom(lang("fa"))]),
+        ]),
+        atom(tag("x y"), true),
+        atom(tag(UNTAGGED_TAG_ID)),
+      ]),
+    )
+  })
+
+  test("reads the spec's example shape, AND binding tighter than OR", () => {
+    // The spec's example with its number Conditions (CTB-02) swapped for tags.
+    const parsed = parseChannelFilter(
+      "(tag tech and big) or (tag news and (small or popular) and (slow or important))",
+      names,
+    )
+    expect(parsed ? shape(parsed) : parsed).toEqual(
+      shape(
+        root("or", [
+          grp("and", [atom(tag("tech")), atom(tag("big"))]),
+          grp("and", [
+            atom(tag("news")),
+            grp("or", [atom(tag("small")), atom(tag("popular"))]),
+            grp("or", [atom(tag("slow")), atom(tag("important"))]),
+          ]),
+        ]),
+      ),
+    )
+    const loose = parseChannelFilter("not a or b and c", names)
+    expect(loose ? shape(loose) : loose).toEqual(
+      shape(
+        root("or", [
+          atom(tag("a"), true),
+          grp("and", [atom(tag("b")), atom(tag("c"))]),
+        ]),
+      ),
+    )
+  })
+
+  test("Setting groups are read by name or by id, and derived tags by label", () => {
+    for (const text of ['group:"daily news"', "group:g1"]) {
+      const parsed = parseChannelFilter(text, names)
+      expect(parsed ? shape(parsed) : parsed).toEqual(
+        shape(root("and", [atom(group("g1"))])),
+      )
+    }
+    expect(
+      printChannelFilter(root("and", [atom(tag(UNTAGGED_TAG_ID))]), names),
+    ).toBe("tag:Untagged")
+  })
+
+  test("a malformed string is not a filter", () => {
+    for (const text of [
+      "(tag:a",
+      "tag:a)",
+      "and",
+      "group:nope",
+      "foo:bar",
+      "a >",
+    ]) {
+      expect(parseChannelFilter(text, names)).toBeNull()
+    }
+  })
+
+  test("a group name holding a quote is written by id", () => {
+    const quoted = filterNames([{ id: "g9", name: 'the "best"' }])
+    const text = printChannelFilter(root("and", [atom(group("g9"))]), quoted)
+    expect(text).toBe("group:g9")
+  })
+})

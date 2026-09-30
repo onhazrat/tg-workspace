@@ -7,6 +7,7 @@ import {
 } from "./utils/scoped-storage.ts"
 import { seedBulkChannels, seedTestChannel } from "./utils/seed-channel"
 import {
+  clearChannelSelection,
   gotoWorkspace,
   selectChannelsKeyboard,
 } from "./utils/summarizer-helpers.ts"
@@ -278,14 +279,14 @@ test.describe("TG Workspace channels and posts", () => {
       })
     }
 
-    await page.getByRole("button", { name: "None", exact: true }).click()
-    await page.getByRole("button", { name: "All", exact: true }).click()
-    await expect(page.getByText("5 Selected")).toBeVisible()
+    await clearChannelSelection(page)
+    await page.getByRole("button", { name: "Select all", exact: true }).click()
+    await expect(page.getByText("5 selected")).toBeVisible()
 
     await page.getByTestId("channel-trim-count").fill("2")
     await page.getByTestId("channel-trim-button").click()
 
-    await expect(page.getByText("2 Selected")).toBeVisible()
+    await expect(page.getByText("2 selected")).toBeVisible()
     await expect(
       page.locator(
         `[data-channel-name="${channelNames[0]}"] button[aria-pressed="true"]`,
@@ -305,7 +306,7 @@ test.describe("TG Workspace channels and posts", () => {
     await page.getByTestId("channel-trim-count").fill("5")
     await page.getByTestId("channel-trim-button").click()
     await expect(page.getByText(/Already 2 or fewer selected/i)).toBeVisible()
-    await expect(page.getByText("2 Selected")).toBeVisible()
+    await expect(page.getByText("2 selected")).toBeVisible()
   })
 
   /**
@@ -332,8 +333,7 @@ test.describe("TG Workspace channels and posts", () => {
 
     // With nothing selected the grid is in plain sort order. A selected run at
     // the top keeps that order, so these handles stay the on-screen order.
-    const none = page.getByRole("button", { name: "None", exact: true })
-    await none.click()
+    await clearChannelSelection(page)
     await expect(
       page.locator(`[data-channel-name^="${prefix}"] [aria-pressed="true"]`),
     ).toHaveCount(0)
@@ -379,15 +379,14 @@ test.describe("TG Workspace channels and posts", () => {
     // would reach the top. Ungrouped, nothing moves and the run stays put.
     // The grid stays ungrouped from here, so the reload below checks it is
     // remembered.
-    const grouping = page.getByRole("button", {
-      name: "Group selected and frozen channels",
-    })
+    const grouping = page.getByRole("button", { name: /Selected first/ })
     await grouping.click()
     await expect(grouping).toHaveAttribute("aria-pressed", "false")
     await shiftRun(checkboxOf, 1)
 
-    const zoomIn = page.getByRole("button", { name: "Detailed cards" })
-    const zoomOut = page.getByRole("button", { name: "Compact cards" })
+    const detailed = page.getByRole("button", { name: "Detailed cards" })
+    const compact = page.getByRole("button", { name: "Compact cards" })
+    const tiles = page.getByRole("button", { name: "Tiles" })
     // Pin cards by handle: selection can reorder the grid, so `first()` and
     // `nth()` would re-resolve to a different card after a toggle.
     const cardNamed = async (index: number) => {
@@ -397,14 +396,13 @@ test.describe("TG Workspace channels and posts", () => {
     const first = await cardNamed(0)
 
     // +1 shows fields the default settings hide, such as Start ID.
-    await zoomIn.click()
-    await expect(zoomIn).toBeDisabled()
+    await detailed.click()
+    await expect(detailed).toHaveAttribute("aria-pressed", "true")
     await expect(first.getByText("Start ID")).toBeVisible()
 
     // -1: no checkbox, the body selects, Sync does not. New channels may start
     // selected, so each step asserts a flip rather than a count.
-    await zoomOut.click()
-    await zoomOut.click()
+    await compact.click()
     await expect(first.getByText("Start ID")).toHaveCount(0)
     const toggle = first.locator("button[aria-pressed]")
     await expect(toggle).toHaveCount(1)
@@ -416,8 +414,8 @@ test.describe("TG Workspace channels and posts", () => {
     await expect(toggle).toHaveAttribute("aria-pressed", after)
 
     // -2: the tile is the toggle.
-    await zoomOut.click()
-    await expect(zoomOut).toBeDisabled()
+    await tiles.click()
+    await expect(tiles).toHaveAttribute("aria-pressed", "true")
     const tile = await cardNamed(1)
     const tileBefore = await tile.getAttribute("aria-pressed")
     await tile.click()
@@ -428,13 +426,11 @@ test.describe("TG Workspace channels and posts", () => {
     await page.reload()
     await page.getByPlaceholder("Search channels...").fill(prefix)
     await expect(cards).toHaveCount(4, { timeout: 30_000 })
-    await expect(
-      page.getByRole("button", { name: "Compact cards" }),
-    ).toBeDisabled()
+    await expect(tiles).toHaveAttribute("aria-pressed", "true")
     await expect(grouping).toHaveAttribute("aria-pressed", "false")
 
     // -2: the tile takes the shift-click, from mid-grid since still ungrouped.
-    await none.click()
+    await clearChannelSelection(page)
     await shiftRun((name) => page.locator(`[data-channel-name="${name}"]`), 1)
   })
 
@@ -479,8 +475,56 @@ test.describe("TG Workspace channels and posts", () => {
     await page.getByRole("button", { name: "Detailed cards" }).click()
     await expect(cards.first().getByText("Start ID")).toBeVisible()
     await expectRowsFlush()
-    await page.getByRole("button", { name: "Compact cards" }).click()
+    await page.getByRole("button", { name: "Cards", exact: true }).click()
     await expect(cards.first().getByText("Start ID")).toHaveCount(0)
     await expectRowsFlush()
+  })
+
+  /**
+   * CTB-01: a tag funnel is a Condition in the Channel filter, and the filter
+   * lives in the URL, so a reload keeps it. Tags a Channel through the Tags
+   * popover and finds the tag through the Tags dropdown's search on the way.
+   */
+  test("a tag funnel filters the grid and survives a reload", async ({
+    page,
+  }) => {
+    const prefix = `funnel${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 2, prefix)
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByRole("button", { name: "Cards", exact: true }).click()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(2, { timeout: 30_000 })
+    const [tagged, other] = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+
+    await clearChannelSelection(page)
+    await page
+      .getByRole("button", { name: `Select ${tagged}`, exact: true })
+      .click()
+    await page.getByTestId("bulk-tags").click()
+    await page.getByTestId("bulk-add-tag-input").fill(prefix)
+    await page.getByTestId("bulk-add-tag-button").click()
+    await page.keyboard.press("Escape")
+
+    await page.getByTestId("channel-tags").click()
+    await page.getByPlaceholder("Search tags...").fill(prefix)
+    await page.getByTestId(`channel-tags-funnel-${prefix}`).click()
+    await page.keyboard.press("Escape")
+    await expect(cards).toHaveCount(1)
+    await expect(page.locator(`[data-channel-name="${tagged}"]`)).toBeVisible()
+    await expect(page.getByTestId("channel-tags")).toContainText(prefix)
+    await expect(page).toHaveURL(/channelFilter=/)
+
+    await page.reload()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    await expect(page.getByTestId(`channel-filter-chip-${prefix}`)).toBeVisible(
+      { timeout: 30_000 },
+    )
+    await expect(page.locator(`[data-channel-name="${tagged}"]`)).toBeVisible()
+    await expect(page.locator(`[data-channel-name="${other}"]`)).toHaveCount(0)
   })
 })

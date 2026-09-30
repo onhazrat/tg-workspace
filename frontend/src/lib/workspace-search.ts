@@ -9,8 +9,12 @@ export type WorkspaceSearch = {
   section?: SettingsSection
   /** Deep-link to a catalog setting id (scroll + highlight). */
   setting?: string
-  /** Active group filter on the Channels tab (setting group id). */
-  channelGroup?: string
+  /**
+   * The Channel filter on the Channels tab, in its text form
+   * (`lib/channels/channel-filter.ts`). It replaced `channelGroup`, whose old
+   * links become a one-Condition filter on that Setting group.
+   */
+  channelFilter?: string
   /** Selected setting group in Settings → Channels & Sync. */
   settingGroup?: string
   /**
@@ -34,10 +38,10 @@ export type WorkspaceSearch = {
   tagRun?: string
 }
 
-/** The id-like params: kept trimmed when non-blank, dropped otherwise. */
+/** The string params: kept trimmed when non-blank, dropped otherwise. */
 const ID_PARAMS = [
   "setting",
-  "channelGroup",
+  "channelFilter",
   "settingGroup",
   "report",
   "summary",
@@ -68,6 +72,10 @@ export function validateWorkspaceSearch(
   for (const key of ID_PARAMS) {
     const value = trimmedString(search[key])
     if (value) result[key] = value
+  }
+  const legacyGroup = trimmedString(search.channelGroup)
+  if (legacyGroup && !result.channelFilter) {
+    result.channelFilter = `group:"${legacyGroup}"`
   }
   // Only the active tab's Artifact param means anything (TABS-01). An old
   // `?summary=` riding along on `?tab=posts` would otherwise reopen that

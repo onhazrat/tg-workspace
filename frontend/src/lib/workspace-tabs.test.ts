@@ -331,15 +331,19 @@ describe("goTo", () => {
 
 describe("tabSearch", () => {
   it("names only the target tab's Artifact", () => {
-    const prev = { tab: "summary" as const, summary: "old", channelGroup: "g" }
+    const prev = {
+      tab: "summary" as const,
+      summary: "old",
+      channelFilter: "tag:g",
+    }
     expect(tabSearch(prev, { kind: "summary" })).toEqual({
       tab: "summary",
-      channelGroup: "g",
+      channelFilter: "tag:g",
     })
     expect(tabSearch(prev, { kind: "chat", id: "c" })).toEqual({
       tab: "chat",
       chatSession: "c",
-      channelGroup: "g",
+      channelFilter: "tag:g",
     })
   })
 })

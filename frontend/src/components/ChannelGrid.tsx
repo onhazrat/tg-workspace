@@ -1,18 +1,40 @@
+import { Languages, Layers, RefreshCw, Search, Tag } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ChannelBulkActions } from "@/components/channel-grid/ChannelBulkActions"
+import {
+  AiContextPill,
+  FollowControl,
+  SortMenu,
+} from "@/components/channel-grid/ChannelBarControls"
+import {
+  ChannelFacetMenu,
+  type FacetRow,
+} from "@/components/channel-grid/ChannelFacetMenu"
+import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
-import { ChannelGridFilterBar } from "@/components/channel-grid/ChannelGridFilterBar"
-import { ChannelGridToolbar } from "@/components/channel-grid/ChannelGridToolbar"
-import { ChannelGroupChips } from "@/components/channel-grid/ChannelGroupChips"
-import { ChannelTagChips } from "@/components/channel-grid/ChannelTagChips"
+import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
+import {
+  addFunnel,
+  type ChannelFilter,
+  type CondType,
+  clearFunnels,
+  emptyFilter,
+  filterNames,
+  funnelledValues,
+  parseChannelFilter,
+  printChannelFilter,
+  removeFunnel,
+  removeNode,
+} from "@/lib/channels/channel-filter"
 import {
   areAllNamesSelected,
   collectGridTags,
@@ -23,7 +45,6 @@ import {
 import {
   buildChannelPseudoTagChips,
   filterTagsBySearch,
-  findChannelPseudoTag,
 } from "@/lib/channels/channel-tags"
 import {
   collectChannelLanguages,
@@ -88,23 +109,31 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const [channelSearch, setChannelSearch] = useState("")
   const [tagSearch, setTagSearch] = useState("")
-  const [selectedLanguageFilter, setSelectedLanguageFilter] =
-    useState<string>("")
-  const { channelGroupFilter, setChannelGroupFilter } =
-    useWorkspaceGroupParams()
-  const selectedGroupFilter = channelGroupFilter
+  const { channelFilterText, setChannelFilterText } = useWorkspaceGroupParams()
 
   const actions = useChannelGridActions()
   const { sortedSettingGroups } = actions
 
+  // The Channel filter lives in the URL. A text that does not parse is
+  // ignored, and replaced by the next edit.
+  const names = useMemo(
+    () => filterNames(sortedSettingGroups),
+    [sortedSettingGroups],
+  )
+  const channelFilter = useMemo(
+    () => parseChannelFilter(channelFilterText, names) ?? emptyFilter(),
+    [channelFilterText, names],
+  )
+  const setChannelFilter = (next: ChannelFilter) =>
+    setChannelFilterText(printChannelFilter(next, names))
+
   const filteredChannels = useMemo(
     () =>
       filterChannelsForGrid(channels, {
-        groupFilter: selectedGroupFilter,
-        languageFilter: selectedLanguageFilter,
+        filter: channelFilter,
         search: channelSearch,
       }),
-    [channels, channelSearch, selectedLanguageFilter, selectedGroupFilter],
+    [channels, channelSearch, channelFilter],
   )
 
   // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
@@ -157,16 +186,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     isTrimDisabled,
     isScrapeSelectedDisabled,
     isScrapeAllDisabled,
-    isFilteringActive,
   } = channelGridGates({
     trimCount,
     selectedCount: selectedChannels.size,
     summarizing,
     scrapingCount: scrapingChannels.size,
     isOffline,
-    languageFilter: selectedLanguageFilter,
-    groupFilter: selectedGroupFilter,
-    search: channelSearch,
   })
 
   const handleTrimSelection = useCallback(() => {
@@ -211,13 +236,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   useEffect(() => {
     setVisibleChannels(20)
-  }, [
-    channelSearch,
-    selectedLanguageFilter,
-    selectedGroupFilter,
-    sortBy,
-    sortDirection,
-  ])
+  }, [channelSearch, channelFilterText, sortBy, sortDirection])
 
   const allTags = useMemo(
     () => collectGridTags(channels, selectedChannels),
@@ -277,24 +296,67 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     })
   }
 
-  const toggleGroupSelection = (groupId: string) => {
-    const channelsInGroup = getChannelNamesInGroup(channels, groupId)
-    const allSelected = areAllNamesSelected(channelsInGroup, selectedChannels)
+  // A tick selects or deselects every Channel in a dropdown row.
+  const toggleRowSelection = (row: FacetRow) => {
+    const allSelected = areAllNamesSelected(row.names, selectedChannels)
     setSelectedChannels((prev) =>
-      toggleNamesInSelection(prev, channelsInGroup, allSelected),
+      toggleNamesInSelection(prev, row.names, allSelected),
     )
   }
 
-  const toggleTagSelection = (tag: string) => {
-    const pseudoTag = findChannelPseudoTag(tag)
-    const channelsWithTag = pseudoTag
-      ? channels.filter((c) => pseudoTag.matches(c)).map((c) => c.name)
-      : getChannelNamesWithTag(channels, tag)
-    const allSelected = areAllNamesSelected(channelsWithTag, selectedChannels)
-    setSelectedChannels((prev) =>
-      toggleNamesInSelection(prev, channelsWithTag, allSelected),
-    )
-  }
+  const facet = (type: CondType) => ({
+    selectedChannels,
+    funnelled: funnelledValues(channelFilter, type),
+    onToggleSelect: toggleRowSelection,
+    onFunnel: (id: string, on: boolean) =>
+      setChannelFilter(
+        on
+          ? addFunnel(channelFilter, type, id)
+          : removeFunnel(channelFilter, type, id),
+      ),
+    onClearFunnels: () => setChannelFilter(clearFunnels(channelFilter, type)),
+  })
+
+  const groupRows = useMemo<FacetRow[]>(
+    () =>
+      sortedSettingGroups.map((group) => ({
+        id: group.id,
+        label: group.name,
+        hint: group.isDefault ? "default" : undefined,
+        names: getChannelNamesInGroup(channels, group.id),
+      })),
+    [channels, sortedSettingGroups],
+  )
+
+  const tagRows = useMemo<FacetRow[]>(
+    () => [
+      ...visibleTags.map((tag) => ({
+        id: tag,
+        label: tag,
+        names: getChannelNamesWithTag(channels, tag),
+      })),
+      ...pseudoTagChips.map((chip) => ({
+        id: chip.id,
+        label: chip.label,
+        explanation: chip.tooltip,
+        names: chip.channelNames,
+      })),
+    ],
+    [channels, pseudoTagChips, visibleTags],
+  )
+
+  const languageRows = useMemo<FacetRow[]>(
+    () =>
+      allLanguages.map((language) => ({
+        id: language.code,
+        label: language.name,
+        hint: language.code,
+        names: channels
+          .filter((c) => c.language === language.code)
+          .map((c) => c.name),
+      })),
+    [allLanguages, channels],
+  )
 
   return (
     <motion.div
@@ -303,108 +365,134 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Unified Control Bar */}
-      <div className="bg-app-card rounded-xl border border-app-ink/10 shadow-sm p-4 flex flex-col gap-4">
-        <ChannelGridToolbar
-          inlineChannelName={actions.inlineChannelName}
-          onInlineChannelNameChange={actions.setInlineChannelName}
-          onAddChannel={actions.handleAddChannel}
-          channelSearch={channelSearch}
-          onChannelSearchChange={setChannelSearch}
-          tagSearch={tagSearch}
-          onTagSearchChange={setTagSearch}
-          hasChannels={channels.length > 0}
+      <div className="rounded-xl border border-app-ink/10 bg-app-card shadow-sm">
+        {/* Row 1: follow, find, filter, sort, sync */}
+        <div className="flex flex-wrap items-center gap-2 p-3">
+          <FollowControl
+            value={actions.inlineChannelName}
+            onChange={actions.setInlineChannelName}
+            onFollow={actions.handleAddChannel}
+          />
+          <div className="relative min-w-[200px] flex-1">
+            <Search
+              size={13}
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-3 my-auto text-app-ink/40"
+            />
+            <TgInput
+              type="text"
+              variant="muted"
+              value={channelSearch}
+              onChange={(e) => setChannelSearch(e.target.value)}
+              placeholder="Search channels..."
+              className="h-9 py-0 pl-9"
+            />
+          </div>
+          <ChannelFacetMenu
+            icon={<Layers size={12} />}
+            label="Groups"
+            noun="group"
+            testId="channel-groups"
+            rows={groupRows}
+            {...facet("group")}
+          />
+          <ChannelFacetMenu
+            icon={<Tag size={12} />}
+            label="Tags"
+            noun="tag"
+            testId="channel-tags"
+            rows={tagRows}
+            search={{ value: tagSearch, onChange: setTagSearch }}
+            {...facet("tag")}
+          />
+          {allLanguages.length > 0 && (
+            <ChannelFacetMenu
+              icon={<Languages size={12} />}
+              label="Languages"
+              noun="language"
+              testId="channel-languages"
+              rows={languageRows}
+              {...facet("language")}
+            />
+          )}
+          <SortMenu
+            sortBy={sortBy}
+            onSortByChange={setSortBy}
+            sortDirection={sortDirection}
+            onToggleSortDirection={() =>
+              setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+            }
+            showSubscribers={showChannelSubscribers}
+          />
+          <AiContextPill
+            includeBio={includeChannelBioInPrompt}
+            onIncludeBioChange={setIncludeChannelBioInPrompt}
+            includeTags={includeChannelTagsInPrompt}
+            onIncludeTagsChange={setIncludeChannelTagsInPrompt}
+          />
+          <TgButton
+            type="button"
+            size="sm"
+            onClick={handleScrapeAll}
+            disabled={isScrapeAllDisabled}
+            loading={scrapingChannels.size > 0}
+            className="h-9"
+          >
+            <RefreshCw size={12} />
+            Sync all
+          </TgButton>
+        </div>
+
+        <ChannelFilterRow
+          filter={channelFilter}
+          search={channelSearch}
+          shownCount={filteredChannels.length}
+          totalCount={channels.length}
+          names={names}
+          onRemove={(id) => setChannelFilter(removeNode(channelFilter, id))}
+          onClearSearch={() => setChannelSearch("")}
+          onClearAll={() => {
+            setChannelFilter(emptyFilter())
+            setChannelSearch("")
+          }}
+        />
+
+        <ChannelSelectionBar
+          selectedCount={selectedChannels.size}
+          shownCount={filteredChannels.length}
           onSelectAll={handleSelectAll}
-          onUnselectAll={handleUnselectAll}
-          onRevertSelection={handleRevertSelection}
-          isRevertDisabled={filteredChannels.length === 0}
-          isScraping={scrapingChannels.size > 0}
-          isScrapeSelectedDisabled={isScrapeSelectedDisabled}
-          isScrapeAllDisabled={isScrapeAllDisabled}
-          onScrapeSelected={handleScrapeSelected}
-          onScrapeAll={handleScrapeAll}
+          onInvert={handleRevertSelection}
+          isInvertDisabled={filteredChannels.length === 0}
+          onClear={handleUnselectAll}
+          trimCount={trimCount}
+          onTrimCountChange={setTrimCount}
+          onTrim={handleTrimSelection}
+          isTrimDisabled={isTrimDisabled}
+          onSync={handleScrapeSelected}
+          isSyncDisabled={isScrapeSelectedDisabled}
+          isSyncing={scrapingChannels.size > 0}
+          onFreeze={() => actions.setConfirmBulkFreezeAction("freeze")}
+          onUnfreeze={() => actions.setConfirmBulkFreezeAction("unfreeze")}
+          onDelete={() => actions.setConfirmBulkDelete(true)}
+          settingGroups={sortedSettingGroups}
+          moveTargetId={actions.bulkTargetGroupId}
+          onMoveTargetChange={actions.setBulkTargetGroupId}
+          onMove={() => void actions.applyBulkMoveToGroup()}
+          tagInput={actions.bulkTagInput}
+          onTagInputChange={actions.setBulkTagInput}
+          onAddTag={actions.handleBulkAddTag}
+          removeTagInput={actions.bulkRemoveTagInput}
+          onRemoveTagInputChange={actions.setBulkRemoveTagInput}
+          onRemoveTag={actions.handleBulkRemoveTag}
+          groupBySelection={channelGridGroupBySelection}
+          onToggleGroupBySelection={() =>
+            setChannelGridGroupBySelection(!channelGridGroupBySelection)
+          }
+          showSortRank={showSortRank}
+          onShowSortRankChange={setShowSortRank}
           zoom={channelCardZoom}
           onZoomChange={setChannelCardZoom}
         />
-
-        {/* Group & tag filter rows */}
-        {channels.length > 0 && (
-          <div className="flex flex-col gap-3 pt-4 border-t border-app-ink/5">
-            <ChannelGroupChips
-              groups={sortedSettingGroups}
-              channels={channels}
-              selectedChannels={selectedChannels}
-              activeGroupFilter={selectedGroupFilter}
-              onToggleGroupSelection={toggleGroupSelection}
-              onSetGroupFilter={setChannelGroupFilter}
-            />
-
-            <div className="flex flex-col gap-4">
-              <ChannelTagChips
-                channels={channels}
-                selectedChannels={selectedChannels}
-                visibleTags={visibleTags}
-                pseudoTagChips={pseudoTagChips}
-                onToggleTag={toggleTagSelection}
-              />
-
-              <ChannelGridFilterBar
-                includeChannelBioInPrompt={includeChannelBioInPrompt}
-                onIncludeChannelBioInPromptChange={setIncludeChannelBioInPrompt}
-                includeChannelTagsInPrompt={includeChannelTagsInPrompt}
-                onIncludeChannelTagsInPromptChange={
-                  setIncludeChannelTagsInPrompt
-                }
-                isFilteringActive={isFilteringActive}
-                filteredCount={filteredChannels.length}
-                totalCount={channels.length}
-                allLanguages={allLanguages}
-                selectedLanguageFilter={selectedLanguageFilter}
-                onLanguageFilterChange={setSelectedLanguageFilter}
-                sortBy={sortBy}
-                onSortByChange={setSortBy}
-                sortDirection={sortDirection}
-                onToggleSortDirection={() =>
-                  setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
-                groupBySelection={channelGridGroupBySelection}
-                onToggleGroupBySelection={() =>
-                  setChannelGridGroupBySelection(!channelGridGroupBySelection)
-                }
-                showChannelSubscribers={showChannelSubscribers}
-                trimCount={trimCount}
-                onTrimCountChange={setTrimCount}
-                isTrimInputDisabled={selectedChannels.size === 0}
-                isTrimDisabled={isTrimDisabled}
-                onTrimSelection={handleTrimSelection}
-                showSortRank={showSortRank}
-                onShowSortRankChange={setShowSortRank}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Bulk Actions */}
-        {selectedChannels.size > 0 && (
-          <ChannelBulkActions
-            selectedCount={selectedChannels.size}
-            onRequestFreeze={() => actions.setConfirmBulkFreezeAction("freeze")}
-            onRequestUnfreeze={() =>
-              actions.setConfirmBulkFreezeAction("unfreeze")
-            }
-            settingGroups={sortedSettingGroups}
-            bulkTargetGroupId={actions.bulkTargetGroupId}
-            onBulkTargetGroupIdChange={actions.setBulkTargetGroupId}
-            onApplyMoveToGroup={() => void actions.applyBulkMoveToGroup()}
-            bulkTagInput={actions.bulkTagInput}
-            onBulkTagInputChange={actions.setBulkTagInput}
-            onBulkAddTag={actions.handleBulkAddTag}
-            bulkRemoveTagInput={actions.bulkRemoveTagInput}
-            onBulkRemoveTagInputChange={actions.setBulkRemoveTagInput}
-            onBulkRemoveTag={actions.handleBulkRemoveTag}
-            onRequestDelete={() => actions.setConfirmBulkDelete(true)}
-          />
-        )}
       </div>
 
       <ChannelGridBody

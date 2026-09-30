@@ -1,15 +1,18 @@
+import {
+  type ChannelFilter,
+  matchesChannelFilter,
+} from "@/lib/channels/channel-filter"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
 
 export type ChannelGridFilters = {
-  groupFilter: string
-  languageFilter: string
+  filter: ChannelFilter
   search: string
 }
 
 /**
- * Apply the Channels tab filters in order: setting group, language, then
+ * The Shown Channels: those the Channel filter passes, narrowed by the
  * free-text search over name, display name, and tag names.
  *
  * Matches the historical inline behavior exactly: the search query is
@@ -18,15 +21,12 @@ export type ChannelGridFilters = {
  */
 export function filterChannelsForGrid(
   channels: Channel[],
-  { groupFilter, languageFilter, search }: ChannelGridFilters,
+  { filter, search }: ChannelGridFilters,
 ): Channel[] {
-  let result = channels
-  if (groupFilter) {
-    result = result.filter((channel) => channel.settingGroupId === groupFilter)
-  }
-  if (languageFilter) {
-    result = result.filter((c) => c.language === languageFilter)
-  }
+  let result =
+    filter.children.length > 0
+      ? channels.filter((channel) => matchesChannelFilter(filter, channel))
+      : channels
   if (search.trim()) {
     const query = search.toLowerCase()
     result = result.filter(
@@ -42,7 +42,7 @@ export function filterChannelsForGrid(
 export type ChannelLanguageOption = { code: string; name: string }
 
 /**
- * Each Language code across all channels once, for the Lang filter select.
+ * Each Language code across all channels once, for the Languages dropdown.
  * The option's value is the code, which is what `filterChannelsForGrid`
  * matches; the options are sorted by the name the reader sees.
  */

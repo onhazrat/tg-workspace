@@ -78,7 +78,7 @@ test.describe("TG UI primitives", () => {
       expect(primaryClass).toContain("hover:opacity-90")
       expect(primaryClass).toContain("focus-visible:ring-2")
 
-      const ghost = page.getByRole("button", { name: /^All$/i })
+      const ghost = page.getByRole("button", { name: /^Invert$/i })
       await expect(ghost).toHaveAttribute("data-slot", "tg-button")
       const ghostClass = (await ghost.getAttribute("class")) ?? ""
       expect(ghostClass).toContain("hover:bg-app-ink/5")
@@ -310,19 +310,21 @@ test.describe("TG UI primitives", () => {
     expect(Math.abs(onAxis - (edge ?? 0))).toBeLessThanOrEqual(1.5)
   })
 
-  test("group filter chips use primitives, and a post filter pill fills when set", async ({
+  test("the Groups dropdown keeps a group's casing, and a post filter pill fills when set", async ({
     page,
   }) => {
     await gotoWorkspace(page, "channels")
     await seedTestChannel(page)
-    const selectionChip = page
-      .locator('[data-slot="tg-selection-chip"]')
+    await page.getByTestId("channel-groups").click()
+    const groupRow = page
+      .locator('[data-testid^="channel-groups-row-"]')
       .first()
-    await expect(selectionChip).toBeVisible()
-    // Selection chips carry user-authored tag/group names, so they must render
-    // the operator's casing rather than the app's uppercase micro-label style.
-    await expect(selectionChip).toHaveCSS("text-transform", "none")
-    // Do not click group chips here — toggling a large group can stall the UI.
+    await expect(groupRow).toBeVisible()
+    // A row carries a user-authored group name, so it must render the
+    // operator's casing rather than an uppercase micro-label style.
+    await expect(groupRow).toHaveCSS("text-transform", "none")
+    // Do not tick a group here — toggling a large group can stall the UI.
+    await page.keyboard.press("Escape")
 
     // Workspace tabs navigate to `?tab=`, so they are links, not buttons.
     await page.getByRole("link", { name: "Posts" }).click()

@@ -3,54 +3,6 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-/**
- * Selection chips label user-authored content — tag names and setting-group
- * names — so they deliberately do NOT get the `uppercase tracking-widest`
- * treatment the rest of the app uses for its micro-labels. Casing is data here:
- * uppercasing turns "iOS" into "IOS" and "McKinsey" into "MCKINSEY", so the chip
- * would stop showing what the operator actually typed. `ChannelCard` already
- * renders the same tag names unmodified; this keeps the two views agreeing.
- *
- * `tgFilterChipVariants` below stays uppercase on purpose: it labels fixed UI
- * vocabulary ("Original Only", sort names), where the caps are a style choice
- * rather than a distortion of someone's content.
- */
-const tgSelectionChipVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30",
-  {
-    variants: {
-      state: {
-        selected: "bg-app-ink text-app-bg border-app-ink",
-        partial: "bg-app-ink/20 text-app-ink border-app-ink/40",
-        idle: "bg-app-muted text-app-ink border-app-ink/10 hover:border-app-ink/30 hover:bg-app-ink/5",
-      },
-    },
-    defaultVariants: {
-      state: "idle",
-    },
-  },
-)
-
-type TgSelectionChipProps = React.ComponentProps<"button"> &
-  VariantProps<typeof tgSelectionChipVariants>
-
-function TgSelectionChip({
-  className,
-  state = "idle",
-  type = "button",
-  ...props
-}: TgSelectionChipProps) {
-  return (
-    <button
-      type={type}
-      data-slot="tg-selection-chip"
-      data-state={state ?? "idle"}
-      className={cn(tgSelectionChipVariants({ state }), className)}
-      {...props}
-    />
-  )
-}
-
 const tgMetaChipVariants = cva(
   "inline-flex items-center gap-1 rounded-full bg-app-muted/30 text-app-ink/70",
   {
@@ -123,11 +75,9 @@ function TgFilterChip({
 }
 
 export {
-  TgSelectionChip,
   TgMetaChip,
   TgFilterChip,
-  tgSelectionChipVariants,
   tgMetaChipVariants,
   tgFilterChipVariants,
 }
-export type { TgSelectionChipProps, TgMetaChipProps, TgFilterChipProps }
+export type { TgMetaChipProps, TgFilterChipProps }
