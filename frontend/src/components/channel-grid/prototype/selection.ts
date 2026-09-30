@@ -1,6 +1,6 @@
 /**
  * PROTOTYPE, throwaway: selection changes relative to what the filters show,
- * for S1-S3. S is the selection, F the channels the filters show. Every
+ * for S3. S is the selection, F the channels the filters show. Every
  * operation keeps or drops each of three regions:
  *   hidden  S − F  selected, hidden by the filters
  *   both    S ∩ F  selected and shown

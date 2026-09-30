@@ -86,7 +86,7 @@ export type ChannelControlsProps = {
   /** PROTOTYPE-only, T1: the filter expression, and the names it prints with. */
   filterTree: GroupNode
   onFilterTreeChange: (tree: GroupNode) => void
-  /** PROTOTYPE-only, S1-S3: the shown channels, and selection edits against them. */
+  /** PROTOTYPE-only, S3: the shown channels, and selection edits against them. */
   shownNames: string[]
   onSetSelection: (next: Set<string>) => void
   selectionScope: SelectionScope

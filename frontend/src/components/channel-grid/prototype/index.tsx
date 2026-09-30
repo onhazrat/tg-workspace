@@ -20,7 +20,6 @@ export const PROTOTYPE_VARIANTS = [
   { key: "N2", name: "F3 + Filters dropdown, active-filters bar" },
   { key: "L3", name: "N2 + every AND / OR is a toggle" },
   { key: "T1", name: "L3 + nested groups: drag blocks" },
-  { key: "S1", name: "T1 + Selection menu with Venn legend" },
   { key: "S3", name: "T1 + pick regions of a Venn" },
 ]
 
@@ -48,7 +47,6 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   N2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
   L3: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
   T1: aVariant(T1_LAYOUT),
-  S1: aVariant({ ...T1_LAYOUT, selection: "menu" }),
   S3: aVariant({ ...T1_LAYOUT, selection: "venn" }),
 }
 

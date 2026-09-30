@@ -42,11 +42,7 @@ import type { Channel } from "@/types"
 import { FollowControl, type FollowLayout } from "./Follow"
 import { ActiveFiltersBar, FilterBuilder } from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
-import {
-  SelectionMenu,
-  SelectionScopeSwitch,
-  SelectionVenn,
-} from "./SelectionControls"
+import { SelectionScopeSwitch, SelectionVenn } from "./SelectionControls"
 import { regionsOf } from "./selection"
 import { BlocksBar } from "./TreeBars"
 import {
@@ -78,8 +74,8 @@ export type ALayout = {
   numeric?: "builder"
   /** T1: the nested filter expression, edited as blocks. */
   tree?: "blocks"
-  /** S1-S3: how the selection is edited against what the filters show. */
-  selection?: "menu" | "venn"
+  /** S3: the selection edited against what the filters show, as a Venn. */
+  selection?: "venn"
 }
 
 export const VariantA: React.FC<
@@ -404,7 +400,6 @@ export const VariantA: React.FC<
                 {selectedCount} selected <X size={12} />
               </button>
               {layout.selection && <SelectionScopeSwitch {...p} />}
-              {layout.selection === "menu" && <SelectionMenu {...p} />}
               {layout.selection === "venn" && <SelectionVenn {...p} />}
               {!layout.selection && (
                 <>
