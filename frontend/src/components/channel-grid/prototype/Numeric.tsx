@@ -9,13 +9,7 @@ import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { cn } from "@/lib/utils"
-import {
-  clusters,
-  type FilterLogic,
-  type Joiner,
-  joinerBefore,
-  type Mode,
-} from "./logic"
+import { clusters, type FilterLogic, type Joiner, joinerBefore } from "./logic"
 import {
   describeFilter,
   formatNumber,
@@ -372,16 +366,6 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
       ) : (
         <>
           {input}
-          {p.logicKind === "within" && p.numericFilters.length > 1 && (
-            <MatchSwitch
-              label="Channel passes"
-              value={p.filterLogic.numeric}
-              onChange={(numeric) =>
-                p.onFilterLogicChange({ ...p.filterLogic, numeric })
-              }
-              order={["all", "any"]}
-            />
-          )}
           <PopLabel>Filter by</PopLabel>
           {shown.map((m) => (
             <button
@@ -401,34 +385,6 @@ export const FilterBuilder: React.FC<ChannelControlsProps> = (p) => {
     </Pop>
   )
 }
-
-/** Any/all as a two-way switch, labelled by what it decides. */
-export const MatchSwitch: React.FC<{
-  label: string
-  value: Mode
-  onChange: (m: Mode) => void
-  order?: Mode[]
-}> = ({ label, value, onChange, order = ["any", "all"] }) => (
-  <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-[10px] font-semibold text-app-ink/60">
-    {label}
-    <span className="inline-flex rounded-md border border-app-ink/15 p-0.5">
-      {order.map((m) => (
-        <button
-          key={m}
-          type="button"
-          aria-pressed={value === m}
-          onClick={() => onChange(m)}
-          className={cn(
-            "rounded px-2 py-0.5 uppercase tracking-wide",
-            value === m ? "bg-app-ink text-app-bg" : "hover:text-app-ink",
-          )}
-        >
-          {m}
-        </button>
-      ))}
-    </span>
-  </div>
-)
 
 type Item = {
   key: string
@@ -470,7 +426,7 @@ export const ActiveFiltersBar: React.FC<ChannelControlsProps> = (p) => {
     onClear: () =>
       p.onNumericFiltersChange(withoutMetric(p.numericFilters, f.metric)),
   })
-  const tagsToggle = kind === "within" || kind === "connectors"
+  const tagsToggle = kind === "connectors"
 
   const views: CondView[] = []
   if (p.groupFilters.length)
@@ -509,7 +465,7 @@ export const ActiveFiltersBar: React.FC<ChannelControlsProps> = (p) => {
         onClear: () => p.onLanguageFiltersChange(drop(p.languageFilters, code)),
       })),
     })
-  if (kind === "global" || kind === "connectors") {
+  if (kind === "connectors") {
     for (const f of p.numericFilters)
       views.push({
         id: `num:${f.metric}`,
@@ -521,11 +477,7 @@ export const ActiveFiltersBar: React.FC<ChannelControlsProps> = (p) => {
     views.push({
       id: "numeric",
       kind: "Filters",
-      inner: kind === "within" && logic.numeric === "any" ? "or" : "and",
-      onToggleInner:
-        kind === "within"
-          ? () => setLogic({ numeric: logic.numeric === "any" ? "all" : "any" })
-          : undefined,
+      inner: "and",
       items: p.numericFilters.map(numItem),
     })
   }
@@ -560,14 +512,6 @@ export const ActiveFiltersBar: React.FC<ChannelControlsProps> = (p) => {
         <Search size={10} />
         {p.filteredCount} of {p.totalCount}
       </span>
-      {kind === "global" && views.length > 1 && (
-        <MatchSwitch
-          label="Show channels matching"
-          value={logic.global === "and" ? "all" : "any"}
-          onChange={(m) => setLogic({ global: m === "all" ? "and" : "or" })}
-          order={["all", "any"]}
-        />
-      )}
       {p.channelSearch.trim() && (
         <span className={chipClass}>
           <span className="text-app-ink/45">Search</span>“{p.channelSearch}”

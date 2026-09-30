@@ -38,8 +38,7 @@ import {
 } from "@/lib/channels/channel-grid-chips"
 import { cn } from "@/lib/utils"
 import { FollowControl, type FollowLayout } from "./Follow"
-import type { Mode } from "./logic"
-import { ActiveFiltersBar, FilterBuilder, MatchSwitch } from "./Numeric"
+import { ActiveFiltersBar, FilterBuilder } from "./Numeric"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
 import {
   type ChannelControlsProps,
@@ -148,15 +147,6 @@ export const VariantA: React.FC<
             filterLabel={tagName}
             noun="tag"
             search={{ value: p.tagSearch, onChange: p.onTagSearchChange }}
-            match={
-              p.logicKind === "within" && p.tagFilters.length > 1
-                ? {
-                    value: p.filterLogic.tags,
-                    onChange: (tags) =>
-                      p.onFilterLogicChange({ ...p.filterLogic, tags }),
-                  }
-                : undefined
-            }
             rows={[
               ...p.visibleTags.map((tag) => ({
                 id: tag,
@@ -777,8 +767,6 @@ const FacetMenu: React.FC<{
   onFiltersChange: (ids: string[]) => void
   /** Controlled search; the menu keeps its own when absent. */
   search?: { value: string; onChange: (value: string) => void }
-  /** L2: whether a channel needs any or all of the funnelled values. */
-  match?: { value: Mode; onChange: (m: Mode) => void }
 }> = (m) => {
   const [localQuery, setLocalQuery] = useState("")
   const query = m.search ? m.search.value : localQuery
@@ -827,13 +815,6 @@ const FacetMenu: React.FC<{
         data-testid={m.noun === "tag" ? "channel-tag-search" : undefined}
         className="mb-1 h-8 py-0 text-[11px]"
       />
-      {m.match && (
-        <MatchSwitch
-          label={`Match funnelled ${m.label.toLowerCase()}`}
-          value={m.match.value}
-          onChange={m.match.onChange}
-        />
-      )}
       <div className="flex items-center justify-between px-2 pb-1 pt-2 text-[9px] font-bold uppercase tracking-widest text-app-ink/45">
         <span>Tick selects · funnels show only</span>
         <span>selected / total</span>

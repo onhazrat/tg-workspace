@@ -1,8 +1,8 @@
 /**
  * PROTOTYPE, throwaway: how the filter chips combine. Each facet with funnels
  * (groups, tags, languages) is one condition, true when the channel matches
- * any of its values, or for tags optionally all of them. Numeric bounds are
- * one condition each, or one "all/any" condition in L2. Conditions join with
+ * any of its values, or in L3 optionally all of them for tags. Numeric bounds
+ * are one condition each in L3 and one all-must-pass condition otherwise. Conditions join with
  * AND or OR; AND binds tighter, so `a AND b OR c` is `(a AND b) OR c`.
  * The search box is not a chip condition: it always narrows.
  */
@@ -19,24 +19,19 @@ export type Mode = "any" | "all"
 export type Joiner = "and" | "or"
 
 /**
- * fixed: N2 as it was, every join AND. global (L1): one switch for every
- * join. within (L2): tags and Filters each pick any/all. connectors (L3):
- * every join is its own toggle.
+ * fixed: N2 as it was, every join AND. connectors (L3): every join is its
+ * own toggle. tree (T1-T3): a nested expression, see tree.ts.
  */
-export type LogicKind = "fixed" | "global" | "within" | "connectors"
+export type LogicKind = "fixed" | "connectors" | "tree"
 
 export type FilterLogic = {
-  global: Joiner
   tags: Mode
-  numeric: Mode
   /** L3: the joiner in front of a condition, by condition id. */
   before: Record<string, Joiner>
 }
 
 export const DEFAULT_LOGIC: FilterLogic = {
-  global: "and",
   tags: "any",
-  numeric: "all",
   before: {},
 }
 
@@ -68,7 +63,7 @@ export function buildConditions(
       test: (c) => f.groups.includes(c.settingGroupId ?? ""),
     })
   if (f.tags.length) {
-    const all = kind !== "fixed" && kind !== "global" && logic.tags === "all"
+    const all = kind === "connectors" && logic.tags === "all"
     out.push({
       id: "tags",
       test: (c) =>
@@ -82,7 +77,7 @@ export function buildConditions(
       id: "languages",
       test: (c) => f.languages.includes(c.language ?? ""),
     })
-  const split = kind === "global" || kind === "connectors"
+  const split = kind === "connectors"
   if (split) {
     for (const n of f.numeric)
       out.push({
@@ -90,13 +85,9 @@ export function buildConditions(
         test: (c) => passesNumericFilters(c, [n], f.metricInputs),
       })
   } else if (f.numeric.length) {
-    const any = kind === "within" && logic.numeric === "any"
     out.push({
       id: "numeric",
-      test: (c) =>
-        any
-          ? f.numeric.some((n) => passesNumericFilters(c, [n], f.metricInputs))
-          : passesNumericFilters(c, f.numeric, f.metricInputs),
+      test: (c) => passesNumericFilters(c, f.numeric, f.metricInputs),
     })
   }
   return out
@@ -107,7 +98,6 @@ export function joinerBefore(
   kind: LogicKind,
   logic: FilterLogic,
 ): Joiner {
-  if (kind === "global") return logic.global
   if (kind === "connectors") return logic.before[id] ?? "and"
   return "and"
 }

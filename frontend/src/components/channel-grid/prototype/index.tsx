@@ -17,8 +17,6 @@ export const PROTOTYPE_VARIANTS = [
   { key: "F1", name: "A5 + always-visible follow field" },
   { key: "F3", name: "A5 + paste many to follow, left of search" },
   { key: "N2", name: "F3 + Filters dropdown, active-filters bar" },
-  { key: "L1", name: "N2 + one Match all / any switch" },
-  { key: "L2", name: "N2 + any / all per dropdown (Tags, Filters)" },
   { key: "L3", name: "N2 + every AND / OR is a toggle" },
 ]
 
@@ -42,20 +40,12 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   F1: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "inline" }),
   F3: aVariant(F3_LAYOUT),
   N2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
-  L1: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
-  L2: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
   L3: aVariant({ ...F3_LAYOUT, numeric: "builder" }),
 }
 
 /** How a variant combines its filter conditions. */
 export const logicKindFor = (variant: string): LogicKind =>
-  variant === "L1"
-    ? "global"
-    : variant === "L2"
-      ? "within"
-      : variant === "L3"
-        ? "connectors"
-        : "fixed"
+  variant === "L3" ? "connectors" : "fixed"
 
 /** The variant key in the URL, or "current". */
 export function usePrototypeVariant() {
