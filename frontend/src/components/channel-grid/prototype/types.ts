@@ -20,6 +20,8 @@ export type ChannelControlsProps = {
   inlineChannelName: string
   onInlineChannelNameChange: (value: string) => void
   onAddChannel: () => void
+  /** PROTOTYPE-only: follow several handles at once, optionally into a group. */
+  onFollowNames: (names: string[], groupId?: string) => void
   // Search
   channelSearch: string
   onChannelSearchChange: (value: string) => void

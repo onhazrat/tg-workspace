@@ -340,6 +340,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     inlineChannelName: actions.inlineChannelName,
     onInlineChannelNameChange: actions.setInlineChannelName,
     onAddChannel: actions.handleAddChannel,
+    // Only the variants call it, and `stubWrites` always replaces it there.
+    onFollowNames: () => {},
     channelSearch,
     onChannelSearchChange: setChannelSearch,
     tagSearch,

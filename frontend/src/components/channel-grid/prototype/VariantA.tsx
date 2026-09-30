@@ -15,7 +15,6 @@ import {
   Layers,
   LayoutGrid,
   LayoutList,
-  Plus,
   RefreshCw,
   Search,
   Settings2,
@@ -38,6 +37,12 @@ import {
   getChannelNamesWithTag,
 } from "@/lib/channels/channel-grid-chips"
 import { cn } from "@/lib/utils"
+import {
+  FollowControl,
+  type FollowLayout,
+  FollowRow,
+  OmniSearch,
+} from "./Follow"
 import { Check, CheckRow, Pop, PopLabel } from "./Pop"
 import {
   type ChannelControlsProps,
@@ -61,12 +66,14 @@ export type ALayout = {
   ai: "view" | "pill" | "row2" | "strip"
   /** Where "selected first" and "sort rank" go; defaults to following zoom. */
   display?: "row2"
+  follow?: FollowLayout
 }
 
 export const VariantA: React.FC<
   ChannelControlsProps & { layout?: ALayout }
 > = ({ layout = { zoom: "view", ai: "view" }, ...p }) => {
   const selectedCount = p.selectedChannels.size
+  const [followRowOpen, setFollowRowOpen] = useState(false)
   // Grouping and sort rank follow card size out of the View pill.
   const displayIn =
     layout.display ??
@@ -106,19 +113,23 @@ export const VariantA: React.FC<
       <div className="rounded-xl border border-app-ink/10 bg-app-card shadow-sm">
         {/* Row 1: find, filter, view, follow, sync */}
         <div className="flex flex-wrap items-center gap-2 p-3">
-          <div className="relative min-w-[200px] flex-1">
-            <Search
-              size={14}
-              className="pointer-events-none absolute inset-y-0 left-3 my-auto text-app-ink/40"
-            />
-            <TgInput
-              variant="muted"
-              value={p.channelSearch}
-              onChange={(e) => p.onChannelSearchChange(e.target.value)}
-              placeholder="Search channels…"
-              className="h-9 py-0 pl-9"
-            />
-          </div>
+          {layout.follow === "omnibox" ? (
+            <OmniSearch {...p} />
+          ) : (
+            <div className="relative min-w-[200px] flex-1">
+              <Search
+                size={14}
+                className="pointer-events-none absolute inset-y-0 left-3 my-auto text-app-ink/40"
+              />
+              <TgInput
+                variant="muted"
+                value={p.channelSearch}
+                onChange={(e) => p.onChannelSearchChange(e.target.value)}
+                placeholder="Search channels…"
+                className="h-9 py-0 pl-9"
+              />
+            </div>
+          )}
 
           <FacetMenu
             icon={<Layers size={13} />}
@@ -292,41 +303,12 @@ export const VariantA: React.FC<
 
           <div className="mx-1 h-6 w-px bg-app-ink/10" />
 
-          <Pop
-            align="end"
-            trigger={
-              <TgButton variant="secondary" size="sm" className="h-9 gap-1.5">
-                <Plus size={13} />
-                Follow
-              </TgButton>
-            }
-            className="w-72"
-          >
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault()
-                p.onAddChannel()
-              }}
-            >
-              <TgInput
-                autoFocus
-                variant="muted"
-                value={p.inlineChannelName}
-                onChange={(e) => p.onInlineChannelNameChange(e.target.value)}
-                placeholder="@telegram_channel"
-                className="h-9 py-0"
-              />
-              <TgButton
-                type="submit"
-                size="sm"
-                className="h-9"
-                disabled={!p.inlineChannelName.trim()}
-              >
-                Add
-              </TgButton>
-            </form>
-          </Pop>
+          <FollowControl
+            {...p}
+            layout={layout.follow ?? "pop"}
+            rowOpen={followRowOpen}
+            onRowOpenChange={setFollowRowOpen}
+          />
           <TgButton
             size="sm"
             className="h-9 gap-1.5"
@@ -339,6 +321,9 @@ export const VariantA: React.FC<
           </TgButton>
         </div>
 
+        {layout.follow === "row" && followRowOpen && (
+          <FollowRow {...p} onClose={() => setFollowRowOpen(false)} />
+        )}
         {displayIn === "strip" && (
           <div className="flex flex-wrap items-center gap-2 border-t border-app-ink/10 bg-app-muted/30 px-3 py-2">
             <span className="text-[9px] font-bold uppercase tracking-widest text-app-ink/45">

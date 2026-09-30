@@ -16,6 +16,10 @@ export const PROTOTYPE_VARIANTS = [
   { key: "A3", name: "Display strip" },
   { key: "A4", name: "Size bar above the grid, AI pill" },
   { key: "A5", name: "Size + layout on row 2, AI pill" },
+  { key: "F1", name: "A5 + always-visible follow field" },
+  { key: "F2", name: "A5 + search that offers to follow" },
+  { key: "F3", name: "A5 + paste many to follow" },
+  { key: "F4", name: "A5 + follow row that opens under the bar" },
 ]
 
 const aVariant = (layout: ALayout): React.FC<ChannelControlsProps> =>
@@ -30,6 +34,15 @@ const VARIANTS: Record<string, React.FC<ChannelControlsProps>> = {
   A3: aVariant({ zoom: "strip", ai: "strip" }),
   A4: aVariant({ zoom: "gridbar", ai: "pill" }),
   A5: aVariant({ zoom: "row2", ai: "pill", display: "row2" }),
+  F1: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "inline" }),
+  F2: aVariant({
+    zoom: "row2",
+    ai: "pill",
+    display: "row2",
+    follow: "omnibox",
+  }),
+  F3: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "bulk" }),
+  F4: aVariant({ zoom: "row2", ai: "pill", display: "row2", follow: "row" }),
 }
 
 /** The variant key in the URL, or "current". */
@@ -59,6 +72,15 @@ export function stubWrites(p: ChannelControlsProps): ChannelControlsProps {
   return {
     ...p,
     onAddChannel: would(`follow @${p.inlineChannelName.trim()}`),
+    onFollowNames: (names, groupId) =>
+      toast(
+        `Prototype: would follow ${names.map((n) => `@${n}`).join(", ")}${
+          groupId
+            ? ` into ${p.groups.find((g) => g.id === groupId)?.name ?? "?"}`
+            : ""
+        }`,
+        { description: "Nothing was sent." },
+      ),
     onScrapeSelected: would(`sync ${n} selected channels`),
     onScrapeAll: would("sync all channels"),
     onRequestFreeze: would(`freeze ${n} channels`),
