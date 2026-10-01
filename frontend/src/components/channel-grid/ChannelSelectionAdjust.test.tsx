@@ -55,6 +55,7 @@ describe("the Venn", () => {
     expect(region(FRESH).getAttribute("aria-checked")).toBe("false")
     expect(change()).toContain("no change")
     expect(apply().hasAttribute("disabled")).toBe(true)
+    expect(apply().textContent).toBe("Apply · 3 selected")
   })
 
   test("a click drops a region, and Apply writes the selection without it", () => {

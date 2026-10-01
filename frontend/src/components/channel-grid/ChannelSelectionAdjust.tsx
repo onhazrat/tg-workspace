@@ -82,7 +82,8 @@ function VennIcon({ keep, size = 16 }: { keep: Regions; size?: number }) {
  * Painted left circle, right circle, then the overlap on top, so each region
  * is its own click target and keyboard checkbox without computing crescents.
  * A dropped region is hatched with its count faded, so it reads as removed
- * rather than empty.
+ * rather than empty. Each hatch is painted straight after its own region, so
+ * the overlap painted later covers a crescent's hatch where it reaches in.
  */
 function Venn({
   counts,
@@ -131,6 +132,17 @@ function Venn({
       </text>
     </g>
   )
+  const hatch = (k: RegionKey, cx: number, clipPath?: string) =>
+    keep[k] ? null : (
+      <circle
+        cx={cx}
+        cy="80"
+        r="64"
+        fill={`url(#${id}-x)`}
+        clipPath={clipPath}
+        className="pointer-events-none"
+      />
+    )
   return (
     <svg viewBox="0 0 320 150" className="w-full">
       <title>Pick what stays selected</title>
@@ -171,7 +183,17 @@ function Venn({
         Shown
       </text>
       <circle cx="122" cy="80" r="64" {...region("hidden")} />
+      {hatch("hidden", 122)}
       <circle cx="198" cy="80" r="64" {...region("fresh")} />
+      {hatch("fresh", 198)}
+      {/* An opaque base, so neither crescent's paint or hatch shows through. */}
+      <circle
+        cx="198"
+        cy="80"
+        r="64"
+        clipPath={`url(#${id}-l)`}
+        className="pointer-events-none fill-app-card"
+      />
       <circle
         cx="198"
         cy="80"
@@ -179,19 +201,7 @@ function Venn({
         clipPath={`url(#${id}-l)`}
         {...region("both")}
       />
-      {(["hidden", "fresh", "both"] as const).map((k) =>
-        keep[k] ? null : (
-          <circle
-            key={k}
-            cx={k === "hidden" ? 122 : 198}
-            cy="80"
-            r="64"
-            fill={`url(#${id}-x)`}
-            clipPath={k === "both" ? `url(#${id}-l)` : undefined}
-            className="pointer-events-none"
-          />
-        ),
-      )}
+      {hatch("both", 198, `url(#${id}-l)`)}
       <circle
         cx="122"
         cy="80"
@@ -384,7 +394,7 @@ export function ChannelSelectionAdjust({
             setOpen(false)
           }}
         >
-          {noop ? "Nothing to change" : `Apply · ${after} selected`}
+          Apply · {after} selected
         </TgButton>
 
         <div className="mt-3 border-t border-app-ink/10 pt-3">

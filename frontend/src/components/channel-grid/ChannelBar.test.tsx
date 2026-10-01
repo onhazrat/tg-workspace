@@ -167,7 +167,6 @@ describe("ChannelSelectionBar", () => {
         onSetSelection={log("set")}
         actionLimit="shown"
         onActionLimitChange={log("limit")}
-        actionCount={over.selection?.size ?? 0}
         onClear={log("clear")}
         trimCount="3"
         onTrimCountChange={log("trimCount")}
@@ -275,7 +274,7 @@ describe("ChannelSelectionBar", () => {
   test("with part of the selection hidden, says so and counts the shown part", () => {
     // Two selected and shown, three selected and hidden by the filters.
     const selection = new Set(["c0", "c1", "h0", "h1", "h2"])
-    const calls = mount({ selection, actionCount: 2 })
+    const calls = mount({ selection })
     expect(screen.getByText("5 selected")).toBeTruthy()
     const indicator = screen.getByTestId("action-limit-indicator")
     expect(indicator.textContent).toBe("acting on 2 shown")
@@ -288,10 +287,23 @@ describe("ChannelSelectionBar", () => {
 
   test("on All, Trim reads plain and the indicator turns amber", () => {
     const selection = new Set(["c0", "h0"])
-    mount({ selection, actionLimit: "all", actionCount: 2 })
+    mount({ selection, actionLimit: "all" })
     expect(screen.getByTestId("action-limit-indicator").textContent).toBe(
       "1 hidden by filters",
     )
     expect(screen.queryByText("shown")).toBeNull()
+  })
+
+  test("on Shown with every selected Channel hidden, no action can run", () => {
+    mount({ selection: new Set(["h0", "h1"]) })
+    expect(screen.getByTestId("action-limit-indicator").textContent).toBe(
+      "acting on 0 shown",
+    )
+    for (const name of ["Freeze", "Unfreeze", "Delete", /Move to group/]) {
+      expect(
+        screen.getByRole("button", { name }).hasAttribute("disabled"),
+      ).toBe(true)
+    }
+    expect(screen.getByTestId("bulk-tags").hasAttribute("disabled")).toBe(true)
   })
 })

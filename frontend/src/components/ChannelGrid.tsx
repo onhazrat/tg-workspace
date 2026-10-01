@@ -538,7 +538,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onSetSelection={setSelectedChannels}
           actionLimit={channelActionLimit}
           onActionLimitChange={setChannelActionLimit}
-          actionCount={targets.size}
           onClear={handleUnselectAll}
           trimCount={trimCount}
           onTrimCountChange={setTrimCount}

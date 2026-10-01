@@ -516,8 +516,8 @@ describe("CTB-04 — the action limit reaches no other tab", () => {
    *
    * The limit never touches DataContext's selection, so the only way it can
    * leak is a module outside the Channels tab reading it. These are the
-   * modules that may: the tab, the pure module, the setting, and the palette
-   * that switches it.
+   * modules that may: the tab and its `channel-grid/` parts, the pure module,
+   * the setting, and the palette that switches it.
    */
   const READERS = new Set([
     "src/components/ChannelGrid.tsx",
@@ -539,7 +539,9 @@ describe("CTB-04 — the action limit reaches no other tab", () => {
       )
       .map(rel)
     expect(
-      readers.filter((f) => !READERS.has(f)),
+      readers.filter(
+        (f) => !READERS.has(f) && !f.startsWith("src/components/channel-grid/"),
+      ),
       "The action limit is the Channels tab's own. Anything building a Scope " +
         "or a request for another tab must read DataContext's whole selection.",
     ).toEqual([])

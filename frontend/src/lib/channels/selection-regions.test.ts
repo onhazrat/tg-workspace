@@ -3,7 +3,6 @@ import { describe, expect, it } from "bun:test"
 import {
   actionTargets,
   applyRegions,
-  applySelectionEdit,
   editFor,
   hiddenSelection,
   hiddenSelectionNote,
@@ -19,8 +18,11 @@ import {
 const selection = new Set(["h1", "h2", "b1"])
 const shown = ["b1", "f1", "f2"]
 
-const edit = (key: SelectionEditKey) =>
-  [...applySelectionEdit(key, selection, shown)].sort()
+const edit = (key: SelectionEditKey) => {
+  const found = SELECTION_EDITS.find((e) => e.key === key)
+  if (!found) throw new Error(`no edit ${key}`)
+  return [...applyRegions(selection, shown, found.regions)].sort()
+}
 
 describe("regionsOf", () => {
   it("splits the selection and the Shown Channels into three regions", () => {

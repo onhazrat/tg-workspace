@@ -78,17 +78,6 @@ export function applyRegions(
   ])
 }
 
-export const applySelectionEdit = (
-  key: SelectionEditKey,
-  selection: ReadonlySet<string>,
-  shown: string[],
-) =>
-  applyRegions(
-    selection,
-    shown,
-    SELECTION_EDITS.find((e) => e.key === key)?.regions ?? UNCHANGED,
-  )
-
 /** The named edit a picture is, or undefined for a custom one. */
 export const editFor = (keep: Regions) =>
   SELECTION_EDITS.find(

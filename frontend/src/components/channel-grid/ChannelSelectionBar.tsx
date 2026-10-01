@@ -12,7 +12,10 @@ import { Popover } from "radix-ui"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import type { CardZoom } from "@/lib/channels/card-zoom"
-import type { ActionLimit } from "@/lib/channels/selection-regions"
+import {
+  type ActionLimit,
+  actionTargets,
+} from "@/lib/channels/selection-regions"
 import type { ChannelSettingGroup } from "@/types"
 import { BarHeading, BarPopover } from "./BarPopover"
 import { BarToggle, CardSizeSwitch } from "./ChannelBarControls"
@@ -29,8 +32,6 @@ export type ChannelSelectionBarProps = {
   onSetSelection: (next: Set<string>) => void
   actionLimit: ActionLimit
   onActionLimitChange: (limit: ActionLimit) => void
-  /** How many Channels the actions reach under the limit. */
-  actionCount: number
   onClear: () => void
   trimCount: string
   onTrimCountChange: (value: string) => void
@@ -111,8 +112,11 @@ function TagField({
 
 /** The bulk toolbar: what reaches the selected Channels. */
 function SelectionActions(p: ChannelSelectionBarProps) {
-  const count = plural(p.actionCount)
-  const narrowed = p.actionCount < p.selection.size
+  const actionCount = actionTargets(p.selection, p.shown, p.actionLimit).size
+  const count = plural(actionCount)
+  const narrowed = actionCount < p.selection.size
+  // Every selected Channel hidden, on Shown: nothing for an action to reach.
+  const idle = actionCount === 0
   return (
     <>
       <ChannelSelectionAdjust
@@ -167,16 +171,26 @@ function SelectionActions(p: ChannelSelectionBarProps) {
         <RefreshCw size={12} className={p.isSyncing ? "animate-spin" : ""} />
         Sync
       </button>
-      <button type="button" onClick={p.onFreeze} className={actionClass}>
+      <button
+        type="button"
+        onClick={p.onFreeze}
+        disabled={idle}
+        className={actionClass}
+      >
         <Snowflake size={12} /> Freeze
       </button>
-      <button type="button" onClick={p.onUnfreeze} className={actionClass}>
+      <button
+        type="button"
+        onClick={p.onUnfreeze}
+        disabled={idle}
+        className={actionClass}
+      >
         <Sun size={12} /> Unfreeze
       </button>
       <BarPopover
         width="w-60"
         trigger={
-          <button type="button" className={actionClass}>
+          <button type="button" disabled={idle} className={actionClass}>
             <Layers size={12} /> Move to group
             <ChevronDown size={11} className="opacity-50" />
           </button>
@@ -204,7 +218,12 @@ function SelectionActions(p: ChannelSelectionBarProps) {
       <BarPopover
         width="w-64"
         trigger={
-          <button type="button" data-testid="bulk-tags" className={actionClass}>
+          <button
+            type="button"
+            data-testid="bulk-tags"
+            disabled={idle}
+            className={actionClass}
+          >
             <Hash size={12} /> Tags
             <ChevronDown size={11} className="opacity-50" />
           </button>
@@ -232,6 +251,7 @@ function SelectionActions(p: ChannelSelectionBarProps) {
       <button
         type="button"
         onClick={p.onDelete}
+        disabled={idle}
         className={`${actionClass} text-red-500 hover:bg-red-500/10 hover:text-red-500`}
       >
         <Trash2 size={12} /> Delete
