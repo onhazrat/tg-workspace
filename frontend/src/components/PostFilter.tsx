@@ -93,6 +93,8 @@ interface PostFilterProps {
   subtitle: string
   /** Posts an Estimated views threshold hid for being too new to judge. */
   tooNewToJudge: number
+  /** Switches at the end of the pill row: the feed's Compact grid and Keyboard. */
+  trailing?: React.ReactNode
 }
 
 export interface PostFilterBarProps extends PostFilterProps {
@@ -364,6 +366,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
           >
             <Layers size={12} /> Grouped by channel
           </button>
+          {props.trailing}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from "lucide-react"
-import { useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { renderPostText } from "@/lib/posts/render-post-text"
 import type { Post } from "@/types"
 import { isLongPost } from "./post-card-model"
@@ -44,5 +44,46 @@ export function PostCardBody({
         </button>
       )}
     </>
+  )
+}
+
+/** A compact card's text: three lines, then "More" when it runs past them. */
+export function PostCardClampedBody({
+  text,
+  linkSpans,
+  postSearch,
+}: {
+  text: string
+  linkSpans: Post["linkSpans"] | null
+  postSearch: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [over, setOver] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el && !open) setOver(el.scrollHeight > el.clientHeight + 2)
+  }, [text, open])
+  return (
+    <div>
+      {/* The font size sits on the clamp, so 4.5em is exactly three 1.5em lines. */}
+      <div
+        ref={ref}
+        className={`text-[13px] leading-[1.5em] ${open ? "" : "max-h-[4.5em] overflow-hidden"}`}
+      >
+        <p dir="auto" className="whitespace-pre-wrap text-app-ink/80">
+          {renderPostText(text, postSearch, linkSpans)}
+        </p>
+      </div>
+      {(over || open) && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="mt-0.5 text-[12px] font-medium text-blue-500 hover:underline"
+        >
+          {open ? "Less" : "More"}
+        </button>
+      )}
+    </div>
   )
 }

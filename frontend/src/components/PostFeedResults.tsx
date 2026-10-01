@@ -12,6 +12,10 @@ interface PostFeedResultsProps {
   showLoadMore: boolean
   loadMoreRef: React.RefObject<HTMLDivElement | null>
   postSearch: string
+  /** Lay the cards out as the Compact grid. */
+  compact?: boolean
+  /** Keyboard mode is on. */
+  keyboard?: boolean
 }
 
 /** The feed below the filter: loading skeletons, the post list, or the empty state. */
@@ -21,6 +25,8 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
   showLoadMore,
   loadMoreRef,
   postSearch,
+  compact = false,
+  keyboard = false,
 }) =>
   isInitialLoading ? (
     <div className="space-y-4">
@@ -49,12 +55,21 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
       ))}
     </div>
   ) : posts.length > 0 ? (
-    <div className="space-y-4">
+    <div
+      className={
+        // As many 22rem columns as fit, in feed order left to right.
+        compact
+          ? "grid grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))] gap-3"
+          : "space-y-4"
+      }
+    >
       {posts.map((post) => (
         <PostCard
           key={`${post.channelName}-${post.id}`}
           post={post}
           postSearch={postSearch}
+          compact={compact}
+          keyboard={keyboard}
         />
       ))}
 
@@ -62,7 +77,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
       {showLoadMore && (
         <div
           ref={loadMoreRef}
-          className="h-32 flex flex-col items-center justify-center gap-4 opacity-60"
+          className="col-span-full h-32 flex flex-col items-center justify-center gap-4 opacity-60"
         >
           <div className="w-10 h-10 rounded-full bg-app-card shadow-sm border border-app-ink/10 flex items-center justify-center">
             <Loader2 size={18} className="animate-spin text-app-ink/60" />
