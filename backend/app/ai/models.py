@@ -3,11 +3,11 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
-from app.schemas.post_filter import PostSelection, legacy_selection, select_all
+from app.schemas.post_filter import PostSelection, select_all
 from app.schemas.scope import (
     SortOrder,
     ViewMeasure,
-    upgrade_legacy_scope_fields,
+    upgrade_legacy_submission,
 )
 
 
@@ -37,8 +37,7 @@ class PromptScopeInput(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _upgrade_legacy_shape(cls, data: Any) -> Any:
-        upgraded = upgrade_legacy_scope_fields(data)
-        return legacy_selection(upgraded) if isinstance(upgraded, dict) else upgraded
+        return upgrade_legacy_submission(data)
 
     # `extra="forbid"`: see `PostScopeRequest`. The blast radius is largest
     # here. A stale client posting the pre-AW-02 pair would resolve to an

@@ -108,9 +108,6 @@ export const pick = (
   postId: post.id,
 })
 
-const pickKey = (p: { channelName: string; postId: number }) =>
-  `${p.channelName}:${p.postId}`
-
 type Loaded = { channelName: string; id: number }
 export const postKey = (p: Loaded) => `${p.channelName}:${p.id}`
 
@@ -137,25 +134,19 @@ export function runPicks(
 /**
  * `steps` with `added` appended, compacted where they are appended: a rule
  * over an empty filter reaches every Post, so it replaces everything before
- * it, and a Pick replaces an earlier Pick of the same Post, which it decides
- * anyway. A string when a bound refuses, saying what to do instead.
+ * it. Nothing else is compacted, so removing a chip always undoes exactly
+ * its own steps. A string when a bound refuses, saying what to do instead.
  */
 export function appendSteps(
   steps: PostSelection,
   added: SelectionStep[],
 ): PostSelection | string {
   let next = steps
-  for (const step of added) {
-    if (step.kind === "rule") {
-      next = isEmptySnapshot(step.filter) ? [step] : [...next, step]
-      continue
-    }
-    const key = pickKey(step)
-    next = [
-      ...next.filter((s) => s.kind === "rule" || pickKey(s) !== key),
-      step,
-    ]
-  }
+  for (const step of added)
+    next =
+      step.kind === "rule" && isEmptySnapshot(step.filter)
+        ? [step]
+        : [...next, step]
   const picks = next.filter((s) => s.kind === "pick").length
   if (picks > MAX_PICKS)
     return `A selection holds at most ${MAX_PICKS.toLocaleString()} single Posts. Select or deselect them with a filter instead, which records one rule.`

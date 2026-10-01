@@ -8566,7 +8566,10 @@
             ]
           },
           "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [
+              { "type": "string", "maxLength": 500 },
+              { "type": "null" }
+            ],
             "title": "Keyword"
           },
           "sort": {
@@ -8609,7 +8612,10 @@
             ]
           },
           "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "anyOf": [
+              { "type": "string", "maxLength": 500 },
+              { "type": "null" }
+            ],
             "title": "Keyword"
           },
           "sort": {

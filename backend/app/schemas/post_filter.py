@@ -175,7 +175,8 @@ class PostFilterSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     tree: FilterGroup | None = None
-    keyword: str | None = None
+    # Bounded, unlike the feed's: fifty rules would multiply an unbounded one.
+    keyword: str | None = Field(None, max_length=500)
     # The order an `ordered` cap keeps the first N of, and what views read.
     sort: FeedSort = "newest"
     view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")

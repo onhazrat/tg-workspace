@@ -500,8 +500,8 @@ describe("AW-04 — a Live tick invalidates the Posts key, never replaces it", (
     const source = readFileSync(join(FRONTEND, POSTS_VIEW), "utf8")
     const calls = [...source.matchAll(KEY_CALL)].map(([call]) => call)
 
-    // All of them — the feed, the tab's counts and the Scope's — or a tick
-    // refreshes part of the screen and remints the rest.
+    // The feed and both counts, or a tick refreshes part of the screen and
+    // remints the rest.
     expect(calls.length).toBe(3)
     for (const call of calls) {
       expect(call).toContain("window: windowKey")

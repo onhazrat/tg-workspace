@@ -39,6 +39,7 @@ import {
   DEFAULT_SELECTION,
   isEmptySnapshot,
   type PostSelection,
+  pick,
   rule,
 } from "@/lib/posts/post-selection"
 import type {
@@ -104,11 +105,21 @@ export function workspaceFromScope(scope: FrozenScope): {
     sort: scope.sort ?? "newest",
     groupByChannel: scope.groupByChannel ?? false,
     selection: scope.selection
-      ? // The generated steps are the hand-written ones, the tree's ids intact.
+      ? // The generated read type leaves `filter` optional because the server
+        // defaults it on input; it always emits one. The write direction is
+        // compiler-checked in `usePromptPosts.getScopeSubmission`.
         (scope.selection as PostSelection)
-      : isEmptySnapshot(legacy.filter)
-        ? DEFAULT_SELECTION
-        : [legacy],
+      : scope.posts?.length
+        ? // A ranked Artifact from before: those Posts, as the server reads it.
+          [
+            rule(false),
+            ...scope.posts.map((ref) =>
+              pick(true, { channelName: ref.channelName, id: ref.postId }),
+            ),
+          ]
+        : isEmptySnapshot(legacy.filter)
+          ? DEFAULT_SELECTION
+          : [legacy],
   }
 }
 

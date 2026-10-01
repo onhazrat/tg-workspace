@@ -200,7 +200,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       groupByChannel,
       // The hand-written steps are the generated ones; the tree's ids ride
       // along untouched, as they do on the feed.
-      selection: selectionBody(postSelection) as ScopeSubmission["selection"],
+      selection: selectionBody(postSelection),
     }),
     [windowKey, viewMeasure, postSortOrder, groupByChannel, postSelection],
   )

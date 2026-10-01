@@ -80,6 +80,15 @@ describe("workspaceFromScope", () => {
     })
   })
 
+  test("a ranked Artifact from before comes back as those Posts", () => {
+    const posts = [{ channelName: "a", postId: 3 }]
+
+    expect(workspaceFromScope({ ...window, posts }).selection).toEqual([
+      rule(false),
+      pick(true, { channelName: "a", id: 3 }),
+    ])
+  })
+
   test("a frozen Post selection comes back as it was (PTR-05)", () => {
     const selection = [
       rule(false, { ...EMPTY_SNAPSHOT, keyword: "rates" }),

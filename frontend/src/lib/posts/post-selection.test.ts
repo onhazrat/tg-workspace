@@ -15,6 +15,7 @@ import {
   rule,
   runPicks,
   SELECTION_STORAGE_KEY,
+  type SelectionChip,
   saveSelection,
   selectionBody,
   selectionChips,
@@ -77,21 +78,19 @@ describe("appendSteps", () => {
     ).toHaveLength(2)
   })
 
-  it("lets a second Pick of one Post replace the first", () => {
-    const once = steps(appendSteps(DEFAULT_SELECTION, [pick(false, post(1))]))
-    const twice = steps(
-      appendSteps(once, [pick(false, post(2)), pick(true, post(1))]),
+  it("keeps a second Pick of one Post beside the first, so a chip undoes one step", () => {
+    const arabicFirst = steps(
+      appendSteps(DEFAULT_SELECTION, [
+        pick(false, post(1)),
+        rule(false, arabic),
+      ]),
     )
+    const repicked = steps(appendSteps(arabicFirst, [pick(true, post(1))]))
 
-    expect(twice).toEqual([
-      DEFAULT_SELECTION[0],
-      pick(false, post(2)),
-      pick(true, post(1)),
-    ])
-    // The same id in another Channel is another Post.
-    expect(
-      steps(appendSteps(once, [pick(true, post(1, "other"))])),
-    ).toHaveLength(3)
+    expect(repicked).toHaveLength(4)
+    // Removing the last chip leaves the first Pick deciding the Post again.
+    const last = selectionChips(repicked).at(-1) as SelectionChip
+    expect(removeChip(repicked, last)).toEqual(arabicFirst)
   })
 
   it("refuses past the Pick cap and suggests a rule", () => {
@@ -104,8 +103,8 @@ describe("appendSteps", () => {
     const refused = appendSteps(atCap, [pick(false, post(MAX_PICKS))])
     expect(typeof refused).toBe("string")
     expect(refused).toContain("filter")
-    // Re-picking a Post already there adds nothing, so it is not refused.
-    expect(typeof appendSteps(atCap, [pick(true, post(0))])).not.toBe("string")
+    // A select-all starts again, so it is never refused.
+    expect(appendSteps(atCap, [rule(true)])).toEqual([rule(true)])
   })
 
   it("refuses past the rule cap", () => {

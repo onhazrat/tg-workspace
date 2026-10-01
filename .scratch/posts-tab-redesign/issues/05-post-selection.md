@@ -81,7 +81,8 @@ order an ordered cap follows), as it was when the rule was made.
 - [x] The steps show in order as chips ("Select all · Deselect Arabic · −3 posts"); removing a chip
       removes its step and nothing else. A select-all or deselect-all over an empty filter replaces
       the list. As built, a run of Picks in one direction is one chip and removing it removes the
-      run; a second Pick of one Post replaces the first, which it decides anyway
+      run. Nothing else is compacted in the browser, so removing a chip undoes exactly its steps;
+      the server drops an earlier Pick of the same Post when it evaluates, which changes nothing
 - [x] The selection lasts the browser session, namespaced per Account through the session storage
       counterpart from PTR-02. A View-as session reads and writes the target's namespace
 - [x] Summarize and Chat run on the whole selection, never only what the filter shows; Tag run and

@@ -41,14 +41,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
-from app.schemas.post_filter import PostSelection, legacy_selection, select_all
+from app.schemas.post_filter import PostSelection, select_all
 from app.schemas.posts import PostWindowRequest
 from app.schemas.scope import (
     FrozenScope,
     ScopeSubmission,
     SortOrder,
     ViewMeasure,
-    upgrade_legacy_scope_fields,
+    upgrade_legacy_submission,
 )
 
 
@@ -440,8 +440,7 @@ class DiscoverCandidatesRequest(PostWindowRequest):
     @model_validator(mode="before")
     @classmethod
     def _legacy_selection(cls, data: Any) -> Any:
-        upgraded = upgrade_legacy_scope_fields(data)
-        return legacy_selection(upgraded) if isinstance(upgraded, dict) else upgraded
+        return upgrade_legacy_submission(data)
 
     def to_scope_submission(self) -> ScopeSubmission:
         """The same request as the Scope every other Artifact family submits (AW-06)."""

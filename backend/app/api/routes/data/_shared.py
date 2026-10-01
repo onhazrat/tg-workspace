@@ -10,12 +10,11 @@ belongs in that family's module.
 """
 
 from dataclasses import replace
-from typing import Any
 
 from sqlalchemy import ColumnElement
 from sqlmodel import Session
 
-from app.schemas.post_filter import FilterGroup, to_steps
+from app.schemas.post_filter import FilterGroup, SelectionPick, SelectionRule, to_steps
 from app.schemas.posts import PostScopeRequest
 from app.services.post_filters import PostFilters
 from app.services.post_selection import PostScope, selection_clause
@@ -52,7 +51,9 @@ def parse_post_filters(
 
 
 def selected_in(
-    session: Session, selection: list[Any] | None, scope: PostScope
+    session: Session,
+    selection: list[SelectionRule | SelectionPick] | None,
+    scope: PostScope,
 ) -> ColumnElement[bool]:
     """The Post selection a request carried as a predicate; omitted is select all."""
     return selection_clause(

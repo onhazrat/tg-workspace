@@ -86,6 +86,17 @@ def upgrade_legacy_scope_fields(data: Any) -> Any:
     return upgraded
 
 
+def upgrade_legacy_submission(data: Any) -> Any:
+    """`upgrade_legacy_scope_fields`, then the keyword, cap and ranked Posts as a selection.
+
+    For the three bodies that carry a Post selection (PTR-05): the Scope
+    submission, the prompt scope and a Discovery request. After the shared
+    upgrade, so a legacy `sort` reaches the rule it makes already respelled.
+    """
+    upgraded = upgrade_legacy_scope_fields(data)
+    return legacy_selection(upgraded) if isinstance(upgraded, dict) else upgraded
+
+
 def scope_key(scope: FrozenScope | None) -> dict[str, Any]:
     """The `scope` key of an Artifact projection, stamped **last**.
 
@@ -167,14 +178,11 @@ class ScopeSubmission(_ScopeOrder):
     # never names the Posts.
     selection: PostSelection = Field(default_factory=select_all)
 
-    # The previous bundle's keyword, cap and ranked `posts`, for one release:
-    # see `legacy_selection`. After the shared upgrade, so a legacy `sort`
-    # reaches the rule it makes already in the new spelling.
+    # The previous bundle's keyword, cap and ranked `posts`, for one release.
     @model_validator(mode="before")
     @classmethod
     def _legacy_selection(cls, data: Any) -> Any:
-        upgraded = upgrade_legacy_scope_fields(data)
-        return legacy_selection(upgraded) if isinstance(upgraded, dict) else upgraded
+        return upgrade_legacy_submission(data)
 
 
 class FrozenScope(_ScopeOrder):
