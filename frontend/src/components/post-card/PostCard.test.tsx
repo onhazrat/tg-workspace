@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { Toaster } from "sonner"
 import { isTranslationQuotaError } from "@/lib/translations/translation-errors"
 import type { Post } from "@/types"
+import { FeedKeyboard } from "./FeedKeyboard"
 import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
 import {
   PostCardActions,
@@ -384,6 +385,66 @@ describe("PostCardView", () => {
         {...extra}
       />,
     )
+
+  describe("the selection checkbox (PTR-05)", () => {
+    const toggled: boolean[] = []
+    const selection = (selected: boolean) => ({
+      post: { ...full, selected },
+      onToggleSelected: (shift: boolean) => {
+        toggled.push(shift)
+      },
+    })
+
+    test("is ticked for a selected Post and absent when the read said nothing", () => {
+      renderCard(selection(true))
+      const box = screen.getByRole("checkbox") as HTMLInputElement
+      expect(box.checked).toBe(true)
+      expect(box.getAttribute("aria-label")).toBe("Deselect this post")
+      cleanup()
+
+      renderCard({ onToggleSelected: () => {} })
+      expect(screen.queryByRole("checkbox")).toBeNull()
+    })
+
+    test("a click toggles, a shift-click asks for the run, and the card stays", () => {
+      toggled.length = 0
+      renderCard({ ...selection(false), compact: true })
+      const box = screen.getByRole("checkbox")
+
+      fireEvent.click(box)
+      fireEvent.click(box, { shiftKey: true })
+
+      expect(toggled).toEqual([false, true])
+      // Deselected Posts stay in the feed, dimmed.
+      expect(document.querySelector("article")?.className).toContain(
+        "opacity-50",
+      )
+    })
+
+    test("x fires it in Keyboard mode", () => {
+      toggled.length = 0
+      render(
+        <>
+          <PostCardView
+            channel={undefined}
+            followsForwardSource={false}
+            onAddChannel={() => {}}
+            postSearch=""
+            text={full.text}
+            {...selection(true)}
+          />
+          <FeedKeyboard on />
+        </>,
+      )
+      fireEvent.keyDown(document.body, { key: "j" })
+      fireEvent.keyDown(document.body, { key: "x" })
+
+      expect(toggled).toEqual([false])
+      expect(document.querySelector("article")?.className).not.toContain(
+        "opacity-50",
+      )
+    })
+  })
 
   test("the card's footer carries views, reactions and every action, translate named", () => {
     renderCard({ onFindRelated: () => {} })

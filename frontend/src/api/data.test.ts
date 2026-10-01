@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
 import { addPostFunnel, emptyPostFilter } from "@/lib/posts/post-filter"
+import { DEFAULT_SELECTION } from "@/lib/posts/post-selection"
 import { channelWritePayload, dataApi } from "./data"
 
 describe("channelWritePayload", () => {
@@ -119,24 +120,20 @@ describe("getDiscoverCandidates", () => {
     ])
   })
 
-  it("sends every scope field, keeping a zero seed and an empty postIds", async () => {
+  it("sends every scope field, the Post selection included (PTR-05)", async () => {
     await dataApi.getDiscoverCandidates({
       channelNames: ["alpha"],
       signals: ["mentions"],
-      maxPerChannelMode: "ordered",
       sort: "oldest",
       groupByChannel: true,
-      seed: 0,
-      postIds: [],
+      selection: DEFAULT_SELECTION,
     })
     expect(sent[0].body).toEqual({
       channelNames: ["alpha"],
       signals: ["mentions"],
-      maxPerChannelMode: "ordered",
       sort: "oldest",
       groupByChannel: true,
-      seed: 0,
-      postIds: [],
+      selection: DEFAULT_SELECTION,
     })
   })
 })

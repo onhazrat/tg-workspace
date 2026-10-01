@@ -21,7 +21,7 @@ from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.summaries import DerivationMode, SummaryDerivation
-from app.services.analysis_window import freeze_scope
+from app.services.post_selection import freeze_selection
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -554,7 +554,7 @@ def submit_summary(
         assert_owner_on_write(predecessor.user_id, user_id, detail=SUMMARY_NOT_FOUND)
         scope = derived_scope(predecessor, derived_from.mode)
     elif submission is not None:
-        scope = freeze_scope(submission, now_ms=now_ms)
+        scope = freeze_selection(session, submission, user_id=user_id, now_ms=now_ms)
     else:
         # `SummarySubmitRequest` requires exactly one, so a route cannot reach
         # this. A raise rather than an `assert`, because a service function is

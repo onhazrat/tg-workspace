@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -23,11 +28,7 @@ import {
   type ChannelSpotlight,
   spotlightView,
 } from "@/lib/posts/channel-spotlight"
-import {
-  emptyPostFilter,
-  type PostFilter,
-  printPostFilter,
-} from "@/lib/posts/post-filter"
+import { printPostFilter } from "@/lib/posts/post-filter"
 import type { Post } from "@/types"
 import {
   queryKeys,
@@ -85,54 +86,63 @@ function useSelectedChannelNames(): string[] {
 }
 
 /**
- * Per-channel in-scope post counts, on demand. Server-side (SQL `GROUP BY`)
- * when no semantic search is active and a selection exists; otherwise counted
- * from the client scoped posts (semantic/related results aren't reproducible
- * server-side). Replaces the render-time reads of the eager `filteredPosts`
+ * Per-channel counts of the Posts an Action covers: the selected Posts in the
+ * window (PTR-05). The Scope's, so the Post filter is not in it: a Summary
+ * covers the Post selection whatever the tab shows (ADR-026). Server-side
+ * even during a meaning search, which changes what the tab shows and not the
+ * selection. Replaces the render-time reads of the eager `filteredPosts`
  * array in App/SummaryAction/ChannelCard/ChannelGrid.
- *
- * The Scope's, so the Post filter is not in it: a Summary covers every Post
- * in the window whatever the tab shows (PTR-03, ADR-026).
  */
 export function useScopedPostCounts(): Record<string, number> {
-  return useScopeCounts(NO_FILTER, false).counts
+  const { selectedChannels } = useData()
+  const { startDate, endDate, windowKey } = useScope()
+  const { postSelection, selectionEdit } = useScraper()
+  const channelNames = useSelectedChannelNames()
+  const enabled = selectedChannels.size > 0
+  const query = useQuery({
+    // An edit moves the revision, which stands for the selection here
+    // rather than a key as large as 5,000 Picks.
+    queryKey: queryKeys.postsCounts({
+      channelNames,
+      window: windowKey,
+      selection: selectionEdit.revision,
+    }),
+    queryFn: () =>
+      dataPostsCounts({
+        body: postScopeBody({
+          channelNames,
+          startDate,
+          endDate,
+          selection: postSelection,
+        }) as PostFilteredRequest,
+      }),
+    enabled,
+    staleTime: SUMMARIZER_STALE_TIME,
+    placeholderData: (previous) => previous,
+  })
+  return (enabled && query.data?.selected) || NO_COUNTS
 }
+
+const NO_COUNTS: Record<string, number> = {}
 
 /**
  * What the Posts tab shows under the Post filter: per-channel counts and how
  * many Posts an Estimated views bound hid for being too new to judge (PFB-03,
  * PTR-03). One request for both. A meaning search has no server count and
- * reports none too new.
+ * reports none too new. It follows a spotlight.
  */
 export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
-  counts: Record<string, number>
-  tooNewToJudge: number
-} {
-  return useScopeCounts(useScraper().postFilter, true, spotlight)
-}
-
-const NO_FILTER = emptyPostFilter()
-
-/**
- * `accountFilter` is what is counted; `shown` says it is the tab's, not the Scope's,
- * and only the tab's count follows a spotlight.
- */
-function useScopeCounts(
-  accountFilter: PostFilter,
-  shown: boolean,
-  spotlight: ChannelSpotlight | null = null,
-): {
   counts: Record<string, number>
   tooNewToJudge: number
 } {
   const { selectedChannels } = useData()
   const { startDate, endDate, windowKey } = useScope()
   const {
+    postFilter: accountFilter,
     postSearch,
     maxPostsPerChannel,
     semanticSearchQuery,
     getScopedPosts,
-    getPromptPostsInput,
   } = useScraper()
   const debouncedPostSearch = useDebouncedValue(postSearch, 300)
   const selectedChannelNames = useSelectedChannelNames()
@@ -178,17 +188,13 @@ function useScopeCounts(
   useEffect(() => {
     if (serverEligible) return
     let cancelled = false
-    // The Scope's count reads the ranked Posts an Action would, unfiltered.
-    const ranked = shown
-      ? getScopedPosts()
-      : getPromptPostsInput().then((input) => input.posts ?? [])
-    ranked.then((posts) => {
+    getScopedPosts().then((posts) => {
       if (!cancelled) setClientCounts(buildPostsInScopeCounts(posts))
     })
     return () => {
       cancelled = true
     }
-  }, [serverEligible, shown, getScopedPosts, getPromptPostsInput])
+  }, [serverEligible, getScopedPosts])
 
   if (!serverEligible) return { counts: clientCounts, tooNewToJudge: 0 }
   return {
@@ -288,7 +294,10 @@ export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
     relatedPostSearch,
     setRelatedPostSearch,
     getScopedPosts,
+    postSelection,
+    selectionEdit,
   } = useScraper()
+  const queryClient = useQueryClient()
   const { embeddingsEnabled } = useSettings()
   const debouncedPostSearch = useDebouncedValue(postSearch, 300)
   const debouncedSemantic = useDebouncedValue(semanticSearchQuery, 300)
@@ -314,7 +323,16 @@ export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
     sort: postSortOrder,
     seed: 0,
   }
-  const feedParams: PostFeedQuery = { ...filters, filter, startDate, endDate }
+  // The selection rides the request and not the key: an edit refreshes the
+  // rows in place below, and a new key would drop the Account back to the
+  // top of the feed on every tick (PTR-05).
+  const feedParams: PostFeedQuery = {
+    ...filters,
+    filter,
+    startDate,
+    endDate,
+    selection: postSelection,
+  }
   // The filter by its text, which is stable where the tree's ids are not.
   const keyed = { ...filters, filter: printPostFilter(filter) }
 
@@ -352,7 +370,42 @@ export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
   // Client RAG path for semantic/related search.
   const [clientPosts, setClientPosts] = useState<Post[]>([])
   const [clientLoading, setClientLoading] = useState(false)
+  // Moves when an edit other than Picks needs the ranked Posts flagged again.
+  const [ruleEdits, setRuleEdits] = useState(0)
+
+  // A selection edit, after the render that carries it, so a refetch reads
+  // the new selection. Picks reach only their own Posts, so their rows are
+  // patched where they are; anything else asks the server again (PTR-05).
+  const seenEdit = useRef(selectionEdit.revision)
   useEffect(() => {
+    if (seenEdit.current === selectionEdit.revision) return
+    seenEdit.current = selectionEdit.revision
+    if (!selectionEdit.picks) {
+      queryClient.invalidateQueries({ queryKey: ["postsFeed"] })
+      setRuleEdits((n) => n + 1)
+      return
+    }
+    const flags = new Map(
+      selectionEdit.picks.map((p) => [
+        `${p.channelName}:${p.postId}`,
+        p.select,
+      ]),
+    )
+    const patch = (posts: Post[]) =>
+      posts.map((p) => {
+        const selected = flags.get(`${p.channelName}:${p.id}`)
+        return selected === undefined ? p : { ...p, selected }
+      })
+    queryClient.setQueriesData<InfiniteData<Post[]>>(
+      { queryKey: ["postsFeed"] },
+      (data) => data && { ...data, pages: data.pages.map(patch) },
+    )
+    setClientPosts(patch)
+  }, [selectionEdit, queryClient])
+
+  useEffect(() => {
+    // Read so a rule edit re-flags the ranked Posts; see `ruleEdits`.
+    void ruleEdits
     if (!semanticActive) {
       setClientPosts([])
       return
@@ -385,6 +438,7 @@ export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
     relatedPostSearch,
     setRelatedPostSearch,
     setSemanticSearchQuery,
+    ruleEdits,
   ])
 
   if (semanticActive) {

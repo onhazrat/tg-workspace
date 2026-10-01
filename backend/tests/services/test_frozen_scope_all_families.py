@@ -32,7 +32,8 @@ ticket exists to close.
   on the wire *and* against the SQL, because dropping a field in Python after
   reading it off disk is the defect, not the fix.
 * **The unified History read exposes one Scope shape** over all four kinds.
-* **The explicit Post selection survives on the paths that have one.**
+* **The Post selection survives with every Post it reached** (PTR-05), and
+  inspecting it after the corpus changed returns the same Posts.
 
 Two claims are Summary-only because only Summaries have successors:
 
@@ -75,9 +76,10 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import ChatSession, DiscoverReport, Summary, TagRun
+from app.models_tg import ChatSession, DiscoverReport, Post, Summary, TagRun
 from app.services import analysis_window as analysis_window_service
 from app.services.analysis_window import MINUTE_MS
+from tests.utils.scope import followed_posts
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -90,23 +92,37 @@ NOW = _ms("2026-03-14T14:32:47.812+00:00")
 MINUTE = _ms("2026-03-14T14:32:00+00:00")
 DAY_MS = 24 * 60 * MINUTE_MS
 
-#: One filter set, sent by every family, so "the same contract" is asserted
-#: rather than described. Every value is deliberately non-default: a filter that
+#: One Scope, sent by every family, so "the same contract" is asserted rather
+#: than described. Every value is deliberately non-default: a field that
 #: silently failed to travel would otherwise read back as the value it was
-#: given.
+#: given. Since PTR-05 the keyword and the cap are a Selection rule's, written
+#: out whole because the record returns every field of the snapshot.
+SELECTION: list[dict[str, Any]] = [
+    {
+        "kind": "rule",
+        "select": True,
+        "filter": {
+            "tree": None,
+            "keyword": "tehran",
+            "sort": "oldest",
+            "viewMeasure": "views",
+            "maxPerChannel": 25,
+            "maxPerChannelMode": "random",
+            "seed": 4242,
+        },
+    },
+    {"kind": "pick", "select": False, "channelName": "ch", "postId": 7},
+]
 FILTERS: dict[str, Any] = {
-    "keyword": "tehran",
     "viewMeasure": "views",
-    "maxPerChannel": 25,
-    "maxPerChannelMode": "random",
     "sort": "most_views",
     "groupByChannel": True,
-    "seed": 4242,
+    "selection": SELECTION,
 }
 
-#: What every family's frozen Scope must agree on: the whole filter set,
-#: Discover's included since PFB-01 made its capped reads follow the order.
-#: `channels`, `start` and `end` are asserted separately.
+#: What every family's frozen Scope must agree on: the order and the Post
+#: selection, Discover's included. `channels`, `start` and `end` are asserted
+#: separately.
 SHARED_KEYS = tuple(FILTERS)
 
 #: The flat Post filters, which left the Scope in PTR-03 (ADR-026): a stored
@@ -115,8 +131,7 @@ FLAT_FILTERS = ("forwarded", "languages", "media", "views")
 
 #: The filter half as it was spelled before PFB-01, and what each value reads
 #: as now. Every Artifact and scheduled Summary written before the change holds
-#: the left-hand shape; a browser on the previous bundle sends it, without the
-#: flat filters, for a release.
+#: the left-hand shape.
 LEGACY_FILTERS: dict[str, Any] = {
     "keyword": "tehran",
     "forwarded": "original",
@@ -181,6 +196,20 @@ def at_now(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(analysis_window_service, "server_now_ms", lambda: NOW)
 
 
+@pytest.fixture
+def corpus() -> list[dict[str, Any]]:
+    """Forty Posts of `ch` inside the default window, followed by the Operator."""
+    return followed_posts("ch", 40, at=MINUTE - 60 * MINUTE_MS)
+
+
+def _picks(refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deselect all, then select exactly `refs`."""
+    return [
+        {"kind": "rule", "select": False},
+        *({"kind": "pick", "select": True, **ref} for ref in refs),
+    ]
+
+
 # --------------------------------------------------------------------------
 # The four families, as a caller reaches them
 # --------------------------------------------------------------------------
@@ -208,8 +237,6 @@ class Family:
     later_write: Callable[[str, dict[str, Any]], tuple[str, str, dict[str, Any]]]
     #: The row class, for reading the database directly.
     model: type[Any]
-    #: Whether the submission accepts an explicit Post selection.
-    takes_posts: bool = True
 
 
 def _artifact_body(id_: str, window: dict[str, Any], filters: dict[str, Any]) -> dict:
@@ -299,15 +326,14 @@ def _create(
     filters: dict[str, Any] | None = None,
     posts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Submit one Artifact of this kind and return the created body."""
-    body = family.body(
-        str(uuid.uuid4()), window or _live(), FILTERS if filters is None else filters
-    )
+    """Submit one Artifact of this kind and return the created body.
+
+    `posts` selects exactly those Posts, as deselect-all then a Pick each.
+    """
+    filters = FILTERS if filters is None else filters
     if posts is not None:
-        if family.kind == "discovery":
-            body["postIds"] = posts
-        else:
-            body["scope"]["posts"] = posts
+        filters = {**filters, "selection": _picks(posts)}
+    body = family.body(str(uuid.uuid4()), window or _live(), filters)
     response = client.post(family.path, json=body, headers=headers)
     assert response.status_code == 200, response.text
     return dict(response.json())
@@ -405,12 +431,17 @@ def test_a_later_write_cannot_replace_the_frozen_scope(
     created = _create(client, family, headers)
     method, path, body = family.later_write(
         created["id"],
-        {"channels": ["someone-elses"], "start": 0, "end": 1, "keyword": "rewritten"},
+        {
+            "channels": ["someone-elses"],
+            "start": 0,
+            "end": 1,
+            "selection": [{"kind": "rule", "select": False}],
+        },
     )
     client.request(method, path, json=body, headers=headers)
 
     detail = client.get(family.detail(created["id"]), headers=headers).json()
-    assert detail["scope"]["keyword"] == FILTERS["keyword"]
+    assert detail["scope"]["selection"] == SELECTION
     assert detail["scope"]["channels"] == ["ch"]
     assert (detail["scope"]["start"], detail["scope"]["end"]) == (
         MINUTE - DAY_MS,
@@ -452,17 +483,16 @@ def test_a_rejected_scope_does_not_land_in_the_open_extra_bag(
 
 @pytest.mark.parametrize("family", FAMILIES, ids=IDS)
 def test_the_list_projection_carries_the_scope_without_its_post_refs(
-    client: TestClient, at_now: None, family: Family
+    client: TestClient, at_now: None, family: Family, corpus: list[dict[str, Any]]
 ) -> None:
     """A page of history renders date ranges, not corpora.
 
-    `scopedPostCount` rides the Scope so a list can still say the selection was
-    restricted; the refs themselves are in a payload table or a heavy column,
+    `scopedPostCount` rides the Scope so a list can still say how many Posts
+    it covered; the refs themselves are in a payload table or a heavy column,
     and the list opens neither.
     """
     headers = _auth(client)
-    refs = [{"channelName": "ch", "postId": n} for n in range(40)]
-    created = _create(client, family, headers, posts=refs)
+    created = _create(client, family, headers, posts=corpus)
 
     listed = next(
         item
@@ -498,7 +528,7 @@ def _captured_sql() -> Iterator[list[str]]:
 
 @pytest.mark.parametrize("family", FAMILIES, ids=IDS)
 def test_a_list_never_reads_the_column_the_post_refs_live_in(
-    client: TestClient, at_now: None, family: Family
+    client: TestClient, at_now: None, family: Family, corpus: list[dict[str, Any]]
 ) -> None:
     """The claim above it is about the wire; this one is about the disk.
 
@@ -513,12 +543,7 @@ def test_a_list_never_reads_the_column_the_post_refs_live_in(
     the column is selected by name or dragged in by `select(Entity)`.
     """
     headers = _auth(client)
-    _create(
-        client,
-        family,
-        headers,
-        posts=[{"channelName": "ch", "postId": n} for n in range(5)],
-    )
+    _create(client, family, headers, posts=corpus[:5])
 
     with _captured_sql() as statements:
         listed = client.get(family.list_path, headers=headers)
@@ -529,23 +554,36 @@ def test_a_list_never_reads_the_column_the_post_refs_live_in(
 
 
 @pytest.mark.parametrize("family", FAMILIES, ids=IDS)
-def test_the_detail_read_returns_the_selection_the_ranking_named(
-    client: TestClient, at_now: None, family: Family
+def test_the_detail_read_returns_every_post_the_selection_reached(
+    client: TestClient, at_now: None, family: Family, corpus: list[dict[str, Any]]
 ) -> None:
-    """Semantic and related-Post ranking is not expressible as filters.
+    """The steps and a reference to every Post they reached (PTR-05).
 
-    The server cannot rebuild the ordering from a keyword and a cap, so the
-    selection itself is the reproduction — for all four kinds, not only the one
-    AW-05 happened to prove it on.
+    For all four kinds, and still the same Posts after the corpus changed: a
+    Post the selection's rule would reach today is not in a record made
+    before it existed, and inspecting never applies a rule again.
     """
     headers = _auth(client)
-    refs = [{"channelName": "ch", "postId": n} for n in (11, 12, 13)]
-    created = _create(client, family, headers, posts=refs)
+    selection = [
+        {"kind": "rule", "select": True},
+        {"kind": "pick", "select": False, "channelName": "ch", "postId": 39},
+        # Picks a Post nobody wrote reach nothing and are not an error.
+        {"kind": "pick", "select": True, "channelName": "ch", "postId": 999},
+    ]
+    created = _create(
+        client, family, headers, filters={"sort": "oldest", "selection": selection}
+    )
+    with Session(engine) as session:
+        session.add(
+            Post(channel_name="ch", post_id=40, text="later", timestamp=MINUTE - 1)
+        )
+        session.commit()
 
     detail = client.get(family.detail(created["id"]), headers=headers).json()
 
-    assert detail["scope"]["scopedPostCount"] == 3
-    assert detail["scope"]["posts"] == refs
+    assert detail["scope"]["scopedPostCount"] == 39
+    assert detail["scope"]["posts"] == corpus[:39]
+    assert detail["scope"]["selection"][1]["postId"] == 39
 
 
 @pytest.mark.parametrize("family", FAMILIES, ids=IDS)
@@ -692,15 +730,56 @@ def test_a_submission_in_the_old_shape_is_recorded_in_the_new_one(
 ) -> None:
     """A browser still on the previous bundle keeps working until it reloads.
 
-    Accepted for one release, mapped exactly as a stored row is, so an old tab
-    and an old row can never mean two different things by one value.
+    Accepted for one release. The spelling maps exactly as a stored row's
+    does, and the keyword and cap become the one select rule that covers the
+    Posts the old Scope did (PTR-05).
     """
     submitted = {k: v for k, v in LEGACY_FILTERS.items() if k not in FLAT_FILTERS}
     created = _create(client, family, _auth(client), filters=submitted)
 
-    for key, expected in LEGACY_READS_AS.items():
-        if key not in FLAT_FILTERS:
-            assert created["scope"][key] == expected, key
+    assert created["scope"]["sort"] == "newest"
+    assert created["scope"]["groupByChannel"] is True
+    assert created["scope"]["selection"] == [
+        {
+            "kind": "rule",
+            "select": True,
+            "filter": {
+                "tree": None,
+                "keyword": "tehran",
+                "sort": "newest",
+                "viewMeasure": "estimated",
+                "maxPerChannel": 25,
+                "maxPerChannelMode": "ordered",
+                "seed": 4242,
+            },
+        }
+    ]
+
+
+@pytest.mark.parametrize("family", FAMILIES, ids=IDS)
+def test_a_legacy_ranked_submission_is_read_as_deselect_all_then_picks(
+    client: TestClient, at_now: None, family: Family, corpus: list[dict[str, Any]]
+) -> None:
+    """A meaning search's ranked Posts, from the previous bundle (PTR-05)."""
+    refs = corpus[11:14]
+    body = family.body(str(uuid.uuid4()), _live(), {})
+    if family.kind == "discovery":
+        body["postIds"] = refs
+    else:
+        body["scope"]["posts"] = refs
+    response = client.post(family.path, json=body, headers=_auth(client))
+    assert response.status_code == 200, response.text
+    detail = client.get(
+        family.detail(response.json()["id"]), headers=_auth(client)
+    ).json()
+
+    assert detail["scope"]["selection"][0] == {
+        "kind": "rule",
+        "select": False,
+        "filter": detail["scope"]["selection"][0]["filter"],
+    }
+    assert [s["postId"] for s in detail["scope"]["selection"][1:]] == [11, 12, 13]
+    assert sorted(r["postId"] for r in detail["scope"]["posts"]) == [11, 12, 13]
 
 
 # --------------------------------------------------------------------------
@@ -800,6 +879,7 @@ def test_a_successor_carries_the_channels_and_no_filter_its_run_did_not_apply(
     ).json()
 
     assert second["scope"]["channels"] == ["ch", "other"]
+    assert second["scope"]["selection"] is None
     assert second["scope"]["keyword"] is None
     assert second["scope"]["maxPerChannel"] == 0
     assert second["scope"]["seed"] == 0

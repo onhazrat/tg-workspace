@@ -22,20 +22,15 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from sqlalchemy import or_
+from sqlalchemy import ColumnElement
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post
 from app.services.discover_ignored import ignored_handles
 from app.services.follows import visible_channel_names
-from app.services.post_filters import (
-    FeedSort,
-    PostFilters,
-    apply_analysis_window,
-    apply_post_filters,
-)
+from app.services.post_filters import ViewReading, apply_analysis_window
 from app.services.post_links_parser import channel_from_telegram_url
-from app.services.posts import channel_order, random_cap_order
+from app.services.posts import channel_order
 from app.services.telegram_web import _all_web_domains, is_channel_handle
 from app.services.tenancy import scoped_select
 
@@ -144,20 +139,6 @@ class _Accumulator:
     reference: Post | None = None
 
 
-def _scan_order(
-    max_per_channel: int,
-    max_per_channel_mode: str,
-    sort: FeedSort,
-    seed: int,
-    filters: PostFilters | None,
-) -> list[Any]:
-    """Channel by channel, each in the order the cap keeps the first N of."""
-    if max_per_channel > 0 and max_per_channel_mode == "random":
-        return [col(Post.channel_name), random_cap_order(seed)]
-    reading = (filters or PostFilters()).reading
-    return [col(Post.channel_name), *channel_order(sort, Post, reading)]
-
-
 def compute_discover_candidates(
     session: Session,
     *,
@@ -166,12 +147,7 @@ def compute_discover_candidates(
     start_date: int | None = None,
     end_date: int | None = None,
     signals: set[SignalKind] | None = None,
-    filters: PostFilters | None = None,
-    max_per_channel: int = 0,
-    max_per_channel_mode: str = "ordered",
-    sort: FeedSort = "newest",
-    seed: int = 0,
-    post_ids: list[tuple[str, int]] | None = None,
+    selected: ColumnElement[bool] | None = None,
 ) -> dict[str, Any]:
     """Aggregate discovery candidates for a channel/date scope.
 
@@ -179,17 +155,10 @@ def compute_discover_candidates(
     descending, plus post-level `scopeCounts` which always report every kind
     regardless of which signals are enabled.
 
-    `filters` and the cap reproduce the Scope the report covers: the keyword
-    (the Post filter never reaches a report, ADR-026), then the per-channel cap in either `ordered` or `random` mode — `ordered` keeps each
-    channel's first N under `sort`, as the feed's cap does (PFB-01); `random`
-    reuses the feed's seeded ordering (`posts.random_cap_order`) so the same
-    posts are chosen for the same seed.
-
-    `post_ids` restricts the scope to an explicit `(channel_name, post_id)` set.
-    That is how a semantic (vector) query is expressed here: the caller runs the
-    vector search, which owns the ranking, and passes the resulting posts in.
-    Aggregation therefore has exactly one implementation regardless of how the
-    post set was chosen (IDEA-011 D14).
+    `selected` is the Post selection's predicate (`post_selection`): the
+    report covers the Posts it selects, as every Action does (PTR-05). `None`
+    is every Post in the window. A meaning search's ranked Posts reach here as
+    Picks, so aggregation has one implementation however the Posts were chosen.
 
     `user_id` scopes the aggregation to Channels the caller Follows (ticket
     16). It narrows *two* independent reads, not one: the Posts being scanned,
@@ -198,17 +167,14 @@ def compute_discover_candidates(
     already followed because another account follows it, which is both the
     wrong answer for this caller and a fact about somebody else's account.
 
-    It also makes `post_ids` safe to accept from an unscoped ranker: the
-    semantic path runs its own vector search and passes the winners in here, so
-    the scoping predicate on the Post select is what keeps a post the caller
-    may not see out of the aggregate regardless of how it was chosen.
+    It also makes a Pick safe to accept from an unscoped ranker: the scoping
+    predicate on the Post select is what keeps a post the caller may not see
+    out of the aggregate regardless of how it was chosen.
     """
     enabled = signals if signals is not None else set(SIGNAL_KINDS)
 
     scope_counts = {"forwardPosts": 0, "mentionPosts": 0, "linkPosts": 0}
-    # An explicit empty `post_ids` means "the search matched nothing", which is
-    # an empty scope — not "no restriction".
-    if not channel_names or not enabled or post_ids == []:
+    if not channel_names or not enabled:
         return {"candidates": [], "scopeCounts": scope_counts, "postsInScope": 0}
 
     followed = visible_channel_names(session, user_id=user_id)
@@ -217,43 +183,22 @@ def compute_discover_candidates(
         col(Post.channel_name).in_(channel_names)
     )
     stmt = apply_analysis_window(stmt, start_date, end_date)
-    if post_ids:
-        unique_pairs = {(name, post_id) for name, post_id in post_ids}
-        stmt = stmt.where(
-            or_(
-                *[
-                    (col(Post.channel_name) == name) & (col(Post.post_id) == post_id)
-                    for name, post_id in unique_pairs
-                ]
-            )
-        )
-    if filters is not None:
-        stmt = apply_post_filters(stmt, filters, followed_names=frozenset(followed))
-    # Order by channel first so the per-channel cap can be applied while
-    # streaming. `ordered` then follows the feed's order within the channel
-    # (timestamp desc under `newest`, which is served by
-    # ix_tg_posts_channel_name_timestamp); `random` uses the feed's seeded
-    # ordering so the cap selects the same posts the Posts tab would show.
+    if selected is not None:
+        stmt = stmt.where(selected)
+    # Channel by channel, newest first, served by
+    # ix_tg_posts_channel_name_timestamp.
     stmt = stmt.order_by(
-        *_scan_order(max_per_channel, max_per_channel_mode, sort, seed, filters)
+        col(Post.channel_name), *channel_order("newest", Post, ViewReading())
     )
 
     by_source: dict[str, _Accumulator] = {}
-    seen_per_channel: dict[str, int] = {}
     posts_in_scope = 0
 
     # Stream in batches: the whole point is to avoid materialising every post
     # body at once, which is what this endpoint replaces on the client side.
     for post in session.exec(stmt.execution_options(yield_per=1000)):
-        if max_per_channel > 0:
-            seen = seen_per_channel.get(post.channel_name, 0)
-            if seen >= max_per_channel:
-                continue
-            seen_per_channel[post.channel_name] = seen + 1
-
-        # Every post that survives the filters and cap — the client's
-        # `filteredPosts.length`, used to tell "empty scope" from "posts exist
-        # but reference nothing".
+        # Every selected post, used to tell "empty scope" from "posts exist but
+        # reference nothing".
         posts_in_scope += 1
 
         all_refs = post_references(post)

@@ -135,7 +135,8 @@ def _counts(client: TestClient, headers: dict[str, str], **scope: Any) -> Any:
         f"{PREFIX}/posts/counts", json={"channelNames": ALL, **scope}, headers=headers
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    # The shown counts; the selected ones are `test_post_selection.py`'s (PTR-05).
+    return {k: v for k, v in response.json().items() if k != "selected"}
 
 
 def _at_least(n: int) -> dict[str, Any]:

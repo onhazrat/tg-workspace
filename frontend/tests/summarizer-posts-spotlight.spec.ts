@@ -33,7 +33,13 @@ async function mockPosts(page: Page, channel: string): Promise<FeedBody[]> {
     await route.fulfill({ json: posts })
   })
   await page.route("**/api/v1/data/posts/counts**", (route) =>
-    route.fulfill({ json: { counts: { [channel]: 2 }, tooNewToJudge: 0 } }),
+    route.fulfill({
+      json: {
+        counts: { [channel]: 2 },
+        selected: { [channel]: 2 },
+        tooNewToJudge: 0,
+      },
+    }),
   )
   return bodies
 }

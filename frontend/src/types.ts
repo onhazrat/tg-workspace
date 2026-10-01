@@ -166,6 +166,11 @@ export interface Post {
   reactionCounts?: PostReactionCount[] | null
   /** When the counters were read, in epoch milliseconds. */
   viewsObservedAt?: number | null
+  /**
+   * Whether the Post selection the read carried selects it (PTR-05). Set by
+   * the feed and the lookup; absent on a read that carries no selection.
+   */
+  selected?: boolean
 }
 
 export interface PostEmbedding {

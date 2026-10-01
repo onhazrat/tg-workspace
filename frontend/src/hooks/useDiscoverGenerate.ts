@@ -5,10 +5,7 @@ import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
-import { useDebouncedValue } from "@/hooks/useDebouncedValue"
-import type { DiscoverCandidatesParams } from "@/hooks/useDiscover"
 import { useCreateDiscoverReportMutation } from "@/hooks/useDiscover"
-import { RANDOM_CAP_SEED } from "@/lib/posts/discover-candidates"
 
 /**
  * Generating a Discover report, extracted so the Action tab can do it too.
@@ -20,75 +17,34 @@ import { RANDOM_CAP_SEED } from "@/lib/posts/discover-candidates"
  */
 export function useDiscoverGenerate() {
   const { selectedChannels } = useData()
-  const {
-    getPromptPostsInput,
-    postSearch,
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-    groupByChannel,
-    viewMeasure,
-  } = useScraper()
+  const { postSelection, postSortOrder, groupByChannel, viewMeasure } =
+    useScraper()
   const { startDate, endDate } = useScope()
   const { discoverSignals } = useSettings()
   const { workspaceTabs } = useUI()
   const createReport = useCreateDiscoverReportMutation()
 
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
   const selectedChannelNames = useMemo(
     () => [...selectedChannels].sort(),
     [selectedChannels],
   )
 
-  /** Live scope — the *input* to the next report, never a description of one. */
-  const liveParams: DiscoverCandidatesParams = useMemo(
-    () => ({
+  /**
+   * Generate and save a report over the Post selection, which the server
+   * resolves like every other Action's (PTR-05). A meaning search reaches it
+   * as the Picks "Select all" recorded, never as a ranking sent here.
+   */
+  const generate = async () => {
+    const report = await createReport.mutateAsync({
       channelNames: selectedChannelNames,
       startDate,
       endDate,
       signals: discoverSignals,
-      keyword: debouncedPostSearch,
       viewMeasure,
-      maxPerChannel: maxPostsPerChannel,
-      maxPerChannelMode: maxPostsPerChannelMode,
       sort: postSortOrder,
       groupByChannel,
-      seed: RANDOM_CAP_SEED,
-    }),
-    [
-      selectedChannelNames,
-      startDate,
-      endDate,
-      discoverSignals,
-      debouncedPostSearch,
-      viewMeasure,
-      maxPostsPerChannel,
-      maxPostsPerChannelMode,
-      postSortOrder,
-      groupByChannel,
-    ],
-  )
-
-  /**
-   * Generate and save a report.
-   *
-   * A semantic query is the one scope whose *post selection* the server cannot
-   * derive from the scope alone — the vector search owns that ranking. So the
-   * client resolves which posts matched and passes their ids; the aggregation
-   * still happens server-side, in the single implementation. They are the
-   * ranked Posts an Action reads, which the Post filter never narrows
-   * (ADR-026).
-   */
-  const generate = async () => {
-    const params = { ...liveParams }
-    const input = await getPromptPostsInput()
-    if (input.posts) {
-      params.postIds = input.posts.map((post) => ({
-        channelName: post.channelName,
-        postId: post.id,
-      }))
-    }
-    const report = await createReport.mutateAsync(params)
+      selection: postSelection,
+    })
     // Its own tab, shown when this was started from Action (TABS-01).
     workspaceTabs.createTab("discover", report.id)
     return report
@@ -96,7 +52,6 @@ export function useDiscoverGenerate() {
 
   return {
     generate,
-    liveParams,
     isGenerating: createReport.isPending,
     channelCount: selectedChannelNames.length,
   }

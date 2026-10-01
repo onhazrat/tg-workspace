@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import type { PostScopeQuery } from "@/api/data"
-import type { Post } from "@/types"
+import { DEFAULT_SELECTION } from "@/lib/posts/post-selection"
 import {
   errorText,
   frozenScope,
@@ -81,22 +81,17 @@ describe("withProvisionalRow", () => {
 })
 
 describe("frozenScope", () => {
-  const scope = { startDate: 1, endDate: 2 }
+  const scope = { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION }
 
-  it("selects by the frozen window, keeping the filters", () => {
-    expect(
-      frozenScope({ ...scope, keyword: "x" }, { start: 10, end: 20 }),
-    ).toEqual({
-      startDate: 1,
-      endDate: 2,
-      keyword: "x",
+  it("selects by the frozen window, keeping the selection", () => {
+    expect(frozenScope(scope, { start: 10, end: 20 })).toEqual({
+      ...scope,
       window: { mode: "fixed", start: 10, end: 20 },
     })
   })
 
-  it("leaves the scope alone with nothing frozen, and the semantic path alone always", () => {
+  it("leaves the scope alone with nothing frozen", () => {
     expect(frozenScope(scope, null)).toBe(scope)
-    expect(frozenScope(undefined, { start: 10, end: 20 })).toBeUndefined()
   })
 })
 
@@ -131,23 +126,10 @@ it("readStream accumulates the text, reports it per chunk, and keeps the last ch
 })
 
 describe("promptPosts", () => {
-  const post = { channelName: "chan", id: 1, date: "d", text: "hi" } as Post
-  const noCounts = async (): Promise<Record<string, number>> => {
-    throw new Error("the semantic path must not ask the server to count")
-  }
-
-  it("formats the posts this browser holds on the semantic path", async () => {
-    const result = await promptPosts({ posts: [post] }, ["chan"], noCounts)
-    expect(result.posts).toEqual([post])
-    expect(result.postCount).toBe(1)
-    expect(result.postsText).toContain("[chan] ID: 1")
-    expect(result.scope).toBeUndefined()
-  })
-
   it("sends the scope and sums the server's per-channel counts", async () => {
     const asked: PostScopeQuery[] = []
     const result = await promptPosts(
-      { scope: { startDate: 1, endDate: 2 } },
+      { scope: { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION } },
       ["a", "b"],
       async (q) => {
         asked.push(q)
@@ -155,19 +137,24 @@ describe("promptPosts", () => {
       },
     )
     expect(result).toEqual({
-      scope: { startDate: 1, endDate: 2 },
+      scope: { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION },
       postsText: "",
       postCount: 7,
     })
     expect(asked).toEqual([
-      { channelNames: ["a", "b"], startDate: 1, endDate: 2 },
+      {
+        channelNames: ["a", "b"],
+        startDate: 1,
+        endDate: 2,
+        selection: DEFAULT_SELECTION,
+      },
     ])
   })
 
   it("counts inside the frozen window when there is one", async () => {
     const asked: PostScopeQuery[] = []
     const result = await promptPosts(
-      { scope: { startDate: 1, endDate: 2 } },
+      { scope: { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION } },
       ["a"],
       async (q) => {
         asked.push(q)

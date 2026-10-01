@@ -1,7 +1,8 @@
 import type { PostFeedQuery } from "@/api/data"
 import type { ViewEstimate } from "@/lib/posts/estimated-views"
 import type { Post } from "@/types"
-import { isEmptyPostFilter, type PostFilter } from "./post-filter"
+import type { PostFilter } from "./post-filter"
+import type { PostSelection } from "./post-selection"
 import {
   buildFilteredPostsFromRaw,
   type PostViewOptions,
@@ -48,6 +49,8 @@ export interface ScopedPostsDeps {
    * the Post filter never narrows (ADR-026).
    */
   postFilter: PostFilter
+  /** Flags every Post the read returns with `selected` (PTR-05). */
+  postSelection: PostSelection
   postViewOptions: PostViewOptions
   semanticSearchRespectsChannels: boolean
   searchSimilarPosts: (
@@ -60,10 +63,19 @@ export interface ScopedPostsDeps {
    * testable without a network stub at module scope.
    */
   getPostsFeed: (query: PostFeedQuery) => Promise<Post[]>
-  /** The server lookup, which passes ranked Posts through the Post filter. */
+  /**
+   * The server lookup, which passes ranked Posts through the Post filter and
+   * flags each with the Post selection, whose rules reach Posts in `scope`.
+   */
   lookupPosts: (
     refs: { channelName: string; postId: number }[],
     filter: PostFilter,
+    scope: {
+      channelNames: string[]
+      startDate: number
+      endDate: number
+      selection: PostSelection
+    },
   ) => Promise<Post[]>
   /**
    * The curve and settings the browser reads an Estimated View count through,
@@ -92,6 +104,7 @@ export async function computeScopedPosts(
     startDate,
     endDate,
     postFilter,
+    postSelection,
     postViewOptions,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
@@ -101,22 +114,29 @@ export async function computeScopedPosts(
   } = deps
 
   // The ranked Posts a vector search returns pass through the Post filter, so
-  // the filter means the same thing in both modes. The server evaluates it,
-  // through the lookup, and the rank order is kept. Not the keyword: in
-  // meaning mode the search box holds the meaning query.
+  // the filter means the same thing in both modes, and come back flagged by
+  // the Post selection. The server does both, through the lookup, and the
+  // rank order is kept. Not the keyword: in meaning mode the search box holds
+  // the meaning query.
   const readsEstimate = readsEstimatedViews(postViewOptions)
   const filterRanked = async (ranked: Post[]) => {
-    let kept = ranked
-    if (!isEmptyPostFilter(postFilter) && ranked.length > 0) {
-      const shown = new Set(
+    let kept: Post[] = []
+    if (ranked.length > 0) {
+      const shown = new Map(
         (
           await lookupPosts(
             ranked.map((p) => ({ channelName: p.channelName, postId: p.id })),
             postFilter,
+            {
+              channelNames: selectedChannels,
+              startDate,
+              endDate,
+              selection: postSelection,
+            },
           )
-        ).map((p) => `${p.channelName}:${p.id}`),
+        ).map((p) => [`${p.channelName}:${p.id}`, p]),
       )
-      kept = ranked.filter((p) => shown.has(`${p.channelName}:${p.id}`))
+      kept = ranked.flatMap((p) => shown.get(`${p.channelName}:${p.id}`) ?? [])
     }
     return buildFilteredPostsFromRaw(kept, {
       searchText: "",
@@ -183,5 +203,6 @@ export async function computeScopedPosts(
     groupByChannel: postViewOptions.groupByChannel,
     seed: 0,
     limit: SCOPED_POSTS_LIMIT,
+    selection: postSelection,
   })
 }

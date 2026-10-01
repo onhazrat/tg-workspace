@@ -3,11 +3,11 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
+from app.schemas.post_filter import PostSelection, select_all
 from app.schemas.scope import (
-    CapMode,
     SortOrder,
     ViewMeasure,
-    upgrade_legacy_scope_fields,
+    upgrade_legacy_submission,
 )
 
 
@@ -23,23 +23,21 @@ class PromptScopeInput(BaseModel):
 
     # AW-02: stated, not computed by the browser. See `PostScopeRequest`.
     window: AnalysisWindowInput | None = None
-    keyword: str | None = None
-    # PFB-01: the Scope's filter half, spelled as `_ScopeFilters` spells it, so
-    # a value it refuses is refused here too rather than 200ing a prompt over a
-    # Scope nobody can record. Without the flat `forwarded`, `languages`,
-    # `media` and `views` since PTR-03 (ADR-026), which `extra="forbid"` refuses.
+    # PTR-05 (ADR-026): the prompt reads the Post selection, in the order
+    # below, spelled as `ScopeSubmission` spells it so a value it refuses is
+    # refused here too rather than 200ing a prompt over a Scope nobody can
+    # record. The keyword and the cap are part of a Selection rule's filter.
+    selection: PostSelection = Field(default_factory=select_all)
     view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")
-    max_per_channel: int = Field(0, alias="maxPerChannel")
-    max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
     sort: SortOrder = "newest"
     group_by_channel: bool = Field(False, alias="groupByChannel")
-    seed: int = 0
 
-    # The previous bundle's spelling, for one release: see `PostScopeRequest`.
+    # The previous bundle's spelling, keyword and cap, for one release: see
+    # `PostScopeRequest` and `legacy_selection`.
     @model_validator(mode="before")
     @classmethod
     def _upgrade_legacy_shape(cls, data: Any) -> Any:
-        return upgrade_legacy_scope_fields(data)
+        return upgrade_legacy_submission(data)
 
     # `extra="forbid"`: see `PostScopeRequest`. The blast radius is largest
     # here. A stale client posting the pre-AW-02 pair would resolve to an

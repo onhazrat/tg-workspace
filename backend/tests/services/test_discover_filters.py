@@ -1,7 +1,8 @@
-"""Discover honoring the Posts-tab filters + latest cap (step 2 / T4.1).
+"""Discover over the Post selection's keyword and cap (step 2 / T4.1, PTR-05).
 
-Discover aggregates over the same filtered/capped set the Posts tab shows, so
-these assert the ported filters change which posts feed the aggregation.
+Since PTR-05 a report covers the Post selection, so the keyword and the cap
+that used to narrow it are a Selection rule's. These assert a rule's filter
+changes which posts feed the aggregation.
 """
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ from sqlmodel import Session
 from app.core.db import engine
 from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
-from app.services.post_filters import PostFilters
+from app.services.post_filters import Rule
+from app.services.post_selection import PostScope, selection_clause
 from tests.utils.tenancy import ANY_READER, follow_channels
 
 
@@ -34,6 +36,10 @@ def _add(session: Session, post_id: int, **kw: Any) -> None:
     )
 
 
+def _selected(session: Session, rule: Rule) -> Any:
+    return selection_clause(session, [rule], PostScope(ANY_READER, ["carrier"]))
+
+
 def _totals(result: dict[str, Any]) -> dict[str, int]:
     return {c["name"]: c["total"] for c in result["candidates"]}
 
@@ -52,7 +58,7 @@ def test_keyword_filter_scopes_discovery() -> None:
         scoped = compute_discover_candidates(
             session,
             channel_names=["carrier"],
-            filters=PostFilters(keyword="great"),
+            selected=_selected(session, Rule(select=True, keyword="great")),
             user_id=ANY_READER,
         )
         assert set(_totals(scoped)) == {"alpha_news"}
@@ -68,7 +74,7 @@ def test_latest_cap_limits_posts_per_channel() -> None:
         capped = compute_discover_candidates(
             session,
             channel_names=["carrier"],
-            max_per_channel=1,
+            selected=_selected(session, Rule(select=True, max_per_channel=1)),
             user_id=ANY_READER,
         )
         # Only the single newest post is considered.
@@ -87,8 +93,7 @@ def test_no_filters_matches_prior_behavior() -> None:
         explicit = compute_discover_candidates(
             session,
             channel_names=["carrier"],
-            filters=PostFilters(),
-            max_per_channel=0,
+            selected=_selected(session, Rule(select=True)),
             user_id=ANY_READER,
         )
         assert base == explicit

@@ -85,6 +85,7 @@ SCOPE_KEYS = {
     "durationMinutes",
     "posts",
     "signals",
+    "selection",
     "keyword",
     "forwarded",
     "languages",

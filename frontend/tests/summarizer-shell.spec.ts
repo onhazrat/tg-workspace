@@ -218,7 +218,13 @@ test.describe("TG Workspace shell", () => {
       lastUpdated: Date.now(),
     })
     await page.route("**/api/v1/data/posts/counts**", (route) =>
-      route.fulfill({ json: { counts: { [channel]: 3 }, tooNewToJudge: 0 } }),
+      route.fulfill({
+        json: {
+          counts: { [channel]: 3 },
+          selected: { [channel]: 3 },
+          tooNewToJudge: 0,
+        },
+      }),
     )
     await page.route("**/api/v1/ai/summary/prompt", (route) =>
       route.fulfill({ json: { prompt: "summary prompt for e2e" } }),

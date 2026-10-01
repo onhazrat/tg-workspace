@@ -422,7 +422,8 @@ def _counts(client: TestClient, headers: dict[str, str], tree: Any) -> Any:
         headers=headers,
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    # The shown counts; the selected ones are `test_post_selection.py`'s (PTR-05).
+    return {k: v for k, v in response.json().items() if k != "selected"}
 
 
 def test_the_counts_are_exactly_what_the_filter_shows(

@@ -3,6 +3,10 @@
 Before IDEA-011 D14 a `random` per-channel cap and a semantic query each fell
 back to `computeDiscoveryCandidates` in the browser, so the counting rules had
 two implementations. These cover the server reproducing both.
+
+Since PTR-05 both reach a report as its Post selection: a cap is a Selection
+rule's, and ranked Posts are deselect-all then one Pick each. `_run` spells
+each old knob as the selection that replaced it.
 """
 
 from __future__ import annotations
@@ -15,6 +19,8 @@ from app.core.db import engine
 from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
 from app.services.discover_reports import create_report
+from app.services.post_filters import Pick, Rule, Step
+from app.services.post_selection import PostScope, selection_clause
 from tests.utils.discover import report_scope
 from tests.utils.tenancy import ANY_READER, follow_channels
 
@@ -44,12 +50,29 @@ def _seed_posts(session: Session, count: int = 12) -> None:
     )
 
 
-def _run(session: Session, **kwargs: Any) -> dict[str, Any]:
-    base: dict[str, Any] = {"channel_names": ["carrier"]}
-    base.update(kwargs)
-    names = base.get("channel_names") or []
+def _run(
+    session: Session,
+    *,
+    post_ids: list[tuple[str, int]] | None = None,
+    start_date: int | None = None,
+    **cap: Any,
+) -> dict[str, Any]:
+    names = ["carrier"]
     follow_channels(session, *names, user_id=ANY_READER)
-    return compute_discover_candidates(session, **base, user_id=ANY_READER)
+    steps: list[Step] = (
+        [Rule(select=True, **cap)]
+        if post_ids is None
+        else [Rule(select=False), *(Pick(True, c, p) for c, p in post_ids)]
+    )
+    return compute_discover_candidates(
+        session,
+        channel_names=names,
+        start_date=start_date,
+        selected=selection_clause(
+            session, steps, PostScope(ANY_READER, names, start_date, None)
+        ),
+        user_id=ANY_READER,
+    )
 
 
 # --- random per-channel cap ------------------------------------------------
@@ -175,28 +198,27 @@ def test_post_ids_still_respect_the_date_range() -> None:
 # --- the scope snapshot ----------------------------------------------------
 
 
-def test_saved_report_records_the_cap_mode_seed_and_scope_size() -> None:
+def test_saved_report_reads_and_records_its_selection() -> None:
+    """The cap and its seed travel in the rule, and the report covers its Posts."""
+    selection = [
+        {
+            "kind": "rule",
+            "select": True,
+            "filter": {"maxPerChannel": 3, "maxPerChannelMode": "random", "seed": 42},
+        }
+    ]
     with Session(engine) as session:
         _seed_posts(session, count=10)
         report = create_report(
             session,
-            scope=report_scope(
-                channels=["carrier"],
-                maxPerChannel=3,
-                maxPerChannelMode="random",
-                seed=42,
-                posts=[
-                    {"channelName": c, "postId": p}
-                    for c, p in [("carrier", 1), ("carrier", 2), ("carrier", 3)]
-                ],
-            ),
+            scope=report_scope(channels=["carrier"], selection=selection),
             signals=None,
             user_id=ANY_READER,
         )
         scope = report["scope"]
-        assert scope["maxPerChannelMode"] == "random"
-        assert scope["seed"] == 42
-        assert scope["scopedPostCount"] == 3
+        assert scope["selection"][0]["filter"]["maxPerChannelMode"] == "random"
+        assert scope["selection"][0]["filter"]["seed"] == 42
+        assert report["postsInScope"] == 3
 
 
 def test_unrestricted_report_records_no_scoped_post_count() -> None:

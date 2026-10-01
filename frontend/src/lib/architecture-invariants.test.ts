@@ -488,22 +488,36 @@ describe("AW-04 — a Live tick invalidates the Posts key, never replaces it", (
    *
    * No type can say this, and it is one careless autocomplete from coming back:
    * `feedParams` is right there, spelled almost the same.
+   *
+   * The Post selection is the same argument one edit at a time (PTR-05): a
+   * tick of a checkbox in the feed's key would drop the Account back to the
+   * top of the feed on every click. The feed refreshes in place instead.
    */
   const POSTS_VIEW = "src/hooks/usePostsView.ts"
-  const KEY_CALL = /queryKeys\.posts(?:Feed|Counts)\([^\n]*/g
+  const KEY_CALL = /queryKeys\.posts(?:Feed|Counts)\([^)]*\)/g
 
-  it("keys both Posts queries on the window, not on the minute it resolves to", () => {
+  it("keys the Posts queries on the window, not on the minute it resolves to", () => {
     const source = readFileSync(join(FRONTEND, POSTS_VIEW), "utf8")
     const calls = [...source.matchAll(KEY_CALL)].map(([call]) => call)
 
-    // Both of them — the feed and the counts — or a tick refreshes half the
-    // screen and remints the other half.
-    expect(calls.length).toBe(2)
+    // The feed and both counts, or a tick refreshes part of the screen and
+    // remints the rest.
+    expect(calls.length).toBe(3)
     for (const call of calls) {
       expect(call).toContain("window: windowKey")
       expect(call).not.toContain("startDate")
       expect(call).not.toContain("feedParams")
     }
+  })
+
+  it("never keys the feed on the Post selection", () => {
+    const source = readFileSync(join(FRONTEND, POSTS_VIEW), "utf8")
+    const feed = [...source.matchAll(KEY_CALL)]
+      .map(([call]) => call)
+      .filter((call) => call.startsWith("queryKeys.postsFeed"))
+
+    expect(feed.length).toBe(1)
+    expect(feed[0]).not.toMatch(/selection/i)
   })
 })
 

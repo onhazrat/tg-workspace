@@ -1,5 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query"
-import React, { createContext, useCallback, useContext } from "react"
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+} from "react"
 import { toast } from "sonner"
 import {
   api,
@@ -26,6 +32,16 @@ import { useSyncJob } from "../hooks/useSyncJob"
 import { useSyncQueue } from "../hooks/useSyncQueue"
 import { channelAllows, disabledReason } from "../lib/channels/sync-permissions"
 import type { PostFilter } from "../lib/posts/post-filter"
+import {
+  appendSteps,
+  loadSelection,
+  type PostSelection,
+  removeChip,
+  type SelectionChip,
+  type SelectionPick,
+  type SelectionStep,
+  saveSelection,
+} from "../lib/posts/post-selection"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
@@ -76,15 +92,12 @@ interface ScraperContextType {
    * The posts input for an AI endpoint: a server-side `scope` (backend
    * assembles), or client-fetched `posts` for the semantic/related path.
    */
-  getPromptPostsInput: () => Promise<
-    | { posts: Post[]; scope?: undefined }
-    | { posts?: undefined; scope: PromptScope }
-  >
+  getPromptPostsInput: () => Promise<{ scope: PromptScope }>
   /**
    * The current Scope as an Action submits it, for the server to freeze
    * (AW-05). See `usePromptPosts`.
    */
-  getScopeSubmission: (channels: string[], posts?: Post[]) => ScopeSubmission
+  getScopeSubmission: (channels: string[]) => ScopeSubmission
   handleScrapeChannel: (
     channel: Channel,
     refresh?: boolean,
@@ -121,6 +134,21 @@ interface ScraperContextType {
   /** What the Posts tab shows, from `?postFilter=` (PTR-03). */
   postFilter: PostFilter
   setPostFilter: (next: PostFilter) => void
+  /**
+   * What an Action covers (PTR-05): an ordered list of Selection rules and
+   * Picks, for the browser session, per Account.
+   */
+  postSelection: PostSelection
+  /**
+   * The last edit: a number that moves on every one, and the Picks it
+   * appended when it appended nothing else. The feed patches those rows in
+   * place rather than refetching; any other edit refetches it.
+   */
+  selectionEdit: SelectionEdit
+  /** Append steps; false, with a toast saying why, when a bound refuses. */
+  appendSelection: (steps: SelectionStep[]) => boolean
+  removeSelectionChip: (chip: Pick<SelectionChip, "start" | "end">) => void
+  replaceSelection: (steps: PostSelection) => void
   maxPostsPerChannel: number
   setMaxPostsPerChannel: React.Dispatch<React.SetStateAction<number>>
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -134,6 +162,11 @@ interface ScraperContextType {
   viewMeasure: ViewMeasure
   setViewMeasure: React.Dispatch<React.SetStateAction<ViewMeasure>>
   postViewOptions: PostViewOptions
+}
+
+export type SelectionEdit = {
+  revision: number
+  picks: SelectionPick[] | null
 }
 
 /** Module-level so `useFollowJob`'s callbacks keep one identity across renders. */
@@ -208,6 +241,47 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   } = usePostFilters()
   const { postFilter, setPostFilter } = usePostFilterParam()
 
+  // The Post selection (PTR-05). The ref is what an edit reads, so two edits
+  // in one tick each build on the other rather than on the last render.
+  const [postSelection, setPostSelectionState] =
+    useState<PostSelection>(loadSelection)
+  const selectionRef = useRef(postSelection)
+  const [selectionEdit, setSelectionEdit] = useState<SelectionEdit>({
+    revision: 0,
+    picks: null,
+  })
+  const commitSelection = useCallback(
+    (next: PostSelection, picks: SelectionPick[] | null) => {
+      selectionRef.current = next
+      setPostSelectionState(next)
+      saveSelection(next)
+      setSelectionEdit((edit) => ({ revision: edit.revision + 1, picks }))
+    },
+    [],
+  )
+  const appendSelection = useCallback(
+    (steps: SelectionStep[]) => {
+      const next = appendSteps(selectionRef.current, steps)
+      if (typeof next === "string") {
+        toast.error(next)
+        return false
+      }
+      const picks = steps.filter((s): s is SelectionPick => s.kind === "pick")
+      commitSelection(next, picks.length === steps.length ? picks : null)
+      return true
+    },
+    [commitSelection],
+  )
+  const removeSelectionChip = useCallback(
+    (chip: Pick<SelectionChip, "start" | "end">) =>
+      commitSelection(removeChip(selectionRef.current, chip), null),
+    [commitSelection],
+  )
+  const replaceSelection = useCallback(
+    (steps: PostSelection) => commitSelection(steps, null),
+    [commitSelection],
+  )
+
   const getViewEstimate = useCallback(
     () =>
       queryClient.fetchQuery({
@@ -265,6 +339,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       debouncedSemanticSearchQuery,
       relatedPostSearch,
       postFilter,
+      postSelection,
       postViewOptions,
       semanticSearchRespectsChannels,
       searchSimilarPosts,
@@ -431,6 +506,11 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         followDiscoverChannels,
         postFilter,
         setPostFilter,
+        postSelection,
+        selectionEdit,
+        appendSelection,
+        removeSelectionChip,
+        replaceSelection,
         maxPostsPerChannel,
         setMaxPostsPerChannel,
         maxPostsPerChannelMode,

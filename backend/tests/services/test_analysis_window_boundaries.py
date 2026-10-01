@@ -49,7 +49,6 @@ from app.jobs import auto_summary
 from app.models import User
 from app.models_tg import AICredential, Post, PostEmbedding, Summary, utc_now
 from app.services.discover import compute_discover_candidates
-from app.services.post_filters import PostFilters
 from app.services.posts import count_posts_in_scope, list_feed
 from app.services.prompt_assembly import PromptScope, assemble_posts_text
 from tests.utils.scope import stored_scope
@@ -297,7 +296,6 @@ def test_discovery_aggregates_over_the_same_window(
         channel_names=[channel],
         start_date=START,
         end_date=END,
-        filters=PostFilters(),
     )
 
     assert result["postsInScope"] == len(IN_WINDOW)

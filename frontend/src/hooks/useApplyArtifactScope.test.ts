@@ -6,6 +6,12 @@
 import { describe, expect, test } from "bun:test"
 
 import { printPostFilter } from "@/lib/posts/post-filter"
+import {
+  DEFAULT_SELECTION,
+  EMPTY_SNAPSHOT,
+  pick,
+  rule,
+} from "@/lib/posts/post-selection"
 import { workspaceFromScope } from "./useApplyArtifactScope"
 
 const window = { start: 1, end: 2 }
@@ -27,6 +33,7 @@ describe("workspaceFromScope", () => {
       maxPerChannelMode: "ordered",
       sort: "newest",
       groupByChannel: false,
+      selection: DEFAULT_SELECTION,
     })
   })
 
@@ -58,6 +65,38 @@ describe("workspaceFromScope", () => {
       maxPerChannelMode: "random",
       sort: "most_views",
       groupByChannel: true,
+      // Before PTR-05 the keyword and the cap said what it covered.
+      selection: [
+        rule(true, {
+          tree: null,
+          keyword: "rates",
+          sort: "most_views",
+          viewMeasure: "views",
+          maxPerChannel: 5,
+          maxPerChannelMode: "random",
+          seed: 0,
+        }),
+      ],
     })
+  })
+
+  test("a ranked Artifact from before comes back as those Posts", () => {
+    const posts = [{ channelName: "a", postId: 3 }]
+
+    expect(workspaceFromScope({ ...window, posts }).selection).toEqual([
+      rule(false),
+      pick(true, { channelName: "a", id: 3 }),
+    ])
+  })
+
+  test("a frozen Post selection comes back as it was (PTR-05)", () => {
+    const selection = [
+      rule(false, { ...EMPTY_SNAPSHOT, keyword: "rates" }),
+      pick(true, { channelName: "a", id: 7 }),
+    ]
+
+    expect(workspaceFromScope({ ...window, selection }).selection).toEqual(
+      selection,
+    )
   })
 })

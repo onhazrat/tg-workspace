@@ -132,6 +132,9 @@ INVENTORY: dict[str, str] = {
     "configuration_catalog.py": READ_MODEL,
     "discover.py": READ_MODEL,
     "network_settings.py": READ_MODEL,
+    # Evaluates the Post selection (PTR-05) into a predicate other reads
+    # enclose, and resolves the Posts it reached; reads only, owns no table.
+    "post_selection.py": READ_MODEL,
     "prompt_assembly.py": READ_MODEL,
     # Resolves a User's permissions from their role assignments. Reads
     # rbac_user_roles joined to rbac_roles and never commits; seeding is done by

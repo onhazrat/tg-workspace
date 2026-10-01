@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import Any
 
 from sqlalchemy import (
+    ColumnElement,
     Integer,
     and_,
     cast,
@@ -521,7 +522,7 @@ def _block_order(sort: FeedSort, entity: Any, reading: ViewReading) -> Any:
     return func.max(key).over(partition_by=entity.channel_name).desc().nulls_last()
 
 
-def _feed_order_by(
+def feed_order_by(
     sort: FeedSort, group_by_channel: bool, entity: Any, reading: ViewReading
 ) -> list[Any]:
     """Deterministic ORDER BY for the feed, with a stable tiebreak for paging.
@@ -563,6 +564,8 @@ def list_feed(
     seed: int = 0,
     limit: int = DEFAULT_POST_PAGE_SIZE,
     offset: int = 0,
+    selected: ColumnElement[bool] | None = None,
+    only_selected: bool = False,
 ) -> list[dict[str, Any]]:
     """One page of the Posts feed, filtered / capped / sorted entirely in SQL.
 
@@ -582,6 +585,10 @@ def list_feed(
     The predicate goes on ``base``, *before* the ``row_number()`` wrapper
     below, so a capped feed ranks only rows the caller can see — applying it
     outside the subquery would let another account's posts consume the cap.
+
+    `selected` is the Post selection's predicate (`post_selection`): with it,
+    each row says whether it is selected, and `only_selected` keeps only
+    those, which is what an Action reads (PTR-05).
     """
     base = _in_scope(
         session,
@@ -593,6 +600,10 @@ def list_feed(
         filters=filters,
     )
     reading = (filters or PostFilters()).reading
+    if selected is not None:
+        base = base.add_columns(selected.label("selected"))
+        if only_selected:
+            base = base.where(selected)
 
     if max_per_channel > 0:
         # `ordered` ranks by the chosen order, so the N kept are the first N
@@ -611,20 +622,33 @@ def list_feed(
         ranked = base.add_columns(row_number).subquery()
         capped = aliased(Post, ranked)
         stmt = (
-            select(capped)
+            select(capped, *([ranked.c.selected] if selected is not None else []))
             .where(ranked.c.rn <= max_per_channel)
-            .order_by(*_feed_order_by(sort, group_by_channel, capped, reading))
+            .order_by(*feed_order_by(sort, group_by_channel, capped, reading))
             .offset(offset)
             .limit(limit)
         )
-        return [post_to_camel(p) for p in session.exec(stmt).all()]
+    else:
+        stmt = (
+            base.order_by(*feed_order_by(sort, group_by_channel, Post, reading))
+            .offset(offset)
+            .limit(limit)
+        )
+    return _rows(session, stmt, selected is not None)
 
-    stmt = (
-        base.order_by(*_feed_order_by(sort, group_by_channel, Post, reading))
-        .offset(offset)
-        .limit(limit)
-    )
-    return [post_to_camel(p) for p in session.exec(stmt).all()]
+
+def _rows(session: Session, stmt: Any, flagged: bool) -> list[dict[str, Any]]:
+    """Posts as the wire has them, each with its `selected` flag when asked.
+
+    `execute` for the flagged rows: SQLModel's `exec` reads a `select(Post)`
+    that gained a column as scalars, which drops the flag.
+    """
+    if not flagged:
+        return [post_to_camel(p) for p in session.exec(stmt).all()]
+    return [
+        {**post_to_camel(p), "selected": bool(chosen)}
+        for p, chosen in session.execute(stmt).all()
+    ]
 
 
 def lookup_posts(
@@ -633,6 +657,7 @@ def lookup_posts(
     *,
     user_id: uuid.UUID,
     filters: PostFilters | None = None,
+    selected: ColumnElement[bool] | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch specific posts by their `(channel_name, post_id)` natural key.
 
@@ -651,14 +676,13 @@ def lookup_posts(
 
     `filters` narrows the batch to the Posts the Post filter shows, which is
     how a meaning search's ranked Posts pass it (PTR-03). A Post it hides is
-    absent like any other.
+    absent like any other. `selected` flags each row, as on the feed (PTR-05).
     """
     unique = {(name, post_id) for name, post_id in pairs}
     if not unique:
         return []
-    stmt = _filtered(
-        session, scoped_select(select(Post), Post, user_id), user_id, filters
-    )
+    columns = select(Post) if selected is None else select(Post, selected)
+    stmt = _filtered(session, scoped_select(columns, Post, user_id), user_id, filters)
     stmt = stmt.where(
         or_(
             *[
@@ -667,7 +691,38 @@ def lookup_posts(
             ]
         )
     )
-    return [post_to_camel(p) for p in session.exec(stmt).all()]
+    return _rows(session, stmt, selected is not None)
+
+
+def count_selected(
+    session: Session,
+    selected: ColumnElement[bool],
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+) -> dict[str, int]:
+    """Per-channel counts of the selected Posts in the window, filters aside.
+
+    What an Action covers (PTR-05): the selection bar's count, the Channels
+    tab's "Posts in scope", and the AI paths' size check. A channel with none
+    is absent, as in `count_scope`.
+    """
+    rows = session.exec(
+        _in_scope(
+            session,
+            select(col(Post.channel_name), func.count()),
+            user_id=user_id,
+            channel_names=channel_names,
+            start_date=start_date,
+            end_date=end_date,
+            filters=None,
+        )
+        .where(selected)
+        .group_by(col(Post.channel_name))
+    ).all()
+    return dict(rows)
 
 
 def count_posts_in_scope(

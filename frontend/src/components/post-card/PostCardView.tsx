@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { SHORTCUTS } from "./FeedKeyboard"
 import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
 import {
   PostCardActions,
@@ -26,6 +27,36 @@ export interface PostCardViewProps extends PostCardHeaderProps {
   translation?: PostTranslationControl
   /** Present only when embeddings are enabled. */
   onFindRelated?: () => void
+  /**
+   * Tick or untick the Post (PTR-05); the checkbox shows when the read said
+   * whether the Post is selected. `shift` asks for the run since the last
+   * click.
+   */
+  onToggleSelected?: (shift: boolean) => void
+}
+
+/** Ticked when an Action covers the Post; x fires it from the keyboard. */
+export function SelectBox({
+  selected,
+  onToggle,
+}: {
+  selected: boolean
+  onToggle: (shift: boolean) => void
+}) {
+  return (
+    <input
+      type="checkbox"
+      // Controlled by the read's flag: a click records a Pick, and the patched
+      // row moves the tick.
+      checked={selected}
+      readOnly
+      aria-label={selected ? "Deselect this post" : "Select this post"}
+      title="Select for Summarize and Chat (shift-click for a run)"
+      data-shortcut={SHORTCUTS.select}
+      onClick={(e) => onToggle(e.shiftKey)}
+      className="mt-1 size-4 shrink-0 cursor-pointer accent-blue-600"
+    />
+  )
 }
 
 /** Keyboard mode's ring on the card `FeedKeyboard` has selected. */
@@ -43,9 +74,20 @@ export function PostCardView({
   text,
   translation,
   onFindRelated,
-  ...header
+  onToggleSelected,
+  ...rest
 }: PostCardViewProps) {
+  const { selected } = rest.post
+  const header = {
+    ...rest,
+    trailing: selected !== undefined && onToggleSelected && (
+      <SelectBox selected={selected} onToggle={onToggleSelected} />
+    ),
+  }
   const { post, postSearch } = header
+  // A deselected Post stays in the feed, dimmed: the selection marks Posts
+  // and never hides them.
+  const dimmed = selected === false && "opacity-50"
   const title = header.channel?.displayName || post.channelName
   const thumb = post.media?.thumbApiPath
   const body = {
@@ -76,6 +118,7 @@ export function PostCardView({
         className={cn(
           "flex flex-col gap-2 rounded-xl border border-app-ink/10 bg-app-card px-4 pt-3 pb-1.5 transition-colors hover:border-app-ink/20",
           RINGABLE,
+          dimmed,
         )}
       >
         <PostCardCompactHeader {...header} />
@@ -103,6 +146,7 @@ export function PostCardView({
       className={cn(
         "overflow-hidden rounded-2xl border border-app-ink/10 bg-app-card shadow-sm transition-colors hover:border-app-ink/20",
         RINGABLE,
+        dimmed,
       )}
     >
       <PostCardHeader {...header} />

@@ -1,4 +1,5 @@
 import { CornerUpLeft, Hash, PlusCircle, Repeat2 } from "lucide-react"
+import type { ReactNode } from "react"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
@@ -22,6 +23,8 @@ export interface PostCardHeaderProps {
   /** This Post's own Channel is the one in the spotlight. */
   spotlit?: boolean
   postSearch: string
+  /** At the header's end: the card's selection checkbox (PTR-05). */
+  trailing?: ReactNode
 }
 
 /** Avatar, name and handle, then the time, post id, reply and forward. */
@@ -42,6 +45,7 @@ export function PostCardHeader(props: PostCardHeaderProps) {
           <ForwardRef {...props} />
         </div>
       </div>
+      {props.trailing}
     </header>
   )
 }
@@ -56,6 +60,7 @@ export function PostCardCompactHeader(props: PostCardHeaderProps) {
         <ChannelName {...props} />
         <span>·</span>
         <RelativeTime timestamp={postTime(post)} className="shrink-0" />
+        {props.trailing && <span className="ml-auto">{props.trailing}</span>}
       </header>
       {(post.forwardedFrom || post.replyToPostId != null) && (
         <div className="flex flex-wrap gap-x-3 text-[12px] text-app-ink/50">

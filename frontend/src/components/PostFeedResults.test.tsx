@@ -13,6 +13,7 @@ const render = (isInitialLoading: boolean) =>
       showLoadMore
       loadMoreRef={{ current: null }}
       postSearch=""
+      onToggleSelected={() => {}}
     />,
   )
 

@@ -1,6 +1,6 @@
 """Helpers shared by more than one `/data` family.
 
-Only the Post filter's parsing lives here, and only because the posts feed and the
+Only the Post filter's and the Post selection's parsing live here, and only because the posts feed and the
 Discover aggregate must interpret an identical filter set identically — a
 Discover report is an aggregation over exactly the Posts-tab view. Letting the
 two parse separately is the drift the server-side aggregation exists to remove.
@@ -11,10 +11,13 @@ belongs in that family's module.
 
 from dataclasses import replace
 
+from sqlalchemy import ColumnElement
 from sqlmodel import Session
 
-from app.schemas.posts import FilterGroup, PostScopeRequest
+from app.schemas.post_filter import FilterGroup, SelectionPick, SelectionRule, to_steps
+from app.schemas.posts import PostScopeRequest
 from app.services.post_filters import PostFilters
+from app.services.post_selection import PostScope, selection_clause
 from app.services.settling_curve import tree_readings, view_reading
 
 
@@ -44,4 +47,15 @@ def parse_post_filters(
         tree_filters(session, tree),
         keyword=body.keyword,
         reading=view_reading(session, body.view_measure, sort=sort),
+    )
+
+
+def selected_in(
+    session: Session,
+    selection: list[SelectionRule | SelectionPick] | None,
+    scope: PostScope,
+) -> ColumnElement[bool]:
+    """The Post selection a request carried as a predicate; omitted is select all."""
+    return selection_clause(
+        session, None if selection is None else to_steps(selection), scope
     )

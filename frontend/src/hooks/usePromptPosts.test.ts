@@ -1,11 +1,11 @@
 /**
- * Which posts input an AI prompt gets (G1).
+ * Which posts input an AI prompt gets (G1, PTR-05).
  *
- * `getPromptPostsInput` makes one decision, and it is the load-bearing one in
- * the whole prompt path: **scope or posts**. Send a scope and the backend
- * assembles the block, so nothing crosses the wire; send posts and the caller
- * formats them itself. Choose wrong in the "scope" direction and a semantic
- * search silently summarises the *unranked* corpus instead of the matches.
+ * Always a scope carrying the Post selection, which the backend resolves and
+ * assembles, so nothing crosses the wire. A meaning search used to send its
+ * ranked Posts instead; since PTR-05 it reaches an Action as the Picks its
+ * "Select all" records, and the prompt covers the whole selection whatever
+ * the tab shows.
  *
  * Testable without `mock.module` — which is process-wide in Bun and would
  * contaminate every file importing `@/api` — because every dependency is
@@ -17,6 +17,13 @@ import { renderHook } from "@testing-library/react"
 
 import { type PromptPostsDeps, usePromptPosts } from "@/hooks/usePromptPosts"
 import { addPostFunnel, emptyPostFilter } from "@/lib/posts/post-filter"
+import {
+  DEFAULT_SELECTION,
+  EMPTY_SNAPSHOT,
+  pick,
+  rule,
+  selectionBody,
+} from "@/lib/posts/post-selection"
 import type { WindowState } from "@/lib/scope/window"
 import type { Post } from "@/types"
 
@@ -58,6 +65,11 @@ const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
 // down from a memo, so a fresh one per render would fake a changed filter.
 const NO_FILTER = emptyPostFilter()
 const PERSIAN = addPostFunnel(emptyPostFilter(), "language", "fa")
+const SELECTION = [
+  rule(true),
+  rule(false, { ...EMPTY_SNAPSHOT, tree: PERSIAN }),
+  pick(true, post(1)),
+]
 const NO_SEARCH: PromptPostsDeps["searchSimilarPosts"] = async () => {
   throw new Error("searchSimilarPosts should not be called")
 }
@@ -84,6 +96,7 @@ function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
     debouncedSemanticSearchQuery: "",
     relatedPostSearch: null,
     postFilter: NO_FILTER,
+    postSelection: DEFAULT_SELECTION,
     postViewOptions: VIEW_OPTIONS,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: NO_SEARCH,
@@ -99,20 +112,20 @@ function render(over: Partial<PromptPostsDeps> = {}) {
 }
 
 describe("getPromptPostsInput", () => {
-  test("the ordinary path sends a scope and fetches nothing", async () => {
-    // Both injected fetchers throw, so reaching either fails the test.
+  test("sends a scope and fetches nothing", async () => {
+    // Every injected fetcher throws, so reaching one fails the test.
     const input = await render().getPromptPostsInput()
 
-    expect(input.posts).toBeUndefined()
     expect(input.scope).toBeDefined()
   })
 
-  test("the scope carries the keyword, the cap and the order, never the Post filter", async () => {
-    // ADR-026: the Post filter decides what the tab shows, not what a prompt
-    // reads. A Summary covers the window whatever the filter says.
+  test("the scope carries the selection and the order, never the Post filter", async () => {
+    // ADR-026: the Post filter, the keyword and the cap decide what the tab
+    // shows. A Summary covers the Post selection whatever they say.
     const input = await render({
       debouncedPostSearch: "crypto",
       postFilter: PERSIAN,
+      postSelection: SELECTION,
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
@@ -125,93 +138,43 @@ describe("getPromptPostsInput", () => {
     expect(input.scope).toEqual({
       startDate: 1000,
       endDate: 9000,
-      keyword: "crypto",
+      selection: SELECTION,
       viewMeasure: "views",
-      maxPerChannel: 7,
-      maxPerChannelMode: "random",
       sort: "most_views",
       groupByChannel: true,
-      seed: 0,
     })
   })
 
-  test("a semantic query returns posts, not a scope", async () => {
-    // The direction that matters: a scope here would summarise the unranked
-    // corpus, silently ignoring what the user searched for.
+  test("a meaning search is not a prompt input: the selection is", async () => {
+    // Its ranked Posts never reach a prompt directly; the search runs only
+    // for what the tab shows.
     const input = await render({
       embeddingsEnabled: true,
       debouncedSemanticSearchQuery: "crypto",
-      searchSimilarPosts: async () => [post(1), post(2)],
+      relatedPostSearch: post(1),
+      postSelection: SELECTION,
     }).getPromptPostsInput()
 
-    expect(input.scope).toBeUndefined()
-    expect(input.posts?.length).toBe(2)
+    expect(input.scope.selection).toBe(SELECTION)
   })
 
-  test("a meaning search's ranked Posts reach a prompt unfiltered; the tab sees them filtered", async () => {
+  test("the tab's ranked Posts come back flagged by the selection", async () => {
     const ranked = [post(1), post(2)]
     const looked: unknown[] = []
-    const hook = render({
+    const shown = await render({
       embeddingsEnabled: true,
       debouncedSemanticSearchQuery: "crypto",
       postFilter: PERSIAN,
+      postSelection: SELECTION,
       searchSimilarPosts: async () => ranked,
-      lookupPosts: async (_refs, filter) => {
-        looked.push(filter)
-        return [ranked[1]]
+      lookupPosts: async (_refs, filter, scope) => {
+        looked.push([filter, scope.selection])
+        return [{ ...ranked[1], selected: false }]
       },
-    })
+    }).getScopedPosts()
 
-    const input = await hook.getPromptPostsInput()
-    expect(input.posts?.map((p) => p.id)).toEqual([2, 1])
-    expect(looked).toEqual([])
-
-    const shown = await hook.getScopedPosts()
-    expect(shown.map((p) => p.id)).toEqual([2])
-    expect(looked).toEqual([PERSIAN])
-  })
-
-  test("a related-post search returns posts, not a scope", async () => {
-    const seed = post(1)
-    const input = await render({
-      embeddingsEnabled: true,
-      relatedPostSearch: seed,
-      searchSimilarPosts: async () => [seed, post(2)],
-    }).getPromptPostsInput()
-
-    expect(input.scope).toBeUndefined()
-    expect(input.posts?.map((p) => p.id)).toEqual([2])
-  })
-
-  test("embeddings off keeps the scope path even with a semantic query", async () => {
-    // Otherwise turning embeddings off would break summarising entirely.
-    const input = await render({
-      embeddingsEnabled: false,
-      debouncedSemanticSearchQuery: "crypto",
-      relatedPostSearch: post(1),
-    }).getPromptPostsInput()
-
-    expect(input.scope).toBeDefined()
-  })
-
-  test("a whitespace-only semantic query is not a semantic search", async () => {
-    const input = await render({
-      embeddingsEnabled: true,
-      debouncedSemanticSearchQuery: "   ",
-    }).getPromptPostsInput()
-
-    expect(input.scope).toBeDefined()
-  })
-
-  test("a keyword search stays on the scope path", async () => {
-    // Keyword filtering is reproducible in SQL; only vector ranking is not.
-    const input = await render({
-      embeddingsEnabled: true,
-      debouncedPostSearch: "crypto",
-    }).getPromptPostsInput()
-
-    expect(input.scope?.keyword).toBe("crypto")
-    expect(input.posts).toBeUndefined()
+    expect(shown.map((p) => [p.id, p.selected])).toEqual([[2, false]])
+    expect(looked).toEqual([[PERSIAN, SELECTION]])
   })
 })
 
@@ -275,9 +238,10 @@ describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () 
 })
 
 describe("getScopeSubmission", () => {
-  test("the submission an Artifact freezes carries the Scope and no Post filter (PTR-03)", () => {
+  test("the submission an Artifact freezes carries the selection and no Post filter", () => {
     const submission = render({
       postFilter: PERSIAN,
+      postSelection: SELECTION,
       postViewOptions: {
         maxPostsPerChannel: 3,
         maxPostsPerChannelMode: "ordered",
@@ -287,15 +251,13 @@ describe("getScopeSubmission", () => {
       },
     }).getScopeSubmission(["alpha"])
 
-    expect(Object.keys(submission)).not.toContain("languages")
-    expect(Object.keys(submission)).not.toContain("filter")
-    expect(submission).toMatchObject({
+    expect(submission).toEqual({
       channels: ["alpha"],
-      maxPerChannel: 3,
-      maxPerChannelMode: "ordered",
+      window: submission.window,
+      viewMeasure: "estimated",
       sort: "oldest",
       groupByChannel: true,
-      posts: null,
+      selection: selectionBody(SELECTION),
     })
   })
 })

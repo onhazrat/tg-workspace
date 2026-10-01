@@ -24,6 +24,7 @@ import {
 } from "@/lib/artifacts/artifact-run"
 import { staleSelectedChannels } from "@/lib/chat-sessions/chat-turn"
 import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
+import { DEFAULT_SELECTION } from "@/lib/posts/post-selection"
 import { lookupPosts } from "@/lib/posts/store"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import {
@@ -187,7 +188,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     const opened = await submitSummary({
       id,
-      scope: getScopeSubmission(names, posts.posts),
+      scope: getScopeSubmission(names),
       language: aiLanguage,
       model: selectedModel,
       postCount: posts.postCount,
@@ -365,7 +366,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         timestamp: Date.now(),
         status: null,
         promptText: null,
-        citedPosts: await resolveCitedPosts(text, posts.posts, lookupPosts),
+        citedPosts: await resolveCitedPosts(text, undefined, lookupPosts),
       } as unknown as Summary)
     } catch (err: unknown) {
       throw leftPending(
@@ -565,6 +566,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         : await generateAndLog(s, summaryChannels, {
             startDate: range.start,
             endDate: range.end,
+            // Every Post in the window: a regeneration applies no selection,
+            // as the derived Scope it froze says (PTR-05).
+            selection: DEFAULT_SELECTION,
           })
 
     // **The Key that actually paid is the live selection** — not the one the

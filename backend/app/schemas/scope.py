@@ -30,6 +30,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
+from app.schemas.post_filter import PostSelection, legacy_selection, select_all
 from app.services.post_filters import CapMode as CapMode
 from app.services.post_filters import FeedSort, ForwardedFilter, ViewsOp
 from app.services.post_filters import MediaKind as MediaKind
@@ -41,11 +42,6 @@ from app.services.post_filters import ViewMeasure as ViewMeasure
 #: a reproduction that quietly is not one.
 #: `CapMode` and `MediaKind` are re-exported for the same reason.
 SortOrder = FeedSort
-
-#: A semantic or related-Post selection can run to the whole page of matches.
-#: Bounded for the reason `PostLookupRequest` is bounded: without a ceiling this
-#: is another way to ask the server to store an unbounded list.
-MAX_SCOPED_POSTS = 5000
 
 
 def upgrade_legacy_scope_fields(data: Any) -> Any:
@@ -90,6 +86,17 @@ def upgrade_legacy_scope_fields(data: Any) -> Any:
     return upgraded
 
 
+def upgrade_legacy_submission(data: Any) -> Any:
+    """`upgrade_legacy_scope_fields`, then the keyword, cap and ranked Posts as a selection.
+
+    For the three bodies that carry a Post selection (PTR-05): the Scope
+    submission, the prompt scope and a Discovery request. After the shared
+    upgrade, so a legacy `sort` reaches the rule it makes already respelled.
+    """
+    upgraded = upgrade_legacy_scope_fields(data)
+    return legacy_selection(upgraded) if isinstance(upgraded, dict) else upgraded
+
+
 def scope_key(scope: FrozenScope | None) -> dict[str, Any]:
     """The `scope` key of an Artifact projection, stamped **last**.
 
@@ -131,26 +138,20 @@ class ScopedPostRef(BaseModel):
     post_id: int = Field(alias="postId")
 
 
-# The filter half, shared by both shapes so a filter added later cannot reach
-# the submission and miss the record. `ScopeSubmission` adds the stated window,
-# `FrozenScope` the resolved instants.
-class _ScopeFilters(BaseModel):
+# The half both shapes share, so a field added later cannot reach the
+# submission and miss the record. `ScopeSubmission` adds the stated window and
+# the Post selection, `FrozenScope` the resolved instants, the selection and
+# every Post it reached. Since PTR-05 (ADR-026) the keyword and the cap are
+# not here: they are part of the Post filter a Selection rule carries.
+class _ScopeOrder(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     channels: list[str] = Field(default_factory=list)
-    keyword: str | None = None
     # What the views orders read (PFB-03, ADR-025). A Scope stored before the
     # field reads as `estimated`, which changes no order.
     view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")
-    max_per_channel: int = Field(0, alias="maxPerChannel", ge=0)
-    max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
     sort: SortOrder = "newest"
     group_by_channel: bool = Field(False, alias="groupByChannel")
-    # The `random` cap's seed. Stored because the same seed picks the same
-    # Posts, which is the only thing that makes a randomly-capped Artifact
-    # reproducible rather than a one-off — the argument `DiscoverReport.seed`
-    # already makes one table over.
-    seed: int = 0
 
     # Before, so a Scope stored in the old shape reads as the new one and never
     # reaches the literals above as a value they refuse (PFB-01). It runs on
@@ -161,7 +162,7 @@ class _ScopeFilters(BaseModel):
         return upgrade_legacy_scope_fields(data)
 
 
-class ScopeSubmission(_ScopeFilters):
+class ScopeSubmission(_ScopeOrder):
     """The complete Scope an Action is submitted with."""
 
     # `extra="forbid"`, for the reason `PostScopeRequest` gives: a stale client
@@ -173,14 +174,32 @@ class ScopeSubmission(_ScopeFilters):
     # always covers a window somebody chose; "both sides open" is a corpus walk,
     # not a Scope.
     window: AnalysisWindowInput
-    # The semantic and related-Post paths rank Posts with a query the server
-    # cannot reproduce from filters, so they name the selection outright. `None`
-    # means the filters above are the whole story.
-    posts: list[ScopedPostRef] | None = Field(default=None, max_length=MAX_SCOPED_POSTS)
+    # What the Action covers (PTR-05). The server resolves it; the browser
+    # never names the Posts.
+    selection: PostSelection = Field(default_factory=select_all)
+
+    # The previous bundle's keyword, cap and ranked `posts`, for one release.
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_selection(cls, data: Any) -> Any:
+        return upgrade_legacy_submission(data)
 
 
-class FrozenScope(_ScopeFilters):
+class FrozenScope(_ScopeOrder):
     """The immutable Scope an Artifact was produced from."""
+
+    # What the Action covered (PTR-05): the steps, as sent, and below in
+    # `posts` every Post they reached. `null` for an Artifact made before,
+    # which `keyword` and the cap describe, and for a regeneration, which
+    # covers every Post in its window.
+    selection: PostSelection | None = None
+
+    # Read-only since PTR-05: the keyword and the cap a Scope frozen before it
+    # held, shown as they were. One frozen since holds the defaults.
+    keyword: str | None = None
+    max_per_channel: int = Field(0, alias="maxPerChannel", ge=0)
+    max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
+    seed: int = 0
 
     # The flat filters, read-only (PTR-03, ADR-026). They left the Scope: a
     # Post filter decides what the Posts tab shows and never what an Artifact
@@ -193,15 +212,16 @@ class FrozenScope(_ScopeFilters):
 
     start: int
     end: int
-    # The size of an explicit selection; `null` means the filters were the whole
-    # story. Carried on the Artifact's own row so a list can say "restricted to
+    # How many Posts the Artifact covered; `null` on one made before PTR-05
+    # without a ranked selection, where the filters were the whole story.
+    # Carried on the Artifact's own row so a list can say "restricted to
     # 120 Posts" without opening the table the refs live in — the same split,
     # and the same reason, as `DiscoverReport.scoped_post_count`.
     scoped_post_count: int | None = Field(default=None, alias="scopedPostCount")
     # Detail-only: the refs themselves live in the companion payload table, so
     # `null` here means "not loaded" on a list projection and "there was no
     # explicit selection" on a detail one. `scopedPostCount` is the field that
-    # tells the two apart.
+    # tells the two apart. Unbounded: every Post the selection reached.
     posts: list[ScopedPostRef] | None = None
 
     #: Exact elapsed UTC minutes between the two boundaries.

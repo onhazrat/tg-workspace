@@ -17,6 +17,10 @@
  * views filters. They come back as the Post filter that says the same thing,
  * so the restored view shows the Posts that Artifact read; one made since
  * froze none and clears the Post filter.
+ *
+ * The Post selection comes back as it was frozen (PTR-05). An Artifact made
+ * before it has none; its keyword and cap covered what one select rule over
+ * them covers, which is how the server reads such a Scope too.
  */
 
 import { useCallback } from "react"
@@ -31,6 +35,13 @@ import {
   emptyPostFilter,
   type PostFilter,
 } from "@/lib/posts/post-filter"
+import {
+  DEFAULT_SELECTION,
+  isEmptySnapshot,
+  type PostSelection,
+  pick,
+  rule,
+} from "@/lib/posts/post-selection"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
@@ -73,7 +84,17 @@ export function workspaceFromScope(scope: FrozenScope): {
   maxPerChannelMode: MaxPostsPerChannelMode
   sort: PostSortOrder
   groupByChannel: boolean
+  selection: PostSelection
 } {
+  const legacy = rule(true, {
+    tree: null,
+    keyword: scope.keyword ?? null,
+    sort: scope.sort ?? "newest",
+    viewMeasure: scope.viewMeasure ?? "estimated",
+    maxPerChannel: scope.maxPerChannel ?? 0,
+    maxPerChannelMode: scope.maxPerChannelMode ?? "ordered",
+    seed: scope.seed ?? 0,
+  })
   return {
     channels: new Set(scope.channels ?? []),
     keyword: scope.keyword ?? "",
@@ -83,6 +104,22 @@ export function workspaceFromScope(scope: FrozenScope): {
     maxPerChannelMode: scope.maxPerChannelMode ?? "ordered",
     sort: scope.sort ?? "newest",
     groupByChannel: scope.groupByChannel ?? false,
+    selection: scope.selection
+      ? // The generated read type leaves `filter` optional because the server
+        // defaults it on input; it always emits one. The write direction is
+        // compiler-checked in `usePromptPosts.getScopeSubmission`.
+        (scope.selection as PostSelection)
+      : scope.posts?.length
+        ? // A ranked Artifact from before: those Posts, as the server reads it.
+          [
+            rule(false),
+            ...scope.posts.map((ref) =>
+              pick(true, { channelName: ref.channelName, id: ref.postId }),
+            ),
+          ]
+        : isEmptySnapshot(legacy.filter)
+          ? DEFAULT_SELECTION
+          : [legacy],
   }
 }
 
@@ -99,6 +136,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
     setMaxPostsPerChannelMode,
     setPostSortOrder,
     setGroupByChannel,
+    replaceSelection,
   } = useScraper()
 
   return useCallback(
@@ -113,6 +151,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setMaxPostsPerChannelMode(next.maxPerChannelMode)
       setPostSortOrder(next.sort)
       setGroupByChannel(next.groupByChannel)
+      replaceSelection(next.selection)
       // The ranked Post selection a Semantic or related-Post Artifact froze is
       // not a filter, so there is nothing in the workspace to restore it into.
       // Leaving a live semantic query running instead would mean the restored
@@ -132,6 +171,7 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setGroupByChannel,
       setSemanticSearchQuery,
       setRelatedPostSearch,
+      replaceSelection,
     ],
   )
 }
