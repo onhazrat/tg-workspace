@@ -3,6 +3,7 @@ import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import type { Post } from "../types"
+import { useSpotlight } from "./post-card/ChannelSpotlight"
 import { PostCardView } from "./post-card/PostCardView"
 import { usePostTranslation } from "./post-card/usePostTranslation"
 
@@ -13,7 +14,7 @@ interface PostCardProps {
   keyboard?: boolean
 }
 
-/** `PostCardView` wired to the workspace: Follows, translation, find related. */
+/** `PostCardView` wired to the workspace: Follows, spotlight, translation, find related. */
 export const PostCard: React.FC<PostCardProps> = ({
   post,
   postSearch,
@@ -24,6 +25,7 @@ export const PostCard: React.FC<PostCardProps> = ({
   const { setRelatedPostSearch, addNewChannel } = useScraper()
   const { channels } = useData()
   const translation = usePostTranslation(post)
+  const { spotlight, enter } = useSpotlight()
   const followed = (name: string | null | undefined) =>
     channels.find((c) => c.name.toLowerCase() === name?.toLowerCase())
 
@@ -36,6 +38,10 @@ export const PostCard: React.FC<PostCardProps> = ({
       channel={followed(post.channelName)}
       followsForwardSource={!!followed(post.forwardedFrom)}
       onAddChannel={addNewChannel}
+      onShowChannel={enter && ((name) => enter(post, name))}
+      spotlit={
+        spotlight?.channel.toLowerCase() === post.channelName.toLowerCase()
+      }
       text={translation.text}
       translation={
         translation.translatable

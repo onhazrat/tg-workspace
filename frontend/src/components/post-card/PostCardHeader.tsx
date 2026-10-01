@@ -17,6 +17,10 @@ export interface PostCardHeaderProps {
   /** Whether the channel the post was forwarded from is already followed. */
   followsForwardSource: boolean
   onAddChannel: (name: string) => void
+  /** Open the Channel spotlight on a Channel; absent outside the Posts feed. */
+  onShowChannel?: (name: string) => void
+  /** This Post's own Channel is the one in the spotlight. */
+  spotlit?: boolean
   postSearch: string
 }
 
@@ -91,15 +95,33 @@ function CardAvatar({
 }
 
 /**
- * The Channel's name as plain text, its handle linking to Telegram. PTR-04
- * makes the name open the Channel spotlight.
+ * The Channel's name opens its spotlight (PTR-04), plain text when there is
+ * none to open; the handle links to Telegram.
  */
-function ChannelName({ post, channel, postSearch }: PostCardHeaderProps) {
+function ChannelName({
+  post,
+  channel,
+  postSearch,
+  onShowChannel,
+  spotlit,
+}: PostCardHeaderProps) {
+  const title = channel?.displayName || post.channelName
   return (
     <span className="inline-flex min-w-0 items-baseline gap-1.5">
-      <span className="truncate text-[14px] font-semibold">
-        {highlightText(channel?.displayName || post.channelName, postSearch)}
-      </span>
+      {onShowChannel && !spotlit ? (
+        <button
+          type="button"
+          onClick={() => onShowChannel(post.channelName)}
+          title={`Show only posts from ${title}`}
+          className="truncate text-left text-[14px] font-semibold underline-offset-2 hover:underline"
+        >
+          {highlightText(title, postSearch)}
+        </button>
+      ) : (
+        <span className="truncate text-[14px] font-semibold">
+          {highlightText(title, postSearch)}
+        </span>
+      )}
       <a
         href={telegramWebViewChannelUrl(post.channelName)}
         target="_blank"
@@ -156,13 +178,14 @@ function ReplyRef({ post }: { post: Post }) {
 }
 
 /**
- * The forward's source: plain when followed (PTR-04 makes it open the
- * spotlight), an offer to add it when not.
+ * The forward's source: its spotlight when followed (PTR-04), an offer to add
+ * it when not.
  */
 function ForwardRef({
   post,
   followsForwardSource,
   onAddChannel,
+  onShowChannel,
 }: PostCardHeaderProps) {
   if (!post.forwardedFrom) return null
   const source = post.forwardedFrom
@@ -172,7 +195,18 @@ function ForwardRef({
       <Repeat2 size={12} className="shrink-0" />
       Forwarded from
       {followsForwardSource ? (
-        <span className="truncate font-medium">{name}</span>
+        onShowChannel ? (
+          <button
+            type="button"
+            onClick={() => onShowChannel(source)}
+            title={`Show only posts from ${name}`}
+            className="truncate font-medium underline-offset-2 hover:text-app-ink/80 hover:underline"
+          >
+            {name}
+          </button>
+        ) : (
+          <span className="truncate font-medium">{name}</span>
+        )
       ) : (
         <button
           type="button"

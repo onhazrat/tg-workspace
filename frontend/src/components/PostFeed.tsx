@@ -3,20 +3,25 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useState } from "react"
 import {
+  isSemanticFeed,
   useLiveWindowRefresh,
   usePostsFeed,
   useShownPostCounts,
 } from "@/hooks/usePostsView"
-import type {
-  MaxPostsPerChannelMode,
-  PostSortOrder,
-} from "@/lib/posts/post-view"
+import { feedSubtitle } from "@/lib/posts/post-filter-bar"
 import { scopedSessionStorage } from "@/lib/storage/scoped"
 import { cn } from "@/lib/utils"
+import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
+import { useSettings } from "../contexts/SettingsContext"
 import { PostFeedResults } from "./PostFeedResults"
 import { PostFilter } from "./PostFilter"
 import { pillClass } from "./PostFilterParts"
+import {
+  SpotlightBanner,
+  SpotlightProvider,
+  useSpotlightState,
+} from "./post-card/ChannelSpotlight"
 import { FeedKeyboard } from "./post-card/FeedKeyboard"
 
 interface PostFeedProps {
@@ -24,20 +29,6 @@ interface PostFeedProps {
   setPostSearch: (val: string) => void
   loadMoreRef: React.RefObject<HTMLDivElement | null>
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
-}
-
-/**
- * The cap mode as the subtitle names it. `ordered` is named for the order it
- * follows, so it still reads "latest" under newest first, as it did (PFB-01).
- */
-function capModeLabel(
-  mode: MaxPostsPerChannelMode,
-  order: PostSortOrder,
-): string {
-  if (mode === "random") return "random"
-  if (order === "most_views") return "top by views"
-  if (order === "fewest_views") return "bottom by views"
-  return order === "oldest" ? "earliest" : "latest"
 }
 
 /**
@@ -59,6 +50,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   postSearch,
   setPostSearch,
   loadMoreRef,
+  scrollContainerRef,
 }) => {
   const {
     maxPostsPerChannel,
@@ -66,12 +58,23 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     postSortOrder,
     groupByChannel,
     invalidatePostViews,
+    postFilter,
+    semanticSearchQuery,
+    relatedPostSearch,
   } = useScraper()
+  const { embeddingsEnabled } = useSettings()
+  const { channels } = useData()
+  const spotlightApi = useSpotlightState(
+    scrollContainerRef,
+    postFilter,
+    isSemanticFeed(embeddingsEnabled, relatedPostSearch, semanticSearchQuery),
+  )
+  const { spotlight } = spotlightApi
   const { posts, isInitialLoading, hasMore, loadMore, isLoadingMore } =
-    usePostsFeed()
+    usePostsFeed(spotlight)
   const [compact, setCompact] = useSessionFlag("postFeed_compactGrid")
   const [keyboard, setKeyboard] = useSessionFlag("postFeed_keyboard")
-  const { counts, tooNewToJudge } = useShownPostCounts()
+  const { counts, tooNewToJudge } = useShownPostCounts(spotlight)
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
   // Posts is the surface a Live window is watched on, so it is the surface that
@@ -79,18 +82,15 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   // count above refreshes with it (AW-04).
   useLiveWindowRefresh(invalidatePostViews)
 
-  // What the footer adds after the count: the cap and grouping, as the
-  // subtitle always said them.
-  const subtitleParts: string[] = []
-  if (maxPostsPerChannel > 0) {
-    subtitleParts.push(
-      `(max ${maxPostsPerChannel}/channel, ${capModeLabel(maxPostsPerChannelMode, postSortOrder)})`,
-    )
-  }
-  if (groupByChannel) {
-    subtitleParts.push("(grouped by channel)")
-  }
-  const subtitle = subtitleParts.join(" ")
+  // A spotlight drops the cap and grouping, so the subtitle names neither.
+  const subtitle = spotlight
+    ? ""
+    : feedSubtitle(
+        maxPostsPerChannel,
+        maxPostsPerChannelMode,
+        postSortOrder,
+        groupByChannel,
+      )
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -114,51 +114,65 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   }, [loadMoreRef, loadMore])
 
   return (
-    <motion.div
-      key="posts"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6 pb-10"
-    >
-      <PostFilter
-        postSearch={postSearch}
-        setPostSearch={setPostSearch}
-        shownCount={totalInScope}
-        subtitle={subtitle}
-        tooNewToJudge={tooNewToJudge}
-        trailing={
-          <>
-            <button
-              type="button"
-              aria-pressed={compact}
-              onClick={() => setCompact(!compact)}
-              className={cn(pillClass(compact), "ml-auto")}
-            >
-              <LayoutGrid size={12} /> Compact grid
-            </button>
-            <button
-              type="button"
-              aria-pressed={keyboard}
-              onClick={() => setKeyboard(!keyboard)}
-              className={pillClass(keyboard)}
-              title="j / k to move, an action's letter to fire it"
-            >
-              <Keyboard size={12} /> Keyboard
-            </button>
-          </>
-        }
-      />
+    <SpotlightProvider value={spotlightApi}>
+      <motion.div
+        key="posts"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6 pb-10"
+      >
+        <PostFilter
+          postSearch={postSearch}
+          setPostSearch={setPostSearch}
+          shownCount={totalInScope}
+          subtitle={subtitle}
+          tooNewToJudge={tooNewToJudge}
+          trailing={
+            <>
+              <button
+                type="button"
+                aria-pressed={compact}
+                onClick={() => setCompact(!compact)}
+                className={cn(pillClass(compact), "ml-auto")}
+              >
+                <LayoutGrid size={12} /> Compact grid
+              </button>
+              <button
+                type="button"
+                aria-pressed={keyboard}
+                onClick={() => setKeyboard(!keyboard)}
+                className={pillClass(keyboard)}
+                title="j / k to move, an action's letter to fire it"
+              >
+                <Keyboard size={12} /> Keyboard
+              </button>
+            </>
+          }
+        />
 
-      <PostFeedResults
-        isInitialLoading={isInitialLoading}
-        posts={posts}
-        showLoadMore={hasMore || isLoadingMore}
-        loadMoreRef={loadMoreRef}
-        postSearch={postSearch}
-        compact={compact}
-        keyboard={keyboard}
-      />
-      <FeedKeyboard on={keyboard} />
-    </motion.div>
+        {spotlight && (
+          <SpotlightBanner
+            name={spotlight.channel}
+            channel={channels.find(
+              (c) => c.name.toLowerCase() === spotlight.channel.toLowerCase(),
+            )}
+            keepFilters={spotlight.keepFilters}
+            onKeepFiltersChange={spotlightApi.setKeepFilters}
+            onBack={spotlightApi.leave}
+          />
+        )}
+
+        <PostFeedResults
+          isInitialLoading={isInitialLoading}
+          posts={posts}
+          showLoadMore={hasMore || isLoadingMore}
+          loadMoreRef={loadMoreRef}
+          postSearch={postSearch}
+          compact={compact}
+          keyboard={keyboard}
+        />
+        <FeedKeyboard on={keyboard} />
+      </motion.div>
+    </SpotlightProvider>
   )
 }

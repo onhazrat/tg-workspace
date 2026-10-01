@@ -193,6 +193,45 @@ def test_a_bound_reads_its_own_measure_whatever_the_order_reads(
     assert _feed(client, operator, filter=tree, viewMeasure="views") == [5, 4, 1]
 
 
+def _not(tree: dict[str, Any]) -> dict[str, Any]:
+    """`tree` with its one atom negated."""
+    (atom,) = tree["children"]
+    return {**tree, "children": [{**atom, "not": True}]}
+
+
+#: Keeps a2, a3 and b6. Raw views put a2 (1000) first; estimates have none
+#: for a2, so it falls last behind a3.
+_ESTIMATED_UNDER_2500 = _not(_bound("estimated", _at_least(2500)))
+#: Keeps a1, a2, a4 and b5. Fewest raw views starts at a2; fewest estimated
+#: starts at a4 (2543) and leaves a2 last.
+_VIEWS_OVER_900 = _bound("views", _at_least(900))
+
+
+@pytest.mark.parametrize(
+    ("tree", "sort", "measure", "expected"),
+    [
+        (_ESTIMATED_UNDER_2500, "most_views", "views", [2, 6, 3]),
+        (_ESTIMATED_UNDER_2500, "most_views", "estimated", [6, 3, 2]),
+        (_VIEWS_OVER_900, "fewest_views", "estimated", [4, 5, 1, 2]),
+        (_VIEWS_OVER_900, "fewest_views", "views", [2, 4, 5, 1]),
+    ],
+)
+def test_the_sort_reads_its_own_measure_beside_a_bound_on_the_other(
+    client: TestClient,
+    seeded: tuple[dict[str, str], dict[str, str]],
+    tree: dict[str, Any],
+    sort: str,
+    measure: str,
+    expected: list[int],
+) -> None:
+    """The Sort menu's Views and Estimated views (PTR-04): a bound never moves the order."""
+    operator, _other = seeded
+
+    assert _feed(client, operator, filter=tree, sort=sort, viewMeasure=measure) == (
+        expected
+    )
+
+
 @pytest.mark.parametrize(
     ("measure", "sort", "expected"),
     [

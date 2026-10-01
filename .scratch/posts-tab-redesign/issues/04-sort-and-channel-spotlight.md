@@ -10,36 +10,44 @@ sorting decision under "The Post filter", and user stories 20 to 24, 29 (f) and 
 
 **Blocked by:** PTR-02, PTR-03
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### Sort
 
-- [ ] A Sort pill with a search over Post date, Views and Estimated views, and a direction arrow
+- [x] A Sort pill with a search over Post date, Views and Estimated views, and a direction arrow
       beside it, as on the Channels tab, replacing the Order pill
-- [ ] The views orders carry their own measure in the feed request and in the Scope's order, so
+- [x] The views orders carry their own measure in the feed request and in the Scope's order, so
       choosing Views to sort never changes what a views bound in the filter means. A Scope frozen
-      before keeps its old meaning
-- [ ] The per-Channel cap's "ordered" mode follows the chosen order and direction, as today
+      before keeps its old meaning. As built, no wire change: since PTR-03 a bound names its own
+      measure in the tree, so the existing `viewMeasure` field is already read by the views
+      orders alone. The Sort menu maps Post date, Views and Estimated views plus the arrow onto
+      `sort` and `viewMeasure`; the palette's four order commands stay as they were
+- [x] The per-Channel cap's "ordered" mode follows the chosen order and direction, as today
 
 ### Channel spotlight
 
-- [ ] The card's Channel name, a followed forward source, a "Show this Channel" footer action and
+- [x] The card's Channel name, a followed forward source, a "Show this Channel" footer action and
       the f key open a spotlight on that Channel
-- [ ] A spotlight replaces the Post filter with a single Channel Condition and drops the cap and
+- [x] A spotlight replaces the Post filter with a single Channel Condition and drops the cap and
       the grouping while it is on; "Keep my filters" joins the Channel Condition with AND to the filter
-      the Account had instead
-- [ ] A sticky banner names the Channel (avatar, title linking to Telegram), says whether it shows
+      the Account had instead. As built, the spotlight holds its own tree and never writes the
+      Account's (or the URL's `?postFilter=`): the filter row shows and edits the spotlight's tree,
+      the feed's request names only that Channel, and the keyword applies only with filters kept.
+      Leaving drops the spotlight, so the old filter returns by construction
+- [x] A sticky banner names the Channel (avatar, title linking to Telegram), says whether it shows
       everything or keeps the filters, and has "Back to feed" with an Esc hint
-- [ ] "Back to feed" and Escape restore the filter the Account had and scroll the feed back to the
+- [x] "Back to feed" and Escape restore the filter the Account had and scroll the feed back to the
       card the spotlight started from (or the scroll position, if that card is gone). Escape while
       the photo viewer is open closes the viewer only
-- [ ] A meaning search or "find related" leaves the spotlight first; a spotlight is never part of
+- [x] A meaning search or "find related" leaves the spotlight first; a spotlight is never part of
       a Scope, and an Action submitted during one covers what it would have without it
 
 ### Tests
 
-- [ ] Route tests for the sort's own measure: Views and Estimated views orders each read theirs
+- [x] Route tests for the sort's own measure: Views and Estimated views orders each read theirs
       with a views bound on the other measure present
-- [ ] Component tests for the Sort menu and the spotlight banner (keep filters, back, Escape with
-      and without the viewer open)
-- [ ] A pure test that entering and leaving a spotlight returns the exact filter that was there
+- [x] Component tests for the Sort menu and the spotlight banner (keep filters, back, Escape with
+      and without the viewer open). Also the card's three ways in, the scroll back, a search
+      leaving the spotlight, and a Playwright spec (`summarizer-posts-spotlight.spec.ts`) for the
+      request each carries
+- [x] A pure test that entering and leaving a spotlight returns the exact filter that was there

@@ -414,6 +414,34 @@ describe("PostCardView", () => {
     expect(screen.getByLabelText("Translate").textContent).toBe("")
   })
 
+  test("the name, a followed forward source and the footer open the spotlight, the footer on f", () => {
+    const shown: string[] = []
+    renderCard({
+      post: { ...full, forwardedFrom: "src", forwardedFromName: "Source" },
+      followsForwardSource: true,
+      onShowChannel: (name) => shown.push(name),
+    })
+    fireEvent.click(screen.getByTitle("Show only posts from durov"))
+    fireEvent.click(screen.getByTitle("Show only posts from Source"))
+    const action = screen.getByLabelText("Show this Channel")
+    expect(action.dataset.shortcut).toBe("f")
+    fireEvent.click(action)
+    expect(shown).toEqual(["durov", "src", "durov"])
+  })
+
+  test("in its own Channel's spotlight, or with no spotlight to open, the card offers none", () => {
+    renderCard({ onShowChannel: () => {}, spotlit: true })
+    expect(screen.queryByLabelText("Show this Channel")).toBeNull()
+    expect(screen.queryByTitle("Show only posts from durov")).toBeNull()
+    cleanup()
+    renderCard({
+      post: { ...full, forwardedFrom: "src", forwardedFromName: "Source" },
+      followsForwardSource: true,
+    })
+    expect(screen.queryByLabelText("Show this Channel")).toBeNull()
+    expect(screen.queryByTitle("Show only posts from Source")).toBeNull()
+  })
+
   test("the card is what Keyboard mode moves through", () => {
     const { container } = renderCard({})
     expect(

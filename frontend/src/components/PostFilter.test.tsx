@@ -164,9 +164,8 @@ describe("the dropdowns", () => {
     expect(screen.getByTestId("post-filter-language").textContent).toContain(
       "No text",
     )
-    expect(screen.getByTestId("post-filter-pill-order").textContent).toContain(
-      "Oldest first",
-    )
+    expect(screen.getByTestId("post-sort").textContent).toContain("Post date")
+    expect(screen.getByLabelText("Sort ascending")).toBeTruthy()
     expect(screen.getByTestId("post-filter-pill-cap").textContent).toContain(
       "Oldest 10",
     )
@@ -268,14 +267,33 @@ describe("the Filters menu", () => {
 })
 
 describe("the pills", () => {
-  test("Order is one choice, and says which measure the views orders read", () => {
-    const { calls } = mount()
-    fireEvent.click(screen.getByTestId("post-filter-pill-order"))
-    fireEvent.click(screen.getByText("Views"))
-    fireEvent.click(screen.getByRole("radio", { name: /Oldest first/ }))
+  test("Sort searches Post date, Views and Estimated views, and keeps its direction", () => {
+    const { calls } = mount({ postSortOrder: "oldest" })
+    fireEvent.click(screen.getByTestId("post-sort"))
+    fireEvent.change(screen.getByPlaceholderText("Search sort options..."), {
+      target: { value: "views" },
+    })
+    expect(
+      screen.getAllByRole("radio").map((radio) => radio.textContent),
+    ).toEqual(["○ Views", "○ Estimated views"])
+    // Ascending dates become fewest views, read on the measure picked.
+    fireEvent.click(screen.getByRole("radio", { name: "○ Views" }))
     expect(calls).toEqual([
       ["measure", "views"],
-      ["order", "oldest"],
+      ["order", "fewest_views"],
+    ])
+  })
+
+  test("the arrow flips the direction and keeps the measure", () => {
+    const { calls } = mount({
+      postSortOrder: "most_views",
+      viewMeasure: "views",
+    })
+    expect(screen.getByTestId("post-sort").textContent).toContain("Views")
+    fireEvent.click(screen.getByRole("button", { name: "Sort descending" }))
+    expect(calls).toEqual([
+      ["measure", "views"],
+      ["order", "fewest_views"],
     ])
   })
 
