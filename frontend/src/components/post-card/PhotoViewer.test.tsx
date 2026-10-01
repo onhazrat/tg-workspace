@@ -65,8 +65,11 @@ describe("PhotoViewer", () => {
   test("a double-click toggles 2.5x and cancels the click that would close", async () => {
     const onClose = mock()
     render(<PhotoViewer start="blob:a" onClose={onClose} />)
-    fireEvent.pointerDown(stage(), { clientX: 0, clientY: 0 })
-    fireEvent.pointerUp(stage())
+    // A browser sends both clicks of a double-click before the dblclick.
+    for (let i = 0; i < 2; i++) {
+      fireEvent.pointerDown(stage(), { clientX: 0, clientY: 0 })
+      fireEvent.pointerUp(stage())
+    }
     fireEvent.doubleClick(stage())
     expect(label()).toContain("2.5x")
     await act(() => sleep(300))

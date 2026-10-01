@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog"
 import {
   clampView,
   DOUBLE_CLICK_ZOOM,
-  type View,
+  WHOLE,
   zoomAbout,
 } from "./photo-viewer-model"
 
@@ -140,7 +140,6 @@ export function PhotoViewer({
   )
 }
 
-const WHOLE: View = { s: 1, x: 0, y: 0 }
 /** Long enough for the second click of a double-click to cancel the close. */
 const CLOSE_DELAY_MS = 250
 
@@ -237,6 +236,8 @@ function PanZoom({
         const d = drag.current
         drag.current = null
         if (d && !d.moved && viewRef.current.s === 1) {
+          // One timer at a time: a double-click's first click must not survive.
+          window.clearTimeout(pendingClose.current)
           pendingClose.current = window.setTimeout(onClose, CLOSE_DELAY_MS)
         }
       }}

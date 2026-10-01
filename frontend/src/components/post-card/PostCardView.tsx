@@ -4,6 +4,7 @@ import {
   PostCardActions,
   PostCardReactions,
   PostCardViews,
+  type PostTranslationControl,
 } from "./PostCardFooter"
 import {
   PostCardCompactHeader,
@@ -22,7 +23,7 @@ export interface PostCardViewProps extends PostCardHeaderProps {
   /** The text to show: the translation while it is showing. */
   text: string
   /** Present only when the post is in a language that needs translating. */
-  translation?: { showing: boolean; busy: boolean; onToggle: () => void }
+  translation?: PostTranslationControl
   /** Present only when embeddings are enabled. */
   onFindRelated?: () => void
 }

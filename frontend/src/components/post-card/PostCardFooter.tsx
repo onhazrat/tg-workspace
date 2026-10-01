@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import type { Post } from "@/types"
 import { TgIconButton, tgIconButtonVariants } from "../ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
+import { SHORTCUTS } from "./FeedKeyboard"
 
 /** The view count, the exact number on hover; nothing when unknown. */
 export function PostCardViews({ post }: { post: Post }) {
@@ -63,6 +64,13 @@ export function PostCardReactions({
   )
 }
 
+/** The translate button's state; absent when the post needs no translating. */
+export type PostTranslationControl = {
+  showing: boolean
+  busy: boolean
+  onToggle: () => void
+}
+
 /** "Copy link (c)" while Keyboard mode is on, so the tooltip teaches the key. */
 const withKey = (label: string, key: string, keyboard: boolean) =>
   keyboard ? `${label} (${key})` : label
@@ -81,11 +89,7 @@ export function PostCardActions({
 }: {
   post: Post
   /** Present only when the post is in a language that needs translating. */
-  translation?: {
-    showing: boolean
-    busy: boolean
-    onToggle: () => void
-  }
+  translation?: PostTranslationControl
   /** Present only when embeddings are enabled. */
   onFindRelated?: () => void
   keyboard?: boolean
@@ -103,8 +107,8 @@ export function PostCardActions({
       {translation && (
         <TgIconButton
           aria-label={translateLabel}
-          tooltip={withKey(translateLabel, "t", keyboard)}
-          data-shortcut="t"
+          tooltip={withKey(translateLabel, SHORTCUTS.translate, keyboard)}
+          data-shortcut={SHORTCUTS.translate}
           onClick={translation.onToggle}
           loading={translation.busy}
           className={cn(
@@ -119,8 +123,8 @@ export function PostCardActions({
       {onFindRelated && (
         <TgIconButton
           aria-label="Find Related Posts"
-          tooltip={withKey("Find Related Posts", "r", keyboard)}
-          data-shortcut="r"
+          tooltip={withKey("Find Related Posts", SHORTCUTS.related, keyboard)}
+          data-shortcut={SHORTCUTS.related}
           onClick={onFindRelated}
           className="text-purple-500/70 hover:text-purple-600 hover:bg-purple-500/10"
         >
@@ -129,8 +133,8 @@ export function PostCardActions({
       )}
       <TgIconButton
         aria-label="Copy Link"
-        tooltip={withKey("Copy Link", "c", keyboard)}
-        data-shortcut="c"
+        tooltip={withKey("Copy Link", SHORTCUTS.copy, keyboard)}
+        data-shortcut={SHORTCUTS.copy}
         onClick={copyLink}
       >
         <Copy size={14} />
@@ -142,14 +146,14 @@ export function PostCardActions({
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Open in Telegram"
-            data-shortcut="o"
+            data-shortcut={SHORTCUTS.open}
             className={cn(tgIconButtonVariants({ variant: "ghost" }))}
           >
             <ExternalLink size={14} />
           </a>
         </TooltipTrigger>
         <TooltipContent>
-          <p>{withKey("Open in Telegram", "o", keyboard)}</p>
+          <p>{withKey("Open in Telegram", SHORTCUTS.open, keyboard)}</p>
         </TooltipContent>
       </Tooltip>
     </span>

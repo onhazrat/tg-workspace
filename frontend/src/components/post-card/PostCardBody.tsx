@@ -66,11 +66,12 @@ export function PostCardClampedBody({
   }, [text, open])
   return (
     <div>
-      <div ref={ref} className={open ? "" : "max-h-[4.5em] overflow-hidden"}>
-        <p
-          dir="auto"
-          className="whitespace-pre-wrap text-[13px] leading-[1.5em] text-app-ink/80"
-        >
+      {/* The font size sits on the clamp, so 4.5em is exactly three 1.5em lines. */}
+      <div
+        ref={ref}
+        className={`text-[13px] leading-[1.5em] ${open ? "" : "max-h-[4.5em] overflow-hidden"}`}
+      >
+        <p dir="auto" className="whitespace-pre-wrap text-app-ink/80">
           {renderPostText(text, postSearch, linkSpans)}
         </p>
       </div>

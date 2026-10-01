@@ -7,8 +7,6 @@ import {
   Sticker,
   Video,
 } from "lucide-react"
-import { useEffect, useState } from "react"
-import { api } from "@/api"
 import { getMediaKindLabel, getPostMediaKinds } from "@/lib/posts/post-media"
 import type { Post, PostMediaKind } from "@/types"
 import { Badge } from "../ui/badge"
@@ -46,26 +44,4 @@ export function PostCardMedia({ post }: { post: Post }) {
       })}
     </div>
   )
-}
-
-/** The cached thumbnail as an object URL; null until loaded or after a failure. */
-export function usePostThumbSrc(thumbApiPath: string) {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let objectUrl: string | null = null
-    setSrc(null)
-    api
-      .fetchPostThumb(thumbApiPath)
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob)
-        setSrc(objectUrl)
-      })
-      .catch(() => setSrc(null))
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [thumbApiPath])
-
-  return [src, setSrc] as const
 }

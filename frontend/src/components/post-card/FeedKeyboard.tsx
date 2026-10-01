@@ -11,17 +11,26 @@ const RING = "data-kbd-selected"
 /** A card hidden under the workspace's sticky header is not "on screen". */
 const HEADER_PX = 80
 
+/** The letter each card action answers to; the buttons carry it as `data-shortcut`. */
+export const SHORTCUTS = {
+  photo: "p",
+  translate: "t",
+  related: "r",
+  copy: "c",
+  open: "o",
+} as const
+
 const KEY_HELP = [
   ["j / k", "next / previous post"],
-  ["p", "open photo"],
-  ["t", "translate"],
-  ["r", "find related"],
-  ["c", "copy link"],
-  ["o", "open in Telegram"],
+  [SHORTCUTS.photo, "open photo"],
+  [SHORTCUTS.translate, "translate"],
+  [SHORTCUTS.related, "find related"],
+  [SHORTCUTS.copy, "copy link"],
+  [SHORTCUTS.open, "open in Telegram"],
 ] as const
 
 /** Keys belong to the page only when nothing else could be listening for them. */
-function ignored(e: KeyboardEvent): boolean {
+function keyBelongsElsewhere(e: KeyboardEvent): boolean {
   if (e.metaKey || e.ctrlKey || e.altKey) return true
   const el = document.activeElement as HTMLElement | null
   if (
@@ -40,7 +49,7 @@ export function FeedKeyboard({ on }: { on: boolean }) {
   useEffect(() => {
     if (!on) return
     const onKey = (e: KeyboardEvent) => {
-      if (ignored(e)) return
+      if (keyBelongsElsewhere(e)) return
       const cards = Array.from(document.querySelectorAll<HTMLElement>(CARD))
       const at = cards.findIndex((c) => c.hasAttribute(RING))
       if (e.key === "j" || e.key === "k") {
