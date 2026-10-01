@@ -22,8 +22,9 @@ and 69.
       the rows have no tick while the counts are unknown (a meaning search)
 - [x] A tick on a row that is not fully selected appends "select every Post with this value"; on a
       fully or partly selected row it appends "deselect every Post with this value". The rule's
-      snapshot is that one Condition and nothing of the current filter. As built, a partly
-      selected row selects, as on Channels; only a fully selected row deselects. In a Channel
+      snapshot is that one Condition and nothing of the current filter. As built, the two
+      clauses overlap on a partly selected row, and it deselects, as story 56 means a tick to
+      drop a whole value; only a row with nothing selected selects. In a Channel
       spotlight the rows count that Channel, so the rule names it beside the value
 - [x] The line over the rows says what a tick does here, which differs from Channels on purpose
 
@@ -51,7 +52,9 @@ and 69.
 - [x] "Copy links" copies the Telegram links of the selected Posts the filter shows, and "Export
       Markdown" downloads them as a Markdown file; both fetch them from the feed with
       `onlySelected`, up to 5,000, and say so when they hit the limit. As built, `onlySelected`
-      applies after the cap, so it is exactly the selected Posts the feed would show
+      applies after the cap, so it is exactly the selected Posts the feed would show. The
+      limit is reported against the counts read's total, so exactly 5,000 is not a cut. Under
+      Selected first a Pick refetches the pages instead of patching them, so paging still holds
 
 ### Tests
 

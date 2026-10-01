@@ -11,6 +11,7 @@ import {
   useScopedPostCounts,
   useShownPostCounts,
 } from "@/hooks/usePostsView"
+import { downloadBlob } from "@/lib/data-transfer/download"
 import { spotlightView } from "@/lib/posts/channel-spotlight"
 import { feedSubtitle } from "@/lib/posts/post-filter-bar"
 import {
@@ -97,6 +98,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   const { spotlight } = spotlightApi
   const [compact, setCompact] = useSessionFlag("postFeed_compactGrid")
   const [keyboard, setKeyboard] = useSessionFlag("postFeed_keyboard")
+  const { counts, tooNewToJudge, selectedShown } = useShownPostCounts(spotlight)
   const [selectedFirst, setSelectedFirst] = useSessionFlag(
     "postFeed_selectedFirst",
   )
@@ -107,8 +109,11 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     loadMore,
     isLoadingMore,
     fetchSelectedShown,
-  } = usePostsFeed(spotlight, { selectedFirst })
-  const { counts, tooNewToJudge, selectedShown } = useShownPostCounts(spotlight)
+  } = usePostsFeed(spotlight, {
+    selectedFirst,
+    selectedShownTotal: selectedShown,
+  })
+
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
   // The Post selection (PTR-05): window-wide, so neither a spotlight nor the
@@ -161,37 +166,30 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   // Copy links and Export Markdown (PTR-06): the selected Posts the filter
   // shows, read from the feed.
   const withSelectedShown = async (
-    use: (shown: typeof posts) => Promise<void> | void,
+    use: (shown: typeof posts, note: string) => Promise<void> | void,
   ) => {
     try {
-      const shown = await fetchSelectedShown()
+      const { posts: shown, total } = await fetchSelectedShown()
       if (shown.length === 0) {
         toast.info("No selected Posts are shown")
         return
       }
-      await use(shown)
+      await use(shown, limitNote(shown.length, total))
     } catch {
       toast.error("Could not read the selected Posts")
     }
   }
   const copyLinks = () =>
-    withSelectedShown(async (shown) => {
+    withSelectedShown(async (shown, note) => {
       await navigator.clipboard.writeText(postLinks(shown))
-      toast.success(
-        `Copied ${shown.length.toLocaleString()} links.${limitNote(shown.length)}`,
-      )
+      toast.success(`Copied ${shown.length.toLocaleString()} links.${note}`)
     })
   const exportMarkdown = () =>
-    withSelectedShown((shown) => {
-      const url = URL.createObjectURL(
+    withSelectedShown((shown, note) => {
+      downloadBlob(
         new Blob([postsMarkdown(shown)], { type: "text/markdown" }),
+        `selected-posts-${new Date().toISOString().slice(0, 10)}.md`,
       )
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `selected-posts-${new Date().toISOString().slice(0, 10)}.md`
-      a.click()
-      URL.revokeObjectURL(url)
-      const note = limitNote(shown.length)
       if (note) toast.info(note.trim())
     })
 

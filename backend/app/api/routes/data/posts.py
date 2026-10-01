@@ -29,10 +29,8 @@ from app.services.post_selection import PostScope
 from app.services.posts import (
     bulk_upsert_posts,
     count_facets_in_scope,
-    count_selected,
-    count_selected_shown,
+    count_shown_and_selected,
 )
-from app.services.posts import count_scope as count_scope_impl
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
 from app.services.settling_curve import current_estimate
@@ -107,44 +105,25 @@ def posts_counts(
     """
     window = resolve_analysis_window(body.window)
     channel_names = body.cleaned_channel_names()
-    filters = parse_post_filters(session, body, tree=body.filter, sort=body.sort)
-    counts, too_new = count_scope_impl(
-        session,
-        user_id=current_user.id,
-        channel_names=channel_names,
-        start_date=window.start,
-        end_date=window.end,
-        filters=filters,
-        max_per_channel=body.max_per_channel,
-    )
     scope = PostScope(current_user.id, channel_names, window.start, window.end)
-    chosen = selected_in(session, body.selection, scope)
-    selected = count_selected(
+    counted = count_shown_and_selected(
         session,
-        chosen,
+        selected_in(session, body.selection, scope),
         user_id=current_user.id,
         channel_names=channel_names,
         start_date=window.start,
         end_date=window.end,
-    )
-    selected_shown = count_selected_shown(
-        session,
-        chosen,
-        user_id=current_user.id,
-        channel_names=channel_names,
-        start_date=window.start,
-        end_date=window.end,
-        filters=filters,
+        filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
         max_per_channel=body.max_per_channel,
         max_per_channel_mode=body.max_per_channel_mode,
         sort=body.sort,
         seed=body.seed,
     )
     return PostCountsResponse(
-        counts=counts,
-        selected=selected,
-        selectedShown=selected_shown,
-        tooNewToJudge=too_new,
+        counts=counted["counts"],
+        selected=counted["selected"],
+        selectedShown=counted["selected_shown"],
+        tooNewToJudge=counted["too_new"],
     )
 
 
@@ -170,7 +149,10 @@ def posts_facets(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> PostFacetsResponse:
-    """How many Posts in the window have each Type, media kind and Language, and how many of those are selected."""
+    """How many Posts in the window have each Type, media kind and Language.
+
+    And how many of each value the Post selection selects.
+    """
     window = resolve_analysis_window(body.window)
     channel_names = body.cleaned_channel_names()
     scope = PostScope(current_user.id, channel_names, window.start, window.end)

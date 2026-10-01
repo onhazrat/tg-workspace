@@ -3,6 +3,7 @@ import { SelectionAdjust } from "@/components/SelectionAdjust"
 import {
   type ActionLimit,
   applyRegions,
+  regionSizes,
   regionsOf,
   SELECTION_EDITS,
 } from "@/lib/channels/selection-regions"
@@ -71,12 +72,7 @@ export function ChannelSelectionAdjust({
   limit,
   onLimitChange,
 }: LimitProps & { onApply: (next: Set<string>) => void }) {
-  const r = regionsOf(selection, shown)
-  const counts = {
-    hidden: r.hidden.length,
-    both: r.both.length,
-    fresh: r.fresh.length,
-  }
+  const counts = regionSizes(regionsOf(selection, shown))
 
   return (
     <SelectionAdjust

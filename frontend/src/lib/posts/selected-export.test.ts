@@ -40,7 +40,9 @@ describe("postsMarkdown", () => {
 
 describe("limitNote", () => {
   it("says so only when the limit cut the list", () => {
-    expect(limitNote(EXPORT_LIMIT - 1)).toBe("")
-    expect(limitNote(EXPORT_LIMIT)).toContain("first 5,000")
+    expect(limitNote(EXPORT_LIMIT - 1, EXPORT_LIMIT - 1)).toBe("")
+    // Exactly the limit, and nothing left out.
+    expect(limitNote(EXPORT_LIMIT, EXPORT_LIMIT)).toBe("")
+    expect(limitNote(EXPORT_LIMIT, 7200)).toContain("first 5,000 of 7,200")
   })
 })

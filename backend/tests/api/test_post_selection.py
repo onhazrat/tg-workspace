@@ -545,13 +545,24 @@ EN_ONLY = [rule(True), rule(False, lang("fa"))]
     [
         ({"sort": "newest"}, [5, 2, 4, 3, 1]),
         ({"sort": "oldest"}, [2, 5, 1, 3, 4]),
+        # No Post has a count, so the views orders fall back to newest first.
+        ({"sort": "most_views"}, [5, 2, 4, 3, 1]),
+        ({"sort": "fewest_views", "viewMeasure": "views"}, [5, 2, 4, 3, 1]),
         # Grouped: each part places its own blocks by the feed's order.
         ({"sort": "newest", "groupByChannel": True}, [5, 2, 4, 3, 1]),
         ({"sort": "oldest", "groupByChannel": True}, [2, 5, 1, 3, 4]),
         # Under a cap the parts hold only what the cap shows: 5 and 3.
         ({"sort": "newest", "maxPerChannel": 1}, [5, 3]),
     ],
-    ids=["newest", "oldest", "grouped-newest", "grouped-oldest", "capped"],
+    ids=[
+        "newest",
+        "oldest",
+        "most-views",
+        "fewest-views",
+        "grouped-newest",
+        "grouped-oldest",
+        "capped",
+    ],
 )
 def test_selected_first_lists_the_selected_before_the_rest_in_the_feeds_order(
     client: TestClient,

@@ -30,8 +30,8 @@ export const postsMarkdown = (posts: Post[]): string =>
     )
     .join("\n\n---\n\n")
 
-/** What to add when the limit cut the list short, or nothing. */
-export const limitNote = (count: number): string =>
-  count >= EXPORT_LIMIT
-    ? ` Only the first ${EXPORT_LIMIT.toLocaleString("en-US")} selected Posts; narrow the filter for the rest.`
+/** What to add when the limit cut `count` short of `total`, or nothing. */
+export const limitNote = (count: number, total: number): string =>
+  count >= EXPORT_LIMIT && total > count
+    ? ` Only the first ${EXPORT_LIMIT.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} selected Posts; narrow the filter for the rest.`
     : ""

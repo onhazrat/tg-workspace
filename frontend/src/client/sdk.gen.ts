@@ -891,7 +891,9 @@ export const dataPostsViewEstimate = <ThrowOnError extends boolean = true>(optio
 /**
  * Posts Facets
  *
- * How many Posts in the window have each Type, media kind and Language, and how many of those are selected.
+ * How many Posts in the window have each Type, media kind and Language.
+ *
+ * And how many of each value the Post selection selects.
  */
 export const dataPostsFacets = <ThrowOnError extends boolean = true>(options: Options<DataPostsFacetsData, ThrowOnError>) => (options.client ?? client).post<DataPostsFacetsResponses, DataPostsFacetsErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

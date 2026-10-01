@@ -228,7 +228,7 @@ describe("the ticks (PTR-06)", () => {
     expect(tick("type", "original").getAttribute("aria-checked")).toBe("true")
   })
 
-  test("select a value not fully selected, deselect one that is", () => {
+  test("select a value with nothing selected, deselect one with some or all", () => {
     const { calls } = mount()
     fireEvent.click(screen.getByTestId("post-filter-language"))
     fireEvent.click(tick("language", "fa"))
@@ -239,7 +239,7 @@ describe("the ticks (PTR-06)", () => {
     fireEvent.click(tick("type", "original"))
 
     expect(calls).toEqual([
-      ["tick", "select language:fa"],
+      ["tick", "deselect language:fa"],
       ["tick", "select language:zxx"],
     ])
     expect(second.calls).toEqual([["tick", "deselect type:original"]])

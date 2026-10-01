@@ -114,9 +114,9 @@ test("a filter with NOT and parentheses, a tick, a Pick, a new window, Selected 
 
   // ---- A tick on Arabic records a Deselect rule ----
   await page.getByTestId("post-filter-language").click()
-  await expect(
-    page.getByTestId("post-filter-language-count-ar"),
-  ).toHaveText("1/1")
+  await expect(page.getByTestId("post-filter-language-count-ar")).toHaveText(
+    "1/1",
+  )
   await page.getByTestId("post-filter-language-row-ar").click()
   await page.keyboard.press("Escape")
   const bar = page.getByRole("region", { name: "Post selection" })

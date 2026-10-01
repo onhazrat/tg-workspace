@@ -302,8 +302,8 @@ const tickOf = (selected: number, total: number): FacetMenuRow["tick"] =>
  * A Type, Media or Language dropdown: a search and a row per value with a
  * funnel. Two funnels in one dropdown join with OR, different dropdowns with
  * AND. With `onTick`, each row also has a tick that selects every Post with
- * the value in the window, or deselects them when all are selected, whatever
- * the filter shows (PTR-06).
+ * the value in the window when none is selected, and deselects them when
+ * some or all are, whatever the filter shows (PTR-06).
  */
 export function PostFacetMenu({
   facet,
@@ -343,7 +343,9 @@ export function PostFacetMenu({
       rows={rows}
       funnelled={funnelledValues(filter, facet)}
       labelOf={(id) => values.find((v) => v.id === id)?.label ?? id}
-      onToggleSelect={onTick && ((row) => onTick(row.id, row.tick !== "true"))}
+      // Partly selected deselects: dropping a whole value from what an Action
+      // covers is what a tick is for (story 56).
+      onToggleSelect={onTick && ((row) => onTick(row.id, row.tick === "false"))}
       tickHint="Tick: every Post with it, whatever the filter shows"
       onFunnel={(id, on) =>
         onChange(

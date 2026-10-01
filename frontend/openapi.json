@@ -2057,7 +2057,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Facets",
-        "description": "How many Posts in the window have each Type, media kind and Language, and how many of those are selected.",
+        "description": "How many Posts in the window have each Type, media kind and Language.\n\nAnd how many of each value the Post selection selects.",
         "operationId": "data-posts_facets",
         "requestBody": {
           "content": {

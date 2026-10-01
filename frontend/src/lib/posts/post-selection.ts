@@ -10,7 +10,7 @@
  * sends it.
  */
 
-import type { Regions } from "@/lib/channels/selection-regions"
+import type { RegionCounts, Regions } from "@/lib/channels/selection-regions"
 import { addFunnel } from "@/lib/filter-tree"
 import { scopedSessionStorage } from "@/lib/storage/scoped"
 import {
@@ -225,7 +225,7 @@ export const regionCounts = (counts: {
   selected: number
   selectedShown: number
   shown: number
-}): Record<keyof Regions, number> => ({
+}): RegionCounts => ({
   hidden: Math.max(0, counts.selected - counts.selectedShown),
   both: counts.selectedShown,
   fresh: Math.max(0, counts.shown - counts.selectedShown),

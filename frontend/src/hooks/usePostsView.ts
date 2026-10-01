@@ -291,9 +291,10 @@ export interface PostsFeed {
   isLoadingMore: boolean
   /**
    * The selected Posts the filter shows, in the feed's order, at most
-   * `EXPORT_LIMIT`: what Copy links and Export Markdown take (PTR-06).
+   * `EXPORT_LIMIT`, and how many there are: what Copy links and Export
+   * Markdown take (PTR-06).
    */
-  fetchSelectedShown: () => Promise<Post[]>
+  fetchSelectedShown: () => Promise<{ posts: Post[]; total: number }>
 }
 
 /**
@@ -318,7 +319,14 @@ export function isSemanticFeed(
  */
 export function usePostsFeed(
   spotlight: ChannelSpotlight | null,
-  { selectedFirst = false }: { selectedFirst?: boolean } = {},
+  {
+    selectedFirst = false,
+    selectedShownTotal = 0,
+  }: {
+    selectedFirst?: boolean
+    /** The counts read's selected Posts the filter shows, past any limit. */
+    selectedShownTotal?: number
+  } = {},
 ): PostsFeed {
   const { startDate, endDate, windowKey } = useScope()
   const {
@@ -421,7 +429,9 @@ export function usePostsFeed(
   useEffect(() => {
     if (seenEdit.current === selectionEdit.revision) return
     seenEdit.current = selectionEdit.revision
-    if (!selectionEdit.picks) {
+    // Under Selected first a Pick moves its Post between the two parts, so
+    // the pages are refetched or the next offset would skip and repeat one.
+    if (!selectionEdit.picks || (selectedFirst && !semanticActive)) {
       queryClient.invalidateQueries({ queryKey: ["postsFeed"] })
       setRuleEdits((n) => n + 1)
       return
@@ -442,7 +452,7 @@ export function usePostsFeed(
       (data) => data && { ...data, pages: data.pages.map(patch) },
     )
     setClientPosts(patch)
-  }, [selectionEdit, queryClient])
+  }, [selectionEdit, queryClient, selectedFirst, semanticActive])
 
   useEffect(() => {
     // Read so a rule edit re-flags the ranked Posts; see `ruleEdits`.
@@ -495,19 +505,24 @@ export function usePostsFeed(
       hasMore: false,
       loadMore: () => {},
       isLoadingMore: false,
-      fetchSelectedShown: async () => clientPosts.filter((p) => p.selected),
+      fetchSelectedShown: async () => {
+        const shown = clientPosts.filter((p) => p.selected)
+        return { posts: shown, total: shown.length }
+      },
     }
   }
 
   return {
-    fetchSelectedShown: () =>
-      api.getPostsFeed({
+    fetchSelectedShown: async () => ({
+      posts: await api.getPostsFeed({
         ...feedParams,
         selectedFirst: false,
         onlySelected: true,
         limit: EXPORT_LIMIT,
         offset: 0,
       }),
+      total: selectedShownTotal,
+    }),
     posts: infinite.data?.pages.flat() ?? [],
     isInitialLoading: infinite.isLoading,
     hasMore: infinite.hasNextPage,

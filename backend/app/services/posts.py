@@ -657,6 +657,66 @@ def count_selected_shown(
     return {str(channel): int(n) for channel, n in rows}
 
 
+def count_shown_and_selected(
+    session: Session,
+    selected: ColumnElement[bool],
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
+    max_per_channel_mode: CapMode = "ordered",
+    sort: FeedSort = "newest",
+    seed: int = 0,
+) -> dict[str, Any]:
+    """The counts read, per channel: shown, selected, and both (PTR-06).
+
+    What the filter shows and how many it hid as too new to judge
+    (`count_scope`), what the Post selection selects filters aside
+    (`count_selected`), and the selected Posts the filter shows
+    (`count_selected_shown`), which the Adjust selection Venn subtracts the
+    other two regions from.
+    """
+    counts, too_new = count_scope(
+        session,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+        max_per_channel=max_per_channel,
+    )
+    selected_count = count_selected(
+        session,
+        selected,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    selected_shown = count_selected_shown(
+        session,
+        selected,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+        max_per_channel=max_per_channel,
+        max_per_channel_mode=max_per_channel_mode,
+        sort=sort,
+        seed=seed,
+    )
+    return {
+        "counts": counts,
+        "too_new": too_new,
+        "selected": selected_count,
+        "selected_shown": selected_shown,
+    }
+
+
 @dataclass(frozen=True)
 class _Shown:
     """The Posts the feed shows, unordered: what to select from and order by."""
@@ -665,7 +725,7 @@ class _Shown:
     #: `Post`, or its alias over the capped subquery.
     entity: Any
     #: The selection flag as that statement can read it; `None` unasked.
-    flag: Any
+    flag: ColumnElement[bool] | None
     reading: ViewReading
 
 
