@@ -1,29 +1,24 @@
 /**
- * What to hand an AI endpoint as its posts (G1).
+ * What to hand an AI endpoint as its posts (G1), and the Scope it submits.
  *
- * Two shapes, and which one you get is the whole point:
+ * Always a **scope**: the window, the Post selection and the order, which the
+ * backend resolves and assembles itself, so no posts cross the wire (PTR-05).
+ * A meaning search used to be the exception, sending the ranked Posts; its
+ * results reach an Action now as the Picks "Select all" records.
  *
- * - **`scope`** — the ordinary path. The backend resolves the scope and
- *   assembles the posts block itself, so no posts cross the wire.
- * - **`posts`** — the semantic/related path. Vector ranking is the one
- *   selection the server cannot derive from a scope, so the client resolves
- *   which posts matched and the caller formats them.
- *
- * Extracted from `ScraperContext` for G1. The split it encodes is the same one
- * the Discover and feed paths already make; see `computeScopedPosts` and
- * `usePostsFeed`.
+ * Extracted from `ScraperContext` for G1.
  *
  * The Post filter reaches `getScopedPosts`, which is what the tab shows, and
  * neither of the other two: it decides what the Posts tab shows and never what
- * an Artifact covers (PTR-03, ADR-026). A meaning search's ranked Posts reach
- * a prompt unfiltered for the same reason.
+ * an Artifact covers (PTR-03, ADR-026).
  */
 
 import { useCallback, useRef } from "react"
 
 import type { PromptScope } from "@/api/data"
 import type { ScopeSubmission } from "@/client"
-import { emptyPostFilter, type PostFilter } from "@/lib/posts/post-filter"
+import type { PostFilter } from "@/lib/posts/post-filter"
+import { type PostSelection, selectionBody } from "@/lib/posts/post-selection"
 import type { PostViewOptions } from "@/lib/posts/post-view"
 import {
   computeScopedPosts,
@@ -52,6 +47,8 @@ export interface PromptPostsDeps {
   debouncedSemanticSearchQuery: string
   relatedPostSearch: Post | null
   postFilter: PostFilter
+  /** What an Action covers (PTR-05). */
+  postSelection: PostSelection
   postViewOptions: PostViewOptions
   semanticSearchRespectsChannels: boolean
   searchSimilarPosts: (
@@ -64,9 +61,7 @@ export interface PromptPostsDeps {
   getViewEstimate: ScopedPostsDeps["getViewEstimate"]
 }
 
-export type PromptPostsInput =
-  | { posts: Post[]; scope?: undefined }
-  | { posts?: undefined; scope: PromptScope }
+export type PromptPostsInput = { scope: PromptScope }
 
 export interface PromptPosts {
   getScopedPosts: (
@@ -84,7 +79,7 @@ export interface PromptPosts {
    * to: flattening a Live window in the browser is the clock skew AW-02
    * removed, reintroduced one layer up.
    */
-  getScopeSubmission: (channels: string[], posts?: Post[]) => ScopeSubmission
+  getScopeSubmission: (channels: string[]) => ScopeSubmission
 }
 
 export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
@@ -98,6 +93,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     debouncedSemanticSearchQuery,
     relatedPostSearch,
     postFilter,
+    postSelection,
     postViewOptions,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
@@ -107,9 +103,11 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
   } = deps
 
   // Read when the call happens, not when the memo was built, so a minute that
-  // has passed since is still reflected in what gets fetched.
-  const boundsRef = useRef({ startDate, endDate })
-  boundsRef.current = { startDate, endDate }
+  // has passed since is still reflected in what gets fetched. The selection
+  // too: a tick changes only the flags, which the feed refreshes on its own,
+  // and must not re-run a meaning search.
+  const boundsRef = useRef({ startDate, endDate, postSelection })
+  boundsRef.current = { startDate, endDate, postSelection }
 
   const {
     maxPostsPerChannel,
@@ -133,6 +131,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         selectedChannels: Array.from(selectedChannels),
         startDate: boundsRef.current.startDate,
         endDate: boundsRef.current.endDate,
+        postSelection: boundsRef.current.postSelection,
         postFilter: filter,
         postViewOptions,
         semanticSearchRespectsChannels,
@@ -171,71 +170,39 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     [scopedPosts, postFilter],
   )
 
-  const getPromptPostsInput =
-    useCallback(async (): Promise<PromptPostsInput> => {
-      const semanticActive =
-        embeddingsEnabled &&
-        (!!relatedPostSearch || !!debouncedSemanticSearchQuery.trim())
-      if (semanticActive) {
-        return { posts: await scopedPosts(emptyPostFilter()) }
-      }
-      return {
-        scope: {
-          startDate,
-          endDate,
-          keyword: debouncedPostSearch,
-          viewMeasure,
-          maxPerChannel: maxPostsPerChannel,
-          maxPerChannelMode: maxPostsPerChannelMode,
-          sort: postSortOrder,
-          groupByChannel,
-          seed: 0,
-        },
-      }
-    }, [
-      embeddingsEnabled,
-      relatedPostSearch,
-      debouncedSemanticSearchQuery,
-      scopedPosts,
-      startDate,
-      endDate,
-      debouncedPostSearch,
-      viewMeasure,
-      maxPostsPerChannel,
-      maxPostsPerChannelMode,
-      postSortOrder,
-      groupByChannel,
-    ])
-
-  const getScopeSubmission = useCallback(
-    (channels: string[], posts?: Post[]): ScopeSubmission => ({
-      channels,
-      window: toWireWindow(windowKey),
-      keyword: debouncedPostSearch.trim() || null,
-      viewMeasure,
-      maxPerChannel: maxPostsPerChannel,
-      maxPerChannelMode: maxPostsPerChannelMode,
-      sort: postSortOrder,
-      groupByChannel,
-      seed: 0,
-      // The ranked selection, when there was one. `null` says the filters
-      // above were the whole story, which is a different fact from "the
-      // ranking returned nothing".
-      posts:
-        posts?.map((post) => ({
-          channelName: post.channelName,
-          postId: post.id,
-        })) ?? null,
+  const getPromptPostsInput = useCallback(
+    async (): Promise<PromptPostsInput> => ({
+      scope: {
+        startDate,
+        endDate,
+        selection: postSelection,
+        viewMeasure,
+        sort: postSortOrder,
+        groupByChannel,
+      },
     }),
     [
-      windowKey,
-      debouncedPostSearch,
+      startDate,
+      endDate,
+      postSelection,
       viewMeasure,
-      maxPostsPerChannel,
-      maxPostsPerChannelMode,
       postSortOrder,
       groupByChannel,
     ],
+  )
+
+  const getScopeSubmission = useCallback(
+    (channels: string[]): ScopeSubmission => ({
+      channels,
+      window: toWireWindow(windowKey),
+      viewMeasure,
+      sort: postSortOrder,
+      groupByChannel,
+      // The hand-written steps are the generated ones; the tree's ids ride
+      // along untouched, as they do on the feed.
+      selection: selectionBody(postSelection) as ScopeSubmission["selection"],
+    }),
+    [windowKey, viewMeasure, postSortOrder, groupByChannel, postSelection],
   )
 
   return { getScopedPosts, getPromptPostsInput, getScopeSubmission }

@@ -62,6 +62,7 @@ import type {
   NetworkLogResponse,
   PostResponse,
   ReportCandidateResponse,
+  SelectablePostResponse,
   SettingGroupResponse,
   SummaryResponse,
 } from "@/client"
@@ -267,6 +268,13 @@ export type PostHasServerFields = NoMismatches<
     | "reactionCounts"
     | "viewsObservedAt"
   >
+>
+/** The feed and the lookup flag each Post with the Post selection (PTR-05). */
+export type SelectablePostHasServerFields = NoMismatches<
+  MissingServerFields<SelectablePostResponse, "selected">
+>
+export type SelectablePostConforms = NoMismatches<
+  UnrefinedMismatches<SelectablePostResponse, Post, PostRefined>
 >
 export type ChannelHasServerFields = NoMismatches<
   MissingServerFields<ChannelResponse, "id" | "name" | "startTime">

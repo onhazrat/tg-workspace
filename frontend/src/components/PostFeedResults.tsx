@@ -16,6 +16,8 @@ interface PostFeedResultsProps {
   compact?: boolean
   /** Keyboard mode is on. */
   keyboard?: boolean
+  /** Tick or untick a Post (PTR-05). */
+  onToggleSelected?: (post: Post, shift: boolean) => void
 }
 
 /** The feed below the filter: loading skeletons, the post list, or the empty state. */
@@ -27,6 +29,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
   postSearch,
   compact = false,
   keyboard = false,
+  onToggleSelected,
 }) =>
   isInitialLoading ? (
     <div className="space-y-4">
@@ -70,6 +73,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
           postSearch={postSearch}
           compact={compact}
           keyboard={keyboard}
+          onToggleSelected={onToggleSelected}
         />
       ))}
 

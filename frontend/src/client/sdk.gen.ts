@@ -935,10 +935,8 @@ export const dataBulkUpsertPostsRoute = <ThrowOnError extends boolean = true>(op
  * Aggregated discovery candidates for a channel/date scope.
  *
  * Returns counts only. The client previously fetched every post body in
- * scope to compute this in JS. The keyword and cap params reproduce the
- * Scope the report covers, and
- * `maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic
- * scopes that used to keep a second client-side implementation alive.
+ * scope to compute this in JS. A report covers the Post selection, which the
+ * server resolves here like every other Action's.
  *
  * POST rather than GET for the same reason as `/posts` — the channel selection
  * travels in the body so it cannot overflow the request line.

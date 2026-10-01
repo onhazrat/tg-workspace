@@ -5,8 +5,6 @@
  */
 import { frozenWindow, type PostScopeQuery, type PromptScope } from "@/api/data"
 import type { FrozenScope } from "@/client"
-import { formatPostsForPrompt } from "@/lib/posts/post-view"
-import type { Post } from "@/types"
 
 /** What a run tells `withProvisionalRow` about the row it opened. */
 export interface ProvisionalRow {
@@ -46,15 +44,14 @@ export async function withProvisionalRow<T>(
 
 /**
  * Select by what the server froze, not by what the clock says now: the Artifact
- * and its prompt have to name the same two instants. No scope is the semantic
- * path, which carries its Posts rather than a window; no frozen Scope is a row
+ * and its prompt have to name the same two instants. No frozen Scope is a row
  * opened before AW-06.
  */
 export function frozenScope(
-  scope: PromptScope | undefined,
+  scope: PromptScope,
   frozen: FrozenScope | null | undefined,
-): PromptScope | undefined {
-  return scope && frozen ? { ...scope, window: frozenWindow(frozen) } : scope
+): PromptScope {
+  return frozen ? { ...scope, window: frozenWindow(frozen) } : scope
 }
 
 /** The Posts-tab filters a submission records beside its Scope; empty ones are left out. */
@@ -88,25 +85,22 @@ export async function readStream(
   return { text, lastChunk }
 }
 
-export type PromptPostsInput =
-  | { posts: Post[]; scope?: undefined }
-  | { posts?: undefined; scope: PromptScope }
+export type PromptPostsInput = { scope: PromptScope }
 
 export interface PromptPosts {
-  /** Set on the server-assembly path: the backend builds the posts block. */
-  scope?: PromptScope
-  /** Set on the semantic/related path: the posts this browser holds. */
-  posts?: Post[]
+  /** The backend builds the posts block from it. */
+  scope: PromptScope
+  /** Always empty: no posts cross the wire since PTR-05. */
   postsText: string
   postCount: number
 }
 
 /**
- * The posts block a prompt is built from, and how many posts it covers.
+ * The scope a prompt is built from, and how many posts it covers.
  *
- * A server-eligible scope travels as the scope, so no posts cross the wire and
- * the count comes from the server; semantic or related results are formatted
- * here. `frozen` selects the counted window when the Scope is already frozen.
+ * The scope travels as it is, so no posts cross the wire, and the count is
+ * the server's: the selected Posts in the window (PTR-05). `frozen` selects
+ * the counted window when the Scope is already frozen.
  */
 export async function promptPosts(
   input: PromptPostsInput,
@@ -114,12 +108,6 @@ export async function promptPosts(
   countPosts: (q: PostScopeQuery) => Promise<Record<string, number>>,
   frozen?: FrozenScope | null,
 ): Promise<PromptPosts> {
-  if (!input.scope)
-    return {
-      posts: input.posts,
-      postsText: formatPostsForPrompt(input.posts),
-      postCount: input.posts.length,
-    }
   const scope = frozenScope(input.scope, frozen)
   const counts = await countPosts({ channelNames, ...scope })
   const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)

@@ -12,6 +12,8 @@ interface PostCardProps {
   postSearch: string
   compact?: boolean
   keyboard?: boolean
+  /** Tick or untick this Post; `shift` asks for the run since the last click. */
+  onToggleSelected?: (post: Post, shift: boolean) => void
 }
 
 /** `PostCardView` wired to the workspace: Follows, spotlight, translation, find related. */
@@ -20,6 +22,7 @@ export const PostCard: React.FC<PostCardProps> = ({
   postSearch,
   compact,
   keyboard,
+  onToggleSelected,
 }) => {
   const { embeddingsEnabled } = useSettings()
   const { setRelatedPostSearch, addNewChannel } = useScraper()
@@ -41,6 +44,14 @@ export const PostCard: React.FC<PostCardProps> = ({
       onShowChannel={enter && ((name) => enter(post, name))}
       spotlit={
         spotlight?.channel.toLowerCase() === post.channelName.toLowerCase()
+      }
+      selection={
+        post.selected !== undefined && onToggleSelected
+          ? {
+              selected: post.selected,
+              onToggle: (shift) => onToggleSelected(post, shift),
+            }
+          : undefined
       }
       text={translation.text}
       translation={

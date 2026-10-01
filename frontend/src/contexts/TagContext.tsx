@@ -27,10 +27,7 @@ import {
 import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
 import { parseTagResponse } from "@/lib/channels/parse-tag-response"
 import { bulkUpdateChannelTags } from "@/lib/channels/store"
-import {
-  formatAllTagsForPrompt,
-  formatPostsForTagPrompt,
-} from "@/lib/channels/tag-prompt"
+import { formatAllTagsForPrompt } from "@/lib/channels/tag-prompt"
 import {
   applicableSuggestions,
   appliedTagsMessage,
@@ -48,7 +45,7 @@ import {
   upsertTagRun,
 } from "@/lib/summaries/store"
 import { generateTagStream, getTagPrompt } from "@/services/ai"
-import type { Post, TagRun, TagRunSummary } from "@/types"
+import type { TagRun, TagRunSummary } from "@/types"
 import { useData } from "./DataContext"
 import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
@@ -160,37 +157,15 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       includeTags: includeChannelTagsInPrompt,
     })
     const allTags = formatAllTagsForPrompt(channels)
-    // Server-eligible → send the scope (backend assembles the tag posts block);
-    // semantic/related → client-built postsText with the tag formatter.
-    const input = await getPromptPostsInput()
-    if (input.scope) {
-      const counts = await api.getPostsCounts({
-        channelNames: selectedChannelNames,
-        ...input.scope,
-      })
-      const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
-      return {
-        channelsText,
-        postsText: "",
-        allTags,
-        postCount,
-        scope: input.scope,
-        // The submission carries no explicit selection: the filters were the
-        // whole story on this branch.
-        rankedPosts: undefined,
-      }
-    }
-    const postsText = formatPostsForTagPrompt(input.posts, selectedChannels)
-    return {
-      channelsText,
-      postsText,
-      allTags,
-      postCount: input.posts.length,
-      scope: undefined,
-      // Semantic/related ranking, which the server cannot rebuild from the
-      // filters — so the selection itself is what makes the run reproducible.
-      rankedPosts: input.posts,
-    }
+    // The scope, always: the backend assembles the tag posts block from the
+    // Post selection (PTR-05).
+    const { scope } = await getPromptPostsInput()
+    const counts = await api.getPostsCounts({
+      channelNames: selectedChannelNames,
+      ...scope,
+    })
+    const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
+    return { channelsText, postsText: "", allTags, postCount, scope }
   }
 
   /**
@@ -204,12 +179,11 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
    */
   const openTagRun = async (
     postCount: number,
-    rankedPosts: Post[] | undefined,
     source: "generated" | "pasted",
   ) =>
     submitTagRun({
       id: crypto.randomUUID(),
-      scope: getScopeSubmission(selectedChannelNames, rankedPosts),
+      scope: getScopeSubmission(selectedChannelNames),
       mode,
       source,
       status: "pending",
@@ -227,13 +201,13 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags, postCount, scope, rankedPosts } =
+    const { channelsText, postsText, allTags, postCount, scope } =
       await buildPromptParts()
     // Submission opens the row, so a prompt that never gets built has to take
     // it back — otherwise a failed copy litters History with a `pending` run
     // nobody can complete. The same compensation `AIContext` makes, for the
     // same reason.
-    const opened = await openTagRun(postCount, rankedPosts, "pasted")
+    const opened = await openTagRun(postCount, "pasted")
     try {
       const prompt = await getTagPrompt({
         channels: selectedChannelNames,
@@ -286,11 +260,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     parts: Awaited<ReturnType<typeof buildPromptParts>>,
     row: ProvisionalRow,
   ) => {
-    const opened = await openTagRun(
-      parts.postCount,
-      parts.rankedPosts,
-      "generated",
-    )
+    const opened = await openTagRun(parts.postCount, "generated")
     row.opened(opened.id)
     const { stream, prompt } = await generateTagStream({
       channels: selectedChannelNames,

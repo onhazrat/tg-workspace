@@ -11,6 +11,7 @@ import type {
 } from "../lib/posts/discover-candidates"
 import { type PostFilter, postFilterBody } from "../lib/posts/post-filter"
 import type { MediaFilterValue } from "../lib/posts/post-media"
+import { type PostSelection, selectionBody } from "../lib/posts/post-selection"
 import type {
   ForwardedFilterValue,
   MaxPostsPerChannelMode,
@@ -69,6 +70,11 @@ export type PostScopeQuery = {
   /** What the views orders read; the server's default is `estimated` (PFB-03). */
   viewMeasure?: ViewMeasure
   maxPerChannel?: number
+  /**
+   * The Post selection (PTR-05): each Post comes back with `selected`, and
+   * the counts say how many are. Omitted is the server's default, select all.
+   */
+  selection?: PostSelection
 }
 
 /**
@@ -93,14 +99,17 @@ export type PostFeedQuery = PostFilteredQuery & {
 }
 
 /**
- * A scope an AI endpoint resolves into its posts block server-side. The
- * `channels` list travels at the request top level, so it is omitted here; the
- * AI paths assemble every matching post, so paging is omitted too.
+ * A scope an AI endpoint resolves into its posts block server-side: the
+ * window, the Post selection and the order (PTR-05). The `channels` list
+ * travels at the request top level, so it is omitted here. Never the Post
+ * filter, the keyword or the cap, which decide what the Posts tab shows and
+ * reach an Action only inside a Selection rule (ADR-026).
  */
-export type PromptScope = Omit<
+export type PromptScope = Pick<
   PostFeedQuery,
-  "channelNames" | "limit" | "offset" | "filter"
+  "startDate" | "endDate" | "viewMeasure" | "sort" | "groupByChannel"
 > & {
+  selection: PostSelection
   /**
    * A frozen window, sent verbatim instead of being derived from the pair
    * (AW-05).
@@ -140,6 +149,7 @@ export function postScopeBody(
   // An empty filter is the server's default, so it is omitted.
   const filter = params.filter && postFilterBody(params.filter)
   if (filter) body.filter = filter
+  if (params.selection) body.selection = selectionBody(params.selection)
   return body
 }
 
@@ -166,28 +176,24 @@ export function frozenWindow(scope: {
 }
 
 export function promptScopeBody(scope: PromptScope): Record<string, unknown> {
-  const { startDate, endDate, window: frozen, ...rest } = scope
+  const { startDate, endDate, window: frozen, selection, ...rest } = scope
   const window = frozen ?? fixedWindow(startDate, endDate)
-  return window ? { ...rest, window } : { ...rest }
+  const body = { ...rest, selection: selectionBody(selection) }
+  return window ? { ...body, window } : body
 }
 
 /**
- * Inputs to a Discover run, on top of the shared post scope.
- *
- * `maxPerChannelMode` + `seed` and `postIds` are what make every scope
- * reproducible server-side: the cap reuses the feed's seeded ordering, and a
- * semantic query passes in the posts its vector search matched. Without them
- * these two cases needed a duplicate client-side aggregation (IDEA-011 D14).
+ * Inputs to a Discover run: the Channels, the window and the Post selection,
+ * which is what a report covers like every other Action (PTR-05), and the
+ * order it records.
  */
-export type DiscoverScopeQuery = PostScopeQuery & {
+export type DiscoverScopeQuery = Pick<
+  PostScopeQuery,
+  "channelNames" | "startDate" | "endDate" | "viewMeasure" | "selection"
+> & {
   signals?: string[]
-  maxPerChannelMode?: MaxPostsPerChannelMode
-  /** The order the `ordered` cap keeps the first N of (PFB-01). */
   sort?: PostSortOrder
   groupByChannel?: boolean
-  seed?: number
-  /** Omit for no restriction; `[]` means the search matched nothing. */
-  postIds?: { channelName: string; postId: number }[]
 }
 
 function discoverScopeBody(
@@ -198,13 +204,8 @@ function discoverScopeBody(
   // than letting `postScopeBody`'s omit-empty rule drop it into a 422.
   body.channelNames = params.channelNames ?? []
   if (params.signals) body.signals = params.signals
-  if (params.maxPerChannelMode)
-    body.maxPerChannelMode = params.maxPerChannelMode
   if (params.sort) body.sort = params.sort
   if (params.groupByChannel) body.groupByChannel = true
-  if (params.seed != null) body.seed = params.seed
-  // Sent even when empty: `[]` and "absent" mean different things here.
-  if (params.postIds != null) body.postIds = params.postIds
   return body
 }
 
@@ -522,18 +523,26 @@ export const dataApi = {
 
   /**
    * Resolve specific posts by natural key. Batch capped server-side at 200.
-   * With a Post filter, only the Posts it shows come back (PTR-03).
+   * With a Post filter, only the Posts it shows come back (PTR-03). With a
+   * scope, each says whether its Post selection selects it (PTR-05); a rule
+   * reaches only Posts of those Channels and that window.
    */
   lookupPosts: (
     refs: { channelName: string; postId: number }[],
     filter?: PostFilter,
+    scope?: Pick<
+      PostScopeQuery,
+      "channelNames" | "startDate" | "endDate" | "selection"
+    >,
   ) => {
     const tree = filter && postFilterBody(filter)
     return request<Post[]>("/api/v1/data/posts/lookup", {
       method: "POST",
-      body: JSON.stringify(
-        tree ? { posts: refs, filter: tree } : { posts: refs },
-      ),
+      body: JSON.stringify({
+        posts: refs,
+        ...(tree ? { filter: tree } : {}),
+        ...(scope ? postScopeBody(scope) : {}),
+      }),
     })
   },
 
@@ -657,7 +666,8 @@ export const dataApi = {
     ),
 
   /**
-   * Per-channel post counts for a filtered scope (SQL GROUP BY).
+   * Per-channel counts of the Posts an Action covers: the selected Posts in
+   * the window, whatever the Post filter shows (PTR-05).
    *
    * POSTed rather than GETed: the scope carries the channel selection, which can
    * be the whole account. As a query string that reached ~700 chars at 43
@@ -667,12 +677,12 @@ export const dataApi = {
   getPostsCounts: (
     params: PostFilteredQuery,
   ): Promise<Record<string, number>> =>
-    // Just the per-channel map, which is all the AI paths size a selection
-    // by. The feed footer reads the whole answer through `dataPostsCounts`.
+    // Just the selected map, which is what the AI paths size a selection by.
+    // The feed footer reads the whole answer through `dataPostsCounts`.
     request<PostCountsResponse>("/api/v1/data/posts/counts", {
       method: "POST",
       body: JSON.stringify(postScopeBody(params)),
-    }).then((response) => response.counts),
+    }).then((response) => response.selected),
 
   getTranslation: (channelName: string, postId: number, language: string) => {
     const qs = new URLSearchParams({

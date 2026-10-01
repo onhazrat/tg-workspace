@@ -7,6 +7,11 @@ import {
   type PostFilter,
 } from "@/lib/posts/post-filter"
 import {
+  DEFAULT_SELECTION,
+  type PostSelection,
+  pick,
+} from "@/lib/posts/post-selection"
+import {
   applyPostViewPipeline,
   type PostViewOptions,
 } from "@/lib/posts/post-view"
@@ -59,6 +64,19 @@ const SEED_ESTIMATE = {
   estimationFloorHours: 3,
 }
 
+/** A Post as the lookup returns it, flagged by the Post selection (PTR-05). */
+const flag = (p: Post): Post => ({ ...p, selected: true })
+
+/** The server lookup under an empty filter: every ranked Post it was asked for, flagged. */
+const flagged =
+  (posts: Post[]): ScopedPostsDeps["lookupPosts"] =>
+  async (refs) =>
+    posts
+      .filter((p) =>
+        refs.some((r) => r.channelName === p.channelName && r.postId === p.id),
+      )
+      .map(flag)
+
 /** A deps object with inert RAG/repository fns; individual tests override. */
 function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
   return {
@@ -70,6 +88,7 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     startDate: 1000,
     endDate: 9000,
     postFilter: emptyPostFilter(),
+    postSelection: DEFAULT_SELECTION,
     postViewOptions: view,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: async () => {
@@ -134,6 +153,7 @@ describe("computeScopedPosts", () => {
         groupByChannel: true,
         seed: 0,
         limit: SCOPED_POSTS_LIMIT,
+        selection: DEFAULT_SELECTION,
       },
     ])
   })
@@ -169,6 +189,7 @@ describe("computeScopedPosts", () => {
         capturedOptions = options
         return ragResults
       },
+      lookupPosts: flagged(ragResults),
     })
 
     const result = await computeScopedPosts(deps)
@@ -179,9 +200,9 @@ describe("computeScopedPosts", () => {
       endDate: 9000,
       channels: ["alpha", "beta"],
     })
-    // No Post filter, so no lookup: the view pipeline runs on the ranking.
+    // The view pipeline runs on the ranking, each Post flagged.
     expect(result).toEqual(
-      applyPostViewPipeline(ragResults, view, {
+      applyPostViewPipeline(ragResults.map(flag), view, {
         startDate: 1000,
         endDate: 9000,
       }),
@@ -195,12 +216,14 @@ describe("computeScopedPosts", () => {
       makePost("beta", 3, 300),
       makePost("beta", 5, 50),
     ]
-    const asked: { refs: unknown; filter: PostFilter }[] = []
+    const asked: { refs: unknown; filter: PostFilter; scope: unknown }[] = []
+    const selection: PostSelection = [pick(false, ranked[3])]
     const result = await computeScopedPosts(
       baseDeps({
         embeddingsEnabled: true,
         semanticQuery: "crypto",
         postFilter: persian,
+        postSelection: selection,
         postViewOptions: {
           ...view,
           postSortOrder: "oldest",
@@ -208,9 +231,9 @@ describe("computeScopedPosts", () => {
         },
         searchSimilarPosts: async () => ranked,
         // The server answers in its own order; the ranking's set is kept.
-        lookupPosts: async (refs, filter) => {
-          asked.push({ refs, filter })
-          return [ranked[3], ranked[0]]
+        lookupPosts: async (refs, filter, scope) => {
+          asked.push({ refs, filter, scope })
+          return [{ ...ranked[3], selected: false }, flag(ranked[0])]
         },
       }),
     )
@@ -219,13 +242,20 @@ describe("computeScopedPosts", () => {
       {
         refs: ranked.map((p) => ({ channelName: p.channelName, postId: p.id })),
         filter: persian,
+        // Flagged by the selection, whose rules reach this window's Posts.
+        scope: {
+          channelNames: ["alpha", "beta"],
+          startDate: 1000,
+          endDate: 9000,
+          selection,
+        },
       },
     ])
-    // What the filter showed, oldest first, beta's block first (its 50 leads).
-    expect(result.map((p) => `${p.channelName}/${p.id}`)).toEqual([
-      "beta/5",
-      "alpha/1",
-    ])
+    // What the filter showed, oldest first, beta's block first (its 50 leads),
+    // each with the server's flag.
+    expect(result.map((p) => `${p.channelName}/${p.id}/${p.selected}`)).toEqual(
+      ["beta/5/false", "alpha/1/true"],
+    )
   })
 
   test("semantic path: a views order reads the server's curve (PFB-03)", async () => {
@@ -253,6 +283,7 @@ describe("computeScopedPosts", () => {
           semanticQuery: "crypto",
           postViewOptions: { ...view, ...over },
           searchSimilarPosts: async () => ranked,
+          lookupPosts: flagged(ranked),
           getViewEstimate: async () => {
             asked += 1
             return SEED_ESTIMATE
@@ -315,6 +346,7 @@ describe("computeScopedPosts", () => {
         capturedOptions = options
         return ragResults
       },
+      lookupPosts: flagged(ragResults),
     })
 
     const result = await computeScopedPosts(deps)
@@ -324,9 +356,9 @@ describe("computeScopedPosts", () => {
     // every Post ever — the same defect as the removed ignore-window control,
     // with nothing on screen admitting to it.
     expect(capturedOptions).toEqual({ startDate: 1000, endDate: 9000 })
-    const expected = ragResults.filter(
-      (p) => p.id !== seed.id || p.channelName !== seed.channelName,
-    )
+    const expected = ragResults
+      .filter((p) => p.id !== seed.id || p.channelName !== seed.channelName)
+      .map(flag)
     expect(result).toEqual(
       applyPostViewPipeline(expected, view, {
         startDate: 1000,
@@ -358,10 +390,12 @@ describe("computeScopedPosts", () => {
     // Semantic ranking is the one selection the server cannot derive from a
     // scope, so those branches must stay on the RAG path. `baseDeps` throws
     // from `getPostsFeed`, which is what makes this assertion real.
+    const found = [makePost("alpha", 1, 100)]
     const deps = baseDeps({
       embeddingsEnabled: true,
       semanticQuery: "crypto",
-      searchSimilarPosts: async () => [makePost("alpha", 1, 100)],
+      searchSimilarPosts: async () => found,
+      lookupPosts: flagged(found),
     })
 
     expect((await computeScopedPosts(deps)).length).toBe(1)

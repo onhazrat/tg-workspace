@@ -427,10 +427,10 @@ def create_report(
 
     `filters` went the same way, and it had the same defect one field along: it
     was passed beside the Scope, so the predicate the aggregation ran and the
-    keyword the row recorded were two values nothing held together. They are
-    derived from the Scope here instead. No validation is needed on the way —
-    `FrozenScope` types its fields as the same literals `PostFilters` reads, so
-    a value that got this far is already one of them.
+    keyword the row recorded were two values nothing held together. Since
+    PTR-05 the predicate is the Scope's own Post selection, evaluated here over
+    its frozen window. No validation is needed on the way: `FrozenScope`
+    validated the steps when it was frozen.
 
     `signals` stays an argument because it is not Scope: it picks which kinds of
     signal the report describes, not which Posts it reads.

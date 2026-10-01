@@ -26,7 +26,6 @@ import {
   printChannelFilter,
 } from "@/lib/channels/channel-filter"
 import { useShownChannels } from "@/lib/channels/shown-channels"
-import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
   buildActionCommands,
   buildChannelEntityCommands,
@@ -97,14 +96,13 @@ export function useCommandRegistry(): {
     postFilter,
     setPostFilter,
     getScopedPosts,
-    semanticSearchQuery,
-    maxPostsPerChannel,
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
     postSortOrder,
     setPostSortOrder,
     groupByChannel,
     setGroupByChannel,
+    postSelection,
   } = useScraper()
   const {
     setSummary,
@@ -144,39 +142,22 @@ export function useCommandRegistry(): {
     [navigateWorkspace],
   )
 
-  // Per-channel in-scope counts on demand. Mirrors ChannelGrid: server-side
-  // when no semantic search is active and a selection exists, else derived
-  // from the scoped posts (semantic results can't be counted server-side).
+  // Per-channel in-scope counts on demand, as ChannelGrid shows them: the
+  // selected Posts in the window, which a meaning search does not change
+  // (PTR-05).
   const getPostsInScopeCounts = useCallback(async (): Promise<
     Record<string, number>
   > => {
-    const serverEligible =
-      !semanticSearchQuery.trim() && selectedChannels.size > 0
-    if (serverEligible) {
-      const selectedChannelNames = channels
+    if (selectedChannels.size === 0) return {}
+    return api.getPostsCounts({
+      channelNames: channels
         .filter((channel) => selectedChannels.has(channel.name))
-        .map((channel) => channel.name)
-      return api.getPostsCounts({
-        channelNames: selectedChannelNames,
-        startDate,
-        endDate,
-        keyword: postSearch,
-        filter: postFilter,
-        maxPerChannel: maxPostsPerChannel,
-      })
-    }
-    return buildPostsInScopeCounts(await getScopedPosts())
-  }, [
-    semanticSearchQuery,
-    selectedChannels,
-    channels,
-    startDate,
-    endDate,
-    postSearch,
-    postFilter,
-    maxPostsPerChannel,
-    getScopedPosts,
-  ])
+        .map((channel) => channel.name),
+      startDate,
+      endDate,
+      selection: postSelection,
+    })
+  }, [selectedChannels, channels, startDate, endDate, postSelection])
 
   const context = useMemo<CommandContext>(
     () => ({

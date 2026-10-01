@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@/api"
-import type { DiscoverScopeQuery, PostScopeQuery } from "@/api/data"
+import type { DiscoverScopeQuery } from "@/api/data"
 import type { DiscoverySignalKind } from "@/lib/posts/discover-candidates"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -114,22 +114,5 @@ export function useDeleteDiscoverReportMutation() {
         queryKey: queryKeys.discoverReports,
       })
     },
-  })
-}
-
-/**
- * Per-channel post counts for a filtered scope, computed in SQL.
- *
- * Replaces the client-side tally over the full fetched post array. Enabled only
- * when a scope is present; the caller keeps prior counts as placeholder data so
- * the grid does not flicker between scope changes.
- */
-export function usePostsCountsQuery(params: PostScopeQuery, enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.postsCounts(params),
-    queryFn: () => api.getPostsCounts(params),
-    enabled,
-    staleTime: SUMMARIZER_STALE_TIME,
-    placeholderData: (previous) => previous,
   })
 }

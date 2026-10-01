@@ -371,6 +371,7 @@ export async function mockDiscoverForwardPosts(
     await route.fulfill({
       json: {
         counts: { [fixture.carrierName]: posts.length },
+        selected: { [fixture.carrierName]: posts.length },
         tooNewToJudge: 0,
       },
     })

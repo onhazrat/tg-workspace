@@ -19,6 +19,7 @@ export const SHORTCUTS = {
   related: "r",
   copy: "c",
   open: "o",
+  select: "x",
 } as const
 
 const KEY_HELP = [
@@ -29,6 +30,7 @@ const KEY_HELP = [
   [SHORTCUTS.related, "find related"],
   [SHORTCUTS.copy, "copy link"],
   [SHORTCUTS.open, "open in Telegram"],
+  [SHORTCUTS.select, "select or deselect"],
 ] as const
 
 /** Inputs that take a click, not typing, so a key pressed on one is the page's. */
