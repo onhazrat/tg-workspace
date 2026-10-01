@@ -20,6 +20,10 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
+  type ChannelSpotlight,
+  spotlightView,
+} from "@/lib/posts/channel-spotlight"
+import {
   emptyPostFilter,
   type PostFilter,
   printPostFilter,
@@ -100,19 +104,23 @@ export function useScopedPostCounts(): Record<string, number> {
  * PTR-03). One request for both. A meaning search has no server count and
  * reports none too new.
  */
-export function useShownPostCounts(): {
+export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
   counts: Record<string, number>
   tooNewToJudge: number
 } {
-  return useScopeCounts(useScraper().postFilter, true)
+  return useScopeCounts(useScraper().postFilter, true, spotlight)
 }
 
 const NO_FILTER = emptyPostFilter()
 
-/** `filter` is what is counted; `shown` says it is the tab's, not the Scope's. */
+/**
+ * `accountFilter` is what is counted; `shown` says it is the tab's, not the Scope's,
+ * and only the tab's count follows a spotlight.
+ */
 function useScopeCounts(
-  filter: PostFilter,
+  accountFilter: PostFilter,
   shown: boolean,
+  spotlight: ChannelSpotlight | null = null,
 ): {
   counts: Record<string, number>
   tooNewToJudge: number
@@ -132,10 +140,18 @@ function useScopeCounts(
   const serverEligible =
     !semanticSearchQuery.trim() && selectedChannels.size > 0
 
-  const filters = {
+  const view = spotlightView(spotlight, {
     channelNames: selectedChannelNames,
     keyword: debouncedPostSearch,
+    filter: accountFilter,
     maxPerChannel: maxPostsPerChannel,
+    groupByChannel: false,
+  })
+  const filter = view.filter
+  const filters = {
+    channelNames: view.channelNames,
+    keyword: view.keyword,
+    maxPerChannel: view.maxPerChannel,
   }
   // The filter by its text, which is stable where the tree's ids are not.
   const keyed = { ...filters, filter: printPostFilter(filter) }
@@ -190,11 +206,14 @@ function useScopeCounts(
  */
 export function usePostFacets(
   enabled: boolean,
+  spotlight: ChannelSpotlight | null,
 ): PostFacetsResponse | undefined {
   const { selectedChannels } = useData()
   const { startDate, endDate, windowKey } = useScope()
   const { semanticSearchQuery } = useScraper()
-  const channelNames = useSelectedChannelNames()
+  const selected = useSelectedChannelNames()
+  // A spotlight's window is its Channel's, so "N of M" reads against it.
+  const channelNames = spotlight ? [spotlight.channel] : selected
   const query = useQuery({
     queryKey: queryKeys.postsFacets({ channelNames, window: windowKey }),
     queryFn: () =>
@@ -254,7 +273,7 @@ export function isSemanticFeed(
  * agreed design. The query key encodes the scope + filters, so any change
  * refetches the first page; a completed sync invalidates it (see ScraperContext).
  */
-export function usePostsFeed(): PostsFeed {
+export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
   const { startDate, endDate, windowKey } = useScope()
   const {
     postSearch,
@@ -281,24 +300,23 @@ export function usePostsFeed(): PostsFeed {
     debouncedSemantic,
   )
 
-  const filters = {
+  const { filter, ...view } = spotlightView(spotlight, {
     channelNames: selectedChannelNames,
     keyword: debouncedPostSearch,
-    viewMeasure,
+    filter: postFilter,
     maxPerChannel: maxPostsPerChannel,
+    groupByChannel,
+  })
+  const filters = {
+    ...view,
+    viewMeasure,
     maxPerChannelMode: maxPostsPerChannelMode,
     sort: postSortOrder,
-    groupByChannel,
     seed: 0,
   }
-  const feedParams: PostFeedQuery = {
-    ...filters,
-    filter: postFilter,
-    startDate,
-    endDate,
-  }
+  const feedParams: PostFeedQuery = { ...filters, filter, startDate, endDate }
   // The filter by its text, which is stable where the tree's ids are not.
-  const keyed = { ...filters, filter: printPostFilter(postFilter) }
+  const keyed = { ...filters, filter: printPostFilter(filter) }
 
   const infinite = useInfiniteQuery({
     /*

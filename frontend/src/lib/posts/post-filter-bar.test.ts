@@ -5,10 +5,14 @@ import {
   capCard,
   capPhrase,
   clearChip,
+  feedSubtitle,
   languageLabel,
   languageOptions,
   meaningQueryOnKey,
   parseCount,
+  postSortChoice,
+  postSortDirection,
+  postSortKey,
   viewMeasureDescription,
 } from "@/lib/posts/post-filter-bar"
 
@@ -164,5 +168,41 @@ describe("meaningQueryOnKey", () => {
     expect(meaningQueryOnKey(true, "a", "rates")).toBeNull()
     expect(meaningQueryOnKey(false, "Enter", "rates")).toBeNull()
     expect(meaningQueryOnKey(true, "Enter", "   ")).toBeNull()
+  })
+})
+
+describe("the Sort menu", () => {
+  test("every order reads back as the key and direction that send it", () => {
+    for (const order of [
+      "newest",
+      "oldest",
+      "most_views",
+      "fewest_views",
+    ] as const)
+      for (const measure of ["views", "estimated"] as const) {
+        const key = postSortKey(order, measure)
+        const choice = postSortChoice(key, postSortDirection(order))
+        expect(choice.order).toBe(order)
+        expect(choice.measure).toBe(key === "date" ? undefined : measure)
+      }
+  })
+})
+
+describe("the feed's subtitle", () => {
+  test("names the cap by the order it follows, then the grouping", () => {
+    expect(feedSubtitle(0, "ordered", "newest", false)).toBe("")
+    expect(feedSubtitle(5, "ordered", "newest", false)).toBe(
+      "(max 5/channel, latest)",
+    )
+    expect(feedSubtitle(5, "ordered", "oldest", true)).toBe(
+      "(max 5/channel, earliest) (grouped by channel)",
+    )
+    expect(feedSubtitle(5, "ordered", "most_views", false)).toContain(
+      "top by views",
+    )
+    expect(feedSubtitle(5, "ordered", "fewest_views", false)).toContain(
+      "bottom by views",
+    )
+    expect(feedSubtitle(5, "random", "most_views", false)).toContain("random")
   })
 })

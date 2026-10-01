@@ -57,6 +57,11 @@ export function PostCardView({
   const actions = (
     <PostCardActions
       post={post}
+      onShowChannel={
+        header.onShowChannel && !header.spotlit
+          ? () => header.onShowChannel?.(post.channelName)
+          : undefined
+      }
       keyboard={keyboard}
       labels={!compact}
       translation={translation}

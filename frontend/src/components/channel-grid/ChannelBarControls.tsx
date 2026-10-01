@@ -1,6 +1,4 @@
 import {
-  ArrowDown,
-  ArrowUp,
   ChevronDown,
   Grid2x2,
   Grid3x3,
@@ -8,9 +6,9 @@ import {
   LayoutList,
   Sparkles,
 } from "lucide-react"
-import { useState } from "react"
-import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
-import { Options, Pill, pillClass } from "@/components/PostFilterParts"
+import { BarHeading, BarPopover } from "@/components/BarPopover"
+import { SortPicker } from "@/components/filter-tree/SortPicker"
+import { pillClass } from "@/components/PostFilterParts"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
@@ -30,7 +28,7 @@ const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
   { value: "subscribers", label: "Subscribers" },
 ]
 
-/** Sort as a dropdown with a search over its options, and its direction. */
+/** The Channels tab's Sort menu; Subscribers only when the setting shows them. */
 export function SortMenu({
   sortBy,
   onSortByChange,
@@ -42,50 +40,19 @@ export function SortMenu({
   onSortByChange: (value: ChannelGridSortOption) => void
   sortDirection: "asc" | "desc"
   onToggleSortDirection: () => void
-  /** Subscribers is offered only when the setting shows them. */
   showSubscribers: boolean
 }) {
-  const [query, setQuery] = useState("")
-  const options = SORT_OPTIONS.filter(
-    (option) => showSubscribers || option.value !== "subscribers",
-  )
-  const label = options.find((option) => option.value === sortBy)?.label
-  const direction = sortDirection === "asc" ? "ascending" : "descending"
   return (
-    <div className="flex items-center gap-0.5">
-      <Pill
-        label="Sort"
-        value={label ?? "Last updated"}
-        active={false}
-        width="w-56"
-        testId="channel-sort"
-      >
-        <BarSearch
-          value={query}
-          onChange={setQuery}
-          placeholder="Search sort options..."
-        />
-        <Options
-          options={options.filter((option) =>
-            option.label.toLowerCase().includes(query.trim().toLowerCase()),
-          )}
-          value={sortBy}
-          onChange={onSortByChange}
-        />
-      </Pill>
-      <TgIconButton
-        aria-label={`Sort ${direction}`}
-        tooltip={`Sort ${direction}`}
-        onClick={onToggleSortDirection}
-        className="h-8 w-8"
-      >
-        {sortDirection === "asc" ? (
-          <ArrowUp size={13} />
-        ) : (
-          <ArrowDown size={13} />
-        )}
-      </TgIconButton>
-    </div>
+    <SortPicker
+      options={SORT_OPTIONS.filter(
+        (option) => showSubscribers || option.value !== "subscribers",
+      )}
+      value={sortBy}
+      onChange={onSortByChange}
+      direction={sortDirection}
+      onToggleDirection={onToggleSortDirection}
+      testId="channel-sort"
+    />
   )
 }
 

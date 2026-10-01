@@ -1,4 +1,11 @@
-import { Copy, ExternalLink, Eye, Languages, Sparkles } from "lucide-react"
+import {
+  Copy,
+  ExternalLink,
+  Eye,
+  Filter,
+  Languages,
+  Sparkles,
+} from "lucide-react"
 import { toast } from "sonner"
 import { formatCount } from "@/lib/format-count"
 import { telegramWebViewPostUrl } from "@/lib/telegram-web"
@@ -76,18 +83,21 @@ const withKey = (label: string, key: string, keyboard: boolean) =>
   keyboard ? `${label} (${key})` : label
 
 /**
- * The actions, always visible: translate, find related, copy link, open in
- * Telegram. Each carries the letter Keyboard mode fires it with
+ * The actions, always visible: show this Channel, translate, find related,
+ * copy link, open in Telegram. Each carries the letter Keyboard mode fires it with
  * (`FeedKeyboard`). With `labels`, translate also names itself on wide screens.
  */
 export function PostCardActions({
   post,
+  onShowChannel,
   translation,
   onFindRelated,
   keyboard = false,
   labels = false,
 }: {
   post: Post
+  /** Present only in the Posts feed, outside this Channel's own spotlight. */
+  onShowChannel?: () => void
   /** Present only when the post is in a language that needs translating. */
   translation?: PostTranslationControl
   /** Present only when embeddings are enabled. */
@@ -104,6 +114,16 @@ export function PostCardActions({
       .catch(() => toast.error("Could not copy the link"))
   return (
     <span className="ml-auto flex items-center gap-0.5">
+      {onShowChannel && (
+        <TgIconButton
+          aria-label="Show this Channel"
+          tooltip={withKey("Show this Channel", SHORTCUTS.channel, keyboard)}
+          data-shortcut={SHORTCUTS.channel}
+          onClick={onShowChannel}
+        >
+          <Filter size={14} />
+        </TgIconButton>
+      )}
       {translation && (
         <TgIconButton
           aria-label={translateLabel}

@@ -14,6 +14,7 @@ const HEADER_PX = 80
 /** The letter each card action answers to; the buttons carry it as `data-shortcut`. */
 export const SHORTCUTS = {
   photo: "p",
+  channel: "f",
   translate: "t",
   related: "r",
   copy: "c",
@@ -23,6 +24,7 @@ export const SHORTCUTS = {
 const KEY_HELP = [
   ["j / k", "next / previous post"],
   [SHORTCUTS.photo, "open photo"],
+  [SHORTCUTS.channel, "this channel alone"],
   [SHORTCUTS.translate, "translate"],
   [SHORTCUTS.related, "find related"],
   [SHORTCUTS.copy, "copy link"],

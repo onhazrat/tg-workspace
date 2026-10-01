@@ -21,6 +21,39 @@ export const POST_ORDER_OPTIONS: { label: string; value: PostSortOrder }[] = [
   { label: "Fewest views", value: "fewest_views" },
 ]
 
+/**
+ * The Sort menu's keys (PTR-04): Post date or one of the two measures, with a
+ * direction beside it. The wire keeps the four orders plus `viewMeasure`,
+ * which only the views orders read; a views bound names its own measure.
+ */
+export type PostSortKey = "date" | ViewMeasure
+
+export const POST_SORT_OPTIONS: { label: string; value: PostSortKey }[] = [
+  { label: "Post date", value: "date" },
+  { label: "Views", value: "views" },
+  { label: "Estimated views", value: "estimated" },
+]
+
+export function postSortKey(
+  order: PostSortOrder,
+  measure: ViewMeasure,
+): PostSortKey {
+  return order === "newest" || order === "oldest" ? "date" : measure
+}
+
+export const postSortDirection = (order: PostSortOrder): "asc" | "desc" =>
+  order === "oldest" || order === "fewest_views" ? "asc" : "desc"
+
+/** The order a key and direction send, and the measure, when it reads one. */
+export function postSortChoice(
+  key: PostSortKey,
+  direction: "asc" | "desc",
+): { order: PostSortOrder; measure?: ViewMeasure } {
+  const asc = direction === "asc"
+  if (key === "date") return { order: asc ? "oldest" : "newest" }
+  return { order: asc ? "fewest_views" : "most_views", measure: key }
+}
+
 /** The two measures a views bound and the views orders read, in this order. */
 export const VIEW_MEASURE_OPTIONS: { label: string; value: ViewMeasure }[] = [
   { label: "Views", value: "views" },
@@ -77,6 +110,35 @@ export function capPhrase(
   if (order === "most_views") return `Top ${cap} by views`
   if (order === "fewest_views") return `Bottom ${cap} by views`
   return `${capCard(order, cap).title} ${cap}`
+}
+
+/**
+ * What the feed's footer adds after the count: the cap and grouping. The cap
+ * mode is named for the order it follows, so `ordered` still reads "latest"
+ * under newest first, as it did (PFB-01).
+ */
+export function feedSubtitle(
+  cap: number,
+  mode: MaxPostsPerChannelMode,
+  order: PostSortOrder,
+  grouped: boolean,
+): string {
+  const parts: string[] = []
+  if (cap > 0) {
+    const named =
+      mode === "random"
+        ? "random"
+        : order === "most_views"
+          ? "top by views"
+          : order === "fewest_views"
+            ? "bottom by views"
+            : order === "oldest"
+              ? "earliest"
+              : "latest"
+    parts.push(`(max ${cap}/channel, ${named})`)
+  }
+  if (grouped) parts.push("(grouped by channel)")
+  return parts.join(" ")
 }
 
 /** The first "Which ones" card, which follows the Order and never says newest under oldest. */

@@ -14,6 +14,7 @@ import { Layers, Search, Sparkles, X } from "lucide-react"
 import React from "react"
 import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
 import { FilterRow } from "@/components/filter-tree/FilterRow"
+import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { funnelledValues } from "@/lib/filter-tree"
 import {
@@ -31,13 +32,14 @@ import {
   activeFilters,
   capPhrase,
   clearChip,
-  labelOf,
   languageLabel,
   languageOptions,
   meaningQueryOnKey,
-  POST_ORDER_OPTIONS,
+  POST_SORT_OPTIONS,
+  postSortChoice,
+  postSortDirection,
+  postSortKey,
   type SearchMode,
-  VIEW_MEASURE_OPTIONS,
 } from "../lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS } from "../lib/posts/post-media"
 import type {
@@ -52,7 +54,8 @@ import {
   PostFiltersMenu,
   postVocabulary,
 } from "./PostFilterControls"
-import { Options, PerChannelForm, Pill, pillClass } from "./PostFilterParts"
+import { PerChannelForm, Pill, pillClass } from "./PostFilterParts"
+import { spotlitBar, useSpotlight } from "./post-card/ChannelSpotlight"
 
 /** What the bar reads and writes; `ScraperContext` provides all of it. */
 export interface FilterBarControls {
@@ -100,6 +103,8 @@ export interface PostFilterBarProps extends PostFilterProps {
   channelLanguages: string[]
   /** The selected Channels, which a Channel Condition picks from. */
   channelNames: string[]
+  /** A spotlight is on without the Account's filters, so the keyword is not applied. */
+  keywordIgnored?: boolean
   /** Called as a dropdown opens and closes, so counts load only then. */
   onCountingPillOpenChange: (open: boolean) => void
   /** The deployment's estimation floor, for the views editor's copy. */
@@ -202,6 +207,41 @@ function SearchBox({
   )
 }
 
+/**
+ * Post date, Views or Estimated views, and a direction (PTR-04). Choosing a
+ * measure sets what the views orders read and nothing else.
+ */
+function PostSortMenu({
+  order,
+  measure,
+  setOrder,
+  setMeasure,
+}: {
+  order: PostSortOrder
+  measure: ViewMeasure
+  setOrder: (order: PostSortOrder) => void
+  setMeasure: (measure: ViewMeasure) => void
+}) {
+  const key = postSortKey(order, measure)
+  const direction = postSortDirection(order)
+  const choose = (next: ReturnType<typeof postSortChoice>) => {
+    if (next.measure) setMeasure(next.measure)
+    setOrder(next.order)
+  }
+  return (
+    <SortPicker
+      options={POST_SORT_OPTIONS}
+      value={key}
+      onChange={(next) => choose(postSortChoice(next, direction))}
+      direction={direction}
+      onToggleDirection={() =>
+        choose(postSortChoice(key, direction === "asc" ? "desc" : "asc"))
+      }
+      testId="post-sort"
+    />
+  )
+}
+
 const countOf = (facets: { value: string; count: number }[] | undefined) => {
   const counts = new Map(facets?.map((f) => [f.value, f.count]))
   return (value: string) => counts.get(value)
@@ -294,29 +334,12 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 
           <span className="mx-1 h-5 w-px bg-app-ink/10" />
 
-          <Pill
-            label="Order"
-            value={labelOf(POST_ORDER_OPTIONS, s.postSortOrder)}
-            active={s.postSortOrder !== "newest"}
-            width="w-56"
-            testId="post-filter-pill-order"
-          >
-            <Options
-              options={POST_ORDER_OPTIONS}
-              value={s.postSortOrder}
-              onChange={s.setPostSortOrder}
-            />
-            <div className="mt-2 flex items-center justify-between gap-2 border-t border-app-ink/10 pt-2 text-[11px] text-app-ink/60">
-              The views orders read
-              <TgSegmentedControl
-                size="sm"
-                aria-label="The measure the views orders read"
-                value={s.viewMeasure}
-                onChange={s.setViewMeasure}
-                options={VIEW_MEASURE_OPTIONS}
-              />
-            </div>
-          </Pill>
+          <PostSortMenu
+            order={s.postSortOrder}
+            measure={s.viewMeasure}
+            setOrder={s.setPostSortOrder}
+            setMeasure={s.setViewMeasure}
+          />
           <Pill
             label="Per channel"
             value={capPhrase(
@@ -353,7 +376,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
         onChange={s.setPostFilter}
         vocabulary={vocabulary}
         testId="post-filter"
-        search={postSearch}
+        search={props.keywordIgnored ? "" : postSearch}
         shownCount={props.shownCount}
         totalCount={facets?.total ?? props.shownCount}
         approximate={
@@ -398,7 +421,9 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 
 /** The bar wired to the workspace's state. */
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
-  const controls = useScraper()
+  const spot = useSpotlight()
+  // A spotlight's tree is what the row shows and edits (PTR-04).
+  const { controls, keywordIgnored } = spotlitBar(useScraper(), spot)
   const { channels, selectedChannels } = useData()
   const { embeddingsEnabled } = useSettings()
   const { setActiveTab } = useUI()
@@ -407,7 +432,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   // load while it is showing as well as while a dropdown is open.
   const rowShowing =
     controls.postFilter.children.length > 0 || props.postSearch.trim() !== ""
-  const facets = usePostFacets(openPillCount > 0 || rowShowing)
+  const facets = usePostFacets(openPillCount > 0 || rowShowing, spot.spotlight)
   const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
     () => channels.map((c) => c.language).filter((code) => !!code) as string[],
@@ -421,6 +446,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
     <PostFilterBar
       {...props}
       controls={controls}
+      keywordIgnored={keywordIgnored}
       embeddingsEnabled={embeddingsEnabled}
       windowControl={
         <AnalysisWindowControl
