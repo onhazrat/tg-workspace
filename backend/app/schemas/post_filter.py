@@ -186,12 +186,16 @@ class PostFilterSnapshot(BaseModel):
 
 
 class SelectionRule(BaseModel):
-    """Select or deselect every Post a Post filter matches."""
+    """Select or deselect every Post a Post filter matches, or with `not` every Post it does not."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     kind: Literal["rule"]
     select: bool
+    # PTR-06. "Keep only shown" deselects NOT F, and a keyword or a cap has no
+    # inverse inside the tree, so the rule carries it. Left out when false, so
+    # every rule stored before it reads back as it was sent.
+    negated: bool = Field(False, alias="not", exclude_if=lambda negated: not negated)
     filter: PostFilterSnapshot = Field(
         default_factory=lambda: PostFilterSnapshot.model_validate({})
     )
@@ -229,7 +233,7 @@ PostSelection = Annotated[
 
 def select_all() -> list[SelectionRule | SelectionPick]:
     """The default selection: one rule, select every Post."""
-    return [SelectionRule(kind="rule", select=True)]
+    return [SelectionRule.model_validate({"kind": "rule", "select": True})]
 
 
 def to_steps(selection: list[SelectionRule | SelectionPick]) -> tuple[Step, ...]:
@@ -243,6 +247,7 @@ def to_steps(selection: list[SelectionRule | SelectionPick]) -> tuple[Step, ...]
         steps.append(
             Rule(
                 select=step.select,
+                negated=step.negated,
                 tree=None if snap.tree is None else snap.tree.to_tree(),
                 keyword=snap.keyword,
                 sort=snap.sort,

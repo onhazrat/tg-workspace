@@ -422,8 +422,13 @@ def _counts(client: TestClient, headers: dict[str, str], tree: Any) -> Any:
         headers=headers,
     )
     assert response.status_code == 200, response.text
-    # The shown counts; the selected ones are `test_post_selection.py`'s (PTR-05).
-    return {k: v for k, v in response.json().items() if k != "selected"}
+    # The shown counts; the selected ones are `test_post_selection.py`'s
+    # (PTR-05, PTR-06).
+    return {
+        k: v
+        for k, v in response.json().items()
+        if k not in ("selected", "selectedShown")
+    }
 
 
 def test_the_counts_are_exactly_what_the_filter_shows(
@@ -478,7 +483,10 @@ def test_facets_count_every_value_in_the_window_filters_aside(
         # The projection: exactly these keys, each value a count, no `null`.
         assert set(body) == {"total", "types", "languages", "media"}
         assert all(
-            set(f) == {"value", "count"} for k in body if k != "total" for f in body[k]
+            set(f) == {"value", "count", "selected"}
+            for k in body
+            if k != "total"
+            for f in body[k]
         )
         return {
             "total": body["total"],

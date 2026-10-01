@@ -133,6 +133,9 @@ class PostCountsResponse(BaseModel):
     # Per channel, how many Posts in the window the Post selection selects,
     # filters aside: what an Action covers (PTR-05).
     selected: dict[str, int]
+    # Per channel, how many of the Posts the filter shows are selected: the
+    # Adjust selection Venn's middle region (PTR-06).
+    selected_shown: dict[str, int] = Field(alias="selectedShown")
     # Posts the filter hid that an Estimated views bound could not judge for
     # being under the estimation floor; 0 with no such bound (PFB-03, PTR-03).
     too_new_to_judge: int = Field(alias="tooNewToJudge")
@@ -156,10 +159,12 @@ class ViewEstimateResponse(BaseModel):
 
 
 class PostFacetCount(BaseModel):
-    """How many Posts in the window have one value."""
+    """How many Posts in the window have one value, and how many of those are selected."""
 
     value: str
     count: int
+    # PTR-06. What a dropdown row's tick reads, filters aside.
+    selected: int
 
 
 # The Type, Media and Language dropdowns' counts (PTR-03); see
@@ -241,10 +246,15 @@ class PostFilteredRequest(PostScopeRequest):
     filter: FilterGroup | None = None
     # PTR-05. Omitted is the default, select all.
     selection: PostSelection | None = None
+    # PTR-06. Which Posts a cap keeps, so the counts can say how many of the
+    # Posts the feed shows are selected.
+    max_per_channel_mode: CapMode = PydanticField("ordered", alias="maxPerChannelMode")
+    sort: SortOrder = "newest"
+    seed: int = 0
 
 
 class PostFeedRequest(PostFilteredRequest):
-    """`PostFilteredRequest` plus the feed's paging, cap mode and sort.
+    """`PostFilteredRequest` plus the feed's paging, grouping and the selection's order.
 
     `limit`/`offset` keep the same bounds the query params enforced, so an
     out-of-range page is still a 422 rather than an unbounded read.
@@ -253,10 +263,11 @@ class PostFeedRequest(PostFilteredRequest):
     channel_name: str | None = PydanticField(None, alias="channelName")
     limit: int = PydanticField(DEFAULT_POST_PAGE_SIZE, ge=1, le=MAX_POST_PAGE_SIZE)
     offset: int = PydanticField(0, ge=0)
-    max_per_channel_mode: CapMode = PydanticField("ordered", alias="maxPerChannelMode")
-    sort: SortOrder = "newest"
     group_by_channel: bool = PydanticField(False, alias="groupByChannel")
-    seed: int = 0
+    # PTR-06. The selected Posts first, each part in the feed's own order;
+    # and only the selected Posts the filter shows, for copy and export.
+    selected_first: bool = PydanticField(False, alias="selectedFirst")
+    only_selected: bool = PydanticField(False, alias="onlySelected")
 
     def resolved_channel_names(self) -> list[str] | None:
         """`channelNames` wins; `channelName` is the single-channel shorthand.
@@ -270,6 +281,13 @@ class PostFeedRequest(PostFilteredRequest):
         if self.channel_name and self.channel_name.strip():
             return [self.channel_name.strip()]
         return None
+
+
+# PTR-06. The facets count the selected Posts of each value, filters aside.
+class PostFacetsRequest(PostWindowRequest):
+    """The Channels, the window and the Post selection."""
+
+    selection: PostSelection | None = None
 
 
 class PostLookupRef(BaseModel):

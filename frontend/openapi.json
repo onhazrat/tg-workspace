@@ -1960,7 +1960,7 @@
       "post": {
         "tags": ["data"],
         "summary": "List Posts",
-        "description": "One page of posts for a channel/date scope.\n\nWith no filter, no cap and ``sort=newest`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses the keyword, the Post filter, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.\n\nEach post says whether the Post selection selects it.",
+        "description": "One page of posts for a channel/date scope.\n\nWith no filter, no cap and ``sort=newest`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses the keyword, the Post filter, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.\n\nEach post says whether the Post selection selects it. ``selectedFirst``\nlists the selected Posts before the rest, and ``onlySelected`` returns only\nthe selected Posts the filter shows.",
         "operationId": "data-list_posts",
         "requestBody": {
           "content": {
@@ -2001,7 +2001,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Counts",
-        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array. Also says how many Posts an Estimated\nviews bound hid for being too new to judge, and how many Posts in the\nwindow the Post selection selects, filters aside.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
+        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array. Also says how many Posts an Estimated\nviews bound hid for being too new to judge, how many Posts in the window\nthe Post selection selects, filters aside, and how many of the Posts the\nfilter shows it selects.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
         "operationId": "data-posts_counts",
         "requestBody": {
           "content": {
@@ -2057,12 +2057,12 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Facets",
-        "description": "How many Posts in the window have each Type, media kind and Language.",
+        "description": "How many Posts in the window have each Type, media kind and Language, and how many of those are selected.",
         "operationId": "data-posts_facets",
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostWindowRequest" }
+              "schema": { "$ref": "#/components/schemas/PostFacetsRequest" }
             }
           },
           "required": true
@@ -8403,22 +8403,84 @@
             "type": "object",
             "title": "Selected"
           },
+          "selectedShown": {
+            "additionalProperties": { "type": "integer" },
+            "type": "object",
+            "title": "Selectedshown"
+          },
           "tooNewToJudge": { "type": "integer", "title": "Toonewtojudge" }
         },
         "type": "object",
-        "required": ["counts", "selected", "tooNewToJudge"],
+        "required": ["counts", "selected", "selectedShown", "tooNewToJudge"],
         "title": "PostCountsResponse",
         "description": "Per-channel Post counts for a scope, and how many were too new to judge."
       },
       "PostFacetCount": {
         "properties": {
           "value": { "type": "string", "title": "Value" },
-          "count": { "type": "integer", "title": "Count" }
+          "count": { "type": "integer", "title": "Count" },
+          "selected": { "type": "integer", "title": "Selected" }
         },
         "type": "object",
-        "required": ["value", "count"],
+        "required": ["value", "count", "selected"],
         "title": "PostFacetCount",
-        "description": "How many Posts in the window have one value."
+        "description": "How many Posts in the window have one value, and how many of those are selected."
+      },
+      "PostFacetsRequest": {
+        "properties": {
+          "channelNames": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Channelnames"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Input" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Input"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PostFacetsRequest",
+        "description": "The Channels, the window and the Post selection."
       },
       "PostFacetsResponse": {
         "properties": {
@@ -8516,6 +8578,19 @@
             ],
             "title": "Selection"
           },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["ordered", "random"],
+            "title": "Maxperchannelmode",
+            "default": "ordered"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "channelName": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Channelname"
@@ -8533,29 +8608,26 @@
             "title": "Offset",
             "default": 0
           },
-          "maxPerChannelMode": {
-            "type": "string",
-            "enum": ["ordered", "random"],
-            "title": "Maxperchannelmode",
-            "default": "ordered"
-          },
-          "sort": {
-            "type": "string",
-            "enum": ["newest", "oldest", "most_views", "fewest_views"],
-            "title": "Sort",
-            "default": "newest"
-          },
           "groupByChannel": {
             "type": "boolean",
             "title": "Groupbychannel",
             "default": false
           },
-          "seed": { "type": "integer", "title": "Seed", "default": 0 }
+          "selectedFirst": {
+            "type": "boolean",
+            "title": "Selectedfirst",
+            "default": false
+          },
+          "onlySelected": {
+            "type": "boolean",
+            "title": "Onlyselected",
+            "default": false
+          }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "PostFeedRequest",
-        "description": "`PostFilteredRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
+        "description": "`PostFilteredRequest` plus the feed's paging, grouping and the selection's order.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
       },
       "PostFilterSnapshot-Input": {
         "properties": {
@@ -8720,7 +8792,20 @@
               { "type": "null" }
             ],
             "title": "Selection"
-          }
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["ordered", "random"],
+            "title": "Maxperchannelmode",
+            "default": "ordered"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 }
         },
         "additionalProperties": false,
         "type": "object",
@@ -8940,40 +9025,6 @@
         "required": ["id", "channelName", "postId", "language"],
         "title": "PostTranslationResponse",
         "description": "One post translated into one language."
-      },
-      "PostWindowRequest": {
-        "properties": {
-          "channelNames": {
-            "anyOf": [
-              { "items": { "type": "string" }, "type": "array" },
-              { "type": "null" }
-            ],
-            "title": "Channelnames"
-          },
-          "window": {
-            "anyOf": [
-              {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
-                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
-                ],
-                "discriminator": {
-                  "propertyName": "mode",
-                  "mapping": {
-                    "fixed": "#/components/schemas/FixedAnalysisWindow",
-                    "live": "#/components/schemas/LiveAnalysisWindow"
-                  }
-                }
-              },
-              { "type": "null" }
-            ],
-            "title": "Window"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "PostWindowRequest",
-        "description": "The Channels and the Analysis window, carried in a request body.\n\nThe channel selection can run to the full account \u2014 over a thousand handles \u2014\nwhich as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and\nserver header limits. A body has no such ceiling."
       },
       "PromptResponse": {
         "properties": {
@@ -9910,25 +9961,27 @@
         "properties": {
           "kind": { "type": "string", "const": "rule", "title": "Kind" },
           "select": { "type": "boolean", "title": "Select" },
+          "not": { "type": "boolean", "title": "Not", "default": false },
           "filter": { "$ref": "#/components/schemas/PostFilterSnapshot-Input" }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["kind", "select"],
         "title": "SelectionRule",
-        "description": "Select or deselect every Post a Post filter matches."
+        "description": "Select or deselect every Post a Post filter matches, or with `not` every Post it does not."
       },
       "SelectionRule-Output": {
         "properties": {
           "kind": { "type": "string", "const": "rule", "title": "Kind" },
           "select": { "type": "boolean", "title": "Select" },
+          "not": { "type": "boolean", "title": "Not", "default": false },
           "filter": { "$ref": "#/components/schemas/PostFilterSnapshot-Output" }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["kind", "select"],
         "title": "SelectionRule",
-        "description": "Select or deselect every Post a Post filter matches."
+        "description": "Select or deselect every Post a Post filter matches, or with `not` every Post it does not."
       },
       "ServerTimeResponse": {
         "properties": {

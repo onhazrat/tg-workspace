@@ -23,6 +23,15 @@ Ids run in time order, so the feed's newest-first order is the ids descending.
   both-orders case among them
 * drop the follow scope from the read that freezes the references -> the
   frozen-references case, which then holds the foreign Post 6
+
+PTR-06's tools, each watched to fail the same way:
+
+* order the selected Posts last -> the 5 Selected first cases
+* drop `onlySelected`'s predicate -> 2 cases
+* ignore a rule's `not` -> the negated-rule case
+* count every shown Post as selected -> the Venn's count case
+* count a value's Posts as all selected, Languages or Types and media -> the
+  facets case
 """
 
 from __future__ import annotations
@@ -425,7 +434,7 @@ def test_the_lookup_flags_each_post_with_the_selection(
 def test_the_reads_add_selected_and_nothing_else(
     client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
 ) -> None:
-    """The projection: one new key on a Post row, one on the counts."""
+    """The projection: one new key on a Post row, two on the counts."""
     operator, _other = seeded
     post_keys = {f.alias or name for name, f in PostResponse.model_fields.items()}
 
@@ -444,7 +453,7 @@ def test_the_reads_add_selected_and_nothing_else(
     assert {frozenset(row) for row in [*feed, *lookup]} == {
         frozenset(post_keys | {"selected"})
     }
-    assert set(counts) == {"counts", "selected", "tooNewToJudge"}
+    assert set(counts) == {"counts", "selected", "selectedShown", "tooNewToJudge"}
 
 
 # ---- Actions -----------------------------------------------------------------
@@ -512,3 +521,202 @@ def test_a_discovery_report_covers_exactly_the_selection(
 
     assert response.status_code == 200, response.text
     assert response.json()["postsInScope"] == len(SELECTED)
+
+
+# ---- The selection tools (PTR-06) -------------------------------------------
+
+
+def _feed(client: TestClient, headers: dict[str, str], **body: Any) -> list[int]:
+    response = client.post(
+        f"{PREFIX}/posts",
+        json={"channelNames": ALL, "window": BOTH, **body},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return [row["id"] for row in response.json()]
+
+
+#: Selects the `en` Posts, 5 and 2, and nothing else.
+EN_ONLY = [rule(True), rule(False, lang("fa"))]
+
+
+@pytest.mark.parametrize(
+    ("view", "ordered"),
+    [
+        ({"sort": "newest"}, [5, 2, 4, 3, 1]),
+        ({"sort": "oldest"}, [2, 5, 1, 3, 4]),
+        # Grouped: each part places its own blocks by the feed's order.
+        ({"sort": "newest", "groupByChannel": True}, [5, 2, 4, 3, 1]),
+        ({"sort": "oldest", "groupByChannel": True}, [2, 5, 1, 3, 4]),
+        # Under a cap the parts hold only what the cap shows: 5 and 3.
+        ({"sort": "newest", "maxPerChannel": 1}, [5, 3]),
+    ],
+    ids=["newest", "oldest", "grouped-newest", "grouped-oldest", "capped"],
+)
+def test_selected_first_lists_the_selected_before_the_rest_in_the_feeds_order(
+    client: TestClient,
+    seeded: tuple[dict[str, str], dict[str, str]],
+    view: dict[str, Any],
+    ordered: list[int],
+) -> None:
+    operator, _other = seeded
+
+    whole = _feed(client, operator, selection=EN_ONLY, selectedFirst=True, **view)
+    pages = [
+        _feed(
+            client,
+            operator,
+            selection=EN_ONLY,
+            selectedFirst=True,
+            limit=2,
+            offset=offset,
+            **view,
+        )
+        for offset in (0, 2, 4)
+    ]
+
+    assert whole == ordered
+    assert [post_id for page in pages for post_id in page] == ordered
+    assert sorted(_feed(client, operator, selection=EN_ONLY, **view)) == sorted(
+        ordered
+    ), "the switch reorders and hides nothing"
+
+
+def test_only_selected_keeps_the_selected_posts_the_filter_shows(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, other = seeded
+    steps = [rule(True), pick(False, "ps_a", 3)]
+
+    assert _feed(
+        client, operator, selection=steps, onlySelected=True, filter=lang("fa")
+    ) == [4, 1]
+    # The cap shows 5 and 3; Post 1 is selected and not shown, so not taken.
+    assert (
+        _feed(
+            client,
+            operator,
+            selection=[rule(False), pick(True, "ps_a", 1)],
+            onlySelected=True,
+            maxPerChannel=1,
+        )
+        == []
+    )
+    # Another account's copy reads its own Follows; its Pick on ps_a is nothing.
+    assert (
+        _feed(
+            client,
+            other,
+            selection=[rule(False), pick(True, "ps_a", 1)],
+            onlySelected=True,
+        )
+        == []
+    )
+
+
+def test_only_selected_is_bounded_at_the_page_limit(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _other = seeded
+
+    assert len(_feed(client, operator, onlySelected=True, limit=5000)) == 5
+    response = client.post(
+        f"{PREFIX}/posts",
+        json={"channelNames": ALL, "onlySelected": True, "limit": 5001},
+        headers=operator,
+    )
+    assert response.status_code == 422
+
+
+def test_counts_report_the_selected_posts_the_filter_shows(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """The Venn's middle region; the other two are subtractions."""
+    operator, _other = seeded
+
+    def counts(**body: Any) -> Any:
+        response = client.post(
+            f"{PREFIX}/posts/counts",
+            json={"channelNames": ALL, "window": BOTH, **body},
+            headers=operator,
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    filtered = counts(filter=lang("fa"), selection=[rule(True), pick(False, "ps_a", 1)])
+    assert filtered["counts"] == {"ps_a": 2, "ps_b": 1}
+    assert filtered["selected"] == {"ps_a": 2, "ps_b": 2}
+    assert filtered["selectedShown"] == {"ps_a": 1, "ps_b": 1}
+
+    picked = [rule(False), pick(True, "ps_a", 3)]
+    # The cap keeps each Channel's first Post in the feed's order.
+    assert counts(selection=picked, maxPerChannel=1)["selectedShown"] == {"ps_a": 1}
+    assert (
+        counts(selection=picked, maxPerChannel=1, sort="oldest")["selectedShown"] == {}
+    )
+
+
+def test_facets_report_the_selected_posts_of_each_value(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Over the window, filters aside, as a tick on a row ignores the filter."""
+    operator, other = seeded
+
+    def facets(
+        headers: dict[str, str], key: str = "languages", **body: Any
+    ) -> dict[str, list[int]]:
+        response = client.post(
+            f"{PREFIX}/posts/facets",
+            json={"channelNames": ALL, "window": BOTH, **body},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        return {
+            row["value"]: [row["selected"], row["count"]]
+            for row in response.json()[key]
+            if row["count"]
+        }
+
+    assert facets(operator) == {"fa": [3, 3], "en": [2, 2]}
+    assert facets(operator, selection=EN_ONLY) == {"fa": [0, 3], "en": [2, 2]}
+    assert facets(operator, selection=[rule(False), pick(True, "ps_b", 4)]) == {
+        "fa": [1, 3],
+        "en": [0, 2],
+    }
+    assert facets(other, selection=EN_ONLY) == {"fa": [0, 2], "en": [1, 1]}
+    # Every Post is an original with no media, so those rows count all five.
+    assert facets(operator, "types", selection=EN_ONLY) == {"original": [2, 5]}
+    assert facets(operator, "media", selection=EN_ONLY) == {"text_only": [2, 5]}
+
+
+def test_a_negated_rule_reaches_every_post_its_filter_does_not(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """ "Keep only shown" deselects NOT F, which a keyword or cap cannot be inverted
+    into inside the tree."""
+    operator, _other = seeded
+
+    def negated(select: bool, tree: Any = None, **snapshot: Any) -> dict[str, Any]:
+        return {**rule(select, tree, **snapshot), "not": True}
+
+    assert _chosen(
+        _selected(client, operator, [rule(True), negated(False, lang("fa"))])
+    ) == [
+        4,
+        3,
+        1,
+    ]
+    assert _chosen(
+        _selected(client, operator, [rule(True), negated(False, keyword="post 3")])
+    ) == [3]
+    assert _chosen(
+        _selected(client, operator, [rule(True), negated(False, maxPerChannel=1)])
+    ) == [5, 3]
+    # NOT of everything is nothing.
+    assert _chosen(_selected(client, operator, [rule(True), negated(False)])) == [
+        5,
+        4,
+        3,
+        2,
+        1,
+    ]
