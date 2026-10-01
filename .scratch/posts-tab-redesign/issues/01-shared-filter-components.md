@@ -10,7 +10,7 @@ filter components".
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 The prototype branch `claude/mattpocock-skills-post-card-4f5186` already made this move and its
 shape is the one to rebuild; rewrite it with tests rather than copying. The vocabulary, from the
@@ -36,33 +36,35 @@ type FilterVocabulary<C> = PickerVocabulary<C> & {
 
 ### The tree module
 
-- [ ] Generic over the Condition type: a Condition names its kind, and a funnelled one also holds
+- [x] Generic over the Condition type: a Condition names its kind, and a funnelled one also holds
       a value. Evaluation takes the test as an argument; an empty group passes, negated or not
-- [ ] Every operation the Channel filter has today moves unchanged: append, remove with pruning
+- [x] Every operation the Channel filter has today moves unchanged: append, remove with pruning
       (no "()" or "(a)" left behind, NOT kept when unwrapping), replace, set the joiner, toggle
       NOT (the root too), move (never a group into itself), wrap, group-by-drop, unwrap, funnel
       add, remove and clear
-- [ ] The Channel filter keeps its own Conditions, its evaluation of them, its labels and its URL
+- [x] The Channel filter keeps its own Conditions, its evaluation of them, its labels and its URL
       text form, and builds on the shared module; its public names stay importable from where
       they are today, so nothing else in the codebase changes
 
 ### The components
 
-- [ ] The facet dropdown takes rows that carry their own selected count, total, tick state
+- [x] The facet dropdown takes rows that carry their own selected count, total, tick state
       (all, some, none) and a busy flag, plus a tick hint line, so each tab computes them its own
       way. The Channels wrapper computes them exactly as today
-- [ ] The filter row and the condition picker take a vocabulary and a test-id prefix; the
-      Channels row and picker are thin wrappers that pass the Channels vocabulary
-- [ ] The filter row can show its count as approximate with a tooltip saying why (unused by
+- [x] The filter row and the condition picker take a vocabulary and a test-id prefix; the
+      Channels row and picker are thin wrappers that pass the Channels vocabulary. As built,
+      only the row takes the prefix, since the picker has no test ids; the Channels picker is
+      `channelVocabulary`, which the Channels row passes to the shared row
+- [x] The filter row can show its count as approximate with a tooltip saying why (unused by
       Channels; Posts may need it while a count is partial)
 
 ### Tests
 
-- [ ] Every existing Channels test passes unchanged: the Channel filter, the filter row, the
+- [x] Every existing Channels test passes unchanged: the Channel filter, the filter row, the
       facet menu, the metric editor, the bar and the grid. A change to any of them is a sign the
       move changed behaviour
-- [ ] The shared tree module has its own tests over a toy Condition type, covering evaluation,
+- [x] The shared tree module has its own tests over a toy Condition type, covering evaluation,
       pruning, NOT through unwrap, the move guard and funnels, so it is not tested only through
       Channels
-- [ ] A component test for the shared filter row and the shared picker over a toy vocabulary
+- [x] A component test for the shared filter row and the shared picker over a toy vocabulary
       (the frontend CRAP ratchet fails a new branching component without one)

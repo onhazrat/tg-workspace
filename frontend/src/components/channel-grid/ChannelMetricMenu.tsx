@@ -1,5 +1,6 @@
 import { ChevronDown, SlidersHorizontal } from "lucide-react"
 import { useState } from "react"
+import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { pillClass } from "@/components/PostFilterParts"
 import type { MetricAtom, MetricCond } from "@/lib/channels/channel-filter"
 import {
@@ -9,7 +10,6 @@ import {
   type MetricData,
   type MetricKey,
 } from "@/lib/channels/channel-metrics"
-import { BarHeading, BarPopover, BarSearch } from "./BarPopover"
 import { ChannelMetricEditor } from "./ChannelMetricEditor"
 
 /**

@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { Popover } from "radix-ui"
 import type React from "react"
+import { BarHeading, BarPopover } from "@/components/BarPopover"
 import { TgButton } from "@/components/ui/tg-button"
 import type { TagSuggestion } from "@/lib/channels/bulk-tag-suggestions"
 import type { CardZoom } from "@/lib/channels/card-zoom"
@@ -18,7 +19,6 @@ import {
   actionTargets,
 } from "@/lib/channels/selection-regions"
 import type { ChannelSettingGroup } from "@/types"
-import { BarHeading, BarPopover } from "./BarPopover"
 import { BarToggle, CardSizeSwitch } from "./ChannelBarControls"
 import {
   ActionLimitIndicator,

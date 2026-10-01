@@ -9,11 +9,11 @@ import {
   Sparkles,
 } from "lucide-react"
 import { useState } from "react"
+import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { Options, Pill, pillClass } from "@/components/PostFilterParts"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
-import { BarHeading, BarPopover, BarSearch } from "./BarPopover"
 
 const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
   { value: "last_updated", label: "Last updated" },

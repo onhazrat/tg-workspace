@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react"
 import { useState } from "react"
 import type { FollowJobStatus } from "@/api"
+import { BarHeading, BarPopover } from "@/components/BarPopover"
 import { pillClass } from "@/components/PostFilterParts"
 import { TgButton } from "@/components/ui/tg-button"
 import {
@@ -8,7 +9,6 @@ import {
   parsePastedHandles,
 } from "@/lib/channels/paste-handles"
 import type { ChannelSettingGroup } from "@/types"
-import { BarHeading, BarPopover } from "./BarPopover"
 
 export type FollowPasteBoxProps = {
   /** The names of the Channels already followed. */
