@@ -58,21 +58,6 @@ def test_keyword_filter_scopes_discovery() -> None:
         assert set(_totals(scoped)) == {"alpha_news"}
 
 
-def test_forwarded_filter_scopes_discovery() -> None:
-    with Session(engine) as session:
-        _add(session, 1, text="see @alpha_news", forwarded_from=None)
-        _add(session, 2, text="body", forwarded_from="SomeSource")
-        session.commit()
-        # original-only removes the forwarded post, so its forward ref is gone.
-        scoped = compute_discover_candidates(
-            session,
-            channel_names=["carrier"],
-            filters=PostFilters(forwarded="original"),
-            user_id=ANY_READER,
-        )
-        assert set(_totals(scoped)) == {"alpha_news"}
-
-
 def test_latest_cap_limits_posts_per_channel() -> None:
     with Session(engine) as session:
         # 5 posts, newest (higher ts) mention gamma, older mention delta.

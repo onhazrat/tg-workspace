@@ -32,7 +32,12 @@ type FacetMenuProps = {
   funnelled: string[]
   /** A funnelled id's name, including one the search has hidden. */
   labelOf: (id: string) => string
-  onToggleSelect: (row: FacetMenuRow) => void
+  /**
+   * A tick that selects every member of the row. Without one the rows have
+   * no tick column and the count is the row's `total` alone, as on the Posts
+   * tab until its ticks record Selection rules (PTR-06).
+   */
+  onToggleSelect?: (row: FacetMenuRow) => void
   onFunnel: (id: string, on: boolean) => void
   onClearFunnels: () => void
   /**
@@ -42,6 +47,51 @@ type FacetMenuProps = {
   search?: { value: string; onChange: (value: string) => void }
   /** The line over the rows; what a tick selects differs by tab. */
   tickHint?: string
+  /** Called as the dropdown opens and closes, so a tab can load its counts then. */
+  onOpenChange?: (open: boolean) => void
+}
+
+function Tick({ row }: { row: FacetMenuRow }) {
+  return (
+    <span
+      aria-hidden
+      className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border text-[9px] leading-none ${
+        row.tick === "true"
+          ? "border-app-ink bg-app-ink text-app-bg"
+          : row.tick === "mixed"
+            ? "border-app-ink/60 bg-app-ink/20"
+            : "border-app-ink/30"
+      }`}
+    >
+      {row.busy ? (
+        <Loader2 size={9} className="animate-spin" />
+      ) : row.tick === "true" ? (
+        "✓"
+      ) : row.tick === "mixed" ? (
+        "–"
+      ) : (
+        ""
+      )}
+    </span>
+  )
+}
+
+function RowLabel({ row }: { row: FacetMenuRow }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block truncate font-semibold">
+        {row.label}
+        {row.hint && (
+          <span className="ml-1.5 font-normal text-app-ink/40">{row.hint}</span>
+        )}
+      </span>
+      {row.explanation && (
+        <span className="block text-[11px] text-app-ink/50">
+          {row.explanation}
+        </span>
+      )}
+    </span>
+  )
 }
 
 /**
@@ -63,7 +113,9 @@ export function FacetMenu({
   onClearFunnels,
   search,
   tickHint = "Tick selects, the funnel shows only",
+  onOpenChange,
 }: FacetMenuProps) {
+  const ticks = onToggleSelect !== undefined
   const [ownQuery, setOwnQuery] = useState("")
   const query = search ? search.value : ownQuery
   const needle = query.trim().toLowerCase()
@@ -72,7 +124,9 @@ export function FacetMenu({
     : rows.filter((row) =>
         `${row.label} ${row.hint ?? ""}`.toLowerCase().includes(needle),
       )
-  const withSelection = rows.filter((row) => row.selected > 0).length
+  const withSelection = ticks
+    ? rows.filter((row) => row.selected > 0).length
+    : 0
   const title =
     funnelled.length > 1
       ? `${funnelled.length} ${label.toLowerCase()}`
@@ -84,6 +138,7 @@ export function FacetMenu({
   return (
     <BarPopover
       width="w-80"
+      onOpenChange={onOpenChange}
       trigger={
         <button
           type="button"
@@ -108,8 +163,8 @@ export function FacetMenu({
         placeholder={`Search ${label.toLowerCase()}...`}
       />
       <div className="flex justify-between px-2 pb-1 pt-1 text-[11px] text-app-ink/50">
-        <span>{tickHint}</span>
-        <span>selected/total</span>
+        <span>{ticks ? tickHint : "The funnel shows only"}</span>
+        <span>{ticks ? "selected/total" : "in the window"}</span>
       </div>
       {active && (
         <button
@@ -133,57 +188,33 @@ export function FacetMenu({
           <div key={row.id}>
             {heading && <BarHeading>Derived</BarHeading>}
             <div className="group flex items-center gap-1 rounded-md hover:bg-app-ink/5">
-              {/* biome-ignore lint/a11y/useSemanticElements: a native checkbox cannot say "mixed" without a ref, and a partly selected row must. */}
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={row.tick}
-                disabled={row.busy}
-                data-testid={`${testId}-row-${row.id}`}
-                onClick={() => onToggleSelect(row)}
-                className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
-              >
-                <span
-                  aria-hidden
-                  className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border text-[9px] leading-none ${
-                    row.tick === "true"
-                      ? "border-app-ink bg-app-ink text-app-bg"
-                      : row.tick === "mixed"
-                        ? "border-app-ink/60 bg-app-ink/20"
-                        : "border-app-ink/30"
-                  }`}
+              {ticks ? (
+                // biome-ignore lint/a11y/useSemanticElements: a native checkbox cannot say "mixed" without a ref, and a partly selected row must.
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={row.tick}
+                  disabled={row.busy}
+                  data-testid={`${testId}-row-${row.id}`}
+                  onClick={() => onToggleSelect(row)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
                 >
-                  {row.busy ? (
-                    <Loader2 size={9} className="animate-spin" />
-                  ) : row.tick === "true" ? (
-                    "✓"
-                  ) : row.tick === "mixed" ? (
-                    "–"
-                  ) : (
-                    ""
-                  )}
+                  <Tick row={row} />
+                  <RowLabel row={row} />
+                </button>
+              ) : (
+                <span
+                  data-testid={`${testId}-row-${row.id}`}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5"
+                >
+                  <RowLabel row={row} />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold">
-                    {row.label}
-                    {row.hint && (
-                      <span className="ml-1.5 font-normal text-app-ink/40">
-                        {row.hint}
-                      </span>
-                    )}
-                  </span>
-                  {row.explanation && (
-                    <span className="block text-[11px] text-app-ink/50">
-                      {row.explanation}
-                    </span>
-                  )}
-                </span>
-              </button>
+              )}
               <span
                 data-testid={`${testId}-count-${row.id}`}
                 className="font-mono text-[10px] text-app-ink/50"
               >
-                {row.selected}/{row.total}
+                {ticks ? `${row.selected}/${row.total}` : row.total}
               </span>
               <button
                 type="button"

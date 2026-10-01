@@ -5,8 +5,7 @@ import { useEffect, useState } from "react"
 import {
   useLiveWindowRefresh,
   usePostsFeed,
-  useScopedPostCounts,
-  useTooNewToJudge,
+  useShownPostCounts,
 } from "@/hooks/usePostsView"
 import type {
   MaxPostsPerChannelMode,
@@ -72,8 +71,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     usePostsFeed()
   const [compact, setCompact] = useSessionFlag("postFeed_compactGrid")
   const [keyboard, setKeyboard] = useSessionFlag("postFeed_keyboard")
-  const counts = useScopedPostCounts()
-  const tooNewToJudge = useTooNewToJudge()
+  const { counts, tooNewToJudge } = useShownPostCounts()
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
 
   // Posts is the surface a Live window is watched on, so it is the surface that

@@ -12,6 +12,11 @@
  * back out of them would be inventing an intent. End gap needs no restoring at
  * all — it is derived against the synchronized current minute, so it is true
  * the moment the Fixed pair lands.
+ *
+ * An Artifact made before PTR-03 froze the flat Type, media, Language and
+ * views filters. They come back as the Post filter that says the same thing,
+ * so the restored view shows the Posts that Artifact read; one made since
+ * froze none and clears the Post filter.
  */
 
 import { useCallback } from "react"
@@ -20,13 +25,37 @@ import type { FrozenScope } from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
+import { append } from "@/lib/filter-tree"
+import {
+  addPostFunnel,
+  emptyPostFilter,
+  type PostFilter,
+} from "@/lib/posts/post-filter"
 import type {
   MaxPostsPerChannelMode,
-  MediaFilterValue,
   PostSortOrder,
   ViewMeasure,
-  ViewsFilter,
 } from "@/lib/posts/post-view"
+
+/** A frozen Scope's flat filters as the Post filter that says the same thing. */
+function postFilterFromScope(scope: FrozenScope): PostFilter {
+  let filter = emptyPostFilter()
+  if (scope.forwarded && scope.forwarded !== "all")
+    filter = addPostFunnel(filter, "type", scope.forwarded)
+  for (const kind of new Set(scope.media ?? []))
+    filter = addPostFunnel(filter, "media", kind)
+  for (const code of new Set(scope.languages ?? []))
+    filter = addPostFunnel(filter, "language", code)
+  if (scope.views) {
+    const { op, value } = scope.views
+    filter = append(filter, "root", {
+      type: "views",
+      measure: scope.viewMeasure ?? "estimated",
+      ...(op === "gte" ? { min: value } : { max: value }),
+    })
+  }
+  return filter
+}
 
 /**
  * The workspace filters a frozen Scope puts back, with each absent field reset.
@@ -38,11 +67,8 @@ import type {
 export function workspaceFromScope(scope: FrozenScope): {
   channels: Set<string>
   keyword: string
-  forwarded: NonNullable<FrozenScope["forwarded"]>
-  media: MediaFilterValue
-  languages: string[]
+  postFilter: PostFilter
   viewMeasure: ViewMeasure
-  views: ViewsFilter | null
   maxPerChannel: number
   maxPerChannelMode: MaxPostsPerChannelMode
   sort: PostSortOrder
@@ -51,11 +77,8 @@ export function workspaceFromScope(scope: FrozenScope): {
   return {
     channels: new Set(scope.channels ?? []),
     keyword: scope.keyword ?? "",
-    forwarded: scope.forwarded ?? "all",
-    media: [...new Set(scope.media ?? [])],
-    languages: [...new Set(scope.languages ?? [])],
+    postFilter: postFilterFromScope(scope),
     viewMeasure: scope.viewMeasure ?? "estimated",
-    views: scope.views ?? null,
     maxPerChannel: scope.maxPerChannel ?? 0,
     maxPerChannelMode: scope.maxPerChannelMode ?? "ordered",
     sort: scope.sort ?? "newest",
@@ -70,11 +93,8 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
     setPostSearch,
     setSemanticSearchQuery,
     setRelatedPostSearch,
-    setForwardedFilter,
-    setMediaFilter,
-    setLanguageFilter,
+    setPostFilter,
     setViewMeasure,
-    setViewsFilter,
     setMaxPostsPerChannel,
     setMaxPostsPerChannelMode,
     setPostSortOrder,
@@ -87,11 +107,8 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setSelectedChannels(next.channels)
       setFixedRange(scope.start, scope.end)
       setPostSearch(next.keyword)
-      setForwardedFilter(next.forwarded)
-      setMediaFilter(next.media)
-      setLanguageFilter(next.languages)
+      setPostFilter(next.postFilter)
       setViewMeasure(next.viewMeasure)
-      setViewsFilter(next.views)
       setMaxPostsPerChannel(next.maxPerChannel)
       setMaxPostsPerChannelMode(next.maxPerChannelMode)
       setPostSortOrder(next.sort)
@@ -107,11 +124,8 @@ export function useApplyArtifactScope(): (scope: FrozenScope) => void {
       setSelectedChannels,
       setFixedRange,
       setPostSearch,
-      setForwardedFilter,
-      setMediaFilter,
-      setLanguageFilter,
+      setPostFilter,
       setViewMeasure,
-      setViewsFilter,
       setMaxPostsPerChannel,
       setMaxPostsPerChannelMode,
       setPostSortOrder,

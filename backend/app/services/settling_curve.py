@@ -23,9 +23,10 @@ from app.jobs.settings import load_reach_settings
 from app.models_tg import Post, SettlingCurveFit, ViewObservation
 from app.services.post_filters import (
     VIEW_SORTS,
+    TreeGroup,
     ViewMeasure,
     ViewReading,
-    ViewsThreshold,
+    tree_measures,
 )
 from app.services.reach import (
     MS_PER_HOUR,
@@ -72,21 +73,33 @@ def current_estimate(session: Session) -> tuple[CurvePoints, ReachSettings]:
 
 
 def view_reading(
-    session: Session,
-    measure: ViewMeasure,
-    *,
-    views: ViewsThreshold | None = None,
-    sort: str = "newest",
+    session: Session, measure: ViewMeasure, *, sort: str = "newest"
 ) -> ViewReading:
-    """What "views" means for one request (PFB-03, ADR-025).
+    """What the views orders read for one request (PFB-03, ADR-025).
 
-    The one place that decides whether a Scope reads an Estimated View count:
-    only a threshold or a views order does, so only then are the curve and the
-    settings read. Per request, never stored, so a refit reaches the next page.
+    The curve and the settings are read only when a views order will read an
+    Estimated View count. Per request, never stored, so a refit reaches the
+    next page.
     """
-    if measure == "views" or (views is None and sort not in VIEW_SORTS):
+    if measure == "views" or sort not in VIEW_SORTS:
         return ViewReading(measure)
     return ViewReading(measure, *current_estimate(session))
+
+
+def tree_readings(
+    session: Session, tree: TreeGroup | None
+) -> dict[ViewMeasure, ViewReading]:
+    """One reading per measure a Post filter's views bounds name (PTR-03).
+
+    The curve is read only when a bound names the Estimated View count.
+    """
+    measures = tree_measures(tree) if tree is not None else frozenset()
+    readings: dict[ViewMeasure, ViewReading] = {}
+    if "views" in measures:
+        readings["views"] = ViewReading("views")
+    if "estimated" in measures:
+        readings["estimated"] = ViewReading("estimated", *current_estimate(session))
+    return readings
 
 
 def observed_pairs(session: Session) -> ObservedPairs:

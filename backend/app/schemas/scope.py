@@ -31,7 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.analysis_window import AnalysisWindowInput
 from app.services.post_filters import CapMode as CapMode
-from app.services.post_filters import FeedSort, ForwardedFilter, ViewsOp, ViewsThreshold
+from app.services.post_filters import FeedSort, ForwardedFilter, ViewsOp
 from app.services.post_filters import MediaKind as MediaKind
 from app.services.post_filters import ViewMeasure as ViewMeasure
 
@@ -115,15 +115,11 @@ def scope_key(scope: FrozenScope | None) -> dict[str, Any]:
 class ViewsFilter(BaseModel):
     """At least or at most a number of views."""
 
-    # `extra="forbid"` for the reason the Scope has it: a key this server does
-    # not read is a 422, never a threshold that quietly means something else.
+    # Read-only since PTR-03: only a frozen Scope from before it holds one.
     model_config = ConfigDict(extra="forbid")
 
     op: ViewsOp
     value: int = Field(ge=0)
-
-    def threshold(self) -> ViewsThreshold:
-        return ViewsThreshold(self.op, self.value)
 
 
 class ScopedPostRef(BaseModel):
@@ -143,16 +139,9 @@ class _ScopeFilters(BaseModel):
 
     channels: list[str] = Field(default_factory=list)
     keyword: str | None = None
-    forwarded: ForwardedFilter = "all"
-    # The Post's own Language, any of these; empty for any (PFB-02). A Post
-    # whose Language is unread matches no set.
-    languages: list[str] = Field(default_factory=list)
-    media: list[MediaKind] = Field(default_factory=list)
-    # What `views` and the views orders read (PFB-03, ADR-025). A Scope stored
-    # before either field reads as `estimated` and no threshold, which filters
-    # nothing and changes no order.
+    # What the views orders read (PFB-03, ADR-025). A Scope stored before the
+    # field reads as `estimated`, which changes no order.
     view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")
-    views: ViewsFilter | None = None
     max_per_channel: int = Field(0, alias="maxPerChannel", ge=0)
     max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
     sort: SortOrder = "newest"
@@ -192,6 +181,15 @@ class ScopeSubmission(_ScopeFilters):
 
 class FrozenScope(_ScopeFilters):
     """The immutable Scope an Artifact was produced from."""
+
+    # The flat filters, read-only (PTR-03, ADR-026). They left the Scope: a
+    # Post filter decides what the Posts tab shows and never what an Artifact
+    # covers. An Artifact made before keeps them and shows them as they were;
+    # one made since holds the defaults, which filtered nothing.
+    forwarded: ForwardedFilter = "all"
+    languages: list[str] = Field(default_factory=list)
+    media: list[MediaKind] = Field(default_factory=list)
+    views: ViewsFilter | None = None
 
     start: int
     end: int

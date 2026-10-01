@@ -5,10 +5,8 @@ from pydantic import BaseModel, Field, model_validator
 from app.schemas.analysis_window import AnalysisWindowInput
 from app.schemas.scope import (
     CapMode,
-    MediaKind,
     SortOrder,
     ViewMeasure,
-    ViewsFilter,
     upgrade_legacy_scope_fields,
 )
 
@@ -26,14 +24,11 @@ class PromptScopeInput(BaseModel):
     # AW-02: stated, not computed by the browser. See `PostScopeRequest`.
     window: AnalysisWindowInput | None = None
     keyword: str | None = None
-    forwarded: str = "all"
     # PFB-01: the Scope's filter half, spelled as `_ScopeFilters` spells it, so
     # a value it refuses is refused here too rather than 200ing a prompt over a
-    # Scope nobody can record.
-    languages: list[str] = Field(default_factory=list)
-    media: list[MediaKind] = Field(default_factory=list)
+    # Scope nobody can record. Without the flat `forwarded`, `languages`,
+    # `media` and `views` since PTR-03 (ADR-026), which `extra="forbid"` refuses.
     view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")
-    views: ViewsFilter | None = None
     max_per_channel: int = Field(0, alias="maxPerChannel")
     max_per_channel_mode: CapMode = Field("ordered", alias="maxPerChannelMode")
     sort: SortOrder = "newest"

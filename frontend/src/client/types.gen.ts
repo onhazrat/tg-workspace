@@ -680,6 +680,20 @@ export type CandidateSeenInResponse = {
 };
 
 /**
+ * ChannelCondition
+ */
+export type ChannelCondition = {
+    /**
+     * Type
+     */
+    type: 'channel';
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
  * ChannelInfoRequest
  */
 export type ChannelInfoRequest = {
@@ -1606,22 +1620,9 @@ export type DiscoverCandidatesRequest = {
      */
     keyword?: string | null;
     /**
-     * Forwarded
-     */
-    forwarded?: string;
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
     /**
      * Maxperchannel
      */
@@ -1865,22 +1866,9 @@ export type DiscoverReportCreateRequest = {
      */
     keyword?: string | null;
     /**
-     * Forwarded
-     */
-    forwarded?: string;
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
     /**
      * Maxperchannel
      */
@@ -2040,22 +2028,9 @@ export type DiscoverReportScopeResponse = {
      */
     keyword?: string | null;
     /**
-     * Forwarded
-     */
-    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
     /**
      * Maxperchannel
      */
@@ -2076,6 +2051,19 @@ export type DiscoverReportScopeResponse = {
      * Seed
      */
     seed?: number;
+    /**
+     * Forwarded
+     */
+    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
+    /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
+     * Media
+     */
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
+    views?: ViewsFilter | null;
     /**
      * Start
      */
@@ -2264,6 +2252,72 @@ export type EmbeddingResult = {
 };
 
 /**
+ * FilterAtom
+ *
+ * One Condition, maybe negated.
+ */
+export type FilterAtom = {
+    /**
+     * Kind
+     */
+    kind: 'atom';
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Not
+     */
+    not?: boolean;
+    /**
+     * Cond
+     */
+    cond: ({
+        type: 'type';
+    } & TypeCondition) | ({
+        type: 'media';
+    } & MediaCondition) | ({
+        type: 'language';
+    } & LanguageCondition) | ({
+        type: 'channel';
+    } & ChannelCondition) | ({
+        type: 'views';
+    } & ViewsCondition);
+};
+
+/**
+ * FilterGroup
+ *
+ * Conditions joined with AND or OR, maybe negated; parentheses are groups.
+ */
+export type FilterGroup = {
+    /**
+     * Kind
+     */
+    kind: 'group';
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Op
+     */
+    op: 'and' | 'or';
+    /**
+     * Not
+     */
+    not?: boolean;
+    /**
+     * Children
+     */
+    children?: Array<({
+        kind: 'atom';
+    } & FilterAtom) | ({
+        kind: 'group';
+    } & FilterGroup)>;
+};
+
+/**
  * FixedAnalysisWindow
  *
  * Two exact UTC instants, in epoch milliseconds, that do not move.
@@ -2320,22 +2374,9 @@ export type FrozenScope = {
      */
     keyword?: string | null;
     /**
-     * Forwarded
-     */
-    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
     /**
      * Maxperchannel
      */
@@ -2356,6 +2397,19 @@ export type FrozenScope = {
      * Seed
      */
     seed?: number;
+    /**
+     * Forwarded
+     */
+    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
+    /**
+     * Languages
+     */
+    languages?: Array<string>;
+    /**
+     * Media
+     */
+    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
+    views?: ViewsFilter | null;
     /**
      * Start
      */
@@ -2773,6 +2827,20 @@ export type LlmLogResponse = {
 };
 
 /**
+ * LanguageCondition
+ */
+export type LanguageCondition = {
+    /**
+     * Type
+     */
+    type: 'language';
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
  * LiftCeilingRequest
  *
  * Lift (or restore) this account's ceilings for the current UTC day.
@@ -2831,6 +2899,20 @@ export type LogWriteResponse = {
      * Upserted
      */
     upserted?: number;
+};
+
+/**
+ * MediaCondition
+ */
+export type MediaCondition = {
+    /**
+     * Type
+     */
+    type: 'media';
+    /**
+     * Value
+     */
+    value: 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
 };
 
 /**
@@ -3216,7 +3298,7 @@ export type PostCountsResponse = {
 /**
  * PostFacetCount
  *
- * How many Posts one choice of a filter would leave.
+ * How many Posts in the window have one value.
  */
 export type PostFacetCount = {
     /**
@@ -3232,9 +3314,17 @@ export type PostFacetCount = {
 /**
  * PostFacetsResponse
  *
- * Per-choice Post counts for the Language and media filters.
+ * Per-value Post counts for the Type, media and Language dropdowns.
  */
 export type PostFacetsResponse = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Types
+     */
+    types: Array<PostFacetCount>;
     /**
      * Languages
      */
@@ -3248,7 +3338,7 @@ export type PostFacetsResponse = {
 /**
  * PostFeedRequest
  *
- * `PostScopeRequest` plus the feed's paging, cap mode and sort.
+ * `PostFilteredRequest` plus the feed's paging, cap mode and sort.
  *
  * `limit`/`offset` keep the same bounds the query params enforced, so an
  * out-of-range page is still a 422 rather than an unbounded read.
@@ -3271,26 +3361,14 @@ export type PostFeedRequest = {
      */
     keyword?: string | null;
     /**
-     * Forwarded
-     */
-    forwarded?: string;
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
     /**
      * Maxperchannel
      */
     maxPerChannel?: number;
+    filter?: FilterGroup | null;
     /**
      * Channelname
      */
@@ -3319,6 +3397,39 @@ export type PostFeedRequest = {
      * Seed
      */
     seed?: number;
+};
+
+/**
+ * PostFilteredRequest
+ *
+ * `PostScopeRequest` plus the Post filter's tree.
+ */
+export type PostFilteredRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    filter?: FilterGroup | null;
 };
 
 /**
@@ -3370,6 +3481,7 @@ export type PostLookupRequest = {
      * Posts
      */
     posts: Array<PostLookupRef>;
+    filter?: FilterGroup | null;
 };
 
 /**
@@ -3487,55 +3599,6 @@ export type PostResponse = {
 };
 
 /**
- * PostScopeRequest
- *
- * A post scope carried in a request body rather than a query string.
- *
- * The channel selection can run to the full account — over a thousand handles —
- * which as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and
- * server header limits. A body has no such ceiling.
- */
-export type PostScopeRequest = {
-    /**
-     * Channelnames
-     */
-    channelNames?: Array<string> | null;
-    /**
-     * Window
-     */
-    window?: ({
-        mode: 'live';
-    } & LiveAnalysisWindow) | ({
-        mode: 'fixed';
-    } & FixedAnalysisWindow) | null;
-    /**
-     * Keyword
-     */
-    keyword?: string | null;
-    /**
-     * Forwarded
-     */
-    forwarded?: string;
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
-     * Viewmeasure
-     */
-    viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-};
-
-/**
  * PostTranslationResponse
  *
  * One post translated into one language.
@@ -3565,6 +3628,30 @@ export type PostTranslationResponse = {
      * Timestamp
      */
     timestamp?: number;
+};
+
+/**
+ * PostWindowRequest
+ *
+ * The Channels and the Analysis window, carried in a request body.
+ *
+ * The channel selection can run to the full account — over a thousand handles —
+ * which as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and
+ * server header limits. A body has no such ceiling.
+ */
+export type PostWindowRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
 };
 
 /**
@@ -3603,22 +3690,9 @@ export type PromptScopeInput = {
      */
     keyword?: string | null;
     /**
-     * Forwarded
-     */
-    forwarded?: string;
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
     /**
      * Maxperchannel
      */
@@ -4352,22 +4426,9 @@ export type ScopeSubmission = {
      */
     keyword?: string | null;
     /**
-     * Forwarded
-     */
-    forwarded?: 'all' | 'forwarded' | 'original' | 'unfollowed_forwarded';
-    /**
-     * Languages
-     */
-    languages?: Array<string>;
-    /**
-     * Media
-     */
-    media?: Array<'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped'>;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    views?: ViewsFilter | null;
     /**
      * Maxperchannel
      */
@@ -5719,6 +5780,20 @@ export type TranslateResponse = {
 };
 
 /**
+ * TypeCondition
+ */
+export type TypeCondition = {
+    /**
+     * Type
+     */
+    type: 'type';
+    /**
+     * Value
+     */
+    value: 'forwarded' | 'original' | 'unfollowed_forwarded';
+};
+
+/**
  * UpdateJobRequest
  */
 export type UpdateJobRequest = {
@@ -6061,6 +6136,32 @@ export type ViewEstimateResponse = {
      * Estimationfloorhours
      */
     estimationFloorHours: number;
+};
+
+/**
+ * ViewsCondition
+ */
+export type ViewsCondition = {
+    /**
+     * Type
+     */
+    type: 'views';
+    /**
+     * Measure
+     */
+    measure: 'views' | 'estimated';
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * None
+     */
+    none?: boolean;
 };
 
 /**
@@ -7627,7 +7728,7 @@ export type DataListPostsResponses = {
 export type DataListPostsResponse = DataListPostsResponses[keyof DataListPostsResponses];
 
 export type DataPostsCountsData = {
-    body: PostScopeRequest;
+    body: PostFilteredRequest;
     path?: never;
     query?: never;
     url: '/api/v1/data/posts/counts';
@@ -7668,7 +7769,7 @@ export type DataPostsViewEstimateResponses = {
 export type DataPostsViewEstimateResponse = DataPostsViewEstimateResponses[keyof DataPostsViewEstimateResponses];
 
 export type DataPostsFacetsData = {
-    body: PostScopeRequest;
+    body: PostWindowRequest;
     path?: never;
     query?: never;
     url: '/api/v1/data/posts/facets';

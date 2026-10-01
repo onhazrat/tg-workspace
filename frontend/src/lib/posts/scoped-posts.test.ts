@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test"
 
 import type { PostFeedQuery } from "@/api/data"
 import {
-  applyForwardedFilter,
+  addPostFunnel,
+  emptyPostFilter,
+  type PostFilter,
+} from "@/lib/posts/post-filter"
+import {
   applyPostViewPipeline,
   type PostViewOptions,
 } from "@/lib/posts/post-view"
@@ -11,7 +15,7 @@ import {
   SCOPED_POSTS_LIMIT,
   type ScopedPostsDeps,
 } from "@/lib/posts/scoped-posts"
-import type { Channel, Post } from "@/types"
+import type { Post } from "@/types"
 
 function makePost(
   channelName: string,
@@ -29,33 +33,15 @@ function makePost(
   }
 }
 
-function makeChannel(name: string): Channel {
-  return {
-    id: name,
-    name,
-    displayName: name,
-    startTime: 0,
-    lastUpdated: 0,
-    followedAt: 0,
-    tags: [],
-    isFrozen: false,
-    isUnavailableOnWebView: false,
-    autoFollowForwarded: false,
-    regularSyncEnabled: true,
-    dynamicSyncEnabled: false,
-  }
-}
-
 const view: PostViewOptions = {
   maxPostsPerChannel: 0,
   maxPostsPerChannelMode: "ordered",
   postSortOrder: "newest",
   groupByChannel: false,
   viewMeasure: "estimated" as const,
-  viewsFilter: null,
 }
 
-const channels = [makeChannel("alpha"), makeChannel("beta")]
+const persian = addPostFunnel(emptyPostFilter(), "language", "fa")
 
 /** The seed curve at the default settings, as the server hands it over. */
 const SEED_ESTIMATE = {
@@ -83,10 +69,7 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     selectedChannels: ["alpha", "beta"],
     startDate: 1000,
     endDate: 9000,
-    forwardedFilter: "all",
-    mediaFilter: [],
-    languageFilter: [],
-    channels,
+    postFilter: emptyPostFilter(),
     postViewOptions: view,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: async () => {
@@ -94,6 +77,9 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     },
     getPostsFeed: async () => {
       throw new Error("getPostsFeed should not be called")
+    },
+    lookupPosts: async () => {
+      throw new Error("lookupPosts should not be called")
     },
     getViewEstimate: async () => SEED_ESTIMATE,
     ...overrides,
@@ -116,16 +102,13 @@ describe("computeScopedPosts", () => {
     const calls: PostFeedQuery[] = []
     const deps = baseDeps({
       searchText: "Post",
-      forwardedFilter: "unfollowed_forwarded",
-      mediaFilter: ["photo", "video"],
-      languageFilter: ["fa"],
+      postFilter: persian,
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
         postSortOrder: "most_views",
         groupByChannel: true,
         viewMeasure: "views" as const,
-        viewsFilter: { op: "gte" as const, value: 2500 },
       },
       getPostsFeed: async (query) => {
         calls.push(query)
@@ -143,11 +126,8 @@ describe("computeScopedPosts", () => {
         startDate: 1000,
         endDate: 9000,
         keyword: "Post",
-        forwarded: "unfollowed_forwarded",
-        media: ["photo", "video"],
-        languages: ["fa"],
+        filter: persian,
         viewMeasure: "views",
-        views: { op: "gte", value: 2500 },
         maxPerChannel: 7,
         maxPerChannelMode: "random",
         sort: "most_views",
@@ -177,16 +157,12 @@ describe("computeScopedPosts", () => {
   })
 
   test("semantic path: bounded at 50, RAG options honoured, view pipeline applied", async () => {
-    const ragResults = [
-      makePost("alpha", 1, 100, { forwardedFrom: "somewhere" }),
-      makePost("beta", 2, 300),
-    ]
+    const ragResults = [makePost("alpha", 1, 100), makePost("beta", 2, 300)]
     let capturedLimit: number | undefined
     let capturedOptions: unknown
     const deps = baseDeps({
       embeddingsEnabled: true,
       semanticQuery: "  crypto  ",
-      forwardedFilter: "original",
       semanticSearchRespectsChannels: true,
       searchSimilarPosts: async (_q, limit, options) => {
         capturedLimit = limit
@@ -203,53 +179,56 @@ describe("computeScopedPosts", () => {
       endDate: 9000,
       channels: ["alpha", "beta"],
     })
-    // "original" drops the forwarded post, then the view pipeline runs.
+    // No Post filter, so no lookup: the view pipeline runs on the ranking.
     expect(result).toEqual(
-      applyPostViewPipeline(
-        applyForwardedFilter(ragResults, "original", channels),
-        view,
-        { startDate: 1000, endDate: 9000 },
-      ),
+      applyPostViewPipeline(ragResults, view, {
+        startDate: 1000,
+        endDate: 9000,
+      }),
     )
   })
 
-  test("semantic path: every pill on the bar applies to the ranked Posts (PFB-02)", async () => {
+  test("semantic path: the Post filter reaches the ranked Posts through the server (PTR-03)", async () => {
     const ranked = [
-      makePost("alpha", 1, 100, {
-        language: "fa",
-        media: { kinds: ["photo"] },
-      }),
-      makePost("alpha", 2, 200, {
-        language: "en",
-        media: { kinds: ["photo"] },
-      }),
-      makePost("beta", 3, 300, { language: "fa" }),
-      makePost("beta", 4, 400, { language: null, media: { kinds: ["photo"] } }),
-      makePost("beta", 5, 50, { language: "fa", media: { kinds: ["photo"] } }),
+      makePost("alpha", 1, 100),
+      makePost("alpha", 2, 200),
+      makePost("beta", 3, 300),
+      makePost("beta", 5, 50),
     ]
+    const asked: { refs: unknown; filter: PostFilter }[] = []
     const result = await computeScopedPosts(
       baseDeps({
         embeddingsEnabled: true,
         semanticQuery: "crypto",
-        languageFilter: ["fa"],
-        mediaFilter: ["photo"],
+        postFilter: persian,
         postViewOptions: {
           ...view,
           postSortOrder: "oldest",
           groupByChannel: true,
         },
         searchSimilarPosts: async () => ranked,
+        // The server answers in its own order; the ranking's set is kept.
+        lookupPosts: async (refs, filter) => {
+          asked.push({ refs, filter })
+          return [ranked[3], ranked[0]]
+        },
       }),
     )
 
-    // Persian photos only, oldest first, beta's block first (its 50 leads).
+    expect(asked).toEqual([
+      {
+        refs: ranked.map((p) => ({ channelName: p.channelName, postId: p.id })),
+        filter: persian,
+      },
+    ])
+    // What the filter showed, oldest first, beta's block first (its 50 leads).
     expect(result.map((p) => `${p.channelName}/${p.id}`)).toEqual([
       "beta/5",
       "alpha/1",
     ])
   })
 
-  test("semantic path: an Estimated views threshold reads the server's curve (PFB-03)", async () => {
+  test("semantic path: a views order reads the server's curve (PFB-03)", async () => {
     const HOUR = 3_600_000
     const ranked = [
       // Settled at 5000, estimated from 2000 at 6h to 2543, too new at 1h.
@@ -281,22 +260,15 @@ describe("computeScopedPosts", () => {
         }),
       ).then((posts) => posts.map((p) => p.id))
 
-    expect(
-      await run({
-        viewsFilter: { op: "gte", value: 2500 },
-        postSortOrder: "fewest_views",
-      }),
-    ).toEqual([2, 1])
+    // The unjudged Post sorts last.
+    expect(await run({ postSortOrder: "fewest_views" })).toEqual([2, 1, 3])
     expect(asked).toBe(1)
-    // Neither a threshold nor a views order: no curve is asked for.
+    // No views order: no curve is asked for.
     expect(await run({})).toEqual([3, 2, 1])
     // The raw measure never needs one either.
     expect(
-      await run({
-        viewMeasure: "views",
-        viewsFilter: { op: "gte", value: 2500 },
-      }),
-    ).toEqual([3, 1])
+      await run({ viewMeasure: "views", postSortOrder: "fewest_views" }),
+    ).toEqual([2, 1, 3])
     expect(asked).toBe(1)
   })
 
@@ -356,14 +328,10 @@ describe("computeScopedPosts", () => {
       (p) => p.id !== seed.id || p.channelName !== seed.channelName,
     )
     expect(result).toEqual(
-      applyPostViewPipeline(
-        applyForwardedFilter(expected, "all", channels),
-        view,
-        {
-          startDate: 1000,
-          endDate: 9000,
-        },
-      ),
+      applyPostViewPipeline(expected, view, {
+        startDate: 1000,
+        endDate: 9000,
+      }),
     )
   })
 

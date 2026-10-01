@@ -2,7 +2,7 @@
 
 Replaces the browser round-trip where every post was shipped to the client,
 concatenated into one string, and shipped back. The scope (channels + date
-range + the Posts-tab filters + per-channel cap + sort) is resolved with the
+range + the keyword + per-channel cap + sort) is resolved with the
 same ``list_feed`` the Posts feed uses, so a summary reflects exactly what the
 feed shows, and formatted by the byte-identical ``format_posts_for_prompt``.
 """
@@ -25,11 +25,8 @@ from app.prompts.posts import (
 from app.services.post_filters import (
     FEED_CAP_MODES,
     FEED_SORTS,
-    FORWARDED_FILTERS,
-    MEDIA_KINDS,
     VIEW_MEASURES,
     PostFilters,
-    ViewsThreshold,
 )
 from app.services.posts import count_posts_in_scope, list_feed
 from app.services.settling_curve import view_reading
@@ -50,14 +47,9 @@ class PromptScope:
     start_date: int | None = None
     end_date: int | None = None
     keyword: str | None = None
-    forwarded: str = "all"
-    #: Empty is any media (PFB-01).
-    media: tuple[str, ...] = ()
-    #: Empty is any Language (PFB-02).
-    languages: tuple[str, ...] = ()
-    #: What `views` and the views orders read, and the threshold (PFB-03).
+    #: What the views orders read (PFB-03). The Post filter is not here: it
+    #: decides what the Posts tab shows, never what a prompt reads (ADR-026).
     view_measure: str = "estimated"
-    views: ViewsThreshold | None = None
     max_per_channel: int = 0
     max_per_channel_mode: str = "ordered"
     sort: str = "newest"
@@ -79,11 +71,6 @@ def _fetch_scoped_posts(
     survives, and a count over a wider scope than the feed would 413 a
     selection that would have fit.
     """
-    if scope.forwarded not in FORWARDED_FILTERS:
-        raise HTTPException(422, detail=f"unknown forwarded: {scope.forwarded}")
-    unknown_media = sorted(set(scope.media) - MEDIA_KINDS)
-    if unknown_media:
-        raise HTTPException(422, detail=f"unknown media: {unknown_media}")
     if scope.sort not in FEED_SORTS:
         raise HTTPException(422, detail=f"unknown sort: {scope.sort}")
     if scope.view_measure not in VIEW_MEASURES:
@@ -94,16 +81,7 @@ def _fetch_scoped_posts(
         )
     filters = PostFilters(
         keyword=scope.keyword,
-        forwarded=cast("Any", scope.forwarded),
-        media=cast("Any", scope.media),
-        languages=scope.languages,
-        views=scope.views,
-        reading=view_reading(
-            session,
-            cast("Any", scope.view_measure),
-            views=scope.views,
-            sort=scope.sort,
-        ),
+        reading=view_reading(session, cast("Any", scope.view_measure), sort=scope.sort),
     )
     channel_names = scope.channels or None
 

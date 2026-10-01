@@ -139,11 +139,22 @@ def _counts(client: TestClient, headers: dict[str, str], **scope: Any) -> Any:
 
 
 def _at_least(n: int) -> dict[str, Any]:
-    return {"op": "gte", "value": n}
+    return {"min": n}
 
 
 def _at_most(n: int) -> dict[str, Any]:
-    return {"op": "lte", "value": n}
+    return {"max": n}
+
+
+def _bound(measure: str, bound: dict[str, Any]) -> dict[str, Any]:
+    """A Post filter of one views bound on `measure` (PTR-03)."""
+    cond = {"type": "views", "measure": measure, **bound}
+    return {
+        "kind": "group",
+        "id": "root",
+        "op": "and",
+        "children": [{"kind": "atom", "id": "v", "cond": cond}],
+    }
 
 
 @pytest.mark.parametrize(
@@ -167,18 +178,19 @@ def test_a_threshold_keeps_posts_on_its_side_under_either_measure(
 ) -> None:
     """A Post with no value never matches: not a3 (no count), not a2 or c7 (too new)."""
     operator, other = seeded
-    scope = {"viewMeasure": measure, "views": views}
+    scope = {"filter": _bound(measure, views)}
 
     assert _feed(client, operator, **scope) == mine
     assert _feed(client, other, **scope) == theirs
 
 
-def test_estimated_is_the_measure_by_default(
+def test_a_bound_reads_its_own_measure_whatever_the_order_reads(
     client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
 ) -> None:
     operator, _other = seeded
+    tree = _bound("estimated", _at_least(2500))
 
-    assert _feed(client, operator, views=_at_least(2500)) == [5, 4, 1]
+    assert _feed(client, operator, filter=tree, viewMeasure="views") == [5, 4, 1]
 
 
 @pytest.mark.parametrize(
@@ -274,7 +286,7 @@ def test_the_counts_say_how_many_posts_were_too_new_to_judge(
     client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
 ) -> None:
     operator, other = seeded
-    estimated = {"views": _at_least(2500)}
+    estimated = {"filter": _bound("estimated", _at_least(2500))}
 
     assert _counts(client, operator, **estimated) == {
         "counts": {"pv_a": 2, "pv_b": 1},
@@ -284,10 +296,12 @@ def test_the_counts_say_how_many_posts_were_too_new_to_judge(
         "counts": {"pv_b": 1},
         "tooNewToJudge": 1,
     }
-    # An at-most threshold hides them too.
-    assert _counts(client, operator, views=_at_most(900))["tooNewToJudge"] == 1
-    # The raw measure judges every Post with a count, and no threshold hides none.
-    assert _counts(client, operator, viewMeasure="views", **estimated) == {
+    # An at-most bound hides them too.
+    at_most = _bound("estimated", _at_most(900))
+    assert _counts(client, operator, filter=at_most)["tooNewToJudge"] == 1
+    # The raw measure judges every Post with a count, and no bound hides none.
+    raw = _bound("views", _at_least(2500))
+    assert _counts(client, operator, filter=raw) == {
         "counts": {"pv_a": 1, "pv_b": 1},
         "tooNewToJudge": 0,
     }
@@ -315,7 +329,7 @@ def test_the_newest_fit_is_the_curve(
         )
         session.commit()
 
-    assert _feed(client, operator, views=_at_least(10_000)) == [4]
+    assert _feed(client, operator, filter=_bound("estimated", _at_least(10_000))) == [4]
 
 
 def test_the_browser_is_handed_the_curve_the_feed_reads(
@@ -354,9 +368,9 @@ def test_the_browser_is_handed_the_curve_the_feed_reads(
     "scope",
     [
         {"viewMeasure": "reach"},
-        {"views": {"op": "gt", "value": 10}},
-        {"views": {"op": "gte", "value": -1}},
-        {"views": {"op": "gte"}},
+        {"filter": _bound("reach", _at_least(10))},
+        {"filter": _bound("views", _at_least(-1))},
+        {"filter": _bound("views", {"min": "many"})},
         {"sort": "most_reach"},
     ],
 )

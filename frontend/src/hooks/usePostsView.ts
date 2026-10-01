@@ -9,7 +9,8 @@ import {
   dataPostsFacets,
   dataPostsViewEstimate,
   type PostFacetsResponse,
-  type PostScopeRequest,
+  type PostFilteredRequest,
+  type PostWindowRequest,
   type ViewEstimateResponse,
 } from "@/client"
 import { useData } from "@/contexts/DataContext"
@@ -18,6 +19,11 @@ import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
+import {
+  emptyPostFilter,
+  type PostFilter,
+  printPostFilter,
+} from "@/lib/posts/post-filter"
 import type { Post } from "@/types"
 import {
   queryKeys,
@@ -25,7 +31,6 @@ import {
   VIEW_ESTIMATE_STALE_TIME,
 } from "./queryKeys"
 import { useDebouncedValue } from "./useDebouncedValue"
-import { POST_SEARCH_DEBOUNCE_MS } from "./usePostFilters"
 
 /** One page of the infinite Posts feed. */
 export const FEED_PAGE_SIZE = 20
@@ -81,21 +86,34 @@ function useSelectedChannelNames(): string[] {
  * from the client scoped posts (semantic/related results aren't reproducible
  * server-side). Replaces the render-time reads of the eager `filteredPosts`
  * array in App/SummaryAction/ChannelCard/ChannelGrid.
+ *
+ * The Scope's, so the Post filter is not in it: a Summary covers every Post
+ * in the window whatever the tab shows (PTR-03, ADR-026).
  */
 export function useScopedPostCounts(): Record<string, number> {
-  return useScopeCounts().counts
+  return useScopeCounts(NO_FILTER, false).counts
 }
 
 /**
- * How many Posts an Estimated views threshold hid for being too new to judge,
- * for the footer (PFB-03). The same query as `useScopedPostCounts`, so the two
- * cost one request. A meaning search has no server count and reports none.
+ * What the Posts tab shows under the Post filter: per-channel counts and how
+ * many Posts an Estimated views bound hid for being too new to judge (PFB-03,
+ * PTR-03). One request for both. A meaning search has no server count and
+ * reports none too new.
  */
-export function useTooNewToJudge(): number {
-  return useScopeCounts().tooNewToJudge
+export function useShownPostCounts(): {
+  counts: Record<string, number>
+  tooNewToJudge: number
+} {
+  return useScopeCounts(useScraper().postFilter, true)
 }
 
-function useScopeCounts(): {
+const NO_FILTER = emptyPostFilter()
+
+/** `filter` is what is counted; `shown` says it is the tab's, not the Scope's. */
+function useScopeCounts(
+  filter: PostFilter,
+  shown: boolean,
+): {
   counts: Record<string, number>
   tooNewToJudge: number
 } {
@@ -103,14 +121,10 @@ function useScopeCounts(): {
   const { startDate, endDate, windowKey } = useScope()
   const {
     postSearch,
-    forwardedFilter,
-    mediaFilter,
-    languageFilter,
-    viewMeasure,
-    viewsFilter,
     maxPostsPerChannel,
     semanticSearchQuery,
     getScopedPosts,
+    getPromptPostsInput,
   } = useScraper()
   const debouncedPostSearch = useDebouncedValue(postSearch, 300)
   const selectedChannelNames = useSelectedChannelNames()
@@ -121,20 +135,23 @@ function useScopeCounts(): {
   const filters = {
     channelNames: selectedChannelNames,
     keyword: debouncedPostSearch,
-    forwarded: forwardedFilter,
-    media: mediaFilter,
-    languages: languageFilter,
-    viewMeasure,
-    views: viewsFilter,
     maxPerChannel: maxPostsPerChannel,
   }
-  const params = { ...filters, startDate, endDate }
+  // The filter by its text, which is stable where the tree's ids are not.
+  const keyed = { ...filters, filter: printPostFilter(filter) }
   const query = useQuery({
     // Keyed on the window rather than the minute it currently resolves to —
     // see `usePostsFeed`, which pays for this and says why.
-    queryKey: queryKeys.postsCounts({ ...filters, window: windowKey }),
+    queryKey: queryKeys.postsCounts({ ...keyed, window: windowKey }),
     queryFn: () =>
-      dataPostsCounts({ body: postScopeBody(params) as PostScopeRequest }),
+      dataPostsCounts({
+        body: postScopeBody({
+          ...filters,
+          filter,
+          startDate,
+          endDate,
+        }) as PostFilteredRequest,
+      }),
     enabled: serverEligible,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
@@ -145,13 +162,17 @@ function useScopeCounts(): {
   useEffect(() => {
     if (serverEligible) return
     let cancelled = false
-    getScopedPosts().then((posts) => {
+    // The Scope's count reads the ranked Posts an Action would, unfiltered.
+    const ranked = shown
+      ? getScopedPosts()
+      : getPromptPostsInput().then((input) => input.posts ?? [])
+    ranked.then((posts) => {
       if (!cancelled) setClientCounts(buildPostsInScopeCounts(posts))
     })
     return () => {
       cancelled = true
     }
-  }, [serverEligible, getScopedPosts])
+  }, [serverEligible, shown, getScopedPosts, getPromptPostsInput])
 
   if (!serverEligible) return { counts: clientCounts, tooNewToJudge: 0 }
   return {
@@ -161,50 +182,28 @@ function useScopeCounts(): {
 }
 
 /**
- * How many Posts each Language and each media kind would leave, for the
- * pills' checklists (PFB-02). Server-side, and only while `enabled` (a pill
- * is open) and the feed is the server's: a meaning search's ranked Posts are
- * not a scope the server can count, so its pills show no numbers.
+ * How many Posts in the window have each Type, media kind and Language, and
+ * how many there are, for the dropdowns and the filter row (PTR-03). Filters
+ * aside, so it is keyed on the Channels and the window alone. Server-side,
+ * and only while `enabled` and the feed is the server's: a meaning search's
+ * ranked Posts are not a scope the server can count.
  */
 export function usePostFacets(
   enabled: boolean,
 ): PostFacetsResponse | undefined {
   const { selectedChannels } = useData()
   const { startDate, endDate, windowKey } = useScope()
-  const {
-    postSearch,
-    forwardedFilter,
-    mediaFilter,
-    languageFilter,
-    viewMeasure,
-    viewsFilter,
-    maxPostsPerChannel,
-    semanticSearchQuery,
-  } = useScraper()
-  const debouncedPostSearch = useDebouncedValue(
-    postSearch,
-    POST_SEARCH_DEBOUNCE_MS,
-  )
-  const selectedChannelNames = useSelectedChannelNames()
-  const filters = {
-    channelNames: selectedChannelNames,
-    keyword: debouncedPostSearch,
-    forwarded: forwardedFilter,
-    media: mediaFilter,
-    languages: languageFilter,
-    viewMeasure,
-    views: viewsFilter,
-    maxPerChannel: maxPostsPerChannel,
-  }
+  const { semanticSearchQuery } = useScraper()
+  const channelNames = useSelectedChannelNames()
   const query = useQuery({
-    queryKey: queryKeys.postsFacets({ ...filters, window: windowKey }),
+    queryKey: queryKeys.postsFacets({ channelNames, window: windowKey }),
     queryFn: () =>
       dataPostsFacets({
         body: postScopeBody({
-          ...filters,
+          channelNames,
           startDate,
           endDate,
-        }) as PostScopeRequest,
+        }) as PostWindowRequest,
       }),
     enabled:
       enabled && !semanticSearchQuery.trim() && selectedChannels.size > 0,
@@ -259,11 +258,8 @@ export function usePostsFeed(): PostsFeed {
   const { startDate, endDate, windowKey } = useScope()
   const {
     postSearch,
-    forwardedFilter,
-    mediaFilter,
-    languageFilter,
+    postFilter,
     viewMeasure,
-    viewsFilter,
     maxPostsPerChannel,
     maxPostsPerChannelMode,
     postSortOrder,
@@ -288,18 +284,21 @@ export function usePostsFeed(): PostsFeed {
   const filters = {
     channelNames: selectedChannelNames,
     keyword: debouncedPostSearch,
-    forwarded: forwardedFilter,
-    media: mediaFilter,
-    languages: languageFilter,
     viewMeasure,
-    views: viewsFilter,
     maxPerChannel: maxPostsPerChannel,
     maxPerChannelMode: maxPostsPerChannelMode,
     sort: postSortOrder,
     groupByChannel,
     seed: 0,
   }
-  const feedParams: PostFeedQuery = { ...filters, startDate, endDate }
+  const feedParams: PostFeedQuery = {
+    ...filters,
+    filter: postFilter,
+    startDate,
+    endDate,
+  }
+  // The filter by its text, which is stable where the tree's ids are not.
+  const keyed = { ...filters, filter: printPostFilter(postFilter) }
 
   const infinite = useInfiniteQuery({
     /*
@@ -316,7 +315,7 @@ export function usePostsFeed(): PostsFeed {
      * `feedParams` still carries fresh boundaries: the query function is read
      * from the latest render, so a refetch asks for the minute it happens in.
      */
-    queryKey: queryKeys.postsFeed({ ...filters, window: windowKey }),
+    queryKey: queryKeys.postsFeed({ ...keyed, window: windowKey }),
     queryFn: ({ pageParam }) =>
       api.getPostsFeed({
         ...feedParams,

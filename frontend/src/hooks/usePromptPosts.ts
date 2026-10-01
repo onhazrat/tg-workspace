@@ -12,26 +12,27 @@
  * Extracted from `ScraperContext` for G1. The split it encodes is the same one
  * the Discover and feed paths already make; see `computeScopedPosts` and
  * `usePostsFeed`.
+ *
+ * The Post filter reaches `getScopedPosts`, which is what the tab shows, and
+ * neither of the other two: it decides what the Posts tab shows and never what
+ * an Artifact covers (PTR-03, ADR-026). A meaning search's ranked Posts reach
+ * a prompt unfiltered for the same reason.
  */
 
 import { useCallback, useRef } from "react"
 
 import type { PromptScope } from "@/api/data"
 import type { ScopeSubmission } from "@/client"
-import type {
-  ForwardedFilterValue,
-  MediaFilterValue,
-  PostViewOptions,
-} from "@/lib/posts/post-view"
+import { emptyPostFilter, type PostFilter } from "@/lib/posts/post-filter"
+import type { PostViewOptions } from "@/lib/posts/post-view"
 import {
   computeScopedPosts,
   type ScopedPostsDeps,
 } from "@/lib/posts/scoped-posts"
 import { toWireWindow, type WindowState } from "@/lib/scope/window"
-import type { Channel, Post } from "@/types"
+import type { Post } from "@/types"
 
 export interface PromptPostsDeps {
-  channels: Channel[]
   selectedChannels: Set<string>
   startDate: number
   endDate: number
@@ -50,9 +51,7 @@ export interface PromptPostsDeps {
   debouncedPostSearch: string
   debouncedSemanticSearchQuery: string
   relatedPostSearch: Post | null
-  forwardedFilter: ForwardedFilterValue
-  mediaFilter: MediaFilterValue
-  languageFilter: string[]
+  postFilter: PostFilter
   postViewOptions: PostViewOptions
   semanticSearchRespectsChannels: boolean
   searchSimilarPosts: (
@@ -61,6 +60,7 @@ export interface PromptPostsDeps {
     options: { channels?: string[]; startDate: number; endDate: number },
   ) => Promise<Post[]>
   getPostsFeed: typeof import("@/api").api.getPostsFeed
+  lookupPosts: ScopedPostsDeps["lookupPosts"]
   getViewEstimate: ScopedPostsDeps["getViewEstimate"]
 }
 
@@ -89,7 +89,6 @@ export interface PromptPosts {
 
 export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
   const {
-    channels,
     selectedChannels,
     startDate,
     endDate,
@@ -98,13 +97,12 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     debouncedPostSearch,
     debouncedSemanticSearchQuery,
     relatedPostSearch,
-    forwardedFilter,
-    mediaFilter,
-    languageFilter,
+    postFilter,
     postViewOptions,
     semanticSearchRespectsChannels,
     searchSimilarPosts,
     getPostsFeed,
+    lookupPosts,
     getViewEstimate,
   } = deps
 
@@ -119,11 +117,11 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     postSortOrder,
     groupByChannel,
     viewMeasure,
-    viewsFilter,
   } = postViewOptions
 
-  const getScopedPosts = useCallback(
+  const scopedPosts = useCallback(
     async (
+      filter: PostFilter,
       searchText = debouncedPostSearch,
       semanticQuery = debouncedSemanticSearchQuery,
     ): Promise<Post[]> =>
@@ -135,14 +133,12 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         selectedChannels: Array.from(selectedChannels),
         startDate: boundsRef.current.startDate,
         endDate: boundsRef.current.endDate,
-        forwardedFilter,
-        mediaFilter,
-        languageFilter,
-        channels,
+        postFilter: filter,
         postViewOptions,
         semanticSearchRespectsChannels,
         searchSimilarPosts,
         getPostsFeed,
+        lookupPosts,
         getViewEstimate,
       }),
     [
@@ -156,11 +152,8 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       semanticSearchRespectsChannels,
       searchSimilarPosts,
       getPostsFeed,
+      lookupPosts,
       getViewEstimate,
-      forwardedFilter,
-      channels,
-      mediaFilter,
-      languageFilter,
       // `postViewOptions` is rebuilt every render, so depend on its fields.
       // Depending on the object would defeat the memo entirely.
       postViewOptions,
@@ -169,8 +162,13 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       postSortOrder,
       groupByChannel,
       viewMeasure,
-      viewsFilter,
     ],
+  )
+
+  const getScopedPosts = useCallback(
+    (searchText?: string, semanticQuery?: string) =>
+      scopedPosts(postFilter, searchText, semanticQuery),
+    [scopedPosts, postFilter],
   )
 
   const getPromptPostsInput =
@@ -179,18 +177,14 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
         embeddingsEnabled &&
         (!!relatedPostSearch || !!debouncedSemanticSearchQuery.trim())
       if (semanticActive) {
-        return { posts: await getScopedPosts() }
+        return { posts: await scopedPosts(emptyPostFilter()) }
       }
       return {
         scope: {
           startDate,
           endDate,
           keyword: debouncedPostSearch,
-          forwarded: forwardedFilter,
-          media: mediaFilter,
-          languages: languageFilter,
           viewMeasure,
-          views: viewsFilter,
           maxPerChannel: maxPostsPerChannel,
           maxPerChannelMode: maxPostsPerChannelMode,
           sort: postSortOrder,
@@ -202,15 +196,11 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       embeddingsEnabled,
       relatedPostSearch,
       debouncedSemanticSearchQuery,
-      getScopedPosts,
+      scopedPosts,
       startDate,
       endDate,
       debouncedPostSearch,
-      forwardedFilter,
-      mediaFilter,
-      languageFilter,
       viewMeasure,
-      viewsFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
@@ -222,11 +212,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       channels,
       window: toWireWindow(windowKey),
       keyword: debouncedPostSearch.trim() || null,
-      forwarded: forwardedFilter,
-      media: mediaFilter,
-      languages: languageFilter,
       viewMeasure,
-      views: viewsFilter,
       maxPerChannel: maxPostsPerChannel,
       maxPerChannelMode: maxPostsPerChannelMode,
       sort: postSortOrder,
@@ -244,11 +230,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     [
       windowKey,
       debouncedPostSearch,
-      forwardedFilter,
-      mediaFilter,
-      languageFilter,
       viewMeasure,
-      viewsFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,

@@ -5,20 +5,24 @@
  */
 import { describe, expect, test } from "bun:test"
 
+import { printPostFilter } from "@/lib/posts/post-filter"
 import { workspaceFromScope } from "./useApplyArtifactScope"
 
 const window = { start: 1, end: 2 }
 
+/** The restored workspace with its Post filter as text, which a parse mints ids for. */
+const restored = (scope: Parameters<typeof workspaceFromScope>[0]) => {
+  const { postFilter, ...rest } = workspaceFromScope(scope)
+  return { ...rest, postFilter: printPostFilter(postFilter) }
+}
+
 describe("workspaceFromScope", () => {
   test("an absent field resets to its default", () => {
-    expect(workspaceFromScope(window)).toEqual({
+    expect(restored(window)).toEqual({
       channels: new Set(),
       keyword: "",
-      forwarded: "all",
-      media: [],
-      languages: [],
+      postFilter: "",
       viewMeasure: "estimated",
-      views: null,
       maxPerChannel: 0,
       maxPerChannelMode: "ordered",
       sort: "newest",
@@ -26,9 +30,11 @@ describe("workspaceFromScope", () => {
     })
   })
 
+  // An Artifact made before PTR-03 froze flat filters; they come back as the
+  // Post filter that says the same, so the view shows the Posts it read.
   test("a frozen field comes back as it was", () => {
     expect(
-      workspaceFromScope({
+      restored({
         ...window,
         channels: ["a", "b"],
         keyword: "rates",
@@ -45,11 +51,9 @@ describe("workspaceFromScope", () => {
     ).toEqual({
       channels: new Set(["a", "b"]),
       keyword: "rates",
-      forwarded: "original",
-      media: ["photo", "video"],
-      languages: ["fa", "en"],
+      postFilter:
+        "type:original and (media:photo or media:video) and (lang:fa or lang:en) and views <= 900",
       viewMeasure: "views",
-      views: { op: "lte", value: 900 },
       maxPerChannel: 5,
       maxPerChannelMode: "random",
       sort: "most_views",

@@ -10,16 +10,17 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, SessionDep
-from app.api.routes.data._shared import parse_post_filters
+from app.api.routes.data._shared import parse_post_filters, tree_filters
 from app.schemas.posts import (
     BulkUpsertPostsResponse,
     PostCountsResponse,
     PostFacetCount,
     PostFacetsResponse,
     PostFeedRequest,
+    PostFilteredRequest,
     PostLookupRequest,
     PostResponse,
-    PostScopeRequest,
+    PostWindowRequest,
     ViewCurveResponse,
     ViewEstimateResponse,
 )
@@ -41,9 +42,9 @@ def list_posts(
 ) -> list[PostResponse]:
     """One page of posts for a channel/date scope.
 
-    With no filters, no cap and ``sort=newest`` this is the newest-first page the
+    With no filter, no cap and ``sort=newest`` this is the newest-first page the
     export/lookup fallbacks and language detection rely on. The Posts feed also
-    passes keyword/forwarded/media filters, a per-channel cap, a sort order and
+    passes the keyword, the Post filter, a per-channel cap, a sort order and
     ``offset`` so the whole view is assembled server-side instead of paging a
     channel's history into the browser.
 
@@ -60,7 +61,7 @@ def list_posts(
             channel_names=body.resolved_channel_names(),
             start_date=window.start,
             end_date=window.end,
-            filters=parse_post_filters(session, body, sort=body.sort),
+            filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
             max_per_channel=body.max_per_channel,
             max_per_channel_mode=body.max_per_channel_mode,
             sort=body.sort,
@@ -74,7 +75,7 @@ def list_posts(
 
 @router.post("/posts/counts")
 def posts_counts(
-    body: PostScopeRequest,
+    body: PostFilteredRequest,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> PostCountsResponse:
@@ -82,7 +83,7 @@ def posts_counts(
 
     Replaces the client's `buildPostsInScopeCounts`, which counted the fully
     fetched, client-filtered post array. Also says how many Posts an Estimated
-    views threshold hid for being too new to judge.
+    views bound hid for being too new to judge.
 
     POST rather than GET because the scope carries the channel selection: this is
     a read expressed as a POST purely so the selection travels in the body.
@@ -94,7 +95,7 @@ def posts_counts(
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
-        filters=parse_post_filters(session, body),
+        filters=parse_post_filters(session, body, tree=body.filter),
         max_per_channel=body.max_per_channel,
     )
     return PostCountsResponse(counts=counts, tooNewToJudge=too_new)
@@ -118,11 +119,11 @@ def posts_view_estimate(
 # on `VIEW_AS_READ_ONLY_PATHS` beside it.
 @router.post("/posts/facets")
 def posts_facets(
-    body: PostScopeRequest,
+    body: PostWindowRequest,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> PostFacetsResponse:
-    """How many Posts each Language and each media kind would leave in a scope."""
+    """How many Posts in the window have each Type, media kind and Language."""
     window = resolve_analysis_window(body.window)
     facets = count_facets_in_scope(
         session,
@@ -130,12 +131,13 @@ def posts_facets(
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
-        filters=parse_post_filters(session, body),
-        max_per_channel=body.max_per_channel,
     )
     return PostFacetsResponse(
-        languages=[PostFacetCount(value=v, count=n) for v, n in facets["languages"]],
-        media=[PostFacetCount(value=v, count=n) for v, n in facets["media"]],
+        total=facets["total"],
+        **{
+            key: [PostFacetCount(value=v, count=n) for v, n in facets[key]]
+            for key in ("types", "languages", "media")
+        },
     )
 
 
@@ -151,6 +153,7 @@ def lookup_posts_route(
             session,
             [(ref.channel_name, ref.post_id) for ref in body.posts],
             user_id=current_user.id,
+            filters=None if body.filter is None else tree_filters(session, body.filter),
         )
     ]
 

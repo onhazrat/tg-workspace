@@ -181,18 +181,9 @@ export interface CommandContext {
     import("@/hooks/useWorkspaceTabs").WorkspaceTabs,
     "active" | "openTab" | "closeTab" | "reopenLastTab"
   >
-  forwardedFilter: "all" | "forwarded" | "original" | "unfollowed_forwarded"
-  setForwardedFilter: (
-    value: "all" | "forwarded" | "original" | "unfollowed_forwarded",
-  ) => void
-  mediaFilter: import("@/lib/posts/post-media").MediaFilterValue
-  setMediaFilter: (
-    value: import("@/lib/posts/post-media").MediaFilterValue,
-  ) => void
-  setLanguageFilter: (value: string[]) => void
-  setViewsFilter: (
-    value: import("@/lib/posts/post-view").ViewsFilter | null,
-  ) => void
+  /** What the Posts tab shows (PTR-03); a palette command adds a Condition. */
+  postFilter: import("@/lib/posts/post-filter").PostFilter
+  setPostFilter: (next: import("@/lib/posts/post-filter").PostFilter) => void
   setMaxPostsPerChannel: (value: number) => void
   setMaxPostsPerChannelMode: (
     value: import("@/lib/posts/post-view").MaxPostsPerChannelMode,

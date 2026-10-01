@@ -1,13 +1,25 @@
 /**
- * The Posts filter bar (PFB-02), rendered props-only so it needs no providers
- * and no `mock.module` (process-wide in bun, see `DataContext.test.tsx`). What
- * is pinned is what an Account can do on it: search by keyword or by meaning,
- * read every pill's value, tick through the forms, and drop filters from the
- * footer.
+ * The Posts filter bar (PFB-02, PTR-03), rendered props-only so it needs no
+ * providers and no `mock.module` (process-wide in bun, see
+ * `DataContext.test.tsx`). What is pinned is what an Account can do on it:
+ * search by keyword or by meaning, funnel from the Type, Media and Language
+ * dropdowns, bound Views from the Filters menu, edit the Post filter in its
+ * row, and drop what the footer shows.
  */
 import { afterEach, describe, expect, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type React from "react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react"
+import {
+  addPostFunnel,
+  emptyPostFilter,
+  type PostFilter,
+  printPostFilter,
+} from "@/lib/posts/post-filter"
 import {
   type FilterBarControls,
   PostFilterBar,
@@ -27,26 +39,12 @@ function controls(
     (value: unknown): void => {
       calls.push([name, value])
     }
-  // Updaters are applied to the current value, so a call records the result.
-  const apply =
-    <T,>(name: string, current: T) =>
-    (update: React.SetStateAction<T>): void => {
-      calls.push([
-        name,
-        typeof update === "function"
-          ? (update as (previous: T) => T)(current)
-          : update,
-      ])
-    }
   const base = {
     semanticSearchQuery: "",
     semanticSearchRespectsChannels: true,
     relatedPostSearch: null,
-    forwardedFilter: "all" as const,
-    mediaFilter: [],
-    languageFilter: [],
+    postFilter: emptyPostFilter(),
     viewMeasure: "estimated" as const,
-    viewsFilter: null,
     maxPostsPerChannel: 0,
     maxPostsPerChannelMode: "ordered" as const,
     postSortOrder: "newest" as const,
@@ -58,11 +56,10 @@ function controls(
     setSemanticSearchQuery: log("meaning"),
     setSemanticSearchRespectsChannels: log("respectsChannels"),
     setRelatedPostSearch: log("related"),
-    setForwardedFilter: log("forwarded"),
-    setMediaFilter: apply("media", base.mediaFilter),
-    setLanguageFilter: apply("languages", base.languageFilter),
+    // The tree as its text, which is what an Account would read in the URL.
+    setPostFilter: (next: PostFilter) =>
+      calls.push(["filter", printPostFilter(next)]),
     setViewMeasure: log("measure"),
-    setViewsFilter: log("views"),
     setMaxPostsPerChannel: log("cap"),
     setMaxPostsPerChannelMode: log("capMode"),
     setPostSortOrder: log("order"),
@@ -88,6 +85,8 @@ function mount(
       embeddingsEnabled={false}
       windowControl={<span>window</span>}
       facets={{
+        total: 5000,
+        types: [{ value: "original", count: 4000 }],
         languages: [
           { value: "fa", count: 120 },
           { value: "zxx", count: 9 },
@@ -95,6 +94,7 @@ function mount(
         media: [{ value: "photo", count: 55 }],
       }}
       channelLanguages={[]}
+      channelNames={["durov", "news"]}
       onCountingPillOpenChange={(open) => opened.push(open)}
       {...props}
     />,
@@ -140,110 +140,141 @@ describe("the search box", () => {
   })
 })
 
-describe("the pills", () => {
-  test("each reads its value, and the defaults read as defaults", () => {
+const funnels = (...pairs: ["type" | "media" | "language", string][]) =>
+  pairs.reduce(
+    (filter, [facet, value]) => addPostFunnel(filter, facet, value),
+    emptyPostFilter(),
+  )
+
+describe("the dropdowns", () => {
+  test("each names what it funnels, and the defaults read as defaults", () => {
     mount({
-      mediaFilter: ["photo", "video"],
-      languageFilter: ["zxx"],
+      postFilter: funnels(
+        ["media", "photo"],
+        ["media", "video"],
+        ["language", "zxx"],
+      ),
       maxPostsPerChannel: 10,
       postSortOrder: "oldest",
     })
-    expect(screen.getByTestId("post-filter-pill-type").textContent).toContain(
-      "All posts",
+    expect(screen.getByTestId("post-filter-type").textContent).toContain("Type")
+    expect(screen.getByTestId("post-filter-media").textContent).toContain(
+      "2 media",
     )
-    expect(screen.getByTestId("post-filter-pill-media").textContent).toContain(
-      "2 selected",
+    expect(screen.getByTestId("post-filter-language").textContent).toContain(
+      "No text",
     )
-    expect(
-      screen.getByTestId("post-filter-pill-language").textContent,
-    ).toContain("No text")
     expect(screen.getByTestId("post-filter-pill-order").textContent).toContain(
       "Oldest first",
     )
     expect(screen.getByTestId("post-filter-pill-cap").textContent).toContain(
       "Oldest 10",
     )
-    expect(screen.getByTestId("post-filter-pill-views").textContent).toContain(
-      "Any",
-    )
   })
 
-  test("Views picks a measure, a side and a number, and clears", () => {
-    const { calls } = mount({ viewsFilter: { op: "gte", value: 10_000 } })
-    expect(screen.getByTestId("post-filter-pill-views").textContent).toContain(
-      "Popular, 10K est. views",
-    )
-    fireEvent.click(screen.getByTestId("post-filter-pill-views"))
-    expect(
-      screen
-        .getByRole("tab", { name: "Estimated views" })
-        .getAttribute("aria-selected"),
-    ).toBe("true")
-    expect(screen.getByText(/Posts under 3 hours are too new/)).toBeTruthy()
-    fireEvent.click(screen.getByRole("tab", { name: "Views" }))
-    fireEvent.click(screen.getByText("Niche"))
-    fireEvent.change(screen.getByLabelText("Views"), {
-      target: { value: "25k" },
-    })
-    fireEvent.change(screen.getByLabelText("Views, on a log scale"), {
-      target: { value: "3" },
-    })
-    fireEvent.click(screen.getByText("Clear"))
-    expect(calls).toEqual([
-      ["measure", "views"],
-      ["views", { op: "lte", value: 10_000 }],
-      ["views", { op: "gte", value: 25_000 }],
-      ["views", { op: "gte", value: 1_000 }],
-      ["views", null],
-    ])
-  })
-
-  test("the Estimated views line names the deployment's floor", () => {
-    mount({}, { estimationFloorHours: 1 })
-    fireEvent.click(screen.getByTestId("post-filter-pill-views"))
-    expect(screen.getByText(/Posts under 1 hour are too new/)).toBeTruthy()
-  })
-
-  test("a side chosen with no number is 10K, and Order offers the views orders", () => {
-    const { calls } = mount()
-    fireEvent.click(screen.getByTestId("post-filter-pill-views"))
-    fireEvent.click(screen.getByText("Popular"))
-    fireEvent.click(screen.getByTestId("post-filter-pill-order"))
-    fireEvent.click(screen.getByRole("radio", { name: /Most views/ }))
-    expect(calls).toEqual([
-      ["views", { op: "gte", value: 10_000 }],
-      ["order", "most_views"],
-    ])
-  })
-
-  test("Media ticks a kind, with its count, and asks for counts on open", () => {
+  test("Media funnels a kind, with its count in the window, and asks for counts on open", () => {
     const { calls, opened } = mount()
-    fireEvent.click(screen.getByTestId("post-filter-pill-media"))
+    fireEvent.click(screen.getByTestId("post-filter-media"))
     expect(opened).toEqual([true])
-    expect(screen.getByText("55")).toBeTruthy()
-    fireEvent.click(screen.getByTestId("post-media-filter-photo"))
-    expect(calls).toEqual([["media", ["photo"]]])
+    expect(
+      screen.getByTestId("post-filter-media-count-photo").textContent,
+    ).toBe("55")
+    // No tick column until a tick records a Selection rule (PTR-06).
+    expect(screen.queryByRole("checkbox")).toBeNull()
+    fireEvent.click(screen.getByTestId("post-filter-media-funnel-photo"))
+    expect(calls).toEqual([["filter", "media:photo"]])
   })
 
-  test("Language lists what is present with its count, and resets", () => {
-    const { calls } = mount({ languageFilter: ["fa"] })
-    fireEvent.click(screen.getByTestId("post-filter-pill-language"))
+  test("a second funnel in one dropdown joins with OR, and a funnel comes off again", () => {
+    const { calls } = mount({ postFilter: funnels(["language", "fa"]) })
+    fireEvent.click(screen.getByTestId("post-filter-language"))
     expect(screen.getByText("No text")).toBeTruthy()
-    expect(screen.getByText("120")).toBeTruthy()
-    fireEvent.click(screen.getByText("Any language"))
-    expect(calls).toEqual([["languages", []]])
+    expect(
+      screen.getByTestId("post-filter-language-count-fa").textContent,
+    ).toBe("120")
+    fireEvent.click(screen.getByTestId("post-filter-language-funnel-zxx"))
+    fireEvent.click(screen.getByTestId("post-filter-language-funnel-fa"))
+    expect(calls).toEqual([
+      ["filter", "(lang:fa or lang:zxx)"],
+      ["filter", ""],
+    ])
   })
 
-  test("Type and Order are one choice each", () => {
+  test("funnels in different dropdowns join with AND", () => {
+    const { calls } = mount({ postFilter: funnels(["media", "photo"]) })
+    fireEvent.click(screen.getByTestId("post-filter-type"))
+    fireEvent.click(screen.getByTestId("post-filter-type-funnel-original"))
+    expect(calls).toEqual([["filter", "media:photo and type:original"]])
+  })
+})
+
+describe("the Filters menu", () => {
+  test("adds a bound on Views", () => {
     const { calls } = mount()
-    fireEvent.click(screen.getByTestId("post-filter-pill-type"))
-    fireEvent.click(
-      screen.getByRole("radio", { name: /Forwarded from unfollowed channels/ }),
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-views"))
+    expect(screen.getByText(/What Telegram shows now/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText("Value"), {
+      target: { value: "10000" },
+    })
+    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    expect(calls).toEqual([["filter", "views >= 10000"]])
+  })
+
+  test("between, at most and no value on Estimated views, with the deployment's floor", () => {
+    const { calls } = mount({}, { estimationFloorHours: 1 })
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-estimated"))
+    expect(screen.getByText(/Posts under 1 hour are too new/)).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "between" }))
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "5" } })
+    // Incomplete, and then backwards: neither can be added.
+    const submit = () =>
+      screen.getByTestId("post-views-editor-submit") as HTMLButtonElement
+    expect(submit().disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "1" } })
+    expect(submit().disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "50" } })
+    fireEvent.click(submit())
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-estimated"))
+    fireEvent.click(screen.getByRole("button", { name: "no value" }))
+    fireEvent.click(submit())
+    expect(calls).toEqual([
+      ["filter", "estimated 5..50"],
+      ["filter", "estimated = none"],
+    ])
+  })
+
+  test("lists the bounds the filter already holds, NOT included", () => {
+    mount({
+      postFilter: {
+        ...emptyPostFilter(),
+        children: [
+          {
+            kind: "atom",
+            id: "v",
+            not: true,
+            cond: { type: "views", measure: "views", min: 1000 },
+          },
+        ],
+      },
+    })
+    fireEvent.click(screen.getByTestId("post-filters"))
+    expect(screen.getByTestId("post-filters-views").textContent).toContain(
+      "not ≥ 1K",
     )
+  })
+})
+
+describe("the pills", () => {
+  test("Order is one choice, and says which measure the views orders read", () => {
+    const { calls } = mount()
     fireEvent.click(screen.getByTestId("post-filter-pill-order"))
+    fireEvent.click(screen.getByText("Views"))
     fireEvent.click(screen.getByRole("radio", { name: /Oldest first/ }))
     expect(calls).toEqual([
-      ["forwarded", "unfollowed_forwarded"],
+      ["measure", "views"],
       ["order", "oldest"],
     ])
   })
@@ -275,17 +306,71 @@ describe("the pills", () => {
   })
 })
 
+describe("the filter row", () => {
+  test("is not there while nothing filters, and says N of the window's M when something does", () => {
+    mount()
+    expect(screen.queryByTestId("post-filter-row")).toBeNull()
+    cleanup()
+    mount({ postFilter: funnels(["language", "fa"]) })
+    expect(screen.getByTestId("post-filter-count").textContent).toBe(
+      "1234 of 5000",
+    )
+  })
+
+  test("counts are approximate until the window's total is known", () => {
+    mount({ postFilter: funnels(["language", "fa"]) }, { facets: undefined })
+    const count = screen.getByTestId("post-filter-count")
+    expect(count.textContent).toBe("≈ 1234 of 1234")
+    expect(count.getAttribute("title")).toContain("not known yet")
+  })
+
+  test("negates a chip, and its label reopens its picker on that Condition", () => {
+    const { calls } = mount({ postFilter: funnels(["language", "fa"]) })
+    fireEvent.click(screen.getByLabelText("Negate Persian"))
+    const chip = screen.getByTestId("post-filter-chip-language-fa")
+    fireEvent.click(within(chip).getByText("Persian"))
+    fireEvent.click(screen.getByText("No text"))
+    expect(calls).toEqual([
+      ["filter", "not lang:fa"],
+      ["filter", "lang:zxx"],
+    ])
+  })
+
+  test("the + adds any Condition, a Channel among them", () => {
+    const { calls } = mount({ postFilter: funnels(["media", "photo"]) })
+    fireEvent.click(screen.getByLabelText("Add a condition"))
+    fireEvent.click(screen.getByText("Channel"))
+    fireEvent.click(screen.getByText("@durov"))
+    expect(calls).toEqual([["filter", "media:photo and channel:durov"]])
+  })
+
+  test("shows the keyword as a chip, and Clear all clears it and the filter", () => {
+    const { calls } = mount(
+      { postFilter: funnels(["type", "original"]) },
+      { postSearch: "rates" },
+    )
+    expect(screen.getByText(/"rates"/)).toBeTruthy()
+    expect(
+      screen.getByTestId("post-filter-chip-type-original").textContent,
+    ).toContain("Original")
+    fireEvent.click(screen.getByText("Clear all"))
+    expect(calls).toEqual([
+      ["keyword", ""],
+      ["filter", ""],
+    ])
+  })
+})
+
 describe("the footer", () => {
   test("says how many Posts, and drops one filter per chip", () => {
     const { calls } = mount(
-      { mediaFilter: ["photo"] },
+      { maxPostsPerChannel: 5 },
       { subtitle: "(grouped by channel)" },
     )
     expect(screen.getByText("1,234 posts")).toBeTruthy()
     expect(screen.getByText("(grouped by channel)")).toBeTruthy()
-    expect(screen.queryByText("Clear all")).toBeNull()
-    fireEvent.click(screen.getByLabelText("Remove Photo"))
-    expect(calls).toEqual([["media", []]])
+    fireEvent.click(screen.getByLabelText("Remove Newest 5 per channel"))
+    expect(calls).toEqual([["cap", 0]])
   })
 
   test("says how many Posts were too new to judge, when any were", () => {
@@ -294,18 +379,5 @@ describe("the footer", () => {
     cleanup()
     mount()
     expect(screen.queryByText(/too new to judge/)).toBeNull()
-  })
-
-  test("Clear all once two or more are on", () => {
-    const { calls } = mount(
-      { forwardedFilter: "original", maxPostsPerChannel: 5 },
-      { postSearch: "rates" },
-    )
-    fireEvent.click(screen.getByText("Clear all"))
-    expect(calls).toEqual([
-      ["keyword", ""],
-      ["forwarded", "all"],
-      ["cap", 0],
-    ])
   })
 })

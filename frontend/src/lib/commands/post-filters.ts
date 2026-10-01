@@ -1,14 +1,11 @@
 import type { CommandContext } from "@/lib/commands/types"
+import { funnelledValues, removeFunnel } from "@/lib/filter-tree"
 import {
-  MEDIA_KIND_OPTIONS,
-  type MediaFilterValue,
-} from "@/lib/posts/post-media"
-
-export type ForwardedFilterValue =
-  | "all"
-  | "forwarded"
-  | "original"
-  | "unfollowed_forwarded"
+  addPostFunnel,
+  emptyPostFilter,
+  type PostType,
+} from "@/lib/posts/post-filter"
+import { MEDIA_KIND_OPTIONS, type MediaKind } from "@/lib/posts/post-media"
 
 export const POST_DATE_RANGE_PRESETS = [
   { id: "24h", label: "Last 24 Hours", hours: 24 },
@@ -37,10 +34,7 @@ export function clearPostFilters(ctx: CommandContext): void {
   ctx.setPostSearch("")
   ctx.setSemanticSearchQuery("")
   ctx.setRelatedPostSearch(null)
-  ctx.setForwardedFilter("all")
-  ctx.setMediaFilter([])
-  ctx.setLanguageFilter([])
-  ctx.setViewsFilter(null)
+  ctx.setPostFilter(emptyPostFilter())
   ctx.setMaxPostsPerChannel(0)
   ctx.setMaxPostsPerChannelMode("ordered")
   ctx.setPostSortOrder("newest")
@@ -56,18 +50,29 @@ export function applyPostDateRangeHours(
   ctx.setDateRange(start, end)
 }
 
-export function applyForwardedFilter(
+/** Whether the Post filter funnels on this Type or media kind. */
+export const isFunnelled = (
   ctx: CommandContext,
-  value: ForwardedFilterValue,
-): void {
-  ctx.setForwardedFilter(value)
-  void ctx.handleFilterPosts(ctx.postSearch)
-}
+  type: "type" | "media",
+  value: PostType | MediaKind,
+): boolean => funnelledValues(ctx.postFilter, type).includes(value)
 
-export function applyMediaFilter(
+/**
+ * Add the Condition a Type or media command names to the Post filter, as the
+ * dropdown's funnel does, or take it out again when it is already there
+ * (PTR-03). Answers whether it is on now.
+ */
+export function togglePostFunnel(
   ctx: CommandContext,
-  value: MediaFilterValue,
-): void {
-  ctx.setMediaFilter(value)
+  type: "type" | "media",
+  value: PostType | MediaKind,
+): boolean {
+  const on = !isFunnelled(ctx, type, value)
+  ctx.setPostFilter(
+    on
+      ? addPostFunnel(ctx.postFilter, type, value)
+      : removeFunnel(ctx.postFilter, type, value),
+  )
   void ctx.handleFilterPosts(ctx.postSearch)
+  return on
 }

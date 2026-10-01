@@ -19,18 +19,18 @@ import { logger } from "@/lib/logger"
 import { queryKeys, VIEW_ESTIMATE_STALE_TIME } from "../hooks/queryKeys"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { type FollowOptions, useFollowJob } from "../hooks/useFollowJob"
+import { usePostFilterParam } from "../hooks/usePostFilterParam"
 import { usePostFilters } from "../hooks/usePostFilters"
 import { usePromptPosts } from "../hooks/usePromptPosts"
 import { useSyncJob } from "../hooks/useSyncJob"
 import { useSyncQueue } from "../hooks/useSyncQueue"
 import { channelAllows, disabledReason } from "../lib/channels/sync-permissions"
+import type { PostFilter } from "../lib/posts/post-filter"
 import type {
   MaxPostsPerChannelMode,
-  MediaFilterValue,
   PostSortOrder,
   PostViewOptions,
   ViewMeasure,
-  ViewsFilter,
 } from "../lib/posts/post-view"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
@@ -118,16 +118,9 @@ interface ScraperContextType {
     channels: BulkFollowChannelInput[],
     options?: FollowOptions,
   ) => Promise<FollowJobStatus | null>
-  forwardedFilter: "all" | "forwarded" | "original" | "unfollowed_forwarded"
-  setForwardedFilter: React.Dispatch<
-    React.SetStateAction<
-      "all" | "forwarded" | "original" | "unfollowed_forwarded"
-    >
-  >
-  mediaFilter: MediaFilterValue
-  setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
-  languageFilter: string[]
-  setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
+  /** What the Posts tab shows, from `?postFilter=` (PTR-03). */
+  postFilter: PostFilter
+  setPostFilter: (next: PostFilter) => void
   maxPostsPerChannel: number
   setMaxPostsPerChannel: React.Dispatch<React.SetStateAction<number>>
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -140,8 +133,6 @@ interface ScraperContextType {
   setGroupByChannel: React.Dispatch<React.SetStateAction<boolean>>
   viewMeasure: ViewMeasure
   setViewMeasure: React.Dispatch<React.SetStateAction<ViewMeasure>>
-  viewsFilter: ViewsFilter | null
-  setViewsFilter: React.Dispatch<React.SetStateAction<ViewsFilter | null>>
   postViewOptions: PostViewOptions
 }
 
@@ -201,12 +192,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setSemanticSearchRespectsChannels,
     relatedPostSearch,
     setRelatedPostSearch,
-    forwardedFilter,
-    setForwardedFilter,
-    mediaFilter,
-    setMediaFilter,
-    languageFilter,
-    setLanguageFilter,
     maxPostsPerChannel,
     setMaxPostsPerChannel,
     maxPostsPerChannelMode,
@@ -217,12 +202,11 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setGroupByChannel,
     viewMeasure,
     setViewMeasure,
-    viewsFilter,
-    setViewsFilter,
     postViewOptions,
     debouncedPostSearch,
     debouncedSemanticSearchQuery,
   } = usePostFilters()
+  const { postFilter, setPostFilter } = usePostFilterParam()
 
   const getViewEstimate = useCallback(
     () =>
@@ -272,7 +256,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const { getScopedPosts, getPromptPostsInput, getScopeSubmission } =
     usePromptPosts({
-      channels,
       selectedChannels,
       startDate,
       endDate,
@@ -281,13 +264,12 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       debouncedPostSearch,
       debouncedSemanticSearchQuery,
       relatedPostSearch,
-      forwardedFilter,
-      mediaFilter,
-      languageFilter,
+      postFilter,
       postViewOptions,
       semanticSearchRespectsChannels,
       searchSimilarPosts,
       getPostsFeed: api.getPostsFeed,
+      lookupPosts: api.lookupPosts,
       getViewEstimate,
     })
 
@@ -447,12 +429,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setConsecutiveFailures,
         addNewChannel,
         followDiscoverChannels,
-        forwardedFilter,
-        setForwardedFilter,
-        mediaFilter,
-        setMediaFilter,
-        languageFilter,
-        setLanguageFilter,
+        postFilter,
+        setPostFilter,
         maxPostsPerChannel,
         setMaxPostsPerChannel,
         maxPostsPerChannelMode,
@@ -463,8 +441,6 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setGroupByChannel,
         viewMeasure,
         setViewMeasure,
-        viewsFilter,
-        setViewsFilter,
         postViewOptions,
       }}
     >

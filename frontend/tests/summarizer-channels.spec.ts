@@ -2,7 +2,6 @@ import { expect, test } from "./fixtures.ts"
 
 import {
   clearScopedStorage,
-  readScopedStorage,
   seedScopedStorage,
 } from "./utils/scoped-storage.ts"
 import { seedBulkChannels, seedTestChannel } from "./utils/seed-channel"
@@ -148,26 +147,24 @@ test.describe("TG Workspace channels and posts", () => {
         },
       },
     ]
-    // The feed filters server-side now, so honour the `media` query param the
-    // client sends (the real backend does the same) rather than returning the
-    // full set regardless.
+    // The feed filters server-side, so honour the Post filter the client
+    // sends (the real backend does the same) rather than returning the full
+    // set regardless. A media Condition on photo is all this spec needs.
     await page.route("**/api/v1/data/posts**", async (route) => {
-      // The Media pill's per-kind counts (PFB-02) share the prefix.
+      // The dropdowns' per-value counts share the prefix.
       if (route.request().url().includes("/posts/facets")) {
-        await route.fulfill({ json: { languages: [], media: [] } })
+        await route.fulfill({
+          json: { total: 0, types: [], languages: [], media: [] },
+        })
         return
       }
-      // `media` moved from the query string into the request body along with
-      // the rest of the scope.
-      // `media` is a set of kinds since PFB-01; empty or absent is any media.
-      const body = route.request().postDataJSON() as {
-        media?: string[]
-      } | null
-      const media = body?.media ?? []
-      const json =
-        media.includes("photo") || media.includes("media_only")
-          ? mediaPosts.filter((post) => post.media?.kinds?.includes("photo"))
-          : mediaPosts
+      const body = route.request().postDataJSON() as { filter?: unknown } | null
+      const photo = JSON.stringify(body?.filter ?? null).includes(
+        '{"type":"media","value":"photo"}',
+      )
+      const json = photo
+        ? mediaPosts.filter((post) => post.media?.kinds?.includes("photo"))
+        : mediaPosts
       await route.fulfill({ json })
     })
 
@@ -176,15 +173,17 @@ test.describe("TG Workspace channels and posts", () => {
     await selectChannelsKeyboard(page, [channelName])
     await gotoWorkspace(page, "posts")
 
-    // The kinds are a checklist behind the Media pill since PFB-02.
-    await page.getByTestId("post-filter-pill-media").click()
-    await expect(page.getByTestId("post-media-filter-photo")).toBeVisible()
-    await page.getByTestId("post-media-filter-photo").click()
+    // The kinds are funnels in the Media dropdown since PTR-03, and the Post
+    // filter they build lives in the URL.
+    await page.getByTestId("post-filter-media").click()
+    await expect(
+      page.getByTestId("post-filter-media-funnel-photo"),
+    ).toBeVisible()
+    await page.getByTestId("post-filter-media-funnel-photo").click()
     await page.keyboard.press("Escape")
 
-    await expect
-      .poll(() => readScopedStorage(page, "postFilter_media"))
-      .toBe(JSON.stringify(["photo"]))
+    await expect(page).toHaveURL(/postFilter=media%3Aphoto/)
+    await expect(page.getByTestId("post-filter-chip-media-photo")).toBeVisible()
 
     await expect(page.getByTestId("post-card-media-badge-photo")).toBeVisible()
     await expect(page.getByText("Caption only")).not.toBeVisible()

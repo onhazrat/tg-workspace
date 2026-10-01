@@ -366,14 +366,23 @@ def test_the_frozen_artifact_exceptions_are_all_still_real() -> None:
 
 
 def test_every_scope_carrying_request_states_a_window() -> None:
-    """The other direction: the three Scope shapes all take the new input.
+    """The other direction: the Scope shapes all take the new input.
 
     Named rather than derived, because "carries a Scope" is not a property a
     schema declares — and the point of listing them is that a fourth appearing
     without a window is a question somebody has to answer deliberately.
     """
     schemas = _request_schemas()
-    for name in ("PostScopeRequest", "RagSearchRequest", "PromptScopeInput"):
+    # PTR-03 split the posts reads' body three ways: the facets take only the
+    # Channels and the window, the counts add the Post filter's tree, and the
+    # Discover request is the middle shape inherited, flattened into its own.
+    names = (
+        "PostWindowRequest",
+        "PostFilteredRequest",
+        "RagSearchRequest",
+        "PromptScopeInput",
+    )
+    for name in names:
         assert name in schemas, f"{name} is no longer reachable from a mounted route"
         assert "window" in _properties(schemas[name]), (
             f"{name} carries a Post scope but states no Analysis window"
@@ -389,7 +398,7 @@ def test_the_window_reaches_the_client_as_a_discriminated_union() -> None:
     inference ADR-018 refuses.
     """
     schemas = _request_schemas()
-    window = schemas["PostScopeRequest"]["properties"]["window"]  # type: ignore[index]
+    window = schemas["PostWindowRequest"]["properties"]["window"]  # type: ignore[index]
 
     refs: set[str] = set()
     _schema_refs(window, refs)

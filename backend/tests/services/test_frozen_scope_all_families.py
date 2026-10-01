@@ -96,11 +96,7 @@ DAY_MS = 24 * 60 * MINUTE_MS
 #: given.
 FILTERS: dict[str, Any] = {
     "keyword": "tehran",
-    "forwarded": "original",
-    "languages": ["fa", "en"],
-    "media": ["photo", "video"],
     "viewMeasure": "views",
-    "views": {"op": "gte", "value": 2500},
     "maxPerChannel": 25,
     "maxPerChannelMode": "random",
     "sort": "most_views",
@@ -113,9 +109,14 @@ FILTERS: dict[str, Any] = {
 #: `channels`, `start` and `end` are asserted separately.
 SHARED_KEYS = tuple(FILTERS)
 
+#: The flat Post filters, which left the Scope in PTR-03 (ADR-026): a stored
+#: Scope keeps them, read-only, and a submission naming one is refused.
+FLAT_FILTERS = ("forwarded", "languages", "media", "views")
+
 #: The filter half as it was spelled before PFB-01, and what each value reads
 #: as now. Every Artifact and scheduled Summary written before the change holds
-#: the left-hand shape; a browser on the previous bundle sends it for a release.
+#: the left-hand shape; a browser on the previous bundle sends it, without the
+#: flat filters, for a release.
 LEGACY_FILTERS: dict[str, Any] = {
     "keyword": "tehran",
     "forwarded": "original",
@@ -151,6 +152,11 @@ UNIMPLEMENTED: list[tuple[str, Any]] = [
     ("viewMeasure", "reach"),
     ("views", {"op": "gt", "value": 10}),
     ("views", {"op": "gte", "value": -1}),
+    # Gone from the submission rather than unimplemented, and refused alike.
+    ("forwarded", "original"),
+    ("languages", ["fa"]),
+    ("media", ["photo"]),
+    ("views", {"op": "gte", "value": 1}),
 ]
 
 
@@ -689,10 +695,12 @@ def test_a_submission_in_the_old_shape_is_recorded_in_the_new_one(
     Accepted for one release, mapped exactly as a stored row is, so an old tab
     and an old row can never mean two different things by one value.
     """
-    created = _create(client, family, _auth(client), filters=LEGACY_FILTERS)
+    submitted = {k: v for k, v in LEGACY_FILTERS.items() if k not in FLAT_FILTERS}
+    created = _create(client, family, _auth(client), filters=submitted)
 
     for key, expected in LEGACY_READS_AS.items():
-        assert created["scope"][key] == expected, key
+        if key not in FLAT_FILTERS:
+            assert created["scope"][key] == expected, key
 
 
 # --------------------------------------------------------------------------

@@ -21,18 +21,13 @@ import { RANDOM_CAP_SEED } from "@/lib/posts/discover-candidates"
 export function useDiscoverGenerate() {
   const { selectedChannels } = useData()
   const {
-    getScopedPosts,
-    forwardedFilter,
+    getPromptPostsInput,
     postSearch,
-    semanticSearchQuery,
     maxPostsPerChannel,
     maxPostsPerChannelMode,
     postSortOrder,
     groupByChannel,
-    mediaFilter,
-    languageFilter,
     viewMeasure,
-    viewsFilter,
   } = useScraper()
   const { startDate, endDate } = useScope()
   const { discoverSignals } = useSettings()
@@ -53,11 +48,7 @@ export function useDiscoverGenerate() {
       endDate,
       signals: discoverSignals,
       keyword: debouncedPostSearch,
-      forwarded: forwardedFilter,
-      media: mediaFilter,
-      languages: languageFilter,
       viewMeasure,
-      views: viewsFilter,
       maxPerChannel: maxPostsPerChannel,
       maxPerChannelMode: maxPostsPerChannelMode,
       sort: postSortOrder,
@@ -70,11 +61,7 @@ export function useDiscoverGenerate() {
       endDate,
       discoverSignals,
       debouncedPostSearch,
-      forwardedFilter,
-      mediaFilter,
-      languageFilter,
       viewMeasure,
-      viewsFilter,
       maxPostsPerChannel,
       maxPostsPerChannelMode,
       postSortOrder,
@@ -88,13 +75,15 @@ export function useDiscoverGenerate() {
    * A semantic query is the one scope whose *post selection* the server cannot
    * derive from the scope alone — the vector search owns that ranking. So the
    * client resolves which posts matched and passes their ids; the aggregation
-   * still happens server-side, in the single implementation.
+   * still happens server-side, in the single implementation. They are the
+   * ranked Posts an Action reads, which the Post filter never narrows
+   * (ADR-026).
    */
   const generate = async () => {
     const params = { ...liveParams }
-    if (semanticSearchQuery.trim()) {
-      const posts = await getScopedPosts()
-      params.postIds = posts.map((post) => ({
+    const input = await getPromptPostsInput()
+    if (input.posts) {
+      params.postIds = input.posts.map((post) => ({
         channelName: post.channelName,
         postId: post.id,
       }))

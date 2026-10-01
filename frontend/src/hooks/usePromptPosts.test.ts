@@ -16,6 +16,7 @@ import { describe, expect, test } from "bun:test"
 import { renderHook } from "@testing-library/react"
 
 import { type PromptPostsDeps, usePromptPosts } from "@/hooks/usePromptPosts"
+import { addPostFunnel, emptyPostFilter } from "@/lib/posts/post-filter"
 import type { WindowState } from "@/lib/scope/window"
 import type { Post } from "@/types"
 
@@ -45,7 +46,6 @@ function post(id: number): Post {
  * you nothing about the dependency it is guarding. The real providers hand
  * these down from `useState`/`useCallback`, which is what this mirrors.
  */
-const CHANNELS: PromptPostsDeps["channels"] = []
 const SELECTED = new Set(["alpha"])
 const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
   maxPostsPerChannel: 0,
@@ -53,17 +53,20 @@ const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
   postSortOrder: "newest",
   groupByChannel: false,
   viewMeasure: "estimated" as const,
-  viewsFilter: null,
 }
-// A constant for the reason `VIEW_OPTIONS` is one: the provider hands the set
-// down from `useState`, so a fresh `[]` per render would fake a changed filter.
-const ANY_MEDIA: PromptPostsDeps["mediaFilter"] = []
-const ANY_LANGUAGE: PromptPostsDeps["languageFilter"] = []
+// A constant for the reason `VIEW_OPTIONS` is one: the provider hands the tree
+// down from a memo, so a fresh one per render would fake a changed filter.
+const NO_FILTER = emptyPostFilter()
+const PERSIAN = addPostFunnel(emptyPostFilter(), "language", "fa")
 const NO_SEARCH: PromptPostsDeps["searchSimilarPosts"] = async () => {
   throw new Error("searchSimilarPosts should not be called")
 }
 const NO_FEED: PromptPostsDeps["getPostsFeed"] = async () => {
   throw new Error("getPostsFeed should not be called")
+}
+
+const NO_LOOKUP: PromptPostsDeps["lookupPosts"] = async () => {
+  throw new Error("lookupPosts should not be called")
 }
 
 const NO_ESTIMATE: PromptPostsDeps["getViewEstimate"] = async () => {
@@ -72,7 +75,6 @@ const NO_ESTIMATE: PromptPostsDeps["getViewEstimate"] = async () => {
 
 function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
   return {
-    channels: CHANNELS,
     selectedChannels: SELECTED,
     startDate: 1000,
     endDate: 9000,
@@ -81,13 +83,12 @@ function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
     debouncedPostSearch: "",
     debouncedSemanticSearchQuery: "",
     relatedPostSearch: null,
-    forwardedFilter: "all",
-    mediaFilter: ANY_MEDIA,
-    languageFilter: ANY_LANGUAGE,
+    postFilter: NO_FILTER,
     postViewOptions: VIEW_OPTIONS,
     semanticSearchRespectsChannels: false,
     searchSimilarPosts: NO_SEARCH,
     getPostsFeed: NO_FEED,
+    lookupPosts: NO_LOOKUP,
     getViewEstimate: NO_ESTIMATE,
     ...over,
   }
@@ -106,19 +107,18 @@ describe("getPromptPostsInput", () => {
     expect(input.scope).toBeDefined()
   })
 
-  test("the scope carries the whole filter state", async () => {
+  test("the scope carries the keyword, the cap and the order, never the Post filter", async () => {
+    // ADR-026: the Post filter decides what the tab shows, not what a prompt
+    // reads. A Summary covers the window whatever the filter says.
     const input = await render({
       debouncedPostSearch: "crypto",
-      forwardedFilter: "unfollowed_forwarded",
-      mediaFilter: ["photo", "video"],
-      languageFilter: ["fa"],
+      postFilter: PERSIAN,
       postViewOptions: {
         maxPostsPerChannel: 7,
         maxPostsPerChannelMode: "random",
         postSortOrder: "most_views",
         groupByChannel: true,
         viewMeasure: "views" as const,
-        viewsFilter: { op: "gte" as const, value: 2500 },
       },
     }).getPromptPostsInput()
 
@@ -126,11 +126,7 @@ describe("getPromptPostsInput", () => {
       startDate: 1000,
       endDate: 9000,
       keyword: "crypto",
-      forwarded: "unfollowed_forwarded",
-      media: ["photo", "video"],
-      languages: ["fa"],
       viewMeasure: "views",
-      views: { op: "gte", value: 2500 },
       maxPerChannel: 7,
       maxPerChannelMode: "random",
       sort: "most_views",
@@ -150,6 +146,29 @@ describe("getPromptPostsInput", () => {
 
     expect(input.scope).toBeUndefined()
     expect(input.posts?.length).toBe(2)
+  })
+
+  test("a meaning search's ranked Posts reach a prompt unfiltered; the tab sees them filtered", async () => {
+    const ranked = [post(1), post(2)]
+    const looked: unknown[] = []
+    const hook = render({
+      embeddingsEnabled: true,
+      debouncedSemanticSearchQuery: "crypto",
+      postFilter: PERSIAN,
+      searchSimilarPosts: async () => ranked,
+      lookupPosts: async (_refs, filter) => {
+        looked.push(filter)
+        return [ranked[1]]
+      },
+    })
+
+    const input = await hook.getPromptPostsInput()
+    expect(input.posts?.map((p) => p.id)).toEqual([2, 1])
+    expect(looked).toEqual([])
+
+    const shown = await hook.getScopedPosts()
+    expect(shown.map((p) => p.id)).toEqual([2])
+    expect(looked).toEqual([PERSIAN])
   })
 
   test("a related-post search returns posts, not a scope", async () => {
@@ -256,24 +275,22 @@ describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () 
 })
 
 describe("getScopeSubmission", () => {
-  test("the submission an Artifact freezes carries every pill (PFB-02)", () => {
+  test("the submission an Artifact freezes carries the Scope and no Post filter (PTR-03)", () => {
     const submission = render({
-      mediaFilter: ["photo", "video"],
-      languageFilter: ["fa", "en"],
+      postFilter: PERSIAN,
       postViewOptions: {
         maxPostsPerChannel: 3,
         maxPostsPerChannelMode: "ordered",
         postSortOrder: "oldest",
         groupByChannel: true,
         viewMeasure: "estimated" as const,
-        viewsFilter: null,
       },
     }).getScopeSubmission(["alpha"])
 
+    expect(Object.keys(submission)).not.toContain("languages")
+    expect(Object.keys(submission)).not.toContain("filter")
     expect(submission).toMatchObject({
       channels: ["alpha"],
-      media: ["photo", "video"],
-      languages: ["fa", "en"],
       maxPerChannel: 3,
       maxPerChannelMode: "ordered",
       sort: "oldest",

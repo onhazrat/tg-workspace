@@ -28,14 +28,14 @@ import { copyChannelTelegramChatId } from "@/lib/commands/channel-telegram-chat-
 import { filterPartialHistoryChannels } from "@/lib/commands/filter-channels"
 import { parseOpenPostInput } from "@/lib/commands/open-post"
 import {
-  applyForwardedFilter,
-  applyMediaFilter,
   applyPostDateRangeHours,
   clearPostFilters,
   FORWARDED_FILTER_OPTIONS,
+  isFunnelled,
   MEDIA_KIND_OPTIONS,
   POST_DATE_RANGE_PRESETS,
   POST_ORDER_OPTIONS,
+  togglePostFunnel,
 } from "@/lib/commands/post-filters"
 import { pickSearchPost } from "@/lib/commands/search-filters"
 import type {
@@ -615,10 +615,11 @@ export function buildExtendedCommands(): CommandDef[] {
       label: `Set Forwarded Filter → ${option.label}`,
       keywords: ["post", "forwarded", "filter", option.id],
       group: "Posts",
-      getBadge: (ctx) => (ctx.forwardedFilter === option.value ? "ON" : null),
+      // Adds the Type Condition, or takes it out (PTR-03).
+      getBadge: (ctx) => (isFunnelled(ctx, "type", option.value) ? "ON" : null),
       run: async (ctx) => {
-        applyForwardedFilter(ctx, option.value)
-        toast.success(`Forwarded filter: ${option.label}`)
+        const on = togglePostFunnel(ctx, "type", option.value)
+        toast.success(`Forwarded filter: ${option.label} ${on ? "on" : "off"}`)
       },
     })
   }
@@ -630,16 +631,11 @@ export function buildExtendedCommands(): CommandDef[] {
       label: `Set Media Filter → ${option.label}`,
       keywords: ["post", "media", "filter", option.value, option.label],
       group: "Posts",
-      // Ticks or unticks the kind, as the Media pill's checkbox does (PFB-02).
-      getBadge: (ctx) => (ctx.mediaFilter.includes(option.value) ? "ON" : null),
+      // Funnels on the kind, or stops, as the Media dropdown's funnel does.
+      getBadge: (ctx) =>
+        isFunnelled(ctx, "media", option.value) ? "ON" : null,
       run: async (ctx) => {
-        const on = !ctx.mediaFilter.includes(option.value)
-        applyMediaFilter(
-          ctx,
-          on
-            ? [...ctx.mediaFilter, option.value]
-            : ctx.mediaFilter.filter((kind) => kind !== option.value),
-        )
+        const on = togglePostFunnel(ctx, "media", option.value)
         toast.success(`Media filter: ${option.label} ${on ? "on" : "off"}`)
       },
     })

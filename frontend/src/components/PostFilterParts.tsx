@@ -1,27 +1,15 @@
 /**
  * The pieces the Posts filter bar is built from (PFB-02): a pill that opens a
- * small form, the forms' option list and checklist, and a count typed as
- * text. Layout and copy follow the A1b prototype
+ * small form, the forms' option list, and a count typed as text. Layout and copy follow the A1b prototype
  * (`prototype/post-filter-ui`).
  */
 import { ChevronDown } from "lucide-react"
 import { Popover } from "radix-ui"
 import React from "react"
-import {
-  CAP_SHORTCUTS,
-  capCard,
-  DEFAULT_VIEWS_VALUE,
-  nearestViewStep,
-  parseCount,
-  VIEW_MEASURE_OPTIONS,
-  VIEW_STEPS,
-  viewMeasureDescription,
-} from "@/lib/posts/post-filter-bar"
+import { CAP_SHORTCUTS, capCard, parseCount } from "@/lib/posts/post-filter-bar"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
-  ViewMeasure,
-  ViewsFilter,
 } from "@/lib/posts/post-view"
 
 export const pillClass = (active: boolean) =>
@@ -99,74 +87,6 @@ export function Options<T extends string>({
   )
 }
 
-export interface CheckItem {
-  key: string
-  label: string
-  /** Omitted when no count is known, as on a meaning search. */
-  count?: number
-  checked: boolean
-  testId?: string
-}
-
-/** Several choices, each with its Post count, and an "Any" reset. */
-export function CheckList({
-  items,
-  anyLabel,
-  emptyLabel,
-  onToggle,
-  onAny,
-}: {
-  items: CheckItem[]
-  anyLabel: string
-  emptyLabel?: string
-  onToggle: (key: string) => void
-  onAny: () => void
-}) {
-  const anyChecked = items.some((item) => item.checked)
-  return (
-    <>
-      <div className="flex max-h-72 flex-col overflow-y-auto">
-        {items.length === 0 && emptyLabel && (
-          <p className="px-2 py-1.5 text-app-ink/60">{emptyLabel}</p>
-        )}
-        {items.map((item) => (
-          <label
-            key={item.key}
-            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-app-ink/5"
-          >
-            <input
-              type="checkbox"
-              data-testid={item.testId}
-              checked={item.checked}
-              onChange={() => onToggle(item.key)}
-              className="accent-app-ink"
-            />
-            <span className="flex-1">{item.label}</span>
-            {item.count != null && (
-              <span className="font-mono text-[10px] opacity-50">
-                {item.count.toLocaleString()}
-              </span>
-            )}
-          </label>
-        ))}
-      </div>
-      {anyChecked && (
-        <button
-          type="button"
-          onClick={onAny}
-          className="mt-2 text-app-ink/60 hover:underline"
-        >
-          {anyLabel}
-        </button>
-      )}
-    </>
-  )
-}
-
-/**
- * A count typed as text, so `1,000` works. Blank is `null`. The draft is kept
- * while it does not parse, and replaced when the value changes from outside.
- */
 export function CountInput({
   value,
   onChange,
@@ -328,97 +248,6 @@ export function PerChannelForm({
       <p className="mt-2 text-[11px] text-app-ink/50">
         The first choice follows the Order.
       </p>
-    </>
-  )
-}
-
-/**
- * The Views form (PFB-03): which measure, which side, and how many. A number
- * typed or slid with no side chosen yet is Popular, and a side chosen with no
- * number yet is 10K.
- */
-export function ViewsForm({
-  measure,
-  setMeasure,
-  views,
-  setViews,
-  floorHours,
-}: {
-  measure: ViewMeasure
-  setMeasure: (value: ViewMeasure) => void
-  views: ViewsFilter | null
-  setViews: (value: ViewsFilter | null) => void
-  floorHours: number
-}) {
-  const op = views?.op ?? "gte"
-  const setValue = (value: number | null) =>
-    setViews(value == null ? null : { op, value })
-  return (
-    <>
-      <div className="flex gap-3 border-b border-app-ink/10" role="tablist">
-        {VIEW_MEASURE_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            role="tab"
-            aria-selected={option.value === measure}
-            onClick={() => setMeasure(option.value)}
-            className={`-mb-px border-b-2 pb-1.5 ${option.value === measure ? "border-app-ink font-semibold" : "border-transparent text-app-ink/60"}`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      <p className="mt-2 text-[11px] text-app-ink/60">
-        {viewMeasureDescription(measure, floorHours)}
-      </p>
-      <div className="mt-3 flex gap-2">
-        <Card
-          on={views?.op === "gte"}
-          onClick={() =>
-            setViews({ op: "gte", value: views?.value ?? DEFAULT_VIEWS_VALUE })
-          }
-          title="Popular"
-          body="At least this many"
-        />
-        <Card
-          on={views?.op === "lte"}
-          onClick={() =>
-            setViews({ op: "lte", value: views?.value ?? DEFAULT_VIEWS_VALUE })
-          }
-          title="Niche"
-          body="At most this many"
-        />
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <CountInput
-          ariaLabel="Views"
-          className="w-24"
-          placeholder="any"
-          value={views?.value ?? null}
-          onChange={setValue}
-        />
-        <span className="text-app-ink/60">views</span>
-        {views && (
-          <button
-            type="button"
-            onClick={() => setViews(null)}
-            className="ml-auto text-app-ink/60 hover:underline"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-      <input
-        type="range"
-        aria-label="Views, on a log scale"
-        min={0}
-        max={VIEW_STEPS.length - 1}
-        step={1}
-        value={nearestViewStep(views?.value ?? DEFAULT_VIEWS_VALUE)}
-        onChange={(e) => setValue(VIEW_STEPS[Number(e.target.value)])}
-        className={`mt-3 w-full accent-app-ink ${views ? "" : "opacity-40"}`}
-      />
     </>
   )
 }

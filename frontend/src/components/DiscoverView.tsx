@@ -61,8 +61,7 @@ import { useApiStatus } from "../hooks/useApiStatus"
  */
 export const DiscoverView: React.FC = () => {
   const { selectedChannels } = useData()
-  const { setForwardedFilter, followDiscoverChannels, scrapingChannels } =
-    useScraper()
+  const { followDiscoverChannels, scrapingChannels } = useScraper()
   const { setActiveTab } = useUI()
   const { isOffline } = useApiStatus()
   const {
@@ -253,7 +252,6 @@ export const DiscoverView: React.FC = () => {
 
   const runQuickAction = (action: DiscoveryQuickAction) =>
     runDiscoveryQuickAction(action, {
-      setForwardedFilter,
       goToTab: setActiveTab,
       enableAllSignals: () => setDiscoverSignals([...DISCOVERY_SIGNAL_KINDS]),
       resetCandidateFilters,

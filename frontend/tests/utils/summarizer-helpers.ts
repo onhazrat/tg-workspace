@@ -324,8 +324,6 @@ export async function mockDiscoverForwardPosts(
         scope: {
           ...discoverReport.scope,
           signals: body.signals ?? discoverReport.scope.signals,
-          forwarded: body.forwarded ?? "all",
-          media: body.media ?? [],
           keyword: body.keyword ?? null,
         },
       }
@@ -383,8 +381,6 @@ export async function mockDiscoverForwardPosts(
     startDateTs: String(now - 14 * 24 * 60 * 60 * 1000),
     endDateTs: String(now + 60_000),
     postFilter_maxPerChannel: "0",
-    // Persisted across specs; a leftover media filter would empty the scope.
-    postFilter_media: "[]",
   })
 }
 

@@ -6,11 +6,11 @@ caps how many posts per channel are kept. Discover and the per-channel scope
 counts both derive from that same filtered set, so to compute either
 server-side we must reproduce these filters exactly against the database.
 
-Parity targets (keep in lockstep with the frontend):
-  - keyword   → `applyKeywordFilter`        (post-view.ts:112)
-  - forwarded → `applyForwardedFilter`      (post-view.ts:88)
-  - media     → `matchesMediaFilter`        (post-media.ts:46)
-  - languages → `applyLanguageFilter`       (post-view.ts)
+Parity target (keep in lockstep with the frontend):
+  - keyword   → `applyKeywordFilter`        (post-view.ts)
+
+The rest of the Post filter is a tree of Conditions (PTR-03) that only the
+server evaluates; the browser sends it and never tests a Post against it.
 
 The Scope's vocabulary lives here too: the media kinds, the feed's orders and
 the cap's modes, so the schemas that accept a Scope and the services that read
@@ -20,7 +20,8 @@ one name one set of values (PFB-01).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
 from sqlalchemy import (
@@ -36,6 +37,7 @@ from sqlalchemy import (
     literal,
     not_,
     or_,
+    true,
     type_coerce,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -46,6 +48,10 @@ from app.services.post_media_parser import LEGACY_MEDIA_PLACEHOLDER
 from app.services.reach import MS_PER_HOUR, CurvePoints, ReachSettings
 
 ForwardedFilter = Literal["all", "forwarded", "original", "unfollowed_forwarded"]
+#: A Type Condition's values: `ForwardedFilter` without `all`, which a tree
+#: says by having no Type Condition at all.
+PostType = Literal["forwarded", "original", "unfollowed_forwarded"]
+POST_TYPE_ORDER: tuple[PostType, ...] = get_args(PostType)
 #: One media kind. A Scope carries a *set* of them (PFB-01): empty means any
 #: media, and a Post matches when it matches any kind in the set. The set
 #: replaced a single value whose `"all"` meant what the empty set means now;
@@ -65,11 +71,12 @@ MediaKind = Literal[
 FeedSort = Literal["newest", "oldest", "most_views", "fewest_views"]
 VIEW_SORTS: frozenset[str] = frozenset(("most_views", "fewest_views"))
 
-#: What a views threshold and the views orders compare: the View count
-#: Telegram shows now, or the Estimated View count (ADR-025).
+#: What a views bound and the views orders compare: the View count Telegram
+#: shows now, or the Estimated View count (ADR-025).
 ViewMeasure = Literal["views", "estimated"]
 VIEW_MEASURES: frozenset[str] = frozenset(get_args(ViewMeasure))
-#: At least (`gte`) or at most (`lte`) a number of views.
+#: At least (`gte`) or at most (`lte`): a frozen Scope's views threshold from
+#: before PTR-03, kept so an old Artifact still reads.
 ViewsOp = Literal["gte", "lte"]
 
 #: The per-channel cap's modes. `ordered` keeps each channel's first N **in the
@@ -77,9 +84,6 @@ ViewsOp = Literal["gte", "lte"]
 #: cap under `oldest` can never be labelled "newest" (PFB-01).
 CapMode = Literal["ordered", "random"]
 
-FORWARDED_FILTERS: frozenset[str] = frozenset(
-    ("all", "forwarded", "original", "unfollowed_forwarded")
-)
 #: The kinds in the order the Media pill lists them.
 MEDIA_KIND_ORDER: tuple[MediaKind, ...] = get_args(MediaKind)
 MEDIA_KINDS: frozenset[str] = frozenset(MEDIA_KIND_ORDER)
@@ -92,14 +96,6 @@ FEED_CAP_MODES: frozenset[str] = frozenset(get_args(CapMode))
 _MEDIA_ONLY_TEXT_RE = (
     r"^\[(photo|video|voice|audio|document|poll|sticker|photo album)\]"
 )
-
-
-@dataclass(frozen=True)
-class ViewsThreshold:
-    """Keep Posts with at least or at most `value` views under the measure."""
-
-    op: ViewsOp
-    value: int
 
 
 @dataclass(frozen=True)
@@ -138,34 +134,102 @@ class ViewReading:
         )
 
 
+# ---- The Post filter's tree (PTR-03) ----------------------------------------
+#
+# The Channels tab's filter over Posts: AND/OR groups and NOT on any node, so
+# parentheses are just groups. Each Condition holds one value, so a tree says
+# what one list per pill could not: "not Persian", "photo and not forwarded",
+# "(fa and video) or (views >= 10K)".
+
+TreeOp = Literal["and", "or"]
+
+
+@dataclass(frozen=True)
+class TypeCond:
+    value: PostType
+
+
+@dataclass(frozen=True)
+class MediaCond:
+    value: MediaKind
+
+
+@dataclass(frozen=True)
+class LanguageCond:
+    value: str
+
+
+@dataclass(frozen=True)
+class ChannelCond:
+    """One Channel by handle; one the caller does not follow matches nothing."""
+
+    value: str
+
+
+@dataclass(frozen=True)
+class ViewsCond:
+    """A bound on a measure, either end open; `none` keeps the Posts with no value."""
+
+    measure: ViewMeasure
+    min: float | None = None
+    max: float | None = None
+    none: bool = False
+
+
+TreeCond = TypeCond | MediaCond | LanguageCond | ChannelCond | ViewsCond
+
+
+@dataclass(frozen=True)
+class TreeAtom:
+    cond: TreeCond
+    negated: bool = False
+
+
+@dataclass(frozen=True)
+class TreeGroup:
+    op: TreeOp
+    children: tuple[TreeAtom | TreeGroup, ...] = ()
+    negated: bool = False
+
+
+TreeNode = TreeAtom | TreeGroup
+
+
+def tree_conds(node: TreeNode) -> list[TreeCond]:
+    """Every Condition in the tree, in order."""
+    if isinstance(node, TreeAtom):
+        return [node.cond]
+    return [cond for child in node.children for cond in tree_conds(child)]
+
+
+def tree_measures(node: TreeNode) -> frozenset[ViewMeasure]:
+    """The measures the tree's views bounds read, so only those are loaded."""
+    return frozenset(c.measure for c in tree_conds(node) if isinstance(c, ViewsCond))
+
+
 @dataclass(frozen=True)
 class PostFilters:
-    """The subset of Posts-tab view state that maps onto SQL predicates.
+    """The Post filter as SQL predicates: the keyword and the tree (PTR-03).
 
-    `followed_names` is only consulted for the `unfollowed_forwarded` filter;
-    pass the lowercased followed-channel set when that value is possible.
+    `followed_names` is only consulted for the `unfollowed_forwarded` Type;
+    pass the lowercased followed-channel set when the tree holds one.
     """
 
     keyword: str | None = None
-    forwarded: ForwardedFilter = "all"
-    #: Empty is any media; otherwise a Post matching any one kind is kept.
-    media: tuple[MediaKind, ...] = ()
-    #: Empty is any Language; otherwise the Post's own Language must be one of
-    #: these. A Post whose Language is unread (NULL) never matches (PFB-02).
-    languages: tuple[str, ...] = ()
-    #: None keeps every Post; otherwise a Post whose value under `reading` is
-    #: on the threshold's side. A Post with no value never matches (PFB-03).
-    views: ViewsThreshold | None = None
-    #: The measure `views` and the views orders read.
+    #: None or an empty root keeps every Post.
+    tree: TreeGroup | None = None
+    #: One reading per measure the tree's views bounds read.
+    tree_readings: Mapping[ViewMeasure, ViewReading] = field(default_factory=dict)
+    #: The measure the views orders read. Not the tree's: a bound names its own.
     reading: ViewReading = ViewReading()
 
-    def is_noop(self) -> bool:
-        return (
-            not (self.keyword and self.keyword.strip())
-            and self.forwarded == "all"
-            and not self.media
-            and not self.languages
-            and self.views is None
+    def has_tree(self) -> bool:
+        return self.tree is not None and bool(self.tree.children)
+
+    def reads_unfollowed(self) -> bool:
+        """Whether the tree needs the followed-channel set."""
+        return self.tree is not None and TypeCond("unfollowed_forwarded") in tree_conds(
+            self.tree
         )
 
 
@@ -208,20 +272,18 @@ def _keyword_clause(term: str) -> ColumnElement[bool]:
     )
 
 
-def _forwarded_clause(
-    value: ForwardedFilter, followed_names: frozenset[str] | None
-) -> ColumnElement[bool] | None:
+def post_type_clause(
+    value: PostType, followed_names: frozenset[str] | None
+) -> ColumnElement[bool]:
     if value == "forwarded":
         return col(Post.forwarded_from).is_not(None)
     if value == "original":
         return col(Post.forwarded_from).is_(None)
-    if value == "unfollowed_forwarded":
-        followed = followed_names or frozenset()
-        return and_(
-            col(Post.forwarded_from).is_not(None),
-            func.lower(col(Post.forwarded_from)).notin_(followed),
-        )
-    return None
+    followed = followed_names or frozenset()
+    return and_(
+        col(Post.forwarded_from).is_not(None),
+        func.lower(col(Post.forwarded_from)).notin_(followed),
+    )
 
 
 def media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
@@ -243,21 +305,61 @@ def media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
     raise ValueError(f"unknown media kind: {value}")
 
 
-def _media_clause(kinds: tuple[MediaKind, ...]) -> ColumnElement[bool] | None:
-    """Any one of `kinds`, or no predicate at all for the empty set."""
-    if not kinds:
-        return None
-    return or_(*(media_kind_clause(kind) for kind in dict.fromkeys(kinds)))
-
-
-def views_clause(
-    threshold: ViewsThreshold, reading: ViewReading, entity: Any = Post
+def _atom_clause(
+    cond: TreeCond,
+    readings: Mapping[ViewMeasure, ViewReading],
+    followed_names: frozenset[str] | None,
 ) -> ColumnElement[bool]:
-    """`threshold` under `reading`. A NULL value compares to NULL, never true."""
-    value = reading.of(entity)
-    return (
-        value >= threshold.value if threshold.op == "gte" else value <= threshold.value
-    )
+    if isinstance(cond, TypeCond):
+        return post_type_clause(cond.value, followed_names)
+    if isinstance(cond, MediaCond):
+        return media_kind_clause(cond.value)
+    if isinstance(cond, LanguageCond):
+        return col(Post.language) == cond.value
+    if isinstance(cond, ChannelCond):
+        # The read is already narrowed to the caller's Follows, so a Channel
+        # they do not follow matches nothing here without a check of its own.
+        return col(Post.channel_name) == cond.value
+    value = readings[cond.measure].of(Post)
+    if cond.none:
+        return value.is_(None)
+    bounds: list[ColumnElement[bool]] = [value.is_not(None)]
+    if cond.min is not None:
+        bounds.append(value >= cond.min)
+    if cond.max is not None:
+        bounds.append(value <= cond.max)
+    return and_(*bounds)
+
+
+def tree_clause(
+    node: TreeNode,
+    *,
+    readings: Mapping[ViewMeasure, ViewReading],
+    followed_names: frozenset[str] | None = None,
+) -> ColumnElement[bool]:
+    """`node` as one predicate, evaluated the way the Channels tab evaluates.
+
+    Every atom is `coalesce(clause, false)`, so NOT is two-valued: a Post with
+    no value for a Condition (an unread Language, no View count) fails it and
+    passes its negation, as a Channel with no value does on Channels. Plain SQL
+    would make both NULL and drop the Post either way.
+
+    An empty group keeps every Post, negated or not, so an empty tree hides
+    nothing (the Channels rule again).
+    """
+    if isinstance(node, TreeAtom):
+        clause: ColumnElement[bool] = func.coalesce(
+            _atom_clause(node.cond, readings, followed_names), false()
+        )
+    else:
+        if not node.children:
+            return true()
+        parts = [
+            tree_clause(child, readings=readings, followed_names=followed_names)
+            for child in node.children
+        ]
+        clause = and_(*parts) if node.op == "and" else or_(*parts)
+    return not_(clause) if node.negated else clause
 
 
 def post_filter_clauses(
@@ -267,18 +369,14 @@ def post_filter_clauses(
     clauses: list[ColumnElement[bool]] = []
     if filters.keyword and filters.keyword.strip():
         clauses.append(_keyword_clause(filters.keyword.strip()))
-    fwd = _forwarded_clause(filters.forwarded, followed_names)
-    if fwd is not None:
-        clauses.append(fwd)
-    media = _media_clause(filters.media)
-    if media is not None:
-        clauses.append(media)
-    if filters.languages:
-        # `IN` never matches NULL, which is the rule: an unread Post has no
-        # Language to be ticked.
-        clauses.append(col(Post.language).in_(filters.languages))
-    if filters.views is not None:
-        clauses.append(views_clause(filters.views, filters.reading))
+    if filters.tree is not None and filters.has_tree():
+        clauses.append(
+            tree_clause(
+                filters.tree,
+                readings=filters.tree_readings,
+                followed_names=followed_names,
+            )
+        )
     return clauses
 
 
