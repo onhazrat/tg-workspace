@@ -515,7 +515,7 @@ def test_bulk_follow_lands_every_new_follow_in_the_named_setting_group(
 
     Both kinds of new Follow: a handle nobody follows yet, and one already in
     the corpus because another account scraped it. The second is the case the
-    old pre-check got wrong — it asked whether the *Channel* existed, so the
+    old pre-check got wrong: it asked whether the *Channel* existed, so the
     handle was reported "already followed" and this account got no Follow at
     all, which the single-handle field it replaces never did.
     """
@@ -535,14 +535,20 @@ def test_bulk_follow_lands_every_new_follow_in_the_named_setting_group(
         patch(
             "app.services.bulk_follow.get_channel_info",
             new_callable=AsyncMock,
-            side_effect=lambda name, **_kw: _info(name),
+            side_effect=lambda name, **_kw: _info(
+                name, unavailable=name == "pasted_dark"
+            ),
         ),
         patch("app.services.sync_orchestrator.run_sync_job", new_callable=AsyncMock),
     ):
         r = client.post(
             PREFIX,
             json={
-                "channels": [{"name": "pasted_one"}, {"name": "corpus_only"}],
+                "channels": [
+                    {"name": "pasted_one"},
+                    {"name": "corpus_only"},
+                    {"name": "pasted_dark"},
+                ],
                 "settingGroupId": group_id,
             },
             headers=headers,
@@ -553,9 +559,15 @@ def test_bulk_follow_lands_every_new_follow_in_the_named_setting_group(
     assert {row["name"]: row["status"] for row in final["results"]} == {
         "pasted_one": "added",
         "corpus_only": "added",
+        "pasted_dark": "unavailable",
     }
     assert _group_of("pasted_one") == group_id
     assert _group_of("corpus_only") == group_id
+    # An Unavailable Channel still goes to Restricted, which is frozen: the
+    # web view cannot sync it, so the named group would fail it every tick.
+    with Session(engine) as session:
+        dark = session.get(ChannelSettingGroup, _group_of("pasted_dark"))
+        assert dark is not None and dark.is_unavailable_on_web_view
 
     clear_follow_jobs_for_tests()
     clear_jobs_for_tests()

@@ -59,3 +59,17 @@ both are input on the new bar; they touch different code. See
 - [x] The Channels end-to-end spec gains following two Channels from a paste into a chosen
       Setting group, completing the spec's journey
 - [x] Every new test is watched failing before it is trusted
+
+### Decisions made while implementing
+
+- **An Unavailable Channel still lands in Restricted**, whatever Setting group the paste names.
+  Restricted is frozen because the web view cannot sync it; any other group would schedule a sync
+  that fails every tick. Pinned in `test_bulk_follow.py`.
+- **Bulk follow now asks "does this Account follow it", not "does the Channel exist".** A Channel
+  another Account already scraped used to answer "skipped, already followed" and write a Follow
+  silently into the default group. It is now a new Follow, reported "added", in the named group,
+  and synced. This changes Discover too: such a handle now costs one probe Request and is
+  reported honestly.
+- A named Setting group deleted between the request and the job falls back to the default.
+- Forward auto-follow (`sync_orchestrator._maybe_add_forwarded_channel`) keeps the old
+  corpus-existence pre-check. Out of scope here.

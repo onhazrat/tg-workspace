@@ -149,7 +149,7 @@ PROBED: dict[tuple[str, str], str] = {
     ("DELETE", f"{V1}/data/channels/{{channel_id}}"): "unfollow",
     ("GET", f"{V1}/data/artifacts"): "the unified History",
     ("POST", f"{V1}/data/channels/bulk-follow"): (
-        "a client-chosen settingGroupId (CTB-05) — a write, so ungated"
+        "a client-chosen settingGroupId (CTB-05), a write, so ungated"
     ),
     ("GET", f"{V1}/data/channels/bulk-follow/{{follow_job_id}}"): "follow job read",
     ("POST", f"{V1}/data/channels/bulk-follow/{{follow_job_id}}/cancel"): (

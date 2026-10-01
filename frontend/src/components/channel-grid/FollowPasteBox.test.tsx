@@ -28,6 +28,7 @@ function mount(onFollow?: FollowPasteBoxProps["onFollow"]) {
         onFollow ??
         (async (handles, settingGroupId) => {
           calls.push({ handles, settingGroupId })
+          return {} as FollowJobStatus
         })
       }
     />,
@@ -42,6 +43,15 @@ function mount(onFollow?: FollowPasteBoxProps["onFollow"]) {
 }
 
 describe("FollowPasteBox", () => {
+  test("keeps the paste when the follow never ran", async () => {
+    const { paste, followButton } = mount(async () => null)
+    paste("durov")
+    await act(async () => fireEvent.click(followButton()))
+    expect(
+      (screen.getByLabelText("Handles to follow") as HTMLTextAreaElement).value,
+    ).toBe("durov")
+  })
+
   test("marks each pasted handle and counts the ones it will follow", () => {
     const { paste, followButton } = mount()
     paste("@durov, t.me/s/Durov\nhttps://t.me/telegram abc")
@@ -88,9 +98,9 @@ describe("FollowPasteBox", () => {
     let report: (status: FollowJobStatus) => void = () => {}
     const { paste, followButton } = mount(
       (_handles, _group, onProgress) =>
-        new Promise<void>((resolve) => {
+        new Promise((resolve) => {
           report = onProgress
-          finish = resolve
+          finish = () => resolve({} as FollowJobStatus)
         }),
     )
     paste("durov bbcpersian")

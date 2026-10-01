@@ -14,12 +14,12 @@ export type FollowPasteBoxProps = {
   /** The names of the Channels already followed. */
   followed: string[]
   settingGroups: ChannelSettingGroup[]
-  /** Runs the bulk-follow job; resolves when it is done. */
+  /** Runs the bulk-follow job; resolves to its last status, or null if it never ran. */
   onFollow: (
     handles: string[],
     settingGroupId: string | undefined,
     onProgress: (status: FollowJobStatus) => void,
-  ) => Promise<unknown>
+  ) => Promise<FollowJobStatus | null>
 }
 
 const STATUS_TEXT: Record<PastedHandle["status"], string> = {
@@ -57,8 +57,8 @@ export function FollowPasteBox({
   const follow = async () => {
     setRunning(true)
     try {
-      await onFollow(fresh, groupId, setProgress)
-      setText("")
+      // A follow that never ran (offline, a refused request) keeps the paste.
+      if (await onFollow(fresh, groupId, setProgress)) setText("")
     } finally {
       setRunning(false)
       setProgress(null)
