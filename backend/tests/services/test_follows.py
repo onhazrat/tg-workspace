@@ -454,7 +454,10 @@ def test_following_a_channel_someone_else_scraped_writes_a_follow(
         effective_start_time=0,
     )
 
-    assert created is False, "the Channel already existed"
+    # True since CTB-05: the answer is whether a Follow was written, because
+    # bulk follow reports it as "added". The Channel existing is not the
+    # caller's news.
+    assert created is True, "a new Follow is a new Follow, whoever scraped it"
     assert follow_exists(session, user_id=second.id, channel_id="ch_popular")
     assert follow_exists(session, user_id=first.id, channel_id="ch_popular")
 

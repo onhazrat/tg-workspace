@@ -5741,6 +5741,10 @@
             "type": "integer",
             "title": "Torrotationthreshold",
             "default": 10
+          },
+          "settingGroupId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Settinggroupid"
           }
         },
         "type": "object",

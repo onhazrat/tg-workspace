@@ -9,12 +9,16 @@ from typing import Any
 from sqlmodel import Session, col, select
 
 from app.core.db import engine
-from app.models_tg import Channel
+from app.models_tg import Channel, ChannelSettingGroup
 from app.services.channel_setting_groups import (
     ensure_default_group,
     get_or_create_restricted_group,
 )
-from app.services.follows import ensure_follow_for_channel, resolve_follow_owner
+from app.services.follows import (
+    ensure_follow_for_channel,
+    follow_exists,
+    resolve_follow_owner,
+)
 from app.services.logs import upsert_network_log
 from app.services.network_settings import redact_proxy_url
 from app.services.sync_meta import touch_sync
@@ -79,16 +83,40 @@ def normalize_channel_name(raw: str) -> str:
     return raw.strip().replace("@", "").split("/")[-1]
 
 
-def channel_name_exists(session: Session, name: str) -> bool:
-    return (
-        session.exec(select(Channel).where(col(Channel.name) == name)).first()
-        is not None
-    )
+def is_followed_by(name: str, *, user_id: uuid.UUID) -> bool:
+    """Whether `user_id` already follows the Channel called `name`.
 
-
-def channel_exists(name: str) -> bool:
+    Not whether the Channel exists, which is what this asked until CTB-05: a
+    Channel another account scraped is still a new Follow for this one, and
+    bulk follow reported it "already followed" and wrote nothing.
+    """
     with Session(engine) as session:
-        return channel_name_exists(session, name)
+        channel = session.exec(select(Channel).where(col(Channel.name) == name)).first()
+        return channel is not None and follow_exists(
+            session, user_id=user_id, channel_id=channel.id
+        )
+
+
+def _group_for_new_follow(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    setting_group_id: str | None,
+    is_unavailable: bool,
+) -> ChannelSettingGroup:
+    """The Setting group a new Follow lands in.
+
+    An Unavailable Channel always goes to Restricted, whatever was named: that
+    group is frozen because the web view cannot sync it, and any other group
+    would schedule a sync that fails every tick. A named group that has gone
+    since the route checked it falls back to the default.
+    """
+    if is_unavailable:
+        return get_or_create_restricted_group(session, user_id=user_id)
+    named = (
+        session.get(ChannelSettingGroup, setting_group_id) if setting_group_id else None
+    )
+    return named or ensure_default_group(session, user_id=user_id)
 
 
 def create_followed_channel(
@@ -102,17 +130,19 @@ def create_followed_channel(
     effective_start_time: int,
     telemetry_url: str | None = None,
     telemetry: Any = None,
+    setting_group_id: str | None = None,
 ) -> bool:
-    """Create a newly followed channel. Returns False if it already exists."""
+    """Follow `clean`, creating the Channel if nobody has. False if `user_id`
+    already followed it."""
     with Session(engine) as session:
         existing = session.exec(
             select(Channel).where(col(Channel.name) == clean)
         ).first()
         if existing is not None:
             # Following a channel someone else already scraped is the case the
-            # shared corpus exists for: the Channel is not created, so the
-            # caller still hears "already followed", but the *relation* is new
-            # and has to be written or this account never sees the channel it
+            # shared corpus exists for: the Channel is not created, but the
+            # *relation* is new, so this answers True (CTB-05), and it has to
+            # be written or this account never sees the channel it
             # just asked to follow once enforcement is on. The early return
             # here used to skip it, which the dual-write guard cannot see —
             # the module does call a follow writer, on the other branch.
@@ -125,29 +155,37 @@ def create_followed_channel(
             # resolved from this account's own groups for the same reason;
             # copying the Channel's handed over a group belonging to whoever
             # scraped the handle first.
-            if ensure_follow_for_channel(
+            group = _group_for_new_follow(
+                session,
+                user_id=user_id,
+                setting_group_id=setting_group_id,
+                is_unavailable=is_unavailable,
+            )
+            created = ensure_follow_for_channel(
                 session,
                 existing,
                 user_id=user_id,
                 values={
-                    "setting_group_id": ensure_default_group(
-                        session, user_id=user_id
-                    ).id,
+                    "setting_group_id": group.id,
                     "followed_at": int(time.time() * 1000),
                     "tags": [],
                     "start_time": effective_start_time,
                     "discovered_via": discovered_via,
                 },
-            ):
+            )
+            if created:
                 session.commit()
-            return False
+                touch_sync(session, "channels")
+            return created
         if telemetry_url and telemetry:
             _save_network_telemetry(session, telemetry_url, telemetry, user_id=user_id)
         now = int(time.time() * 1000)
-        if is_unavailable:
-            group = get_or_create_restricted_group(session, user_id=user_id)
-        else:
-            group = ensure_default_group(session, user_id=user_id)
+        group = _group_for_new_follow(
+            session,
+            user_id=user_id,
+            setting_group_id=setting_group_id,
+            is_unavailable=is_unavailable,
+        )
         channel = Channel(
             id=clean,
             name=clean,

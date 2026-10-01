@@ -69,6 +69,7 @@ from app.services.channel_setting_groups import (
 from app.services.channel_setting_groups import (
     list_setting_groups as list_setting_groups_impl,
 )
+from app.services.channel_setting_groups import own_setting_group
 from app.services.channel_setting_groups import (
     update_setting_group as update_setting_group_impl,
 )
@@ -269,6 +270,9 @@ async def start_bulk_follow(
     # `create_follow_job` (a thread hop and an insert) and the trigger's
     # `NOTIFY` is the `idle in transaction` shape `CLAUDE.md` names: it pins
     # the xmin horizon so autovacuum reclaims nothing. Found in review.
+    # Before the job exists, so a foreign group leaves nothing behind (CTB-05).
+    if body.setting_group_id is not None:
+        own_setting_group(session, body.setting_group_id, user_id=current_user.id)
     resolved_proxies: list[str] = []
     if body.proxy_enabled:
         resolved_proxies = list(resolve_proxies_for_user(session, current_user.id))
@@ -280,6 +284,7 @@ async def start_bulk_follow(
         proxies=resolved_proxies,
         tor_auto_rotate=body.tor_auto_rotate,
         tor_rotation_threshold=body.tor_rotation_threshold,
+        setting_group_id=body.setting_group_id,
     )
     if not job.results:
         raise HTTPException(status_code=400, detail="No valid channel names provided")

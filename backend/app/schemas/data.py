@@ -29,6 +29,9 @@ class BulkFollowRequest(BaseModel):
     proxy_enabled: bool = Field(False, alias="proxyEnabled")
     tor_auto_rotate: bool = Field(False, alias="torAutoRotate")
     tor_rotation_threshold: int = Field(10, alias="torRotationThreshold")
+    #: Where every new Follow lands (CTB-05). Omitted is the default group, so
+    #: Discover, which never names one, is unchanged.
+    setting_group_id: str | None = Field(None, alias="settingGroupId")
 
     model_config = {"populate_by_name": True}
 
