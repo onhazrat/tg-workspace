@@ -161,15 +161,15 @@ _Avoid_: target language, translation target
 
 **Scope**:
 The slice of Posts an operation runs over: selected Channels (the Hidden
-selection included) × an Analysis window × the active post filters, in their
-chosen order. The post filters are
-the keyword, Type, media kinds, Languages and a View count or Estimated View
-count threshold; the order is newest, oldest, most or fewest views, optionally
-grouped by Channel; and a per-Channel cap keeps the first Posts in that order,
-or a random few. Every Artifact freezes a snapshot of the Scope it was made
-from, so it can be inspected or explicitly restored without reinterpreting it
-against today's.
-_Avoid_: selection, range, filter set, context
+selection included) × an Analysis window × the Post selection, read in the
+Posts tab's order, optionally grouped by Channel. The Post filter is not part of
+it: what the Posts tab shows and what an operation covers are separate
+questions. Every Artifact freezes a snapshot of the Scope it was made from,
+including the Selection rules and Picks and the exact Posts they reached, so it
+can be inspected or explicitly restored without reinterpreting it against
+today's.
+_Avoid_: selection (the Post selection is one part of it), range, filter set,
+context
 
 **Analysis window**:
 The temporal part of the current Scope. It is explicitly either Live or Fixed,
@@ -213,15 +213,19 @@ _Avoid_: group (unqualified, where parentheses could be meant), profile, preset
 **Channel filter**:
 An expression that decides which followed Channels are shown: Conditions joined
 by AND and OR, negated with NOT, and nested in parentheses to any depth. It is
-not part of the Scope and never changes which Channels are selected. The post
-filters are a different thing and belong to the Scope.
+not part of the Scope and never changes which Channels are selected. The Post
+filter is its counterpart on the Posts tab.
 _Avoid_: channel query, channel search, facet
 
 **Condition**:
-One test in a Channel filter: a tag, a Setting group, a Language, or a bound on
-a number such as Reach or subscribers. A Channel with no value for that number
-fails a bound on it, and a separate Condition asks whether it has one.
-_Avoid_: rule, clause, criterion, filter chip
+One test in a Channel filter or a Post filter. In a Channel filter: a tag, a
+Setting group, a Language, or a bound on a number such as Reach or
+subscribers. In a Post filter: a Type, a media kind, a Language, a Channel, or
+a bound on a View count or an Estimated View count. Anything with no value for
+that number fails a bound on it, and a separate Condition asks whether it has
+one.
+_Avoid_: rule (a Selection rule is something else), clause, criterion, filter
+chip
 
 **Shown Channels**:
 The followed Channels that pass the Channel filter and the search box.
@@ -233,6 +237,43 @@ Scope includes them. The Channels tab can limit its own actions (edits, sync,
 trim, rank) to the Shown Channels, so that nothing changes on a Channel the
 Account cannot see; that limit reaches no other tab.
 _Avoid_: invisible selection, filtered-out selection
+
+### Choosing Posts
+
+**Post filter**:
+An expression that decides which Posts the Posts tab shows: Conditions joined by
+AND and OR, negated with NOT, nested in parentheses, together with the keyword
+search and a per-Channel cap. It is not part of the Scope. It decides what is
+shown, and so what a select-all or deselect-all reaches.
+_Avoid_: post filters (as part of the Scope), query, facet
+
+**Post selection**:
+Which Posts of the selected Channels and the Analysis window an operation
+covers: an ordered list of Selection rules and Picks, read top to bottom, where
+the last one to reach a Post decides it. It starts as one Selection rule,
+select all, so an Account that never touches it covers every Post. It lasts for
+the browser session, across reloads and tab switches.
+_Avoid_: exclusions, checked posts, Selected posts (that is a Chat mode)
+
+**Selection rule**:
+A step of the Post selection that selects or deselects every Post matching a
+Post filter, kept as the filter was when the rule was made. It is applied again
+whenever the Analysis window or the selected Channels change, so it reaches
+Posts that did not exist when it was made. Selecting all the results of a
+meaning search makes Picks instead, because a ranking cannot be applied again.
+_Avoid_: saved filter, auto-selection, rule (unqualified)
+
+**Pick**:
+A step of the Post selection that selects or deselects one exact Post. It
+follows that Post into any Analysis window and never reaches another.
+_Avoid_: exception, override, manual selection
+
+**Channel spotlight**:
+Showing one Channel's Posts alone in the Posts tab for a moment, as a Post
+filter with a single Channel Condition. Like any Post filter it changes what is
+shown, never the Scope.
+_Avoid_: focus mode (that is the collapsed workspace), channel focus, channel
+view
 
 ### Scraping
 
