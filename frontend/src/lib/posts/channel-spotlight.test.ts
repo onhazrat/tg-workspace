@@ -3,8 +3,8 @@ import { toggleNot } from "@/lib/filter-tree"
 import {
   enterSpotlight,
   keepSpotlightFilters,
-  shownPostFilter,
   spotlightView,
+  spotlitBar,
 } from "@/lib/posts/channel-spotlight"
 import {
   addPostFunnel,
@@ -21,11 +21,9 @@ const persianVideos = addPostFunnel(
 describe("the Channel spotlight", () => {
   test("shows the Channel alone, then with the filters kept", () => {
     const spot = enterSpotlight(null, "durov", "durov_7", persianVideos)
-    expect(printPostFilter(shownPostFilter(spot, persianVideos))).toBe(
-      "channel:durov",
-    )
+    expect(printPostFilter(spot.filter)).toBe("channel:durov")
     const kept = keepSpotlightFilters(spot, true, persianVideos)
-    expect(printPostFilter(shownPostFilter(kept, persianVideos))).toBe(
+    expect(printPostFilter(kept.filter)).toBe(
       "channel:durov and lang:fa and media:video",
     )
   })
@@ -60,8 +58,12 @@ describe("the Channel spotlight", () => {
     spot = enterSpotlight(spot, "news", "news_3", persianVideos)
     expect(spot.from).toBe("durov_7")
     expect(spot.keepFilters).toBe(true)
-    // Leaving is dropping the spotlight, and nothing above wrote the filter.
-    expect(shownPostFilter(null, persianVideos)).toBe(persianVideos)
+    // Leaving is dropping the spotlight: the bar reads the Account's filter
+    // again, and nothing above wrote it.
+    const controls = { postFilter: persianVideos, setPostFilter: () => {} }
+    expect(spotlitBar(controls, null, () => {}).controls.postFilter).toBe(
+      persianVideos,
+    )
     expect(printPostFilter(persianVideos)).toBe("lang:fa and media:video")
   })
 
@@ -86,5 +88,33 @@ describe("the Channel spotlight", () => {
       spotlightView(keepSpotlightFilters(spot, true, persianVideos), view)
         .keyword,
     ).toBe("rates")
+  })
+})
+
+describe("spotlitBar", () => {
+  const controls = { postFilter: persianVideos, setPostFilter: () => {} }
+  const setFilter = () => {}
+  const spot = (keepFilters: boolean) => ({
+    channel: "durov",
+    keepFilters,
+    filter: emptyPostFilter(),
+    from: "durov_7",
+  })
+
+  test("with no spotlight the bar is the Account's", () => {
+    expect(spotlitBar(controls, null, setFilter)).toEqual({
+      controls,
+      keywordIgnored: false,
+    })
+  })
+
+  test("a spotlight's tree is shown and edited, and the keyword applies only when kept", () => {
+    const bar = spotlitBar(controls, spot(false), setFilter)
+    expect(bar.controls.postFilter).toEqual(emptyPostFilter())
+    expect(bar.controls.setPostFilter).toBe(setFilter)
+    expect(bar.keywordIgnored).toBe(true)
+    expect(spotlitBar(controls, spot(true), setFilter).keywordIgnored).toBe(
+      false,
+    )
   })
 })

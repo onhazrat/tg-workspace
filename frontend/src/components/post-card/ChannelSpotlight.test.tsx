@@ -15,11 +15,7 @@ import {
 import { useState } from "react"
 import { addPostFunnel, emptyPostFilter } from "@/lib/posts/post-filter"
 import type { Post } from "@/types"
-import {
-  SpotlightBanner,
-  spotlitBar,
-  useSpotlightState,
-} from "./ChannelSpotlight"
+import { SpotlightBanner, useSpotlightState } from "./ChannelSpotlight"
 import { PhotoViewerDialog } from "./PhotoViewer"
 
 afterEach(cleanup)
@@ -62,6 +58,15 @@ describe("SpotlightBanner", () => {
       ["back", undefined],
       ["back", undefined],
     ])
+  })
+
+  test("Escape after ticking Keep my filters still leads back", () => {
+    const calls: [string, unknown][] = []
+    mount(calls)
+    const box = screen.getByLabelText("Keep my filters")
+    box.focus()
+    fireEvent.keyDown(box, { key: "Escape" })
+    expect(calls).toEqual([["back", undefined]])
   })
 
   test("Escape in a field being typed in stays there", () => {
@@ -151,35 +156,5 @@ describe("useSpotlightState", () => {
     expect(hook.result.current.spotlight).toBeNull()
     expect(scrolled).toEqual([{ top: 0 }])
     container.remove()
-  })
-})
-
-describe("spotlitBar", () => {
-  const filter = addPostFunnel(emptyPostFilter(), "language", "fa")
-  const controls = { postFilter: filter, setPostFilter: () => {} }
-  const setFilter = () => {}
-  const api = (keepFilters: boolean) => ({
-    spotlight: {
-      channel: "durov",
-      keepFilters,
-      filter: emptyPostFilter(),
-      from: "durov_7",
-    },
-    leave: () => {},
-    setKeepFilters: () => {},
-    setFilter,
-  })
-
-  test("with no spotlight the bar is the Account's", () => {
-    const bar = spotlitBar(controls, { ...api(false), spotlight: null })
-    expect(bar).toEqual({ controls, keywordIgnored: false })
-  })
-
-  test("a spotlight's tree is shown and edited, and the keyword applies only when kept", () => {
-    const bar = spotlitBar(controls, api(false))
-    expect(bar.controls.postFilter).toEqual(emptyPostFilter())
-    expect(bar.controls.setPostFilter).toBe(setFilter)
-    expect(bar.keywordIgnored).toBe(true)
-    expect(spotlitBar(controls, api(true)).keywordIgnored).toBe(false)
   })
 })

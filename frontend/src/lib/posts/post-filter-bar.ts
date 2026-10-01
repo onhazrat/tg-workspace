@@ -113,10 +113,20 @@ export function capPhrase(
 }
 
 /**
- * What the feed's footer adds after the count: the cap and grouping. The cap
- * mode is named for the order it follows, so `ordered` still reads "latest"
- * under newest first, as it did (PFB-01).
+ * The cap mode as the subtitle names it. `ordered` is named for the order it
+ * follows, so it still reads "latest" under newest first, as it did (PFB-01).
  */
+function capModeLabel(
+  mode: MaxPostsPerChannelMode,
+  order: PostSortOrder,
+): string {
+  if (mode === "random") return "random"
+  if (order === "most_views") return "top by views"
+  if (order === "fewest_views") return "bottom by views"
+  return order === "oldest" ? "earliest" : "latest"
+}
+
+/** What the feed's footer adds after the count: the cap and grouping. */
 export function feedSubtitle(
   cap: number,
   mode: MaxPostsPerChannelMode,
@@ -124,19 +134,7 @@ export function feedSubtitle(
   grouped: boolean,
 ): string {
   const parts: string[] = []
-  if (cap > 0) {
-    const named =
-      mode === "random"
-        ? "random"
-        : order === "most_views"
-          ? "top by views"
-          : order === "fewest_views"
-            ? "bottom by views"
-            : order === "oldest"
-              ? "earliest"
-              : "latest"
-    parts.push(`(max ${cap}/channel, ${named})`)
-  }
+  if (cap > 0) parts.push(`(max ${cap}/channel, ${capModeLabel(mode, order)})`)
   if (grouped) parts.push("(grouped by channel)")
   return parts.join(" ")
 }

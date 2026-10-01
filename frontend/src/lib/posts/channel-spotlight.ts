@@ -77,11 +77,27 @@ export const keepSpotlightFilters = (
   filter: spotlightFilter(spotlight.channel, keepFilters, accountFilter),
 })
 
-/** The tree the tab shows: the spotlight's while one is on. */
-export const shownPostFilter = (
+/**
+ * The filter bar's controls under a spotlight: its tree to show and edit, and
+ * whether the keyword applies (only with the filters kept).
+ */
+export function spotlitBar<
+  T extends { postFilter: PostFilter; setPostFilter: (f: PostFilter) => void },
+>(
+  controls: T,
   spotlight: ChannelSpotlight | null,
-  accountFilter: PostFilter,
-): PostFilter => spotlight?.filter ?? accountFilter
+  setSpotlightFilter: (f: PostFilter) => void,
+): { controls: T; keywordIgnored: boolean } {
+  if (!spotlight) return { controls, keywordIgnored: false }
+  return {
+    controls: {
+      ...controls,
+      postFilter: spotlight.filter,
+      setPostFilter: setSpotlightFilter,
+    },
+    keywordIgnored: !spotlight.keepFilters,
+  }
+}
 
 /** What the feed and its counts read: the Channels, the keyword, the tree, the cap and grouping. */
 export interface PostsView {

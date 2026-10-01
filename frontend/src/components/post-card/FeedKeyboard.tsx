@@ -31,18 +31,28 @@ const KEY_HELP = [
   [SHORTCUTS.open, "open in Telegram"],
 ] as const
 
+/** Inputs that take a click, not typing, so a key pressed on one is the page's. */
+const CLICKED_INPUTS = new Set([
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+])
+
+/** Whether focus is in a field a key could be typing into. */
+export function focusIsTyping(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  if (!el) return false
+  if (el instanceof HTMLInputElement) return !CLICKED_INPUTS.has(el.type)
+  return (
+    el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable
+  )
+}
+
 /** Keys belong to the page only when nothing else could be listening for them. */
 function keyBelongsElsewhere(e: KeyboardEvent): boolean {
-  if (e.metaKey || e.ctrlKey || e.altKey) return true
-  const el = document.activeElement as HTMLElement | null
-  if (
-    el &&
-    (el.tagName === "INPUT" ||
-      el.tagName === "TEXTAREA" ||
-      el.tagName === "SELECT" ||
-      el.isContentEditable)
-  )
-    return true
+  if (e.metaKey || e.ctrlKey || e.altKey || focusIsTyping()) return true
   // Includes the photo viewer, which owns the arrow keys while it is open.
   return document.querySelector('[role="dialog"]') !== null
 }

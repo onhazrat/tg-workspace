@@ -28,6 +28,7 @@ import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { usePostFacets, useViewEstimate } from "../hooks/usePostsView"
+import { spotlitBar } from "../lib/posts/channel-spotlight"
 import {
   activeFilters,
   capPhrase,
@@ -55,7 +56,7 @@ import {
   postVocabulary,
 } from "./PostFilterControls"
 import { PerChannelForm, Pill, pillClass } from "./PostFilterParts"
-import { spotlitBar, useSpotlight } from "./post-card/ChannelSpotlight"
+import { useSpotlight } from "./post-card/ChannelSpotlight"
 
 /** What the bar reads and writes; `ScraperContext` provides all of it. */
 export interface FilterBarControls {
@@ -423,7 +424,11 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const spot = useSpotlight()
   // A spotlight's tree is what the row shows and edits (PTR-04).
-  const { controls, keywordIgnored } = spotlitBar(useScraper(), spot)
+  const { controls, keywordIgnored } = spotlitBar(
+    useScraper(),
+    spot.spotlight,
+    spot.setFilter,
+  )
   const { channels, selectedChannels } = useData()
   const { embeddingsEnabled } = useSettings()
   const { setActiveTab } = useUI()

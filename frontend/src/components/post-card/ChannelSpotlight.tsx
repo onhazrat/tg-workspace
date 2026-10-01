@@ -22,6 +22,7 @@ import type { PostFilter } from "@/lib/posts/post-filter"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, Post } from "@/types"
 import { ChannelAvatar } from "../ChannelAvatar"
+import { focusIsTyping } from "./FeedKeyboard"
 
 export interface SpotlightApi {
   spotlight: ChannelSpotlight | null
@@ -97,6 +98,8 @@ export function useSpotlightState(
 
   // Back to the card the spotlight started from, or the scroll position if
   // that card is gone, once the full feed has rendered.
+  // ponytail: one frame, so it relies on the feed's pages still being in the
+  // query cache; wait for the refetch if a long spotlight lands at the top.
   useEffect(() => {
     if (spotlight || !origin.current) return
     const { key, top } = origin.current
@@ -116,37 +119,10 @@ export function useSpotlightState(
   )
 }
 
-/**
- * The filter bar's controls under a spotlight: its tree to show and edit, and
- * whether the keyword applies (only with the filters kept).
- */
-export function spotlitBar<
-  T extends { postFilter: PostFilter; setPostFilter: (f: PostFilter) => void },
->(controls: T, api: SpotlightApi): { controls: T; keywordIgnored: boolean } {
-  const { spotlight } = api
-  if (!spotlight) return { controls, keywordIgnored: false }
-  return {
-    controls: {
-      ...controls,
-      postFilter: spotlight.filter,
-      setPostFilter: api.setFilter,
-    },
-    keywordIgnored: !spotlight.keepFilters,
-  }
-}
-
 /** Escape belongs to whatever is open over the feed, or to a field being typed in. */
 function escapeBelongsElsewhere(e: KeyboardEvent): boolean {
   // A dialog that closed on this key has already claimed it.
-  if (e.defaultPrevented) return true
-  const el = document.activeElement as HTMLElement | null
-  if (
-    el &&
-    (el.tagName === "INPUT" ||
-      el.tagName === "TEXTAREA" ||
-      el.isContentEditable)
-  )
-    return true
+  if (e.defaultPrevented || focusIsTyping()) return true
   return document.querySelector('[role="dialog"]') !== null
 }
 
