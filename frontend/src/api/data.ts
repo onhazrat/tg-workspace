@@ -96,6 +96,10 @@ export type PostFeedQuery = PostFilteredQuery & {
   seed?: number
   limit?: number
   offset?: number
+  /** The selected Posts first, each part in the feed's order (PTR-06). */
+  selectedFirst?: boolean
+  /** Only the selected Posts the filter shows, for copy and export (PTR-06). */
+  onlySelected?: boolean
 }
 
 /**
@@ -150,6 +154,22 @@ export function postScopeBody(
   const filter = params.filter && postFilterBody(params.filter)
   if (filter) body.filter = filter
   if (params.selection) body.selection = selectionBody(params.selection)
+  return body
+}
+
+/**
+ * `postScopeBody` plus which Posts a cap keeps and the order: what the feed
+ * shows, so the counts can say how many of those are selected (PTR-06). The
+ * cap mode and seed only mean anything alongside a cap, so they follow it.
+ */
+export function shownPostsBody(params: PostFeedQuery): Record<string, unknown> {
+  const body = postScopeBody(params)
+  if (params.maxPerChannel != null && params.maxPerChannel > 0) {
+    if (params.maxPerChannelMode)
+      body.maxPerChannelMode = params.maxPerChannelMode
+    if (params.seed != null) body.seed = params.seed
+  }
+  if (params.sort) body.sort = params.sort
   return body
 }
 
@@ -503,16 +523,10 @@ export const dataApi = {
    * rows per page instead of a channel's whole history.
    */
   getPostsFeed: (params: PostFeedQuery) => {
-    const body = postScopeBody(params)
-    // The cap mode and seed only mean anything alongside a cap, so they follow
-    // it — exactly as the query-string builder gated them.
-    if (params.maxPerChannel != null && params.maxPerChannel > 0) {
-      if (params.maxPerChannelMode)
-        body.maxPerChannelMode = params.maxPerChannelMode
-      if (params.seed != null) body.seed = params.seed
-    }
-    if (params.sort) body.sort = params.sort
+    const body = shownPostsBody(params)
     if (params.groupByChannel) body.groupByChannel = true
+    if (params.selectedFirst) body.selectedFirst = true
+    if (params.onlySelected) body.onlySelected = true
     if (params.limit != null) body.limit = params.limit
     if (params.offset != null) body.offset = params.offset
     return request<Post[]>("/api/v1/data/posts", {

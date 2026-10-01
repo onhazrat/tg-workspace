@@ -8,14 +8,14 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { api } from "@/api"
-import { type PostFeedQuery, postScopeBody } from "@/api/data"
+import { type PostFeedQuery, postScopeBody, shownPostsBody } from "@/api/data"
 import {
   dataPostsCounts,
   dataPostsFacets,
   dataPostsViewEstimate,
+  type PostFacetsRequest,
   type PostFacetsResponse,
   type PostFilteredRequest,
-  type PostWindowRequest,
   type ViewEstimateResponse,
 } from "@/client"
 import { useData } from "@/contexts/DataContext"
@@ -29,6 +29,7 @@ import {
   spotlightView,
 } from "@/lib/posts/channel-spotlight"
 import { printPostFilter } from "@/lib/posts/post-filter"
+import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
 import type { Post } from "@/types"
 import {
   queryKeys,
@@ -126,14 +127,17 @@ export function useScopedPostCounts(): Record<string, number> {
 const NO_COUNTS: Record<string, number> = {}
 
 /**
- * What the Posts tab shows under the Post filter: per-channel counts and how
+ * What the Posts tab shows under the Post filter: per-channel counts, how
  * many Posts an Estimated views bound hid for being too new to judge (PFB-03,
- * PTR-03). One request for both. A meaning search has no server count and
- * reports none too new. It follows a spotlight.
+ * PTR-03), and how many of the shown Posts the Post selection selects, which
+ * is the Adjust selection Venn's middle region (PTR-06). One request for all
+ * three. A meaning search has no server count and reports none too new. It
+ * follows a spotlight.
  */
 export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
   counts: Record<string, number>
   tooNewToJudge: number
+  selectedShown: number
 } {
   const { selectedChannels } = useData()
   const { startDate, endDate, windowKey } = useScope()
@@ -141,8 +145,13 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
     postFilter: accountFilter,
     postSearch,
     maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    postSortOrder,
+    viewMeasure,
     semanticSearchQuery,
     getScopedPosts,
+    postSelection,
+    selectionEdit,
   } = useScraper()
   const debouncedPostSearch = useDebouncedValue(postSearch, 300)
   const selectedChannelNames = useSelectedChannelNames()
@@ -158,24 +167,35 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
     groupByChannel: false,
   })
   const filter = view.filter
+  // Which Posts the cap keeps, as the feed asks: the Venn counts those.
   const filters = {
     channelNames: view.channelNames,
     keyword: view.keyword,
     maxPerChannel: view.maxPerChannel,
+    maxPerChannelMode: maxPostsPerChannelMode,
+    sort: postSortOrder,
+    viewMeasure,
+    seed: 0,
   }
   // The filter by its text, which is stable where the tree's ids are not.
   const keyed = { ...filters, filter: printPostFilter(filter) }
   const query = useQuery({
     // Keyed on the window rather than the minute it currently resolves to —
-    // see `usePostsFeed`, which pays for this and says why.
-    queryKey: queryKeys.postsCounts({ ...keyed, window: windowKey }),
+    // see `usePostsFeed`, which pays for this and says why. An edit moves the
+    // revision, which stands for the selection.
+    queryKey: queryKeys.postsCounts({
+      ...keyed,
+      window: windowKey,
+      selection: selectionEdit.revision,
+    }),
     queryFn: () =>
       dataPostsCounts({
-        body: postScopeBody({
+        body: shownPostsBody({
           ...filters,
           filter,
           startDate,
           endDate,
+          selection: postSelection,
         }) as PostFilteredRequest,
       }),
     enabled: serverEligible,
@@ -196,19 +216,26 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
     }
   }, [serverEligible, getScopedPosts])
 
-  if (!serverEligible) return { counts: clientCounts, tooNewToJudge: 0 }
+  if (!serverEligible)
+    return { counts: clientCounts, tooNewToJudge: 0, selectedShown: 0 }
   return {
     counts: query.data?.counts ?? {},
     tooNewToJudge: query.data?.tooNewToJudge ?? 0,
+    selectedShown: sum(query.data?.selectedShown),
   }
 }
 
+const sum = (counts: Record<string, number> | undefined) =>
+  Object.values(counts ?? {}).reduce((total, n) => total + n, 0)
+
 /**
  * How many Posts in the window have each Type, media kind and Language, and
- * how many there are, for the dropdowns and the filter row (PTR-03). Filters
- * aside, so it is keyed on the Channels and the window alone. Server-side,
- * and only while `enabled` and the feed is the server's: a meaning search's
- * ranked Posts are not a scope the server can count.
+ * how many there are, for the dropdowns and the filter row (PTR-03), with how
+ * many of each value the Post selection selects for the ticks (PTR-06).
+ * Filters aside, so it is keyed on the Channels, the window and the
+ * selection alone. Server-side, and only while `enabled` and the feed is the
+ * server's: a meaning search's ranked Posts are not a scope the server can
+ * count.
  */
 export function usePostFacets(
   enabled: boolean,
@@ -216,19 +243,24 @@ export function usePostFacets(
 ): PostFacetsResponse | undefined {
   const { selectedChannels } = useData()
   const { startDate, endDate, windowKey } = useScope()
-  const { semanticSearchQuery } = useScraper()
+  const { semanticSearchQuery, postSelection, selectionEdit } = useScraper()
   const selected = useSelectedChannelNames()
   // A spotlight's window is its Channel's, so "N of M" reads against it.
   const channelNames = spotlight ? [spotlight.channel] : selected
   const query = useQuery({
-    queryKey: queryKeys.postsFacets({ channelNames, window: windowKey }),
+    queryKey: queryKeys.postsFacets({
+      channelNames,
+      window: windowKey,
+      selection: selectionEdit.revision,
+    }),
     queryFn: () =>
       dataPostsFacets({
         body: postScopeBody({
           channelNames,
           startDate,
           endDate,
-        }) as PostWindowRequest,
+          selection: postSelection,
+        }) as PostFacetsRequest,
       }),
     enabled:
       enabled && !semanticSearchQuery.trim() && selectedChannels.size > 0,
@@ -257,6 +289,11 @@ export interface PostsFeed {
   hasMore: boolean
   loadMore: () => void
   isLoadingMore: boolean
+  /**
+   * The selected Posts the filter shows, in the feed's order, at most
+   * `EXPORT_LIMIT`: what Copy links and Export Markdown take (PTR-06).
+   */
+  fetchSelectedShown: () => Promise<Post[]>
 }
 
 /**
@@ -279,7 +316,10 @@ export function isSemanticFeed(
  * agreed design. The query key encodes the scope + filters, so any change
  * refetches the first page; a completed sync invalidates it (see ScraperContext).
  */
-export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
+export function usePostsFeed(
+  spotlight: ChannelSpotlight | null,
+  { selectedFirst = false }: { selectedFirst?: boolean } = {},
+): PostsFeed {
   const { startDate, endDate, windowKey } = useScope()
   const {
     postSearch,
@@ -322,6 +362,7 @@ export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
     maxPerChannelMode: maxPostsPerChannelMode,
     sort: postSortOrder,
     seed: 0,
+    selectedFirst,
   }
   // The selection rides the request and not the key: an edit refreshes the
   // rows in place below, and a new key would drop the Account back to the
@@ -443,15 +484,30 @@ export function usePostsFeed(spotlight: ChannelSpotlight | null): PostsFeed {
 
   if (semanticActive) {
     return {
-      posts: clientPosts,
+      // The ranked Posts are here already, so the switch sorts them here,
+      // stably, by the flag the server set (PTR-06).
+      posts: selectedFirst
+        ? [...clientPosts].sort(
+            (a, b) => Number(!!b.selected) - Number(!!a.selected),
+          )
+        : clientPosts,
       isInitialLoading: clientLoading && clientPosts.length === 0,
       hasMore: false,
       loadMore: () => {},
       isLoadingMore: false,
+      fetchSelectedShown: async () => clientPosts.filter((p) => p.selected),
     }
   }
 
   return {
+    fetchSelectedShown: () =>
+      api.getPostsFeed({
+        ...feedParams,
+        selectedFirst: false,
+        onlySelected: true,
+        limit: EXPORT_LIMIT,
+        offset: 0,
+      }),
     posts: infinite.data?.pages.flat() ?? [],
     isInitialLoading: infinite.isLoading,
     hasMore: infinite.hasNextPage,

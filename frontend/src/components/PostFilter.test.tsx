@@ -86,13 +86,19 @@ function mount(
       windowControl={<span>window</span>}
       facets={{
         total: 5000,
-        types: [{ value: "original", count: 4000 }],
+        types: [{ value: "original", count: 4000, selected: 4000 }],
         languages: [
-          { value: "fa", count: 120 },
-          { value: "zxx", count: 9 },
+          { value: "fa", count: 120, selected: 30 },
+          { value: "zxx", count: 9, selected: 0 },
         ],
-        media: [{ value: "photo", count: 55 }],
+        media: [{ value: "photo", count: 55, selected: 55 }],
       }}
+      onFacetTick={(facet, value, select) =>
+        calls.push([
+          "tick",
+          `${select ? "select" : "deselect"} ${facet}:${value}`,
+        ])
+      }
       channelLanguages={[]}
       channelNames={["durov", "news"]}
       onCountingPillOpenChange={(open) => opened.push(open)}
@@ -177,9 +183,7 @@ describe("the dropdowns", () => {
     expect(opened).toEqual([true])
     expect(
       screen.getByTestId("post-filter-media-count-photo").textContent,
-    ).toBe("55")
-    // No tick column until a tick records a Selection rule (PTR-06).
-    expect(screen.queryByRole("checkbox")).toBeNull()
+    ).toBe("55/55")
     fireEvent.click(screen.getByTestId("post-filter-media-funnel-photo"))
     expect(calls).toEqual([["filter", "media:photo"]])
   })
@@ -190,7 +194,7 @@ describe("the dropdowns", () => {
     expect(screen.getByText("No text")).toBeTruthy()
     expect(
       screen.getByTestId("post-filter-language-count-fa").textContent,
-    ).toBe("120")
+    ).toBe("30/120")
     fireEvent.click(screen.getByTestId("post-filter-language-funnel-zxx"))
     fireEvent.click(screen.getByTestId("post-filter-language-funnel-fa"))
     expect(calls).toEqual([
@@ -204,6 +208,47 @@ describe("the dropdowns", () => {
     fireEvent.click(screen.getByTestId("post-filter-type"))
     fireEvent.click(screen.getByTestId("post-filter-type-funnel-original"))
     expect(calls).toEqual([["filter", "media:photo and type:original"]])
+  })
+})
+
+describe("the ticks (PTR-06)", () => {
+  const tick = (facet: string, value: string) =>
+    screen.getByTestId(`post-filter-${facet}-row-${value}`)
+
+  test("read all, some or none of a value's Posts, over the window", () => {
+    mount()
+    fireEvent.click(screen.getByTestId("post-filter-language"))
+    expect(tick("language", "fa").getAttribute("aria-checked")).toBe("mixed")
+    expect(tick("language", "zxx").getAttribute("aria-checked")).toBe("false")
+    expect(screen.getByText(/whatever the filter shows/)).toBeTruthy()
+    cleanup()
+
+    mount()
+    fireEvent.click(screen.getByTestId("post-filter-type"))
+    expect(tick("type", "original").getAttribute("aria-checked")).toBe("true")
+  })
+
+  test("select a value not fully selected, deselect one that is", () => {
+    const { calls } = mount()
+    fireEvent.click(screen.getByTestId("post-filter-language"))
+    fireEvent.click(tick("language", "fa"))
+    fireEvent.click(tick("language", "zxx"))
+    cleanup()
+    const second = mount()
+    fireEvent.click(screen.getByTestId("post-filter-type"))
+    fireEvent.click(tick("type", "original"))
+
+    expect(calls).toEqual([
+      ["tick", "select language:fa"],
+      ["tick", "select language:zxx"],
+    ])
+    expect(second.calls).toEqual([["tick", "deselect type:original"]])
+  })
+
+  test("leave no tick column while the window's counts are unknown", () => {
+    mount({}, { facets: undefined })
+    fireEvent.click(screen.getByTestId("post-filter-language"))
+    expect(screen.queryByRole("checkbox")).toBeNull()
   })
 })
 

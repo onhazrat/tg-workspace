@@ -87,6 +87,18 @@ export const editFor = (keep: Regions) =>
       e.regions.fresh === keep.fresh,
   )
 
+/** How many members each region holds. */
+export type RegionCounts = Record<keyof Regions, number>
+
+/** "52 → 30 selected, −40 dropped, +18 added", from the regions' sizes alone. */
+export function changeOf(counts: RegionCounts, keep: Regions) {
+  const dropped =
+    (keep.hidden ? 0 : counts.hidden) + (keep.both ? 0 : counts.both)
+  const added = keep.fresh ? counts.fresh : 0
+  const before = counts.hidden + counts.both
+  return { before, after: before - dropped + added, dropped, added }
+}
+
 /** Counts for "52 → 30 selected, −40 dropped, +18 added". */
 export function selectionChange(
   selection: ReadonlySet<string>,
@@ -94,15 +106,10 @@ export function selectionChange(
   keep: Regions,
 ) {
   const r = regionsOf(selection, shown)
-  const dropped =
-    (keep.hidden ? 0 : r.hidden.length) + (keep.both ? 0 : r.both.length)
-  const added = keep.fresh ? r.fresh.length : 0
-  return {
-    before: selection.size,
-    after: selection.size - dropped + added,
-    dropped,
-    added,
-  }
+  return changeOf(
+    { hidden: r.hidden.length, both: r.both.length, fresh: r.fresh.length },
+    keep,
+  )
 }
 
 /** Would applying `keep` leave the selection as it is? */
