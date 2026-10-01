@@ -1,10 +1,10 @@
+import { FilterRow } from "@/components/filter-tree/FilterRow"
 import {
   type ChannelFilter,
   conditionLabel,
   type FilterNames,
 } from "@/lib/channels/channel-filter"
 import type { MetricData } from "@/lib/channels/channel-metrics"
-import { FilterRow } from "../filter-tree/FilterRow"
 import {
   CONDITION_ICON,
   type ConditionOptions,

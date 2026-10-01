@@ -1,12 +1,10 @@
 import { Languages, Layers, SlidersHorizontal, Tag } from "lucide-react"
-import type React from "react"
+import type {
+  ConditionOption,
+  PickerVocabulary,
+} from "@/components/filter-tree/ConditionPicker"
 import type { Cond, CondType } from "@/lib/channels/channel-filter"
 import { METRICS, type MetricData } from "@/lib/channels/channel-metrics"
-import {
-  type ConditionOption,
-  ConditionPicker,
-  type PickerVocabulary,
-} from "../filter-tree/ConditionPicker"
 import { ChannelMetricEditor } from "./ChannelMetricEditor"
 
 export type { ConditionOption }
@@ -26,7 +24,10 @@ const KINDS: [CondType, string][] = [
   ["language", "Language"],
 ]
 
-/** The Channels' Conditions as the shared picker reads them. */
+/**
+ * The Channels' Conditions as the shared condition picker reads them (CTB-03):
+ * a tag, Setting group or Language by name, or a number through its editor.
+ */
 export function channelVocabulary(
   options: ConditionOptions,
   metrics: MetricData,
@@ -69,33 +70,4 @@ export function channelVocabulary(
     entryOf: (cond) =>
       cond.type === "metric" ? `metric:${cond.metric}` : cond.type,
   }
-}
-
-/**
- * The condition picker (CTB-03) a "+" or a chip's label opens: a tag,
- * Setting group or Language by name, or a number through its editor, with a
- * search. Opened on a Condition, it starts at that Condition's list. The
- * picker itself is `filter-tree/ConditionPicker`, shared with Posts.
- */
-export function ChannelConditionPicker({
-  trigger,
-  start,
-  options,
-  metrics,
-  onPick,
-}: {
-  trigger: React.ReactElement
-  start?: Cond
-  options: ConditionOptions
-  metrics: MetricData
-  onPick: (cond: Cond) => void
-}) {
-  return (
-    <ConditionPicker
-      trigger={trigger}
-      start={start}
-      vocabulary={channelVocabulary(options, metrics)}
-      onPick={onPick}
-    />
-  )
 }

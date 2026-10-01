@@ -1,6 +1,7 @@
 import { ChevronDown, Eye, EyeOff } from "lucide-react"
 import type React from "react"
 import { useId, useState } from "react"
+import { BarPopover } from "@/components/BarPopover"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type ActionLimit,
@@ -13,7 +14,6 @@ import {
   UNCHANGED,
 } from "@/lib/channels/selection-regions"
 import { cn } from "@/lib/utils"
-import { BarPopover } from "./BarPopover"
 
 type RegionKey = keyof Regions
 

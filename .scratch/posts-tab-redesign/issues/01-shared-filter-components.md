@@ -52,7 +52,9 @@ type FilterVocabulary<C> = PickerVocabulary<C> & {
       (all, some, none) and a busy flag, plus a tick hint line, so each tab computes them its own
       way. The Channels wrapper computes them exactly as today
 - [x] The filter row and the condition picker take a vocabulary and a test-id prefix; the
-      Channels row and picker are thin wrappers that pass the Channels vocabulary
+      Channels row and picker are thin wrappers that pass the Channels vocabulary. As built,
+      only the row takes the prefix, since the picker has no test ids; the Channels picker is
+      `channelVocabulary`, which the Channels row passes to the shared row
 - [x] The filter row can show its count as approximate with a tooltip saying why (unused by
       Channels; Posts may need it while a count is partial)
 

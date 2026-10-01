@@ -7,13 +7,12 @@
  * nothing.
  *
  * The tree knows nothing about what a Condition tests: each tab supplies its
- * own Condition type and the test `evalTree` calls. Moved out of
- * `channels/channel-filter.ts` unchanged apart from the type parameter.
+ * own Condition type and the test `evalTree` calls.
  */
 
 /** Every Condition names its kind; a funnelled one also holds a value. */
 export type BaseCond = { type: string }
-type ValueOf<C> = C extends { value: string } ? C : never
+type WithValue<C> = C extends { value: string } ? C : never
 
 export type Joiner = "and" | "or"
 
@@ -323,13 +322,13 @@ export function unwrap<C extends BaseCond>(
 
 // ---- Funnels ---------------------------------------------------------------
 
-const hasValue = <C extends BaseCond>(cond: C): cond is ValueOf<C> =>
+const hasValue = <C extends BaseCond>(cond: C): cond is WithValue<C> =>
   typeof (cond as { value?: unknown }).value === "string"
 
 /** The values of `type` that appear in a Condition anywhere in the tree. */
 export const funnelledValues = <C extends BaseCond>(
   filter: FilterTree<C>,
-  type: C["type"],
+  type: WithValue<C>["type"],
 ): string[] => [
   ...new Set(
     atoms(filter).flatMap((a) =>
@@ -401,7 +400,7 @@ function removeWhere<C extends BaseCond>(
 /** Unfunnelling removes every Condition with that value. */
 export const removeFunnel = <C extends BaseCond>(
   filter: FilterTree<C>,
-  type: C["type"],
+  type: WithValue<C>["type"],
   value: string,
 ): FilterTree<C> =>
   removeWhere(
@@ -411,5 +410,5 @@ export const removeFunnel = <C extends BaseCond>(
 
 export const clearFunnels = <C extends BaseCond>(
   filter: FilterTree<C>,
-  type: C["type"],
+  type: WithValue<C>["type"],
 ): FilterTree<C> => removeWhere(filter, (cond) => cond.type === type)

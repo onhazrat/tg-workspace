@@ -1,8 +1,8 @@
 import { ChevronDown, Filter, Loader2, X } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
+import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { pillClass } from "@/components/PostFilterParts"
-import { BarHeading, BarPopover, BarSearch } from "../channel-grid/BarPopover"
 
 /** One value in a facet dropdown, with how much of it is selected. */
 export type FacetMenuRow = {

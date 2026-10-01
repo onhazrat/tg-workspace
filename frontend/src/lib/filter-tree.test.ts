@@ -216,7 +216,8 @@ describe("funnels", () => {
     expect(shapeOf(clearFunnels(tree, "colour"))).toEqual(
       shapeOf(root("and", [atom(size(3))])),
     )
-    // A bound has no value, so it is never a funnel.
+    // A bound has no value, so it is never a funnel, and the compiler says so.
+    // @ts-expect-error: "size" holds no value
     expect(funnelledValues(tree, "size")).toStrictEqual([])
   })
 })

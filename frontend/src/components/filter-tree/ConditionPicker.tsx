@@ -1,8 +1,8 @@
 import type { LucideIcon } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
+import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import type { BaseCond } from "@/lib/filter-tree"
-import { BarHeading, BarPopover, BarSearch } from "../channel-grid/BarPopover"
 
 export type ConditionOption = { id: string; label: string; hint?: string }
 

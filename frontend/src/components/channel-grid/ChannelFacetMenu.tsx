@@ -1,6 +1,9 @@
 import type React from "react"
+import {
+  FacetMenu,
+  type FacetMenuRow,
+} from "@/components/filter-tree/FacetMenu"
 import { getChipSelectionState } from "@/lib/channels/channel-grid-chips"
-import { FacetMenu, type FacetMenuRow } from "../filter-tree/FacetMenu"
 
 export type FacetRow = {
   id: string
