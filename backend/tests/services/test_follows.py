@@ -463,3 +463,39 @@ def test_following_a_channel_someone_else_scraped_writes_a_follow(
 
     session.exec(delete(User).where(col(User.id).in_([first.id, second.id])))
     session.commit()
+
+
+def test_a_handle_in_another_case_reaches_the_channel_already_scraped(
+    session: Session,
+) -> None:
+    """Telegram handles ignore case, so "CH_Cased" is the Channel "ch_cased".
+
+    Forward auto-follow used to drop any handle the corpus already held,
+    lowercased, before it reached `create_followed_channel`. Now it asks whether
+    this account follows the handle, so both lookups have to ignore case or a
+    forward spelled differently creates a second Channel beside the first.
+    """
+    from app.services.followed_channels import create_followed_channel, is_followed_by
+
+    first = create_random_user(session)
+    second = create_random_user(session)
+    _channel(session, "ch_cased", user_id=first.id)
+    ensure_follow(session, channel_id="ch_cased", user_id=first.id)
+    session.commit()
+
+    assert is_followed_by("CH_CASED", user_id=first.id)
+    assert not is_followed_by("CH_CASED", user_id=second.id)
+    assert create_followed_channel(
+        "CH_Cased",
+        display_name="Cased",
+        photo_url=None,
+        is_unavailable=False,
+        discovered_via=None,
+        user_id=second.id,
+        effective_start_time=0,
+    )
+    assert follow_exists(session, user_id=second.id, channel_id="ch_cased")
+    assert session.get(Channel, "CH_Cased") is None, "a second Channel was created"
+
+    session.exec(delete(User).where(col(User.id).in_([first.id, second.id])))
+    session.commit()

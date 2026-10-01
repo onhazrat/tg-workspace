@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, func, select
 
 from app.core.db import engine
 from app.models_tg import Channel, ChannelSettingGroup
@@ -83,6 +83,13 @@ def normalize_channel_name(raw: str) -> str:
     return raw.strip().replace("@", "").split("/")[-1]
 
 
+def _channel_named(session: Session, name: str) -> Channel | None:
+    """The Channel whose handle is `name`, ignoring case, as Telegram does."""
+    return session.exec(
+        select(Channel).where(func.lower(Channel.name) == name.lower())
+    ).first()
+
+
 def is_followed_by(name: str, *, user_id: uuid.UUID) -> bool:
     """Whether `user_id` already follows the Channel called `name`.
 
@@ -91,7 +98,7 @@ def is_followed_by(name: str, *, user_id: uuid.UUID) -> bool:
     bulk follow reported it "already followed" and wrote nothing.
     """
     with Session(engine) as session:
-        channel = session.exec(select(Channel).where(col(Channel.name) == name)).first()
+        channel = _channel_named(session, name)
         return channel is not None and follow_exists(
             session, user_id=user_id, channel_id=channel.id
         )
@@ -135,9 +142,7 @@ def create_followed_channel(
     """Follow `clean`, creating the Channel if nobody has. False if `user_id`
     already followed it."""
     with Session(engine) as session:
-        existing = session.exec(
-            select(Channel).where(col(Channel.name) == clean)
-        ).first()
+        existing = _channel_named(session, clean)
         if existing is not None:
             # Following a channel someone else already scraped is the case the
             # shared corpus exists for: the Channel is not created, but the

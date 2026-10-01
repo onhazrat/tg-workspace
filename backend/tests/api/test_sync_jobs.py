@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import time
 from unittest.mock import AsyncMock, patch
@@ -12,7 +13,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import SyncJob
+from app.models_tg import Channel, SyncJob
 from app.services import pgmq
 from app.services.scraper_jobs import (
     clear_active_jobs_for_tests,
@@ -590,6 +591,74 @@ def test_sync_auto_follow_enabled_creates_forwarded_channel(client: TestClient) 
     fwd = next(c for c in channels_r.json() if c["name"] == "fwd-target-ch")
     assert fwd["discoveredVia"]["channelName"] == "source-ch"
     assert fwd["discoveredVia"]["postId"] == 200
+
+    client.delete(f"{DATA}/channels/fwd-target-ch", headers=headers)
+    client.delete(f"{DATA}/channels/source-ch", headers=headers)
+    client.delete(f"{DATA}/setting-groups/{group_id}", headers=headers)
+    clear_jobs_for_tests()
+
+
+def test_sync_auto_follow_follows_a_forwarded_channel_already_in_the_corpus(
+    client: TestClient,
+) -> None:
+    """A forward source another account scraped is still a new Follow here.
+
+    The pre-check asked whether the Channel existed, so a source anybody had
+    ever scraped was never auto-followed by anybody else. It asks whether this
+    account follows it now, the fix CTB-05 made to bulk follow.
+    """
+    clear_jobs_for_tests()
+    headers = _auth(client)
+    with Session(engine) as session:
+        session.add(Channel(id="fwd-target-ch", name="fwd-target-ch"))
+        session.commit()
+
+    group_id = client.post(
+        f"{DATA}/setting-groups",
+        json={"name": "Auto Follow Corpus", "autoFollowForwarded": True},
+        headers=headers,
+    ).json()["id"]
+    client.put(
+        f"{DATA}/channels/source-ch", json={"name": "source-ch"}, headers=headers
+    )
+    client.patch(
+        f"{DATA}/channels/bulk-setting-group",
+        json={"channelIds": ["source-ch"], "settingGroupId": group_id},
+        headers=headers,
+    )
+
+    # A fresh post each scrape, or the second sync stores nothing and never
+    # looks at the forward at all.
+    post_ids = itertools.count(200)
+    probe = AsyncMock(
+        return_value={"displayName": "Fwd Target", "isUnavailableOnWebView": False}
+    )
+    with (
+        patch(
+            "app.services.sync_orchestrator.scrape_channel_page",
+            new_callable=AsyncMock,
+            side_effect=lambda *_a, **_kw: _mock_page_response(
+                "source-ch",
+                [{**_forwarded_post(), "id": next(post_ids)}],
+                next_before_id=None,
+            ),
+        ),
+        patch("app.services.sync_orchestrator.get_channel_info", probe),
+    ):
+        # The second sync finds the source followed and asks Telegram nothing.
+        for _ in range(2):
+            r = client.post(
+                f"{PREFIX}/sync",
+                json={"channelIds": ["source-ch"], "source": "Test"},
+                headers=headers,
+            )
+            assert _wait_for_job(client, r.json()["jobId"], headers)["status"] == (
+                "completed"
+            )
+    assert probe.await_count == 1
+
+    names = {c["name"] for c in client.get(f"{DATA}/channels", headers=headers).json()}
+    assert "fwd-target-ch" in names
 
     client.delete(f"{DATA}/channels/fwd-target-ch", headers=headers)
     client.delete(f"{DATA}/channels/source-ch", headers=headers)

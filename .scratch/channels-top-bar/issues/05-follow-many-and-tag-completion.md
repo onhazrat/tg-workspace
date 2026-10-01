@@ -71,5 +71,7 @@ both are input on the new bar; they touch different code. See
   and synced. This changes Discover too: such a handle now costs one probe Request and is
   reported honestly.
 - A named Setting group deleted between the request and the job falls back to the default.
-- Forward auto-follow (`sync_orchestrator._maybe_add_forwarded_channel`) keeps the old
-  corpus-existence pre-check. Out of scope here.
+- Forward auto-follow got the same fix: `_collect_new_forwards` no longer drops every handle in
+  the corpus (it read all of `tg_channels` per page to do it), and `_maybe_add_forwarded_channel`
+  asks whether the owner follows the source. Handle lookups ignore case, as Telegram does, so a
+  forward spelled "Durov" reaches the Channel "durov" instead of creating a second one.

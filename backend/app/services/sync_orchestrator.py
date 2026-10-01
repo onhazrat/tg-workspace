@@ -51,6 +51,7 @@ from app.services.channels import (
 )
 from app.services.followed_channels import (
     create_followed_channel,
+    is_followed_by,
     normalize_channel_name,
 )
 from app.services.follows import follows_for_channels, resolve_follow_owner
@@ -321,7 +322,7 @@ def _resolve_auto_follow_owner(user_id: uuid.UUID | None) -> uuid.UUID | None:
 
     `run_db` does **not** inject a Session — it is
     `asyncio.to_thread(fn, *args)` and nothing more — so every helper handed to
-    it opens its own, the way `_channel_name_exists` below does. Passing
+    it opens its own, the way `followed_channels.is_followed_by` does. Passing
     `resolve_follow_owner` directly type-checks (`run_db` takes
     `Callable[..., T]`) and fails at runtime with a missing `user_id`, which is
     the same type-erasure that let this whole call site keep creating unowned
@@ -329,16 +330,6 @@ def _resolve_auto_follow_owner(user_id: uuid.UUID | None) -> uuid.UUID | None:
     """
     with Session(engine) as session:
         return resolve_follow_owner(session, user_id)
-
-
-def _channel_name_exists(channel_name: str) -> bool:
-    with Session(engine) as session:
-        return (
-            session.exec(
-                select(Channel).where(col(Channel.name) == channel_name)
-            ).first()
-            is not None
-        )
 
 
 async def _maybe_add_forwarded_channel(
@@ -355,9 +346,6 @@ async def _maybe_add_forwarded_channel(
     clean = normalize_channel_name(forwarded_name)
     if not clean:
         return
-    if await run_db(_channel_name_exists, clean):
-        return
-
     # Resolve the owner *before* anything is created, because `run_db` erases
     # types: its signature is `Callable[..., T]` with `*args: Any`, so passing
     # this `user_id` straight through to `create_followed_channel` type-checks
@@ -377,6 +365,11 @@ async def _maybe_add_forwarded_channel(
             "Not auto-following @%s: no account to own the Channel or its follow",
             clean,
         )
+        return
+    # Whether *this* account follows it, not whether the Channel exists: a
+    # source another account scraped is still a new Follow here, the fix CTB-05
+    # made to bulk follow.
+    if await run_db(is_followed_by, clean, user_id=owner_id):
         return
 
     display_name = clean
@@ -804,14 +797,17 @@ def _refresh_channel_meta(
 
 
 def _collect_new_forwards(
-    session: Session, channel: Channel, posts_to_save: list[dict[str, Any]]
+    channel: Channel, posts_to_save: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """Forwarded-from handles on this page that we do not already follow.
+    """Forwarded-from handles on this page, once each.
 
     Returned rather than followed here: auto-follow is a decision for the caller,
-    and creating channels mid-page would change the set this very loop reads.
+    which asks whether *this* account follows each one. Until CTB-05 this
+    dropped every handle in the corpus, so a source another account had scraped
+    was never auto-followed, and it read every row of `tg_channels` per page to
+    do it.
     """
-    known_names = {c.name.lower() for c in session.exec(select(Channel)).all()}
+    known_names: set[str] = set()
     found: list[dict[str, Any]] = []
     for p in posts_to_save:
         fwd = p.get("forwardedFrom")
@@ -920,7 +916,7 @@ def _persist_page_posts(
     result.posts_saved = len(posts_to_save)
 
     if ctx.auto_follow:
-        result.forwards.extend(_collect_new_forwards(session, channel, posts_to_save))
+        result.forwards.extend(_collect_new_forwards(channel, posts_to_save))
 
 
 def _apply_scrape_page(
