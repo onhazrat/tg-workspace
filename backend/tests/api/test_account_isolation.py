@@ -209,17 +209,20 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "the feed, in both query shapes; test_post_tenancy_scoping.py. Under "
         "the Post filter, a Channel Condition included, with two live accounts; "
-        "test_post_filter_tree.py",
+        "test_post_filter_tree.py. Under a Post selection naming a foreign "
+        "Channel by Pick and by rule; test_post_selection.py",
     ),
     ("POST", f"{DATA}/posts/lookup"): (
         Reason.COVERED_ELSEWHERE,
         "test_post_tenancy_scoping.py; under the Post filter with a foreign "
-        "ref in the batch, test_post_filter_tree.py",
+        "ref in the batch, test_post_filter_tree.py; flagged by a Post "
+        "selection with a foreign ref, test_post_selection.py",
     ),
     ("POST", f"{DATA}/posts/counts"): (
         Reason.COVERED_ELSEWHERE,
         "test_post_tenancy_scoping.py; under the Post filter with two live "
-        "accounts, test_post_filter_tree.py",
+        "accounts, test_post_filter_tree.py; the selected counts under a "
+        "foreign Pick and rule, test_post_selection.py",
     ),
     ("GET", f"{DATA}/posts/view-estimate"): (
         Reason.NOT_ROW_ADDRESSED,
@@ -242,7 +245,8 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("POST", f"{DATA}/discover/candidates"): (
         Reason.COVERED_ELSEWHERE,
-        "aggregation over followed carriers; test_post_tenancy_scoping.py",
+        "aggregation over followed carriers; test_post_tenancy_scoping.py; "
+        "under a Post selection naming a foreign Post, test_post_selection.py",
     ),
     ("GET", f"{DATA}/discover/probes"): (
         Reason.CORPUS,

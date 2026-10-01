@@ -36,6 +36,7 @@ from app.schemas.ai import (
     PromptResponse,
     TranslateResponse,
 )
+from app.schemas.post_filter import to_steps
 from app.services.ai_keys import (
     AI_KEY_REJECTED_DETAIL,
     Purpose,
@@ -218,13 +219,10 @@ def _resolve_posts_text(
         channels=channels,
         start_date=window.start,
         end_date=window.end,
-        keyword=scope.keyword,
+        steps=to_steps(scope.selection),
         view_measure=scope.view_measure,
-        max_per_channel=scope.max_per_channel,
-        max_per_channel_mode=scope.max_per_channel_mode,
         sort=scope.sort,
         group_by_channel=scope.group_by_channel,
-        seed=scope.seed,
     )
     if tag_format:
         return assemble_tag_posts_text(session, prompt_scope, user_id=user_id)

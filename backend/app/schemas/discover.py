@@ -37,12 +37,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
-from app.schemas.posts import PostScopeRequest
-from app.schemas.scope import CapMode, FrozenScope, ScopeSubmission, SortOrder
+from app.schemas.post_filter import PostSelection, legacy_selection, select_all
+from app.schemas.posts import PostWindowRequest
+from app.schemas.scope import (
+    FrozenScope,
+    ScopeSubmission,
+    SortOrder,
+    ViewMeasure,
+    upgrade_legacy_scope_fields,
+)
 
 
 class SignalCountsResponse(BaseModel):
@@ -410,76 +417,42 @@ class DiscoverProbeRefreshResponse(BaseModel):
     refreshed: list[str] = Field(default_factory=list)
 
 
-class DiscoverPostRef(BaseModel):
-    channel_name: str = PydanticField(alias="channelName")
-    post_id: int = PydanticField(alias="postId")
-
-
-class DiscoverCandidatesRequest(PostScopeRequest):
-    """`PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.
+class DiscoverCandidatesRequest(PostWindowRequest):
+    """The Channels, the window, the Post selection and the signal-kind filter.
 
     `channelNames` is re-declared as required: the discovery aggregate is always
     asked about an explicit selection, and the query-string version required it
     too.
-
-    `maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the
-    two scopes that used to fall back to a second, client-side implementation of
-    the same counting rules — the `random` cap and a semantic query
-    (IDEA-011 D14).
     """
 
     channel_names: list[str] = PydanticField(alias="channelNames")
     signals: list[str] | None = None
-    max_per_channel_mode: CapMode = PydanticField("ordered", alias="maxPerChannelMode")
-    # The feed's order, which the `ordered` cap keeps the first N of (PFB-01).
-    # Discover aggregates rather than lists, so the order changes which Posts a
-    # capped report reads and nothing else; grouping changes nothing at all
-    # and is carried so the report records the Scope the Posts tab showed.
+    # PTR-05 (ADR-026): what a report covers is the Post selection, resolved
+    # here like every other Action's. The keyword, the cap and the ranked
+    # `postIds` it replaced are read as a selection for one release.
+    selection: PostSelection = PydanticField(default_factory=select_all)
+    # Recorded so the report keeps the Scope the Posts tab showed; Discover
+    # aggregates, so neither changes which Posts it reads.
+    view_measure: ViewMeasure = PydanticField("estimated", alias="viewMeasure")
     sort: SortOrder = "newest"
     group_by_channel: bool = PydanticField(False, alias="groupByChannel")
-    seed: int = 0
-    post_ids: list[DiscoverPostRef] | None = PydanticField(None, alias="postIds")
 
-    def resolved_post_ids(self) -> list[tuple[str, int]] | None:
-        """`None` means "no restriction"; `[]` means "matched nothing"."""
-        if self.post_ids is None:
-            return None
-        return [(ref.channel_name, ref.post_id) for ref in self.post_ids]
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_selection(cls, data: Any) -> Any:
+        upgraded = upgrade_legacy_scope_fields(data)
+        return legacy_selection(upgraded) if isinstance(upgraded, dict) else upgraded
 
     def to_scope_submission(self) -> ScopeSubmission:
-        """The same request as the Scope every other Artifact family submits.
-
-        A conversion rather than a new request shape (AW-06). This body already
-        carries every field `ScopeSubmission` does, under the same names — it is
-        `PostScopeRequest` plus the cap mode, the seed and the explicit
-        selection, which is what a submission is — so asking callers to send a
-        second spelling of what they already send would have been churn with no
-        claim behind it.
-
-        `sort` and `groupByChannel` took their defaults here until PFB-01,
-        when the cap began following the order: a capped report under `oldest`
-        reads each channel's earliest N, so the order is part of which Posts it
-        read and has to be recorded like any other filter.
-        """
+        """The same request as the Scope every other Artifact family submits (AW-06)."""
         return ScopeSubmission.model_validate(
             {
                 "channels": [n.strip() for n in self.channel_names if n.strip()],
                 "window": self.window,
-                "keyword": self.keyword,
                 "viewMeasure": self.view_measure,
-                "maxPerChannel": self.max_per_channel,
-                "maxPerChannelMode": self.max_per_channel_mode,
                 "sort": self.sort,
                 "groupByChannel": self.group_by_channel,
-                "seed": self.seed,
-                "posts": (
-                    None
-                    if self.post_ids is None
-                    else [
-                        {"channelName": ref.channel_name, "postId": ref.post_id}
-                        for ref in self.post_ids
-                    ]
-                ),
+                "selection": self.selection,
             }
         )
 

@@ -1960,7 +1960,7 @@
       "post": {
         "tags": ["data"],
         "summary": "List Posts",
-        "description": "One page of posts for a channel/date scope.\n\nWith no filter, no cap and ``sort=newest`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses the keyword, the Post filter, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.",
+        "description": "One page of posts for a channel/date scope.\n\nWith no filter, no cap and ``sort=newest`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses the keyword, the Post filter, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.\n\nEach post says whether the Post selection selects it.",
         "operationId": "data-list_posts",
         "requestBody": {
           "content": {
@@ -1976,7 +1976,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "$ref": "#/components/schemas/PostResponse" },
+                  "items": {
+                    "$ref": "#/components/schemas/SelectablePostResponse"
+                  },
                   "type": "array",
                   "title": "Response Data-List Posts"
                 }
@@ -1999,7 +2001,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Counts",
-        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array. Also says how many Posts an Estimated\nviews bound hid for being too new to judge.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
+        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array. Also says how many Posts an Estimated\nviews bound hid for being too new to judge, and how many Posts in the\nwindow the Post selection selects, filters aside.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
         "operationId": "data-posts_counts",
         "requestBody": {
           "content": {
@@ -2105,7 +2107,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": { "$ref": "#/components/schemas/PostResponse" },
+                  "items": {
+                    "$ref": "#/components/schemas/SelectablePostResponse"
+                  },
                   "type": "array",
                   "title": "Response Data-Lookup Posts Route"
                 }
@@ -6785,22 +6789,6 @@
             ],
             "title": "Window"
           },
-          "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Keyword"
-          },
-          "viewMeasure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
-            "title": "Viewmeasure",
-            "default": "estimated"
-          },
-          "maxPerChannel": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Maxperchannel",
-            "default": 0
-          },
           "signals": {
             "anyOf": [
               { "items": { "type": "string" }, "type": "array" },
@@ -6808,11 +6796,28 @@
             ],
             "title": "Signals"
           },
-          "maxPerChannelMode": {
+          "selection": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/SelectionRule-Input" },
+                { "$ref": "#/components/schemas/SelectionPick" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "pick": "#/components/schemas/SelectionPick",
+                  "rule": "#/components/schemas/SelectionRule-Input"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Selection"
+          },
+          "viewMeasure": {
             "type": "string",
-            "enum": ["ordered", "random"],
-            "title": "Maxperchannelmode",
-            "default": "ordered"
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
           },
           "sort": {
             "type": "string",
@@ -6824,24 +6829,13 @@
             "type": "boolean",
             "title": "Groupbychannel",
             "default": false
-          },
-          "seed": { "type": "integer", "title": "Seed", "default": 0 },
-          "postIds": {
-            "anyOf": [
-              {
-                "items": { "$ref": "#/components/schemas/DiscoverPostRef" },
-                "type": "array"
-              },
-              { "type": "null" }
-            ],
-            "title": "Postids"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["channelNames"],
         "title": "DiscoverCandidatesRequest",
-        "description": "`PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.\n\n`channelNames` is re-declared as required: the discovery aggregate is always\nasked about an explicit selection, and the query-string version required it\ntoo.\n\n`maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the\ntwo scopes that used to fall back to a second, client-side implementation of\nthe same counting rules \u2014 the `random` cap and a semantic query\n(IDEA-011 D14)."
+        "description": "The Channels, the window, the Post selection and the signal-kind filter.\n\n`channelNames` is re-declared as required: the discovery aggregate is always\nasked about an explicit selection, and the query-string version required it\ntoo."
       },
       "DiscoverCandidatesResponse": {
         "properties": {
@@ -6904,15 +6898,6 @@
         "type": "object",
         "title": "DiscoverIgnoredRemovedResponse",
         "description": "Handles whose dismissal was undone. Unknown handles are omitted."
-      },
-      "DiscoverPostRef": {
-        "properties": {
-          "channelName": { "type": "string", "title": "Channelname" },
-          "postId": { "type": "integer", "title": "Postid" }
-        },
-        "type": "object",
-        "required": ["channelName", "postId"],
-        "title": "DiscoverPostRef"
       },
       "DiscoverProbeQueueResponse": {
         "properties": {
@@ -7017,22 +7002,6 @@
               }
             }
           },
-          "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Keyword"
-          },
-          "viewMeasure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
-            "title": "Viewmeasure",
-            "default": "estimated"
-          },
-          "maxPerChannel": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Maxperchannel",
-            "default": 0
-          },
           "signals": {
             "anyOf": [
               { "items": { "type": "string" }, "type": "array" },
@@ -7040,11 +7009,28 @@
             ],
             "title": "Signals"
           },
-          "maxPerChannelMode": {
+          "selection": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/SelectionRule-Input" },
+                { "$ref": "#/components/schemas/SelectionPick" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "pick": "#/components/schemas/SelectionPick",
+                  "rule": "#/components/schemas/SelectionRule-Input"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Selection"
+          },
+          "viewMeasure": {
             "type": "string",
-            "enum": ["ordered", "random"],
-            "title": "Maxperchannelmode",
-            "default": "ordered"
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
           },
           "sort": {
             "type": "string",
@@ -7056,17 +7042,6 @@
             "type": "boolean",
             "title": "Groupbychannel",
             "default": false
-          },
-          "seed": { "type": "integer", "title": "Seed", "default": 0 },
-          "postIds": {
-            "anyOf": [
-              {
-                "items": { "$ref": "#/components/schemas/DiscoverPostRef" },
-                "type": "array"
-              },
-              { "type": "null" }
-            ],
-            "title": "Postids"
           }
         },
         "additionalProperties": false,
@@ -7176,15 +7151,48 @@
             "type": "array",
             "title": "Channels"
           },
-          "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Keyword"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Output" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Output"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
           },
           "maxPerChannel": {
             "type": "integer",
@@ -7197,17 +7205,6 @@
             "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
             "default": "ordered"
-          },
-          "sort": {
-            "type": "string",
-            "enum": ["newest", "oldest", "most_views", "fewest_views"],
-            "title": "Sort",
-            "default": "newest"
-          },
-          "groupByChannel": {
-            "type": "boolean",
-            "title": "Groupbychannel",
-            "default": false
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "forwarded": {
@@ -7433,7 +7430,7 @@
         "title": "FilterAtom",
         "description": "One Condition, maybe negated."
       },
-      "FilterGroup": {
+      "FilterGroup-Input": {
         "properties": {
           "kind": { "type": "string", "const": "group", "title": "Kind" },
           "id": {
@@ -7446,13 +7443,46 @@
             "items": {
               "oneOf": [
                 { "$ref": "#/components/schemas/FilterAtom" },
-                { "$ref": "#/components/schemas/FilterGroup" }
+                { "$ref": "#/components/schemas/FilterGroup-Input" }
               ],
               "discriminator": {
                 "propertyName": "kind",
                 "mapping": {
                   "atom": "#/components/schemas/FilterAtom",
-                  "group": "#/components/schemas/FilterGroup"
+                  "group": "#/components/schemas/FilterGroup-Input"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "op"],
+        "title": "FilterGroup",
+        "description": "Conditions joined with AND or OR, maybe negated; parentheses are groups."
+      },
+      "FilterGroup-Output": {
+        "properties": {
+          "kind": { "type": "string", "const": "group", "title": "Kind" },
+          "id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Id"
+          },
+          "op": { "type": "string", "enum": ["and", "or"], "title": "Op" },
+          "not": { "type": "boolean", "title": "Not", "default": false },
+          "children": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/FilterAtom" },
+                { "$ref": "#/components/schemas/FilterGroup-Output" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "atom": "#/components/schemas/FilterAtom",
+                  "group": "#/components/schemas/FilterGroup-Output"
                 }
               }
             },
@@ -7523,15 +7553,48 @@
             "type": "array",
             "title": "Channels"
           },
-          "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Keyword"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Output" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Output"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
           },
           "maxPerChannel": {
             "type": "integer",
@@ -7544,17 +7607,6 @@
             "enum": ["ordered", "random"],
             "title": "Maxperchannelmode",
             "default": "ordered"
-          },
-          "sort": {
-            "type": "string",
-            "enum": ["newest", "oldest", "most_views", "fewest_views"],
-            "title": "Sort",
-            "default": "newest"
-          },
-          "groupByChannel": {
-            "type": "boolean",
-            "title": "Groupbychannel",
-            "default": false
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "forwarded": {
@@ -8346,10 +8398,15 @@
             "type": "object",
             "title": "Counts"
           },
+          "selected": {
+            "additionalProperties": { "type": "integer" },
+            "type": "object",
+            "title": "Selected"
+          },
           "tooNewToJudge": { "type": "integer", "title": "Toonewtojudge" }
         },
         "type": "object",
-        "required": ["counts", "tooNewToJudge"],
+        "required": ["counts", "selected", "tooNewToJudge"],
         "title": "PostCountsResponse",
         "description": "Per-channel Post counts for a scope, and how many were too new to judge."
       },
@@ -8433,9 +8490,31 @@
           },
           "filter": {
             "anyOf": [
-              { "$ref": "#/components/schemas/FilterGroup" },
+              { "$ref": "#/components/schemas/FilterGroup-Input" },
               { "type": "null" }
             ]
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Input" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Input"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
           },
           "channelName": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -8477,6 +8556,92 @@
         "type": "object",
         "title": "PostFeedRequest",
         "description": "`PostFilteredRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
+      },
+      "PostFilterSnapshot-Input": {
+        "properties": {
+          "tree": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup-Input" },
+              { "type": "null" }
+            ]
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["ordered", "random"],
+            "title": "Maxperchannelmode",
+            "default": "ordered"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PostFilterSnapshot",
+        "description": "A Post filter as it was when a Selection rule was made."
+      },
+      "PostFilterSnapshot-Output": {
+        "properties": {
+          "tree": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup-Output" },
+              { "type": "null" }
+            ]
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["ordered", "random"],
+            "title": "Maxperchannelmode",
+            "default": "ordered"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PostFilterSnapshot",
+        "description": "A Post filter as it was when a Selection rule was made."
       },
       "PostFilteredRequest": {
         "properties": {
@@ -8524,15 +8689,37 @@
           },
           "filter": {
             "anyOf": [
-              { "$ref": "#/components/schemas/FilterGroup" },
+              { "$ref": "#/components/schemas/FilterGroup-Input" },
               { "type": "null" }
             ]
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Input" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Input"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "PostFilteredRequest",
-        "description": "`PostScopeRequest` plus the Post filter's tree."
+        "description": "`PostScopeRequest` plus the Post filter's tree and the Post selection."
       },
       "PostLinkSpan": {
         "properties": {
@@ -8564,9 +8751,57 @@
           },
           "filter": {
             "anyOf": [
-              { "$ref": "#/components/schemas/FilterGroup" },
+              { "$ref": "#/components/schemas/FilterGroup-Input" },
               { "type": "null" }
             ]
+          },
+          "channelNames": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Channelnames"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Input" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Input"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
           }
         },
         "type": "object",
@@ -8763,26 +8998,28 @@
             ],
             "title": "Window"
           },
-          "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Keyword"
+          "selection": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/SelectionRule-Input" },
+                { "$ref": "#/components/schemas/SelectionPick" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "pick": "#/components/schemas/SelectionPick",
+                  "rule": "#/components/schemas/SelectionRule-Input"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Selection"
           },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
-          },
-          "maxPerChannel": {
-            "type": "integer",
-            "title": "Maxperchannel",
-            "default": 0
-          },
-          "maxPerChannelMode": {
-            "type": "string",
-            "enum": ["ordered", "random"],
-            "title": "Maxperchannelmode",
-            "default": "ordered"
           },
           "sort": {
             "type": "string",
@@ -8794,8 +9031,7 @@
             "type": "boolean",
             "title": "Groupbychannel",
             "default": false
-          },
-          "seed": { "type": "integer", "title": "Seed", "default": 0 }
+          }
         },
         "additionalProperties": false,
         "type": "object",
@@ -9382,27 +9618,11 @@
             "type": "array",
             "title": "Channels"
           },
-          "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Keyword"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
-          },
-          "maxPerChannel": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Maxperchannel",
-            "default": 0
-          },
-          "maxPerChannelMode": {
-            "type": "string",
-            "enum": ["ordered", "random"],
-            "title": "Maxperchannelmode",
-            "default": "ordered"
           },
           "sort": {
             "type": "string",
@@ -9415,7 +9635,6 @@
             "title": "Groupbychannel",
             "default": false
           },
-          "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "window": {
             "oneOf": [
               { "$ref": "#/components/schemas/LiveAnalysisWindow" },
@@ -9430,16 +9649,22 @@
               }
             }
           },
-          "posts": {
-            "anyOf": [
-              {
-                "items": { "$ref": "#/components/schemas/ScopedPostRef" },
-                "type": "array",
-                "maxItems": 5000
-              },
-              { "type": "null" }
-            ],
-            "title": "Posts"
+          "selection": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/SelectionRule-Input" },
+                { "$ref": "#/components/schemas/SelectionPick" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "pick": "#/components/schemas/SelectionPick",
+                  "rule": "#/components/schemas/SelectionRule-Input"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Selection"
           }
         },
         "additionalProperties": false,
@@ -9555,6 +9780,149 @@
         "type": "object",
         "required": ["maxPostsPerChannel", "iterationLimit"],
         "title": "ScraperRuntimeSettings"
+      },
+      "SelectablePostResponse": {
+        "properties": {
+          "id": { "type": "integer", "title": "Id" },
+          "channelName": { "type": "string", "title": "Channelname" },
+          "text": { "type": "string", "title": "Text", "default": "" },
+          "date": { "type": "string", "title": "Date", "default": "" },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "default": 0
+          },
+          "forwardedFrom": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Forwardedfrom"
+          },
+          "forwardedFromName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Forwardedfromname"
+          },
+          "isAnchor": {
+            "type": "boolean",
+            "title": "Isanchor",
+            "default": false
+          },
+          "retrievedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Retrievedat"
+          },
+          "retrievalJobId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Retrievaljobid"
+          },
+          "retrievalPass": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Retrievalpass"
+          },
+          "retrievalSource": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Retrievalsource"
+          },
+          "media": {
+            "anyOf": [
+              { "additionalProperties": true, "type": "object" },
+              { "type": "null" }
+            ],
+            "title": "Media"
+          },
+          "links": {
+            "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
+            "title": "Links"
+          },
+          "linkSpans": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/PostLinkSpan" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Linkspans"
+          },
+          "replyToPostId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Replytopostid"
+          },
+          "replyTo": {
+            "anyOf": [
+              { "additionalProperties": true, "type": "object" },
+              { "type": "null" }
+            ],
+            "title": "Replyto"
+          },
+          "language": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Language"
+          },
+          "viewsCount": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Viewscount"
+          },
+          "reactionCounts": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/PostReactionChip" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Reactioncounts"
+          },
+          "viewsObservedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Viewsobservedat"
+          },
+          "selected": { "type": "boolean", "title": "Selected" }
+        },
+        "type": "object",
+        "required": ["id", "channelName", "selected"],
+        "title": "SelectablePostResponse",
+        "description": "One post, and whether the Post selection the request carried selects it."
+      },
+      "SelectionPick": {
+        "properties": {
+          "kind": { "type": "string", "const": "pick", "title": "Kind" },
+          "select": { "type": "boolean", "title": "Select" },
+          "channelName": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Channelname"
+          },
+          "postId": { "type": "integer", "title": "Postid" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "select", "channelName", "postId"],
+        "title": "SelectionPick",
+        "description": "Select or deselect one Post."
+      },
+      "SelectionRule-Input": {
+        "properties": {
+          "kind": { "type": "string", "const": "rule", "title": "Kind" },
+          "select": { "type": "boolean", "title": "Select" },
+          "filter": { "$ref": "#/components/schemas/PostFilterSnapshot-Input" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "select"],
+        "title": "SelectionRule",
+        "description": "Select or deselect every Post a Post filter matches."
+      },
+      "SelectionRule-Output": {
+        "properties": {
+          "kind": { "type": "string", "const": "rule", "title": "Kind" },
+          "select": { "type": "boolean", "title": "Select" },
+          "filter": { "$ref": "#/components/schemas/PostFilterSnapshot-Output" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "select"],
+        "title": "SelectionRule",
+        "description": "Select or deselect every Post a Post filter matches."
       },
       "ServerTimeResponse": {
         "properties": {

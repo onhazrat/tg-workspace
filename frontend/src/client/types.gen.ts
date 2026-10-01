@@ -1591,16 +1591,11 @@ export type DiscoverCandidateResponse = {
 /**
  * DiscoverCandidatesRequest
  *
- * `PostScopeRequest` plus the signal-kind filter and the cap/scope inputs.
+ * The Channels, the window, the Post selection and the signal-kind filter.
  *
  * `channelNames` is re-declared as required: the discovery aggregate is always
  * asked about an explicit selection, and the query-string version required it
  * too.
- *
- * `maxPerChannelMode`/`seed` and `postIds` are what let Discover reproduce the
- * two scopes that used to fall back to a second, client-side implementation of
- * the same counting rules — the `random` cap and a semantic query
- * (IDEA-011 D14).
  */
 export type DiscoverCandidatesRequest = {
     /**
@@ -1616,25 +1611,21 @@ export type DiscoverCandidatesRequest = {
         mode: 'fixed';
     } & FixedAnalysisWindow) | null;
     /**
-     * Keyword
-     */
-    keyword?: string | null;
-    /**
-     * Viewmeasure
-     */
-    viewMeasure?: 'views' | 'estimated';
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-    /**
      * Signals
      */
     signals?: Array<string> | null;
     /**
-     * Maxperchannelmode
+     * Selection
      */
-    maxPerChannelMode?: 'ordered' | 'random';
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)>;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
     /**
      * Sort
      */
@@ -1643,14 +1634,6 @@ export type DiscoverCandidatesRequest = {
      * Groupbychannel
      */
     groupByChannel?: boolean;
-    /**
-     * Seed
-     */
-    seed?: number;
-    /**
-     * Postids
-     */
-    postIds?: Array<DiscoverPostRef> | null;
 };
 
 /**
@@ -1712,20 +1695,6 @@ export type DiscoverIgnoredRemovedResponse = {
      * Removed
      */
     removed?: Array<string>;
-};
-
-/**
- * DiscoverPostRef
- */
-export type DiscoverPostRef = {
-    /**
-     * Channelname
-     */
-    channelName: string;
-    /**
-     * Postid
-     */
-    postId: number;
 };
 
 /**
@@ -1862,25 +1831,21 @@ export type DiscoverReportCreateRequest = {
         mode: 'fixed';
     } & FixedAnalysisWindow);
     /**
-     * Keyword
-     */
-    keyword?: string | null;
-    /**
-     * Viewmeasure
-     */
-    viewMeasure?: 'views' | 'estimated';
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-    /**
      * Signals
      */
     signals?: Array<string> | null;
     /**
-     * Maxperchannelmode
+     * Selection
      */
-    maxPerChannelMode?: 'ordered' | 'random';
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)>;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
     /**
      * Sort
      */
@@ -1889,14 +1854,6 @@ export type DiscoverReportCreateRequest = {
      * Groupbychannel
      */
     groupByChannel?: boolean;
-    /**
-     * Seed
-     */
-    seed?: number;
-    /**
-     * Postids
-     */
-    postIds?: Array<DiscoverPostRef> | null;
 };
 
 /**
@@ -2024,21 +1981,9 @@ export type DiscoverReportScopeResponse = {
      */
     channels?: Array<string>;
     /**
-     * Keyword
-     */
-    keyword?: string | null;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-    /**
-     * Maxperchannelmode
-     */
-    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
@@ -2047,6 +1992,26 @@ export type DiscoverReportScopeResponse = {
      * Groupbychannel
      */
     groupByChannel?: boolean;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleOutput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Seed
      */
@@ -2290,7 +2255,7 @@ export type FilterAtom = {
  *
  * Conditions joined with AND or OR, maybe negated; parentheses are groups.
  */
-export type FilterGroup = {
+export type FilterGroupInput = {
     /**
      * Kind
      */
@@ -2314,7 +2279,39 @@ export type FilterGroup = {
         kind: 'atom';
     } & FilterAtom) | ({
         kind: 'group';
-    } & FilterGroup)>;
+    } & FilterGroupInput)>;
+};
+
+/**
+ * FilterGroup
+ *
+ * Conditions joined with AND or OR, maybe negated; parentheses are groups.
+ */
+export type FilterGroupOutput = {
+    /**
+     * Kind
+     */
+    kind: 'group';
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Op
+     */
+    op: 'and' | 'or';
+    /**
+     * Not
+     */
+    not?: boolean;
+    /**
+     * Children
+     */
+    children?: Array<({
+        kind: 'atom';
+    } & FilterAtom) | ({
+        kind: 'group';
+    } & FilterGroupOutput)>;
 };
 
 /**
@@ -2370,21 +2367,9 @@ export type FrozenScope = {
      */
     channels?: Array<string>;
     /**
-     * Keyword
-     */
-    keyword?: string | null;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-    /**
-     * Maxperchannelmode
-     */
-    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
@@ -2393,6 +2378,26 @@ export type FrozenScope = {
      * Groupbychannel
      */
     groupByChannel?: boolean;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleOutput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Seed
      */
@@ -3290,6 +3295,12 @@ export type PostCountsResponse = {
         [key: string]: number;
     };
     /**
+     * Selected
+     */
+    selected: {
+        [key: string]: number;
+    };
+    /**
      * Toonewtojudge
      */
     tooNewToJudge: number;
@@ -3368,7 +3379,15 @@ export type PostFeedRequest = {
      * Maxperchannel
      */
     maxPerChannel?: number;
-    filter?: FilterGroup | null;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
     /**
      * Channelname
      */
@@ -3400,9 +3419,75 @@ export type PostFeedRequest = {
 };
 
 /**
+ * PostFilterSnapshot
+ *
+ * A Post filter as it was when a Selection rule was made.
+ */
+export type PostFilterSnapshotInput = {
+    tree?: FilterGroupInput | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Seed
+     */
+    seed?: number;
+};
+
+/**
+ * PostFilterSnapshot
+ *
+ * A Post filter as it was when a Selection rule was made.
+ */
+export type PostFilterSnapshotOutput = {
+    tree?: FilterGroupOutput | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Seed
+     */
+    seed?: number;
+};
+
+/**
  * PostFilteredRequest
  *
- * `PostScopeRequest` plus the Post filter's tree.
+ * `PostScopeRequest` plus the Post filter's tree and the Post selection.
  */
 export type PostFilteredRequest = {
     /**
@@ -3429,7 +3514,15 @@ export type PostFilteredRequest = {
      * Maxperchannel
      */
     maxPerChannel?: number;
-    filter?: FilterGroup | null;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
 };
 
 /**
@@ -3481,7 +3574,27 @@ export type PostLookupRequest = {
      * Posts
      */
     posts: Array<PostLookupRef>;
-    filter?: FilterGroup | null;
+    filter?: FilterGroupInput | null;
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
 };
 
 /**
@@ -3686,21 +3799,17 @@ export type PromptScopeInput = {
         mode: 'fixed';
     } & FixedAnalysisWindow) | null;
     /**
-     * Keyword
+     * Selection
      */
-    keyword?: string | null;
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)>;
     /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-    /**
-     * Maxperchannelmode
-     */
-    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
@@ -3709,10 +3818,6 @@ export type PromptScopeInput = {
      * Groupbychannel
      */
     groupByChannel?: boolean;
-    /**
-     * Seed
-     */
-    seed?: number;
 };
 
 /**
@@ -4422,21 +4527,9 @@ export type ScopeSubmission = {
      */
     channels?: Array<string>;
     /**
-     * Keyword
-     */
-    keyword?: string | null;
-    /**
      * Viewmeasure
      */
     viewMeasure?: 'views' | 'estimated';
-    /**
-     * Maxperchannel
-     */
-    maxPerChannel?: number;
-    /**
-     * Maxperchannelmode
-     */
-    maxPerChannelMode?: 'ordered' | 'random';
     /**
      * Sort
      */
@@ -4446,10 +4539,6 @@ export type ScopeSubmission = {
      */
     groupByChannel?: boolean;
     /**
-     * Seed
-     */
-    seed?: number;
-    /**
      * Window
      */
     window: ({
@@ -4458,9 +4547,13 @@ export type ScopeSubmission = {
         mode: 'fixed';
     } & FixedAnalysisWindow);
     /**
-     * Posts
+     * Selection
      */
-    posts?: Array<ScopedPostRef> | null;
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)>;
 };
 
 /**
@@ -4592,6 +4685,164 @@ export type ScraperRuntimeSettings = {
      * Iterationlimit
      */
     iterationLimit: number;
+};
+
+/**
+ * SelectablePostResponse
+ *
+ * One post, and whether the Post selection the request carried selects it.
+ */
+export type SelectablePostResponse = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Channelname
+     */
+    channelName: string;
+    /**
+     * Text
+     */
+    text?: string;
+    /**
+     * Date
+     */
+    date?: string;
+    /**
+     * Timestamp
+     */
+    timestamp?: number;
+    /**
+     * Forwardedfrom
+     */
+    forwardedFrom?: string | null;
+    /**
+     * Forwardedfromname
+     */
+    forwardedFromName?: string | null;
+    /**
+     * Isanchor
+     */
+    isAnchor?: boolean;
+    /**
+     * Retrievedat
+     */
+    retrievedAt?: number | null;
+    /**
+     * Retrievaljobid
+     */
+    retrievalJobId?: string | null;
+    /**
+     * Retrievalpass
+     */
+    retrievalPass?: string | null;
+    /**
+     * Retrievalsource
+     */
+    retrievalSource?: string | null;
+    /**
+     * Media
+     */
+    media?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Links
+     */
+    links?: Array<unknown> | null;
+    /**
+     * Linkspans
+     */
+    linkSpans?: Array<PostLinkSpan> | null;
+    /**
+     * Replytopostid
+     */
+    replyToPostId?: number | null;
+    /**
+     * Replyto
+     */
+    replyTo?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Language
+     */
+    language?: string | null;
+    /**
+     * Viewscount
+     */
+    viewsCount?: number | null;
+    /**
+     * Reactioncounts
+     */
+    reactionCounts?: Array<PostReactionChip> | null;
+    /**
+     * Viewsobservedat
+     */
+    viewsObservedAt?: number | null;
+    /**
+     * Selected
+     */
+    selected: boolean;
+};
+
+/**
+ * SelectionPick
+ *
+ * Select or deselect one Post.
+ */
+export type SelectionPick = {
+    /**
+     * Kind
+     */
+    kind: 'pick';
+    /**
+     * Select
+     */
+    select: boolean;
+    /**
+     * Channelname
+     */
+    channelName: string;
+    /**
+     * Postid
+     */
+    postId: number;
+};
+
+/**
+ * SelectionRule
+ *
+ * Select or deselect every Post a Post filter matches.
+ */
+export type SelectionRuleInput = {
+    /**
+     * Kind
+     */
+    kind: 'rule';
+    /**
+     * Select
+     */
+    select: boolean;
+    filter?: PostFilterSnapshotInput;
+};
+
+/**
+ * SelectionRule
+ *
+ * Select or deselect every Post a Post filter matches.
+ */
+export type SelectionRuleOutput = {
+    /**
+     * Kind
+     */
+    kind: 'rule';
+    /**
+     * Select
+     */
+    select: boolean;
+    filter?: PostFilterSnapshotOutput;
 };
 
 /**
@@ -7722,7 +7973,7 @@ export type DataListPostsResponses = {
      *
      * Successful Response
      */
-    200: Array<PostResponse>;
+    200: Array<SelectablePostResponse>;
 };
 
 export type DataListPostsResponse = DataListPostsResponses[keyof DataListPostsResponses];
@@ -7815,7 +8066,7 @@ export type DataLookupPostsRouteResponses = {
      *
      * Successful Response
      */
-    200: Array<PostResponse>;
+    200: Array<SelectablePostResponse>;
 };
 
 export type DataLookupPostsRouteResponse = DataLookupPostsRouteResponses[keyof DataLookupPostsRouteResponses];

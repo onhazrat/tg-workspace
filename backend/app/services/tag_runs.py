@@ -14,7 +14,7 @@ from app.core import acting_owner
 from app.models_tg import TagRun, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.tag_runs import TagMode, TagRunSource, TagRunStatus
-from app.services.analysis_window import freeze_scope
+from app.services.post_selection import freeze_selection
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -342,7 +342,7 @@ def submit_tag_run(
     if session.get(TagRun, tag_run_id) is not None:
         raise HTTPException(status_code=409, detail="Tag run already exists")
 
-    scope = freeze_scope(submission, now_ms=now_ms)
+    scope = freeze_selection(session, submission, user_id=user_id, now_ms=now_ms)
     now = int(utc_now().timestamp() * 1000)
     tag_run = TagRun(
         id=tag_run_id,

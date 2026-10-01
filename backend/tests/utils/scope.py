@@ -14,7 +14,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlmodel import Session
+
+from app.core.db import engine
+from app.models_tg import Post
 from app.schemas.scope import FrozenScope
+from tests.utils.tenancy import follow_channels
 
 
 def stored_scope(*, start: int, end: int, **overrides: Any) -> dict[str, Any]:
@@ -22,3 +27,26 @@ def stored_scope(*, start: int, end: int, **overrides: Any) -> dict[str, Any]:
     return FrozenScope.model_validate(
         {"start": start, "end": end, **overrides}
     ).stored()
+
+
+def followed_posts(channel: str, count: int, *, at: int) -> list[dict[str, Any]]:
+    """Seed `count` Posts of `channel` from `at`, followed by the Operator.
+
+    Since PTR-05 an Artifact records the Posts its selection reached, so a
+    test about those references needs Posts for it to reach. Answers their
+    references in posting order.
+    """
+    with Session(engine) as session:
+        for n in range(count):
+            session.add(
+                Post(
+                    channel_name=channel,
+                    post_id=n,
+                    text=f"post {n}",
+                    timestamp=at + n * 1000,
+                )
+            )
+        session.commit()
+        follow_channels(session, channel)
+        session.commit()
+    return [{"channelName": channel, "postId": n} for n in range(count)]

@@ -25,8 +25,8 @@ afterwards can move it.
 * **The filter set is complete, derived from the schemas rather than listed.** A
   filter added to `ScopeSubmission` and forgotten in `FrozenScope` fails here,
   which is the half a hand-written list cannot do.
-* **The semantic path keeps its explicit selection**, in the payload table, out
-  of the list projection.
+* **The Post selection keeps every Post it reached** (PTR-05), in the payload
+  table, out of the list projection.
 * **A later write cannot replace it.** Not the text, not a flag, not a
   round-tripped list item — which is the shape the client actually PUTs.
 * **An export and an import carry it.** That door writes `tg_summaries` without
@@ -66,6 +66,7 @@ from app.models_tg import Summary, SummaryPayload
 from app.schemas.scope import FrozenScope, ScopeSubmission
 from app.services import analysis_window as analysis_window_service
 from app.services.analysis_window import MINUTE_MS, freeze_scope
+from tests.utils.scope import followed_posts
 
 PREFIX = f"{settings.API_V1_STR}/data"
 
@@ -117,6 +118,28 @@ def _submit(
         },
         headers=headers,
     )
+
+
+#: A Selection rule with every field of its snapshot non-default (PTR-05).
+RULE: dict[str, Any] = {
+    "kind": "rule",
+    "select": False,
+    "filter": {
+        "tree": None,
+        "keyword": "tehran",
+        "sort": "oldest",
+        "viewMeasure": "views",
+        "maxPerChannel": 25,
+        "maxPerChannelMode": "random",
+        "seed": 4242,
+    },
+}
+
+
+@pytest.fixture
+def corpus() -> list[dict[str, Any]]:
+    """Forty Posts of `ch` inside the default window, followed by the Operator."""
+    return followed_posts("ch", 40, at=MINUTE - 60 * MINUTE_MS)
 
 
 @pytest.fixture
@@ -298,26 +321,15 @@ def test_the_record_carries_the_whole_filter_set_a_submission_named(
 ) -> None:
     """The same claim through the wire, so a projection cannot drop one."""
     sent = _scope(
-        keyword="tehran",
         viewMeasure="views",
-        maxPerChannel=25,
-        maxPerChannelMode="random",
         sort="fewest_views",
         groupByChannel=True,
-        seed=4242,
+        selection=[{"kind": "rule", "select": True, "filter": RULE["filter"]}, RULE],
     )
     body = _submit(client, _auth(client), scope=sent).json()
 
-    for key in (
-        "keyword",
-        "viewMeasure",
-        "sort",
-        "groupByChannel",
-        "seed",
-    ):
+    for key in ("viewMeasure", "sort", "groupByChannel", "selection"):
         assert body["scope"][key] == sent[key]
-    assert body["scope"]["maxPerChannel"] == 25
-    assert body["scope"]["maxPerChannelMode"] == "random"
     assert body["scope"]["channels"] == ["ch"]
 
 
@@ -360,42 +372,45 @@ def test_an_old_artifact_keeps_showing_its_flat_filters(
 
 
 # --------------------------------------------------------------------------
-# The explicit selection
+# The Post selection and the Posts it reached
 # --------------------------------------------------------------------------
 
 
-def test_a_semantic_submission_keeps_the_posts_it_ranked(
-    client: TestClient, at_now: None
-) -> None:
-    """Semantic and related-Post ranking is not expressible as filters.
+def _picks(refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deselect all, then select exactly `refs`."""
+    return [
+        {"kind": "rule", "select": False},
+        *({"kind": "pick", "select": True, **ref} for ref in refs),
+    ]
 
-    The server cannot rebuild the ordering from a keyword and a cap, so the
-    selection itself is the reproduction and it has to be stored.
-    """
+
+def test_a_submission_keeps_every_post_its_selection_reached(
+    client: TestClient, at_now: None, corpus: list[dict[str, Any]]
+) -> None:
+    """The references are the record, so inspecting never applies a rule again."""
     headers = _auth(client)
-    refs = [{"channelName": "ch", "postId": n} for n in (11, 12, 13)]
-    created = _submit(client, headers, scope=_scope(posts=refs)).json()
+    refs = corpus[11:14]
+    created = _submit(client, headers, scope=_scope(selection=_picks(refs))).json()
 
     detail = client.get(f"{PREFIX}/summaries/{created['id']}", headers=headers).json()
 
     assert detail["scope"]["scopedPostCount"] == 3
-    assert detail["scope"]["posts"] == refs
+    assert detail["scope"]["posts"] == list(reversed(refs)), "in the feed's order"
     _, payload = _stored(created["id"])
-    assert payload is not None and payload.scope_posts == refs
+    assert payload is not None and payload.scope_posts == list(reversed(refs))
 
 
 def test_the_selection_lives_in_the_payload_table_and_not_the_list(
-    client: TestClient, at_now: None
+    client: TestClient, at_now: None, corpus: list[dict[str, Any]]
 ) -> None:
     """A few thousand refs is a corpus, and the list must not read one.
 
     The same rule `citedPosts` / `promptText` / `chatMessages` already follow,
     for the same measured reason. `scopedPostCount` rides the base row so a
-    list can still say the Scope was restricted.
+    list can still say how many Posts the Scope covered.
     """
     headers = _auth(client)
-    refs = [{"channelName": "ch", "postId": n} for n in range(40)]
-    created = _submit(client, headers, scope=_scope(posts=refs)).json()
+    created = _submit(client, headers, scope=_scope()).json()
 
     listed = next(
         item
@@ -407,14 +422,26 @@ def test_the_selection_lives_in_the_payload_table_and_not_the_list(
     assert listed["scope"]["posts"] is None
 
 
-def test_a_filtered_submission_records_no_selection_at_all(
+def test_a_default_submission_selects_every_post_and_says_how_many(
     client: TestClient, at_now: None
 ) -> None:
-    """`null` means "the filters were the whole story", not "none matched"."""
+    """Select all is a selection too; `0` is an answer, not a missing one."""
     body = _submit(client, _auth(client)).json()
 
-    assert body["scope"]["scopedPostCount"] is None
-    assert body["scope"]["posts"] is None
+    assert body["scope"]["selection"] == [
+        {"kind": "rule", "select": True, "filter": {**RULE["filter"], **_DEFAULTS}}
+    ]
+    assert body["scope"]["scopedPostCount"] == 0
+
+
+_DEFAULTS: dict[str, Any] = {
+    "keyword": None,
+    "sort": "newest",
+    "viewMeasure": "estimated",
+    "maxPerChannel": 0,
+    "maxPerChannelMode": "ordered",
+    "seed": 0,
+}
 
 
 # --------------------------------------------------------------------------
@@ -427,7 +454,7 @@ def test_a_later_content_or_flag_write_cannot_replace_the_frozen_scope(
 ) -> None:
     """Editing a Summary's text does not change which Posts produced it."""
     headers = _auth(client)
-    created = _submit(client, headers, scope=_scope(keyword="tehran")).json()
+    created = _submit(client, headers, scope=_scope(selection=[RULE])).json()
 
     client.put(
         f"{PREFIX}/summaries/{created['id']}",
@@ -438,7 +465,7 @@ def test_a_later_content_or_flag_write_cannot_replace_the_frozen_scope(
                 "channels": ["someone-elses"],
                 "start": 0,
                 "end": 1,
-                "keyword": "rewritten",
+                "selection": [],
             },
         },
         headers=headers,
@@ -447,7 +474,7 @@ def test_a_later_content_or_flag_write_cannot_replace_the_frozen_scope(
     stored, _ = _stored(created["id"])
     assert stored.scope is not None
     assert stored.text == "edited"
-    assert stored.scope["keyword"] == "tehran"
+    assert stored.scope["selection"] == [RULE]
     assert stored.scope["channels"] == ["ch"]
     assert stored.extra.get("scope") is None, (
         "a rejected `scope` must not be routed into `extra`, where the "
@@ -456,7 +483,7 @@ def test_a_later_content_or_flag_write_cannot_replace_the_frozen_scope(
 
 
 def test_an_export_and_import_round_trip_keeps_the_frozen_scope(
-    client: TestClient, at_now: None
+    client: TestClient, at_now: None, corpus: list[dict[str, Any]]
 ) -> None:
     """The other write door, and the one that can bypass the rule above.
 
@@ -467,9 +494,9 @@ def test_an_export_and_import_round_trip_keeps_the_frozen_scope(
     `NULL` while the API claims a Scope the database does not hold.
     """
     headers = _auth(client)
-    refs = [{"channelName": "ch", "postId": n} for n in (7, 8)]
+    refs = [corpus[8], corpus[7]]
     created = _submit(
-        client, headers, scope=_scope(keyword="tehran", posts=refs)
+        client, headers, scope=_scope(selection=[*_picks(refs), RULE])
     ).json()
     exported = client.get(f"{PREFIX}/summaries/{created['id']}", headers=headers).json()
 
@@ -478,7 +505,7 @@ def test_an_export_and_import_round_trip_keeps_the_frozen_scope(
 
     stored, payload = _stored(created["id"])
     assert stored.scope is not None, "the import dropped the frozen Scope"
-    assert stored.scope["keyword"] == "tehran"
+    assert stored.scope["selection"][-1] == RULE
     assert "scope" not in (stored.extra or {}), (
         "the Scope landed in `extra`, where the projection reports it as the "
         "real one over a column that is still NULL"

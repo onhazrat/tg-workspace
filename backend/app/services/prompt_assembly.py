@@ -2,9 +2,9 @@
 
 Replaces the browser round-trip where every post was shipped to the client,
 concatenated into one string, and shipped back. The scope (channels + date
-range + the keyword + per-channel cap + sort) is resolved with the
-same ``list_feed`` the Posts feed uses, so a summary reflects exactly what the
-feed shows, and formatted by the byte-identical ``format_posts_for_prompt``.
+range + the Post selection + order) is resolved with the same ``list_feed``
+the Posts feed uses, so a summary reads exactly the Posts the feed marks as
+selected, and formatted by the byte-identical ``format_posts_for_prompt``.
 """
 
 from __future__ import annotations
@@ -22,13 +22,9 @@ from app.prompts.posts import (
     format_posts_for_prompt,
     format_posts_for_tag_prompt,
 )
-from app.services.post_filters import (
-    FEED_CAP_MODES,
-    FEED_SORTS,
-    VIEW_MEASURES,
-    PostFilters,
-)
-from app.services.posts import count_posts_in_scope, list_feed
+from app.services.post_filters import FEED_SORTS, VIEW_MEASURES, PostFilters, Step
+from app.services.post_selection import PostScope, selection_clause
+from app.services.posts import count_selected, list_feed
 from app.services.settling_curve import view_reading
 
 # Upper bound on how many posts one prompt assembles. The token budget is the
@@ -46,15 +42,14 @@ class PromptScope:
     channels: list[str]
     start_date: int | None = None
     end_date: int | None = None
-    keyword: str | None = None
-    #: What the views orders read (PFB-03). The Post filter is not here: it
-    #: decides what the Posts tab shows, never what a prompt reads (ADR-026).
+    #: The Post selection (PTR-05); `None` is select all. The Post filter is
+    #: not here: it decides what the Posts tab shows, never what a prompt
+    #: reads (ADR-026).
+    steps: tuple[Step, ...] | None = None
+    #: What the views orders read (PFB-03).
     view_measure: str = "estimated"
-    max_per_channel: int = 0
-    max_per_channel_mode: str = "ordered"
     sort: str = "newest"
     group_by_channel: bool = False
-    seed: int = 0
 
 
 def _fetch_scoped_posts(
@@ -75,24 +70,23 @@ def _fetch_scoped_posts(
         raise HTTPException(422, detail=f"unknown sort: {scope.sort}")
     if scope.view_measure not in VIEW_MEASURES:
         raise HTTPException(422, detail=f"unknown viewMeasure: {scope.view_measure}")
-    if scope.max_per_channel_mode not in FEED_CAP_MODES:
-        raise HTTPException(
-            422, detail=f"unknown maxPerChannelMode: {scope.max_per_channel_mode}"
-        )
     filters = PostFilters(
-        keyword=scope.keyword,
         reading=view_reading(session, cast("Any", scope.view_measure), sort=scope.sort),
     )
     channel_names = scope.channels or None
-
-    counts = count_posts_in_scope(
+    selected = selection_clause(
         session,
+        scope.steps,
+        PostScope(user_id, channel_names, scope.start_date, scope.end_date),
+    )
+
+    counts = count_selected(
+        session,
+        selected,
         user_id=user_id,
         channel_names=channel_names,
         start_date=scope.start_date,
         end_date=scope.end_date,
-        filters=filters,
-        max_per_channel=scope.max_per_channel,
     )
     total = sum(counts.values())
     if total > MAX_PROMPT_POSTS:
@@ -101,7 +95,7 @@ def _fetch_scoped_posts(
             detail=(
                 f"The selection has {total:,} posts, more than the "
                 f"{MAX_PROMPT_POSTS:,} a single prompt can assemble. Narrow the "
-                "channel selection or date range, or set a per-channel cap."
+                "channel selection or date range, or deselect some Posts."
             ),
         )
 
@@ -112,13 +106,12 @@ def _fetch_scoped_posts(
         start_date=scope.start_date,
         end_date=scope.end_date,
         filters=filters,
-        max_per_channel=scope.max_per_channel,
-        max_per_channel_mode=cast("Any", scope.max_per_channel_mode),
         sort=cast("Any", scope.sort),
         group_by_channel=scope.group_by_channel,
-        seed=scope.seed,
         limit=MAX_PROMPT_POSTS,
         offset=0,
+        selected=selected,
+        only_selected=True,
     )
 
 
@@ -130,7 +123,7 @@ def _enforce_token_budget(text: str) -> str:
             detail=(
                 f"The selected posts are ~{tokens:,} tokens, over the "
                 f"{MAX_PROMPT_TOKENS:,}-token limit for a single prompt. Narrow "
-                "the channel selection or date range, or set a per-channel cap."
+                "the channel selection or date range, or deselect some Posts."
             ),
         )
     return text

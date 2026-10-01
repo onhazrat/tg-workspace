@@ -5,6 +5,7 @@ Split out of the former `routes/data.py` under C1. The parent router in
 path and operation id is unchanged.
 """
 
+import uuid
 from datetime import timedelta
 from typing import Any, cast
 
@@ -12,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
-from app.api.routes.data._shared import parse_post_filters
+from app.api.routes.data._shared import selected_in
 from app.jobs.directory_harvest import (
     DIRECTORY_HARVEST_JOB_ID,
     is_harvest_running,
@@ -38,7 +39,7 @@ from app.schemas.discover import (
     IgnoredChannelResponse,
 )
 from app.schemas.scope import FrozenScope
-from app.services.analysis_window import freeze_scope, resolve_analysis_window
+from app.services.analysis_window import resolve_analysis_window
 from app.services.channel_directory import (
     DEFAULT_PROBE_PAGE_SIZE,
     MAX_PROBE_PAGE_SIZE,
@@ -71,6 +72,7 @@ from app.services.discover_reports import (
     list_reports,
     update_report_flags,
 )
+from app.services.post_selection import PostScope, freeze_selection
 
 router = APIRouter()
 
@@ -94,7 +96,9 @@ def discover_candidates(
     """
     return DiscoverCandidatesResponse.model_validate(
         compute_discover_candidates(
-            session, user_id=current_user.id, **_discover_kwargs(session, body)
+            session,
+            user_id=current_user.id,
+            **_discover_kwargs(session, body, current_user.id),
         )
     )
 
@@ -111,7 +115,7 @@ def _parse_discover_signals(signals: list[str] | None) -> set[str] | None:
 
 
 def _discover_kwargs(
-    session: Session, body: DiscoverCandidatesRequest
+    session: Session, body: DiscoverCandidatesRequest, user_id: uuid.UUID
 ) -> dict[str, Any]:
     """Validated aggregation inputs, shared by the compute and save routes.
 
@@ -120,23 +124,22 @@ def _discover_kwargs(
     rather than being duplicated per route.
     """
     window = resolve_analysis_window(body.window)
+    channel_names = [n.strip() for n in body.channel_names if n.strip()]
+    scope = PostScope(user_id, channel_names, window.start, window.end)
     return {
-        "channel_names": [n.strip() for n in body.channel_names if n.strip()],
+        "channel_names": channel_names,
         "start_date": window.start,
         "end_date": window.end,
         "signals": cast(
             "set[SignalKind] | None", _parse_discover_signals(body.signals)
         ),
-        "filters": parse_post_filters(session, body, sort=body.sort),
-        "max_per_channel": body.max_per_channel,
-        "max_per_channel_mode": body.max_per_channel_mode,
-        "sort": body.sort,
-        "seed": body.seed,
-        "post_ids": body.resolved_post_ids(),
+        "selected": selected_in(session, body.selection, scope),
     }
 
 
-def _report_submission(body: DiscoverReportCreateRequest) -> FrozenScope:
+def _report_submission(
+    session: Session, body: DiscoverReportCreateRequest, user_id: uuid.UUID
+) -> FrozenScope:
     """Freeze the report's Scope **once**, here, before the aggregation runs.
 
     The save route used to resolve the window through `_discover_kwargs` and
@@ -144,10 +147,10 @@ def _report_submission(body: DiscoverReportCreateRequest) -> FrozenScope:
     that part was already right — but it shared that resolution with
     `/discover/candidates`, which computes and forgets. AW-06 gives the saving
     route its own submission seam so the value it persists is the same object
-    the aggregation ran on, produced by `freeze_scope` like every other
+    the aggregation ran on, produced by `freeze_selection` like every other
     Artifact's.
     """
-    return freeze_scope(body.to_scope_submission())
+    return freeze_selection(session, body.to_scope_submission(), user_id=user_id)
 
 
 @router.get("/discover/ignored")
@@ -312,7 +315,7 @@ def create_discover_report(
         create_report(
             session,
             user_id=_current_user.id,
-            scope=_report_submission(body),
+            scope=_report_submission(session, body, _current_user.id),
             signals=cast(
                 "set[SignalKind] | None", _parse_discover_signals(body.signals)
             ),

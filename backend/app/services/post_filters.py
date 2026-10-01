@@ -233,6 +233,38 @@ class PostFilters:
         )
 
 
+# ---- The Post selection's steps (PTR-05, ADR-026) ---------------------------
+#
+# The vocabulary only; `post_selection` evaluates them.
+
+
+@dataclass(frozen=True)
+class Rule:
+    """Select or deselect every Post a Post filter matches, as it was made."""
+
+    select: bool
+    tree: TreeGroup | None = None
+    keyword: str | None = None
+    sort: FeedSort = "newest"
+    view_measure: ViewMeasure = "estimated"
+    max_per_channel: int = 0
+    max_per_channel_mode: CapMode = "ordered"
+    seed: int = 0
+
+
+@dataclass(frozen=True)
+class Pick:
+    """Select or deselect one Post."""
+
+    select: bool
+    channel_name: str
+    post_id: int
+
+
+Step = Rule | Pick
+SELECT_ALL: tuple[Step, ...] = (Rule(select=True),)
+
+
 def _media_jsonb() -> ColumnElement[Any]:
     # media is a `json` column (not `jsonb`); cast so containment/length work.
     return cast(col(Post.media), JSONB)

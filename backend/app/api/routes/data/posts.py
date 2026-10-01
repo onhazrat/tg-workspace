@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, SessionDep
-from app.api.routes.data._shared import parse_post_filters, tree_filters
+from app.api.routes.data._shared import parse_post_filters, selected_in, tree_filters
 from app.schemas.posts import (
     BulkUpsertPostsResponse,
     PostCountsResponse,
@@ -19,13 +19,18 @@ from app.schemas.posts import (
     PostFeedRequest,
     PostFilteredRequest,
     PostLookupRequest,
-    PostResponse,
     PostWindowRequest,
+    SelectablePostResponse,
     ViewCurveResponse,
     ViewEstimateResponse,
 )
 from app.services.analysis_window import resolve_analysis_window
-from app.services.posts import bulk_upsert_posts, count_facets_in_scope
+from app.services.post_selection import PostScope
+from app.services.posts import (
+    bulk_upsert_posts,
+    count_facets_in_scope,
+    count_selected,
+)
 from app.services.posts import count_scope as count_scope_impl
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -39,7 +44,7 @@ def list_posts(
     body: PostFeedRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> list[PostResponse]:
+) -> list[SelectablePostResponse]:
     """One page of posts for a channel/date scope.
 
     With no filter, no cap and ``sort=newest`` this is the newest-first page the
@@ -51,14 +56,18 @@ def list_posts(
     POST rather than GET because the scope carries the channel selection, which
     can be the entire account — see `PostScopeRequest`. This is a read expressed
     as a POST purely so the selection travels in the body.
+
+    Each post says whether the Post selection selects it.
     """
     window = resolve_analysis_window(body.window)
+    channel_names = body.resolved_channel_names()
+    scope = PostScope(current_user.id, channel_names, window.start, window.end)
     return [
-        PostResponse.model_validate(row)
+        SelectablePostResponse.model_validate(row)
         for row in list_feed_impl(
             session,
             user_id=current_user.id,
-            channel_names=body.resolved_channel_names(),
+            channel_names=channel_names,
             start_date=window.start,
             end_date=window.end,
             filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
@@ -69,6 +78,7 @@ def list_posts(
             seed=body.seed,
             limit=body.limit,
             offset=body.offset,
+            selected=selected_in(session, body.selection, scope),
         )
     ]
 
@@ -83,7 +93,8 @@ def posts_counts(
 
     Replaces the client's `buildPostsInScopeCounts`, which counted the fully
     fetched, client-filtered post array. Also says how many Posts an Estimated
-    views bound hid for being too new to judge.
+    views bound hid for being too new to judge, and how many Posts in the
+    window the Post selection selects, filters aside.
 
     POST rather than GET because the scope carries the channel selection: this is
     a read expressed as a POST purely so the selection travels in the body.
@@ -98,7 +109,17 @@ def posts_counts(
         filters=parse_post_filters(session, body, tree=body.filter),
         max_per_channel=body.max_per_channel,
     )
-    return PostCountsResponse(counts=counts, tooNewToJudge=too_new)
+    channel_names = body.cleaned_channel_names()
+    scope = PostScope(current_user.id, channel_names, window.start, window.end)
+    selected = count_selected(
+        session,
+        selected_in(session, body.selection, scope),
+        user_id=current_user.id,
+        channel_names=channel_names,
+        start_date=window.start,
+        end_date=window.end,
+    )
+    return PostCountsResponse(counts=counts, selected=selected, tooNewToJudge=too_new)
 
 
 # PFB-03. A GET: it reads the curve and two settings, nothing per account.
@@ -146,14 +167,17 @@ def lookup_posts_route(
     body: PostLookupRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> list[PostResponse]:
+) -> list[SelectablePostResponse]:
+    window = resolve_analysis_window(body.window)
+    scope = PostScope(current_user.id, body.channel_names, window.start, window.end)
     return [
-        PostResponse.model_validate(row)
+        SelectablePostResponse.model_validate(row)
         for row in lookup_posts_impl(
             session,
             [(ref.channel_name, ref.post_id) for ref in body.posts],
             user_id=current_user.id,
             filters=None if body.filter is None else tree_filters(session, body.filter),
+            selected=selected_in(session, body.selection, scope),
         )
     ]
 

@@ -34,14 +34,14 @@ from sqlmodel import Session, col
 
 from app.core import acting_owner
 from app.models_tg import DiscoverReport, utc_now
+from app.schemas.post_filter import to_steps
 from app.schemas.scope import FrozenScope
 from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.discover_ignored import ignored_handles
 from app.services.follows import visible_channel_names
-from app.services.post_filters import PostFilters
+from app.services.post_selection import PostScope, selection_clause
 from app.services.serialization import model_to_camel
-from app.services.settling_curve import view_reading
 from app.services.tenancy import (
     assert_owner,
     assert_owner_on_write,
@@ -435,18 +435,8 @@ def create_report(
     `signals` stays an argument because it is not Scope: it picks which kinds of
     signal the report describes, not which Posts it reads.
     """
-    # The keyword and the views order only: the flat filters a Scope frozen
-    # before PTR-03 holds are read-only history, and one frozen since holds
-    # their defaults (ADR-026).
-    filters = PostFilters(
-        keyword=scope.keyword,
-        reading=view_reading(session, scope.view_measure, sort=scope.sort),
-    )
-    post_ids = (
-        None
-        if scope.posts is None
-        else [(ref.channel_name, ref.post_id) for ref in scope.posts]
-    )
+    # The selection the Scope froze, applied over its frozen window (PTR-05).
+    # A Scope without one, from before, covered the whole window.
     result = compute_discover_candidates(
         session,
         user_id=user_id,
@@ -454,12 +444,11 @@ def create_report(
         start_date=scope.start,
         end_date=scope.end,
         signals=signals,
-        filters=filters,
-        max_per_channel=scope.max_per_channel,
-        max_per_channel_mode=scope.max_per_channel_mode,
-        sort=scope.sort,
-        seed=scope.seed,
-        post_ids=post_ids,
+        selected=selection_clause(
+            session,
+            None if scope.selection is None else to_steps(scope.selection),
+            PostScope(user_id, list(scope.channels) or None, scope.start, scope.end),
+        ),
     )
 
     report = DiscoverReport(
