@@ -58,9 +58,11 @@ from app.models_tg import (
     ChatDestination,
     ChatSession,
     DiscoverReport,
+    FollowJob,
     Summary,
     TagRun,
 )
+from app.services.follows import get_follow
 from tests.utils.discover import stored_report_scope
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import user_authentication_headers
@@ -146,6 +148,9 @@ PROBED: dict[tuple[str, str], str] = {
     ("PUT", f"{V1}/data/channels/{{channel_id}}"): "follow-scoped write",
     ("DELETE", f"{V1}/data/channels/{{channel_id}}"): "unfollow",
     ("GET", f"{V1}/data/artifacts"): "the unified History",
+    ("POST", f"{V1}/data/channels/bulk-follow"): (
+        "a client-chosen settingGroupId (CTB-05), a write, so ungated"
+    ),
     ("GET", f"{V1}/data/channels/bulk-follow/{{follow_job_id}}"): "follow job read",
     ("POST", f"{V1}/data/channels/bulk-follow/{{follow_job_id}}/cancel"): (
         "follow job cancel — a write, so ungated"
@@ -275,10 +280,6 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ),
     ("POST", f"{DATA}/embeddings"): (Reason.CORPUS, "embeddings key off Posts"),
     # --- bulk channel operations -------------------------------------------
-    ("POST", f"{DATA}/channels/bulk-follow"): (
-        Reason.COVERED_ELSEWHERE,
-        "writes follows for the caller; test_follows.py",
-    ),
     ("GET", f"{DATA}/channels/bulk-follow/{{follow_job_id}}/events"): (
         Reason.COVERED_ELSEWHERE,
         "SSE, and a test client cannot bound a stream that fails to refuse — "
@@ -1502,6 +1503,50 @@ def test_a_foreign_bulk_follow_job_is_not_readable_or_cancellable(
         "the refusal answered 404 and cancelled the job anyway — the guard has "
         "moved back behind `cancel_follow_job`"
     )
+
+
+@pytest.mark.security
+def test_a_bulk_follow_into_a_foreign_setting_group_is_refused(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+) -> None:
+    """CTB-05: the paste box follows into a Setting group the browser names.
+
+    `settingGroupId` is client-chosen, so without the check Bob's Follows land
+    in Alice's group: her policy schedules his Channels and her group list
+    counts them. It answers the 404 an absent group gets, before a job exists,
+    so no Follow is created and no job id leaks. A write door, so the check is
+    the ungated one.
+    """
+    created = client.post(
+        f"{DATA}/setting-groups", json={"name": "alices-follows"}, headers=alice[1]
+    )
+    assert created.status_code in (200, 201), created.text[:200]
+    group_id = created.json()["id"]
+
+    def follow_into(target: str) -> Any:
+        return client.post(
+            f"{DATA}/channels/bulk-follow",
+            json={"channels": [{"name": "iso_follow_into"}], "settingGroupId": target},
+            headers=bob[1],
+        )
+
+    foreign = follow_into(group_id)
+    absent = follow_into(f"no-such-group-{uuid.uuid4()}")
+
+    assert foreign.status_code == 404, foreign.text[:200]
+    assert foreign.json() == absent.json() == {"detail": "Setting group not found"}
+    with Session(engine) as session:
+        assert (
+            session.exec(
+                select(FollowJob).where(FollowJob.user_id == bob[0].id)
+            ).first()
+            is None
+        )
+        assert (
+            get_follow(session, user_id=bob[0].id, channel_id="iso_follow_into") is None
+        )
 
 
 @pytest.mark.security

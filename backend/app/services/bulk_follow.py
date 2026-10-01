@@ -33,8 +33,8 @@ from app.services.follow_jobs import (
     write_progress,
 )
 from app.services.followed_channels import (
-    channel_exists,
     create_followed_channel,
+    is_followed_by,
     normalize_channel_name,
 )
 from app.services.network_settings import (
@@ -127,6 +127,9 @@ class FollowJobState:
     discovered_via_by_name: dict[str, dict[str, Any] | None] = field(
         default_factory=dict
     )
+    #: Where the Follows this job creates land (CTB-05); `None` is the default
+    #: group. The route has already checked it is the caller's own.
+    setting_group_id: str | None = None
     _update_condition: asyncio.Condition = field(
         default_factory=asyncio.Condition, repr=False
     )
@@ -305,6 +308,7 @@ def _state_from_row(row: FollowJob) -> FollowJobState:
         tor_auto_rotate=bool(options.get("torAutoRotate")),
         tor_rotation_threshold=int(options.get("torRotationThreshold") or 10),
         discovered_via_by_name=dict(options.get("discoveredViaByName") or {}),
+        setting_group_id=options.get("settingGroupId"),
     )
     if row.cancel_requested:
         state.cancel_event.set()
@@ -348,6 +352,7 @@ async def create_follow_job(
     proxies: list[str] | None = None,
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
+    setting_group_id: str | None = None,
 ) -> FollowJobState:
     """Normalize + dedupe input and create an in-memory follow job."""
     seen: set[str] = set()
@@ -372,6 +377,7 @@ async def create_follow_job(
         tor_auto_rotate=tor_auto_rotate,
         tor_rotation_threshold=tor_rotation_threshold,
         discovered_via_by_name=via_by_name,
+        setting_group_id=setting_group_id,
     )
     # The row first, then anything that could make somebody look for it. This
     # runs in the API process, which will not run the job — the worker reads
@@ -405,6 +411,7 @@ def _create_row_for(job: FollowJobState) -> None:
                 "torAutoRotate": job.tor_auto_rotate,
                 "torRotationThreshold": job.tor_rotation_threshold,
                 "discoveredViaByName": job.discovered_via_by_name,
+                "settingGroupId": job.setting_group_id,
             },
             created_at=job.created_at,
         )
@@ -549,8 +556,7 @@ async def _process_one_channel(
         await touch_follow_job(job)
         return
 
-    exists = await run_db(channel_exists, result.name)
-    if exists:
+    if await run_db(is_followed_by, result.name, user_id=user_uuid):
         result.status = "skipped"
         result.reason = "already_followed"
         await touch_follow_job(job)
@@ -609,6 +615,7 @@ async def _process_one_channel(
             effective_start_time=effective_start_time,
             telemetry_url=telegram_web_view_channel_url(result.name),
             telemetry=telemetry,
+            setting_group_id=job.setting_group_id,
         )
     if not created:
         result.status = "skipped"

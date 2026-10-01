@@ -435,6 +435,22 @@ def move_channel_from_restricted_to_default(
     return default_group
 
 
+def own_setting_group(
+    session: Session, group_id: str, *, user_id: uuid.UUID
+) -> ChannelSettingGroup:
+    """The caller's own group, for a door that writes through it.
+
+    A foreign group answers the 404 an absent one does, so the id space is not
+    walkable. Ungated, because every caller writes: a flag may gate visibility
+    and never identity.
+    """
+    group = session.get(ChannelSettingGroup, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Setting group not found")
+    assert_owner_on_write(group.user_id, user_id, detail="Setting group not found")
+    return group
+
+
 def ensure_default_group(
     session: Session, *, user_id: uuid.UUID
 ) -> ChannelSettingGroup:
@@ -1016,10 +1032,7 @@ def update_setting_group(
     is not gated on the flag. Ticket 31 found nine by-id writes sitting on the
     gated guard and still clobbering foreign rows on the shipping config.
     """
-    group = session.get(ChannelSettingGroup, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail="Setting group not found")
-    assert_owner_on_write(group.user_id, user_id, detail="Setting group not found")
+    group = own_setting_group(session, group_id, user_id=user_id)
 
     previous_interval_minutes = group.auto_sync_interval_minutes
     previous_expected_posts = group.dynamic_sync_expected_posts
@@ -1058,10 +1071,7 @@ def delete_setting_group(
     otherwise the 400s would confirm its existence and the oracle the 404 closes
     would move into the payload.
     """
-    group = session.get(ChannelSettingGroup, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail="Setting group not found")
-    assert_owner_on_write(group.user_id, user_id, detail="Setting group not found")
+    group = own_setting_group(session, group_id, user_id=user_id)
     if group.is_default:
         raise HTTPException(
             status_code=400,
@@ -1113,10 +1123,7 @@ def bulk_assign_setting_group(
 
     from app.services.follows import followed_channels_for
 
-    group = session.get(ChannelSettingGroup, setting_group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail="Setting group not found")
-    assert_owner_on_write(group.user_id, user_id, detail="Setting group not found")
+    group = own_setting_group(session, setting_group_id, user_id=user_id)
 
     operator_channels = {
         channel.id: channel

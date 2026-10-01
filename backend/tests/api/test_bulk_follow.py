@@ -498,3 +498,105 @@ def test_bulk_follow_error_isolation(client: TestClient) -> None:
     client.delete(f"{DATA}/channels/good-two", headers=headers)
     clear_follow_jobs_for_tests()
     clear_jobs_for_tests()
+
+
+def _group_of(channel_id: str) -> str | None:
+    with Session(engine) as session:
+        operator_id = get_operator_user_id(session)
+        assert operator_id is not None
+        follow = get_follow(session, user_id=operator_id, channel_id=channel_id)
+        return None if follow is None else follow.setting_group_id
+
+
+def test_bulk_follow_lands_every_new_follow_in_the_named_setting_group(
+    client: TestClient,
+) -> None:
+    """CTB-05: the paste box names the Setting group new Follows land in.
+
+    Both kinds of new Follow: a handle nobody follows yet, and one already in
+    the corpus because another account scraped it. The second is the case the
+    old pre-check got wrong: it asked whether the *Channel* existed, so the
+    handle was reported "already followed" and this account got no Follow at
+    all, which the single-handle field it replaces never did.
+    """
+    clear_follow_jobs_for_tests()
+    clear_jobs_for_tests()
+    headers = _auth(client)
+    group = client.post(
+        f"{DATA}/setting-groups", json={"name": "Pasted"}, headers=headers
+    )
+    assert group.status_code in (200, 201), group.text[:200]
+    group_id = group.json()["id"]
+    with Session(engine) as session:
+        session.add(Channel(id="corpus_only", name="corpus_only"))
+        session.commit()
+
+    with (
+        patch(
+            "app.services.bulk_follow.get_channel_info",
+            new_callable=AsyncMock,
+            side_effect=lambda name, **_kw: _info(
+                name, unavailable=name == "pasted_dark"
+            ),
+        ),
+        patch("app.services.sync_orchestrator.run_sync_job", new_callable=AsyncMock),
+    ):
+        r = client.post(
+            PREFIX,
+            json={
+                "channels": [
+                    {"name": "pasted_one"},
+                    {"name": "corpus_only"},
+                    {"name": "pasted_dark"},
+                ],
+                "settingGroupId": group_id,
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text[:200]
+        final = _wait_follow_done(client, headers, r.json()["followJobId"])
+
+    assert {row["name"]: row["status"] for row in final["results"]} == {
+        "pasted_one": "added",
+        "corpus_only": "added",
+        "pasted_dark": "unavailable",
+    }
+    assert _group_of("pasted_one") == group_id
+    assert _group_of("corpus_only") == group_id
+    # An Unavailable Channel still goes to Restricted, which is frozen: the
+    # web view cannot sync it, so the named group would fail it every tick.
+    with Session(engine) as session:
+        dark = session.get(ChannelSettingGroup, _group_of("pasted_dark"))
+        assert dark is not None and dark.is_unavailable_on_web_view
+
+    clear_follow_jobs_for_tests()
+    clear_jobs_for_tests()
+
+
+def test_bulk_follow_without_a_setting_group_uses_the_default(
+    client: TestClient,
+) -> None:
+    """No `settingGroupId` is today's behaviour, which Discover relies on."""
+    clear_follow_jobs_for_tests()
+    clear_jobs_for_tests()
+    headers = _auth(client)
+
+    with (
+        patch(
+            "app.services.bulk_follow.get_channel_info",
+            new_callable=AsyncMock,
+            return_value=_info("unnamed_group"),
+        ),
+        patch("app.services.sync_orchestrator.run_sync_job", new_callable=AsyncMock),
+    ):
+        r = client.post(
+            PREFIX, json={"channels": [{"name": "unnamed_group"}]}, headers=headers
+        )
+        _wait_follow_done(client, headers, r.json()["followJobId"])
+
+    with Session(engine) as session:
+        group = session.get(ChannelSettingGroup, _group_of("unnamed_group"))
+        assert group is not None and group.is_default
+
+    clear_follow_jobs_for_tests()
+    clear_jobs_for_tests()

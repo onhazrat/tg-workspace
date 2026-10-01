@@ -18,7 +18,7 @@ import {
 import { logger } from "@/lib/logger"
 import { queryKeys, VIEW_ESTIMATE_STALE_TIME } from "../hooks/queryKeys"
 import { useApiStatus } from "../hooks/useApiStatus"
-import { useFollowJob } from "../hooks/useFollowJob"
+import { type FollowOptions, useFollowJob } from "../hooks/useFollowJob"
 import { usePostFilters } from "../hooks/usePostFilters"
 import { usePromptPosts } from "../hooks/usePromptPosts"
 import { useSyncJob } from "../hooks/useSyncJob"
@@ -116,9 +116,7 @@ interface ScraperContextType {
   ) => Promise<void>
   followDiscoverChannels: (
     channels: BulkFollowChannelInput[],
-    options?: {
-      onProgress?: (status: FollowJobStatus) => void
-    },
+    options?: FollowOptions,
   ) => Promise<FollowJobStatus | null>
   forwardedFilter: "all" | "forwarded" | "original" | "unfollowed_forwarded"
   setForwardedFilter: React.Dispatch<

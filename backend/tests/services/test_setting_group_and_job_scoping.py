@@ -63,6 +63,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, delete
 
+from app.api.routes.data.channels import start_bulk_follow
 from app.core.db import engine
 from app.models import User
 from app.models_tg import Channel, ChannelFollow, ChannelSettingGroup, SyncJob
@@ -71,6 +72,7 @@ from app.services.channel_setting_groups import (
     delete_setting_group,
     list_setting_groups,
     load_groups_by_id,
+    own_setting_group,
     update_setting_group,
 )
 from app.services.follows import get_follow
@@ -708,9 +710,19 @@ def test_the_refusal_reuses_the_absent_row_detail() -> None:
     string the family already gives for a group that is not there, so "somebody
     else owns it" and "there is nothing here" stay indistinguishable — otherwise
     the enumeration oracle the 404 closes just moves into the payload.
+
+    The rule lives in `own_setting_group` since CTB-05 added a fourth door, the
+    bulk follow's `settingGroupId`, so this asserts the helper answers the one
+    string on both branches and that every door goes through it.
     """
-    for func in (update_setting_group, delete_setting_group, bulk_assign_setting_group):
-        assert GROUP_NOT_FOUND in inspect.getsource(func)
+    assert inspect.getsource(own_setting_group).count(GROUP_NOT_FOUND) == 2
+    for func in (
+        update_setting_group,
+        delete_setting_group,
+        bulk_assign_setting_group,
+        start_bulk_follow,
+    ):
+        assert "own_setting_group(" in inspect.getsource(func), func.__name__
 
 
 # --------------------------------------------------------------------------

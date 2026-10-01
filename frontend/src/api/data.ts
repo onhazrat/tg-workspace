@@ -301,6 +301,8 @@ export type BulkFollowRequest = {
   proxyEnabled?: boolean
   torAutoRotate?: boolean
   torRotationThreshold?: number
+  /** Where every new Follow lands; omitted is the default group (CTB-05). */
+  settingGroupId?: string
 }
 
 export type FollowChannelResultStatus =

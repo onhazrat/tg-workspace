@@ -56,7 +56,7 @@ export const useGuidedTour = () => {
           popover: {
             title: "Add Channels",
             description:
-              "Start here! Type a Telegram channel username (e.g., @telegram) and hit Enter to start tracking it.",
+              "Start here! Paste one or more Telegram handles or t.me links, pick a setting group, and follow them in one click.",
             side: "bottom",
             align: "start",
           },

@@ -420,6 +420,10 @@ export type BulkFollowRequest = {
      * Torrotationthreshold
      */
     torRotationThreshold?: number;
+    /**
+     * Settinggroupid
+     */
+    settingGroupId?: string | null;
 };
 
 /**
