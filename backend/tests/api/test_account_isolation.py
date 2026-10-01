@@ -207,17 +207,28 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     # --- the shared corpus --------------------------------------------------
     ("POST", f"{DATA}/posts"): (
         Reason.COVERED_ELSEWHERE,
-        "the feed, in both query shapes; test_post_tenancy_scoping.py",
+        "the feed, in both query shapes; test_post_tenancy_scoping.py. Under "
+        "the Post filter, a Channel Condition included, with two live accounts; "
+        "test_post_filter_tree.py",
     ),
-    ("POST", f"{DATA}/posts/lookup"): (Reason.COVERED_ELSEWHERE, "same file"),
-    ("POST", f"{DATA}/posts/counts"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("POST", f"{DATA}/posts/lookup"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_post_tenancy_scoping.py; under the Post filter with a foreign "
+        "ref in the batch, test_post_filter_tree.py",
+    ),
+    ("POST", f"{DATA}/posts/counts"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_post_tenancy_scoping.py; under the Post filter with two live "
+        "accounts, test_post_filter_tree.py",
+    ),
     ("GET", f"{DATA}/posts/view-estimate"): (
         Reason.NOT_ROW_ADDRESSED,
         "the Settling curve and two settings, one answer for every account",
     ),
     ("POST", f"{DATA}/posts/facets"): (
         Reason.COVERED_ELSEWHERE,
-        "two live accounts; test_post_filter_bar_feed.py",
+        "two live accounts; test_post_filter_bar_feed.py, and the Types and "
+        "the total in test_post_filter_tree.py",
     ),
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,

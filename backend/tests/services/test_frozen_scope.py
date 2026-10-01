@@ -299,11 +299,7 @@ def test_the_record_carries_the_whole_filter_set_a_submission_named(
     """The same claim through the wire, so a projection cannot drop one."""
     sent = _scope(
         keyword="tehran",
-        forwarded="original",
-        languages=["fa", "en"],
-        media=["photo", "video"],
         viewMeasure="views",
-        views={"op": "lte", "value": 900},
         maxPerChannel=25,
         maxPerChannelMode="random",
         sort="fewest_views",
@@ -314,11 +310,7 @@ def test_the_record_carries_the_whole_filter_set_a_submission_named(
 
     for key in (
         "keyword",
-        "forwarded",
-        "languages",
-        "media",
         "viewMeasure",
-        "views",
         "sort",
         "groupByChannel",
         "seed",
@@ -340,6 +332,31 @@ def test_a_filter_value_this_server_does_not_implement_is_refused(
     response = _submit(client, _auth(client), scope=_scope(sort="relevance"))
 
     assert response.status_code == 422
+
+
+def test_an_old_artifact_keeps_showing_its_flat_filters(
+    client: TestClient, at_now: None
+) -> None:
+    """A Summary made before PTR-03 shows the filters it was made with."""
+    headers = _auth(client)
+    created = _submit(client, headers, scope=_scope()).json()
+    old = {
+        "forwarded": "original",
+        "languages": ["fa"],
+        "media": ["photo"],
+        "views": {"op": "gte", "value": 2500},
+    }
+    with Session(engine) as session:
+        row = session.get(Summary, created["id"])
+        assert row is not None
+        row.scope = {**(row.scope or {}), **old}
+        session.add(row)
+        session.commit()
+
+    detail = client.get(f"{PREFIX}/summaries/{created['id']}", headers=headers).json()
+
+    for key, value in old.items():
+        assert detail["scope"][key] == value, key
 
 
 # --------------------------------------------------------------------------

@@ -179,9 +179,8 @@ def compute_discover_candidates(
     descending, plus post-level `scopeCounts` which always report every kind
     regardless of which signals are enabled.
 
-    `filters` and the cap reproduce the Posts-tab view the frontend aggregated
-    over (`buildFilteredPostsFromRaw`): keyword / forwarded / media, then the
-    per-channel cap in either `ordered` or `random` mode — `ordered` keeps each
+    `filters` and the cap reproduce the Scope the report covers: the keyword
+    (the Post filter never reaches a report, ADR-026), then the per-channel cap in either `ordered` or `random` mode — `ordered` keeps each
     channel's first N under `sort`, as the feed's cap does (PFB-01); `random`
     reuses the feed's seeded ordering (`posts.random_cap_order`) so the same
     posts are chosen for the same seed.

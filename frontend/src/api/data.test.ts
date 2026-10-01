@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 
+import { addPostFunnel, emptyPostFilter } from "@/lib/posts/post-filter"
 import { channelWritePayload, dataApi } from "./data"
 
 describe("channelWritePayload", () => {
@@ -57,6 +58,12 @@ afterEach(() => {
   globalThis.fetch = realFetch
 })
 
+const PHOTO_OR_VIDEO = addPostFunnel(
+  addPostFunnel(emptyPostFilter(), "media", "photo"),
+  "media",
+  "video",
+)
+
 describe("getPostsFeed", () => {
   it("sends the cap mode and seed alongside a cap, with paging, order and grouping", async () => {
     await dataApi.getPostsFeed({
@@ -66,7 +73,7 @@ describe("getPostsFeed", () => {
       seed: 0,
       sort: "oldest",
       groupByChannel: true,
-      media: ["photo", "video"],
+      filter: PHOTO_OR_VIDEO,
       limit: 50,
       offset: 0,
     })
@@ -76,12 +83,12 @@ describe("getPostsFeed", () => {
         method: "POST",
         body: {
           channelNames: ["alpha"],
-          media: ["photo", "video"],
           maxPerChannel: 5,
           maxPerChannelMode: "random",
           seed: 0,
           sort: "oldest",
           groupByChannel: true,
+          filter: PHOTO_OR_VIDEO,
           limit: 50,
           offset: 0,
         },

@@ -1,7 +1,8 @@
 import type { DiscoveryEmptyReason } from "@/lib/posts/discover-candidates"
 
+// "Show all posts" is gone (PTR-03): it set the Posts tab's Type filter, and
+// the Post filter no longer narrows a report (ADR-026).
 export type DiscoveryQuickAction =
-  | { type: "set_forwarded_filter"; value: "all" | "forwarded" }
   | { type: "go_to_tab"; tab: "channels" | "posts" }
   | { type: "enable_all_signals" }
   | { type: "reset_candidate_filters" }
@@ -39,12 +40,8 @@ const EMPTY_STATES: Record<DiscoveryEmptyReason, DiscoveryEmptyState> = {
   },
   original_only: {
     title: "Original posts only",
-    body: "Forward discovery needs posts with forward metadata, and the Posts tab is filtered to originals. Show all posts, or enable the Mentions and Links signals to discover from original posts too.",
+    body: "Forward discovery needs posts with forward metadata, and this report was made from originals only. Enable the Mentions and Links signals to discover from original posts too.",
     quickActions: [
-      {
-        label: "Show all posts",
-        action: { type: "set_forwarded_filter", value: "all" },
-      },
       { label: "Enable all signals", action: { type: "enable_all_signals" } },
     ],
   },
@@ -53,10 +50,6 @@ const EMPTY_STATES: Record<DiscoveryEmptyReason, DiscoveryEmptyState> = {
     body: "These posts don't forward from, mention, or link to any other channel. Try widening the date range or enabling more discovery signals.",
     quickActions: [
       { label: "Enable all signals", action: { type: "enable_all_signals" } },
-      {
-        label: "Show all posts",
-        action: { type: "set_forwarded_filter", value: "all" },
-      },
     ],
   },
   no_matching_candidates: {
@@ -79,7 +72,6 @@ export function resolveDiscoveryEmptyState(
 }
 
 export interface DiscoveryQuickActionHandlers {
-  setForwardedFilter: (value: "all" | "forwarded") => void
   goToTab: (tab: "channels" | "posts") => void
   enableAllSignals: () => void
   resetCandidateFilters: () => void
@@ -95,9 +87,6 @@ export function runDiscoveryQuickAction(
   handlers: DiscoveryQuickActionHandlers,
 ): void {
   switch (action.type) {
-    case "set_forwarded_filter":
-      handlers.setForwardedFilter(action.value)
-      break
     case "go_to_tab":
       handlers.goToTab(action.tab)
       break

@@ -826,9 +826,9 @@ export const dataGetChannelStats = <ThrowOnError extends boolean = true>(options
  *
  * One page of posts for a channel/date scope.
  *
- * With no filters, no cap and ``sort=newest`` this is the newest-first page the
+ * With no filter, no cap and ``sort=newest`` this is the newest-first page the
  * export/lookup fallbacks and language detection rely on. The Posts feed also
- * passes keyword/forwarded/media filters, a per-channel cap, a sort order and
+ * passes the keyword, the Post filter, a per-channel cap, a sort order and
  * ``offset`` so the whole view is assembled server-side instead of paging a
  * channel's history into the browser.
  *
@@ -854,7 +854,7 @@ export const dataListPosts = <ThrowOnError extends boolean = true>(options: Opti
  *
  * Replaces the client's `buildPostsInScopeCounts`, which counted the fully
  * fetched, client-filtered post array. Also says how many Posts an Estimated
- * views threshold hid for being too new to judge.
+ * views bound hid for being too new to judge.
  *
  * POST rather than GET because the scope carries the channel selection: this is
  * a read expressed as a POST purely so the selection travels in the body.
@@ -885,7 +885,7 @@ export const dataPostsViewEstimate = <ThrowOnError extends boolean = true>(optio
 /**
  * Posts Facets
  *
- * How many Posts each Language and each media kind would leave in a scope.
+ * How many Posts in the window have each Type, media kind and Language.
  */
 export const dataPostsFacets = <ThrowOnError extends boolean = true>(options: Options<DataPostsFacetsData, ThrowOnError>) => (options.client ?? client).post<DataPostsFacetsResponses, DataPostsFacetsErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',
@@ -932,8 +932,8 @@ export const dataBulkUpsertPostsRoute = <ThrowOnError extends boolean = true>(op
  * Aggregated discovery candidates for a channel/date scope.
  *
  * Returns counts only. The client previously fetched every post body in
- * scope to compute this in JS. The keyword/forwarded/media/cap params
- * reproduce the Posts-tab view the client aggregated over, and
+ * scope to compute this in JS. The keyword and cap params reproduce the
+ * Scope the report covers, and
  * `maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic
  * scopes that used to keep a second client-side implementation alive.
  *

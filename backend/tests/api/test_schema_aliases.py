@@ -62,6 +62,11 @@ EXEMPT: set[tuple[str, str]] = {
     ("JobsStatusResponse", "translation_batch"),
     ("PrivateUserCreate", "full_name"),
     ("PrivateUserCreate", "is_verified"),
+    # The Post filter's NOT (PTR-03). Not a column: the key is the shared filter
+    # tree's own (`frontend/src/lib/filter-tree.ts`, the Channel filter's too),
+    # and `not` is a Python keyword, so the field cannot carry the wire name.
+    ("FilterAtom", "negated"),
+    ("FilterGroup", "negated"),
 }
 
 

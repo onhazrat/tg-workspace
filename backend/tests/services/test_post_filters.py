@@ -1,9 +1,10 @@
-"""SQL parity for the ported Posts-tab view filters.
+"""SQL for the Post filter's Conditions, one Condition at a time.
 
-Each case asserts that `apply_post_filters` selects exactly the posts the
-frontend `buildFilteredPostsFromRaw` would keep for the same filter value. The
-media cases are the parity-risky ones: `media` is a JSON column and
-`media_only` folds together a JSON flag, a sentinel text, and a regex.
+Each case asserts that `apply_post_filters` selects exactly the posts a Type or
+media Condition names (PTR-03); the tree's joining is
+`tests/api/test_post_filter_tree.py`. The media cases are the parity-risky
+ones: `media` is a JSON column and `media_only` folds together a JSON flag, a
+sentinel text, and a regex.
 """
 
 from __future__ import annotations
@@ -14,7 +15,15 @@ from sqlmodel import Session, select
 
 from app.core.db import engine
 from app.models_tg import Post
-from app.services.post_filters import PostFilters, apply_post_filters
+from app.services.post_filters import (
+    MediaCond,
+    PostFilters,
+    TreeAtom,
+    TreeCond,
+    TreeGroup,
+    TypeCond,
+    apply_post_filters,
+)
 
 
 def _add(session: Session, post_id: int, **kw: Any) -> None:
@@ -27,6 +36,17 @@ def _add(session: Session, post_id: int, **kw: Any) -> None:
             **kw,
         )
     )
+
+
+def _any(*conds: TreeCond, keyword: str | None = None) -> PostFilters:
+    """Posts matching any one of `conds`, as funnels in one dropdown join."""
+    tree = TreeGroup("or", tuple(TreeAtom(cond) for cond in conds))
+    return PostFilters(keyword=keyword, tree=tree)
+
+
+def _all(*conds: TreeCond, keyword: str | None = None) -> PostFilters:
+    tree = TreeGroup("and", tuple(TreeAtom(cond) for cond in conds))
+    return PostFilters(keyword=keyword, tree=tree)
 
 
 def _ids(session: Session, filters: PostFilters, **kw: Any) -> set[int]:
@@ -52,15 +72,15 @@ def test_forwarded_states() -> None:
         _add(session, 2, forwarded_from="SourceA")
         _add(session, 3, forwarded_from="FollowedSrc")
         session.commit()
-        assert _ids(session, PostFilters(forwarded="all")) == {1, 2, 3}
-        assert _ids(session, PostFilters(forwarded="forwarded")) == {2, 3}
-        assert _ids(session, PostFilters(forwarded="original")) == {1}
+        assert _ids(session, PostFilters()) == {1, 2, 3}
+        assert _ids(session, _any(TypeCond("forwarded"))) == {2, 3}
+        assert _ids(session, _any(TypeCond("original"))) == {1}
         # unfollowed_forwarded excludes forwards from followed channels
         # (compared case-insensitively, matching the frontend).
         followed = frozenset({"followedsrc"})
         assert _ids(
             session,
-            PostFilters(forwarded="unfollowed_forwarded"),
+            _any(TypeCond("unfollowed_forwarded")),
             followed_names=followed,
         ) == {2}
 
@@ -79,11 +99,11 @@ def test_media_text_only_vs_media_only_kinds() -> None:
         # Stickers are real media and must leave text_only.
         _add(session, 6, text="[sticker]", media={"kinds": ["sticker"]})
         session.commit()
-        assert _ids(session, PostFilters(media=("text_only",))) == {1, 2, 5}
-        assert _ids(session, PostFilters(media=("media_only",))) == {6}
-        assert _ids(session, PostFilters(media=("photo",))) == {3}
-        assert _ids(session, PostFilters(media=("video",))) == {4}
-        assert _ids(session, PostFilters(media=())) == {1, 2, 3, 4, 5, 6}
+        assert _ids(session, _any(MediaCond("text_only"))) == {1, 2, 5}
+        assert _ids(session, _any(MediaCond("media_only"))) == {6}
+        assert _ids(session, _any(MediaCond("photo"))) == {3}
+        assert _ids(session, _any(MediaCond("video"))) == {4}
+        assert _ids(session, PostFilters()) == {1, 2, 3, 4, 5, 6}
 
 
 def test_media_only_three_ways() -> None:
@@ -105,7 +125,7 @@ def test_media_only_three_ways() -> None:
         # not media-only: regex matches but there is no media at all
         _add(session, 5, text="[photo]", media=None)
         session.commit()
-        assert _ids(session, PostFilters(media=("media_only",))) == {1, 2, 3}
+        assert _ids(session, _any(MediaCond("media_only"))) == {1, 2, 3}
 
 
 def test_media_grouped_by_kind_or_count() -> None:
@@ -115,7 +135,7 @@ def test_media_grouped_by_kind_or_count() -> None:
         _add(session, 3, media={"kinds": ["photo"], "groupedCount": 1})
         _add(session, 4, media={"kinds": ["photo"]})
         session.commit()
-        assert _ids(session, PostFilters(media=("grouped",))) == {1, 2}
+        assert _ids(session, _any(MediaCond("grouped"))) == {1, 2}
 
 
 def test_link_preview_kind() -> None:
@@ -123,14 +143,14 @@ def test_link_preview_kind() -> None:
         _add(session, 1, media={"kinds": ["link_preview"]})
         _add(session, 2, media={"kinds": ["photo"]})
         session.commit()
-        assert _ids(session, PostFilters(media=("link_preview",))) == {1}
+        assert _ids(session, _any(MediaCond("link_preview"))) == {1}
 
 
 def test_a_media_set_keeps_a_post_matching_any_kind() -> None:
-    """PFB-01: media is a set, and ticking more widens the feed.
+    """Two media funnels join with OR, and a second one widens the feed.
 
-    Each kind keeps what it kept as a single value; the set is their union,
-    including across the two kinds that are not `kinds` entries at all.
+    Each kind keeps what it keeps alone; the OR is their union, including
+    across the two kinds that are not `kinds` entries at all.
     """
     with Session(engine) as session:
         _add(session, 1, text="plain text", media=None)
@@ -139,13 +159,15 @@ def test_a_media_set_keeps_a_post_matching_any_kind() -> None:
         _add(session, 4, media={"kinds": ["link_preview"]})
         _add(session, 5, text="both", media={"kinds": ["photo", "video"]})
         session.commit()
-        assert _ids(session, PostFilters(media=("photo", "video"))) == {2, 3, 5}
-        assert _ids(session, PostFilters(media=("text_only", "link_preview"))) == {
+        assert _ids(session, _any(MediaCond("photo"), MediaCond("video"))) == {2, 3, 5}
+        assert _ids(
+            session, _any(MediaCond("text_only"), MediaCond("link_preview"))
+        ) == {
             1,
             4,
         }
-        # A repeated kind is the same set, not a narrower one.
-        assert _ids(session, PostFilters(media=("photo", "photo"))) == {2, 5}
+        # A repeated kind is the same Posts, not fewer.
+        assert _ids(session, _any(MediaCond("photo"), MediaCond("photo"))) == {2, 5}
 
 
 def test_combined_filters_intersect() -> None:
@@ -164,7 +186,7 @@ def test_combined_filters_intersect() -> None:
         session.commit()
         got = _ids(
             session,
-            PostFilters(keyword="vpn", forwarded="forwarded", media=("photo",)),
+            _all(TypeCond("forwarded"), MediaCond("photo"), keyword="vpn"),
         )
         assert got == {1}
 
@@ -174,5 +196,6 @@ def test_noop_filter_selects_everything() -> None:
         for i in range(3):
             _add(session, i)
         session.commit()
-        assert PostFilters().is_noop() is True
+        empty = PostFilters(tree=TreeGroup("and"))
+        assert _ids(session, empty) == {0, 1, 2}
         assert _ids(session, PostFilters()) == {0, 1, 2}

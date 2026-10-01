@@ -1,18 +1,26 @@
 /**
- * The Posts filter bar (PFB-02, the A1b prototype on `prototype/post-filter-ui`).
+ * The Posts filter bar (PFB-02, PTR-03).
  *
  * One row with the Analysis window small on the left and one search box large
- * on the right; under it one row of pills; under that a footer with the Post
- * count and every active filter as a removable chip. It replaced four stacked
- * panels, two search inputs side by side and two active-search banners.
+ * on the right; under it one row of pills; under that the filter row, and a
+ * footer with the Post count.
  *
- * Every pill writes the Scope's filter half through `ScraperContext`, so the
- * feed, the counts, every Action and its frozen Scope all see the same choice.
+ * The Type, Media and Language dropdowns and the Filters menu build the Post
+ * filter, which the filter row shows and edits as a tree (PTR-03). It decides
+ * only what the tab shows: a Summary covers the window whatever it says
+ * (ADR-026). The keyword, the order and the cap still write the Scope.
  */
 import { Layers, Search, Sparkles, X } from "lucide-react"
 import React from "react"
 import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
+import { FilterRow } from "@/components/filter-tree/FilterRow"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { funnelledValues } from "@/lib/filter-tree"
+import {
+  emptyPostFilter,
+  POST_TYPE_VALUES,
+  type PostFilter as PostFilterTree,
+} from "@/lib/posts/post-filter"
 import type { PostFacetsResponse } from "../client"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -26,35 +34,25 @@ import {
   labelOf,
   languageLabel,
   languageOptions,
-  languageSummary,
   meaningQueryOnKey,
-  mediaSummary,
   POST_ORDER_OPTIONS,
-  POST_TYPE_OPTIONS,
   type SearchMode,
-  viewsSummary,
+  VIEW_MEASURE_OPTIONS,
 } from "../lib/posts/post-filter-bar"
-import {
-  MEDIA_KIND_OPTIONS,
-  type MediaFilterValue,
-  type MediaKind,
-} from "../lib/posts/post-media"
+import { MEDIA_KIND_OPTIONS } from "../lib/posts/post-media"
 import type {
-  ForwardedFilterValue,
   MaxPostsPerChannelMode,
   PostSortOrder,
   ViewMeasure,
-  ViewsFilter,
 } from "../lib/posts/post-view"
 import type { Post } from "../types"
 import {
-  CheckList,
-  Options,
-  PerChannelForm,
-  Pill,
-  pillClass,
-  ViewsForm,
-} from "./PostFilterParts"
+  PostFacetMenu,
+  type PostFacetValue,
+  PostFiltersMenu,
+  postVocabulary,
+} from "./PostFilterControls"
+import { Options, PerChannelForm, Pill, pillClass } from "./PostFilterParts"
 
 /** What the bar reads and writes; `ScraperContext` provides all of it. */
 export interface FilterBarControls {
@@ -64,16 +62,10 @@ export interface FilterBarControls {
   setSemanticSearchRespectsChannels: (value: boolean) => void
   relatedPostSearch: Post | null
   setRelatedPostSearch: (value: Post | null) => void
-  forwardedFilter: ForwardedFilterValue
-  setForwardedFilter: (value: ForwardedFilterValue) => void
-  mediaFilter: MediaFilterValue
-  setMediaFilter: React.Dispatch<React.SetStateAction<MediaFilterValue>>
-  languageFilter: string[]
-  setLanguageFilter: React.Dispatch<React.SetStateAction<string[]>>
+  postFilter: PostFilterTree
+  setPostFilter: (next: PostFilterTree) => void
   viewMeasure: ViewMeasure
   setViewMeasure: (value: ViewMeasure) => void
-  viewsFilter: ViewsFilter | null
-  setViewsFilter: (value: ViewsFilter | null) => void
   maxPostsPerChannel: number
   setMaxPostsPerChannel: (value: number) => void
   maxPostsPerChannelMode: MaxPostsPerChannelMode
@@ -87,11 +79,11 @@ export interface FilterBarControls {
 interface PostFilterProps {
   postSearch: string
   setPostSearch: (val: string) => void
-  /** How many Posts the Scope holds, for the footer. */
+  /** How many Posts the filter shows, for the footer and the filter row. */
   shownCount: number
   /** The existing subtitle's qualifiers: the cap and grouping. */
   subtitle: string
-  /** Posts an Estimated views threshold hid for being too new to judge. */
+  /** Posts an Estimated views bound hid for being too new to judge. */
   tooNewToJudge: number
   /** Switches at the end of the pill row: the feed's Compact grid and Keyboard. */
   trailing?: React.ReactNode
@@ -102,21 +94,20 @@ export interface PostFilterBarProps extends PostFilterProps {
   embeddingsEnabled: boolean
   /** The Analysis window control, left of the search box. */
   windowControl: React.ReactNode
-  /** Per-choice counts; `undefined` while none are known. */
+  /** Per-value counts and the window's total; `undefined` while none are known. */
   facets: PostFacetsResponse | undefined
   /** The followed Channels' Languages, for when no counts are known. */
   channelLanguages: string[]
-  /** Called as a counting pill opens and closes, so counts load only then. */
+  /** The selected Channels, which a Channel Condition picks from. */
+  channelNames: string[]
+  /** Called as a dropdown opens and closes, so counts load only then. */
   onCountingPillOpenChange: (open: boolean) => void
-  /** The deployment's estimation floor, for the Views pill's copy. */
+  /** The deployment's estimation floor, for the views editor's copy. */
   estimationFloorHours: number
 }
 
 /** The floor's default in `services/reach.py`, until the server's arrives. */
 const DEFAULT_ESTIMATION_FLOOR_HOURS = 3
-
-const toggle = <T,>(list: T[], value: T): T[] =>
-  list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
 
 /**
  * One search box for both kinds of search. Keyword filters as you type;
@@ -211,29 +202,56 @@ function SearchBox({
   )
 }
 
+const countOf = (facets: { value: string; count: number }[] | undefined) => {
+  const counts = new Map(facets?.map((f) => [f.value, f.count]))
+  return (value: string) => counts.get(value)
+}
+
 /** The bar itself, props only, so it renders without providers. */
 export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
   const { postSearch, setPostSearch, controls: s, facets } = props
-  const mediaCounts = new Map(facets?.media.map((f) => [f.value, f.count]))
+  const filter = s.postFilter
+  const typeCount = countOf(facets?.types)
+  const mediaCount = countOf(facets?.media)
   const languages = languageOptions(
     facets?.languages,
     props.channelLanguages,
-    s.languageFilter,
+    funnelledValues(filter, "language"),
+  ).map(({ code, count }) => ({
+    id: code,
+    label: languageLabel(code),
+    count,
+  }))
+  const values: Record<"type" | "media" | "language", PostFacetValue[]> = {
+    type: POST_TYPE_VALUES.map((t) => ({
+      id: t.value,
+      label: t.label,
+      count: typeCount(t.value),
+    })),
+    media: MEDIA_KIND_OPTIONS.map((m) => ({
+      id: m.value,
+      label: m.label,
+      count: mediaCount(m.value),
+    })),
+    language: languages,
+  }
+  const vocabulary = postVocabulary(
+    {
+      languages: languages.map(({ id, label }) => ({ id, label })),
+      channels: props.channelNames.map((name) => ({
+        id: name,
+        label: `@${name}`,
+      })),
+    },
+    props.estimationFloorHours,
   )
   const chips = activeFilters({
-    keyword: postSearch,
     meaning: s.semanticSearchQuery,
     relatedTo: s.relatedPostSearch,
-    forwarded: s.forwardedFilter,
-    media: s.mediaFilter,
-    languages: s.languageFilter,
-    views: s.viewsFilter,
-    viewMeasure: s.viewMeasure,
     cap: s.maxPostsPerChannel,
     capMode: s.maxPostsPerChannelMode,
     order: s.postSortOrder,
   })
-  const setters = { ...s, setPostSearch }
 
   return (
     <section className="mb-6 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
@@ -251,78 +269,28 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Pill
-            label="Type"
-            value={labelOf(POST_TYPE_OPTIONS, s.forwardedFilter)}
-            active={s.forwardedFilter !== "all"}
-            width="w-64"
-            testId="post-filter-pill-type"
-          >
-            <Options
-              options={POST_TYPE_OPTIONS}
-              value={s.forwardedFilter}
-              onChange={s.setForwardedFilter}
+          {(
+            [
+              ["type", "Type"],
+              ["media", "Media"],
+              ["language", "Language"],
+            ] as const
+          ).map(([facet, label]) => (
+            <PostFacetMenu
+              key={facet}
+              facet={facet}
+              label={label}
+              values={values[facet]}
+              filter={filter}
+              onChange={s.setPostFilter}
+              onOpenChange={props.onCountingPillOpenChange}
             />
-          </Pill>
-          <Pill
-            label="Media"
-            value={mediaSummary(s.mediaFilter)}
-            active={s.mediaFilter.length > 0}
-            width="w-56"
-            testId="post-filter-pill-media"
-            onOpenChange={props.onCountingPillOpenChange}
-          >
-            <CheckList
-              items={MEDIA_KIND_OPTIONS.map((option) => ({
-                key: option.value,
-                label: option.label,
-                count: mediaCounts.get(option.value),
-                checked: s.mediaFilter.includes(option.value),
-                testId: `post-media-filter-${option.value}`,
-              }))}
-              anyLabel="Any media"
-              onToggle={(key) =>
-                s.setMediaFilter((m) => toggle(m, key as MediaKind))
-              }
-              onAny={() => s.setMediaFilter([])}
-            />
-          </Pill>
-          <Pill
-            label="Language"
-            value={languageSummary(s.languageFilter)}
-            active={s.languageFilter.length > 0}
-            testId="post-filter-pill-language"
-            onOpenChange={props.onCountingPillOpenChange}
-          >
-            <CheckList
-              items={languages.map(({ code, count }) => ({
-                key: code,
-                label: languageLabel(code),
-                count,
-                checked: s.languageFilter.includes(code),
-              }))}
-              anyLabel="Any language"
-              emptyLabel="No Language read yet"
-              onToggle={(code) => s.setLanguageFilter((l) => toggle(l, code))}
-              onAny={() => s.setLanguageFilter([])}
-            />
-          </Pill>
-
-          <Pill
-            label="Views"
-            value={viewsSummary(s.viewsFilter, s.viewMeasure)}
-            active={s.viewsFilter != null}
-            width="w-80"
-            testId="post-filter-pill-views"
-          >
-            <ViewsForm
-              measure={s.viewMeasure}
-              setMeasure={s.setViewMeasure}
-              views={s.viewsFilter}
-              setViews={s.setViewsFilter}
-              floorHours={props.estimationFloorHours}
-            />
-          </Pill>
+          ))}
+          <PostFiltersMenu
+            filter={filter}
+            onChange={s.setPostFilter}
+            floorHours={props.estimationFloorHours}
+          />
 
           <span className="mx-1 h-5 w-px bg-app-ink/10" />
 
@@ -330,7 +298,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
             label="Order"
             value={labelOf(POST_ORDER_OPTIONS, s.postSortOrder)}
             active={s.postSortOrder !== "newest"}
-            width="w-48"
+            width="w-56"
             testId="post-filter-pill-order"
           >
             <Options
@@ -338,6 +306,16 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
               value={s.postSortOrder}
               onChange={s.setPostSortOrder}
             />
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-app-ink/10 pt-2 text-[11px] text-app-ink/60">
+              The views orders read
+              <TgSegmentedControl
+                size="sm"
+                aria-label="The measure the views orders read"
+                value={s.viewMeasure}
+                onChange={s.setViewMeasure}
+                options={VIEW_MEASURE_OPTIONS}
+              />
+            </div>
           </Pill>
           <Pill
             label="Per channel"
@@ -370,6 +348,26 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
         </div>
       </div>
 
+      <FilterRow
+        filter={filter}
+        onChange={s.setPostFilter}
+        vocabulary={vocabulary}
+        testId="post-filter"
+        search={postSearch}
+        shownCount={props.shownCount}
+        totalCount={facets?.total ?? props.shownCount}
+        approximate={
+          facets
+            ? undefined
+            : "The window's total has not loaded, and a meaning search never counts one"
+        }
+        onClearSearch={() => setPostSearch("")}
+        onClearAll={() => {
+          setPostSearch("")
+          s.setPostFilter(emptyPostFilter())
+        }}
+      />
+
       <div className="flex flex-wrap items-center gap-2 border-t border-app-ink/5 bg-app-muted/30 px-4 py-2.5 text-xs">
         <span className="font-semibold">
           {props.shownCount.toLocaleString()} posts
@@ -387,23 +385,12 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
             key={chip.key}
             type="button"
             aria-label={`Remove ${chip.label}`}
-            onClick={() => clearChip(chip.clears, setters)}
+            onClick={() => clearChip(chip.clears, s)}
             className="inline-flex items-center gap-1 rounded-full bg-app-ink/10 px-2 py-0.5 hover:bg-app-ink/20"
           >
             {chip.label} <X size={11} />
           </button>
         ))}
-        {chips.length > 1 && (
-          <button
-            type="button"
-            onClick={() => {
-              for (const chip of chips) clearChip(chip.clears, setters)
-            }}
-            className="ml-auto text-app-ink/60 underline-offset-2 hover:underline"
-          >
-            Clear all
-          </button>
-        )}
       </div>
     </section>
   )
@@ -412,15 +399,23 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 /** The bar wired to the workspace's state. */
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const controls = useScraper()
-  const { channels } = useData()
+  const { channels, selectedChannels } = useData()
   const { embeddingsEnabled } = useSettings()
   const { setActiveTab } = useUI()
   const [openPillCount, setOpenPillCount] = React.useState(0)
-  const facets = usePostFacets(openPillCount > 0)
+  // The filter row says "N of M", and M is the window's total, so the counts
+  // load while it is showing as well as while a dropdown is open.
+  const rowShowing =
+    controls.postFilter.children.length > 0 || props.postSearch.trim() !== ""
+  const facets = usePostFacets(openPillCount > 0 || rowShowing)
   const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
     () => channels.map((c) => c.language).filter((code) => !!code) as string[],
     [channels],
+  )
+  const channelNames = React.useMemo(
+    () => [...selectedChannels].sort(),
+    [selectedChannels],
   )
   return (
     <PostFilterBar
@@ -434,6 +429,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
       }
       facets={facets}
       channelLanguages={channelLanguages}
+      channelNames={channelNames}
       estimationFloorHours={
         estimate?.estimationFloorHours ?? DEFAULT_ESTIMATION_FLOOR_HOURS
       }

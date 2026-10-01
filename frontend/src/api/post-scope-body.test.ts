@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { MINUTE_MS } from "@/lib/analysis-window"
+import { addPostFunnel, emptyPostFilter } from "@/lib/posts/post-filter"
 import { postScopeBody } from "./data"
 
 /**
@@ -26,32 +27,30 @@ describe("postScopeBody", () => {
     expect(
       postScopeBody({
         channelNames: [],
-        forwarded: "all",
-        media: [],
+        filter: emptyPostFilter(),
         maxPerChannel: 0,
         keyword: "   ",
       }),
     ).toEqual({})
   })
 
-  it("keeps non-default filters", () => {
+  it("keeps non-default filters, the Post filter as its tree", () => {
+    const filter = addPostFunnel(emptyPostFilter(), "type", "original")
     expect(
       postScopeBody({
         channelNames: ["alpha"],
         startDate: HOUR_AGO,
         endDate: MINUTE_AGO,
         keyword: "  war  ",
-        forwarded: "original",
-        media: ["photo"],
+        filter,
         maxPerChannel: 25,
       }),
     ).toEqual({
       channelNames: ["alpha"],
       window: { mode: "fixed", start: HOUR_AGO, end: MINUTE_AGO },
       keyword: "war",
-      forwarded: "original",
-      media: ["photo"],
       maxPerChannel: 25,
+      filter,
     })
   })
 

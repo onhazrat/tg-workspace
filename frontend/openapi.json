@@ -1960,7 +1960,7 @@
       "post": {
         "tags": ["data"],
         "summary": "List Posts",
-        "description": "One page of posts for a channel/date scope.\n\nWith no filters, no cap and ``sort=newest`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses keyword/forwarded/media filters, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.",
+        "description": "One page of posts for a channel/date scope.\n\nWith no filter, no cap and ``sort=newest`` this is the newest-first page the\nexport/lookup fallbacks and language detection rely on. The Posts feed also\npasses the keyword, the Post filter, a per-channel cap, a sort order and\n``offset`` so the whole view is assembled server-side instead of paging a\nchannel's history into the browser.\n\nPOST rather than GET because the scope carries the channel selection, which\ncan be the entire account \u2014 see `PostScopeRequest`. This is a read expressed\nas a POST purely so the selection travels in the body.",
         "operationId": "data-list_posts",
         "requestBody": {
           "content": {
@@ -1999,12 +1999,12 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Counts",
-        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array. Also says how many Posts an Estimated\nviews threshold hid for being too new to judge.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
+        "description": "Per-channel post counts for a filtered scope, computed as a SQL GROUP BY.\n\nReplaces the client's `buildPostsInScopeCounts`, which counted the fully\nfetched, client-filtered post array. Also says how many Posts an Estimated\nviews bound hid for being too new to judge.\n\nPOST rather than GET because the scope carries the channel selection: this is\na read expressed as a POST purely so the selection travels in the body.",
         "operationId": "data-posts_counts",
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostScopeRequest" }
+              "schema": { "$ref": "#/components/schemas/PostFilteredRequest" }
             }
           },
           "required": true
@@ -2055,12 +2055,12 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Facets",
-        "description": "How many Posts each Language and each media kind would leave in a scope.",
+        "description": "How many Posts in the window have each Type, media kind and Language.",
         "operationId": "data-posts_facets",
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostScopeRequest" }
+              "schema": { "$ref": "#/components/schemas/PostWindowRequest" }
             }
           },
           "required": true
@@ -2168,7 +2168,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Discover Candidates",
-        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword/forwarded/media/cap params\nreproduce the Posts-tab view the client aggregated over, and\n`maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic\nscopes that used to keep a second client-side implementation alive.\n\nPOST rather than GET for the same reason as `/posts` \u2014 the channel selection\ntravels in the body so it cannot overflow the request line.",
+        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword and cap params reproduce the\nScope the report covers, and\n`maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic\nscopes that used to keep a second client-side implementation alive.\n\nPOST rather than GET for the same reason as `/posts` \u2014 the channel selection\ntravels in the body so it cannot overflow the request line.",
         "operationId": "data-discover_candidates",
         "requestBody": {
           "content": {
@@ -5958,6 +5958,21 @@
         "title": "CandidateSeenInResponse",
         "description": "One carrier channel's contribution to a candidate's totals."
       },
+      "ChannelCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "channel", "title": "Type" },
+          "value": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "ChannelCondition"
+      },
       "ChannelInfoRequest": {
         "properties": {
           "proxyEnabled": {
@@ -6774,42 +6789,11 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
-          "forwarded": {
-            "type": "string",
-            "title": "Forwarded",
-            "default": "all"
-          },
-          "languages": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Languages"
-          },
-          "media": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "text_only",
-                "media_only",
-                "photo",
-                "video",
-                "link_preview",
-                "grouped"
-              ]
-            },
-            "type": "array",
-            "title": "Media"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
-          },
-          "views": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/ViewsFilter" },
-              { "type": "null" }
-            ]
           },
           "maxPerChannel": {
             "type": "integer",
@@ -7037,42 +7021,11 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
-          "forwarded": {
-            "type": "string",
-            "title": "Forwarded",
-            "default": "all"
-          },
-          "languages": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Languages"
-          },
-          "media": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "text_only",
-                "media_only",
-                "photo",
-                "video",
-                "link_preview",
-                "grouped"
-              ]
-            },
-            "type": "array",
-            "title": "Media"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
-          },
-          "views": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/ViewsFilter" },
-              { "type": "null" }
-            ]
           },
           "maxPerChannel": {
             "type": "integer",
@@ -7227,6 +7180,36 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["ordered", "random"],
+            "title": "Maxperchannelmode",
+            "default": "ordered"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "forwarded": {
             "type": "string",
             "enum": ["all", "forwarded", "original", "unfollowed_forwarded"],
@@ -7253,42 +7236,12 @@
             "type": "array",
             "title": "Media"
           },
-          "viewMeasure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
-            "title": "Viewmeasure",
-            "default": "estimated"
-          },
           "views": {
             "anyOf": [
               { "$ref": "#/components/schemas/ViewsFilter" },
               { "type": "null" }
             ]
           },
-          "maxPerChannel": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Maxperchannel",
-            "default": 0
-          },
-          "maxPerChannelMode": {
-            "type": "string",
-            "enum": ["ordered", "random"],
-            "title": "Maxperchannelmode",
-            "default": "ordered"
-          },
-          "sort": {
-            "type": "string",
-            "enum": ["newest", "oldest", "most_views", "fewest_views"],
-            "title": "Sort",
-            "default": "newest"
-          },
-          "groupByChannel": {
-            "type": "boolean",
-            "title": "Groupbychannel",
-            "default": false
-          },
-          "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "start": { "type": "integer", "title": "Start" },
           "end": { "type": "integer", "title": "End" },
           "scopedPostCount": {
@@ -7445,6 +7398,74 @@
         "required": ["vectors", "model", "provider", "dimensions"],
         "title": "EmbeddingResult"
       },
+      "FilterAtom": {
+        "properties": {
+          "kind": { "type": "string", "const": "atom", "title": "Kind" },
+          "id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Id"
+          },
+          "not": { "type": "boolean", "title": "Not", "default": false },
+          "cond": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/TypeCondition" },
+              { "$ref": "#/components/schemas/MediaCondition" },
+              { "$ref": "#/components/schemas/LanguageCondition" },
+              { "$ref": "#/components/schemas/ChannelCondition" },
+              { "$ref": "#/components/schemas/ViewsCondition" }
+            ],
+            "title": "Cond",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "channel": "#/components/schemas/ChannelCondition",
+                "language": "#/components/schemas/LanguageCondition",
+                "media": "#/components/schemas/MediaCondition",
+                "type": "#/components/schemas/TypeCondition",
+                "views": "#/components/schemas/ViewsCondition"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "cond"],
+        "title": "FilterAtom",
+        "description": "One Condition, maybe negated."
+      },
+      "FilterGroup": {
+        "properties": {
+          "kind": { "type": "string", "const": "group", "title": "Kind" },
+          "id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Id"
+          },
+          "op": { "type": "string", "enum": ["and", "or"], "title": "Op" },
+          "not": { "type": "boolean", "title": "Not", "default": false },
+          "children": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/FilterAtom" },
+                { "$ref": "#/components/schemas/FilterGroup" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "atom": "#/components/schemas/FilterAtom",
+                  "group": "#/components/schemas/FilterGroup"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "op"],
+        "title": "FilterGroup",
+        "description": "Conditions joined with AND or OR, maybe negated; parentheses are groups."
+      },
       "FixedAnalysisWindow": {
         "properties": {
           "mode": { "type": "string", "const": "fixed", "title": "Mode" },
@@ -7506,6 +7527,36 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["ordered", "random"],
+            "title": "Maxperchannelmode",
+            "default": "ordered"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "groupByChannel": {
+            "type": "boolean",
+            "title": "Groupbychannel",
+            "default": false
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "forwarded": {
             "type": "string",
             "enum": ["all", "forwarded", "original", "unfollowed_forwarded"],
@@ -7532,42 +7583,12 @@
             "type": "array",
             "title": "Media"
           },
-          "viewMeasure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
-            "title": "Viewmeasure",
-            "default": "estimated"
-          },
           "views": {
             "anyOf": [
               { "$ref": "#/components/schemas/ViewsFilter" },
               { "type": "null" }
             ]
           },
-          "maxPerChannel": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Maxperchannel",
-            "default": 0
-          },
-          "maxPerChannelMode": {
-            "type": "string",
-            "enum": ["ordered", "random"],
-            "title": "Maxperchannelmode",
-            "default": "ordered"
-          },
-          "sort": {
-            "type": "string",
-            "enum": ["newest", "oldest", "most_views", "fewest_views"],
-            "title": "Sort",
-            "default": "newest"
-          },
-          "groupByChannel": {
-            "type": "boolean",
-            "title": "Groupbychannel",
-            "default": false
-          },
-          "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "start": { "type": "integer", "title": "Start" },
           "end": { "type": "integer", "title": "End" },
           "scopedPostCount": {
@@ -7922,6 +7943,21 @@
         "title": "LLMLogResponse",
         "description": "One model call: the prompt, the response, and what it cost.\n\n`protected_namespaces=()` is required, not decorative. Pydantic v2 reserves\nthe `model_` prefix for its own API, and this table has both a `model` column\nand a `model_config_json` one \u2014 the latter collides with `BaseModel.model_config`\nitself. Without the override, declaring these fields raises at class-creation\ntime. Renaming the columns is not an option: they are the wire format."
       },
+      "LanguageCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "language", "title": "Type" },
+          "value": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "LanguageCondition"
+      },
       "LiftCeilingRequest": {
         "properties": {
           "budgets": {
@@ -7988,6 +8024,27 @@
         "type": "object",
         "title": "LogWriteResponse",
         "description": "Result of a bulk log write: how many rows were accepted."
+      },
+      "MediaCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "media", "title": "Type" },
+          "value": {
+            "type": "string",
+            "enum": [
+              "text_only",
+              "media_only",
+              "photo",
+              "video",
+              "link_preview",
+              "grouped"
+            ],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "MediaCondition"
       },
       "MediaMixResponse": {
         "properties": {
@@ -8304,10 +8361,16 @@
         "type": "object",
         "required": ["value", "count"],
         "title": "PostFacetCount",
-        "description": "How many Posts one choice of a filter would leave."
+        "description": "How many Posts in the window have one value."
       },
       "PostFacetsResponse": {
         "properties": {
+          "total": { "type": "integer", "title": "Total" },
+          "types": {
+            "items": { "$ref": "#/components/schemas/PostFacetCount" },
+            "type": "array",
+            "title": "Types"
+          },
           "languages": {
             "items": { "$ref": "#/components/schemas/PostFacetCount" },
             "type": "array",
@@ -8320,9 +8383,9 @@
           }
         },
         "type": "object",
-        "required": ["languages", "media"],
+        "required": ["total", "types", "languages", "media"],
         "title": "PostFacetsResponse",
-        "description": "Per-choice Post counts for the Language and media filters."
+        "description": "Per-value Post counts for the Type, media and Language dropdowns."
       },
       "PostFeedRequest": {
         "properties": {
@@ -8356,48 +8419,23 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
-          "forwarded": {
-            "type": "string",
-            "title": "Forwarded",
-            "default": "all"
-          },
-          "languages": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Languages"
-          },
-          "media": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "text_only",
-                "media_only",
-                "photo",
-                "video",
-                "link_preview",
-                "grouped"
-              ]
-            },
-            "type": "array",
-            "title": "Media"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
           },
-          "views": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/ViewsFilter" },
-              { "type": "null" }
-            ]
-          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
             "title": "Maxperchannel",
             "default": 0
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup" },
+              { "type": "null" }
+            ]
           },
           "channelName": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -8438,7 +8476,63 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PostFeedRequest",
-        "description": "`PostScopeRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
+        "description": "`PostFilteredRequest` plus the feed's paging, cap mode and sort.\n\n`limit`/`offset` keep the same bounds the query params enforced, so an\nout-of-range page is still a 422 rather than an unbounded read."
+      },
+      "PostFilteredRequest": {
+        "properties": {
+          "channelNames": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Channelnames"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PostFilteredRequest",
+        "description": "`PostScopeRequest` plus the Post filter's tree."
       },
       "PostLinkSpan": {
         "properties": {
@@ -8467,6 +8561,12 @@
             "type": "array",
             "maxItems": 200,
             "title": "Posts"
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup" },
+              { "type": "null" }
+            ]
           }
         },
         "type": "object",
@@ -8582,7 +8682,25 @@
         "title": "PostResponse",
         "description": "One post, as `post_to_camel` builds it."
       },
-      "PostScopeRequest": {
+      "PostTranslationResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "channelName": { "type": "string", "title": "Channelname" },
+          "postId": { "type": "integer", "title": "Postid" },
+          "language": { "type": "string", "title": "Language" },
+          "translatedText": {
+            "type": "string",
+            "title": "Translatedtext",
+            "default": ""
+          },
+          "timestamp": { "type": "integer", "title": "Timestamp", "default": 0 }
+        },
+        "type": "object",
+        "required": ["id", "channelName", "postId", "language"],
+        "title": "PostTranslationResponse",
+        "description": "One post translated into one language."
+      },
+      "PostWindowRequest": {
         "properties": {
           "channelNames": {
             "anyOf": [
@@ -8609,77 +8727,12 @@
               { "type": "null" }
             ],
             "title": "Window"
-          },
-          "keyword": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Keyword"
-          },
-          "forwarded": {
-            "type": "string",
-            "title": "Forwarded",
-            "default": "all"
-          },
-          "languages": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Languages"
-          },
-          "media": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "text_only",
-                "media_only",
-                "photo",
-                "video",
-                "link_preview",
-                "grouped"
-              ]
-            },
-            "type": "array",
-            "title": "Media"
-          },
-          "viewMeasure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
-            "title": "Viewmeasure",
-            "default": "estimated"
-          },
-          "views": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/ViewsFilter" },
-              { "type": "null" }
-            ]
-          },
-          "maxPerChannel": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Maxperchannel",
-            "default": 0
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "PostScopeRequest",
-        "description": "A post scope carried in a request body rather than a query string.\n\nThe channel selection can run to the full account \u2014 over a thousand handles \u2014\nwhich as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and\nserver header limits. A body has no such ceiling."
-      },
-      "PostTranslationResponse": {
-        "properties": {
-          "id": { "type": "string", "title": "Id" },
-          "channelName": { "type": "string", "title": "Channelname" },
-          "postId": { "type": "integer", "title": "Postid" },
-          "language": { "type": "string", "title": "Language" },
-          "translatedText": {
-            "type": "string",
-            "title": "Translatedtext",
-            "default": ""
-          },
-          "timestamp": { "type": "integer", "title": "Timestamp", "default": 0 }
-        },
-        "type": "object",
-        "required": ["id", "channelName", "postId", "language"],
-        "title": "PostTranslationResponse",
-        "description": "One post translated into one language."
+        "title": "PostWindowRequest",
+        "description": "The Channels and the Analysis window, carried in a request body.\n\nThe channel selection can run to the full account \u2014 over a thousand handles \u2014\nwhich as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and\nserver header limits. A body has no such ceiling."
       },
       "PromptResponse": {
         "properties": {
@@ -8714,42 +8767,11 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
-          "forwarded": {
-            "type": "string",
-            "title": "Forwarded",
-            "default": "all"
-          },
-          "languages": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Languages"
-          },
-          "media": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "text_only",
-                "media_only",
-                "photo",
-                "video",
-                "link_preview",
-                "grouped"
-              ]
-            },
-            "type": "array",
-            "title": "Media"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
-          },
-          "views": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/ViewsFilter" },
-              { "type": "null" }
-            ]
           },
           "maxPerChannel": {
             "type": "integer",
@@ -9364,43 +9386,11 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Keyword"
           },
-          "forwarded": {
-            "type": "string",
-            "enum": ["all", "forwarded", "original", "unfollowed_forwarded"],
-            "title": "Forwarded",
-            "default": "all"
-          },
-          "languages": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Languages"
-          },
-          "media": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "text_only",
-                "media_only",
-                "photo",
-                "video",
-                "link_preview",
-                "grouped"
-              ]
-            },
-            "type": "array",
-            "title": "Media"
-          },
           "viewMeasure": {
             "type": "string",
             "enum": ["views", "estimated"],
             "title": "Viewmeasure",
             "default": "estimated"
-          },
-          "views": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/ViewsFilter" },
-              { "type": "null" }
-            ]
           },
           "maxPerChannel": {
             "type": "integer",
@@ -10601,6 +10591,20 @@
         "title": "TranslateResponse",
         "description": "Translated posts, in the order they were submitted.\n\nEntries stay `dict[str, str]` because the provider contract is a bare\n`{id: text}`-shaped mapping chosen by the caller, not a fixed record."
       },
+      "TypeCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "type", "title": "Type" },
+          "value": {
+            "type": "string",
+            "enum": ["forwarded", "original", "unfollowed_forwarded"],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "TypeCondition"
+      },
       "UpdateJobRequest": {
         "properties": { "enabled": { "type": "boolean", "title": "Enabled" } },
         "type": "object",
@@ -10964,6 +10968,29 @@
         "required": ["curve", "settlingAgeHours", "estimationFloorHours"],
         "title": "ViewEstimateResponse",
         "description": "What the browser needs to read an Estimated View count."
+      },
+      "ViewsCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "views", "title": "Type" },
+          "measure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Measure"
+          },
+          "min": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Max"
+          },
+          "none": { "type": "boolean", "title": "None", "default": false }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "measure"],
+        "title": "ViewsCondition"
       },
       "ViewsFilter": {
         "properties": {

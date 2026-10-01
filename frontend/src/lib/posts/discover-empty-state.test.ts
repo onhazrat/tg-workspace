@@ -13,7 +13,6 @@ import {
 function run(action: DiscoveryQuickAction): string[] {
   const calls: string[] = []
   runDiscoveryQuickAction(action, {
-    setForwardedFilter: (value) => calls.push(`filter:${value}`),
     goToTab: (tab) => calls.push(`tab:${tab}`),
     enableAllSignals: () => calls.push("signals"),
     resetCandidateFilters: () => calls.push("reset"),
@@ -23,9 +22,6 @@ function run(action: DiscoveryQuickAction): string[] {
 
 describe("runDiscoveryQuickAction", () => {
   test("each action reaches its own handler and no other", () => {
-    expect(run({ type: "set_forwarded_filter", value: "all" })).toEqual([
-      "filter:all",
-    ])
     expect(run({ type: "go_to_tab", tab: "posts" })).toEqual(["tab:posts"])
     expect(run({ type: "enable_all_signals" })).toEqual(["signals"])
     expect(run({ type: "reset_candidate_filters" })).toEqual(["reset"])

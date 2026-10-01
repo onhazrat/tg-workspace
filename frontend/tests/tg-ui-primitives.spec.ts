@@ -335,18 +335,19 @@ test.describe("TG UI primitives", () => {
 
     // Workspace tabs navigate to `?tab=`, so they are links, not buttons.
     await page.getByRole("link", { name: "Posts" }).click()
-    // The post filters are pills on one bar since PFB-02, not filter chips.
-    const typePill = page.getByTestId("post-filter-pill-type")
-    await expect(typePill).toBeVisible()
-    await typePill.click()
-    const original = page.getByRole("radio", { name: /^○ Original$/ })
-    await original.click()
-    await expect(typePill).toContainText("Original")
-    await expect(typePill).toHaveClass(/bg-app-ink/)
-    // Put it back: the forwarded filter is not persisted, but later specs in
-    // this worker share the page state until a reload.
-    await typePill.click()
-    await page.getByRole("radio", { name: /All posts/ }).click()
+    // The Type dropdown funnels into the Post filter (PTR-03): the trigger
+    // names what it funnels and fills, and the filter is in the URL.
+    const typeMenu = page.getByTestId("post-filter-type")
+    await expect(typeMenu).toBeVisible()
+    await typeMenu.click()
+    await page.getByTestId("post-filter-type-funnel-original").click()
+    await expect(typeMenu).toContainText("Original")
+    await expect(typeMenu).toHaveClass(/bg-app-ink/)
+    await expect(page).toHaveURL(/postFilter=type%3Aoriginal/)
+    // Put it back, so later specs in this worker start unfiltered.
+    await page.getByTestId("post-filter-type-funnel-original").click()
+    await expect(page).not.toHaveURL(/postFilter=/)
+    await page.keyboard.press("Escape")
   })
 
   test("history empty state uses TgHeroEmptyState", async ({ page }) => {

@@ -9,6 +9,7 @@ import type {
   DiscoveryCandidate,
   DiscoveryScopeCounts,
 } from "../lib/posts/discover-candidates"
+import { type PostFilter, postFilterBody } from "../lib/posts/post-filter"
 import type { MediaFilterValue } from "../lib/posts/post-media"
 import type {
   ForwardedFilterValue,
@@ -65,22 +66,24 @@ export type PostScopeQuery = {
   startDate?: number
   endDate?: number
   keyword?: string
-  forwarded?: ForwardedFilterValue
-  media?: MediaFilterValue
-  /** The Post's own Language, any of these; empty for any (PFB-02). */
-  languages?: string[]
-  /** What `views` and the views orders read; the server's default is `estimated` (PFB-03). */
+  /** What the views orders read; the server's default is `estimated` (PFB-03). */
   viewMeasure?: ViewMeasure
-  views?: ViewsFilter | null
   maxPerChannel?: number
 }
+
+/**
+ * The scope plus the Post filter (PTR-03), which only the feed, the counts and
+ * the lookup take: it decides what the Posts tab shows, so a Discovery report
+ * or a prompt never carries it (ADR-026).
+ */
+export type PostFilteredQuery = PostScopeQuery & { filter?: PostFilter }
 
 /**
  * A single page of the Posts feed: the scope filters plus the per-channel cap
  * mode + seed (both used server-side for `random`), the order, grouping, and
  * paging.
  */
-export type PostFeedQuery = PostScopeQuery & {
+export type PostFeedQuery = PostFilteredQuery & {
   maxPerChannelMode?: MaxPostsPerChannelMode
   sort?: PostSortOrder
   groupByChannel?: boolean
@@ -96,7 +99,7 @@ export type PostFeedQuery = PostScopeQuery & {
  */
 export type PromptScope = Omit<
   PostFeedQuery,
-  "channelNames" | "limit" | "offset"
+  "channelNames" | "limit" | "offset" | "filter"
 > & {
   /**
    * A frozen window, sent verbatim instead of being derived from the pair
@@ -122,22 +125,21 @@ export type PromptScope = Omit<
  * Defaults are omitted rather than sent explicitly, so the body stays as small
  * as the scope actually is.
  */
-export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
+export function postScopeBody(
+  params: PostFilteredQuery,
+): Record<string, unknown> {
   const body: Record<string, unknown> = {}
   if (params.channelNames?.length) body.channelNames = params.channelNames
   const window = fixedWindow(params.startDate, params.endDate)
   if (window) body.window = window
   if (params.keyword?.trim()) body.keyword = params.keyword.trim()
-  if (params.forwarded && params.forwarded !== "all")
-    body.forwarded = params.forwarded
-  // Empty is any media and is the server's default, so it is omitted.
-  if (params.media?.length) body.media = params.media
-  if (params.languages?.length) body.languages = params.languages
   if (params.viewMeasure && params.viewMeasure !== "estimated")
     body.viewMeasure = params.viewMeasure
-  if (params.views) body.views = params.views
   if (params.maxPerChannel != null && params.maxPerChannel > 0)
     body.maxPerChannel = params.maxPerChannel
+  // An empty filter is the server's default, so it is omitted.
+  const filter = params.filter && postFilterBody(params.filter)
+  if (filter) body.filter = filter
   return body
 }
 
@@ -494,11 +496,10 @@ export const dataApi = {
   },
 
   /**
-   * One page of the server-side Posts feed. The backend applies the
-   * keyword/forwarded/media filters, the per-channel cap (`ordered` or a
-   * deterministic seeded `random`), the order and grouping — so the browser
-   * fetches only
-   * `limit` rows per page instead of a channel's whole history.
+   * One page of the server-side Posts feed. The backend applies the keyword,
+   * the Post filter, the per-channel cap (`ordered` or a deterministic seeded
+   * `random`), the order and grouping — so the browser fetches only `limit`
+   * rows per page instead of a channel's whole history.
    */
   getPostsFeed: (params: PostFeedQuery) => {
     const body = postScopeBody(params)
@@ -519,19 +520,30 @@ export const dataApi = {
     })
   },
 
-  /** Resolve specific posts by natural key. Batch capped server-side at 200. */
-  lookupPosts: (refs: { channelName: string; postId: number }[]) =>
-    request<Post[]>("/api/v1/data/posts/lookup", {
+  /**
+   * Resolve specific posts by natural key. Batch capped server-side at 200.
+   * With a Post filter, only the Posts it shows come back (PTR-03).
+   */
+  lookupPosts: (
+    refs: { channelName: string; postId: number }[],
+    filter?: PostFilter,
+  ) => {
+    const tree = filter && postFilterBody(filter)
+    return request<Post[]>("/api/v1/data/posts/lookup", {
       method: "POST",
-      body: JSON.stringify({ posts: refs }),
-    }),
+      body: JSON.stringify(
+        tree ? { posts: refs, filter: tree } : { posts: refs },
+      ),
+    })
+  },
 
   /**
    * Discover aggregation without saving a report.
    *
    * The only implementation of the counting rules — the browser no longer has
-   * a copy. Covers every scope: keyword / forwarded / media, the per-channel
-   * cap in either mode, and an explicit `postIds` set for a semantic query.
+   * a copy. Covers every scope: the keyword, the per-channel cap in either
+   * mode, and an explicit `postIds` set for a semantic query. Never the Post
+   * filter, which decides what the Posts tab shows (ADR-026).
    */
   getDiscoverCandidates: (params: DiscoverScopeQuery) => {
     const body = discoverScopeBody(params)
@@ -652,7 +664,9 @@ export const dataApi = {
    * channels and would have run to roughly 13 KB at the ~1,070 channels a real
    * account holds — past what proxies and servers accept in a request line.
    */
-  getPostsCounts: (params: PostScopeQuery): Promise<Record<string, number>> =>
+  getPostsCounts: (
+    params: PostFilteredQuery,
+  ): Promise<Record<string, number>> =>
     // Just the per-channel map, which is all the AI paths size a selection
     // by. The feed footer reads the whole answer through `dataPostsCounts`.
     request<PostCountsResponse>("/api/v1/data/posts/counts", {

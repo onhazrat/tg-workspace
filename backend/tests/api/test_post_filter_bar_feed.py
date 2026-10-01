@@ -118,6 +118,19 @@ def _feed(
 ALL = ["pfb_a", "pfb_b", "pfb_c"]
 
 
+def _any(kind: str, *values: str) -> dict[str, Any]:
+    """Funnels in one dropdown: a Post with any one of the values (PTR-03)."""
+    return {
+        "kind": "group",
+        "id": "root",
+        "op": "or",
+        "children": [
+            {"kind": "atom", "id": v, "cond": {"type": kind, "value": v}}
+            for v in values
+        ],
+    }
+
+
 def test_a_language_set_keeps_posts_whose_own_language_is_ticked(
     client: TestClient,
     operator: dict[str, str],
@@ -139,16 +152,20 @@ def test_a_language_set_keeps_posts_whose_own_language_is_ticked(
         ],
     )
 
-    assert _feed(client, operator, channelNames=ALL, languages=["fa"]) == [
+    assert _feed(client, operator, channelNames=ALL, filter=_any("language", "fa")) == [
         ("pfb_b", 4),
         ("pfb_a", 1),
     ]
-    assert _feed(client, operator, channelNames=ALL, languages=["fa", "en"]) == [
+    assert _feed(
+        client, operator, channelNames=ALL, filter=_any("language", "fa", "en")
+    ) == [
         ("pfb_b", 4),
         ("pfb_a", 2),
         ("pfb_a", 1),
     ]
-    assert _feed(client, other_headers, channelNames=ALL, languages=["fa"]) == [
+    assert _feed(
+        client, other_headers, channelNames=ALL, filter=_any("language", "fa")
+    ) == [
         ("pfb_c", 6),
         ("pfb_b", 4),
     ]
@@ -184,12 +201,15 @@ def test_the_counts_honour_the_language_set(
         assert response.status_code == 200, response.text
         return response.json()["counts"]
 
-    assert counts(operator, languages=["fa"]) == {"pfb_a": 2, "pfb_b": 1}
-    assert counts(operator, languages=["fa"], maxPerChannel=1) == {
+    assert counts(operator, filter=_any("language", "fa")) == {"pfb_a": 2, "pfb_b": 1}
+    assert counts(operator, filter=_any("language", "fa"), maxPerChannel=1) == {
         "pfb_a": 1,
         "pfb_b": 1,
     }
-    assert counts(other_headers, languages=["fa"]) == {"pfb_b": 1, "pfb_c": 1}
+    assert counts(other_headers, filter=_any("language", "fa")) == {
+        "pfb_b": 1,
+        "pfb_c": 1,
+    }
 
 
 def _seed_blocks(
@@ -318,17 +338,15 @@ def _facets(client: TestClient, headers: dict[str, str], **scope: Any) -> Any:
     return response.json()
 
 
-def test_the_facets_count_each_choice_under_every_other_filter(
+def test_the_facets_count_each_value_in_the_window(
     client: TestClient,
     operator: dict[str, str],
     other: tuple[uuid.UUID, dict[str, str]],
 ) -> None:
-    """What ticking one option alone would leave, cap included.
+    """How many Posts in the window have each value, filters aside (PTR-03).
 
     Languages present, most frequent first, the unread left out; all six media
-    kinds, in their own order. A facet ignores its own selection, so ticking a
-    Language does not zero the other Languages' counts, and honours the other
-    facet's, so ticking Photo narrows the Language counts.
+    kinds, in their own order. No filter reaches it: the request has none.
     """
     other_id, other_headers = other
     _seed(
@@ -363,21 +381,6 @@ def test_the_facets_count_each_choice_under_every_other_filter(
     assert media["video"] == 1
     assert media["text_only"] == 2
 
-    # Its own selection does not narrow a facet; the other one's does.
-    narrowed = _facets(client, operator, languages=["en"], media=["photo"])
-    assert narrowed["languages"] == [
-        {"value": "en", "count": 1},
-        {"value": "fa", "count": 1},
-    ]
-    assert {row["value"]: row["count"] for row in narrowed["media"]}["photo"] == 1
-
-    # The cap clamps each channel's count, as the counts route does.
-    capped = _facets(client, operator, maxPerChannel=1)
-    assert capped["languages"] == [
-        {"value": "fa", "count": 2},
-        {"value": "en", "count": 1},
-    ]
-
     # The second account's facets are about its own Follows.
     assert _facets(client, other_headers)["languages"] == [
         {"value": "de", "count": 1},
@@ -403,7 +406,11 @@ def test_a_media_set_and_oldest_first_for_each_account(
             _post("pfb_c", 4, 4, kinds=["photo"]),
         ],
     )
-    scope = {"channelNames": ALL, "media": ["photo", "video"], "sort": "oldest"}
+    scope = {
+        "channelNames": ALL,
+        "filter": _any("media", "photo", "video"),
+        "sort": "oldest",
+    }
 
     assert _feed(client, operator, **scope) == [("pfb_a", 1), ("pfb_b", 3)]
     assert _feed(client, other_headers, **scope) == [("pfb_b", 3), ("pfb_c", 4)]

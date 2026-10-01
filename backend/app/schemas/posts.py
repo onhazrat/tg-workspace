@@ -24,7 +24,7 @@ fourteen scalar fields still gain real types.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
@@ -35,8 +35,18 @@ from app.schemas.scope import (
     MediaKind,
     SortOrder,
     ViewMeasure,
-    ViewsFilter,
     upgrade_legacy_scope_fields,
+)
+from app.services.post_filters import (
+    ChannelCond,
+    LanguageCond,
+    MediaCond,
+    PostType,
+    TreeAtom,
+    TreeCond,
+    TreeGroup,
+    TypeCond,
+    ViewsCond,
 )
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
@@ -123,8 +133,8 @@ class PostCountsResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     counts: dict[str, int]
-    # Posts an Estimated views threshold hid for being under the estimation
-    # floor; 0 under the raw measure or with no threshold (PFB-03).
+    # Posts the filter hid that an Estimated views bound could not judge for
+    # being under the estimation floor; 0 with no such bound (PFB-03, PTR-03).
     too_new_to_judge: int = Field(alias="tooNewToJudge")
 
 
@@ -146,23 +156,151 @@ class ViewEstimateResponse(BaseModel):
 
 
 class PostFacetCount(BaseModel):
-    """How many Posts one choice of a filter would leave."""
+    """How many Posts in the window have one value."""
 
     value: str
     count: int
 
 
-# The Media and Language pills' counts (PFB-02); see
+# The Type, Media and Language dropdowns' counts (PTR-03); see
 # `services/posts.py::count_facets_in_scope` for what each number means.
 class PostFacetsResponse(BaseModel):
-    """Per-choice Post counts for the Language and media filters."""
+    """Per-value Post counts for the Type, media and Language dropdowns."""
 
+    # Every Post in the window, which the filter row says it shows N of.
+    total: int
+    types: list[PostFacetCount]
     languages: list[PostFacetCount]
     media: list[PostFacetCount]
 
 
-class PostScopeRequest(BaseModel):
-    """A post scope carried in a request body rather than a query string.
+# ---- The Post filter's tree on the wire (PTR-03) -----------------------------
+#
+# The browser's tree, `frontend/src/lib/filter-tree.ts`, as
+# `post_filters.TreeGroup` reads it. The nodes carry the browser's `id` so a
+# tree round-trips untouched; the server never reads it. `extra="forbid"` for
+# the reason the Scope gives: an unknown Condition is a 422, never a filter
+# that quietly matches everything. A tree is SQL the server builds, so its
+# size is bounded too.
+
+MAX_FILTER_DEPTH = 6
+MAX_FILTER_NODES = 100
+
+
+class _Cond(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class TypeCondition(_Cond):
+    type: Literal["type"]
+    value: PostType
+
+
+class MediaCondition(_Cond):
+    type: Literal["media"]
+    value: MediaKind
+
+
+class LanguageCondition(_Cond):
+    type: Literal["language"]
+    value: str = Field(min_length=1, max_length=16)
+
+
+class ChannelCondition(_Cond):
+    type: Literal["channel"]
+    value: str = Field(min_length=1, max_length=256)
+
+
+class ViewsCondition(_Cond):
+    type: Literal["views"]
+    measure: ViewMeasure
+    min: float | None = Field(None, ge=0)
+    max: float | None = Field(None, ge=0)
+    none: bool = False
+
+
+PostCondition = Annotated[
+    TypeCondition
+    | MediaCondition
+    | LanguageCondition
+    | ChannelCondition
+    | ViewsCondition,
+    Field(discriminator="type"),
+]
+
+
+class FilterAtom(BaseModel):
+    """One Condition, maybe negated."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    kind: Literal["atom"]
+    id: str | None = None
+    negated: bool = Field(False, alias="not")
+    cond: PostCondition
+
+
+class FilterGroup(BaseModel):
+    """Conditions joined with AND or OR, maybe negated; parentheses are groups."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    kind: Literal["group"]
+    id: str | None = None
+    op: Literal["and", "or"]
+    negated: bool = Field(False, alias="not")
+    children: list[Annotated[FilterAtom | FilterGroup, Field(discriminator="kind")]] = (
+        Field(default_factory=list)
+    )
+
+    # Every nested group runs this too, each from its own depth of 1, so only
+    # the root's walk is the one that can refuse; the others are smaller.
+    @model_validator(mode="after")
+    def _bounded(self) -> FilterGroup:
+        def walk(node: FilterAtom | FilterGroup, depth: int) -> int:
+            if depth > MAX_FILTER_DEPTH:
+                raise ValueError(f"filter deeper than {MAX_FILTER_DEPTH}")
+            if isinstance(node, FilterAtom):
+                return 1
+            return 1 + sum(walk(child, depth + 1) for child in node.children)
+
+        if walk(self, 1) > MAX_FILTER_NODES:
+            raise ValueError(f"filter larger than {MAX_FILTER_NODES} nodes")
+        return self
+
+    def to_tree(self) -> TreeGroup:
+        return TreeGroup(
+            op=self.op,
+            negated=self.negated,
+            children=tuple(
+                TreeAtom(cond=_cond(child.cond), negated=child.negated)
+                if isinstance(child, FilterAtom)
+                else child.to_tree()
+                for child in self.children
+            ),
+        )
+
+
+def _cond(
+    cond: TypeCondition
+    | MediaCondition
+    | LanguageCondition
+    | ChannelCondition
+    | ViewsCondition,
+) -> TreeCond:
+    if isinstance(cond, TypeCondition):
+        return TypeCond(cond.value)
+    if isinstance(cond, MediaCondition):
+        return MediaCond(cond.value)
+    if isinstance(cond, LanguageCondition):
+        return LanguageCond(cond.value)
+    if isinstance(cond, ChannelCondition):
+        return ChannelCond(cond.value)
+    return ViewsCond(cond.measure, cond.min, cond.max, cond.none)
+
+
+class PostWindowRequest(BaseModel):
+    """The Channels and the Analysis window, carried in a request body.
 
     The channel selection can run to the full account — over a thousand handles —
     which as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and
@@ -175,7 +313,8 @@ class PostScopeRequest(BaseModel):
     # get `window=None`, and be answered with **every Post in the corpus**
     # instead of the day it asked for — silently, with a 200. An unknown key on
     # a Scope is a client that means something this server does not do, and the
-    # only safe answer is 422.
+    # only safe answer is 422. It is also what refuses the flat `forwarded`,
+    # `media`, `languages` and `views` a previous bundle sends (PTR-03).
     model_config = ConfigDict(extra="forbid")
 
     channel_names: list[str] | None = PydanticField(None, alias="channelNames")
@@ -189,16 +328,6 @@ class PostScopeRequest(BaseModel):
     # window like any other caller (`ScraperContext.tsx` asks for a fixed
     # lookback), and listing it here as an exception was simply wrong.
     window: AnalysisWindowInput | None = None
-    keyword: str | None = None
-    forwarded: str = "all"
-    # The Post's own Language, any of these; empty for any (PFB-02).
-    languages: list[str] = PydanticField(default_factory=list)
-    # A set of kinds, empty for any; a Post matching any one is kept (PFB-01).
-    media: list[MediaKind] = PydanticField(default_factory=list)
-    # What `views` and the views orders read, and the threshold (PFB-03).
-    view_measure: ViewMeasure = PydanticField("estimated", alias="viewMeasure")
-    views: ViewsFilter | None = None
-    max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)
 
     # A browser still on the previous bundle posts `media: "all"`, `sort:
     # "time"` and `maxPerChannelMode: "latest"` until it reloads. Read as the
@@ -219,8 +348,26 @@ class PostScopeRequest(BaseModel):
         return names or None
 
 
-class PostFeedRequest(PostScopeRequest):
-    """`PostScopeRequest` plus the feed's paging, cap mode and sort.
+class PostScopeRequest(PostWindowRequest):
+    """The Channels and window plus the keyword, the views order's measure and the cap."""
+
+    keyword: str | None = None
+    # What the views orders read (PFB-03).
+    view_measure: ViewMeasure = PydanticField("estimated", alias="viewMeasure")
+    max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)
+
+
+# PTR-03. A Discovery report's request is `PostScopeRequest` without the tree:
+# the Post filter decides what the Posts tab shows, never what an Artifact
+# covers (ADR-026).
+class PostFilteredRequest(PostScopeRequest):
+    """`PostScopeRequest` plus the Post filter's tree."""
+
+    filter: FilterGroup | None = None
+
+
+class PostFeedRequest(PostFilteredRequest):
+    """`PostFilteredRequest` plus the feed's paging, cap mode and sort.
 
     `limit`/`offset` keep the same bounds the query params enforced, so an
     out-of-range page is still a 422 rather than an unbounded read.
@@ -260,3 +407,5 @@ class PostLookupRequest(BaseModel):
     """
 
     posts: list[PostLookupRef] = PydanticField(max_length=MAX_POST_LOOKUP_BATCH)
+    # A meaning search's ranked Posts pass the Post filter here (PTR-03).
+    filter: FilterGroup | None = None

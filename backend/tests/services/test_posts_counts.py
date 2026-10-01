@@ -8,7 +8,7 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.models_tg import Post
-from app.services.post_filters import PostFilters
+from app.services.post_filters import PostFilters, TreeAtom, TreeGroup, TypeCond
 from app.services.posts import count_posts_in_scope
 from tests.utils.tenancy import ANY_READER, follow_channels
 
@@ -69,7 +69,10 @@ def test_counts_apply_filters() -> None:
         counts = count_posts_in_scope(
             session,
             channel_names=["a"],
-            filters=PostFilters(keyword="vpn", forwarded="forwarded"),
+            filters=PostFilters(
+                keyword="vpn",
+                tree=TreeGroup("and", (TreeAtom(TypeCond("forwarded")),)),
+            ),
             user_id=ANY_READER,
         )
         assert counts == {"a": 1}

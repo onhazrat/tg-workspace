@@ -3,12 +3,8 @@ import {
   type ViewEstimate,
   type ViewMeasure,
 } from "@/lib/posts/estimated-views"
-import {
-  formatPostMediaHints,
-  type MediaFilterValue,
-  matchesMediaFilter,
-} from "@/lib/posts/post-media"
-import type { Channel, Post } from "@/types"
+import { formatPostMediaHints } from "@/lib/posts/post-media"
+import type { Post } from "@/types"
 
 export type { ViewEstimate, ViewMeasure } from "@/lib/posts/estimated-views"
 
@@ -27,7 +23,10 @@ export type MaxPostsPerChannelMode = "ordered" | "random"
  */
 export type PostSortOrder = "newest" | "oldest" | "most_views" | "fewest_views"
 
-/** At least or at most a number of views, under `viewMeasure`. */
+/**
+ * At least or at most a number of views: a frozen Scope's threshold from
+ * before PTR-03, read-only. A live views bound is a Post filter Condition.
+ */
 export interface ViewsFilter {
   op: "gte" | "lte"
   value: number
@@ -38,9 +37,8 @@ export interface PostViewOptions {
   maxPostsPerChannelMode: MaxPostsPerChannelMode
   postSortOrder: PostSortOrder
   groupByChannel: boolean
-  /** What `viewsFilter` and the views orders read (PFB-03). */
+  /** What the views orders read (PFB-03). */
   viewMeasure: ViewMeasure
-  viewsFilter: ViewsFilter | null
   /**
    * The curve and settings an Estimated View count reads through. Only the
    * browser pipeline needs it, for semantic results; absent, every estimate
@@ -49,6 +47,7 @@ export interface PostViewOptions {
   viewEstimate?: ViewEstimate | null
 }
 
+/** A frozen Scope's Type filter from before PTR-03, read-only. */
 export type ForwardedFilterValue =
   | "all"
   | "forwarded"
@@ -57,11 +56,6 @@ export type ForwardedFilterValue =
 
 export interface BuildFilteredPostsContext {
   searchText: string
-  forwardedFilter: ForwardedFilterValue
-  mediaFilter: MediaFilterValue
-  /** The Post's own Language, any of these; empty for any (PFB-02). */
-  languageFilter: string[]
-  channels: Channel[]
   view: PostViewOptions
   startDate: number
   endDate: number
@@ -117,30 +111,6 @@ function groupPostsByChannel(posts: Post[]): Map<string, Post[]> {
     }
   }
   return groups
-}
-
-export function applyForwardedFilter(
-  posts: Post[],
-  forwardedFilter: ForwardedFilterValue,
-  channels: Channel[],
-): Post[] {
-  if (forwardedFilter === "all") return posts
-
-  if (forwardedFilter === "forwarded") {
-    return posts.filter((p) => !!p.forwardedFrom)
-  }
-
-  if (forwardedFilter === "original") {
-    return posts.filter((p) => !p.forwardedFrom)
-  }
-
-  return posts.filter(
-    (p) =>
-      p.forwardedFrom &&
-      !channels.some(
-        (c) => c.name.toLowerCase() === p.forwardedFrom?.toLowerCase(),
-      ),
-  )
 }
 
 export function applyKeywordFilter(posts: Post[], searchText: string): Post[] {
@@ -263,12 +233,11 @@ export function sortPosts(posts: Post[], view: PostViewOptions): Post[] {
     .flatMap(([, block]) => block)
 }
 
-/** Whether a Scope reads an Estimated View count: a threshold or a views order does. */
+/** Whether the order reads an Estimated View count: a views order does. */
 export function readsEstimatedViews(view: PostViewOptions): boolean {
   return (
     view.viewMeasure === "estimated" &&
-    (view.viewsFilter != null ||
-      view.postSortOrder === "most_views" ||
+    (view.postSortOrder === "most_views" ||
       view.postSortOrder === "fewest_views")
   )
 }
@@ -280,39 +249,6 @@ export function applyPostViewPipeline(
 ): Post[] {
   const capped = applyMaxPostsPerChannel(posts, view, seedContext)
   return sortPosts(capped, view)
-}
-
-export function applyLanguageFilter(
-  posts: Post[],
-  languageFilter: string[],
-): Post[] {
-  if (languageFilter.length === 0) return posts
-  const ticked = new Set(languageFilter)
-  // An unread Post (`language` null) has no Language to be ticked.
-  return posts.filter(
-    (post) => post.language != null && ticked.has(post.language),
-  )
-}
-
-/** Keep Posts on the threshold's side; a Post with no value never matches. */
-export function applyViewsFilter(posts: Post[], view: PostViewOptions): Post[] {
-  const threshold = view.viewsFilter
-  if (!threshold) return posts
-  return posts.filter((post) => {
-    const value = postViewValue(post, view.viewMeasure, view.viewEstimate)
-    if (value == null) return false
-    return threshold.op === "gte"
-      ? value >= threshold.value
-      : value <= threshold.value
-  })
-}
-
-export function applyMediaFilter(
-  posts: Post[],
-  mediaFilter: MediaFilterValue,
-): Post[] {
-  if (mediaFilter.length === 0) return posts
-  return posts.filter((post) => matchesMediaFilter(post, mediaFilter))
 }
 
 export function formatPostsForPrompt(posts: Post[]): string {
@@ -330,15 +266,16 @@ export function formatPostsForPrompt(posts: Post[]): string {
     .join("\n\n---\n\n")
 }
 
+/**
+ * The keyword, the cap and the order over Posts already in the browser, for a
+ * meaning search's ranked results. The Post filter is not here: only the
+ * server evaluates it (PTR-03), through the lookup.
+ */
 export function buildFilteredPostsFromRaw(
   posts: Post[],
   ctx: BuildFilteredPostsContext,
 ): Post[] {
-  let filtered = applyKeywordFilter(posts, ctx.searchText)
-  filtered = applyForwardedFilter(filtered, ctx.forwardedFilter, ctx.channels)
-  filtered = applyMediaFilter(filtered, ctx.mediaFilter)
-  filtered = applyLanguageFilter(filtered, ctx.languageFilter)
-  filtered = applyViewsFilter(filtered, ctx.view)
+  const filtered = applyKeywordFilter(posts, ctx.searchText)
   return applyPostViewPipeline(filtered, ctx.view, {
     startDate: ctx.startDate,
     endDate: ctx.endDate,

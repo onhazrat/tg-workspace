@@ -429,20 +429,18 @@ def create_report(
     was passed beside the Scope, so the predicate the aggregation ran and the
     keyword the row recorded were two values nothing held together. They are
     derived from the Scope here instead. No validation is needed on the way —
-    `FrozenScope` types `forwarded` and `media` as the same literals
-    `PostFilters` does, so a value that got this far is already one of them.
+    `FrozenScope` types its fields as the same literals `PostFilters` reads, so
+    a value that got this far is already one of them.
 
     `signals` stays an argument because it is not Scope: it picks which kinds of
     signal the report describes, not which Posts it reads.
     """
-    views = None if scope.views is None else scope.views.threshold()
+    # The keyword and the views order only: the flat filters a Scope frozen
+    # before PTR-03 holds are read-only history, and one frozen since holds
+    # their defaults (ADR-026).
     filters = PostFilters(
         keyword=scope.keyword,
-        forwarded=scope.forwarded,
-        media=tuple(scope.media),
-        languages=tuple(scope.languages),
-        views=views,
-        reading=view_reading(session, scope.view_measure, views=views, sort=scope.sort),
+        reading=view_reading(session, scope.view_measure, sort=scope.sort),
     )
     post_ids = (
         None

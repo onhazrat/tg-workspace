@@ -40,15 +40,15 @@ test.describe("TG Workspace discover", () => {
     ).toBeVisible()
   })
 
-  test("discover shows forward-only empty guide when only forwards are enabled", async ({
+  test("discover shows the no-references guide when only forwards are enabled", async ({
     page,
   }) => {
     // Keep SPA state (filter is in-memory); avoid flaky tab-bar clicks under load.
     test.setTimeout(90_000)
 
-    // The "original only" guide requires a non-empty scope of original posts.
-    // Reading that from the shared dev DB is what made this spec unreliable —
-    // it reported "no posts in scope" whenever the DB had none in range.
+    // The guide requires a non-empty scope of original posts. Reading that
+    // from the shared dev DB is what made this spec unreliable — it reported
+    // "no posts in scope" whenever the DB had none in range.
     const stamp = Date.now()
     const carrierName = `dsorig${stamp}`
 
@@ -61,14 +61,10 @@ test.describe("TG Workspace discover", () => {
     })
     await pinSelectionToCarrier(page, carrierName)
 
+    // The Posts tab's Type filter no longer narrows a report (PTR-03,
+    // ADR-026), so the scope is every Post in the window: originals only,
+    // because that is all the carrier holds.
     await gotoWorkspace(page, "posts")
-    // Post type is a pill since PFB-02: open it, choose Original, and the pill
-    // reads and fills as the new value.
-    const typePill = page.getByTestId("post-filter-pill-type")
-    await typePill.click()
-    await page.getByRole("radio", { name: /^○ Original$/ }).click()
-    await expect(typePill).toContainText("Original")
-    await expect(typePill).toHaveClass(/bg-app-ink/)
 
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "Go to Discover")
@@ -90,10 +86,12 @@ test.describe("TG Workspace discover", () => {
     await page.getByTestId("action-generate-report").click()
     await expect(page).toHaveURL(/tab=discover/, { timeout: 30_000 })
 
-    await expect(page.getByText(/forward metadata/i)).toBeVisible()
+    await expect(
+      page.getByText(/don't forward from, mention, or link/i),
+    ).toBeVisible()
     await expect(
       page.getByRole("button", { name: "Show all posts" }),
-    ).toBeVisible()
+    ).toHaveCount(0)
     await expect(
       page.getByRole("button", { name: "Enable all signals" }),
     ).toBeVisible()

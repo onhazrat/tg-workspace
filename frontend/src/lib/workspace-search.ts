@@ -21,6 +21,12 @@ export type WorkspaceSearch = {
    * links become a one-Condition filter on that Setting group.
    */
   channelFilter?: string
+  /**
+   * The Post filter on the Posts tab, in its text form
+   * (`lib/posts/post-filter.ts`). It decides what the tab shows, never what an
+   * Artifact covers, so it is a view's address rather than a Scope's.
+   */
+  postFilter?: string
   /** Selected setting group in Settings → Channels & Sync. */
   settingGroup?: string
   /**
@@ -48,6 +54,7 @@ export type WorkspaceSearch = {
 const ID_PARAMS = [
   "setting",
   "channelFilter",
+  "postFilter",
   "settingGroup",
   "report",
   "summary",

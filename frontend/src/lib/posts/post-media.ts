@@ -11,10 +11,9 @@ export type MediaKind =
   | "grouped"
 
 /**
- * The media filter: a set of kinds (PFB-01). Empty is any media; otherwise a
- * Post matching any one kind is kept, so ticking more widens the feed. It was a
- * single value whose `"all"` meant what the empty set means now;
- * `parseMediaFilterValue` reads that old spelling out of storage.
+ * A frozen Scope's media filter from before PTR-03, read-only: a set of
+ * kinds, empty for any. A live one is the Post filter's media Conditions,
+ * which only the server evaluates.
  */
 export type MediaFilterValue = MediaKind[]
 
@@ -30,63 +29,12 @@ export const MEDIA_KIND_OPTIONS: {
   { label: "Grouped", value: "grouped" },
 ]
 
-const MEDIA_KINDS = new Set<string>(
-  MEDIA_KIND_OPTIONS.map((option) => option.value),
-)
-
-export function isMediaKind(value: unknown): value is MediaKind {
-  return typeof value === "string" && MEDIA_KINDS.has(value)
-}
-
-// Keep in sync with _MEDIA_ONLY_TEXT_RE in backend/app/services/post_filters.py.
-const MEDIA_ONLY_TEXT_RE =
-  /^\[(?:photo|video|voice|audio|document|poll|sticker|photo album)\]/i
-
 export function getPostMediaKinds(post: Post): PostMediaKind[] {
   return post.media?.kinds ?? []
 }
 
 export function hasPostMedia(post: Post): boolean {
   return getPostMediaKinds(post).length > 0
-}
-
-export function isMediaOnlyPost(post: Post): boolean {
-  if (post.media?.isMediaOnly) return true
-  if (post.text === "[Media/No Text Content]") return hasPostMedia(post)
-  return MEDIA_ONLY_TEXT_RE.test(post.text.trim())
-}
-
-export function postHasMediaKind(post: Post, kind: PostMediaKind): boolean {
-  return getPostMediaKinds(post).includes(kind)
-}
-
-function matchesMediaKind(post: Post, kind: MediaKind): boolean {
-  const kinds = getPostMediaKinds(post)
-  const hasMedia = kinds.length > 0
-
-  if (kind === "text_only") return !hasMedia
-
-  if (kind === "media_only") {
-    if (!hasMedia) return false
-    return isMediaOnlyPost(post)
-  }
-
-  if (kind === "photo") return postHasMediaKind(post, "photo")
-  if (kind === "video") return postHasMediaKind(post, "video")
-  if (kind === "link_preview") return postHasMediaKind(post, "link_preview")
-  return (
-    postHasMediaKind(post, "grouped") ||
-    (post.media?.groupedCount != null && post.media.groupedCount > 1)
-  )
-}
-
-/** Keep in sync with `_media_clause` in backend/app/services/post_filters.py. */
-export function matchesMediaFilter(
-  post: Post,
-  filter: MediaFilterValue,
-): boolean {
-  if (filter.length === 0) return true
-  return filter.some((kind) => matchesMediaKind(post, kind))
 }
 
 function formatDurationLabel(durationSec: number): string {
@@ -156,25 +104,5 @@ export function getMediaKindLabel(kind: PostMediaKind): string {
       return "Album"
     default:
       return kind
-  }
-}
-
-/**
- * The stored media filter, read into the set shape.
- *
- * Stored as a JSON array since PFB-01. A value written by the previous bundle
- * is a bare string, `"all"` or one kind, and is read as `[]` or `[kind]`; the
- * hook writes the set back, so the old spelling is read exactly once. Anything
- * unreadable is any media, as it always was.
- */
-export function parseMediaFilterValue(raw: string | null): MediaFilterValue {
-  if (!raw || raw === "all") return []
-  if (isMediaKind(raw)) return [raw]
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return [...new Set(parsed.filter(isMediaKind))]
-  } catch {
-    return []
   }
 }

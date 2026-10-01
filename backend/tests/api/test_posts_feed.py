@@ -125,7 +125,13 @@ def test_forwarded_filter_server_side(client: TestClient) -> None:
         ],
     )
 
-    body = _feed(client, headers, channelName="fwd", forwarded="forwarded")
+    forwarded = {
+        "kind": "atom",
+        "id": "f",
+        "cond": {"type": "type", "value": "forwarded"},
+    }
+    tree = {"kind": "group", "id": "root", "op": "and", "children": [forwarded]}
+    body = _feed(client, headers, channelName="fwd", filter=tree)
 
     assert [row["id"] for row in body] == [2]
 
@@ -277,8 +283,6 @@ def test_oldest_orders_oldest_first_with_the_stable_tiebreak(
 #: Each pre-PFB-01 wire value beside the new spelling that must answer
 #: identically. The cap cases carry a cap so the mode is actually exercised.
 LEGACY_EQUIVALENTS: list[tuple[str, dict[str, Any], dict[str, Any]]] = [
-    ("media all", {"media": "all"}, {"media": []}),
-    ("media one kind", {"media": "photo"}, {"media": ["photo"]}),
     ("sort time", {"sort": "time"}, {"sort": "newest", "groupByChannel": False}),
     (
         "sort channel_time",
@@ -336,58 +340,6 @@ def test_an_old_wire_value_returns_what_its_new_spelling_does(
     assert before, "an empty feed would make the parity vacuous"
 
 
-def test_the_counts_read_an_old_media_value_as_its_new_spelling(
-    client: TestClient,
-) -> None:
-    headers = _auth(client)
-    _seed_interleaved(client, headers)
-    scope = {"channelNames": ["feed_a", "feed_b"], "maxPerChannel": 2}
-
-    def counts(**media: Any) -> Any:
-        response = client.post(
-            f"{PREFIX}/posts/counts", json={**scope, **media}, headers=headers
-        )
-        assert response.status_code == 200, response.text
-        return response.json()["counts"]
-
-    assert counts(media="all") == counts(media=[]) == {"feed_a": 2, "feed_b": 2}
-
-
-def test_a_media_set_keeps_a_post_matching_any_kind(client: TestClient) -> None:
-    """The panel cannot send one yet; the server already answers it."""
-    headers = _auth(client)
-    base = int(time.time() * 1000)
-    _bulk(
-        client,
-        headers,
-        [
-            {"id": 1, "channelName": "ms", "text": "plain", "timestamp": base + 1},
-            {
-                "id": 2,
-                "channelName": "ms",
-                "text": "photo",
-                "timestamp": base + 2,
-                "media": {"kinds": ["photo"]},
-            },
-            {
-                "id": 3,
-                "channelName": "ms",
-                "text": "video",
-                "timestamp": base + 3,
-                "media": {"kinds": ["video"]},
-            },
-        ],
-    )
-
-    both = _feed(client, headers, channelName="ms", media=["photo", "video"])
-    one = _feed(client, headers, channelName="ms", media=["photo"])
-    any_media = _feed(client, headers, channelName="ms", media=[])
-
-    assert [row["id"] for row in both] == [3, 2]
-    assert [row["id"] for row in one] == [2]
-    assert [row["id"] for row in any_media] == [3, 2, 1]
-
-
 @pytest.mark.parametrize(
     "body",
     [
@@ -407,8 +359,8 @@ def test_a_value_this_server_does_not_implement_is_422(
     """Refused rather than dropped, for every field of the new shape.
 
     An order this server does not implement is asking for something it would
-    not do. A Language set is a list, so a bare string is a client speaking
-    some other shape.
+    not do. The flat media and Language filters left in PTR-03, so a client
+    still sending one speaks a shape this server no longer reads.
     """
     headers = _auth(client)
     assert client.post(f"{PREFIX}/posts", json=body, headers=headers).status_code == 422

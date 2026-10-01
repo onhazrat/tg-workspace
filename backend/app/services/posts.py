@@ -4,11 +4,22 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import replace
 from typing import Any
 
-from sqlalchemy import Integer, cast, column, func, literal, or_, update, values
+from sqlalchemy import (
+    Integer,
+    and_,
+    cast,
+    column,
+    func,
+    literal,
+    not_,
+    or_,
+    update,
+    values,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
@@ -20,6 +31,7 @@ from app.services.follows import visible_channel_names
 from app.services.language import own_words, read_language
 from app.services.post_filters import (
     MEDIA_KIND_ORDER,
+    POST_TYPE_ORDER,
     VIEW_SORTS,
     CapMode,
     FeedSort,
@@ -28,7 +40,8 @@ from app.services.post_filters import (
     apply_analysis_window,
     apply_post_filters,
     media_kind_clause,
-    views_clause,
+    post_type_clause,
+    tree_clause,
 )
 from app.services.reach import MS_PER_HOUR, REFRESH_HORIZON_HOURS
 from app.services.serialization import post_to_camel
@@ -555,8 +568,8 @@ def list_feed(
 
     Replaces the frontend's eager ``filteredPosts`` for the Posts tab: rather
     than paging a channel's whole history into the browser and filtering there,
-    the keyword / forwarded / media filters, the per-channel cap, and the sort
-    all run server-side and only ``limit`` rows are returned. With no filters,
+    the keyword, the Post filter, the per-channel cap, and the sort all run
+    server-side and only ``limit`` rows are returned. With no filters,
     no cap, and ``sort="newest"`` this is a newest-first page.
 
     The read stays bounded: ``tg_posts`` holds millions of rows across hundreds
@@ -615,7 +628,11 @@ def list_feed(
 
 
 def lookup_posts(
-    session: Session, pairs: list[tuple[str, int]], *, user_id: uuid.UUID
+    session: Session,
+    pairs: list[tuple[str, int]],
+    *,
+    user_id: uuid.UUID,
+    filters: PostFilters | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch specific posts by their `(channel_name, post_id)` natural key.
 
@@ -631,11 +648,18 @@ def lookup_posts(
     deliberate: this endpoint's whole contract is that a missing post is
     silence, so "you may not see this" and "there is nothing here" give the
     same answer — the enumeration argument `assert_owner` makes with a 404.
+
+    `filters` narrows the batch to the Posts the Post filter shows, which is
+    how a meaning search's ranked Posts pass it (PTR-03). A Post it hides is
+    absent like any other.
     """
     unique = {(name, post_id) for name, post_id in pairs}
     if not unique:
         return []
-    stmt = scoped_select(select(Post), Post, user_id).where(
+    stmt = _filtered(
+        session, scoped_select(select(Post), Post, user_id), user_id, filters
+    )
+    stmt = stmt.where(
         or_(
             *[
                 (col(Post.channel_name) == name) & (col(Post.post_id) == post_id)
@@ -659,8 +683,8 @@ def count_posts_in_scope(
     """Per-channel post counts for a filtered scope, as a `GROUP BY` in SQL.
 
     Replaces the frontend's `buildPostsInScopeCounts`, which tallied the fully
-    fetched, client-filtered post array. Applies the same keyword / forwarded /
-    media filters as Discover so the two agree.
+    fetched, client-filtered post array. Applies whatever `filters` names: the
+    keyword alone on the prompt path, the Post filter too for the feed's.
 
     `max_per_channel` clamps each channel's count to the cap. The cap's
     `random` and `ordered` modes select *different* posts but the same *number*
@@ -696,20 +720,25 @@ def count_scope(
 ) -> tuple[dict[str, int], int]:
     """`count_posts_in_scope`, and how many Posts were too new to judge (PFB-03).
 
-    The second number is the Posts an Estimated views threshold hid for being
-    under the estimation floor, so an empty Live window can say why. It is one
-    more filtered aggregate in the same scan: the threshold moves from the
-    `WHERE` into the per-channel count's `FILTER`, so the rows it hides are
-    still there to be counted. Not clamped to the cap, which applies only to
-    the Posts the threshold kept. A channel whose count is zero is absent, as
-    it was before.
+    The second number is the Posts the filter hid that an Estimated views bound
+    could not judge for being under the estimation floor, so an empty Live
+    window can say why. It is one more filtered aggregate in the same scan:
+    with such a bound the tree moves from the `WHERE` into the per-channel
+    count's `FILTER`, so the rows it hides are still there to be counted. A
+    too-new Post the tree keeps anyway, through the other half of an OR, was
+    not hidden and is not counted (PTR-03). Not clamped to the cap, which
+    applies only to the Posts the tree kept. A channel whose count is zero is
+    absent, as it was before.
     """
     filters = filters or PostFilters()
     kept: Any = func.count()
     too_new: Any = literal(0)
-    if filters.views is not None:
-        kept = func.count().filter(views_clause(filters.views, filters.reading))
-        too_new = func.count().filter(filters.reading.too_new(Post))
+    estimate = filters.tree_readings.get("estimated")
+    if filters.tree is not None and filters.has_tree() and estimate is not None:
+        shown = _tree_clause(session, filters, user_id)
+        kept = func.count().filter(shown)
+        too_new = func.count().filter(and_(not_(shown), estimate.too_new(Post)))
+        filters = replace(filters, tree=None)
     if max_per_channel > 0:
         kept = func.least(kept, max_per_channel)
 
@@ -721,7 +750,7 @@ def count_scope(
             channel_names=channel_names,
             start_date=start_date,
             end_date=end_date,
-            filters=replace(filters, views=None),
+            filters=filters,
         ).group_by(col(Post.channel_name))
     ).all()
     return (
@@ -737,71 +766,93 @@ def count_facets_in_scope(
     channel_names: list[str] | None = None,
     start_date: int | None = None,
     end_date: int | None = None,
-    filters: PostFilters | None = None,
-    max_per_channel: int = 0,
-) -> dict[str, list[tuple[str, int]]]:
-    """How many Posts each Language and each media kind would leave (PFB-02).
+) -> dict[str, Any]:
+    """How many Posts in the window have each Type, media kind and Language.
 
-    The counts the Media and Language pills print beside each choice: what
-    ticking that one choice alone would show. So a facet is counted under every
-    filter of the Scope **but its own** (ticking Persian does not zero English)
-    and each channel's count is clamped to the cap, which for one choice is
-    exactly what the feed would keep.
+    The counts the Type, Media and Language dropdowns print beside each value
+    (PTR-03): how many Posts in the window have it, **filters aside**, because
+    a dropdown row is a value to funnel on, and later a value to select by
+    whatever the filter shows (PTR-06). No keyword, no tree, no cap.
 
     Languages are the ones present, most frequent first, an unread Post left
-    out because it has no Language to tick. The media kinds are all six, in the
-    pill's order, zero included, and they overlap, so they are six filtered
-    aggregates over one scan rather than a `GROUP BY`.
+    out because it has no Language to funnel. The Types are all three and the
+    media kinds all six, in the dropdowns' order, zero included; both overlap,
+    so they are filtered aggregates over one scan rather than a `GROUP BY`.
+    `total` is every Post in the window, in the same scan.
     """
-    filters = filters or PostFilters()
 
-    def scoped(stmt: Any, without: PostFilters) -> Any:
+    def scoped(stmt: Any) -> Any:
         return _in_scope(
             session,
-            stmt,
+            stmt.select_from(Post),
             user_id=user_id,
             channel_names=channel_names,
             start_date=start_date,
             end_date=end_date,
-            filters=without,
+            filters=None,
         )
 
-    def clamp(n: int) -> int:
-        return min(n, max_per_channel) if max_per_channel > 0 else n
-
-    by_language: Counter[str] = Counter()
+    followed = frozenset(visible_channel_names(session, user_id=user_id))
     language_rows = session.exec(
-        scoped(
-            select(col(Post.channel_name), col(Post.language), func.count()),
-            replace(filters, languages=()),
-        )
+        scoped(select(col(Post.language), func.count()))
         .where(col(Post.language).is_not(None))
-        .group_by(col(Post.channel_name), col(Post.language))
+        .group_by(col(Post.language))
     ).all()
-    for _channel, language, n in language_rows:
-        by_language[language] += clamp(n)
-
-    by_kind: Counter[str] = Counter(dict.fromkeys(MEDIA_KIND_ORDER, 0))
-    media_rows = session.exec(
+    counts = session.exec(
         scoped(
             select(
-                col(Post.channel_name),
+                func.count(),
+                *(
+                    func.count().filter(post_type_clause(value, followed))
+                    for value in POST_TYPE_ORDER
+                ),
                 *(
                     func.count().filter(media_kind_clause(kind))
                     for kind in MEDIA_KIND_ORDER
                 ),
-            ),
-            replace(filters, media=()),
-        ).group_by(col(Post.channel_name))
-    ).all()
-    for _channel, *counts in media_rows:
-        for kind, n in zip(MEDIA_KIND_ORDER, counts, strict=True):
-            by_kind[kind] += clamp(n)
+            )
+        )
+    ).one()
+    total, *rest = counts
+    types, kinds = rest[: len(POST_TYPE_ORDER)], rest[len(POST_TYPE_ORDER) :]
 
     return {
-        "languages": sorted(by_language.items(), key=lambda kv: (-kv[1], kv[0])),
-        "media": [(kind, by_kind[kind]) for kind in MEDIA_KIND_ORDER],
+        "total": total,
+        "types": list(zip(POST_TYPE_ORDER, types, strict=True)),
+        "languages": sorted(
+            ((language, n) for language, n in language_rows),
+            key=lambda kv: (-kv[1], kv[0]),
+        ),
+        "media": list(zip(MEDIA_KIND_ORDER, kinds, strict=True)),
     }
+
+
+def _followed_for(
+    session: Session, filters: PostFilters, user_id: uuid.UUID
+) -> frozenset[str] | None:
+    """The followed-channel set, read only when an `unfollowed_forwarded` needs it."""
+    if not filters.reads_unfollowed():
+        return None
+    return frozenset(visible_channel_names(session, user_id=user_id))
+
+
+def _tree_clause(session: Session, filters: PostFilters, user_id: uuid.UUID) -> Any:
+    assert filters.tree is not None
+    return tree_clause(
+        filters.tree,
+        readings=filters.tree_readings,
+        followed_names=_followed_for(session, filters, user_id),
+    )
+
+
+def _filtered(
+    session: Session, stmt: Any, user_id: uuid.UUID, filters: PostFilters | None
+) -> Any:
+    if filters is None:
+        return stmt
+    return apply_post_filters(
+        stmt, filters, followed_names=_followed_for(session, filters, user_id)
+    )
 
 
 def _in_scope(
@@ -823,12 +874,7 @@ def _in_scope(
     if channel_names:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
     stmt = apply_analysis_window(stmt, start_date, end_date)
-    if filters is not None:
-        followed: frozenset[str] | None = None
-        if filters.forwarded == "unfollowed_forwarded":
-            followed = frozenset(visible_channel_names(session, user_id=user_id))
-        stmt = apply_post_filters(stmt, filters, followed_names=followed)
-    return stmt
+    return _filtered(session, stmt, user_id, filters)
 
 
 def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:

@@ -98,8 +98,6 @@ def _feed_block(client: TestClient, headers: dict[str, str], **scope: Any) -> st
 #: Each pre-PFB-01 prompt scope beside the new spelling that must assemble the
 #: same block. The cap cases carry a cap so the mode is actually exercised.
 EQUIVALENTS: list[tuple[str, dict[str, Any], dict[str, Any]]] = [
-    ("media all", {"media": "all"}, {"media": []}),
-    ("media one kind", {"media": "photo"}, {"media": ["photo"]}),
     ("sort time", {"sort": "time"}, {"sort": "newest"}),
     (
         "sort channel_time",
@@ -114,13 +112,11 @@ EQUIVALENTS: list[tuple[str, dict[str, Any], dict[str, Any]]] = [
     (
         "everything at once",
         {
-            "media": "photo",
             "maxPerChannel": 1,
             "maxPerChannelMode": "latest",
             "sort": "channel_time",
         },
         {
-            "media": ["photo"],
             "maxPerChannel": 1,
             "maxPerChannelMode": "ordered",
             "sort": "newest",
@@ -169,16 +165,16 @@ def test_grouped_assembles_channel_by_channel_in_the_feeds_order(
 def test_the_filter_bar_scope_assembles_what_the_feed_shows(
     client: TestClient,
 ) -> None:
-    """Languages, the order, grouping and the cap reach the prompt together.
+    """The order, grouping and the cap reach the prompt together.
 
-    Oldest first under a cap of two keeps each channel's two earliest Posts in
-    Persian: alpha 1 and 3, beta 4 and 6, the unread alpha 5 matching nothing.
-    Grouped, alpha's block leads because its earliest Post is the earliest.
+    Oldest first under a cap of two keeps each channel's two earliest Posts:
+    alpha 1 and 3, beta 2 and 4. Grouped, alpha's block leads because its
+    earliest Post is the earliest. The Post filter never reaches a prompt
+    (ADR-026), so there is no Language here to narrow it.
     """
     headers = get_superuser_token_headers(client)
     _seed()
     scope = {
-        "languages": ["fa"],
         "sort": "oldest",
         "groupByChannel": True,
         "maxPerChannel": 2,
@@ -188,20 +184,19 @@ def test_the_filter_bar_scope_assembles_what_the_feed_shows(
     prompt = _prompt_text(client, headers, **scope)
 
     assert _feed_block(client, headers, **scope) in prompt
-    order = ["alpha post 1", "alpha post 3", "beta post 4", "beta post 6"]
+    order = ["alpha post 1", "alpha post 3", "beta post 2", "beta post 4"]
     assert [prompt.index(text) for text in order] == sorted(
         prompt.index(text) for text in order
     )
-    assert "beta post 2" not in prompt
+    assert "beta post 6" not in prompt
     assert "alpha post 5" not in prompt
 
 
 def test_a_views_scope_assembles_what_the_feed_shows(client: TestClient) -> None:
-    """The threshold, the views order and the cap reach the prompt (PFB-03).
+    """The views order and the cap reach the prompt (PFB-03).
 
     Every count is Settled, so both measures agree. Most views under a cap of
-    one keeps each channel's top Post, alpha 5 before beta 4; at least 800
-    views then leaves alpha 5 alone.
+    one keeps each channel's top Post, alpha 5 before beta 4.
     """
     headers = get_superuser_token_headers(client)
     _seed()
@@ -215,16 +210,11 @@ def test_a_views_scope_assembles_what_the_feed_shows(client: TestClient) -> None
     scope: dict[str, Any] = {"sort": "most_views", "maxPerChannel": 1}
 
     ordered = _prompt_text(client, headers, **scope)
-    thresholded = _prompt_text(
-        client, headers, **scope, views={"op": "gte", "value": 800}
-    )
 
     assert _feed_block(client, headers, **scope) in ordered
     assert ordered.index("alpha post 5") < ordered.index("beta post 4")
-    assert "alpha post 5" in thresholded
     for absent in ("alpha post 1", "alpha post 3", "beta post 2", "beta post 6"):
         assert absent not in ordered
-    assert "beta post 4" not in thresholded
 
 
 def test_oldest_assembles_oldest_first_and_caps_each_channels_earliest(
@@ -254,6 +244,11 @@ def test_oldest_assembles_oldest_first_and_caps_each_channels_earliest(
         {"maxPerChannelMode": "alphabetical"},
         {"media": ["nonsense"]},
         {"languages": "fa"},
+        # The flat filters and the Post filter's tree are not a Scope (PTR-03).
+        {"languages": ["fa"]},
+        {"forwarded": "original"},
+        {"views": {"op": "gte", "value": 1}},
+        {"filter": {"kind": "group", "op": "and", "children": []}},
     ],
     ids=lambda scope: next(iter(scope)),
 )

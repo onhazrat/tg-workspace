@@ -46,7 +46,7 @@ from app.models_tg import Post
 from app.services.channel_directory import enqueue_handles, list_probes, queue_counts
 from app.services.discover import compute_discover_candidates
 from app.services.follows import ensure_follow
-from app.services.post_filters import PostFilters
+from app.services.post_filters import PostFilters, TreeAtom, TreeGroup, TypeCond
 from app.services.posts import count_posts_in_scope, list_feed, lookup_posts
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
@@ -323,7 +323,9 @@ def test_unfollowed_forwarded_filter_uses_your_own_follows(
     rows = list_feed(
         session,
         user_id=user.id,
-        filters=PostFilters(forwarded="unfollowed_forwarded"),
+        filters=PostFilters(
+            tree=TreeGroup("and", (TreeAtom(TypeCond("unfollowed_forwarded")),))
+        ),
     )
 
     assert [r["id"] for r in rows] == [1]

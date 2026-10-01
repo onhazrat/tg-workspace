@@ -41,7 +41,6 @@ describe("post-view pipeline", () => {
       postSortOrder: "newest" as const,
       groupByChannel: false,
       viewMeasure: "estimated" as const,
-      viewsFilter: null,
     }
 
     expect(applyPostViewPipeline(posts, view)).toEqual([
@@ -68,7 +67,6 @@ describe("post-view pipeline", () => {
       postSortOrder: "newest" as const,
       groupByChannel: false,
       viewMeasure: "estimated" as const,
-      viewsFilter: null,
     }
 
     const result = applyPostViewPipeline(posts, view, seedContext)
@@ -97,7 +95,6 @@ describe("post-view pipeline", () => {
       postSortOrder: "newest" as const,
       groupByChannel: false,
       viewMeasure: "estimated" as const,
-      viewsFilter: null,
     }
 
     const first = applyMaxPostsPerChannel(posts, view, seedContext)
@@ -119,7 +116,6 @@ describe("post-view pipeline", () => {
       postSortOrder: "newest" as const,
       groupByChannel: true,
       viewMeasure: "estimated" as const,
-      viewsFilter: null,
     }
 
     expect(sortPosts(posts, view)).toEqual([
@@ -143,7 +139,6 @@ describe("post-view pipeline", () => {
       postSortOrder: "newest" as const,
       groupByChannel: true,
       viewMeasure: "estimated" as const,
-      viewsFilter: null,
     }
 
     // zebra kept its 500, so its block leads (PFB-02).
@@ -153,7 +148,7 @@ describe("post-view pipeline", () => {
     ])
   })
 
-  test("buildFilteredPostsFromRaw applies keyword, forwarded, and view pipeline", () => {
+  test("buildFilteredPostsFromRaw applies the keyword and the view pipeline", () => {
     const posts = [
       makePost("alpha", 1, 100),
       { ...makePost("beta", 2, 200), forwardedFrom: "other" },
@@ -161,24 +156,19 @@ describe("post-view pipeline", () => {
     ]
 
     const result = buildFilteredPostsFromRaw(posts, {
-      searchText: "Post",
-      forwardedFilter: "original",
-      mediaFilter: [],
-      languageFilter: [],
-      channels: [],
+      searchText: "from gamma",
       view: {
         maxPostsPerChannel: 0,
         maxPostsPerChannelMode: "ordered",
         postSortOrder: "newest",
         groupByChannel: false,
         viewMeasure: "estimated" as const,
-        viewsFilter: null,
       },
       startDate: 0,
       endDate: 9999,
     })
 
-    expect(result.map((p) => p.id)).toEqual([3, 1])
+    expect(result.map((p) => p.id)).toEqual([3])
   })
 
   test("formatPostsForPrompt preserves array order", () => {
@@ -273,100 +263,6 @@ describe("post-view pipeline", () => {
       "Media: video | Duration: 1:23\n[video]",
     )
   })
-
-  test("buildFilteredPostsFromRaw applies media filter", () => {
-    const posts = [
-      makePost("alpha", 1, 100, { text: "Plain text" }),
-      makePost("alpha", 2, 200, {
-        text: "[photo]",
-        media: { kinds: ["photo"], isMediaOnly: true },
-      }),
-      makePost("alpha", 3, 300, {
-        text: "News link",
-        media: { kinds: ["link_preview"] },
-      }),
-    ]
-
-    const photoOnly = buildFilteredPostsFromRaw(posts, {
-      searchText: "",
-      forwardedFilter: "all",
-      mediaFilter: ["photo"],
-      languageFilter: [],
-      channels: [],
-      view: {
-        maxPostsPerChannel: 0,
-        maxPostsPerChannelMode: "ordered",
-        postSortOrder: "newest",
-        groupByChannel: false,
-        viewMeasure: "estimated" as const,
-        viewsFilter: null,
-      },
-      startDate: 0,
-      endDate: 9999,
-    })
-    expect(photoOnly.map((p) => p.id)).toEqual([2])
-
-    const textOnly = buildFilteredPostsFromRaw(posts, {
-      searchText: "",
-      forwardedFilter: "all",
-      mediaFilter: ["text_only"],
-      languageFilter: [],
-      channels: [],
-      view: {
-        maxPostsPerChannel: 0,
-        maxPostsPerChannelMode: "ordered",
-        postSortOrder: "newest",
-        groupByChannel: false,
-        viewMeasure: "estimated" as const,
-        viewsFilter: null,
-      },
-      startDate: 0,
-      endDate: 9999,
-    })
-    expect(textOnly.map((p) => p.id)).toEqual([1])
-  })
-
-  // Mirrors test_media_text_only_vs_media_only_kinds in
-  // backend/tests/services/test_post_filters.py — the two filter
-  // implementations must agree on these.
-  test("stats-only media keeps a post text_only, stickers do not", () => {
-    const posts = [
-      makePost("alpha", 1, 100, { text: "Plain text" }),
-      makePost("alpha", 2, 200, {
-        text: "Text with views",
-        media: { kinds: [] },
-        viewsCount: 1_200,
-      }),
-      makePost("alpha", 3, 300, {
-        text: "[sticker]",
-        media: { kinds: ["sticker"] },
-      }),
-    ]
-
-    const filterBy = (kind: "text_only" | "media_only") =>
-      buildFilteredPostsFromRaw(posts, {
-        searchText: "",
-        forwardedFilter: "all",
-        mediaFilter: [kind],
-        languageFilter: [],
-        channels: [],
-        view: {
-          maxPostsPerChannel: 0,
-          maxPostsPerChannelMode: "ordered",
-          postSortOrder: "newest",
-          groupByChannel: false,
-          viewMeasure: "estimated" as const,
-          viewsFilter: null,
-        },
-        startDate: 0,
-        endDate: 9999,
-      })
-        .map((p) => p.id)
-        .sort()
-
-    expect(filterBy("text_only")).toEqual([1, 2])
-    expect(filterBy("media_only")).toEqual([3])
-  })
 })
 
 // PFB-01: the Scope's new shape through the browser pipeline, which is the
@@ -381,7 +277,6 @@ describe("post-view pipeline — the PFB-01 shape", () => {
     postSortOrder: "newest" as const,
     groupByChannel: false,
     viewMeasure: "estimated" as const,
-    viewsFilter: null,
     ...overrides,
   })
   const keys = (posts: Post[]) => posts.map((p) => `${p.channelName}/${p.id}`)
@@ -422,7 +317,6 @@ describe("post-view pipeline — the PFB-01 shape", () => {
         postSortOrder: "oldest",
         groupByChannel: true,
         viewMeasure: "estimated" as const,
-        viewsFilter: null,
       }),
       seedContext,
     )
@@ -435,35 +329,13 @@ describe("post-view pipeline — the PFB-01 shape", () => {
     expect(keys(oldest)).toEqual(["feed_a/1", "feed_b/2"])
     expect(keys(newest)).toEqual(["feed_a/5", "feed_b/4"])
   })
-
-  test("a media set keeps a Post matching any kind; empty keeps all", () => {
-    const posts = [
-      makePost("ms", 1, 1, { text: "plain" }),
-      makePost("ms", 2, 2, { text: "photo", media: { kinds: ["photo"] } }),
-      makePost("ms", 3, 3, { text: "video", media: { kinds: ["video"] } }),
-    ]
-    const filtered = (mediaFilter: ("photo" | "video")[]) =>
-      buildFilteredPostsFromRaw(posts, {
-        searchText: "",
-        forwardedFilter: "all",
-        mediaFilter,
-        languageFilter: [],
-        channels: [],
-        view: view(),
-        startDate: 0,
-        endDate: 9999,
-      }).map((p) => p.id)
-
-    expect(filtered(["photo", "video"])).toEqual([3, 2])
-    expect(filtered(["photo"])).toEqual([2])
-    expect(filtered([])).toEqual([3, 2, 1])
-  })
 })
 
 /**
- * Semantic parity (PFB-02): a meaning search filters its ranked Posts in the
- * browser, so the browser pipeline over a fixed set of Posts must give what
- * the server gives for the same filters. The fixtures and expected rows are
+ * Semantic parity (PFB-02): a meaning search caps and orders its ranked Posts
+ * in the browser, so the browser pipeline over a fixed set of Posts must give
+ * what the server gives for the same cap and order. The Post filter is the
+ * server's alone (PTR-03). The fixtures and expected rows are
  * `backend/tests/api/test_post_filter_bar_feed.py`'s, as the Operator sees
  * them (`pfb_a` and `pfb_b`); the random cap is left out because the two
  * seeded orders were never byte-identical (see `scoped-posts.ts`).
@@ -485,10 +357,6 @@ describe("post-view pipeline: parity with the server feed", () => {
   ) =>
     buildFilteredPostsFromRaw(posts, {
       searchText: "",
-      forwardedFilter: "all",
-      mediaFilter: [],
-      languageFilter: [],
-      channels: [],
       startDate: 0,
       endDate: 0,
       ...over,
@@ -498,12 +366,11 @@ describe("post-view pipeline: parity with the server feed", () => {
         postSortOrder: "newest",
         groupByChannel: false,
         viewMeasure: "estimated" as const,
-        viewsFilter: null,
         ...over.view,
       },
     }).map((p) => `${p.channelName}/${p.id}`)
 
-  const languages = [
+  const _languages = [
     at("pfb_a", 1, 1, { language: "fa" }),
     at("pfb_a", 2, 2, { language: "en" }),
     at("pfb_a", 3, 3, { language: null }),
@@ -517,18 +384,6 @@ describe("post-view pipeline: parity with the server feed", () => {
     at("pfb_b", 3, 5),
     at("pfb_b", 4, 90),
   ]
-
-  test("a Language set keeps the ticked; an unread Post never matches", () => {
-    expect(run(languages, { languageFilter: ["fa"] })).toEqual([
-      "pfb_b/4",
-      "pfb_a/1",
-    ])
-    expect(run(languages, { languageFilter: ["fa", "en"] })).toEqual([
-      "pfb_b/4",
-      "pfb_a/2",
-      "pfb_a/1",
-    ])
-  })
 
   test("a block sits where its first Post falls, under both orders", () => {
     expect(run(blocks, { view: { groupByChannel: true } })).toEqual([
@@ -602,10 +457,6 @@ describe("post-view pipeline: parity with the server's views feed", () => {
   const run = (view: Partial<Parameters<typeof sortPosts>[1]>) =>
     buildFilteredPostsFromRaw(posts, {
       searchText: "",
-      forwardedFilter: "all",
-      mediaFilter: [],
-      languageFilter: [],
-      channels: [],
       startDate: 0,
       endDate: 0,
       view: {
@@ -614,25 +465,10 @@ describe("post-view pipeline: parity with the server's views feed", () => {
         postSortOrder: "newest",
         groupByChannel: false,
         viewMeasure: "estimated",
-        viewsFilter: null,
         viewEstimate: SEED,
         ...view,
       },
     }).map((p) => p.id)
-
-  test.each([
-    ["estimated", "gte", 2500, [5, 4, 1]],
-    ["views", "gte", 2500, [5, 1]],
-    ["estimated", "lte", 900, [6]],
-    ["views", "lte", 900, [6]],
-  ] as const)(
-    "%s %s %d keeps what the server keeps",
-    (measure, op, value, expected) => {
-      expect(run({ viewMeasure: measure, viewsFilter: { op, value } })).toEqual(
-        [...expected],
-      )
-    },
-  )
 
   test.each([
     ["estimated", "most_views", [1, 5, 4, 6, 3, 2]],
@@ -676,15 +512,8 @@ describe("post-view pipeline: parity with the server's views feed", () => {
       postSortOrder: "most_views",
       groupByChannel: true,
       viewMeasure: "estimated",
-      viewsFilter: null,
       viewEstimate: SEED,
     })
     expect(grouped.map((p) => p.channelName)).toEqual(["pv_y", "pv_z"])
-  })
-
-  test("with no curve loaded an estimate is none, never a guess", () => {
-    expect(
-      run({ viewsFilter: { op: "gte", value: 0 }, viewEstimate: null }),
-    ).toEqual([])
   })
 })
