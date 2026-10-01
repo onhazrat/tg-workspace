@@ -321,7 +321,7 @@ describe("the filter row", () => {
     mount({ postFilter: funnels(["language", "fa"]) }, { facets: undefined })
     const count = screen.getByTestId("post-filter-count")
     expect(count.textContent).toBe("≈ 1234 of 1234")
-    expect(count.getAttribute("title")).toContain("not known yet")
+    expect(count.getAttribute("title")).toContain("has not loaded")
   })
 
   test("negates a chip, and its label reopens its picker on that Condition", () => {

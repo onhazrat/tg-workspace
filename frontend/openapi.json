@@ -2168,7 +2168,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Discover Candidates",
-        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword/forwarded/media/cap params\nreproduce the Posts-tab view the client aggregated over, and\n`maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic\nscopes that used to keep a second client-side implementation alive.\n\nPOST rather than GET for the same reason as `/posts` \u2014 the channel selection\ntravels in the body so it cannot overflow the request line.",
+        "description": "Aggregated discovery candidates for a channel/date scope.\n\nReturns counts only. The client previously fetched every post body in\nscope to compute this in JS. The keyword and cap params reproduce the\nScope the report covers, and\n`maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic\nscopes that used to keep a second client-side implementation alive.\n\nPOST rather than GET for the same reason as `/posts` \u2014 the channel selection\ntravels in the body so it cannot overflow the request line.",
         "operationId": "data-discover_candidates",
         "requestBody": {
           "content": {

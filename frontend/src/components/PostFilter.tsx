@@ -359,7 +359,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
         approximate={
           facets
             ? undefined
-            : "Counted over what the feed found; the window's total is not known yet"
+            : "The window's total has not loaded, and a meaning search never counts one"
         }
         onClearSearch={() => setPostSearch("")}
         onClearAll={() => {

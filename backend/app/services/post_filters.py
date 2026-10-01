@@ -84,7 +84,7 @@ ViewsOp = Literal["gte", "lte"]
 #: cap under `oldest` can never be labelled "newest" (PFB-01).
 CapMode = Literal["ordered", "random"]
 
-#: The kinds in the order the Media pill lists them.
+#: The kinds in the order the Media dropdown lists them.
 MEDIA_KIND_ORDER: tuple[MediaKind, ...] = get_args(MediaKind)
 MEDIA_KINDS: frozenset[str] = frozenset(MEDIA_KIND_ORDER)
 FEED_SORTS: frozenset[str] = frozenset(get_args(FeedSort))

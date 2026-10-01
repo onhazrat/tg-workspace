@@ -1,7 +1,8 @@
 /**
  * The Posts filter bar's words and the parsing behind its typed numbers
- * (PFB-02). The Post filter's own words are `post-filter.ts` (PTR-03). Pure, so the copy the pills and chips print is tested once here
- * rather than read out of rendered components.
+ * (PFB-02). Pure, so the copy the pills and chips print is tested once here
+ * rather than read out of rendered components. The Post filter's own words
+ * are `post-filter.ts` (PTR-03).
  */
 
 import { languageName } from "@/lib/language-name"

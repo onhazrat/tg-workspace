@@ -16,7 +16,7 @@ export type ViewCurve = ViewCurveResponse
 /** Everything an estimate is read through, as the server hands it over. */
 export type ViewEstimate = ViewEstimateResponse
 
-/** What a views threshold and the views orders compare. */
+/** What a views bound and the views orders compare. */
 export type ViewMeasure = "views" | "estimated"
 
 const MS_PER_HOUR = 3_600_000

@@ -932,8 +932,8 @@ export const dataBulkUpsertPostsRoute = <ThrowOnError extends boolean = true>(op
  * Aggregated discovery candidates for a channel/date scope.
  *
  * Returns counts only. The client previously fetched every post body in
- * scope to compute this in JS. The keyword/forwarded/media/cap params
- * reproduce the Posts-tab view the client aggregated over, and
+ * scope to compute this in JS. The keyword and cap params reproduce the
+ * Scope the report covers, and
  * `maxPerChannelMode`/`seed`/`postIds` cover the `random` cap and semantic
  * scopes that used to keep a second client-side implementation alive.
  *

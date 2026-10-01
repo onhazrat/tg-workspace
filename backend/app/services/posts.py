@@ -568,8 +568,8 @@ def list_feed(
 
     Replaces the frontend's eager ``filteredPosts`` for the Posts tab: rather
     than paging a channel's whole history into the browser and filtering there,
-    the keyword / forwarded / media filters, the per-channel cap, and the sort
-    all run server-side and only ``limit`` rows are returned. With no filters,
+    the keyword, the Post filter, the per-channel cap, and the sort all run
+    server-side and only ``limit`` rows are returned. With no filters,
     no cap, and ``sort="newest"`` this is a newest-first page.
 
     The read stays bounded: ``tg_posts`` holds millions of rows across hundreds
@@ -683,8 +683,8 @@ def count_posts_in_scope(
     """Per-channel post counts for a filtered scope, as a `GROUP BY` in SQL.
 
     Replaces the frontend's `buildPostsInScopeCounts`, which tallied the fully
-    fetched, client-filtered post array. Applies the same keyword / forwarded /
-    media filters as Discover so the two agree.
+    fetched, client-filtered post array. Applies whatever `filters` names: the
+    keyword alone on the prompt path, the Post filter too for the feed's.
 
     `max_per_channel` clamps each channel's count to the cap. The cap's
     `random` and `ordered` modes select *different* posts but the same *number*

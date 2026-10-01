@@ -541,8 +541,9 @@ export const dataApi = {
    * Discover aggregation without saving a report.
    *
    * The only implementation of the counting rules — the browser no longer has
-   * a copy. Covers every scope: keyword / forwarded / media, the per-channel
-   * cap in either mode, and an explicit `postIds` set for a semantic query.
+   * a copy. Covers every scope: the keyword, the per-channel cap in either
+   * mode, and an explicit `postIds` set for a semantic query. Never the Post
+   * filter, which decides what the Posts tab shows (ADR-026).
    */
   getDiscoverCandidates: (params: DiscoverScopeQuery) => {
     const body = discoverScopeBody(params)
