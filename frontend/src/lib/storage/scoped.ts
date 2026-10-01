@@ -467,3 +467,35 @@ export const scopedStorage = {
     }
   },
 }
+
+/**
+ * The same namespace over `sessionStorage`, for state that should end with the
+ * browser session (PTR-02: the Posts feed's Compact grid and Keyboard switches).
+ *
+ * No adoption sweep: nothing was ever written here under a bare name.
+ */
+export const scopedSessionStorage = {
+  getItem(key: string): string | null {
+    try {
+      return sessionStorage.getItem(scopedKey(key))
+    } catch {
+      return null
+    }
+  },
+
+  setItem(key: string, value: string): void {
+    try {
+      sessionStorage.setItem(scopedKey(key), value)
+    } catch {
+      /* lasts until the next render only; not worth taking the page down for */
+    }
+  },
+
+  removeItem(key: string): void {
+    try {
+      sessionStorage.removeItem(scopedKey(key))
+    } catch {
+      /* nothing to remove, or storage refused */
+    }
+  },
+}

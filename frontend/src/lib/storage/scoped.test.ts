@@ -9,6 +9,7 @@ import {
   exitViewAs,
   ownerToken,
   scopedKey,
+  scopedSessionStorage,
   scopedStorage,
   TOKEN_STORAGE_KEY,
   VIEW_AS_ELEVATED,
@@ -55,6 +56,7 @@ function signIn(userId: string): void {
 
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
 })
 
 describe("decodeJwtSubject", () => {
@@ -154,6 +156,60 @@ describe("scopedStorage", () => {
     signIn(ALICE)
     for (const key of DEVICE_SCOPED_KEYS) {
       expect(scopedKey(key)).toBe(key)
+    }
+  })
+})
+
+/**
+ * PTR-02: state that lasts one browser session (the Compact grid and Keyboard
+ * switches, later the Post selection) is per account for the same reason
+ * everything in local storage is.
+ */
+describe("scopedSessionStorage", () => {
+  it("writes into session storage under the account's prefix", () => {
+    signIn(ALICE)
+    scopedSessionStorage.setItem("postFeed_compact", "1")
+    expect(sessionStorage.getItem(`u:${ALICE}:postFeed_compact`)).toBe("1")
+    expect(localStorage.getItem(`u:${ALICE}:postFeed_compact`)).toBeNull()
+    expect(scopedSessionStorage.getItem("postFeed_compact")).toBe("1")
+  })
+
+  it("shows a second account nothing of the first's", () => {
+    signIn(ALICE)
+    scopedSessionStorage.setItem("postFeed_compact", "1")
+
+    signIn(BOB)
+    expect(scopedSessionStorage.getItem("postFeed_compact")).toBeNull()
+    scopedSessionStorage.removeItem("postFeed_compact")
+
+    signIn(ALICE)
+    expect(scopedSessionStorage.getItem("postFeed_compact")).toBe("1")
+  })
+
+  it("survives a browser that refuses session storage", () => {
+    const refuse = () => {
+      throw new DOMException("blocked", "SecurityError")
+    }
+    const real = globalThis.sessionStorage
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: { getItem: refuse, setItem: refuse, removeItem: refuse },
+    })
+    signIn(ALICE)
+
+    try {
+      expect(scopedSessionStorage.getItem("postFeed_compact")).toBeNull()
+      expect(() =>
+        scopedSessionStorage.setItem("postFeed_compact", "1"),
+      ).not.toThrow()
+      expect(() =>
+        scopedSessionStorage.removeItem("postFeed_compact"),
+      ).not.toThrow()
+    } finally {
+      Object.defineProperty(globalThis, "sessionStorage", {
+        configurable: true,
+        value: real,
+      })
     }
   })
 })
