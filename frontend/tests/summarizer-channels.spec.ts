@@ -9,6 +9,7 @@ import { seedBulkChannels, seedTestChannel } from "./utils/seed-channel"
 import {
   clearChannelSelection,
   gotoWorkspace,
+  mockBulkFollowJob,
   selectChannelsKeyboard,
 } from "./utils/summarizer-helpers.ts"
 
@@ -478,6 +479,56 @@ test.describe("TG Workspace channels and posts", () => {
     await page.getByRole("button", { name: "Cards", exact: true }).click()
     await expect(cards.first().getByText("Start ID")).toHaveCount(0)
     await expectRowsFlush()
+  })
+
+  /**
+   * CTB-05: Follow is a paste box. Two new handles, a duplicate and one
+   * already followed are pasted; the box marks each, follows the two into the
+   * Setting group picked, and reports the job. The follow job is mocked, since
+   * the real one asks Telegram, and so is one extra Setting group to pick.
+   */
+  test("follows two Channels from a paste into a chosen Setting group", async ({
+    page,
+  }) => {
+    const prefix = `paste${Date.now()}`
+    await gotoWorkspace(page, "channels")
+    const followed = await seedTestChannel(page, `${prefix}_old`)
+    const [first, second] = [`${prefix}_one`, `${prefix}_two`]
+
+    await page.route("**/api/v1/data/setting-groups", async (route) => {
+      if (route.request().method() !== "GET") return route.fallback()
+      const groups = await (await route.fetch()).json()
+      await route.fulfill({
+        json: [
+          ...groups,
+          { ...groups[0], id: "e2e-pasted", name: "Pasted", isDefault: false },
+        ],
+      })
+    })
+    const follow = await mockBulkFollowJob(page)
+
+    await page.goto("/workspace?tab=channels")
+    await page.locator("#tour-add-channel").click()
+    await page
+      .getByLabel("Handles to follow")
+      .fill(`@${first}, t.me/s/${second}\nhttps://t.me/${first} ${followed} x`)
+    await expect(page.getByTestId("follow-paste-row")).toHaveText([
+      `@${first} · will follow`,
+      `@${second} · will follow`,
+      `@${followed} · already following`,
+      "@x · not a handle",
+    ])
+    await page.getByLabel("Setting group").selectOption({ label: "Pasted" })
+    await page.getByTestId("follow-paste-submit").click()
+
+    await expect(page.getByText("Follow finished: 2 added")).toBeVisible()
+    expect(follow.getPostBodies()).toEqual([
+      expect.objectContaining({
+        channels: [{ name: first }, { name: second }],
+        settingGroupId: "e2e-pasted",
+      }),
+    ])
+    await expect(page.getByLabel("Handles to follow")).toHaveValue("")
   })
 
   /**

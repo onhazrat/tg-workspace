@@ -5,12 +5,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ChannelSettingGroup } from "@/types"
-import {
-  AiContextPill,
-  CardSizeSwitch,
-  FollowControl,
-  SortMenu,
-} from "./ChannelBarControls"
+import { AiContextPill, CardSizeSwitch, SortMenu } from "./ChannelBarControls"
 import {
   ChannelSelectionBar,
   type ChannelSelectionBarProps,
@@ -23,38 +18,6 @@ type Calls = [string, unknown][]
 const logger = (calls: Calls) => (name: string) => (value?: unknown) => {
   calls.push([name, typeof value === "object" ? undefined : value])
 }
-
-describe("FollowControl", () => {
-  test("follows the typed handle, and only once one is typed", () => {
-    const calls: Calls = []
-    const log = logger(calls)
-    const { rerender } = render(
-      <FollowControl
-        value=""
-        onChange={log("change")}
-        onFollow={log("follow")}
-      />,
-    )
-    fireEvent.click(screen.getByRole("button", { name: /Follow/ }))
-    const submit = screen.getAllByRole("button", { name: "Follow" }).at(-1)
-    expect(submit?.hasAttribute("disabled")).toBe(true)
-    fireEvent.change(screen.getByLabelText("Channel to follow"), {
-      target: { value: "durov" },
-    })
-    rerender(
-      <FollowControl
-        value="durov"
-        onChange={log("change")}
-        onFollow={log("follow")}
-      />,
-    )
-    fireEvent.submit(screen.getByLabelText("Channel to follow"))
-    expect(calls).toEqual([
-      ["change", "durov"],
-      ["follow", undefined],
-    ])
-  })
-})
 
 describe("SortMenu", () => {
   const mount = (showSubscribers: boolean, calls: Calls = []) => {
@@ -188,6 +151,7 @@ describe("ChannelSelectionBar", () => {
         removeTagInput=""
         onRemoveTagInputChange={log("removeInput")}
         onRemoveTag={log("removeTag")}
+        tagSuggestions={{ add: [], remove: [] }}
         groupBySelection
         onToggleGroupBySelection={log("grouping")}
         showSortRank={false}

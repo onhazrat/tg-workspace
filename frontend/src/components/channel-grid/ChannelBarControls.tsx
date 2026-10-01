@@ -6,70 +6,14 @@ import {
   Grid3x3,
   LayoutGrid,
   LayoutList,
-  Plus,
   Sparkles,
 } from "lucide-react"
 import { useState } from "react"
 import { Options, Pill, pillClass } from "@/components/PostFilterParts"
-import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
 import { BarHeading, BarPopover, BarSearch } from "./BarPopover"
-
-/**
- * Today's single-handle follow field, moved into a popover at the start of
- * row 1. CTB-05 replaces it with the paste box.
- */
-export function FollowControl({
-  value,
-  onChange,
-  onFollow,
-}: {
-  value: string
-  onChange: (value: string) => void
-  onFollow: () => void
-}) {
-  return (
-    <BarPopover
-      trigger={
-        <button
-          type="button"
-          id="tour-add-channel"
-          className={pillClass(false)}
-        >
-          <Plus size={12} /> Follow
-        </button>
-      }
-    >
-      <form
-        className="flex gap-1.5 p-1"
-        onSubmit={(e) => {
-          e.preventDefault()
-          onFollow()
-        }}
-      >
-        <div className="relative min-w-0 flex-1">
-          <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center font-bold text-app-ink/40">
-            @
-          </span>
-          <input
-            // biome-ignore lint/a11y/noAutofocus: the popover opens to type a handle.
-            autoFocus
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="telegram_channel"
-            aria-label="Channel to follow"
-            className="h-8 w-full rounded-lg border border-app-ink/15 bg-app-muted pl-7 pr-2 text-xs outline-none focus:border-app-ink/40"
-          />
-        </div>
-        <TgButton type="submit" size="sm" disabled={!value.trim()}>
-          Follow
-        </TgButton>
-      </form>
-    </BarPopover>
-  )
-}
 
 const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
   { value: "last_updated", label: "Last updated" },

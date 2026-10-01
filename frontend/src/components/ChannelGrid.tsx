@@ -4,7 +4,6 @@ import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AiContextPill,
-  FollowControl,
   SortMenu,
 } from "@/components/channel-grid/ChannelBarControls"
 import type { ConditionOptions } from "@/components/channel-grid/ChannelConditionPicker"
@@ -18,6 +17,7 @@ import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs
 import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
+import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
 import { TgButton } from "@/components/ui/tg-button"
@@ -25,6 +25,7 @@ import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
 import { useSettingGroupsQuery } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
+import { bulkTagSuggestions } from "@/lib/channels/bulk-tag-suggestions"
 import {
   addFunnel,
   append,
@@ -127,8 +128,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const { isOffline } = useApiStatus()
 
-  const { scrapingChannels, handleScrapeSelected, handleScrapeAll } =
-    useScraper()
+  const {
+    scrapingChannels,
+    handleScrapeSelected,
+    handleScrapeAll,
+    followDiscoverChannels,
+  } = useScraper()
 
   const [channelSearch, setChannelSearch] = useState("")
   const [tagSearch, setTagSearch] = useState("")
@@ -202,6 +207,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   useEffect(() => () => publishShownChannels(null), [])
 
   const actions = useChannelGridActions(targets)
+  const channelNames = useMemo(
+    () => channels.map((channel) => channel.name),
+    [channels],
+  )
+  const tagSuggestions = useMemo(
+    () => bulkTagSuggestions(channels, targets),
+    [channels, targets],
+  )
 
   const sortedFilteredChannels = useMemo(
     () =>
@@ -433,10 +446,15 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       <div className="rounded-xl border border-app-ink/10 bg-app-card shadow-sm">
         {/* Row 1: follow, find, filter, sort, sync */}
         <div className="flex flex-wrap items-center gap-2 p-3">
-          <FollowControl
-            value={actions.inlineChannelName}
-            onChange={actions.setInlineChannelName}
-            onFollow={actions.handleAddChannel}
+          <FollowPasteBox
+            followed={channelNames}
+            settingGroups={sortedSettingGroups}
+            onFollow={(handles, settingGroupId, onProgress) =>
+              followDiscoverChannels(
+                handles.map((name) => ({ name })),
+                { settingGroupId, onProgress },
+              )
+            }
           />
           <div className="relative min-w-[200px] flex-1">
             <Search
@@ -559,6 +577,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           removeTagInput={actions.bulkRemoveTagInput}
           onRemoveTagInputChange={actions.setBulkRemoveTagInput}
           onRemoveTag={actions.handleBulkRemoveTag}
+          tagSuggestions={tagSuggestions}
           groupBySelection={channelGridGroupBySelection}
           onToggleGroupBySelection={() =>
             setChannelGridGroupBySelection(!channelGridGroupBySelection)

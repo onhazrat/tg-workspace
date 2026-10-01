@@ -58,10 +58,16 @@ export interface FollowJobDeps extends ProxySettings {
   }
 }
 
+export interface FollowOptions {
+  onProgress?: (status: FollowJobStatus) => void
+  /** Where the new Follows land; omitted is the default group. */
+  settingGroupId?: string
+}
+
 export interface FollowJob {
   followDiscoverChannels: (
     channels: BulkFollowChannelInput[],
-    options?: { onProgress?: (status: FollowJobStatus) => void },
+    options?: FollowOptions,
   ) => Promise<FollowJobStatus | null>
 }
 
@@ -236,9 +242,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
   const followDiscoverChannels = useCallback(
     async (
       channelsToFollow: BulkFollowChannelInput[],
-      options?: {
-        onProgress?: (status: FollowJobStatus) => void
-      },
+      options?: FollowOptions,
     ): Promise<FollowJobStatus | null> => {
       if (isOffline) {
         toast.warning("Server offline — cannot follow channels while offline.")
@@ -267,6 +271,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
           }),
           torAutoRotate,
           torRotationThreshold,
+          settingGroupId: options?.settingGroupId,
         })
 
         const followStatus = await waitFollowJob(

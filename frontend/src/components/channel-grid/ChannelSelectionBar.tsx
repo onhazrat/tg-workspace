@@ -11,6 +11,7 @@ import {
 import { Popover } from "radix-ui"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
+import type { TagSuggestion } from "@/lib/channels/bulk-tag-suggestions"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import {
   type ActionLimit,
@@ -23,6 +24,7 @@ import {
   ActionLimitIndicator,
   ChannelSelectionAdjust,
 } from "./ChannelSelectionAdjust"
+import { TagCompletionField } from "./TagCompletionField"
 
 export type ChannelSelectionBarProps = {
   selection: ReadonlySet<string>
@@ -53,6 +55,8 @@ export type ChannelSelectionBarProps = {
   removeTagInput: string
   onRemoveTagInputChange: (value: string) => void
   onRemoveTag: () => void
+  /** What the two tag fields complete to, from the Channels actions reach. */
+  tagSuggestions: { add: TagSuggestion[]; remove: TagSuggestion[] }
   groupBySelection: boolean
   onToggleGroupBySelection: () => void
   showSortRank: boolean
@@ -65,50 +69,6 @@ const actionClass =
   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold text-app-ink/80 hover:bg-app-ink/10 hover:text-app-ink disabled:opacity-40"
 
 const plural = (n: number) => `${n} channel${n === 1 ? "" : "s"}`
-
-function TagField({
-  label,
-  button,
-  value,
-  onChange,
-  onSubmit,
-  testId,
-}: {
-  label: string
-  button: string
-  value: string
-  onChange: (value: string) => void
-  onSubmit: () => void
-  testId: string
-}) {
-  return (
-    <form
-      className="flex gap-1.5 px-1 pb-1"
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSubmit()
-      }}
-    >
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Tag"
-        aria-label={label}
-        data-testid={`${testId}-input`}
-        className="h-8 min-w-0 flex-1 rounded-lg border border-app-ink/15 bg-app-muted px-2.5 text-xs outline-none focus:border-app-ink/40"
-      />
-      <TgButton
-        type="submit"
-        size="sm"
-        variant="secondary"
-        disabled={!value.trim()}
-        data-testid={`${testId}-button`}
-      >
-        {button}
-      </TgButton>
-    </form>
-  )
-}
 
 /** The bulk toolbar: what reaches the selected Channels. */
 function SelectionActions(p: ChannelSelectionBarProps) {
@@ -230,21 +190,23 @@ function SelectionActions(p: ChannelSelectionBarProps) {
         }
       >
         <BarHeading>Add to {count}</BarHeading>
-        <TagField
+        <TagCompletionField
           label="Add tag to selected channels"
           button="Add"
           value={p.tagInput}
           onChange={p.onTagInputChange}
           onSubmit={p.onAddTag}
+          suggestions={p.tagSuggestions.add}
           testId="bulk-add-tag"
         />
         <BarHeading>Remove from {count}</BarHeading>
-        <TagField
+        <TagCompletionField
           label="Remove tag from selected channels"
           button="Remove"
           value={p.removeTagInput}
           onChange={p.onRemoveTagInputChange}
           onSubmit={p.onRemoveTag}
+          suggestions={p.tagSuggestions.remove}
           testId="bulk-remove-tag"
         />
       </BarPopover>

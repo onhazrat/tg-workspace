@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from "react"
 import { api } from "@/api"
 import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
-import { useSettings } from "@/contexts/SettingsContext"
 import { useLoadDBStats } from "@/hooks/useDBStats"
 import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
-import { addChannelByName } from "@/lib/channels/add-channel"
 import { assignChannelsToSettingGroup } from "@/lib/channels/assign-setting-group"
 import {
   addManualTag,
@@ -20,7 +18,7 @@ import { upsertChannel } from "@/lib/channels/store"
 import type { Channel } from "@/types"
 
 /**
- * Channel mutations behind the Channels tab: add channel, single/bulk delete,
+ * Channel mutations behind the Channels tab: single/bulk delete,
  * reset-and-sync, bulk freeze/unfreeze, bulk group move, and bulk tag edits,
  * together with the input and confirm-dialog state that drives them.
  *
@@ -31,20 +29,8 @@ export function useChannelGridActions(targets: ReadonlySet<string>) {
   const { channels, setChannels, setSelectedChannels, loadChannels } = useData()
   const loadDBStats = useLoadDBStats()
 
-  const {
-    proxyEnabled,
-    defaultProxyUrls,
-    torEnabled,
-    torMode,
-    torProxyUrls,
-    torAutoRotate,
-    torRotationThreshold,
-    getEffectiveGlobalStartTime,
-  } = useSettings()
-
   const { addToSyncQueue } = useScraper()
 
-  const [inlineChannelName, setInlineChannelName] = useState("")
   const [bulkTagInput, setBulkTagInput] = useState("")
   const [bulkRemoveTagInput, setBulkRemoveTagInput] = useState("")
   const [confirmResetModal, setConfirmResetModal] = useState<Channel | null>(
@@ -208,31 +194,7 @@ export function useChannelGridActions(targets: ReadonlySet<string>) {
     setConfirmResetModal(null)
   }
 
-  const handleAddChannel = async () => {
-    if (!inlineChannelName) return
-    const result = await addChannelByName(inlineChannelName, {
-      channels,
-      setSelectedChannels,
-      loadChannels,
-      addToSyncQueue,
-      getEffectiveGlobalStartTime,
-      settings: {
-        proxyEnabled,
-        defaultProxyUrls,
-        torEnabled,
-        torMode,
-        torProxyUrls,
-        torAutoRotate,
-        torRotationThreshold,
-      },
-    })
-    if (result.ok) setInlineChannelName("")
-  }
-
   return {
-    inlineChannelName,
-    setInlineChannelName,
-    handleAddChannel,
     bulkTagInput,
     setBulkTagInput,
     handleBulkAddTag,
