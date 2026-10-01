@@ -184,8 +184,9 @@ export function ChannelCardBadges({
           </TooltipTrigger>
           <TooltipContent>
             <p>
-              Rank {sortRank} among selected channels by current sort order
-              (Trim keeps ranks 1–N)
+              Rank {sortRank} by the current sort among the selected Channels
+              Trim reaches, so Keep first {sortRank} keeps it. With actions
+              limited to Shown, hidden ones are not ranked.
             </p>
           </TooltipContent>
         </Tooltip>

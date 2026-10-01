@@ -91,7 +91,8 @@ interface ScraperContextType {
     source?: string,
   ) => Promise<void>
   handleScrapeAll: () => Promise<void>
-  handleScrapeSelected: () => Promise<void>
+  /** Syncs `names`, or the whole selection when none are given. */
+  handleScrapeSelected: (names?: Set<string>) => Promise<void>
   handleRecheckRestricted: () => Promise<void>
   scrapeChannelsInParallel: (
     channelsToScrape: Channel[],
@@ -372,8 +373,11 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     )
   }
 
-  const runManualSync = async (mode: ManualSyncMode) => {
-    const plan = planManualSync(mode, channels, selectedChannels)
+  const runManualSync = async (
+    mode: ManualSyncMode,
+    names: Set<string> = selectedChannels,
+  ) => {
+    const plan = planManualSync(mode, channels, names)
     if ("refusal" in plan) {
       toast[plan.refusal.level](plan.refusal.message)
       return
@@ -388,7 +392,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   const handleScrapeAll = () => runManualSync("sync_all")
-  const handleScrapeSelected = () => runManualSync("bulk")
+  const handleScrapeSelected = (names?: Set<string>) =>
+    runManualSync("bulk", names)
   const handleRecheckRestricted = () => runManualSync("recheck_restricted")
 
   const addNewChannel = (

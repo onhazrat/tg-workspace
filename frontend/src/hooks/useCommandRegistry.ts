@@ -25,6 +25,7 @@ import {
   filterNames,
   printChannelFilter,
 } from "@/lib/channels/channel-filter"
+import { useShownChannels } from "@/lib/channels/shown-channels"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
   buildActionCommands,
@@ -126,6 +127,7 @@ export function useCommandRegistry(): {
   const { setChannelFilterText, setSelectedSettingGroup } =
     useWorkspaceGroupParams()
   const { data: settingGroups = [] } = useSettingGroupsQuery()
+  const shownChannelNames = useShownChannels()
   // The palette's "filter by Setting group" sets a one-Condition filter.
   const setChannelGroupFilter = (groupId: string) =>
     setChannelFilterText(
@@ -201,6 +203,7 @@ export function useCommandRegistry(): {
       channelStats,
       selectedChannels,
       setSelectedChannels,
+      shownChannelNames,
       setChannels,
       handleScrapeAll,
       handleScrapeSelected,
@@ -232,6 +235,8 @@ export function useCommandRegistry(): {
       workspaceTabs,
       currentSummaryId,
       settings: {
+        channelActionLimit: settings.channelActionLimit,
+        setChannelActionLimit: settings.setChannelActionLimit,
         theme: settings.theme,
         setTheme: settings.setTheme,
         aiLanguage: settings.aiLanguage,
@@ -387,6 +392,7 @@ export function useCommandRegistry(): {
       setPostSearch,
       setRelatedPostSearch,
       setSelectedChannels,
+      shownChannelNames,
       setSemanticSearchQuery,
       setSemanticSearchRespectsChannels,
       setStarredOnly,

@@ -506,3 +506,44 @@ describe("AW-04 — a Live tick invalidates the Posts key, never replaces it", (
     }
   })
 })
+
+describe("CTB-04 — the action limit reaches no other tab", () => {
+  /**
+   * "Actions apply to: Shown" narrows what the Channels tab's own actions,
+   * Trim and the sort rank reach. The Scope, the Posts tab and every Artifact
+   * must keep the whole selection, the Hidden selection included, or a
+   * Summary silently covers only what one tab's filter happened to show.
+   *
+   * The limit never touches DataContext's selection, so the only way it can
+   * leak is a module outside the Channels tab reading it. These are the
+   * modules that may: the tab and its `channel-grid/` parts, the pure module,
+   * the setting, and the palette that switches it.
+   */
+  const READERS = new Set([
+    "src/components/ChannelGrid.tsx",
+    "src/lib/channels/selection-regions.ts",
+    "src/lib/settings/schema.ts",
+    "src/contexts/SettingsContext.tsx",
+    "src/hooks/useCommandRegistry.ts",
+    "src/lib/commands/types.ts",
+    "src/lib/commands/channel-entities.ts",
+  ])
+
+  it("is read only by the Channels tab and the controls that switch it", () => {
+    const readers = sourceFiles(SRC)
+      .filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) =>
+        /\bactionTargets\b|\bchannelActionLimit\b/.test(
+          readFileSync(f, "utf8"),
+        ),
+      )
+      .map(rel)
+    expect(
+      readers.filter(
+        (f) => !READERS.has(f) && !f.startsWith("src/components/channel-grid/"),
+      ),
+      "The action limit is the Channels tab's own. Anything building a Scope " +
+        "or a request for another tab must read DataContext's whole selection.",
+    ).toEqual([])
+  })
+})

@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test"
 import { expect, test } from "./fixtures.ts"
 
 import { seedTestChannel } from "./utils/seed-channel"
+import { clearChannelSelection } from "./utils/summarizer-helpers.ts"
 
 const TAB_LABELS: Record<string, string> = {
   channels: "Channels",
@@ -78,7 +79,13 @@ test.describe("TG UI primitives", () => {
       expect(primaryClass).toContain("hover:opacity-90")
       expect(primaryClass).toContain("focus-visible:ring-2")
 
-      const ghost = page.getByRole("button", { name: /^Invert$/i })
+      // Row 2's ghost button with nothing selected (CTB-04 moved Invert into
+      // Adjust selection, which only a selection shows).
+      await clearChannelSelection(page)
+      const ghost = page.getByRole("button", {
+        name: "Select all",
+        exact: true,
+      })
       await expect(ghost).toHaveAttribute("data-slot", "tg-button")
       const ghostClass = (await ghost.getAttribute("class")) ?? ""
       expect(ghostClass).toContain("hover:bg-app-ink/5")

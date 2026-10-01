@@ -13,6 +13,10 @@ import {
   RETENTION_SHARED_LOG_DAYS_DEFAULT,
 } from "@/constants"
 import { CARD_ZOOM_LEVELS, type CardZoom } from "@/lib/channels/card-zoom"
+import {
+  ACTION_LIMITS,
+  type ActionLimit,
+} from "@/lib/channels/selection-regions"
 import type {
   DiscoverFollowState,
   DiscoverSortKey,
@@ -206,6 +210,16 @@ const channelCardZoomSetting: SettingSpec<CardZoom> = {
   encode: (value) => String(value),
 }
 
+/** Local only: whether row 2's actions, Trim and the sort rank reach the
+ *  Hidden selection (CTB-04). Shown keeps them off Channels the filters hide. */
+const channelActionLimitSetting: SettingSpec<ActionLimit> = {
+  storageKey: "channelActionLimit",
+  schema: z.enum(ACTION_LIMITS),
+  defaultValue: "shown",
+  decode: (raw) => raw,
+  encode: (value) => value,
+}
+
 // Persistence note: historically only some of these keys had a persist-to-storage
 // effect; the store now persists EVERY key on change (benign unification — the
 // backend-synced keys still hydrate from the server, browser storage is a fallback).
@@ -229,6 +243,7 @@ export const appSettingsSpec = {
     "channelGridGroupBySelection",
     true,
   ),
+  channelActionLimit: channelActionLimitSetting,
   regularSyncIntervalMinutes: intSetting(
     "regularSyncIntervalMinutes",
     AUTO_SYNC_INTERVAL_DEFAULT,

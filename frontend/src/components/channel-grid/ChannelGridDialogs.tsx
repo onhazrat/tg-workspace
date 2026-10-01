@@ -13,7 +13,10 @@ type ChannelGridDialogsProps = {
   confirmBulkDelete: boolean
   onBulkDeleteOpenChange: (open: boolean) => void
   onConfirmBulkDelete: () => void
-  selectedCount: number
+  /** How many Channels the bulk actions reach. */
+  actionCount: number
+  /** What the confirmations say about the Hidden selection, or "". */
+  hiddenNote: string
   confirmBulkFreezeAction: "freeze" | "unfreeze" | null
   onCloseBulkFreezeAction: () => void
   onConfirmBulkFreezeAction: () => void
@@ -30,7 +33,8 @@ export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
   confirmBulkDelete,
   onBulkDeleteOpenChange,
   onConfirmBulkDelete,
-  selectedCount,
+  actionCount,
+  hiddenNote,
   confirmBulkFreezeAction,
   onCloseBulkFreezeAction,
   onConfirmBulkFreezeAction,
@@ -97,15 +101,20 @@ export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
           <>
             You are about to remove{" "}
             <span className="font-bold text-app-ink">
-              {selectedCount} selected channels
+              {actionCount} selected channels
             </span>{" "}
             from your channel list. Their scraped posts stay in the shared
             corpus; they are cleared later only if nobody else follows them.
+            {hiddenNote && (
+              <span className="mt-2 block font-semibold text-app-ink">
+                {hiddenNote}
+              </span>
+            )}
           </>
         }
         descriptionClassName="text-xs leading-relaxed text-app-ink/60"
         variant="destructive"
-        confirmLabel={`Remove ${selectedCount} Channels`}
+        confirmLabel={`Remove ${actionCount} Channels`}
         footerClassName="sm:justify-between"
         confirmClassName="flex-1"
         cancelClassName="flex-1"
@@ -129,11 +138,14 @@ export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
             ? "Freeze Selected Channels?"
             : "Unfreeze Selected Channels?"
         }
-        description={
+        description={[
           confirmBulkFreezeAction === "freeze"
-            ? "Freeze all currently selected channels. They will be skipped during sync."
-            : "Unfreeze all currently selected channels."
-        }
+            ? `Freeze ${actionCount} selected channels. They will be skipped during sync.`
+            : `Unfreeze ${actionCount} selected channels.`,
+          hiddenNote,
+        ]
+          .filter(Boolean)
+          .join(" ")}
         variant="dangerSoft"
         onConfirm={onConfirmBulkFreezeAction}
         onCancel={onCloseBulkFreezeAction}

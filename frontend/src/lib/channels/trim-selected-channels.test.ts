@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, spyOn } from "bun:test"
 import { toast } from "sonner"
 
 import type { Channel, ChannelStats } from "@/types"
-
+import { buildSelectedTrimRanks } from "./selected-trim-ranks"
+import { actionTargets, hiddenSelection } from "./selection-regions"
 import {
   applyTrimChannelSelection,
   trimSelectedChannelsToCount,
@@ -263,5 +264,54 @@ describe("applyTrimChannelSelection", () => {
     expect(apply(0)).toEqual([])
     expect(info).not.toHaveBeenCalled()
     expect(success).not.toHaveBeenCalled()
+  })
+})
+
+describe("Trim under the action limit (CTB-04)", () => {
+  // The filters show everything but "hidden-selected", so the limit narrows
+  // Trim to the three shown selected Channels.
+  const shown = ["low-activity", "mid-activity", "high-activity", "unselected"]
+  const targets = actionTargets(selectedChannels, shown, "shown")
+  const hidden = hiddenSelection(selectedChannels, shown)
+
+  it("ranks only the Shown Channels and keeps the Hidden selection", () => {
+    const sets: Set<string>[] = []
+    applyTrimChannelSelection({
+      channels,
+      channelStats,
+      selectedChannels: targets,
+      keep: hidden,
+      sortBy: "activity_rate",
+      sortDirection: "desc",
+      count: 1,
+      setSelectedChannels: (value) => sets.push(value),
+    })
+    // Unlimited, "hidden-selected" (velocity 7) would be second; limited, it
+    // is not ranked at all and survives anyway.
+    expect(sets).toEqual([new Set(["hidden-selected", "high-activity"])])
+  })
+
+  it("keeps the Channel the sort rank numbers 1", () => {
+    const ranks = buildSelectedTrimRanks({
+      channels,
+      channelStats,
+      postsInScopeCounts: {},
+      selectedChannels: targets,
+      sortBy: "activity_rate",
+      sortDirection: "asc",
+    })
+    const result = trimSelectedChannelsToCount({
+      channels,
+      channelStats,
+      selectedChannels: targets,
+      sortBy: "activity_rate",
+      sortDirection: "asc",
+      count: 1,
+    })
+    const first = [...ranks].find(([, rank]) => rank === 1)?.[0]
+    expect(result.status === "applied" && result.keptNames).toEqual([
+      first as string,
+    ])
+    expect(ranks.has("hidden-selected")).toBe(false)
   })
 })

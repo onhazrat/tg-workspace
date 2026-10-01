@@ -649,4 +649,87 @@ test.describe("TG Workspace channels and posts", () => {
     await expect(page.locator(`[data-channel-name="${other}"]`)).toBeVisible()
     await expect(page.locator(`[data-channel-name="${tagged}"]`)).toHaveCount(0)
   })
+  /**
+   * CTB-04: the action limit. Everything is selected, then a tag funnel hides
+   * two of three, so row 2 says it is acting on the one shown. Add tag writes
+   * only that one; the Posts tab still asks for all three, because the limit
+   * never reaches the Scope; and switching to All writes all three.
+   */
+  test("the action limit keeps bulk edits on the Shown Channels", async ({
+    page,
+  }) => {
+    const prefix = `limit${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 3, prefix)
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByRole("button", { name: "Cards", exact: true }).click()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+    const names = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+    const shown = names[0]
+
+    const addTag = async (tag: string) => {
+      await page.getByTestId("bulk-tags").click()
+      await page.getByTestId("bulk-add-tag-input").fill(tag)
+      await page.getByTestId("bulk-add-tag-button").click()
+      await page.keyboard.press("Escape")
+    }
+    // The Channels one bulk edit wrote, by the PUT each sends.
+    const written = (from: number) =>
+      writes.slice(from).filter((name) => name.startsWith(prefix))
+    const writes: string[] = []
+    page.on("request", (request) => {
+      const match = request.url().match(/\/api\/v1\/data\/channels\/([^/?]+)$/)
+      if (request.method() === "PUT" && match) writes.push(match[1])
+    })
+
+    // Tag one Channel so a funnel can show it alone.
+    await clearChannelSelection(page)
+    await page
+      .getByRole("button", { name: `Select ${shown}`, exact: true })
+      .click()
+    await addTag(prefix)
+
+    // Select everything, then narrow the filter.
+    await clearChannelSelection(page)
+    await page.getByRole("button", { name: "Select all", exact: true }).click()
+    await expect(page.getByText("3 selected")).toBeVisible()
+    await page.getByTestId("channel-tags").click()
+    await page.getByPlaceholder("Search tags...").fill(prefix)
+    await page.getByTestId(`channel-tags-funnel-${prefix}`).click()
+    await page.keyboard.press("Escape")
+    await expect(cards).toHaveCount(1)
+    await expect(page.getByText("3 selected")).toBeVisible()
+    const indicator = page.getByTestId("action-limit-indicator")
+    await expect(indicator).toHaveText("acting on 1 shown")
+
+    let from = writes.length
+    await addTag(`${prefix}-a`)
+    await expect.poll(() => written(from)).toEqual([shown])
+
+    // The Scope is the whole selection whatever the limit says.
+    const feed = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" &&
+        request.url().endsWith("/api/v1/data/posts") &&
+        names.every((name) =>
+          (request.postDataJSON()?.channelNames ?? []).includes(name),
+        ),
+    )
+    await page.goto(`${page.url().replace("tab=channels", "tab=posts")}`)
+    await feed
+    await page.goBack()
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    await expect(cards).toHaveCount(1, { timeout: 30_000 })
+
+    await indicator.click()
+    await expect(indicator).toHaveText("2 hidden by filters")
+    from = writes.length
+    await addTag(`${prefix}-b`)
+    await expect.poll(() => written(from).sort()).toEqual([...names].sort())
+  })
 })
