@@ -255,7 +255,53 @@ export function isSemanticFeed(
  * agreed design. The query key encodes the scope + filters, so any change
  * refetches the first page; a completed sync invalidates it (see ScraperContext).
  */
-export function usePostsFeed(): PostsFeed {
+/**
+ * PROTOTYPE (post-card): up to `VIEWS_SAMPLE` newest Posts of the Scope, with
+ * no views bound, for the views histogram. Fetched only while `enabled`.
+ * ponytail: a sample of whole Posts; the real one is a server histogram
+ * (`width_bucket` over the Scope) so it costs one small response.
+ */
+export const VIEWS_SAMPLE = 2000
+
+export function useViewsSample(enabled: boolean): Post[] | undefined {
+  const { startDate, endDate, windowKey } = useScope()
+  const {
+    postSearch,
+    forwardedFilter,
+    mediaFilter,
+    languageFilter,
+    semanticSearchQuery,
+  } = useScraper()
+  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
+  const channelNames = useSelectedChannelNames()
+  const filters = {
+    channelNames,
+    keyword: debouncedPostSearch,
+    forwarded: forwardedFilter,
+    media: mediaFilter,
+    languages: languageFilter,
+  }
+  return useQuery({
+    queryKey: ["proto-views-sample", { ...filters, window: windowKey }],
+    queryFn: () =>
+      api.getPostsFeed({
+        ...filters,
+        startDate,
+        endDate,
+        sort: "newest",
+        limit: VIEWS_SAMPLE,
+        offset: 0,
+      }),
+    enabled: enabled && !semanticSearchQuery.trim() && channelNames.length > 0,
+    staleTime: SUMMARIZER_STALE_TIME,
+    placeholderData: (previous) => previous,
+  }).data
+}
+
+/** PROTOTYPE (post-card): a temporary "only this Channel" view of the feed. */
+export type ChannelFocus = { channel: string; keepFilters: boolean }
+
+export function usePostsFeed(focus: ChannelFocus | null = null): PostsFeed {
   const { startDate, endDate, windowKey } = useScope()
   const {
     postSearch,
@@ -279,13 +325,11 @@ export function usePostsFeed(): PostsFeed {
   const debouncedSemantic = useDebouncedValue(semanticSearchQuery, 300)
   const selectedChannelNames = useSelectedChannelNames()
 
-  const semanticActive = isSemanticFeed(
-    embeddingsEnabled,
-    relatedPostSearch,
-    debouncedSemantic,
-  )
+  const semanticActive =
+    !focus &&
+    isSemanticFeed(embeddingsEnabled, relatedPostSearch, debouncedSemantic)
 
-  const filters = {
+  const baseFilters = {
     channelNames: selectedChannelNames,
     keyword: debouncedPostSearch,
     forwarded: forwardedFilter,
@@ -299,6 +343,28 @@ export function usePostsFeed(): PostsFeed {
     groupByChannel,
     seed: 0,
   }
+  // PROTOTYPE (post-card): focus drops the cap and grouping, and unless asked
+  // keeps nothing but the window and the order.
+  const filters = !focus
+    ? baseFilters
+    : focus.keepFilters
+      ? {
+          ...baseFilters,
+          channelNames: [focus.channel],
+          maxPerChannel: 0,
+          groupByChannel: false,
+        }
+      : {
+          ...baseFilters,
+          channelNames: [focus.channel],
+          keyword: "",
+          forwarded: "all" as const,
+          media: [],
+          languages: [],
+          views: null,
+          maxPerChannel: 0,
+          groupByChannel: false,
+        }
   const feedParams: PostFeedQuery = { ...filters, startDate, endDate }
 
   const infinite = useInfiniteQuery({

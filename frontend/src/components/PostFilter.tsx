@@ -55,6 +55,7 @@ import {
   pillClass,
   ViewsForm,
 } from "./PostFilterParts"
+import type { FilterBarOverride } from "./post-card/PostSelectionPrototype"
 
 /** What the bar reads and writes; `ScraperContext` provides all of it. */
 export interface FilterBarControls {
@@ -93,6 +94,10 @@ interface PostFilterProps {
   subtitle: string
   /** Posts an Estimated views threshold hid for being too new to judge. */
   tooNewToJudge: number
+  /** PROTOTYPE (post-card): controls appended to the pill row. */
+  trailing?: React.ReactNode
+  /** PROTOTYPE (post-card): A-plus-* swap pills and add a filter row. */
+  override?: FilterBarOverride
 }
 
 export interface PostFilterBarProps extends PostFilterProps {
@@ -249,94 +254,114 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Pill
-            label="Type"
-            value={labelOf(POST_TYPE_OPTIONS, s.forwardedFilter)}
-            active={s.forwardedFilter !== "all"}
-            width="w-64"
-            testId="post-filter-pill-type"
-          >
-            <Options
-              options={POST_TYPE_OPTIONS}
-              value={s.forwardedFilter}
-              onChange={s.setForwardedFilter}
-            />
-          </Pill>
-          <Pill
-            label="Media"
-            value={mediaSummary(s.mediaFilter)}
-            active={s.mediaFilter.length > 0}
-            width="w-56"
-            testId="post-filter-pill-media"
-            onOpenChange={props.onCountingPillOpenChange}
-          >
-            <CheckList
-              items={MEDIA_KIND_OPTIONS.map((option) => ({
-                key: option.value,
-                label: option.label,
-                count: mediaCounts.get(option.value),
-                checked: s.mediaFilter.includes(option.value),
-                testId: `post-media-filter-${option.value}`,
-              }))}
-              anyLabel="Any media"
-              onToggle={(key) =>
-                s.setMediaFilter((m) => toggle(m, key as MediaKind))
-              }
-              onAny={() => s.setMediaFilter([])}
-            />
-          </Pill>
-          <Pill
-            label="Language"
-            value={languageSummary(s.languageFilter)}
-            active={s.languageFilter.length > 0}
-            testId="post-filter-pill-language"
-            onOpenChange={props.onCountingPillOpenChange}
-          >
-            <CheckList
-              items={languages.map(({ code, count }) => ({
-                key: code,
-                label: languageLabel(code),
-                count,
-                checked: s.languageFilter.includes(code),
-              }))}
-              anyLabel="Any language"
-              emptyLabel="No Language read yet"
-              onToggle={(code) => s.setLanguageFilter((l) => toggle(l, code))}
-              onAny={() => s.setLanguageFilter([])}
-            />
-          </Pill>
+          {props.override?.type !== undefined ? (
+            props.override.type
+          ) : (
+            <Pill
+              label="Type"
+              value={labelOf(POST_TYPE_OPTIONS, s.forwardedFilter)}
+              active={s.forwardedFilter !== "all"}
+              width="w-64"
+              testId="post-filter-pill-type"
+            >
+              <Options
+                options={POST_TYPE_OPTIONS}
+                value={s.forwardedFilter}
+                onChange={s.setForwardedFilter}
+              />
+            </Pill>
+          )}
+          {props.override?.media !== undefined ? (
+            props.override.media
+          ) : (
+            <Pill
+              label="Media"
+              value={mediaSummary(s.mediaFilter)}
+              active={s.mediaFilter.length > 0}
+              width="w-56"
+              testId="post-filter-pill-media"
+              onOpenChange={props.onCountingPillOpenChange}
+            >
+              <CheckList
+                items={MEDIA_KIND_OPTIONS.map((option) => ({
+                  key: option.value,
+                  label: option.label,
+                  count: mediaCounts.get(option.value),
+                  checked: s.mediaFilter.includes(option.value),
+                  testId: `post-media-filter-${option.value}`,
+                }))}
+                anyLabel="Any media"
+                onToggle={(key) =>
+                  s.setMediaFilter((m) => toggle(m, key as MediaKind))
+                }
+                onAny={() => s.setMediaFilter([])}
+              />
+            </Pill>
+          )}
+          {props.override?.language !== undefined ? (
+            props.override.language
+          ) : (
+            <Pill
+              label="Language"
+              value={languageSummary(s.languageFilter)}
+              active={s.languageFilter.length > 0}
+              testId="post-filter-pill-language"
+              onOpenChange={props.onCountingPillOpenChange}
+            >
+              <CheckList
+                items={languages.map(({ code, count }) => ({
+                  key: code,
+                  label: languageLabel(code),
+                  count,
+                  checked: s.languageFilter.includes(code),
+                }))}
+                anyLabel="Any language"
+                emptyLabel="No Language read yet"
+                onToggle={(code) => s.setLanguageFilter((l) => toggle(l, code))}
+                onAny={() => s.setLanguageFilter([])}
+              />
+            </Pill>
+          )}
 
-          <Pill
-            label="Views"
-            value={viewsSummary(s.viewsFilter, s.viewMeasure)}
-            active={s.viewsFilter != null}
-            width="w-80"
-            testId="post-filter-pill-views"
-          >
-            <ViewsForm
-              measure={s.viewMeasure}
-              setMeasure={s.setViewMeasure}
-              views={s.viewsFilter}
-              setViews={s.setViewsFilter}
-              floorHours={props.estimationFloorHours}
-            />
-          </Pill>
+          {props.override?.views !== undefined ? (
+            props.override.views
+          ) : (
+            <Pill
+              label="Views"
+              value={viewsSummary(s.viewsFilter, s.viewMeasure)}
+              active={s.viewsFilter != null}
+              width="w-80"
+              testId="post-filter-pill-views"
+            >
+              <ViewsForm
+                measure={s.viewMeasure}
+                setMeasure={s.setViewMeasure}
+                views={s.viewsFilter}
+                setViews={s.setViewsFilter}
+                floorHours={props.estimationFloorHours}
+              />
+            </Pill>
+          )}
 
           <span className="mx-1 h-5 w-px bg-app-ink/10" />
 
-          <Pill
-            label="Order"
-            value={labelOf(POST_ORDER_OPTIONS, s.postSortOrder)}
-            active={s.postSortOrder !== "newest"}
-            width="w-48"
-            testId="post-filter-pill-order"
-          >
-            <Options
-              options={POST_ORDER_OPTIONS}
-              value={s.postSortOrder}
-              onChange={s.setPostSortOrder}
-            />
-          </Pill>
+          {props.override?.order !== undefined ? (
+            props.override.order
+          ) : (
+            <Pill
+              label="Order"
+              value={labelOf(POST_ORDER_OPTIONS, s.postSortOrder)}
+              active={s.postSortOrder !== "newest"}
+              width="w-48"
+              testId="post-filter-pill-order"
+            >
+              <Options
+                options={POST_ORDER_OPTIONS}
+                value={s.postSortOrder}
+                onChange={s.setPostSortOrder}
+              />
+            </Pill>
+          )}
           <Pill
             label="Per channel"
             value={capPhrase(
@@ -364,44 +389,49 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
           >
             <Layers size={12} /> Grouped by channel
           </button>
+          {props.trailing}
         </div>
+        {props.override?.extraRow}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-app-ink/5 bg-app-muted/30 px-4 py-2.5 text-xs">
-        <span className="font-semibold">
-          {props.shownCount.toLocaleString()} posts
-        </span>
-        {props.subtitle && (
-          <span className="text-app-ink/50">{props.subtitle}</span>
-        )}
-        {props.tooNewToJudge > 0 && (
-          <span className="text-app-ink/50">
-            {props.tooNewToJudge.toLocaleString()} too new to judge
+      {!props.override?.hideFooter && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-app-ink/5 bg-app-muted/30 px-4 py-2.5 text-xs">
+          <span className="font-semibold">
+            {props.shownCount.toLocaleString()} posts
           </span>
-        )}
-        {chips.map((chip) => (
-          <button
-            key={chip.key}
-            type="button"
-            aria-label={`Remove ${chip.label}`}
-            onClick={() => clearChip(chip.clears, setters)}
-            className="inline-flex items-center gap-1 rounded-full bg-app-ink/10 px-2 py-0.5 hover:bg-app-ink/20"
-          >
-            {chip.label} <X size={11} />
-          </button>
-        ))}
-        {chips.length > 1 && (
-          <button
-            type="button"
-            onClick={() => {
-              for (const chip of chips) clearChip(chip.clears, setters)
-            }}
-            className="ml-auto text-app-ink/60 underline-offset-2 hover:underline"
-          >
-            Clear all
-          </button>
-        )}
-      </div>
+          {props.subtitle && (
+            <span className="text-app-ink/50">{props.subtitle}</span>
+          )}
+          {props.tooNewToJudge > 0 && (
+            <span className="text-app-ink/50">
+              {props.tooNewToJudge.toLocaleString()} too new to judge
+            </span>
+          )}
+          {!props.override?.hideChips &&
+            chips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                aria-label={`Remove ${chip.label}`}
+                onClick={() => clearChip(chip.clears, setters)}
+                className="inline-flex items-center gap-1 rounded-full bg-app-ink/10 px-2 py-0.5 hover:bg-app-ink/20"
+              >
+                {chip.label} <X size={11} />
+              </button>
+            ))}
+          {!props.override?.hideChips && chips.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                for (const chip of chips) clearChip(chip.clears, setters)
+              }}
+              className="ml-auto text-app-ink/60 underline-offset-2 hover:underline"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
     </section>
   )
 }

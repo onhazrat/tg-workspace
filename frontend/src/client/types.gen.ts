@@ -1622,6 +1622,7 @@ export type DiscoverCandidatesRequest = {
      */
     viewMeasure?: 'views' | 'estimated';
     views?: ViewsFilter | null;
+    filter?: FilterGroup | null;
     /**
      * Maxperchannel
      */
@@ -1881,6 +1882,7 @@ export type DiscoverReportCreateRequest = {
      */
     viewMeasure?: 'views' | 'estimated';
     views?: ViewsFilter | null;
+    filter?: FilterGroup | null;
     /**
      * Maxperchannel
      */
@@ -2261,6 +2263,66 @@ export type EmbeddingResult = {
      * Dimensions
      */
     dimensions: number;
+};
+
+/**
+ * FilterAtom
+ */
+export type FilterAtom = {
+    /**
+     * Kind
+     */
+    kind: 'atom';
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Not
+     */
+    not?: boolean;
+    /**
+     * Cond
+     */
+    cond: ({
+        type: 'type';
+    } & TypeCondition) | ({
+        type: 'media';
+    } & MediaCondition) | ({
+        type: 'language';
+    } & LanguageCondition) | ({
+        type: 'views';
+    } & ViewsCondition);
+};
+
+/**
+ * FilterGroup
+ */
+export type FilterGroup = {
+    /**
+     * Kind
+     */
+    kind: 'group';
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Op
+     */
+    op: 'and' | 'or';
+    /**
+     * Not
+     */
+    not?: boolean;
+    /**
+     * Children
+     */
+    children?: Array<({
+        kind: 'atom';
+    } & FilterAtom) | ({
+        kind: 'group';
+    } & FilterGroup)>;
 };
 
 /**
@@ -2773,6 +2835,20 @@ export type LlmLogResponse = {
 };
 
 /**
+ * LanguageCondition
+ */
+export type LanguageCondition = {
+    /**
+     * Type
+     */
+    type: 'language';
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
  * LiftCeilingRequest
  *
  * Lift (or restore) this account's ceilings for the current UTC day.
@@ -2831,6 +2907,20 @@ export type LogWriteResponse = {
      * Upserted
      */
     upserted?: number;
+};
+
+/**
+ * MediaCondition
+ */
+export type MediaCondition = {
+    /**
+     * Type
+     */
+    type: 'media';
+    /**
+     * Value
+     */
+    value: 'text_only' | 'media_only' | 'photo' | 'video' | 'link_preview' | 'grouped';
 };
 
 /**
@@ -3287,6 +3377,7 @@ export type PostFeedRequest = {
      */
     viewMeasure?: 'views' | 'estimated';
     views?: ViewsFilter | null;
+    filter?: FilterGroup | null;
     /**
      * Maxperchannel
      */
@@ -3529,6 +3620,7 @@ export type PostScopeRequest = {
      */
     viewMeasure?: 'views' | 'estimated';
     views?: ViewsFilter | null;
+    filter?: FilterGroup | null;
     /**
      * Maxperchannel
      */
@@ -5719,6 +5811,20 @@ export type TranslateResponse = {
 };
 
 /**
+ * TypeCondition
+ */
+export type TypeCondition = {
+    /**
+     * Type
+     */
+    type: 'type';
+    /**
+     * Value
+     */
+    value: 'forwarded' | 'original' | 'unfollowed_forwarded';
+};
+
+/**
  * UpdateJobRequest
  */
 export type UpdateJobRequest = {
@@ -6061,6 +6167,32 @@ export type ViewEstimateResponse = {
      * Estimationfloorhours
      */
     estimationFloorHours: number;
+};
+
+/**
+ * ViewsCondition
+ */
+export type ViewsCondition = {
+    /**
+     * Type
+     */
+    type: 'views';
+    /**
+     * Measure
+     */
+    measure: 'views' | 'estimated';
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * None
+     */
+    none?: boolean;
 };
 
 /**

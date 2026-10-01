@@ -14,6 +14,13 @@ import { formatCount } from "@/lib/format-count"
 import { getMediaKindLabel, getPostMediaKinds } from "@/lib/posts/post-media"
 import type { Post, PostMediaKind } from "@/types"
 import { Badge } from "../ui/badge"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "../ui/dialog"
 import { mediaBadgeSuffix } from "./post-card-model"
 
 const MEDIA_ICONS: Partial<Record<PostMediaKind, LucideIcon>> = {
@@ -64,7 +71,8 @@ export function PostCardMedia({ post }: { post: Post }) {
   )
 }
 
-function PostThumbImage({ thumbApiPath }: { thumbApiPath: string }) {
+/** The cached thumbnail as an object URL; null until loaded or after a failure. */
+export function usePostThumbSrc(thumbApiPath: string) {
   const [src, setSrc] = useState<string | null>(null)
 
   useEffect(() => {
@@ -82,6 +90,21 @@ function PostThumbImage({ thumbApiPath }: { thumbApiPath: string }) {
     }
   }, [thumbApiPath])
 
+  return [src, setSrc] as const
+}
+
+export function PostThumbImage({
+  thumbApiPath,
+  className = "max-w-full max-h-80 mx-auto rounded-lg border border-app-ink/10 bg-app-muted",
+  frameClassName,
+}: {
+  thumbApiPath: string
+  className?: string
+  /** The click target around the picture, for a layout that stretches it. */
+  frameClassName?: string
+}) {
+  const [src, setSrc] = usePostThumbSrc(thumbApiPath)
+
   if (!src) return null
 
   /*
@@ -92,14 +115,37 @@ function PostThumbImage({ thumbApiPath }: { thumbApiPath: string }) {
    * + `max-h-80`, centred) makes the box *be* the picture, so there is no
    * leftover to paint and `object-contain` becomes unnecessary.
    */
+  // Click opens the same picture as large as the viewport allows.
   return (
-    <img
-      src={src}
-      alt=""
-      data-testid="post-card-thumb"
-      className="max-w-full max-h-80 mx-auto rounded-lg border border-app-ink/10 bg-app-muted"
-      loading="lazy"
-      onError={() => setSrc(null)}
-    />
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label="View image larger"
+          className={`block max-w-full mx-auto cursor-zoom-in ${frameClassName ?? ""}`}
+        >
+          <img
+            src={src}
+            alt=""
+            data-testid="post-card-thumb"
+            className={className}
+            loading="lazy"
+            onError={() => setSrc(null)}
+          />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="w-[96vw] h-[94vh] max-w-none sm:max-w-none border-0 bg-transparent p-0 shadow-none">
+        <DialogTitle className="sr-only">Post image</DialogTitle>
+        {/* A click on the picture closes it too, not only one outside it. */}
+        <DialogClose asChild>
+          <img
+            src={src}
+            alt=""
+            data-testid="post-card-lightbox"
+            className="w-full h-full object-contain cursor-zoom-out"
+          />
+        </DialogClose>
+      </DialogContent>
+    </Dialog>
   )
 }

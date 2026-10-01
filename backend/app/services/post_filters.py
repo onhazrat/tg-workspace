@@ -20,7 +20,8 @@ one name one set of values (PFB-01).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
 from sqlalchemy import (
@@ -36,6 +37,7 @@ from sqlalchemy import (
     literal,
     not_,
     or_,
+    true,
     type_coerce,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -138,6 +140,72 @@ class ViewReading:
         )
 
 
+# ---- The filter tree ---------------------------------------------------------
+#
+# The Channels tab's filter as a tree: AND/OR groups, NOT on any node, so
+# parentheses are just groups. It ANDs with the flat filters above it. The
+# conditions are the flat filters' own vocabulary, one value each, so a tree
+# can say what the flat fields cannot: "not Persian", "photo and not
+# forwarded", "(fa and video) or (en and views >= 10K)".
+
+TreeOp = Literal["and", "or"]
+
+
+@dataclass(frozen=True)
+class TypeCond:
+    value: ForwardedFilter
+
+
+@dataclass(frozen=True)
+class MediaCond:
+    value: MediaKind
+
+
+@dataclass(frozen=True)
+class LanguageCond:
+    value: str
+
+
+@dataclass(frozen=True)
+class ViewsCond:
+    """A bound on a measure; `none` keeps only the Posts with no value."""
+
+    measure: ViewMeasure
+    min: float | None = None
+    max: float | None = None
+    none: bool = False
+
+
+TreeCond = TypeCond | MediaCond | LanguageCond | ViewsCond
+
+
+@dataclass(frozen=True)
+class TreeAtom:
+    cond: TreeCond
+    negated: bool = False
+
+
+@dataclass(frozen=True)
+class TreeGroup:
+    op: TreeOp
+    children: tuple[TreeAtom | TreeGroup, ...] = ()
+    negated: bool = False
+
+
+TreeNode = TreeAtom | TreeGroup
+
+
+def tree_measures(node: TreeNode) -> frozenset[ViewMeasure]:
+    """The view measures a tree's bounds read, so only those are loaded."""
+    if isinstance(node, TreeAtom):
+        return (
+            frozenset((node.cond.measure,))
+            if isinstance(node.cond, ViewsCond)
+            else frozenset()
+        )
+    return frozenset().union(*(tree_measures(child) for child in node.children))
+
+
 @dataclass(frozen=True)
 class PostFilters:
     """The subset of Posts-tab view state that maps onto SQL predicates.
@@ -158,6 +226,11 @@ class PostFilters:
     views: ViewsThreshold | None = None
     #: The measure `views` and the views orders read.
     reading: ViewReading = ViewReading()
+    #: The Channels-style filter tree, joined with AND to everything above. None or an
+    #: empty root keeps every Post.
+    tree: TreeGroup | None = None
+    #: One reading per measure the tree's views bounds use.
+    tree_readings: Mapping[ViewMeasure, ViewReading] = field(default_factory=dict)
 
     def is_noop(self) -> bool:
         return (
@@ -166,6 +239,7 @@ class PostFilters:
             and not self.media
             and not self.languages
             and self.views is None
+            and not (self.tree and self.tree.children)
         )
 
 
@@ -260,6 +334,60 @@ def views_clause(
     )
 
 
+def _atom_clause(
+    cond: TreeCond,
+    readings: Mapping[ViewMeasure, ViewReading],
+    followed_names: frozenset[str] | None,
+) -> ColumnElement[bool]:
+    if isinstance(cond, TypeCond):
+        clause = _forwarded_clause(cond.value, followed_names)
+        return true() if clause is None else clause
+    if isinstance(cond, MediaCond):
+        return media_kind_clause(cond.value)
+    if isinstance(cond, LanguageCond):
+        return col(Post.language) == cond.value
+    value = readings[cond.measure].of(Post)
+    if cond.none:
+        return value.is_(None)
+    bounds: list[ColumnElement[bool]] = [value.is_not(None)]
+    if cond.min is not None:
+        bounds.append(value >= cond.min)
+    if cond.max is not None:
+        bounds.append(value <= cond.max)
+    return and_(*bounds)
+
+
+def tree_clause(
+    node: TreeNode,
+    *,
+    readings: Mapping[ViewMeasure, ViewReading],
+    followed_names: frozenset[str] | None = None,
+) -> ColumnElement[bool]:
+    """`node` as one predicate, evaluated the way the Channels tab evaluates.
+
+    Every atom is `coalesce(clause, false)`, so NOT is two-valued: a Post with
+    no value for a condition (an unread Language, no View count) fails it and
+    passes its negation, as a Channel with no value does on Channels. Plain SQL
+    would make both NULL and drop the Post either way.
+
+    An empty group keeps every Post, negated or not, so an empty tree hides
+    nothing (the Channels rule again).
+    """
+    if isinstance(node, TreeAtom):
+        clause: ColumnElement[bool] = func.coalesce(
+            _atom_clause(node.cond, readings, followed_names), false()
+        )
+    else:
+        if not node.children:
+            return true()
+        parts = [
+            tree_clause(child, readings=readings, followed_names=followed_names)
+            for child in node.children
+        ]
+        clause = and_(*parts) if node.op == "and" else or_(*parts)
+    return not_(clause) if node.negated else clause
+
+
 def post_filter_clauses(
     filters: PostFilters, *, followed_names: frozenset[str] | None = None
 ) -> list[ColumnElement[bool]]:
@@ -279,6 +407,14 @@ def post_filter_clauses(
         clauses.append(col(Post.language).in_(filters.languages))
     if filters.views is not None:
         clauses.append(views_clause(filters.views, filters.reading))
+    if filters.tree is not None and filters.tree.children:
+        clauses.append(
+            tree_clause(
+                filters.tree,
+                readings=filters.tree_readings,
+                followed_names=followed_names,
+            )
+        )
     return clauses
 
 

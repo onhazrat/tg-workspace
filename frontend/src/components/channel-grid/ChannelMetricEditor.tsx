@@ -57,14 +57,17 @@ function runBound(run: Run, h: ReturnType<typeof histogram>): MetricBound {
   return { min, max }
 }
 
-function Histogram({
+export function Histogram({
   values,
   bound,
   onSelect,
+  noun = "channels",
 }: {
   values: number[]
   bound: MetricBound | null
   onSelect: (bound: MetricBound) => void
+  /** What one bar counts, for the hover caption. */
+  noun?: string
 }) {
   const [drag, setDrag] = useState<Run | null>(null)
   const [hover, setHover] = useState<number | null>(null)
@@ -122,7 +125,7 @@ function Histogram({
         <span>{formatCount(h.lo)}</span>
         <span className="text-center">
           {shown !== null
-            ? `${h.bins[shown]} channels, ${formatCount(nice(h.edge(shown)))}–${formatCount(nice(h.edge(shown + 1)))}`
+            ? `${h.bins[shown]} ${noun}, ${formatCount(nice(h.edge(shown)))}–${formatCount(nice(h.edge(shown + 1)))}`
             : `median ${formatCount(median(values))}${h.log ? ", log scale" : ""}`}
         </span>
         <span>{formatCount(h.hi)}</span>

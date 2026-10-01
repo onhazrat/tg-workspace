@@ -42,6 +42,8 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** PROTOTYPE (post-card): which post card variant renders. Remove with the prototype. */
+  variant?: string
 }
 
 /** The string params: kept trimmed when non-blank, dropped otherwise. */
@@ -53,6 +55,7 @@ const ID_PARAMS = [
   "summary",
   "chatSession",
   "tagRun",
+  "variant",
 ] as const
 
 function trimmedString(value: unknown): string | undefined {

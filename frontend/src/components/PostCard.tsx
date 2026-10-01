@@ -9,6 +9,7 @@ import { PostCardActions } from "./post-card/PostCardActions"
 import { PostCardBody } from "./post-card/PostCardBody"
 import { PostCardIdentity } from "./post-card/PostCardHeader"
 import { PostCardMedia } from "./post-card/PostCardMedia"
+import { PostCardVariant, useCardVariant } from "./post-card/PostCardPrototype"
 import { postTime } from "./post-card/post-card-model"
 import { usePostTranslation } from "./post-card/usePostTranslation"
 import { RelativeTime } from "./RelativeTime"
@@ -18,7 +19,17 @@ interface PostCardProps {
   postSearch: string
 }
 
-export const PostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
+// PROTOTYPE (post-card): `?variant=current` keeps the shipped card below.
+export const PostCard: React.FC<PostCardProps> = (props) => {
+  const variant = useCardVariant()
+  return variant === "current" ? (
+    <ShippedPostCard {...props} />
+  ) : (
+    <PostCardVariant {...props} />
+  )
+}
+
+const ShippedPostCard: React.FC<PostCardProps> = ({ post, postSearch }) => {
   const { embeddingsEnabled } = useSettings()
   const { setRelatedPostSearch, addNewChannel } = useScraper()
   const { channels } = useData()

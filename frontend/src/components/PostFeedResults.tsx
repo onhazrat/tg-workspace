@@ -3,6 +3,7 @@ import type React from "react"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import type { Post } from "@/types"
 import { PostCard } from "./PostCard"
+import { useFeedMode } from "./post-card/PostCardPrototype"
 import { Skeleton } from "./ui/skeleton"
 
 interface PostFeedResultsProps {
@@ -21,8 +22,9 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
   showLoadMore,
   loadMoreRef,
   postSearch,
-}) =>
-  isInitialLoading ? (
+}) => {
+  const compactGrid = useFeedMode().compact
+  return isInitialLoading ? (
     <div className="space-y-4">
       {Array.from({ length: 5 }).map((_, index) => (
         <div
@@ -49,7 +51,15 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
       ))}
     </div>
   ) : posts.length > 0 ? (
-    <div className="space-y-4">
+    <div
+      className={
+        // PROTOTYPE (post-card): compact mode fills the width with as many
+        // 22rem columns as fit, in feed order left to right.
+        compactGrid
+          ? "grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))]"
+          : "space-y-4"
+      }
+    >
       {posts.map((post) => (
         <PostCard
           key={`${post.channelName}-${post.id}`}
@@ -62,7 +72,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
       {showLoadMore && (
         <div
           ref={loadMoreRef}
-          className="h-32 flex flex-col items-center justify-center gap-4 opacity-60"
+          className="col-span-full h-32 flex flex-col items-center justify-center gap-4 opacity-60"
         >
           <div className="w-10 h-10 rounded-full bg-app-card shadow-sm border border-app-ink/10 flex items-center justify-center">
             <Loader2 size={18} className="animate-spin text-app-ink/60" />
@@ -82,3 +92,4 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
       description="Try adjusting your filtration parameters, clearing your search query, or adding more channels to your selection."
     />
   )
+}

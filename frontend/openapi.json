@@ -6811,6 +6811,12 @@
               { "type": "null" }
             ]
           },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -7071,6 +7077,12 @@
           "views": {
             "anyOf": [
               { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup" },
               { "type": "null" }
             ]
           },
@@ -7444,6 +7456,70 @@
         "type": "object",
         "required": ["vectors", "model", "provider", "dimensions"],
         "title": "EmbeddingResult"
+      },
+      "FilterAtom": {
+        "properties": {
+          "kind": { "type": "string", "const": "atom", "title": "Kind" },
+          "id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Id"
+          },
+          "not": { "type": "boolean", "title": "Not", "default": false },
+          "cond": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/TypeCondition" },
+              { "$ref": "#/components/schemas/MediaCondition" },
+              { "$ref": "#/components/schemas/LanguageCondition" },
+              { "$ref": "#/components/schemas/ViewsCondition" }
+            ],
+            "title": "Cond",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "language": "#/components/schemas/LanguageCondition",
+                "media": "#/components/schemas/MediaCondition",
+                "type": "#/components/schemas/TypeCondition",
+                "views": "#/components/schemas/ViewsCondition"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "cond"],
+        "title": "FilterAtom"
+      },
+      "FilterGroup": {
+        "properties": {
+          "kind": { "type": "string", "const": "group", "title": "Kind" },
+          "id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Id"
+          },
+          "op": { "type": "string", "enum": ["and", "or"], "title": "Op" },
+          "not": { "type": "boolean", "title": "Not", "default": false },
+          "children": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/FilterAtom" },
+                { "$ref": "#/components/schemas/FilterGroup" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "atom": "#/components/schemas/FilterAtom",
+                  "group": "#/components/schemas/FilterGroup"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "op"],
+        "title": "FilterGroup"
       },
       "FixedAnalysisWindow": {
         "properties": {
@@ -7922,6 +7998,21 @@
         "title": "LLMLogResponse",
         "description": "One model call: the prompt, the response, and what it cost.\n\n`protected_namespaces=()` is required, not decorative. Pydantic v2 reserves\nthe `model_` prefix for its own API, and this table has both a `model` column\nand a `model_config_json` one \u2014 the latter collides with `BaseModel.model_config`\nitself. Without the override, declaring these fields raises at class-creation\ntime. Renaming the columns is not an option: they are the wire format."
       },
+      "LanguageCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "language", "title": "Type" },
+          "value": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "LanguageCondition"
+      },
       "LiftCeilingRequest": {
         "properties": {
           "budgets": {
@@ -7988,6 +8079,27 @@
         "type": "object",
         "title": "LogWriteResponse",
         "description": "Result of a bulk log write: how many rows were accepted."
+      },
+      "MediaCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "media", "title": "Type" },
+          "value": {
+            "type": "string",
+            "enum": [
+              "text_only",
+              "media_only",
+              "photo",
+              "video",
+              "link_preview",
+              "grouped"
+            ],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "MediaCondition"
       },
       "MediaMixResponse": {
         "properties": {
@@ -8393,6 +8505,12 @@
               { "type": "null" }
             ]
           },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup" },
+              { "type": "null" }
+            ]
+          },
           "maxPerChannel": {
             "type": "integer",
             "minimum": 0.0,
@@ -8648,6 +8766,12 @@
           "views": {
             "anyOf": [
               { "$ref": "#/components/schemas/ViewsFilter" },
+              { "type": "null" }
+            ]
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup" },
               { "type": "null" }
             ]
           },
@@ -10601,6 +10725,20 @@
         "title": "TranslateResponse",
         "description": "Translated posts, in the order they were submitted.\n\nEntries stay `dict[str, str]` because the provider contract is a bare\n`{id: text}`-shaped mapping chosen by the caller, not a fixed record."
       },
+      "TypeCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "type", "title": "Type" },
+          "value": {
+            "type": "string",
+            "enum": ["forwarded", "original", "unfollowed_forwarded"],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "TypeCondition"
+      },
       "UpdateJobRequest": {
         "properties": { "enabled": { "type": "boolean", "title": "Enabled" } },
         "type": "object",
@@ -10964,6 +11102,29 @@
         "required": ["curve", "settlingAgeHours", "estimationFloorHours"],
         "title": "ViewEstimateResponse",
         "description": "What the browser needs to read an Estimated View count."
+      },
+      "ViewsCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "views", "title": "Type" },
+          "measure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Measure"
+          },
+          "min": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Max"
+          },
+          "none": { "type": "boolean", "title": "None", "default": false }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "measure"],
+        "title": "ViewsCondition"
       },
       "ViewsFilter": {
         "properties": {

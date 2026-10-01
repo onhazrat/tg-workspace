@@ -24,7 +24,7 @@ fourteen scalar fields still gain real types.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
@@ -37,6 +37,15 @@ from app.schemas.scope import (
     ViewMeasure,
     ViewsFilter,
     upgrade_legacy_scope_fields,
+)
+from app.services.post_filters import (
+    LanguageCond,
+    MediaCond,
+    TreeAtom,
+    TreeCond,
+    TreeGroup,
+    TypeCond,
+    ViewsCond,
 )
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
@@ -161,6 +170,110 @@ class PostFacetsResponse(BaseModel):
     media: list[PostFacetCount]
 
 
+# ---- The filter tree on the wire ---------------------------------------------
+#
+# The browser's Channels-style tree, as `post_filters.TreeGroup` reads it. The
+# nodes carry the browser's `id` so a tree round-trips untouched; the server
+# never reads it. `extra="forbid"` for the reason the Scope gives: an unknown
+# condition is a 422, never a filter that quietly matches everything.
+
+MAX_FILTER_DEPTH = 6
+MAX_FILTER_NODES = 100
+
+
+class _Cond(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class TypeCondition(_Cond):
+    type: Literal["type"]
+    value: Literal["forwarded", "original", "unfollowed_forwarded"]
+
+
+class MediaCondition(_Cond):
+    type: Literal["media"]
+    value: MediaKind
+
+
+class LanguageCondition(_Cond):
+    type: Literal["language"]
+    value: str = Field(min_length=1, max_length=16)
+
+
+class ViewsCondition(_Cond):
+    type: Literal["views"]
+    measure: ViewMeasure
+    min: float | None = Field(None, ge=0)
+    max: float | None = Field(None, ge=0)
+    none: bool = False
+
+
+PostCondition = Annotated[
+    TypeCondition | MediaCondition | LanguageCondition | ViewsCondition,
+    Field(discriminator="type"),
+]
+
+
+class FilterAtom(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    kind: Literal["atom"]
+    id: str | None = None
+    negated: bool = Field(False, alias="not")
+    cond: PostCondition
+
+
+class FilterGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    kind: Literal["group"]
+    id: str | None = None
+    op: Literal["and", "or"]
+    negated: bool = Field(False, alias="not")
+    children: list[Annotated[FilterAtom | FilterGroup, Field(discriminator="kind")]] = (
+        Field(default_factory=list)
+    )
+
+    @model_validator(mode="after")
+    def _bounded(self) -> FilterGroup:
+        """A tree is SQL the server builds, so its size is bounded: 422 past it."""
+
+        def walk(node: FilterAtom | FilterGroup, depth: int) -> int:
+            if depth > MAX_FILTER_DEPTH:
+                raise ValueError(f"filter deeper than {MAX_FILTER_DEPTH}")
+            if isinstance(node, FilterAtom):
+                return 1
+            return 1 + sum(walk(child, depth + 1) for child in node.children)
+
+        if walk(self, 1) > MAX_FILTER_NODES:
+            raise ValueError(f"filter larger than {MAX_FILTER_NODES} nodes")
+        return self
+
+    def to_tree(self) -> TreeGroup:
+        return TreeGroup(
+            op=self.op,
+            negated=self.negated,
+            children=tuple(
+                TreeAtom(cond=_cond(child.cond), negated=child.negated)
+                if isinstance(child, FilterAtom)
+                else child.to_tree()
+                for child in self.children
+            ),
+        )
+
+
+def _cond(
+    cond: TypeCondition | MediaCondition | LanguageCondition | ViewsCondition,
+) -> TreeCond:
+    if isinstance(cond, TypeCondition):
+        return TypeCond(cond.value)
+    if isinstance(cond, MediaCondition):
+        return MediaCond(cond.value)
+    if isinstance(cond, LanguageCondition):
+        return LanguageCond(cond.value)
+    return ViewsCond(cond.measure, cond.min, cond.max, cond.none)
+
+
 class PostScopeRequest(BaseModel):
     """A post scope carried in a request body rather than a query string.
 
@@ -198,6 +311,9 @@ class PostScopeRequest(BaseModel):
     # What `views` and the views orders read, and the threshold (PFB-03).
     view_measure: ViewMeasure = PydanticField("estimated", alias="viewMeasure")
     views: ViewsFilter | None = None
+    # The Channels-style filter tree, joined with AND to the fields above. Not carried
+    # into an Artifact's Scope yet (docs/post-filter-tree-plan.md).
+    filter: FilterGroup | None = None
     max_per_channel: int = PydanticField(0, alias="maxPerChannel", ge=0)
 
     # A browser still on the previous bundle posts `media: "all"`, `sort:

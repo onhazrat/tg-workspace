@@ -19,8 +19,10 @@ from app.services.post_filters import (
     FORWARDED_FILTERS,
     MEDIA_KINDS,
     PostFilters,
+    ViewReading,
+    tree_measures,
 )
-from app.services.settling_curve import view_reading
+from app.services.settling_curve import current_estimate, view_reading
 
 
 def parse_post_filters(
@@ -41,6 +43,16 @@ def parse_post_filters(
     if unknown_media:
         raise HTTPException(status_code=422, detail=f"unknown media: {unknown_media}")
     views = None if body.views is None else body.views.threshold()
+    tree = None if body.filter is None else body.filter.to_tree()
+    # Each measure the tree bounds gets its own reading; the curve is read
+    # only when a tree bounds an Estimated View count.
+    measures = tree_measures(tree) if tree else frozenset()
+    tree_readings = {
+        m: ViewReading(m)
+        if m == "views"
+        else ViewReading(m, *current_estimate(session))
+        for m in measures
+    }
     return PostFilters(
         keyword=body.keyword,
         forwarded=cast("Any", body.forwarded),
@@ -48,4 +60,6 @@ def parse_post_filters(
         languages=tuple(body.languages),
         views=views,
         reading=view_reading(session, body.view_measure, views=views, sort=sort),
+        tree=tree,
+        tree_readings=tree_readings,
     )

@@ -1,3 +1,4 @@
+import type { PostFilterTree } from "@/lib/posts/post-filter-tree"
 import type {
   ChatSessionSubmitRequest,
   PostCountsResponse,
@@ -72,6 +73,8 @@ export type PostScopeQuery = {
   /** What `views` and the views orders read; the server's default is `estimated` (PFB-03). */
   viewMeasure?: ViewMeasure
   views?: ViewsFilter | null
+  /** The Channels-style filter tree, joined with AND to the fields above. */
+  filter?: PostFilterTree
   maxPerChannel?: number
 }
 
@@ -136,6 +139,7 @@ export function postScopeBody(params: PostScopeQuery): Record<string, unknown> {
   if (params.viewMeasure && params.viewMeasure !== "estimated")
     body.viewMeasure = params.viewMeasure
   if (params.views) body.views = params.views
+  if (params.filter?.children.length) body.filter = params.filter
   if (params.maxPerChannel != null && params.maxPerChannel > 0)
     body.maxPerChannel = params.maxPerChannel
   return body

@@ -28,6 +28,18 @@ import {
   CHANNEL_PSEUDO_TAGS,
   findChannelPseudoTag,
 } from "@/lib/channels/channel-tags"
+import {
+  addFunnel as addTreeFunnel,
+  emptyTree,
+  evalTree,
+  flip,
+  type Joiner,
+  mapGroups,
+  newId,
+  type AtomNode as TreeAtom,
+  type GroupNode as TreeGroup,
+  type FilterNode as TreeNode,
+} from "@/lib/filter-tree"
 import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
 
@@ -37,32 +49,36 @@ export type ValueCond = { type: CondType; value: string }
 /** A bound on a number; `none` passes only a Channel with no value. */
 export type MetricCond = { type: "metric"; metric: MetricKey } & MetricBound
 export type Cond = ValueCond | MetricCond
-export type Joiner = "and" | "or"
+export type { Joiner }
 
-export type AtomNode = { kind: "atom"; id: string; cond: Cond; not?: boolean }
+// The tree itself is `lib/filter-tree.ts`, shared with the Posts tab; these
+// are its node types over the Channels' Conditions.
+export type AtomNode = TreeAtom<Cond>
 export type MetricAtom = AtomNode & { cond: MetricCond }
-export type GroupNode = {
-  kind: "group"
-  id: string
-  op: Joiner
-  not?: boolean
-  children: FilterNode[]
-}
-export type FilterNode = AtomNode | GroupNode
+export type GroupNode = TreeGroup<Cond>
+export type FilterNode = TreeNode<Cond>
 /** The root is always a group, with the id `root`. */
 export type ChannelFilter = GroupNode
 
-export const flip = (op: Joiner): Joiner => (op === "and" ? "or" : "and")
+export {
+  append,
+  atoms,
+  clearFunnels,
+  flip,
+  funnelledValues,
+  groupWith,
+  moveNode,
+  removeFunnel,
+  removeNode,
+  replaceCond,
+  replaceNode,
+  setOp,
+  toggleNot,
+  unwrap,
+  wrap,
+} from "@/lib/filter-tree"
 
-let seq = 0
-const newId = () => `n${++seq}`
-
-export const emptyFilter = (): ChannelFilter => ({
-  kind: "group",
-  id: "root",
-  op: "and",
-  children: [],
-})
+export const emptyFilter = (): ChannelFilter => emptyTree<Cond>()
 
 // ---- Evaluation ------------------------------------------------------------
 
@@ -83,355 +99,21 @@ function testCond(cond: Cond, channel: Channel, inputs: MetricInputs): boolean {
   }
 }
 
-function evalNode(
-  node: FilterNode,
-  channel: Channel,
-  inputs: MetricInputs,
-): boolean {
-  if (node.kind === "group" && node.children.length === 0) return true
-  const result =
-    node.kind === "atom"
-      ? testCond(node.cond, channel, inputs)
-      : node.op === "and"
-        ? node.children.every((child) => evalNode(child, channel, inputs))
-        : node.children.some((child) => evalNode(child, channel, inputs))
-  return node.not ? !result : result
-}
-
 export const matchesChannelFilter = (
   filter: ChannelFilter,
   channel: Channel,
   inputs: MetricInputs,
-): boolean => evalNode(filter, channel, inputs)
-
-// ---- Reading the tree ------------------------------------------------------
-
-export function atoms(node: FilterNode): AtomNode[] {
-  return node.kind === "atom" ? [node] : node.children.flatMap(atoms)
-}
-
-function find(node: FilterNode, id: string): FilterNode | null {
-  if (node.id === id) return node
-  if (node.kind === "atom") return null
-  for (const child of node.children) {
-    const hit = find(child, id)
-    if (hit) return hit
-  }
-  return null
-}
-
-function parentOf(
-  root: GroupNode,
-  id: string,
-): { parent: GroupNode; index: number } | null {
-  const index = root.children.findIndex((child) => child.id === id)
-  if (index >= 0) return { parent: root, index }
-  for (const child of root.children) {
-    if (child.kind !== "group") continue
-    const hit = parentOf(child, id)
-    if (hit) return hit
-  }
-  return null
-}
-
-// ---- Editing ---------------------------------------------------------------
-
-/** Rebuild the tree bottom up, letting `fn` replace any group. */
-function mapGroups(
-  group: GroupNode,
-  fn: (group: GroupNode) => GroupNode,
-): GroupNode {
-  return fn({
-    ...group,
-    children: group.children.map((child) =>
-      child.kind === "group" ? mapGroups(child, fn) : child,
-    ),
-  })
-}
-
-const withoutNode = (root: ChannelFilter, id: string) =>
-  mapGroups(root, (group) => ({
-    ...group,
-    children: group.children.filter((child) => child.id !== id),
-  }))
-
-function childCounts(node: FilterNode, into = new Map<string, number>()) {
-  if (node.kind === "group") {
-    into.set(node.id, node.children.length)
-    for (const child of node.children) childCounts(child, into)
-  }
-  return into
-}
-
-/**
- * Drop empty groups and unwrap the groups an edit of `before` left holding
- * one block, so a remove or a move never leaves "()" or "(a)" behind. A
- * chip the Account put in parentheses by itself keeps them. Unwrapping keeps
- * the negation: "not (a)" is "not a", and "not (not a)" is "a". The root
- * stays a group.
- */
-function prune(root: ChannelFilter, before: ChannelFilter): ChannelFilter {
-  const had = childCounts(before)
-  return mapGroups(root, (group) => ({
-    ...group,
-    children: group.children
-      .filter((child) => child.kind === "atom" || child.children.length > 0)
-      .map((child) =>
-        child.kind === "group" &&
-        child.children.length === 1 &&
-        (had.get(child.id) ?? 0) > 1
-          ? {
-              ...child.children[0],
-              not: !!child.children[0].not !== !!child.not,
-            }
-          : child,
-      ),
-  }))
-}
-
-function insertAt(
-  root: ChannelFilter,
-  parentId: string,
-  index: number,
-  node: FilterNode,
-): ChannelFilter {
-  return mapGroups(root, (group) =>
-    group.id === parentId
-      ? {
-          ...group,
-          children: [
-            ...group.children.slice(0, index),
-            node,
-            ...group.children.slice(index),
-          ],
-        }
-      : group,
-  )
-}
-
-export function append(
-  root: ChannelFilter,
-  parentId: string,
-  cond: Cond,
-): ChannelFilter {
-  const parent = find(root, parentId)
-  const at = parent?.kind === "group" ? parent.children.length : 0
-  return insertAt(root, parentId, at, { kind: "atom", id: newId(), cond })
-}
-
-export const removeNode = (root: ChannelFilter, id: string): ChannelFilter =>
-  prune(withoutNode(root, id), root)
-
-export function replaceNode(
-  root: ChannelFilter,
-  id: string,
-  next: FilterNode,
-): ChannelFilter {
-  if (root.id === id && next.kind === "group") return { ...next, id: "root" }
-  return mapGroups(root, (group) => ({
-    ...group,
-    children: group.children.map((child) => (child.id === id ? next : child)),
-  }))
-}
-
-/** Give Condition `id` a new Condition, keeping its NOT. */
-export function replaceCond(
-  root: ChannelFilter,
-  id: string,
-  cond: Cond,
-): ChannelFilter {
-  const node = find(root, id)
-  return node?.kind === "atom" ? replaceNode(root, id, { ...node, cond }) : root
-}
-
-export const setOp = (
-  root: ChannelFilter,
-  groupId: string,
-  op: Joiner,
-): ChannelFilter =>
-  mapGroups(root, (group) => (group.id === groupId ? { ...group, op } : group))
-
-/** Flip one node's NOT; the root may be negated too. */
-export function toggleNot(root: ChannelFilter, id: string): ChannelFilter {
-  if (root.id === id) return { ...root, not: !root.not }
-  return mapGroups(root, (group) => ({
-    ...group,
-    children: group.children.map((child) =>
-      child.id === id ? { ...child, not: !child.not } : child,
-    ),
-  }))
-}
-
-/**
- * Move `id` to `index` inside `parentId`, the index read against the parent
- * as it is before the move. A group cannot move into itself.
- */
-export function moveNode(
-  root: ChannelFilter,
-  id: string,
-  parentId: string,
-  index: number,
-): ChannelFilter {
-  const node = find(root, id)
-  if (!node || find(node, parentId)) return root
-  const from = parentOf(root, id)
-  const shift =
-    from && from.parent.id === parentId && from.index < index ? 1 : 0
-  return prune(
-    insertAt(withoutNode(root, id), parentId, index - shift, node),
-    root,
-  )
-}
-
-/** Put `id` in parentheses of its own, where it was. */
-export function wrap(
-  root: ChannelFilter,
-  id: string,
-  op: Joiner,
-): ChannelFilter {
-  const node = find(root, id)
-  if (!node || node.id === root.id) return root
-  return replaceNode(root, id, {
-    kind: "group",
-    id: newId(),
-    op,
-    children: [node],
-  })
-}
-
-/**
- * Drop `dragId` onto `targetId`: both go in new parentheses where the target
- * was, joined by the opposite of the parent's operator, since that is why one
- * groups. Neither may hold the other.
- */
-export function groupWith(
-  root: ChannelFilter,
-  dragId: string,
-  targetId: string,
-): ChannelFilter {
-  if (dragId === targetId) return root
-  const drag = find(root, dragId)
-  const target = find(root, targetId)
-  if (!drag || !target || find(drag, targetId) || find(target, dragId))
-    return root
-  const op = flip(parentOf(root, targetId)?.parent.op ?? "or")
-  return prune(
-    replaceNode(withoutNode(root, dragId), targetId, {
-      kind: "group",
-      id: newId(),
-      op,
-      children: [target, drag],
-    }),
-    root,
-  )
-}
-
-/**
- * Remove a group's parentheses, splicing its children into its parent. The
- * editor never offers it on a negated group, since dropping the parentheses
- * of "not (a or b)" would change what it means.
- */
-export function unwrap(root: ChannelFilter, groupId: string): ChannelFilter {
-  return prune(
-    mapGroups(root, (group) => ({
-      ...group,
-      children: group.children.flatMap((child) =>
-        child.id === groupId && child.kind === "group"
-          ? child.children
-          : [child],
-      ),
-    })),
-    root,
-  )
-}
-
-// ---- Funnels ---------------------------------------------------------------
-
-/** The values of `type` that appear in a Condition anywhere in the tree. */
-export const funnelledValues = (
-  filter: ChannelFilter,
-  type: CondType,
-): string[] => [
-  ...new Set(
-    atoms(filter).flatMap((a) =>
-      a.cond.type !== "metric" && a.cond.type === type ? [a.cond.value] : [],
-    ),
-  ),
-]
-
-const isFunnelOr = (node: FilterNode, type: CondType) =>
-  node.kind === "group" &&
-  !node.not &&
-  node.op === "or" &&
-  node.children.length > 0 &&
-  node.children.every(
-    (child) => child.kind === "atom" && !child.not && child.cond.type === type,
-  )
-
-/** The filter as a plain AND root, wrapping it when it is an OR or negated. */
-function andRoot(filter: ChannelFilter): ChannelFilter {
-  if (filter.children.length === 0) return emptyFilter()
-  if (!filter.not && (filter.op === "and" || filter.children.length === 1)) {
-    return { ...filter, op: "and" }
-  }
-  return { ...emptyFilter(), children: [{ ...filter, id: newId() }] }
-}
+): boolean => evalTree(filter, (cond) => testCond(cond, channel, inputs))
 
 /**
  * A dropdown funnel. Funnels in one dropdown join with OR and different
- * dropdowns with AND: the first of a type appends to the root, the second
- * puts the root-level one and itself in an OR group, later ones join it.
+ * dropdowns with AND (`filter-tree.ts::addFunnel`).
  */
-export function addFunnel(
+export const addFunnel = (
   filter: ChannelFilter,
   type: CondType,
   value: string,
-): ChannelFilter {
-  if (funnelledValues(filter, type).includes(value)) return filter
-  const cond = { type, value }
-  if (isFunnelOr(filter, type)) return append(filter, "root", cond)
-  const base = andRoot(filter)
-  const or = base.children.find((child) => isFunnelOr(child, type))
-  if (or) return append(base, or.id, cond)
-  const lone = base.children.find(
-    (child) => child.kind === "atom" && !child.not && child.cond.type === type,
-  )
-  if (!lone) return append(base, "root", cond)
-  return replaceNode(base, lone.id, {
-    kind: "group",
-    id: newId(),
-    op: "or",
-    children: [lone, { kind: "atom", id: newId(), cond }],
-  })
-}
-
-function removeWhere(
-  filter: ChannelFilter,
-  drop: (cond: Cond) => boolean,
-): ChannelFilter {
-  return prune(
-    mapGroups(filter, (group) => ({
-      ...group,
-      children: group.children.filter(
-        (child) => child.kind === "group" || !drop(child.cond),
-      ),
-    })),
-    filter,
-  )
-}
-
-/** Unfunnelling removes every Condition with that value. */
-export const removeFunnel = (
-  filter: ChannelFilter,
-  type: CondType,
-  value: string,
-): ChannelFilter =>
-  removeWhere(filter, (cond) => cond.type === type && cond.value === value)
-
-export const clearFunnels = (
-  filter: ChannelFilter,
-  type: CondType,
-): ChannelFilter => removeWhere(filter, (cond) => cond.type === type)
+): ChannelFilter => addTreeFunnel<Cond>(filter, { type, value })
 
 // ---- The URL form ----------------------------------------------------------
 
