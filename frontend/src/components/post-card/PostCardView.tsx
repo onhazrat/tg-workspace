@@ -28,18 +28,21 @@ export interface PostCardViewProps extends PostCardHeaderProps {
   /** Present only when embeddings are enabled. */
   onFindRelated?: () => void
   /**
-   * The Post selection's checkbox (PTR-05), present when the read said
+   * Tick or untick the Post (PTR-05); the checkbox shows when the read said
    * whether the Post is selected. `shift` asks for the run since the last
    * click.
    */
-  selection?: { selected: boolean; onToggle: (shift: boolean) => void }
+  onToggleSelected?: (shift: boolean) => void
 }
 
 /** Ticked when an Action covers the Post; x fires it from the keyboard. */
 export function SelectBox({
   selected,
   onToggle,
-}: NonNullable<PostCardViewProps["selection"]>) {
+}: {
+  selected: boolean
+  onToggle: (shift: boolean) => void
+}) {
   return (
     <input
       type="checkbox"
@@ -71,17 +74,20 @@ export function PostCardView({
   text,
   translation,
   onFindRelated,
-  selection,
+  onToggleSelected,
   ...rest
 }: PostCardViewProps) {
+  const { selected } = rest.post
   const header = {
     ...rest,
-    trailing: selection && <SelectBox {...selection} />,
+    trailing: selected !== undefined && onToggleSelected && (
+      <SelectBox selected={selected} onToggle={onToggleSelected} />
+    ),
   }
   const { post, postSearch } = header
   // A deselected Post stays in the feed, dimmed: the selection marks Posts
   // and never hides them.
-  const dimmed = selection && !selection.selected && "opacity-50"
+  const dimmed = selected === false && "opacity-50"
   const title = header.channel?.displayName || post.channelName
   const thumb = post.media?.thumbApiPath
   const body = {

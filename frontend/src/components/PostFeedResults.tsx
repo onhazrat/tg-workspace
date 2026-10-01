@@ -17,7 +17,7 @@ interface PostFeedResultsProps {
   /** Keyboard mode is on. */
   keyboard?: boolean
   /** Tick or untick a Post (PTR-05). */
-  onToggleSelected?: (post: Post, shift: boolean) => void
+  onToggleSelected: (post: Post, shift: boolean) => void
 }
 
 /** The feed below the filter: loading skeletons, the post list, or the empty state. */

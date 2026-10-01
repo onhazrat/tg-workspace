@@ -389,24 +389,26 @@ describe("PostCardView", () => {
   describe("the selection checkbox (PTR-05)", () => {
     const toggled: boolean[] = []
     const selection = (selected: boolean) => ({
-      selected,
-      onToggle: (shift: boolean) => toggled.push(shift),
+      post: { ...full, selected },
+      onToggleSelected: (shift: boolean) => {
+        toggled.push(shift)
+      },
     })
 
     test("is ticked for a selected Post and absent when the read said nothing", () => {
-      renderCard({ selection: selection(true) })
+      renderCard(selection(true))
       const box = screen.getByRole("checkbox") as HTMLInputElement
       expect(box.checked).toBe(true)
       expect(box.getAttribute("aria-label")).toBe("Deselect this post")
       cleanup()
 
-      renderCard({})
+      renderCard({ onToggleSelected: () => {} })
       expect(screen.queryByRole("checkbox")).toBeNull()
     })
 
     test("a click toggles, a shift-click asks for the run, and the card stays", () => {
       toggled.length = 0
-      renderCard({ selection: selection(false), compact: true })
+      renderCard({ ...selection(false), compact: true })
       const box = screen.getByRole("checkbox")
 
       fireEvent.click(box)
@@ -424,13 +426,12 @@ describe("PostCardView", () => {
       render(
         <>
           <PostCardView
-            post={full}
             channel={undefined}
             followsForwardSource={false}
             onAddChannel={() => {}}
             postSearch=""
             text={full.text}
-            selection={selection(true)}
+            {...selection(true)}
           />
           <FeedKeyboard on />
         </>,
