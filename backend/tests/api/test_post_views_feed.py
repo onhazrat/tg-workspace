@@ -14,9 +14,9 @@ curve, is laid out so the two measures disagree:
 | a1    | 5000  | 48h          | 5000               |
 | a2    | 1000  | 1h           | too new to judge   |
 | a3    | none  |              | none               |
-| a4    | 2000  | 6h           | 2000 x .89/.70 = 2543 |
+| a4    | 2000  | 9h           | 2000 / .719 = 2782 |
 | b5    | 3000  | 30h          | 3000               |
-| b6    | 800   | 12h          | 800 x .89/.86 = 828 |
+| b6    | 800   | 20h          | 800 / .940 = 851   |
 | c7    | 10000 | 2h           | too new to judge   |
 | c8    | 400   | 100h         | 400                |
 
@@ -44,6 +44,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import User
 from app.models_tg import SettlingCurveFit
+from app.services.reach import SEED_CURVE
 from tests.utils.tenancy import follow_channels
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.utils import get_superuser_token_headers
@@ -58,9 +59,9 @@ CORPUS: list[tuple[str, int, int | None, float | None]] = [
     ("pv_a", 1, 5000, 48),
     ("pv_a", 2, 1000, 1),
     ("pv_a", 3, None, None),
-    ("pv_a", 4, 2000, 6),
+    ("pv_a", 4, 2000, 9),
     ("pv_b", 5, 3000, 30),
-    ("pv_b", 6, 800, 12),
+    ("pv_b", 6, 800, 20),
     ("pv_c", 7, 10000, 2),
     ("pv_c", 8, 400, 100),
 ]
@@ -209,7 +210,7 @@ def _not(tree: dict[str, Any]) -> dict[str, Any]:
 #: for a2, so it falls last behind a3.
 _ESTIMATED_UNDER_2500 = _not(_bound("estimated", _at_least(2500)))
 #: Keeps a1, a2, a4 and b5. Fewest raw views starts at a2; fewest estimated
-#: starts at a4 (2543) and leaves a2 last.
+#: starts at a4 (2782) and leaves a2 last.
 _VIEWS_OVER_900 = _bound("views", _at_least(900))
 
 
@@ -359,12 +360,12 @@ def test_the_counts_say_how_many_posts_were_too_new_to_judge(
 def test_the_newest_fit_is_the_curve(
     client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
 ) -> None:
-    """A fit that reads a 6-hour Post at a tenth of its settled count lifts a4."""
+    """A fit that reads a 9-hour Post at a tenth of its settled count lifts a4."""
     operator, _other = seeded
     with Session(engine) as session:
         session.add(
             SettlingCurveFit(
-                knots=[[1.0, 0.1], [6.0, 0.1], [24.0, 1.0]],
+                knots=[[1.0, 0.1], [9.0, 0.1], [24.0, 1.0]],
                 settling_age_hours=24,
                 observation_stride=1,
                 pair_count=100,
@@ -380,14 +381,11 @@ def test_the_newest_fit_is_the_curve(
 def test_the_browser_is_handed_the_curve_the_feed_reads(
     client: TestClient, operator: dict[str, str]
 ) -> None:
-    """The seed's steps before any fit, then the newest fit's knots."""
+    """The seed's knots before any fit, then the newest fit's."""
     path = f"{PREFIX}/posts/view-estimate"
     before = client.get(path, headers=operator).json()
     assert before == {
-        "curve": {
-            "kind": "steps",
-            "points": [[0, 0.2], [3, 0.59], [6, 0.7], [12, 0.86], [24, 0.89]],
-        },
+        "curve": SEED_CURVE.wire(),
         "settlingAgeHours": 24,
         "estimationFloorHours": 3,
     }
