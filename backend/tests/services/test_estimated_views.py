@@ -44,7 +44,7 @@ CASES: list[dict[str, Any]] = FIXTURE["cases"]
 
 def _curve(name: str) -> CurvePoints:
     spec = FIXTURE["curves"][name]
-    return CurvePoints(spec["kind"], tuple(tuple(point) for point in spec["points"]))
+    return CurvePoints(tuple((age, share) for age, share in spec["points"]))
 
 
 def _settings(case: dict[str, Any]) -> ReachSettings:
@@ -94,7 +94,7 @@ def test_a_wrong_curve_fails_the_fixture(implementation: str) -> None:
     run once against a curve that is wrong on purpose and must disagree with
     at least one estimated case.
     """
-    wrong = CurvePoints("steps", ((0.0, 0.5), (12.0, 0.9)))
+    wrong = CurvePoints(((1.0, 0.5), (12.0, 0.9)))
     mismatches = [
         case
         for case in CASES

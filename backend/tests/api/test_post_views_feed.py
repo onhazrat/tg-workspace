@@ -403,7 +403,7 @@ def test_the_browser_is_handed_the_curve_the_feed_reads(
         session.commit()
 
     after = client.get(path, headers=operator).json()
-    assert after["curve"] == {"kind": "knots", "points": [[1, 0.1], [24, 1]]}
+    assert after["curve"] == {"points": [[1, 0.1], [24, 1]]}
     assert client.get(path).status_code == 401
 
 

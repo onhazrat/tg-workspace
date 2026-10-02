@@ -10,7 +10,7 @@
 import type { ViewCurveResponse, ViewEstimateResponse } from "@/client"
 import type { Post } from "@/types"
 
-/** A Settling curve as data: the seed's steps or a fit's log-log knots. */
+/** A Settling curve as data: `[age in hours, share]` knots, read log-log. */
 export type ViewCurve = ViewCurveResponse
 
 /** Everything an estimate is read through, as the server hands it over. */
@@ -21,15 +21,8 @@ export type ViewMeasure = "views" | "estimated"
 
 const MS_PER_HOUR = 3_600_000
 
-/** The share of the step whose range holds the age, the first below it. */
-function stepShare(points: number[][], age: number): number {
-  let share = points[0][1]
-  for (const [start, value] of points) if (age >= start) share = value
-  return share
-}
-
 /** `np.interp` over log age and log share, flat outside the knots. */
-function knotShare(points: number[][], age: number): number {
+function share({ points }: ViewCurve, age: number): number {
   const at = Math.log(Math.max(age, points[0][0]))
   const last = points[points.length - 1]
   if (at >= Math.log(last[0])) return last[1]
@@ -42,12 +35,6 @@ function knotShare(points: number[][], age: number): number {
     }
   }
   return last[1]
-}
-
-function share(curve: ViewCurve, age: number): number {
-  return curve.kind === "knots"
-    ? knotShare(curve.points, age)
-    : stepShare(curve.points, age)
 }
 
 /** One count at one age; `null` when there is none or it is too new to judge. */
