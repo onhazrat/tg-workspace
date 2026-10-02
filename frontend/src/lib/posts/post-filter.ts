@@ -163,9 +163,44 @@ const POST_TEXT: TextVocabulary<PostCond> = {
   },
 }
 
-/** The text form back as a filter; anything that does not parse is `null`. */
-export const parsePostFilter = (src: string): PostFilter | null =>
-  parseTree(src, POST_TEXT)
+/**
+ * What the posts reads accept (`app/schemas/posts.py`): past these every read
+ * is a 422, so a filter outside them is never sent.
+ */
+export const POST_FILTER_BOUNDS = {
+  depth: 6,
+  nodes: 100,
+  languageLength: 16,
+  channelLength: 256,
+} as const
+
+/** Whether the server accepts `filter`: depth, node count and value lengths. */
+export function withinPostFilterBounds(filter: PostFilter): boolean {
+  let nodes = 0
+  const fits = (node: FilterNode<PostCond>, depth: number): boolean => {
+    nodes += 1
+    if (depth > POST_FILTER_BOUNDS.depth) return false
+    if (node.kind === "group")
+      return node.children.every((child) => fits(child, depth + 1))
+    const { cond } = node
+    if (cond.type === "language")
+      return cond.value.length <= POST_FILTER_BOUNDS.languageLength
+    if (cond.type === "channel")
+      return cond.value.length <= POST_FILTER_BOUNDS.channelLength
+    return true
+  }
+  return fits(filter, 1) && nodes <= POST_FILTER_BOUNDS.nodes
+}
+
+/**
+ * The text form back as a filter. Anything that does not parse, or that the
+ * server would refuse, is `null`, so a crafted link is ignored rather than
+ * failing every read.
+ */
+export function parsePostFilter(src: string): PostFilter | null {
+  const filter = parseTree(src, POST_TEXT)
+  return filter && withinPostFilterBounds(filter) ? filter : null
+}
 
 // ---- The wire --------------------------------------------------------------
 

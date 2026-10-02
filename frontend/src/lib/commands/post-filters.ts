@@ -13,20 +13,6 @@ export const POST_DATE_RANGE_PRESETS = [
   { id: "30d", label: "Last 30 Days", hours: 24 * 30 },
 ] as const
 
-export const FORWARDED_FILTER_OPTIONS = [
-  { id: "original", label: "Original Posts Only", value: "original" as const },
-  {
-    id: "forwarded",
-    label: "Forwarded Posts Only",
-    value: "forwarded" as const,
-  },
-  {
-    id: "unfollowed_forwarded",
-    label: "Unfollowed Forwarded Posts",
-    value: "unfollowed_forwarded" as const,
-  },
-] as const
-
 export { POST_ORDER_OPTIONS } from "@/lib/posts/post-filter-bar"
 export { MEDIA_KIND_OPTIONS }
 

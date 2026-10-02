@@ -146,6 +146,28 @@ describe("the URL form", () => {
     expect(parsePostFilter(text)).toBeNull()
   })
 
+  // The server's bounds (`app/schemas/posts.py`), mirrored so a crafted link
+  // is ignored rather than turning every read into a 422.
+  test("a filter past the server's bounds is ignored", () => {
+    // Each pair of parentheses is one level under the root's; joiners
+    // alternate so no pair is redundant and collapses away.
+    const nested = (depth: number) => {
+      let text = "lang:x and media:photo"
+      for (let i = 0; i < depth - 2; i++)
+        text = `lang:a${i} ${i % 2 ? "and" : "or"} (${text})`
+      return text
+    }
+    expect(parsePostFilter(nested(6))).not.toBeNull()
+    expect(parsePostFilter(nested(7))).toBeNull()
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => `lang:l${i}`).join(" or ")
+    expect(parsePostFilter(many(99))).not.toBeNull()
+    expect(parsePostFilter(many(100))).toBeNull()
+    expect(parsePostFilter(`lang:${"x".repeat(16)}`)).not.toBeNull()
+    expect(parsePostFilter(`lang:${"x".repeat(17)}`)).toBeNull()
+    expect(parsePostFilter(`channel:${"c".repeat(257)}`)).toBeNull()
+  })
+
   test("blank text is the empty filter", () => {
     expect(parsePostFilter("  ")).toEqual(emptyPostFilter())
   })

@@ -69,8 +69,12 @@ type PostCond =
       settings registry, and the palette commands that set a Type, media kind or Language add the
       same Condition to the Post filter instead. As built, the keys were scoped-storage keys in
       `usePostFilters` (`postFilter_media`, `_languages`, `_views`), not schema or registry
-      entries; the palette has Type and media commands and no Language ones
-- [x] The filter bar's footer chips, which the filter row replaces, are removed
+      entries; the palette has Type and media commands and no Language ones. Each toggles its
+      Condition, so two Type commands join with OR as two Type funnels do; their labels say
+      "Filter Posts by Type" since the review that followed
+- [x] The filter bar's footer chips, which the filter row replaces, are removed. As built,
+      the footer keeps chips for a meaning search, a related-Post search and the per-Channel
+      cap, which the row has no Condition for; the keyword and every Condition moved to the row
 
 ### Tests
 

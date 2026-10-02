@@ -30,7 +30,6 @@ import { parseOpenPostInput } from "@/lib/commands/open-post"
 import {
   applyPostDateRangeHours,
   clearPostFilters,
-  FORWARDED_FILTER_OPTIONS,
   isFunnelled,
   MEDIA_KIND_OPTIONS,
   POST_DATE_RANGE_PRESETS,
@@ -44,6 +43,7 @@ import type {
   EntityFlowType,
 } from "@/lib/commands/types"
 import { restartTorService, rotateTorIpNow } from "@/lib/network/tor-actions"
+import { POST_TYPE_VALUES } from "@/lib/posts/post-filter"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { deleteSummary } from "@/lib/summaries/store"
@@ -608,18 +608,20 @@ export function buildExtendedCommands(): CommandDef[] {
     })
   }
 
-  for (const option of FORWARDED_FILTER_OPTIONS) {
+  // The ids keep their old `set-forwarded-filter-` spelling so a remembered
+  // command still finds them. Each adds its Type Condition or takes it out, so
+  // two of them join with OR, as two funnels in the Type dropdown do.
+  for (const option of POST_TYPE_VALUES) {
     commands.push({
-      id: `set-forwarded-filter-${option.id}`,
+      id: `set-forwarded-filter-${option.value}`,
       kind: "action",
-      label: `Set Forwarded Filter → ${option.label}`,
-      keywords: ["post", "forwarded", "filter", option.id],
+      label: `Filter Posts by Type → ${option.label}`,
+      keywords: ["post", "forwarded", "type", "filter", option.value],
       group: "Posts",
-      // Adds the Type Condition, or takes it out (PTR-03).
       getBadge: (ctx) => (isFunnelled(ctx, "type", option.value) ? "ON" : null),
       run: async (ctx) => {
         const on = togglePostFunnel(ctx, "type", option.value)
-        toast.success(`Forwarded filter: ${option.label} ${on ? "on" : "off"}`)
+        toast.success(`Type: ${option.label} ${on ? "on" : "off"}`)
       },
     })
   }

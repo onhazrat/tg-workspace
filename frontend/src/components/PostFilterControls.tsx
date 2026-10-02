@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
+import { BoundFields } from "@/components/filter-tree/BoundFields"
 import type { ConditionOption } from "@/components/filter-tree/ConditionPicker"
 import {
   FacetMenu,
@@ -29,6 +30,7 @@ import {
   boundKind,
   boundText,
   type MetricBound,
+  parseBound,
 } from "@/lib/channels/channel-metrics"
 import {
   type AtomNode,
@@ -65,35 +67,6 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
 
 // ---- The views editor ------------------------------------------------------
 
-const OPS: [BoundKind, string][] = [
-  ["gte", "at least"],
-  ["lte", "at most"],
-  ["between", "between"],
-  ["none", "no value"],
-]
-
-const num = (text: string) =>
-  text.trim() === "" || !Number.isFinite(Number(text)) || Number(text) < 0
-    ? undefined
-    : Number(text)
-
-/** The bound the fields spell, or null while it is incomplete. */
-export function boundOf(
-  op: BoundKind,
-  a: string,
-  b: string,
-): MetricBound | null {
-  if (op === "none") return { none: true }
-  const [x, y] = [num(a), num(b)]
-  if (x === undefined) return null
-  if (op === "gte") return { min: x }
-  if (op === "lte") return { max: x }
-  return y === undefined || y < x ? null : { min: x, max: y }
-}
-
-const fieldClass =
-  "h-8 min-w-0 flex-1 rounded-md border border-app-ink/15 bg-app-muted px-2 text-xs tabular-nums outline-none focus:border-app-ink/40"
-
 /**
  * One measure's bound: at least, at most, between or no value, one or two
  * fields, Add or Update. No histogram: the server has no endpoint for one yet.
@@ -117,7 +90,7 @@ export function PostViewsEditor({
     String((op === "lte" ? initial?.max : initial?.min) ?? ""),
   )
   const [b, setB] = useState(String(initial?.max ?? ""))
-  const bound = boundOf(op, a, b)
+  const bound = parseBound(op, a, b, { min: 0 })
   return (
     <form
       className="space-y-2 p-1"
@@ -142,50 +115,15 @@ export function PostViewsEditor({
       <p className="text-[11px] text-app-ink/50">
         {viewMeasureDescription(measure, floorHours)}
       </p>
-      <fieldset aria-label="Operator" className="m-0 flex gap-1 border-0 p-0">
-        {OPS.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={op === key}
-            onClick={() => setOp(key)}
-            className={`flex-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold ${
-              op === key
-                ? "border-app-ink bg-app-ink text-app-bg"
-                : "border-app-ink/15 hover:border-app-ink/40"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </fieldset>
-      {op !== "none" && (
-        <div className="flex items-center gap-1.5">
-          <input
-            type="number"
-            min={0}
-            step="any"
-            aria-label={op === "between" ? "From" : "Value"}
-            value={a}
-            onChange={(e) => setA(e.target.value)}
-            className={fieldClass}
-          />
-          {op === "between" && (
-            <>
-              <span className="text-app-ink/50">and</span>
-              <input
-                type="number"
-                min={0}
-                step="any"
-                aria-label="To"
-                value={b}
-                onChange={(e) => setB(e.target.value)}
-                className={fieldClass}
-              />
-            </>
-          )}
-        </div>
-      )}
+      <BoundFields
+        op={op}
+        setOp={setOp}
+        a={a}
+        setA={setA}
+        b={b}
+        setB={setB}
+        min={0}
+      />
       <p className="text-[11px] text-app-ink/50">
         A post with no {measureLabel(measure).toLowerCase()} does not match a
         bound.

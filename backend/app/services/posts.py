@@ -939,8 +939,13 @@ def count_scope(
     kept: Any = func.count()
     too_new: Any = literal(0)
     estimate = filters.tree_readings.get("estimated")
-    if filters.tree is not None and filters.has_tree() and estimate is not None:
-        shown = _tree_clause(session, filters, user_id)
+    tree = filters.active_tree()
+    if tree is not None and estimate is not None:
+        shown = tree_clause(
+            tree,
+            readings=filters.tree_readings,
+            followed_names=_followed_for(session, filters, user_id),
+        )
         kept = func.count().filter(shown)
         too_new = func.count().filter(and_(not_(shown), estimate.too_new(Post)))
         filters = replace(filters, tree=None)
@@ -964,6 +969,16 @@ def count_scope(
     )
 
 
+@dataclass(frozen=True)
+class PostFacets:
+    """The window's Post count, and each value's as `(value, count, selected)`."""
+
+    total: int
+    types: list[tuple[str, int, int]]
+    languages: list[tuple[str, int, int]]
+    media: list[tuple[str, int, int]]
+
+
 def count_facets_in_scope(
     session: Session,
     *,
@@ -972,7 +987,7 @@ def count_facets_in_scope(
     start_date: int | None = None,
     end_date: int | None = None,
     selected: ColumnElement[bool] | None = None,
-) -> dict[str, Any]:
+) -> PostFacets:
     """How many Posts in the window have each Type, media kind and Language.
 
     The counts the Type, Media and Language dropdowns print beside each value
@@ -1031,19 +1046,19 @@ def count_facets_in_scope(
     pairs = list(zip(rest[::2], rest[1::2], strict=True))
     types, kinds = pairs[: len(POST_TYPE_ORDER)], pairs[len(POST_TYPE_ORDER) :]
 
-    return {
-        "total": total,
-        "types": [
+    return PostFacets(
+        total=total,
+        types=[
             (value, n, m) for value, (n, m) in zip(POST_TYPE_ORDER, types, strict=True)
         ],
-        "languages": sorted(
+        languages=sorted(
             ((language, n, m) for language, n, m in language_rows),
             key=lambda row: (-row[1], row[0]),
         ),
-        "media": [
+        media=[
             (kind, n, m) for kind, (n, m) in zip(MEDIA_KIND_ORDER, kinds, strict=True)
         ],
-    }
+    )
 
 
 def _followed_for(
@@ -1053,15 +1068,6 @@ def _followed_for(
     if not filters.reads_unfollowed():
         return None
     return frozenset(visible_channel_names(session, user_id=user_id))
-
-
-def _tree_clause(session: Session, filters: PostFilters, user_id: uuid.UUID) -> Any:
-    assert filters.tree is not None
-    return tree_clause(
-        filters.tree,
-        readings=filters.tree_readings,
-        followed_names=_followed_for(session, filters, user_id),
-    )
 
 
 def _filtered(

@@ -49,24 +49,40 @@ class _Cond(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# Each wire Condition says which `post_filters` Condition it is, so the wire
+# and the SQL stay two shapes of one vocabulary with no cascade between them.
+
+
 class TypeCondition(_Cond):
     type: Literal["type"]
     value: PostType
+
+    def to_cond(self) -> TreeCond:
+        return TypeCond(self.value)
 
 
 class MediaCondition(_Cond):
     type: Literal["media"]
     value: MediaKind
 
+    def to_cond(self) -> TreeCond:
+        return MediaCond(self.value)
+
 
 class LanguageCondition(_Cond):
     type: Literal["language"]
     value: str = Field(min_length=1, max_length=16)
 
+    def to_cond(self) -> TreeCond:
+        return LanguageCond(self.value)
+
 
 class ChannelCondition(_Cond):
     type: Literal["channel"]
     value: str = Field(min_length=1, max_length=256)
+
+    def to_cond(self) -> TreeCond:
+        return ChannelCond(self.value)
 
 
 class ViewsCondition(_Cond):
@@ -75,6 +91,9 @@ class ViewsCondition(_Cond):
     min: float | None = Field(None, ge=0)
     max: float | None = Field(None, ge=0)
     none: bool = False
+
+    def to_cond(self) -> TreeCond:
+        return ViewsCond(self.measure, self.min, self.max, self.none)
 
 
 PostCondition = Annotated[
@@ -131,30 +150,12 @@ class FilterGroup(BaseModel):
             op=self.op,
             negated=self.negated,
             children=tuple(
-                TreeAtom(cond=_cond(child.cond), negated=child.negated)
+                TreeAtom(cond=child.cond.to_cond(), negated=child.negated)
                 if isinstance(child, FilterAtom)
                 else child.to_tree()
                 for child in self.children
             ),
         )
-
-
-def _cond(
-    cond: TypeCondition
-    | MediaCondition
-    | LanguageCondition
-    | ChannelCondition
-    | ViewsCondition,
-) -> TreeCond:
-    if isinstance(cond, TypeCondition):
-        return TypeCond(cond.value)
-    if isinstance(cond, MediaCondition):
-        return MediaCond(cond.value)
-    if isinstance(cond, LanguageCondition):
-        return LanguageCond(cond.value)
-    if isinstance(cond, ChannelCondition):
-        return ChannelCond(cond.value)
-    return ViewsCond(cond.measure, cond.min, cond.max, cond.none)
 
 
 # ---- The Post selection on the wire (PTR-05, ADR-026) -----------------------

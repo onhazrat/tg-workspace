@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { BoundFields } from "@/components/filter-tree/BoundFields"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -8,6 +9,7 @@ import {
   type MetricData,
   type MetricKey,
   metric,
+  parseBound,
 } from "@/lib/channels/channel-metrics"
 import { formatCount } from "@/lib/format-count"
 
@@ -131,31 +133,6 @@ function Histogram({
   )
 }
 
-const OPS: [BoundKind, string][] = [
-  ["gte", "at least"],
-  ["lte", "at most"],
-  ["between", "between"],
-  ["none", "no value"],
-]
-
-const num = (text: string) =>
-  text.trim() === "" || !Number.isFinite(Number(text))
-    ? undefined
-    : Number(text)
-
-/** The bound the fields spell, or null while it is incomplete. */
-function boundOf(op: BoundKind, a: string, b: string): MetricBound | null {
-  const [x, y] = [num(a), num(b)]
-  if (op === "none") return { none: true }
-  if (x === undefined) return null
-  if (op === "gte") return { min: x }
-  if (op === "lte") return { max: x }
-  return y === undefined || y < x ? null : { min: x, max: y }
-}
-
-const fieldClass =
-  "h-8 min-w-0 flex-1 rounded-md border border-app-ink/15 bg-app-muted px-2 text-xs tabular-nums outline-none focus:border-app-ink/40"
-
 /**
  * One number criterion's editor (CTB-02): a histogram of the Account's
  * Channels that a drag across sets the bound from, the operator, one or two
@@ -183,7 +160,7 @@ export function ChannelMetricEditor({
     return String(start ?? (values.length ? nice(median(values)) : ""))
   })
   const [b, setB] = useState(String(initial?.max ?? ""))
-  const bound = boundOf(op, a, b)
+  const bound = parseBound(op, a, b)
   const kept = !bound
     ? 0
     : bound.none
@@ -225,48 +202,7 @@ export function ChannelMetricEditor({
           None of your channels has a value yet.
         </p>
       )}
-      <fieldset aria-label="Operator" className="m-0 flex gap-1 border-0 p-0">
-        {OPS.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={op === key}
-            onClick={() => setOp(key)}
-            className={`flex-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold ${
-              op === key
-                ? "border-app-ink bg-app-ink text-app-bg"
-                : "border-app-ink/15 hover:border-app-ink/40"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </fieldset>
-      {op !== "none" && (
-        <div className="flex items-center gap-1.5">
-          <input
-            type="number"
-            step="any"
-            aria-label={op === "between" ? "From" : "Value"}
-            value={a}
-            onChange={(e) => setA(e.target.value)}
-            className={fieldClass}
-          />
-          {op === "between" && (
-            <>
-              <span className="text-app-ink/50">and</span>
-              <input
-                type="number"
-                step="any"
-                aria-label="To"
-                value={b}
-                onChange={(e) => setB(e.target.value)}
-                className={fieldClass}
-              />
-            </>
-          )}
-        </div>
-      )}
+      <BoundFields op={op} setOp={setOp} a={a} setA={setA} b={b} setB={setB} />
       <p className="text-[11px] text-app-ink/50">
         A channel with no {m.label.toLowerCase()} does not match a bound.
         {op === "none"

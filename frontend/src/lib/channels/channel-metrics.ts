@@ -128,6 +128,33 @@ export const boundKind = (b?: MetricBound): BoundKind =>
         ? "lte"
         : "gte"
 
+/**
+ * The bound a bound editor's fields spell, or null while it is incomplete or
+ * backwards. `min` refuses a value under it, for a measure that has a floor
+ * the server enforces (a View count is never negative).
+ */
+export function parseBound(
+  op: BoundKind,
+  a: string,
+  b: string,
+  { min }: { min?: number } = {},
+): MetricBound | null {
+  if (op === "none") return { none: true }
+  const num = (text: string) => {
+    const n = Number(text)
+    return text.trim() === "" ||
+      !Number.isFinite(n) ||
+      (min !== undefined && n < min)
+      ? undefined
+      : n
+  }
+  const [x, y] = [num(a), num(b)]
+  if (x === undefined) return null
+  if (op === "gte") return { min: x }
+  if (op === "lte") return { max: x }
+  return y === undefined || y < x ? null : { min: x, max: y }
+}
+
 /** What a bound editor needs of the Account's Channels. */
 export type MetricData = {
   /** A metric's measured values across the Account's Channels, ascending. */
