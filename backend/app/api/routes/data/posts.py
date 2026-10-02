@@ -164,14 +164,15 @@ def posts_facets(
         end_date=window.end,
         selected=selected_in(session, body.selection, scope),
     )
+
+    def counted(rows: list[tuple[str, int, int]]) -> list[PostFacetCount]:
+        return [PostFacetCount(value=v, count=n, selected=m) for v, n, m in rows]
+
     return PostFacetsResponse(
-        total=facets["total"],
-        **{
-            key: [
-                PostFacetCount(value=v, count=n, selected=m) for v, n, m in facets[key]
-            ]
-            for key in ("types", "languages", "media")
-        },
+        total=facets.total,
+        types=counted(facets.types),
+        languages=counted(facets.languages),
+        media=counted(facets.media),
     )
 
 

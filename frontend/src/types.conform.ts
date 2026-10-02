@@ -57,16 +57,22 @@
 
 import type {
   ChannelResponse,
+  FilterAtom,
+  FilterGroupInput,
   HandleProbeResponse,
   LlmLogResponse,
+  MediaCondition,
   NetworkLogResponse,
   PostResponse,
   ReportCandidateResponse,
   SelectablePostResponse,
   SettingGroupResponse,
   SummaryResponse,
+  TypeCondition,
 } from "@/client"
 import type { DiscoveryCandidate } from "@/lib/posts/discover-candidates"
+import type { PostCond, PostFilter, PostType } from "@/lib/posts/post-filter"
+import type { MediaKind } from "@/lib/posts/post-media"
 import type {
   Channel,
   ChannelSettingGroup,
@@ -349,4 +355,42 @@ export type DiscoveryProbeHasServerFields = NoMismatches<
     | "reachEstimated"
     | "mediaMix"
   >
+>
+
+/**
+ * The Post filter (PTR-03) has no generated twin to rebase onto: it is the
+ * shared tree from `lib/filter-tree.ts`, sent as it is through a
+ * `Record<string, unknown>` body. So nothing would notice the browser and the
+ * server drifting apart until every read answered 422.
+ *
+ * Asserted in both directions where a direction can drift: the tree must
+ * still be a `FilterGroupInput` the server accepts, and the Condition kinds,
+ * Types and media kinds must be the same sets on both sides, so a value the
+ * server adds is a compile error here rather than a dropdown that never
+ * offers it.
+ */
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+type Holds<_T extends true> = true
+
+export type PostFilterIsSendable = Holds<
+  PostFilter extends FilterGroupInput ? true : false
+>
+export type PostConditionKindsMatch = Holds<
+  Same<PostCond["type"], FilterAtom["cond"]["type"]>
+>
+export type PostTypeValuesMatch = Holds<Same<PostType, TypeCondition["value"]>>
+export type PostMediaValuesMatch = Holds<
+  Same<MediaKind, MediaCondition["value"]>
+>
+
+/**
+ * `extends` lets our Condition carry a key the server's lacks, and the server
+ * forbids unknown keys, so every key of ours must be one the server declares
+ * for the same Condition kind.
+ */
+type UndeclaredCondKeys<C> = C extends { type: infer T }
+  ? Exclude<keyof C, keyof Extract<FilterAtom["cond"], { type: T }>>
+  : never
+export type PostConditionKeysDeclared = Holds<
+  Same<UndeclaredCondKeys<PostCond>, never>
 >

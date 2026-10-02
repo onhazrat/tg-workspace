@@ -1,7 +1,7 @@
 /**
  * The pieces the Posts filter bar is built from (PFB-02): a pill that opens a
- * small form, the forms' option list, and a count typed as text. Layout and copy follow the A1b prototype
- * (`prototype/post-filter-ui`).
+ * small form, the forms' option list, and a count typed as text. Layout and
+ * copy follow the A1b prototype (`prototype/post-filter-ui`).
  */
 import { ChevronDown } from "lucide-react"
 import { Popover } from "radix-ui"
@@ -87,6 +87,10 @@ export function Options<T extends string>({
   )
 }
 
+/**
+ * A count typed as text, so `1,000` works. Blank is `null`. The draft is kept
+ * while it does not parse, and replaced when the value changes from outside.
+ */
 export function CountInput({
   value,
   onChange,

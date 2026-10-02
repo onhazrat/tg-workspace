@@ -223,8 +223,9 @@ class PostFilters:
     #: The measure the views orders read. Not the tree's: a bound names its own.
     reading: ViewReading = ViewReading()
 
-    def has_tree(self) -> bool:
-        return self.tree is not None and bool(self.tree.children)
+    def active_tree(self) -> TreeGroup | None:
+        """The tree, when it holds anything to filter by; an empty root keeps all."""
+        return self.tree if self.tree is not None and self.tree.children else None
 
     def reads_unfollowed(self) -> bool:
         """Whether the tree needs the followed-channel set."""
@@ -403,12 +404,10 @@ def post_filter_clauses(
     clauses: list[ColumnElement[bool]] = []
     if filters.keyword and filters.keyword.strip():
         clauses.append(_keyword_clause(filters.keyword.strip()))
-    if filters.tree is not None and filters.has_tree():
+    if (tree := filters.active_tree()) is not None:
         clauses.append(
             tree_clause(
-                filters.tree,
-                readings=filters.tree_readings,
-                followed_names=followed_names,
+                tree, readings=filters.tree_readings, followed_names=followed_names
             )
         )
     return clauses
