@@ -8,13 +8,12 @@ let through the floor, a curve left unanchored, an absent Reach reported as 0.
 
 * gate the measured path on all pairs rather than the Settled ones
 * drop the estimation floor, or gate the estimate on the corrected counts alone
-* divide by the raw seed share instead of the share anchored at the settling
-  age, which reads every estimate about 12% high
+* divide by the raw curve share instead of the share anchored at the settling
+  age -> the fitted-curve case (the seed is anchored at 24h, so it cannot tell)
 * return `Reach(0)` instead of `Reach()` for not measured
 * round the median half-up, which reads the tie case as 505
 * accept a floor equal to the settling age, or a settling age of 168
-* `bisect_left` in the seed lookup, which puts an age on a step boundary in the
-  younger step
+* a seed that is not the staging fit, or not anchored at 24h
 * gate a sample's Reach on the sample count rather than on the samples carrying
   a View count -> twenty samples with one view between them measure it
 * read the oldest samples, or keep a sample with no publication time -> the
@@ -28,7 +27,9 @@ import pytest
 from app.models_tg import DirectorySample
 from app.services.reach import (
     DEFAULT_REACH_SETTINGS,
+    KNOT_AGES_HOURS,
     REFRESH_HORIZON_HOURS,
+    SEED_CURVE,
     Reach,
     ReachSettings,
     compute_reach,
@@ -61,17 +62,19 @@ def test_four_settled_counts_are_not_enough_to_measure() -> None:
 
 
 def test_young_counts_are_corrected_through_the_anchored_curve() -> None:
-    """A count at 12 to 24h holds 0.86/0.89 of its Settled value on the seed."""
+    """A count at 15h holds about 0.86 of its Settled value on the seed."""
     share = seed_curve(15.0) / seed_curve(24.0)
-    pairs = [(round(100 * share), 15.0)] * 5
+    pairs = [(round(1000 * share), 15.0)] * 5
 
     reach = compute_reach(pairs, SETTINGS)
 
-    assert reach == Reach(100, estimated=True)
+    assert reach == Reach(1000, estimated=True)
 
 
 def test_an_estimate_mixes_settled_and_corrected_counts() -> None:
-    pairs = [(100, 30.0)] * 3 + [(round(1000 * seed_curve(4.0) / 0.89), 4.0)] * 2
+    pairs = [(100, 30.0)] * 3 + [
+        (round(1000 * seed_curve(4.0) / seed_curve(24.0)), 4.0)
+    ] * 2
 
     reach = compute_reach(pairs, SETTINGS)
 
@@ -114,17 +117,17 @@ def test_a_fitted_curve_is_anchored_at_the_settling_age_too() -> None:
     assert reach == Reach(200, estimated=True)
 
 
-def test_the_seed_curve_holds_the_staging_measurement() -> None:
-    assert [seed_curve(h) for h in (0, 2.9, 3, 5, 6, 12, 23.9, 24, 500)] == [
-        0.20,
-        0.20,
-        0.59,
-        0.59,
-        0.70,
-        0.86,
-        0.86,
-        0.89,
-        0.89,
+def test_the_seed_curve_is_a_staging_fit_anchored_at_the_default_age() -> None:
+    """REACH-09: staging's fit of 2026-10-01, share 1 at 24h, flat outside."""
+    assert SEED_CURVE.kind == "knots"
+    assert seed_curve(SETTINGS.settling_age_hours) == pytest.approx(1, abs=1e-4)
+    shares = [seed_curve(age) for age in KNOT_AGES_HOURS]
+    assert shares == sorted(shares)
+    assert [round(seed_curve(h), 4) for h in (0.0, 0.5, 168.0, 500.0)] == [
+        0.0999,
+        0.0999,
+        1.903,
+        1.903,
     ]
 
 

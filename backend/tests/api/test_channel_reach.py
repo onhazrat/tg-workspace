@@ -82,7 +82,7 @@ def test_young_counts_answer_an_estimate(
         f"{PREFIX}/channels/reach-young/stats", headers=superuser_token_headers
     ).json()
 
-    assert body["reach"] == 92  # 89 / (0.86 / 0.89)
+    assert body["reach"] == 112  # 89 / 0.795, the seed's share at 12h
     assert body["reachEstimated"] is True
 
 

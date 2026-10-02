@@ -12,7 +12,7 @@ the default settings (settling 24h, floor 3h) and the seed curve:
 | 1    | pt_a    | fa       | photo |                | 5000  | 48h      | 5000      |
 | 2    | pt_a    | en       | video | pt_b           | 1000  | 1h       | too new   |
 | 3    | pt_a    | (unread) |       |                | none  |          | none      |
-| 4    | pt_b    | fa       | video | elsewhere      | 2000  | 6h       | 2543      |
+| 4    | pt_b    | fa       | video | elsewhere      | 2000  | 9h       | 2782      |
 | 5    | pt_b    | en       | photo |                | 300   | 48h      | 300       |
 | 6    | pt_c    | fa       | photo |                | 9000  | 48h      | 9000      |
 
@@ -57,7 +57,7 @@ CORPUS: list[
     ("pt_a", 1, "fa", ["photo"], None, 5000, 48),
     ("pt_a", 2, "en", ["video"], "pt_b", 1000, 1),
     ("pt_a", 3, None, [], None, None, None),
-    ("pt_b", 4, "fa", ["video"], "elsewhere", 2000, 6),
+    ("pt_b", 4, "fa", ["video"], "elsewhere", 2000, 9),
     ("pt_b", 5, "en", ["photo"], None, 300, 48),
     ("pt_c", 6, "fa", ["photo"], None, 9000, 48),
 ]

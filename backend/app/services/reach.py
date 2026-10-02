@@ -13,17 +13,18 @@ first page. When fewer than `MIN_SAMPLES` counts are Settled, each count between
 the estimation floor and the settling age is divided by the Settling curve's
 share at its age, and Reach is the median of the Settled and corrected counts,
 marked as an estimate. Below the floor a count is too young to correct: the seed
-curve puts a 0 to 3 hour count at a fifth of its Settled value, so a small error
-in its age becomes a large one in the estimate.
+curve puts a 30-minute count at a tenth of its Settled value and a 2-hour one at
+about two fifths, so a small error in its age becomes a large one in the
+estimate.
 
 **Not measured is `None`, never zero.** Zero reach and no measurement are
 different claims, the rule `directory_statistics` already follows.
 
-**The curve is a function of age in hours**, not a table, so the seed step curve
-below and the fitted piecewise-linear one (REACH-07) are interchangeable. It is
-rescaled here to share 1 at the settling age, which makes an already-anchored
-fitted curve a no-op and lets the seed stay written relative to the 14-day
-median it was measured against.
+**The curve is a function of age in hours**, not a table, so the seed below
+and a stored fit (REACH-07) are interchangeable. It is rescaled here to share 1
+at the settling age, which makes a curve anchored at that age a no-op and keeps
+the seed, anchored at the default 24 hours, right under any other settling
+age.
 """
 
 from __future__ import annotations
@@ -44,18 +45,19 @@ from app.services.directory_statistics import MIN_SAMPLES, SamplePost, views_of
 #: holds at an age in hours.
 Curve = Callable[[float], float]
 
-#: Staging, 2026-09-27, 491,420 Posts: the median View count of Posts captured
-#: at each age, relative to the median of those captured at 14 days or older.
-#: `(start of the age range in hours, share)`, flat past the last one. Cross-Post
-#: data confounded by Channel growth, so a starting point rather than a
-#: measurement; REACH-09 replaces it with a fitted curve.
-SEED_CURVE_STEPS: tuple[tuple[float, float], ...] = (
-    (0.0, 0.20),
-    (3.0, 0.59),
-    (6.0, 0.70),
-    (12.0, 0.86),
-    (24.0, 0.89),
+#: The refresh horizon: sync stops refreshing a stored Post's View count at 7
+#: days (ADR-024). A settling age at or past it would call a count Settled that
+#: sync could never have observed that old.
+REFRESH_HORIZON_HOURS = 7 * 24
+
+#: The fitted curve's knots: ages log-spaced from 30 minutes to the refresh
+#: horizon, the last age sync sees a View count at.
+KNOT_AGES_HOURS: tuple[float, ...] = tuple(
+    float(age) for age in np.geomspace(0.5, REFRESH_HORIZON_HOURS, 16)
 )
+
+#: `(age in hours, share)` per knot, share 1 at the settling age.
+Knots = tuple[tuple[float, float], ...]
 
 
 def _step_share(steps: Sequence[Sequence[float]], age_hours: float) -> float:
@@ -65,15 +67,52 @@ def _step_share(steps: Sequence[Sequence[float]], age_hours: float) -> float:
     return steps[index][1]
 
 
-def seed_curve(age_hours: float) -> float:
-    """The seed curve's share at `age_hours`: the step whose range holds it."""
-    return _step_share(SEED_CURVE_STEPS, age_hours)
+def curve_from_knots(knots: Sequence[Sequence[float]]) -> Curve:
+    """Piecewise-linear log share over log age, flat outside the knots."""
+    log_ages = [math.log(age) for age, _share in knots]
+    log_shares = [math.log(share) for _age, share in knots]
+
+    def curve(age_hours: float) -> float:
+        at = math.log(max(age_hours, knots[0][0]))
+        return math.exp(float(np.interp(at, log_ages, log_shares)))
+
+    return curve
 
 
-#: The refresh horizon: sync stops refreshing a stored Post's View count at 7
-#: days (ADR-024). A settling age at or past it would call a count Settled that
-#: sync could never have observed that old.
-REFRESH_HORIZON_HOURS = 7 * 24
+#: Staging's fit #5 of 2026-10-01 (REACH-09): 235,626 pairs from 21,575 Posts in
+#: 238 Channels, Observation stride 1, anchored at the default settling age of
+#: 24 hours. Every span was crossed by at least 14,000 pairs, so none took the
+#: older seed's shape; the flat 1.1 to 1.6 hour span is the fit's own
+#: monotone pooling. Shares rescaled to 1 at 24 hours and rounded to 4 places.
+#: It replaces the first seed, a cross-Post measurement confounded by Channel
+#: growth, so a fresh deployment estimates through real View observations.
+SEED_KNOTS: Knots = tuple(
+    zip(
+        KNOT_AGES_HOURS,
+        (
+            0.0999,
+            0.2196,
+            0.3585,
+            0.3585,
+            0.4792,
+            0.4986,
+            0.5894,
+            0.6753,
+            0.7755,
+            0.8797,
+            1.0023,
+            1.1165,
+            1.2232,
+            1.3564,
+            1.6181,
+            1.903,
+        ),
+        strict=True,
+    )
+)
+
+#: The seed curve: Reach estimates through it before the first stored fit.
+seed_curve: Curve = curve_from_knots(SEED_KNOTS)
 
 
 @dataclass(frozen=True)
@@ -230,18 +269,9 @@ def sample_reach(
 # Fitting the Settling curve (REACH-07)
 # --------------------------------------------------------------------------
 
-#: The fitted curve's knots: ages log-spaced from 30 minutes to the refresh
-#: horizon, the last age sync sees a View count at.
-KNOT_AGES_HOURS: tuple[float, ...] = tuple(
-    float(age) for age in np.geomspace(0.5, REFRESH_HORIZON_HOURS, 16)
-)
-
 #: A span between two knots learns its shape from the data only when at
 #: least this many pairs cross it; below, it takes the seed's.
 MIN_PAIRS_PER_SPAN = 30
-
-#: `(age in hours, share)` per knot, share 1 at the settling age.
-Knots = tuple[tuple[float, float], ...]
 
 
 class ObservationPair(NamedTuple):
@@ -253,7 +283,7 @@ class ObservationPair(NamedTuple):
     late_views: int
 
 
-#: How a curve is spelled as data: the seed's steps or a fit's knots.
+#: How a curve is spelled as data: steps or a fit's knots.
 CurveKind = Literal["steps", "knots"]
 
 
@@ -261,8 +291,9 @@ CurveKind = Literal["steps", "knots"]
 class CurvePoints:
     """A Settling curve as data, so SQL and the browser can read it too (PFB-03).
 
-    `steps` is the seed's shape, `(start of the age range, share)`; `knots` a
-    fit's, piecewise-linear log share over log age. Callable, so it is a
+    `steps` is `(start of the age range, share)`, the first seed's shape,
+    which nothing in code produces since REACH-09; `knots` a fit's and the
+    seed's, piecewise-linear log share over log age. Callable, so it is a
     `Curve` wherever one is taken.
     """
 
@@ -282,20 +313,8 @@ class CurvePoints:
         return {"kind": self.kind, "points": [list(point) for point in self.points]}
 
 
-def curve_from_knots(knots: Sequence[Sequence[float]]) -> Curve:
-    """Piecewise-linear log share over log age, flat outside the knots."""
-    log_ages = [math.log(age) for age, _share in knots]
-    log_shares = [math.log(share) for _age, share in knots]
-
-    def curve(age_hours: float) -> float:
-        at = math.log(max(age_hours, knots[0][0]))
-        return math.exp(float(np.interp(at, log_ages, log_shares)))
-
-    return curve
-
-
 #: The seed curve as data (PFB-03).
-SEED_CURVE = CurvePoints("steps", SEED_CURVE_STEPS)
+SEED_CURVE = CurvePoints("knots", SEED_KNOTS)
 
 
 def _non_decreasing(values: Sequence[float]) -> list[float]:

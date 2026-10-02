@@ -74,7 +74,7 @@ def test_every_entry_is_recomputed_and_a_second_run_changes_nothing() -> None:
 
     assert _reach() == {
         "a_settled": (100, False),
-        "b_young": (890, True),
+        "b_young": (1054, True),
         "c_gone": (None, False),
         "d_same": (None, False),
     }
