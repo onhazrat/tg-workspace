@@ -836,7 +836,9 @@ export const dataGetChannelStats = <ThrowOnError extends boolean = true>(options
  * can be the entire account — see `PostScopeRequest`. This is a read expressed
  * as a POST purely so the selection travels in the body.
  *
- * Each post says whether the Post selection selects it.
+ * Each post says whether the Post selection selects it. ``selectedFirst``
+ * lists the selected Posts before the rest, and ``onlySelected`` returns only
+ * the selected Posts the filter shows.
  */
 export const dataListPosts = <ThrowOnError extends boolean = true>(options: Options<DataListPostsData, ThrowOnError>) => (options.client ?? client).post<DataListPostsResponses, DataListPostsErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',
@@ -856,8 +858,9 @@ export const dataListPosts = <ThrowOnError extends boolean = true>(options: Opti
  *
  * Replaces the client's `buildPostsInScopeCounts`, which counted the fully
  * fetched, client-filtered post array. Also says how many Posts an Estimated
- * views bound hid for being too new to judge, and how many Posts in the
- * window the Post selection selects, filters aside.
+ * views bound hid for being too new to judge, how many Posts in the window
+ * the Post selection selects, filters aside, and how many of the Posts the
+ * filter shows it selects.
  *
  * POST rather than GET because the scope carries the channel selection: this is
  * a read expressed as a POST purely so the selection travels in the body.
@@ -889,6 +892,8 @@ export const dataPostsViewEstimate = <ThrowOnError extends boolean = true>(optio
  * Posts Facets
  *
  * How many Posts in the window have each Type, media kind and Language.
+ *
+ * And how many of each value the Post selection selects.
  */
 export const dataPostsFacets = <ThrowOnError extends boolean = true>(options: Options<DataPostsFacetsData, ThrowOnError>) => (options.client ?? client).post<DataPostsFacetsResponses, DataPostsFacetsErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

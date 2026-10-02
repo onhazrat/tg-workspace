@@ -1,7 +1,17 @@
-import { X } from "lucide-react"
-import type { SelectionChip } from "@/lib/posts/post-selection"
+import { FileDown, Link2, X } from "lucide-react"
+import {
+  type RegionCounts,
+  type Regions,
+  SELECTION_EDITS,
+} from "@/lib/channels/selection-regions"
+import { isExpressible, type SelectionChip } from "@/lib/posts/post-selection"
 import { cn } from "@/lib/utils"
+import { BarToggle } from "./channel-grid/ChannelBarControls"
 import { pillClass } from "./PostFilterParts"
+import { SelectionAdjust } from "./SelectionAdjust"
+
+// A rule sets Posts, it cannot flip each one (PTR-06).
+const POST_EDITS = SELECTION_EDITS.filter((edit) => isExpressible(edit.regions))
 
 export interface PostSelectionBarProps {
   /** Selected Posts in the window, filters aside. */
@@ -14,12 +24,23 @@ export interface PostSelectionBarProps {
   onSelectAll: () => void
   onDeselectAll: () => void
   onRemoveChip: (chip: SelectionChip) => void
+  /** The Venn's regions; `undefined` over a meaning search, which no rule repeats. */
+  regions: RegionCounts | undefined
+  /** A Venn picture, which the tab records as rules over the filter. */
+  onAdjust: (keep: Regions) => void
+  selectedFirst: boolean
+  onSelectedFirstChange: (on: boolean) => void
+  onCopyLinks: () => void
+  onExportMarkdown: () => void
 }
 
 /**
  * The Post selection (PTR-05): what Summarize, Chat, Tag run and Discovery
  * cover, apart from what the feed shows. Select all and Deselect all take
- * what the filter shows; the chips are the steps, last one wins.
+ * what the filter shows; the chips are the steps, last one wins. Its tools
+ * (PTR-06): the Channels tab's Adjust selection Venn, without the action
+ * limit and the one picture rules cannot draw; Selected first; and Copy
+ * links and Export Markdown over the selected Posts the filter shows.
  */
 export function PostSelectionBar({
   selected,
@@ -29,6 +50,12 @@ export function PostSelectionBar({
   onSelectAll,
   onDeselectAll,
   onRemoveChip,
+  regions,
+  onAdjust,
+  selectedFirst,
+  onSelectedFirstChange,
+  onCopyLinks,
+  onExportMarkdown,
 }: PostSelectionBarProps) {
   const over = ranked ? "these search results" : "what the filter shows"
   return (
@@ -56,6 +83,17 @@ export function PostSelectionBar({
       >
         Deselect all
       </button>
+      <SelectionAdjust
+        counts={regions ?? { hidden: 0, both: 0, fresh: 0 }}
+        edits={POST_EDITS}
+        allowed={isExpressible}
+        onApply={onAdjust}
+        disabled={
+          regions
+            ? undefined
+            : "A meaning search ranks Posts, which a rule cannot repeat. Select or deselect its results instead."
+        }
+      />
       <ol className="flex flex-wrap items-center gap-1.5" aria-label="Steps">
         {chips.map((chip, i) => (
           <li
@@ -80,6 +118,30 @@ export function PostSelectionBar({
           </li>
         ))}
       </ol>
+      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <BarToggle
+          on={selectedFirst}
+          onClick={() => onSelectedFirstChange(!selectedFirst)}
+          label="Selected first"
+          title="Selected Posts first, each part in the feed's order"
+        />
+        <button
+          type="button"
+          className={pillClass(false)}
+          title="Copy the Telegram links of the selected Posts the filter shows"
+          onClick={onCopyLinks}
+        >
+          <Link2 size={12} /> Copy links
+        </button>
+        <button
+          type="button"
+          className={pillClass(false)}
+          title="Download the selected Posts the filter shows as Markdown"
+          onClick={onExportMarkdown}
+        >
+          <FileDown size={12} /> Export Markdown
+        </button>
+      </div>
     </section>
   )
 }

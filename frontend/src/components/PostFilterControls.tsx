@@ -286,13 +286,24 @@ export function postVocabulary(
 
 // ---- The dropdowns ---------------------------------------------------------
 
-/** One value of a dropdown, with how many Posts in the window have it. */
-export type PostFacetValue = { id: string; label: string; count?: number }
+/** One value of a dropdown: how many Posts in the window have it, and are selected. */
+export type PostFacetValue = {
+  id: string
+  label: string
+  count?: number
+  selected?: number
+}
+
+/** The tick a row reads: all of its Posts selected, some, or none. */
+const tickOf = (selected: number, total: number): FacetMenuRow["tick"] =>
+  total > 0 && selected >= total ? "true" : selected > 0 ? "mixed" : "false"
 
 /**
  * A Type, Media or Language dropdown: a search and a row per value with a
  * funnel. Two funnels in one dropdown join with OR, different dropdowns with
- * AND. No tick yet: a tick will record a Selection rule (PTR-06).
+ * AND. With `onTick`, each row also has a tick that selects every Post with
+ * the value in the window when none is selected, and deselects them when
+ * some or all are, whatever the filter shows (PTR-06).
  */
 export function PostFacetMenu({
   facet,
@@ -301,6 +312,7 @@ export function PostFacetMenu({
   filter,
   onChange,
   onOpenChange,
+  onTick,
 }: {
   facet: PostFacet
   label: string
@@ -308,15 +320,20 @@ export function PostFacetMenu({
   filter: PostFilter
   onChange: (next: PostFilter) => void
   onOpenChange?: (open: boolean) => void
+  onTick?: (value: string, select: boolean) => void
 }) {
   const Icon = POST_CONDITION_ICON[facet]
-  const rows: FacetMenuRow[] = values.map((v) => ({
-    id: v.id,
-    label: v.label,
-    selected: 0,
-    total: v.count ?? 0,
-    tick: "false",
-  }))
+  const rows: FacetMenuRow[] = values.map((v) => {
+    const total = v.count ?? 0
+    const selected = v.selected ?? 0
+    return {
+      id: v.id,
+      label: v.label,
+      selected,
+      total,
+      tick: tickOf(selected, total),
+    }
+  })
   return (
     <FacetMenu
       icon={<Icon size={12} />}
@@ -326,6 +343,10 @@ export function PostFacetMenu({
       rows={rows}
       funnelled={funnelledValues(filter, facet)}
       labelOf={(id) => values.find((v) => v.id === id)?.label ?? id}
+      // Partly selected deselects: dropping a whole value from what an Action
+      // covers is what a tick is for (story 56).
+      onToggleSelect={onTick && ((row) => onTick(row.id, row.tick === "false"))}
+      tickHint="Tick: every Post with it, whatever the filter shows"
       onFunnel={(id, on) =>
         onChange(
           on

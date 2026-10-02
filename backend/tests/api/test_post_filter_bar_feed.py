@@ -364,9 +364,10 @@ def test_the_facets_count_each_value_in_the_window(
     )
 
     facets = _facets(client, operator)
+    # Nothing says otherwise, so every Post is selected (PTR-06).
     assert facets["languages"] == [
-        {"value": "fa", "count": 3},
-        {"value": "en", "count": 1},
+        {"value": "fa", "count": 3, "selected": 3},
+        {"value": "en", "count": 1, "selected": 1},
     ]
     media = {row["value"]: row["count"] for row in facets["media"]}
     assert [row["value"] for row in facets["media"]] == [
@@ -383,8 +384,8 @@ def test_the_facets_count_each_value_in_the_window(
 
     # The second account's facets are about its own Follows.
     assert _facets(client, other_headers)["languages"] == [
-        {"value": "de", "count": 1},
-        {"value": "fa", "count": 1},
+        {"value": "de", "count": 1, "selected": 1},
+        {"value": "fa", "count": 1, "selected": 1},
     ]
 
 

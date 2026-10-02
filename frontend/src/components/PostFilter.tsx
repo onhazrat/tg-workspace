@@ -20,6 +20,7 @@ import { funnelledValues } from "@/lib/filter-tree"
 import {
   emptyPostFilter,
   POST_TYPE_VALUES,
+  type PostFacet,
   type PostFilter as PostFilterTree,
 } from "@/lib/posts/post-filter"
 import type { PostFacetsResponse } from "../client"
@@ -43,6 +44,7 @@ import {
   type SearchMode,
 } from "../lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS } from "../lib/posts/post-media"
+import { facetRule } from "../lib/posts/post-selection"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
@@ -110,6 +112,8 @@ export interface PostFilterBarProps extends PostFilterProps {
   onCountingPillOpenChange: (open: boolean) => void
   /** The deployment's estimation floor, for the views editor's copy. */
   estimationFloorHours: number
+  /** A dropdown row's tick, which records a Selection rule (PTR-06). */
+  onFacetTick?: (facet: PostFacet, value: string, select: boolean) => void
 }
 
 /** The floor's default in `services/reach.py`, until the server's arrives. */
@@ -243,9 +247,14 @@ function PostSortMenu({
   )
 }
 
-const countOf = (facets: { value: string; count: number }[] | undefined) => {
-  const counts = new Map(facets?.map((f) => [f.value, f.count]))
-  return (value: string) => counts.get(value)
+type FacetCount = { value: string; count: number; selected: number }
+
+const countOf = (facets: FacetCount[] | undefined) => {
+  const counts = new Map(facets?.map((f) => [f.value, f]))
+  return (value: string) => {
+    const f = counts.get(value)
+    return { count: f?.count, selected: f?.selected }
+  }
 }
 
 /** The bar itself, props only, so it renders without providers. */
@@ -254,28 +263,31 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
   const filter = s.postFilter
   const typeCount = countOf(facets?.types)
   const mediaCount = countOf(facets?.media)
+  const languageCount = countOf(facets?.languages)
   const languages = languageOptions(
     facets?.languages,
     props.channelLanguages,
     funnelledValues(filter, "language"),
-  ).map(({ code, count }) => ({
+  ).map(({ code }) => ({
     id: code,
     label: languageLabel(code),
-    count,
+    ...languageCount(code),
   }))
-  const values: Record<"type" | "media" | "language", PostFacetValue[]> = {
+  const values: Record<PostFacet, PostFacetValue[]> = {
     type: POST_TYPE_VALUES.map((t) => ({
       id: t.value,
       label: t.label,
-      count: typeCount(t.value),
+      ...typeCount(t.value),
     })),
     media: MEDIA_KIND_OPTIONS.map((m) => ({
       id: m.value,
       label: m.label,
-      count: mediaCount(m.value),
+      ...mediaCount(m.value),
     })),
     language: languages,
   }
+  // A tick reads the window's counts, so it waits for them.
+  const onFacetTick = facets ? props.onFacetTick : undefined
   const vocabulary = postVocabulary(
     {
       languages: languages.map(({ id, label }) => ({ id, label })),
@@ -325,6 +337,10 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
               filter={filter}
               onChange={s.setPostFilter}
               onOpenChange={props.onCountingPillOpenChange}
+              onTick={
+                onFacetTick &&
+                ((value, select) => onFacetTick(facet, value, select))
+              }
             />
           ))}
           <PostFiltersMenu
@@ -424,8 +440,9 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const spot = useSpotlight()
   // A spotlight's tree is what the row shows and edits (PTR-04).
+  const scraper = useScraper()
   const { controls, keywordIgnored } = spotlitBar(
-    useScraper(),
+    scraper,
     spot.spotlight,
     spot.setFilter,
   )
@@ -466,6 +483,11 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
       }
       onCountingPillOpenChange={(open) =>
         setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
+      }
+      onFacetTick={(facet, value, select) =>
+        scraper.appendSelection([
+          facetRule(select, facet, value, spot.spotlight?.channel),
+        ])
       }
     />
   )

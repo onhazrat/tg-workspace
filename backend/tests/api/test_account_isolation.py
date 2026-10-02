@@ -210,7 +210,8 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "the feed, in both query shapes; test_post_tenancy_scoping.py. Under "
         "the Post filter, a Channel Condition included, with two live accounts; "
         "test_post_filter_tree.py. Under a Post selection naming a foreign "
-        "Channel by Pick and by rule; test_post_selection.py",
+        "Channel by Pick and by rule, and `onlySelected` under it; "
+        "test_post_selection.py",
     ),
     ("POST", f"{DATA}/posts/lookup"): (
         Reason.COVERED_ELSEWHERE,
@@ -222,7 +223,8 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "test_post_tenancy_scoping.py; under the Post filter with two live "
         "accounts, test_post_filter_tree.py; the selected counts under a "
-        "foreign Pick and rule, test_post_selection.py",
+        "foreign Pick and rule, and the selected Posts the filter shows, "
+        "test_post_selection.py",
     ),
     ("GET", f"{DATA}/posts/view-estimate"): (
         Reason.NOT_ROW_ADDRESSED,
@@ -231,7 +233,8 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ("POST", f"{DATA}/posts/facets"): (
         Reason.COVERED_ELSEWHERE,
         "two live accounts; test_post_filter_bar_feed.py, and the Types and "
-        "the total in test_post_filter_tree.py",
+        "the total in test_post_filter_tree.py; each value's selected count "
+        "under a Post selection, test_post_selection.py",
     ),
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,

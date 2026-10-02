@@ -243,6 +243,8 @@ class Rule:
     """Select or deselect every Post a Post filter matches, as it was made."""
 
     select: bool
+    #: Reach every Post the filter does not match instead (PTR-06).
+    negated: bool = False
     tree: TreeGroup | None = None
     keyword: str | None = None
     sort: FeedSort = "newest"

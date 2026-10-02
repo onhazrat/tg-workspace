@@ -3301,6 +3301,12 @@ export type PostCountsResponse = {
         [key: string]: number;
     };
     /**
+     * Selectedshown
+     */
+    selectedShown: {
+        [key: string]: number;
+    };
+    /**
      * Toonewtojudge
      */
     tooNewToJudge: number;
@@ -3309,7 +3315,7 @@ export type PostCountsResponse = {
 /**
  * PostFacetCount
  *
- * How many Posts in the window have one value.
+ * How many Posts in the window have one value, and how many of those are selected.
  */
 export type PostFacetCount = {
     /**
@@ -3320,6 +3326,38 @@ export type PostFacetCount = {
      * Count
      */
     count: number;
+    /**
+     * Selected
+     */
+    selected: number;
+};
+
+/**
+ * PostFacetsRequest
+ *
+ * The Channels, the window and the Post selection.
+ */
+export type PostFacetsRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
 };
 
 /**
@@ -3349,7 +3387,7 @@ export type PostFacetsResponse = {
 /**
  * PostFeedRequest
  *
- * `PostFilteredRequest` plus the feed's paging, cap mode and sort.
+ * `PostFilteredRequest` plus the feed's paging, grouping and the selection's order.
  *
  * `limit`/`offset` keep the same bounds the query params enforced, so an
  * out-of-range page is still a 422 rather than an unbounded read.
@@ -3389,6 +3427,18 @@ export type PostFeedRequest = {
         kind: 'pick';
     } & SelectionPick)> | null;
     /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
      * Channelname
      */
     channelName?: string | null;
@@ -3401,21 +3451,17 @@ export type PostFeedRequest = {
      */
     offset?: number;
     /**
-     * Maxperchannelmode
-     */
-    maxPerChannelMode?: 'ordered' | 'random';
-    /**
-     * Sort
-     */
-    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
-    /**
      * Groupbychannel
      */
     groupByChannel?: boolean;
     /**
-     * Seed
+     * Selectedfirst
      */
-    seed?: number;
+    selectedFirst?: boolean;
+    /**
+     * Onlyselected
+     */
+    onlySelected?: boolean;
 };
 
 /**
@@ -3523,6 +3569,18 @@ export type PostFilteredRequest = {
     } & SelectionRuleInput) | ({
         kind: 'pick';
     } & SelectionPick)> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
 };
 
 /**
@@ -3741,30 +3799,6 @@ export type PostTranslationResponse = {
      * Timestamp
      */
     timestamp?: number;
-};
-
-/**
- * PostWindowRequest
- *
- * The Channels and the Analysis window, carried in a request body.
- *
- * The channel selection can run to the full account — over a thousand handles —
- * which as `?channelNames=a,b,c,...` produced URLs long enough to hit proxy and
- * server header limits. A body has no such ceiling.
- */
-export type PostWindowRequest = {
-    /**
-     * Channelnames
-     */
-    channelNames?: Array<string> | null;
-    /**
-     * Window
-     */
-    window?: ({
-        mode: 'live';
-    } & LiveAnalysisWindow) | ({
-        mode: 'fixed';
-    } & FixedAnalysisWindow) | null;
 };
 
 /**
@@ -4814,7 +4848,7 @@ export type SelectionPick = {
 /**
  * SelectionRule
  *
- * Select or deselect every Post a Post filter matches.
+ * Select or deselect every Post a Post filter matches, or with `not` every Post it does not.
  */
 export type SelectionRuleInput = {
     /**
@@ -4825,13 +4859,17 @@ export type SelectionRuleInput = {
      * Select
      */
     select: boolean;
+    /**
+     * Not
+     */
+    not?: boolean;
     filter?: PostFilterSnapshotInput;
 };
 
 /**
  * SelectionRule
  *
- * Select or deselect every Post a Post filter matches.
+ * Select or deselect every Post a Post filter matches, or with `not` every Post it does not.
  */
 export type SelectionRuleOutput = {
     /**
@@ -4842,6 +4880,10 @@ export type SelectionRuleOutput = {
      * Select
      */
     select: boolean;
+    /**
+     * Not
+     */
+    not?: boolean;
     filter?: PostFilterSnapshotOutput;
 };
 
@@ -8020,7 +8062,7 @@ export type DataPostsViewEstimateResponses = {
 export type DataPostsViewEstimateResponse = DataPostsViewEstimateResponses[keyof DataPostsViewEstimateResponses];
 
 export type DataPostsFacetsData = {
-    body: PostWindowRequest;
+    body: PostFacetsRequest;
     path?: never;
     query?: never;
     url: '/api/v1/data/posts/facets';

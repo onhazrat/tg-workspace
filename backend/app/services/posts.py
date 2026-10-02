@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections import defaultdict
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from sqlalchemy import (
@@ -18,6 +18,7 @@ from sqlalchemy import (
     literal,
     not_,
     or_,
+    true,
     update,
     values,
 )
@@ -566,6 +567,7 @@ def list_feed(
     offset: int = 0,
     selected: ColumnElement[bool] | None = None,
     only_selected: bool = False,
+    selected_first: bool = False,
 ) -> list[dict[str, Any]]:
     """One page of the Posts feed, filtered / capped / sorted entirely in SQL.
 
@@ -581,14 +583,172 @@ def list_feed(
     ends in ``(channel_name, post_id)`` so offset paging is deterministic (a
     non-deterministic order silently repeats and skips rows across pages).
 
+    `selected` is the Post selection's predicate (`post_selection`): with it,
+    each row says whether it is selected, `only_selected` keeps only those of
+    the Posts the filter shows, which is what an Action and copy read, and
+    `selected_first` orders them before the rest, each part in the feed's own
+    order (PTR-05, PTR-06).
+    """
+    shown = _shown(
+        session,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+        max_per_channel=max_per_channel,
+        max_per_channel_mode=max_per_channel_mode,
+        sort=sort,
+        seed=seed,
+        selected=selected,
+    )
+    stmt = shown.stmt
+    order = feed_order_by(sort, group_by_channel, shown.entity, shown.reading)
+    if shown.flag is not None:
+        if only_selected:
+            stmt = stmt.where(shown.flag)
+        if selected_first:
+            order = [shown.flag.desc(), *order]
+    stmt = stmt.order_by(*order).offset(offset).limit(limit)
+    return _rows(session, stmt, selected is not None)
+
+
+def count_selected_shown(
+    session: Session,
+    selected: ColumnElement[bool],
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
+    max_per_channel_mode: CapMode = "ordered",
+    sort: FeedSort = "newest",
+    seed: int = 0,
+) -> dict[str, int]:
+    """Per channel, how many of the Posts the feed shows are selected (PTR-06).
+
+    The Adjust selection Venn's middle region. Read over the feed's own
+    statement, cap included, so it counts exactly the rows a page would flag;
+    a channel with none is absent, as in `count_scope`.
+    """
+    shown = _shown(
+        session,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+        max_per_channel=max_per_channel,
+        max_per_channel_mode=max_per_channel_mode,
+        sort=sort,
+        seed=seed,
+        selected=selected,
+    )
+    assert shown.flag is not None
+    # `execute`: the statement began as `select(Post)`, which SQLModel's
+    # `exec` would read as scalars and drop the count.
+    rows = session.execute(
+        shown.stmt.with_only_columns(shown.entity.channel_name, func.count())
+        .where(shown.flag)
+        .group_by(shown.entity.channel_name)
+    ).all()
+    return {str(channel): int(n) for channel, n in rows}
+
+
+def count_shown_and_selected(
+    session: Session,
+    selected: ColumnElement[bool],
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
+    filters: PostFilters | None = None,
+    max_per_channel: int = 0,
+    max_per_channel_mode: CapMode = "ordered",
+    sort: FeedSort = "newest",
+    seed: int = 0,
+) -> dict[str, Any]:
+    """The counts read, per channel: shown, selected, and both (PTR-06).
+
+    What the filter shows and how many it hid as too new to judge
+    (`count_scope`), what the Post selection selects filters aside
+    (`count_selected`), and the selected Posts the filter shows
+    (`count_selected_shown`), which the Adjust selection Venn subtracts the
+    other two regions from.
+    """
+    counts, too_new = count_scope(
+        session,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+        max_per_channel=max_per_channel,
+    )
+    selected_count = count_selected(
+        session,
+        selected,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    selected_shown = count_selected_shown(
+        session,
+        selected,
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+        max_per_channel=max_per_channel,
+        max_per_channel_mode=max_per_channel_mode,
+        sort=sort,
+        seed=seed,
+    )
+    return {
+        "counts": counts,
+        "too_new": too_new,
+        "selected": selected_count,
+        "selected_shown": selected_shown,
+    }
+
+
+@dataclass(frozen=True)
+class _Shown:
+    """The Posts the feed shows, unordered: what to select from and order by."""
+
+    stmt: Any
+    #: `Post`, or its alias over the capped subquery.
+    entity: Any
+    #: The selection flag as that statement can read it; `None` unasked.
+    flag: ColumnElement[bool] | None
+    reading: ViewReading
+
+
+def _shown(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None,
+    start_date: int | None,
+    end_date: int | None,
+    filters: PostFilters | None,
+    max_per_channel: int,
+    max_per_channel_mode: CapMode,
+    sort: FeedSort,
+    seed: int,
+    selected: ColumnElement[bool] | None,
+) -> _Shown:
+    """The feed's statement before its order and page.
+
     ``user_id`` narrows the read to Channels the caller Follows (ticket 16).
     The predicate goes on ``base``, *before* the ``row_number()`` wrapper
     below, so a capped feed ranks only rows the caller can see — applying it
     outside the subquery would let another account's posts consume the cap.
-
-    `selected` is the Post selection's predicate (`post_selection`): with it,
-    each row says whether it is selected, and `only_selected` keeps only
-    those, which is what an Action reads (PTR-05).
     """
     base = _in_scope(
         session,
@@ -602,39 +762,29 @@ def list_feed(
     reading = (filters or PostFilters()).reading
     if selected is not None:
         base = base.add_columns(selected.label("selected"))
-        if only_selected:
-            base = base.where(selected)
+    if max_per_channel <= 0:
+        return _Shown(base, Post, selected, reading)
 
-    if max_per_channel > 0:
-        # `ordered` ranks by the chosen order, so the N kept are the first N
-        # the feed would show; under `newest` that is the newest N, exactly
-        # what `latest` kept.
-        cap_order = (
-            [random_cap_order(seed)]
-            if max_per_channel_mode == "random"
-            else channel_order(sort, Post, reading)
-        )
-        row_number = (
-            func.row_number()
-            .over(partition_by=col(Post.channel_name), order_by=cap_order)
-            .label("rn")
-        )
-        ranked = base.add_columns(row_number).subquery()
-        capped = aliased(Post, ranked)
-        stmt = (
-            select(capped, *([ranked.c.selected] if selected is not None else []))
-            .where(ranked.c.rn <= max_per_channel)
-            .order_by(*feed_order_by(sort, group_by_channel, capped, reading))
-            .offset(offset)
-            .limit(limit)
-        )
-    else:
-        stmt = (
-            base.order_by(*feed_order_by(sort, group_by_channel, Post, reading))
-            .offset(offset)
-            .limit(limit)
-        )
-    return _rows(session, stmt, selected is not None)
+    # `ordered` ranks by the chosen order, so the N kept are the first N the
+    # feed would show; under `newest` that is the newest N, exactly what
+    # `latest` kept.
+    cap_order = (
+        [random_cap_order(seed)]
+        if max_per_channel_mode == "random"
+        else channel_order(sort, Post, reading)
+    )
+    row_number = (
+        func.row_number()
+        .over(partition_by=col(Post.channel_name), order_by=cap_order)
+        .label("rn")
+    )
+    ranked = base.add_columns(row_number).subquery()
+    capped = aliased(Post, ranked)
+    flag = ranked.c.selected if selected is not None else None
+    stmt = select(capped, *([flag] if flag is not None else [])).where(
+        ranked.c.rn <= max_per_channel
+    )
+    return _Shown(stmt, capped, flag, reading)
 
 
 def _rows(session: Session, stmt: Any, flagged: bool) -> list[dict[str, Any]]:
@@ -821,20 +971,24 @@ def count_facets_in_scope(
     channel_names: list[str] | None = None,
     start_date: int | None = None,
     end_date: int | None = None,
+    selected: ColumnElement[bool] | None = None,
 ) -> dict[str, Any]:
     """How many Posts in the window have each Type, media kind and Language.
 
     The counts the Type, Media and Language dropdowns print beside each value
     (PTR-03): how many Posts in the window have it, **filters aside**, because
-    a dropdown row is a value to funnel on, and later a value to select by
-    whatever the filter shows (PTR-06). No keyword, no tree, no cap.
+    a dropdown row is a value to funnel on, and a value to select by whatever
+    the filter shows. Each value also says how many of its Posts `selected`
+    selects, which is what its tick reads (PTR-06). No keyword, no tree, no cap.
 
     Languages are the ones present, most frequent first, an unread Post left
     out because it has no Language to funnel. The Types are all three and the
     media kinds all six, in the dropdowns' order, zero included; both overlap,
     so they are filtered aggregates over one scan rather than a `GROUP BY`.
-    `total` is every Post in the window, in the same scan.
+    `total` is every Post in the window, in the same scan. Each value is
+    `(value, count, selected)`.
     """
+    chosen = true() if selected is None else selected
 
     def scoped(stmt: Any) -> Any:
         return _in_scope(
@@ -847,9 +1001,12 @@ def count_facets_in_scope(
             filters=None,
         )
 
+    def both(clause: Any) -> list[Any]:
+        return [func.count().filter(clause), func.count().filter(and_(clause, chosen))]
+
     followed = frozenset(visible_channel_names(session, user_id=user_id))
     language_rows = session.exec(
-        scoped(select(col(Post.language), func.count()))
+        scoped(select(col(Post.language), func.count(), func.count().filter(chosen)))
         .where(col(Post.language).is_not(None))
         .group_by(col(Post.language))
     ).all()
@@ -858,27 +1015,34 @@ def count_facets_in_scope(
             select(
                 func.count(),
                 *(
-                    func.count().filter(post_type_clause(value, followed))
+                    agg
                     for value in POST_TYPE_ORDER
+                    for agg in both(post_type_clause(value, followed))
                 ),
                 *(
-                    func.count().filter(media_kind_clause(kind))
+                    agg
                     for kind in MEDIA_KIND_ORDER
+                    for agg in both(media_kind_clause(kind))
                 ),
             )
         )
     ).one()
     total, *rest = counts
-    types, kinds = rest[: len(POST_TYPE_ORDER)], rest[len(POST_TYPE_ORDER) :]
+    pairs = list(zip(rest[::2], rest[1::2], strict=True))
+    types, kinds = pairs[: len(POST_TYPE_ORDER)], pairs[len(POST_TYPE_ORDER) :]
 
     return {
         "total": total,
-        "types": list(zip(POST_TYPE_ORDER, types, strict=True)),
+        "types": [
+            (value, n, m) for value, (n, m) in zip(POST_TYPE_ORDER, types, strict=True)
+        ],
         "languages": sorted(
-            ((language, n) for language, n in language_rows),
-            key=lambda kv: (-kv[1], kv[0]),
+            ((language, n, m) for language, n, m in language_rows),
+            key=lambda row: (-row[1], row[0]),
         ),
-        "media": list(zip(MEDIA_KIND_ORDER, kinds, strict=True)),
+        "media": [
+            (kind, n, m) for kind, (n, m) in zip(MEDIA_KIND_ORDER, kinds, strict=True)
+        ],
     }
 
 

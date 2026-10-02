@@ -15,11 +15,11 @@ from app.schemas.posts import (
     BulkUpsertPostsResponse,
     PostCountsResponse,
     PostFacetCount,
+    PostFacetsRequest,
     PostFacetsResponse,
     PostFeedRequest,
     PostFilteredRequest,
     PostLookupRequest,
-    PostWindowRequest,
     SelectablePostResponse,
     ViewCurveResponse,
     ViewEstimateResponse,
@@ -29,9 +29,8 @@ from app.services.post_selection import PostScope
 from app.services.posts import (
     bulk_upsert_posts,
     count_facets_in_scope,
-    count_selected,
+    count_shown_and_selected,
 )
-from app.services.posts import count_scope as count_scope_impl
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
 from app.services.settling_curve import current_estimate
@@ -57,7 +56,9 @@ def list_posts(
     can be the entire account — see `PostScopeRequest`. This is a read expressed
     as a POST purely so the selection travels in the body.
 
-    Each post says whether the Post selection selects it.
+    Each post says whether the Post selection selects it. ``selectedFirst``
+    lists the selected Posts before the rest, and ``onlySelected`` returns only
+    the selected Posts the filter shows.
     """
     window = resolve_analysis_window(body.window)
     channel_names = body.resolved_channel_names()
@@ -79,6 +80,8 @@ def list_posts(
             limit=body.limit,
             offset=body.offset,
             selected=selected_in(session, body.selection, scope),
+            only_selected=body.only_selected,
+            selected_first=body.selected_first,
         )
     ]
 
@@ -93,33 +96,35 @@ def posts_counts(
 
     Replaces the client's `buildPostsInScopeCounts`, which counted the fully
     fetched, client-filtered post array. Also says how many Posts an Estimated
-    views bound hid for being too new to judge, and how many Posts in the
-    window the Post selection selects, filters aside.
+    views bound hid for being too new to judge, how many Posts in the window
+    the Post selection selects, filters aside, and how many of the Posts the
+    filter shows it selects.
 
     POST rather than GET because the scope carries the channel selection: this is
     a read expressed as a POST purely so the selection travels in the body.
     """
     window = resolve_analysis_window(body.window)
-    counts, too_new = count_scope_impl(
-        session,
-        user_id=current_user.id,
-        channel_names=body.cleaned_channel_names(),
-        start_date=window.start,
-        end_date=window.end,
-        filters=parse_post_filters(session, body, tree=body.filter),
-        max_per_channel=body.max_per_channel,
-    )
     channel_names = body.cleaned_channel_names()
     scope = PostScope(current_user.id, channel_names, window.start, window.end)
-    selected = count_selected(
+    counted = count_shown_and_selected(
         session,
         selected_in(session, body.selection, scope),
         user_id=current_user.id,
         channel_names=channel_names,
         start_date=window.start,
         end_date=window.end,
+        filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
+        max_per_channel=body.max_per_channel,
+        max_per_channel_mode=body.max_per_channel_mode,
+        sort=body.sort,
+        seed=body.seed,
     )
-    return PostCountsResponse(counts=counts, selected=selected, tooNewToJudge=too_new)
+    return PostCountsResponse(
+        counts=counted["counts"],
+        selected=counted["selected"],
+        selectedShown=counted["selected_shown"],
+        tooNewToJudge=counted["too_new"],
+    )
 
 
 # PFB-03. A GET: it reads the curve and two settings, nothing per account.
@@ -140,23 +145,31 @@ def posts_view_estimate(
 # on `VIEW_AS_READ_ONLY_PATHS` beside it.
 @router.post("/posts/facets")
 def posts_facets(
-    body: PostWindowRequest,
+    body: PostFacetsRequest,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> PostFacetsResponse:
-    """How many Posts in the window have each Type, media kind and Language."""
+    """How many Posts in the window have each Type, media kind and Language.
+
+    And how many of each value the Post selection selects.
+    """
     window = resolve_analysis_window(body.window)
+    channel_names = body.cleaned_channel_names()
+    scope = PostScope(current_user.id, channel_names, window.start, window.end)
     facets = count_facets_in_scope(
         session,
         user_id=current_user.id,
-        channel_names=body.cleaned_channel_names(),
+        channel_names=channel_names,
         start_date=window.start,
         end_date=window.end,
+        selected=selected_in(session, body.selection, scope),
     )
     return PostFacetsResponse(
         total=facets["total"],
         **{
-            key: [PostFacetCount(value=v, count=n) for v, n in facets[key]]
+            key: [
+                PostFacetCount(value=v, count=n, selected=m) for v, n, m in facets[key]
+            ]
             for key in ("types", "languages", "media")
         },
     )

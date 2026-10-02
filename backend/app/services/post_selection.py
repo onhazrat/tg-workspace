@@ -31,6 +31,7 @@ from sqlalchemy import (
     column,
     false,
     func,
+    not_,
     true,
     tuple_,
     values,
@@ -118,7 +119,17 @@ def _picked(picks: list[Pick]) -> ColumnElement[bool]:
 def _reached(
     session: Session, rule: Rule, scope: PostScope, followed: frozenset[str] | None
 ) -> ColumnElement[bool]:
-    """The Posts `rule` reaches: its filter over the scope, then its cap."""
+    """The Posts `rule` reaches: its filter's over the scope, or with `negated` the rest."""
+    matched = _matched(session, rule, scope, followed)
+    # A keyword over a Post with no text is NULL, which NOT keeps NULL; the
+    # coalesce makes "not matched" two-valued, as the tree's atoms are.
+    return not_(func.coalesce(matched, false())) if rule.negated else matched
+
+
+def _matched(
+    session: Session, rule: Rule, scope: PostScope, followed: frozenset[str] | None
+) -> ColumnElement[bool]:
+    """The Posts `rule`'s filter matches over the scope, then its cap."""
     reading = view_reading(session, rule.view_measure, sort=rule.sort)
     filters = PostFilters(
         keyword=rule.keyword,

@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 
-import { addPostFunnel, emptyPostFilter } from "./post-filter"
+import { addPostFunnel, emptyPostFilter, printPostFilter } from "./post-filter"
 import {
   appendSteps,
   DEFAULT_SELECTION,
   EMPTY_SNAPSHOT,
+  facetRule,
+  isExpressible,
   loadSelection,
   MAX_PICKS,
   MAX_RULES,
   type PostFilterSnapshot,
   type PostSelection,
   pick,
+  regionCounts,
+  regionSteps,
   removeChip,
   rule,
   runPicks,
@@ -253,5 +257,120 @@ describe("session persistence", () => {
     sessionStorage.setItem(`u:alice:${SELECTION_STORAGE_KEY}`, '[{"kind":"x"}]')
 
     expect(loadSelection()).toEqual(DEFAULT_SELECTION)
+  })
+})
+
+// ---- PTR-06 ------------------------------------------------------------------
+
+describe("facetRule", () => {
+  it("is that one Condition and nothing of the current filter", () => {
+    const { filter, ...made } = facetRule(false, "language", "ar")
+    const { tree, ...rest } = filter
+    const { tree: _none, ...empty } = EMPTY_SNAPSHOT
+    expect(made).toEqual({ kind: "rule", select: false })
+    expect(rest).toEqual(empty)
+    // The node ids differ; the text form is the tree.
+    expect(tree && printPostFilter(tree)).toBe(
+      arabic.tree && printPostFilter(arabic.tree),
+    )
+  })
+
+  it("names the spotlit Channel, whose Posts the rows count", () => {
+    const { filter } = facetRule(true, "language", "ar", "chan")
+    expect(filter.tree && printPostFilter(filter.tree)).toBe(
+      printPostFilter(
+        addPostFunnel(
+          {
+            kind: "group",
+            id: "root",
+            op: "and",
+            children: [
+              {
+                kind: "atom",
+                id: "c",
+                cond: { type: "channel", value: "chan" },
+              },
+            ],
+          },
+          "language",
+          "ar",
+        ),
+      ),
+    )
+  })
+
+  it("reads as the value it reaches", () => {
+    const list = steps(
+      appendSteps(DEFAULT_SELECTION, [facetRule(false, "language", "ar")]),
+    )
+    expect(selectionChips(list).map((c) => c.label)).toEqual([
+      "Select all",
+      "Deselect Arabic",
+    ])
+  })
+})
+
+describe("a negated rule", () => {
+  const notArabic = { ...rule(false, arabic), not: true }
+  const notAll = { ...rule(false), not: true }
+
+  it("reads as everything but what it names", () => {
+    const list = steps(appendSteps(DEFAULT_SELECTION, [notArabic]))
+    expect(selectionChips(list).at(-1)?.label).toBe("Deselect all but Arabic")
+  })
+
+  it("never replaces the steps before it, even over an empty filter", () => {
+    const list = steps(appendSteps(DEFAULT_SELECTION, [notAll]))
+    expect(list).toEqual([...DEFAULT_SELECTION, notAll])
+  })
+
+  it("travels with its flag, and a plain rule without one", () => {
+    expect(selectionBody([notArabic])[0]).toMatchObject({ not: true })
+    expect("not" in selectionBody([rule(false, arabic)])[0]).toBe(false)
+  })
+})
+
+describe("the Venn over Posts", () => {
+  const F = arabic
+  const keep = (hidden: boolean, both: boolean, fresh: boolean) => ({
+    hidden,
+    both,
+    fresh,
+  })
+
+  it("maps each preset to the rules the spec names", () => {
+    // Add shown: select F.
+    expect(regionSteps(keep(true, true, true), F)).toEqual([rule(true, F)])
+    // Remove shown: deselect F.
+    expect(regionSteps(keep(true, false, false), F)).toEqual([rule(false, F)])
+    // Keep only shown: deselect NOT F.
+    expect(regionSteps(keep(false, true, false), F)).toEqual([
+      { ...rule(false, F), not: true },
+    ])
+    // Select only shown: deselect all, then select F.
+    expect(regionSteps(keep(false, true, true), F)).toEqual([
+      rule(false),
+      rule(true, F),
+    ])
+  })
+
+  it("records nothing for the picture that changes nothing", () => {
+    expect(regionSteps(keep(true, true, false), F)).toEqual([])
+  })
+
+  it("refuses the picture that would flip each shown Post", () => {
+    expect(isExpressible(keep(true, false, true))).toBe(false)
+    expect(isExpressible(keep(false, false, true))).toBe(false)
+    expect(isExpressible(keep(true, true, true))).toBe(true)
+    expect(isExpressible(keep(false, false, false))).toBe(true)
+    expect(() => regionSteps(keep(true, false, true), F)).toThrow()
+  })
+
+  it("counts the three regions from the server's counts", () => {
+    expect(regionCounts({ selected: 10, selectedShown: 4, shown: 7 })).toEqual({
+      hidden: 6,
+      both: 4,
+      fresh: 3,
+    })
   })
 })

@@ -10,9 +10,14 @@
  * sends it.
  */
 
+import type { RegionCounts, Regions } from "@/lib/channels/selection-regions"
+import { addFunnel } from "@/lib/filter-tree"
 import { scopedSessionStorage } from "@/lib/storage/scoped"
 import {
+  addPostFunnel,
+  emptyPostFilter,
   isEmptyPostFilter,
+  type PostFacet,
   type PostFilter,
   postConditionLabel,
   printPostFilter,
@@ -37,6 +42,8 @@ export type PostFilterSnapshot = {
 export type SelectionRule = {
   kind: "rule"
   select: boolean
+  /** Reach every Post the filter does not match instead (PTR-06). */
+  not?: boolean
   filter: PostFilterSnapshot
 }
 export type SelectionPick = {
@@ -144,7 +151,7 @@ export function appendSteps(
   let next = steps
   for (const step of added)
     next =
-      step.kind === "rule" && isEmptySnapshot(step.filter)
+      step.kind === "rule" && !step.not && isEmptySnapshot(step.filter)
         ? [step]
         : [...next, step]
   const picks = next.filter((s) => s.kind === "pick").length
@@ -154,6 +161,75 @@ export function appendSteps(
     return `A selection holds at most ${MAX_RULES} rules. Remove a few chips, or start again with Select all.`
   return next
 }
+
+// ---- The selection tools (PTR-06) -------------------------------------------
+
+/**
+ * A tick on a Type, Media or Language row: every Post with that value in the
+ * window, whatever the filter shows, so the rule is that one Condition. In a
+ * Channel spotlight the rows count that Channel, so the rule names it too.
+ */
+export const facetRule = (
+  select: boolean,
+  facet: PostFacet,
+  value: string,
+  spotlit?: string,
+): SelectionRule =>
+  rule(select, {
+    ...EMPTY_SNAPSHOT,
+    tree: addPostFunnel(
+      spotlit
+        ? addFunnel(emptyPostFilter(), { type: "channel", value: spotlit })
+        : emptyPostFilter(),
+      facet,
+      value,
+    ),
+  })
+
+/**
+ * Whether rules over the filter can draw a Venn picture. Every picture can
+ * but the ones that drop the selected shown Posts while keeping the
+ * unselected ones: that flips each shown Post, and a rule sets Posts, it
+ * cannot flip them.
+ */
+export const isExpressible = (keep: Regions): boolean =>
+  keep.both || !keep.fresh
+
+/**
+ * The rules a Venn picture records over the current filter F: add shown is
+ * select F, remove shown deselect F, keep only shown deselect NOT F, select
+ * only shown deselect all then select F. Throws on a picture that is not
+ * expressible, which the Venn never offers.
+ */
+export function regionSteps(
+  keep: Regions,
+  shown: PostFilterSnapshot,
+): SelectionRule[] {
+  if (!isExpressible(keep)) throw new Error("a rule cannot flip each Post")
+  // Both shown regions alike: F is selected or deselected as a whole.
+  const uniform = keep.both === keep.fresh
+  if (!keep.hidden && uniform)
+    return [rule(false), ...(keep.both ? [rule(true, shown)] : [])]
+  return [
+    ...(keep.hidden ? [] : [{ ...rule(false, shown), not: true }]),
+    ...(uniform ? [rule(keep.both, shown)] : []),
+  ]
+}
+
+/**
+ * The Venn's three regions from the server's counts. Two reads answer them,
+ * so one can be a refetch behind the other for a moment; a region never
+ * reads below zero.
+ */
+export const regionCounts = (counts: {
+  selected: number
+  selectedShown: number
+  shown: number
+}): RegionCounts => ({
+  hidden: Math.max(0, counts.selected - counts.selectedShown),
+  both: counts.selectedShown,
+  fresh: Math.max(0, counts.shown - counts.selectedShown),
+})
 
 // ---- Chips -----------------------------------------------------------------
 
@@ -210,7 +286,7 @@ export function selectionChips(steps: PostSelection): SelectionChip[] {
       start: i,
       end: i + 1,
       select: step.select,
-      label: `${step.select ? "Select" : "Deselect"} ${snapshotLabel(step.filter)}`,
+      label: `${step.select ? "Select" : "Deselect"} ${step.not ? "all but " : ""}${snapshotLabel(step.filter)}`,
     })
   })
   return chips
