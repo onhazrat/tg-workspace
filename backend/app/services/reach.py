@@ -82,8 +82,10 @@ def curve_from_knots(knots: Sequence[Sequence[float]]) -> Curve:
 #: Staging's fit #5 of 2026-10-01 (REACH-09): 235,626 pairs from 21,575 Posts in
 #: 238 Channels, Observation stride 1, anchored at the default settling age of
 #: 24 hours. Every span was crossed by at least 14,000 pairs, so none took the
-#: older seed's shape; the flat 1.1 to 1.6 hour span is the fit's own
-#: monotone pooling. Shares rescaled to 1 at 24 hours and rounded to 4 places.
+#: older seed's shape. The flat 1.1 to 1.6 hour span is where the fit learned a
+#: dip and pool-adjacent-violators levelled it. The fit was already anchored at
+#: 24 hours, so rescaling to 1 there changed nothing; rounding to 4 places
+#: leaves the share at 24 hours within 2e-5 of 1.
 #: It replaces the first seed, a cross-Post measurement confounded by Channel
 #: growth, so a fresh deployment estimates through real View observations.
 SEED_KNOTS: Knots = tuple(
