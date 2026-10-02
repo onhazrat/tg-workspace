@@ -29,13 +29,12 @@ age.
 
 from __future__ import annotations
 
-import bisect
 import math
 import statistics
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Literal, NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -58,13 +57,6 @@ KNOT_AGES_HOURS: tuple[float, ...] = tuple(
 
 #: `(age in hours, share)` per knot, share 1 at the settling age.
 Knots = tuple[tuple[float, float], ...]
-
-
-def _step_share(steps: Sequence[Sequence[float]], age_hours: float) -> float:
-    """The share of the step whose range holds `age_hours`, the first below it."""
-    starts = [start for start, _share in steps]
-    index = max(bisect.bisect_right(starts, age_hours) - 1, 0)
-    return steps[index][1]
 
 
 def curve_from_knots(knots: Sequence[Sequence[float]]) -> Curve:
@@ -285,38 +277,29 @@ class ObservationPair(NamedTuple):
     late_views: int
 
 
-#: How a curve is spelled as data: steps or a fit's knots.
-CurveKind = Literal["steps", "knots"]
-
-
 @dataclass(frozen=True)
 class CurvePoints:
     """A Settling curve as data, so SQL and the browser can read it too (PFB-03).
 
-    `steps` is `(start of the age range, share)`, the first seed's shape,
-    which nothing in code produces since REACH-09; `knots` a fit's and the
-    seed's, piecewise-linear log share over log age. Callable, so it is a
-    `Curve` wherever one is taken.
+    The knots of a fit or the seed, piecewise-linear log share over log age.
+    Callable, so it is a `Curve` wherever one is taken.
     """
 
-    kind: CurveKind
-    points: tuple[tuple[float, float], ...]
+    points: Knots
 
     @cached_property
     def _curve(self) -> Curve:
-        if self.kind == "knots":
-            return curve_from_knots(self.points)
-        return lambda age: _step_share(self.points, age)
+        return curve_from_knots(self.points)
 
     def __call__(self, age_hours: float) -> float:
         return self._curve(age_hours)
 
     def wire(self) -> dict[str, Any]:
-        return {"kind": self.kind, "points": [list(point) for point in self.points]}
+        return {"points": [list(point) for point in self.points]}
 
 
 #: The seed curve as data (PFB-03).
-SEED_CURVE = CurvePoints("knots", SEED_KNOTS)
+SEED_CURVE = CurvePoints(SEED_KNOTS)
 
 
 def _non_decreasing(values: Sequence[float]) -> list[float]:

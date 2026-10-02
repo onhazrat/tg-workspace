@@ -6401,13 +6401,10 @@ export type ViewAsSessionsResponse = {
 /**
  * ViewCurveResponse
  *
- * A Settling curve as data: the seed's steps or a fit's knots.
+ * A Settling curve as data: `[age in hours, share]` knots, read as
+ * piecewise-linear log share over log age, flat outside them.
  */
 export type ViewCurveResponse = {
-    /**
-     * Kind
-     */
-    kind: 'steps' | 'knots';
     /**
      * Points
      */

@@ -11363,11 +11363,6 @@
       },
       "ViewCurveResponse": {
         "properties": {
-          "kind": {
-            "type": "string",
-            "enum": ["steps", "knots"],
-            "title": "Kind"
-          },
           "points": {
             "items": { "items": { "type": "number" }, "type": "array" },
             "type": "array",
@@ -11375,9 +11370,9 @@
           }
         },
         "type": "object",
-        "required": ["kind", "points"],
+        "required": ["points"],
         "title": "ViewCurveResponse",
-        "description": "A Settling curve as data: the seed's steps or a fit's knots."
+        "description": "A Settling curve as data: `[age in hours, share]` knots, read as\npiecewise-linear log share over log age, flat outside them."
       },
       "ViewEstimateResponse": {
         "properties": {

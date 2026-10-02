@@ -425,16 +425,14 @@ describe("post-view pipeline: parity with the server feed", () => {
  */
 describe("post-view pipeline: parity with the server's views feed", () => {
   const HOUR = 3_600_000
+  // `reach.py`'s SEED_KNOTS: 16 ages log-spaced from 30 minutes to 7 days.
+  const SEED_SHARES = [
+    0.0999, 0.2196, 0.3585, 0.3585, 0.4792, 0.4986, 0.5894, 0.6753, 0.7755,
+    0.8797, 1.0023, 1.1165, 1.2232, 1.3564, 1.6181, 1.903,
+  ]
   const SEED = {
     curve: {
-      kind: "steps" as const,
-      points: [
-        [0, 0.2],
-        [3, 0.59],
-        [6, 0.7],
-        [12, 0.86],
-        [24, 0.89],
-      ],
+      points: SEED_SHARES.map((share, i) => [0.5 * 336 ** (i / 15), share]),
     },
     settlingAgeHours: 24,
     estimationFloorHours: 3,
@@ -443,9 +441,9 @@ describe("post-view pipeline: parity with the server's views feed", () => {
     ["pv_a", 1, 5000, 48],
     ["pv_a", 2, 1000, 1],
     ["pv_a", 3, null, null],
-    ["pv_a", 4, 2000, 6],
+    ["pv_a", 4, 2000, 9],
     ["pv_b", 5, 3000, 30],
-    ["pv_b", 6, 800, 12],
+    ["pv_b", 6, 800, 20],
   ]
   const posts = corpus.map(([channel, id, views, age]) => {
     const timestamp = 1_000_000 + id * 60_000

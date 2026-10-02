@@ -64,7 +64,7 @@ def current_curve(session: Session) -> CurvePoints:
     fit = newest_fit(session)
     if fit is None:
         return SEED_CURVE
-    return CurvePoints("knots", tuple((age, share) for age, share in fit.knots))
+    return CurvePoints(tuple((age, share) for age, share in fit.knots))
 
 
 def current_estimate(session: Session) -> tuple[CurvePoints, ReachSettings]:

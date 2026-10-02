@@ -48,16 +48,12 @@ const view: PostViewOptions = {
 
 const persian = addPostFunnel(emptyPostFilter(), "language", "fa")
 
-/** The seed curve at the default settings, as the server hands it over. */
-const SEED_ESTIMATE = {
+/** A curve at the default settings, as the server hands it over. */
+const ESTIMATE = {
   curve: {
-    kind: "steps" as const,
     points: [
-      [0, 0.2],
-      [3, 0.59],
-      [6, 0.7],
-      [12, 0.86],
-      [24, 0.89],
+      [1, 0.25],
+      [24, 1],
     ],
   },
   settlingAgeHours: 24,
@@ -100,7 +96,7 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
     lookupPosts: async () => {
       throw new Error("lookupPosts should not be called")
     },
-    getViewEstimate: async () => SEED_ESTIMATE,
+    getViewEstimate: async () => ESTIMATE,
     ...overrides,
   }
 }
@@ -261,7 +257,7 @@ describe("computeScopedPosts", () => {
   test("semantic path: a views order reads the server's curve (PFB-03)", async () => {
     const HOUR = 3_600_000
     const ranked = [
-      // Settled at 5000, estimated from 2000 at 6h to 2543, too new at 1h.
+      // Settled at 5000, estimated from 2000 at 6h to 3663, too new at 1h.
       makePost("alpha", 1, 100, {
         viewsCount: 5000,
         viewsObservedAt: 100 + 48 * HOUR,
@@ -286,7 +282,7 @@ describe("computeScopedPosts", () => {
           lookupPosts: flagged(ranked),
           getViewEstimate: async () => {
             asked += 1
-            return SEED_ESTIMATE
+            return ESTIMATE
           },
         }),
       ).then((posts) => posts.map((p) => p.id))

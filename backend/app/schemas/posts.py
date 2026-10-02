@@ -42,7 +42,6 @@ from app.services.posts import (
     MAX_POST_LOOKUP_BATCH,
     MAX_POST_PAGE_SIZE,
 )
-from app.services.reach import CurveKind
 
 
 class PostLinkSpan(BaseModel):
@@ -142,9 +141,9 @@ class PostCountsResponse(BaseModel):
 
 
 class ViewCurveResponse(BaseModel):
-    """A Settling curve as data: the seed's steps or a fit's knots."""
+    """A Settling curve as data: `[age in hours, share]` knots, read as
+    piecewise-linear log share over log age, flat outside them."""
 
-    kind: CurveKind
     points: list[list[float]]
 
 

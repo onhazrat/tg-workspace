@@ -471,16 +471,11 @@ def apply_analysis_window(
 
 
 def _share_sql(curve: CurvePoints, age_hours: ColumnElement[Any]) -> Any:
-    """`curve`'s share at `age_hours`, as a CASE over its steps or knots."""
+    """`curve`'s share at `age_hours`, as a CASE over its knots.
+
+    `np.interp` over log age, flat outside the knots.
+    """
     points = curve.points
-    if curve.kind == "steps":
-        # Newest step first, so the first match is the step holding the age;
-        # below the first start is the first step, as `bisect` makes it.
-        return case(
-            *((age_hours >= start, literal(share)) for start, share in points[:0:-1]),
-            else_=literal(points[0][1]),
-        )
-    # `np.interp` over log age, flat outside the knots.
     at = func.ln(func.greatest(age_hours, points[0][0]))
     logs = [(math.log(age), math.log(share)) for age, share in points]
     spans = [

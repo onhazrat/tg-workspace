@@ -29,7 +29,6 @@ from app.services.reach import (
     DEFAULT_REACH_SETTINGS,
     KNOT_AGES_HOURS,
     REFRESH_HORIZON_HOURS,
-    SEED_CURVE,
     Reach,
     ReachSettings,
     compute_reach,
@@ -119,7 +118,6 @@ def test_a_fitted_curve_is_anchored_at_the_settling_age_too() -> None:
 
 def test_the_seed_curve_is_a_staging_fit_anchored_at_the_default_age() -> None:
     """REACH-09: staging's fit of 2026-10-01, share 1 at 24h, flat outside."""
-    assert SEED_CURVE.kind == "knots"
     assert seed_curve(SETTINGS.settling_age_hours) == pytest.approx(1, abs=1e-4)
     shares = [seed_curve(age) for age in KNOT_AGES_HOURS]
     assert shares == sorted(shares)
