@@ -16,6 +16,7 @@ import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
 import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
 import { DiscoverView } from "./components/DiscoverView"
+import { FindPrototype } from "./components/find-prototype/FindPrototype"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
 import { SettingsHub } from "./components/SettingsHub"
@@ -203,6 +204,7 @@ export default function App() {
       channels: () => <ChannelGrid scrollContainerRef={scrollContainerRef} />,
       tag: () => <TagView />,
       discover: () => <DiscoverView />,
+      find: () => <FindPrototype />,
       summary: () => <SummaryView />,
       action: () => <ActionView />,
       settings: () => <SettingsHub />,

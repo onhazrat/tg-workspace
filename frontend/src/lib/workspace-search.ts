@@ -48,6 +48,14 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** PROTOTYPE: the Find tab's `?variant=`. */
+  variant?: string
+  /**
+   * PROTOTYPE: the Find tab's filters, only what differs from the defaults,
+   * so a view can be shared and bookmarked. The router writes an object as
+   * JSON in the URL and parses it back.
+   */
+  find?: Record<string, unknown>
 }
 
 /** The string params: kept trimmed when non-blank, dropped otherwise. */
@@ -60,6 +68,7 @@ const ID_PARAMS = [
   "summary",
   "chatSession",
   "tagRun",
+  "variant",
 ] as const
 
 function trimmedString(value: unknown): string | undefined {
@@ -86,6 +95,12 @@ export function validateWorkspaceSearch(
     const value = trimmedString(search[key])
     if (value) result[key] = value
   }
+  if (
+    search.find &&
+    typeof search.find === "object" &&
+    !Array.isArray(search.find)
+  )
+    result.find = search.find as Record<string, unknown>
   const legacyGroup = trimmedString(search.channelGroup)
   if (legacyGroup && !result.channelFilter) {
     // No group names here, so it is written by id, which reads back.

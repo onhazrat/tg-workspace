@@ -54,6 +54,11 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
+        // PROTOTYPE: the Find tab's API (backend/scripts/proto_find_api.py).
+        "/proto": {
+          target: `http://127.0.0.1:${process.env.PROTO_API_PORT || 8012}`,
+          rewrite: (p) => p.replace(/^\/proto/, ""),
+        },
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

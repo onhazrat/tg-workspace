@@ -24,6 +24,8 @@ export const WORKSPACE_TABS = [
   { id: "summary", label: "Summary", icon: "FileText" },
   { id: "tag", label: "Tag", icon: "Tag" },
   { id: "discover", label: "Discover", icon: "Compass" },
+  // PROTOTYPE (find-prototype): throwaway, never merge.
+  { id: "find", label: "Find", icon: "Telescope" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "history", label: "History", icon: "History" },
   { id: "settings", label: "Settings", icon: "Settings" },

@@ -28,6 +28,7 @@ import {
   Settings,
   Sparkles,
   Tag,
+  Telescope,
   X,
   Zap,
 } from "lucide-react"
@@ -57,6 +58,7 @@ const TAB_ICONS = {
   Activity,
   Tag,
   Compass,
+  Telescope,
   Zap,
 }
 

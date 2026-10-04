@@ -1109,6 +1109,34 @@
     },
     {
       "default": null,
+      "name": "PROTO_API_PORT",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "PROTO_DSN",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": true
+    },
+    {
+      "default": null,
+      "name": "PROTO_PORT",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
+      "name": "PROTO_STAGING_API",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
       "name": "TEST_POSTGRES_DB",
       "required": false,
       "scope": "tooling",
