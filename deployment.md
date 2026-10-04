@@ -343,8 +343,8 @@ Workflows deploy via self-hosted runners with labels:
 
 | Environment | Trigger | Runner labels |
 |-------------|---------|---------------|
-| `staging` | Push to `main` | `self-hosted`, `staging` |
-| `production` | Release published | `self-hosted`, `production` |
+| `staging` | Push to `main`, or manual dispatch | `self-hosted`, `staging` |
+| `production` | Release published, or manual dispatch | `self-hosted`, `production` |
 
 ### Configure GitHub Environments
 

@@ -31,6 +31,7 @@ STAGING_DEPLOY_INPUTS = {
     "package.json",
     "pyproject.toml",
     "scripts/postgres-init/**",
+    "scripts/write-deploy-env.sh",
     "uv.lock",
 }
 
