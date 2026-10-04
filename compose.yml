@@ -333,10 +333,10 @@ services:
 
       - traefik.http.services.${STACK_NAME?Variable not set}-frontend.loadbalancer.server.port=80
 
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.rule=Host(`dashboard.${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.rule=Host(`${DOMAIN?Variable not set}`) || Host(`dashboard.${DOMAIN?Variable not set}`)
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.entrypoints=http
 
-      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.rule=Host(`dashboard.${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.rule=Host(`${DOMAIN?Variable not set}`)
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.entrypoints=https
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls=true
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.tls.certresolver=le
@@ -358,6 +358,21 @@ services:
       # Enable redirection for HTTP and HTTPS
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.middlewares=https-redirect
       - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-https.middlewares=${STACK_NAME?Variable not set}-frontend-compress
+
+      # The app lives on the bare domain. `dashboard.` was its host until
+      # 2026-10-04 and now redirects there permanently, so old links and
+      # bookmarks keep working while the browser only ever has one origin:
+      # scoped storage and CORS are per origin, and two live hosts would split
+      # a user's saved preferences between them.
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-legacy-https.rule=Host(`dashboard.${DOMAIN?Variable not set}`)
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-legacy-https.entrypoints=https
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-legacy-https.tls=true
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-legacy-https.tls.certresolver=le
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-legacy-https.service=${STACK_NAME?Variable not set}-frontend
+      - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-legacy-https.middlewares=${STACK_NAME?Variable not set}-frontend-legacy-redirect
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-frontend-legacy-redirect.redirectregex.regex=^https://dashboard\.(.*)
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-frontend-legacy-redirect.redirectregex.replacement=https://$${1}
+      - traefik.http.middlewares.${STACK_NAME?Variable not set}-frontend-legacy-redirect.redirectregex.permanent=true
 volumes:
   app-db-data:
   app-media-data:

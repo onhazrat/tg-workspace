@@ -6,7 +6,7 @@ Deploy the stack with Docker Compose on a remote server behind a shared Traefik 
 
 * Remote server with [Docker Engine](https://docs.docker.com/engine/install/) installed.
 * Domain DNS hosted on **Cloudflare** (required for automatic certificate issuance).
-* DNS A records for your domain (and subdomains, or a wildcard) pointing to the server — e.g. `api.`, `dashboard.`, `adminer.`, `traefik.` under `${DOMAIN}`. Orange-cloud (proxied) records are supported with the DNS-01 challenge.
+* DNS A records for your domain (and subdomains, or a wildcard) pointing to the server — `${DOMAIN}` itself (the frontend) and `api.`, `dashboard.` (redirects to the frontend), `adminer.`, `traefik.` under it. Orange-cloud (proxied) records are supported with the DNS-01 challenge.
 * A Cloudflare **API token** with **Zone → DNS → Edit** and **Zone → Zone → Read** for the target zone.
 * [GitHub Actions self-hosted runners](https://docs.github.com/en/actions/hosting-your-own-runners) (optional, for CD).
 
@@ -75,8 +75,8 @@ Set at minimum:
 | `SECRET_KEY` | JWT signing key — not `changethis`; must be stable across restarts |
 | `POSTGRES_PASSWORD` | Database password |
 | `FIRST_SUPERUSER` / `FIRST_SUPERUSER_PASSWORD` | Initial admin account |
-| `BACKEND_CORS_ORIGINS` | `https://dashboard.${DOMAIN},https://api.${DOMAIN}` |
-| `FRONTEND_HOST` | `https://dashboard.${DOMAIN}` |
+| `BACKEND_CORS_ORIGINS` | `https://${DOMAIN},https://api.${DOMAIN}` |
+| `FRONTEND_HOST` | `https://${DOMAIN}` |
 | `API_KEY` | **Required** in staging/production — scripts use `X-API-Key`; browser uses JWT |
 | `TOKEN_ENCRYPTION_KEY` | **Required** — Fernet key for bot tokens at rest (see `.env.example`) |
 | `USERS_OPEN_REGISTRATION` | **`false`** in production |
@@ -402,7 +402,7 @@ Replace `tg-summarizer.example.com` with your domain.
 
 | Service | Production | Staging |
 |---------|------------|---------|
-| Frontend | `https://dashboard.tg-summarizer.example.com` | `https://dashboard.staging.tg-summarizer.example.com` |
+| Frontend | `https://tg-summarizer.example.com` (`dashboard.` redirects) | `https://staging.tg-summarizer.example.com` |
 | API | `https://api.tg-summarizer.example.com` | `https://api.staging.tg-summarizer.example.com` |
 | API docs | `.../docs` | `.../docs` |
 | Adminer | `https://adminer.tg-summarizer.example.com` | `https://adminer.staging.tg-summarizer.example.com` |
