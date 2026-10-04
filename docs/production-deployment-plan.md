@@ -1,6 +1,6 @@
 # Production deployment on vm-contabo
 
-Status: in progress, started 2026-10-04.
+Status: live since 2026-10-04 on staging's data; cutover (below) is the operator's.
 
 Production runs on `vm-contabo` (Contabo, Ubuntu 24.04, 4 vCPU, 7.8 GB RAM,
 96 GB disk, public `94.250.201.181`, Tailscale `100.118.228.11`). Staging
@@ -39,64 +39,41 @@ Cloudflare token, so there was no token to reuse. Production does the same,
 as a VM-local edit to its copy of `compose.traefik.yml`; the records are
 DNS-only.
 
-## Steps
+## What was done (2026-10-04)
 
-### 1. Repo (one PR)
+1. **Repo**, PR #149: both deploy workflows call `scripts/write-deploy-env.sh`;
+   production deploys on `release: published` or `workflow_dispatch`.
+2. **VM base**: Docker from Docker's apt repository; runner `production-vm`
+   (label `production`, user `github`), so the deploy directory is
+   `/home/github/actions-runner/_work/tg-workspace/tg-workspace`, Compose
+   project `tg-workspace-production`.
+3. **derper and Traefik**: Traefik from `/root/code/traefik-public/`
+   (HTTP-01, dashboard password in `dashboard-password` there, root only);
+   derper containerised as above. `/derp/probe` 200, `/generate_204` 204,
+   `tailscale debug derp fleet-eu` clean over IPv4.
+4. **DNS**: `tg-workspace.hazrati.dev` and `*.tg-workspace.hazrati.dev`, A
+   to `94.250.201.181`, DNS-only like staging.
+5. **Secrets**: `production` environment; `SECRET_KEY`, `API_KEY`,
+   `POSTGRES_PASSWORD` new, the rest copied from staging's `.env`. Mail, Tor
+   and Sentry are empty on staging and so on production too, which means
+   password recovery sends nothing.
+6. **First deploy**: run 37215826002, empty stack, all 200.
+7. **Data copy**: `pg_dump -Fc -N proto` inside staging's db container
+   (3.0 GB from an 11 GB database), pulled to vm-contabo and checked by
+   sha256, `pg_restore -j 4` into a recreated `app`, then the `jobs` row
+   `{"auto_summary": {"enabled": false}}` inserted before the worker
+   started. Row counts matched staging to within its growth during the copy
+   (513,166 vs 512,619 Posts). Both dump files deleted.
+8. **Verify**: `/docs` and the health check 200, `openapi.json` paths and
+   schemas identical to `main` (122 and 213), derper still 200.
 
-- `deploy-production.yml` is stale: it writes no `.env` and lacks
-  `TOKEN_ENCRYPTION_KEY`. Bring it level with staging, add
-  `workflow_dispatch`, and stop the two `.env` writers drifting again by
-  moving the writer into one script both workflows call.
-- This plan.
+### The transfer is slow per stream
 
-### 2. VM base
-
-- Docker Engine from Docker's apt repository.
-- `github` user in the `docker` group; GitHub runner registered as
-  `production-vm` with label `production`, running as a systemd service.
-- `docker network create traefik-public`.
-
-### 3. derper and Traefik (done 2026-10-04)
-
-- Traefik up from `/root/code/traefik-public/`, HTTP-01, dashboard password
-  in `dashboard-password` there (root only).
-- derper containerised as above. `/derp/probe` 200, `/generate_204` 204,
-  `tailscale debug derp fleet-eu` clean over IPv4.
-
-### 4. DNS
-
-A records for `dashboard`, `api`, `adminer`, `traefik` under
-`tg-workspace.hazrati.dev` to `94.250.201.181`, proxied the same way
-staging's are.
-
-### 5. Secrets
-
-`production` GitHub environment with the secrets the workflow reads.
-
-### 6. First deploy
-
-`workflow_dispatch` on `main`. Brings up an empty stack and proves TLS,
-routing and the backend's secret checks.
-
-### 7. Data copy
-
-1. On staging: `pg_dump -Fc` to a file inside the db container (never stream
-   it through `docker exec`, which truncated a dump before), `docker cp`
-   out, `sha256sum`. Excludes the `proto` schema. `--no-owner --no-acl`.
-2. `scp -3` staging to vm-contabo, check the hash.
-3. On prod: stop `backend` and `worker`, drop and recreate `app`,
-   `pg_restore`, then set `jobs.auto_summary.enabled = false` in
-   `tg_app_settings` **before** the worker starts again.
-4. `docker compose up -d`; prestart migrates to the deployed revision.
-5. Delete the dump files on both boxes.
-
-### 8. Verify
-
-- `https://api.tg-workspace.hazrati.dev/docs` is 200 and its
-  `openapi.json` matches the deployed commit.
-- Dashboard login with the copied superuser.
-- Settings show `auto_summary` disabled.
-- derper still reachable.
+Staging to vm-contabo is 105 ms over a direct Tailscale path with a little
+loss, so one TCP stream (cubic) holds about 1 MB/s whatever either port can
+do; both CPUs sat idle. Eight parallel `dd` byte ranges over SSH reached
+about 7 MB/s. Split a large copy between these boxes from the start; the
+end-to-end sha256 is what proves the pieces reassembled.
 
 ## Cutover (operator)
 
