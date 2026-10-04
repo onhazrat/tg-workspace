@@ -4,12 +4,16 @@ on:
   release:
     types:
       - published
+  # Re-deploying without cutting a release, the same recovery path staging
+  # keeps for when the event trigger is the broken part.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   deploy:
+    timeout-minutes: 30
     environment: production
     runs-on:
       - self-hosted
@@ -26,14 +30,28 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       EMAILS_FROM_EMAIL: ${{ secrets.EMAILS_FROM_EMAIL }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: app
+      POSTGRES_PORT: "5432"
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       API_KEY: ${{ secrets.API_KEY }}
+      TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
       TOR_CONTROL_PASSWORD: ${{ secrets.TOR_CONTROL_PASSWORD }}
+      DOCKER_IMAGE_BACKEND: backend
+      DOCKER_IMAGE_FRONTEND: frontend
+      # Open signup, but every new account waits for an Admin (ADR-011).
+      USERS_OPEN_REGISTRATION: "true"
+      USERS_REQUIRE_APPROVAL: "true"
+      PROJECT_NAME: TG Summarizer
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+
+      - name: Create .env
+        run: bash scripts/write-deploy-env.sh
+
       - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_PRODUCTION }} build
       - run: docker compose -f compose.yml --project-name ${{ secrets.STACK_NAME_PRODUCTION }} up -d
