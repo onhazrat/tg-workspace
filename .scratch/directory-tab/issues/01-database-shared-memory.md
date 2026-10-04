@@ -15,8 +15,8 @@ ADR-027's consequences.
 This is for a human because applying it restarts staging's database. Nothing else in the Directory
 tab waits on it, but the later tickets' heavy queries are safer with it in place.
 
-- [ ] The database service's shared memory is raised in the compose file, with a comment naming the failure it prevents
+- [x] The database service's shared memory is raised in the compose file, with a comment naming the failure it prevents
 - [ ] Local compose and staging both run with the new size, checked with `df` on the container's shared memory mount
 - [ ] A parallel query that overflowed 64 MB (the similarity query from the prototype is the known case) completes on staging
 - [ ] The staging database log shows no "could not resize shared memory segment" after the change
-- [ ] `deployment.md` mentions the setting where it describes the database service
+- [x] `deployment.md` mentions the setting where it describes the database service

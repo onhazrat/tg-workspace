@@ -103,6 +103,19 @@ docker compose -f compose.yml up -d
 
 Use `compose.yml` only in production (not `compose.override.yml`).
 
+### Database shared memory
+
+The `db` service sets `shm_size: 256mb`. Postgres parallel query workers pass
+data through `/dev/shm`, and Docker's default of 64 MB overflowed on 2026-10-03
+under a parallel hash join over the References, failing every parallel query
+running at that moment with "could not resize shared memory segment". Changing
+the size recreates the container, so it restarts the database. Check the live
+size with:
+
+```bash
+docker compose exec db df -h /dev/shm
+```
+
 ### Post-deploy (Mode A, one-time)
 
 After the first deploy (or when upgrading from pre–Sprint 2 data), assign all existing TG rows to the operator superuser so scheduler jobs and sync scope correctly:
