@@ -26,6 +26,12 @@ services:
       - pg_stat_statements.track=top
       - -c
       - track_io_timing=on
+    # Parallel query workers exchange data through /dev/shm, and Docker's
+    # default is 64 MB. On 2026-10-03 a parallel hash join over the References
+    # overflowed it ("could not resize shared memory segment ... No space left
+    # on device"), and every parallel query running at that moment failed with
+    # it, the app's included. Changing this restarts the database.
+    shm_size: 256mb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
