@@ -21,28 +21,23 @@ stays on `vm-oracle-amd` and is not touched except for read-only copies.
 
 ## The box already runs a DERP relay
 
-`derper.service` (Tailscale DERP for `edge-eu.devopsguys.online`, systemd,
-`-certmode=letsencrypt`) listens on `:443` and `:80`. Traefik needs both.
-Chosen fix is SNI passthrough, so the tailnet's DERP map does not change:
+`derper` (Tailscale DERP for `edge-eu.devopsguys.online`, region `fleet-eu`)
+held `:443` and `:80`. Traefik needs both. derper only serves TLS when its
+listen port is 443 (`-a=:8443` serves plain HTTP), and it binds STUN to the
+same host as `-a`, so moving its port or address on the host breaks it.
 
-- derper moves to `-a=172.17.0.1:8443 -http-port=8080`, bound on the Docker
-  bridge so it is not public, and reached from the Traefik container through
-  `host.docker.internal:host-gateway`. Its unit gains `After=docker.service`
-  so the bridge address exists when it binds.
-- Traefik reads a file-provider directory (`compose.traefik.yml` now mounts
-  `./dynamic`). The DERP file stays on the VM only, because it names a domain
-  that is not this project's:
-  - a TCP router `HostSNI(edge-eu.devopsguys.online)` on `https` with
-    `tls.passthrough=true` to `host.docker.internal:8443`. derper keeps
-    terminating its own TLS, so its Let's Encrypt TLS-ALPN renewal still
-    works through the passthrough.
-  - an HTTP router `Host(edge-eu.devopsguys.online)` on `http` to
-    `host.docker.internal:8080`, with no HTTPS redirect, because Tailscale
-    clients probe DERP nodes over plain HTTP for captive-portal detection.
-- STUN (UDP 3478) is untouched.
+What runs instead: derper as a container on the `traefik-public` network
+(`/root/code/derper/compose.yml` on the VM), same binary, state directory,
+hostname and certificate, still on `:443` inside its container. Traefik
+labels forward `HostSNI(edge-eu.devopsguys.online)` with TLS passthrough and
+plain HTTP for the same host (Tailscale's captive-portal probe). STUN is
+published on `3478/udp`. The systemd unit is disabled, with a backup at
+`/root/derper.service.bak`. Its domain and DERP map entry are unchanged.
 
-Cost: a DERP outage of a few seconds while derper restarts and Traefik
-starts. SSH still works over the public IP's sshd if Tailscale paths flap.
+Staging's Traefik turned out to use HTTP-01, not the repo's DNS-01 with a
+Cloudflare token, so there was no token to reuse. Production does the same,
+as a VM-local edit to its copy of `compose.traefik.yml`; the records are
+DNS-only.
 
 ## Steps
 
@@ -61,14 +56,12 @@ starts. SSH still works over the public IP's sshd if Tailscale paths flap.
   `production-vm` with label `production`, running as a systemd service.
 - `docker network create traefik-public`.
 
-### 3. derper and Traefik
+### 3. derper and Traefik (done 2026-10-04)
 
-- Edit `derper.service` ports, `daemon-reload`, restart.
-- `/root/code/traefik-public/` with `compose.traefik.yml`, an `.env`
-  holding `DOMAIN`, `EMAIL`, `USERNAME`, `HASHED_PASSWORD`,
-  `CF_DNS_API_TOKEN`, and the DERP file-provider config.
-- Verify `https://edge-eu.devopsguys.online/derp/probe` and
-  `tailscale netcheck` from a client.
+- Traefik up from `/root/code/traefik-public/`, HTTP-01, dashboard password
+  in `dashboard-password` there (root only).
+- derper containerised as above. `/derp/probe` 200, `/generate_204` 204,
+  `tailscale debug derp fleet-eu` clean over IPv4.
 
 ### 4. DNS
 
