@@ -108,6 +108,13 @@ the Scope: every Candidate is a Directory entry, but a Directory entry only
 becomes a Candidate by turning up in the Posts somebody actually reads.
 _Avoid_: suggestion, recommendation, discovered channel
 
+**Dismissal**:
+An Account's decision that a Channel is not for it. One Dismissal hides the
+Channel everywhere that Account looks for Channels to follow, Discovery reports
+and the Directory alike, until the Account takes it back. It is the Account's
+alone and says nothing about the Channel.
+_Avoid_: ignore, not interested, hide, block, reject
+
 **Reference**:
 One Post naming one Channel, once, in one way: a forward, a mention, a link or a
 reply that crosses channels. A Post naming two Channels makes two References, and
@@ -118,6 +125,23 @@ Directory entry's sample, which is a Post by the Channel itself, so the two neve
 share a word. A Discovery report surfaces the newest Reference to each Candidate;
 the deployment keeps every one of them, for good.
 _Avoid_: edge, link, connection, sample post, source post, evidence
+
+**Citing Channel**:
+A Channel with at least one Post that makes a Reference to another Channel; it
+*cites* that Channel, which is *cited by* it. "Cited by N" counts distinct Citing
+Channels, never References, so a Post that both mentions and links a Channel, or
+twenty Posts from one Channel, count once.
+_Avoid_: referrer, source channel, inbound link
+
+**Shared parent**:
+A Citing Channel that cites both a Channel the Account picked and the Channel
+being judged. Many Shared parents mean the two are read by the same people.
+_Avoid_: co-citer, common source
+
+**Shared child**:
+A Channel that both a picked Channel and the Channel being judged cite. Many
+Shared children mean the two point their readers at the same places.
+_Avoid_: common target, shared link
 
 **Follow**:
 The relation between an Account and a Channel, carrying everything private
@@ -217,11 +241,19 @@ not part of the Scope and never changes which Channels are selected. The Post
 filter is its counterpart on the Posts tab.
 _Avoid_: channel query, channel search, facet
 
+**Directory filter**:
+The same kind of expression over the Directory: it decides which Directory
+entries are shown, followed or not. Its Conditions test what a Directory entry
+records and the References around it.
+_Avoid_: directory query, directory search, browse filter
+
 **Condition**:
-One test in a Channel filter or a Post filter. In a Channel filter: a tag, a
+One test in a Channel filter, a Directory filter or a Post filter. In a Channel filter: a tag, a
 Setting group, a Language, or a bound on a number such as Reach or
 subscribers. In a Post filter: a Type, a media kind, a Language, a Channel, or
-a bound on a View count or an Estimated View count. Anything with no value for
+a bound on a View count or an Estimated View count. In a Directory filter: a
+Language, the followability verdict, being followed or dismissed, a citation, or
+a bound on a number such as Reach or subscribers. Anything with no value for
 that number fails a bound on it, and a separate Condition asks whether it has
 one.
 _Avoid_: rule (a Selection rule is something else), clause, criterion, filter
@@ -383,7 +415,8 @@ _Avoid_: pinned tab, permanent tab, core tab
 
 **Closable tab**:
 A workspace tab the Account can close and reopen, like a browser tab: History,
-Settings, and every Artifact tab. History and Settings are open at most once.
+Settings, Directory, and every Artifact tab. History, Settings and Directory are
+open at most once.
 _Avoid_: hidden tab, optional tab, compact tabs
 
 **Artifact tab**:
