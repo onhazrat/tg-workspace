@@ -9,7 +9,7 @@ implementation decision on the detail.
 
 **Status:** ready-for-agent
 
-The prototype's panel (variant E on `claude/find-e-signals`) shows the behaviour: the newest three
+The prototype's panel (variant E on `prototype/directory-tab`) shows the behaviour: the newest three
 Posts with "Show N more", long Posts clamped to six lines with "Read more", links rendered as on
 the Posts tab, hidden links as chips. Rewrite it rather than copying.
 

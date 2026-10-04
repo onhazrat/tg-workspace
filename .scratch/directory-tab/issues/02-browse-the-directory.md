@@ -15,7 +15,7 @@ Directory, the tab, and state.
 
 **Status:** ready-for-agent
 
-The prototype's variant E (branch `claude/find-e-signals`) shows the behaviour to rebuild; rewrite
+The prototype's variant E (branch `prototype/directory-tab`) shows the behaviour to rebuild; rewrite
 it properly rather than copying its code. It ran against a throwaway API with no guards. The
 Conditions here are those that read the Directory entry alone plus "cited by the selected
 Channels", which is counted live from the References. The search box comes in DIR-04, the detail

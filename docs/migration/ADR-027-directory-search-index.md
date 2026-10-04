@@ -1,7 +1,7 @@
 # ADR-027: The Directory is searched with Postgres full-text search, in a companion table
 
 **Status:** Accepted (2026-10-04). Research: `.scratch/directory-tab/research-search-index.md`.
-Prototype: `proto.search_doc` on branch `claude/find-e-signals`.
+Prototype: `proto.search_doc` on branch `prototype/directory-tab`.
 
 ## Context
 
