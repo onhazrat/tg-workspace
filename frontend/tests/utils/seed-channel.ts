@@ -21,7 +21,10 @@ import { expect, type Page } from "@playwright/test"
  *
  * This accounts for most of the flakiness but not all of it:
  * `tg-ui-primitives.spec.ts:63` fails at 0, 6, 148 and 154 channels alike and is
- * tracked separately.
+ * tracked separately. That failure is the Sync All locator after `setTheme`'s
+ * reload. A *500* from this helper's first PUT on a fresh stack was a different
+ * bug, a race creating the account's built-in setting groups, fixed in the
+ * backend (`tests/services/test_builtin_group_creation_race.py`).
  */
 
 export async function seedTestChannel(
