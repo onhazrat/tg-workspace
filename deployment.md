@@ -45,6 +45,38 @@ cd /root/code/traefik-public/
 docker compose -f compose.traefik.yml up -d
 ```
 
+### A host that already serves 80/443
+
+Traefik must own ports 80 and 443. If another process on the box needs them
+too, move it to a port bound on the Docker bridge (`172.17.0.1`) and route
+to it from a file in `/root/code/traefik-public/dynamic/`, which Traefik
+watches. Production's box runs a Tailscale DERP relay this way (derper with
+`-a=172.17.0.1:8443 -http-port=8080`):
+
+```yaml
+tcp:
+  routers:
+    derp:
+      entryPoints: [https]
+      rule: HostSNI(`derp.example.com`)
+      tls: {passthrough: true}  # derper keeps its own certificate
+      service: derp
+  services:
+    derp:
+      loadBalancer:
+        servers: [{address: "host.docker.internal:8443"}]
+http:
+  routers:
+    derp-http:  # Tailscale probes DERP over plain HTTP; no HTTPS redirect
+      entryPoints: [http]
+      rule: Host(`derp.example.com`)
+      service: derp-http
+  services:
+    derp-http:
+      loadBalancer:
+        servers: [{url: "http://host.docker.internal:8080"}]
+```
+
 ## Application stack
 
 Copy the project (excluding gitignored files):

@@ -25,10 +25,13 @@ stays on `vm-oracle-amd` and is not touched except for read-only copies.
 `-certmode=letsencrypt`) listens on `:443` and `:80`. Traefik needs both.
 Chosen fix is SNI passthrough, so the tailnet's DERP map does not change:
 
-- derper moves to `-a=:8443 -http-port=8080` (bound on the host, reached
-  from the Traefik container through `host.docker.internal:host-gateway`).
-- Traefik gets a file-provider config, kept on the VM only because it names a
-  domain that is not this project's:
+- derper moves to `-a=172.17.0.1:8443 -http-port=8080`, bound on the Docker
+  bridge so it is not public, and reached from the Traefik container through
+  `host.docker.internal:host-gateway`. Its unit gains `After=docker.service`
+  so the bridge address exists when it binds.
+- Traefik reads a file-provider directory (`compose.traefik.yml` now mounts
+  `./dynamic`). The DERP file stays on the VM only, because it names a domain
+  that is not this project's:
   - a TCP router `HostSNI(edge-eu.devopsguys.online)` on `https` with
     `tls.passthrough=true` to `host.docker.internal:8443`. derper keeps
     terminating its own TLS, so its Let's Encrypt TLS-ALPN renewal still
