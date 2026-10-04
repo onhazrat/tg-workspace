@@ -10,7 +10,7 @@ stays on `vm-oracle-amd` and is not touched except for read-only copies.
 
 | Question | Answer |
 |---|---|
-| Domain | `tg-workspace.hazrati.dev`: `dashboard.`, `api.`, `adminer.`, `traefik.` |
+| Domain | `tg-workspace.hazrati.dev` for the app (`dashboard.` redirects there since 2026-10-04); `api.`, `adminer.`, `traefik.` |
 | Starting data | One-time copy of staging's database |
 | Duplicate auto-publish | Production's copy starts with the `auto_summary` job **disabled**; the operator flips it on in prod and off in staging at cutover |
 | Deploy trigger | `release: published` plus `workflow_dispatch` |
