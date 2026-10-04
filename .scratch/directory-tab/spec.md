@@ -5,7 +5,7 @@ Status: ready-for-agent
 Ticket prefix: `DIR`.
 
 Settled by a UI prototype on live staging data (2026-10-03 to 2026-10-04; the winning variant E,
-"filter everything in the Directory", is on branch `claude/find-e-signals`) and six grilling rounds
+"filter everything in the Directory", is on branch `prototype/directory-tab`) and six grilling rounds
 on 2026-10-04. The terms **Dismissal**, **Directory filter**, **Citing Channel**, **Shared
 parent** and **Shared child** are in `CONTEXT.md`; **Condition** now names the Directory filter
 too. **ADR-027** records how the Directory is searched and **ADR-028** how citations are counted;
@@ -232,7 +232,7 @@ people as, or pointing at the same places as, Channels the Account picks.
 
 ## Further Notes
 
-- The prototype is the primary source: branch `claude/find-e-signals` (variant E, with B and C folded in) and its handoff `.scratch/channel-find/prototype.md`. Its throwaway API read staging live as the `proto` role. None of its code is to be promoted as is.
+- The prototype is the primary source: branch `prototype/directory-tab` (variant E, with B and C folded in) and its handoff `.scratch/channel-find/prototype.md`. Its throwaway API read staging live as the `proto` role. None of its code is to be promoted as is.
 - The prototype measured on staging: search over 318K Channels in 0.2 to 2.7 s including a ~200 ms tunnel; the unfiltered page in 0.24 s of database time with counts cached; "cited by every follow in the last 14 days" in 0.28 s; Shared parents across 333 follows in 1.4 s. A parallel hash join over References overflowed the database container's 64 MB shared memory and failed with "could not resize shared memory segment".
 - The prototype called Reach "average views per post"; the glossary defines it as the median Settled View count of recent Posts, and the tab must say so.
 - A plain @mention is stored as both a mention and a link Reference. Every count here is in distinct Citing Channels or distinct Posts, never in Reference rows.
