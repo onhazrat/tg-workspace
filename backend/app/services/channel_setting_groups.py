@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import HTTPException
 from sqlalchemy import or_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, select
 
@@ -451,6 +452,29 @@ def own_setting_group(
     return group
 
 
+def _insert_builtin_group(
+    session: Session, group: ChannelSettingGroup
+) -> ChannelSettingGroup:
+    """Insert a built-in group, or take the one a concurrent request just made.
+
+    Built-in ids are derived from the owner, so two requests creating the same
+    one collide on the primary key: a fresh account's first channel `PUT` and
+    the Channels tab's `GET /setting-groups` do exactly that, and the loser used
+    to answer 500. `ON CONFLICT (id) DO NOTHING` waits for the winner, then the
+    `get` reads its committed row. Only the id is a conflict target, so a user
+    group already holding a built-in's name still raises as it did.
+    See `tests/services/test_builtin_group_creation_race.py`.
+    """
+    session.execute(
+        pg_insert(ChannelSettingGroup)
+        .values(**group.model_dump())
+        .on_conflict_do_nothing(index_elements=["id"])
+    )
+    created = session.get(ChannelSettingGroup, group.id)
+    assert created is not None
+    return created
+
+
 def ensure_default_group(
     session: Session, *, user_id: uuid.UUID
 ) -> ChannelSettingGroup:
@@ -466,9 +490,7 @@ def ensure_default_group(
         is_default=True,
         **values,
     )
-    session.add(group)
-    session.flush()
-    return group
+    return _insert_builtin_group(session, group)
 
 
 def get_or_create_restricted_group(
@@ -496,9 +518,7 @@ def get_or_create_restricted_group(
         dynamic_sync_expected_posts=values["dynamic_sync_expected_posts"],
         auto_follow_forwarded=False,
     )
-    session.add(group)
-    session.flush()
-    return group
+    return _insert_builtin_group(session, group)
 
 
 def get_or_create_frozen_group(
@@ -526,9 +546,7 @@ def get_or_create_frozen_group(
         dynamic_sync_expected_posts=values["dynamic_sync_expected_posts"],
         auto_follow_forwarded=False,
     )
-    session.add(group)
-    session.flush()
-    return group
+    return _insert_builtin_group(session, group)
 
 
 def get_or_create_slow_feed_group(
@@ -551,9 +569,7 @@ def get_or_create_slow_feed_group(
         is_frozen=False,
         is_unavailable_on_web_view=False,
     )
-    session.add(group)
-    session.flush()
-    return group
+    return _insert_builtin_group(session, group)
 
 
 def get_or_create_high_velocity_group(
@@ -576,9 +592,7 @@ def get_or_create_high_velocity_group(
         is_frozen=False,
         is_unavailable_on_web_view=False,
     )
-    session.add(group)
-    session.flush()
-    return group
+    return _insert_builtin_group(session, group)
 
 
 def ensure_builtin_groups(
