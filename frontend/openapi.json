@@ -2725,6 +2725,140 @@
         }
       }
     },
+    "/api/v1/data/directory/list": {
+      "post": {
+        "tags": ["data"],
+        "summary": "List Directory",
+        "description": "One page of 100 Directory entries under a Directory filter, sorted.\n\nWith the view's total and its Language counts, both counted without the\nview's Language Conditions where the menu needs them.",
+        "operationId": "data-list_directory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DirectoryListRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/directory/count": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Count Directory",
+        "description": "How many entries a view leaves, with a candidate Condition added with AND.",
+        "operationId": "data-count_directory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DirectoryCountRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryCountResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/directory/distribution": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Get Directory Distribution",
+        "description": "A measure's spread across the view with its own bounds left out.",
+        "operationId": "data-get_directory_distribution",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryDistributionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryDistributionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/directory/size": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Directory Size",
+        "description": "How many Channels the Directory lists at all.",
+        "operationId": "data-get_directory_size",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorySizeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/summaries": {
       "get": {
         "tags": ["data"],
@@ -6709,6 +6843,477 @@
         "title": "DbStatsResponse",
         "description": "Row counts across the corpus, scoped to the operator.\n\n`embeddedPostCount` is deliberately **not** operator-scoped: embeddings are a\ncorpus-level artefact shared across users (see the multi-user seam note in\nthe plan), so it counts the whole table while the rest count the operator's\nrows."
       },
+      "DirectoryBinResponse": {
+        "properties": {
+          "lo": { "type": "number", "title": "Lo" },
+          "hi": { "type": "number", "title": "Hi" },
+          "count": { "type": "integer", "title": "Count" }
+        },
+        "type": "object",
+        "required": ["lo", "hi", "count"],
+        "title": "DirectoryBinResponse",
+        "description": "One histogram bar: entries with a value from `lo` to `hi`."
+      },
+      "DirectoryCountRequest": {
+        "properties": {
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryFilterGroup" },
+              { "type": "null" }
+            ]
+          },
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
+          "candidate": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryFilterAtom" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DirectoryCountRequest",
+        "description": "How many entries a view leaves, with a candidate Condition added with AND."
+      },
+      "DirectoryCountResponse": {
+        "properties": { "total": { "type": "integer", "title": "Total" } },
+        "type": "object",
+        "required": ["total"],
+        "title": "DirectoryCountResponse",
+        "description": "How many entries a view leaves."
+      },
+      "DirectoryDistributionRequest": {
+        "properties": {
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryFilterGroup" },
+              { "type": "null" }
+            ]
+          },
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
+          "measure": {
+            "type": "string",
+            "enum": [
+              "subscribers",
+              "reach",
+              "posts_per_week",
+              "forward_pct",
+              "last_post_days",
+              "found_days",
+              "photos",
+              "videos",
+              "files",
+              "links"
+            ],
+            "title": "Measure"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["measure"],
+        "title": "DirectoryDistributionRequest",
+        "description": "A measure's spread under every other Condition of the view."
+      },
+      "DirectoryDistributionResponse": {
+        "properties": {
+          "scale": {
+            "type": "string",
+            "enum": ["log", "linear"],
+            "title": "Scale"
+          },
+          "total": { "type": "integer", "title": "Total" },
+          "noValue": { "type": "integer", "title": "Novalue" },
+          "min": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Max"
+          },
+          "median": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Median"
+          },
+          "bins": {
+            "items": { "$ref": "#/components/schemas/DirectoryBinResponse" },
+            "type": "array",
+            "title": "Bins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scale",
+          "total",
+          "noValue",
+          "min",
+          "max",
+          "median",
+          "bins"
+        ],
+        "title": "DirectoryDistributionResponse",
+        "description": "A measure's spread, for the bound editor."
+      },
+      "DirectoryFilterAtom": {
+        "properties": {
+          "kind": { "type": "string", "const": "atom", "title": "Kind" },
+          "id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Id"
+          },
+          "not": { "type": "boolean", "title": "Not", "default": false },
+          "cond": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/DirectoryLanguageCondition" },
+              { "$ref": "#/components/schemas/DirectoryNameCondition" },
+              { "$ref": "#/components/schemas/DirectoryMeasureCondition" },
+              { "$ref": "#/components/schemas/DirectoryFlagCondition" },
+              { "$ref": "#/components/schemas/DirectoryMineCondition" }
+            ],
+            "title": "Cond",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "flag": "#/components/schemas/DirectoryFlagCondition",
+                "language": "#/components/schemas/DirectoryLanguageCondition",
+                "measure": "#/components/schemas/DirectoryMeasureCondition",
+                "mine": "#/components/schemas/DirectoryMineCondition",
+                "name": "#/components/schemas/DirectoryNameCondition"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "cond"],
+        "title": "DirectoryFilterAtom",
+        "description": "One Condition, maybe negated."
+      },
+      "DirectoryFilterGroup": {
+        "properties": {
+          "kind": { "type": "string", "const": "group", "title": "Kind" },
+          "id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Id"
+          },
+          "op": { "type": "string", "enum": ["and", "or"], "title": "Op" },
+          "not": { "type": "boolean", "title": "Not", "default": false },
+          "children": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/DirectoryFilterAtom" },
+                { "$ref": "#/components/schemas/DirectoryFilterGroup" }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "atom": "#/components/schemas/DirectoryFilterAtom",
+                  "group": "#/components/schemas/DirectoryFilterGroup"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["kind", "op"],
+        "title": "DirectoryFilterGroup",
+        "description": "Conditions joined with AND or OR, maybe negated; parentheses are groups."
+      },
+      "DirectoryFlagCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "flag", "title": "Type" },
+          "value": {
+            "type": "string",
+            "enum": ["followed", "followable"],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "DirectoryFlagCondition",
+        "description": "Followed by this Account, or followable by anybody (the entry's verdict)."
+      },
+      "DirectoryLanguageCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "language", "title": "Type" },
+          "value": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "DirectoryLanguageCondition"
+      },
+      "DirectoryLanguageCountResponse": {
+        "properties": {
+          "language": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Language"
+          },
+          "count": { "type": "integer", "title": "Count" }
+        },
+        "type": "object",
+        "required": ["language", "count"],
+        "title": "DirectoryLanguageCountResponse",
+        "description": "How many entries in the view have one Language; `null` is none read."
+      },
+      "DirectoryListRequest": {
+        "properties": {
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryFilterGroup" },
+              { "type": "null" }
+            ]
+          },
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "subscribers",
+              "reach",
+              "posts_per_week",
+              "forward_pct",
+              "last_post_days",
+              "found_days",
+              "photos",
+              "videos",
+              "files",
+              "links",
+              "mine",
+              "mine_last_days"
+            ],
+            "title": "Sort",
+            "default": "mine"
+          },
+          "descending": {
+            "type": "boolean",
+            "title": "Descending",
+            "default": true
+          },
+          "page": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Page",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DirectoryListRequest",
+        "description": "One page of a Directory view, sorted."
+      },
+      "DirectoryListResponse": {
+        "properties": {
+          "rows": {
+            "items": { "$ref": "#/components/schemas/DirectoryRowResponse" },
+            "type": "array",
+            "title": "Rows"
+          },
+          "total": { "type": "integer", "title": "Total" },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryLanguageCountResponse"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "yoursSize": { "type": "integer", "title": "Yourssize" }
+        },
+        "type": "object",
+        "required": ["rows", "total", "languages", "yoursSize"],
+        "title": "DirectoryListResponse",
+        "description": "One page, the view's total and its Language counts."
+      },
+      "DirectoryMeasureCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "measure", "title": "Type" },
+          "measure": {
+            "type": "string",
+            "enum": [
+              "subscribers",
+              "reach",
+              "posts_per_week",
+              "forward_pct",
+              "last_post_days",
+              "found_days",
+              "photos",
+              "videos",
+              "files",
+              "links"
+            ],
+            "title": "Measure"
+          },
+          "min": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Max"
+          },
+          "none": { "type": "boolean", "title": "None", "default": false }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "measure"],
+        "title": "DirectoryMeasureCondition",
+        "description": "A bound on a measure, either end open; `none` keeps only entries with no value."
+      },
+      "DirectoryMineCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "mine", "title": "Type" },
+          "days": {
+            "anyOf": [
+              { "type": "integer", "maximum": 36500.0, "minimum": 1.0 },
+              { "type": "null" }
+            ],
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type"],
+        "title": "DirectoryMineCondition",
+        "description": "Cited by your channels, ever or within the last `days`."
+      },
+      "DirectoryNameCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "name", "title": "Type" },
+          "value": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "value"],
+        "title": "DirectoryNameCondition",
+        "description": "Any part of the handle or the display name, case-insensitive."
+      },
+      "DirectoryRowResponse": {
+        "properties": {
+          "handle": { "type": "string", "title": "Handle" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          },
+          "photoUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Photourl"
+          },
+          "language": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Language"
+          },
+          "subscribers": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Subscribers"
+          },
+          "reach": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Reach"
+          },
+          "reachEstimated": { "type": "boolean", "title": "Reachestimated" },
+          "postsPerWeek": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Postsperweek"
+          },
+          "forwardShare": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Forwardshare"
+          },
+          "lastPostAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastpostat"
+          },
+          "foundAt": { "type": "integer", "title": "Foundat" },
+          "photos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Links"
+          },
+          "followable": { "type": "boolean", "title": "Followable" },
+          "followed": { "type": "boolean", "title": "Followed" },
+          "mine": { "type": "integer", "title": "Mine" },
+          "mineLastAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Minelastat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "handle",
+          "displayName",
+          "photoUrl",
+          "language",
+          "subscribers",
+          "reach",
+          "reachEstimated",
+          "postsPerWeek",
+          "forwardShare",
+          "lastPostAt",
+          "foundAt",
+          "photos",
+          "videos",
+          "files",
+          "links",
+          "followable",
+          "followed",
+          "mine",
+          "mineLastAt"
+        ],
+        "title": "DirectoryRowResponse",
+        "description": "One Directory entry in the list: its measures, never its bio or samples."
+      },
       "DirectorySamplePostResponse": {
         "properties": {
           "postId": { "type": "integer", "title": "Postid" },
@@ -6723,6 +7328,13 @@
         "required": ["postId", "text", "timestamp"],
         "title": "DirectorySamplePostResponse",
         "description": "One Post off a Channel's preview page, as the last probe captured it.\n\nThe text travels whole; truncation is the reader's."
+      },
+      "DirectorySizeResponse": {
+        "properties": { "size": { "type": "integer", "title": "Size" } },
+        "type": "object",
+        "required": ["size"],
+        "title": "DirectorySizeResponse",
+        "description": "How many Channels the Directory lists at all."
       },
       "DiscoverCandidateResponse": {
         "properties": {
@@ -11424,6 +12036,26 @@
         "required": ["op", "value"],
         "title": "ViewsFilter",
         "description": "At least or at most a number of views."
+      },
+      "YourChannels": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": ["follows", "selection", "ticked"],
+            "title": "Source",
+            "default": "follows"
+          },
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Handles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "YourChannels",
+        "description": "Whose citations count: every follow (resolved by the server) or the handles sent."
       }
     },
     "securitySchemes": {

@@ -317,19 +317,24 @@ def _with_followed_reach(
     shared by every Follower.
     """
     probes = [probe_to_camel(row) for row in rows]
+    reach = followed_reach(session, {row.handle for row in rows})
+    for probe in probes:
+        own = reach.get(probe["handle"])
+        if own is not None:
+            probe["reach"] = own.value
+            probe["reachEstimated"] = own.estimated
+    return probes
+
+
+def followed_reach(session: Session, handles: set[str]) -> dict[str, Reach]:
+    """The Post-based Reach of each of `handles` that anybody follows (REACH-04)."""
     followed = {
-        name.lower(): name
-        for name in followed_channel_names(session, among={row.handle for row in rows})
+        name.lower(): name for name in followed_channel_names(session, among=handles)
     }
     if not followed:
-        return probes
+        return {}
     reach = reach_by_channel(session, list(followed.values()))
-    for probe in probes:
-        name = followed.get(probe["handle"])
-        if name is not None:
-            probe["reach"] = reach[name].value
-            probe["reachEstimated"] = reach[name].estimated
-    return probes
+    return {handle: reach[name] for handle, name in followed.items()}
 
 
 def probe_map(session: Session, handles: set[str]) -> dict[str, dict[str, Any]]:
