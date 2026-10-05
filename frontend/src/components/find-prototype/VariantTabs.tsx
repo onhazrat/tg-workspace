@@ -12,7 +12,8 @@ import {
   Search,
   Sparkles,
 } from "lucide-react"
-import { BarHeading, BarPopover } from "@/components/BarPopover"
+import { useState } from "react"
+import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { ConditionPicker } from "@/components/filter-tree/ConditionPicker"
 import { FacetMenu } from "@/components/filter-tree/FacetMenu"
@@ -97,10 +98,13 @@ export function KindsPill({
   align?: "start" | "end"
 }) {
   const { view, patch } = d
+  const [query, setQuery] = useState("")
   const on = view.kinds.length > 0
+  const shown = KINDS.filter((k) => k.includes(query.trim().toLowerCase()))
   return (
     <BarPopover
       align={align}
+      onOpenChange={(open) => open || setQuery("")}
       trigger={
         <button type="button" className={pillClass(on)}>
           Kinds
@@ -111,10 +115,20 @@ export function KindsPill({
         </button>
       }
     >
+      <BarSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="Search kinds..."
+      />
       <BarHeading>
         Which References count, for Cited by, Cites and your channels
       </BarHeading>
-      {KINDS.map((k) => (
+      {shown.length === 0 && (
+        <p className="px-2 py-3 text-app-ink/50">
+          No kind matches {query.trim()}
+        </p>
+      )}
+      {shown.map((k) => (
         <label
           key={k}
           className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 capitalize hover:bg-app-ink/5"
