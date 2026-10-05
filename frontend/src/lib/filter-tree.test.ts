@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   addFunnel,
   append,
+  appendAnd,
   atoms,
   clearFunnels,
   emptyTree,
@@ -245,6 +246,16 @@ describe("an on/off switch over one top-level Condition", () => {
     const tree = root("and", [atom(red), atom(size(2))])
     expect(shapeOf(setSwitch(tree, isRed, red, true, true))).toEqual(
       shapeOf(root("and", [atom(size(2)), atom(red, true)])),
+    )
+  })
+
+  test("a Condition added with AND wraps an OR root first", () => {
+    const or = root("or", [atom(size(1)), atom(size(2))])
+    expect(shapeOf(appendAnd(or, red))).toEqual(
+      shapeOf(root("and", [{ ...or, id: "g" }, atom(red)])),
+    )
+    expect(shapeOf(appendAnd(emptyTree<Toy>(), red))).toEqual(
+      shapeOf(root("and", [atom(red)])),
     )
   })
 

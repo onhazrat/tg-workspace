@@ -5,7 +5,11 @@
  * form and the rest beside it, so a link opens exactly that view. The ticks
  * are never in it.
  */
-import type { DirectoryListRequest, YourChannels } from "@/client"
+import type {
+  DirectoryCountRequest,
+  DirectoryListRequest,
+  YourChannels,
+} from "@/client"
 import { MEASURES, OPENING_FILTER } from "./directory-filter"
 
 export type DirectorySort = NonNullable<DirectoryListRequest["sort"]>
@@ -13,6 +17,8 @@ export type RefKind = NonNullable<
   DirectoryListRequest["referenceKinds"]
 >[number]
 export type YoursSource = NonNullable<YourChannels["source"]>
+/** What every Directory read shares: the filter, "your channels", the kinds. */
+export type DirectoryViewRequest = Omit<DirectoryCountRequest, "candidate">
 
 export type DirectoryView = {
   /** The Directory filter's text form; "" is the empty filter. */
@@ -86,6 +92,16 @@ export function chooseSort(value: string): Partial<DirectoryView> {
     page: 0,
   }
 }
+
+/** A column header's click: the sorted column flips, another sorts by itself. */
+export const headerSort = (
+  view: DirectoryView,
+  key: DirectorySort,
+  yours: YoursSource,
+): Partial<DirectoryView> =>
+  view.sort === key
+    ? { descending: !view.descending }
+    : chooseSort(key === "mine" ? `mine:${yours}` : key)
 
 export function viewFromParams(params: DirectoryParams): DirectoryView {
   const sort = SORTS.has(params.dirSort ?? "")

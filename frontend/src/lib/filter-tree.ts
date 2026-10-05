@@ -357,6 +357,12 @@ function andRoot<C extends BaseCond>(filter: FilterTree<C>): FilterTree<C> {
 
 // ---- Switches --------------------------------------------------------------
 
+/** Add a Condition joined to the rest with AND, wrapping an OR root first. */
+export const appendAnd = <C extends BaseCond>(
+  filter: FilterTree<C>,
+  cond: C,
+): FilterTree<C> => append(andRoot(filter), "root", cond)
+
 const isAndRoot = <C extends BaseCond>(filter: FilterTree<C>) =>
   !filter.not && (filter.op === "and" || filter.children.length === 1)
 

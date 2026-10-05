@@ -15,6 +15,7 @@ import { ActionView } from "./components/ActionView"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
 import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
+import { DirectoryView } from "./components/DirectoryView"
 import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
@@ -203,6 +204,7 @@ export default function App() {
       channels: () => <ChannelGrid scrollContainerRef={scrollContainerRef} />,
       tag: () => <TagView />,
       discover: () => <DiscoverView />,
+      directory: () => <DirectoryView />,
       summary: () => <SummaryView />,
       action: () => <ActionView />,
       settings: () => <SettingsHub />,

@@ -10,6 +10,7 @@ import {
   chooseSort,
   DEFAULT_VIEW,
   hasViewParams,
+  headerSort,
   paramsFromView,
   resolveYours,
   SORT_OPTIONS,
@@ -134,6 +135,22 @@ describe("the sort picker", () => {
       page: 0,
     })
     expect(chooseSort("mine_last_days").descending).toBe(false)
+  })
+
+  test("a header flips its own column and sorts by another, days newest first", () => {
+    const view = { ...DEFAULT_VIEW, sort: "reach" as const }
+    expect(headerSort(view, "reach", "follows")).toEqual({ descending: false })
+    expect(headerSort(view, "found_days", "follows")).toEqual({
+      sort: "found_days",
+      descending: false,
+      page: 0,
+    })
+    expect(headerSort(view, "mine", "selection")).toEqual({
+      sort: "mine",
+      yours: "selection",
+      descending: true,
+      page: 0,
+    })
   })
 
   test("the picker's value names the source the view counts", () => {

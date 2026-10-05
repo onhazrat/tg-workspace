@@ -197,6 +197,44 @@ function ChannelCell({ row }: { row: Row }) {
   )
 }
 
+/** A column's header: a button that sorts by it, except Language. */
+function ColumnHeader({
+  column,
+  sorted,
+  descending,
+  onSort,
+  className,
+}: {
+  column: DirectoryColumn
+  sorted: boolean
+  descending: boolean
+  onSort: (key: DirectorySort) => void
+  className: string
+}) {
+  const { key } = column
+  return (
+    <th
+      title={column.description}
+      aria-sort={sorted ? (descending ? "descending" : "ascending") : undefined}
+      className={`px-2 py-2 ${key === "language" ? "" : "text-right"} ${className}`}
+    >
+      {key === "language" ? (
+        column.label
+      ) : (
+        <button
+          type="button"
+          onClick={() => onSort(key)}
+          className={`inline-flex items-center gap-0.5 whitespace-nowrap hover:text-app-ink ${sorted ? "text-app-ink" : ""}`}
+        >
+          {column.label}
+          {sorted &&
+            (descending ? <ArrowDown size={10} /> : <ArrowUp size={10} />)}
+        </button>
+      )}
+    </th>
+  )
+}
+
 function Pages({
   page,
   total,
@@ -269,7 +307,7 @@ export function DirectoryTable({
   /** Handles whose follow job is running. */
   following: ReadonlySet<string>
   onFollow: (handle: string) => void
-  onSort: (key: DirectoryColumn["key"]) => void
+  onSort: (key: DirectorySort) => void
   onPage: (page: number) => void
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
@@ -286,36 +324,14 @@ export function DirectoryTable({
             </th>
             <th className="px-2 py-2">Channel</th>
             {columns.map((c) => (
-              <th
+              <ColumnHeader
                 key={c.key}
-                title={c.description}
-                aria-sort={
-                  sortedColumn === c.key
-                    ? descending
-                      ? "descending"
-                      : "ascending"
-                    : undefined
-                }
-                className={`px-2 py-2 ${c.key === "language" ? "" : "text-right"} ${narrow(c.key)}`}
-              >
-                {c.key === "language" ? (
-                  c.label
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onSort(c.key)}
-                    className={`inline-flex items-center gap-0.5 whitespace-nowrap hover:text-app-ink ${sortedColumn === c.key ? "text-app-ink" : ""}`}
-                  >
-                    {c.label}
-                    {sortedColumn === c.key &&
-                      (descending ? (
-                        <ArrowDown size={10} />
-                      ) : (
-                        <ArrowUp size={10} />
-                      ))}
-                  </button>
-                )}
-              </th>
+                column={c}
+                sorted={sortedColumn === c.key}
+                descending={descending}
+                onSort={onSort}
+                className={narrow(c.key)}
+              />
             ))}
             <th className="px-2 py-2" />
           </tr>
