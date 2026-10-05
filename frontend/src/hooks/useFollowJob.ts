@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import type {
   api,
   BulkFollowChannelInput,
+  BulkFollowRequest,
   FollowJobStatus,
   SyncJobStatus,
   streamFollowJobEvents,
@@ -62,6 +63,8 @@ export interface FollowOptions {
   onProgress?: (status: FollowJobStatus) => void
   /** Where the new Follows land; omitted is the default group. */
   settingGroupId?: string
+  /** A Follow from the Directory: whose newest Reference is discovered-via. */
+  directory?: BulkFollowRequest["directory"]
 }
 
 export interface FollowJob {
@@ -272,6 +275,7 @@ export function useFollowJob(deps: FollowJobDeps): FollowJob {
           torAutoRotate,
           torRotationThreshold,
           settingGroupId: options?.settingGroupId,
+          directory: options?.directory,
         })
 
         const followStatus = await waitFollowJob(

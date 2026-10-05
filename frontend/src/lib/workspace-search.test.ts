@@ -10,6 +10,24 @@ describe("validateWorkspaceSearch", () => {
     expect(validateWorkspaceSearch({ tab: 3 })).toEqual({ tab: "channels" })
   })
 
+  test("the Directory view's parameters are kept as text, the empty filter too", () => {
+    // The router reads `?dirPage=2` as a number and `?dirFilter=` as "".
+    expect(
+      validateWorkspaceSearch({
+        tab: "directory",
+        dirFilter: "",
+        dirPage: 2,
+        dirSort: " reach ",
+        dirKinds: "",
+      }),
+    ).toEqual({
+      tab: "directory",
+      dirFilter: "",
+      dirPage: "2",
+      dirSort: "reach",
+    })
+  })
+
   test("a real tab is kept", () => {
     expect(validateWorkspaceSearch({ tab: "history" })).toEqual({
       tab: "history",

@@ -5,6 +5,10 @@ import {
   filterNames,
   printChannelFilter,
 } from "@/lib/channels/channel-filter"
+import {
+  DIRECTORY_PARAMS,
+  type DirectoryParams,
+} from "@/lib/directory/directory-view"
 import type { SettingsSection } from "@/lib/settingsSection"
 import { normalizeSettingsSection } from "@/lib/settingsSection"
 import { tabFromSearch, tabSearch } from "@/lib/workspace-tabs"
@@ -48,7 +52,7 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
-}
+} & DirectoryParams
 
 /** The string params: kept trimmed when non-blank, dropped otherwise. */
 const ID_PARAMS = [
@@ -85,6 +89,13 @@ export function validateWorkspaceSearch(
   for (const key of ID_PARAMS) {
     const value = trimmedString(search[key])
     if (value) result[key] = value
+  }
+  for (const key of DIRECTORY_PARAMS) {
+    const raw = search[key]
+    const text = typeof raw === "number" ? String(raw) : trimmedString(raw)
+    // A blank `?dirFilter=` is the empty filter, which absence is not.
+    if (text) result[key] = text
+    else if (key === "dirFilter" && raw === "") result[key] = ""
   }
   const legacyGroup = trimmedString(search.channelGroup)
   if (legacyGroup && !result.channelFilter) {
