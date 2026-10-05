@@ -56,8 +56,8 @@ import {
 
 // --- the filter model ----------------------------------------------------------
 
-type Mode = "atLeast" | "atMost" | "between" | "none"
-type Bound = {
+export type Mode = "atLeast" | "atMost" | "between" | "none"
+export type Bound = {
   metric: string
   mode: Mode
   min: number | null
@@ -65,7 +65,7 @@ type Bound = {
   negate: boolean
 }
 
-type Filters = {
+export type Filters = {
   q: string
   q_in: string[]
   name_like: string
@@ -96,7 +96,7 @@ type Filters = {
   dismissed: "hide" | "show" | "only"
 }
 
-const EMPTY: Filters = {
+export const EMPTY: Filters = {
   q: "",
   q_in: ["name", "bio", "posts"],
   name_like: "",
@@ -125,21 +125,21 @@ const EMPTY: Filters = {
  * a candidate needs. "selection" and "follows" resolve at request time, so they
  * track the Channels tab.
  */
-type Picks = {
+export type Picks = {
   source: "handles" | "selection" | "follows"
   handles: string[]
   min: number
 }
 type Relation = "parents" | "children"
 
-type Metric = {
+export type Metric = {
   key: string
   label: string
   unit?: "days" | "pct"
   hint?: string
 }
 
-const METRIC_SECTIONS: { heading: string; metrics: Metric[] }[] = [
+export const METRIC_SECTIONS: { heading: string; metrics: Metric[] }[] = [
   {
     heading: "Size and activity",
     metrics: [
@@ -201,19 +201,19 @@ const METRIC_SECTIONS: { heading: string; metrics: Metric[] }[] = [
     ],
   },
 ]
-const METRICS = METRIC_SECTIONS.flatMap((s) => s.metrics)
-const metricOf = (key: string) =>
+export const METRICS = METRIC_SECTIONS.flatMap((s) => s.metrics)
+export const metricOf = (key: string) =>
   METRICS.find((m) => m.key === key) ?? { key, label: key }
 
-const SORTS = [
+export const SORTS = [
   { key: "relevance", label: "Relevance" },
   ...METRICS.map((m) => ({ key: m.key, label: m.label })),
   { key: "handle", label: "Handle" },
 ]
 
-const KINDS = ["forward", "mention", "link", "reply"]
+export const KINDS = ["forward", "mention", "link", "reply"]
 
-function fmtValue(m: Metric, v: number | null) {
+export function fmtValue(m: Metric, v: number | null) {
   if (v == null) return "?"
   if (m.unit === "days") return `${v < 10 ? v.toFixed(1) : Math.round(v)}d`
   if (m.unit === "pct") return `${Math.round(v)}%`
@@ -235,7 +235,7 @@ function boundText(b: Bound) {
 
 // --- state ---------------------------------------------------------------------
 
-type Row = Entry & {
+export type Row = Entry & {
   forward_share: number | null
   photos: number | null
   videos: number | null
@@ -319,6 +319,46 @@ function useUrlFilters() {
   return [f, setF] as const
 }
 
+/** "Not interested", one or many, each with an Undo toast; `reload` refetches. */
+export function useDismiss(reload: () => void) {
+  /** Mark (or unmark) "Not interested"; the toast offers the way back. */
+  const setDismissed = async (handle: string, on: boolean) => {
+    try {
+      await protoPost(`/dismiss/${handle}`, on ? "POST" : "DELETE")
+    } catch (err) {
+      toast.error(`Could not update @${handle}: ${String(err)}`)
+      return
+    }
+    reload()
+    if (on)
+      toast(`Hid @${handle}`, {
+        description: "Not interested. Scope shows it again.",
+        duration: 10_000,
+        action: { label: "Undo", onClick: () => setDismissed(handle, false) },
+      })
+  }
+  /** "Not interested" for many at once, with one Undo for the lot. */
+  const setDismissedMany = async (handles: string[], on: boolean) => {
+    const method = on ? "POST" : "DELETE"
+    const results = await Promise.allSettled(
+      handles.map((h) => protoPost(`/dismiss/${h}`, method)),
+    )
+    const failed = results.filter((r) => r.status === "rejected").length
+    reload()
+    if (failed) toast.error(`Could not update ${failed} of ${handles.length}`)
+    if (on && failed < handles.length)
+      toast(`Hid ${handles.length - failed} channels`, {
+        description: "Not interested. Scope shows them again.",
+        duration: 10_000,
+        action: {
+          label: "Undo",
+          onClick: () => setDismissedMany(handles, false),
+        },
+      })
+  }
+  return { setDismissed, setDismissedMany }
+}
+
 function useFilters() {
   const { selectedChannels, channels } = useData()
   const [f, setF] = useUrlFilters()
@@ -396,41 +436,7 @@ function useFilters() {
     queryClient.invalidateQueries({ queryKey: ["proto", "/browse"] })
     queryClient.invalidateQueries({ queryKey: ["proto", "/histogram"] })
   }
-  /** Mark (or unmark) "Not interested"; the toast offers the way back. */
-  const setDismissed = async (handle: string, on: boolean) => {
-    try {
-      await protoPost(`/dismiss/${handle}`, on ? "POST" : "DELETE")
-    } catch (err) {
-      toast.error(`Could not update @${handle}: ${String(err)}`)
-      return
-    }
-    reload()
-    if (on)
-      toast(`Hid @${handle}`, {
-        description: "Not interested. Scope shows it again.",
-        duration: 10_000,
-        action: { label: "Undo", onClick: () => setDismissed(handle, false) },
-      })
-  }
-  /** "Not interested" for many at once, with one Undo for the lot. */
-  const setDismissedMany = async (handles: string[], on: boolean) => {
-    const method = on ? "POST" : "DELETE"
-    const results = await Promise.allSettled(
-      handles.map((h) => protoPost(`/dismiss/${h}`, method)),
-    )
-    const failed = results.filter((r) => r.status === "rejected").length
-    reload()
-    if (failed) toast.error(`Could not update ${failed} of ${handles.length}`)
-    if (on && failed < handles.length)
-      toast(`Hid ${handles.length - failed} channels`, {
-        description: "Not interested. Scope shows them again.",
-        duration: 10_000,
-        action: {
-          label: "Undo",
-          onClick: () => setDismissedMany(handles, false),
-        },
-      })
-  }
+  const { setDismissed, setDismissedMany } = useDismiss(reload)
   const putBound = (b: Bound) =>
     set({ bounds: [...f.bounds.filter((x) => x.metric !== b.metric), b] })
   return {
@@ -449,7 +455,7 @@ function useFilters() {
     mentionSources,
   }
 }
-type State = ReturnType<typeof useFilters>
+export type State = ReturnType<typeof useFilters>
 
 // --- the variant ---------------------------------------------------------------
 
@@ -638,7 +644,7 @@ export function VariantBrowseTop() {
 
 // --- bar pieces ----------------------------------------------------------------
 
-function BarButton({
+export function BarButton({
   label,
   icon,
   count,
@@ -798,7 +804,7 @@ function LanguageMenu({ s }: { s: State }) {
   )
 }
 
-function languageLabel(code: string) {
+export function languageLabel(code: string) {
   if (code === "?") return "Unknown"
   try {
     return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code
@@ -958,7 +964,7 @@ function FiltersMenu({
     )
   if (step)
     return (
-      <BoundEditor
+      <FlatBoundEditor
         s={s}
         metric={metricOf(step)}
         onBack={() => setStep(null)}
@@ -1050,7 +1056,7 @@ function FiltersMenu({
   )
 }
 
-type Histogram = {
+export type Histogram = {
   total: number
   measured: number
   lo: number | null
@@ -1060,7 +1066,8 @@ type Histogram = {
   bins: { lo: number; hi: number; n: number }[]
 }
 
-function BoundEditor({
+/** E's bound editor, wired to E's flat filters. */
+function FlatBoundEditor({
   s,
   metric,
   onBack,
@@ -1072,6 +1079,63 @@ function BoundEditor({
   onDone: () => void
 }) {
   const existing = s.f.bounds.find((b) => b.metric === metric.key)
+  const others = {
+    ...s.f,
+    bounds: s.f.bounds.filter((x) => x.metric !== metric.key),
+  }
+  return (
+    <BoundEditor
+      metric={metric}
+      start={existing}
+      histFilters={s.toBody(others)}
+      previewBody={(b) => ({
+        ...s.toBody({ ...others, bounds: [...others.bounds, b] }),
+        count_only: true,
+      })}
+      onBack={onBack}
+      onSubmit={(b) => {
+        s.putBound(b)
+        onDone()
+      }}
+      onRemove={
+        existing &&
+        (() => {
+          s.set({ bounds: others.bounds })
+          onDone()
+        })
+      }
+    />
+  )
+}
+
+/**
+ * One metric's bound: its distribution under every other filter, at least /
+ * at most / between / no value, and how many Channels it would keep. The
+ * caller says what "every other filter" and "what it would keep" send.
+ */
+export function BoundEditor({
+  metric,
+  start,
+  histFilters,
+  previewBody,
+  onSubmit,
+  onRemove,
+  onBack,
+  negatable = true,
+}: {
+  metric: Metric
+  start?: Bound
+  /** The /browse body the distribution is drawn under. */
+  histFilters: unknown
+  /** The count-only /browse body for a candidate bound. */
+  previewBody: (b: Bound) => unknown
+  onSubmit: (b: Bound) => void
+  onRemove?: () => void
+  onBack: () => void
+  /** The tree variants negate on the chip instead. */
+  negatable?: boolean
+}) {
+  const existing = start
   const [b, setB] = useState<Bound>(
     existing ?? {
       metric: metric.key,
@@ -1081,29 +1145,18 @@ function BoundEditor({
       negate: false,
     },
   )
-  const others = {
-    ...s.f,
-    bounds: s.f.bounds.filter((x) => x.metric !== metric.key),
-  }
   const hist = useProto<Histogram>("/histogram", false, {
-    filters: s.toBody(others),
+    filters: histFilters,
     metric: metric.key,
   })
-  const candidate = {
-    ...others,
-    bounds: [...others.bounds, b],
-    count_only: true,
-  }
+  const candidate = previewBody(b)
   const [debounced, setDebounced] = useState(candidate)
   const key = JSON.stringify(candidate)
   useEffect(() => {
     const t = setTimeout(() => setDebounced(candidate), 250)
     return () => clearTimeout(t)
   }, [key])
-  const preview = useProto<{ total: number }>("/browse", true, {
-    ...s.toBody(debounced),
-    count_only: true,
-  })
+  const preview = useProto<{ total: number }>("/browse", true, debounced)
   const ready =
     b.mode === "none" ||
     (b.mode === "atLeast"
@@ -1237,14 +1290,16 @@ function BoundEditor({
           ))}
         </div>
       )}
-      <label className="flex items-center gap-1.5 text-app-ink/70">
-        <input
-          type="checkbox"
-          checked={b.negate}
-          onChange={(e) => setB({ ...b, negate: e.target.checked })}
-        />
-        exclude the matches instead
-      </label>
+      {negatable && (
+        <label className="flex items-center gap-1.5 text-app-ink/70">
+          <input
+            type="checkbox"
+            checked={b.negate}
+            onChange={(e) => setB({ ...b, negate: e.target.checked })}
+          />
+          exclude the matches instead
+        </label>
+      )}
       {h && h.measured < h.total && b.mode !== "none" && (
         <p className="text-[10px] text-app-ink/40">
           {(h.total - h.measured).toLocaleString()} channels have no value and
@@ -1255,10 +1310,7 @@ function BoundEditor({
         <button
           type="button"
           disabled={!ready}
-          onClick={() => {
-            s.putBound(b)
-            onDone()
-          }}
+          onClick={() => onSubmit(b)}
           className="flex-1 rounded bg-app-ink/90 px-2 py-1.5 font-semibold text-app-bg disabled:opacity-40"
         >
           {existing ? "Update" : "Add"}
@@ -1267,15 +1319,10 @@ function BoundEditor({
             : ""}
           {ready && preview.isFetching ? " …" : ""}
         </button>
-        {existing && (
+        {onRemove && (
           <button
             type="button"
-            onClick={() => {
-              s.set({
-                bounds: s.f.bounds.filter((x) => x.metric !== metric.key),
-              })
-              onDone()
-            }}
+            onClick={onRemove}
             className="rounded border border-app-ink/20 px-2 py-1.5 hover:bg-app-ink/5"
           >
             Remove
@@ -1342,7 +1389,7 @@ function HandleEditor({
   )
 }
 
-function NumberField({
+export function NumberField({
   value,
   placeholder,
   onChange,
@@ -1365,7 +1412,7 @@ function NumberField({
   )
 }
 
-function TogglePill({
+export function TogglePill({
   on,
   onClick,
   children,
@@ -1551,7 +1598,7 @@ const COLUMNS: Column[] = [
   { key: "found_days", label: "Found", title: "First seen by the Directory" },
 ]
 // Ascending days means newest first, so those columns start ascending.
-const ASC_FIRST = new Set([
+export const ASC_FIRST = new Set([
   "last_post_days",
   "found_days",
   "mine_last_days",
@@ -1572,7 +1619,7 @@ const RELATION_COLUMNS: Record<Relation, Column> = {
   },
 }
 
-function ResultsTable({
+export function ResultsTable({
   s,
   open,
   setOpen,
@@ -1814,7 +1861,7 @@ function cell(key: string, r: Row): ReactNode {
 }
 
 /** Which columns the table shows; the Channel and Follow columns always stay. */
-function ColumnsMenu({ s }: { s: State }) {
+export function ColumnsMenu({ s }: { s: State }) {
   const all = [
     ...(["parents", "children"] as const).map((k) => ({
       ...RELATION_COLUMNS[k],
@@ -1878,7 +1925,7 @@ type Neighbour = {
   subscribers: number | null
 }
 
-function Drawer({
+export function Drawer({
   row,
   handle,
   s,
@@ -2004,7 +2051,7 @@ function Drawer({
 
 // --- Shared parents / children and "Mentioned by your channels" (C and B in E) ---
 
-const RELATION_TEXT: Record<
+export const RELATION_TEXT: Record<
   Relation,
   { title: string; explain: string; metric: string }
 > = {
@@ -2168,7 +2215,7 @@ function RelationEditor({
   )
 }
 
-const MENTION_WINDOWS = [7, 14, 30, 90]
+export const MENTION_WINDOWS = [7, 14, 30, 90]
 
 function MentionEditor({
   s,
@@ -2418,7 +2465,7 @@ function DismissButton({
 }
 
 /** The picked Channels and what to do with them, as Discover's bulk bar. */
-function BulkBar({
+export function BulkBar({
   s,
   picked,
   setPicked,

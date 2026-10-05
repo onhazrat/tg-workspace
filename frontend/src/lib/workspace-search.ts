@@ -56,6 +56,8 @@ export type WorkspaceSearch = {
    * JSON in the URL and parses it back.
    */
   find?: Record<string, unknown>
+  /** PROTOTYPE: the bar variants' shared view (tree text, search, sort). */
+  dir?: Record<string, unknown>
 }
 
 /** The string params: kept trimmed when non-blank, dropped otherwise. */
@@ -101,6 +103,12 @@ export function validateWorkspaceSearch(
     !Array.isArray(search.find)
   )
     result.find = search.find as Record<string, unknown>
+  if (
+    search.dir &&
+    typeof search.dir === "object" &&
+    !Array.isArray(search.dir)
+  )
+    result.dir = search.dir as Record<string, unknown>
   const legacyGroup = trimmedString(search.channelGroup)
   if (legacyGroup && !result.channelFilter) {
     // No group names here, so it is written by id, which reads back.

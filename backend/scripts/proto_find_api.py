@@ -300,9 +300,92 @@ class Filters(BaseModel):
     # B folded in: count "your channels" only over the last N days.
     mentioned_days: int | None = None
     snippets: bool = True  # quote the matching Post and bio while searching
+    # The Directory filter as the shared AND/OR/NOT tree (the bar variants T, Q
+    # and R). It ANDs with the flat fields above, which those variants leave at
+    # their widest (hide_followed false, dismissed "show", include_unavailable).
+    tree: dict | None = None
 
 
 WEIGHT = {"name": "A", "bio": "B", "posts": "C"}
+
+TREE_MAX_NODES = 80
+FLAGS = {
+    "followed": "d.handle IN (SELECT h FROM fol)",
+    "dismissed": "d.handle IN (SELECT handle FROM proto.dismissed WHERE user_id = %(uid)s)",
+    "available": "d.status = 'ok'",
+    "photo": "d.photo_url IS NOT NULL",
+}
+
+
+def _tree_nodes(node: dict) -> list[dict]:
+    return [node] + [n for c in node.get("children", []) for n in _tree_nodes(c)]
+
+
+def _tree_atoms(tree: dict | None) -> list[dict]:
+    return (
+        [n["cond"] for n in _tree_nodes(tree) if n.get("kind") == "atom"]
+        if tree
+        else []
+    )
+
+
+def _cond_sql(c: dict, f: Filters, p: dict, skip_lang: bool) -> str | None:
+    """One Condition as a boolean SQL expression; None leaves it out."""
+    key = f"t{len(p)}"
+    kinds = "AND r.kind = ANY(%(kinds)s)" if f.ref_kinds else ""
+    match c.get("type"):
+        case "language":
+            if skip_lang:
+                return None
+            p[key] = c["value"]
+            return f"coalesce(d.language, '?') = %({key})s"
+        case "flag":
+            return FLAGS.get(c["value"])
+        case "name":
+            p[key] = f"%{c['value']}%"
+            return f"(d.handle ILIKE %({key})s OR d.display_name ILIKE %({key})s)"
+        case "metric":
+            b = Bound(
+                metric=c["metric"],
+                mode=c.get("mode", "atLeast"),
+                min=c.get("min"),
+                max=c.get("max"),
+            )
+            if (b.metric == "shared_parents" and not f.parents_of) or (
+                b.metric == "shared_children" and not f.children_of
+            ):
+                return "false"
+            return _bound_sql(b, p, len(p))
+        case "cited_by" | "cites":
+            p[key] = [h.lstrip("@").lower() for h in c.get("handles", [])]
+            mine, other = (
+                ("target_handle", "source_channel")
+                if c["type"] == "cited_by"
+                else ("source_channel", "target_handle")
+            )
+            return f"d.handle IN (SELECT r.{mine} FROM tg_post_references r WHERE r.{other} = ANY(%({key})s) {kinds})"
+        case "mine":
+            # The window is the m CTE's, from mentioned_days (the client sends the first one).
+            return "coalesce(m.n, 0) > 0"
+        case "parents":
+            return "par.handle IS NOT NULL" if f.parents_of else "false"
+        case "children":
+            return "chi.handle IS NOT NULL" if f.children_of else "false"
+    return None
+
+
+def _tree_sql(node: dict, f: Filters, p: dict, skip_lang: bool = False) -> str | None:
+    """AND/OR/NOT over the Conditions; an empty group passes everything, negated or not."""
+    if node.get("kind") == "atom":
+        sql = _cond_sql(node["cond"], f, p, skip_lang)
+        sql = sql and f"coalesce(({sql}), false)"
+    else:
+        parts = [
+            x for c in node.get("children", []) if (x := _tree_sql(c, f, p, skip_lang))
+        ]
+        joiner = " OR " if node.get("op") == "or" else " AND "
+        sql = f"({joiner.join(parts)})" if parts else None
+    return f"(NOT {sql})" if sql and node.get("not") else sql
 
 
 def _bound_sql(b: Bound, p: dict, i: int) -> str | None:
@@ -366,6 +449,18 @@ def _where(
         w.append(
             f"d.handle {op} (SELECT handle FROM proto.dismissed WHERE user_id = %(uid)s)"
         )
+    if f.tree:
+        if len(_tree_nodes(f.tree)) > TREE_MAX_NODES:
+            raise HTTPException(400, "the filter is too big")
+        if sql := _tree_sql(f.tree, f, p, skip_lang):
+            w.append(sql)
+    else:
+        # The relatives use a left join so a tree can OR them; the flat filter
+        # still means "must be one".
+        if f.parents_of:
+            w.append("par.handle IS NOT NULL")
+        if f.children_of:
+            w.append("chi.handle IS NOT NULL")
     return w
 
 
@@ -414,12 +509,12 @@ def _relatives(f: Filters, p: dict) -> tuple[str, str]:
         p["p_seeds"] = sorted({h.lstrip("@").lower() for h in f.parents_of})
         p["p_min"] = max(1, f.parents_min)
         ctes += f", {PARENTS_CTES}"
-        join += " JOIN par USING (handle)"
+        join += " LEFT JOIN par USING (handle)"
     if f.children_of:
         p["c_seeds"] = sorted({h.lstrip("@").lower() for h in f.children_of})
         p["c_min"] = max(1, f.children_min)
         ctes += f", {CHILDREN_CTES}"
-        join += " JOIN chi USING (handle)"
+        join += " LEFT JOIN chi USING (handle)"
     return ctes, join
 
 
@@ -539,7 +634,14 @@ def browse(f: Filters, authorization: str | None = Header(None)) -> dict:
     # page is picked from the Directory alone and they are joined to its 100
     # rows: that cut the unfiltered page from ~1.3 s to well under one.
     graph = {"indeg", "outdeg", "mine", "mine_last_days"}
-    needs_graph = f.sort in graph or any(b.metric in graph for b in f.bounds)
+    needs_graph = (
+        f.sort in graph
+        or any(b.metric in graph for b in f.bounds)
+        or any(
+            c.get("type") == "mine" or c.get("metric") in graph
+            for c in _tree_atoms(f.tree)
+        )
+    )
     light = (
         join
         if needs_graph
