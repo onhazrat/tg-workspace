@@ -163,17 +163,22 @@ export function useDirectory() {
     [selectedChannels],
   )
   const follows = useMemo(() => channels.map((c) => c.name).sort(), [channels])
+  // Ticked in the list for a bulk action; also a pick source for the relations.
+  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const pickedList = useMemo(() => [...picked].sort(), [picked])
   const picks = useCallback(
     (source: PickSource, handles: string[]) =>
       (source === "selection"
         ? selection
         : source === "follows"
           ? follows
-          : handles
+          : source === "picked"
+            ? pickedList
+            : handles
       )
         .map((h) => h.toLowerCase())
         .sort(),
-    [selection, follows],
+    [selection, follows, pickedList],
   )
 
   /** The /browse body for a tree and this view. */
@@ -260,7 +265,11 @@ export function useDirectory() {
     const c = conds.find((x) => x.type === type) as
       | (DCond & { type: "parents" | "children" })
       | undefined
-    return c ? { source: c.source, handles: c.handles, min: c.min } : null
+    if (!c) return null
+    // E's shape has no "picked"; to E's table it is just those handles.
+    return c.source === "picked"
+      ? { source: "handles" as const, handles: pickedList, min: c.min }
+      : { source: c.source, handles: c.handles, min: c.min }
   }
   const mine = conds.find((x) => x.type === "mine") as
     | (DCond & { type: "mine" })
@@ -305,6 +314,7 @@ export function useDirectory() {
     langs,
     selectedCount: selection.length,
     followCount: follows.length,
+    picked: pickedList,
   })
   const sortOptions = SORTS.filter(
     (o) =>
@@ -330,6 +340,8 @@ export function useDirectory() {
     sortOptions,
     selectedCount: selection.length,
     followCount: follows.length,
+    picked,
+    setPicked,
     /** Add a Condition at the root, joined with the rest by AND. */
     add: (cond: DCond, not = false) =>
       setTree(setRoot(tree, () => false, { cond, not })),
@@ -496,6 +508,9 @@ export function MentionEditor({
   )
 }
 
+/** How the relation editor offers each pick source; "frozen" saves the ticks as handles. */
+type PickChoice = PickSource | "frozen"
+
 export function RelationEditor({
   type,
   start,
@@ -503,32 +518,46 @@ export function RelationEditor({
   onBack,
   selectedCount,
   followCount,
+  picked = [],
 }: EditorProps<DCond & { type: "parents" | "children" }> & {
   type: "parents" | "children"
   selectedCount: number
   followCount: number
+  /** The channels ticked in the Directory list right now. */
+  picked?: string[]
 }) {
-  const [source, setSource] = useState<PickSource>(
-    start?.source ?? (selectedCount ? "selection" : "follows"),
+  const [choice, setChoice] = useState<PickChoice>(
+    start?.source ??
+      (picked.length ? "picked" : selectedCount ? "selection" : "follows"),
   )
   const [typed, setTyped] = useState(
     (start?.handles ?? []).map((h) => `@${h}`).join(", "),
   )
   const [min, setMin] = useState(start?.min ?? 2)
   const handles = parseHandles(typed)
-  const option = (value: PickSource, label: string, off = false) => (
+  const option = (
+    value: PickChoice,
+    label: string,
+    hint: string,
+    off = false,
+  ) => (
     <label
-      className={`flex items-center gap-2 rounded px-1 py-1 ${off ? "opacity-40" : "hover:bg-app-ink/5"}`}
+      className={`flex items-start gap-2 rounded px-1 py-1 ${off ? "opacity-40" : "hover:bg-app-ink/5"}`}
     >
       <input
         type="radio"
+        className="mt-0.5"
         disabled={off}
-        checked={source === value}
-        onChange={() => setSource(value)}
+        checked={choice === value}
+        onChange={() => setChoice(value)}
       />
-      {label}
+      <span>
+        {label}
+        <span className="block text-[10px] text-app-ink/50">{hint}</span>
+      </span>
     </label>
   )
+  const n = (count: number) => ` (${count.toLocaleString()})`
   return (
     <EditorShell
       title={
@@ -536,25 +565,53 @@ export function RelationEditor({
       }
       explain={
         type === "parents"
-          ? "Cited by the same channels that cite your picks (co-citation)."
-          : "Cites the same channels your picks cite (coupling)."
+          ? "Cited by the same channels that cite the ones below (co-citation)."
+          : "Cites the same channels the ones below cite (coupling)."
       }
       onBack={onBack}
       submit={start ? "Update" : "Add"}
-      disabled={source === "handles" && !handles.length}
+      disabled={choice === "handles" && !handles.length}
       onSubmit={() =>
-        onSubmit({
-          type,
-          source,
-          handles: source === "handles" ? handles : [],
-          min,
-        })
+        onSubmit(
+          choice === "frozen"
+            ? { type, source: "handles", handles: picked, min }
+            : {
+                type,
+                source: choice,
+                handles: choice === "handles" ? handles : [],
+                min,
+              },
+        )
       }
     >
-      {option("selection", `my selection (${selectedCount})`, !selectedCount)}
-      {option("follows", `every follow (${followCount})`)}
-      {option("handles", "these channels:")}
-      {source === "handles" && (
+      <p className="px-1 text-[10px] font-semibold tracking-widest text-app-ink/40 uppercase">
+        Compared with
+      </p>
+      {option(
+        "picked",
+        `Channels ticked in this list${n(picked.length)}`,
+        "Live: follows your ticks as you change them. A ticked channel leaves the results, since it is now a pick.",
+        !picked.length && start?.source !== "picked",
+      )}
+      {option(
+        "frozen",
+        `Channels ticked in this list, saved now${n(picked.length)}`,
+        "Fixed: keeps these handles; ticking or clearing later leaves it alone.",
+        !picked.length,
+      )}
+      {option(
+        "selection",
+        `Channels selected on the Channels tab${n(selectedCount)}`,
+        "Live: follows that tab's selection.",
+        !selectedCount,
+      )}
+      {option(
+        "follows",
+        `Every channel you follow${n(followCount)}`,
+        "Live: follows your follows.",
+      )}
+      {option("handles", "These channels", "Typed handles, fixed.")}
+      {choice === "handles" && (
         <input
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
@@ -639,12 +696,14 @@ function useVocabulary({
   langs,
   selectedCount,
   followCount,
+  picked,
 }: {
   tree: DTree
   bodyFor: (t: DTree) => unknown
   langs: { language: string; n: number }[]
   selectedCount: number
   followCount: number
+  picked: string[]
 }): FilterVocabulary<DCond> {
   const relationsOn = new Set(condsOf(tree).map((c) => c.type))
   const editor = (
@@ -751,6 +810,7 @@ function useVocabulary({
                   start={p.start?.type === type ? p.start : undefined}
                   selectedCount={selectedCount}
                   followCount={followCount}
+                  picked={picked}
                 />
               ),
             ),
@@ -779,7 +839,7 @@ export function DirectoryResults({
   tableHeight?: string
 }) {
   const [open, setOpen] = usePersistentState<string | null>("E.open", null)
-  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const { picked, setPicked } = d
   return (
     <>
       <BulkBar s={d.s} picked={picked} setPicked={setPicked} />

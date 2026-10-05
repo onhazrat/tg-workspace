@@ -22,7 +22,8 @@ import {
 
 // "photo" is left out: every Channel in the Directory has a photo URL.
 export type Flag = "followed" | "dismissed" | "available"
-export type PickSource = "selection" | "follows" | "handles"
+/** "picked" is the channels ticked in the Directory list itself, live. */
+export type PickSource = "selection" | "follows" | "picked" | "handles"
 
 export type DCond =
   | { type: "language"; value: string }
@@ -53,6 +54,12 @@ export const FLAG_LABEL: Record<Flag, string> = {
   available: "Available",
 }
 
+const PICKS_LABEL: Partial<Record<PickSource, string>> = {
+  selection: "your selected channels",
+  follows: "your follows",
+  picked: "the channels ticked here",
+}
+
 const handlesText = (hs: string[]) => hs.map((h) => `@${h}`).join(" or ")
 
 export function condLabel(c: DCond, langName: (code: string) => string) {
@@ -75,7 +82,7 @@ export function condLabel(c: DCond, langName: (code: string) => string) {
         : "your channels cite it"
     case "parents":
     case "children":
-      return `${c.min}+ shared ${c.type} with ${c.source === "handles" ? handlesText(c.handles) : `your ${c.source}`}`
+      return `${c.min}+ shared ${c.type} with ${PICKS_LABEL[c.source] ?? handlesText(c.handles)}`
   }
 }
 
@@ -186,7 +193,9 @@ function word(prefix: string | undefined, text: string): DCond {
       const min = parts.length > 1 && Number.isInteger(last) ? last : 2
       const who = min === last && parts.length > 1 ? parts.slice(0, -1) : parts
       const source: PickSource =
-        who[0] === "selection" || who[0] === "follows" ? who[0] : "handles"
+        who[0] === "selection" || who[0] === "follows" || who[0] === "picked"
+          ? who[0]
+          : "handles"
       return {
         type: prefix,
         source,

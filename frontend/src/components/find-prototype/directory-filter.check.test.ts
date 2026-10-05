@@ -18,5 +18,8 @@ test("the text form reads back what it prints", () => {
   expect(p.children[0]).toMatchObject({
     cond: { type: "parents", source: "selection", min: 3 },
   })
+  expect(parseDirectory("children:picked")!.children[0]).toMatchObject({
+    cond: { type: "children", source: "picked", min: 2 },
+  })
   expect(parseDirectory("is:bogus")).toBeNull()
 })
