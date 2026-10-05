@@ -252,8 +252,8 @@ One test in a Channel filter, a Directory filter or a Post filter. In a Channel 
 Setting group, a Language, or a bound on a number such as Reach or
 subscribers. In a Post filter: a Type, a media kind, a Language, a Channel, or
 a bound on a View count or an Estimated View count. In a Directory filter: a
-Language, the followability verdict, being followed or dismissed, a citation, or
-a bound on a number such as Reach or subscribers. Anything with no value for
+Language, part of the handle or name, the followability verdict, being followed
+or dismissed, a citation, or a bound on a number such as Reach or subscribers. Anything with no value for
 that number fails a bound on it, and a separate Condition asks whether it has
 one.
 _Avoid_: rule (a Selection rule is something else), clause, criterion, filter
