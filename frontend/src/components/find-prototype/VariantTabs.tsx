@@ -154,10 +154,12 @@ export function KindsPill({
 
 export function ColumnsPill({ d }: { d: Dir }) {
   const hidden = d.s.hiddenCols.length
+  const [query, setQuery] = useState("")
   return (
     <BarPopover
       align="end"
       width="w-80"
+      onOpenChange={(open) => open || setQuery("")}
       trigger={
         <button type="button" className={pillClass(hidden > 0)}>
           <Columns3 size={12} /> Columns
@@ -169,7 +171,12 @@ export function ColumnsPill({ d }: { d: Dir }) {
         </button>
       }
     >
-      <ColumnsMenu s={d.s} />
+      <BarSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="Search columns..."
+      />
+      <ColumnsMenu s={d.s} query={query} />
     </BarPopover>
   )
 }

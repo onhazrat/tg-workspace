@@ -1861,14 +1861,15 @@ function cell(key: string, r: Row): ReactNode {
 }
 
 /** Which columns the table shows; the Channel and Follow columns always stay. */
-export function ColumnsMenu({ s }: { s: State }) {
+export function ColumnsMenu({ s, query = "" }: { s: State; query?: string }) {
+  const needle = query.trim().toLowerCase()
   const all = [
     ...(["parents", "children"] as const).map((k) => ({
       ...RELATION_COLUMNS[k],
       hint: s.f[k] ? "" : " (when on)",
     })),
     ...COLUMNS.map((c) => ({ ...c, hint: "" })),
-  ]
+  ].filter((c) => `${c.label} ${c.title}`.toLowerCase().includes(needle))
   const flip = (key: string) =>
     s.setHiddenCols(
       s.hiddenCols.includes(key)
