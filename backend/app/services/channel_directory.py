@@ -1050,7 +1050,7 @@ def index_for_search(session: Session, handles: Iterable[str]) -> int:
         .order_by(col(DirectorySample.handle), col(DirectorySample.post_id).desc())
     ).all():
         text = own_words(sample)
-        if text and len(words[sample.handle]) < search_text.SAMPLES_INDEXED:
+        if text:
             words[sample.handle].append(text)
     now = utc_now()
     params = []

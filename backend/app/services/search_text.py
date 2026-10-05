@@ -11,7 +11,7 @@ does before `to_tsvector`:
 * **Persian letters fold to their Arabic forms** (ی to ي, ک to ك), and tatweel
   and harakat go, so two spellings of one Persian word are one token.
 * **The zero-width non-joiner becomes a space.** Persian writes compounds with
-  it, and Postgres's parser keeps it inside the token, so کتاب‌های would never
+  it, and Postgres's parser keeps it inside the token, so کتاب\u200cهای would never
   match کتاب.
 * **Chinese and Japanese runs become overlapping character pairs.** Postgres
   has no word splitter for them, so a whole run is one token and a word inside
@@ -45,18 +45,18 @@ PREFIX_FROM = 3
 
 _FOLD = str.maketrans(
     {
-        "ی": "ي",  # Persian yeh -> Arabic yeh
-        "ى": "ي",  # alef maksura -> Arabic yeh
-        "ک": "ك",  # keheh -> Arabic kaf
-        "ۀ": "ه",  # heh with yeh above -> heh
-        "‌": " ",  # zero-width non-joiner
-        "ـ": None,  # tatweel
+        "\u06cc": "\u064a",  # Persian yeh -> Arabic yeh
+        "\u0649": "\u064a",  # alef maksura -> Arabic yeh
+        "\u06a9": "\u0643",  # keheh -> Arabic kaf
+        "\u06c0": "\u0647",  # heh with yeh above -> heh
+        "\u200c": " ",  # zero-width non-joiner
+        "\u0640": None,  # tatweel
     }
 )
 #: Harakat and the superscript alef: marks, not letters.
-_MARKS = re.compile("[ً-ٰٟ]")
+_MARKS = re.compile("[\u064b-\u065f\u0670]")
 #: Han, Hiragana and Katakana.
-_CJK_CHAR = "぀-ヿ㐀-䶿一-鿿豈-﫿"
+_CJK_CHAR = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
 _CJK_RUN = re.compile(f"[{_CJK_CHAR}]+")
 _WORD = re.compile(r"\w+")
 

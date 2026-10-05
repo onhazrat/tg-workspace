@@ -8,19 +8,34 @@ index fails here rather than in a test that inserted index rows itself.
 | entry          | Language | name                | bio                   | Posts say                                   | subscribers |
 |----------------|----------|---------------------|-----------------------|---------------------------------------------|-------------|
 | ds_ru          | ru       | Russkiy Dnevnik     |                       | "... новостей о политике ..."               | 5000        |
-| ds_fa          | fa       | Kucheh              |                       | "کتاب‌های ... ملی ..." (Persian ک, ی, ZWNJ)  | 5000        |
+| ds_fa          | fa       | Kucheh              |                       | "کتاب\u200cهای ... ملی ..." (Persian ک, ی, ZWNJ)  | 5000        |
 | ds_zh          | zh       | Zhongwen            |                       | "...电报频道发布了很多科技新闻..."            | 5000        |
 | ds_typo        | en       | Telegraphist Weekly |                       | English filler                              | 5000        |
 | ds_name        | en       | Blockchain Corner   |                       | English filler                              | 5000        |
 | ds_bio         | en       | Bio Only            | "all about blockchain"| English filler                              | 5000        |
 | ds_posts       | en       | Posts Only          |                       | "... blockchain ..."                        | 5000        |
-| ds_quasar_big  | en       | Sky Big             |                       | "... quasar ..."                            | 1000000     |
-| ds_quasar_small| en       | Sky Small           |                       | "... quasar ..."                            | 100         |
+| ds_sky_wide    | en       | Sky Big             |                       | "... quasar ..."                            | 1000000     |
+| ds_sky_small   | en       | Sky Small           |                       | "... quasar ..."                            | 100         |
 | ds_long        | en       | Long                |                       | 700 characters, "nebula" in the middle      | 5000        |
 
 ## Watched to fail
 
 Each mutation was applied alone and this module went red:
+
+* drop the keheh fold, or the yeh fold -> the Persian letter-variant cases
+* keep the zero-width non-joiner -> the Persian compound case
+* index a CJK run whole (no pairs) -> the Chinese cases
+* no prefix, a prefix on every word, a prefix below three characters -> the
+  prefix cases, one each
+* keep a word one configuration drops as a stop word -> "the quasar"
+* drop the trigram match -> the typo case; run it on every field -> the typo
+  case and the bio and Posts field limits
+* drop the weight labels -> the field limits
+* rank without the log of subscribers -> the relevance order
+* leave the search out of the totals and the page -> almost everything
+* quote matches without `showMatches` -> the switch-off case
+* cut snippets from the folded text -> the snippet cases
+* mark overlapping pairs separately -> the Chinese snippet
 """
 
 from __future__ import annotations
@@ -44,8 +59,8 @@ DAY = 24 * 3_600_000
 
 EN = "The weather was calm today and the market opened quietly in the morning"
 RU = "Сегодня в мире много важных новостей о политике и экономике страны"
-#: Persian keheh (ک) and Persian yeh (ی), and a zero-width non-joiner in کتاب‌های.
-FA = "کتاب‌های جدید درباره تاریخ ایران در کتابخانه ملی منتشر شد"
+#: Persian keheh (ک) and Persian yeh (ی), and a zero-width non-joiner in کتاب\u200cهای.
+FA = "کتاب\u200cهای جدید درباره تاریخ ایران در کتابخانه ملی منتشر شد"
 ZH = "今天电报频道发布了很多科技新闻和市场分析报告"
 LONG = ". ".join([EN] * 5)
 
@@ -58,8 +73,8 @@ ENTRIES: dict[str, tuple[str, str | None, str, int]] = {
     "ds_name": ("Blockchain Corner", None, EN, 5000),
     "ds_bio": ("Bio Only", "All about blockchain, every day", EN, 5000),
     "ds_posts": ("Posts Only", None, f"{EN}. Then blockchain news arrived", 5000),
-    "ds_quasar_big": ("Sky Big", None, f"{EN}. A quasar was seen", 1_000_000),
-    "ds_quasar_small": ("Sky Small", None, f"{EN}. A quasar was seen", 100),
+    "ds_sky_wide": ("Sky Big", None, f"{EN}. A quasar was seen", 1_000_000),
+    "ds_sky_small": ("Sky Small", None, f"{EN}. A quasar was seen", 100),
     "ds_long": ("Long", None, f"{LONG}. A nebula glowed. {LONG}", 5000),
 }
 
@@ -133,8 +148,10 @@ def test_a_russian_word_form_finds_another_form_of_the_word(
     "typed",
     [
         "كتاب",  # Arabic kaf where the Post wrote Persian keheh
-        "ملي",  # Arabic yeh where the Post wrote Persian yeh
-        "کتاب‌های",  # the compound as written, joined by a ZWNJ
+        # Arabic yeh where the Post wrote Persian yeh. Two words, because the
+        # arabic stemmer cuts a final yeh and a prefix would then match anyway.
+        "جديد تاريخ",
+        "کتاب\u200cهای",  # the compound as written, joined by a ZWNJ
     ],
 )
 def test_a_persian_letter_variant_or_compound_finds_the_post(
@@ -183,16 +200,16 @@ def test_the_fields_limit_where_a_word_is_looked_for(
 @pytest.mark.parametrize(
     ("typed", "expected"),
     [
-        ("quasar", ["ds_quasar_big", "ds_quasar_small"]),
+        ("quasar", ["ds_sky_wide", "ds_sky_small"]),
         # The last word is a prefix from three characters...
-        ("qua", ["ds_quasar_big", "ds_quasar_small"]),
+        ("qua", ["ds_sky_wide", "ds_sky_small"]),
         # ...and not below it.
         ("qu", []),
         # Every other word matches whole.
         ("qua seen", []),
-        ("seen qua", ["ds_quasar_big", "ds_quasar_small"]),
+        ("seen qua", ["ds_sky_wide", "ds_sky_small"]),
         # A stop word in one configuration does not hide that configuration's rows.
-        ("the quasar", ["ds_quasar_big", "ds_quasar_small"]),
+        ("the quasar", ["ds_sky_wide", "ds_sky_small"]),
     ],
 )
 def test_the_last_word_is_a_prefix_from_three_characters(
@@ -205,7 +222,7 @@ def test_relevance_is_match_strength_times_the_log_of_subscribers(
     client: TestClient, operator: dict[str, str]
 ) -> None:
     # The same Posts: the bigger Channel first, in either order of probing.
-    assert _found(client, operator, "quasar") == ["ds_quasar_big", "ds_quasar_small"]
+    assert _found(client, operator, "quasar") == ["ds_sky_wide", "ds_sky_small"]
     # The same size: a word in the name outranks one in the bio, and that one
     # outranks one in a Post.
     assert _found(client, operator, "blockchain") == ["ds_name", "ds_bio", "ds_posts"]
@@ -247,7 +264,7 @@ def test_a_snippet_marks_a_word_form_a_letter_variant_and_a_pair(
     assert "[новостей]" in _marked(ru["parts"])
     fa = _matches(client, operator, "كتاب", showMatches=True)["ds_fa"]["post"]
     # The Post's own spelling is quoted, not the folded one.
-    assert _marked(fa["parts"]).startswith("[کتاب]‌های")
+    assert _marked(fa["parts"]).startswith("[کتاب]\u200cهای")
     zh = _matches(client, operator, "科技新闻", showMatches=True)["ds_zh"]["post"]
     assert "很多[科技新闻]和" in _marked(zh["parts"])
 
@@ -289,7 +306,7 @@ def test_a_search_combines_with_every_condition(
     page = _list(
         client, operator, search={"text": "quasar"}, filter=small, sort="relevance"
     )
-    assert [row["handle"] for row in page["rows"]] == ["ds_quasar_small"]
+    assert [row["handle"] for row in page["rows"]] == ["ds_sky_small"]
     assert page["total"] == 1
     count = client.post(
         f"{DIRECTORY}/count",
@@ -310,8 +327,8 @@ def test_a_search_sorts_by_any_sort_and_relevance_needs_one(
         descending=False,
     )
     assert [row["handle"] for row in page["rows"]] == [
-        "ds_quasar_small",
-        "ds_quasar_big",
+        "ds_sky_small",
+        "ds_sky_wide",
     ]
     # Relevance with nothing searched falls back to the handle.
     page = _list(client, operator, sort="relevance")

@@ -14,6 +14,21 @@ backfill and the writers build the same thing.
 ## Watched to fail
 
 Each mutation was applied alone and this module went red:
+
+* skip the rebuild in `record_probe_result` -> every writer case
+* skip it in `record_sync_metadata` -> the metadata sync case
+* skip it in `requeue_probes` -> the recheck case and the listed-only case
+* skip it in `expire_samples` -> the sample retention case
+* index every kind, not only Channels -> the bot, recheck and listed-only cases
+* index every sample, not the eight newest -> the eight-newest case
+* index a sample's stored text rather than its own words -> the no-words case
+* let the backfill ignore the index version -> the version case
+
+The inventories that place the table were watched to fail before it was
+placed: `test_tenancy_seam.py` (classified, and named corpus),
+`test_tg_cleanup_inventory.py`, `test_admin_scoped_export.py`'s export
+coverage, `test_superseded_columns.py`'s owner-free list and
+`test_service_kinds.py` for `search_text.py`.
 """
 
 from __future__ import annotations
