@@ -33,7 +33,12 @@ import {
   rootFlag,
   setRootFlag,
 } from "./directory-filter"
-import { type Dir, DirectoryResults, useDirectory } from "./directory-state"
+import {
+  type Dir,
+  DirectoryResults,
+  useDirectory,
+  type Yours,
+} from "./directory-state"
 import { fmt } from "./shared"
 import { ColumnsMenu, KINDS, languageLabel } from "./VariantBrowseTop"
 
@@ -214,10 +219,12 @@ export function DirectorySort({ d }: { d: Dir }) {
   return (
     <SortPicker
       options={d.sortOptions}
-      value={d.body.sort}
-      onChange={(sort) =>
+      value={d.body.sort === "mine" ? `mine:${d.view.yours}` : d.body.sort}
+      onChange={(choice) => {
+        const [sort, yours] = choice.split(":") as [string, Yours | undefined]
         d.patch({
           sort,
+          ...(yours ? { yours } : {}),
           desc: ![
             "last_post_days",
             "found_days",
@@ -225,7 +232,7 @@ export function DirectorySort({ d }: { d: Dir }) {
             "handle",
           ].includes(sort),
         })
-      }
+      }}
       direction={d.view.desc ? "desc" : "asc"}
       onToggleDirection={() => d.patch({ desc: !d.view.desc })}
       testId="dir-sort"
@@ -327,12 +334,16 @@ export function VariantTabs() {
           <span className="text-app-ink/50">
             {res.isFetching ? "loading…" : `${res.data?.ms ?? 0} ms`}
           </span>
-          {d.selectedCount === 0 && d.body.sort === "mine" && (
-            <span className="inline-flex items-center gap-1 text-app-ink/50">
-              <Sparkles size={11} /> "Yours" counts every follow; select
-              channels on the Channels tab for a personal ranking
-            </span>
-          )}
+          {d.body.sort === "mine" &&
+            ((d.view.yours === "selection" && d.selectedCount === 0) ||
+              (d.view.yours === "picked" && d.picked.size === 0)) && (
+              <span className="inline-flex items-center gap-1 text-amber-600">
+                <Sparkles size={11} />
+                {d.view.yours === "selection"
+                  ? "Nothing is selected on the Channels tab, so every count is 0"
+                  : "No channels are ticked here yet, so every count is 0"}
+              </span>
+            )}
           {d.all.data && (
             <span className="ml-auto text-app-ink/40">
               of {fmt(d.all.data.total)} in the Directory

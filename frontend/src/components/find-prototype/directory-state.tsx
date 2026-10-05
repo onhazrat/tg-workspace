@@ -68,6 +68,15 @@ import {
 const workspaceRoute = getRouteApi("/_tg/workspace")
 export const PAGE = 100
 
+export type Yours = "follows" | "selection" | "picked"
+
+/** The three ways to count "cited by your channels", as the sort offers them. */
+export const YOURS_SORTS: { yours: Yours; label: string }[] = [
+  { yours: "follows", label: "Cited by channels you follow" },
+  { yours: "selection", label: "Cited by your Channels tab selection" },
+  { yours: "picked", label: "Cited by channels ticked here" },
+]
+
 export type View = {
   /** The Directory filter in its text form. */
   f: string
@@ -78,6 +87,11 @@ export type View = {
   desc: boolean
   /** Reference kinds: narrow every Reference Condition and "yours". */
   kinds: string[]
+  /**
+   * Whose citations "Cited by your channels" counts: the sort, the "Yours"
+   * column and the Condition all read it.
+   */
+  yours: Yours
   offset: number
 }
 
@@ -89,6 +103,7 @@ const DEFAULT_VIEW: View = {
   sort: "mine",
   desc: true,
   kinds: [],
+  yours: "follows",
   offset: 0,
 }
 
@@ -181,6 +196,17 @@ export function useDirectory() {
     [selection, follows, pickedList],
   )
 
+  // The server reads no sources as "every follow", so an empty selection or
+  // tick list is sent as one handle that matches nothing.
+  const yoursSources = useCallback(
+    (y: Yours) => {
+      if (y === "follows") return []
+      const list = y === "selection" ? selection : pickedList
+      return list.length ? list.map((h) => h.toLowerCase()) : ["~none~"]
+    },
+    [selection, pickedList],
+  )
+
   /** The /browse body for a tree and this view. */
   const bodyFor = useCallback(
     (t: DTree, v: View = view) => {
@@ -222,10 +248,10 @@ export function useDirectory() {
         children_min: chi?.min ?? 2,
         mentioned_days: mine?.days ?? null,
         // "Your channels" are the selection, or every follow without one.
-        sources: selection,
+        sources: yoursSources(v.yours),
       }
     },
-    [view, picks, selection],
+    [view, picks, yoursSources],
   )
 
   // The search waits out typing; clearing it applies at once and cancels.
@@ -304,7 +330,12 @@ export function useDirectory() {
     setDismissedMany,
     selectedCount: selection.length,
     followCount: follows.length,
-    mentionSources: selection.length ? selection : follows,
+    mentionSources:
+      view.yours === "follows"
+        ? follows
+        : view.yours === "selection"
+          ? selection
+          : pickedList,
   } as unknown as State
 
   const langName = (code: string) => languageLabel(code)
@@ -321,7 +352,11 @@ export function useDirectory() {
       (o.key !== "relevance" || view.q) &&
       (o.key !== "shared_parents" || f.parents) &&
       (o.key !== "shared_children" || f.children),
-  ).map((o) => ({ value: o.key, label: o.label }))
+  ).flatMap((o) =>
+    o.key === "mine"
+      ? YOURS_SORTS.map((y) => ({ value: `mine:${y.yours}`, label: y.label }))
+      : [{ value: o.key, label: o.label }],
+  )
 
   return {
     view,
@@ -479,7 +514,7 @@ export function MentionEditor({
   return (
     <EditorShell
       title="Cited by your channels"
-      explain="Your selected channels, or every follow without a selection, forwarded, mentioned, linked or replied to it. Bound the Cited by your channels number for at least N of them."
+      explain="Your channels forwarded, mentioned, linked or replied to it. Which channels count as yours is the Sort's Cited by choice: your follows, your Channels tab selection, or the channels ticked here. Bound the Cited by your channels number for at least N of them."
       onBack={onBack}
       submit={start ? "Update" : "Add"}
       onSubmit={() => onSubmit({ type: "mine", days })}
