@@ -130,6 +130,10 @@ INVENTORY: dict[str, str] = {
     # Joins environment metadata with both settings aggregates and quota
     # overrides for one read-only admin inventory; owns and commits nothing.
     "configuration_catalog.py": READ_MODEL,
+    # The Directory tab's reads (DIR-02): a page, its totals and a measure's
+    # spread over Directory entries, References and the caller's Follows.
+    # Writes nothing; its caches are process memory, not a table.
+    "directory_reads.py": READ_MODEL,
     "discover.py": READ_MODEL,
     "network_settings.py": READ_MODEL,
     # Evaluates the Post selection (PTR-05) into a predicate other reads

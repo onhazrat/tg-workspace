@@ -5883,6 +5883,12 @@
           "settingGroupId": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Settinggroupid"
+          },
+          "directory": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryFollowSource" },
+              { "type": "null" }
+            ]
           }
         },
         "type": "object",
@@ -7054,6 +7060,24 @@
         "required": ["type", "value"],
         "title": "DirectoryFlagCondition",
         "description": "Followed by this Account, or followable by anybody (the entry's verdict)."
+      },
+      "DirectoryFollowSource": {
+        "properties": {
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DirectoryFollowSource",
+        "description": "The Directory view's \"your channels\" and Reference kinds, for discovered-via."
       },
       "DirectoryLanguageCondition": {
         "properties": {

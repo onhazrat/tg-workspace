@@ -264,6 +264,21 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "has one answer for every caller and the rows carry no owner to scope "
         "by (tenancy.py::SCOPES, ticket 03)",
     ),
+    ("POST", f"{DATA}/directory/list"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts: the entries are "
+        "corpus, and what is private (Followed, every follow as 'your "
+        "channels') answers for each Account alone",
+    ),
+    ("POST", f"{DATA}/directory/count"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("POST", f"{DATA}/directory/distribution"): (
+        Reason.COVERED_ELSEWHERE,
+        "same file",
+    ),
+    ("GET", f"{DATA}/directory/size"): (
+        Reason.CORPUS,
+        "one count over DirectoryEntry, the same for every caller",
+    ),
     ("POST", f"{DATA}/discover/probe/recheck"): (Reason.CORPUS, "see GET probes"),
     ("POST", f"{DATA}/discover/probe/refresh"): (Reason.CORPUS, "see GET probes"),
     ("GET", f"{DATA}/discover/ignored"): (

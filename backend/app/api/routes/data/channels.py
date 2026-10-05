@@ -46,6 +46,7 @@ from app.schemas.data import (
     SettingGroupWriteRequest,
 )
 from app.schemas.setting_groups import SettingGroupResponse
+from app.services import directory_reads
 from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
     bulk_reset_and_queue_sync,
@@ -265,6 +266,25 @@ async def start_bulk_follow(
         }
         for entry in body.channels
     ]
+    # DIR-02: a Follow from the Directory records the newest Reference from the
+    # view's "your channels", resolved here so ticks from any page get one.
+    if body.directory is not None:
+        view = directory_reads.resolve_view(
+            session,
+            current_user.id,
+            tree=None,
+            source=body.directory.yours.source,
+            handles=body.directory.yours.handles,
+            kinds=body.directory.reference_kinds,
+        )
+        newest = directory_reads.newest_references(
+            session, view, [entry.name for entry in body.channels]
+        )
+        for payload in channel_payloads:
+            if payload["discoveredVia"] is None:
+                payload["discoveredVia"] = newest.get(
+                    str(payload["name"]).strip().lstrip("@").lower()
+                )
     # Resolved from settings, never from the body (ADR-012) — the browser used
     # to send `activeProxies` here, derived from `defaultProxyUrls`, which is
     # the setting this reads.

@@ -69,7 +69,7 @@ from sqlalchemy import select as sa_select
 from sqlmodel import Session, col
 
 from app.models_tg import DirectoryEntry, PostReference, utc_now
-from app.services.channel_directory import PROBE_SCOPE_REASON, followed_reach
+from app.services.channel_directory import followed_reach
 from app.services.follows import visible_channel_names
 from app.services.post_filters import (
     TreeAtom,
@@ -86,6 +86,13 @@ PAGE_SIZE = 100
 #: reused. A Directory that grows while it is read moves by a row or two.
 COUNTS_TTL_SECONDS = 300
 _MAX_CACHED_VIEWS = 1000
+
+#: Why nothing here goes through `scoped_select`.
+_SCOPE_REASON = (
+    "Directory entries and References are corpus (`tenancy.SCOPES`): a fact "
+    "about a public Channel has one answer for every Account. What is private "
+    "to the Account, its Follows, comes in through `visible_channel_names`."
+)
 
 # ---- The vocabulary -----------------------------------------------------------
 
@@ -358,7 +365,7 @@ def _page_handles(
 ) -> list[str]:
     handle = col(DirectoryEntry.handle)
     statement = unscoped_select(
-        sa_select(handle).where(_where(view, view.tree)), reason=PROBE_SCOPE_REASON
+        sa_select(handle).where(_where(view, view.tree)), reason=_SCOPE_REASON
     )
     if sort == "mine" or sort == "mine_last_days":
         mine = _mine_aggregate(view)
@@ -408,7 +415,7 @@ def _rows(
                     col(d.links),
                     col(d.status),
                 ).where(col(d.handle) == any_(_handles(handles))),
-                reason=PROBE_SCOPE_REASON,
+                reason=_SCOPE_REASON,
             )
         ).all()
     }
@@ -489,7 +496,7 @@ def _count(
 ) -> int:
     statement = unscoped_select(
         sa_select(func.count()).select_from(DirectoryEntry).where(_where(view, tree)),
-        reason=PROBE_SCOPE_REASON,
+        reason=_SCOPE_REASON,
     )
     return int(session.execute(statement).scalar_one())
 
@@ -506,7 +513,7 @@ def _totals(session: Session, view: DirectoryView) -> tuple[int, list[LanguageCo
         .where(_where(view, without))
         .group_by(language)
         .order_by(func.count().desc(), language),
-        reason=PROBE_SCOPE_REASON,
+        reason=_SCOPE_REASON,
     )
     languages = [
         LanguageCount(language=lang, count=int(n))
@@ -557,13 +564,47 @@ def count_view(
     return _count(session, view, TreeGroup(op="and", children=parts))
 
 
+def newest_references(
+    session: Session, view: DirectoryView, handles: Sequence[str]
+) -> dict[str, dict[str, Any]]:
+    """Per handle, the newest Reference "your channels" make to it, as a discovered-via.
+
+    In the shape `ChannelFollow.discovered_via` stores; a handle none of them
+    cites is absent.
+    """
+    targets = sorted({h.strip().lstrip("@").lower() for h in handles if h.strip()})
+    if not view.sources or not targets:
+        return {}
+    r = PostReference
+    rows = session.execute(
+        unscoped_select(
+            sa_select(
+                col(r.target_handle),
+                col(r.source_channel),
+                col(r.source_post_id),
+                col(r.timestamp),
+            )
+            .where(*_references(view), col(r.target_handle) == any_(_handles(targets)))
+            .distinct(col(r.target_handle))
+            .order_by(
+                col(r.target_handle), col(r.timestamp).desc(), col(r.source_post_id)
+            ),
+            reason=_SCOPE_REASON,
+        )
+    ).all()
+    return {
+        str(target): {"channelName": source, "postId": post_id, "timestamp": ts}
+        for target, source, post_id, ts in rows
+    }
+
+
 def directory_size(session: Session) -> int:
     """How many Channels the Directory lists at all: the filter row's "of M"."""
     if _size and _size[0][0] > time.monotonic():
         return _size[0][1]
     statement = unscoped_select(
         sa_select(func.count()).select_from(DirectoryEntry).where(_listed()),
-        reason=PROBE_SCOPE_REASON,
+        reason=_SCOPE_REASON,
     )
     size = int(session.execute(statement).scalar_one())
     _size[:] = [(time.monotonic() + COUNTS_TTL_SECONDS, size)]
@@ -611,7 +652,7 @@ def distribution(
                 func.max(value),
                 func.percentile_cont(0.5).within_group(value),
             ).where(where),
-            reason=PROBE_SCOPE_REASON,
+            reason=_SCOPE_REASON,
         )
     ).one()
     scale: Scale = "linear" if measure in _LINEAR else "log"
@@ -636,7 +677,7 @@ def distribution(
                     sa_select(bucket, func.count())
                     .where(where, value.is_not(None))
                     .group_by(bucket),
-                    reason=PROBE_SCOPE_REASON,
+                    reason=_SCOPE_REASON,
                 )
             ).all()
         }

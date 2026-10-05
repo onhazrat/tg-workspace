@@ -74,6 +74,16 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
         "aggregated counts over a scope; the report that *stores* an answer is "
         "POST /data/discover/reports, which is refused"
     ),
+    f"{settings.API_V1_STR}/data/directory/list": (
+        "one page of the Directory; POST only because the Directory filter "
+        "travels in the body (DIR-02)"
+    ),
+    f"{settings.API_V1_STR}/data/directory/count": (
+        "a count over the same view, for the bound editor's preview"
+    ),
+    f"{settings.API_V1_STR}/data/directory/distribution": (
+        "a measure's spread over the same view, for the bound editor"
+    ),
     f"{settings.API_V1_STR}/login/test-token": (
         "echoes the caller back; the app uses it to confirm who it is acting as"
     ),

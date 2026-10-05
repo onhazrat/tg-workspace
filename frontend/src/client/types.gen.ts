@@ -424,6 +424,7 @@ export type BulkFollowRequest = {
      * Settinggroupid
      */
     settingGroupId?: string | null;
+    directory?: DirectoryFollowSource | null;
 };
 
 /**
@@ -1698,6 +1699,19 @@ export type DirectoryFlagCondition = {
      * Value
      */
     value: 'followed' | 'followable';
+};
+
+/**
+ * DirectoryFollowSource
+ *
+ * The Directory view's "your channels" and Reference kinds, for discovered-via.
+ */
+export type DirectoryFollowSource = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
 };
 
 /**
