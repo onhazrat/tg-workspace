@@ -14,7 +14,7 @@ state, the filter's text form and columns.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 The prototype's variant T (branch `prototype/directory-tab-bars`) shows the bar to rebuild, on top
 of variant E's table and bulk bar (`prototype/directory-tab`); rewrite it properly rather than
