@@ -176,6 +176,10 @@ INVENTORY: dict[str, str] = {
     "post_links_parser.py": PURE_TRANSFORM,
     "post_media_parser.py": PURE_TRANSFORM,
     "post_reply_parser.py": PURE_TRANSFORM,
+    # How the Directory search index reads text (DIR-04, ADR-027): one
+    # normalisation shared by the writer that indexes and the read that
+    # queries, so the two cannot drift, and the snippet cutter beside it.
+    "search_text.py": PURE_TRANSFORM,
     # Reach from (View count, age) pairs and the seed Settling curve (REACH-03,
     # ADR-024). Its own module because two sources call it, followed Channels
     # on read and Directory entries at probe time, and neither owns the other.

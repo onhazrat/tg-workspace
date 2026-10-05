@@ -1414,6 +1414,12 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "another install weeks ago. Nothing is lost by omitting it — the "
         "refresh window fills it back in."
     ),
+    "DirectorySearchDocument": (
+        "Derived (DIR-04): rebuilt from the Directory entry and its samples by "
+        "every writer, and wholesale by `scripts/backfill_directory_search.py`. "
+        "Neither of those travels either, so a restored document would index "
+        "an entry the importing install does not hold."
+    ),
     "DirectoryProbeUsage": (
         "What this deployment's probe lane spent per day (ticket 04). A meter "
         "of this install's traffic, meaningless on another, and a restore "

@@ -81,6 +81,7 @@ TG_TABLES: tuple[str, ...] = (
     # child-then-parent like the rest of this list even though the TRUNCATE
     # cascades anyway.
     "tg_channel_directory_samples",
+    "tg_channel_directory_search",
     "tg_channel_directory",
     # CRG-01's reference graph. Truncated between tests for the reason
     # `tg_directory_probe_usage` is, despite production never pruning it: rows

@@ -171,7 +171,14 @@ def _hits(text: str, stems: set[str]) -> list[tuple[int, int]]:
         folded = _fold(word)
         if any(folded.startswith(stem) for stem in words if stem):
             spans.append(match.span())
-    return sorted(spans)
+    # Overlapping pairs become one span, so 新闻 marked twice reads as one word.
+    merged: list[tuple[int, int]] = []
+    for begin, end in sorted(spans):
+        if merged and begin <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((begin, end))
+    return merged
 
 
 def snippet(text: str, stems: set[str]) -> list[SnippetPart] | None:
@@ -193,7 +200,7 @@ def snippet(text: str, stems: set[str]) -> list[SnippetPart] | None:
         parts.append(SnippetPart("…", False))
     cursor = start
     for begin, finish in spans:
-        begin, finish = max(begin, cursor), min(finish, end)
+        finish = min(finish, end)
         if begin >= finish:
             continue
         if begin > cursor:

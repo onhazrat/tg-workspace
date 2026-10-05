@@ -89,6 +89,7 @@ from app.models_tg import (
     DirectoryEntry,
     DirectoryProbeUsage,
     DirectorySample,
+    DirectorySearchDocument,
     DiscoverIgnoredChannel,
     DiscoverReport,
     EmbeddingLog,
@@ -209,6 +210,10 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # Channels nobody follows yet, so scoping it by Follow would hide every row
     # that has a reason to be there.
     DirectorySample: Scope.CORPUS,
+    # The search document of a Directory entry (DIR-04, ADR-027): derived
+    # from the entry and its samples, so corpus for their reason. It answers
+    # "which public Channels say this word" the same way for every Account.
+    DirectorySearchDocument: Scope.CORPUS,
     # What the probe lane spent, one row per UTC day (ticket 04). Corpus
     # because the work is: a probe answers a question about what exists on
     # Telegram, so the row has no owner column to scope by and inventing one

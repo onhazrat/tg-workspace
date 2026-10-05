@@ -1078,6 +1078,39 @@ def index_for_search(session: Session, handles: Iterable[str]) -> int:
     return len(listed)
 
 
+def index_stale_for_search(
+    session: Session, *, after: str = "", limit: int = SEARCH_BATCH
+) -> list[str]:
+    """Index the next `limit` listed entries after `after` whose document is
+    missing or older than `SEARCH_INDEX_VERSION`; return their handles.
+
+    The backfill's step (`scripts/backfill_directory_search.py`), and how a
+    recipe change reaches old rows: raise the version and walk again. Re-running
+    it is safe, because a current row is not stale. Walks by handle, so each
+    batch starts where the last stopped instead of re-scanning the table.
+    **Does not commit.**
+    """
+    entry, doc = DirectoryEntry, DirectorySearchDocument
+    handles = list(
+        session.exec(
+            select(col(entry.handle))
+            .outerjoin(doc, col(doc.handle) == col(entry.handle))
+            .where(
+                col(entry.kind) == LISTED_KIND,
+                col(entry.handle) > after,
+                or_(
+                    col(doc.handle).is_(None),
+                    col(doc.index_version) < SEARCH_INDEX_VERSION,
+                ),
+            )
+            .order_by(col(entry.handle))
+            .limit(limit)
+        ).all()
+    )
+    index_for_search(session, handles)
+    return handles
+
+
 def requeue_probes(
     session: Session, handles: list[str], *, priority: int = RECHECK_PRIORITY
 ) -> list[str]:

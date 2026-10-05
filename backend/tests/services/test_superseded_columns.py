@@ -260,6 +260,7 @@ def test_the_migrations_frozen_list_is_the_derived_one() -> None:
     assert never_had_one <= {
         "tg_channel_directory",
         "tg_channel_directory_samples",
+        "tg_channel_directory_search",
         "tg_directory_probe_usage",
         "tg_post_references",
         "tg_settling_curve_fits",

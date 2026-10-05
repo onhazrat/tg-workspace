@@ -197,6 +197,8 @@ def test_corpus_models_are_the_ones_the_plan_names() -> None:
     assert corpus == {
         "DirectoryEntry",
         "DirectorySample",
+        # DIR-04's search document, derived from the two above.
+        "DirectorySearchDocument",
         "DirectoryProbeUsage",
         # CRG-01's reference graph, corpus for `DirectorySample`'s reason: it
         # exists to record Channels nobody follows, and half its rows come

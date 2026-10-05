@@ -16,6 +16,7 @@ index fails here rather than in a test that inserted index rows itself.
 | ds_posts       | en       | Posts Only          |                       | "... blockchain ..."                        | 5000        |
 | ds_quasar_big  | en       | Sky Big             |                       | "... quasar ..."                            | 1000000     |
 | ds_quasar_small| en       | Sky Small           |                       | "... quasar ..."                            | 100         |
+| ds_long        | en       | Long                |                       | 700 characters, "nebula" in the middle      | 5000        |
 
 ## Watched to fail
 
@@ -46,6 +47,7 @@ RU = "Сегодня в мире много важных новостей о п�
 #: Persian keheh (ک) and Persian yeh (ی), and a zero-width non-joiner in کتاب‌های.
 FA = "کتاب‌های جدید درباره تاریخ ایران در کتابخانه ملی منتشر شد"
 ZH = "今天电报频道发布了很多科技新闻和市场分析报告"
+LONG = ". ".join([EN] * 5)
 
 #: handle -> (display name, bio, Post text, subscribers)
 ENTRIES: dict[str, tuple[str, str | None, str, int]] = {
@@ -58,6 +60,7 @@ ENTRIES: dict[str, tuple[str, str | None, str, int]] = {
     "ds_posts": ("Posts Only", None, f"{EN}. Then blockchain news arrived", 5000),
     "ds_quasar_big": ("Sky Big", None, f"{EN}. A quasar was seen", 1_000_000),
     "ds_quasar_small": ("Sky Small", None, f"{EN}. A quasar was seen", 100),
+    "ds_long": ("Long", None, f"{LONG}. A nebula glowed. {LONG}", 5000),
 }
 
 
@@ -124,3 +127,192 @@ def test_a_russian_word_form_finds_another_form_of_the_word(
 ) -> None:
     # The Post says "новостей"; "новости" stems to the same word.
     assert _found(client, operator, "новости") == ["ds_ru"]
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        "كتاب",  # Arabic kaf where the Post wrote Persian keheh
+        "ملي",  # Arabic yeh where the Post wrote Persian yeh
+        "کتاب‌های",  # the compound as written, joined by a ZWNJ
+    ],
+)
+def test_a_persian_letter_variant_or_compound_finds_the_post(
+    client: TestClient, operator: dict[str, str], typed: str
+) -> None:
+    assert _found(client, operator, typed) == ["ds_fa"]
+
+
+def test_a_chinese_word_inside_a_run_is_found(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    # 新闻 sits inside one unbroken run of the Post.
+    assert _found(client, operator, "新闻") == ["ds_zh"]
+    assert _found(client, operator, "科技新闻") == ["ds_zh"]
+    assert _found(client, operator, "新技") == []
+
+
+def test_a_name_typed_with_a_typo_still_finds_the_channel(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    assert _found(client, operator, "telegrapist") == ["ds_typo"]
+    # The typo match reads names only.
+    assert _found(client, operator, "telegrapist", fields=["posts"]) == []
+
+
+@pytest.mark.parametrize(
+    ("fields", "expected"),
+    [
+        # Every field, a name match (weight A) first.
+        (None, {"ds_name", "ds_bio", "ds_posts"}),
+        (["name"], {"ds_name"}),
+        (["bio"], {"ds_bio"}),
+        (["posts"], {"ds_posts"}),
+        (["name", "posts"], {"ds_name", "ds_posts"}),
+    ],
+)
+def test_the_fields_limit_where_a_word_is_looked_for(
+    client: TestClient,
+    operator: dict[str, str],
+    fields: list[str] | None,
+    expected: set[str],
+) -> None:
+    assert set(_found(client, operator, "blockchain", fields=fields)) == expected
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        ("quasar", ["ds_quasar_big", "ds_quasar_small"]),
+        # The last word is a prefix from three characters...
+        ("qua", ["ds_quasar_big", "ds_quasar_small"]),
+        # ...and not below it.
+        ("qu", []),
+        # Every other word matches whole.
+        ("qua seen", []),
+        ("seen qua", ["ds_quasar_big", "ds_quasar_small"]),
+        # A stop word in one configuration does not hide that configuration's rows.
+        ("the quasar", ["ds_quasar_big", "ds_quasar_small"]),
+    ],
+)
+def test_the_last_word_is_a_prefix_from_three_characters(
+    client: TestClient, operator: dict[str, str], typed: str, expected: list[str]
+) -> None:
+    assert _found(client, operator, typed) == expected
+
+
+def test_relevance_is_match_strength_times_the_log_of_subscribers(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    # The same Posts: the bigger Channel first, in either order of probing.
+    assert _found(client, operator, "quasar") == ["ds_quasar_big", "ds_quasar_small"]
+    # The same size: a word in the name outranks one in the bio, and that one
+    # outranks one in a Post.
+    assert _found(client, operator, "blockchain") == ["ds_name", "ds_bio", "ds_posts"]
+
+
+def _marked(parts: list[dict[str, Any]] | None) -> str | None:
+    """A snippet as text with the matched words in brackets."""
+    if parts is None:
+        return None
+    return "".join(f"[{p['text']}]" if p["hit"] else p["text"] for p in parts)
+
+
+def _matches(
+    client: TestClient, headers: dict[str, str], text: str, **body: Any
+) -> dict[str, Any]:
+    page = _list(client, headers, search={"text": text}, sort="relevance", **body)
+    return {row["handle"]: row["match"] for row in page["rows"]}
+
+
+def test_show_matches_quotes_the_bio_and_the_newest_matching_post(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    matches = _matches(client, operator, "blockchain", showMatches=True)
+    assert _marked(matches["ds_bio"]["bio"]) == "All about [blockchain], every day"
+    assert matches["ds_bio"]["post"] is None
+    post = matches["ds_posts"]["post"]
+    # The newest of the three samples, and the stemmed word marked whole.
+    assert post["postId"] == 3
+    assert _marked(post["parts"]).endswith("Then [blockchain] news arrived")
+    assert matches["ds_posts"]["bio"] is None
+    # A name match quotes nothing: the name is on the row already.
+    assert matches["ds_name"] == {"bio": None, "post": None}
+
+
+def test_a_snippet_marks_a_word_form_a_letter_variant_and_a_pair(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    ru = _matches(client, operator, "новости", showMatches=True)["ds_ru"]["post"]
+    assert "[новостей]" in _marked(ru["parts"])
+    fa = _matches(client, operator, "كتاب", showMatches=True)["ds_fa"]["post"]
+    # The Post's own spelling is quoted, not the folded one.
+    assert _marked(fa["parts"]).startswith("[کتاب]‌های")
+    zh = _matches(client, operator, "科技新闻", showMatches=True)["ds_zh"]["post"]
+    assert "很多[科技新闻]和" in _marked(zh["parts"])
+
+
+def test_a_snippet_is_cut_around_the_match_of_a_long_post(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    post = _matches(client, operator, "nebula", showMatches=True)["ds_long"]["post"]
+    marked = _marked(post["parts"])
+    assert "A [nebula] glowed" in marked
+    assert marked.startswith("…") and marked.endswith("…")
+    assert len(marked) < 300
+
+
+def test_show_matches_off_quotes_nothing(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    assert set(_matches(client, operator, "blockchain").values()) == {None}
+    # Nor does it without a search.
+    page = _list(client, operator, showMatches=True)
+    assert {row["match"] for row in page["rows"]} == {None}
+
+
+def test_a_search_combines_with_every_condition(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    small = {
+        "kind": "group",
+        "id": "root",
+        "op": "and",
+        "children": [
+            {
+                "kind": "atom",
+                "id": "a",
+                "cond": {"type": "measure", "measure": "subscribers", "max": 1000},
+            }
+        ],
+    }
+    page = _list(
+        client, operator, search={"text": "quasar"}, filter=small, sort="relevance"
+    )
+    assert [row["handle"] for row in page["rows"]] == ["ds_quasar_small"]
+    assert page["total"] == 1
+    count = client.post(
+        f"{DIRECTORY}/count",
+        json={"search": {"text": "quasar"}},
+        headers=operator,
+    )
+    assert count.json() == {"total": 2}
+
+
+def test_a_search_sorts_by_any_sort_and_relevance_needs_one(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    page = _list(
+        client,
+        operator,
+        search={"text": "quasar"},
+        sort="subscribers",
+        descending=False,
+    )
+    assert [row["handle"] for row in page["rows"]] == [
+        "ds_quasar_small",
+        "ds_quasar_big",
+    ]
+    # Relevance with nothing searched falls back to the handle.
+    page = _list(client, operator, sort="relevance")
+    assert [row["handle"] for row in page["rows"]] == sorted(ENTRIES)
