@@ -84,11 +84,11 @@ function useView() {
     DIRECTORY_PARAMS.map((key) => [key, search[key]]),
   ) as DirectoryParams
   const paramsKey = JSON.stringify(params)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by the params' text
+  // Keyed by the params' text, so a new search object with the same view is no change.
   const view = useMemo(() => viewFromParams(params), [paramsKey])
   const named = hasViewParams(search)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: once, as the tab opens
+  // Once, as the tab opens: a URL naming no view adopts the remembered one.
   useEffect(() => {
     if (named) return
     const stored = readStored(VIEW_KEY, isParams)
