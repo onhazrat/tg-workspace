@@ -115,6 +115,8 @@ def test_an_unapproved_account_can_read_its_own_record(
         # became an outbound call on the caller's own Provider Key.
         ("POST", f"{PREFIX}/ai/models"),
         ("GET", f"{PREFIX}/rag/status"),
+        # DIR-02: a read, so a POST only because the filter is in the body.
+        ("POST", f"{PREFIX}/data/directory/list"),
     ],
 )
 def test_an_unapproved_account_reaches_no_data(

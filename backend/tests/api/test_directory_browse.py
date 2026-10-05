@@ -24,6 +24,7 @@ name is "Kucheh News"; `dt_en_news`'s is "Daily News".
 | Reference from | to          | kind    | age      |
 |----------------|-------------|---------|----------|
 | src_a1         | dt_fa_big   | forward | 1 day    |
+| src_a1         | dt_fa_big   | mention | 4 days   |
 | src_a1         | dt_en_news  | mention | 30 days  |
 | src_a2         | dt_fa_big   | link    | 2 days   |
 | src_a2         | dt_fa_small | mention | 3 days   |
@@ -36,17 +37,28 @@ dt_fa_small 1 for the Operator, and dt_ru 1, dt_fa_small 1 for the other.
 
 ## Watched to fail
 
+Each mutation was applied alone and this module (or the named guard) went red:
+
 * compile an empty group as false -> the empty-group cases
-* drop the `coalesce` around an atom -> NOT on dt_none's Language and bounds
+* drop the `coalesce` around an atom -> NOT "fa" loses dt_none and dt_dead
 * read Followed from every Account's Follows -> the other Account's opening view
-* count every Reference row instead of distinct Citing Channels -> dt_fa_big 3
-* drop the Reference kinds narrowing -> the forward-only cases
-* ignore the window on "Cited by your channels" -> `mine:7d`
-* resolve "every follow" for the empty selection -> the empty-source case
+* count Reference rows instead of distinct Citing Channels -> dt_fa_big counts 3
+* drop the Reference kinds narrowing -> the forward-only case
+* ignore the window on "Cited by your channels" -> `mine(7)` keeps dt_en_news
+* resolve "every follow" for an empty selection -> the empty-source case
 * sort without the handle tiebreak -> the opening view's zero-count tail
-* drop the measure's own bound from the distribution -> its total
-* leave Language Conditions in the Language counts -> the counts case
-* add `kind = 'channel'` nowhere -> dt_bot listed and the size 8
+* keep the measure's own bound in the distribution -> its total
+* keep Language Conditions in the Language counts -> the counts case
+* list every kind, not only Channels -> dt_bot in the opening view
+* drop `autoescape` from Name contains -> "%" matches everything
+* never reuse a cached total -> the reuse case
+* take the oldest Reference as discovered-via -> the Follow case
+* drop `/directory/list` from `VIEW_AS_READ_ONLY_PATHS` -> the View-as case, and
+  `test_view_as.py` for `/count`
+* mount `/data` without the approval gate -> `test_approval_gate.py`'s
+  Directory probe
+* a handler with no return type, a model in the route module ->
+  `test_route_module_hygiene.py`
 """
 
 from __future__ import annotations
@@ -97,6 +109,7 @@ ENTRIES: dict[str, tuple[Any, ...]] = {
 #: (from, to, kind, age in days)
 REFERENCES = [
     ("src_a1", "dt_fa_big", "forward", 1),
+    ("src_a1", "dt_fa_big", "mention", 4),
     ("src_a1", "dt_en_news", "mention", 30),
     ("src_a2", "dt_fa_big", "link", 2),
     ("src_a2", "dt_fa_small", "mention", 3),
@@ -450,7 +463,7 @@ def test_an_empty_source_counts_zero_and_says_so(
     [
         (["forward"], [("dt_fa_big", 1)]),
         (["link"], [("dt_fa_big", 1)]),
-        (["mention"], [("dt_en_news", 1), ("dt_fa_small", 1)]),
+        (["mention"], [("dt_en_news", 1), ("dt_fa_big", 1), ("dt_fa_small", 1)]),
         (["forward", "link"], [("dt_fa_big", 2)]),
         ([], [("dt_fa_big", 2), ("dt_en_news", 1), ("dt_fa_small", 1)]),
     ],
