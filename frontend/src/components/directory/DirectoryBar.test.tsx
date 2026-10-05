@@ -31,7 +31,7 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
       filter={parse(over.text ?? OPENING_FILTER)}
       onFilter={(next) => calls.filters.push(printDirectoryFilter(next))}
       vocabulary={directoryVocabulary(
-        [{ id: "fa", label: "Persian" }],
+        [{ language: "fa", count: 12 }],
         ({ measure }) => <p>editor for {measure.key}</p>,
       )}
       languages={[

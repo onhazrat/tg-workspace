@@ -12,6 +12,7 @@ import {
   Type,
 } from "lucide-react"
 import type React from "react"
+import type { DirectoryLanguageCountResponse } from "@/client"
 import type {
   ConditionOption,
   PickerEntry,
@@ -27,6 +28,7 @@ import {
   type Measure,
   type MeasureSection,
 } from "@/lib/directory/directory-filter"
+import { languageLabel } from "@/lib/posts/post-filter-bar"
 import { MineEditor, NameEditor } from "./DirectoryConditionEditors"
 
 const ICON: Record<DirectoryCond["type"], LucideIcon> = {
@@ -63,10 +65,21 @@ const measureEntries = (
       }),
   }))
 
+/** The Languages a count read named, as picker options; "no Language" has none. */
+const languageOptions = (
+  counts: DirectoryLanguageCountResponse[],
+): ConditionOption[] =>
+  counts.flatMap(({ language, count }) =>
+    language
+      ? [{ id: language, label: languageLabel(language), hint: String(count) }]
+      : [],
+  )
+
 export function directoryVocabulary(
-  languages: ConditionOption[],
+  languageCounts: DirectoryLanguageCountResponse[],
   renderMeasure: MeasureEditorRender,
 ): FilterVocabulary<DirectoryCond> {
+  const languages = languageOptions(languageCounts)
   return {
     sections: [
       {

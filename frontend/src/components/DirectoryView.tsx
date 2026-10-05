@@ -28,10 +28,10 @@ import {
   chooseSort,
   type DirectoryViewRequest,
   headerSort,
+  listSummary,
   sortValue,
 } from "@/lib/directory/directory-view"
 import { mapGroups } from "@/lib/filter-tree"
-import { languageLabel } from "@/lib/posts/post-filter-bar"
 
 /** The filter without `measure`'s bounds: what its spread is drawn under. */
 const withoutMeasure = (filter: DirectoryFilter, measure: string) =>
@@ -117,31 +117,17 @@ function MeasureEditor({
 export function DirectoryView() {
   const d = useDirectory()
   const { view, patch, list } = d
-  const languages = list.data?.languages ?? []
-  const vocabulary = directoryVocabulary(
-    languages.flatMap(({ language, count }) =>
-      language
-        ? [
-            {
-              id: language,
-              label: languageLabel(language),
-              hint: String(count),
-            },
-          ]
-        : [],
-    ),
-    (props) => (
-      <MeasureEditor request={d.request} filter={d.filter} {...props} />
-    ),
-  )
-  const rows = list.data?.rows ?? []
+  const shown = listSummary(list.data, list.isFetching, d.yours.source)
+  const vocabulary = directoryVocabulary(shown.languages, (props) => (
+    <MeasureEditor request={d.request} filter={d.filter} {...props} />
+  ))
   return (
     <div className="pt-4" data-testid="directory-view">
       <DirectoryBar
         filter={d.filter}
         onFilter={d.setFilter}
         vocabulary={vocabulary}
-        languages={languages}
+        languages={shown.languages}
         kinds={view.kinds}
         onKinds={(kinds) => patch({ kinds })}
         sortValue={sortValue(view, d.yours.source)}
@@ -150,10 +136,10 @@ export function DirectoryView() {
         onToggleDirection={() => patch({ descending: !view.descending })}
         hidden={d.hidden}
         onHidden={d.setHidden}
-        total={list.data?.total}
+        total={shown.total}
         size={d.size}
-        ms={list.isFetching ? undefined : list.data?.ms}
-        emptyYours={list.data?.yoursSize === 0 ? d.yours.source : undefined}
+        ms={shown.ms}
+        emptyYours={shown.emptyYours}
       />
       {list.error && (
         <p className="mb-2 text-xs text-red-500">
@@ -167,8 +153,8 @@ export function DirectoryView() {
         onClear={() => d.setTicks([])}
       />
       <DirectoryTable
-        rows={rows}
-        total={list.data?.total ?? 0}
+        rows={shown.rows}
+        total={shown.total ?? 0}
         page={view.page}
         sort={view.sort}
         descending={view.descending}

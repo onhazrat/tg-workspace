@@ -8,6 +8,7 @@
 import type {
   DirectoryCountRequest,
   DirectoryListRequest,
+  DirectoryListResponse,
   YourChannels,
 } from "@/client"
 import { MEASURES, OPENING_FILTER } from "./directory-filter"
@@ -137,6 +138,25 @@ export function paramsFromView(view: DirectoryView): DirectoryParams {
 /** Whether the URL names a Directory view at all, rather than none. */
 export const hasViewParams = (search: Record<string, unknown>): boolean =>
   DIRECTORY_PARAMS.some((key) => search[key] !== undefined)
+
+/**
+ * What the tab shows of a list read, loaded or not: no rows and no count
+ * while the first page loads, no time while a page is in flight, and which
+ * "your channels" resolved to nothing, for the footer.
+ */
+export function listSummary(
+  data: (DirectoryListResponse & { ms: number }) | undefined,
+  fetching: boolean,
+  source: YoursSource,
+) {
+  return {
+    rows: data?.rows ?? [],
+    total: data?.total,
+    languages: data?.languages ?? [],
+    ms: fetching ? undefined : data?.ms,
+    emptyYours: data?.yoursSize === 0 ? source : undefined,
+  }
+}
 
 /**
  * "Your channels" as the reads take it. A view with no stored value starts on

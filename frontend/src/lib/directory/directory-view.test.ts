@@ -11,6 +11,7 @@ import {
   DEFAULT_VIEW,
   hasViewParams,
   headerSort,
+  listSummary,
   paramsFromView,
   resolveYours,
   SORT_OPTIONS,
@@ -81,6 +82,38 @@ describe("the view and its URL parameters", () => {
     expect(hasViewParams({ postFilter: "lang:fa" })).toBe(false)
     expect(hasViewParams({ dirFilter: "" })).toBe(true)
     expect(hasViewParams({ dirPage: "2" })).toBe(true)
+  })
+})
+
+describe("what the tab shows of a list read", () => {
+  const data = {
+    rows: [],
+    total: 7,
+    languages: [{ language: "fa", count: 7 }],
+    yoursSize: 0,
+    ms: 120,
+  }
+
+  test("nothing to count while the first page loads", () => {
+    expect(listSummary(undefined, true, "follows")).toEqual({
+      rows: [],
+      total: undefined,
+      languages: [],
+      ms: undefined,
+      emptyYours: undefined,
+    })
+  })
+
+  test("the time only once nothing is in flight, and an empty source by name", () => {
+    expect(listSummary(data, false, "ticked")).toMatchObject({
+      total: 7,
+      ms: 120,
+      emptyYours: "ticked",
+    })
+    expect(listSummary(data, true, "ticked").ms).toBeUndefined()
+    expect(
+      listSummary({ ...data, yoursSize: 3 }, false, "ticked").emptyYours,
+    ).toBeUndefined()
   })
 })
 
