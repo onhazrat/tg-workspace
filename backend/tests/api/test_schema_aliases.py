@@ -67,6 +67,9 @@ EXEMPT: set[tuple[str, str]] = {
     # and `not` is a Python keyword, so the field cannot carry the wire name.
     ("FilterAtom", "negated"),
     ("FilterGroup", "negated"),
+    # The Directory filter's NOT (DIR-02): the same tree, so the same reasons.
+    ("DirectoryFilterAtom", "negated"),
+    ("DirectoryFilterGroup", "negated"),
     # A Selection rule's NOT (PTR-06), spelt as the tree spells it, for the
     # same two reasons.
     ("SelectionRule", "negated"),
