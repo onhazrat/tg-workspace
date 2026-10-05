@@ -6868,6 +6868,12 @@
               { "type": "null" }
             ]
           },
+          "search": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectorySearchRequest" },
+              { "type": "null" }
+            ]
+          },
           "yours": { "$ref": "#/components/schemas/YourChannels" },
           "referenceKinds": {
             "items": {
@@ -6902,6 +6908,12 @@
           "filter": {
             "anyOf": [
               { "$ref": "#/components/schemas/DirectoryFilterGroup" },
+              { "type": "null" }
+            ]
+          },
+          "search": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectorySearchRequest" },
               { "type": "null" }
             ]
           },
@@ -7115,6 +7127,12 @@
               { "type": "null" }
             ]
           },
+          "search": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectorySearchRequest" },
+              { "type": "null" }
+            ]
+          },
           "yours": { "$ref": "#/components/schemas/YourChannels" },
           "referenceKinds": {
             "items": {
@@ -7139,7 +7157,8 @@
               "files",
               "links",
               "mine",
-              "mine_last_days"
+              "mine_last_days",
+              "relevance"
             ],
             "title": "Sort",
             "default": "mine"
@@ -7155,6 +7174,11 @@
             "minimum": 0.0,
             "title": "Page",
             "default": 0
+          },
+          "showMatches": {
+            "type": "boolean",
+            "title": "Showmatches",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -7183,6 +7207,49 @@
         "required": ["rows", "total", "languages", "yoursSize"],
         "title": "DirectoryListResponse",
         "description": "One page, the view's total and its Language counts."
+      },
+      "DirectoryMatchResponse": {
+        "properties": {
+          "bio": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DirectorySnippetPartResponse"
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Bio"
+          },
+          "post": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryMatchedPostResponse" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["bio", "post"],
+        "title": "DirectoryMatchResponse",
+        "description": "Why a row matched a search; a part is `null` where it did not match."
+      },
+      "DirectoryMatchedPostResponse": {
+        "properties": {
+          "postId": { "type": "integer", "title": "Postid" },
+          "timestamp": { "type": "integer", "title": "Timestamp" },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/DirectorySnippetPartResponse"
+            },
+            "type": "array",
+            "title": "Parts"
+          }
+        },
+        "type": "object",
+        "required": ["postId", "timestamp", "parts"],
+        "title": "DirectoryMatchedPostResponse",
+        "description": "The newest sampled Post that matched, around its first match."
       },
       "DirectoryMeasureCondition": {
         "properties": {
@@ -7311,6 +7378,12 @@
           "mineLastAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Minelastat"
+          },
+          "match": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryMatchResponse" },
+              { "type": "null" }
+            ]
           }
         },
         "type": "object",
@@ -7333,7 +7406,8 @@
           "followable",
           "followed",
           "mine",
-          "mineLastAt"
+          "mineLastAt",
+          "match"
         ],
         "title": "DirectoryRowResponse",
         "description": "One Directory entry in the list: its measures, never its bio or samples."
@@ -7353,12 +7427,44 @@
         "title": "DirectorySamplePostResponse",
         "description": "One Post off a Channel's preview page, as the last probe captured it.\n\nThe text travels whole; truncation is the reader's."
       },
+      "DirectorySearchRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "fields": {
+            "items": { "type": "string", "enum": ["name", "bio", "posts"] },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Fields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["text"],
+        "title": "DirectorySearchRequest",
+        "description": "Words to find in a Channel's name, bio and recent Posts."
+      },
       "DirectorySizeResponse": {
         "properties": { "size": { "type": "integer", "title": "Size" } },
         "type": "object",
         "required": ["size"],
         "title": "DirectorySizeResponse",
         "description": "How many Channels the Directory lists at all."
+      },
+      "DirectorySnippetPartResponse": {
+        "properties": {
+          "text": { "type": "string", "title": "Text" },
+          "hit": { "type": "boolean", "title": "Hit" }
+        },
+        "type": "object",
+        "required": ["text", "hit"],
+        "title": "DirectorySnippetPartResponse",
+        "description": "A run of snippet text; `hit` marks a matched word."
       },
       "DiscoverCandidateResponse": {
         "properties": {

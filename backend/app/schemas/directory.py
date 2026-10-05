@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.post_filter import check_tree_bounds
 from app.services.directory_reads import (
+    SEARCH_FIELDS,
     DirectoryCond,
     DirectoryFlag,
     DirectoryMeasure,
@@ -25,6 +26,7 @@ from app.services.directory_reads import (
     NameCond,
     ReferenceKind,
     Scale,
+    SearchField,
     YoursSource,
 )
 from app.services.post_filters import TreeAtom, TreeGroup
@@ -197,12 +199,25 @@ class YourChannels(BaseModel):
     handles: list[Handle] = Field(default_factory=list, max_length=MAX_YOUR_CHANNELS)
 
 
+class DirectorySearchRequest(BaseModel):
+    """Words to find in a Channel's name, bio and recent Posts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=256)
+    #: Where to look; every field when omitted.
+    fields: list[SearchField] = Field(
+        default_factory=lambda: list(SEARCH_FIELDS), min_length=1, max_length=3
+    )
+
+
 class DirectoryViewRequest(BaseModel):
-    """A Directory view: the filter, "your channels" and the Reference kinds."""
+    """A Directory view: the filter, the search, "your channels" and the Reference kinds."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     filter: DirectoryFilterGroup | None = None
+    search: DirectorySearchRequest | None = None
     yours: YourChannels = Field(default_factory=YourChannels)
     #: Narrows "Cited by your channels" and the "Yours" count; empty is every kind.
     reference_kinds: list[ReferenceKind] = Field(
@@ -213,10 +228,13 @@ class DirectoryViewRequest(BaseModel):
 class DirectoryListRequest(DirectoryViewRequest):
     """One page of a Directory view, sorted."""
 
+    #: `relevance` ranks a search; with no search it falls back to handle order.
     sort: DirectorySort = "mine"
     descending: bool = True
     #: Pages of 100 rows, from 0.
     page: int = Field(0, ge=0, le=10_000)
+    #: Quote each row's matching bio and Post while a search is on.
+    show_matches: bool = Field(False, alias="showMatches")
 
 
 class DirectoryCountRequest(DirectoryViewRequest):
@@ -233,6 +251,31 @@ class DirectoryDistributionRequest(DirectoryViewRequest):
 
 # Closed, and no field carries a server-side default, so every one is required
 # in the generated client (the reason `DirectorySamplePostResponse` gives).
+class DirectorySnippetPartResponse(BaseModel):
+    """A run of snippet text; `hit` marks a matched word."""
+
+    text: str
+    hit: bool
+
+
+class DirectoryMatchedPostResponse(BaseModel):
+    """The newest sampled Post that matched, around its first match."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    post_id: int = Field(alias="postId")
+    #: Epoch ms.
+    timestamp: int
+    parts: list[DirectorySnippetPartResponse]
+
+
+class DirectoryMatchResponse(BaseModel):
+    """Why a row matched a search; a part is `null` where it did not match."""
+
+    bio: list[DirectorySnippetPartResponse] | None
+    post: DirectoryMatchedPostResponse | None
+
+
 class DirectoryRowResponse(BaseModel):
     """One Directory entry in the list: its measures, never its bio or samples."""
 
@@ -264,6 +307,8 @@ class DirectoryRowResponse(BaseModel):
     mine: int
     #: The newest of those citations, epoch ms.
     mine_last_at: int | None = Field(alias="mineLastAt")
+    #: Set only while a search is on and `showMatches` asked for it.
+    match: DirectoryMatchResponse | None
 
 
 class DirectoryLanguageCountResponse(BaseModel):

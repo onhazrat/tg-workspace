@@ -1545,6 +1545,7 @@ export type DirectoryBinResponse = {
  */
 export type DirectoryCountRequest = {
     filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
     yours?: YourChannels;
     /**
      * Referencekinds
@@ -1572,6 +1573,7 @@ export type DirectoryCountResponse = {
  */
 export type DirectoryDistributionRequest = {
     filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
     yours?: YourChannels;
     /**
      * Referencekinds
@@ -1751,6 +1753,7 @@ export type DirectoryLanguageCountResponse = {
  */
 export type DirectoryListRequest = {
     filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
     yours?: YourChannels;
     /**
      * Referencekinds
@@ -1759,7 +1762,7 @@ export type DirectoryListRequest = {
     /**
      * Sort
      */
-    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'mine' | 'mine_last_days';
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'mine' | 'mine_last_days' | 'relevance';
     /**
      * Descending
      */
@@ -1768,6 +1771,10 @@ export type DirectoryListRequest = {
      * Page
      */
     page?: number;
+    /**
+     * Showmatches
+     */
+    showMatches?: boolean;
 };
 
 /**
@@ -1792,6 +1799,39 @@ export type DirectoryListResponse = {
      * Yourssize
      */
     yoursSize: number;
+};
+
+/**
+ * DirectoryMatchResponse
+ *
+ * Why a row matched a search; a part is `null` where it did not match.
+ */
+export type DirectoryMatchResponse = {
+    /**
+     * Bio
+     */
+    bio: Array<DirectorySnippetPartResponse> | null;
+    post: DirectoryMatchedPostResponse | null;
+};
+
+/**
+ * DirectoryMatchedPostResponse
+ *
+ * The newest sampled Post that matched, around its first match.
+ */
+export type DirectoryMatchedPostResponse = {
+    /**
+     * Postid
+     */
+    postId: number;
+    /**
+     * Timestamp
+     */
+    timestamp: number;
+    /**
+     * Parts
+     */
+    parts: Array<DirectorySnippetPartResponse>;
 };
 
 /**
@@ -1936,6 +1976,7 @@ export type DirectoryRowResponse = {
      * Minelastat
      */
     mineLastAt: number | null;
+    match: DirectoryMatchResponse | null;
 };
 
 /**
@@ -1965,6 +2006,22 @@ export type DirectorySamplePostResponse = {
 };
 
 /**
+ * DirectorySearchRequest
+ *
+ * Words to find in a Channel's name, bio and recent Posts.
+ */
+export type DirectorySearchRequest = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Fields
+     */
+    fields?: Array<'name' | 'bio' | 'posts'>;
+};
+
+/**
  * DirectorySizeResponse
  *
  * How many Channels the Directory lists at all.
@@ -1974,6 +2031,22 @@ export type DirectorySizeResponse = {
      * Size
      */
     size: number;
+};
+
+/**
+ * DirectorySnippetPartResponse
+ *
+ * A run of snippet text; `hit` marks a matched word.
+ */
+export type DirectorySnippetPartResponse = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Hit
+     */
+    hit: boolean;
 };
 
 /**

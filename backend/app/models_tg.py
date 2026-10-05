@@ -16,7 +16,7 @@ from sqlalchemy import (
     false,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlmodel import Field, SQLModel
 
 
@@ -993,6 +993,48 @@ class DirectorySample(SQLModel, table=True):
     #: from here, not from the Post's own date: a Channel that stopped posting
     #: two years ago should keep the sample we captured last week.
     captured_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class DirectorySearchDocument(SQLModel, table=True):
+    """A listed Directory entry's search document (DIR-04, ADR-027).
+
+    The Directory aggregate's payload table, rebuilt by `channel_directory`
+    inside every writer that changes its inputs. A companion table rather than
+    a column on the entry, because a large field on the entry is detoasted by
+    every list read. Derived: `scripts/backfill_directory_search.py` rebuilds
+    any of it from the entries and their samples.
+    """
+
+    __tablename__ = "tg_channel_directory_search"
+    __table_args__ = (
+        Index(
+            "ix_tg_channel_directory_search_tsv",
+            "tsv",
+            postgresql_using="gin",
+            postgresql_with={"fastupdate": "off"},
+        ),
+        Index(
+            "ix_tg_channel_directory_search_names",
+            "names",
+            postgresql_using="gin",
+            postgresql_ops={"names": "gin_trgm_ops"},
+        ),
+    )
+
+    handle: str = Field(
+        primary_key=True,
+        foreign_key="tg_channel_directory.handle",
+        ondelete="CASCADE",
+    )
+    #: The text search configuration the row was built with, from its Language.
+    ts_config: str
+    #: Handle and display name (A), bio (B), the newest samples (C).
+    tsv: str = Field(sa_column=Column(TSVECTOR, nullable=False))
+    #: Handle and display name, normalised, for the trigram typo match.
+    names: str = Field(sa_column=Column(Text, nullable=False))
+    #: The recipe this row was built with; an older one is re-indexed.
+    index_version: int = Field(sa_column=Column(SmallInteger, nullable=False))
+    indexed_at: datetime = Field(default_factory=utc_now)
 
 
 class PostReference(SQLModel, table=True):

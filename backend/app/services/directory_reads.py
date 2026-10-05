@@ -66,11 +66,21 @@ from sqlalchemy import (
     true,
 )
 from sqlalchemy import select as sa_select
+from sqlalchemy import text as sa_text
+from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlmodel import Session, col
 
-from app.models_tg import DirectoryEntry, PostReference, utc_now
-from app.services.channel_directory import followed_reach
+from app.models_tg import (
+    DirectoryEntry,
+    DirectorySample,
+    DirectorySearchDocument,
+    PostReference,
+    utc_now,
+)
+from app.services import search_text
+from app.services.channel_directory import LISTED_KIND, followed_reach
 from app.services.follows import visible_channel_names
+from app.services.language import own_words
 from app.services.post_filters import (
     TreeAtom,
     TreeGroup,
@@ -112,11 +122,15 @@ DirectoryMeasure = Literal[
 DIRECTORY_MEASURES: tuple[DirectoryMeasure, ...] = get_args(DirectoryMeasure)
 #: The measures plus the two "your channels" reads: how many cite it, and how
 #: many days since the newest of them did.
-DirectorySort = Literal[DirectoryMeasure, "mine", "mine_last_days"]
+DirectorySort = Literal[DirectoryMeasure, "mine", "mine_last_days", "relevance"]
 DirectoryFlag = Literal["followed", "followable"]
 ReferenceKind = Literal["forward", "mention", "link", "reply"]
 #: Every follow, the Channels tab selection, or the Channels ticked here.
 YoursSource = Literal["follows", "selection", "ticked"]
+#: Where a search looks: the handle and display name, the bio, the samples.
+SearchField = Literal["name", "bio", "posts"]
+SEARCH_FIELDS: tuple[SearchField, ...] = get_args(SearchField)
+_WEIGHTS: dict[SearchField, str] = {"name": "A", "bio": "B", "posts": "C"}
 Scale = Literal["log", "linear"]
 
 #: Measures whose spread is drawn on a log scale; the rest are linear.
@@ -163,6 +177,19 @@ DirectoryTree = TreeGroup[DirectoryCond]
 
 
 @dataclass(frozen=True)
+class SearchQuery:
+    """What was typed, resolved against every text search configuration."""
+
+    fields: tuple[SearchField, ...]
+    #: The words as one `tsquery`; `None` when no word survived.
+    tsquery: str | None
+    #: The normalised text for the trigram typo match on names; "" for none.
+    typo: str
+    #: Every lexeme the `tsquery` names, for highlighting.
+    stems: frozenset[str]
+
+
+@dataclass(frozen=True)
 class DirectoryView:
     """Everything a Directory read is evaluated under, resolved for one Account."""
 
@@ -175,6 +202,7 @@ class DirectoryView:
     #: Empty means every kind.
     kinds: tuple[ReferenceKind, ...]
     now: datetime
+    search: SearchQuery | None = None
 
 
 def resolve_view(
@@ -185,11 +213,13 @@ def resolve_view(
     source: YoursSource,
     handles: Sequence[str],
     kinds: Sequence[ReferenceKind],
+    search: tuple[str, Sequence[SearchField]] | None = None,
 ) -> DirectoryView:
     """The view, with "every follow" resolved from the Account's own Follows.
 
     Handles the browser sends are taken as they are: a selection or a tick list
     that is empty counts 0 for every row, and is never swapped for anything.
+    `search` is what was typed and the fields it looks in.
     """
     followed = frozenset(visible_channel_names(session, user_id=user_id))
     sources = (
@@ -204,7 +234,88 @@ def resolve_view(
         sources=sources,
         kinds=tuple(sorted(set(kinds))),
         now=utc_now(),
+        search=None if search is None else resolve_search(session, *search),
     )
+
+
+# ---- Search (DIR-04, ADR-027) ---------------------------------------------------
+
+_PER_CONFIG = sa_text(
+    """
+    SELECT o.i, c.cfg, to_tsquery(CAST(c.cfg AS regconfig), o.op)::text
+    FROM unnest(CAST(:ops AS text[])) WITH ORDINALITY AS o(op, i)
+    CROSS JOIN unnest(CAST(:cfgs AS text[])) AS c(cfg)
+    """
+)
+
+
+def resolve_search(
+    session: Session, text: str, fields: Sequence[SearchField]
+) -> SearchQuery:
+    """What was typed, as one `tsquery` over every configuration a row can use.
+
+    Every word but the last matches whole and the last as a prefix from
+    `search_text.PREFIX_FROM` characters. Each word is tried under every
+    configuration and the words are joined with AND. A word one configuration
+    drops as a stop word is left out: rows indexed under that configuration
+    hold no lexeme for it, so keeping it would make "the news" miss every
+    English Channel. The fields become weight labels, so a field limit is read
+    from the same index.
+    """
+    chosen = tuple(f for f in SEARCH_FIELDS if f in set(fields))
+    weights = (
+        ""
+        if len(chosen) == len(SEARCH_FIELDS)
+        else "".join(_WEIGHTS[f] for f in chosen)
+    )
+    terms = search_text.query_terms(text)
+    operands = [
+        search_text.term_operand(t, last=i == len(terms) - 1, weights=weights)
+        for i, t in enumerate(terms)
+    ]
+    per_term: dict[int, list[str]] = {}
+    if operands:
+        for i, _cfg, query in session.execute(
+            _PER_CONFIG, {"ops": operands, "cfgs": list(search_text.CONFIGS)}
+        ).all():
+            per_term.setdefault(int(i), []).append(str(query))
+    kept = [parts for parts in per_term.values() if all(parts)]
+    if not kept:
+        kept = [[p for p in parts if p] for parts in per_term.values()]
+    words = [" | ".join(sorted(set(parts))) for parts in kept if parts]
+    tsquery = " & ".join(f"( {w} )" for w in words) or None
+    typo = " ".join(terms)
+    return SearchQuery(
+        fields=chosen,
+        tsquery=tsquery,
+        typo=typo if "name" in chosen and len(typo) >= search_text.PREFIX_FROM else "",
+        stems=frozenset(search_text.lexemes(tsquery or "")),
+    )
+
+
+def _search_match(search: SearchQuery) -> ColumnElement[bool]:
+    doc = DirectorySearchDocument
+    clauses: list[ColumnElement[bool]] = []
+    if search.tsquery:
+        clauses.append(col(doc.tsv).op("@@")(cast(literal(search.tsquery), TSQUERY)))
+    if search.typo:
+        # `<%` is word similarity, so a typo inside a longer name still counts.
+        clauses.append(literal(search.typo).op("<%")(col(doc.names)))
+    return or_(*clauses) if clauses else false()
+
+
+def _relevance(search: SearchQuery) -> ColumnElement[Any]:
+    """Match strength times the log of subscribers (ADR-027)."""
+    doc = DirectorySearchDocument
+    strength: ColumnElement[Any] = literal(0.0)
+    if search.tsquery:
+        strength = func.ts_rank(col(doc.tsv), cast(literal(search.tsquery), TSQUERY), 1)
+    if search.typo:
+        # A name typed with a typo ranks below most word matches.
+        strength = func.greatest(
+            strength, func.word_similarity(search.typo, col(doc.names)) * 0.1
+        )
+    return strength * func.ln(10 + func.coalesce(col(DirectoryEntry.subscribers), 0))
 
 
 # ---- Compiling the tree ---------------------------------------------------------
@@ -215,7 +326,7 @@ def _handles(values: frozenset[str] | Sequence[str]) -> Any:
 
 
 def _listed() -> ColumnElement[bool]:
-    return col(DirectoryEntry.kind) == "channel"
+    return col(DirectoryEntry.kind) == LISTED_KIND
 
 
 def _days_since(column: Any, now: datetime) -> ColumnElement[Any]:
@@ -278,7 +389,13 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
 
 def _where(view: DirectoryView, tree: TreeNode[DirectoryCond] | None) -> Any:
     clause = true() if tree is None else compile_tree(tree, lambda c: _atom(c, view))
-    return and_(_listed(), clause)
+    if view.search is None:
+        return and_(_listed(), clause)
+    doc = DirectorySearchDocument
+    found = col(DirectoryEntry.handle).in_(
+        sa_select(col(doc.handle)).where(_search_match(view.search))
+    )
+    return and_(_listed(), clause, found)
 
 
 def _without(tree: DirectoryTree | None, drop: Any) -> TreeGroup[DirectoryCond] | None:
@@ -309,6 +426,21 @@ def _mine_aggregate(view: DirectoryView, among: Sequence[str] | None = None) -> 
 
 
 @dataclass(frozen=True)
+class MatchedPost:
+    post_id: int
+    timestamp: int
+    parts: list[search_text.SnippetPart]
+
+
+@dataclass(frozen=True)
+class DirectoryMatch:
+    """Why a row matched: the bio and the newest Post, matched words marked."""
+
+    bio: list[search_text.SnippetPart] | None
+    post: MatchedPost | None
+
+
+@dataclass(frozen=True)
 class DirectoryRow:
     handle: str
     display_name: str | None
@@ -329,6 +461,8 @@ class DirectoryRow:
     followed: bool
     mine: int
     mine_last_at: int | None
+    #: `None` unless a search asked for its matches.
+    match: DirectoryMatch | None = None
 
 
 @dataclass(frozen=True)
@@ -367,15 +501,22 @@ def _page_handles(
     statement = unscoped_select(
         sa_select(handle).where(_where(view, view.tree)), reason=_SCOPE_REASON
     )
-    if sort == "mine" or sort == "mine_last_days":
+    if sort == "relevance" and view.search is not None:
+        doc = DirectorySearchDocument
+        statement = statement.join(doc, col(doc.handle) == handle)
+        key: Any = _relevance(view.search)
+    elif sort == "mine" or sort == "mine_last_days":
         mine = _mine_aggregate(view)
         statement = statement.outerjoin(mine, mine.c.handle == handle)
         now_ms = _epoch_ms(view.now)
-        key: Any = (
+        key = (
             func.coalesce(mine.c.n, 0)
             if sort == "mine"
             else (now_ms - mine.c.last_at) / 86_400_000.0
         )
+    elif sort == "relevance":
+        # Relevance with nothing searched has nothing to rank by.
+        key = literal(0)
     else:
         key = measure_sql(sort, view.now)
     ordered = key.desc() if descending else key.asc()
@@ -387,8 +528,73 @@ def _page_handles(
     return [str(h) for h in session.execute(statement).scalars().all()]
 
 
+def _matches(
+    session: Session, search: SearchQuery, handles: list[str]
+) -> dict[str, DirectoryMatch]:
+    """The snippets for the page's rows, cut in Python (ADR-027).
+
+    Only for the rows on the page, which is what keeps them cheap: Postgres's
+    `ts_headline` re-parses the whole document per row, and could not match a
+    folded Persian letter or a CJK pair against the original text anyway. The
+    Post quoted is the newest of the indexed samples that matches.
+    """
+    stems = set(search.stems)
+    if not stems or not handles:
+        return {}
+    bios: dict[str, str | None] = {}
+    if "bio" in search.fields:
+        bios = {
+            str(h): b
+            for h, b in session.execute(
+                unscoped_select(
+                    sa_select(
+                        col(DirectoryEntry.handle), col(DirectoryEntry.bio)
+                    ).where(col(DirectoryEntry.handle) == any_(_handles(handles))),
+                    reason=_SCOPE_REASON,
+                )
+            ).all()
+        }
+    posts: dict[str, MatchedPost] = {}
+    if "posts" in search.fields:
+        seen: dict[str, int] = {}
+        samples = session.execute(
+            unscoped_select(
+                sa_select(DirectorySample)
+                .where(col(DirectorySample.handle) == any_(_handles(handles)))
+                .order_by(
+                    col(DirectorySample.handle), col(DirectorySample.post_id).desc()
+                ),
+                reason=_SCOPE_REASON,
+            )
+        ).scalars()
+        for sample in samples:
+            words = own_words(sample)
+            if not words or sample.handle in posts:
+                continue
+            seen[sample.handle] = seen.get(sample.handle, 0) + 1
+            if seen[sample.handle] > search_text.SAMPLES_INDEXED:
+                continue
+            parts = search_text.snippet(words, stems)
+            if parts is not None:
+                posts[sample.handle] = MatchedPost(
+                    post_id=sample.post_id, timestamp=sample.timestamp, parts=parts
+                )
+    out = {}
+    for handle in handles:
+        bio = bios.get(handle)
+        out[handle] = DirectoryMatch(
+            bio=None if not bio else search_text.snippet(bio, stems),
+            post=posts.get(handle),
+        )
+    return out
+
+
 def _rows(
-    session: Session, view: DirectoryView, handles: list[str]
+    session: Session,
+    view: DirectoryView,
+    handles: list[str],
+    *,
+    show_matches: bool = False,
 ) -> list[DirectoryRow]:
     if not handles:
         return []
@@ -428,6 +634,11 @@ def _rows(
         }
     # A followed Channel answers the Post-based Reach, as everywhere else.
     reach = followed_reach(session, set(handles))
+    matches = (
+        _matches(session, view.search, handles)
+        if show_matches and view.search is not None
+        else {}
+    )
     rows = []
     for handle in handles:
         e = entries[handle]
@@ -454,6 +665,7 @@ def _rows(
                 followed=handle in view.followed,
                 mine=n,
                 mine_last_at=last_at,
+                match=matches.get(handle),
             )
         )
     return rows
@@ -479,6 +691,7 @@ def _view_key(view: DirectoryView, tree: DirectoryTree | None) -> str:
             tree,
             sorted(view.sources) if _reads_sources(tree) else None,
             view.kinds if _reads_sources(tree) else None,
+            view.search,
         )
     )
 
@@ -540,12 +753,17 @@ def list_page(
     sort: DirectorySort,
     descending: bool,
     page: int,
+    show_matches: bool = False,
 ) -> DirectoryPage:
-    """One page of the view, its total and its Language counts."""
+    """One page of the view, its total and its Language counts.
+
+    `show_matches` adds each row's snippets while a search is on; without it
+    the samples are not read at all.
+    """
     handles = _page_handles(session, view, sort=sort, descending=descending, page=page)
     total, languages = _totals(session, view)
     return DirectoryPage(
-        rows=_rows(session, view, handles),
+        rows=_rows(session, view, handles, show_matches=show_matches),
         total=total,
         languages=languages,
         yours_size=len(view.sources),

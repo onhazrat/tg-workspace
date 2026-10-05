@@ -107,6 +107,7 @@ def _view(
         source=body.yours.source,
         handles=body.yours.handles,
         kinds=body.reference_kinds,
+        search=None if body.search is None else (body.search.text, body.search.fields),
     )
 
 
@@ -127,6 +128,7 @@ def list_directory(
         sort=body.sort,
         descending=body.descending,
         page=body.page,
+        show_matches=body.show_matches,
     )
     return DirectoryListResponse(
         rows=[DirectoryRowResponse.model_validate(asdict(row)) for row in page.rows],
