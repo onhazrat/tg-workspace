@@ -1,5 +1,5 @@
 // PROTOTYPE (find-prototype): throwaway, never merge.
-// Ways to find a Channel to follow, switchable with ?variant=E|T|Q|G on
+// Ways to find a Channel to follow, switchable with ?variant=E|T|G on
 // /workspace?tab=find. Reads staging live through backend/scripts/proto_find_api.py
 // (Vite proxies /proto to it). Follow is REAL: it runs the same bulk-follow job
 // Discover uses, against whichever API the dev server proxies /api to.
@@ -13,14 +13,12 @@ import { FollowCtx, type Via } from "./shared"
 import { VariantBrowseTop } from "./VariantBrowseTop"
 import { VariantGraph } from "./VariantGraph"
 import { VariantTabs } from "./VariantTabs"
-import { VariantTyped } from "./VariantTyped"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
 const VARIANTS = [
   { key: "E", name: "Filter: everything in the Directory" },
   { key: "T", name: "Bar: the Channels and Posts tabs' parts" },
-  { key: "Q", name: "Bar: a typed query" },
   { key: "G", name: "Graph: channels and their references" },
 ]
 
@@ -110,7 +108,6 @@ export function FindPrototype() {
       <div className="mx-auto w-full max-w-none px-4 pb-24">
         {current === "E" && <VariantBrowseTop />}
         {current === "T" && <VariantTabs />}
-        {current === "Q" && <VariantTyped />}
         {current === "G" && <VariantGraph />}
       </div>
       <PrototypeSwitcher

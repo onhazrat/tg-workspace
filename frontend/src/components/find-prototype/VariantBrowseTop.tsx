@@ -37,6 +37,7 @@ import { toast } from "sonner"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
 import { BULK_FOLLOW_CONFIRM_THRESHOLD } from "@/lib/posts/discover-selection"
+import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import {
   Avatar,
   ago,
@@ -1625,12 +1626,15 @@ export function ResultsTable({
   setOpen,
   picked,
   setPicked,
+  linkHandles = false,
 }: {
   s: State
   open: string | null
   setOpen: (h: string) => void
   picked: Set<string>
   setPicked: (next: Set<string>) => void
+  /** The handle opens Telegram's web view, as on the Discover tab. */
+  linkHandles?: boolean
 }) {
   const { f, setF, set, res } = s
   const { state } = useContext(FollowCtx)
@@ -1733,9 +1737,21 @@ export function ResultsTable({
                       <div dir="auto" className="truncate font-semibold">
                         {r.display_name || r.handle}
                       </div>
-                      <div className="truncate font-mono text-[10px] text-app-ink/40">
-                        @{r.handle}
-                      </div>
+                      {linkHandles ? (
+                        <a
+                          href={telegramWebViewChannelUrl(r.handle)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="block truncate font-mono text-[10px] text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                        >
+                          @{r.handle}
+                        </a>
+                      ) : (
+                        <div className="truncate font-mono text-[10px] text-app-ink/40">
+                          @{r.handle}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>

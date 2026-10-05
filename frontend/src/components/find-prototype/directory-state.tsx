@@ -793,6 +793,7 @@ export function DirectoryResults({
           setOpen={setOpen}
           picked={picked}
           setPicked={setPicked}
+          linkHandles
         />
       </div>
       {open && (
