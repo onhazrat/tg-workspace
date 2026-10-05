@@ -23,7 +23,7 @@ from app.jobs.settings import load_reach_settings
 from app.models_tg import Post, SettlingCurveFit, ViewObservation
 from app.services.post_filters import (
     VIEW_SORTS,
-    TreeGroup,
+    PostTree,
     ViewMeasure,
     ViewReading,
     tree_measures,
@@ -87,7 +87,7 @@ def view_reading(
 
 
 def tree_readings(
-    session: Session, tree: TreeGroup | None
+    session: Session, tree: PostTree | None
 ) -> dict[ViewMeasure, ViewReading]:
     """One reading per measure a Post filter's views bounds name (PTR-03).
 
