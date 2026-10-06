@@ -708,8 +708,11 @@ class DiscoverReport(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
-class DiscoverIgnoredChannel(SQLModel, table=True):
-    """A Discover candidate the operator has decided against following.
+class Dismissal(SQLModel, table=True):
+    """A Dismissal: one Account's decision that a Channel is not for it.
+
+    Read by Discovery reports and the Directory alike (DIR-06), so a Channel
+    dismissed in one is hidden in the other.
 
     Without this, every rerun re-surfaces everything already rejected: the good
     candidates get followed and drop out of the unfollowed view, so the report
@@ -727,7 +730,7 @@ class DiscoverIgnoredChannel(SQLModel, table=True):
     ## The owner is half the key (ticket 30)
 
     `handle` alone was the primary key, so the first account to dismiss a
-    candidate dismissed it for everybody — and `ignore_channels` skips a handle
+    candidate dismissed it for everybody — and `dismiss_channels` skips a handle
     that already has a row, so the second account's dismissal wrote nothing at
     all. Scoping the read without moving the key makes that *worse* rather than
     better: the scoped read then reports the handle as not dismissed, so the
@@ -740,7 +743,7 @@ class DiscoverIgnoredChannel(SQLModel, table=True):
     migration rather than deferred to every reader.
     """
 
-    __tablename__ = "tg_discover_ignored"
+    __tablename__ = "tg_dismissals"
 
     handle: str = Field(primary_key=True)
     user_id: uuid.UUID = Field(
@@ -768,7 +771,7 @@ class DirectoryEntry(SQLModel, table=True):
     triage rows that were never actionable. Probing resolves that once per
     handle.
 
-    **Global and separate from `DiscoverIgnoredChannel` by design.** A dismissal
+    **Global and separate from `Dismissal` by design.** A Dismissal
     is a judgement ("not interesting to me"); a probe is a fact about the handle
     ("cannot be followed by anyone"). Merging them would make an automated
     verdict indistinguishable from a deliberate one in the UI, and would let a

@@ -76,7 +76,7 @@ TG_TABLES: tuple[str, ...] = (
     # spans the table, rows leaked by one test show up in another test's page.
     "tg_tag_runs",
     "tg_discover_reports",
-    "tg_discover_ignored",
+    "tg_dismissals",
     # Ticket 02's samples before the entry they hang off, so the order reads
     # child-then-parent like the rest of this list even though the TRUNCATE
     # cascades anyway.

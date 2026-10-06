@@ -38,7 +38,7 @@ from app.schemas.post_filter import to_steps
 from app.schemas.scope import FrozenScope
 from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
-from app.services.discover_ignored import ignored_handles
+from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_selection import PostScope, selection_clause
 from app.services.serialization import model_to_camel
@@ -214,7 +214,7 @@ def report_to_camel(
     written `report.user_id` would answer the wrong one without changing.
     """
     followed = followed_names(session, user_id=viewer_id)
-    ignored = ignored_handles(session, user_id=viewer_id)
+    ignored = dismissed_handles(session, user_id=viewer_id)
     stored = report.candidates or []
     handles = {_candidate_handle(c) for c in stored if isinstance(c, dict)} - {""}
     probes = probe_map(session, handles)

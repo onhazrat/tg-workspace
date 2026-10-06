@@ -63,7 +63,7 @@ INVENTORY: dict[str, str] = {
     # reads, the way `lane_for_job` sits beside the lanes.
     "ai_keys.py": AGGREGATE,
     "data_vectors.py": AGGREGATE,
-    "discover_ignored.py": AGGREGATE,
+    "dismissals.py": AGGREGATE,
     "channel_directory.py": AGGREGATE,
     # Owns `tg_channel_directory_samples` (ticket 02) and is its only writer.
     # A module of its own rather than more of `channel_directory.py`, for the

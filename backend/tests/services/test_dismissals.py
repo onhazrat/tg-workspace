@@ -22,13 +22,13 @@ from app.core.db import engine
 from app.models import User
 from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
-from app.services.discover_ignored import (
-    ignore_channels,
-    ignored_handles,
-    list_ignored,
-    unignore_channels,
-)
 from app.services.discover_reports import create_report, get_report
+from app.services.dismissals import (
+    dismiss_channels,
+    dismissed_handles,
+    list_dismissals,
+    take_back_dismissals,
+)
 from app.services.follows import ensure_follow
 from tests.utils.discover import report_scope
 from tests.utils.setting_groups import add_test_channel
@@ -88,7 +88,7 @@ def test_ignoring_marks_the_candidate_in_new_reports(
     session: Session, owner: uuid.UUID
 ) -> None:
     _seed(session, ["alpha_news", "beta_daily"], owner)
-    ignore_channels(session, ["alpha_news"], user_id=owner)
+    dismiss_channels(session, ["alpha_news"], user_id=owner)
 
     result = compute_discover_candidates(
         session, channel_names=["carrier"], user_id=owner
@@ -106,7 +106,7 @@ def test_dismissal_applies_to_reports_generated_before_it(
     report = _make_report(session, owner)
     assert report["candidates"][0]["isIgnored"] is False
 
-    ignore_channels(session, ["alpha_news"], user_id=owner)
+    dismiss_channels(session, ["alpha_news"], user_id=owner)
 
     refetched = get_report(session, report["id"], user_id=owner)
     assert refetched["candidates"][0]["isIgnored"] is True
@@ -117,20 +117,20 @@ def test_undo_restores_the_candidate_everywhere(
 ) -> None:
     _seed(session, ["alpha_news"], owner)
     report = _make_report(session, owner)
-    ignore_channels(session, ["alpha_news"], user_id=owner)
-    unignore_channels(session, ["alpha_news"], user_id=owner)
+    dismiss_channels(session, ["alpha_news"], user_id=owner)
+    take_back_dismissals(session, ["alpha_news"], user_id=owner)
 
     refetched = get_report(session, report["id"], user_id=owner)
     assert refetched["candidates"][0]["isIgnored"] is False
-    assert ignored_handles(session, user_id=owner) == set()
+    assert dismissed_handles(session, user_id=owner) == set()
 
 
 def test_handles_are_normalized(session: Session, owner: uuid.UUID) -> None:
     """`@Alpha_News` and `alpha_news` are the same channel."""
     _seed(session, ["alpha_news"], owner)
-    ignore_channels(session, ["@Alpha_News"], user_id=owner)
+    dismiss_channels(session, ["@Alpha_News"], user_id=owner)
 
-    assert ignored_handles(session, user_id=owner) == {"alpha_news"}
+    assert dismissed_handles(session, user_id=owner) == {"alpha_news"}
     result = compute_discover_candidates(
         session, channel_names=["carrier"], user_id=owner
     )
@@ -138,14 +138,14 @@ def test_handles_are_normalized(session: Session, owner: uuid.UUID) -> None:
 
 
 def test_ignoring_is_idempotent(session: Session, owner: uuid.UUID) -> None:
-    assert ignore_channels(session, ["alpha_news"], user_id=owner) == ["alpha_news"]
+    assert dismiss_channels(session, ["alpha_news"], user_id=owner) == ["alpha_news"]
     # Second call adds nothing and must not raise on the primary key.
-    assert ignore_channels(session, ["alpha_news"], user_id=owner) == []
-    assert len(list_ignored(session, user_id=owner)) == 1
+    assert dismiss_channels(session, ["alpha_news"], user_id=owner) == []
+    assert len(list_dismissals(session, user_id=owner)) == 1
 
 
 def test_ignoring_dedupes_within_one_call(session: Session, owner: uuid.UUID) -> None:
-    added = ignore_channels(
+    added = dismiss_channels(
         session, ["alpha_news", "@alpha_news", "beta"], user_id=owner
     )
     assert sorted(added) == ["alpha_news", "beta"]
@@ -154,7 +154,7 @@ def test_ignoring_dedupes_within_one_call(session: Session, owner: uuid.UUID) ->
 def test_unignoring_an_unknown_handle_is_a_no_op(
     session: Session, owner: uuid.UUID
 ) -> None:
-    assert unignore_channels(session, ["never_seen"], user_id=owner) == []
+    assert take_back_dismissals(session, ["never_seen"], user_id=owner) == []
 
 
 def test_ignoring_does_not_remove_the_candidate_from_the_report(
@@ -166,7 +166,7 @@ def test_ignoring_does_not_remove_the_candidate_from_the_report(
     practice — there would be nothing left to un-dismiss from.
     """
     _seed(session, ["alpha_news", "beta_daily"], owner)
-    ignore_channels(session, ["alpha_news"], user_id=owner)
+    dismiss_channels(session, ["alpha_news"], user_id=owner)
     report = _make_report(session, owner)
 
     assert report["candidateCount"] == 2
@@ -179,8 +179,8 @@ def test_ignoring_does_not_remove_the_candidate_from_the_report(
 def test_list_reports_reason_and_creation_time(
     session: Session, owner: uuid.UUID
 ) -> None:
-    ignore_channels(session, ["alpha_news"], reason="off topic", user_id=owner)
-    rows = list_ignored(session, user_id=owner)
+    dismiss_channels(session, ["alpha_news"], reason="off topic", user_id=owner)
+    rows = list_dismissals(session, user_id=owner)
     assert rows[0]["handle"] == "alpha_news"
     assert rows[0]["reason"] == "off topic"
     assert rows[0]["createdAt"] > 0

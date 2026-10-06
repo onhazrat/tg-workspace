@@ -17,7 +17,7 @@ fact about anybody's reading, so nothing here is deleted because an account
 followed or unfollowed something. `tg_channels` remains the separate, follow-
 scoped record of a Channel somebody actually syncs.
 
-Deliberately kept apart from `discover_ignored`:
+Deliberately kept apart from `dismissals`:
 
 * A **dismissal** is a judgement — "not interesting to me".
 * A **probe** is a fact about the handle — "cannot be followed by anyone".

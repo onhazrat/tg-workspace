@@ -1357,7 +1357,7 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "credential that leaves through the backup door is spending nobody "
         "can attribute. A Key comes back by pasting it again."
     ),
-    "DiscoverIgnoredChannel": (
+    "Dismissal": (
         "A dismissal is a judgement about a candidate, not an artifact "
         "(ticket 30). Restoring one would re-hide handles on a deployment "
         "where the account never dismissed them, and the row comes back by "

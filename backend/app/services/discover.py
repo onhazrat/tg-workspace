@@ -26,7 +26,7 @@ from sqlalchemy import ColumnElement
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post
-from app.services.discover_ignored import ignored_handles
+from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_filters import ViewReading, apply_analysis_window
 from app.services.post_links_parser import channel_from_telegram_url
@@ -250,7 +250,7 @@ def compute_discover_candidates(
                         (post.forwarded_from or handle).lstrip("@").strip()
                     )
 
-    ignored = ignored_handles(session, user_id=user_id)
+    ignored = dismissed_handles(session, user_id=user_id)
     candidates = [
         _to_candidate(handle, entry, followed, ignored)
         for handle, entry in by_source.items()

@@ -92,8 +92,8 @@ from app.models_tg import (
     DirectoryProbeUsage,
     DirectorySample,
     DirectorySearchDocument,
-    DiscoverIgnoredChannel,
     DiscoverReport,
+    Dismissal,
     EmbeddingLog,
     FollowJob,
     LLMLog,
@@ -160,7 +160,7 @@ SCOPES: dict[type[SQLModel], Scope] = {
     ChatSession: Scope.USER_OWNED,
     ChatSessionPayload: Scope.USER_OWNED,
     DiscoverReport: Scope.USER_OWNED,
-    DiscoverIgnoredChannel: Scope.USER_OWNED,
+    Dismissal: Scope.USER_OWNED,
     TagRun: Scope.USER_OWNED,
     BotCredential: Scope.USER_OWNED,
     # An Account's AI Key. `USER_OWNED` for `BotCredential`'s reason and
@@ -420,7 +420,7 @@ def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
       deliberately never filters on it — stamping it would be work ticket 22
       deletes.
     * **The composite-key tables excuse themselves.** `ChannelFollow`,
-      `DiscoverIgnoredChannel`, `QuotaUsage`, `QuotaLimit` and `UserSetting`
+      `Dismissal`, `QuotaUsage`, `QuotaLimit` and `UserSetting`
       carry `user_id` in a `NOT NULL` primary key, so a row without an owner
       cannot be expressed. That is a stronger excuse than any sentence: the database
       refuses the state rather than a guard asserting nobody reached it.
@@ -453,7 +453,7 @@ def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
         # "cascade".
         #
         # Primary-key membership is the property that was doing the work all
-        # along. The four excused tables — ChannelFollow, DiscoverIgnoredChannel,
+        # along. The four excused tables — ChannelFollow, Dismissal,
         # QuotaUsage, UserSetting — carry `user_id` inside a composite primary
         # key, so they could never express an unowned row and never needed a
         # backfill. That is true before and after the columns become non-null,

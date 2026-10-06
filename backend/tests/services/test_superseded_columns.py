@@ -143,7 +143,7 @@ def test_no_module_reaches_for_a_dropped_column() -> None:
     """No module names a dropped attribute on one of the owner-free classes.
 
     Matches `<ClassName>.<attr>` in the AST rather than by substring, so
-    `follow.setting_group_id` and `DiscoverIgnoredChannel.user_id` — a composite
+    `follow.setting_group_id` and `Dismissal.user_id` — a composite
     primary key ticket 30 put there on purpose, and the opposite of this rule —
     are not false positives.
 
