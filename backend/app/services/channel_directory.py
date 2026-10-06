@@ -99,14 +99,15 @@ from sqlmodel import Session, col, delete, select
 from app.jobs.settings import load_directory_settings, load_reach_settings
 from app.models_tg import (
     DirectoryEntry,
-    DirectorySample,
     DirectorySearchDocument,
     utc_now,
 )
 from app.services import search_text
 from app.services.channel_directory_samples import (
     expire_samples_before,
+    handles_captured_before,
     replace_samples,
+    samples_by_handle,
     samples_for,
 )
 from app.services.channels import reach_by_channel
@@ -117,7 +118,6 @@ from app.services.directory_statistics import (
     media_mix,
 )
 from app.services.follows import followed_channel_names
-from app.services.language import own_words
 from app.services.post_references import extract_sample_references
 from app.services.reach import Reach, reach_settings_from, sample_reach
 from app.services.settling_curve import current_curve
@@ -1043,15 +1043,7 @@ def index_for_search(session: Session, handles: Iterable[str]) -> int:
     )
     if not listed:
         return 0
-    words: dict[str, list[str]] = {h: [] for h in listed}
-    for sample in session.exec(
-        select(DirectorySample)
-        .where(col(DirectorySample.handle).in_(listed))
-        .order_by(col(DirectorySample.handle), col(DirectorySample.post_id).desc())
-    ).all():
-        text = own_words(sample)
-        if text:
-            words[sample.handle].append(text)
+    samples = samples_by_handle(session, listed)
     now = utc_now()
     params = []
     for handle in listed:
@@ -1061,7 +1053,7 @@ def index_for_search(session: Session, handles: Iterable[str]) -> int:
             display_name=entry.display_name,
             bio=entry.bio,
             language=entry.language,
-            posts=words[handle],
+            posts=[w for _, w in search_text.indexed(samples.get(handle, []))],
         )
         params.append(
             {
@@ -1189,13 +1181,7 @@ def expire_samples(session: Session, cutoff: datetime) -> int:
     document's input, so their handles are re-indexed in the same transaction.
     **Does not commit.**
     """
-    handles = list(
-        session.exec(
-            select(col(DirectorySample.handle))
-            .where(col(DirectorySample.captured_at) < cutoff)
-            .distinct()
-        ).all()
-    )
+    handles = handles_captured_before(session, cutoff)
     deleted = expire_samples_before(session, cutoff)
     for start in range(0, len(handles), SEARCH_BATCH):
         index_for_search(session, handles[start : start + SEARCH_BATCH])

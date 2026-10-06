@@ -72,15 +72,14 @@ from sqlmodel import Session, col
 
 from app.models_tg import (
     DirectoryEntry,
-    DirectorySample,
     DirectorySearchDocument,
     PostReference,
     utc_now,
 )
 from app.services import search_text
 from app.services.channel_directory import LISTED_KIND, followed_reach
+from app.services.channel_directory_samples import samples_by_handle
 from app.services.follows import visible_channel_names
-from app.services.language import own_words
 from app.services.post_filters import (
     TreeAtom,
     TreeGroup,
@@ -556,29 +555,14 @@ def _matches(
         }
     posts: dict[str, MatchedPost] = {}
     if "posts" in search.fields:
-        seen: dict[str, int] = {}
-        samples = session.execute(
-            unscoped_select(
-                sa_select(DirectorySample)
-                .where(col(DirectorySample.handle) == any_(_handles(handles)))
-                .order_by(
-                    col(DirectorySample.handle), col(DirectorySample.post_id).desc()
-                ),
-                reason=_SCOPE_REASON,
-            )
-        ).scalars()
-        for sample in samples:
-            words = own_words(sample)
-            if not words or sample.handle in posts:
-                continue
-            seen[sample.handle] = seen.get(sample.handle, 0) + 1
-            if seen[sample.handle] > search_text.SAMPLES_INDEXED:
-                continue
-            parts = search_text.snippet(words, stems)
-            if parts is not None:
-                posts[sample.handle] = MatchedPost(
-                    post_id=sample.post_id, timestamp=sample.timestamp, parts=parts
-                )
+        for handle, samples in samples_by_handle(session, handles).items():
+            for sample, words in search_text.indexed(samples):
+                parts = search_text.snippet(words, stems)
+                if parts is not None:
+                    posts[handle] = MatchedPost(
+                        post_id=sample.post_id, timestamp=sample.timestamp, parts=parts
+                    )
+                    break
     out = {}
     for handle in handles:
         bio = bios.get(handle)

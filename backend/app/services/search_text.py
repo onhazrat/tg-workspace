@@ -24,7 +24,10 @@ Channel wrote rather than the folded copy the index holds.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
+
+from app.services.language import HasWords, own_words
 
 #: Languages Postgres stems; every other Language is indexed with `simple`.
 STEMMED: dict[str, str] = {
@@ -95,6 +98,19 @@ class SearchDocument:
     posts: str
 
 
+def indexed[S: HasWords](samples: Sequence[S]) -> list[tuple[S, str]]:
+    """The samples a document holds, each with its words: the newest
+    `SAMPLES_INDEXED` that have words of their own. `samples` come newest
+    first. A captionless photo is stored as "[photo]", which nobody wrote, so
+    it is skipped rather than indexed."""
+    out: list[tuple[S, str]] = []
+    for sample in samples:
+        words = own_words(sample)
+        if words:
+            out.append((sample, words))
+    return out[:SAMPLES_INDEXED]
+
+
 def document(
     *,
     handle: str,
@@ -103,8 +119,8 @@ def document(
     language: str | None,
     posts: list[str],
 ) -> SearchDocument:
-    """The document for one entry. `posts` is the samples' words, newest first."""
-    joined = "\n".join(posts[:SAMPLES_INDEXED])[:SAMPLE_CHARS]
+    """The document for one entry. `posts` is what `indexed` kept, newest first."""
+    joined = "\n".join(posts)[:SAMPLE_CHARS]
     return SearchDocument(
         config=ts_config(language),
         names=" ".join(normalise(f"{handle} {display_name or ''}").split()),

@@ -159,6 +159,35 @@ def samples_for(session: Session, handle: str) -> list[DirectorySample]:
     return list(session.exec(statement).all())
 
 
+def samples_by_handle(
+    session: Session, handles: list[str]
+) -> dict[str, list[DirectorySample]]:
+    """`samples_for` over many handles at once: each handle's samples, newest
+    first. A handle with none is absent. The search index (DIR-04) reads its
+    documents and its snippets through here."""
+    out: dict[str, list[DirectorySample]] = {}
+    if not handles:
+        return out
+    for row in session.exec(
+        select(DirectorySample)
+        .where(col(DirectorySample.handle).in_(handles))
+        .order_by(col(DirectorySample.handle), col(DirectorySample.post_id).desc())
+    ).all():
+        out.setdefault(row.handle, []).append(row)
+    return out
+
+
+def handles_captured_before(session: Session, cutoff: datetime) -> list[str]:
+    """The handles `expire_samples_before(cutoff)` would take samples from."""
+    return list(
+        session.exec(
+            select(col(DirectorySample.handle))
+            .where(col(DirectorySample.captured_at) < cutoff)
+            .distinct()
+        ).all()
+    )
+
+
 def sample_to_camel(row: DirectorySample) -> dict[str, Any]:
     """One sample on the wire, for the Candidate panel (ticket 03).
 
