@@ -15,7 +15,11 @@ import {
   paramsFromView,
   resolveYours,
   SORT_OPTIONS,
+  searchPatch,
+  searchRequest,
+  sortOptions,
   sortValue,
+  toggleField,
   viewFromParams,
 } from "./directory-view"
 
@@ -27,12 +31,16 @@ describe("the view and its URL parameters", () => {
       descending: true,
       kinds: [],
       page: 0,
+      search: "",
+      fields: ["name", "bio", "posts"],
+      matches: true,
     })
     expect(DEFAULT_VIEW.filter).toBe(OPENING_FILTER)
   })
 
   test("every field reads back from the parameters it wrote", () => {
     const view = {
+      ...DEFAULT_VIEW,
       filter: "lang:fa and subscribers >= 1000",
       sort: "last_post_days" as const,
       descending: false,
@@ -191,5 +199,107 @@ describe("the sort picker", () => {
     expect(sortValue({ ...DEFAULT_VIEW, sort: "reach" }, "follows")).toBe(
       "reach",
     )
+  })
+})
+
+describe("the search (DIR-04)", () => {
+  const previous = { sort: "reach" as const, descending: false }
+
+  test("search, fields and Show matches read back from their parameters", () => {
+    const view = {
+      ...DEFAULT_VIEW,
+      search: "новости",
+      fields: ["name" as const, "posts" as const],
+      matches: false,
+      sort: "relevance" as const,
+    }
+    const params = paramsFromView(view)
+    expect(params).toMatchObject({
+      dirQ: "новости",
+      dirIn: "name,posts",
+      dirMatches: "off",
+      dirSort: "relevance",
+    })
+    expect(viewFromParams(params)).toEqual(view)
+  })
+
+  test("no search is every field with matches shown, and writes nothing", () => {
+    expect(viewFromParams({})).toMatchObject({
+      search: "",
+      fields: ["name", "bio", "posts"],
+      matches: true,
+    })
+    expect(paramsFromView(DEFAULT_VIEW)).toEqual({ dirFilter: OPENING_FILTER })
+  })
+
+  test("an unknown field is dropped, and no known field is every field", () => {
+    expect(viewFromParams({ dirIn: "bio,title" }).fields).toEqual(["bio"])
+    expect(viewFromParams({ dirIn: "title" }).fields).toEqual([
+      "name",
+      "bio",
+      "posts",
+    ])
+  })
+
+  test("Relevance without a search falls back to the default sort", () => {
+    expect(viewFromParams({ dirSort: "relevance" }).sort).toBe("mine")
+    expect(viewFromParams({ dirSort: "relevance", dirQ: "  " }).sort).toBe(
+      "mine",
+    )
+  })
+
+  test("the request carries the trimmed search, or none for a blank box", () => {
+    expect(searchRequest(DEFAULT_VIEW)).toBeNull()
+    expect(searchRequest({ ...DEFAULT_VIEW, search: "   " })).toBeNull()
+    expect(
+      searchRequest({ ...DEFAULT_VIEW, search: " crypto ", fields: ["bio"] }),
+    ).toEqual({ text: "crypto", fields: ["bio"] })
+  })
+
+  test("starting a search switches to Relevance, strongest first", () => {
+    expect(searchPatch(DEFAULT_VIEW, "news", previous)).toEqual({
+      search: "news",
+      sort: "relevance",
+      descending: true,
+    })
+  })
+
+  test("editing a search keeps a sort chosen while searching", () => {
+    const view = { ...DEFAULT_VIEW, search: "news", sort: "reach" as const }
+    expect(searchPatch(view, "news fa", previous)).toEqual({
+      search: "news fa",
+    })
+  })
+
+  test("clearing the search returns Relevance to the sort before it", () => {
+    const view = {
+      ...DEFAULT_VIEW,
+      search: "news",
+      sort: "relevance" as const,
+    }
+    expect(searchPatch(view, "", previous)).toEqual({
+      search: "",
+      sort: "reach",
+      descending: false,
+    })
+    expect(searchPatch(view, "  ", previous)).toMatchObject({ sort: "reach" })
+  })
+
+  test("the last field cannot be turned off", () => {
+    expect(toggleField(["name", "bio", "posts"], "bio")).toEqual([
+      "name",
+      "posts",
+    ])
+    expect(toggleField(["bio"], "bio")).toEqual(["bio"])
+    expect(toggleField(["posts"], "name")).toEqual(["name", "posts"])
+  })
+
+  test("the picker offers Relevance only while searching, first", () => {
+    expect(sortOptions(false)).toBe(SORT_OPTIONS)
+    expect(sortOptions(true)[0]).toEqual({
+      value: "relevance",
+      label: "Relevance",
+    })
+    expect(sortOptions(true).slice(1)).toEqual(SORT_OPTIONS)
   })
 })

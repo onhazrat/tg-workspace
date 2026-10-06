@@ -1,7 +1,7 @@
 /**
  * A Directory view (DIR-02): the filter, the sort and its direction, whose
- * citations "Cited by your channels" counts, the Reference kinds and the
- * page. It lives in the workspace URL, the filter as `?dirFilter=` in its text
+ * citations "Cited by your channels" counts, the Reference kinds, the page,
+ * and DIR-04's search with its fields and "Show matches". It lives in the workspace URL, the filter as `?dirFilter=` in its text
  * form and the rest beside it, so a link opens exactly that view. The ticks
  * are never in it.
  */
@@ -9,6 +9,7 @@ import type {
   DirectoryCountRequest,
   DirectoryListRequest,
   DirectoryListResponse,
+  DirectorySearchRequest,
   YourChannels,
 } from "@/client"
 import { MEASURES, OPENING_FILTER } from "./directory-filter"
@@ -18,6 +19,7 @@ export type RefKind = NonNullable<
   DirectoryListRequest["referenceKinds"]
 >[number]
 export type YoursSource = NonNullable<YourChannels["source"]>
+export type SearchField = NonNullable<DirectorySearchRequest["fields"]>[number]
 /** What every Directory read shares: the filter, "your channels", the kinds. */
 export type DirectoryViewRequest = Omit<DirectoryCountRequest, "candidate">
 
@@ -31,6 +33,12 @@ export type DirectoryView = {
   /** Narrow every Reference count; none is every kind. */
   kinds: RefKind[]
   page: number
+  /** The search box as typed; blank is no search. */
+  search: string
+  /** Where the search looks; never empty. */
+  fields: SearchField[]
+  /** Quote each row's matching bio and Post while searching. */
+  matches: boolean
 }
 
 export const DIRECTORY_PARAMS = [
@@ -40,6 +48,9 @@ export const DIRECTORY_PARAMS = [
   "dirYours",
   "dirKinds",
   "dirPage",
+  "dirQ",
+  "dirIn",
+  "dirMatches",
 ] as const
 export type DirectoryParams = Partial<
   Record<(typeof DIRECTORY_PARAMS)[number], string>
@@ -47,6 +58,7 @@ export type DirectoryParams = Partial<
 
 export const REF_KINDS: RefKind[] = ["forward", "mention", "link", "reply"]
 const YOURS: YoursSource[] = ["follows", "selection", "ticked"]
+export const SEARCH_FIELDS: SearchField[] = ["name", "bio", "posts"]
 const MAX_PAGE = 10_000
 
 export const DEFAULT_VIEW: DirectoryView = {
@@ -55,6 +67,9 @@ export const DEFAULT_VIEW: DirectoryView = {
   descending: true,
   kinds: [],
   page: 0,
+  search: "",
+  fields: SEARCH_FIELDS,
+  matches: true,
 }
 
 /** Measures counted in days sort newest first, which is ascending. */
@@ -94,6 +109,47 @@ export function chooseSort(value: string): Partial<DirectoryView> {
   }
 }
 
+const RELEVANCE = { value: "relevance", label: "Relevance" }
+
+/** The picker's options: Relevance first, only while a search is on. */
+export const sortOptions = (searching: boolean) =>
+  searching ? [RELEVANCE, ...SORT_OPTIONS] : SORT_OPTIONS
+
+/** The search as the reads take it: trimmed, or none for a blank box. */
+export function searchRequest(
+  view: DirectoryView,
+): DirectorySearchRequest | null {
+  const text = view.search.trim()
+  return text ? { text, fields: view.fields } : null
+}
+
+/**
+ * Typing into the search box. Starting a search sorts by Relevance; clearing
+ * it puts a Relevance sort back to `previous`, the sort before it. A sort
+ * chosen while searching is left alone.
+ */
+export function searchPatch(
+  view: DirectoryView,
+  text: string,
+  previous: Pick<DirectoryView, "sort" | "descending">,
+): Partial<DirectoryView> {
+  const was = view.search.trim() !== ""
+  const is = text.trim() !== ""
+  if (is && !was) return { search: text, sort: "relevance", descending: true }
+  if (!is && view.sort === "relevance") return { search: text, ...previous }
+  return { search: text }
+}
+
+/** A field's toggle; the last one on stays on. */
+export function toggleField(
+  fields: SearchField[],
+  field: SearchField,
+): SearchField[] {
+  if (!fields.includes(field))
+    return SEARCH_FIELDS.filter((f) => f === field || fields.includes(f))
+  return fields.length > 1 ? fields.filter((f) => f !== field) : fields
+}
+
 /** A column header's click: the sorted column flips, another sorts by itself. */
 export const headerSort = (
   view: DirectoryView,
@@ -105,9 +161,16 @@ export const headerSort = (
     : chooseSort(key === "mine" ? `mine:${yours}` : key)
 
 export function viewFromParams(params: DirectoryParams): DirectoryView {
-  const sort = SORTS.has(params.dirSort ?? "")
-    ? (params.dirSort as DirectorySort)
-    : DEFAULT_VIEW.sort
+  const search = params.dirQ ?? ""
+  // Relevance with no search would order by handle; take the default instead.
+  const relevance = params.dirSort === "relevance" && search.trim() !== ""
+  const sort =
+    relevance || SORTS.has(params.dirSort ?? "")
+      ? (params.dirSort as DirectorySort)
+      : DEFAULT_VIEW.sort
+  const fields = SEARCH_FIELDS.filter((f) =>
+    params.dirIn?.split(",").includes(f),
+  )
   const page = Number(params.dirPage)
   const yours = params.dirYours as YoursSource
   return {
@@ -120,6 +183,9 @@ export function viewFromParams(params: DirectoryParams): DirectoryView {
     ...(YOURS.includes(yours) ? { yours } : {}),
     kinds: REF_KINDS.filter((k) => params.dirKinds?.split(",").includes(k)),
     page: Number.isInteger(page) && page >= 0 && page <= MAX_PAGE ? page : 0,
+    search,
+    fields: fields.length ? fields : SEARCH_FIELDS,
+    matches: params.dirMatches !== "off",
   }
 }
 
@@ -132,6 +198,10 @@ export function paramsFromView(view: DirectoryView): DirectoryParams {
   if (view.yours) params.dirYours = view.yours
   if (view.kinds.length) params.dirKinds = view.kinds.join(",")
   if (view.page) params.dirPage = String(view.page)
+  if (view.search) params.dirQ = view.search
+  if (view.fields.length < SEARCH_FIELDS.length)
+    params.dirIn = view.fields.join(",")
+  if (!view.matches) params.dirMatches = "off"
   return params
 }
 
