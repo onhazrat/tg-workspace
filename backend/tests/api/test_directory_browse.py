@@ -58,6 +58,7 @@ Each mutation was applied alone and this module (or the named guard) went red:
 * list every kind, not only Channels -> dt_bot in the opening view
 * drop `autoescape` from Name contains -> "%" matches everything
 * never reuse a cached total -> the reuse case
+* key the cached total on the Follow count, not the set -> the follow-swap case
 * take the oldest Reference as discovered-via -> the Follow case
 * drop `/directory/list` from `VIEW_AS_READ_ONLY_PATHS` -> the View-as case, and
   `test_view_as.py` for `/count`
@@ -720,6 +721,26 @@ def test_a_total_is_reused_across_sorts_and_pages(
     assert _list(client, operator, filter=OPENING, sort="reach")["total"] == 5
     assert _list(client, operator, filter=OPENING, page=1)["total"] == 5
     assert _list(client, operator, filter=root(atom(flag("followable"))))["total"] == 7
+
+
+def test_a_follow_swap_moves_a_cached_total(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Follow one and unfollow another: the count is unchanged, the set is not."""
+    operator, _ = accounts
+    big_and_followed = root(
+        atom(flag("followed")), atom(measure("subscribers", min=10000))
+    )
+    # dt_followed_a has 7,000 subscribers; dt_en_news, not followed yet, 12,000.
+    assert _list(client, operator, filter=big_and_followed)["total"] == 0
+    with Session(engine) as session:
+        follow_channels(session, "dt_en_news")
+        session.commit()
+    gone = client.delete(
+        f"{settings.API_V1_STR}/data/channels/dt_followed_a", headers=operator
+    )
+    assert gone.status_code == 200, gone.text
+    assert _list(client, operator, filter=big_and_followed)["total"] == 1
 
 
 def test_the_directory_size_counts_every_listed_channel(

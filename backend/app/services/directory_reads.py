@@ -35,7 +35,7 @@ The Language counts are one GROUP BY over the view without its Language
 Conditions. When the view has none, their sum *is* the total, so the total
 costs nothing more and is always exact; only a view with a Language Condition
 counts again. Both are cached per Account and view for a few minutes, so
-paging and re-sorting reuse them. The key carries the Account's Follow count, so
+paging and re-sorting reuse them. The key carries the Account's Follow set, so
 a follow or an unfollow is never read through a stale total; a view reading the
 Dismissed Condition keys on the Account's Dismissals too, so a Dismissal or a
 take-back moves the total at once (DIR-06).
@@ -932,7 +932,9 @@ def _view_key(view: DirectoryView, tree: DirectoryTree | None) -> str:
     return repr(
         (
             view.user_id,
-            len(view.followed),
+            # The set, not its size: following one Channel and unfollowing
+            # another within the TTL leaves the size where it was.
+            hash(view.followed),
             tree,
             sorted(view.sources) if _reads(tree, MineCond) else None,
             view.kinds if _reads(tree, MineCond, CitedByCond, CitesCond) else None,
