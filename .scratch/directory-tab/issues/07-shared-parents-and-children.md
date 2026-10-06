@@ -8,7 +8,7 @@ Shared parents and Shared children. Variant T on `prototype/directory-tab-bars` 
 
 **Blocked by:** DIR-05
 
-**Status:** ready-for-agent
+**Status:** done
 
 The ranking the prototype measured to behave well (from its throwaway API, trimmed to the
 decision):
