@@ -40,13 +40,14 @@ Each mutation was applied alone and this module went red:
 
 * return the picks -> the picks case
 * count the hub and hub_t -> the aggregators case
-* skip on `>= 3000` read as the candidate's degree, not the middle Channel's ->
+* skip a source on how often it is cited, a target on how many it cites ->
   the aggregators case
 * drop the minimum (`HAVING`) -> the minimum case
 * swap citing and cited in Shared children -> the children case
-* OR the two Conditions instead of the tree's AND -> the both case
 * sort by the shared count, not the weighted score -> the weighted cases
 * the row's count present while the Condition is off -> the columns case
+* the column reading the first Shared Condition whatever its relation -> the
+  columns case
 * "Why it's here" naming every citing Channel, not the shared ones -> the
   Why case
 """

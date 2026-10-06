@@ -454,10 +454,7 @@ def _references(
 # ---- Shared parents and Shared children (DIR-07) ----------------------------------
 #
 # Both read the citation pairs, which keep no kinds, so the view's Reference
-# kinds do not narrow them. Every statement here is `correlate(None)`: the
-# outer statement may join `tg_citation_counts` (`_entries`), and an
-# auto-correlated subquery would then read the candidate's counts row instead
-# of its own.
+# kinds do not narrow them.
 
 #: A middle Channel past this many links is an aggregator, not a taste: a
 #: source citing more than this many Channels, or a target cited by more.
@@ -487,7 +484,6 @@ def _middle(cond: SharedCond) -> Any:
         .join(CitationCount, col(CitationCount.handle) == middle)
         .where(pick == any_(picks), middle != all_(picks))
         .where(col(degree) <= AGGREGATOR_LINKS)
-        .correlate(None)
     )
 
 
@@ -501,7 +497,6 @@ def _shared(cond: SharedCond, among: Sequence[str] | None = None) -> Any:
         sa_select(candidate.label("handle"), func.count().label("n"))
         .where(*where)
         .group_by(candidate)
-        .correlate(None)
     )
 
 
