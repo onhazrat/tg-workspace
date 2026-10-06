@@ -35,6 +35,8 @@ const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
   links: 2,
   followable: true,
   followed: false,
+  citedBy: 40 - i,
+  cites: i,
   mine: 6 - i,
   mineLastAt: Date.now() - 3_600_000,
   match: null,
@@ -92,7 +94,7 @@ async function mockDirectory(page: Page) {
   return { lastList: () => lists.at(-1) as ListBody }
 }
 
-/** The detail panel's three reads (DIR-03), for the row the journey opens. */
+/** The detail panel's reads (DIR-03, DIR-05), for the row the journey opens. */
 async function mockPanel(page: Page) {
   const whys: { handle?: string; days?: number | null }[] = []
   await page.route("**/api/v1/data/directory/a2/entry", (route) =>
@@ -115,6 +117,21 @@ async function mockPanel(page: Page) {
     whys.push(route.request().postDataJSON())
     await route.fulfill({ json: { posts: [], total: 0 } })
   })
+  await page.route("**/api/v1/data/directory/a2/neighbours", (route) =>
+    route.fulfill({
+      json: {
+        citedBy: [
+          {
+            handle: "src_one",
+            displayName: "Source One",
+            references: 4,
+            kinds: ["forward"],
+          },
+        ],
+        cites: [],
+      },
+    }),
+  )
   return { lastWhy: () => whys.at(-1) }
 }
 
@@ -278,5 +295,15 @@ test.describe("TG Workspace directory", () => {
     await expect(aside.getByText("The bio of a2")).toBeVisible()
     await aside.getByRole("button", { name: "Close" }).click()
     await expect(aside).toHaveCount(0)
+
+    // DIR-05: a neighbour is one click from a Condition, and the panel
+    // closes on the narrowed list.
+    await page.getByText("Channel a2").click()
+    await aside
+      .getByRole("button", { name: 'Filter by "Cited by @src_one"' })
+      .click()
+    await expect(aside).toHaveCount(0)
+    await expect(chip(page, "citedby-src_one")).toBeVisible()
+    expect(param(page, "dirFilter")).toContain("citedby:src_one")
   })
 })
