@@ -8,7 +8,7 @@ records the design and why; read it and its research before starting.
 
 **Blocked by:** DIR-02
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A companion table of the Directory entry, one row per live Channel entry, owned by the Directory aggregate as its payload table and scoped corpus, holds the weighted search document: handle and display name (A), bio (B), the 8 newest samples capped at 12,000 characters (C); GIN with fast update off over it, and a trigram index over handle and display name
 - [x] The text search configuration is chosen per row from the entry's Language: russian, english, german and arabic are stemmed, every other Language uses simple
