@@ -14,7 +14,9 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * "+" menu returning focus after a tab is chosen (closes the Language
  * dropdown); the Channels list left unmocked (a Channels tab selection on
  * the shared backend turns "your channels" into it); the open panel kept in
- * memory only, not in storage (DIR-03).
+ * memory only, not in storage (DIR-03); the list read not handed its abort
+ * `signal`, so a superseded search runs on; the search chip's clear doing
+ * nothing (DIR-04).
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -46,6 +48,24 @@ type ListBody = {
   referenceKinds?: string[]
   sort?: string
   page?: number
+  search?: { text: string; fields?: string[] } | null
+  showMatches?: boolean
+}
+
+/** What a search quotes for a1 (DIR-04): a bio and a Post, one word a hit. */
+const MATCH = {
+  bio: [
+    { text: "All about ", hit: false },
+    { text: "crypto", hit: true },
+  ],
+  post: {
+    postId: 7,
+    timestamp: Date.now() - 3_600_000,
+    parts: [
+      { text: "Crypto", hit: true },
+      { text: " is up today", hit: false },
+    ],
+  },
 }
 
 async function mockDirectory(page: Page) {
@@ -54,18 +74,26 @@ async function mockDirectory(page: Page) {
     const body = route.request().postDataJSON() as ListBody
     lists.push(body)
     const yours = body.yours ?? {}
-    await route.fulfill({
-      json: {
-        rows: ROWS,
-        total: 250,
-        languages: [
-          { language: "fa", count: 200 },
-          { language: "en", count: 50 },
-        ],
-        yoursSize:
-          yours.source === "follows" ? 3 : (yours.handles ?? []).length,
-      },
-    })
+    // A search answers slowly, so the journey can supersede one in flight.
+    if (body.search) await new Promise((r) => setTimeout(r, 1500))
+    const rows = body.showMatches
+      ? ROWS.map((r, i) => (i === 0 ? { ...r, match: MATCH } : r))
+      : ROWS
+    // The page may have aborted the read while it waited.
+    await route
+      .fulfill({
+        json: {
+          rows,
+          total: 250,
+          languages: [
+            { language: "fa", count: 200 },
+            { language: "en", count: 50 },
+          ],
+          yoursSize:
+            yours.source === "follows" ? 3 : (yours.handles ?? []).length,
+        },
+      })
+      .catch(() => {})
   })
   await page.route("**/api/v1/data/directory/count", (route) =>
     route.fulfill({ json: { total: 42 } }),
@@ -190,6 +218,53 @@ test.describe("TG Workspace directory", () => {
     await page.getByTestId("directory-bound-submit").click()
     await expect(chip(page, "measure-subscribers")).toBeVisible()
     expect(param(page, "dirFilter")).toContain("subscribers >= 1000")
+
+    // A search (DIR-04): a chip, Relevance, the URL, and a1's quoted matches.
+    const box = page.getByLabel("Search the Directory")
+    await box.fill("crypto")
+    const row = page.getByTestId("directory-filter-row")
+    await expect(row.getByText('"crypto"')).toBeVisible()
+    await expect.poll(() => param(page, "dirQ")).toBe("crypto")
+    expect(param(page, "dirSort")).toBe("relevance")
+    await expect
+      .poll(() => api.lastList())
+      .toMatchObject({
+        search: { text: "crypto", fields: ["name", "bio", "posts"] },
+        sort: "relevance",
+        showMatches: true,
+      })
+    const quote = page.getByTestId("directory-match-a1")
+    await expect(quote.locator("mark").first()).toHaveText("crypto")
+    await expect(page.getByTestId("directory-match-post-a1")).toHaveAttribute(
+      "href",
+      /\/s\/a1\/7$/,
+    )
+
+    // Show matches off drops the quotes and asks for none.
+    await page.getByTestId("directory-switch-matches").click()
+    await expect(quote).toHaveCount(0)
+    expect(param(page, "dirMatches")).toBe("off")
+    await expect.poll(() => api.lastList().showMatches).toBe(false)
+    await page.getByTestId("directory-switch-matches").click()
+
+    // Narrowing the fields sends a new search; clearing it from the chip
+    // while that is in flight aborts it, empties the box and puts the sort back.
+    const narrowed = page.waitForRequest(
+      (r) =>
+        r.url().endsWith("/directory/list") &&
+        (r.postDataJSON() as ListBody).search?.fields?.length === 2,
+    )
+    await page.getByTestId("directory-search-field-bio").click()
+    const superseded = await narrowed
+    expect(param(page, "dirIn")).toBe("name,posts")
+    const aborted = page.waitForEvent("requestfailed", (r) => r === superseded)
+    await row.getByRole("button", { name: "Clear the search" }).click()
+    await aborted
+    await expect(box).toHaveValue("")
+    await expect(row.getByText('"crypto"')).toHaveCount(0)
+    expect(param(page, "dirQ")).toBeNull()
+    expect(param(page, "dirSort")).toBeNull()
+    await expect.poll(() => api.lastList().search ?? null).toBeNull()
 
     // Search the Sort and choose the channels ticked here.
     await page.getByTestId("directory-sort").click()

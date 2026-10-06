@@ -13,7 +13,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { dataGetDirectorySize, dataListDirectory } from "@/client"
 import { useData } from "@/contexts/DataContext"
@@ -35,14 +35,13 @@ import {
   hasViewParams,
   paramsFromView,
   resolveYours,
-  searchPatch,
   searchRequest,
   viewFromParams,
 } from "@/lib/directory/directory-view"
 import { pruneSelectionAfterFollow } from "@/lib/posts/discover-selection"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { queryKeys } from "./queryKeys"
-import { useDebouncedValue } from "./useDebouncedValue"
+import { useDirectorySearchBox } from "./useDirectorySearchBox"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
@@ -129,50 +128,9 @@ function useView() {
   return { view, patch }
 }
 
-/** How long the box waits for typing to stop before the view takes it. */
-const SEARCH_DEBOUNCE_MS = 300
-
-/**
- * The search box (DIR-04): what is typed reaches the view once typing stops,
- * and a blank box at once, so clearing never waits. The sort before Relevance
- * is kept here to go back to; a reload while searching goes back to the
- * default instead.
- */
-function useSearchBox(
-  view: DirectoryView,
-  patch: (next: Partial<DirectoryView>) => void,
-) {
-  const [draft, setDraft] = useState(view.search)
-  const previous = useRef({ sort: view.sort, descending: view.descending })
-  if (view.sort !== "relevance")
-    previous.current = { sort: view.sort, descending: view.descending }
-  const commit = (text: string) =>
-    patch(searchPatch(view, text, previous.current))
-
-  // The view moved on its own (a link, Back, the chip): the box follows.
-  useEffect(() => setDraft(view.search), [view.search])
-  const settled = useDebouncedValue(draft, SEARCH_DEBOUNCE_MS)
-  // On `draft` too: a box cleared and retyped to the last settled text
-  // within the wait never changes `settled`.
-  useEffect(() => {
-    if (settled === draft && settled !== view.search) commit(settled)
-  }, [settled, draft])
-
-  const setSearch = (text: string) => {
-    setDraft(text)
-    if (!text.trim() && view.search) commit(text)
-  }
-  /** Clear all: the search and the filter in one navigation. */
-  const clearAll = () => {
-    setDraft("")
-    patch({ ...searchPatch(view, "", previous.current), filter: "" })
-  }
-  return { draft, setSearch, clearAll }
-}
-
 export function useDirectory() {
   const { view, patch } = useView()
-  const searchBox = useSearchBox(view, patch)
+  const searchBox = useDirectorySearchBox(view, patch)
   const { selectedChannels } = useData()
   const { followDiscoverChannels } = useScraper()
   const queryClient = useQueryClient()
