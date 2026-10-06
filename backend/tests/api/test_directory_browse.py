@@ -95,6 +95,17 @@ DIR-05 (citation counts, "cited by @x" / "cites @x", `GET
 * neighbours least first, or ties by handle descending -> the neighbours case
 * a neighbour's kinds over all its References, not those between the two ->
   the neighbours case
+
+DIR-06 (Dismissal, shared with Discover through `POST`/`DELETE
+/data/discover/ignored`; the per-Account key's own guard is
+`tests/services/test_discover_dismissals_are_per_account.py`):
+
+* leave the Dismissals out of the cached total's key -> the hiding case's total
+* read the row's `dismissed` off the Follows -> the hiding case
+* compile the Dismissed Condition as false -> the hiding case
+* read every Account's Dismissals -> the other Account's opening view
+* follow a dismissed Channel from the Directory -> the withheld-Follow case
+* put `/data/discover/ignored` on `VIEW_AS_READ_ONLY_PATHS` -> the View-as case
 """
 
 from __future__ import annotations

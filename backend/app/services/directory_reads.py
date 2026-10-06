@@ -36,7 +36,9 @@ Conditions. When the view has none, their sum *is* the total, so the total
 costs nothing more and is always exact; only a view with a Language Condition
 counts again. Both are cached per Account and view for a few minutes, so
 paging and re-sorting reuse them. The key carries the Account's Follow count, so
-a follow or an unfollow is never read through a stale total.
+a follow or an unfollow is never read through a stale total; a view reading the
+Dismissed Condition keys on the Account's Dismissals too, so a Dismissal or a
+take-back moves the total at once (DIR-06).
 """
 
 from __future__ import annotations
