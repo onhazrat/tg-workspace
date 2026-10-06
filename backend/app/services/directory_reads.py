@@ -68,9 +68,10 @@ from sqlalchemy import (
 from sqlalchemy import select as sa_select
 from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import TSQUERY
-from sqlmodel import Session, col
+from sqlmodel import Session, col, select
 
 from app.models_tg import (
+    Channel,
     DirectoryEntry,
     DirectorySearchDocument,
     PostReference,
@@ -88,7 +89,8 @@ from app.services.post_filters import (
     prune_tree,
     tree_conds,
 )
-from app.services.tenancy import unscoped_select
+from app.services.posts import lookup_posts
+from app.services.tenancy import scoped_select, unscoped_select
 
 PAGE_SIZE = 100
 #: How long a view's total and Language counts, and the Directory's size, are
@@ -345,11 +347,17 @@ def measure_sql(measure: DirectoryMeasure, now: datetime) -> ColumnElement[Any]:
     return cast(getattr(DirectoryEntry, measure), Float)
 
 
-def _references(view: DirectoryView) -> list[ColumnElement[bool]]:
-    """The References "your channels" make, narrowed by the Reference kinds."""
+def _references(
+    view: DirectoryView, *, days: int | None = None
+) -> list[ColumnElement[bool]]:
+    """The References "your channels" make, narrowed by the Reference kinds,
+    and to the last `days` when given."""
     clauses = [col(PostReference.source_channel) == any_(_handles(view.sources))]
     if view.kinds:
         clauses.append(col(PostReference.kind) == any_(_handles(view.kinds)))
+    if days is not None:
+        since_ms = _epoch_ms(view.now) - days * 86_400_000
+        clauses.append(col(PostReference.timestamp) >= since_ms)
     return clauses
 
 
@@ -369,10 +377,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     if isinstance(cond, MineCond):
         if not view.sources:
             return false()
-        refs = _references(view)
-        if cond.days is not None:
-            since_ms = int(view.now.timestamp() * 1000) - cond.days * 86_400_000
-            refs.append(col(PostReference.timestamp) >= since_ms)
+        refs = _references(view, days=cond.days)
         # Uncorrelated, so Postgres hashes it once even under an OR or a NOT.
         return handle.in_(sa_select(col(PostReference.target_handle)).where(*refs))
     value = measure_sql(cond.measure, view.now)
@@ -797,6 +802,165 @@ def newest_references(
     return {
         str(target): {"channelName": source, "postId": post_id, "timestamp": ts}
         for target, source, post_id, ts in rows
+    }
+
+
+# ---- The detail panel (DIR-03) --------------------------------------------------------
+
+
+def entry(
+    session: Session, user_id: uuid.UUID, handle: str
+) -> tuple[DirectoryRow, str | None] | None:
+    """One listed entry by handle, as a row (with no "your channels" count)
+    and its bio; `None` when the Directory does not list it.
+
+    The panel reads this rather than the list's row, so it opens on a Channel
+    that is not on the current page, and the bio stays out of the list.
+    """
+    found = session.execute(
+        unscoped_select(
+            sa_select(col(DirectoryEntry.bio)).where(
+                col(DirectoryEntry.handle) == handle, _listed()
+            ),
+            reason=_SCOPE_REASON,
+        )
+    ).first()
+    if found is None:
+        return None
+    view = resolve_view(
+        session, user_id, tree=None, source="selection", handles=(), kinds=()
+    )
+    return _rows(session, view, [handle])[0], found[0]
+
+
+#: How many citing Posts "Why it's here" quotes; the rest are counted.
+WHY_LIMIT = 20
+
+
+@dataclass(frozen=True)
+class CitingPost:
+    channel: str
+    display_name: str | None
+    post_id: int
+    timestamp: int
+    kinds: list[str]
+    #: `None` where the Account may not read the Post and no sample holds it.
+    text: str | None
+
+
+@dataclass(frozen=True)
+class Why:
+    posts: list[CitingPost]
+    #: Every citing Post, of which `posts` are the newest.
+    total: int
+
+
+def why_its_here(
+    session: Session, view: DirectoryView, handle: str, *, days: int | None
+) -> Why:
+    """The Posts of "your channels" that cite `handle`, newest first.
+
+    One entry per Post, with every kind it cites in; inside the last `days`
+    when the "Cited by your channels" Condition sets a window, so the panel
+    counts what the sort and the Condition count.
+    """
+    if not view.sources:
+        return Why(posts=[], total=0)
+    r = PostReference
+    per_post = (
+        sa_select(
+            col(r.source_channel).label("channel"),
+            col(r.source_post_id).label("post_id"),
+            func.max(col(r.timestamp)).label("ts"),
+            func.array_agg(distinct(col(r.kind))).label("kinds"),
+        )
+        .where(*_references(view, days=days), col(r.target_handle) == handle)
+        .group_by(col(r.source_channel), col(r.source_post_id))
+        .subquery("per_post")
+    )
+    total = int(
+        session.execute(
+            unscoped_select(
+                sa_select(func.count()).select_from(per_post), reason=_SCOPE_REASON
+            )
+        ).scalar_one()
+    )
+    rows = session.execute(
+        unscoped_select(
+            sa_select(per_post)
+            .order_by(
+                per_post.c.ts.desc(), per_post.c.channel, per_post.c.post_id.desc()
+            )
+            .limit(WHY_LIMIT),
+            reason=_SCOPE_REASON,
+        )
+    ).all()
+    keys = [(str(row.channel), int(row.post_id)) for row in rows]
+    texts = _citing_texts(session, view.user_id, keys)
+    names = _display_names(session, frozenset(channel for channel, _ in keys))
+    return Why(
+        posts=[
+            CitingPost(
+                channel=channel,
+                display_name=names.get(channel),
+                post_id=post_id,
+                timestamp=int(row.ts),
+                kinds=sorted(row.kinds),
+                text=texts.get((channel, post_id)),
+            )
+            for (channel, post_id), row in zip(keys, rows, strict=True)
+        ],
+        total=total,
+    )
+
+
+def _citing_texts(
+    session: Session, user_id: uuid.UUID, keys: list[tuple[str, int]]
+) -> dict[tuple[str, int], str]:
+    """Each citing Post's words: the stored Post where the Account may read it,
+    else the sample the probe kept. A Reference is a corpus fact; a Post's words
+    are read through the Follow seam, so a selection sent with somebody else's
+    Channel in it quotes nothing a sample does not already show everybody."""
+    if not keys:
+        return {}
+    channels = {channel for channel, _ in keys}
+    # References store the handle lowercased; Posts keep the Channel's own case.
+    names = session.exec(
+        scoped_select(select(Channel.name), Channel, user_id).where(
+            func.lower(col(Channel.name)).in_(channels)
+        )
+    ).all()
+    real = {str(n).lower(): str(n) for n in names}
+    texts = {
+        (str(post["channelName"]).lower(), int(post["id"])): str(post["text"] or "")
+        for post in lookup_posts(
+            session,
+            [(real[c], p) for c, p in keys if c in real],
+            user_id=user_id,
+        )
+    }
+    missing = {(c, p) for c, p in keys if (c, p) not in texts}
+    if missing:
+        for channel, samples in samples_by_handle(
+            session, sorted({c for c, _ in missing})
+        ).items():
+            for sample in samples:
+                if (channel, sample.post_id) in missing:
+                    texts[(channel, sample.post_id)] = sample.text
+    return texts
+
+
+def _display_names(session: Session, handles: frozenset[str]) -> dict[str, str | None]:
+    return {
+        str(h): name
+        for h, name in session.execute(
+            unscoped_select(
+                sa_select(
+                    col(DirectoryEntry.handle), col(DirectoryEntry.display_name)
+                ).where(col(DirectoryEntry.handle) == any_(_handles(handles))),
+                reason=_SCOPE_REASON,
+            )
+        ).all()
     }
 
 

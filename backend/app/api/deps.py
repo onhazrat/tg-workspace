@@ -84,6 +84,10 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
     f"{settings.API_V1_STR}/data/directory/distribution": (
         "a measure's spread over the same view, for the bound editor"
     ),
+    f"{settings.API_V1_STR}/data/directory/why": (
+        'the Posts of the view\'s "your channels" citing one Channel, for the '
+        "detail panel; POST for the same reason as the list (DIR-03)"
+    ),
     f"{settings.API_V1_STR}/login/test-token": (
         "echoes the caller back; the app uses it to confirm who it is acting as"
     ),

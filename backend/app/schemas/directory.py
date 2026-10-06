@@ -58,6 +58,21 @@ class DirectorySamplePostResponse(BaseModel):
     #: Telegram's view counter, `null` where the page rendered none — ordinary
     #: on older Posts, and the reason the median has its own threshold.
     views: int | None = None
+    #: When the probe captured the Post, which is when `views` was counted.
+    #: Epoch ms.
+    captured_at: int = Field(alias="capturedAt")
+    #: Whether the Post carries media, from its media kinds (DIR-03).
+    has_media: bool = Field(alias="hasMedia")
+    #: The Telegram Links in its body. They carry no position in the text, so
+    #: the panel links what the text shows and lists the rest under the Post.
+    links: list[DirectorySampleLinkResponse]
+
+
+class DirectorySampleLinkResponse(BaseModel):
+    """A Telegram Link a sample Post carries, and the Channel it names."""
+
+    url: str
+    channel: str
 
 
 # ---- The Directory filter on the wire (DIR-02) -------------------------------
@@ -276,8 +291,8 @@ class DirectoryMatchResponse(BaseModel):
     post: DirectoryMatchedPostResponse | None
 
 
-class DirectoryRowResponse(BaseModel):
-    """One Directory entry in the list: its measures, never its bio or samples."""
+class _DirectoryEntryFields(BaseModel):
+    """What the list's row and the panel's entry both show of an entry."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -303,12 +318,61 @@ class DirectoryRowResponse(BaseModel):
     links: int | None
     followable: bool
     followed: bool
+
+
+class DirectoryRowResponse(_DirectoryEntryFields):
+    """One Directory entry in the list: its measures, never its bio or samples."""
+
     #: Distinct Channels of "your channels" that cite it.
     mine: int
     #: The newest of those citations, epoch ms.
     mine_last_at: int | None = Field(alias="mineLastAt")
     #: Set only while a search is on and `showMatches` asked for it.
     match: DirectoryMatchResponse | None
+
+
+class DirectoryEntryResponse(_DirectoryEntryFields):
+    """One entry for the detail panel, read by handle: the row's measures and
+    the bio, which the list never carries (DIR-03)."""
+
+    bio: str | None
+
+
+class DirectoryWhyRequest(BaseModel):
+    """Whose Posts citing `handle` "Why it's here" lists."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    handle: Handle
+    yours: YourChannels = Field(default_factory=YourChannels)
+    reference_kinds: list[ReferenceKind] = Field(
+        default_factory=list, alias="referenceKinds", max_length=4
+    )
+    #: The "Cited by your channels" Condition's window; every Post when absent.
+    days: int | None = Field(None, ge=1, le=36_500)
+
+
+class DirectoryCitingPostResponse(BaseModel):
+    """One Post of "your channels" that cites the Channel."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    channel: str
+    display_name: str | None = Field(alias="displayName")
+    post_id: int = Field(alias="postId")
+    #: Epoch ms.
+    timestamp: int
+    #: Every Reference kind the Post cites it in.
+    kinds: list[ReferenceKind]
+    #: `null` where the Account may not read the Post and no sample holds it.
+    text: str | None
+
+
+class DirectoryWhyResponse(BaseModel):
+    """The newest citing Posts, and how many there are in all."""
+
+    posts: list[DirectoryCitingPostResponse]
+    total: int
 
 
 class DirectoryLanguageCountResponse(BaseModel):

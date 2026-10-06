@@ -279,6 +279,18 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.CORPUS,
         "one count over DirectoryEntry, the same for every caller",
     ),
+    ("GET", f"{DATA}/directory/{{handle}}/entry"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts: the entry is corpus "
+        "and its Followed flag answers for each Account alone (DIR-03)",
+    ),
+    ("POST", f"{DATA}/directory/why"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts and different "
+        "selections: References are corpus, a citing Post's words are read "
+        "through the Follow seam, so a selection naming a Channel the Account "
+        "does not follow quotes nothing (DIR-03)",
+    ),
     ("POST", f"{DATA}/discover/probe/recheck"): (Reason.CORPUS, "see GET probes"),
     ("POST", f"{DATA}/discover/probe/refresh"): (Reason.CORPUS, "see GET probes"),
     ("GET", f"{DATA}/discover/ignored"): (

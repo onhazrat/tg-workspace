@@ -146,11 +146,14 @@ def test_the_split_did_not_change_the_route_count() -> None:
     no feed read carries because a meaning search reads none; and **88** with
     DIR-02's four Directory reads, `POST /directory/list`, `/count` and
     `/distribution` and `GET /directory/size`, the Directory tab's list, the
-    bound editor's preview and spread, and the filter row's "of M".
+    bound editor's preview and spread, and the filter row's "of M"; and **90**
+    with DIR-03's detail panel, `GET /directory/{handle}/entry` (the entry and
+    its bio, read by handle so a panel off the current page still opens) and
+    `POST /directory/why` ("Why it's here").
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 88, (
-        f"expected 88 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 90, (
+        f"expected 90 /data endpoints, found {len(data_routes)}"
     )

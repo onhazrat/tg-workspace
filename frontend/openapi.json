@@ -2859,6 +2859,80 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/directory/{handle}/entry": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Directory Entry",
+        "description": "One listed Directory entry by handle, with its bio, for the detail panel.",
+        "operationId": "data-get_directory_entry",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Handle" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryEntryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/directory/why": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Get Directory Why",
+        "description": "The Posts of \"your channels\" that cite a Channel, newest first.",
+        "operationId": "data-get_directory_why",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DirectoryWhyRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryWhyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/summaries": {
       "get": {
         "tags": ["data"],
@@ -6860,6 +6934,40 @@
         "title": "DirectoryBinResponse",
         "description": "One histogram bar: entries with a value from `lo` to `hi`."
       },
+      "DirectoryCitingPostResponse": {
+        "properties": {
+          "channel": { "type": "string", "title": "Channel" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          },
+          "postId": { "type": "integer", "title": "Postid" },
+          "timestamp": { "type": "integer", "title": "Timestamp" },
+          "kinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "title": "Kinds"
+          },
+          "text": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "displayName",
+          "postId",
+          "timestamp",
+          "kinds",
+          "text"
+        ],
+        "title": "DirectoryCitingPostResponse",
+        "description": "One Post of \"your channels\" that cites the Channel."
+      },
       "DirectoryCountRequest": {
         "properties": {
           "filter": {
@@ -6989,6 +7097,90 @@
         ],
         "title": "DirectoryDistributionResponse",
         "description": "A measure's spread, for the bound editor."
+      },
+      "DirectoryEntryResponse": {
+        "properties": {
+          "handle": { "type": "string", "title": "Handle" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          },
+          "photoUrl": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Photourl"
+          },
+          "language": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Language"
+          },
+          "subscribers": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Subscribers"
+          },
+          "reach": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Reach"
+          },
+          "reachEstimated": { "type": "boolean", "title": "Reachestimated" },
+          "postsPerWeek": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Postsperweek"
+          },
+          "forwardShare": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Forwardshare"
+          },
+          "lastPostAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastpostat"
+          },
+          "foundAt": { "type": "integer", "title": "Foundat" },
+          "photos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Photos"
+          },
+          "videos": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Videos"
+          },
+          "files": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Files"
+          },
+          "links": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Links"
+          },
+          "followable": { "type": "boolean", "title": "Followable" },
+          "followed": { "type": "boolean", "title": "Followed" },
+          "bio": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "handle",
+          "displayName",
+          "photoUrl",
+          "language",
+          "subscribers",
+          "reach",
+          "reachEstimated",
+          "postsPerWeek",
+          "forwardShare",
+          "lastPostAt",
+          "foundAt",
+          "photos",
+          "videos",
+          "files",
+          "links",
+          "followable",
+          "followed",
+          "bio"
+        ],
+        "title": "DirectoryEntryResponse",
+        "description": "One entry for the detail panel, read by handle: the row's measures and\nthe bio, which the list never carries (DIR-03)."
       },
       "DirectoryFilterAtom": {
         "properties": {
@@ -7412,6 +7604,16 @@
         "title": "DirectoryRowResponse",
         "description": "One Directory entry in the list: its measures, never its bio or samples."
       },
+      "DirectorySampleLinkResponse": {
+        "properties": {
+          "url": { "type": "string", "title": "Url" },
+          "channel": { "type": "string", "title": "Channel" }
+        },
+        "type": "object",
+        "required": ["url", "channel"],
+        "title": "DirectorySampleLinkResponse",
+        "description": "A Telegram Link a sample Post carries, and the Channel it names."
+      },
       "DirectorySamplePostResponse": {
         "properties": {
           "postId": { "type": "integer", "title": "Postid" },
@@ -7420,10 +7622,26 @@
           "views": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Views"
+          },
+          "capturedAt": { "type": "integer", "title": "Capturedat" },
+          "hasMedia": { "type": "boolean", "title": "Hasmedia" },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/DirectorySampleLinkResponse"
+            },
+            "type": "array",
+            "title": "Links"
           }
         },
         "type": "object",
-        "required": ["postId", "text", "timestamp"],
+        "required": [
+          "postId",
+          "text",
+          "timestamp",
+          "capturedAt",
+          "hasMedia",
+          "links"
+        ],
         "title": "DirectorySamplePostResponse",
         "description": "One Post off a Channel's preview page, as the last probe captured it.\n\nThe text travels whole; truncation is the reader's."
       },
@@ -7465,6 +7683,54 @@
         "required": ["text", "hit"],
         "title": "DirectorySnippetPartResponse",
         "description": "A run of snippet text; `hit` marks a matched word."
+      },
+      "DirectoryWhyRequest": {
+        "properties": {
+          "handle": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Handle"
+          },
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
+          "days": {
+            "anyOf": [
+              { "type": "integer", "maximum": 36500.0, "minimum": 1.0 },
+              { "type": "null" }
+            ],
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["handle"],
+        "title": "DirectoryWhyRequest",
+        "description": "Whose Posts citing `handle` \"Why it's here\" lists."
+      },
+      "DirectoryWhyResponse": {
+        "properties": {
+          "posts": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryCitingPostResponse"
+            },
+            "type": "array",
+            "title": "Posts"
+          },
+          "total": { "type": "integer", "title": "Total" }
+        },
+        "type": "object",
+        "required": ["posts", "total"],
+        "title": "DirectoryWhyResponse",
+        "description": "The newest citing Posts, and how many there are in all."
       },
       "DiscoverCandidateResponse": {
         "properties": {

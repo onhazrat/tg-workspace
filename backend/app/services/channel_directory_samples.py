@@ -40,7 +40,7 @@ sample retention window like any other snapshot.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlmodel import Session, col, delete, select
@@ -189,21 +189,36 @@ def handles_captured_before(session: Session, cutoff: datetime) -> list[str]:
 
 
 def sample_to_camel(row: DirectorySample) -> dict[str, Any]:
-    """One sample on the wire, for the Candidate panel (ticket 03).
+    """One sample on the wire, for the Candidate and Directory panels (ticket
+    03, DIR-03).
 
     Here rather than in the route because an aggregate owns its table's wire
     shape, which is the same rule that puts `probe_to_camel` in
     `channel_directory.py` beside the entry it projects.
 
-    Four fields out of a dozen columns. The panel shows what the Post said, when
-    it said it and how many people read it, and builds its Telegram link from
-    the handle it already asked about — so the forward attribution, the media
-    block, the reply pointer and the capture time stay out of a payload that is
-    read once and thrown away.
+    Seven fields out of a dozen columns, each one something the Directory panel
+    shows. What the Post said, when, and how many read it. **When that count
+    was taken**: a sample's View count is frozen at capture, so "900 views"
+    means little without "counted three weeks ago". **Whether it carries
+    media**, read from the media block's kinds and never from the block being
+    there: nearly every sample has a block, because the View count lives in
+    it. **Its Links**, because they carry no position in the text, so the panel
+    links what the text shows and lists the rest under the Post.
+
+    Still out: the forward attribution, the reply pointer and the media block
+    itself, whose thumbnail addresses point at a cache a probe never fills.
     """
+    kinds = (row.media or {}).get("kinds")
     return {
         "postId": row.post_id,
         "text": row.text,
         "timestamp": row.timestamp,
         "views": views_of(row),
+        "capturedAt": int(row.captured_at.replace(tzinfo=UTC).timestamp() * 1000),
+        "hasMedia": isinstance(kinds, list) and len(kinds) > 0,
+        "links": [
+            {"url": link["url"], "channel": link["channel"]}
+            for link in row.links or []
+            if isinstance(link, dict) and "url" in link and "channel" in link
+        ],
     }

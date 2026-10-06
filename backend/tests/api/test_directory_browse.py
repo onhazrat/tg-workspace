@@ -59,6 +59,20 @@ Each mutation was applied alone and this module (or the named guard) went red:
   Directory probe
 * a handler with no return type, a model in the route module ->
   `test_route_module_hygiene.py`
+
+DIR-03 (the detail panel: `GET /directory/{handle}/entry`, `POST
+/directory/why`, and the samples' new fields):
+
+* read the citing Post unscoped -> the other Account quotes src_a2's words
+* drop the window from "Why it's here" -> the window case
+* list it oldest first -> the newest-first case
+* no sample fallback -> the ticked-Channel case
+* let the entry read any kind -> dt_bot is not a 404
+* ignore the Reference kinds in "Why it's here" -> the kinds case
+* read `hasMedia` as "a media block is there" -> the samples case
+* stamp `capturedAt` off the naive column's `.timestamp()` -> the samples case
+  (on any host not on UTC)
+* drop `/directory/why` from `VIEW_AS_READ_ONLY_PATHS` -> the View-as case
 """
 
 from __future__ import annotations
@@ -129,6 +143,7 @@ def _probe(session: Session, handle: str, spec: tuple[Any, ...] | None) -> None:
         name, words, subscribers, photos, count, newest, spacing, views, fwd = spec
         page |= {
             "displayName": name,
+            "bio": f"About {name}",
             "subscribers": subscribers,
             "photos": photos,
             "samples": [
@@ -768,6 +783,185 @@ def test_the_reference_kinds_and_source_choose_the_discovered_via(
     assert via["dt_fa_small"] is None
 
 
+# ---- The detail panel (DIR-03) -----------------------------------------------------
+
+#: The text of each citing Post, keyed by its index in `REFERENCES`, which is
+#: its post id. Written through the Post writer, so a scoped read can see them.
+CITING_TEXT = {n: f"{source} post {n}" for n, (source, *_) in enumerate(REFERENCES)}
+
+
+def _write_citing_posts() -> None:
+    from app.services.posts import bulk_upsert_posts_impl
+
+    now = int(time.time() * 1000)
+    with Session(engine) as session:
+        bulk_upsert_posts_impl(
+            [
+                {
+                    "id": n,
+                    "channelName": source,
+                    "text": CITING_TEXT[n],
+                    "date": "2026-10-01T00:00:00+00:00",
+                    "timestamp": now - age * DAY,
+                }
+                for n, (source, _target, _kind, age) in enumerate(REFERENCES)
+                if source.startswith("src_")
+            ],
+            session,
+        )
+        session.commit()
+
+
+def _entry(client: TestClient, headers: dict[str, str], handle: str) -> Any:
+    return client.get(f"{DIRECTORY}/{handle}/entry", headers=headers)
+
+
+def test_the_panel_reads_the_entry_by_handle_with_its_bio(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Off any page: the panel reopens a remembered or shared handle."""
+    operator, other = accounts
+    response = _entry(client, operator, "@DT_Followed_A")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["handle"], body["displayName"], body["bio"]) == (
+        "dt_followed_a",
+        "Followed A",
+        "About Followed A",
+    )
+    assert (body["subscribers"], body["followable"], body["followed"]) == (
+        7000,
+        True,
+        True,
+    )
+    assert _entry(client, other, "dt_followed_a").json()["followed"] is False
+    assert _entry(client, operator, "dt_none").json()["bio"] is None
+
+
+def test_the_entry_is_a_404_for_what_the_directory_does_not_list(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    for handle in ("nobody_here", "dt_bot"):
+        response = _entry(client, operator, handle)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "No Directory entry for this handle"
+
+
+def test_the_samples_carry_links_capture_time_and_media(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    posts = client.get(f"{DIRECTORY}/dt_ru/posts", headers=operator).json()
+    assert [p["postId"] for p in posts] == [5, 4, 3, 2, 1]
+    now = int(time.time() * 1000)
+    assert all(abs(now - p["capturedAt"]) < HOUR for p in posts)
+    # The fixture's media block names no kinds, so nothing is media.
+    assert {(p["hasMedia"], tuple(p["links"])) for p in posts} == {(False, ())}
+
+
+def _why(
+    client: TestClient,
+    headers: dict[str, str],
+    handle: str,
+    yours: dict[str, Any],
+    **body: Any,
+) -> list[tuple[str, int, list[str], str | None]]:
+    response = client.post(
+        f"{DIRECTORY}/why",
+        json={"handle": handle, "yours": yours, **body},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return [
+        (p["channel"], p["postId"], p["kinds"], p["text"])
+        for p in response.json()["posts"]
+    ]
+
+
+FOLLOWS = {"source": "follows"}
+
+
+def test_why_its_here_lists_your_channels_posts_newest_first(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    _write_citing_posts()
+    operator, other = accounts
+    assert _why(client, operator, "dt_fa_big", FOLLOWS) == [
+        ("src_a1", 0, ["forward"], "src_a1 post 0"),
+        ("src_a2", 3, ["link"], "src_a2 post 3"),
+        ("src_a1", 1, ["mention"], "src_a1 post 1"),
+    ]
+    # The other Account follows only src_b1.
+    assert _why(client, other, "dt_fa_big", FOLLOWS) == []
+    assert _why(client, other, "dt_fa_small", FOLLOWS) == [
+        ("src_b1", 6, ["forward"], "src_b1 post 6"),
+    ]
+
+
+def test_why_its_here_counts_the_chosen_channels(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    _write_citing_posts()
+    operator, other = accounts
+    selection = {"source": "selection", "handles": ["@SRC_A2"]}
+    assert _why(client, operator, "dt_fa_small", selection) == [
+        ("src_a2", 4, ["mention"], "src_a2 post 4"),
+    ]
+    # The same selection sent by an Account that does not follow src_a2: the
+    # Reference is a corpus fact, the Post's words are not theirs to read.
+    assert _why(client, other, "dt_fa_small", selection) == [
+        ("src_a2", 4, ["mention"], None),
+    ]
+    assert _why(client, operator, "dt_fa_big", {"source": "ticked"}) == []
+    assert (
+        _why(client, operator, "dt_fa_big", {"source": "selection", "handles": []})
+        == []
+    )
+
+
+def test_why_its_here_quotes_a_sample_when_the_post_is_not_stored(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """A ticked Channel nobody follows cites through its probe samples."""
+    operator, _ = accounts
+    with Session(engine) as session:
+        write_references(
+            session,
+            [
+                SourcedReferences(
+                    source_chat_id=7,
+                    source_channel="dt_ru",
+                    source_post_id=1,
+                    timestamp=int(time.time() * 1000),
+                    references=[
+                        Reference(target_handle="dt_followed_a", kind="mention"),
+                        Reference(target_handle="dt_followed_a", kind="link"),
+                    ],
+                )
+            ],
+            target_chat_ids={},
+        )
+        session.commit()
+    ticked = {"source": "ticked", "handles": ["dt_ru"]}
+    assert _why(client, operator, "dt_followed_a", ticked) == [
+        ("dt_ru", 1, ["link", "mention"], RU),
+    ]
+
+
+def test_why_its_here_keeps_the_window_and_the_reference_kinds(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    _write_citing_posts()
+    operator, _ = accounts
+    assert [p[:2] for p in _why(client, operator, "dt_fa_big", FOLLOWS, days=3)] == [
+        ("src_a1", 0),
+        ("src_a2", 3),
+    ]
+    by_kind = _why(client, operator, "dt_fa_big", FOLLOWS, referenceKinds=["mention"])
+    assert [p[:2] for p in by_kind] == [("src_a1", 1)]
+
+
 # ---- View-as -----------------------------------------------------------------------
 
 
@@ -802,11 +996,13 @@ def test_view_as_browses_the_directory_as_the_account_sees_it(
     for path, body in (
         ("count", {"filter": OPENING}),
         ("distribution", {"measure": "reach"}),
+        ("why", {"handle": "dt_ru", "yours": {"source": "follows"}}),
     ):
         response = client.post(f"{DIRECTORY}/{path}", json=body, headers=view_as_other)
         assert response.status_code == 200, response.text
     size = client.get(f"{DIRECTORY}/size", headers=view_as_other)
     assert size.status_code == 200
+    assert _entry(client, view_as_other, "dt_ru").status_code == 200
     follow = client.post(
         f"{settings.API_V1_STR}/data/channels/bulk-follow",
         json={"channels": [{"name": "dt_ru"}], "directory": {}},

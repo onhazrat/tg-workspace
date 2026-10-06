@@ -7,8 +7,11 @@ Channels tab will want this read with no report in sight.
 
 What is asserted here and nowhere else:
 
-* the four fields a Post row renders, and no fifth — the media block, the
-  forward attribution and the capture time stay off a payload read once;
+* the seven fields a Post row renders, and no eighth — the media block, the
+  forward attribution and the reply pointer stay off a payload read once;
+* whether a Post carries media, read from its media kinds and not from the
+  block being there, which nearly every sample's is (DIR-03);
+* its Links and its capture time, which the Directory panel shows (DIR-03);
 * the view count, which the panel shows per Post so an Operator can see whether
   the median was flattered by one outlier;
 * the difference between **no entry** (404) and **an entry with no Posts**
@@ -20,7 +23,7 @@ What is asserted here and nowhere else:
 
 ## Watched to fail
 
-* declare a fifth field on `DirectorySamplePostResponse` → the field-set test
+* declare an eighth field on `DirectorySamplePostResponse` → the field-set test
   fails. Adding one to `sample_to_camel` alone does **not**, and that is the
   model doing its job: it is closed, so an extra key never reaches the wire.
   The guard is therefore on the response model, which is where the decision is
@@ -29,6 +32,10 @@ What is asserted here and nowhere else:
   `probe_map`) → the queued-handle test fails
 * gate the 404 on `probe_map` alone → the recheck-window test fails
 * read `views` off `media["views"]` (the display string) → the view test fails
+* read `hasMedia` as "a media block is there" → the media test fails
+* drop the Links, or pass a malformed one through → the Links test fails
+* stamp `capturedAt` from the naive column's `.timestamp()` → the capture test
+  fails on any host not on UTC
 """
 
 from __future__ import annotations
@@ -50,9 +57,17 @@ PREFIX = f"{settings.API_V1_STR}/data/directory"
 
 HANDLE = "panel_news"
 
-#: Exactly what a Post row on the panel renders. A fifth key here is payload
+#: Exactly what a Post row on the panel renders. An eighth key here is payload
 #: nobody reads; a missing one is a blank cell.
-POST_FIELDS = {"postId", "text", "timestamp", "views"}
+POST_FIELDS = {
+    "postId",
+    "text",
+    "timestamp",
+    "views",
+    "capturedAt",
+    "hasMedia",
+    "links",
+}
 
 
 def _post(post_id: int, **extra: Any) -> dict[str, Any]:
@@ -103,7 +118,7 @@ def test_the_panel_reads_the_posts_the_probe_stored(
     assert body[0]["text"] == "post 13"
 
 
-def test_a_post_carries_four_fields_and_no_media_block(
+def test_a_post_carries_seven_fields_and_no_media_block(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     """The list-versus-detail rule applied one rung down.
@@ -268,3 +283,42 @@ def test_reading_the_panel_fetches_nothing_from_telegram(
     _probe(HANDLE, [_post(11)])
 
     assert _get(client, superuser_token_headers).status_code == 200
+
+
+def test_media_is_read_from_the_media_kinds(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """A block that only carries the View count is not media."""
+    _probe(
+        HANDLE,
+        [
+            _post(11, media={"kinds": ["photo"], "viewsCount": 5}),
+            _post(12, media={"kinds": [], "viewsCount": 5}),
+            _post(13, media={"viewsCount": 5}),
+            _post(14),
+        ],
+    )
+
+    body = _get(client, superuser_token_headers).json()
+
+    assert [(row["postId"], row["hasMedia"]) for row in body] == [
+        (14, False),
+        (13, False),
+        (12, False),
+        (11, True),
+    ]
+
+
+def test_a_post_lists_its_links_and_when_it_was_captured(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    from datetime import UTC, datetime
+
+    link = {"url": "https://t.me/durov/5", "channel": "durov"}
+    _probe(HANDLE, [_post(11, links=[link, {"url": "no channel"}]), _post(12)])
+    now_ms = int(datetime.now(UTC).timestamp() * 1000)
+
+    body = _get(client, superuser_token_headers).json()
+
+    assert [row["links"] for row in body] == [[], [link]]
+    assert all(abs(row["capturedAt"] - now_ms) < 60_000 for row in body)

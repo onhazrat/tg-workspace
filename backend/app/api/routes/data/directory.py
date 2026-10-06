@@ -23,6 +23,7 @@ from app.schemas.directory import (
     DirectoryCountResponse,
     DirectoryDistributionRequest,
     DirectoryDistributionResponse,
+    DirectoryEntryResponse,
     DirectoryLanguageCountResponse,
     DirectoryListRequest,
     DirectoryListResponse,
@@ -30,6 +31,8 @@ from app.schemas.directory import (
     DirectorySamplePostResponse,
     DirectorySizeResponse,
     DirectoryViewRequest,
+    DirectoryWhyRequest,
+    DirectoryWhyResponse,
 )
 from app.services import directory_reads
 from app.services.channel_directory import normalize_handle, probe_map
@@ -184,3 +187,41 @@ def get_directory_size(
 ) -> DirectorySizeResponse:
     """How many Channels the Directory lists at all."""
     return DirectorySizeResponse(size=directory_reads.directory_size(session))
+
+
+# ---- The detail panel (DIR-03) -----------------------------------------------------
+
+
+@router.get("/directory/{handle}/entry")
+def get_directory_entry(
+    handle: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DirectoryEntryResponse:
+    """One listed Directory entry by handle, with its bio, for the detail panel."""
+    found = directory_reads.entry(session, current_user.id, normalize_handle(handle))
+    if found is None:
+        raise HTTPException(status_code=404, detail=DIRECTORY_ENTRY_NOT_FOUND)
+    row, bio = found
+    return DirectoryEntryResponse.model_validate(asdict(row) | {"bio": bio})
+
+
+@router.post("/directory/why")
+def get_directory_why(
+    body: DirectoryWhyRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DirectoryWhyResponse:
+    """The Posts of "your channels" that cite a Channel, newest first."""
+    view = directory_reads.resolve_view(
+        session,
+        current_user.id,
+        tree=None,
+        source=body.yours.source,
+        handles=body.yours.handles,
+        kinds=body.reference_kinds,
+    )
+    why = directory_reads.why_its_here(
+        session, view, normalize_handle(body.handle), days=body.days
+    )
+    return DirectoryWhyResponse.model_validate(asdict(why))

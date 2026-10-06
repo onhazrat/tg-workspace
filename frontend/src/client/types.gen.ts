@@ -1539,6 +1539,38 @@ export type DirectoryBinResponse = {
 };
 
 /**
+ * DirectoryCitingPostResponse
+ *
+ * One Post of "your channels" that cites the Channel.
+ */
+export type DirectoryCitingPostResponse = {
+    /**
+     * Channel
+     */
+    channel: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+    /**
+     * Postid
+     */
+    postId: number;
+    /**
+     * Timestamp
+     */
+    timestamp: number;
+    /**
+     * Kinds
+     */
+    kinds: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    /**
+     * Text
+     */
+    text: string | null;
+};
+
+/**
  * DirectoryCountRequest
  *
  * How many entries a view leaves, with a candidate Condition added with AND.
@@ -1619,6 +1651,87 @@ export type DirectoryDistributionResponse = {
      * Bins
      */
     bins: Array<DirectoryBinResponse>;
+};
+
+/**
+ * DirectoryEntryResponse
+ *
+ * One entry for the detail panel, read by handle: the row's measures and
+ * the bio, which the list never carries (DIR-03).
+ */
+export type DirectoryEntryResponse = {
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+    /**
+     * Photourl
+     */
+    photoUrl: string | null;
+    /**
+     * Language
+     */
+    language: string | null;
+    /**
+     * Subscribers
+     */
+    subscribers: number | null;
+    /**
+     * Reach
+     */
+    reach: number | null;
+    /**
+     * Reachestimated
+     */
+    reachEstimated: boolean;
+    /**
+     * Postsperweek
+     */
+    postsPerWeek: number | null;
+    /**
+     * Forwardshare
+     */
+    forwardShare: number | null;
+    /**
+     * Lastpostat
+     */
+    lastPostAt: number | null;
+    /**
+     * Foundat
+     */
+    foundAt: number;
+    /**
+     * Photos
+     */
+    photos: number | null;
+    /**
+     * Videos
+     */
+    videos: number | null;
+    /**
+     * Files
+     */
+    files: number | null;
+    /**
+     * Links
+     */
+    links: number | null;
+    /**
+     * Followable
+     */
+    followable: boolean;
+    /**
+     * Followed
+     */
+    followed: boolean;
+    /**
+     * Bio
+     */
+    bio: string | null;
 };
 
 /**
@@ -1980,6 +2093,22 @@ export type DirectoryRowResponse = {
 };
 
 /**
+ * DirectorySampleLinkResponse
+ *
+ * A Telegram Link a sample Post carries, and the Channel it names.
+ */
+export type DirectorySampleLinkResponse = {
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Channel
+     */
+    channel: string;
+};
+
+/**
  * DirectorySamplePostResponse
  *
  * One Post off a Channel's preview page, as the last probe captured it.
@@ -2003,6 +2132,18 @@ export type DirectorySamplePostResponse = {
      * Views
      */
     views?: number | null;
+    /**
+     * Capturedat
+     */
+    capturedAt: number;
+    /**
+     * Hasmedia
+     */
+    hasMedia: boolean;
+    /**
+     * Links
+     */
+    links: Array<DirectorySampleLinkResponse>;
 };
 
 /**
@@ -2047,6 +2188,43 @@ export type DirectorySnippetPartResponse = {
      * Hit
      */
     hit: boolean;
+};
+
+/**
+ * DirectoryWhyRequest
+ *
+ * Whose Posts citing `handle` "Why it's here" lists.
+ */
+export type DirectoryWhyRequest = {
+    /**
+     * Handle
+     */
+    handle: string;
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    /**
+     * Days
+     */
+    days?: number | null;
+};
+
+/**
+ * DirectoryWhyResponse
+ *
+ * The newest citing Posts, and how many there are in all.
+ */
+export type DirectoryWhyResponse = {
+    /**
+     * Posts
+     */
+    posts: Array<DirectoryCitingPostResponse>;
+    /**
+     * Total
+     */
+    total: number;
 };
 
 /**
@@ -9138,6 +9316,61 @@ export type DataGetDirectorySizeResponses = {
 };
 
 export type DataGetDirectorySizeResponse = DataGetDirectorySizeResponses[keyof DataGetDirectorySizeResponses];
+
+export type DataGetDirectoryEntryData = {
+    body?: never;
+    path: {
+        /**
+         * Handle
+         */
+        handle: string;
+    };
+    query?: never;
+    url: '/api/v1/data/directory/{handle}/entry';
+};
+
+export type DataGetDirectoryEntryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryEntryError = DataGetDirectoryEntryErrors[keyof DataGetDirectoryEntryErrors];
+
+export type DataGetDirectoryEntryResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryEntryResponse;
+};
+
+export type DataGetDirectoryEntryResponse = DataGetDirectoryEntryResponses[keyof DataGetDirectoryEntryResponses];
+
+export type DataGetDirectoryWhyData = {
+    body: DirectoryWhyRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/why';
+};
+
+export type DataGetDirectoryWhyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryWhyError = DataGetDirectoryWhyErrors[keyof DataGetDirectoryWhyErrors];
+
+export type DataGetDirectoryWhyResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryWhyResponse;
+};
+
+export type DataGetDirectoryWhyResponse = DataGetDirectoryWhyResponses[keyof DataGetDirectoryWhyResponses];
 
 export type DataListSummariesData = {
     body?: never;
