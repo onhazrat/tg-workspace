@@ -1145,6 +1145,43 @@ class PostReference(SQLModel, table=True):
     kind: str
 
 
+class CitationPair(SQLModel, table=True):
+    """One distinct citing Channel and cited Channel (DIR-05, ADR-028).
+
+    A summary of `tg_post_references`, written in the same transaction by
+    `post_references.write_references` from the References it reports as
+    new. Keyed by handle on both ends, as `CitationCount` is: the counts the
+    Directory filters on are per handle, and a handle is usually cited before
+    anybody has probed it. References are permanent, so a pair is never
+    deleted and its count never falls.
+    """
+
+    __tablename__ = "tg_citation_pairs"
+    # "Who cites @foo most" and DIR-07's shared parents read by the cited end.
+    __table_args__ = (Index("ix_tg_citation_pairs_cited", "cited_handle"),)
+
+    #: `PostReference.source_channel`.
+    citing_handle: str = Field(primary_key=True)
+    #: `PostReference.target_handle`.
+    cited_handle: str = Field(primary_key=True)
+    #: How many References the pair stands for, every kind.
+    reference_count: int
+
+
+class CitationCount(SQLModel, table=True):
+    """Per handle, how many distinct Channels cite it and it cites (ADR-028).
+
+    Every kind of Reference, never narrowed: the view's Reference kinds narrow
+    only what is counted live from the References. Written with the pairs.
+    """
+
+    __tablename__ = "tg_citation_counts"
+
+    handle: str = Field(primary_key=True)
+    cited_by: int = 0
+    cites: int = 0
+
+
 class TagRun(SQLModel, table=True):
     __tablename__ = "tg_tag_runs"
 

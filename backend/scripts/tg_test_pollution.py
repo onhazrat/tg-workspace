@@ -88,6 +88,11 @@ TG_TABLES: tuple[str, ...] = (
     # left by one test are rows the next test's walk finds already present, so
     # a dedup assertion passes for the wrong reason.
     "tg_post_references",
+    # DIR-05's summary of the References (ADR-028), truncated with them: a
+    # count left behind would disagree with the References the next test
+    # writes, and the guard comparing the two would fail for no reason.
+    "tg_citation_pairs",
+    "tg_citation_counts",
     # Ticket 04's probe-lane tally. Truncated between tests for the reason
     # `tg_quota_usage` is, despite production never pruning either: the row is
     # keyed by day alone, so a count left behind by one test is the *same* row

@@ -33,12 +33,15 @@ by construction rather than by the data being kind.
 
 from __future__ import annotations
 
+import logging
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from sqlalchemy import func, or_, update
+from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
 from sqlmodel.sql.expression import SelectOfScalar
@@ -78,6 +81,8 @@ _INSERT_CHUNK_ROWS = 65535 // _BOUND_COLUMNS_PER_ROW - 1
 #: union rather than a `Protocol`: two concrete classes are the whole set, and
 #: mypy checks the attribute names against the columns this way.
 ReferenceSource = Post | DirectorySample
+
+_log = logging.getLogger(__name__)
 
 _SCOPE_REASON = (
     "The reference graph is corpus-wide: it records what exists on Telegram "
@@ -307,19 +312,157 @@ def write_references(
         for one in sourced
         for ref in one.references
     ]
-    written = 0
+    new: Counter[tuple[str, str]] = Counter()
     for start in range(0, len(rows), _INSERT_CHUNK_ROWS):
         # `RETURNING` rather than `rowcount`: a multi-row INSERT reports -1 on
         # this driver, and `ON CONFLICT DO NOTHING` returns only the rows it
-        # actually inserted, which is exactly the number the caller wants.
+        # actually inserted, which is exactly the number the caller wants --
+        # and exactly the References the citation pairs have not counted yet.
         inserted = session.execute(
             pg_insert(PostReference)
             .values(rows[start : start + _INSERT_CHUNK_ROWS])
             .on_conflict_do_nothing(constraint="uq_tg_post_references_occurrence")
-            .returning(col(PostReference.id))
+            .returning(
+                col(PostReference.source_channel), col(PostReference.target_handle)
+            )
         ).all()
-        written += len(inserted)
-    return written
+        new.update((str(s), str(t)) for s, t in inserted)
+    _count_citations(session, new)
+    return new.total()
+
+
+# ---- Citation pairs and counts (DIR-05, ADR-028) ----------------------------
+#
+# This aggregate's payload: a summary of `tg_post_references` by distinct
+# (citing, cited) handle pair, and per handle how many distinct Channels cite
+# it and it cites. Kept in the References' transaction, so the two can never
+# disagree; `tests/services/test_citation_pairs.py` guards that they do not.
+# Arrays through `unnest` rather than a `VALUES` list, so no batch of
+# References can reach the bind-parameter ceiling `_INSERT_CHUNK_ROWS` exists
+# for.
+
+_ARRAYS = (
+    "unnest(CAST(:a AS text[]), CAST(:b AS text[]), CAST(:n AS int[])) AS v(a, b, n)"
+)
+
+#: `DO NOTHING` + `RETURNING` answers exactly which pairs are new, under any
+#: concurrency: a second writer of the same new pair waits for the first and
+#: then finds it there, so only one of them raises the counts.
+_NEW_PAIRS = sa_text(
+    "INSERT INTO tg_citation_pairs (citing_handle, cited_handle, reference_count) "
+    f"SELECT v.a, v.b, v.n FROM {_ARRAYS} "
+    "ON CONFLICT DO NOTHING RETURNING citing_handle, cited_handle"
+)
+_MORE_REFERENCES = sa_text(
+    "UPDATE tg_citation_pairs p SET reference_count = p.reference_count + v.n "
+    f"FROM {_ARRAYS} WHERE p.citing_handle = v.a AND p.cited_handle = v.b"
+)
+_RAISE_COUNTS = sa_text(
+    "INSERT INTO tg_citation_counts (handle, cited_by, cites) "
+    "SELECT * FROM unnest(CAST(:h AS text[]), CAST(:cited_by AS int[]), "
+    "CAST(:cites AS int[])) "
+    "ON CONFLICT (handle) DO UPDATE SET "
+    "cited_by = tg_citation_counts.cited_by + EXCLUDED.cited_by, "
+    "cites = tg_citation_counts.cites + EXCLUDED.cites"
+)
+
+
+def _count_citations(session: Session, new: Counter[tuple[str, str]]) -> None:
+    """Fold newly written References into the pairs and the counts.
+
+    A pair that did not exist raises its target's cited-by and its source's
+    cites by one; an existing pair only gains References. Nothing decrements,
+    because References are permanent (ADR-019). Keys are sorted so two
+    writers lock the same rows in the same order.
+    """
+    if not new:
+        return
+    keys = sorted(new)
+
+    def arrays(pairs: list[tuple[str, str]]) -> dict[str, list[Any]]:
+        return {
+            "a": [s for s, _ in pairs],
+            "b": [t for _, t in pairs],
+            "n": [new[p] for p in pairs],
+        }
+
+    created = {
+        (str(s), str(t))
+        for s, t in session.execute(_NEW_PAIRS, arrays(keys)).all()
+    }
+    grown = [p for p in keys if p not in created]
+    if grown:
+        session.execute(_MORE_REFERENCES, arrays(grown))
+    if not created:
+        return
+    cited_by = Counter(t for _, t in created)
+    cites = Counter(s for s, _ in created)
+    handles = sorted(set(cited_by) | set(cites))
+    session.execute(
+        _RAISE_COUNTS,
+        {
+            "h": handles,
+            "cited_by": [cited_by[h] for h in handles],
+            "cites": [cites[h] for h in handles],
+        },
+    )
+
+
+def _next_bound(session: Session, table: str, column: str, after: str, batch: int) -> str | None:
+    """The `batch`-th distinct value of `column` past `after`, read off its index."""
+    found = session.execute(
+        sa_text(
+            f"SELECT max(h) FROM (SELECT DISTINCT {column} AS h FROM {table} "
+            f"WHERE {column} > :after ORDER BY 1 LIMIT :batch) AS page"
+        ),
+        {"after": after, "batch": batch},
+    ).scalar_one()
+    return None if found is None else str(found)
+
+
+def _in_batches(session: Session, table: str, column: str, statement: str, batch: int) -> None:
+    after = ""
+    while (upto := _next_bound(session, table, column, after, batch)) is not None:
+        session.execute(sa_text(statement), {"after": after, "upto": upto})
+        session.commit()
+        _log.info("%s by %s: through %r", table, column, upto)
+        after = upto
+
+
+def fill_citations(session: Session, *, batch: int) -> None:
+    """Build the pairs and counts from the References already stored (the first fill).
+
+    In batches of `batch` citing handles (then counted handles), one
+    transaction each, so no transaction pins the vacuum horizon for the whole
+    run. **Overwrites** rather than adds, so it is safe to run again: a second
+    run writes the same numbers. A write the extraction walk commits in the
+    middle of a batch can leave one count short, and a re-run settles it.
+    """
+    _in_batches(
+        session,
+        "tg_post_references",
+        "source_channel",
+        "INSERT INTO tg_citation_pairs (citing_handle, cited_handle, reference_count) "
+        "SELECT source_channel, target_handle, count(*) FROM tg_post_references "
+        "WHERE source_channel > :after AND source_channel <= :upto GROUP BY 1, 2 "
+        "ON CONFLICT (citing_handle, cited_handle) "
+        "DO UPDATE SET reference_count = EXCLUDED.reference_count",
+        batch,
+    )
+    for column, counted, other in (
+        ("citing_handle", "cites", "cited_by"),
+        ("cited_handle", "cited_by", "cites"),
+    ):
+        _in_batches(
+            session,
+            "tg_citation_pairs",
+            column,
+            f"INSERT INTO tg_citation_counts (handle, {counted}, {other}) "
+            f"SELECT {column}, count(*), 0 FROM tg_citation_pairs "
+            f"WHERE {column} > :after AND {column} <= :upto GROUP BY 1 "
+            f"ON CONFLICT (handle) DO UPDATE SET {counted} = EXCLUDED.{counted}",
+            batch,
+        )
 
 
 def extract_sample_references(

@@ -88,7 +88,10 @@ INVENTORY: dict[str, str] = {
     # Owns `tg_post_references` (CRG-01) and is its only writer. Holds the
     # extractor as well as the writes: the pure half is a few functions over
     # one Post and splitting it out would be a module whose only caller is the
-    # one next to it.
+    # one next to it. `tg_citation_pairs` and `tg_citation_counts` (DIR-05,
+    # ADR-028) are its payload, as a companion table is its parent's: a summary
+    # of the References written in their transaction, by `write_references`
+    # alone, and built wholesale by its `fill_citations`.
     "post_references.py": AGGREGATE,
     # Owns `tg_quota_usage` (ticket 08) and is its only writer. The counting
     # itself is not here — `core/request_meter.py` does that, because a

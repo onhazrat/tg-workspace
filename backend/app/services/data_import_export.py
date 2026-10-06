@@ -1431,6 +1431,16 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "unextracted, so a restore re-derives the edges its Posts name rather "
         "than trusting another install's copy."
     ),
+    "CitationPair": (
+        "Derived (DIR-05, ADR-028): a summary of the References by distinct "
+        "Channel pair, kept by the References writer and built wholesale by "
+        "`scripts/backfill_citation_pairs.py`. The References do not travel, "
+        "so a restored pair would count edges the importing install lacks."
+    ),
+    "CitationCount": (
+        "Derived with `CitationPair`, for its reason: per handle, how many "
+        "distinct Channels cite it and it cites."
+    ),
     "SettlingCurveFit": (
         "The Settling curve fits (REACH-07). Corpus, one curve fitted from "
         "this deployment's View observations rather than an Account's data; a "

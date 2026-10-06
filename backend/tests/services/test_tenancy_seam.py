@@ -204,6 +204,9 @@ def test_corpus_models_are_the_ones_the_plan_names() -> None:
         # exists to record Channels nobody follows, and half its rows come
         # from samples whose handles have no `tg_channels` row at all.
         "PostReference",
+        # DIR-05's citation pairs and counts, derived from the References.
+        "CitationPair",
+        "CitationCount",
         "SyncMeta",
         # REACH-05's View observations. Hangs off a Post, so the one most
         # plausibly argued into `FOLLOW_SCOPED`; it must not be, because its

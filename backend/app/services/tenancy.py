@@ -86,6 +86,8 @@ from app.models_tg import (
     ChatDestination,
     ChatSession,
     ChatSessionPayload,
+    CitationCount,
+    CitationPair,
     DirectoryEntry,
     DirectoryProbeUsage,
     DirectorySample,
@@ -232,6 +234,11 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # discloses (somebody on this deployment scrapes @foo) is the fact a
     # Directory entry already discloses.
     PostReference: Scope.CORPUS,
+    # DIR-05's summary of those References by distinct Channel pair, and
+    # per handle (ADR-028). Derived from a corpus table, so corpus for its
+    # reason; no owner column, and nothing in it a Reference does not show.
+    CitationPair: Scope.CORPUS,
+    CitationCount: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
     # A sampled sighting of a Post's View count (REACH-05, ADR-024). Corpus
     # rather than `FOLLOW_SCOPED` like the Post it hangs off: nothing lists it
