@@ -16,7 +16,8 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * the shared backend turns "your channels" into it); the open panel kept in
  * memory only, not in storage (DIR-03); the list read not handed its abort
  * `signal`, so a superseded search runs on; the search chip's clear doing
- * nothing (DIR-04).
+ * nothing (DIR-04); a Dismissal that never refreshes the list, or a row
+ * whose Dismiss also opens the panel (DIR-06).
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -37,6 +38,7 @@ const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
   links: 2,
   followable: true,
   followed: false,
+  dismissed: false,
   citedBy: 40 - i,
   cites: i,
   mine: 6 - i,
@@ -203,7 +205,7 @@ test.describe("TG Workspace directory", () => {
     await expect(page.getByTestId("directory-view")).toBeVisible()
     await expect
       .poll(() => param(page, "dirFilter"))
-      .toBe("not is:followed and is:followable")
+      .toBe("not is:followed and not is:dismissed and is:followable")
     await expect(page.getByText("خبر فوری")).toHaveAttribute("dir", "auto")
 
     // A row's handle is Telegram's web view, in a new tab.
@@ -397,4 +399,75 @@ test.describe("TG Workspace directory", () => {
     await expect(chip(page, "citedby-src_one")).toBeVisible()
     expect(param(page, "dirFilter")).toContain("citedby:src_one")
   })
+
+  // Its own short test, for the journey's time budget (DIR-06).
+  test("dismiss a row, undo, and see it dimmed with Hide dismissed off", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    // The Dismissals, kept as the server keeps them, through Discover's routes.
+    const dismissed = new Set<string>()
+    await page.route("**/api/v1/data/discover/ignored", async (route) => {
+      const { handles } = route.request().postDataJSON() as {
+        handles: string[]
+      }
+      const adding = route.request().method() === "POST"
+      for (const h of handles) adding ? dismissed.add(h) : dismissed.delete(h)
+      await route.fulfill({
+        json: adding ? { ignored: handles } : { removed: handles },
+      })
+    })
+    // Registered after `mockDirectory`, so it answers the list instead.
+    await page.route("**/api/v1/data/directory/list", async (route) => {
+      const hiding = hidesDismissed(route.request().postDataJSON())
+      const rows = ROWS.map((r) => ({
+        ...r,
+        dismissed: dismissed.has(r.handle),
+      }))
+      await route.fulfill({
+        json: {
+          rows: hiding ? rows.filter((r) => !r.dismissed) : rows,
+          total: 250,
+          languages: [],
+          yoursSize: 3,
+        },
+      })
+    })
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, ["directory.view", "directory.open"])
+    await page.goto("/workspace?tab=directory")
+
+    const row = page.getByTestId("directory-row-a3")
+    await expect(row).toBeVisible()
+    await page.getByRole("button", { name: "Dismiss @a3" }).click()
+    await expect(row).toHaveCount(0)
+    await expect(page.getByTestId("directory-panel")).toHaveCount(0)
+    await expect(page.getByText("Dismissed @a3")).toBeVisible()
+    await page.getByRole("button", { name: "Undo" }).click()
+    await expect(row).toBeVisible()
+    expect(dismissed.has("a3")).toBe(false)
+
+    // Dismissed again, then Hide dismissed off: back, dimmed, Follow withheld.
+    await page.getByRole("button", { name: "Dismiss @a3" }).click()
+    await expect(row).toHaveCount(0)
+    await page.getByTestId("directory-switch-dismissed").click()
+    await expect(row).toBeVisible()
+    await expect(row).toHaveClass(/opacity-50/)
+    await expect(row.getByRole("button", { name: "Follow @a3" })).toHaveCount(0)
+    await expect(
+      row.getByRole("button", { name: "Take back @a3" }),
+    ).toBeVisible()
+  })
 })
+
+/** The list body's filter holds `not is:dismissed` on its top-level AND. */
+function hidesDismissed(body: {
+  filter?: { children?: { not?: boolean; cond?: { value?: string } }[] }
+}): boolean {
+  return (body.filter?.children ?? []).some(
+    (c) => c.not === true && c.cond?.value === "dismissed",
+  )
+}
