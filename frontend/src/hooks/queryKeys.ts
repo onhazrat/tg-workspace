@@ -50,8 +50,17 @@ export const queryKeys = {
    * refetches every one of them. Keyed by the request body itself.
    */
   directory: ["directory"] as const,
-  directoryRead: (read: string, body: unknown) =>
-    ["directory", read, body] as const,
+  directoryRead: (
+    read:
+      | "list"
+      | "size"
+      | "count"
+      | "distribution"
+      | "entry"
+      | "why"
+      | "neighbours",
+    body: unknown,
+  ) => ["directory", read, body] as const,
   discoverIgnored: ["discoverIgnored"] as const,
   /** Server-side probe queue counts. Polled while work is outstanding. */
   discoverProbeQueue: ["discoverProbeQueue"] as const,

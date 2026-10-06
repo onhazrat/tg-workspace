@@ -2,10 +2,9 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from app.schemas.directory import YourChannels
-from app.services.directory_reads import ReferenceKind
+from app.schemas.directory import DirectoryYoursRequest
 
 
 class DiscoveredViaPayload(BaseModel):
@@ -25,15 +24,8 @@ class BulkFollowChannelEntry(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class DirectoryFollowSource(BaseModel):
+class DirectoryFollowSource(DirectoryYoursRequest):
     """The Directory view's "your channels" and Reference kinds, for discovered-via."""
-
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    yours: YourChannels = Field(default_factory=YourChannels)
-    reference_kinds: list[ReferenceKind] = Field(
-        default_factory=list, alias="referenceKinds", max_length=4
-    )
 
 
 class BulkFollowRequest(BaseModel):

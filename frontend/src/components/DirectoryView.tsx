@@ -33,6 +33,7 @@ import {
   directoryFilterBody,
   firstShared,
   type Measure,
+  type MeasureKey,
   type PickSets,
   resolvePicks,
 } from "@/lib/directory/directory-filter"
@@ -93,33 +94,13 @@ function MeasureEditor({
         body: { ...others, measure: measure.key },
       }),
   })
-  const usePreviewCount = (bound: MetricBound | null) => {
-    const candidate = useDebouncedValue(JSON.stringify(bound), 250)
-    const preview = useQuery({
-      queryKey: queryKeys.directoryRead("count", { others, candidate }),
-      queryFn: () =>
-        dataCountDirectory({
-          body: {
-            ...others,
-            candidate: {
-              kind: "atom",
-              cond: {
-                type: "measure",
-                measure: measure.key,
-                ...JSON.parse(candidate),
-              },
-            },
-          },
-        }),
-      enabled: candidate !== "null",
-    })
-    return bound ? preview.data?.total : undefined
-  }
   return (
     <DirectoryBoundEditor
       measure={measure}
       distribution={distribution.data}
-      usePreviewCount={usePreviewCount}
+      countFor={(bound) => (
+        <BoundCount others={others} measure={measure.key} bound={bound} />
+      )}
       onSubmit={(bound) =>
         rest.onSubmit({ type: "measure", measure: measure.key, ...bound })
       }
@@ -127,6 +108,34 @@ function MeasureEditor({
       onBack={rest.onBack}
     />
   )
+}
+
+/** How many Channels a candidate bound leaves, read a beat after typing stops. */
+function BoundCount({
+  others,
+  measure,
+  bound,
+}: {
+  others: DirectoryViewRequest
+  measure: MeasureKey
+  bound: MetricBound
+}) {
+  const candidate = useDebouncedValue(JSON.stringify(bound), 250)
+  const count = useQuery({
+    queryKey: queryKeys.directoryRead("count", { others, candidate }),
+    queryFn: () =>
+      dataCountDirectory({
+        body: {
+          ...others,
+          candidate: {
+            kind: "atom",
+            cond: { type: "measure", measure, ...JSON.parse(candidate) },
+          },
+        },
+      }),
+  })
+  const total = count.data?.total
+  return total === undefined ? null : ` · ${total.toLocaleString()} channels`
 }
 
 /**

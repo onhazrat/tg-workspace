@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import { TgButton } from "@/components/ui/tg-button"
@@ -70,14 +70,14 @@ function Spread({
  * bound, the four modes, day presets on a measure counted in days, and how
  * many Channels the bound leaves on Add. NOT is the chip's, not the editor's.
  *
- * `usePreviewCount` is the count read for a candidate bound, a hook the
- * container passes so this stays renderable without a server.
+ * `countFor` renders how many a candidate bound leaves; the container passes
+ * an element that reads it, so this stays renderable without a server.
  */
 export function DirectoryBoundEditor({
   measure,
   initial,
   distribution,
-  usePreviewCount,
+  countFor,
   onSubmit,
   onBack,
 }: {
@@ -85,7 +85,7 @@ export function DirectoryBoundEditor({
   /** The Condition being changed; without one the editor adds. */
   initial?: MetricBound
   distribution?: DirectoryDistributionResponse
-  usePreviewCount: (bound: MetricBound | null) => number | undefined
+  countFor: (bound: MetricBound) => ReactNode
   onSubmit: (bound: MetricBound) => void
   onBack?: () => void
 }) {
@@ -97,7 +97,6 @@ export function DirectoryBoundEditor({
   )
   const [b, setB] = useState(String(initial?.max ?? ""))
   const bound = parseBound(op, a, b)
-  const preview = usePreviewCount(bound)
 
   const onBar = (bin: Bin) => {
     const next = op === "none" ? "between" : op
@@ -167,9 +166,7 @@ export function DirectoryBoundEditor({
         className="w-full"
       >
         {initial ? "Update" : "Add"}
-        {bound && preview !== undefined
-          ? ` · ${preview.toLocaleString()} channels`
-          : ""}
+        {bound && countFor(bound)}
       </TgButton>
     </form>
   )

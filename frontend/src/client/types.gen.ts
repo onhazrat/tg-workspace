@@ -1608,13 +1608,13 @@ export type DirectoryCitingPostResponse = {
  * How many entries a view leaves, with a candidate Condition added with AND.
  */
 export type DirectoryCountRequest = {
-    filter?: DirectoryFilterGroup | null;
-    search?: DirectorySearchRequest | null;
     yours?: YourChannels;
     /**
      * Referencekinds
      */
     referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
     candidate?: DirectoryFilterAtom | null;
 };
 
@@ -1636,13 +1636,13 @@ export type DirectoryCountResponse = {
  * A measure's spread under every other Condition of the view.
  */
 export type DirectoryDistributionRequest = {
-    filter?: DirectoryFilterGroup | null;
-    search?: DirectorySearchRequest | null;
     yours?: YourChannels;
     /**
      * Referencekinds
      */
     referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
     /**
      * Measure
      */
@@ -1916,13 +1916,13 @@ export type DirectoryLanguageCountResponse = {
  * One page of a Directory view, sorted.
  */
 export type DirectoryListRequest = {
-    filter?: DirectoryFilterGroup | null;
-    search?: DirectorySearchRequest | null;
     yours?: YourChannels;
     /**
      * Referencekinds
      */
     referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
     /**
      * Sort
      */
@@ -2359,15 +2359,15 @@ export type DirectorySnippetPartResponse = {
  * Whose Posts citing `handle` "Why it's here" lists.
  */
 export type DirectoryWhyRequest = {
-    /**
-     * Handle
-     */
-    handle: string;
     yours?: YourChannels;
     /**
      * Referencekinds
      */
     referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    /**
+     * Handle
+     */
+    handle: string;
     /**
      * Days
      */

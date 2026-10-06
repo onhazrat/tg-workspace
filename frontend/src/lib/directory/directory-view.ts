@@ -60,9 +60,29 @@ export type DirectoryParams = Partial<
   Record<(typeof DIRECTORY_PARAMS)[number], string>
 >
 
-export const REF_KINDS: RefKind[] = ["forward", "mention", "link", "reply"]
-const YOURS: YoursSource[] = ["follows", "selection", "ticked"]
-export const SEARCH_FIELDS: SearchField[] = ["name", "bio", "posts"]
+/**
+ * Every value of a generated union, in the order written. Keyed by the union,
+ * so a value the server adds or drops is a compile error here.
+ */
+const every = <T extends string>(values: Record<T, true>) =>
+  Object.keys(values) as T[]
+
+export const REF_KINDS = every<RefKind>({
+  forward: true,
+  mention: true,
+  link: true,
+  reply: true,
+})
+const YOURS = every<YoursSource>({
+  follows: true,
+  selection: true,
+  ticked: true,
+})
+export const SEARCH_FIELDS = every<SearchField>({
+  name: true,
+  bio: true,
+  posts: true,
+})
 const MAX_PAGE = 10_000
 
 export const DEFAULT_VIEW: DirectoryView = {

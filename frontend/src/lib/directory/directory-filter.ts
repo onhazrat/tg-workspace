@@ -16,6 +16,7 @@
 import type {
   DirectoryFilterAtom,
   DirectoryFilterGroup,
+  DirectoryFlagCondition,
   DirectoryMeasureCondition,
 } from "@/client"
 import {
@@ -34,7 +35,7 @@ import { atoms, type FilterNode, type FilterTree } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
 
 export type MeasureKey = DirectoryMeasureCondition["measure"]
-export type DirectoryFlag = "followed" | "followable" | "dismissed"
+export type DirectoryFlag = DirectoryFlagCondition["value"]
 
 export type DirectoryMeasureCond = {
   type: "measure"

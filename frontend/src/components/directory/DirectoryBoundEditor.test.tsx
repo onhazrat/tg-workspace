@@ -38,15 +38,15 @@ function mount({
   distribution?: DirectoryDistributionResponse | null
 } = {}) {
   const submitted: MetricBound[] = []
-  const previewed: (MetricBound | null)[] = []
+  const previewed: MetricBound[] = []
   render(
     <DirectoryBoundEditor
       measure={measureOf(measure)}
       initial={initial}
       distribution={distribution ?? undefined}
-      usePreviewCount={(bound) => {
+      countFor={(bound) => {
         previewed.push(bound)
-        return bound ? 77 : undefined
+        return " · 77 channels"
       }}
       onSubmit={(bound) => submitted.push(bound)}
     />,

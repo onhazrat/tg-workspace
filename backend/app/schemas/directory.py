@@ -286,18 +286,24 @@ class DirectorySearchRequest(BaseModel):
     )
 
 
-class DirectoryViewRequest(BaseModel):
-    """A Directory view: the filter, the search, "your channels" and the Reference kinds."""
+class DirectoryYoursRequest(BaseModel):
+    """ "Your channels" and the Reference kinds they cite in: what every read
+    that counts or quotes "your channels" takes."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    filter: DirectoryFilterGroup | None = None
-    search: DirectorySearchRequest | None = None
     yours: YourChannels = Field(default_factory=YourChannels)
     #: Narrows "Cited by your channels" and the "Yours" count; empty is every kind.
     reference_kinds: list[ReferenceKind] = Field(
         default_factory=list, alias="referenceKinds", max_length=4
     )
+
+
+class DirectoryViewRequest(DirectoryYoursRequest):
+    """A Directory view: the filter, the search, "your channels" and the Reference kinds."""
+
+    filter: DirectoryFilterGroup | None = None
+    search: DirectorySearchRequest | None = None
 
 
 class DirectoryListRequest(DirectoryViewRequest):
@@ -408,16 +414,10 @@ class DirectoryEntryResponse(_DirectoryEntryFields):
     bio: str | None
 
 
-class DirectoryWhyRequest(BaseModel):
+class DirectoryWhyRequest(DirectoryYoursRequest):
     """Whose Posts citing `handle` "Why it's here" lists."""
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
     handle: Handle
-    yours: YourChannels = Field(default_factory=YourChannels)
-    reference_kinds: list[ReferenceKind] = Field(
-        default_factory=list, alias="referenceKinds", max_length=4
-    )
     #: The "Cited by your channels" Condition's window; every Post when absent.
     days: int | None = Field(None, ge=1, le=36_500)
     #: The Shared parents Condition's picks, when it is on (DIR-07).

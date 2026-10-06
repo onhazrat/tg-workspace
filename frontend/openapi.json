@@ -7041,6 +7041,16 @@
       },
       "DirectoryCountRequest": {
         "properties": {
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
           "filter": {
             "anyOf": [
               { "$ref": "#/components/schemas/DirectoryFilterGroup" },
@@ -7052,16 +7062,6 @@
               { "$ref": "#/components/schemas/DirectorySearchRequest" },
               { "type": "null" }
             ]
-          },
-          "yours": { "$ref": "#/components/schemas/YourChannels" },
-          "referenceKinds": {
-            "items": {
-              "type": "string",
-              "enum": ["forward", "mention", "link", "reply"]
-            },
-            "type": "array",
-            "maxItems": 4,
-            "title": "Referencekinds"
           },
           "candidate": {
             "anyOf": [
@@ -7084,6 +7084,16 @@
       },
       "DirectoryDistributionRequest": {
         "properties": {
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
           "filter": {
             "anyOf": [
               { "$ref": "#/components/schemas/DirectoryFilterGroup" },
@@ -7095,16 +7105,6 @@
               { "$ref": "#/components/schemas/DirectorySearchRequest" },
               { "type": "null" }
             ]
-          },
-          "yours": { "$ref": "#/components/schemas/YourChannels" },
-          "referenceKinds": {
-            "items": {
-              "type": "string",
-              "enum": ["forward", "mention", "link", "reply"]
-            },
-            "type": "array",
-            "maxItems": 4,
-            "title": "Referencekinds"
           },
           "measure": {
             "type": "string",
@@ -7399,6 +7399,16 @@
       },
       "DirectoryListRequest": {
         "properties": {
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
           "filter": {
             "anyOf": [
               { "$ref": "#/components/schemas/DirectoryFilterGroup" },
@@ -7410,16 +7420,6 @@
               { "$ref": "#/components/schemas/DirectorySearchRequest" },
               { "type": "null" }
             ]
-          },
-          "yours": { "$ref": "#/components/schemas/YourChannels" },
-          "referenceKinds": {
-            "items": {
-              "type": "string",
-              "enum": ["forward", "mention", "link", "reply"]
-            },
-            "type": "array",
-            "maxItems": 4,
-            "title": "Referencekinds"
           },
           "sort": {
             "type": "string",
@@ -7894,12 +7894,6 @@
       },
       "DirectoryWhyRequest": {
         "properties": {
-          "handle": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Handle"
-          },
           "yours": { "$ref": "#/components/schemas/YourChannels" },
           "referenceKinds": {
             "items": {
@@ -7909,6 +7903,12 @@
             "type": "array",
             "maxItems": 4,
             "title": "Referencekinds"
+          },
+          "handle": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Handle"
           },
           "days": {
             "anyOf": [
