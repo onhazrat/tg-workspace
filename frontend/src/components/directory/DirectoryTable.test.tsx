@@ -44,7 +44,8 @@ function mount(over: Partial<ComponentProps<typeof DirectoryTable>> = {}) {
     sort: string[]
     follow: string[]
     page: number[]
-  } = { ticks: [], sort: [], follow: [], page: [] }
+    open: string[]
+  } = { ticks: [], sort: [], follow: [], page: [], open: [] }
   render(
     <DirectoryTable
       rows={[row("alpha"), row("beta"), row("gamma", { followed: true })]}
@@ -59,6 +60,7 @@ function mount(over: Partial<ComponentProps<typeof DirectoryTable>> = {}) {
       onFollow={(h) => calls.follow.push(h)}
       onSort={(key) => calls.sort.push(key)}
       onPage={(p) => calls.page.push(p)}
+      onOpen={(h) => calls.open.push(h)}
       {...over}
     />,
   )
@@ -94,6 +96,17 @@ describe("the rows", () => {
       ).disabled,
     ).toBe(true)
     expect(screen.getByText("Following")).toBeTruthy()
+  })
+})
+
+describe("opening the panel", () => {
+  test("a click on the row opens it; its link, tick and Follow do not", () => {
+    const calls = mount()
+    fireEvent.click(screen.getByText("alpha name"))
+    fireEvent.click(screen.getByRole("link", { name: "@beta" }))
+    fireEvent.click(box("Tick @beta"))
+    fireEvent.click(screen.getByRole("button", { name: "Follow @beta" }))
+    expect(calls.open).toEqual(["alpha"])
   })
 })
 

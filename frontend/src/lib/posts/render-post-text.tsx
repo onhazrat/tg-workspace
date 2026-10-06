@@ -46,7 +46,7 @@ const CLICKABLE_PROTOCOLS: ReadonlySet<string> = new Set([
  * Channel or one of its Posts opens the web view, as mentions always have;
  * any other Telegram path keeps its path on the configured domain.
  */
-function linkHref(url: string): string | null {
+export function linkHref(url: string): string | null {
   let parsed: URL
   try {
     parsed = new URL(url)

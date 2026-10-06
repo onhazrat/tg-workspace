@@ -5,10 +5,17 @@
  */
 import { useQuery } from "@tanstack/react-query"
 
-import { dataCountDirectory, dataGetDirectoryDistribution } from "@/client"
+import {
+  dataCountDirectory,
+  dataGetDirectoryDistribution,
+  dataGetDirectoryEntry,
+  dataGetDirectoryPosts,
+  dataGetDirectoryWhy,
+} from "@/client"
 import { DirectoryBar } from "@/components/directory/DirectoryBar"
 import { DirectoryBoundEditor } from "@/components/directory/DirectoryBoundEditor"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
+import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
 import { DirectoryTable } from "@/components/directory/DirectoryTable"
 import {
   directoryVocabulary,
@@ -24,6 +31,7 @@ import {
   directoryFilterBody,
   type Measure,
 } from "@/lib/directory/directory-filter"
+import { mineWindow } from "@/lib/directory/directory-panel"
 import {
   chooseSort,
   type DirectoryViewRequest,
@@ -114,6 +122,61 @@ function MeasureEditor({
   )
 }
 
+/**
+ * The detail panel's three reads (DIR-03): the entry by handle, so a panel off
+ * the current page still opens, its stored Posts, and "Why it's here" under
+ * the view's "your channels", Reference kinds and Cited-by window.
+ */
+function DirectoryPanelReads({
+  handle,
+  request,
+  windowDays,
+  following,
+  onFollow,
+  onClose,
+}: {
+  handle: string
+  request: DirectoryViewRequest
+  windowDays: number | null
+  following: boolean
+  onFollow: () => void
+  onClose: () => void
+}) {
+  const path = { handle }
+  const entry = useQuery({
+    queryKey: queryKeys.directoryRead("entry", handle),
+    queryFn: () => dataGetDirectoryEntry({ path }),
+    retry: false,
+  })
+  const posts = useQuery({
+    queryKey: queryKeys.directoryPosts(handle),
+    queryFn: () => dataGetDirectoryPosts({ path }),
+    retry: false,
+  })
+  const whyBody = {
+    handle,
+    yours: request.yours,
+    referenceKinds: request.referenceKinds,
+    days: windowDays,
+  }
+  const why = useQuery({
+    queryKey: queryKeys.directoryRead("why", whyBody),
+    queryFn: () => dataGetDirectoryWhy({ body: whyBody }),
+  })
+  return (
+    <DirectoryPanel
+      handle={handle}
+      entry={entry.isError ? null : entry.data}
+      posts={posts.isError ? [] : posts.data}
+      why={why.data}
+      windowDays={windowDays}
+      following={following}
+      onFollow={onFollow}
+      onClose={onClose}
+    />
+  )
+}
+
 export function DirectoryView() {
   const d = useDirectory()
   const { view, patch, list } = d
@@ -165,7 +228,18 @@ export function DirectoryView() {
         onFollow={(handle) => void d.follow([handle])}
         onSort={(key) => patch(headerSort(view, key, d.yours.source))}
         onPage={(page) => patch({ page })}
+        onOpen={d.setOpen}
       />
+      {d.open && (
+        <DirectoryPanelReads
+          handle={d.open}
+          request={d.request}
+          windowDays={mineWindow(d.filter)}
+          following={d.following.has(d.open)}
+          onFollow={() => d.open && void d.follow([d.open])}
+          onClose={() => d.setOpen(null)}
+        />
+      )}
     </div>
   )
 }

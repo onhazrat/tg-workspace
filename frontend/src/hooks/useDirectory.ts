@@ -46,6 +46,8 @@ const workspaceRoute = getRouteApi("/_tg/workspace")
 const VIEW_KEY = "directory.view"
 const TICKS_KEY = "directory.ticks"
 const HIDDEN_KEY = "directory.hiddenColumns"
+/** The handle whose detail panel is open, per browser (DIR-03). */
+const OPEN_KEY = "directory.open"
 /** The whole Directory's size moves slowly; the server caches it as long. */
 const SIZE_STALE_TIME = 5 * 60_000
 
@@ -131,6 +133,8 @@ export function useDirectory() {
   const queryClient = useQueryClient()
   const [ticked, setTicked] = useStoredList(TICKS_KEY)
   const [hidden, setHidden] = useStoredList(HIDDEN_KEY)
+  // A list of at most one handle, so the panel reuses the stored-list plumbing.
+  const [opened, setOpened] = useStoredList(OPEN_KEY)
   const [following, setFollowing] = useState<ReadonlySet<string>>(new Set())
 
   const filter = useMemo(
@@ -215,6 +219,8 @@ export function useDirectory() {
     setTicks: setTicked,
     hidden,
     setHidden,
+    open: opened[0] ?? null,
+    setOpen: (handle: string | null) => setOpened(handle ? [handle] : []),
     following,
     follow,
     list,

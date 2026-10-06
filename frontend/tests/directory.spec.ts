@@ -10,7 +10,8 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  *
  * Watched to fail on: Follow sent without its `directory` source; the
  * switches reading off whatever the filter holds; the ticks and hidden
- * columns not read back from storage; the remembered view not adopted.
+ * columns not read back from storage; the remembered view not adopted; the
+ * open panel kept in memory only, not in storage (DIR-03).
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -88,6 +89,32 @@ async function mockDirectory(page: Page) {
   return { lastList: () => lists.at(-1) as ListBody }
 }
 
+/** The detail panel's three reads (DIR-03), for the row the journey opens. */
+async function mockPanel(page: Page) {
+  const whys: { handle?: string; days?: number | null }[] = []
+  await page.route("**/api/v1/data/directory/a2/entry", (route) =>
+    route.fulfill({ json: { ...ROWS[1], bio: "The bio of a2" } }),
+  )
+  await page.route("**/api/v1/data/directory/a2/posts", (route) =>
+    route.fulfill({
+      json: [1, 2, 3, 4].map((postId) => ({
+        postId,
+        text: `sample post ${postId}`,
+        timestamp: Date.now() - postId * 3_600_000,
+        views: 900,
+        capturedAt: Date.now() - 86_400_000,
+        hasMedia: false,
+        links: [],
+      })),
+    }),
+  )
+  await page.route("**/api/v1/data/directory/why", async (route) => {
+    whys.push(route.request().postDataJSON())
+    await route.fulfill({ json: { posts: [], total: 0 } })
+  })
+  return { lastWhy: () => whys.at(-1) }
+}
+
 const chip = (page: Page, id: string) =>
   page.getByTestId(`directory-filter-chip-${id}`)
 const param = (page: Page, key: string) =>
@@ -104,6 +131,7 @@ test.describe("TG Workspace directory", () => {
       "directory.view",
       "directory.ticks",
       "directory.hiddenColumns",
+      "directory.open",
     ])
 
     // The tab opens on the opening view, written into the URL.
@@ -216,5 +244,20 @@ test.describe("TG Workspace directory", () => {
     await page.goto("/workspace?tab=directory")
     await expect(chip(page, "language-en")).toBeVisible()
     await expect.poll(() => param(page, "dirSort")).toBe("reach")
+
+    // A row opens its panel; a reload keeps it open; Close closes it.
+    const panel = await mockPanel(page)
+    await page.getByText("Channel a2").click()
+    const aside = page.getByTestId("directory-panel")
+    await expect(aside.getByText("The bio of a2")).toBeVisible()
+    await expect(aside.getByText("sample post 3")).toBeVisible()
+    await expect(aside.getByText("sample post 4")).toHaveCount(0)
+    await aside.getByRole("button", { name: "Show 1 more post" }).click()
+    await expect(aside.getByText("sample post 4")).toBeVisible()
+    expect(panel.lastWhy()).toMatchObject({ handle: "a2", days: null })
+    await page.reload()
+    await expect(aside.getByText("The bio of a2")).toBeVisible()
+    await aside.getByRole("button", { name: "Close" }).click()
+    await expect(aside).toHaveCount(0)
   })
 })

@@ -56,7 +56,7 @@ export const COLUMNS: DirectoryColumn[] = [
 const count = (n: number | null) => (n === null ? "" : formatCount(n))
 
 /** What one column shows for a row. */
-function cell(key: DirectoryColumn["key"], r: Row): React.ReactNode {
+export function cell(key: DirectoryColumn["key"], r: Row): React.ReactNode {
   switch (key) {
     case "language":
       return r.language ?? ""
@@ -130,12 +130,13 @@ function HeaderTick({
   )
 }
 
-function FollowCell({
+/** Following, or a Follow button; the panel shows the same one. */
+export function FollowCell({
   row,
   busy,
   onFollow,
 }: {
-  row: Row
+  row: Pick<Row, "handle" | "followed">
   busy: boolean
   onFollow: (handle: string) => void
 }) {
@@ -295,6 +296,7 @@ export function DirectoryTable({
   onFollow,
   onSort,
   onPage,
+  onOpen,
 }: {
   rows: Row[]
   total: number
@@ -309,6 +311,8 @@ export function DirectoryTable({
   onFollow: (handle: string) => void
   onSort: (key: DirectorySort) => void
   onPage: (page: number) => void
+  /** A click anywhere on the row but its links and controls opens the panel. */
+  onOpen: (handle: string) => void
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = COLUMNS.filter((c) => !hidden.includes(c.key))
@@ -340,9 +344,11 @@ export function DirectoryTable({
           {rows.map((r) => (
             <tr
               key={r.handle}
-              className={`border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"}`}
+              data-testid={`directory-row-${r.handle}`}
+              onClick={() => onOpen(r.handle)}
+              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"}`}
             >
-              <td className="pl-3">
+              <td className="pl-3" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
                   aria-label={
