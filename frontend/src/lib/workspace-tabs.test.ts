@@ -346,6 +346,16 @@ describe("tabSearch", () => {
       channelFilter: "tag:g",
     })
   })
+
+  it("keeps the Directory's view on the Directory tab only", () => {
+    const prev = {
+      tab: "directory" as const,
+      dirFilter: "lang:fa",
+      dirSort: "reach",
+    }
+    expect(tabSearch(prev, { kind: "channels" })).toEqual({ tab: "channels" })
+    expect(tabSearch(prev, { kind: "directory" })).toEqual(prev)
+  })
 })
 
 it("never narrows what the router accepts", () => {

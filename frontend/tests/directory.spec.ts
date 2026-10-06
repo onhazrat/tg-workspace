@@ -10,7 +10,10 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  *
  * Watched to fail on: Follow sent without its `directory` source; the
  * switches reading off whatever the filter holds; the ticks and hidden
- * columns not read back from storage; the remembered view not adopted.
+ * columns not read back from storage; the remembered view not adopted; the
+ * "+" menu returning focus after a tab is chosen (closes the Language
+ * dropdown); the Channels list left unmocked (a Channels tab selection on
+ * the shared backend turns "your channels" into it).
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -99,12 +102,24 @@ test.describe("TG Workspace directory", () => {
   }) => {
     const api = await mockDirectory(page)
     const follows = await mockBulkFollowJob(page)
+    // No Channels, so no Channels tab selection: "your channels" is every
+    // follow whatever the shared backend holds.
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
     await gotoWorkspace(page, "channels")
     await clearScopedStorage(page, [
       "directory.view",
       "directory.ticks",
       "directory.hiddenColumns",
     ])
+
+    // Animations slowed, as a slow CI runner gets them, so the "+" menu is
+    // still closing when the Language pill is clicked below.
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send("Animation.enable")
+    await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.05 })
+    const menu = page.locator("[role=menu]")
 
     // The tab opens on the opening view, written into the URL.
     await page.getByTestId("workspace-tab-add").click()
@@ -120,8 +135,12 @@ test.describe("TG Workspace directory", () => {
     await expect(link).toHaveAttribute("href", /\/s\/a1$/)
     await expect(link).toHaveAttribute("target", "_blank")
 
-    // Funnel a Language from the facet menu.
+    // Funnel a Language from the facet menu. The closing "+" menu's focus
+    // return, once it lands, must not close the dropdown opened after it.
+    await expect(menu).toHaveCount(1)
     await page.getByTestId("directory-language").click()
+    await expect(menu).toHaveCount(0)
+    await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 })
     await page.getByTestId("directory-language-funnel-fa").click()
     await page.keyboard.press("Escape")
     await expect(chip(page, "language-fa")).toBeVisible()
