@@ -121,6 +121,10 @@ describe("the dropdowns", () => {
     expect(screen.getAllByRole("checkbox")).toHaveLength(1)
     fireEvent.click(screen.getByRole("checkbox"))
     expect(calls.kinds).toEqual([["forward"]])
+    // DIR-05: it says which counts it narrows and which it never does.
+    expect(
+      screen.getByText(/Cited by @x and\s+Cites @x.*always count every kind/s),
+    ).toBeTruthy()
   })
 
   test("Columns searches names and descriptions and hides one", () => {

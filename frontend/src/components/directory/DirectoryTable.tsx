@@ -32,7 +32,7 @@ const measureColumn = (key: MeasureKey): DirectoryColumn => ({
 
 /**
  * The columns a Columns menu can hide, in table order; the Channel and the
- * actions always show. DIR-05 adds Cited by and Cites.
+ * actions always show.
  */
 export const COLUMNS: DirectoryColumn[] = [
   {
@@ -50,6 +50,8 @@ export const COLUMNS: DirectoryColumn[] = [
     label: "Yours",
     description: "How many of your channels cite it, and when one last did",
   },
+  measureColumn("cited_by"),
+  measureColumn("cites"),
   measureColumn("found_days"),
 ]
 
@@ -83,6 +85,8 @@ export function cell(key: DirectoryColumn["key"], r: Row): React.ReactNode {
       )
     case "found_days":
       return <RelativeTime timestamp={r.foundAt} />
+    case "cited_by":
+      return count(r.citedBy)
     case "mine":
       return r.mine ? (
         <>

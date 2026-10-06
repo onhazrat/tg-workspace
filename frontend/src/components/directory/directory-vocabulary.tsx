@@ -5,6 +5,8 @@
  */
 import {
   CircleDot,
+  CornerDownLeft,
+  CornerUpRight,
   Hash,
   Inbox,
   Languages,
@@ -24,18 +26,25 @@ import {
   type DirectoryFlag,
   directoryConditionLabel,
   FLAG_LABEL,
+  HANDLES_LABEL,
   MEASURES,
   type Measure,
   type MeasureSection,
 } from "@/lib/directory/directory-filter"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
-import { MineEditor, NameEditor } from "./DirectoryConditionEditors"
+import {
+  HandlesEditor,
+  MineEditor,
+  NameEditor,
+} from "./DirectoryConditionEditors"
 
 const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   language: Languages,
   name: Type,
   flag: CircleDot,
   mine: Inbox,
+  citedby: CornerDownLeft,
+  cites: CornerUpRight,
   measure: Hash,
 }
 
@@ -140,6 +149,22 @@ export function directoryVocabulary(
               />
             ),
           },
+          ...measureEntries("References", renderMeasure),
+          ...(["citedby", "cites"] as const).map(
+            (type): PickerEntry<DirectoryCond> => ({
+              kind: "editor",
+              id: type,
+              label: `${HANDLES_LABEL[type]} @channel`,
+              icon: ICON[type],
+              render: ({ start, ...rest }) => (
+                <HandlesEditor
+                  type={type}
+                  start={start?.type === type ? start : undefined}
+                  {...rest}
+                />
+              ),
+            }),
+          ),
         ],
       },
     ],
@@ -151,6 +176,8 @@ export function directoryVocabulary(
         ? `measure-${c.measure}`
         : "value" in c
           ? `${c.type}-${c.value}`
-          : c.type,
+          : "handles" in c
+            ? `${c.type}-${c.handles.join("-")}`
+            : c.type,
   }
 }

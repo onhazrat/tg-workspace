@@ -5,7 +5,11 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryCond } from "@/lib/directory/directory-filter"
-import { MineEditor, NameEditor } from "./DirectoryConditionEditors"
+import {
+  HandlesEditor,
+  MineEditor,
+  NameEditor,
+} from "./DirectoryConditionEditors"
 
 afterEach(cleanup)
 
@@ -29,6 +33,31 @@ describe("Name contains", () => {
     )
     expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("fa")
     expect(submit().textContent).toBe("Update")
+  })
+})
+
+describe("Cited by @x and Cites @x", () => {
+  test("adds the typed handles, and refuses none", () => {
+    const got: DirectoryCond[] = []
+    render(<HandlesEditor type="cites" onSubmit={(c) => got.push(c)} />)
+    expect((submit() as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "@Alpha, beta  alpha" },
+    })
+    fireEvent.click(submit())
+    expect(got).toEqual([{ type: "cites", handles: ["alpha", "beta"] }])
+  })
+
+  test("opens on the handles it edits", () => {
+    render(
+      <HandlesEditor
+        type="citedby"
+        start={{ type: "citedby", handles: ["a", "b"] }}
+        onSubmit={() => {}}
+      />,
+    )
+    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("a b")
+    expect(screen.getByText("Cited by")).toBeTruthy()
   })
 })
 

@@ -45,6 +45,8 @@ const entry = (
   links: 4,
   followable: true,
   followed: false,
+  citedBy: 5,
+  cites: 1,
   bio: "A bio about things",
   ...over,
 })
@@ -75,6 +77,8 @@ function mount(over: Partial<ComponentProps<typeof DirectoryPanel>> = {}) {
       following={false}
       onFollow={() => calls.follow++}
       onClose={() => calls.close++}
+      neighbours={{ citedBy: [], cites: [] }}
+      onFilter={() => {}}
       {...over}
     />,
   )
@@ -168,5 +172,49 @@ describe("why it's here", () => {
   test("says when none of your channels cite it", () => {
     mount()
     expect(screen.getByText("None of your channels cite it.")).toBeTruthy()
+  })
+})
+
+describe("who cites it and whom it cites (DIR-05)", () => {
+  const neighbour = (handle: string, references: number) => ({
+    handle,
+    displayName: handle === "nameless" ? null : `${handle} name`,
+    references,
+    kinds: ["forward" as const, "mention" as const],
+  })
+
+  test("lists both sides, with names, counts and kinds", () => {
+    mount({
+      neighbours: {
+        citedBy: [neighbour("src_one", 12), neighbour("nameless", 1)],
+        cites: [],
+      },
+    })
+    expect(screen.getByText("Cited most by")).toBeTruthy()
+    expect(screen.getByText("src_one name")).toBeTruthy()
+    expect(screen.getByText("@nameless")).toBeTruthy()
+    expect(screen.getByText("12 · forward, mention")).toBeTruthy()
+    expect(screen.getByText("It cites no channel we know of.")).toBeTruthy()
+  })
+
+  test("one click turns a neighbour into a Condition", () => {
+    const got: unknown[] = []
+    mount({
+      neighbours: {
+        citedBy: [neighbour("src_one", 3)],
+        cites: [neighbour("dst_one", 2)],
+      },
+      onFilter: (cond) => got.push(cond),
+    })
+    fireEvent.click(
+      screen.getByRole("button", { name: 'Filter by "Cited by @src_one"' }),
+    )
+    fireEvent.click(
+      screen.getByRole("button", { name: 'Filter by "Cites @dst_one"' }),
+    )
+    expect(got).toEqual([
+      { type: "citedby", handles: ["src_one"] },
+      { type: "cites", handles: ["dst_one"] },
+    ])
   })
 })

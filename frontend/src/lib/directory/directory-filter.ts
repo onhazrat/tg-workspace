@@ -41,11 +41,20 @@ export type DirectoryCond =
   | { type: "flag"; value: DirectoryFlag }
   /** Cited by "your channels", ever or within the last `days`. */
   | { type: "mine"; days?: number }
+  /** Cited by any of these handles, in the view's Reference kinds (DIR-05). */
+  | { type: "citedby"; handles: string[] }
+  /** Cites any of these handles, in the view's Reference kinds (DIR-05). */
+  | { type: "cites"; handles: string[] }
   | DirectoryMeasureCond
+
+export type DirectoryHandlesCond = Extract<
+  DirectoryCond,
+  { type: "citedby" | "cites" }
+>
 
 export type DirectoryFilter = FilterTree<DirectoryCond>
 
-export type MeasureSection = "Size and activity" | "Content"
+export type MeasureSection = "Size and activity" | "Content" | "References"
 
 export type Measure = {
   key: MeasureKey
@@ -133,6 +142,22 @@ export const MEASURES: Measure[] = [
     description: "Links it has posted, as Telegram counts them",
     section: "Content",
   },
+  {
+    key: "cited_by",
+    label: "Cited by (channels)",
+    short: "Cited by",
+    description:
+      "How many channels cite it, any Reference kind; the Reference kinds pill does not narrow it",
+    section: "References",
+  },
+  {
+    key: "cites",
+    label: "Cites (channels)",
+    short: "Cites",
+    description:
+      "How many channels it cites, any Reference kind; only Channels somebody follows or the Directory sampled have theirs recorded",
+    section: "References",
+  },
 ]
 
 const BY_KEY = new Map(MEASURES.map((m) => [m.key, m]))
@@ -143,6 +168,21 @@ export const FLAG_LABEL: Record<DirectoryFlag, string> = {
   followed: "Followed",
   followable: "Followable",
 }
+
+export const HANDLES_LABEL: Record<DirectoryHandlesCond["type"], string> = {
+  citedby: "Cited by",
+  cites: "Cites",
+}
+
+/** Typed handles as the server keys them: no "@", lowercase, each once. */
+export const parseHandles = (text: string): string[] => [
+  ...new Set(
+    text
+      .split(/[\s,]+/)
+      .map((h) => h.replace(/^@/, "").toLowerCase())
+      .filter(Boolean),
+  ),
+]
 
 /** The tab's first view: what an Account does not follow and can follow. */
 export const OPENING_FILTER = "not is:followed and is:followable"
@@ -165,6 +205,9 @@ export function directoryConditionLabel(
       return cond.days
         ? `Cited by your channels, last ${cond.days} days`
         : "Cited by your channels"
+    case "citedby":
+    case "cites":
+      return `${HANDLES_LABEL[cond.type]} ${cond.handles.map((h) => `@${h}`).join(", ")}`
     case "measure":
       return `${measureOf(cond.measure).label}${cond.none ? ":" : ""} ${boundText(cond)}`
   }
@@ -182,6 +225,9 @@ function condText(cond: DirectoryCond): string {
       return `is:${cond.value}`
     case "mine":
       return `mine:${cond.days ? `${cond.days}d` : "all"}`
+    case "citedby":
+    case "cites":
+      return `${cond.type}:${quote(cond.handles.join(" "))}`
     case "measure": {
       const m = cond.measure
       return {
@@ -239,6 +285,13 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
       const days = Number(WINDOW.exec(text)?.[1])
       if (days >= 1) return { type: "mine", days }
     }
+    if (prefix === "citedby" || prefix === "cites") {
+      const handles = parseHandles(text)
+      if (handles.length)
+        return prefix === "cites"
+          ? { type: "cites", handles }
+          : { type: "citedby", handles }
+    }
     // An unknown value would be a 422 from the server, so it does not parse.
     throw new ParseError(`Unknown ${prefix}:${text}`)
   },
@@ -254,6 +307,8 @@ export const DIRECTORY_FILTER_BOUNDS = {
   languageLength: 16,
   nameLength: 256,
   maxDays: 36_500,
+  handles: 50,
+  handleLength: 256,
 } as const
 
 /** Whether the server accepts `filter`: depth, node count and values. */
@@ -269,6 +324,11 @@ export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
     if (cond.type === "language") return cond.value.length <= b.languageLength
     if (cond.type === "name") return cond.value.length <= b.nameLength
     if (cond.type === "mine") return (cond.days ?? 0) <= b.maxDays
+    if (cond.type === "citedby" || cond.type === "cites")
+      return (
+        cond.handles.length <= b.handles &&
+        cond.handles.every((h) => h.length <= b.handleLength)
+      )
     return true
   }
   return fits(filter, 1) && nodes <= b.nodes

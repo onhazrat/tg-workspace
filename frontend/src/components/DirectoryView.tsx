@@ -9,6 +9,7 @@ import {
   dataCountDirectory,
   dataGetDirectoryDistribution,
   dataGetDirectoryEntry,
+  dataGetDirectoryNeighbours,
   dataGetDirectoryPosts,
   dataGetDirectoryWhy,
 } from "@/client"
@@ -27,6 +28,7 @@ import { useDirectory } from "@/hooks/useDirectory"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import {
+  type DirectoryCond,
   type DirectoryFilter,
   directoryFilterBody,
   type Measure,
@@ -39,7 +41,7 @@ import {
   listSummary,
   sortValue,
 } from "@/lib/directory/directory-view"
-import { mapGroups } from "@/lib/filter-tree"
+import { appendAnd, mapGroups } from "@/lib/filter-tree"
 
 /** The filter without `measure`'s bounds: what its spread is drawn under. */
 const withoutMeasure = (filter: DirectoryFilter, measure: string) =>
@@ -123,7 +125,7 @@ function MeasureEditor({
 }
 
 /**
- * The detail panel's three reads (DIR-03): the entry by handle, so a panel off
+ * The detail panel's reads (DIR-03): the entry by handle, so a panel off
  * the current page still opens, its stored Posts, and "Why it's here" under
  * the view's "your channels", Reference kinds and Cited-by window.
  */
@@ -134,6 +136,7 @@ function DirectoryPanelReads({
   following,
   onFollow,
   onClose,
+  onFilter,
 }: {
   handle: string
   request: DirectoryViewRequest
@@ -141,6 +144,7 @@ function DirectoryPanelReads({
   following: boolean
   onFollow: () => void
   onClose: () => void
+  onFilter: (cond: DirectoryCond) => void
 }) {
   const path = { handle }
   const entry = useQuery({
@@ -163,6 +167,10 @@ function DirectoryPanelReads({
     queryKey: queryKeys.directoryRead("why", whyBody),
     queryFn: () => dataGetDirectoryWhy({ body: whyBody }),
   })
+  const neighbours = useQuery({
+    queryKey: queryKeys.directoryRead("neighbours", handle),
+    queryFn: () => dataGetDirectoryNeighbours({ path }),
+  })
   return (
     <DirectoryPanel
       handle={handle}
@@ -173,6 +181,8 @@ function DirectoryPanelReads({
       following={following}
       onFollow={onFollow}
       onClose={onClose}
+      neighbours={neighbours.data}
+      onFilter={onFilter}
     />
   )
 }
@@ -238,6 +248,11 @@ export function DirectoryView() {
           following={d.following.has(d.open)}
           onFollow={() => d.open && void d.follow([d.open])}
           onClose={() => d.setOpen(null)}
+          onFilter={(cond) => {
+            // As the prototype did: close, so the narrowed list shows.
+            d.setFilter(appendAnd(d.filter, cond))
+            d.setOpen(null)
+          }}
         />
       )}
     </div>

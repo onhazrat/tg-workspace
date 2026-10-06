@@ -51,6 +51,10 @@ describe("every Condition prints and parses back unchanged", () => {
     "links >= 10",
     "mine:all",
     "mine:14d",
+    "cited_by >= 5",
+    "cites <= 0",
+    "citedby:durov",
+    'cites:"alpha beta"',
   ])("%s", (text) => {
     expect(roundTrip(text)).toBe(text)
   })
@@ -103,6 +107,22 @@ describe("what each piece of text means", () => {
   })
 })
 
+describe("cited by @x and cites @x", () => {
+  test("one or several handles, lowercased, @ optional inside quotes", () => {
+    expect(conds('citedby:Durov cites:"alpha, @Beta"')).toEqual([
+      { cond: { type: "citedby", handles: ["durov"] }, not: false },
+      { cond: { type: "cites", handles: ["alpha", "beta"] }, not: false },
+    ])
+  })
+
+  test("the server's limit of 50 handles", () => {
+    const handles = (n: number) =>
+      Array.from({ length: n }, (_, i) => `h${i}`).join(" ")
+    expect(parseDirectoryFilter(`cites:"${handles(50)}"`)).not.toBeNull()
+    expect(parseDirectoryFilter(`cites:"${handles(51)}"`)).toBeNull()
+  })
+})
+
 describe("text the server would refuse does not parse", () => {
   test.each([
     ["an unknown is:", "is:dismissed"],
@@ -115,6 +135,7 @@ describe("text the server would refuse does not parse", () => {
     ["an unclosed parenthesis", "(lang:fa or lang:en"],
     ["a stray character", "lang:fa $"],
     ["a backwards range", "reach 10..1"],
+    ["no handle", 'citedby:"@"'],
   ])("%s", (_, text) => {
     expect(parseDirectoryFilter(text)).toBeNull()
   })
@@ -162,6 +183,12 @@ describe("chip labels", () => {
     ],
     [{ type: "mine" }, "Cited by your channels"],
     [{ type: "mine", days: 14 }, "Cited by your channels, last 14 days"],
+    [
+      { type: "measure", measure: "cited_by", min: 10 },
+      "Cited by (channels) ≥ 10",
+    ],
+    [{ type: "citedby", handles: ["durov"] }, "Cited by @durov"],
+    [{ type: "cites", handles: ["a", "b"] }, "Cites @a, @b"],
   ])("%j", (cond, label) => {
     expect(directoryConditionLabel(cond, "en")).toBe(label)
   })

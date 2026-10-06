@@ -138,7 +138,9 @@ export function ReferenceKindsPill({
         placeholder="Search reference kinds..."
       />
       <BarHeading>
-        Which References count for Cited by your channels; none is every kind
+        Which References count for Cited by your channels, Cited by @x and Cites
+        @x; none is every kind. The Cited by and Cites counts always count every
+        kind
       </BarHeading>
       {shown.length === 0 && (
         <p className="px-2 py-3 text-app-ink/50">

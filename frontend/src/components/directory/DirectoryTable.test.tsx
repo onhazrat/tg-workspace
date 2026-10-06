@@ -32,6 +32,8 @@ const row = (handle: string, over: Partial<DirectoryRowResponse> = {}) =>
     links: 4,
     followable: true,
     followed: false,
+    citedBy: 0,
+    cites: 0,
     mine: 2,
     mineLastAt: Date.now() - 3_600_000,
     match: null,
@@ -143,6 +145,22 @@ describe("columns and sorting", () => {
     expect(headers).not.toContain("Lang")
     expect(headers).toContain("Channel")
     expect(headers).toContain("Subs")
+  })
+
+  test("Cited by and Cites show their counts and sort by them", () => {
+    const calls = mount({
+      rows: [row("alpha", { citedBy: 1234, cites: 7 })],
+      hidden: ["mine"],
+    })
+    const cells = screen
+      .getByTestId("directory-row-alpha")
+      .querySelectorAll("td")
+    const texts = [...cells].map((c) => c.textContent)
+    expect(texts).toContain("1.23K")
+    expect(texts).toContain("7")
+    fireEvent.click(screen.getByRole("button", { name: "Cited by" }))
+    fireEvent.click(screen.getByRole("button", { name: "Cites" }))
+    expect(calls.sort).toEqual(["cited_by", "cites"])
   })
 
   test("a header sorts by its column, and the sorted one shows its arrow", () => {

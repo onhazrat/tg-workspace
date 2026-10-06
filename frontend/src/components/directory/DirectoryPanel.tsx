@@ -1,13 +1,20 @@
-import { ExternalLink, X } from "lucide-react"
+import { ExternalLink, Filter, X } from "lucide-react"
 import type {
   DirectoryCitingPostResponse,
   DirectoryEntryResponse,
+  DirectoryNeighbourResponse,
+  DirectoryNeighboursResponse,
   DirectorySamplePostResponse,
   DirectoryWhyResponse,
 } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import { RelativeTime } from "@/components/RelativeTime"
-import { MEASURES } from "@/lib/directory/directory-filter"
+import {
+  type DirectoryCond,
+  type DirectoryHandlesCond,
+  directoryConditionLabel,
+  MEASURES,
+} from "@/lib/directory/directory-filter"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
@@ -131,6 +138,68 @@ function WhyHere({
   )
 }
 
+/**
+ * One side of who cites whom (DIR-05): the Channels citing it most, or those
+ * it cites most, each one click from a Condition.
+ */
+function Neighbours({
+  title,
+  type,
+  list,
+  empty,
+  onFilter,
+}: {
+  title: string
+  /** The Condition a click adds: "cited by @x" or "cites @x". */
+  type: DirectoryHandlesCond["type"]
+  list: DirectoryNeighbourResponse[] | undefined
+  empty: string
+  onFilter: (cond: DirectoryCond) => void
+}) {
+  return (
+    <>
+      <h4 className={HEADING}>{title}</h4>
+      {!list ? (
+        <p className="text-xs text-app-ink/40">Loading…</p>
+      ) : list.length === 0 ? (
+        <p className="text-xs text-app-ink/60">{empty}</p>
+      ) : (
+        <ul className="space-y-1 text-xs">
+          {list.map((n) => {
+            const cond = { type, handles: [n.handle] }
+            const label = directoryConditionLabel(cond)
+            return (
+              <li key={n.handle} className="flex items-center gap-2">
+                <a
+                  href={telegramWebViewChannelUrl(n.handle)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  dir="auto"
+                  className={`min-w-0 truncate ${LINK}`}
+                >
+                  {n.displayName || `@${n.handle}`}
+                </a>
+                <span className="ml-auto shrink-0 font-mono text-[10px] text-app-ink/50">
+                  {n.references} · {n.kinds.join(", ")}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Filter by "${label}"`}
+                  title={`Add "${label}" to the filter`}
+                  onClick={() => onFilter(cond)}
+                  className="shrink-0 rounded p-0.5 text-app-ink/50 hover:bg-app-ink/10 hover:text-app-ink"
+                >
+                  <Filter size={12} />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </>
+  )
+}
+
 function Header({
   entry,
   following,
@@ -198,6 +267,8 @@ export function DirectoryPanel({
   following,
   onFollow,
   onClose,
+  neighbours,
+  onFilter,
 }: {
   handle: string
   entry: DirectoryEntryResponse | null | undefined
@@ -208,6 +279,10 @@ export function DirectoryPanel({
   following: boolean
   onFollow: () => void
   onClose: () => void
+  /** Who cites it most and whom it cites most; `undefined` while loading. */
+  neighbours: DirectoryNeighboursResponse | undefined
+  /** Adds a Condition to the view's filter. */
+  onFilter: (cond: DirectoryCond) => void
 }) {
   return (
     <aside
@@ -241,6 +316,20 @@ export function DirectoryPanel({
           ) : (
             <p className="text-xs text-app-ink/40">Loading recent posts…</p>
           )}
+          <Neighbours
+            title="Cited most by"
+            type="citedby"
+            list={neighbours?.citedBy}
+            empty="No channel we know of cites it."
+            onFilter={onFilter}
+          />
+          <Neighbours
+            title="Cites most"
+            type="cites"
+            list={neighbours?.cites}
+            empty="It cites no channel we know of."
+            onFilter={onFilter}
+          />
         </>
       )}
     </aside>

@@ -1,11 +1,17 @@
 /**
- * The Directory filter's small Condition editors (DIR-02): Name contains and
- * Cited by your channels. Bounds have their own editor.
+ * The Directory filter's small Condition editors (DIR-02): Name contains,
+ * Cited by your channels, and Cited by @x / Cites @x (DIR-05). Bounds have
+ * their own editor.
  */
 import type React from "react"
 import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
-import type { DirectoryCond } from "@/lib/directory/directory-filter"
+import {
+  type DirectoryCond,
+  type DirectoryHandlesCond,
+  HANDLES_LABEL,
+  parseHandles,
+} from "@/lib/directory/directory-filter"
 
 type EditorProps<C> = {
   start?: C
@@ -81,6 +87,43 @@ export function NameEditor({
         autoFocus
         dir="auto"
         aria-label="Name contains"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        className={fieldClass}
+      />
+    </Shell>
+  )
+}
+
+const HANDLES_EXPLAIN: Record<DirectoryHandlesCond["type"], string> = {
+  citedby:
+    "Channels any of these forwarded, mentioned, linked or replied to. The Reference kinds narrow it.",
+  cites:
+    "Channels that forwarded, mentioned, linked or replied to any of these. The Reference kinds narrow it.",
+}
+
+/** "Cited by @x" or "Cites @x", for one or several handles. */
+export function HandlesEditor({
+  type,
+  start,
+  onSubmit,
+  onBack,
+}: EditorProps<DirectoryHandlesCond> & { type: DirectoryHandlesCond["type"] }) {
+  const [text, setText] = useState(start?.handles.join(" ") ?? "")
+  const handles = parseHandles(text)
+  return (
+    <Shell
+      title={HANDLES_LABEL[type]}
+      explain={HANDLES_EXPLAIN[type]}
+      onBack={onBack}
+      submit={start ? "Update" : "Add"}
+      onSubmit={handles.length ? () => onSubmit({ type, handles }) : null}
+    >
+      <input
+        // biome-ignore lint/a11y/noAutofocus: the editor is this one field
+        autoFocus
+        aria-label="Handles"
+        placeholder="@durov @telegram"
         value={text}
         onChange={(e) => setText(e.target.value)}
         className={fieldClass}
