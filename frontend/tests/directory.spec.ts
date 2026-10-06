@@ -172,6 +172,9 @@ test.describe("TG Workspace directory", () => {
   test("browse, filter, sort, share and follow from the Directory", async ({
     page,
   }) => {
+    // Five page loads on CI's Vite dev server: it reached its last step at
+    // 26.6 s of the default 30 s (run 37417123209).
+    test.slow()
     const api = await mockDirectory(page)
     const follows = await mockBulkFollowJob(page)
     // No Channels, so no Channels tab selection: "your channels" is every
@@ -355,9 +358,22 @@ test.describe("TG Workspace directory", () => {
     await page.goto("/workspace?tab=directory")
     await expect(chip(page, "language-en")).toBeVisible()
     await expect.poll(() => param(page, "dirSort")).toBe("reach")
+  })
+
+  // Its own test: as the journey's tail it ran the journey past 30 s on CI.
+  test("open a row's panel, keep it over a reload, filter by a neighbour", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    const panel = await mockPanel(page)
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, ["directory.view", "directory.open"])
+    await page.goto("/workspace?tab=directory")
 
     // A row opens its panel; a reload keeps it open; Close closes it.
-    const panel = await mockPanel(page)
     await page.getByText("Channel a2").click()
     const aside = page.getByTestId("directory-panel")
     await expect(aside.getByText("The bio of a2")).toBeVisible()
