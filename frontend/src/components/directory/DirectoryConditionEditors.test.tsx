@@ -1,6 +1,9 @@
 /**
  * The Directory's small Condition editors (DIR-02): Name contains takes any
  * text, and Cited by your channels takes all time or a window in days.
+ * DIR-07's Shared editor was watched to fail on offering the saved ticked
+ * choice with nothing ticked; the table's Shared column on showing while its
+ * Condition is off (`DirectoryTable.test.tsx`).
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"

@@ -17,7 +17,9 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * memory only, not in storage (DIR-03); the list read not handed its abort
  * `signal`, so a superseded search runs on; the search chip's clear doing
  * nothing (DIR-04); a Dismissal that never refreshes the list, or a row
- * whose Dismiss also opens the panel (DIR-06).
+ * whose Dismiss also opens the panel (DIR-06); the live ticked picks sent
+ * as they were when the Condition was added, not re-resolved per tick
+ * (DIR-07).
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -44,6 +46,8 @@ const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
   mine: 6 - i,
   mineLastAt: Date.now() - 3_600_000,
   match: null,
+  sharedParents: null as number | null,
+  sharedChildren: null,
 }))
 
 type ListBody = {
@@ -145,7 +149,9 @@ async function mockPanel(page: Page) {
   )
   await page.route("**/api/v1/data/directory/why", async (route) => {
     whys.push(route.request().postDataJSON())
-    await route.fulfill({ json: { posts: [], total: 0 } })
+    await route.fulfill({
+      json: { posts: [], total: 0, parents: null, children: null },
+    })
   })
   await page.route("**/api/v1/data/directory/a2/neighbours", (route) =>
     route.fulfill({
@@ -461,7 +467,76 @@ test.describe("TG Workspace directory", () => {
       row.getByRole("button", { name: "Take back @a3" }),
     ).toBeVisible()
   })
+
+  // Its own short test, for the journey's time budget (DIR-07).
+  test("compare with the channels ticked here, live, and open it as a link", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    // Registered after `mockDirectory`, so it answers the list instead: the
+    // picks are never results, and each row carries its shared count.
+    const sent: (string[] | undefined)[] = []
+    await page.route("**/api/v1/data/directory/list", async (route) => {
+      const picks = parentsPicks(route.request().postDataJSON())
+      sent.push(picks)
+      const rows = ROWS.filter((r) => !picks?.includes(r.handle)).map((r) => ({
+        ...r,
+        sharedParents: picks ? 2 : null,
+      }))
+      await route.fulfill({
+        json: { rows, total: 250, languages: [], yoursSize: 3 },
+      })
+    })
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // With a tick, the editor starts on the live ticked choice.
+    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByTestId("directory-filters").click()
+    await page.getByPlaceholder("Search conditions...").fill("shared parents")
+    await page.getByRole("button", { name: /Shared parents with/ }).click()
+    await expect(
+      page.getByRole("radio", { name: /ticked in this list \(1\)/ }),
+    ).toBeChecked()
+    await page.getByRole("button", { name: "Add", exact: true }).click()
+    await expect(chip(page, "parents-picked")).toContainText(
+      "2+ shared parents with the channels ticked here",
+    )
+    expect(param(page, "dirFilter")).toContain("parents:picked")
+    await expect.poll(() => sent.at(-1)).toEqual(["a1"])
+    await expect(
+      page.getByRole("columnheader", { name: "Parents" }),
+    ).toBeVisible()
+
+    // A Channel ticked while it is on is a pick now, so it leaves the list.
+    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    await expect.poll(() => sent.at(-1)).toEqual(["a1", "a2"])
+    await expect(page.getByTestId("directory-row-a2")).toHaveCount(0)
+
+    // A shared link counts the receiver's ticks, which start empty.
+    const link = page.url()
+    await clearScopedStorage(page, ["directory.ticks"])
+    await page.goto(link)
+    await expect(chip(page, "parents-picked")).toBeVisible()
+    await expect.poll(() => sent.at(-1)).toEqual([])
+  })
 })
+
+/** The handles a list body sends as the Shared parents picks, if any. */
+function parentsPicks(body: {
+  filter?: { children?: { cond?: { type?: string; handles?: string[] } }[] }
+}): string[] | undefined {
+  return (body.filter?.children ?? []).find((c) => c.cond?.type === "parents")
+    ?.cond?.handles
+}
 
 /** The list body's filter holds `not is:dismissed` on its top-level AND. */
 function hidesDismissed(body: {
