@@ -28,6 +28,8 @@ Each mutation was applied alone and this module went red:
 * no prefix, a prefix on every word, a prefix below three characters -> the
   prefix cases, one each
 * keep a word one configuration drops as a stop word -> "the quasar"
+* drop such a word under every configuration, or read the relaxed query for
+  rows of any configuration -> "only" plus a Persian word
 * drop the trigram match -> the typo case; run it on every field -> the typo
   case and the bio and Posts field limits
 * drop the weight labels -> the field limits
@@ -210,6 +212,9 @@ def test_the_fields_limit_where_a_word_is_looked_for(
         ("seen qua", ["ds_sky_wide", "ds_sky_small"]),
         # A stop word in one configuration does not hide that configuration's rows.
         ("the quasar", ["ds_sky_wide", "ds_sky_small"]),
+        # ...and stays required under every configuration that keeps it: the
+        # Persian row is indexed with `simple`, which holds "only" as a word.
+        ("only \u06a9\u062a\u0627\u0628", []),
     ],
 )
 def test_the_last_word_is_a_prefix_from_three_characters(

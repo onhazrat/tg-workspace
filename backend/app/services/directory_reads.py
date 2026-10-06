@@ -60,6 +60,7 @@ from sqlalchemy import (
     all_,
     and_,
     any_,
+    case,
     cast,
     distinct,
     false,
@@ -237,6 +238,9 @@ class SearchQuery:
     fields: tuple[SearchField, ...]
     #: The words as one `tsquery`; `None` when no word survived.
     tsquery: str | None
+    #: For each configuration that drops some of the words as stop words, the
+    #: `tsquery` without them, read only for rows indexed under it.
+    relaxed: tuple[tuple[str, str], ...]
     #: The normalised text for the trigram typo match on names; "" for none.
     typo: str
     #: Every lexeme the `tsquery` names, for highlighting.
@@ -313,11 +317,12 @@ def resolve_search(
 
     Every word but the last matches whole and the last as a prefix from
     `search_text.PREFIX_FROM` characters. Each word is tried under every
-    configuration and the words are joined with AND. A word one configuration
-    drops as a stop word is left out: rows indexed under that configuration
-    hold no lexeme for it, so keeping it would make "the news" miss every
-    English Channel. The fields become weight labels, so a field limit is read
-    from the same index.
+    configuration and the words are joined with AND. A word a configuration
+    drops as a stop word is left out **for rows indexed under that
+    configuration only** (`relaxed`): they hold no lexeme for it, so keeping it
+    would make "the news" miss every English Channel, while a Persian row,
+    indexed with `simple`, must still hold "only" to match "only fans". The
+    fields become weight labels, so a field limit is read from the same index.
     """
     chosen = tuple(f for f in SEARCH_FIELDS if f in set(fields))
     weights = (
@@ -330,31 +335,48 @@ def resolve_search(
         search_text.term_operand(t, last=i == len(terms) - 1, weights=weights)
         for i, t in enumerate(terms)
     ]
-    per_term: dict[int, list[str]] = {}
+    per_term: dict[int, dict[str, str]] = {}
     if operands:
-        for i, _cfg, query in session.execute(
+        for i, cfg, query in session.execute(
             _PER_CONFIG, {"ops": operands, "cfgs": list(search_text.CONFIGS)}
         ).all():
-            per_term.setdefault(int(i), []).append(str(query))
-    kept = [parts for parts in per_term.values() if all(parts)]
-    if not kept:
-        kept = [[p for p in parts if p] for parts in per_term.values()]
-    words = [" | ".join(sorted(set(parts))) for parts in kept if parts]
-    tsquery = " & ".join(f"( {w} )" for w in words) or None
+            per_term.setdefault(int(i), {})[str(cfg)] = str(query)
+    # A word no configuration keeps (punctuation `simple` drops too) is gone.
+    forms = [f for f in per_term.values() if any(f.values())]
+    tsquery = _all_of(forms)
+    relaxed = []
+    for cfg in search_text.CONFIGS:
+        kept = [f for f in forms if f[cfg]]
+        # Every word a stop word here: the whole query, which these rows miss.
+        if kept and len(kept) < len(forms):
+            relaxed.append((cfg, _all_of(kept) or ""))
     typo = " ".join(terms)
     return SearchQuery(
         fields=chosen,
         tsquery=tsquery,
+        relaxed=tuple(relaxed),
         typo=typo if "name" in chosen and len(typo) >= search_text.PREFIX_FROM else "",
         stems=frozenset(search_text.lexemes(tsquery or "")),
     )
+
+
+def _all_of(forms: Sequence[dict[str, str]]) -> str | None:
+    """Each word as any of its forms, the words joined with AND."""
+    words = [" | ".join(sorted({q for q in f.values() if q})) for f in forms]
+    return " & ".join(f"( {w} )" for w in words) or None
+
+
+def _matches_query(query: str) -> ColumnElement[bool]:
+    return col(DirectorySearchDocument.tsv).op("@@")(cast(literal(query), TSQUERY))
 
 
 def _search_match(search: SearchQuery) -> ColumnElement[bool]:
     doc = DirectorySearchDocument
     clauses: list[ColumnElement[bool]] = []
     if search.tsquery:
-        clauses.append(col(doc.tsv).op("@@")(cast(literal(search.tsquery), TSQUERY)))
+        clauses.append(_matches_query(search.tsquery))
+    for cfg, query in search.relaxed:
+        clauses.append(and_(col(doc.ts_config) == cfg, _matches_query(query)))
     if search.typo:
         # `<%` is word similarity, so a typo inside a longer name still counts.
         clauses.append(literal(search.typo).op("<%")(col(doc.names)))
@@ -366,13 +388,23 @@ def _relevance(search: SearchQuery) -> ColumnElement[Any]:
     doc = DirectorySearchDocument
     strength: ColumnElement[Any] = literal(0.0)
     if search.tsquery:
-        strength = func.ts_rank(col(doc.tsv), cast(literal(search.tsquery), TSQUERY), 1)
+        strength = _rank(search.tsquery)
+    if search.relaxed:
+        strength = case(
+            *((col(doc.ts_config) == cfg, _rank(q)) for cfg, q in search.relaxed),
+            else_=strength,
+        )
     if search.typo:
         # A name typed with a typo ranks below most word matches.
         strength = func.greatest(
             strength, func.word_similarity(search.typo, col(doc.names)) * 0.1
         )
     return strength * func.ln(10 + func.coalesce(col(DirectoryEntry.subscribers), 0))
+
+
+def _rank(query: str) -> ColumnElement[Any]:
+    tsv = col(DirectorySearchDocument.tsv)
+    return func.ts_rank(tsv, cast(literal(query), TSQUERY), 1)
 
 
 # ---- Compiling the tree ---------------------------------------------------------

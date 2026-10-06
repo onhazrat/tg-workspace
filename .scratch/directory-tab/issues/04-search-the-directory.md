@@ -94,3 +94,16 @@ Nothing left open. Decisions made here:
 * The field segment refuses to turn off its last field, as the server
   refuses an empty list.
 * Clear all clears the search and every Condition in one navigation.
+
+2026-10-06, review fixes (branch `dir/review-fixes`):
+
+* **Changes the stop-word decision above.** A word one configuration drops as
+  a stop word is now left out only for rows indexed under that configuration;
+  every other row must still hold it, as the spec's "each word is tried under
+  every configuration, the words joined with AND" says. Before, "only fans"
+  matched a Persian Channel (indexed with `simple`) on "fans" alone, because
+  English drops "only". `SearchQuery.relaxed` holds one `tsquery` per dropping
+  configuration, matched as `ts_config = <it> AND tsv @@ <it>` beside the full
+  query, so a query with no stop word compiles exactly as before. A query whose
+  every word is a stop word in one configuration still misses that
+  configuration's rows, as it did.
