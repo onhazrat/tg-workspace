@@ -45,6 +45,13 @@ export const queryKeys = {
   discoverCandidates: (scope: unknown) =>
     ["discoverCandidates", scope] as const,
   discoverReports: ["discoverReports"] as const,
+  /**
+   * The Directory tab's reads (DIR-02), under one prefix so a Follow
+   * refetches every one of them. Keyed by the request body itself.
+   */
+  directory: ["directory"] as const,
+  directoryRead: (read: string, body: unknown) =>
+    ["directory", read, body] as const,
   discoverIgnored: ["discoverIgnored"] as const,
   /** Server-side probe queue counts. Polled while work is outstanding. */
   discoverProbeQueue: ["discoverProbeQueue"] as const,

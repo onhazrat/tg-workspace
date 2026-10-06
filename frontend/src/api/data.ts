@@ -1,5 +1,6 @@
 import type {
   ChatSessionSubmitRequest,
+  DirectoryFollowSource,
   PostCountsResponse,
   SummarySubmitRequest,
   TagRunSubmitRequest,
@@ -326,6 +327,12 @@ export type BulkFollowRequest = {
   torRotationThreshold?: number
   /** Where every new Follow lands; omitted is the default group (CTB-05). */
   settingGroupId?: string
+  /**
+   * A Follow from the Directory (DIR-02): each channel sent without its own
+   * `discoveredVia` gets the newest Reference from this "your channels" set,
+   * resolved server-side.
+   */
+  directory?: DirectoryFollowSource
 }
 
 export type FollowChannelResultStatus =

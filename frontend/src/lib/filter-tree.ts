@@ -355,6 +355,57 @@ function andRoot<C extends BaseCond>(filter: FilterTree<C>): FilterTree<C> {
   return { ...emptyTree<C>(), children: [{ ...filter, id: newId() }] }
 }
 
+// ---- Switches --------------------------------------------------------------
+
+/** Add a Condition joined to the rest with AND, wrapping an OR root first. */
+export const appendAnd = <C extends BaseCond>(
+  filter: FilterTree<C>,
+  cond: C,
+): FilterTree<C> => append(andRoot(filter), "root", cond)
+
+const isAndRoot = <C extends BaseCond>(filter: FilterTree<C>) =>
+  !filter.not && (filter.op === "and" || filter.children.length === 1)
+
+/**
+ * An on/off pill over one Condition (DIR-02's Hide followed): on only while
+ * that Condition, with that NOT, sits on the filter's top-level AND. Inside
+ * an OR it means something else, so the switch shows off there and the
+ * switches and the chips never disagree.
+ */
+export const switchOn = <C extends BaseCond>(
+  filter: FilterTree<C>,
+  same: (cond: C) => boolean,
+  not: boolean,
+): boolean =>
+  isAndRoot(filter) &&
+  filter.children.some(
+    (child) => child.kind === "atom" && same(child.cond) && !!child.not === not,
+  )
+
+/**
+ * Turn a switch on or off. On replaces any top-level Condition `same` matches
+ * and appends `cond`, wrapping an OR or negated root in a new AND first; off
+ * removes the top-level one and leaves any inside parentheses alone.
+ */
+export function setSwitch<C extends BaseCond>(
+  filter: FilterTree<C>,
+  same: (cond: C) => boolean,
+  cond: C,
+  not: boolean,
+  on: boolean,
+): FilterTree<C> {
+  const base = on ? andRoot(filter) : filter
+  const children = base.children.filter(
+    (child) =>
+      child.kind === "group" ||
+      !same(child.cond) ||
+      (!on && !!child.not !== not),
+  )
+  const atom: AtomNode<C> = { kind: "atom", id: newId(), cond }
+  if (not) atom.not = true
+  return { ...base, children: on ? [...children, atom] : children }
+}
+
 /**
  * A dropdown funnel. Funnels in one dropdown join with OR and different
  * dropdowns with AND: the first of a type appends to the root, the second

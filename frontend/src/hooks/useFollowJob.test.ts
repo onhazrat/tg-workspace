@@ -96,6 +96,34 @@ describe("followDiscoverChannels", () => {
     expect(status?.added).toBe(1)
   })
 
+  test("a Follow from the Directory sends its your-channels set for discovered-via", async () => {
+    const sent: unknown[] = []
+    const directory = {
+      yours: { source: "ticked" as const, handles: ["a"] },
+      referenceKinds: ["forward" as const],
+    }
+    const { result } = renderHook(() =>
+      useFollowJob(
+        deps({
+          followApi: {
+            ...deps({}).followApi,
+            bulkFollowChannels: async (body) => {
+              sent.push(body.directory)
+              return { followJobId: "follow-1" }
+            },
+          },
+        }),
+      ),
+    )
+
+    await within(
+      result.current.followDiscoverChannels([{ name: "alpha" }], { directory }),
+      500,
+    )
+
+    expect(sent).toEqual([directory])
+  })
+
   test("a running First sync keeps its Channel marked as syncing", async () => {
     const scraping = scrapingSet()
     const { result } = renderHook(() =>

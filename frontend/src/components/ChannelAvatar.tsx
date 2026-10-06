@@ -8,7 +8,7 @@ export function ChannelAvatar({
   className = "w-14 h-14",
   textClassName = "text-xl",
 }: {
-  channel: Channel
+  channel: Pick<Channel, "id" | "name" | "displayName" | "photoUrl">
   className?: string
   textClassName?: string
 }) {
