@@ -33,6 +33,7 @@ const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
   followed: false,
   mine: 6 - i,
   mineLastAt: Date.now() - 3_600_000,
+  match: null,
 }))
 
 type ListBody = {

@@ -34,6 +34,7 @@ const row = (handle: string, over: Partial<DirectoryRowResponse> = {}) =>
     followed: false,
     mine: 2,
     mineLastAt: Date.now() - 3_600_000,
+    match: null,
     ...over,
   }) satisfies DirectoryRowResponse
 
