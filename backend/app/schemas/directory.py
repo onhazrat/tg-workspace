@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.schemas.post_filter import check_tree_bounds
 from app.services.directory_reads import (
     SEARCH_FIELDS,
+    CitedByCond,
+    CitesCond,
     DirectoryCond,
     DirectoryFlag,
     DirectoryMeasure,
@@ -140,12 +142,46 @@ class DirectoryMineCondition(_Cond):
         return MineCond(self.days)
 
 
+#: How many handles one "cited by" or "cites" Condition names.
+MAX_CONDITION_HANDLES = 50
+
+
+def _normalised(handles: list[str]) -> tuple[str, ...]:
+    return tuple(sorted({h.strip().lstrip("@").lower() for h in handles}))
+
+
+class DirectoryCitedByCondition(_Cond):
+    """Cited by any of these handles, in the view's Reference kinds."""
+
+    type: Literal["citedby"]
+    handles: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
+        min_length=1, max_length=MAX_CONDITION_HANDLES
+    )
+
+    def to_cond(self) -> DirectoryCond:
+        return CitedByCond(_normalised(self.handles))
+
+
+class DirectoryCitesCondition(_Cond):
+    """Cites any of these handles, in the view's Reference kinds."""
+
+    type: Literal["cites"]
+    handles: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
+        min_length=1, max_length=MAX_CONDITION_HANDLES
+    )
+
+    def to_cond(self) -> DirectoryCond:
+        return CitesCond(_normalised(self.handles))
+
+
 DirectoryCondition = Annotated[
     DirectoryLanguageCondition
     | DirectoryNameCondition
     | DirectoryMeasureCondition
     | DirectoryFlagCondition
-    | DirectoryMineCondition,
+    | DirectoryMineCondition
+    | DirectoryCitedByCondition
+    | DirectoryCitesCondition,
     Field(discriminator="type"),
 ]
 
@@ -318,6 +354,10 @@ class _DirectoryEntryFields(BaseModel):
     links: int | None
     followable: bool
     followed: bool
+    #: Distinct Channels citing it, every Reference kind.
+    cited_by: int = Field(alias="citedBy")
+    #: Distinct Channels it cites, every Reference kind.
+    cites: int
 
 
 class DirectoryRowResponse(_DirectoryEntryFields):
@@ -373,6 +413,27 @@ class DirectoryWhyResponse(BaseModel):
 
     posts: list[DirectoryCitingPostResponse]
     total: int
+
+
+class DirectoryNeighbourResponse(BaseModel):
+    """A Channel at the other end of a citation, and how much it cites."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    handle: str
+    display_name: str | None = Field(alias="displayName")
+    #: References between the two, every kind.
+    references: int
+    kinds: list[ReferenceKind]
+
+
+class DirectoryNeighboursResponse(BaseModel):
+    """The Channels citing one most, and those it cites most."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    cited_by: list[DirectoryNeighbourResponse] = Field(alias="citedBy")
+    cites: list[DirectoryNeighbourResponse]
 
 
 class DirectoryLanguageCountResponse(BaseModel):

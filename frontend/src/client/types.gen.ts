@@ -1539,6 +1539,38 @@ export type DirectoryBinResponse = {
 };
 
 /**
+ * DirectoryCitedByCondition
+ *
+ * Cited by any of these handles, in the view's Reference kinds.
+ */
+export type DirectoryCitedByCondition = {
+    /**
+     * Type
+     */
+    type: 'citedby';
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+};
+
+/**
+ * DirectoryCitesCondition
+ *
+ * Cites any of these handles, in the view's Reference kinds.
+ */
+export type DirectoryCitesCondition = {
+    /**
+     * Type
+     */
+    type: 'cites';
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+};
+
+/**
  * DirectoryCitingPostResponse
  *
  * One Post of "your channels" that cites the Channel.
@@ -1614,7 +1646,7 @@ export type DirectoryDistributionRequest = {
     /**
      * Measure
      */
-    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links';
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites';
 };
 
 /**
@@ -1729,6 +1761,14 @@ export type DirectoryEntryResponse = {
      */
     followed: boolean;
     /**
+     * Citedby
+     */
+    citedBy: number;
+    /**
+     * Cites
+     */
+    cites: number;
+    /**
      * Bio
      */
     bio: string | null;
@@ -1765,7 +1805,11 @@ export type DirectoryFilterAtom = {
         type: 'flag';
     } & DirectoryFlagCondition) | ({
         type: 'mine';
-    } & DirectoryMineCondition);
+    } & DirectoryMineCondition) | ({
+        type: 'citedby';
+    } & DirectoryCitedByCondition) | ({
+        type: 'cites';
+    } & DirectoryCitesCondition);
 };
 
 /**
@@ -1875,7 +1919,7 @@ export type DirectoryListRequest = {
     /**
      * Sort
      */
-    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'mine' | 'mine_last_days' | 'relevance';
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'mine' | 'mine_last_days' | 'relevance';
     /**
      * Descending
      */
@@ -1960,7 +2004,7 @@ export type DirectoryMeasureCondition = {
     /**
      * Measure
      */
-    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links';
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites';
     /**
      * Min
      */
@@ -2005,6 +2049,46 @@ export type DirectoryNameCondition = {
      * Value
      */
     value: string;
+};
+
+/**
+ * DirectoryNeighbourResponse
+ *
+ * A Channel at the other end of a citation, and how much it cites.
+ */
+export type DirectoryNeighbourResponse = {
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+    /**
+     * References
+     */
+    references: number;
+    /**
+     * Kinds
+     */
+    kinds: Array<'forward' | 'mention' | 'link' | 'reply'>;
+};
+
+/**
+ * DirectoryNeighboursResponse
+ *
+ * The Channels citing one most, and those it cites most.
+ */
+export type DirectoryNeighboursResponse = {
+    /**
+     * Citedby
+     */
+    citedBy: Array<DirectoryNeighbourResponse>;
+    /**
+     * Cites
+     */
+    cites: Array<DirectoryNeighbourResponse>;
 };
 
 /**
@@ -2081,6 +2165,14 @@ export type DirectoryRowResponse = {
      * Followed
      */
     followed: boolean;
+    /**
+     * Citedby
+     */
+    citedBy: number;
+    /**
+     * Cites
+     */
+    cites: number;
     /**
      * Mine
      */
@@ -9346,6 +9438,36 @@ export type DataGetDirectoryEntryResponses = {
 };
 
 export type DataGetDirectoryEntryResponse = DataGetDirectoryEntryResponses[keyof DataGetDirectoryEntryResponses];
+
+export type DataGetDirectoryNeighboursData = {
+    body?: never;
+    path: {
+        /**
+         * Handle
+         */
+        handle: string;
+    };
+    query?: never;
+    url: '/api/v1/data/directory/{handle}/neighbours';
+};
+
+export type DataGetDirectoryNeighboursErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryNeighboursError = DataGetDirectoryNeighboursErrors[keyof DataGetDirectoryNeighboursErrors];
+
+export type DataGetDirectoryNeighboursResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryNeighboursResponse;
+};
+
+export type DataGetDirectoryNeighboursResponse = DataGetDirectoryNeighboursResponses[keyof DataGetDirectoryNeighboursResponses];
 
 export type DataGetDirectoryWhyData = {
     body: DirectoryWhyRequest;

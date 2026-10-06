@@ -284,6 +284,12 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "test_directory_browse.py, with two live Accounts: the entry is corpus "
         "and its Followed flag answers for each Account alone (DIR-03)",
     ),
+    ("GET", f"{DATA}/directory/{{handle}}/neighbours"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts getting one answer: "
+        "the citation pairs are corpus and the route reads nothing per "
+        "Account (DIR-05)",
+    ),
     ("POST", f"{DATA}/directory/why"): (
         Reason.COVERED_ELSEWHERE,
         "test_directory_browse.py, with two live Accounts and different "

@@ -72,6 +72,8 @@ from sqlmodel import Session, col, select
 
 from app.models_tg import (
     Channel,
+    CitationCount,
+    CitationPair,
     DirectoryEntry,
     DirectorySearchDocument,
     PostReference,
@@ -119,6 +121,9 @@ DirectoryMeasure = Literal[
     "videos",
     "files",
     "links",
+    # Distinct Channels citing it and it cites, every kind (DIR-05, ADR-028).
+    "cited_by",
+    "cites",
 ]
 DIRECTORY_MEASURES: tuple[DirectoryMeasure, ...] = get_args(DirectoryMeasure)
 #: The measures plus the two "your channels" reads: how many cite it, and how
@@ -173,7 +178,29 @@ class MineCond:
     days: int | None = None
 
 
-DirectoryCond = LanguageCond | NameCond | MeasureCond | FlagCond | MineCond
+@dataclass(frozen=True)
+class CitedByCond:
+    """Cited by any of these handles, in the view's Reference kinds."""
+
+    handles: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CitesCond:
+    """Cites any of these handles, in the view's Reference kinds."""
+
+    handles: tuple[str, ...]
+
+
+DirectoryCond = (
+    LanguageCond
+    | NameCond
+    | MeasureCond
+    | FlagCond
+    | MineCond
+    | CitedByCond
+    | CitesCond
+)
 DirectoryTree = TreeGroup[DirectoryCond]
 
 
@@ -344,7 +371,22 @@ def measure_sql(measure: DirectoryMeasure, now: datetime) -> ColumnElement[Any]:
         return _days_since(col(DirectoryEntry.last_post_at), now)
     if measure == "found_days":
         return _days_since(col(DirectoryEntry.created_at), now)
+    if measure == "cited_by" or measure == "cites":
+        # Correlated, so only a Condition, sort or spread that reads it joins
+        # the counts; a handle with no row is cited by (and cites) nobody.
+        stored = (
+            sa_select(getattr(CitationCount, measure))
+            .where(col(CitationCount.handle) == col(DirectoryEntry.handle))
+            .scalar_subquery()
+        )
+        return cast(func.coalesce(stored, 0), Float)
     return cast(getattr(DirectoryEntry, measure), Float)
+
+
+def _of_kinds(view: DirectoryView) -> list[ColumnElement[bool]]:
+    if not view.kinds:
+        return []
+    return [col(PostReference.kind) == any_(_handles(view.kinds))]
 
 
 def _references(
@@ -353,8 +395,7 @@ def _references(
     """The References "your channels" make, narrowed by the Reference kinds,
     and to the last `days` when given."""
     clauses = [col(PostReference.source_channel) == any_(_handles(view.sources))]
-    if view.kinds:
-        clauses.append(col(PostReference.kind) == any_(_handles(view.kinds)))
+    clauses += _of_kinds(view)
     if days is not None:
         since_ms = _epoch_ms(view.now) - days * 86_400_000
         clauses.append(col(PostReference.timestamp) >= since_ms)
@@ -380,6 +421,20 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
         refs = _references(view, days=cond.days)
         # Uncorrelated, so Postgres hashes it once even under an OR or a NOT.
         return handle.in_(sa_select(col(PostReference.target_handle)).where(*refs))
+    if isinstance(cond, CitedByCond | CitesCond):
+        # Live from the References, not the pairs: the view's Reference kinds
+        # narrow these two, and a pair keeps no kinds.
+        r = PostReference
+        entry_end, named_end = (
+            (r.target_handle, r.source_channel)
+            if isinstance(cond, CitedByCond)
+            else (r.source_channel, r.target_handle)
+        )
+        return handle.in_(
+            sa_select(col(entry_end)).where(
+                col(named_end) == any_(_handles(cond.handles)), *_of_kinds(view)
+            )
+        )
     value = measure_sql(cond.measure, view.now)
     if cond.none:
         return value.is_(None)
@@ -463,6 +518,8 @@ class DirectoryRow:
     links: int | None
     followable: bool
     followed: bool
+    cited_by: int
+    cites: int
     mine: int
     mine_last_at: int | None
     #: `None` unless a search asked for its matches.
@@ -621,6 +678,19 @@ def _rows(
             str(h): (int(n), last_at)
             for h, n, last_at in session.execute(sa_select(aggregate)).all()
         }
+    counted = {
+        str(h): (int(by), int(out))
+        for h, by, out in session.execute(
+            unscoped_select(
+                sa_select(
+                    col(CitationCount.handle),
+                    col(CitationCount.cited_by),
+                    col(CitationCount.cites),
+                ).where(col(CitationCount.handle) == any_(_handles(handles))),
+                reason=_SCOPE_REASON,
+            )
+        ).all()
+    }
     # A followed Channel answers the Post-based Reach, as everywhere else.
     reach = followed_reach(session, set(handles))
     matches = (
@@ -652,6 +722,8 @@ def _rows(
                 links=e.links,
                 followable=e.status == "ok",
                 followed=handle in view.followed,
+                cited_by=counted.get(handle, (0, 0))[0],
+                cites=counted.get(handle, (0, 0))[1],
                 mine=n,
                 mine_last_at=last_at,
                 match=matches.get(handle),
@@ -678,15 +750,15 @@ def _view_key(view: DirectoryView, tree: DirectoryTree | None) -> str:
             view.user_id,
             len(view.followed),
             tree,
-            sorted(view.sources) if _reads_sources(tree) else None,
-            view.kinds if _reads_sources(tree) else None,
+            sorted(view.sources) if _reads(tree, MineCond) else None,
+            view.kinds if _reads(tree, MineCond, CitedByCond, CitesCond) else None,
             view.search,
         )
     )
 
 
-def _reads_sources(tree: DirectoryTree | None) -> bool:
-    return tree is not None and any(isinstance(c, MineCond) for c in tree_conds(tree))
+def _reads(tree: DirectoryTree | None, *kinds: type) -> bool:
+    return tree is not None and any(isinstance(c, kinds) for c in tree_conds(tree))
 
 
 def _is_language(cond: DirectoryCond) -> bool:
@@ -962,6 +1034,75 @@ def _display_names(session: Session, handles: frozenset[str]) -> dict[str, str |
             )
         ).all()
     }
+
+
+#: How many Channels each side of the panel's neighbour lists shows.
+NEIGHBOURS_LIMIT = 10
+
+
+@dataclass(frozen=True)
+class Neighbour:
+    handle: str
+    display_name: str | None
+    #: References between the two, every kind.
+    references: int
+    kinds: list[str]
+
+
+@dataclass(frozen=True)
+class Neighbours:
+    #: The Channels citing it most.
+    cited_by: list[Neighbour]
+    #: The Channels it cites most.
+    cites: list[Neighbour]
+
+
+def neighbours(session: Session, handle: str) -> Neighbours:
+    """Who cites `handle` most and whom it cites most (DIR-05), from the
+    citation pairs, every kind; ties fall to the handle."""
+    p, r = CitationPair, PostReference
+
+    def side(near: Any, far: Any, ref_near: Any, ref_far: Any) -> list[Neighbour]:
+        top = session.execute(
+            unscoped_select(
+                sa_select(col(far), col(p.reference_count))
+                .where(col(near) == handle)
+                .order_by(col(p.reference_count).desc(), col(far))
+                .limit(NEIGHBOURS_LIMIT),
+                reason=_SCOPE_REASON,
+            )
+        ).all()
+        others = [str(h) for h, _ in top]
+        kinds = {
+            str(h): sorted(k)
+            for h, k in session.execute(
+                unscoped_select(
+                    sa_select(col(ref_far), func.array_agg(distinct(col(r.kind))))
+                    .where(
+                        col(ref_near) == handle, col(ref_far) == any_(_handles(others))
+                    )
+                    .group_by(col(ref_far)),
+                    reason=_SCOPE_REASON,
+                )
+            ).all()
+        }
+        names = _display_names(session, frozenset(others))
+        return [
+            Neighbour(
+                handle=str(h),
+                display_name=names.get(str(h)),
+                references=int(n),
+                kinds=kinds.get(str(h), []),
+            )
+            for h, n in top
+        ]
+
+    return Neighbours(
+        cited_by=side(
+            p.cited_handle, p.citing_handle, r.target_handle, r.source_channel
+        ),
+        cites=side(p.citing_handle, p.cited_handle, r.source_channel, r.target_handle),
+    )
 
 
 def directory_size(session: Session) -> int:

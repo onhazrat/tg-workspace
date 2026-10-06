@@ -69,7 +69,9 @@ def _stored(session: Session) -> tuple[Pairs, Counts]:
         (p.citing_handle, p.cited_handle): p.reference_count
         for p in session.query(CitationPair).all()
     }
-    counts = {c.handle: (c.cited_by, c.cites) for c in session.query(CitationCount).all()}
+    counts = {
+        c.handle: (c.cited_by, c.cites) for c in session.query(CitationCount).all()
+    }
     return pairs, counts
 
 
@@ -157,7 +159,12 @@ def test_the_walk_and_a_probe_keep_the_counts_too() -> None:
     with Session(engine) as session:
         session.add(Channel(id="walker_chan", name="walker_chan", telegram_chat_id=77))
         session.add(
-            Post(channel_name="walker_chan", post_id=1, text="via @bravo_chan", timestamp=1)
+            Post(
+                channel_name="walker_chan",
+                post_id=1,
+                text="via @bravo_chan",
+                timestamp=1,
+            )
         )
         session.commit()
         extract_batch(session, limit=10)

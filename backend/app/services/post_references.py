@@ -387,8 +387,7 @@ def _count_citations(session: Session, new: Counter[tuple[str, str]]) -> None:
         }
 
     created = {
-        (str(s), str(t))
-        for s, t in session.execute(_NEW_PAIRS, arrays(keys)).all()
+        (str(s), str(t)) for s, t in session.execute(_NEW_PAIRS, arrays(keys)).all()
     }
     grown = [p for p in keys if p not in created]
     if grown:
@@ -408,7 +407,9 @@ def _count_citations(session: Session, new: Counter[tuple[str, str]]) -> None:
     )
 
 
-def _next_bound(session: Session, table: str, column: str, after: str, batch: int) -> str | None:
+def _next_bound(
+    session: Session, table: str, column: str, after: str, batch: int
+) -> str | None:
     """The `batch`-th distinct value of `column` past `after`, read off its index."""
     found = session.execute(
         sa_text(
@@ -420,7 +421,9 @@ def _next_bound(session: Session, table: str, column: str, after: str, batch: in
     return None if found is None else str(found)
 
 
-def _in_batches(session: Session, table: str, column: str, statement: str, batch: int) -> None:
+def _in_batches(
+    session: Session, table: str, column: str, statement: str, batch: int
+) -> None:
     after = ""
     while (upto := _next_bound(session, table, column, after, batch)) is not None:
         session.execute(sa_text(statement), {"after": after, "upto": upto})

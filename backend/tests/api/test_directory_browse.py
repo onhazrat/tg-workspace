@@ -31,9 +31,15 @@ name is "Kucheh News"; `dt_en_news`'s is "Daily News".
 | src_b1         | dt_ru       | forward | 1 day    |
 | src_b1         | dt_fa_small | forward | 40 days  |
 | dt_ru          | dt_en_news  | mention | 5 days   |
+| dt_fa_big      | dt_ru       | mention | 6 days   |
+| dt_fa_big      | dt_ru       | link    | 6 days   |
+| dt_fa_big      | dt_en_news  | forward | 8 days   |
 
 So "cited by your channels" over every follow is dt_fa_big 2, dt_en_news 1,
 dt_fa_small 1 for the Operator, and dt_ru 1, dt_fa_small 1 for the other.
+Over every Channel (DIR-05's stored counts), cited by: dt_en_news 3, dt_fa_big
+2, dt_fa_small 2, dt_ru 2 (three References, two Channels), the rest 0; cites:
+dt_fa_big 2, dt_ru 1, the rest 0.
 
 ## Watched to fail
 
@@ -73,6 +79,20 @@ DIR-03 (the detail panel: `GET /directory/{handle}/entry`, `POST
 * stamp `capturedAt` off the naive column's `.timestamp()` -> the samples case
   (on any host not on UTC)
 * drop `/directory/why` from `VIEW_AS_READ_ONLY_PATHS` -> the View-as case
+
+DIR-05 (citation counts, "cited by @x" / "cites @x", `GET
+/directory/{handle}/neighbours`; the writer's guard is
+`tests/services/test_citation_pairs.py`):
+
+* count a handle with no counts row as 1 -> `cited_by <= 0`
+* drop the Reference kinds from the two handle Conditions -> the kinds case
+* read "cites @x" from the citing end -> the `cites` cases
+* leave the Reference kinds out of the cached total's key for them -> the
+  kinds case's total
+* swap the row's two counts -> the columns case
+* neighbours least first, or ties by handle descending -> the neighbours case
+* a neighbour's kinds over all its References, not those between the two ->
+  the neighbours case
 """
 
 from __future__ import annotations
@@ -130,6 +150,10 @@ REFERENCES = [
     ("src_b1", "dt_ru", "forward", 1),
     ("src_b1", "dt_fa_small", "forward", 40),
     ("dt_ru", "dt_en_news", "mention", 5),
+    # DIR-05: a Channel nobody follows citing two others, one of them two ways.
+    ("dt_fa_big", "dt_ru", "mention", 6),
+    ("dt_fa_big", "dt_ru", "link", 6),
+    ("dt_fa_big", "dt_en_news", "forward", 8),
 ]
 
 OPERATOR_FOLLOWS = ("src_a1", "src_a2", "dt_followed_a")
@@ -264,6 +288,14 @@ def mine(days: int | None = None) -> dict[str, Any]:
     return {"type": "mine", "days": days}
 
 
+def cited_by(*handles: str) -> dict[str, Any]:
+    return {"type": "citedby", "handles": list(handles)}
+
+
+def cites(*handles: str) -> dict[str, Any]:
+    return {"type": "cites", "handles": list(handles)}
+
+
 OPENING = root(atom(flag("followed"), negated=True), atom(flag("followable")))
 
 
@@ -382,6 +414,35 @@ def _but(*left_out: str) -> list[str]:
         (root(atom(mine())), ["dt_fa_big", "dt_en_news", "dt_fa_small"]),
         # The window: dt_en_news was last cited 30 days ago.
         (root(atom(mine(7))), ["dt_fa_big", "dt_fa_small"]),
+        # DIR-05: counted in distinct Citing Channels, over every Channel.
+        (root(atom(measure("cited_by", min=3))), ["dt_en_news"]),
+        (
+            root(atom(measure("cited_by", min=2))),
+            ["dt_fa_big", "dt_en_news", "dt_ru", "dt_fa_small"],
+        ),
+        # Nobody cites them, so they count 0, which is a value.
+        (
+            root(atom(measure("cited_by", max=0))),
+            ["dt_followed_a", "dt_dead", "dt_none"],
+        ),
+        (root(atom(measure("cites", min=1))), ["dt_fa_big", "dt_ru"]),
+        (root(atom(measure("cites", min=1), negated=True)), _but("dt_fa_big", "dt_ru")),
+        (root(atom(cited_by("src_a1"))), ["dt_fa_big", "dt_en_news"]),
+        (
+            root(atom(cited_by("src_a1", "@SRC_B1"))),
+            ["dt_fa_big", "dt_en_news", "dt_ru", "dt_fa_small"],
+        ),
+        (
+            root(atom(cited_by("src_a1"), negated=True)),
+            _but("dt_fa_big", "dt_en_news"),
+        ),
+        (root(atom(cites("dt_en_news"))), ["dt_fa_big", "dt_ru"]),
+        (root(atom(cites("dt_ru", "dt_followed_a"))), ["dt_fa_big"]),
+        (root(atom(cites("dt_en_news"), negated=True)), _but("dt_fa_big", "dt_ru")),
+        (
+            root(atom(cites("dt_en_news")), atom(cited_by("src_b1")), op="or"),
+            ["dt_fa_big", "dt_ru", "dt_fa_small"],
+        ),
         # An OR holding one of the opening view's Conditions.
         (
             root(group("or", atom(flag("followed")), atom(lang("ru")))),
@@ -493,6 +554,51 @@ def test_reference_kinds_narrow_your_channels(
     assert _mine(client, operator, referenceKinds=kinds) == expected
 
 
+def test_reference_kinds_narrow_the_handle_conditions_and_not_the_counts(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    forwards = {"referenceKinds": ["forward"], "sort": "subscribers"}
+    by_a1 = root(atom(cited_by("src_a1")))
+    # Every kind first: the cached total must not answer for forwards only.
+    assert _list(client, operator, filter=by_a1)["total"] == 2
+    page = _list(client, operator, filter=by_a1, **forwards)
+    assert ([r["handle"] for r in page["rows"]], page["total"]) == (["dt_fa_big"], 1)
+    assert _handles(
+        client, operator, filter=root(atom(cites("dt_en_news"))), **forwards
+    ) == ["dt_fa_big"]
+    assert _handles(
+        client,
+        operator,
+        filter=root(atom(cites("dt_en_news"))),
+        referenceKinds=["mention"],
+    ) == ["dt_ru"]
+    # The stored counts are over every kind, whatever the view narrows.
+    stored = _list(
+        client, operator, filter=root(atom(measure("cited_by", min=3))), **forwards
+    )
+    assert [(r["handle"], r["citedBy"]) for r in stored["rows"]] == [("dt_en_news", 3)]
+
+
+def test_the_row_carries_both_citation_counts(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, other = accounts
+    for headers in (operator, other):
+        rows = _list(client, headers, sort="subscribers")["rows"]
+        assert [(r["handle"], r["citedBy"], r["cites"]) for r in rows] == [
+            ("dt_fa_big", 2, 2),
+            ("dt_en_news", 3, 0),
+            ("dt_followed_a", 0, 0),
+            ("dt_ru", 2, 1),
+            ("dt_fa_small", 2, 0),
+            ("dt_dead", 0, 0),
+            ("dt_none", 0, 0),
+        ]
+    entry = _entry(client, operator, "dt_fa_big").json()
+    assert (entry["citedBy"], entry["cites"]) == (2, 2)
+
+
 def test_the_row_carries_the_newest_citation_time(
     client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
 ) -> None:
@@ -533,6 +639,9 @@ BY_HANDLE = "dead en_news fa_big fa_small followed_a none ru"
         ("mine", False, "dead followed_a none ru en_news fa_small fa_big"),
         ("mine_last_days", True, "en_news fa_small fa_big dead followed_a none ru"),
         ("mine_last_days", False, "fa_big fa_small en_news dead followed_a none ru"),
+        ("cited_by", True, "en_news fa_big fa_small ru dead followed_a none"),
+        ("cited_by", False, "dead followed_a none fa_big fa_small ru en_news"),
+        ("cites", True, "fa_big ru dead en_news fa_small followed_a none"),
     ],
 )
 def test_every_sort_orders_the_list(
@@ -960,6 +1069,63 @@ def test_why_its_here_keeps_the_window_and_the_reference_kinds(
     ]
     by_kind = _why(client, operator, "dt_fa_big", FOLLOWS, referenceKinds=["mention"])
     assert [p[:2] for p in by_kind] == [("src_a1", 1)]
+
+
+# ---- Neighbours (DIR-05) -------------------------------------------------------------
+
+
+def _neighbours(
+    client: TestClient, headers: dict[str, str], handle: str
+) -> dict[str, list[tuple[str, str | None, int, list[str]]]]:
+    response = client.get(f"{DIRECTORY}/{handle}/neighbours", headers=headers)
+    assert response.status_code == 200, response.text
+    return {
+        side: [
+            (n["handle"], n["displayName"], n["references"], n["kinds"])
+            for n in response.json()[side]
+        ]
+        for side in ("citedBy", "cites")
+    }
+
+
+def test_neighbours_list_who_cites_it_most_and_whom_it_cites_most(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """A corpus fact: both Accounts get the same answer, follows or not."""
+    for headers in accounts:
+        assert _neighbours(client, headers, "@DT_FA_BIG") == {
+            "citedBy": [
+                ("src_a1", None, 2, ["forward", "mention"]),
+                ("src_a2", None, 1, ["link"]),
+            ],
+            "cites": [
+                ("dt_ru", "Russkiy", 2, ["link", "mention"]),
+                ("dt_en_news", "Daily News", 1, ["forward"]),
+            ],
+        }
+        # Equal counts fall to the handle.
+        assert _neighbours(client, headers, "dt_en_news") == {
+            "citedBy": [
+                ("dt_fa_big", "Persian Big", 1, ["forward"]),
+                ("dt_ru", "Russkiy", 1, ["mention"]),
+                ("src_a1", None, 1, ["mention"]),
+            ],
+            "cites": [],
+        }
+        assert _neighbours(client, headers, "nobody_here") == {
+            "citedBy": [],
+            "cites": [],
+        }
+
+
+def test_the_citation_counts_have_a_distribution(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    spread = client.post(
+        f"{DIRECTORY}/distribution", json={"measure": "cited_by"}, headers=operator
+    ).json()
+    assert (spread["total"], spread["noValue"], spread["max"]) == (7, 0, 3)
 
 
 # ---- View-as -----------------------------------------------------------------------

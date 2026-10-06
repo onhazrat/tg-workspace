@@ -27,6 +27,7 @@ from app.schemas.directory import (
     DirectoryLanguageCountResponse,
     DirectoryListRequest,
     DirectoryListResponse,
+    DirectoryNeighboursResponse,
     DirectoryRowResponse,
     DirectorySamplePostResponse,
     DirectorySizeResponse,
@@ -204,6 +205,19 @@ def get_directory_entry(
         raise HTTPException(status_code=404, detail=DIRECTORY_ENTRY_NOT_FOUND)
     row, bio = found
     return DirectoryEntryResponse.model_validate(asdict(row) | {"bio": bio})
+
+
+# DIR-05. A GET, so View-as needs no entry for it; corpus, so both Accounts in
+# `test_directory_browse.py` get one answer.
+@router.get("/directory/{handle}/neighbours")
+def get_directory_neighbours(
+    handle: str,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> DirectoryNeighboursResponse:
+    """The Channels citing a Channel most, and those it cites most."""
+    found = directory_reads.neighbours(session, normalize_handle(handle))
+    return DirectoryNeighboursResponse.model_validate(asdict(found))
 
 
 @router.post("/directory/why")

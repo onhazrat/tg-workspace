@@ -2896,6 +2896,43 @@
         }
       }
     },
+    "/api/v1/data/directory/{handle}/neighbours": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Directory Neighbours",
+        "description": "The Channels citing a Channel most, and those it cites most.",
+        "operationId": "data-get_directory_neighbours",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Handle" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryNeighboursResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/directory/why": {
       "post": {
         "tags": ["data"],
@@ -6934,6 +6971,40 @@
         "title": "DirectoryBinResponse",
         "description": "One histogram bar: entries with a value from `lo` to `hi`."
       },
+      "DirectoryCitedByCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "citedby", "title": "Type" },
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Handles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "handles"],
+        "title": "DirectoryCitedByCondition",
+        "description": "Cited by any of these handles, in the view's Reference kinds."
+      },
+      "DirectoryCitesCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "cites", "title": "Type" },
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Handles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "handles"],
+        "title": "DirectoryCitesCondition",
+        "description": "Cites any of these handles, in the view's Reference kinds."
+      },
       "DirectoryCitingPostResponse": {
         "properties": {
           "channel": { "type": "string", "title": "Channel" },
@@ -7047,7 +7118,9 @@
               "photos",
               "videos",
               "files",
-              "links"
+              "links",
+              "cited_by",
+              "cites"
             ],
             "title": "Measure"
           }
@@ -7153,6 +7226,8 @@
           },
           "followable": { "type": "boolean", "title": "Followable" },
           "followed": { "type": "boolean", "title": "Followed" },
+          "citedBy": { "type": "integer", "title": "Citedby" },
+          "cites": { "type": "integer", "title": "Cites" },
           "bio": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Bio"
@@ -7177,6 +7252,8 @@
           "links",
           "followable",
           "followed",
+          "citedBy",
+          "cites",
           "bio"
         ],
         "title": "DirectoryEntryResponse",
@@ -7196,12 +7273,16 @@
               { "$ref": "#/components/schemas/DirectoryNameCondition" },
               { "$ref": "#/components/schemas/DirectoryMeasureCondition" },
               { "$ref": "#/components/schemas/DirectoryFlagCondition" },
-              { "$ref": "#/components/schemas/DirectoryMineCondition" }
+              { "$ref": "#/components/schemas/DirectoryMineCondition" },
+              { "$ref": "#/components/schemas/DirectoryCitedByCondition" },
+              { "$ref": "#/components/schemas/DirectoryCitesCondition" }
             ],
             "title": "Cond",
             "discriminator": {
               "propertyName": "type",
               "mapping": {
+                "citedby": "#/components/schemas/DirectoryCitedByCondition",
+                "cites": "#/components/schemas/DirectoryCitesCondition",
                 "flag": "#/components/schemas/DirectoryFlagCondition",
                 "language": "#/components/schemas/DirectoryLanguageCondition",
                 "measure": "#/components/schemas/DirectoryMeasureCondition",
@@ -7348,6 +7429,8 @@
               "videos",
               "files",
               "links",
+              "cited_by",
+              "cites",
               "mine",
               "mine_last_days",
               "relevance"
@@ -7458,7 +7541,9 @@
               "photos",
               "videos",
               "files",
-              "links"
+              "links",
+              "cited_by",
+              "cites"
             ],
             "title": "Measure"
           },
@@ -7510,6 +7595,50 @@
         "required": ["type", "value"],
         "title": "DirectoryNameCondition",
         "description": "Any part of the handle or the display name, case-insensitive."
+      },
+      "DirectoryNeighbourResponse": {
+        "properties": {
+          "handle": { "type": "string", "title": "Handle" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          },
+          "references": { "type": "integer", "title": "References" },
+          "kinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "title": "Kinds"
+          }
+        },
+        "type": "object",
+        "required": ["handle", "displayName", "references", "kinds"],
+        "title": "DirectoryNeighbourResponse",
+        "description": "A Channel at the other end of a citation, and how much it cites."
+      },
+      "DirectoryNeighboursResponse": {
+        "properties": {
+          "citedBy": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryNeighbourResponse"
+            },
+            "type": "array",
+            "title": "Citedby"
+          },
+          "cites": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryNeighbourResponse"
+            },
+            "type": "array",
+            "title": "Cites"
+          }
+        },
+        "type": "object",
+        "required": ["citedBy", "cites"],
+        "title": "DirectoryNeighboursResponse",
+        "description": "The Channels citing one most, and those it cites most."
       },
       "DirectoryRowResponse": {
         "properties": {
@@ -7566,6 +7695,8 @@
           },
           "followable": { "type": "boolean", "title": "Followable" },
           "followed": { "type": "boolean", "title": "Followed" },
+          "citedBy": { "type": "integer", "title": "Citedby" },
+          "cites": { "type": "integer", "title": "Cites" },
           "mine": { "type": "integer", "title": "Mine" },
           "mineLastAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -7597,6 +7728,8 @@
           "links",
           "followable",
           "followed",
+          "citedBy",
+          "cites",
           "mine",
           "mineLastAt",
           "match"
