@@ -76,9 +76,25 @@ describe("the switches", () => {
   test("are on for the opening view, and turning one off drops its chip", () => {
     const calls = mount()
     expect(pressed("directory-switch-followed")).toBe("true")
+    expect(pressed("directory-switch-dismissed")).toBe("true")
     expect(pressed("directory-switch-followable")).toBe("true")
     fireEvent.click(screen.getByTestId("directory-switch-followed"))
-    expect(calls.filters).toEqual(["is:followable"])
+    expect(calls.filters).toEqual(["not is:dismissed and is:followable"])
+  })
+
+  test("Hide dismissed sits between the other two and acts as they do", () => {
+    const calls = mount({ text: "is:followable" })
+    const order = screen
+      .getAllByTestId(/^directory-switch-(followed|dismissed|followable)$/)
+      .map((el) => el.dataset.testid)
+    expect(order).toEqual([
+      "directory-switch-followed",
+      "directory-switch-dismissed",
+      "directory-switch-followable",
+    ])
+    expect(pressed("directory-switch-dismissed")).toBe("false")
+    fireEvent.click(screen.getByTestId("directory-switch-dismissed"))
+    expect(calls.filters).toEqual(["is:followable and not is:dismissed"])
   })
 
   test("turning one on adds its Condition", () => {
@@ -115,7 +131,7 @@ describe("the dropdowns", () => {
 
   test("Filters counts the Conditions and opens a searchable picker", () => {
     const calls = mount()
-    expect(screen.getByTestId("directory-filters").textContent).toContain("2")
+    expect(screen.getByTestId("directory-filters").textContent).toContain("3")
     fireEvent.click(screen.getByTestId("directory-filters"))
     fireEvent.change(screen.getByPlaceholderText("Search conditions..."), {
       target: { value: "subs" },

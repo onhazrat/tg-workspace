@@ -106,7 +106,7 @@ export function directoryVocabulary(
           {
             kind: "list",
             id: "flag",
-            label: "Followed or followable",
+            label: "Followed, dismissed or followable",
             icon: CircleDot,
             options: (Object.keys(FLAG_LABEL) as DirectoryFlag[]).map((id) => ({
               id,

@@ -28,7 +28,7 @@ import type { FilterNode, FilterTree } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
 
 export type MeasureKey = DirectoryMeasureCondition["measure"]
-export type DirectoryFlag = "followed" | "followable"
+export type DirectoryFlag = "followed" | "followable" | "dismissed"
 
 export type DirectoryMeasureCond = {
   type: "measure"
@@ -167,6 +167,7 @@ export const measureOf = (key: MeasureKey): Measure =>
 export const FLAG_LABEL: Record<DirectoryFlag, string> = {
   followed: "Followed",
   followable: "Followable",
+  dismissed: "Dismissed",
 }
 
 export const HANDLES_LABEL: Record<DirectoryHandlesCond["type"], string> = {
@@ -184,8 +185,9 @@ export const parseHandles = (text: string): string[] => [
   ),
 ]
 
-/** The tab's first view: what an Account does not follow and can follow. */
-export const OPENING_FILTER = "not is:followed and is:followable"
+/** The tab's first view: what an Account neither follows nor dismissed, and can follow. */
+export const OPENING_FILTER =
+  "not is:followed and not is:dismissed and is:followable"
 
 // ---- Labels ----------------------------------------------------------------
 

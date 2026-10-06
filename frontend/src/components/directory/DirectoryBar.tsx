@@ -63,6 +63,12 @@ const SWITCHES: {
     title: "Leave out channels you follow",
   },
   {
+    flag: "dismissed",
+    not: true,
+    label: "Hide dismissed",
+    title: "Leave out channels you dismissed",
+  },
+  {
     flag: "followable",
     not: false,
     label: "Followable only",

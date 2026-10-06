@@ -37,6 +37,7 @@ describe("every Condition prints and parses back unchanged", () => {
     'name:"daily news"',
     "is:followed",
     "is:followable",
+    "is:dismissed",
     "subscribers >= 1000",
     "reach <= 500",
     "reach 100..5000",
@@ -60,7 +61,9 @@ describe("every Condition prints and parses back unchanged", () => {
   })
 
   test("the opening view", () => {
-    expect(OPENING_FILTER).toBe("not is:followed and is:followable")
+    expect(OPENING_FILTER).toBe(
+      "not is:followed and not is:dismissed and is:followable",
+    )
     expect(roundTrip(OPENING_FILTER)).toBe(OPENING_FILTER)
   })
 
@@ -125,7 +128,6 @@ describe("cited by @x and cites @x", () => {
 
 describe("text the server would refuse does not parse", () => {
   test.each([
-    ["an unknown is:", "is:dismissed"],
     ["another unknown is:", "is:available"],
     ["an unknown prefix", "tag:news"],
     ["a window that is not days", "mine:week"],
@@ -172,6 +174,7 @@ describe("chip labels", () => {
     [{ type: "name", value: "news" }, 'Name contains "news"'],
     [{ type: "flag", value: "followed" }, "Followed"],
     [{ type: "flag", value: "followable" }, "Followable"],
+    [{ type: "flag", value: "dismissed" }, "Dismissed"],
     [
       { type: "measure", measure: "subscribers", min: 1200 },
       "Subscribers ≥ 1.2K",
