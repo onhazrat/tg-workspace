@@ -26,12 +26,16 @@ from sqlalchemy import ColumnElement
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post
-from app.services.discover_ignored import ignored_handles
+from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_filters import ViewReading, apply_analysis_window
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import channel_order
-from app.services.telegram_web import _all_web_domains, is_channel_handle
+from app.services.telegram_web import (
+    _all_web_domains,
+    is_channel_handle,
+    normalize_handle,
+)
 from app.services.tenancy import scoped_select
 
 SignalKind = Literal["forward", "mention", "link"]
@@ -50,10 +54,6 @@ def _text_link_re() -> re.Pattern[str]:
         rf"(?:https?://)?(?:www\.)?(?:{domains})/([^\s<>\"')\]]+)",
         re.IGNORECASE,
     )
-
-
-def normalize_handle(name: str) -> str:
-    return name.lstrip("@").strip().lower()
 
 
 def extract_mentions(text: str) -> set[str]:
@@ -250,9 +250,9 @@ def compute_discover_candidates(
                         (post.forwarded_from or handle).lstrip("@").strip()
                     )
 
-    ignored = ignored_handles(session, user_id=user_id)
+    dismissed = dismissed_handles(session, user_id=user_id)
     candidates = [
-        _to_candidate(handle, entry, followed, ignored)
+        _to_candidate(handle, entry, followed, dismissed)
         for handle, entry in by_source.items()
         if entry.reference is not None
     ]
@@ -273,7 +273,7 @@ def compute_discover_candidates(
 
 
 def _to_candidate(
-    handle: str, entry: _Accumulator, followed: set[str], ignored: set[str]
+    handle: str, entry: _Accumulator, followed: set[str], dismissed: set[str]
 ) -> dict[str, Any]:
     seen_in: list[dict[str, Any]] = [
         {
@@ -296,7 +296,7 @@ def _to_candidate(
         "seenInCount": len(seen_in),
         "lastSeen": entry.last_seen,
         "isFollowed": handle in followed,
-        "isIgnored": handle in ignored,
+        "isIgnored": handle in dismissed,
         "reference": {
             "channelName": reference.channel_name,
             "postId": reference.post_id,

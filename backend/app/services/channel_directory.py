@@ -17,7 +17,7 @@ fact about anybody's reading, so nothing here is deleted because an account
 followed or unfollowed something. `tg_channels` remains the separate, follow-
 scoped record of a Channel somebody actually syncs.
 
-Deliberately kept apart from `discover_ignored`:
+Deliberately kept apart from `dismissals`:
 
 * A **dismissal** is a judgement — "not interesting to me".
 * A **probe** is a fact about the handle — "cannot be followed by anyone".
@@ -88,15 +88,28 @@ the last one.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, func, or_
-from sqlmodel import Session, col, select
+from sqlalchemy import text as sa_text
+from sqlmodel import Session, col, delete, select
 
 from app.jobs.settings import load_directory_settings, load_reach_settings
-from app.models_tg import DirectoryEntry, utc_now
-from app.services.channel_directory_samples import replace_samples, samples_for
+from app.models_tg import (
+    DirectoryEntry,
+    DirectorySearchDocument,
+    utc_now,
+)
+from app.services import search_text
+from app.services.channel_directory_samples import (
+    expire_samples_before,
+    handles_captured_before,
+    replace_samples,
+    samples_by_handle,
+    samples_for,
+)
 from app.services.channels import reach_by_channel
 from app.services.directory_statistics import (
     SampleStatistics,
@@ -108,6 +121,7 @@ from app.services.follows import followed_channel_names
 from app.services.post_references import extract_sample_references
 from app.services.reach import Reach, reach_settings_from, sample_reach
 from app.services.settling_curve import current_curve
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -198,10 +212,13 @@ DEAD_KINDS = frozenset({"bot", "group", "user"})
 DEFAULT_PROBE_PAGE_SIZE = 200
 MAX_PROBE_PAGE_SIZE = 1000
 
-
-def normalize_handle(name: str) -> str:
-    """Mirrors `discover.normalize_handle` — the key must match candidate names."""
-    return name.lstrip("@").strip().lower()
+#: The kind of entry the Directory tab lists, and so the kind that is searched.
+LISTED_KIND = "channel"
+#: The search document's recipe (`search_text`). Raise it when the recipe
+#: changes, and `scripts/backfill_directory_search.py` re-indexes older rows.
+SEARCH_INDEX_VERSION = 1
+#: Entries re-indexed per statement by retention and the backfill.
+SEARCH_BATCH = 500
 
 
 def _retry_deadline(attempts: int, *, now: datetime) -> datetime:
@@ -317,19 +334,24 @@ def _with_followed_reach(
     shared by every Follower.
     """
     probes = [probe_to_camel(row) for row in rows]
+    reach = followed_reach(session, {row.handle for row in rows})
+    for probe in probes:
+        own = reach.get(probe["handle"])
+        if own is not None:
+            probe["reach"] = own.value
+            probe["reachEstimated"] = own.estimated
+    return probes
+
+
+def followed_reach(session: Session, handles: set[str]) -> dict[str, Reach]:
+    """The Post-based Reach of each of `handles` that anybody follows (REACH-04)."""
     followed = {
-        name.lower(): name
-        for name in followed_channel_names(session, among={row.handle for row in rows})
+        name.lower(): name for name in followed_channel_names(session, among=handles)
     }
     if not followed:
-        return probes
+        return {}
     reach = reach_by_channel(session, list(followed.values()))
-    for probe in probes:
-        name = followed.get(probe["handle"])
-        if name is not None:
-            probe["reach"] = reach[name].value
-            probe["reachEstimated"] = reach[name].estimated
-    return probes
+    return {handle: reach[name] for handle, name in followed.items()}
 
 
 def probe_map(session: Session, handles: set[str]) -> dict[str, dict[str, Any]]:
@@ -754,6 +776,7 @@ def record_sync_metadata(
     if row.priority != RECHECK_PRIORITY:
         _schedule_refresh(session, row, now=moment)
     session.add(row)
+    index_for_search(session, [key])
 
 
 def refresh_entries(
@@ -957,9 +980,123 @@ def record_probe_result(
     row.retry_after = None
     row.checked_at = now
     _schedule_refresh(session, row, now=now, provisional=provisional_downgrade)
+    index_for_search(session, [key])
     session.commit()
     session.refresh(row)
     return _with_followed_reach(session, [row])[0]
+
+
+#: The weights are ADR-027's: names A, bio B, the newest samples C.
+_UPSERT_SEARCH = sa_text(
+    """
+    INSERT INTO tg_channel_directory_search
+        (handle, ts_config, tsv, names, index_version, indexed_at)
+    VALUES (
+        :handle,
+        CAST(:config AS text),
+        setweight(to_tsvector(CAST(:config AS text)::regconfig, CAST(:names AS text)), 'A')
+        || setweight(to_tsvector(CAST(:config AS text)::regconfig, :bio), 'B')
+        || setweight(to_tsvector(CAST(:config AS text)::regconfig, :posts), 'C'),
+        :names,
+        :version,
+        :now
+    )
+    ON CONFLICT (handle) DO UPDATE SET
+        ts_config = EXCLUDED.ts_config,
+        tsv = EXCLUDED.tsv,
+        names = EXCLUDED.names,
+        index_version = EXCLUDED.index_version,
+        indexed_at = EXCLUDED.indexed_at
+    """
+)
+
+
+def index_for_search(session: Session, handles: Iterable[str]) -> int:
+    """Rebuild the search document of each of `handles`; return how many exist.
+
+    Called inside every writer that changes a document's inputs, in its
+    transaction, so a search never reads a document older than its entry: a
+    probe result, a metadata sync, a recheck and sample retention. An entry
+    that is not listed (`LISTED_KIND`) has no document, so a recheck, or a page
+    that turned out to be a bot, deletes it. **Does not commit.**
+    """
+    wanted = sorted(set(handles))
+    if not wanted:
+        return 0
+    session.flush()
+    entries = {
+        row.handle: row
+        for row in session.exec(
+            select(DirectoryEntry).where(col(DirectoryEntry.handle).in_(wanted))
+        ).all()
+    }
+    listed = [h for h in wanted if (e := entries.get(h)) and e.kind == LISTED_KIND]
+    session.execute(
+        delete(DirectorySearchDocument).where(
+            col(DirectorySearchDocument.handle).in_(wanted),
+            col(DirectorySearchDocument.handle).not_in(listed),
+        )
+    )
+    if not listed:
+        return 0
+    samples = samples_by_handle(session, listed)
+    now = utc_now()
+    params = []
+    for handle in listed:
+        entry = entries[handle]
+        doc = search_text.document(
+            handle=handle,
+            display_name=entry.display_name,
+            bio=entry.bio,
+            language=entry.language,
+            posts=[w for _, w in search_text.indexed(samples.get(handle, []))],
+        )
+        params.append(
+            {
+                "handle": handle,
+                "config": doc.config,
+                "names": doc.names,
+                "bio": doc.bio,
+                "posts": doc.posts,
+                "version": SEARCH_INDEX_VERSION,
+                "now": now,
+            }
+        )
+    session.execute(_UPSERT_SEARCH, params)
+    return len(listed)
+
+
+def index_stale_for_search(
+    session: Session, *, after: str = "", limit: int = SEARCH_BATCH
+) -> list[str]:
+    """Index the next `limit` listed entries after `after` whose document is
+    missing or older than `SEARCH_INDEX_VERSION`; return their handles.
+
+    The backfill's step (`scripts/backfill_directory_search.py`), and how a
+    recipe change reaches old rows: raise the version and walk again. Re-running
+    it is safe, because a current row is not stale. Walks by handle, so each
+    batch starts where the last stopped instead of re-scanning the table.
+    **Does not commit.**
+    """
+    entry, doc = DirectoryEntry, DirectorySearchDocument
+    handles = list(
+        session.exec(
+            select(col(entry.handle))
+            .outerjoin(doc, col(doc.handle) == col(entry.handle))
+            .where(
+                col(entry.kind) == LISTED_KIND,
+                col(entry.handle) > after,
+                or_(
+                    col(doc.handle).is_(None),
+                    col(doc.index_version) < SEARCH_INDEX_VERSION,
+                ),
+            )
+            .order_by(col(entry.handle))
+            .limit(limit)
+        ).all()
+    )
+    index_for_search(session, handles)
+    return handles
 
 
 def requeue_probes(
@@ -1027,5 +1164,21 @@ def requeue_probes(
         row.priority = priority
         session.add(row)
         requeued.append(handle)
+    # The verdict went, and with it the kind, so the search document goes too.
+    index_for_search(session, requeued)
     session.commit()
     return requeued
+
+
+def expire_samples(session: Session, cutoff: datetime) -> int:
+    """Sample retention: drop samples captured before `cutoff`, and return how many.
+
+    Here rather than in the retention job because the samples are a search
+    document's input, so their handles are re-indexed in the same transaction.
+    **Does not commit.**
+    """
+    handles = handles_captured_before(session, cutoff)
+    deleted = expire_samples_before(session, cutoff)
+    for start in range(0, len(handles), SEARCH_BATCH):
+        index_for_search(session, handles[start : start + SEARCH_BATCH])
+    return deleted

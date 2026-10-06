@@ -49,6 +49,8 @@ type FacetMenuProps = {
   tickHint?: string
   /** Called as the dropdown opens and closes, so a tab can load its counts then. */
   onOpenChange?: (open: boolean) => void
+  /** What a row's count is out of, without ticks: "in the window". */
+  countLabel?: string
 }
 
 function Tick({ row }: { row: FacetMenuRow }) {
@@ -113,6 +115,7 @@ export function FacetMenu({
   onClearFunnels,
   search,
   tickHint = "Tick selects, the funnel shows only",
+  countLabel = "in the window",
   onOpenChange,
 }: FacetMenuProps) {
   const ticks = onToggleSelect !== undefined
@@ -164,7 +167,7 @@ export function FacetMenu({
       />
       <div className="flex justify-between px-2 pb-1 pt-1 text-[11px] text-app-ink/50">
         <span>{ticks ? tickHint : "The funnel shows only"}</span>
-        <span>{ticks ? "selected/total" : "in the window"}</span>
+        <span>{ticks ? "selected/total" : countLabel}</span>
       </div>
       {active && (
         <button

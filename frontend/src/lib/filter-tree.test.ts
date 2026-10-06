@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   addFunnel,
   append,
+  appendAnd,
   atoms,
   clearFunnels,
   emptyTree,
@@ -15,6 +16,8 @@ import {
   removeNode,
   replaceCond,
   setOp,
+  setSwitch,
+  switchOn,
   toggleNot,
   unwrap,
   wrap,
@@ -219,5 +222,62 @@ describe("funnels", () => {
     // A bound has no value, so it is never a funnel, and the compiler says so.
     // @ts-expect-error: "size" holds no value
     expect(funnelledValues(tree, "size")).toStrictEqual([])
+  })
+})
+
+describe("an on/off switch over one top-level Condition", () => {
+  const red = colour("red")
+  const isRed = (cond: Toy) => cond.type === "colour" && cond.value === "red"
+  const on = (tree: FilterTree<Toy>) => switchOn(tree, isRed, true)
+
+  test("is on only while its Condition, with its NOT, sits on the top-level AND", () => {
+    expect(on(root("and", [atom(red, true), atom(size(2))]))).toBe(true)
+    expect(on(root("and", [atom(red), atom(size(2))]))).toBe(false)
+    expect(on(root("and", [atom(size(2))]))).toBe(false)
+    // Inside an OR, nested, or under a negated root, it is not the switch's.
+    expect(on(root("or", [atom(red, true), atom(size(2))]))).toBe(false)
+    expect(
+      on(root("and", [grp("and", [atom(red, true), atom(size(1))])])),
+    ).toBe(false)
+    expect(on(root("and", [atom(red, true)], true))).toBe(false)
+  })
+
+  test("turning it on appends it, replacing one of the other polarity", () => {
+    const tree = root("and", [atom(red), atom(size(2))])
+    expect(shapeOf(setSwitch(tree, isRed, red, true, true))).toEqual(
+      shapeOf(root("and", [atom(size(2)), atom(red, true)])),
+    )
+  })
+
+  test("a Condition added with AND wraps an OR root first", () => {
+    const or = root("or", [atom(size(1)), atom(size(2))])
+    expect(shapeOf(appendAnd(or, red))).toEqual(
+      shapeOf(root("and", [{ ...or, id: "g" }, atom(red)])),
+    )
+    expect(shapeOf(appendAnd(emptyTree<Toy>(), red))).toEqual(
+      shapeOf(root("and", [atom(red)])),
+    )
+  })
+
+  test("turning it on over an OR wraps the OR in a new AND first", () => {
+    const or = root("or", [atom(red, true), atom(size(2))])
+    const next = setSwitch(or, isRed, red, true, true)
+    expect(shapeOf(next)).toEqual(
+      shapeOf(root("and", [{ ...or, id: "g" }, atom(red, true)])),
+    )
+    expect(on(next)).toBe(true)
+  })
+
+  test("turning it off removes only the top-level Condition", () => {
+    const or = grp("or", [atom(red, true), atom(size(1))])
+    const next = setSwitch(
+      root("and", [atom(red, true), or]),
+      isRed,
+      red,
+      true,
+      false,
+    )
+    expect(shapeOf(next)).toEqual(shapeOf(root("and", [or])))
+    expect(on(next)).toBe(false)
   })
 })

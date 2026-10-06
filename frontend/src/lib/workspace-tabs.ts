@@ -1,4 +1,5 @@
 import type { TabType } from "@/constants"
+import { DIRECTORY_PARAMS } from "@/lib/directory/directory-view"
 import { artifactDestination } from "@/lib/history/open-artifact"
 import type { WorkspaceSearch } from "@/lib/workspace-search"
 import type { ArtifactListItem } from "@/types"
@@ -254,11 +255,15 @@ export function goTo(set: TabSet, kind: TabType): Step {
  * The search for `target`, keeping every param that is not an Artifact param.
  *
  * Only the target's own Artifact param survives. Spreading the previous ones
- * forward is what kept an hour-old Summary alive on the Summary tab.
+ * forward is what kept an hour-old Summary alive on the Summary tab. The
+ * Directory's view rides only on the Directory tab: it means nothing anywhere
+ * else, and a Directory opened without it adopts the remembered one.
  */
 export function tabSearch(prev: WorkspaceSearch, target: Tab): WorkspaceSearch {
   const search: WorkspaceSearch = { ...prev, tab: target.kind }
   for (const param of Object.values(ARTIFACT_PARAMS)) delete search[param]
+  if (target.kind !== "directory")
+    for (const param of DIRECTORY_PARAMS) delete search[param]
   if (isArtifactKind(target.kind) && target.id) {
     search[ARTIFACT_PARAMS[target.kind]] = target.id
   }

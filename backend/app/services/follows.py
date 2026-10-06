@@ -648,7 +648,7 @@ def visible_channel_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
     is the Channels the caller Follows. Calling it `followed_channel_names`
     would make it a lie in the state it actually ships in.
 
-    Lowercased here rather than at each call site: `discover.normalize_handle`
+    Lowercased here rather than at each call site: `telegram_web.normalize_handle`
     lowercases every handle it extracts, so an un-lowercased name silently
     fails to match and the only symptom is a candidate the caller already
     follows being offered again.

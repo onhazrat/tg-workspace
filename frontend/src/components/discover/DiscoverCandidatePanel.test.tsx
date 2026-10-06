@@ -8,6 +8,7 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import type { DirectorySamplePostResponse } from "@/client"
 import type {
   DiscoveryCandidate,
   DiscoveryProbe,
@@ -24,6 +25,16 @@ import {
 } from "./DiscoverPanelSections"
 
 afterEach(cleanup)
+
+const SAMPLE: DirectorySamplePostResponse = {
+  postId: 0,
+  text: "",
+  timestamp: 0,
+  views: null,
+  capturedAt: 0,
+  hasMedia: false,
+  links: [],
+}
 
 const probe = {
   handle: "cand",
@@ -226,8 +237,8 @@ describe("RecentPosts", () => {
         handle="cand"
         loading={false}
         posts={[
-          { postId: 1, timestamp: 0, views: 1500, text: "one" },
-          { postId: 2, timestamp: 0, views: null, text: "" },
+          { ...SAMPLE, postId: 1, views: 1500, text: "one" },
+          { ...SAMPLE, postId: 2, views: null, text: "" },
         ]}
       />,
     )

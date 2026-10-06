@@ -86,11 +86,14 @@ from app.models_tg import (
     ChatDestination,
     ChatSession,
     ChatSessionPayload,
+    CitationCount,
+    CitationPair,
     DirectoryEntry,
     DirectoryProbeUsage,
     DirectorySample,
-    DiscoverIgnoredChannel,
+    DirectorySearchDocument,
     DiscoverReport,
+    Dismissal,
     EmbeddingLog,
     FollowJob,
     LLMLog,
@@ -157,7 +160,7 @@ SCOPES: dict[type[SQLModel], Scope] = {
     ChatSession: Scope.USER_OWNED,
     ChatSessionPayload: Scope.USER_OWNED,
     DiscoverReport: Scope.USER_OWNED,
-    DiscoverIgnoredChannel: Scope.USER_OWNED,
+    Dismissal: Scope.USER_OWNED,
     TagRun: Scope.USER_OWNED,
     BotCredential: Scope.USER_OWNED,
     # An Account's AI Key. `USER_OWNED` for `BotCredential`'s reason and
@@ -209,6 +212,10 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # Channels nobody follows yet, so scoping it by Follow would hide every row
     # that has a reason to be there.
     DirectorySample: Scope.CORPUS,
+    # The search document of a Directory entry (DIR-04, ADR-027): derived
+    # from the entry and its samples, so corpus for their reason. It answers
+    # "which public Channels say this word" the same way for every Account.
+    DirectorySearchDocument: Scope.CORPUS,
     # What the probe lane spent, one row per UTC day (ticket 04). Corpus
     # because the work is: a probe answers a question about what exists on
     # Telegram, so the row has no owner column to scope by and inventing one
@@ -227,6 +234,11 @@ SCOPES: dict[type[SQLModel], Scope] = {
     # discloses (somebody on this deployment scrapes @foo) is the fact a
     # Directory entry already discloses.
     PostReference: Scope.CORPUS,
+    # DIR-05's summary of those References by distinct Channel pair, and
+    # per handle (ADR-028). Derived from a corpus table, so corpus for its
+    # reason; no owner column, and nothing in it a Reference does not show.
+    CitationPair: Scope.CORPUS,
+    CitationCount: Scope.CORPUS,
     SyncMeta: Scope.CORPUS,
     # A sampled sighting of a Post's View count (REACH-05, ADR-024). Corpus
     # rather than `FOLLOW_SCOPED` like the Post it hangs off: nothing lists it
@@ -408,7 +420,7 @@ def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
       deliberately never filters on it — stamping it would be work ticket 22
       deletes.
     * **The composite-key tables excuse themselves.** `ChannelFollow`,
-      `DiscoverIgnoredChannel`, `QuotaUsage`, `QuotaLimit` and `UserSetting`
+      `Dismissal`, `QuotaUsage`, `QuotaLimit` and `UserSetting`
       carry `user_id` in a `NOT NULL` primary key, so a row without an owner
       cannot be expressed. That is a stronger excuse than any sentence: the database
       refuses the state rather than a guard asserting nobody reached it.
@@ -441,7 +453,7 @@ def owner_backfill_inventory() -> tuple[OwnerBackfill, ...]:
         # "cascade".
         #
         # Primary-key membership is the property that was doing the work all
-        # along. The four excused tables — ChannelFollow, DiscoverIgnoredChannel,
+        # along. The four excused tables — ChannelFollow, Dismissal,
         # QuotaUsage, UserSetting — carry `user_id` inside a composite primary
         # key, so they could never express an unowned row and never needed a
         # backfill. That is true before and after the columns become non-null,

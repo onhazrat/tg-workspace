@@ -1,4 +1,9 @@
-"""Dismissed Discover candidates (IDEA-011 D8).
+"""Dismissals: one Account's decision that a Channel is not for it (IDEA-011 D8).
+
+Shared by Discovery reports and the Directory (DIR-06): one Dismissal hides
+the Channel in both until the Account takes it back. The table was
+`tg_discover_ignored` until DIR-06 gave it the glossary's name; the Discover
+routes kept their `ignored` paths and wire shape.
 
 Like `isFollowed`, `isIgnored` is *not* stored inside a saved report — it is
 resolved against this table on every read. A report records what was referenced
@@ -20,12 +25,12 @@ key, so filtering on it answers an *identity* question instead: which row is
 yours. A flag cannot gate identity. Gated off, both accounts would resolve to
 one row again and the composite key would be decoration:
 
-* `ignore_channels` skips a handle that already has a row. Read globally, A's
+* `dismiss_channels` skips a handle that already has a row. Read globally, A's
   dismissal makes B's write a no-op, and a scoped read then tells B the handle
   is not dismissed — so B can never dismiss it and the button silently does
   nothing. That is a functional regression, not a visibility one, which is why
   the ticket refuses the read-only half-fix.
-* `unignore_channels` resolved a row by handle alone, so B undoing a dismissal
+* `take_back_dismissals` resolved a row by handle alone, so B undoing a dismissal
   deleted A's row and reported success for something that was never theirs.
 
 `test_discover_dismissals_are_per_account.py` runs every guard under both flag
@@ -39,29 +44,23 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.models_tg import DiscoverIgnoredChannel, utc_now
+from app.models_tg import Dismissal, utc_now
+from app.services.telegram_web import normalize_handle
 
 
-def normalize_handle(name: str) -> str:
-    """Mirrors `discover.normalize_handle` — the key must match candidate names."""
-    return name.lstrip("@").strip().lower()
-
-
-def ignored_handles(session: Session, *, user_id: uuid.UUID) -> set[str]:
+def dismissed_handles(session: Session, *, user_id: uuid.UUID) -> set[str]:
     """The handles `user_id` has dismissed. Never anybody else's."""
     rows = session.exec(
-        select(DiscoverIgnoredChannel.handle).where(
-            col(DiscoverIgnoredChannel.user_id) == user_id
-        )
+        select(Dismissal.handle).where(col(Dismissal.user_id) == user_id)
     ).all()
     return {str(handle) for handle in rows}
 
 
-def list_ignored(session: Session, *, user_id: uuid.UUID) -> list[dict[str, Any]]:
+def list_dismissals(session: Session, *, user_id: uuid.UUID) -> list[dict[str, Any]]:
     statement = (
-        select(DiscoverIgnoredChannel)
-        .where(col(DiscoverIgnoredChannel.user_id) == user_id)
-        .order_by(col(DiscoverIgnoredChannel.created_at).desc())
+        select(Dismissal)
+        .where(col(Dismissal.user_id) == user_id)
+        .order_by(col(Dismissal.created_at).desc())
     )
     return [
         {
@@ -73,7 +72,7 @@ def list_ignored(session: Session, *, user_id: uuid.UUID) -> list[dict[str, Any]
     ]
 
 
-def ignore_channels(
+def dismiss_channels(
     session: Session,
     handles: list[str],
     *,
@@ -87,13 +86,13 @@ def ignore_channels(
     here and this would return `[]` having written nothing.
     """
     added: list[str] = []
-    existing = ignored_handles(session, user_id=user_id)
+    existing = dismissed_handles(session, user_id=user_id)
     for raw in handles:
         handle = normalize_handle(raw)
         if not handle or handle in existing:
             continue
         session.add(
-            DiscoverIgnoredChannel(
+            Dismissal(
                 handle=handle,
                 user_id=user_id,
                 reason=reason,
@@ -106,7 +105,7 @@ def ignore_channels(
     return added
 
 
-def unignore_channels(
+def take_back_dismissals(
     session: Session, handles: list[str], *, user_id: uuid.UUID
 ) -> list[str]:
     """Undo one account's dismissal. Unknown handles are ignored, not 404s.
@@ -128,7 +127,7 @@ def unignore_channels(
         handle = normalize_handle(raw)
         if not handle:
             continue
-        row = session.get(DiscoverIgnoredChannel, (handle, user_id))
+        row = session.get(Dismissal, (handle, user_id))
         if row is None:
             continue
         session.delete(row)

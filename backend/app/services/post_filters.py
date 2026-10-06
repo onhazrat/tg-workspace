@@ -20,7 +20,7 @@ one name one set of values (PFB-01).
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
@@ -179,30 +179,73 @@ class ViewsCond:
 TreeCond = TypeCond | MediaCond | LanguageCond | ChannelCond | ViewsCond
 
 
+# Generic over the Condition, so the Directory filter (DIR-02) is the same tree
+# with its own vocabulary and `compile_tree` is the one place the tree's
+# meaning lives.
+
+
 @dataclass(frozen=True)
-class TreeAtom:
-    cond: TreeCond
+class TreeAtom[C]:
+    cond: C
     negated: bool = False
 
 
 @dataclass(frozen=True)
-class TreeGroup:
+class TreeGroup[C]:
     op: TreeOp
-    children: tuple[TreeAtom | TreeGroup, ...] = ()
+    children: tuple[TreeAtom[C] | TreeGroup[C], ...] = ()
     negated: bool = False
 
 
-TreeNode = TreeAtom | TreeGroup
+type TreeNode[C] = TreeAtom[C] | TreeGroup[C]
+#: The Post filter's tree.
+type PostTree = TreeGroup[TreeCond]
 
 
-def tree_conds(node: TreeNode) -> list[TreeCond]:
+def compile_tree[C](
+    node: TreeNode[C], atom: Callable[[C], ColumnElement[bool]]
+) -> ColumnElement[bool]:
+    """`node` as one predicate, each Condition compiled by `atom`.
+
+    Every atom is `coalesce(clause, false)`, so NOT is two-valued: a row with
+    no value for a Condition (an unread Language, no View count) fails it and
+    passes its negation, as a Channel with no value does on Channels. Plain SQL
+    would make both NULL and drop the row either way.
+
+    An empty group keeps every row, negated or not, so an empty tree hides
+    nothing (the Channels rule again).
+    """
+    if isinstance(node, TreeAtom):
+        clause: ColumnElement[bool] = func.coalesce(atom(node.cond), false())
+    else:
+        if not node.children:
+            return true()
+        parts = [compile_tree(child, atom) for child in node.children]
+        clause = and_(*parts) if node.op == "and" else or_(*parts)
+    return not_(clause) if node.negated else clause
+
+
+def prune_tree[C](node: TreeGroup[C], drop: Callable[[C], bool]) -> TreeGroup[C]:
+    """`node` without the Conditions `drop` names; a group left empty passes all."""
+    return TreeGroup(
+        op=node.op,
+        negated=node.negated,
+        children=tuple(
+            child if isinstance(child, TreeAtom) else prune_tree(child, drop)
+            for child in node.children
+            if not (isinstance(child, TreeAtom) and drop(child.cond))
+        ),
+    )
+
+
+def tree_conds[C](node: TreeNode[C]) -> list[C]:
     """Every Condition in the tree, in order."""
     if isinstance(node, TreeAtom):
         return [node.cond]
     return [cond for child in node.children for cond in tree_conds(child)]
 
 
-def tree_measures(node: TreeNode) -> frozenset[ViewMeasure]:
+def tree_measures(node: TreeNode[TreeCond]) -> frozenset[ViewMeasure]:
     """The measures the tree's views bounds read, so only those are loaded."""
     return frozenset(c.measure for c in tree_conds(node) if isinstance(c, ViewsCond))
 
@@ -217,13 +260,13 @@ class PostFilters:
 
     keyword: str | None = None
     #: None or an empty root keeps every Post.
-    tree: TreeGroup | None = None
+    tree: PostTree | None = None
     #: One reading per measure the tree's views bounds read.
     tree_readings: Mapping[ViewMeasure, ViewReading] = field(default_factory=dict)
     #: The measure the views orders read. Not the tree's: a bound names its own.
     reading: ViewReading = ViewReading()
 
-    def active_tree(self) -> TreeGroup | None:
+    def active_tree(self) -> PostTree | None:
         """The tree, when it holds anything to filter by; an empty root keeps all."""
         return self.tree if self.tree is not None and self.tree.children else None
 
@@ -246,7 +289,7 @@ class Rule:
     select: bool
     #: Reach every Post the filter does not match instead (PTR-06).
     negated: bool = False
-    tree: TreeGroup | None = None
+    tree: PostTree | None = None
     keyword: str | None = None
     sort: FeedSort = "newest"
     view_measure: ViewMeasure = "estimated"
@@ -367,34 +410,13 @@ def _atom_clause(
 
 
 def tree_clause(
-    node: TreeNode,
+    node: TreeNode[TreeCond],
     *,
     readings: Mapping[ViewMeasure, ViewReading],
     followed_names: frozenset[str] | None = None,
 ) -> ColumnElement[bool]:
-    """`node` as one predicate, evaluated the way the Channels tab evaluates.
-
-    Every atom is `coalesce(clause, false)`, so NOT is two-valued: a Post with
-    no value for a Condition (an unread Language, no View count) fails it and
-    passes its negation, as a Channel with no value does on Channels. Plain SQL
-    would make both NULL and drop the Post either way.
-
-    An empty group keeps every Post, negated or not, so an empty tree hides
-    nothing (the Channels rule again).
-    """
-    if isinstance(node, TreeAtom):
-        clause: ColumnElement[bool] = func.coalesce(
-            _atom_clause(node.cond, readings, followed_names), false()
-        )
-    else:
-        if not node.children:
-            return true()
-        parts = [
-            tree_clause(child, readings=readings, followed_names=followed_names)
-            for child in node.children
-        ]
-        clause = and_(*parts) if node.op == "and" else or_(*parts)
-    return not_(clause) if node.negated else clause
+    """`node` as one predicate, evaluated the way the Channels tab evaluates."""
+    return compile_tree(node, lambda cond: _atom_clause(cond, readings, followed_names))
 
 
 def post_filter_clauses(

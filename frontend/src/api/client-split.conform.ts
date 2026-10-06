@@ -54,6 +54,9 @@ import type {
   ConfigurationCatalogResponse,
   ConfigurationEntry,
   ConfigurationLayer,
+  DirectoryDistributionResponse,
+  DirectoryListResponse,
+  DirectoryRowResponse,
   DirectorySamplePostResponse,
   DiscoverReportResponse,
   DiscoveryArtifactResponse,
@@ -253,6 +256,30 @@ export type DirectorySamplePostIsNotAllOptional = Assert<
     timestamp: number
   }
     ? true
+    : false
+>
+
+// The Directory tab's reads (DIR-02): closed, with every field the table and
+// the bar read required, so the tab never narrows a count that is always there.
+export type DirectoryListIsClosed = Assert<IsClosed<DirectoryListResponse>>
+export type DirectoryRowIsClosed = Assert<IsClosed<DirectoryRowResponse>>
+export type DirectoryDistributionIsClosed = Assert<
+  IsClosed<DirectoryDistributionResponse>
+>
+export type DirectoryListIsNotAllOptional = Assert<
+  DirectoryListResponse extends {
+    rows: DirectoryRowResponse[]
+    total: number
+    yoursSize: number
+  }
+    ? DirectoryRowResponse extends {
+        handle: string
+        mine: number
+        followed: boolean
+        reachEstimated: boolean
+      }
+      ? true
+      : false
     : false
 >
 

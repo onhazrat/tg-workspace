@@ -143,11 +143,19 @@ def test_the_split_did_not_change_the_route_count() -> None:
     rather than more of its answer because it counts under a different filter
     set for each facet; and **84** with `GET /posts/view-estimate`, PFB-03's
     Settling curve and settings for the browser's Estimated View count, which
-    no feed read carries because a meaning search reads none.
+    no feed read carries because a meaning search reads none; and **88** with
+    DIR-02's four Directory reads, `POST /directory/list`, `/count` and
+    `/distribution` and `GET /directory/size`, the Directory tab's list, the
+    bound editor's preview and spread, and the filter row's "of M"; and **90**
+    with DIR-03's detail panel, `GET /directory/{handle}/entry` (the entry and
+    its bio, read by handle so a panel off the current page still opens) and
+    `POST /directory/why` ("Why it's here"); and **91** with DIR-05's
+    `GET /directory/{handle}/neighbours`, who cites a Channel most and whom
+    it cites most.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 84, (
-        f"expected 84 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 91, (
+        f"expected 91 /data endpoints, found {len(data_routes)}"
     )

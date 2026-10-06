@@ -76,17 +76,23 @@ TG_TABLES: tuple[str, ...] = (
     # spans the table, rows leaked by one test show up in another test's page.
     "tg_tag_runs",
     "tg_discover_reports",
-    "tg_discover_ignored",
+    "tg_dismissals",
     # Ticket 02's samples before the entry they hang off, so the order reads
     # child-then-parent like the rest of this list even though the TRUNCATE
     # cascades anyway.
     "tg_channel_directory_samples",
+    "tg_channel_directory_search",
     "tg_channel_directory",
     # CRG-01's reference graph. Truncated between tests for the reason
     # `tg_directory_probe_usage` is, despite production never pruning it: rows
     # left by one test are rows the next test's walk finds already present, so
     # a dedup assertion passes for the wrong reason.
     "tg_post_references",
+    # DIR-05's summary of the References (ADR-028), truncated with them: a
+    # count left behind would disagree with the References the next test
+    # writes, and the guard comparing the two would fail for no reason.
+    "tg_citation_pairs",
+    "tg_citation_counts",
     # Ticket 04's probe-lane tally. Truncated between tests for the reason
     # `tg_quota_usage` is, despite production never pruning either: the row is
     # keyed by day alone, so a count left behind by one test is the *same* row

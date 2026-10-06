@@ -58,11 +58,6 @@ from app.services.discover import (
     SignalKind,
     compute_discover_candidates,
 )
-from app.services.discover_ignored import (
-    ignore_channels,
-    list_ignored,
-    unignore_channels,
-)
 from app.services.discover_reports import (
     DEFAULT_REPORT_PAGE_SIZE,
     MAX_REPORT_PAGE_SIZE,
@@ -71,6 +66,11 @@ from app.services.discover_reports import (
     get_report,
     list_reports,
     update_report_flags,
+)
+from app.services.dismissals import (
+    dismiss_channels,
+    list_dismissals,
+    take_back_dismissals,
 )
 from app.services.post_selection import PostScope, freeze_selection
 
@@ -159,7 +159,7 @@ def list_discover_ignored(
     """Dismissed candidates, newest first."""
     return [
         IgnoredChannelResponse.model_validate(row)
-        for row in list_ignored(session, user_id=_current_user.id)
+        for row in list_dismissals(session, user_id=_current_user.id)
     ]
 
 
@@ -174,7 +174,7 @@ def add_discover_ignored(
     Idempotent: re-dismissing an entry is a no-op rather than an error, since
     the UI treats this as a toggle.
     """
-    added = ignore_channels(
+    added = dismiss_channels(
         session, body.handles, reason=body.reason, user_id=_current_user.id
     )
     return DiscoverIgnoredAddedResponse(ignored=added)
@@ -192,7 +192,7 @@ def remove_discover_ignored(
     call, matching the POST.
     """
     return DiscoverIgnoredRemovedResponse(
-        removed=unignore_channels(session, body.handles, user_id=_current_user.id)
+        removed=take_back_dismissals(session, body.handles, user_id=_current_user.id)
     )
 
 

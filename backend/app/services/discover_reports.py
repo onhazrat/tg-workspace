@@ -38,10 +38,11 @@ from app.schemas.post_filter import to_steps
 from app.schemas.scope import FrozenScope
 from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
-from app.services.discover_ignored import ignored_handles
+from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_selection import PostScope, selection_clause
 from app.services.serialization import model_to_camel
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import (
     assert_owner,
     assert_owner_on_write,
@@ -144,13 +145,13 @@ def followed_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
 
 def _candidate_handle(candidate: dict[str, Any]) -> str:
     name = candidate.get("name")
-    return name.lstrip("@").strip().lower() if isinstance(name, str) else ""
+    return normalize_handle(name) if isinstance(name, str) else ""
 
 
 def _with_live_state(
     candidates: list[Any],
     followed: set[str],
-    ignored: set[str],
+    dismissed: set[str],
     probes: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Overlay `isFollowed` / `isIgnored` / `probe` from live state.
@@ -181,7 +182,7 @@ def _with_live_state(
         row = {
             **candidate,
             "isFollowed": handle in followed,
-            "isIgnored": handle in ignored,
+            "isIgnored": handle in dismissed,
             "probe": probes.get(handle),
         }
         stored_before_the_rename = row.pop("samplePost", None)
@@ -214,13 +215,13 @@ def report_to_camel(
     written `report.user_id` would answer the wrong one without changing.
     """
     followed = followed_names(session, user_id=viewer_id)
-    ignored = ignored_handles(session, user_id=viewer_id)
+    dismissed = dismissed_handles(session, user_id=viewer_id)
     stored = report.candidates or []
     handles = {_candidate_handle(c) for c in stored if isinstance(c, dict)} - {""}
     probes = probe_map(session, handles)
     return {
         **_base(report, with_posts=True),
-        "candidates": _with_live_state(stored, followed, ignored, probes),
+        "candidates": _with_live_state(stored, followed, dismissed, probes),
         "candidateCount": len(stored),
         **(report.extra or {}),
     }

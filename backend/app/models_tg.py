@@ -16,7 +16,7 @@ from sqlalchemy import (
     false,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlmodel import Field, SQLModel
 
 
@@ -708,8 +708,11 @@ class DiscoverReport(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
-class DiscoverIgnoredChannel(SQLModel, table=True):
-    """A Discover candidate the operator has decided against following.
+class Dismissal(SQLModel, table=True):
+    """A Dismissal: one Account's decision that a Channel is not for it.
+
+    Read by Discovery reports and the Directory alike (DIR-06), so a Channel
+    dismissed in one is hidden in the other.
 
     Without this, every rerun re-surfaces everything already rejected: the good
     candidates get followed and drop out of the unfollowed view, so the report
@@ -727,7 +730,7 @@ class DiscoverIgnoredChannel(SQLModel, table=True):
     ## The owner is half the key (ticket 30)
 
     `handle` alone was the primary key, so the first account to dismiss a
-    candidate dismissed it for everybody — and `ignore_channels` skips a handle
+    candidate dismissed it for everybody — and `dismiss_channels` skips a handle
     that already has a row, so the second account's dismissal wrote nothing at
     all. Scoping the read without moving the key makes that *worse* rather than
     better: the scoped read then reports the handle as not dismissed, so the
@@ -740,7 +743,7 @@ class DiscoverIgnoredChannel(SQLModel, table=True):
     migration rather than deferred to every reader.
     """
 
-    __tablename__ = "tg_discover_ignored"
+    __tablename__ = "tg_dismissals"
 
     handle: str = Field(primary_key=True)
     user_id: uuid.UUID = Field(
@@ -768,7 +771,7 @@ class DirectoryEntry(SQLModel, table=True):
     triage rows that were never actionable. Probing resolves that once per
     handle.
 
-    **Global and separate from `DiscoverIgnoredChannel` by design.** A dismissal
+    **Global and separate from `Dismissal` by design.** A Dismissal
     is a judgement ("not interesting to me"); a probe is a fact about the handle
     ("cannot be followed by anyone"). Merging them would make an automated
     verdict indistinguishable from a deliberate one in the UI, and would let a
@@ -995,6 +998,48 @@ class DirectorySample(SQLModel, table=True):
     captured_at: datetime = Field(default_factory=utc_now, index=True)
 
 
+class DirectorySearchDocument(SQLModel, table=True):
+    """A listed Directory entry's search document (DIR-04, ADR-027).
+
+    The Directory aggregate's payload table, rebuilt by `channel_directory`
+    inside every writer that changes its inputs. A companion table rather than
+    a column on the entry, because a large field on the entry is detoasted by
+    every list read. Derived: `scripts/backfill_directory_search.py` rebuilds
+    any of it from the entries and their samples.
+    """
+
+    __tablename__ = "tg_channel_directory_search"
+    __table_args__ = (
+        Index(
+            "ix_tg_channel_directory_search_tsv",
+            "tsv",
+            postgresql_using="gin",
+            postgresql_with={"fastupdate": "off"},
+        ),
+        Index(
+            "ix_tg_channel_directory_search_names",
+            "names",
+            postgresql_using="gin",
+            postgresql_ops={"names": "gin_trgm_ops"},
+        ),
+    )
+
+    handle: str = Field(
+        primary_key=True,
+        foreign_key="tg_channel_directory.handle",
+        ondelete="CASCADE",
+    )
+    #: The text search configuration the row was built with, from its Language.
+    ts_config: str
+    #: Handle and display name (A), bio (B), the newest samples (C).
+    tsv: str = Field(sa_column=Column(TSVECTOR, nullable=False))
+    #: Handle and display name, normalised, for the trigram typo match.
+    names: str = Field(sa_column=Column(Text, nullable=False))
+    #: The recipe this row was built with; an older one is re-indexed.
+    index_version: int = Field(sa_column=Column(SmallInteger, nullable=False))
+    indexed_at: datetime = Field(default_factory=utc_now)
+
+
 class PostReference(SQLModel, table=True):
     """One Post naming one Channel, once, in one way (CRG-01, ADR-019).
 
@@ -1101,6 +1146,43 @@ class PostReference(SQLModel, table=True):
     #: `forward` | `mention` | `link` | `reply`. Plain text, as
     #: `DirectoryEntry.kind` and `.status` are, rather than a database enum.
     kind: str
+
+
+class CitationPair(SQLModel, table=True):
+    """One distinct citing Channel and cited Channel (DIR-05, ADR-028).
+
+    A summary of `tg_post_references`, written in the same transaction by
+    `post_references.write_references` from the References it reports as
+    new. Keyed by handle on both ends, as `CitationCount` is: the counts the
+    Directory filters on are per handle, and a handle is usually cited before
+    anybody has probed it. References are permanent, so a pair is never
+    deleted and its count never falls.
+    """
+
+    __tablename__ = "tg_citation_pairs"
+    # "Who cites @foo most" and DIR-07's shared parents read by the cited end.
+    __table_args__ = (Index("ix_tg_citation_pairs_cited", "cited_handle"),)
+
+    #: `PostReference.source_channel`.
+    citing_handle: str = Field(primary_key=True)
+    #: `PostReference.target_handle`.
+    cited_handle: str = Field(primary_key=True)
+    #: How many References the pair stands for, every kind.
+    reference_count: int
+
+
+class CitationCount(SQLModel, table=True):
+    """Per handle, how many distinct Channels cite it and it cites (ADR-028).
+
+    Every kind of Reference, never narrowed: the view's Reference kinds narrow
+    only what is counted live from the References. Written with the pairs.
+    """
+
+    __tablename__ = "tg_citation_counts"
+
+    handle: str = Field(primary_key=True)
+    cited_by: int = 0
+    cites: int = 0
 
 
 class TagRun(SQLModel, table=True):

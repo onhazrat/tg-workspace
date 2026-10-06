@@ -21,6 +21,7 @@ from app.services.post_filters import (
     MediaCond,
     MediaKind,
     Pick,
+    PostTree,
     PostType,
     Rule,
     Step,
@@ -43,6 +44,24 @@ from app.services.post_filters import (
 
 MAX_FILTER_DEPTH = 6
 MAX_FILTER_NODES = 100
+
+
+def check_tree_bounds(root: BaseModel) -> None:
+    """Refuse a wire tree deeper than `MAX_FILTER_DEPTH` or larger than `MAX_FILTER_NODES`.
+
+    Shared by every filter tree on the wire (the Post filter, the Directory
+    filter), which differ only in their Conditions.
+    """
+
+    def walk(node: Any, depth: int) -> int:
+        if depth > MAX_FILTER_DEPTH:
+            raise ValueError(f"filter deeper than {MAX_FILTER_DEPTH}")
+        if node.kind == "atom":
+            return 1
+        return 1 + sum(walk(child, depth + 1) for child in node.children)
+
+    if walk(root, 1) > MAX_FILTER_NODES:
+        raise ValueError(f"filter larger than {MAX_FILTER_NODES} nodes")
 
 
 class _Cond(BaseModel):
@@ -134,18 +153,10 @@ class FilterGroup(BaseModel):
     # the root's walk is the one that can refuse; the others are smaller.
     @model_validator(mode="after")
     def _bounded(self) -> FilterGroup:
-        def walk(node: FilterAtom | FilterGroup, depth: int) -> int:
-            if depth > MAX_FILTER_DEPTH:
-                raise ValueError(f"filter deeper than {MAX_FILTER_DEPTH}")
-            if isinstance(node, FilterAtom):
-                return 1
-            return 1 + sum(walk(child, depth + 1) for child in node.children)
-
-        if walk(self, 1) > MAX_FILTER_NODES:
-            raise ValueError(f"filter larger than {MAX_FILTER_NODES} nodes")
+        check_tree_bounds(self)
         return self
 
-    def to_tree(self) -> TreeGroup:
+    def to_tree(self) -> PostTree:
         return TreeGroup(
             op=self.op,
             negated=self.negated,

@@ -98,6 +98,8 @@ export function useDiscoverIgnoreMutation() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.discoverIgnored,
       })
+      // One Dismissal hides the Channel in the Directory too (DIR-06).
+      void queryClient.invalidateQueries({ queryKey: queryKeys.directory })
     },
   })
 }

@@ -21,6 +21,7 @@ import {
   Database,
   FileText,
   History,
+  Library,
   List,
   MessageSquare,
   Plus,
@@ -31,7 +32,7 @@ import {
   X,
   Zap,
 } from "lucide-react"
-import type { KeyboardEventHandler } from "react"
+import { type KeyboardEventHandler, useRef } from "react"
 
 import {
   DropdownMenu,
@@ -50,6 +51,7 @@ const TAB_ICONS = {
   List,
   MessageSquare,
   History,
+  Library,
   Send,
   Settings,
   Sparkles,
@@ -131,6 +133,7 @@ export function WorkspaceTabStrip({
       keyboardCodes: KEYBOARD_CODES,
     }),
   )
+  const chose = useRef(false)
   const { tabs } = workspaceTabs
   const closable = tabs.filter((tab) => !isFixed(tab.kind))
   const byKey = new Map(tabs.map((tab) => [tabKey(tab), tab]))
@@ -194,13 +197,28 @@ export function WorkspaceTabStrip({
             <Plus size={14} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        {/*
+         * No focus back to "+" once a tab is chosen (Escape still gets it).
+         * The return waits for the menu's exit animation, so on a slow machine
+         * it lands after the new tab is up and closes whatever popover the
+         * user has opened there.
+         */}
+        <DropdownMenuContent
+          align="start"
+          onCloseAutoFocus={(event) => {
+            if (chose.current) event.preventDefault()
+            chose.current = false
+          }}
+        >
           {CLOSABLE_TABS.map((meta) => {
             const Icon = tabIcon(meta)
             return (
               <DropdownMenuItem
                 key={meta.id}
-                onSelect={() => workspaceTabs.openTab(meta.id)}
+                onSelect={() => {
+                  chose.current = true
+                  workspaceTabs.openTab(meta.id)
+                }}
               >
                 <Icon size={14} /> {meta.label}
               </DropdownMenuItem>

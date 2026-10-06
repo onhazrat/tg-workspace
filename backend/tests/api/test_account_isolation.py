@@ -264,6 +264,39 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "has one answer for every caller and the rows carry no owner to scope "
         "by (tenancy.py::SCOPES, ticket 03)",
     ),
+    ("POST", f"{DATA}/directory/list"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts: the entries are "
+        "corpus, and what is private (Followed, every follow as 'your "
+        "channels') answers for each Account alone",
+    ),
+    ("POST", f"{DATA}/directory/count"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("POST", f"{DATA}/directory/distribution"): (
+        Reason.COVERED_ELSEWHERE,
+        "same file",
+    ),
+    ("GET", f"{DATA}/directory/size"): (
+        Reason.CORPUS,
+        "one count over DirectoryEntry, the same for every caller",
+    ),
+    ("GET", f"{DATA}/directory/{{handle}}/entry"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts: the entry is corpus "
+        "and its Followed flag answers for each Account alone (DIR-03)",
+    ),
+    ("GET", f"{DATA}/directory/{{handle}}/neighbours"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts getting one answer: "
+        "the citation pairs are corpus and the route reads nothing per "
+        "Account (DIR-05)",
+    ),
+    ("POST", f"{DATA}/directory/why"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_browse.py, with two live Accounts and different "
+        "selections: References are corpus, a citing Post's words are read "
+        "through the Follow seam, so a selection naming a Channel the Account "
+        "does not follow quotes nothing (DIR-03)",
+    ),
     ("POST", f"{DATA}/discover/probe/recheck"): (Reason.CORPUS, "see GET probes"),
     ("POST", f"{DATA}/discover/probe/refresh"): (Reason.CORPUS, "see GET probes"),
     ("GET", f"{DATA}/discover/ignored"): (

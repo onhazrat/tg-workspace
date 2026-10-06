@@ -232,7 +232,7 @@ def test_a_channel_that_never_synced_is_not_given_a_verdict(session: Session) ->
 def test_an_at_prefixed_name_seeds_under_the_normalized_handle(
     session: Session,
 ) -> None:
-    """`normalize_handle` is `lstrip("@").strip().lower()`, not just lowercase."""
+    """`normalize_handle` drops the "@" and the space, not just the case."""
     session.add(_channel("@Theta_Wire "))
     session.commit()
 

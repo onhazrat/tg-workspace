@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.directory import DirectoryYoursRequest
+
 
 class DiscoveredViaPayload(BaseModel):
     channel_name: str = Field(alias="channelName")
@@ -22,6 +24,10 @@ class BulkFollowChannelEntry(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class DirectoryFollowSource(DirectoryYoursRequest):
+    """The Directory view's "your channels" and Reference kinds, for discovered-via."""
+
+
 class BulkFollowRequest(BaseModel):
     """No `proxies` field — see `schemas/telegram.ProxyConfig` (ADR-012)."""
 
@@ -32,6 +38,9 @@ class BulkFollowRequest(BaseModel):
     #: Where every new Follow lands (CTB-05). Omitted is the default group, so
     #: Discover, which never names one, is unchanged.
     setting_group_id: str | None = Field(None, alias="settingGroupId")
+    #: A Follow from the Directory (DIR-02): each Channel sent without a
+    #: `discoveredVia` records the newest Reference from these channels to it.
+    directory: DirectoryFollowSource | None = None
 
     model_config = {"populate_by_name": True}
 

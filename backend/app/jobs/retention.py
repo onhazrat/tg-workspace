@@ -70,7 +70,7 @@ from app.models_tg import (
     PostTranslation,
     utc_now,
 )
-from app.services.channel_directory_samples import expire_samples_before
+from app.services.channel_directory import expire_samples
 from app.services.channel_photos import (
     delete_cached_photo,
     photo_stem,
@@ -488,7 +488,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     # that eventually needs it, not here ahead of it.
     deleted_samples = 0
     if sample_days > 0:
-        deleted_samples = expire_samples_before(
+        deleted_samples = expire_samples(
             session, utc_now() - timedelta(days=sample_days)
         )
         session.commit()

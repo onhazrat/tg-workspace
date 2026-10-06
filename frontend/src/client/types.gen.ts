@@ -424,6 +424,7 @@ export type BulkFollowRequest = {
      * Settinggroupid
      */
     settingGroupId?: string | null;
+    directory?: DirectoryFollowSource | null;
 };
 
 /**
@@ -1518,6 +1519,707 @@ export type DbStatsResponse = {
 };
 
 /**
+ * DirectoryBinResponse
+ *
+ * One histogram bar: entries with a value from `lo` to `hi`.
+ */
+export type DirectoryBinResponse = {
+    /**
+     * Lo
+     */
+    lo: number;
+    /**
+     * Hi
+     */
+    hi: number;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * DirectoryCitedByCondition
+ *
+ * Cited by any of these handles, in the view's Reference kinds.
+ */
+export type DirectoryCitedByCondition = {
+    /**
+     * Type
+     */
+    type: 'citedby';
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+};
+
+/**
+ * DirectoryCitesCondition
+ *
+ * Cites any of these handles, in the view's Reference kinds.
+ */
+export type DirectoryCitesCondition = {
+    /**
+     * Type
+     */
+    type: 'cites';
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+};
+
+/**
+ * DirectoryCitingPostResponse
+ *
+ * One Post of "your channels" that cites the Channel.
+ */
+export type DirectoryCitingPostResponse = {
+    /**
+     * Channel
+     */
+    channel: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+    /**
+     * Postid
+     */
+    postId: number;
+    /**
+     * Timestamp
+     */
+    timestamp: number;
+    /**
+     * Kinds
+     */
+    kinds: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    /**
+     * Text
+     */
+    text: string | null;
+};
+
+/**
+ * DirectoryCountRequest
+ *
+ * How many entries a view leaves, with a candidate Condition added with AND.
+ */
+export type DirectoryCountRequest = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
+    candidate?: DirectoryFilterAtom | null;
+};
+
+/**
+ * DirectoryCountResponse
+ *
+ * How many entries a view leaves.
+ */
+export type DirectoryCountResponse = {
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * DirectoryDistributionRequest
+ *
+ * A measure's spread under every other Condition of the view.
+ */
+export type DirectoryDistributionRequest = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
+    /**
+     * Measure
+     */
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites';
+};
+
+/**
+ * DirectoryDistributionResponse
+ *
+ * A measure's spread, for the bound editor.
+ */
+export type DirectoryDistributionResponse = {
+    /**
+     * Scale
+     */
+    scale: 'log' | 'linear';
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Novalue
+     */
+    noValue: number;
+    /**
+     * Min
+     */
+    min: number | null;
+    /**
+     * Max
+     */
+    max: number | null;
+    /**
+     * Median
+     */
+    median: number | null;
+    /**
+     * Bins
+     */
+    bins: Array<DirectoryBinResponse>;
+};
+
+/**
+ * DirectoryEntryResponse
+ *
+ * One entry for the detail panel, read by handle: the row's measures and
+ * the bio, which the list never carries (DIR-03).
+ */
+export type DirectoryEntryResponse = {
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+    /**
+     * Photourl
+     */
+    photoUrl: string | null;
+    /**
+     * Language
+     */
+    language: string | null;
+    /**
+     * Subscribers
+     */
+    subscribers: number | null;
+    /**
+     * Reach
+     */
+    reach: number | null;
+    /**
+     * Reachestimated
+     */
+    reachEstimated: boolean;
+    /**
+     * Postsperweek
+     */
+    postsPerWeek: number | null;
+    /**
+     * Forwardshare
+     */
+    forwardShare: number | null;
+    /**
+     * Lastpostat
+     */
+    lastPostAt: number | null;
+    /**
+     * Foundat
+     */
+    foundAt: number;
+    /**
+     * Photos
+     */
+    photos: number | null;
+    /**
+     * Videos
+     */
+    videos: number | null;
+    /**
+     * Files
+     */
+    files: number | null;
+    /**
+     * Links
+     */
+    links: number | null;
+    /**
+     * Followable
+     */
+    followable: boolean;
+    /**
+     * Followed
+     */
+    followed: boolean;
+    /**
+     * Dismissed
+     */
+    dismissed: boolean;
+    /**
+     * Citedby
+     */
+    citedBy: number;
+    /**
+     * Cites
+     */
+    cites: number;
+    /**
+     * Bio
+     */
+    bio: string | null;
+};
+
+/**
+ * DirectoryFilterAtom
+ *
+ * One Condition, maybe negated.
+ */
+export type DirectoryFilterAtom = {
+    /**
+     * Kind
+     */
+    kind: 'atom';
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Not
+     */
+    not?: boolean;
+    /**
+     * Cond
+     */
+    cond: ({
+        type: 'language';
+    } & DirectoryLanguageCondition) | ({
+        type: 'name';
+    } & DirectoryNameCondition) | ({
+        type: 'measure';
+    } & DirectoryMeasureCondition) | ({
+        type: 'flag';
+    } & DirectoryFlagCondition) | ({
+        type: 'mine';
+    } & DirectoryMineCondition) | ({
+        type: 'citedby';
+    } & DirectoryCitedByCondition) | ({
+        type: 'cites';
+    } & DirectoryCitesCondition) | ({
+        type: 'children' | 'parents';
+    } & DirectorySharedCondition);
+};
+
+/**
+ * DirectoryFilterGroup
+ *
+ * Conditions joined with AND or OR, maybe negated; parentheses are groups.
+ */
+export type DirectoryFilterGroup = {
+    /**
+     * Kind
+     */
+    kind: 'group';
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Op
+     */
+    op: 'and' | 'or';
+    /**
+     * Not
+     */
+    not?: boolean;
+    /**
+     * Children
+     */
+    children?: Array<({
+        kind: 'atom';
+    } & DirectoryFilterAtom) | ({
+        kind: 'group';
+    } & DirectoryFilterGroup)>;
+};
+
+/**
+ * DirectoryFlagCondition
+ *
+ * Followed or dismissed by this Account, or followable by anybody (the
+ * entry's verdict).
+ */
+export type DirectoryFlagCondition = {
+    /**
+     * Type
+     */
+    type: 'flag';
+    /**
+     * Value
+     */
+    value: 'followed' | 'followable' | 'dismissed';
+};
+
+/**
+ * DirectoryFollowSource
+ *
+ * The Directory view's "your channels" and Reference kinds, for discovered-via.
+ */
+export type DirectoryFollowSource = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+};
+
+/**
+ * DirectoryLanguageCondition
+ */
+export type DirectoryLanguageCondition = {
+    /**
+     * Type
+     */
+    type: 'language';
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
+ * DirectoryLanguageCountResponse
+ *
+ * How many entries in the view have one Language; `null` is none read.
+ */
+export type DirectoryLanguageCountResponse = {
+    /**
+     * Language
+     */
+    language: string | null;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * DirectoryListRequest
+ *
+ * One page of a Directory view, sorted.
+ */
+export type DirectoryListRequest = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
+    /**
+     * Sort
+     */
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
+    /**
+     * Descending
+     */
+    descending?: boolean;
+    /**
+     * Page
+     */
+    page?: number;
+    /**
+     * Showmatches
+     */
+    showMatches?: boolean;
+};
+
+/**
+ * DirectoryListResponse
+ *
+ * One page, the view's total and its Language counts.
+ */
+export type DirectoryListResponse = {
+    /**
+     * Rows
+     */
+    rows: Array<DirectoryRowResponse>;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Languages
+     */
+    languages: Array<DirectoryLanguageCountResponse>;
+    /**
+     * Yourssize
+     */
+    yoursSize: number;
+};
+
+/**
+ * DirectoryMatchResponse
+ *
+ * Why a row matched a search; a part is `null` where it did not match.
+ */
+export type DirectoryMatchResponse = {
+    /**
+     * Bio
+     */
+    bio: Array<DirectorySnippetPartResponse> | null;
+    post: DirectoryMatchedPostResponse | null;
+};
+
+/**
+ * DirectoryMatchedPostResponse
+ *
+ * The newest sampled Post that matched, around its first match.
+ */
+export type DirectoryMatchedPostResponse = {
+    /**
+     * Postid
+     */
+    postId: number;
+    /**
+     * Timestamp
+     */
+    timestamp: number;
+    /**
+     * Parts
+     */
+    parts: Array<DirectorySnippetPartResponse>;
+};
+
+/**
+ * DirectoryMeasureCondition
+ *
+ * A bound on a measure, either end open; `none` keeps only entries with no value.
+ */
+export type DirectoryMeasureCondition = {
+    /**
+     * Type
+     */
+    type: 'measure';
+    /**
+     * Measure
+     */
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites';
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * None
+     */
+    none?: boolean;
+};
+
+/**
+ * DirectoryMineCondition
+ *
+ * Cited by your channels, ever or within the last `days`.
+ */
+export type DirectoryMineCondition = {
+    /**
+     * Type
+     */
+    type: 'mine';
+    /**
+     * Days
+     */
+    days?: number | null;
+};
+
+/**
+ * DirectoryNameCondition
+ *
+ * Any part of the handle or the display name, case-insensitive.
+ */
+export type DirectoryNameCondition = {
+    /**
+     * Type
+     */
+    type: 'name';
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
+ * DirectoryNeighbourResponse
+ *
+ * A Channel at the other end of a citation, and how much it cites.
+ */
+export type DirectoryNeighbourResponse = {
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+    /**
+     * References
+     */
+    references: number;
+    /**
+     * Kinds
+     */
+    kinds: Array<'forward' | 'mention' | 'link' | 'reply'>;
+};
+
+/**
+ * DirectoryNeighboursResponse
+ *
+ * The Channels citing one most, and those it cites most.
+ */
+export type DirectoryNeighboursResponse = {
+    /**
+     * Citedby
+     */
+    citedBy: Array<DirectoryNeighbourResponse>;
+    /**
+     * Cites
+     */
+    cites: Array<DirectoryNeighbourResponse>;
+};
+
+/**
+ * DirectoryRowResponse
+ *
+ * One Directory entry in the list: its measures, never its bio or samples.
+ */
+export type DirectoryRowResponse = {
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+    /**
+     * Photourl
+     */
+    photoUrl: string | null;
+    /**
+     * Language
+     */
+    language: string | null;
+    /**
+     * Subscribers
+     */
+    subscribers: number | null;
+    /**
+     * Reach
+     */
+    reach: number | null;
+    /**
+     * Reachestimated
+     */
+    reachEstimated: boolean;
+    /**
+     * Postsperweek
+     */
+    postsPerWeek: number | null;
+    /**
+     * Forwardshare
+     */
+    forwardShare: number | null;
+    /**
+     * Lastpostat
+     */
+    lastPostAt: number | null;
+    /**
+     * Foundat
+     */
+    foundAt: number;
+    /**
+     * Photos
+     */
+    photos: number | null;
+    /**
+     * Videos
+     */
+    videos: number | null;
+    /**
+     * Files
+     */
+    files: number | null;
+    /**
+     * Links
+     */
+    links: number | null;
+    /**
+     * Followable
+     */
+    followable: boolean;
+    /**
+     * Followed
+     */
+    followed: boolean;
+    /**
+     * Dismissed
+     */
+    dismissed: boolean;
+    /**
+     * Citedby
+     */
+    citedBy: number;
+    /**
+     * Cites
+     */
+    cites: number;
+    /**
+     * Mine
+     */
+    mine: number;
+    /**
+     * Minelastat
+     */
+    mineLastAt: number | null;
+    match: DirectoryMatchResponse | null;
+    /**
+     * Sharedparents
+     */
+    sharedParents: number | null;
+    /**
+     * Sharedchildren
+     */
+    sharedChildren: number | null;
+};
+
+/**
+ * DirectorySampleLinkResponse
+ *
+ * A Telegram Link a sample Post carries, and the Channel it names.
+ */
+export type DirectorySampleLinkResponse = {
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Channel
+     */
+    channel: string;
+};
+
+/**
  * DirectorySamplePostResponse
  *
  * One Post off a Channel's preview page, as the last probe captured it.
@@ -1541,6 +2243,161 @@ export type DirectorySamplePostResponse = {
      * Views
      */
     views?: number | null;
+    /**
+     * Capturedat
+     */
+    capturedAt: number;
+    /**
+     * Hasmedia
+     */
+    hasMedia: boolean;
+    /**
+     * Links
+     */
+    links: Array<DirectorySampleLinkResponse>;
+};
+
+/**
+ * DirectorySearchRequest
+ *
+ * Words to find in a Channel's name, bio and recent Posts.
+ */
+export type DirectorySearchRequest = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Fields
+     */
+    fields?: Array<'name' | 'bio' | 'posts'>;
+};
+
+/**
+ * DirectorySharedChannelResponse
+ *
+ * A Channel linking the candidate to the picks.
+ */
+export type DirectorySharedChannelResponse = {
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+};
+
+/**
+ * DirectorySharedCondition
+ *
+ * Shared parents or Shared children with these picks, at least `min` shared.
+ */
+export type DirectorySharedCondition = {
+    /**
+     * Type
+     */
+    type: 'parents' | 'children';
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+    /**
+     * Min
+     */
+    min?: number;
+};
+
+/**
+ * DirectorySharedWhyResponse
+ *
+ * A few of the Channels shared with the picks, and how many in all.
+ */
+export type DirectorySharedWhyResponse = {
+    /**
+     * Channels
+     */
+    channels: Array<DirectorySharedChannelResponse>;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * DirectorySizeResponse
+ *
+ * How many Channels the Directory lists at all.
+ */
+export type DirectorySizeResponse = {
+    /**
+     * Size
+     */
+    size: number;
+};
+
+/**
+ * DirectorySnippetPartResponse
+ *
+ * A run of snippet text; `hit` marks a matched word.
+ */
+export type DirectorySnippetPartResponse = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Hit
+     */
+    hit: boolean;
+};
+
+/**
+ * DirectoryWhyRequest
+ *
+ * Whose Posts citing `handle` "Why it's here" lists.
+ */
+export type DirectoryWhyRequest = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Days
+     */
+    days?: number | null;
+    /**
+     * Parents
+     */
+    parents?: Array<string> | null;
+    /**
+     * Children
+     */
+    children?: Array<string> | null;
+};
+
+/**
+ * DirectoryWhyResponse
+ *
+ * The newest citing Posts, how many in all, and the shared Channels per relation on.
+ */
+export type DirectoryWhyResponse = {
+    /**
+     * Posts
+     */
+    posts: Array<DirectoryCitingPostResponse>;
+    /**
+     * Total
+     */
+    total: number;
+    parents: DirectorySharedWhyResponse | null;
+    children: DirectorySharedWhyResponse | null;
 };
 
 /**
@@ -6470,6 +7327,22 @@ export type ViewsFilter = {
     value: number;
 };
 
+/**
+ * YourChannels
+ *
+ * Whose citations count: every follow (resolved by the server) or the handles sent.
+ */
+export type YourChannels = {
+    /**
+     * Source
+     */
+    source?: 'follows' | 'selection' | 'ticked';
+    /**
+     * Handles
+     */
+    handles?: Array<string>;
+};
+
 export type LoginLoginAccessTokenData = {
     body: BodyLoginLoginAccessToken;
     path?: never;
@@ -8525,6 +9398,182 @@ export type DataGetDirectoryPostsResponses = {
 };
 
 export type DataGetDirectoryPostsResponse = DataGetDirectoryPostsResponses[keyof DataGetDirectoryPostsResponses];
+
+export type DataListDirectoryData = {
+    body: DirectoryListRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/list';
+};
+
+export type DataListDirectoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataListDirectoryError = DataListDirectoryErrors[keyof DataListDirectoryErrors];
+
+export type DataListDirectoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryListResponse;
+};
+
+export type DataListDirectoryResponse = DataListDirectoryResponses[keyof DataListDirectoryResponses];
+
+export type DataCountDirectoryData = {
+    body: DirectoryCountRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/count';
+};
+
+export type DataCountDirectoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataCountDirectoryError = DataCountDirectoryErrors[keyof DataCountDirectoryErrors];
+
+export type DataCountDirectoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryCountResponse;
+};
+
+export type DataCountDirectoryResponse = DataCountDirectoryResponses[keyof DataCountDirectoryResponses];
+
+export type DataGetDirectoryDistributionData = {
+    body: DirectoryDistributionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/distribution';
+};
+
+export type DataGetDirectoryDistributionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryDistributionError = DataGetDirectoryDistributionErrors[keyof DataGetDirectoryDistributionErrors];
+
+export type DataGetDirectoryDistributionResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryDistributionResponse;
+};
+
+export type DataGetDirectoryDistributionResponse = DataGetDirectoryDistributionResponses[keyof DataGetDirectoryDistributionResponses];
+
+export type DataGetDirectorySizeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/size';
+};
+
+export type DataGetDirectorySizeResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectorySizeResponse;
+};
+
+export type DataGetDirectorySizeResponse = DataGetDirectorySizeResponses[keyof DataGetDirectorySizeResponses];
+
+export type DataGetDirectoryEntryData = {
+    body?: never;
+    path: {
+        /**
+         * Handle
+         */
+        handle: string;
+    };
+    query?: never;
+    url: '/api/v1/data/directory/{handle}/entry';
+};
+
+export type DataGetDirectoryEntryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryEntryError = DataGetDirectoryEntryErrors[keyof DataGetDirectoryEntryErrors];
+
+export type DataGetDirectoryEntryResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryEntryResponse;
+};
+
+export type DataGetDirectoryEntryResponse = DataGetDirectoryEntryResponses[keyof DataGetDirectoryEntryResponses];
+
+export type DataGetDirectoryNeighboursData = {
+    body?: never;
+    path: {
+        /**
+         * Handle
+         */
+        handle: string;
+    };
+    query?: never;
+    url: '/api/v1/data/directory/{handle}/neighbours';
+};
+
+export type DataGetDirectoryNeighboursErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryNeighboursError = DataGetDirectoryNeighboursErrors[keyof DataGetDirectoryNeighboursErrors];
+
+export type DataGetDirectoryNeighboursResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryNeighboursResponse;
+};
+
+export type DataGetDirectoryNeighboursResponse = DataGetDirectoryNeighboursResponses[keyof DataGetDirectoryNeighboursResponses];
+
+export type DataGetDirectoryWhyData = {
+    body: DirectoryWhyRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/why';
+};
+
+export type DataGetDirectoryWhyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetDirectoryWhyError = DataGetDirectoryWhyErrors[keyof DataGetDirectoryWhyErrors];
+
+export type DataGetDirectoryWhyResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryWhyResponse;
+};
+
+export type DataGetDirectoryWhyResponse = DataGetDirectoryWhyResponses[keyof DataGetDirectoryWhyResponses];
 
 export type DataListSummariesData = {
     body?: never;

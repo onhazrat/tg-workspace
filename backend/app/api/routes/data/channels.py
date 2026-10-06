@@ -46,6 +46,7 @@ from app.schemas.data import (
     SettingGroupWriteRequest,
 )
 from app.schemas.setting_groups import SettingGroupResponse
+from app.services import directory_reads
 from app.services.bulk_channels import (
     bulk_reresolve_start_ids,
     bulk_reset_and_queue_sync,
@@ -241,6 +242,13 @@ def upsert_channel(
     )
 
 
+#: What a Follow from the Directory answers when every Channel sent is one the
+#: Account dismissed (DIR-06).
+DISMISSED_FOLLOW_DETAIL = (
+    "Every channel sent is dismissed; take the Dismissal back first"
+)
+
+
 @router.post("/channels/bulk-follow", response_model=BulkFollowStartResponse)
 async def start_bulk_follow(
     body: BulkFollowRequest,
@@ -265,6 +273,17 @@ async def start_bulk_follow(
         }
         for entry in body.channels
     ]
+    if body.directory is not None:
+        channel_payloads = directory_reads.directory_follows(
+            session,
+            current_user.id,
+            channel_payloads,
+            source=body.directory.yours.source,
+            handles=body.directory.yours.handles,
+            kinds=body.directory.reference_kinds,
+        )
+        if not channel_payloads:
+            raise HTTPException(status_code=409, detail=DISMISSED_FOLLOW_DETAIL)
     # Resolved from settings, never from the body (ADR-012) — the browser used
     # to send `activeProxies` here, derived from `defaultProxyUrls`, which is
     # the setting this reads.

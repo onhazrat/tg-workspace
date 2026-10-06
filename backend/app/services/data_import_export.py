@@ -1357,7 +1357,7 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "credential that leaves through the backup door is spending nobody "
         "can attribute. A Key comes back by pasting it again."
     ),
-    "DiscoverIgnoredChannel": (
+    "Dismissal": (
         "A dismissal is a judgement about a candidate, not an artifact "
         "(ticket 30). Restoring one would re-hide handles on a deployment "
         "where the account never dismissed them, and the row comes back by "
@@ -1414,6 +1414,12 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "another install weeks ago. Nothing is lost by omitting it — the "
         "refresh window fills it back in."
     ),
+    "DirectorySearchDocument": (
+        "Derived (DIR-04): rebuilt from the Directory entry and its samples by "
+        "every writer, and wholesale by `scripts/backfill_directory_search.py`. "
+        "Neither of those travels either, so a restored document would index "
+        "an entry the importing install does not hold."
+    ),
     "DirectoryProbeUsage": (
         "What this deployment's probe lane spent per day (ticket 04). A meter "
         "of this install's traffic, meaningless on another, and a restore "
@@ -1424,6 +1430,16 @@ EXPORT_OMISSIONS: dict[str, str] = {
         "Derived by the extraction walk, and an imported Post arrives "
         "unextracted, so a restore re-derives the edges its Posts name rather "
         "than trusting another install's copy."
+    ),
+    "CitationPair": (
+        "Derived (DIR-05, ADR-028): a summary of the References by distinct "
+        "Channel pair, kept by the References writer and built wholesale by "
+        "`scripts/backfill_citation_pairs.py`. The References do not travel, "
+        "so a restored pair would count edges the importing install lacks."
+    ),
+    "CitationCount": (
+        "Derived with `CitationPair`, for its reason: per handle, how many "
+        "distinct Channels cite it and it cites."
     ),
     "SettlingCurveFit": (
         "The Settling curve fits (REACH-07). Corpus, one curve fitted from "

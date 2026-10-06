@@ -63,7 +63,7 @@ INVENTORY: dict[str, str] = {
     # reads, the way `lane_for_job` sits beside the lanes.
     "ai_keys.py": AGGREGATE,
     "data_vectors.py": AGGREGATE,
-    "discover_ignored.py": AGGREGATE,
+    "dismissals.py": AGGREGATE,
     "channel_directory.py": AGGREGATE,
     # Owns `tg_channel_directory_samples` (ticket 02) and is its only writer.
     # A module of its own rather than more of `channel_directory.py`, for the
@@ -88,7 +88,10 @@ INVENTORY: dict[str, str] = {
     # Owns `tg_post_references` (CRG-01) and is its only writer. Holds the
     # extractor as well as the writes: the pure half is a few functions over
     # one Post and splitting it out would be a module whose only caller is the
-    # one next to it.
+    # one next to it. `tg_citation_pairs` and `tg_citation_counts` (DIR-05,
+    # ADR-028) are its payload, as a companion table is its parent's: a summary
+    # of the References written in their transaction, by `write_references`
+    # alone, and built wholesale by its `fill_citations`.
     "post_references.py": AGGREGATE,
     # Owns `tg_quota_usage` (ticket 08) and is its only writer. The counting
     # itself is not here — `core/request_meter.py` does that, because a
@@ -130,6 +133,10 @@ INVENTORY: dict[str, str] = {
     # Joins environment metadata with both settings aggregates and quota
     # overrides for one read-only admin inventory; owns and commits nothing.
     "configuration_catalog.py": READ_MODEL,
+    # The Directory tab's reads (DIR-02): a page, its totals and a measure's
+    # spread over Directory entries, References and the caller's Follows.
+    # Writes nothing; its caches are process memory, not a table.
+    "directory_reads.py": READ_MODEL,
     "discover.py": READ_MODEL,
     "network_settings.py": READ_MODEL,
     # Evaluates the Post selection (PTR-05) into a predicate other reads
@@ -172,6 +179,10 @@ INVENTORY: dict[str, str] = {
     "post_links_parser.py": PURE_TRANSFORM,
     "post_media_parser.py": PURE_TRANSFORM,
     "post_reply_parser.py": PURE_TRANSFORM,
+    # How the Directory search index reads text (DIR-04, ADR-027): one
+    # normalisation shared by the writer that indexes and the read that
+    # queries, so the two cannot drift, and the snippet cutter beside it.
+    "search_text.py": PURE_TRANSFORM,
     # Reach from (View count, age) pairs and the seed Settling curve (REACH-03,
     # ADR-024). Its own module because two sources call it, followed Channels
     # on read and Directory entries at probe time, and neither owns the other.
