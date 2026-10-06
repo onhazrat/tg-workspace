@@ -84,7 +84,7 @@ from app.models_tg import (
     utc_now,
 )
 from app.services import search_text
-from app.services.channel_directory import LISTED_KIND, followed_reach
+from app.services.channel_directory import LISTED_KIND
 from app.services.channel_directory_samples import samples_by_handle
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
@@ -868,8 +868,6 @@ def _rows(
                 for h, n in session.execute(_shared(cond, among=handles)).all()
             }
         )
-    # A followed Channel answers the Post-based Reach, as everywhere else.
-    reach = followed_reach(session, set(handles))
     matches = (
         _matches(session, view.search, handles)
         if show_matches and view.search is not None
@@ -879,7 +877,6 @@ def _rows(
     for handle in handles:
         e = entries[handle]
         n, last_at = mine.get(handle, (0, None))
-        own = reach.get(handle)
         rows.append(
             DirectoryRow(
                 handle=handle,
@@ -887,8 +884,12 @@ def _rows(
                 photo_url=e.photo_url,
                 language=e.language,
                 subscribers=e.subscribers,
-                reach=e.reach if own is None else own.value,
-                reach_estimated=e.reach_estimated if own is None else own.estimated,
+                # The entry's Reach, the one the bound, the sort and the
+                # distribution read. Not the Post-based one Discover shows for
+                # a followed Channel: a row must never show a Reach outside the
+                # bound that let it through, or out of the sort's order.
+                reach=e.reach,
+                reach_estimated=e.reach_estimated,
                 posts_per_week=e.posts_per_week,
                 forward_share=e.forward_share,
                 last_post_at=_ms(e.last_post_at),

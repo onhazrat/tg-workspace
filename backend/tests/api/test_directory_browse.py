@@ -59,6 +59,7 @@ Each mutation was applied alone and this module (or the named guard) went red:
 * drop `autoescape` from Name contains -> "%" matches everything
 * never reuse a cached total -> the reuse case
 * key the cached total on the Follow count, not the set -> the follow-swap case
+* show a followed Channel's Post-based Reach on its row -> the Reach-shown case
 * take the oldest Reference as discovered-via -> the Follow case
 * drop `/directory/list` from `VIEW_AS_READ_ONLY_PATHS` -> the View-as case, and
   `test_view_as.py` for `/count`
@@ -672,6 +673,25 @@ def test_every_sort_orders_the_list(
     operator, _ = accounts
     handles = _handles(client, operator, sort=sort, descending=descending)
     assert handles == _dt(expected)
+
+
+def test_the_reach_shown_is_the_reach_bounded_and_sorted(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """dt_followed_a is followed and has no stored Posts, so a Post-based Reach
+    would read "not measured" while its entry's 700 passes the bound."""
+    operator, _ = accounts
+    rows = _list(
+        client,
+        operator,
+        filter=root(atom(measure("reach", min=500))),
+        sort="reach",
+    )["rows"]
+    assert [(r["handle"], r["reach"]) for r in rows] == [
+        ("dt_fa_big", 1000),
+        ("dt_followed_a", 700),
+    ]
+    assert _entry(client, operator, "dt_followed_a").json()["reach"] == 700
 
 
 def test_pages_hold_a_hundred_and_keep_the_total(

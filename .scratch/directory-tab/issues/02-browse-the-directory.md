@@ -136,3 +136,18 @@ estimate is ticked.
   `PLAYWRIGHT_API_URL`, workers=1, against a native backend on a private
   database (only login is real; every Directory route and bulk follow is
   mocked). It lists the mutations it was watched to fail on.
+
+2026-10-06, review fixes (branch `dir/review-fixes`):
+
+- The cached total is keyed on the Account's Follow **set**, not its size.
+  Following one Channel and unfollowing another within the 5-minute TTL kept
+  the size, so a view reading the Followed Condition served a stale total.
+- **Every row shows the entry's Reach**, the value the bound, the sort and the
+  distribution read. The row used to swap in the Post-based Reach for any
+  Channel somebody follows, so a row could show a Reach outside the bound that
+  let it through (a followed Channel with no stored Posts read "not measured"
+  under `reach >= 500`) or out of the sort's order. The entry's Reach is the
+  glossary's Reach too: the median Settled View count of its newest samples,
+  marked as an estimate when too few are Settled, so it is the honest one to
+  show beside the numbers it was filtered on. Discover still shows the
+  Post-based Reach for a followed Channel; the two can differ for one Channel.
