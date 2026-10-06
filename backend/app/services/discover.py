@@ -250,9 +250,9 @@ def compute_discover_candidates(
                         (post.forwarded_from or handle).lstrip("@").strip()
                     )
 
-    ignored = dismissed_handles(session, user_id=user_id)
+    dismissed = dismissed_handles(session, user_id=user_id)
     candidates = [
-        _to_candidate(handle, entry, followed, ignored)
+        _to_candidate(handle, entry, followed, dismissed)
         for handle, entry in by_source.items()
         if entry.reference is not None
     ]
@@ -273,7 +273,7 @@ def compute_discover_candidates(
 
 
 def _to_candidate(
-    handle: str, entry: _Accumulator, followed: set[str], ignored: set[str]
+    handle: str, entry: _Accumulator, followed: set[str], dismissed: set[str]
 ) -> dict[str, Any]:
     seen_in: list[dict[str, Any]] = [
         {
@@ -296,7 +296,7 @@ def _to_candidate(
         "seenInCount": len(seen_in),
         "lastSeen": entry.last_seen,
         "isFollowed": handle in followed,
-        "isIgnored": handle in ignored,
+        "isIgnored": handle in dismissed,
         "reference": {
             "channelName": reference.channel_name,
             "postId": reference.post_id,

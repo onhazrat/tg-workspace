@@ -151,7 +151,7 @@ def _candidate_handle(candidate: dict[str, Any]) -> str:
 def _with_live_state(
     candidates: list[Any],
     followed: set[str],
-    ignored: set[str],
+    dismissed: set[str],
     probes: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Overlay `isFollowed` / `isIgnored` / `probe` from live state.
@@ -182,7 +182,7 @@ def _with_live_state(
         row = {
             **candidate,
             "isFollowed": handle in followed,
-            "isIgnored": handle in ignored,
+            "isIgnored": handle in dismissed,
             "probe": probes.get(handle),
         }
         stored_before_the_rename = row.pop("samplePost", None)
@@ -215,13 +215,13 @@ def report_to_camel(
     written `report.user_id` would answer the wrong one without changing.
     """
     followed = followed_names(session, user_id=viewer_id)
-    ignored = dismissed_handles(session, user_id=viewer_id)
+    dismissed = dismissed_handles(session, user_id=viewer_id)
     stored = report.candidates or []
     handles = {_candidate_handle(c) for c in stored if isinstance(c, dict)} - {""}
     probes = probe_map(session, handles)
     return {
         **_base(report, with_posts=True),
-        "candidates": _with_live_state(stored, followed, ignored, probes),
+        "candidates": _with_live_state(stored, followed, dismissed, probes),
         "candidateCount": len(stored),
         **(report.extra or {}),
     }

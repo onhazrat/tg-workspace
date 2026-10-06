@@ -144,7 +144,7 @@ export function useDirectory() {
   // A list of at most one handle, so the panel reuses the stored-list plumbing.
   const [opened, setOpened] = useStoredList(OPEN_KEY)
   const [following, setFollowing] = useState<ReadonlySet<string>>(new Set())
-  const setDismissed = useDiscoverIgnoreMutation()
+  const dismissal = useDiscoverIgnoreMutation()
 
   const filter = useMemo(
     () =>
@@ -240,7 +240,7 @@ export function useDirectory() {
    */
   const dismiss = async (handles: string[], dismissed = true) => {
     try {
-      await setDismissed.mutateAsync({ handles, ignored: dismissed })
+      await dismissal.mutateAsync({ handles, ignored: dismissed })
     } catch (error) {
       toast.error(errorText(error, "The Dismissal did not save."))
       return
