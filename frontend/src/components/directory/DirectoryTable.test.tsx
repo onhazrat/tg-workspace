@@ -225,6 +225,29 @@ describe("columns and sorting", () => {
   })
 })
 
+describe("a narrow screen", () => {
+  /** The headers that stay below `md`: every other one is `hidden`. */
+  const narrowHeaders = () =>
+    screen
+      .getAllByRole("columnheader")
+      .filter((h) => !h.className.includes("hidden"))
+      .map((h) => h.textContent)
+      .filter(Boolean)
+
+  test("keeps the sorted measure", () => {
+    mount({ sort: "reach" })
+    expect(narrowHeaders()).toEqual(["Channel", "Reach"])
+  })
+
+  test("keeps Subscribers when the sort reads no shown column", () => {
+    mount({ sort: "relevance" })
+    expect(narrowHeaders()).toEqual(["Channel", "Subs"])
+    cleanup()
+    mount({ sort: "reach", hidden: ["reach"] })
+    expect(narrowHeaders()).toEqual(["Channel", "Subs"])
+  })
+})
+
 describe("pages", () => {
   test("previous and next, with where the page is in the total", () => {
     const calls = mount({ page: 1 })

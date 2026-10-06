@@ -359,7 +359,8 @@ function Pages({
  * The Directory list (DIR-02): one page of 100 rows, a column per measure the
  * Columns menu has not hidden, ticks for a bulk Follow with the followed rows
  * locked as in Discover, a header that sorts, and the pages. On a narrow
- * screen only the Channel, the sorted measure and Follow stay.
+ * screen only the Channel, the sorted measure (Subscribers when the sort
+ * shows no column) and Follow stay.
  */
 export function DirectoryTable({
   rows,
@@ -402,8 +403,12 @@ export function DirectoryTable({
       rows.some((r) => sharedCount(c.key as SharedKey, r) != null),
     ),
   ]
-  const narrow = (key: string) =>
-    key === sortedColumn ? "" : "hidden md:table-cell"
+  // Under a sort no shown column reads (Relevance, or a hidden column),
+  // Subscribers stays, so a narrow row still carries a measure.
+  const kept = columns.some((c) => c.key === sortedColumn)
+    ? sortedColumn
+    : "subscribers"
+  const narrow = (key: string) => (key === kept ? "" : "hidden md:table-cell")
   return (
     <div className="overflow-x-auto rounded-xl border border-app-ink/10 bg-app-card">
       <table className="w-full text-xs">

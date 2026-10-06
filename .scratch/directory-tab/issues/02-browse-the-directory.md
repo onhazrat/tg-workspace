@@ -151,3 +151,6 @@ estimate is ticked.
   marked as an estimate when too few are Settled, so it is the honest one to
   show beside the numbers it was filtered on. Discover still shows the
   Post-based Reach for a followed Channel; the two can differ for one Channel.
+- The narrow screen's one measure is still the sorted column, but when the
+  sort shows no column (Relevance, or a column the Columns menu hid)
+  Subscribers stays instead, so a phone row is never left with no measure.
