@@ -7,7 +7,7 @@ the implementation decisions on the detail and "Your channels".
 
 **Blocked by:** DIR-02
 
-**Status:** ready-for-agent
+**Status:** done
 
 The prototype's panel (variant E on `prototype/directory-tab`, unchanged in variant T on
 `prototype/directory-tab-bars`) shows the behaviour: the newest three
