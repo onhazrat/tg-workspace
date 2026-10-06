@@ -96,6 +96,7 @@ from app.services.channels import (
 from app.services.channels import (
     upsert_channel as upsert_channel_impl,
 )
+from app.services.dismissals import dismissed_handles, normalize_handle
 from app.services.follow_jobs import FOLLOW_JOB_EVENTS_CHANNEL
 from app.services.network_settings import resolve_proxies_for_user
 from app.services.sync_meta import get_sync_meta, touch_sync
@@ -242,6 +243,13 @@ def upsert_channel(
     )
 
 
+#: What a Follow from the Directory answers when every Channel sent is one the
+#: Account dismissed (DIR-06).
+DISMISSED_FOLLOW_DETAIL = (
+    "Every channel sent is dismissed; take the Dismissal back first"
+)
+
+
 @router.post("/channels/bulk-follow", response_model=BulkFollowStartResponse)
 async def start_bulk_follow(
     body: BulkFollowRequest,
@@ -269,6 +277,16 @@ async def start_bulk_follow(
     # DIR-02: a Follow from the Directory records the newest Reference from the
     # view's "your channels", resolved here so ticks from any page get one.
     if body.directory is not None:
+        # DIR-06: Follow is withheld on a Channel this Account dismissed, until
+        # it takes the Dismissal back. Discover's own follow keeps its contract.
+        dismissed = dismissed_handles(session, user_id=current_user.id)
+        channel_payloads = [
+            p
+            for p in channel_payloads
+            if normalize_handle(str(p["name"])) not in dismissed
+        ]
+        if not channel_payloads:
+            raise HTTPException(status_code=409, detail=DISMISSED_FOLLOW_DETAIL)
         view = directory_reads.resolve_view(
             session,
             current_user.id,

@@ -83,6 +83,7 @@ from app.models_tg import (
 from app.services import search_text
 from app.services.channel_directory import LISTED_KIND, followed_reach
 from app.services.channel_directory_samples import samples_by_handle
+from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_filters import (
     TreeAtom,
@@ -130,7 +131,7 @@ DIRECTORY_MEASURES: tuple[DirectoryMeasure, ...] = get_args(DirectoryMeasure)
 #: The measures plus the two "your channels" reads: how many cite it, and how
 #: many days since the newest of them did.
 DirectorySort = Literal[DirectoryMeasure, "mine", "mine_last_days", "relevance"]
-DirectoryFlag = Literal["followed", "followable"]
+DirectoryFlag = Literal["followed", "followable", "dismissed"]
 ReferenceKind = Literal["forward", "mention", "link", "reply"]
 #: Every follow, the Channels tab selection, or the Channels ticked here.
 YoursSource = Literal["follows", "selection", "ticked"]
@@ -226,6 +227,8 @@ class DirectoryView:
     tree: DirectoryTree | None
     #: Lowercased handles the Account follows.
     followed: frozenset[str]
+    #: Lowercased handles the Account has dismissed (DIR-06).
+    dismissed: frozenset[str]
     #: Lowercased handles "your channels" are, already resolved.
     sources: frozenset[str]
     #: Empty means every kind.
@@ -260,6 +263,7 @@ def resolve_view(
         user_id=user_id,
         tree=tree,
         followed=followed,
+        dismissed=frozenset(dismissed_handles(session, user_id=user_id)),
         sources=sources,
         kinds=tuple(sorted(set(kinds))),
         now=utc_now(),
@@ -435,6 +439,8 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     if isinstance(cond, FlagCond):
         if cond.value == "followable":
             return col(DirectoryEntry.status) == "ok"
+        if cond.value == "dismissed":
+            return handle == any_(_handles(view.dismissed))
         return handle == any_(_handles(view.followed))
     if isinstance(cond, MineCond):
         if not view.sources:
@@ -539,6 +545,7 @@ class DirectoryRow:
     links: int | None
     followable: bool
     followed: bool
+    dismissed: bool
     cited_by: int
     cites: int
     mine: int
@@ -746,6 +753,7 @@ def _rows(
                 links=e.links,
                 followable=e.status == "ok",
                 followed=handle in view.followed,
+                dismissed=handle in view.dismissed,
                 cited_by=counted.get(handle, (0, 0))[0],
                 cites=counted.get(handle, (0, 0))[1],
                 mine=n,
@@ -777,8 +785,15 @@ def _view_key(view: DirectoryView, tree: DirectoryTree | None) -> str:
             sorted(view.sources) if _reads(tree, MineCond) else None,
             view.kinds if _reads(tree, MineCond, CitedByCond, CitesCond) else None,
             view.search,
+            # A Dismissal or a take-back changes the key, so the total moves
+            # at once rather than after the TTL (DIR-06).
+            hash(view.dismissed) if _reads_dismissed(tree) else None,
         )
     )
+
+
+def _reads_dismissed(tree: DirectoryTree | None) -> bool:
+    return tree is not None and FlagCond("dismissed") in tree_conds(tree)
 
 
 def _reads(tree: DirectoryTree | None, *kinds: type) -> bool:

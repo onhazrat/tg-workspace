@@ -123,7 +123,8 @@ class DirectoryMeasureCondition(_Cond):
 
 
 class DirectoryFlagCondition(_Cond):
-    """Followed by this Account, or followable by anybody (the entry's verdict)."""
+    """Followed or dismissed by this Account, or followable by anybody (the
+    entry's verdict)."""
 
     type: Literal["flag"]
     value: DirectoryFlag
@@ -354,6 +355,8 @@ class _DirectoryEntryFields(BaseModel):
     links: int | None
     followable: bool
     followed: bool
+    #: This Account dismissed it (DIR-06); Follow is withheld until taken back.
+    dismissed: bool
     #: Distinct Channels citing it, every Reference kind.
     cited_by: int = Field(alias="citedBy")
     #: Distinct Channels it cites, every Reference kind.

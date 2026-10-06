@@ -7226,6 +7226,7 @@
           },
           "followable": { "type": "boolean", "title": "Followable" },
           "followed": { "type": "boolean", "title": "Followed" },
+          "dismissed": { "type": "boolean", "title": "Dismissed" },
           "citedBy": { "type": "integer", "title": "Citedby" },
           "cites": { "type": "integer", "title": "Cites" },
           "bio": {
@@ -7252,6 +7253,7 @@
           "links",
           "followable",
           "followed",
+          "dismissed",
           "citedBy",
           "cites",
           "bio"
@@ -7336,7 +7338,7 @@
           "type": { "type": "string", "const": "flag", "title": "Type" },
           "value": {
             "type": "string",
-            "enum": ["followed", "followable"],
+            "enum": ["followed", "followable", "dismissed"],
             "title": "Value"
           }
         },
@@ -7344,7 +7346,7 @@
         "type": "object",
         "required": ["type", "value"],
         "title": "DirectoryFlagCondition",
-        "description": "Followed by this Account, or followable by anybody (the entry's verdict)."
+        "description": "Followed or dismissed by this Account, or followable by anybody (the\nentry's verdict)."
       },
       "DirectoryFollowSource": {
         "properties": {
@@ -7695,6 +7697,7 @@
           },
           "followable": { "type": "boolean", "title": "Followable" },
           "followed": { "type": "boolean", "title": "Followed" },
+          "dismissed": { "type": "boolean", "title": "Dismissed" },
           "citedBy": { "type": "integer", "title": "Citedby" },
           "cites": { "type": "integer", "title": "Cites" },
           "mine": { "type": "integer", "title": "Mine" },
@@ -7728,6 +7731,7 @@
           "links",
           "followable",
           "followed",
+          "dismissed",
           "citedBy",
           "cites",
           "mine",

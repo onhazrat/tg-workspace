@@ -298,7 +298,11 @@ def cites(*handles: str) -> dict[str, Any]:
     return {"type": "cites", "handles": list(handles)}
 
 
-OPENING = root(atom(flag("followed"), negated=True), atom(flag("followable")))
+OPENING = root(
+    atom(flag("followed"), negated=True),
+    atom(flag("dismissed"), negated=True),
+    atom(flag("followable")),
+)
 
 
 def _list(client: TestClient, headers: dict[str, str], **body: Any) -> dict[str, Any]:
@@ -798,7 +802,7 @@ def _deep(levels: int) -> dict[str, Any]:
         root(*[atom(lang("fa")) for _ in range(100)]),
         root(atom({"type": "photo"})),
         root(atom({"type": "measure", "measure": "views"})),
-        root(atom({"type": "flag", "value": "dismissed"})),
+        root(atom({"type": "flag", "value": "muted"})),
         root(atom(lang("fa") | {"extra": 1})),
     ],
 )
@@ -1130,6 +1134,174 @@ def test_the_citation_counts_have_a_distribution(
     assert (spread["total"], spread["noValue"], spread["max"]) == (7, 0, 3)
 
 
+# ---- Dismissal (DIR-06) --------------------------------------------------------------
+
+DISMISSALS = f"{settings.API_V1_STR}/data/discover/ignored"
+DISMISSED = root(atom(flag("dismissed")))
+
+
+def _dismiss(client: TestClient, headers: dict[str, str], *handles: str) -> Any:
+    return client.post(DISMISSALS, json={"handles": list(handles)}, headers=headers)
+
+
+def _take_back(client: TestClient, headers: dict[str, str], *handles: str) -> Any:
+    return client.request(
+        "DELETE", DISMISSALS, json={"handles": list(handles)}, headers=headers
+    )
+
+
+def _flags(client: TestClient, headers: dict[str, str], tree: Any) -> list[Any]:
+    rows = _list(client, headers, filter=tree, sort="subscribers")["rows"]
+    return [(r["handle"], r["dismissed"]) for r in rows]
+
+
+def test_a_dismissal_hides_the_channel_for_its_account_only(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, other = accounts
+    # Counted and cached before the Dismissal, so the total has to move.
+    assert _list(client, operator, filter=OPENING)["total"] == 5
+    assert _dismiss(client, operator, "@DT_Fa_Big").status_code == 200
+
+    page = _list(client, operator, filter=OPENING)
+    assert "dt_fa_big" not in [r["handle"] for r in page["rows"]]
+    assert page["total"] == 4
+    assert _flags(client, operator, DISMISSED) == [("dt_fa_big", True)]
+    assert ("dt_en_news", False) in _flags(client, operator, None)
+    assert _entry(client, operator, "dt_fa_big").json()["dismissed"] is True
+
+    theirs = _list(client, other, filter=OPENING)
+    assert "dt_fa_big" in [r["handle"] for r in theirs["rows"]]
+    assert theirs["total"] == 6
+    assert _flags(client, other, DISMISSED) == []
+    assert _entry(client, other, "dt_fa_big").json()["dismissed"] is False
+
+
+def test_hide_dismissed_off_brings_the_row_back(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    _dismiss(client, operator, "dt_ru")
+    without_switch = root(
+        atom(flag("followed"), negated=True), atom(flag("followable"))
+    )
+    assert ("dt_ru", True) in _flags(client, operator, without_switch)
+    # An OR holding one of the opening view's three: dismissed or Russian.
+    either = root(atom(flag("dismissed")), atom(lang("en")), op="or")
+    assert _flags(client, operator, either) == [
+        ("dt_en_news", False),
+        ("dt_followed_a", False),
+        ("dt_ru", True),
+    ]
+
+
+def _forward_into(carrier: str, source: str, post_id: int) -> None:
+    from app.models_tg import Post
+
+    with Session(engine) as session:
+        session.add(
+            Post(
+                channel_name=carrier,
+                post_id=post_id,
+                text="forwarded",
+                timestamp=int(time.time() * 1000),
+                forwarded_from=source,
+            )
+        )
+        session.commit()
+
+
+def _discover_flags(
+    client: TestClient, headers: dict[str, str], carrier: str
+) -> dict[str, bool]:
+    response = client.post(
+        f"{settings.API_V1_STR}/data/discover/candidates",
+        json={"channelNames": [carrier]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return {c["name"]: c["isIgnored"] for c in response.json()["candidates"]}
+
+
+def test_one_dismissal_hides_the_channel_in_discover_and_here(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Dismissed here, gone from Discover; dismissed in Discover, gone from here."""
+    operator, other = accounts
+    _forward_into("src_a1", "dt_fa_big", 900)
+    _forward_into("src_b1", "dt_fa_big", 900)
+    _forward_into("src_a1", "dt_ru", 901)
+    _dismiss(client, operator, "dt_fa_big")
+    assert _discover_flags(client, operator, "src_a1")["dt_fa_big"] is True
+    assert _discover_flags(client, other, "src_b1")["dt_fa_big"] is False
+    assert _discover_flags(client, operator, "src_a1")["dt_ru"] is False
+
+    # Discover's own list of them is the same Dismissals.
+    listed = client.get(DISMISSALS, headers=operator).json()
+    assert [row["handle"] for row in listed] == ["dt_fa_big"]
+    assert client.get(DISMISSALS, headers=other).json() == []
+
+
+def test_taking_a_dismissal_back_restores_the_row(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, other = accounts
+    _dismiss(client, operator, "dt_fa_big")
+    _dismiss(client, other, "dt_fa_big")
+    assert _list(client, operator, filter=OPENING)["total"] == 4
+
+    taken = _take_back(client, operator, "dt_fa_big")
+    assert taken.json() == {"removed": ["dt_fa_big"]}
+    assert _list(client, operator, filter=OPENING)["total"] == 5
+    assert _flags(client, operator, DISMISSED) == []
+    # The other Account's Dismissal of the same Channel is untouched.
+    assert _flags(client, other, DISMISSED) == [("dt_fa_big", True)]
+
+
+def test_follow_is_withheld_on_a_dismissed_channel_until_taken_back(
+    client: TestClient,
+    accounts: tuple[dict[str, str], dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def not_now(_follow_job_id: str) -> None:
+        return None
+
+    monkeypatch.setattr("app.api.routes.data.channels.request_follow_job_run", not_now)
+    from app.services.follow_jobs import read_row
+
+    operator, other = accounts
+    _dismiss(client, operator, "dt_fa_big")
+
+    def follow(headers: dict[str, str], *names: str) -> Any:
+        return client.post(
+            f"{settings.API_V1_STR}/data/channels/bulk-follow",
+            json={
+                "channels": [{"name": n} for n in names],
+                "directory": {"yours": {"source": "follows"}},
+            },
+            headers=headers,
+        )
+
+    refused = follow(operator, "dt_fa_big")
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == DISMISSED_DETAIL
+    # A batch follows the rest and leaves the dismissed one out.
+    mixed = follow(operator, "dt_fa_big", "dt_ru")
+    assert mixed.status_code == 200, mixed.text
+    with Session(engine) as session:
+        row = read_row(session, mixed.json()["followJobId"])
+        assert row is not None
+        assert list(row.options["discoveredViaByName"]) == ["dt_ru"]
+    # Another Account's Dismissal withholds nothing from this one.
+    assert follow(other, "dt_fa_big").status_code == 200
+
+    _take_back(client, operator, "dt_fa_big")
+    assert follow(operator, "dt_fa_big").status_code == 200
+
+
+DISMISSED_DETAIL = "Every channel sent is dismissed; take the Dismissal back first"
+
+
 # ---- View-as -----------------------------------------------------------------------
 
 
@@ -1177,3 +1349,24 @@ def test_view_as_browses_the_directory_as_the_account_sees_it(
         headers=view_as_other,
     )
     assert follow.status_code == 403
+    assert _dismiss(client, view_as_other, "dt_ru").status_code == 403
+    assert _take_back(client, view_as_other, "dt_ru").status_code == 403
+
+
+def test_an_elevated_session_may_dismiss_and_take_back(
+    client: TestClient,
+    accounts: tuple[dict[str, str], dict[str, str]],
+    view_as_other: dict[str, str],
+) -> None:
+    operator, other = accounts
+    me = client.get(f"{settings.API_V1_STR}/users/me", headers=other).json()
+    response = client.post(
+        f"{settings.API_V1_STR}/view-as/{me['id']}/elevate", headers=operator
+    )
+    assert response.status_code == 200, response.text
+    elevated = {"Authorization": f"Bearer {response.json()['accessToken']}"}
+    assert _dismiss(client, elevated, "dt_ru").status_code == 200
+    assert _flags(client, other, DISMISSED) == [("dt_ru", True)]
+    assert _flags(client, operator, DISMISSED) == []
+    assert _take_back(client, elevated, "dt_ru").status_code == 200
+    assert _flags(client, other, DISMISSED) == []

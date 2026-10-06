@@ -1761,6 +1761,10 @@ export type DirectoryEntryResponse = {
      */
     followed: boolean;
     /**
+     * Dismissed
+     */
+    dismissed: boolean;
+    /**
      * Citedby
      */
     citedBy: number;
@@ -1847,7 +1851,8 @@ export type DirectoryFilterGroup = {
 /**
  * DirectoryFlagCondition
  *
- * Followed by this Account, or followable by anybody (the entry's verdict).
+ * Followed or dismissed by this Account, or followable by anybody (the
+ * entry's verdict).
  */
 export type DirectoryFlagCondition = {
     /**
@@ -1857,7 +1862,7 @@ export type DirectoryFlagCondition = {
     /**
      * Value
      */
-    value: 'followed' | 'followable';
+    value: 'followed' | 'followable' | 'dismissed';
 };
 
 /**
@@ -2165,6 +2170,10 @@ export type DirectoryRowResponse = {
      * Followed
      */
     followed: boolean;
+    /**
+     * Dismissed
+     */
+    dismissed: boolean;
     /**
      * Citedby
      */
