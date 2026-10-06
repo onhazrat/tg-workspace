@@ -9,7 +9,7 @@ implementation decisions on Dismissal and the tab. The glossary term is **Dismis
 
 **Blocked by:** DIR-03
 
-**Status:** ready-for-agent
+**Status:** done
 
 Start with the rename, as a prefactor in its own commit: Discover's dismissal table, model and
 service take the glossary's name, and every inventory that lists them follows: the tenancy seam,
