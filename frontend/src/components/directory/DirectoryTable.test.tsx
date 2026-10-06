@@ -8,7 +8,10 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import type { DirectoryRowResponse } from "@/client"
-import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
+import {
+  telegramWebViewChannelUrl,
+  telegramWebViewPostUrl,
+} from "@/lib/telegram-web"
 import { DirectoryTable } from "./DirectoryTable"
 
 afterEach(cleanup)
@@ -172,5 +175,52 @@ describe("pages", () => {
       (screen.getByRole("button", { name: "Next page" }) as HTMLButtonElement)
         .disabled,
     ).toBe(true)
+  })
+})
+
+describe("the matches (DIR-04)", () => {
+  const match = {
+    bio: [
+      { text: "Daily ", hit: false },
+      { text: "crypto", hit: true },
+      { text: " news", hit: false },
+    ],
+    post: {
+      postId: 42,
+      timestamp: Date.now() - 7_200_000,
+      parts: [
+        { text: "…", hit: false },
+        { text: "<b>Crypto</b>", hit: true },
+        { text: " is up", hit: false },
+      ],
+    },
+  }
+
+  test("a row with a match quotes its bio and Post, matched words marked", () => {
+    mount({ rows: [row("alpha", { match }), row("beta")] })
+    const quote = screen.getByTestId("directory-match-alpha")
+    expect(quote.textContent).toContain("Daily crypto news")
+    expect(
+      [...quote.querySelectorAll("mark")].map((m) => m.textContent),
+    ).toEqual(["crypto", "<b>Crypto</b>"])
+    // Plain text, never markup.
+    expect(quote.querySelector("b")).toBeNull()
+    expect(screen.queryByTestId("directory-match-beta")).toBeNull()
+  })
+
+  test("the quoted Post links to its web view without opening the panel", () => {
+    const calls = mount({ rows: [row("alpha", { match })] })
+    const link = screen.getByTestId("directory-match-post-alpha")
+    expect(link.getAttribute("href")).toBe(telegramWebViewPostUrl("alpha", 42))
+    expect(link.getAttribute("target")).toBe("_blank")
+    fireEvent.click(link)
+    expect(calls.open).toEqual([])
+    fireEvent.click(screen.getByTestId("directory-match-alpha"))
+    expect(calls.open).toEqual(["alpha"])
+  })
+
+  test("a name-only match quotes nothing", () => {
+    mount({ rows: [row("alpha", { match: { bio: null, post: null } })] })
+    expect(screen.queryByTestId("directory-match-alpha")).toBeNull()
   })
 })

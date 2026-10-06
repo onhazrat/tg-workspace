@@ -203,6 +203,13 @@ export function DirectoryView() {
         size={d.size}
         ms={shown.ms}
         emptyYours={shown.emptyYours}
+        search={d.draft}
+        onSearch={d.setSearch}
+        fields={view.fields}
+        onFields={(fields) => patch({ fields })}
+        matches={view.matches}
+        onMatches={(matches) => patch({ matches })}
+        onClearAll={d.clearAll}
       />
       {list.error && (
         <p className="mb-2 text-xs text-red-500">
