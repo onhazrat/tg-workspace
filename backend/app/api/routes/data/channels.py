@@ -96,7 +96,6 @@ from app.services.channels import (
 from app.services.channels import (
     upsert_channel as upsert_channel_impl,
 )
-from app.services.dismissals import dismissed_handles, normalize_handle
 from app.services.follow_jobs import FOLLOW_JOB_EVENTS_CHANNEL
 from app.services.network_settings import resolve_proxies_for_user
 from app.services.sync_meta import get_sync_meta, touch_sync
@@ -274,35 +273,17 @@ async def start_bulk_follow(
         }
         for entry in body.channels
     ]
-    # DIR-02: a Follow from the Directory records the newest Reference from the
-    # view's "your channels", resolved here so ticks from any page get one.
     if body.directory is not None:
-        # DIR-06: Follow is withheld on a Channel this Account dismissed, until
-        # it takes the Dismissal back. Discover's own follow keeps its contract.
-        dismissed = dismissed_handles(session, user_id=current_user.id)
-        channel_payloads = [
-            p
-            for p in channel_payloads
-            if normalize_handle(str(p["name"])) not in dismissed
-        ]
-        if not channel_payloads:
-            raise HTTPException(status_code=409, detail=DISMISSED_FOLLOW_DETAIL)
-        view = directory_reads.resolve_view(
+        channel_payloads = directory_reads.directory_follows(
             session,
             current_user.id,
-            tree=None,
+            channel_payloads,
             source=body.directory.yours.source,
             handles=body.directory.yours.handles,
             kinds=body.directory.reference_kinds,
         )
-        newest = directory_reads.newest_references(
-            session, view, [entry.name for entry in body.channels]
-        )
-        for payload in channel_payloads:
-            if payload["discoveredVia"] is None:
-                payload["discoveredVia"] = newest.get(
-                    str(payload["name"]).strip().lstrip("@").lower()
-                )
+        if not channel_payloads:
+            raise HTTPException(status_code=409, detail=DISMISSED_FOLLOW_DETAIL)
     # Resolved from settings, never from the body (ADR-012) — the browser used
     # to send `activeProxies` here, derived from `defaultProxyUrls`, which is
     # the setting this reads.

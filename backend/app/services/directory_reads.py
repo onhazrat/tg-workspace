@@ -47,7 +47,7 @@ import math
 import time
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Literal, get_args
 
@@ -87,7 +87,7 @@ from app.models_tg import (
 from app.services import search_text
 from app.services.channel_directory import LISTED_KIND
 from app.services.channel_directory_samples import samples_by_handle
-from app.services.dismissals import dismissed_handles
+from app.services.dismissals import dismissed_handles, normalize_handle
 from app.services.follows import visible_channel_names
 from app.services.post_filters import (
     TreeAtom,
@@ -1070,6 +1070,40 @@ def count_view(
     return _count(session, view, TreeGroup(op="and", children=parts))
 
 
+def directory_follows(
+    session: Session,
+    user_id: uuid.UUID,
+    channels: Sequence[dict[str, Any]],
+    *,
+    source: YoursSource,
+    handles: Sequence[str],
+    kinds: Sequence[ReferenceKind],
+) -> list[dict[str, Any]]:
+    """What a Follow from the Directory sends to the follow job.
+
+    `channels` (`{"name", "discoveredVia"}` each) minus the ones this Account
+    dismissed, since Follow is withheld on those until the Dismissal is taken
+    back (DIR-06); Discover's own follow keeps its contract. Each one sent
+    without a discovered-via gets the newest Reference the view's "your
+    channels" make to it (DIR-02), resolved here so ticks from any page get
+    one. Empty when every Channel sent is dismissed.
+    """
+    dismissed = dismissed_handles(session, user_id=user_id)
+    kept = [c for c in channels if normalize_handle(str(c["name"])) not in dismissed]
+    if not kept:
+        return []
+    view = resolve_view(
+        session, user_id, tree=None, source=source, handles=handles, kinds=kinds
+    )
+    newest = newest_references(session, view, [str(c["name"]) for c in kept])
+    return [
+        c
+        if c["discoveredVia"] is not None
+        else {**c, "discoveredVia": newest.get(normalize_handle(str(c["name"])))}
+        for c in kept
+    ]
+
+
 def newest_references(
     session: Session, view: DirectoryView, handles: Sequence[str]
 ) -> dict[str, dict[str, Any]]:
@@ -1152,17 +1186,43 @@ class Why:
     posts: list[CitingPost]
     #: Every citing Post, of which `posts` are the newest.
     total: int
+    #: The Channels shared with the Shared parents picks; `None` when that
+    #: Condition is off (DIR-07).
+    parents: SharedWhy | None = None
+    #: The same for the Shared children picks.
+    children: SharedWhy | None = None
 
 
 def why_its_here(
-    session: Session, view: DirectoryView, handle: str, *, days: int | None
+    session: Session,
+    view: DirectoryView,
+    handle: str,
+    *,
+    days: int | None,
+    parents: Sequence[str] | None = None,
+    children: Sequence[str] | None = None,
 ) -> Why:
-    """The Posts of "your channels" that cite `handle`, newest first.
+    """The Posts of "your channels" that cite `handle`, newest first, and the
+    Channels it shares with each Shared Condition's picks, when one is on.
 
     One entry per Post, with every kind it cites in; inside the last `days`
     when the "Cited by your channels" Condition sets a window, so the panel
     counts what the sort and the Condition count.
     """
+    return replace(
+        _citing_posts(session, view, handle, days=days),
+        parents=None
+        if parents is None
+        else shared_why(session, handle, "parents", parents),
+        children=None
+        if children is None
+        else shared_why(session, handle, "children", children),
+    )
+
+
+def _citing_posts(
+    session: Session, view: DirectoryView, handle: str, *, days: int | None
+) -> Why:
     if not view.sources:
         return Why(posts=[], total=0)
     r = PostReference
