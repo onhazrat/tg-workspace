@@ -73,7 +73,7 @@ function mount(over: Partial<ComponentProps<typeof DirectoryPanel>> = {}) {
       handle="chan"
       entry={entry()}
       posts={[]}
-      why={{ posts: [], total: 0 }}
+      why={{ posts: [], total: 0, parents: null, children: null }}
       windowDays={null}
       following={false}
       onFollow={() => calls.follow++}
@@ -159,6 +159,8 @@ describe("why it's here", () => {
           citing("src_two", 2, { text: null }),
         ],
         total: 2,
+        parents: null,
+        children: null,
       },
       windowDays: 14,
     })
@@ -178,13 +180,45 @@ describe("why it's here", () => {
   })
 
   test("says how many more there are past the ones listed", () => {
-    mount({ why: { posts: [citing("src_one", 1)], total: 25 } })
+    mount({
+      why: {
+        posts: [citing("src_one", 1)],
+        total: 25,
+        parents: null,
+        children: null,
+      },
+    })
     expect(screen.getByText("and 24 more")).toBeTruthy()
   })
 
   test("says when none of your channels cite it", () => {
     mount()
     expect(screen.getByText("None of your channels cite it.")).toBeTruthy()
+  })
+
+  test("names a few shared Channels for each Shared relation on (DIR-07)", () => {
+    const channel = (handle: string) => ({ handle, displayName: null })
+    mount({
+      why: {
+        posts: [],
+        total: 0,
+        parents: {
+          channels: [channel("s1"), channel("s2")],
+          total: 7,
+        },
+        children: { channels: [], total: 0 },
+      },
+    })
+    expect(
+      screen.getByText(
+        "Shared parents: @s1, @s2 and 5 more cite it and your picks",
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(
+        "Shared children: none; it cites nothing your picks cite",
+      ),
+    ).toBeTruthy()
   })
 })
 

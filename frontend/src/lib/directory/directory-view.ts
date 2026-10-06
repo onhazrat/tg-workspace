@@ -12,7 +12,11 @@ import type {
   DirectorySearchRequest,
   YourChannels,
 } from "@/client"
-import { MEASURES, OPENING_FILTER } from "./directory-filter"
+import {
+  type DirectorySharedCond,
+  MEASURES,
+  OPENING_FILTER,
+} from "./directory-filter"
 
 export type DirectorySort = NonNullable<DirectoryListRequest["sort"]>
 export type RefKind = NonNullable<
@@ -89,10 +93,20 @@ export const SORT_OPTIONS: { value: string; label: string }[] = [
   ...MEASURES.map((m) => ({ value: m.key, label: m.label })),
 ]
 
+export type SharedRelation = DirectorySharedCond["type"]
+
+/** Each Shared relation's weighted sort, offered while its Condition is on (DIR-07). */
+const SHARED_SORTS: Record<SharedRelation, { value: string; label: string }> = {
+  parents: { value: "shared_parents", label: "Shared parents (weighted)" },
+  children: { value: "shared_children", label: "Shared children (weighted)" },
+}
+
 const SORTS = new Set<string>([
   "mine",
   "mine_last_days",
   ...MEASURES.map((m) => m.key),
+  "shared_parents",
+  "shared_children",
 ])
 
 export const sortValue = (view: DirectoryView, yours: YoursSource): string =>
@@ -111,9 +125,14 @@ export function chooseSort(value: string): Partial<DirectoryView> {
 
 const RELEVANCE = { value: "relevance", label: "Relevance" }
 
-/** The picker's options: Relevance first, only while a search is on. */
-export const sortOptions = (searching: boolean) =>
-  searching ? [RELEVANCE, ...SORT_OPTIONS] : SORT_OPTIONS
+/**
+ * The picker's options: Relevance first, only while a search is on, and each
+ * Shared relation's weighted sort last, only while its Condition is on.
+ */
+export function sortOptions(searching: boolean, shared: SharedRelation[] = []) {
+  const base = searching ? [RELEVANCE, ...SORT_OPTIONS] : SORT_OPTIONS
+  return shared.length ? [...base, ...shared.map((r) => SHARED_SORTS[r])] : base
+}
 
 /** The search as the reads take it: trimmed, or none for a blank box. */
 export function searchRequest(

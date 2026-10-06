@@ -24,6 +24,7 @@ import {
   type DirectoryFilter,
   directoryFilterBody,
   OPENING_FILTER,
+  type PickSets,
   parseDirectoryFilter,
   printDirectoryFilter,
   withinDirectoryFilterBounds,
@@ -135,7 +136,7 @@ function useView() {
 export function useDirectory() {
   const { view, patch } = useView()
   const searchBox = useDirectorySearchBox(view, patch)
-  const { selectedChannels } = useData()
+  const { selectedChannels, channels } = useData()
   const { followDiscoverChannels } = useScraper()
   const queryClient = useQueryClient()
   const [ticked, setTicked] = useStoredList(TICKS_KEY)
@@ -169,13 +170,23 @@ export function useDirectory() {
     [selectedChannels],
   )
   const ticks = useMemo(() => new Set(ticked), [ticked])
+  // What Shared parents / children compare with, re-resolved on every read,
+  // so the live ticked choice follows the ticks (DIR-07).
+  const sets: PickSets = useMemo(
+    () => ({
+      picked: [...ticked].sort(),
+      selection,
+      follows: channels.map((c) => c.name).sort(),
+    }),
+    [ticked, selection, channels],
+  )
   const yours = resolveYours(view.yours, {
     selection,
-    ticked: [...ticked].sort(),
+    ticked: sets.picked,
   })
   const search = searchRequest(view)
   const request: DirectoryViewRequest = {
-    filter: directoryFilterBody(filter),
+    filter: directoryFilterBody(filter, sets),
     yours,
     referenceKinds: view.kinds,
     search,
@@ -250,6 +261,7 @@ export function useDirectory() {
     filter,
     setFilter,
     request,
+    sets,
     yours,
     ticks,
     setTicks: setTicked,

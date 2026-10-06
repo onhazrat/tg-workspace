@@ -9,6 +9,7 @@ import type { FilterNode } from "@/lib/filter-tree"
 import {
   type DirectoryCond,
   directoryConditionLabel,
+  directoryFilterBody,
   OPENING_FILTER,
   parseDirectoryFilter,
   printDirectoryFilter,
@@ -194,5 +195,83 @@ describe("chip labels", () => {
     [{ type: "cites", handles: ["a", "b"] }, "Cites @a, @b"],
   ])("%j", (cond, label) => {
     expect(directoryConditionLabel(cond, "en")).toBe(label)
+  })
+})
+
+describe("Shared parents and Shared children (DIR-07)", () => {
+  test.each([
+    "parents:picked",
+    "parents:selection",
+    "parents:follows",
+    'children:"a b 3"',
+    'parents:"picked 3"',
+    'children:"alpha beta"',
+    'not parents:follows and children:"follows 5"',
+  ])("%s prints and parses back unchanged", (text) => {
+    expect(roundTrip(text)).toBe(text)
+  })
+
+  test("the picks, and a trailing number as the minimum (default 2)", () => {
+    expect(conds('parents:picked children:"@Alpha, beta 3"')).toEqual([
+      {
+        cond: { type: "parents", picks: "picked", handles: [], min: 2 },
+        not: false,
+      },
+      {
+        cond: {
+          type: "children",
+          picks: "handles",
+          handles: ["alpha", "beta"],
+          min: 3,
+        },
+        not: false,
+      },
+    ])
+  })
+
+  test.each([
+    ["no picks", 'parents:"3"'],
+    ["a zero minimum", 'parents:"follows 0"'],
+    ["no handle", 'children:"@ 3"'],
+  ])("%s does not parse", (_, text) => {
+    expect(parseDirectoryFilter(text)).toBeNull()
+  })
+
+  test.each<[DirectoryCond, string]>([
+    [
+      { type: "parents", picks: "picked", handles: [], min: 2 },
+      "2+ shared parents with the channels ticked here",
+    ],
+    [
+      { type: "children", picks: "selection", handles: [], min: 3 },
+      "3+ shared children with your selected channels",
+    ],
+    [
+      { type: "parents", picks: "follows", handles: [], min: 2 },
+      "2+ shared parents with your follows",
+    ],
+    [
+      { type: "children", picks: "handles", handles: ["a", "b"], min: 2 },
+      "2+ shared children with @a, @b",
+    ],
+  ])("%j reads as its chip", (cond, label) => {
+    expect(directoryConditionLabel(cond, "en")).toBe(label)
+  })
+
+  test("the body sends the picks as handles, resolved now", () => {
+    const filter = parseDirectoryFilter(
+      'parents:picked or children:follows or parents:selection or children:"x 4"',
+    )
+    const body = directoryFilterBody(filter as NonNullable<typeof filter>, {
+      picked: ["t1"],
+      selection: ["s1", "s2"],
+      follows: ["f1"],
+    })
+    expect(body?.children?.map((c) => c.kind === "atom" && c.cond)).toEqual([
+      { type: "parents", handles: ["t1"], min: 2 },
+      { type: "children", handles: ["f1"], min: 2 },
+      { type: "parents", handles: ["s1", "s2"], min: 2 },
+      { type: "children", handles: ["x"], min: 4 },
+    ])
   })
 })

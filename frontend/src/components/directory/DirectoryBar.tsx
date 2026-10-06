@@ -19,10 +19,11 @@ import {
 } from "@/components/filter-tree/FilterRow"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { pillClass } from "@/components/PostFilterParts"
-import type {
-  DirectoryCond,
-  DirectoryFilter,
-  DirectoryFlag,
+import {
+  type DirectoryCond,
+  type DirectoryFilter,
+  type DirectoryFlag,
+  sharedOn,
 } from "@/lib/directory/directory-filter"
 import {
   REF_KINDS,
@@ -410,7 +411,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
         <ReferenceKindsPill kinds={p.kinds} onKinds={p.onKinds} />
         <span className="mx-1 h-5 w-px bg-app-ink/10" />
         <SortPicker
-          options={sortOptions(p.search.trim() !== "")}
+          options={sortOptions(p.search.trim() !== "", sharedOn(p.filter))}
           value={p.sortValue}
           onChange={p.onSort}
           direction={p.descending ? "desc" : "asc"}

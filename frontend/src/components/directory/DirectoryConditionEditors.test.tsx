@@ -9,6 +9,7 @@ import {
   HandlesEditor,
   MineEditor,
   NameEditor,
+  SharedEditor,
 } from "./DirectoryConditionEditors"
 
 afterEach(cleanup)
@@ -91,5 +92,106 @@ describe("Cited by your channels", () => {
       (screen.getByRole("spinbutton", { name: "Days" }) as HTMLInputElement)
         .value,
     ).toBe("7")
+  })
+})
+
+describe("Shared parents and Shared children (DIR-07)", () => {
+  const sets = {
+    picked: ["t1", "t2"],
+    selection: ["s1"],
+    follows: ["f1", "f2", "f3"],
+  }
+  const choice = (name: RegExp) =>
+    screen.getByRole("radio", { name }) as HTMLInputElement
+
+  test("lists the five picks with their counts, the live ticks chosen first", () => {
+    render(<SharedEditor type="parents" sets={sets} onSubmit={() => {}} />)
+    expect(screen.getByText("Compared with")).toBeTruthy()
+    expect(choice(/ticked in this list \(2\)/).checked).toBe(true)
+    expect(choice(/ticked in this list, saved now \(2\)/)).toBeTruthy()
+    expect(choice(/Channels tab selection \(1\)/)).toBeTruthy()
+    expect(choice(/Every channel you follow \(3\)/)).toBeTruthy()
+    expect(choice(/These channels/)).toBeTruthy()
+    // The live choice says a tick takes a Channel out of the results.
+    expect(screen.getByText(/leaves the results/)).toBeTruthy()
+  })
+
+  test("with nothing ticked the two ticked choices are off", () => {
+    render(
+      <SharedEditor
+        type="parents"
+        sets={{ ...sets, picked: [] }}
+        onSubmit={() => {}}
+      />,
+    )
+    expect(choice(/ticked in this list \(0\)/).disabled).toBe(true)
+    expect(choice(/saved now/).disabled).toBe(true)
+    expect(choice(/Channels tab selection/).checked).toBe(true)
+  })
+
+  test("each choice adds its picks and the minimum", () => {
+    const got: DirectoryCond[] = []
+    render(
+      <SharedEditor
+        type="children"
+        sets={sets}
+        onSubmit={(c) => got.push(c)}
+      />,
+    )
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: "Minimum shared" }),
+      { target: { value: "3" } },
+    )
+    fireEvent.click(submit())
+    fireEvent.click(choice(/saved now/))
+    fireEvent.click(submit())
+    fireEvent.click(choice(/Every channel you follow/))
+    fireEvent.click(submit())
+    fireEvent.click(choice(/These channels/))
+    expect((submit() as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByRole("textbox", { name: "Handles" }), {
+      target: { value: "@A b" },
+    })
+    fireEvent.click(submit())
+    expect(got).toEqual([
+      { type: "children", picks: "picked", handles: [], min: 3 },
+      { type: "children", picks: "handles", handles: ["t1", "t2"], min: 3 },
+      { type: "children", picks: "follows", handles: [], min: 3 },
+      { type: "children", picks: "handles", handles: ["a", "b"], min: 3 },
+    ])
+  })
+
+  test("a saved choice reopens as These channels, its handles to edit", () => {
+    render(
+      <SharedEditor
+        type="parents"
+        sets={sets}
+        start={{
+          type: "parents",
+          picks: "handles",
+          handles: ["t1", "t2"],
+          min: 4,
+        }}
+        onSubmit={() => {}}
+      />,
+    )
+    expect(choice(/These channels/).checked).toBe(true)
+    expect(
+      (screen.getByRole("textbox", { name: "Handles" }) as HTMLInputElement)
+        .value,
+    ).toBe("t1 t2")
+    expect(
+      (
+        screen.getByRole("spinbutton", {
+          name: "Minimum shared",
+        }) as HTMLInputElement
+      ).value,
+    ).toBe("4")
+    expect(submit().textContent).toBe("Update")
+  })
+
+  test("Shared children says picks nobody follows find little", () => {
+    render(<SharedEditor type="children" sets={sets} onSubmit={() => {}} />)
+    expect(screen.getByText(/only Channels somebody follows/i)).toBeTruthy()
   })
 })

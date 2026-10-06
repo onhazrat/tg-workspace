@@ -7,11 +7,13 @@ import {
   CircleDot,
   CornerDownLeft,
   CornerUpRight,
+  GitFork,
   Hash,
   Inbox,
   Languages,
   type LucideIcon,
   Type,
+  Users,
 } from "lucide-react"
 import type React from "react"
 import type { DirectoryLanguageCountResponse } from "@/client"
@@ -30,12 +32,15 @@ import {
   MEASURES,
   type Measure,
   type MeasureSection,
+  type PickSets,
+  SHARED_LABEL,
 } from "@/lib/directory/directory-filter"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
 import {
   HandlesEditor,
   MineEditor,
   NameEditor,
+  SharedEditor,
 } from "./DirectoryConditionEditors"
 
 const ICON: Record<DirectoryCond["type"], LucideIcon> = {
@@ -45,6 +50,8 @@ const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   mine: Inbox,
   citedby: CornerDownLeft,
   cites: CornerUpRight,
+  parents: Users,
+  children: GitFork,
   measure: Hash,
 }
 
@@ -87,6 +94,8 @@ const languageOptions = (
 export function directoryVocabulary(
   languageCounts: DirectoryLanguageCountResponse[],
   renderMeasure: MeasureEditorRender,
+  /** What Shared parents / children can compare with, as it is now (DIR-07). */
+  sets: PickSets,
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
   return {
@@ -165,6 +174,22 @@ export function directoryVocabulary(
               ),
             }),
           ),
+          ...(["parents", "children"] as const).map(
+            (type): PickerEntry<DirectoryCond> => ({
+              kind: "editor",
+              id: type,
+              label: `${SHARED_LABEL[type]} with…`,
+              icon: ICON[type],
+              render: ({ start, ...rest }) => (
+                <SharedEditor
+                  type={type}
+                  sets={sets}
+                  start={start?.type === type ? start : undefined}
+                  {...rest}
+                />
+              ),
+            }),
+          ),
         ],
       },
     ],
@@ -174,10 +199,12 @@ export function directoryVocabulary(
     chipId: (c) =>
       c.type === "measure"
         ? `measure-${c.measure}`
-        : "value" in c
-          ? `${c.type}-${c.value}`
-          : "handles" in c
-            ? `${c.type}-${c.handles.join("-")}`
-            : c.type,
+        : c.type === "parents" || c.type === "children"
+          ? `${c.type}-${c.picks}`
+          : "value" in c
+            ? `${c.type}-${c.value}`
+            : "handles" in c
+              ? `${c.type}-${c.handles.join("-")}`
+              : c.type,
   }
 }

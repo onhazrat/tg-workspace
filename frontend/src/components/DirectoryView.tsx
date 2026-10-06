@@ -31,7 +31,10 @@ import {
   type DirectoryCond,
   type DirectoryFilter,
   directoryFilterBody,
+  firstShared,
   type Measure,
+  type PickSets,
+  resolvePicks,
 } from "@/lib/directory/directory-filter"
 import { mineWindow } from "@/lib/directory/directory-panel"
 import {
@@ -64,11 +67,13 @@ const withoutMeasure = (filter: DirectoryFilter, measure: string) =>
 function MeasureEditor({
   request,
   filter,
+  sets,
   measure,
   ...rest
 }: {
   request: DirectoryViewRequest
   filter: DirectoryFilter
+  sets: PickSets
   measure: Measure
   initial?: MetricBound
   onSubmit: Parameters<MeasureEditorRender>[0]["onSubmit"]
@@ -76,7 +81,7 @@ function MeasureEditor({
 }) {
   const others = {
     ...request,
-    filter: directoryFilterBody(withoutMeasure(filter, measure.key)),
+    filter: directoryFilterBody(withoutMeasure(filter, measure.key), sets),
   }
   const distribution = useQuery({
     queryKey: queryKeys.directoryRead("distribution", {
@@ -132,6 +137,7 @@ function MeasureEditor({
 function DirectoryPanelReads({
   handle,
   request,
+  shared,
   windowDays,
   following,
   onFollow,
@@ -141,6 +147,8 @@ function DirectoryPanelReads({
 }: {
   handle: string
   request: DirectoryViewRequest
+  /** Each Shared relation's picks while it is on, for Why (DIR-07). */
+  shared: { parents: string[] | null; children: string[] | null }
   windowDays: number | null
   following: boolean
   onFollow: () => void
@@ -164,6 +172,7 @@ function DirectoryPanelReads({
     yours: request.yours,
     referenceKinds: request.referenceKinds,
     days: windowDays,
+    ...shared,
   }
   const why = useQuery({
     queryKey: queryKeys.directoryRead("why", whyBody),
@@ -194,9 +203,22 @@ export function DirectoryView() {
   const d = useDirectory()
   const { view, patch, list } = d
   const shown = listSummary(list.data, list.isFetching, d.yours.source)
-  const vocabulary = directoryVocabulary(shown.languages, (props) => (
-    <MeasureEditor request={d.request} filter={d.filter} {...props} />
-  ))
+  const vocabulary = directoryVocabulary(
+    shown.languages,
+    (props) => (
+      <MeasureEditor
+        request={d.request}
+        filter={d.filter}
+        sets={d.sets}
+        {...props}
+      />
+    ),
+    d.sets,
+  )
+  const picksOf = (relation: "parents" | "children") => {
+    const cond = firstShared(d.filter, relation)
+    return cond ? resolvePicks(cond, d.sets) : null
+  }
   return (
     <div className="pt-4" data-testid="directory-view">
       <DirectoryBar
@@ -256,6 +278,10 @@ export function DirectoryView() {
         <DirectoryPanelReads
           handle={d.open}
           request={d.request}
+          shared={{
+            parents: picksOf("parents"),
+            children: picksOf("children"),
+          }}
           windowDays={mineWindow(d.filter)}
           following={d.following.has(d.open)}
           onFollow={() => d.open && void d.follow([d.open])}

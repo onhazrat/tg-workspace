@@ -14,6 +14,7 @@ import {
   type DirectoryHandlesCond,
   directoryConditionLabel,
   MEASURES,
+  SHARED_LABEL,
 } from "@/lib/directory/directory-filter"
 import {
   telegramWebViewChannelUrl,
@@ -36,7 +37,14 @@ const KIND_VERB: Record<string, string> = {
 
 /** Every measure of the entry, as the table formats it; a dash for none. */
 function Counters({ entry }: { entry: DirectoryEntryResponse }) {
-  const row = { ...entry, mine: 0, mineLastAt: null, match: null }
+  const row = {
+    ...entry,
+    mine: 0,
+    mineLastAt: null,
+    match: null,
+    sharedParents: null,
+    sharedChildren: null,
+  }
   const stats = [
     { key: "language" as const, label: "Lang" },
     ...MEASURES.map((m) => ({ key: m.key, label: m.short })),
@@ -134,8 +142,41 @@ function WhyHere({
           )}
         </>
       )}
+      {why && <SharedWhy why={why} />}
     </section>
   )
+}
+
+const SHARED_WHY = {
+  parents: {
+    link: "cite it and your picks",
+    none: "nothing citing your picks cites it",
+  },
+  children: {
+    link: "are cited by it and your picks",
+    none: "it cites nothing your picks cite",
+  },
+}
+
+/** A line per Shared relation on (DIR-07): a few of the Channels it shares. */
+function SharedWhy({ why }: { why: DirectoryWhyResponse }) {
+  return (["parents", "children"] as const).map((relation) => {
+    const shared = why[relation]
+    if (!shared) return null
+    const names = shared.channels.map((c) => `@${c.handle}`).join(", ")
+    const more =
+      shared.total > shared.channels.length
+        ? ` and ${shared.total - shared.channels.length} more`
+        : ""
+    return (
+      <p key={relation} className="mt-2 text-xs text-app-ink/80">
+        {SHARED_LABEL[relation]}:{" "}
+        {shared.total
+          ? `${names}${more} ${SHARED_WHY[relation].link}`
+          : `none; ${SHARED_WHY[relation].none}`}
+      </p>
+    )
+  })
 }
 
 /**

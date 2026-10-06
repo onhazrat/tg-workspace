@@ -303,6 +303,20 @@ describe("the search (DIR-04)", () => {
     })
     expect(sortOptions(true).slice(1)).toEqual(SORT_OPTIONS)
   })
+
+  test("a Shared relation's weighted sort is offered only while it is on (DIR-07)", () => {
+    expect(sortOptions(false, ["children"]).at(-1)).toEqual({
+      value: "shared_children",
+      label: "Shared children (weighted)",
+    })
+    expect(
+      sortOptions(true, ["parents", "children"]).map((o) => o.value),
+    ).toContain("shared_parents")
+    // A link sorting by one survives a reload.
+    expect(viewFromParams({ dirSort: "shared_parents" }).sort).toBe(
+      "shared_parents",
+    )
+  })
 })
 
 describe("the Dismissal's confirmation (DIR-06)", () => {

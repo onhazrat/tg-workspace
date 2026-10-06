@@ -19,8 +19,10 @@ export const PAGE_SIZE = 100
 
 type Row = DirectoryRowResponse
 
+type SharedKey = "shared_parents" | "shared_children"
+
 export type DirectoryColumn = {
-  key: "language" | "mine" | MeasureKey
+  key: "language" | "mine" | MeasureKey | SharedKey
   label: string
   description: string
 }
@@ -56,6 +58,29 @@ export const COLUMNS: DirectoryColumn[] = [
   measureColumn("found_days"),
 ]
 
+/**
+ * Shared parents and Shared children (DIR-07): shown only while their
+ * Condition is on, which is when the rows carry a count, so the Columns menu
+ * does not list them.
+ */
+const SHARED_COLUMNS: DirectoryColumn[] = [
+  {
+    key: "shared_parents",
+    label: "Parents",
+    description:
+      "Shared parents: how many channels citing your picks also cite it. Sorts by that count weighed against how many cite it overall.",
+  },
+  {
+    key: "shared_children",
+    label: "Children",
+    description:
+      "Shared children: how many channels your picks cite it cites too. Sorts by that count weighed against how many it cites overall.",
+  },
+]
+
+const sharedCount = (key: SharedKey, r: Row) =>
+  key === "shared_parents" ? r.sharedParents : r.sharedChildren
+
 const count = (n: number | null) => (n === null ? "" : formatCount(n))
 
 /** What one column shows for a row. */
@@ -88,6 +113,9 @@ export function cell(key: DirectoryColumn["key"], r: Row): React.ReactNode {
       return <RelativeTime timestamp={r.foundAt} />
     case "cited_by":
       return count(r.citedBy)
+    case "shared_parents":
+    case "shared_children":
+      return count(sharedCount(key, r))
     case "mine":
       return r.mine ? (
         <>
@@ -368,7 +396,12 @@ export function DirectoryTable({
   onOpen: (handle: string) => void
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
-  const columns = COLUMNS.filter((c) => !hidden.includes(c.key))
+  const columns = [
+    ...COLUMNS.filter((c) => !hidden.includes(c.key)),
+    ...SHARED_COLUMNS.filter((c) =>
+      rows.some((r) => sharedCount(c.key as SharedKey, r) != null),
+    ),
+  ]
   const narrow = (key: string) =>
     key === sortedColumn ? "" : "hidden md:table-cell"
   return (

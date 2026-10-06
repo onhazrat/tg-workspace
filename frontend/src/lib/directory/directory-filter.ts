@@ -8,10 +8,16 @@
  * (`lib/filter-text.ts`): `lang:fa`, `name:"news"` (a bare word too),
  * `is:followed`, `is:followable`, `subscribers >= 1000`, `reach 100..5000`,
  * `reach = none`, `mine:all`, `mine:14d`, with `not`, `and`, `or` and
- * parentheses. DIR-05 to DIR-07 add their Conditions here.
+ * parentheses. DIR-05 adds `citedby:` and `cites:`; DIR-07 adds
+ * `parents:` and `children:` (`picked`, `selection`, `follows` or typed
+ * handles, a trailing number being the minimum).
  */
 
-import type { DirectoryFilterGroup, DirectoryMeasureCondition } from "@/client"
+import type {
+  DirectoryFilterAtom,
+  DirectoryFilterGroup,
+  DirectoryMeasureCondition,
+} from "@/client"
 import {
   boundKind,
   boundText,
@@ -24,7 +30,7 @@ import {
   quote,
   type TextVocabulary,
 } from "@/lib/filter-text"
-import type { FilterNode, FilterTree } from "@/lib/filter-tree"
+import { atoms, type FilterNode, type FilterTree } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
 
 export type MeasureKey = DirectoryMeasureCondition["measure"]
@@ -45,7 +51,26 @@ export type DirectoryCond =
   | { type: "citedby"; handles: string[] }
   /** Cites any of these handles, in the view's Reference kinds (DIR-05). */
   | { type: "cites"; handles: string[] }
+  | DirectorySharedCond
   | DirectoryMeasureCond
+
+/**
+ * Whom Shared parents / children compare with (DIR-07): the Channels ticked in
+ * the list (live), the Channels tab selection, every follow, or typed
+ * `handles`. The browser resolves them to handles as it sends the filter.
+ */
+export type PicksSource = "picked" | "selection" | "follows" | "handles"
+/** The picks' handles as they are now, for every source but typed handles. */
+export type PickSets = Record<Exclude<PicksSource, "handles">, string[]>
+
+/** Shared parents or Shared children with the picks, at least `min` shared. */
+export type DirectorySharedCond = {
+  type: "parents" | "children"
+  picks: PicksSource
+  /** Only for typed handles; `[]` otherwise. */
+  handles: string[]
+  min: number
+}
 
 export type DirectoryHandlesCond = Extract<
   DirectoryCond,
@@ -175,6 +200,20 @@ export const HANDLES_LABEL: Record<DirectoryHandlesCond["type"], string> = {
   cites: "Cites",
 }
 
+export const SHARED_LABEL: Record<DirectorySharedCond["type"], string> = {
+  parents: "Shared parents",
+  children: "Shared children",
+}
+
+const PICKS_LABEL: Record<Exclude<PicksSource, "handles">, string> = {
+  picked: "the channels ticked here",
+  selection: "your selected channels",
+  follows: "your follows",
+}
+
+/** The default minimum shared count. */
+export const SHARED_MIN = 2
+
 /** Typed handles as the server keys them: no "@", lowercase, each once. */
 export const parseHandles = (text: string): string[] => [
   ...new Set(
@@ -210,6 +249,13 @@ export function directoryConditionLabel(
     case "citedby":
     case "cites":
       return `${HANDLES_LABEL[cond.type]} ${cond.handles.map((h) => `@${h}`).join(", ")}`
+    case "parents":
+    case "children":
+      return `${cond.min}+ shared ${cond.type} with ${
+        cond.picks === "handles"
+          ? cond.handles.map((h) => `@${h}`).join(", ")
+          : PICKS_LABEL[cond.picks]
+      }`
     case "measure":
       return `${measureOf(cond.measure).label}${cond.none ? ":" : ""} ${boundText(cond)}`
   }
@@ -230,6 +276,12 @@ function condText(cond: DirectoryCond): string {
     case "citedby":
     case "cites":
       return `${cond.type}:${quote(cond.handles.join(" "))}`
+    case "parents":
+    case "children": {
+      const words = cond.picks === "handles" ? cond.handles : [cond.picks]
+      if (cond.min !== SHARED_MIN) words.push(String(cond.min))
+      return `${cond.type}:${quote(words.join(" "))}`
+    }
     case "measure": {
       const m = cond.measure
       return {
@@ -267,6 +319,25 @@ function boundCond(m: RegExpExecArray): DirectoryMeasureCond | null {
 }
 
 const FLAGS = new Set<string>(Object.keys(FLAG_LABEL))
+const SOURCES = new Set<string>(Object.keys(PICKS_LABEL))
+
+/**
+ * `parents:` / `children:`'s value: a source word or handles, then maybe the
+ * minimum. ponytail: a typed handle spelled like a source word (`follows`)
+ * reads as that source; Telegram allows such a handle, nobody has asked.
+ */
+function sharedCond(
+  type: DirectorySharedCond["type"],
+  text: string,
+): DirectorySharedCond | null {
+  const words = text.split(/[\s,]+/).filter(Boolean)
+  const last = words.at(-1) ?? ""
+  const min = /^\d+$/.test(last) ? Number(words.pop()) : SHARED_MIN
+  if (min < 1 || !words.length) return null
+  if (words.length === 1 && SOURCES.has(words[0]))
+    return { type, picks: words[0] as PicksSource, handles: [], min }
+  return { type, picks: "handles", handles: parseHandles(words.join(" ")), min }
+}
 const WINDOW = /^(\d+)d$/
 
 const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
@@ -294,6 +365,10 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
           ? { type: "cites", handles }
           : { type: "citedby", handles }
     }
+    if (prefix === "parents" || prefix === "children") {
+      const cond = sharedCond(prefix, text)
+      if (cond && (cond.picks !== "handles" || cond.handles.length)) return cond
+    }
     // An unknown value would be a 422 from the server, so it does not parse.
     throw new ParseError(`Unknown ${prefix}:${text}`)
   },
@@ -311,6 +386,9 @@ export const DIRECTORY_FILTER_BOUNDS = {
   maxDays: 36_500,
   handles: 50,
   handleLength: 256,
+  /** Shared parents / children: picks per Condition, and the minimum. */
+  picks: 10_000,
+  min: 10_000,
 } as const
 
 /** Whether the server accepts `filter`: depth, node count and values. */
@@ -331,6 +409,12 @@ export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
         cond.handles.length <= b.handles &&
         cond.handles.every((h) => h.length <= b.handleLength)
       )
+    if (cond.type === "parents" || cond.type === "children")
+      return (
+        cond.handles.length <= b.picks &&
+        cond.handles.every((h) => h.length <= b.handleLength) &&
+        cond.min <= b.min
+      )
     return true
   }
   return fits(filter, 1) && nodes <= b.nodes
@@ -346,8 +430,49 @@ export function parseDirectoryFilter(src: string): DirectoryFilter | null {
   return filter && withinDirectoryFilterBounds(filter) ? filter : null
 }
 
-/** The tree as the Directory reads take it, or `null` for an empty one. */
+/** A Shared Condition's picks as handles, resolved against `sets` now. */
+export const resolvePicks = (cond: DirectorySharedCond, sets: PickSets) =>
+  cond.picks === "handles" ? cond.handles : sets[cond.picks]
+
+/** One Condition as the wire takes it: Shared picks become their handles. */
+function wireCond(
+  cond: DirectoryCond,
+  sets: PickSets,
+): DirectoryFilterAtom["cond"] {
+  if (cond.type !== "parents" && cond.type !== "children") return cond
+  return { type: cond.type, handles: resolvePicks(cond, sets), min: cond.min }
+}
+
+const toWire = (
+  node: FilterNode<DirectoryCond>,
+  sets: PickSets,
+): DirectoryFilterAtom | DirectoryFilterGroup =>
+  node.kind === "atom"
+    ? { ...node, cond: wireCond(node.cond, sets) }
+    : { ...node, children: node.children.map((c) => toWire(c, sets)) }
+
+/**
+ * The tree as the Directory reads take it, or `null` for an empty one. The
+ * picks are resolved here, so a live choice follows the ticks, the selection
+ * and the follows on every read (DIR-07).
+ */
 export const directoryFilterBody = (
   filter: DirectoryFilter,
+  sets: PickSets,
 ): DirectoryFilterGroup | null =>
-  filter.children.length === 0 ? null : (filter as DirectoryFilterGroup)
+  filter.children.length === 0
+    ? null
+    : (toWire(filter, sets) as DirectoryFilterGroup)
+
+/** The first Shared Condition of `type`, whose picks a column and Why read. */
+export const firstShared = (
+  filter: DirectoryFilter,
+  type: DirectorySharedCond["type"],
+): DirectorySharedCond | undefined =>
+  atoms(filter)
+    .map((a) => a.cond)
+    .find((c): c is DirectorySharedCond => c.type === type)
+
+/** The Shared relations the filter has on, for the sort picker. */
+export const sharedOn = (filter: DirectoryFilter) =>
+  (["parents", "children"] as const).filter((r) => firstShared(filter, r))

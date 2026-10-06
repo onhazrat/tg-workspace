@@ -41,6 +41,8 @@ const row = (handle: string, over: Partial<DirectoryRowResponse> = {}) =>
     mine: 2,
     mineLastAt: Date.now() - 3_600_000,
     match: null,
+    sharedParents: null,
+    sharedChildren: null,
     ...over,
   }) satisfies DirectoryRowResponse
 
@@ -187,6 +189,28 @@ describe("columns and sorting", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cited by" }))
     fireEvent.click(screen.getByRole("button", { name: "Cites" }))
     expect(calls.sort).toEqual(["cited_by", "cites"])
+  })
+
+  test("a Shared column shows only while its Condition is on, and sorts (DIR-07)", () => {
+    mount()
+    const headers = () =>
+      screen.getAllByRole("columnheader").map((h) => h.textContent)
+    expect(headers()).not.toContain("Parents")
+    cleanup()
+    const calls = mount({
+      rows: [
+        row("alpha", { sharedParents: 3 }),
+        row("beta", { sharedParents: 0 }),
+      ],
+    })
+    expect(headers()).toContain("Parents")
+    expect(headers()).not.toContain("Children")
+    const texts = [
+      ...screen.getByTestId("directory-row-alpha").querySelectorAll("td"),
+    ].map((c) => c.textContent)
+    expect(texts).toContain("3")
+    fireEvent.click(screen.getByRole("button", { name: "Parents" }))
+    expect(calls.sort).toEqual(["shared_parents"])
   })
 
   test("a header sorts by its column, and the sorted one shows its arrow", () => {

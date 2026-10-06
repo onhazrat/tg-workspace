@@ -37,6 +37,7 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
       vocabulary={directoryVocabulary(
         [{ language: "fa", count: 12 }],
         ({ measure }) => <p>editor for {measure.key}</p>,
+        { picked: [], selection: [], follows: [] },
       )}
       languages={[
         { language: "fa", count: 12 },
