@@ -107,3 +107,6 @@ Nothing left open. Decisions made here:
   query, so a query with no stop word compiles exactly as before. A query whose
   every word is a stop word in one configuration still misses that
   configuration's rows, as it did.
+* The backfill stays a script, as recorded; `deployment.md` ("Post-deploy:
+  the Directory tab") now lists it and `backfill_citation_pairs.py` with what
+  reads empty until each runs and the measured times and sizes.
