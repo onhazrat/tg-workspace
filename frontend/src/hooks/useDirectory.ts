@@ -35,11 +35,13 @@ import {
   hasViewParams,
   paramsFromView,
   resolveYours,
+  searchRequest,
   viewFromParams,
 } from "@/lib/directory/directory-view"
 import { pruneSelectionAfterFollow } from "@/lib/posts/discover-selection"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { queryKeys } from "./queryKeys"
+import { useDirectorySearchBox } from "./useDirectorySearchBox"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
@@ -128,6 +130,7 @@ function useView() {
 
 export function useDirectory() {
   const { view, patch } = useView()
+  const searchBox = useDirectorySearchBox(view, patch)
   const { selectedChannels } = useData()
   const { followDiscoverChannels } = useScraper()
   const queryClient = useQueryClient()
@@ -165,22 +168,28 @@ export function useDirectory() {
     selection,
     ticked: [...ticked].sort(),
   })
+  const search = searchRequest(view)
   const request: DirectoryViewRequest = {
     filter: directoryFilterBody(filter),
     yours,
     referenceKinds: view.kinds,
+    search,
   }
   const body = {
     ...request,
     sort: view.sort,
     descending: view.descending,
     page: view.page,
+    // Only while searching, so the switch leaves an unsearched read's key alone.
+    ...(search && { showMatches: view.matches }),
   }
   const list = useQuery({
     queryKey: queryKeys.directoryRead("list", body),
-    queryFn: async () => {
+    // `signal` is consumed, so a read nobody waits for any more (a cleared or
+    // retyped search) is aborted rather than left to finish.
+    queryFn: async ({ signal }) => {
       const started = performance.now()
-      const data = await dataListDirectory({ body })
+      const data = await dataListDirectory({ body, signal })
       return { ...data, ms: Math.round(performance.now() - started) }
     },
     placeholderData: keepPreviousData,
@@ -211,6 +220,7 @@ export function useDirectory() {
   return {
     view,
     patch,
+    ...searchBox,
     filter,
     setFilter,
     request,

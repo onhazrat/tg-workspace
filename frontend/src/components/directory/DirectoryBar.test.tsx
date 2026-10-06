@@ -25,6 +25,10 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
     kinds: [] as string[][],
     hidden: [] as string[][],
     sorts: [] as string[],
+    searches: [] as string[],
+    fields: [] as string[][],
+    matches: [] as boolean[],
+    cleared: 0,
   }
   render(
     <DirectoryBar
@@ -50,6 +54,15 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
       total={1234}
       size={297_345}
       ms={360}
+      search=""
+      onSearch={(t) => calls.searches.push(t)}
+      fields={["name", "bio", "posts"]}
+      onFields={(f) => calls.fields.push(f)}
+      matches
+      onMatches={(m) => calls.matches.push(m)}
+      onClearAll={() => {
+        calls.cleared += 1
+      }}
       {...over}
     />,
   )
@@ -170,5 +183,61 @@ describe("the filter row and the footer", () => {
   test("the footer says when your channels are empty", () => {
     mount({ emptyYours: "ticked" })
     expect(screen.getByText(/No channels are ticked here yet/)).toBeTruthy()
+  })
+})
+
+describe("the search box (DIR-04)", () => {
+  test("typing searches, and the field segment turns a field off", () => {
+    const calls = mount({ fields: ["name", "bio"] })
+    fireEvent.change(screen.getByLabelText("Search the Directory"), {
+      target: { value: "crypto" },
+    })
+    expect(calls.searches).toEqual(["crypto"])
+    expect(pressed("directory-search-field-name")).toBe("true")
+    expect(pressed("directory-search-field-posts")).toBe("false")
+    fireEvent.click(screen.getByTestId("directory-search-field-bio"))
+    fireEvent.click(screen.getByTestId("directory-search-field-posts"))
+    expect(calls.fields).toEqual([["name"], ["name", "bio", "posts"]])
+  })
+
+  test("a search is a chip even with no Condition, and the chip clears it", () => {
+    const calls = mount({ text: "", search: "crypto" })
+    const row = screen.getByTestId("directory-filter-row")
+    expect(row.textContent).toContain('"crypto"')
+    fireEvent.click(screen.getByLabelText("Clear the search"))
+    expect(calls.searches).toEqual([""])
+  })
+
+  test("Clear all clears the search and the Conditions at once", () => {
+    const calls = mount({ search: "crypto" })
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }))
+    expect(calls.cleared).toBe(1)
+    expect(calls.filters).toEqual([])
+  })
+
+  test("the sort picker offers Relevance only while searching", () => {
+    mount()
+    fireEvent.click(screen.getByTestId("directory-sort"))
+    expect(screen.queryByRole("radio", { name: /Relevance/ })).toBeNull()
+    cleanup()
+    mount({ search: "crypto", sortValue: "relevance" })
+    fireEvent.click(screen.getByTestId("directory-sort"))
+    expect(
+      screen
+        .getByRole("radio", { name: /Relevance/ })
+        .getAttribute("aria-checked"),
+    ).toBe("true")
+  })
+
+  test("Show matches is a switch after the sort picker", () => {
+    const calls = mount({ matches: true })
+    const toggle = screen.getByTestId("directory-switch-matches")
+    expect(toggle.getAttribute("aria-pressed")).toBe("true")
+    expect(
+      screen.getByTestId("directory-sort").compareDocumentPosition(toggle) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(calls.matches).toEqual([false])
   })
 })

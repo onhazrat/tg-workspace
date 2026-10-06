@@ -1,12 +1,12 @@
 /**
  * The Directory tab's bar (DIR-02), laid out like the Posts tab's and built
- * from the shared parts: a pill row (the facet menu for Language, the
- * condition picker as Filters, the on/off switches, Reference kinds, the sort
- * picker and Columns), then the shared filter row, then a footer. DIR-04 puts
- * the search box above the pill row. Props only, so it renders without a
- * server; `DirectoryView` wires it.
+ * from the shared parts: the search box with its field segment (DIR-04), a
+ * pill row (the facet menu for Language, the condition picker as Filters, the
+ * on/off switches, Reference kinds, the sort picker, Show matches and
+ * Columns), then the shared filter row, then a footer. Props only, so it
+ * renders without a server; `DirectoryView` wires it.
  */
-import { ChevronDown, Columns3, Link2, ListFilter } from "lucide-react"
+import { ChevronDown, Columns3, Link2, ListFilter, Search } from "lucide-react"
 import { useState } from "react"
 import type { DirectoryLanguageCountResponse } from "@/client"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
@@ -27,7 +27,10 @@ import type {
 import {
   REF_KINDS,
   type RefKind,
-  SORT_OPTIONS,
+  SEARCH_FIELDS,
+  type SearchField,
+  sortOptions,
+  toggleField,
   type YoursSource,
 } from "@/lib/directory/directory-view"
 import {
@@ -35,7 +38,6 @@ import {
   appendAnd,
   atoms,
   clearFunnels,
-  emptyTree,
   funnelledValues,
   removeFunnel,
   setSwitch,
@@ -103,6 +105,62 @@ export function DirectorySwitches({
       />
     )
   })
+}
+
+/** The server refuses a longer search. */
+const SEARCH_MAX = 256
+
+/**
+ * The Posts tab's search box, with Name, Bio and Posts as a segment inside
+ * it; any mix of the three, never none.
+ */
+export function DirectorySearch({
+  search,
+  onSearch,
+  fields,
+  onFields,
+}: {
+  search: string
+  onSearch: (text: string) => void
+  fields: SearchField[]
+  onFields: (next: SearchField[]) => void
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-app-ink/10 bg-app-muted pl-3 pr-1.5 transition-colors focus-within:border-app-ink/30">
+      <Search size={16} className="text-app-ink/50" />
+      <input
+        type="search"
+        dir="auto"
+        aria-label="Search the Directory"
+        data-testid="directory-search"
+        value={search}
+        maxLength={SEARCH_MAX}
+        placeholder="Search names, bios and posts"
+        onChange={(e) => onSearch(e.target.value)}
+        className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
+      />
+      <fieldset
+        aria-label="Search in"
+        className="flex items-center gap-0.5 rounded-lg bg-app-ink/5 p-0.5 text-[11px]"
+      >
+        {SEARCH_FIELDS.map((f) => {
+          const on = fields.includes(f)
+          return (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={on}
+              data-testid={`directory-search-field-${f}`}
+              onClick={() => onFields(toggleField(fields, f))}
+              className={`rounded-md px-2 py-1 capitalize ${on ? "bg-app-card font-semibold shadow-sm" : "text-app-ink/50 hover:text-app-ink"}`}
+            >
+              {f}
+            </button>
+          )
+        })}
+      </fieldset>
+    </div>
+  )
 }
 
 export function ReferenceKindsPill({
@@ -267,6 +325,16 @@ export type DirectoryBarProps = {
   ms?: number
   /** "Your channels" resolved to nothing: which source it was. */
   emptyYours?: YoursSource
+  /** The search box as typed. */
+  search: string
+  onSearch: (text: string) => void
+  fields: SearchField[]
+  onFields: (next: SearchField[]) => void
+  /** Show matches: quote each row's matching bio and Post. */
+  matches: boolean
+  onMatches: (on: boolean) => void
+  /** The filter row's Clear all: the search and every Condition, as one change. */
+  onClearAll: () => void
 }
 
 export function DirectoryBar(p: DirectoryBarProps) {
@@ -274,6 +342,14 @@ export function DirectoryBar(p: DirectoryBarProps) {
   const funnelled = funnelledValues(p.filter, "language")
   return (
     <section className="mb-3 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
+      <div className="px-4 pt-4">
+        <DirectorySearch
+          search={p.search}
+          onSearch={p.onSearch}
+          fields={p.fields}
+          onFields={p.onFields}
+        />
+      </div>
       <div className="flex flex-wrap items-center gap-2 p-4">
         <FacetMenu
           label="Language"
@@ -328,12 +404,19 @@ export function DirectoryBar(p: DirectoryBarProps) {
         <ReferenceKindsPill kinds={p.kinds} onKinds={p.onKinds} />
         <span className="mx-1 h-5 w-px bg-app-ink/10" />
         <SortPicker
-          options={SORT_OPTIONS}
+          options={sortOptions(p.search.trim() !== "")}
           value={p.sortValue}
           onChange={p.onSort}
           direction={p.descending ? "desc" : "asc"}
           onToggleDirection={p.onToggleDirection}
           testId="directory-sort"
+        />
+        <BarToggle
+          on={p.matches}
+          label="Show matches"
+          title="Quote the matching bio and post under each row while searching"
+          testId="directory-switch-matches"
+          onClick={() => p.onMatches(!p.matches)}
         />
         <span className="ml-auto" />
         <ColumnsPill hidden={p.hidden} onHidden={p.onHidden} />
@@ -344,11 +427,11 @@ export function DirectoryBar(p: DirectoryBarProps) {
         onChange={p.onFilter}
         vocabulary={p.vocabulary}
         testId="directory-filter"
-        search=""
+        search={p.search}
         shownCount={p.total ?? 0}
         totalCount={p.size ?? 0}
-        onClearSearch={() => {}}
-        onClearAll={() => p.onFilter(emptyTree())}
+        onClearSearch={() => p.onSearch("")}
+        onClearAll={p.onClearAll}
       />
 
       <div

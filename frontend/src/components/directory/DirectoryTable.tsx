@@ -13,6 +13,7 @@ import {
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
+import { DirectoryMatchRow } from "./DirectoryMatches"
 
 export const PAGE_SIZE = 100
 
@@ -345,7 +346,7 @@ export function DirectoryTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {rows.map((r) => [
             <tr
               key={r.handle}
               data-testid={`directory-row-${r.handle}`}
@@ -388,8 +389,17 @@ export function DirectoryTable({
                   onFollow={onFollow}
                 />
               </td>
-            </tr>
-          ))}
+            </tr>,
+            r.match && (
+              <DirectoryMatchRow
+                key={`${r.handle}-match`}
+                handle={r.handle}
+                match={r.match}
+                colSpan={columns.length + 3}
+                onOpen={onOpen}
+              />
+            ),
+          ])}
         </tbody>
       </table>
       {total > 0 && <Pages page={page} total={total} onPage={onPage} />}
