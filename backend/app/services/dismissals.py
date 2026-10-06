@@ -45,11 +45,7 @@ from typing import Any
 from sqlmodel import Session, col, select
 
 from app.models_tg import Dismissal, utc_now
-
-
-def normalize_handle(name: str) -> str:
-    """Mirrors `discover.normalize_handle` — the key must match candidate names."""
-    return name.lstrip("@").strip().lower()
+from app.services.telegram_web import normalize_handle
 
 
 def dismissed_handles(session: Session, *, user_id: uuid.UUID) -> set[str]:

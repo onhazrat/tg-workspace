@@ -859,7 +859,7 @@ def _visible_channel_names_exact(session: Session, *, user_id: uuid.UUID) -> set
 
     **Not `follows.visible_channel_names`, and the difference is load-bearing.**
     That one lowercases, because all three of its callers compare against a
-    handle scraped out of a post and `discover.normalize_handle` has already
+    handle scraped out of a post and `telegram_web.normalize_handle` has already
     lowercased that. This one feeds a write whose row is later read back through
     `scoped_select`, which emits `tg_channels.name = tg_sync_logs.channel_name`,
     an exact match in PostgreSQL.

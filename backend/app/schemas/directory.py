@@ -34,6 +34,7 @@ from app.services.directory_reads import (
     YoursSource,
 )
 from app.services.post_filters import TreeAtom, TreeGroup
+from app.services.telegram_web import normalize_handle
 
 
 # Closed, and `postId`/`text`/`timestamp` carry **no server-side default**, which
@@ -150,7 +151,7 @@ MAX_CONDITION_HANDLES = 50
 
 
 def _normalised(handles: list[str]) -> tuple[str, ...]:
-    return tuple(sorted({h.strip().lstrip("@").lower() for h in handles}))
+    return tuple(sorted({normalize_handle(h) for h in handles}))
 
 
 class DirectoryCitedByCondition(_Cond):

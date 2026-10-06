@@ -121,6 +121,7 @@ from app.services.follows import followed_channel_names
 from app.services.post_references import extract_sample_references
 from app.services.reach import Reach, reach_settings_from, sample_reach
 from app.services.settling_curve import current_curve
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -218,11 +219,6 @@ LISTED_KIND = "channel"
 SEARCH_INDEX_VERSION = 1
 #: Entries re-indexed per statement by retention and the backfill.
 SEARCH_BATCH = 500
-
-
-def normalize_handle(name: str) -> str:
-    """Mirrors `discover.normalize_handle` — the key must match candidate names."""
-    return name.lstrip("@").strip().lower()
 
 
 def _retry_deadline(attempts: int, *, now: datetime) -> datetime:

@@ -87,7 +87,7 @@ from app.models_tg import (
 from app.services import search_text
 from app.services.channel_directory import LISTED_KIND
 from app.services.channel_directory_samples import samples_by_handle
-from app.services.dismissals import dismissed_handles, normalize_handle
+from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_filters import (
     TreeAtom,
@@ -98,6 +98,7 @@ from app.services.post_filters import (
     tree_conds,
 )
 from app.services.posts import lookup_posts
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import scoped_select, unscoped_select
 
 PAGE_SIZE = 100
@@ -285,7 +286,7 @@ def resolve_view(
     sources = (
         followed
         if source == "follows"
-        else frozenset(h.strip().lstrip("@").lower() for h in handles if h.strip())
+        else frozenset(normalize_handle(h) for h in handles if h.strip())
     )
     return DirectoryView(
         user_id=user_id,
@@ -1112,7 +1113,7 @@ def newest_references(
     In the shape `ChannelFollow.discovered_via` stores; a handle none of them
     cites is absent.
     """
-    targets = sorted({h.strip().lstrip("@").lower() for h in handles if h.strip()})
+    targets = sorted({normalize_handle(h) for h in handles if h.strip()})
     if not view.sources or not targets:
         return {}
     r = PostReference
@@ -1331,9 +1332,7 @@ def shared_why(
 ) -> SharedWhy:
     """The Channels `handle` shares with the picks: for parents, those citing both
     it and a pick; for children, those both it and a pick cite (DIR-07)."""
-    cond = SharedCond(
-        relation, tuple(sorted({h.strip().lstrip("@").lower() for h in picks}))
-    )
+    cond = SharedCond(relation, tuple(sorted({normalize_handle(h) for h in picks})))
     middle, candidate = _ends(relation)
     if not cond.picks:
         return SharedWhy(channels=[], total=0)

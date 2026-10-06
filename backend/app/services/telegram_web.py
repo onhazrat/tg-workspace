@@ -119,6 +119,12 @@ RESERVED_TELEGRAM_PATHS = frozenset(
 _HANDLE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{4,31}$")
 
 
+def normalize_handle(name: str) -> str:
+    """A handle as every table keyed by handle stores it: no "@", lowercase,
+    and no space on either side of the "@" (a pasted " @Foo" is "foo")."""
+    return name.strip().lstrip("@").strip().lower()
+
+
 def is_channel_handle(name: str) -> bool:
     """True when `name` can be a public channel handle (not an invite/reserved path)."""
     clean = name.lstrip("@").strip()

@@ -36,8 +36,9 @@ from app.schemas.directory import (
     DirectoryWhyResponse,
 )
 from app.services import directory_reads
-from app.services.channel_directory import normalize_handle, probe_map
+from app.services.channel_directory import probe_map
 from app.services.channel_directory_samples import sample_to_camel, samples_for
+from app.services.telegram_web import normalize_handle
 
 router = APIRouter()
 

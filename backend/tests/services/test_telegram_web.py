@@ -6,6 +6,7 @@ from app.services.telegram_web import (
     extract_channel_name_from_href,
     is_telegram_web_url,
     is_telegram_web_view_url,
+    normalize_handle,
     parse_telegram_web_view_url,
     resolve_telegram_href,
     telegram_channel_post_url,
@@ -72,3 +73,10 @@ def test_is_telegram_web_url_matches_both_domains() -> None:
     assert is_telegram_web_url("https://telegram.me/durov/1")
     assert is_telegram_web_url("https://t.me/durov/1")
     assert not is_telegram_web_url("https://example.com/t.me/durov")
+
+
+def test_a_handle_is_keyed_without_its_at_sign_space_or_case() -> None:
+    """One normaliser for every table keyed by handle: space goes on both
+    sides of the "@", so a pasted " @Foo" keys where "foo" does."""
+    for raw in ("foo", "@Foo", " @Foo ", "@ foo", "\t@FOO\n"):
+        assert normalize_handle(raw) == "foo", raw

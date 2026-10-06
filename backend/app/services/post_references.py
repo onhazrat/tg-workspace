@@ -48,15 +48,15 @@ from sqlmodel.sql.expression import SelectOfScalar
 
 from app.core.config import settings
 from app.models_tg import Channel, DirectoryEntry, DirectorySample, Post, PostReference
-from app.services.discover import (
-    _text_link_re,
-    extract_mentions,
-    normalize_handle,
-)
+from app.services.discover import _text_link_re, extract_mentions
 from app.services.follows import followed_channel_names
 from app.services.settings_registry import REFERENCE_GRAPH_KEY
 from app.services.settings_store import get_global_setting
-from app.services.telegram_web import extract_channel_post_from_href, is_channel_handle
+from app.services.telegram_web import (
+    extract_channel_post_from_href,
+    is_channel_handle,
+    normalize_handle,
+)
 from app.services.tenancy import unscoped_select
 
 #: The four kinds, one wider than `discover.SignalKind`. A cross-channel reply

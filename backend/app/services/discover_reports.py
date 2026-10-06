@@ -42,6 +42,7 @@ from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_selection import PostScope, selection_clause
 from app.services.serialization import model_to_camel
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import (
     assert_owner,
     assert_owner_on_write,
@@ -144,7 +145,7 @@ def followed_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
 
 def _candidate_handle(candidate: dict[str, Any]) -> str:
     name = candidate.get("name")
-    return name.lstrip("@").strip().lower() if isinstance(name, str) else ""
+    return normalize_handle(name) if isinstance(name, str) else ""
 
 
 def _with_live_state(

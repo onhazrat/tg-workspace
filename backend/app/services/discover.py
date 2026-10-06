@@ -31,7 +31,11 @@ from app.services.follows import visible_channel_names
 from app.services.post_filters import ViewReading, apply_analysis_window
 from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import channel_order
-from app.services.telegram_web import _all_web_domains, is_channel_handle
+from app.services.telegram_web import (
+    _all_web_domains,
+    is_channel_handle,
+    normalize_handle,
+)
 from app.services.tenancy import scoped_select
 
 SignalKind = Literal["forward", "mention", "link"]
@@ -50,10 +54,6 @@ def _text_link_re() -> re.Pattern[str]:
         rf"(?:https?://)?(?:www\.)?(?:{domains})/([^\s<>\"')\]]+)",
         re.IGNORECASE,
     )
-
-
-def normalize_handle(name: str) -> str:
-    return name.lstrip("@").strip().lower()
 
 
 def extract_mentions(text: str) -> set[str]:
