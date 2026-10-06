@@ -45,6 +45,7 @@ const entry = (
   links: 4,
   followable: true,
   followed: false,
+  dismissed: false,
   citedBy: 5,
   cites: 1,
   bio: "A bio about things",
@@ -66,7 +67,7 @@ const citing = (
 })
 
 function mount(over: Partial<ComponentProps<typeof DirectoryPanel>> = {}) {
-  const calls = { follow: 0, close: 0 }
+  const calls = { follow: 0, close: 0, dismiss: [] as boolean[] }
   render(
     <DirectoryPanel
       handle="chan"
@@ -76,6 +77,7 @@ function mount(over: Partial<ComponentProps<typeof DirectoryPanel>> = {}) {
       windowDays={null}
       following={false}
       onFollow={() => calls.follow++}
+      onDismiss={(dismissed) => calls.dismiss.push(dismissed)}
       onClose={() => calls.close++}
       neighbours={{ citedBy: [], cites: [] }}
       onFilter={() => {}}
@@ -107,6 +109,17 @@ describe("the header", () => {
     cleanup()
     mount({ entry: entry({ followed: true }) })
     expect(screen.getByText("Following")).toBeTruthy()
+  })
+
+  test("Dismiss dismisses; a dismissed Channel withholds Follow and takes it back", () => {
+    const calls = mount()
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss @chan" }))
+    expect(calls.dismiss).toEqual([true])
+    cleanup()
+    const dismissed = mount({ entry: entry({ dismissed: true }) })
+    expect(screen.queryByRole("button", { name: "Follow @chan" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Take back @chan" }))
+    expect(dismissed.dismiss).toEqual([false])
   })
 
   test("closes", () => {

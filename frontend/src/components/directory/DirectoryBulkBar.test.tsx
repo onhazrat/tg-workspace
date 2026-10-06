@@ -10,12 +10,17 @@ import { DirectoryBulkBar } from "./DirectoryBulkBar"
 afterEach(cleanup)
 
 function mount(handles: string[], busy = false) {
-  const calls = { follow: [] as string[][], clear: 0 }
+  const calls = {
+    follow: [] as string[][],
+    dismiss: [] as string[][],
+    clear: 0,
+  }
   render(
     <DirectoryBulkBar
       ticks={new Set(handles)}
       busy={busy}
       onFollow={(h) => calls.follow.push(h)}
+      onDismiss={(h) => calls.dismiss.push(h)}
       onClear={() => calls.clear++}
     />,
   )
@@ -46,6 +51,12 @@ describe("the bulk bar", () => {
     expect(calls.follow).toEqual([])
     fireEvent.click(screen.getByTestId("directory-bulk-confirm"))
     expect(calls.follow).toEqual([["a", "b", "c", "d", "e"]])
+  })
+
+  test("Dismiss dismisses every tick at once, without asking", () => {
+    const calls = mount(["a", "b", "c", "d", "e"])
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss 5" }))
+    expect(calls.dismiss).toEqual([["a", "b", "c", "d", "e"]])
   })
 
   test("Clear empties the ticks, and a running follow holds both", () => {

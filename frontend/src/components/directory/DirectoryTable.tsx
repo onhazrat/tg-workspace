@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, Plus } from "lucide-react"
+import { ArrowDown, ArrowUp, Check, EyeOff, Plus, Undo2 } from "lucide-react"
 import type React from "react"
 import type { DirectoryRowResponse } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
@@ -136,7 +136,7 @@ function HeaderTick({
 }
 
 /** Following, or a Follow button; the panel shows the same one. */
-export function FollowCell({
+function FollowButton({
   row,
   busy,
   onFollow,
@@ -167,6 +167,51 @@ export function FollowCell({
     >
       <Plus size={11} /> Follow
     </TgButton>
+  )
+}
+
+/**
+ * Follow and Dismiss for one Channel (DIR-06). A dismissed Channel withholds
+ * Follow until the Dismissal is taken back, as Discover does.
+ */
+export function FollowCell({
+  row,
+  busy,
+  onFollow,
+  onDismiss,
+}: {
+  row: Pick<Row, "handle" | "followed" | "dismissed">
+  busy: boolean
+  onFollow: (handle: string) => void
+  /** `true` dismisses, `false` takes the Dismissal back. */
+  onDismiss: (handle: string, dismissed: boolean) => void
+}) {
+  const verb = row.dismissed ? "Take back" : "Dismiss"
+  return (
+    <span className="inline-flex items-center gap-1">
+      {!row.dismissed && (
+        <FollowButton row={row} busy={busy} onFollow={onFollow} />
+      )}
+      <TgButton
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-label={`${verb} @${row.handle}`}
+        title={
+          row.dismissed
+            ? "Take the Dismissal back, here and in Discover"
+            : "Hide this channel here and in Discover"
+        }
+        onClick={(e) => {
+          e.stopPropagation()
+          onDismiss(row.handle, !row.dismissed)
+        }}
+        className="h-7 rounded-full px-2 text-app-ink/50"
+      >
+        {row.dismissed ? <Undo2 size={11} /> : <EyeOff size={11} />}
+        {row.dismissed ? "Take back" : null}
+      </TgButton>
+    </span>
   )
 }
 
@@ -299,6 +344,7 @@ export function DirectoryTable({
   onTicks,
   following,
   onFollow,
+  onDismiss,
   onSort,
   onPage,
   onOpen,
@@ -314,6 +360,8 @@ export function DirectoryTable({
   /** Handles whose follow job is running. */
   following: ReadonlySet<string>
   onFollow: (handle: string) => void
+  /** `true` dismisses, `false` takes the Dismissal back (DIR-06). */
+  onDismiss: (handle: string, dismissed: boolean) => void
   onSort: (key: DirectorySort) => void
   onPage: (page: number) => void
   /** A click anywhere on the row but its links and controls opens the panel. */
@@ -351,7 +399,7 @@ export function DirectoryTable({
               key={r.handle}
               data-testid={`directory-row-${r.handle}`}
               onClick={() => onOpen(r.handle)}
-              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"}`}
+              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""}`}
             >
               <td className="pl-3" onClick={(e) => e.stopPropagation()}>
                 <input
@@ -387,6 +435,7 @@ export function DirectoryTable({
                   row={r}
                   busy={following.has(r.handle)}
                   onFollow={onFollow}
+                  onDismiss={onDismiss}
                 />
               </td>
             </tr>,

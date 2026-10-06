@@ -135,6 +135,7 @@ function DirectoryPanelReads({
   windowDays,
   following,
   onFollow,
+  onDismiss,
   onClose,
   onFilter,
 }: {
@@ -143,6 +144,7 @@ function DirectoryPanelReads({
   windowDays: number | null
   following: boolean
   onFollow: () => void
+  onDismiss: (dismissed: boolean) => void
   onClose: () => void
   onFilter: (cond: DirectoryCond) => void
 }) {
@@ -180,6 +182,7 @@ function DirectoryPanelReads({
       windowDays={windowDays}
       following={following}
       onFollow={onFollow}
+      onDismiss={onDismiss}
       onClose={onClose}
       neighbours={neighbours.data}
       onFilter={onFilter}
@@ -230,6 +233,7 @@ export function DirectoryView() {
         ticks={d.ticks}
         busy={[...d.ticks].some((h) => d.following.has(h))}
         onFollow={(handles) => void d.follow(handles)}
+        onDismiss={(handles) => void d.dismiss(handles)}
         onClear={() => d.setTicks([])}
       />
       <DirectoryTable
@@ -243,6 +247,7 @@ export function DirectoryView() {
         onTicks={d.setTicks}
         following={d.following}
         onFollow={(handle) => void d.follow([handle])}
+        onDismiss={(handle, dismissed) => void d.dismiss([handle], dismissed)}
         onSort={(key) => patch(headerSort(view, key, d.yours.source))}
         onPage={(page) => patch({ page })}
         onOpen={d.setOpen}
@@ -254,6 +259,9 @@ export function DirectoryView() {
           windowDays={mineWindow(d.filter)}
           following={d.following.has(d.open)}
           onFollow={() => d.open && void d.follow([d.open])}
+          onDismiss={(dismissed) =>
+            d.open && void d.dismiss([d.open], dismissed)
+          }
           onClose={() => d.setOpen(null)}
           onFilter={(cond) => {
             // As the prototype did: close, so the narrowed list shows.

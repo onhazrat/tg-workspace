@@ -204,10 +204,12 @@ function Header({
   entry,
   following,
   onFollow,
+  onDismiss,
 }: {
   entry: DirectoryEntryResponse
   following: boolean
   onFollow: () => void
+  onDismiss: (dismissed: boolean) => void
 }) {
   return (
     <>
@@ -245,7 +247,12 @@ function Header({
         </p>
       )}
       <div className="mt-3">
-        <FollowCell row={entry} busy={following} onFollow={onFollow} />
+        <FollowCell
+          row={entry}
+          busy={following}
+          onFollow={onFollow}
+          onDismiss={(_, dismissed) => onDismiss(dismissed)}
+        />
       </div>
       <Counters entry={entry} />
     </>
@@ -266,6 +273,7 @@ export function DirectoryPanel({
   windowDays,
   following,
   onFollow,
+  onDismiss,
   onClose,
   neighbours,
   onFilter,
@@ -278,6 +286,8 @@ export function DirectoryPanel({
   windowDays: number | null
   following: boolean
   onFollow: () => void
+  /** `true` dismisses, `false` takes the Dismissal back (DIR-06). */
+  onDismiss: (dismissed: boolean) => void
   onClose: () => void
   /** Who cites it most and whom it cites most; `undefined` while loading. */
   neighbours: DirectoryNeighboursResponse | undefined
@@ -308,7 +318,12 @@ export function DirectoryPanel({
       )}
       {entry && (
         <>
-          <Header entry={entry} following={following} onFollow={onFollow} />
+          <Header
+            entry={entry}
+            following={following}
+            onFollow={onFollow}
+            onDismiss={onDismiss}
+          />
           <WhyHere why={why} windowDays={windowDays} />
           <h4 className={HEADING}>Recent posts</h4>
           {posts ? (

@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { dataGetDirectorySize, dataListDirectory } from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
+import { errorText } from "@/lib/artifacts/artifact-run"
 import {
   DIRECTORY_FILTER_BOUNDS,
   type DirectoryFilter,
@@ -29,9 +30,11 @@ import {
 } from "@/lib/directory/directory-filter"
 import {
   DIRECTORY_PARAMS,
+  DISMISSAL_NOTICE_MS,
   type DirectoryParams,
   type DirectoryView,
   type DirectoryViewRequest,
+  dismissalNotice,
   hasViewParams,
   paramsFromView,
   resolveYours,
@@ -42,6 +45,7 @@ import { pruneSelectionAfterFollow } from "@/lib/posts/discover-selection"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { queryKeys } from "./queryKeys"
 import { useDirectorySearchBox } from "./useDirectorySearchBox"
+import { useDiscoverIgnoreMutation } from "./useDiscover"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
@@ -139,6 +143,7 @@ export function useDirectory() {
   // A list of at most one handle, so the panel reuses the stored-list plumbing.
   const [opened, setOpened] = useStoredList(OPEN_KEY)
   const [following, setFollowing] = useState<ReadonlySet<string>>(new Set())
+  const setDismissed = useDiscoverIgnoreMutation()
 
   const filter = useMemo(
     () =>
@@ -217,9 +222,30 @@ export function useDirectory() {
     }
   }
 
+  /**
+   * Dismisses Channels, or takes the Dismissal back, through Discover's own
+   * routes, so one Dismissal hides the Channel in both tabs (DIR-06). The
+   * confirmation offers Undo for ten seconds.
+   */
+  const dismiss = async (handles: string[], dismissed = true) => {
+    try {
+      await setDismissed.mutateAsync({ handles, ignored: dismissed })
+    } catch (error) {
+      toast.error(errorText(error, "The Dismissal did not save."))
+      return
+    }
+    if (!dismissed) return
+    setTicked(ticked.filter((h) => !handles.includes(h)))
+    toast(dismissalNotice(handles), {
+      duration: DISMISSAL_NOTICE_MS,
+      action: { label: "Undo", onClick: () => void dismiss(handles, false) },
+    })
+  }
+
   return {
     view,
     patch,
+    dismiss,
     ...searchBox,
     filter,
     setFilter,

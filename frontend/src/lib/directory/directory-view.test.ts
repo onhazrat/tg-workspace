@@ -9,6 +9,7 @@ import { OPENING_FILTER } from "./directory-filter"
 import {
   chooseSort,
   DEFAULT_VIEW,
+  dismissalNotice,
   hasViewParams,
   headerSort,
   listSummary,
@@ -301,5 +302,12 @@ describe("the search (DIR-04)", () => {
       label: "Relevance",
     })
     expect(sortOptions(true).slice(1)).toEqual(SORT_OPTIONS)
+  })
+})
+
+describe("the Dismissal's confirmation (DIR-06)", () => {
+  test("names one Channel, counts several", () => {
+    expect(dismissalNotice(["alpha"])).toBe("Dismissed @alpha")
+    expect(dismissalNotice(["a", "b", "c"])).toBe("Dismissed 3 channels")
   })
 })

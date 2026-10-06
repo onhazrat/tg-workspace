@@ -244,3 +244,12 @@ export function resolveYours(
     handles: source === "follows" ? [] : sources[source],
   }
 }
+
+/** How long a Dismissal's confirmation, and its Undo, stay up (DIR-06). */
+export const DISMISSAL_NOTICE_MS = 10_000
+
+/** A Dismissal's confirmation: one Channel by handle, several by count. */
+export const dismissalNotice = (handles: string[]): string =>
+  handles.length === 1
+    ? `Dismissed @${handles[0]}`
+    : `Dismissed ${handles.length} channels`

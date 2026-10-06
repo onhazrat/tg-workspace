@@ -35,6 +35,7 @@ const row = (handle: string, over: Partial<DirectoryRowResponse> = {}) =>
     links: 4,
     followable: true,
     followed: false,
+    dismissed: false,
     citedBy: 0,
     cites: 0,
     mine: 2,
@@ -50,7 +51,8 @@ function mount(over: Partial<ComponentProps<typeof DirectoryTable>> = {}) {
     follow: string[]
     page: number[]
     open: string[]
-  } = { ticks: [], sort: [], follow: [], page: [], open: [] }
+    dismiss: [string, boolean][]
+  } = { ticks: [], sort: [], follow: [], page: [], open: [], dismiss: [] }
   render(
     <DirectoryTable
       rows={[row("alpha"), row("beta"), row("gamma", { followed: true })]}
@@ -63,6 +65,7 @@ function mount(over: Partial<ComponentProps<typeof DirectoryTable>> = {}) {
       onTicks={(next) => calls.ticks.push([...next].sort())}
       following={new Set()}
       onFollow={(h) => calls.follow.push(h)}
+      onDismiss={(h, dismissed) => calls.dismiss.push([h, dismissed])}
       onSort={(key) => calls.sort.push(key)}
       onPage={(p) => calls.page.push(p)}
       onOpen={(h) => calls.open.push(h)}
@@ -101,6 +104,26 @@ describe("the rows", () => {
       ).disabled,
     ).toBe(true)
     expect(screen.getByText("Following")).toBeTruthy()
+  })
+})
+
+describe("Dismissal", () => {
+  test("Dismiss dismisses one row without opening the panel", () => {
+    const calls = mount()
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss @alpha" }))
+    expect(calls.dismiss).toEqual([["alpha", true]])
+    expect(calls.open).toEqual([])
+  })
+
+  test("a dismissed row is dimmed, withholds Follow and takes it back", () => {
+    const calls = mount({ rows: [row("alpha", { dismissed: true })] })
+    expect(screen.queryByRole("button", { name: "Follow @alpha" })).toBeNull()
+    expect(screen.getByTestId("directory-row-alpha").className).toContain(
+      "opacity-50",
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Take back @alpha" }))
+    expect(calls.dismiss).toEqual([["alpha", false]])
+    expect(calls.open).toEqual([])
   })
 })
 

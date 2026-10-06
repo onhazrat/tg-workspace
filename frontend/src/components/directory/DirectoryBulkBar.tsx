@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react"
+import { EyeOff, Plus } from "lucide-react"
 import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
@@ -8,19 +8,22 @@ const SHOWN = 3
 
 /**
  * What a bulk action on the Directory's ticks will touch (DIR-02): the count,
- * a few handles, Follow and Clear. Following five or more asks first, at
- * Discover's threshold. DIR-06 adds Dismiss.
+ * a few handles, Follow, Dismiss and Clear. Following five or more asks first,
+ * at Discover's threshold; Dismiss does not ask, because its confirmation
+ * offers Undo (DIR-06).
  */
 export function DirectoryBulkBar({
   ticks,
   busy,
   onFollow,
+  onDismiss,
   onClear,
 }: {
   ticks: ReadonlySet<string>
   /** A follow job is running for some of them. */
   busy: boolean
   onFollow: (handles: string[]) => void
+  onDismiss: (handles: string[]) => void
   onClear: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
@@ -55,6 +58,17 @@ export function DirectoryBulkBar({
         >
           <Plus size={12} />
           Follow {ticks.size}
+        </TgButton>
+        <TgButton
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={busy}
+          onClick={() => onDismiss(handles)}
+          className="rounded-full"
+        >
+          <EyeOff size={12} />
+          Dismiss {ticks.size}
         </TgButton>
         <TgButton
           type="button"
