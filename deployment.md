@@ -133,6 +133,31 @@ uv run python scripts/backfill_user_id.py             # apply
 
 **Single-owner model:** Mode A treats the bootstrap superuser as the sole data owner. Scheduler jobs (auto-sync, retention, summaries) and manual sync without `channelIds` only touch channels/posts linked to that user. Legacy `/api/*` routes return **410 Gone** in production; use `/api/v1/*` only.
 
+### Post-deploy: the Directory tab (one-time)
+
+The deploy that carries the Directory tab creates two derived stores empty. The
+writers keep both current from then on, but nothing fills them for the rows
+already there. Run both once after that deploy, in the backend container
+(`docker compose exec backend uv run python scripts/<name>.py`) or from the
+repo root as below. Both are batched, resumable and idempotent, and safe beside
+a live worker.
+
+```bash
+uv run python backend/scripts/backfill_directory_search.py --dry-run   # how many to index
+uv run python backend/scripts/backfill_directory_search.py
+uv run python backend/scripts/backfill_citation_pairs.py
+```
+
+| Script | Reads empty until it runs | Measured on the staging copy |
+|---|---|---|
+| `backfill_directory_search.py` (DIR-04) | Search: it finds only Channels probed since the deploy | 297,345 entries in 533 s (8.9 min, 230 MB peak RSS); the index is 1.53 GB (TOAST 902 MB, GIN on `tsv` 406 MB, trigram GIN 46 MB) |
+| `backfill_citation_pairs.py` (DIR-05) | Cited by and Cites read 0 (Conditions, columns, sorts, neighbours); Shared parents and Shared children find nothing | 3.33M References in 15 s; 1,722,025 pairs (396 MB with indexes), 520,737 counted handles (93 MB) |
+
+Re-run `backfill_directory_search.py` after raising
+`channel_directory.SEARCH_INDEX_VERSION`; it re-indexes only the older rows.
+Beside a live worker a racing write can leave a citation count one short, which
+a second run of `backfill_citation_pairs.py` settles.
+
 ## Response compression
 
 Traefik gzips responses for both the API and the dashboard. Before this, nothing on
