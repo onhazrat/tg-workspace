@@ -85,6 +85,8 @@ DIR-05 (citation counts, "cited by @x" / "cites @x", `GET
 `tests/services/test_citation_pairs.py`):
 
 * count a handle with no counts row as 1 -> `cited_by <= 0`
+* never join the counts, or join them for a Condition and not for a sort ->
+  the Condition cases, the sort cases
 * drop the Reference kinds from the two handle Conditions -> the kinds case
 * read "cites @x" from the citing end -> the `cites` cases
 * leave the Reference kinds out of the cached total's key for them -> the

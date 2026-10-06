@@ -63,6 +63,7 @@ from sqlalchemy import (
     func,
     literal,
     or_,
+    outerjoin,
     true,
 )
 from sqlalchemy import select as sa_select
@@ -371,16 +372,36 @@ def measure_sql(measure: DirectoryMeasure, now: datetime) -> ColumnElement[Any]:
         return _days_since(col(DirectoryEntry.last_post_at), now)
     if measure == "found_days":
         return _days_since(col(DirectoryEntry.created_at), now)
-    if measure == "cited_by" or measure == "cites":
-        # Correlated, so only a Condition, sort or spread that reads it joins
-        # the counts; a handle with no row is cited by (and cites) nobody.
-        stored = (
-            sa_select(getattr(CitationCount, measure))
-            .where(col(CitationCount.handle) == col(DirectoryEntry.handle))
-            .scalar_subquery()
-        )
-        return cast(func.coalesce(stored, 0), Float)
+    if measure in _COUNTED:
+        # Read off `_entries`' join; a handle with no row cites, and is cited
+        # by, nobody.
+        return cast(func.coalesce(getattr(CitationCount, measure), 0), Float)
     return cast(getattr(DirectoryEntry, measure), Float)
+
+
+#: The measures `tg_citation_counts` holds rather than the entry.
+_COUNTED: frozenset[str] = frozenset({"cited_by", "cites"})
+
+
+def _entries(tree: TreeNode[DirectoryCond] | None, *reads: str) -> Any:
+    """What a Directory statement reads from: the entries, joined to their
+    citation counts only when the tree or one of `reads` (a sort, a measure)
+    reads them. A hash join over the counts measured 0.2 s on the staging
+    copy where a correlated lookup per entry took 2.6 s."""
+    counted = any(m in _COUNTED for m in reads) or (
+        tree is not None
+        and any(
+            isinstance(c, MeasureCond) and c.measure in _COUNTED
+            for c in tree_conds(tree)
+        )
+    )
+    if not counted:
+        return DirectoryEntry
+    return outerjoin(
+        DirectoryEntry,
+        CitationCount,
+        col(CitationCount.handle) == col(DirectoryEntry.handle),
+    )
 
 
 def _of_kinds(view: DirectoryView) -> list[ColumnElement[bool]]:
@@ -560,7 +581,10 @@ def _page_handles(
 ) -> list[str]:
     handle = col(DirectoryEntry.handle)
     statement = unscoped_select(
-        sa_select(handle).where(_where(view, view.tree)), reason=_SCOPE_REASON
+        sa_select(handle)
+        .select_from(_entries(view.tree, sort))
+        .where(_where(view, view.tree)),
+        reason=_SCOPE_REASON,
     )
     if sort == "relevance" and view.search is not None:
         doc = DirectorySearchDocument
@@ -769,7 +793,7 @@ def _count(
     session: Session, view: DirectoryView, tree: TreeNode[DirectoryCond] | None
 ) -> int:
     statement = unscoped_select(
-        sa_select(func.count()).select_from(DirectoryEntry).where(_where(view, tree)),
+        sa_select(func.count()).select_from(_entries(tree)).where(_where(view, tree)),
         reason=_SCOPE_REASON,
     )
     return int(session.execute(statement).scalar_one())
@@ -784,6 +808,7 @@ def _totals(session: Session, view: DirectoryView) -> tuple[int, list[LanguageCo
     language = col(DirectoryEntry.language)
     statement = unscoped_select(
         sa_select(language, func.count())
+        .select_from(_entries(without))
         .where(_where(view, without))
         .group_by(language)
         .order_by(func.count().desc(), language),
@@ -1158,7 +1183,9 @@ def distribution(
                 func.min(value),
                 func.max(value),
                 func.percentile_cont(0.5).within_group(value),
-            ).where(where),
+            )
+            .select_from(_entries(tree, measure))
+            .where(where),
             reason=_SCOPE_REASON,
         )
     ).one()
@@ -1182,6 +1209,7 @@ def distribution(
             for n_bucket, n in session.execute(
                 unscoped_select(
                     sa_select(bucket, func.count())
+                    .select_from(_entries(tree, measure))
                     .where(where, value.is_not(None))
                     .group_by(bucket),
                     reason=_SCOPE_REASON,
