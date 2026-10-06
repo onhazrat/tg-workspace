@@ -235,7 +235,16 @@ def get_directory_why(
         handles=body.yours.handles,
         kinds=body.reference_kinds,
     )
-    why = directory_reads.why_its_here(
-        session, view, normalize_handle(body.handle), days=body.days
-    )
-    return DirectoryWhyResponse.model_validate(asdict(why))
+    handle = normalize_handle(body.handle)
+    why = directory_reads.why_its_here(session, view, handle, days=body.days)
+    picks: dict[directory_reads.SharedRelation, list[str] | None] = {
+        "parents": body.parents,
+        "children": body.children,
+    }
+    shared = {
+        relation: None
+        if chosen is None
+        else asdict(directory_reads.shared_why(session, handle, relation, chosen))
+        for relation, chosen in picks.items()
+    }
+    return DirectoryWhyResponse.model_validate(asdict(why) | shared)

@@ -7277,19 +7277,22 @@
               { "$ref": "#/components/schemas/DirectoryFlagCondition" },
               { "$ref": "#/components/schemas/DirectoryMineCondition" },
               { "$ref": "#/components/schemas/DirectoryCitedByCondition" },
-              { "$ref": "#/components/schemas/DirectoryCitesCondition" }
+              { "$ref": "#/components/schemas/DirectoryCitesCondition" },
+              { "$ref": "#/components/schemas/DirectorySharedCondition" }
             ],
             "title": "Cond",
             "discriminator": {
               "propertyName": "type",
               "mapping": {
+                "children": "#/components/schemas/DirectorySharedCondition",
                 "citedby": "#/components/schemas/DirectoryCitedByCondition",
                 "cites": "#/components/schemas/DirectoryCitesCondition",
                 "flag": "#/components/schemas/DirectoryFlagCondition",
                 "language": "#/components/schemas/DirectoryLanguageCondition",
                 "measure": "#/components/schemas/DirectoryMeasureCondition",
                 "mine": "#/components/schemas/DirectoryMineCondition",
-                "name": "#/components/schemas/DirectoryNameCondition"
+                "name": "#/components/schemas/DirectoryNameCondition",
+                "parents": "#/components/schemas/DirectorySharedCondition"
               }
             }
           }
@@ -7435,7 +7438,9 @@
               "cites",
               "mine",
               "mine_last_days",
-              "relevance"
+              "relevance",
+              "shared_parents",
+              "shared_children"
             ],
             "title": "Sort",
             "default": "mine"
@@ -7710,6 +7715,14 @@
               { "$ref": "#/components/schemas/DirectoryMatchResponse" },
               { "type": "null" }
             ]
+          },
+          "sharedParents": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Sharedparents"
+          },
+          "sharedChildren": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Sharedchildren"
           }
         },
         "type": "object",
@@ -7736,7 +7749,9 @@
           "cites",
           "mine",
           "mineLastAt",
-          "match"
+          "match",
+          "sharedParents",
+          "sharedChildren"
         ],
         "title": "DirectoryRowResponse",
         "description": "One Directory entry in the list: its measures, never its bio or samples."
@@ -7804,6 +7819,62 @@
         "title": "DirectorySearchRequest",
         "description": "Words to find in a Channel's name, bio and recent Posts."
       },
+      "DirectorySharedChannelResponse": {
+        "properties": {
+          "handle": { "type": "string", "title": "Handle" },
+          "displayName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Displayname"
+          }
+        },
+        "type": "object",
+        "required": ["handle", "displayName"],
+        "title": "DirectorySharedChannelResponse",
+        "description": "A Channel linking the candidate to the picks."
+      },
+      "DirectorySharedCondition": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["parents", "children"],
+            "title": "Type"
+          },
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Handles"
+          },
+          "min": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Min",
+            "default": 2
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "handles"],
+        "title": "DirectorySharedCondition",
+        "description": "Shared parents or Shared children with these picks, at least `min` shared."
+      },
+      "DirectorySharedWhyResponse": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/DirectorySharedChannelResponse"
+            },
+            "type": "array",
+            "title": "Channels"
+          },
+          "total": { "type": "integer", "title": "Total" }
+        },
+        "type": "object",
+        "required": ["channels", "total"],
+        "title": "DirectorySharedWhyResponse",
+        "description": "A few of the Channels shared with the picks, and how many in all."
+      },
       "DirectorySizeResponse": {
         "properties": { "size": { "type": "integer", "title": "Size" } },
         "type": "object",
@@ -7845,6 +7916,28 @@
               { "type": "null" }
             ],
             "title": "Days"
+          },
+          "parents": {
+            "anyOf": [
+              {
+                "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+                "type": "array",
+                "maxItems": 10000
+              },
+              { "type": "null" }
+            ],
+            "title": "Parents"
+          },
+          "children": {
+            "anyOf": [
+              {
+                "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+                "type": "array",
+                "maxItems": 10000
+              },
+              { "type": "null" }
+            ],
+            "title": "Children"
           }
         },
         "additionalProperties": false,
@@ -7862,12 +7955,24 @@
             "type": "array",
             "title": "Posts"
           },
-          "total": { "type": "integer", "title": "Total" }
+          "total": { "type": "integer", "title": "Total" },
+          "parents": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectorySharedWhyResponse" },
+              { "type": "null" }
+            ]
+          },
+          "children": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectorySharedWhyResponse" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
-        "required": ["posts", "total"],
+        "required": ["posts", "total", "parents", "children"],
         "title": "DirectoryWhyResponse",
-        "description": "The newest citing Posts, and how many there are in all."
+        "description": "The newest citing Posts, how many in all, and the shared Channels per relation on."
       },
       "DiscoverCandidateResponse": {
         "properties": {

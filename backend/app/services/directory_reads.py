@@ -57,6 +57,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     String,
+    all_,
     and_,
     any_,
     cast,
@@ -132,9 +133,20 @@ DirectoryMeasure = Literal[
 DIRECTORY_MEASURES: tuple[DirectoryMeasure, ...] = get_args(DirectoryMeasure)
 #: The measures plus the two "your channels" reads: how many cite it, and how
 #: many days since the newest of them did.
-DirectorySort = Literal[DirectoryMeasure, "mine", "mine_last_days", "relevance"]
+DirectorySort = Literal[
+    DirectoryMeasure,
+    "mine",
+    "mine_last_days",
+    "relevance",
+    # The weighted score of the first Shared parents / children Condition (DIR-07).
+    "shared_parents",
+    "shared_children",
+]
 DirectoryFlag = Literal["followed", "followable", "dismissed"]
 ReferenceKind = Literal["forward", "mention", "link", "reply"]
+#: Shared parents: cited by whoever cites the picks. Shared children: cites
+#: what the picks cite (DIR-07).
+SharedRelation = Literal["parents", "children"]
 #: Every follow, the Channels tab selection, or the Channels ticked here.
 YoursSource = Literal["follows", "selection", "ticked"]
 #: Where a search looks: the handle and display name, the bio, the samples.
@@ -196,6 +208,15 @@ class CitesCond:
     handles: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class SharedCond:
+    """Shared parents or Shared children with `picks`, at least `min` shared."""
+
+    relation: SharedRelation
+    picks: tuple[str, ...]
+    min: int = 2
+
+
 DirectoryCond = (
     LanguageCond
     | NameCond
@@ -204,6 +225,7 @@ DirectoryCond = (
     | MineCond
     | CitedByCond
     | CitesCond
+    | SharedCond
 )
 DirectoryTree = TreeGroup[DirectoryCond]
 
@@ -429,8 +451,109 @@ def _references(
     return clauses
 
 
+# ---- Shared parents and Shared children (DIR-07) ----------------------------------
+#
+# Both read the citation pairs, which keep no kinds, so the view's Reference
+# kinds do not narrow them. Every statement here is `correlate(None)`: the
+# outer statement may join `tg_citation_counts` (`_entries`), and an
+# auto-correlated subquery would then read the candidate's counts row instead
+# of its own.
+
+#: A middle Channel past this many links is an aggregator, not a taste: a
+#: source citing more than this many Channels, or a target cited by more.
+AGGREGATOR_LINKS = 3000
+
+
+def _ends(relation: SharedRelation) -> tuple[Any, Any]:
+    """The pair's (middle, candidate) ends: parents cite the candidate, children
+    are cited by it."""
+    p = CitationPair
+    if relation == "parents":
+        return col(p.citing_handle), col(p.cited_handle)
+    return col(p.cited_handle), col(p.citing_handle)
+
+
+def _middle(cond: SharedCond) -> Any:
+    """The Channels between the picks and a candidate: who cites the picks
+    (parents) or whom they cite (children), past aggregators and the picks."""
+    middle, pick = _ends(cond.relation)
+    degree = (
+        CitationCount.cites if cond.relation == "parents" else CitationCount.cited_by
+    )
+    picks = _handles(cond.picks)
+    return (
+        sa_select(middle)
+        .distinct()
+        .join(CitationCount, col(CitationCount.handle) == middle)
+        .where(pick == any_(picks), middle != all_(picks))
+        .where(col(degree) <= AGGREGATOR_LINKS)
+        .correlate(None)
+    )
+
+
+def _shared(cond: SharedCond, among: Sequence[str] | None = None) -> Any:
+    """Per candidate, how many middle Channels it shares with the picks; never a pick."""
+    middle, candidate = _ends(cond.relation)
+    where = [middle.in_(_middle(cond)), candidate != all_(_handles(cond.picks))]
+    if among is not None:
+        where.append(candidate == any_(_handles(among)))
+    return (
+        sa_select(candidate.label("handle"), func.count().label("n"))
+        .where(*where)
+        .group_by(candidate)
+        .correlate(None)
+    )
+
+
+def _shared_score(cond: SharedCond) -> Any:
+    """The candidates passing `cond` with the weighted score the sort reads:
+    shared / sqrt(degree(candidate) * |middle|), so a giant does not win by size."""
+    shared = _shared(cond).having(func.count() >= cond.min).subquery("shared")
+    degree = (
+        CitationCount.cited_by if cond.relation == "parents" else CitationCount.cites
+    )
+    middles = (
+        sa_select(func.count()).select_from(_middle(cond).subquery()).scalar_subquery()
+    )
+    score = shared.c.n / func.sqrt(
+        func.greatest(func.coalesce(col(degree), 1), 1) * func.greatest(middles, 1)
+    )
+    return (
+        sa_select(shared.c.handle, score.label("score"))
+        .select_from(
+            outerjoin(
+                shared, CitationCount, col(CitationCount.handle) == shared.c.handle
+            )
+        )
+        .subquery("shared_score")
+    )
+
+
+def _first_shared(
+    tree: TreeNode[DirectoryCond] | None, relation: SharedRelation
+) -> SharedCond | None:
+    """The Condition a relation's column and sort read: its first in the tree."""
+    if tree is None:
+        return None
+    return next(
+        (
+            c
+            for c in tree_conds(tree)
+            if isinstance(c, SharedCond) and c.relation == relation
+        ),
+        None,
+    )
+
+
 def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     handle = col(DirectoryEntry.handle)
+    if isinstance(cond, SharedCond):
+        if not cond.picks:
+            return false()
+        _, candidate = _ends(cond.relation)
+        return handle.in_(
+            _shared(cond).with_only_columns(candidate).having(func.count() >= cond.min)
+        )
     if isinstance(cond, LanguageCond):
         return col(DirectoryEntry.language) == cond.value
     if isinstance(cond, NameCond):
@@ -552,6 +675,10 @@ class DirectoryRow:
     cites: int
     mine: int
     mine_last_at: int | None
+    #: Shared parents / children with the first such Condition's picks;
+    #: `None` while the view has no such Condition (DIR-07).
+    shared_parents: int | None = None
+    shared_children: int | None = None
     #: `None` unless a search asked for its matches.
     match: DirectoryMatch | None = None
 
@@ -611,6 +738,17 @@ def _page_handles(
     elif sort == "relevance":
         # Relevance with nothing searched has nothing to rank by.
         key = literal(0)
+    elif sort == "shared_parents" or sort == "shared_children":
+        cond = _first_shared(
+            view.tree, "parents" if sort == "shared_parents" else "children"
+        )
+        if cond is None:
+            # A stale link sorting by a relation that is off falls to the handle.
+            key = literal(0)
+        else:
+            scored = _shared_score(cond)
+            statement = statement.outerjoin(scored, scored.c.handle == handle)
+            key = scored.c.score
     else:
         key = measure_sql(sort, view.now)
     ordered = key.desc() if descending else key.asc()
@@ -724,6 +862,17 @@ def _rows(
             )
         ).all()
     }
+    shared: dict[SharedRelation, dict[str, int] | None] = {}
+    for relation in get_args(SharedRelation):
+        cond = _first_shared(view.tree, relation)
+        shared[relation] = (
+            None
+            if cond is None
+            else {
+                str(h): int(n)
+                for h, n in session.execute(_shared(cond, among=handles)).all()
+            }
+        )
     # A followed Channel answers the Post-based Reach, as everywhere else.
     reach = followed_reach(session, set(handles))
     matches = (
@@ -760,10 +909,16 @@ def _rows(
                 cites=counted.get(handle, (0, 0))[1],
                 mine=n,
                 mine_last_at=last_at,
+                shared_parents=_count_of(shared["parents"], handle),
+                shared_children=_count_of(shared["children"], handle),
                 match=matches.get(handle),
             )
         )
     return rows
+
+
+def _count_of(counts: dict[str, int] | None, handle: str) -> int | None:
+    return None if counts is None else counts.get(handle, 0)
 
 
 # ---- Totals, cached ---------------------------------------------------------------
@@ -1062,6 +1217,53 @@ def _citing_texts(
                 if (channel, sample.post_id) in missing:
                     texts[(channel, sample.post_id)] = sample.text
     return texts
+
+
+#: How many shared Channels "Why it's here" names per relation; the rest are counted.
+SHARED_LIMIT = 5
+
+
+@dataclass(frozen=True)
+class SharedChannel:
+    handle: str
+    display_name: str | None
+
+
+@dataclass(frozen=True)
+class SharedWhy:
+    #: The middle Channels linking `handle` to the picks, most References first.
+    channels: list[SharedChannel]
+    total: int
+
+
+def shared_why(
+    session: Session, handle: str, relation: SharedRelation, picks: Sequence[str]
+) -> SharedWhy:
+    """The Channels `handle` shares with the picks: for parents, those citing both
+    it and a pick; for children, those both it and a pick cite (DIR-07)."""
+    cond = SharedCond(
+        relation, tuple(sorted({h.strip().lstrip("@").lower() for h in picks}))
+    )
+    middle, candidate = _ends(relation)
+    if not cond.picks:
+        return SharedWhy(channels=[], total=0)
+    rows = (
+        session.execute(
+            unscoped_select(
+                sa_select(middle)
+                .where(candidate == handle, middle.in_(_middle(cond)))
+                .order_by(col(CitationPair.reference_count).desc(), middle),
+                reason=_SCOPE_REASON,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    few = [str(h) for h in rows[:SHARED_LIMIT]]
+    names = _display_names(session, frozenset(few))
+    return SharedWhy(
+        channels=[SharedChannel(h, names.get(h)) for h in few], total=len(rows)
+    )
 
 
 def _display_names(session: Session, handles: frozenset[str]) -> dict[str, str | None]:

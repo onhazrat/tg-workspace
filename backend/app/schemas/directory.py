@@ -29,6 +29,8 @@ from app.services.directory_reads import (
     ReferenceKind,
     Scale,
     SearchField,
+    SharedCond,
+    SharedRelation,
     YoursSource,
 )
 from app.services.post_filters import TreeAtom, TreeGroup
@@ -175,6 +177,25 @@ class DirectoryCitesCondition(_Cond):
         return CitesCond(_normalised(self.handles))
 
 
+#: How many picks one Shared parents / children Condition sends: every follow,
+#: or a Channels tab selection, which can be the whole account.
+MAX_PICKS = 10_000
+
+
+class DirectorySharedCondition(_Cond):
+    """Shared parents or Shared children with these picks, at least `min` shared."""
+
+    type: SharedRelation
+    #: Resolved by the browser; none matches nothing.
+    handles: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
+        max_length=MAX_PICKS
+    )
+    min: int = Field(2, ge=1, le=10_000)
+
+    def to_cond(self) -> DirectoryCond:
+        return SharedCond(self.type, _normalised(self.handles), self.min)
+
+
 DirectoryCondition = Annotated[
     DirectoryLanguageCondition
     | DirectoryNameCondition
@@ -182,7 +203,8 @@ DirectoryCondition = Annotated[
     | DirectoryFlagCondition
     | DirectoryMineCondition
     | DirectoryCitedByCondition
-    | DirectoryCitesCondition,
+    | DirectoryCitesCondition
+    | DirectorySharedCondition,
     Field(discriminator="type"),
 ]
 
@@ -372,6 +394,10 @@ class DirectoryRowResponse(_DirectoryEntryFields):
     mine_last_at: int | None = Field(alias="mineLastAt")
     #: Set only while a search is on and `showMatches` asked for it.
     match: DirectoryMatchResponse | None
+    #: Shared parents with the first such Condition's picks; `null` while off.
+    shared_parents: int | None = Field(alias="sharedParents")
+    #: Shared children with the first such Condition's picks; `null` while off.
+    shared_children: int | None = Field(alias="sharedChildren")
 
 
 class DirectoryEntryResponse(_DirectoryEntryFields):
@@ -393,6 +419,10 @@ class DirectoryWhyRequest(BaseModel):
     )
     #: The "Cited by your channels" Condition's window; every Post when absent.
     days: int | None = Field(None, ge=1, le=36_500)
+    #: The Shared parents Condition's picks, when it is on (DIR-07).
+    parents: list[Handle] | None = Field(None, max_length=MAX_PICKS)
+    #: The Shared children Condition's picks, when it is on.
+    children: list[Handle] | None = Field(None, max_length=MAX_PICKS)
 
 
 class DirectoryCitingPostResponse(BaseModel):
@@ -411,11 +441,31 @@ class DirectoryCitingPostResponse(BaseModel):
     text: str | None
 
 
+class DirectorySharedChannelResponse(BaseModel):
+    """A Channel linking the candidate to the picks."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    handle: str
+    display_name: str | None = Field(alias="displayName")
+
+
+class DirectorySharedWhyResponse(BaseModel):
+    """A few of the Channels shared with the picks, and how many in all."""
+
+    channels: list[DirectorySharedChannelResponse]
+    total: int
+
+
 class DirectoryWhyResponse(BaseModel):
-    """The newest citing Posts, and how many there are in all."""
+    """The newest citing Posts, how many in all, and the shared Channels per relation on."""
 
     posts: list[DirectoryCitingPostResponse]
     total: int
+    #: `null` unless the request sent Shared parents picks.
+    parents: DirectorySharedWhyResponse | None
+    #: `null` unless the request sent Shared children picks.
+    children: DirectorySharedWhyResponse | None
 
 
 class DirectoryNeighbourResponse(BaseModel):

@@ -1813,7 +1813,9 @@ export type DirectoryFilterAtom = {
         type: 'citedby';
     } & DirectoryCitedByCondition) | ({
         type: 'cites';
-    } & DirectoryCitesCondition);
+    } & DirectoryCitesCondition) | ({
+        type: 'children' | 'parents';
+    } & DirectorySharedCondition);
 };
 
 /**
@@ -1924,7 +1926,7 @@ export type DirectoryListRequest = {
     /**
      * Sort
      */
-    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'mine' | 'mine_last_days' | 'relevance';
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
     /**
      * Descending
      */
@@ -2191,6 +2193,14 @@ export type DirectoryRowResponse = {
      */
     mineLastAt: number | null;
     match: DirectoryMatchResponse | null;
+    /**
+     * Sharedparents
+     */
+    sharedParents: number | null;
+    /**
+     * Sharedchildren
+     */
+    sharedChildren: number | null;
 };
 
 /**
@@ -2264,6 +2274,58 @@ export type DirectorySearchRequest = {
 };
 
 /**
+ * DirectorySharedChannelResponse
+ *
+ * A Channel linking the candidate to the picks.
+ */
+export type DirectorySharedChannelResponse = {
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Displayname
+     */
+    displayName: string | null;
+};
+
+/**
+ * DirectorySharedCondition
+ *
+ * Shared parents or Shared children with these picks, at least `min` shared.
+ */
+export type DirectorySharedCondition = {
+    /**
+     * Type
+     */
+    type: 'parents' | 'children';
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+    /**
+     * Min
+     */
+    min?: number;
+};
+
+/**
+ * DirectorySharedWhyResponse
+ *
+ * A few of the Channels shared with the picks, and how many in all.
+ */
+export type DirectorySharedWhyResponse = {
+    /**
+     * Channels
+     */
+    channels: Array<DirectorySharedChannelResponse>;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * DirectorySizeResponse
  *
  * How many Channels the Directory lists at all.
@@ -2310,12 +2372,20 @@ export type DirectoryWhyRequest = {
      * Days
      */
     days?: number | null;
+    /**
+     * Parents
+     */
+    parents?: Array<string> | null;
+    /**
+     * Children
+     */
+    children?: Array<string> | null;
 };
 
 /**
  * DirectoryWhyResponse
  *
- * The newest citing Posts, and how many there are in all.
+ * The newest citing Posts, how many in all, and the shared Channels per relation on.
  */
 export type DirectoryWhyResponse = {
     /**
@@ -2326,6 +2396,8 @@ export type DirectoryWhyResponse = {
      * Total
      */
     total: number;
+    parents: DirectorySharedWhyResponse | null;
+    children: DirectorySharedWhyResponse | null;
 };
 
 /**
