@@ -18,6 +18,7 @@ import {
   SORT_OPTIONS,
   searchPatch,
   searchRequest,
+  selectedFirstRequest,
   sortOptions,
   sortValue,
   toggleField,
@@ -149,6 +150,26 @@ describe("whose citations count", () => {
       source: "follows",
       handles: [],
     })
+  })
+})
+
+describe("Selected first's part of the list body", () => {
+  const follows = { source: "follows" as const, handles: [] }
+  test("sends the ticks with the switch", () => {
+    expect(selectedFirstRequest(true, follows, ["a", "b"])).toEqual({
+      selectedFirst: true,
+      ticked: ["a", "b"],
+    })
+  })
+  test("never sends the ticks twice when they are your channels", () => {
+    const ticked = { source: "ticked" as const, handles: ["a"] }
+    expect(selectedFirstRequest(true, ticked, ["a"])).toEqual({
+      selectedFirst: true,
+    })
+  })
+  test("sends nothing while off or with nothing ticked", () => {
+    expect(selectedFirstRequest(false, follows, ["a"])).toEqual({})
+    expect(selectedFirstRequest(true, follows, [])).toEqual({})
   })
 })
 

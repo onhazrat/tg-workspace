@@ -243,6 +243,8 @@ export const appSettingsSpec = {
     "channelGridGroupBySelection",
     true,
   ),
+  // Local only: the Directory lists the ticked rows first.
+  directorySelectedFirst: booleanSetting("directorySelectedFirst", false),
   channelActionLimit: channelActionLimitSetting,
   regularSyncIntervalMinutes: intSetting(
     "regularSyncIntervalMinutes",

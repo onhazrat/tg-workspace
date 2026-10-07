@@ -284,6 +284,22 @@ export function resolveYours(
   }
 }
 
+/**
+ * Selected first's part of the list body: the switch and the ticks, unless
+ * "your channels" is the ticks and already carries them. Nothing while off or
+ * with nothing ticked, so the list's query key moves only when the order can.
+ */
+export function selectedFirstRequest(
+  on: boolean,
+  yours: Required<YourChannels>,
+  ticked: string[],
+): { selectedFirst?: true; ticked?: string[] } {
+  if (!on || ticked.length === 0) return {}
+  return yours.source === "ticked"
+    ? { selectedFirst: true }
+    : { selectedFirst: true, ticked }
+}
+
 /** How long a Dismissal's confirmation, and its Undo, stay up (DIR-06). */
 export const DISMISSAL_NOTICE_MS = 10_000
 
