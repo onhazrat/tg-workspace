@@ -1939,6 +1939,14 @@ export type DirectoryListRequest = {
      * Showmatches
      */
     showMatches?: boolean;
+    /**
+     * Selectedfirst
+     */
+    selectedFirst?: boolean;
+    /**
+     * Ticked
+     */
+    ticked?: Array<string>;
 };
 
 /**

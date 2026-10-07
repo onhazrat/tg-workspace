@@ -742,8 +742,10 @@ def _page_handles(
     sort: DirectorySort,
     descending: bool,
     page: int,
+    first: Sequence[str] = (),
 ) -> list[str]:
     handle = col(DirectoryEntry.handle)
+    ticked = sorted({normalize_handle(h) for h in first if h.strip()})
     statement = unscoped_select(
         sa_select(handle)
         .select_from(_entries(view.tree, sort))
@@ -780,8 +782,9 @@ def _page_handles(
     else:
         key = measure_sql(sort, view.now)
     ordered = key.desc() if descending else key.asc()
+    leading = [(handle == any_(_handles(ticked))).desc()] if ticked else []
     statement = (
-        statement.order_by(ordered.nulls_last(), handle)
+        statement.order_by(*leading, ordered.nulls_last(), handle)
         .offset(page * PAGE_SIZE)
         .limit(PAGE_SIZE)
     )
@@ -1043,13 +1046,17 @@ def list_page(
     descending: bool,
     page: int,
     show_matches: bool = False,
+    first: Sequence[str] = (),
 ) -> DirectoryPage:
     """One page of the view, its total and its Language counts.
 
     `show_matches` adds each row's snippets while a search is on; without it
-    the samples are not read at all.
+    the samples are not read at all. `first` (the ticked handles) leads the
+    order, each part in the view's sort; it narrows nothing.
     """
-    handles = _page_handles(session, view, sort=sort, descending=descending, page=page)
+    handles = _page_handles(
+        session, view, sort=sort, descending=descending, page=page, first=first
+    )
     total, languages = _totals(session, view)
     return DirectoryPage(
         rows=_rows(session, view, handles, show_matches=show_matches),

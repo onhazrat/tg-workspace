@@ -108,6 +108,16 @@ DIR-06 (Dismissal, shared with Discover through `POST`/`DELETE
 * read every Account's Dismissals -> the other Account's opening view
 * follow a dismissed Channel from the Directory -> the withheld-Follow case
 * put `/data/discover/ignored` on `VIEW_AS_READ_ONLY_PATHS` -> the View-as case
+
+Selected first (`selectedFirst` with the ticked handles on `/directory/list`):
+
+* never lead with the ticks, or lead with them while the switch is off ->
+  the selected-first case
+* order the ticked part by handle instead of the view's sort -> the same
+* keep only the ticked rows -> its pages and total
+* match the ticks without normalising `@` and case -> the same
+* read `ticked` when "Channels ticked here" already carries them -> its
+  ticked-source case
 """
 
 from __future__ import annotations
@@ -701,6 +711,45 @@ def test_pages_hold_a_hundred_and_keep_the_total(
     page = _list(client, operator, page=1)
     assert page["rows"] == []
     assert page["total"] == len(EVERYONE)
+
+
+#: Ticked as the browser keeps them, in any case and with `@`.
+TICKED = ["@DT_FA_SMALL", "dt_ru", "dt_dead"]
+
+
+@pytest.mark.parametrize(
+    "ticks",
+    [
+        pytest.param({"ticked": TICKED}, id="ticked field"),
+        # "Channels ticked here" already carries them; they are not sent twice.
+        pytest.param(
+            {"yours": {"source": "ticked", "handles": TICKED}}, id="ticked source"
+        ),
+    ],
+)
+def test_selected_first_leads_with_the_ticks_across_pages(
+    client: TestClient,
+    accounts: tuple[dict[str, str], dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+    ticks: dict[str, Any],
+) -> None:
+    """The ticked rows come first, each part in the view's own sort, and the
+    total does not move: the ticks only reorder (PTR-06's order, Directory)."""
+    operator, _ = accounts
+    monkeypatch.setattr(directory_reads, "PAGE_SIZE", 2)
+    body = {"sort": "subscribers", **ticks}
+    pages = [
+        _list(client, operator, selectedFirst=True, page=n, **body) for n in range(4)
+    ]
+    assert [[r["handle"] for r in p["rows"]] for p in pages] == [
+        _dt("ru fa_small"),
+        _dt("dead fa_big"),
+        _dt("en_news followed_a"),
+        _dt("none"),
+    ]
+    assert {p["total"] for p in pages} == {len(EVERYONE)}
+    # Off, the ticks change nothing.
+    assert _handles(client, operator, page=0, **body) == _dt("fa_big en_news")
 
 
 # ---- Totals, Language counts and the Directory's size -----------------------------
