@@ -19,7 +19,7 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * nothing (DIR-04); a Dismissal that never refreshes the list, or a row
  * whose Dismiss also opens the panel (DIR-06); the live ticked picks sent
  * as they were when the Condition was added, not re-resolved per tick
- * (DIR-07).
+ * (DIR-07); Selected first sent without the ticks.
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -58,6 +58,8 @@ type ListBody = {
   page?: number
   search?: { text: string; fields?: string[] } | null
   showMatches?: boolean
+  selectedFirst?: boolean
+  ticked?: string[]
 }
 
 /** What a search quotes for a1 (DIR-04): a bio and a Post, one word a hit. */
@@ -479,9 +481,11 @@ test.describe("TG Workspace directory", () => {
     // Registered after `mockDirectory`, so it answers the list instead: the
     // picks are never results, and each row carries its shared count.
     const sent: (string[] | undefined)[] = []
+    const bodies: ListBody[] = []
     await page.route("**/api/v1/data/directory/list", async (route) => {
       const picks = parentsPicks(route.request().postDataJSON())
       sent.push(picks)
+      bodies.push(route.request().postDataJSON())
       const rows = ROWS.filter((r) => !picks?.includes(r.handle)).map((r) => ({
         ...r,
         sharedParents: picks ? 2 : null,
@@ -495,6 +499,7 @@ test.describe("TG Workspace directory", () => {
       "directory.view",
       "directory.ticks",
       "directory.open",
+      "directorySelectedFirst",
     ])
     await page.goto("/workspace?tab=directory")
 
@@ -521,12 +526,22 @@ test.describe("TG Workspace directory", () => {
     await expect.poll(() => sent.at(-1)).toEqual(["a1", "a2"])
     await expect(page.getByTestId("directory-row-a2")).toHaveCount(0)
 
-    // A shared link counts the receiver's ticks, which start empty.
+    // Selected first sends the ticks for the server to order by.
+    const selectedFirst = page.getByTestId("directory-switch-selected-first")
+    await selectedFirst.click()
+    await expect
+      .poll(() => bodies.at(-1))
+      .toMatchObject({ selectedFirst: true, ticked: ["a1", "a2"] })
+
+    // A shared link counts the receiver's ticks, which start empty; the
+    // switch stays on for this browser, and with no ticks it sends nothing.
     const link = page.url()
     await clearScopedStorage(page, ["directory.ticks"])
     await page.goto(link)
     await expect(chip(page, "parents-picked")).toBeVisible()
     await expect.poll(() => sent.at(-1)).toEqual([])
+    await expect(selectedFirst).toHaveAttribute("aria-pressed", "true")
+    expect(bodies.at(-1)?.selectedFirst).toBeUndefined()
   })
 })
 
