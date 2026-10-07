@@ -28,6 +28,7 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
     searches: [] as string[],
     fields: [] as string[][],
     matches: [] as boolean[],
+    selectedFirst: [] as boolean[],
     cleared: 0,
   }
   render(
@@ -61,6 +62,8 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
       onFields={(f) => calls.fields.push(f)}
       matches
       onMatches={(m) => calls.matches.push(m)}
+      selectedFirst={false}
+      onSelectedFirst={(on) => calls.selectedFirst.push(on)}
       onClearAll={() => {
         calls.cleared += 1
       }}
@@ -256,5 +259,17 @@ describe("the search box (DIR-04)", () => {
     ).toBeTruthy()
     fireEvent.click(toggle)
     expect(calls.matches).toEqual([false])
+  })
+
+  test("Selected first is a switch beside Show matches", () => {
+    const calls = mount({ selectedFirst: false })
+    const toggle = screen.getByTestId("directory-switch-selected-first")
+    expect(toggle.textContent).toBe("Selected first")
+    expect(toggle.getAttribute("aria-pressed")).toBe("false")
+    expect(
+      screen.getByTestId("directory-switch-matches").nextElementSibling,
+    ).toBe(toggle)
+    fireEvent.click(toggle)
+    expect(calls.selectedFirst).toEqual([true])
   })
 })

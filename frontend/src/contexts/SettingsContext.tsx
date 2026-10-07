@@ -130,6 +130,8 @@ interface SettingsContextType {
   setChannelCardZoom: (zoom: CardZoom) => void
   channelGridGroupBySelection: boolean
   setChannelGridGroupBySelection: (group: boolean) => void
+  directorySelectedFirst: boolean
+  setDirectorySelectedFirst: (on: boolean) => void
   channelActionLimit: ActionLimit
   setChannelActionLimit: (limit: ActionLimit) => void
   discoverSignals: DiscoverySignalKind[]

@@ -134,6 +134,7 @@ def list_directory(
         descending=body.descending,
         page=body.page,
         show_matches=body.show_matches,
+        first=body.first(),
     )
     return DirectoryListResponse(
         rows=[DirectoryRowResponse.model_validate(asdict(row)) for row in page.rows],

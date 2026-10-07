@@ -316,6 +316,16 @@ class DirectoryListRequest(DirectoryViewRequest):
     page: int = Field(0, ge=0, le=10_000)
     #: Quote each row's matching bio and Post while a search is on.
     show_matches: bool = Field(False, alias="showMatches")
+    #: The ticked rows first, each part in the view's sort; the total is unchanged.
+    selected_first: bool = Field(False, alias="selectedFirst")
+    #: The ticked handles; left out when `yours` is the ticks, which carries them.
+    ticked: list[Handle] = Field(default_factory=list, max_length=MAX_YOUR_CHANNELS)
+
+    def first(self) -> list[str]:
+        """The handles `selectedFirst` leads with; none while it is off."""
+        if not self.selected_first:
+            return []
+        return self.yours.handles if self.yours.source == "ticked" else self.ticked
 
 
 class DirectoryCountRequest(DirectoryViewRequest):

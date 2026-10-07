@@ -253,6 +253,8 @@ export function DirectoryView() {
         onFields={(fields) => patch({ fields })}
         matches={view.matches}
         onMatches={(matches) => patch({ matches })}
+        selectedFirst={d.selectedFirst}
+        onSelectedFirst={d.setSelectedFirst}
         onClearAll={d.clearAll}
       />
       {list.error && (

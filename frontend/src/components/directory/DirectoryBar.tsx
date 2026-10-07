@@ -340,6 +340,9 @@ export type DirectoryBarProps = {
   /** Show matches: quote each row's matching bio and Post. */
   matches: boolean
   onMatches: (on: boolean) => void
+  /** Selected first: the ticked rows lead, each part in the sort. */
+  selectedFirst: boolean
+  onSelectedFirst: (on: boolean) => void
   /** The filter row's Clear all: the search and every Condition, as one change. */
   onClearAll: () => void
 }
@@ -424,6 +427,13 @@ export function DirectoryBar(p: DirectoryBarProps) {
           title="Quote the matching bio and post under each row while searching"
           testId="directory-switch-matches"
           onClick={() => p.onMatches(!p.matches)}
+        />
+        <BarToggle
+          on={p.selectedFirst}
+          label="Selected first"
+          title="Ticked channels first, each part in the list's order"
+          testId="directory-switch-selected-first"
+          onClick={() => p.onSelectedFirst(!p.selectedFirst)}
         />
         <span className="ml-auto" />
         <ColumnsPill hidden={p.hidden} onHidden={p.onHidden} />

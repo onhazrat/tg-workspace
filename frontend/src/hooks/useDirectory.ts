@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { dataGetDirectorySize, dataListDirectory } from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
+import { useSettings } from "@/contexts/SettingsContext"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import {
   DIRECTORY_FILTER_BOUNDS,
@@ -40,6 +41,7 @@ import {
   paramsFromView,
   resolveYours,
   searchRequest,
+  selectedFirstRequest,
   viewFromParams,
 } from "@/lib/directory/directory-view"
 import { pruneSelectionAfterFollow } from "@/lib/posts/discover-selection"
@@ -138,6 +140,7 @@ export function useDirectory() {
   const searchBox = useDirectorySearchBox(view, patch)
   const { selectedChannels, channels } = useData()
   const { followDiscoverChannels } = useScraper()
+  const { directorySelectedFirst, setDirectorySelectedFirst } = useSettings()
   const queryClient = useQueryClient()
   const [ticked, setTicked] = useStoredList(TICKS_KEY)
   const [hidden, setHidden] = useStoredList(HIDDEN_KEY)
@@ -198,6 +201,7 @@ export function useDirectory() {
     page: view.page,
     // Only while searching, so the switch leaves an unsearched read's key alone.
     ...(search && { showMatches: view.matches }),
+    ...selectedFirstRequest(directorySelectedFirst, yours, sets.picked),
   }
   const list = useQuery({
     queryKey: queryKeys.directoryRead("list", body),
@@ -265,6 +269,8 @@ export function useDirectory() {
     yours,
     ticks,
     setTicks: setTicked,
+    selectedFirst: directorySelectedFirst,
+    setSelectedFirst: setDirectorySelectedFirst,
     hidden,
     setHidden,
     open: opened[0] ?? null,

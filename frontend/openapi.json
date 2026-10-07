@@ -7461,6 +7461,17 @@
             "type": "boolean",
             "title": "Showmatches",
             "default": false
+          },
+          "selectedFirst": {
+            "type": "boolean",
+            "title": "Selectedfirst",
+            "default": false
+          },
+          "ticked": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Ticked"
           }
         },
         "additionalProperties": false,
