@@ -156,6 +156,12 @@ It comes after the Follow and is not part of it: the Follow is complete when
 the relation exists, whether or not the first sync has finished.
 _Avoid_: initial sync, backfill
 
+**Last sync**:
+When a Channel's most recent successful sync finished. It belongs to the
+Channel, not to a Follow, so every Follower sees the same one. A Channel that
+has never synced has no Last sync, which is not the same as an old one.
+_Avoid_: last updated, freshness, last scraped
+
 **Post**:
 One message scraped from a Channel.
 _Avoid_: message, item, entry
