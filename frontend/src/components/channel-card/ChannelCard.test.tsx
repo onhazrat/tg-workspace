@@ -345,6 +345,15 @@ describe("ChannelCardTags", () => {
     ])
   })
 
+  test("hovering a suggestion does not change what Enter adds", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("ra")
+    fireEvent.mouseEnter(screen.getByRole("option", { name: "radar" }))
+    key("Enter")
+    expect(await saves(onSave)).toEqual([["news", "ra"]])
+  })
+
   test("a trailing comma adds the tag and leaves the field empty", async () => {
     const { onSave } = renderTags()
     fireEvent.focus(field())
@@ -425,6 +434,30 @@ describe("ChannelCardTags", () => {
     await settle()
     expect(screen.queryByRole("button", { name: "tech" })).toBeNull()
     expect(screen.getByText("news")).toBeTruthy()
+  })
+
+  test("a failed save with a later one queued leaves the later save to carry both tags", async () => {
+    let failFirst = () => {}
+    const onSave = mock()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_, reject) => {
+            failFirst = () => reject(new Error("offline"))
+          }),
+      )
+      .mockImplementation(() => Promise.resolve())
+    renderTags({ onSave })
+    fireEvent.focus(field())
+    type("tech,")
+    type("zoo,")
+    await settle()
+    failFirst()
+    expect(await saves(onSave)).toEqual([
+      ["news", "tech"],
+      ["news", "tech", "zoo"],
+    ])
+    expect(screen.getByRole("button", { name: "tech" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "zoo" })).toBeTruthy()
   })
 
   test("clicking a tag's name filters by it; its remove button stays; AI tags stay marked", async () => {

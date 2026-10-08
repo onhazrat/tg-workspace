@@ -262,6 +262,13 @@ describe("ChannelSelectionBar", () => {
     expect(calls.map(([name]) => name)).toEqual(["stop"])
   })
 
+  test("Stop sync stays while the sync runs after the selection is emptied", () => {
+    const calls = mount({ isSyncing: true, syncJobRunning: true })
+    expect(screen.queryByText("Delete")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Stop sync" }))
+    expect(calls.map(([name]) => name)).toEqual(["stop"])
+  })
+
   test("with a selection: the count clears it, and the bulk actions reach it", () => {
     const calls = mount({ selection: selecting(5) })
     expect(screen.getByText("5 selected")).toBeTruthy()

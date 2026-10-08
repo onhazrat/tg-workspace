@@ -77,6 +77,19 @@ const actionClass =
 
 const plural = (n: number) => `${n} channel${n === 1 ? "" : "s"}`
 
+/** Stops the running Sync selected job, which outlives the selection it started from. */
+const StopSync = ({ onStopSync }: { onStopSync: () => void }) => (
+  <button
+    type="button"
+    onClick={onStopSync}
+    data-testid="channel-sync-selected-stop"
+    className={actionClass}
+  >
+    <Square size={11} className="fill-current" />
+    Stop sync
+  </button>
+)
+
 /** The bulk toolbar: what reaches the selected Channels. */
 function SelectionActions(p: ChannelSelectionBarProps) {
   const actionCount = actionTargets(p.selection, p.shown, p.actionLimit).size
@@ -130,15 +143,7 @@ function SelectionActions(p: ChannelSelectionBarProps) {
         </button>
       </div>
       {p.syncJobRunning ? (
-        <button
-          type="button"
-          onClick={p.onStopSync}
-          data-testid="channel-sync-selected-stop"
-          className={actionClass}
-        >
-          <Square size={11} className="fill-current" />
-          Stop sync
-        </button>
+        <StopSync onStopSync={p.onStopSync} />
       ) : (
         <button
           type="button"
@@ -279,7 +284,11 @@ export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
           </Ghost>
         </>
       )}
-      {selecting && <SelectionActions {...p} />}
+      {selecting ? (
+        <SelectionActions {...p} />
+      ) : (
+        p.syncJobRunning && <StopSync onStopSync={p.onStopSync} />
+      )}
       <div className="ml-auto flex flex-wrap items-center gap-1.5 pl-2">
         <BarToggle
           on={p.groupBySelection}

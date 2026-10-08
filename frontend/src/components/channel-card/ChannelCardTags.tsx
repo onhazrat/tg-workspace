@@ -22,7 +22,8 @@ type Tags = NonNullable<Channel["tags"]>
  * The tag list as the card shows it, ahead of the server, and its saves sent
  * one at a time: each waits for the one before it, then sends the list as it
  * stands. Two quick adds therefore both arrive, in order, instead of racing
- * each other with lists that each lack the other's tag.
+ * each other with lists that each lack the other's tag. Only the last save's
+ * failure puts the card back to the server's list.
  */
 function useSerialTagSaves(
   tags: Channel["tags"],
@@ -52,6 +53,9 @@ function useSerialTagSaves(
     pending.current += 1
     queue.current = (pending.current === 1 ? send() : queue.current.then(send))
       .catch(() => {
+        // A later save sends the whole list the card shows, this one's tag
+        // included, so only the last save's failure is reported.
+        if (pending.current > 1) return
         toast.error("Could not save tags")
         latest.current = fromServer.current
         setLocal(fromServer.current)
@@ -235,9 +239,10 @@ export function ChannelCardTags({
                 role="option"
                 aria-selected={i === active}
                 title={`On ${r.total} Channel${r.total === 1 ? "" : "s"}`}
-                onMouseEnter={() => setActive(i)}
+                // Hover only paints: Enter adds the arrow-chosen row, never
+                // the one under the pointer.
                 onClick={() => add(r.tag)}
-                className={`block w-full truncate rounded px-2 py-1 text-left ${i === active ? "bg-app-ink/10" : ""}`}
+                className={`block w-full truncate rounded px-2 py-1 text-left hover:bg-app-ink/5 ${i === active ? "bg-app-ink/10" : ""}`}
               >
                 {r.tag}
               </button>

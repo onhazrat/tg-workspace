@@ -264,6 +264,16 @@ sync and how many it skips, and while it runs the button becomes **Stop sync**.
   Sync selected, and exposes a stop action that calls the existing cancel endpoint and confirms
   with a message. The endpoint already cancels queued Channels and the one in progress, across the
   API and worker processes. A single Channel's sync has no stop.
+- **Deviations made on purpose while building it:**
+  - A tile is the photo alone apart from its hover controls: the magnifier, Open in Telegram, and a
+    Sync button, so keyboard mode's `s` presses a real control on a tile too.
+  - Tab in an empty field with nothing highlighted leaves the field instead of taking the top
+    suggestion.
+  - A Restricted Channel's Last sync is idle (grey) even when it has never synced.
+  - The end-to-end test of Sync All then Stop mocks the sync routes, because a real Sync All would
+    reach Telegram.
+  - When a tag save fails while a later one is queued, the later save sends the whole list the
+    card shows, the failed save's tag included, and only the last save's failure is reported.
 
 ## Testing Decisions
 

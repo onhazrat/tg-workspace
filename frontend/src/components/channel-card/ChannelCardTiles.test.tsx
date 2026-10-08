@@ -247,6 +247,15 @@ describe("the bio", () => {
   let overflowing = false
   const resized: (() => void)[] = []
   const RealResizeObserver = globalThis.ResizeObserver
+  // Restore what was there, never `delete` it: happy-dom's own `clientHeight`
+  // getter lives on HTMLElement.prototype, and deleting it broke later files.
+  const real = (["scrollHeight", "clientHeight"] as const).map(
+    (key) =>
+      [
+        key,
+        Object.getOwnPropertyDescriptor(HTMLElement.prototype, key),
+      ] as const,
+  )
 
   // The test DOM does no layout, so the measured heights are stubbed: the
   // text overflows when its scroll height passes its clamped height.
@@ -271,8 +280,11 @@ describe("the bio", () => {
     } as unknown as typeof ResizeObserver
   })
   afterEach(() => {
-    delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight
-    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight
+    for (const [key, descriptor] of real) {
+      if (descriptor)
+        Object.defineProperty(HTMLElement.prototype, key, descriptor)
+      else Reflect.deleteProperty(HTMLElement.prototype, key)
+    }
     globalThis.ResizeObserver = RealResizeObserver
   })
 

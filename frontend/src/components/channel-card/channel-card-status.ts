@@ -1,4 +1,6 @@
+import { shortcut } from "@/lib/channels/card-zoom"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
+import { channelAllows } from "@/lib/channels/sync-permissions"
 import { toVirtualGroupTagName } from "@/lib/channels/virtual-group-tags"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 
@@ -80,6 +82,27 @@ export function selectionHandlers(onToggleSelected: (shift: boolean) => void) {
     onClick: (event: { shiftKey: boolean }) => onToggleSelected(event.shiftKey),
     onMouseDown: (event: { shiftKey: boolean; preventDefault: () => void }) => {
       if (event.shiftKey) event.preventDefault()
+    },
+  }
+}
+
+/**
+ * What every size's Sync button shares: `s` presses it, a click stays off the
+ * card under it, the Channel's own sync rule disables it, and an unavailable
+ * Channel offers Recheck instead.
+ */
+export function syncButtonProps(
+  channel: Channel,
+  busy: boolean,
+  onSync: () => void,
+) {
+  return {
+    ...shortcut("s"),
+    label: channel.isUnavailableOnWebView ? "Recheck" : "Sync",
+    disabled: busy || !channelAllows(channel, "individual"),
+    onClick: (event: { stopPropagation: () => void }) => {
+      event.stopPropagation()
+      onSync()
     },
   }
 }
