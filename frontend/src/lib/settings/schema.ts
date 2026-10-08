@@ -201,11 +201,12 @@ const globalStartTimeValueSetting: SettingSpec<GlobalStartTimeValue> = {
   section: "sync",
 }
 
-/** Local only: how dense the Channels tab cards are (ZOOM-01). */
+/** Local only: how dense the Channels tab cards are (ZOOM-01). Compact cards
+ *  by default, so a first visit shows many Channels and their Last sync. */
 const channelCardZoomSetting: SettingSpec<CardZoom> = {
   storageKey: "channelCardZoom",
   schema: z.literal(CARD_ZOOM_LEVELS),
-  defaultValue: 0,
+  defaultValue: -1,
   decode: (raw) => Number.parseInt(raw, 10),
   encode: (value) => String(value),
 }

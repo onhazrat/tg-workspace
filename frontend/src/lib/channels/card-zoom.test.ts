@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { type CardFace, type CardFieldSettings, cardFace } from "./card-zoom"
+import {
+  CARD_ZOOM_LEVELS,
+  type CardFace,
+  type CardFieldSettings,
+  type CardZoom,
+  cardFace,
+} from "./card-zoom"
 
 const allOff: CardFieldSettings = {
   showChannelBio: false,
@@ -67,6 +73,9 @@ describe("cardFace", () => {
       detailBadges: false,
       checkbox: false,
       bodySelects: true,
+      detailed: false,
+      statTiles: [],
+      keys: ["x", "s", "o", "p"],
     })
   })
 
@@ -86,6 +95,49 @@ describe("cardFace", () => {
       ...cardFace(-1, allOn),
       layout: "tile",
     })
+  })
+
+  test("each size says whether it is detailed, its stat tiles and its keys", () => {
+    const settings = {
+      ...allOff,
+      showChannelSubscribers: true,
+      showChannelVideos: true,
+    }
+    const describeSize = (zoom: CardZoom) => {
+      const { detailed, statTiles, keys } = cardFace(zoom, settings)
+      return { detailed, statTiles, keys }
+    }
+    expect(CARD_ZOOM_LEVELS.map(describeSize)).toEqual([
+      { detailed: false, statTiles: [], keys: ["x", "s", "o", "p"] },
+      { detailed: false, statTiles: [], keys: ["x", "s", "o", "p"] },
+      {
+        detailed: false,
+        statTiles: [
+          "posts",
+          "inScope",
+          "reach",
+          "perHour",
+          "subscribers",
+          "videos",
+        ],
+        keys: ["x", "s", "t", "f", "o", "b", "p"],
+      },
+      {
+        detailed: true,
+        statTiles: [
+          "posts",
+          "inScope",
+          "reach",
+          "perHour",
+          "subscribers",
+          "photos",
+          "videos",
+          "files",
+          "links",
+        ],
+        keys: ["x", "s", "t", "f", "o", "b", "p"],
+      },
+    ])
   })
 
   test("zoom 0 ties each setting to its own field and no other", () => {

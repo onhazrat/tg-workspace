@@ -41,6 +41,20 @@ describe("loadAppSettings", () => {
     expect(settings.postRetentionDays).toBe(RETENTION_POST_DAYS_DEFAULT)
   })
 
+  it("opens the Channels tab on compact cards unless a card size is stored (CARD-01)", () => {
+    expect(loadAppSettings(readerFromRecord({})).channelCardZoom).toBe(-1)
+    for (const [stored, zoom] of [
+      ["-2", -2],
+      ["0", 0],
+      ["1", 1],
+    ] as const) {
+      const settings = loadAppSettings(
+        readerFromRecord({ channelCardZoom: stored }),
+      )
+      expect(settings.channelCardZoom).toBe(zoom)
+    }
+  })
+
   it("reads a saved Median views sort as the Reach sort (REACH-04)", () => {
     const saved = readerFromRecord({ discoverSortKey: "medianViews" })
     expect(loadAppSettings(saved).discoverSortKey).toBe("reach")

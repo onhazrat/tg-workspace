@@ -599,6 +599,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         selectedChannels={selectedChannels}
         selectedTrimRanks={selectedTrimRanks}
         postsInScopeCounts={postsInScopeCounts}
+        onFilterByTag={(tag) =>
+          setChannelFilter(addFunnel(channelFilter, "tag", tag))
+        }
         onRemoveChannel={actions.handleRemoveChannel}
         onResetAndSync={actions.handleResetAndSync}
         onSelectChannel={handleSelectChannel}
