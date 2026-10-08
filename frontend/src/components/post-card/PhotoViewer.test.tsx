@@ -114,6 +114,21 @@ describe("PhotoViewer", () => {
   })
 })
 
+test("closing leaves the Channels grid at the Channel of the last photo viewed", () => {
+  const grid = document.createElement("div")
+  grid.id = "grid"
+  grid.innerHTML = `<div data-channel-name="durov"><img src="blob:d" data-gallery-caption="Pavel"></div>`
+  document.body.appendChild(grid)
+  const tile = grid.firstElementChild as HTMLElement
+  tile.scrollIntoView = mock()
+  const { unmount } = render(<PhotoViewer start="blob:c" onClose={() => {}} />)
+  fireEvent.keyDown(window, { key: "ArrowRight" })
+  expect(label()).toContain("Pavel · 4 / 4")
+  unmount()
+  grid.remove()
+  expect(tile.scrollIntoView).toHaveBeenCalledTimes(1)
+})
+
 describe("PhotoViewerDialog", () => {
   test("Escape and the close button both close it", () => {
     const onOpenChange = mock()

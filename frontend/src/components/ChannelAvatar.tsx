@@ -1,5 +1,10 @@
+import { ZoomIn } from "lucide-react"
 import { useEffect, useState } from "react"
 
+import {
+  GALLERY_CAPTION_ATTR,
+  PhotoViewerDialog,
+} from "@/components/post-card/PhotoViewer"
 import { getChannelPhotoSrc } from "@/lib/channels/channel-photo-cache"
 import type { Channel } from "@/types"
 
@@ -7,13 +12,22 @@ export function ChannelAvatar({
   channel,
   className = "w-14 h-14",
   textClassName = "text-xl",
+  view,
 }: {
   channel: Pick<Channel, "id" | "name" | "displayName" | "photoUrl">
   className?: string
   textClassName?: string
+  /**
+   * Opens the photo in the Posts tab's viewer and puts it in the viewer's
+   * gallery: the photo itself is the button, or a magnifier at the bottom
+   * left of the nearest positioned ancestor, for a tile whose body selects.
+   * Unset everywhere else, so post-header avatars never join the gallery.
+   */
+  view?: "image" | "corner"
 }) {
   const [src, setSrc] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  const [viewing, setViewing] = useState(false)
 
   const gradientClass = getGradientFromName(channel.displayName || channel.name)
   const fallbackLetter =
@@ -41,16 +55,57 @@ export function ChannelAvatar({
   }, [channel.id, channel.photoUrl])
 
   if (src && !failed) {
-    return (
+    const title = channel.displayName || channel.name
+    const img = (
       <img
         src={src}
-        alt={channel.displayName || channel.name}
+        alt={title}
+        {...(view ? { [GALLERY_CAPTION_ATTR]: title } : {})}
         className={`${className} rounded-full object-cover`}
         onError={() => {
           setFailed(true)
           setSrc(null)
         }}
       />
+    )
+    if (!view) return img
+    const open = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setViewing(true)
+    }
+    const label = `View ${title}'s photo`
+    return (
+      <>
+        {view === "corner" ? (
+          <>
+            {img}
+            <button
+              type="button"
+              aria-label={label}
+              onClick={open}
+              className={`${PHOTO_CORNER_BUTTON_CLASS} -left-1`}
+            >
+              <ZoomIn size={10} />
+            </button>
+          </>
+        ) : (
+          // Raised over a compact card's selection layer.
+          <button
+            type="button"
+            aria-label={label}
+            onClick={open}
+            className="relative z-20 block cursor-zoom-in rounded-full"
+          >
+            {img}
+          </button>
+        )}
+        <PhotoViewerDialog
+          start={src}
+          open={viewing}
+          onOpenChange={setViewing}
+          title="Channel photo"
+        />
+      </>
     )
   }
 
@@ -62,6 +117,14 @@ export function ChannelAvatar({
     </div>
   )
 }
+
+/**
+ * A round button at a bottom corner of the photo (add `-left-1` or
+ * `-right-1`), over a card's selection layer and shown on the card's hover or
+ * keyboard focus.
+ */
+export const PHOTO_CORNER_BUTTON_CLASS =
+  "absolute -bottom-1 z-20 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
 
 const getGradientFromName = (name: string) => {
   const gradients = [

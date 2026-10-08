@@ -103,6 +103,26 @@ describe("PostCardHeader", () => {
     expect(screen.queryByText(/Forwarded from/)).toBeNull()
   })
 
+  test("the Channel's avatar stays out of the photo gallery", async () => {
+    render(
+      <PostCardHeader
+        post={post}
+        channel={{
+          id: "c1",
+          name: "durov",
+          tags: [],
+          photoUrl: "https://example.test/durov.jpg",
+        }}
+        followsForwardSource={false}
+        onAddChannel={mock()}
+        postSearch=""
+      />,
+    )
+    expect(await screen.findByRole("img", { name: "durov" })).toBeTruthy()
+    expect(document.querySelector("img[data-gallery-caption]")).toBeNull()
+    expect(screen.queryByRole("button", { name: /photo/ })).toBeNull()
+  })
+
   test("names the Channel, its handle linking to Telegram", () => {
     renderIdentity(post)
     expect(screen.getByText("durov")).toBeTruthy()
