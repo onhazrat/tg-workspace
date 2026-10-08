@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test"
 import { expect, test } from "./fixtures.ts"
 
 import { seedTestChannel } from "./utils/seed-channel"
-import { clearChannelSelection } from "./utils/summarizer-helpers.ts"
+import { clearChannelSelection, showCards } from "./utils/summarizer-helpers.ts"
 
 const TAB_LABELS: Record<string, string> = {
   channels: "Channels",
@@ -174,6 +174,7 @@ test.describe("TG UI primitives", () => {
     page,
   }) => {
     await gotoWorkspace(page, "channels")
+    await showCards(page)
     const channelName = await seedTestChannel(page)
 
     let nativeConfirmOpened = false
@@ -231,6 +232,7 @@ test.describe("TG UI primitives", () => {
     page,
   }) => {
     await gotoWorkspace(page, "channels")
+    await showCards(page)
     await seedTestChannel(page)
 
     for (const theme of ["light", "dark"] as const) {
@@ -383,6 +385,8 @@ test.describe("TG UI primitives", () => {
 
     const syncAll = page.getByRole("button", { name: /Sync All/i })
     await syncAll.click()
+    // Sync All asks first; nothing is sent until it is confirmed.
+    await page.getByTestId("channel-sync-all-confirm").click()
     await expect(syncAll).toHaveAttribute("aria-busy", "true")
     release?.()
   })

@@ -7,7 +7,7 @@ implementation decisions on stat tiles, In scope, aligned rows and the bio.
 
 **Blocked by:** CARD-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 The header stays today's: photo, title and handle at today's size, with the Language, sort rank
 and partial history badges at the top left. The prototype (`prototype/channel-cards`,
@@ -24,3 +24,7 @@ spec cuts them at about four lines instead.
 - [ ] Header, bio, tiles, tags, the About line and the footer each start level with the same section on every card in the row; a section a card lacks takes no height of its own beyond the row's; tiles and compact cards are unaffected
 - [ ] The Channels end-to-end spec checks the alignment by comparing element positions across a row of cards with bios of different lengths
 - [ ] The frontend CRAP ratchet passes, and every new or changed test is mutation-checked
+
+## Comments
+
+- 2026-10-08: implemented on `worktree-agent-a417f11fae8f6f613` and merged into the integration branch in 3b3e9e49. The row grid gap is column-only so no row gap falls between subgrid sections; `showChannelTelegramChatId` now matters only on the detailed card's About line.

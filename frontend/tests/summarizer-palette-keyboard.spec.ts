@@ -14,6 +14,7 @@ import {
   pickEntityFilterKeyboard,
   runPaletteCommand,
   selectChannelsKeyboard,
+  showCards,
 } from "./utils/summarizer-helpers.ts"
 
 test.describe("command palette keyboard", () => {
@@ -218,6 +219,7 @@ test.describe("command palette keyboard", () => {
 
   test("K12: add tag chain via keyboard", async ({ page }) => {
     await gotoWorkspace(page, "channels")
+    await showCards(page)
     const channelName = await seedTestChannel(page)
     const tagName = `tag${Date.now()}`
 
@@ -362,6 +364,7 @@ test.describe("command palette keyboard", () => {
 
   test("K17: freeze and unfreeze channel via keyboard", async ({ page }) => {
     await gotoWorkspace(page, "channels")
+    await showCards(page)
     const channelName = await seedTestChannel(page)
     const card = page.locator(`[data-channel-name="${channelName}"]`)
 

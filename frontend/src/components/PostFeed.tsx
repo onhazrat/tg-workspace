@@ -1,7 +1,7 @@
 import { Keyboard, LayoutGrid } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import {
   isSemanticFeed,
@@ -11,6 +11,7 @@ import {
   useScopedPostCounts,
   useShownPostCounts,
 } from "@/hooks/usePostsView"
+import { useCompactPostGrid, useSessionFlag } from "@/hooks/useSessionFlag"
 import { downloadBlob } from "@/lib/data-transfer/download"
 import { spotlightView } from "@/lib/posts/channel-spotlight"
 import { feedSubtitle } from "@/lib/posts/post-filter-bar"
@@ -29,7 +30,6 @@ import {
   postLinks,
   postsMarkdown,
 } from "@/lib/posts/selected-export"
-import { scopedSessionStorage } from "@/lib/storage/scoped"
 import { cn } from "@/lib/utils"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
@@ -50,21 +50,6 @@ interface PostFeedProps {
   setPostSearch: (val: string) => void
   loadMoreRef: React.RefObject<HTMLDivElement | null>
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
-}
-
-/**
- * A switch that lasts for the browser session, per Account. Not in the
- * settings schema, which persists to local storage and the server: the Compact
- * grid and Keyboard switches must reset with a new session (spec story 32).
- */
-function useSessionFlag(key: string): [boolean, (on: boolean) => void] {
-  const [on, setOn] = useState(() => scopedSessionStorage.getItem(key) === "1")
-  const set = (next: boolean) => {
-    setOn(next)
-    if (next) scopedSessionStorage.setItem(key, "1")
-    else scopedSessionStorage.removeItem(key)
-  }
-  return [on, set]
 }
 
 export const PostFeed: React.FC<PostFeedProps> = ({
@@ -96,7 +81,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   )
   const spotlightApi = useSpotlightState(scrollContainerRef, postFilter, ranked)
   const { spotlight } = spotlightApi
-  const [compact, setCompact] = useSessionFlag("postFeed_compactGrid")
+  const [compact, setCompact] = useCompactPostGrid()
   const [keyboard, setKeyboard] = useSessionFlag("postFeed_keyboard")
   const { counts, tooNewToJudge, selectedShown } = useShownPostCounts(spotlight)
   const [selectedFirst, setSelectedFirst] = useSessionFlag(
@@ -258,7 +243,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 aria-pressed={keyboard}
                 onClick={() => setKeyboard(!keyboard)}
                 className={pillClass(keyboard)}
-                title="j / k to move, an action's letter to fire it"
+                title="j / k to move, gg / G to jump, an action's letter to fire it"
               >
                 <Keyboard size={12} /> Keyboard
               </button>

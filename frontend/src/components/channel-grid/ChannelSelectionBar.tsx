@@ -4,6 +4,7 @@ import {
   Layers,
   RefreshCw,
   Snowflake,
+  Square,
   Sun,
   Trash2,
   X,
@@ -42,6 +43,9 @@ export type ChannelSelectionBarProps = {
   onSync: () => void
   isSyncDisabled: boolean
   isSyncing: boolean
+  /** A Sync selected job is running, so Sync becomes Stop sync. */
+  syncJobRunning: boolean
+  onStopSync: () => void
   onFreeze: () => void
   onUnfreeze: () => void
   onDelete: () => void
@@ -63,12 +67,28 @@ export type ChannelSelectionBarProps = {
   onShowSortRankChange: (value: boolean) => void
   zoom: CardZoom
   onZoomChange: (zoom: CardZoom) => void
+  /** Keyboard mode, a switch for the browser session. */
+  keyboard: boolean
+  onKeyboardChange: (on: boolean) => void
 }
 
 const actionClass =
   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold text-app-ink/80 hover:bg-app-ink/10 hover:text-app-ink disabled:opacity-40"
 
 const plural = (n: number) => `${n} channel${n === 1 ? "" : "s"}`
+
+/** Stops the running Sync selected job, which outlives the selection it started from. */
+const StopSync = ({ onStopSync }: { onStopSync: () => void }) => (
+  <button
+    type="button"
+    onClick={onStopSync}
+    data-testid="channel-sync-selected-stop"
+    className={actionClass}
+  >
+    <Square size={11} className="fill-current" />
+    Stop sync
+  </button>
+)
 
 /** The bulk toolbar: what reaches the selected Channels. */
 function SelectionActions(p: ChannelSelectionBarProps) {
@@ -122,15 +142,19 @@ function SelectionActions(p: ChannelSelectionBarProps) {
           Trim
         </button>
       </div>
-      <button
-        type="button"
-        onClick={p.onSync}
-        disabled={p.isSyncDisabled || p.isSyncing}
-        className={actionClass}
-      >
-        <RefreshCw size={12} className={p.isSyncing ? "animate-spin" : ""} />
-        Sync
-      </button>
+      {p.syncJobRunning ? (
+        <StopSync onStopSync={p.onStopSync} />
+      ) : (
+        <button
+          type="button"
+          onClick={p.onSync}
+          disabled={p.isSyncDisabled || p.isSyncing}
+          className={actionClass}
+        >
+          <RefreshCw size={12} className={p.isSyncing ? "animate-spin" : ""} />
+          Sync
+        </button>
+      )}
       <button
         type="button"
         onClick={p.onFreeze}
@@ -260,7 +284,11 @@ export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
           </Ghost>
         </>
       )}
-      {selecting && <SelectionActions {...p} />}
+      {selecting ? (
+        <SelectionActions {...p} />
+      ) : (
+        p.syncJobRunning && <StopSync onStopSync={p.onStopSync} />
+      )}
       <div className="ml-auto flex flex-wrap items-center gap-1.5 pl-2">
         <BarToggle
           on={p.groupBySelection}
@@ -274,6 +302,13 @@ export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
           label="Sort rank"
           title="Number each selected card by its place in the sort"
           testId="channel-show-sort-rank"
+        />
+        <BarToggle
+          on={p.keyboard}
+          onClick={() => p.onKeyboardChange(!p.keyboard)}
+          label="Keyboard"
+          title="j / k to move, gg / G to jump, an action's letter to fire it"
+          testId="channel-keyboard"
         />
         <CardSizeSwitch zoom={p.zoom} onZoomChange={p.onZoomChange} />
       </div>

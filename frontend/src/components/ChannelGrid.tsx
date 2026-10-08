@@ -1,10 +1,11 @@
-import { Languages, Layers, RefreshCw, Search, Tag } from "lucide-react"
+import { Languages, Layers, Search, Tag } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AiContextPill,
   SortMenu,
+  SyncAllButton,
 } from "@/components/channel-grid/ChannelBarControls"
 import type { ConditionOptions } from "@/components/channel-grid/ChannelConditionPicker"
 import {
@@ -14,18 +15,20 @@ import {
 import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
+import { ChannelKeyHelp } from "@/components/channel-grid/ChannelGridKeyboard"
 import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
-import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
+import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { useSettingGroupsQuery } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import { bulkTagSuggestions } from "@/lib/channels/bulk-tag-suggestions"
+import { cardFace } from "@/lib/channels/card-zoom"
 import {
   addFunnel,
   append,
@@ -116,6 +119,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setShowSortRank,
   } = useChannelGridSortState()
 
+  const settings = useSettings()
   const {
     showChannelSubscribers,
     channelCardZoom,
@@ -124,7 +128,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setChannelGridGroupBySelection,
     channelActionLimit,
     setChannelActionLimit,
-  } = useSettings()
+  } = settings
+  const [keyboard, setKeyboard] = useSessionFlag("channelGrid_keyboard")
 
   const { isOffline } = useApiStatus()
 
@@ -132,6 +137,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     scrapingChannels,
     handleScrapeSelected,
     handleScrapeAll,
+    runningSyncJobs,
+    stopSync,
     followDiscoverChannels,
   } = useScraper()
 
@@ -520,17 +527,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             includeTags={includeChannelTagsInPrompt}
             onIncludeTagsChange={setIncludeChannelTagsInPrompt}
           />
-          <TgButton
-            type="button"
-            size="sm"
-            onClick={handleScrapeAll}
+          <SyncAllButton
+            channels={channels}
+            onSync={() => void handleScrapeAll()}
+            running={runningSyncJobs.sync_all !== null}
+            onStop={() => void stopSync("sync_all")}
             disabled={isScrapeAllDisabled}
             loading={scrapingChannels.size > 0}
-            className="h-9"
-          >
-            <RefreshCw size={12} />
-            Sync all
-          </TgButton>
+          />
         </div>
 
         <ChannelFilterRow
@@ -564,6 +568,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onSync={() => void handleScrapeSelected(targets)}
           isSyncDisabled={isScrapeSelectedDisabled}
           isSyncing={scrapingChannels.size > 0}
+          syncJobRunning={runningSyncJobs.selected !== null}
+          onStopSync={() => void stopSync("selected")}
           onFreeze={() => actions.setConfirmBulkFreezeAction("freeze")}
           onUnfreeze={() => actions.setConfirmBulkFreezeAction("unfreeze")}
           onDelete={() => actions.setConfirmBulkDelete(true)}
@@ -586,6 +592,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onShowSortRankChange={setShowSortRank}
           zoom={channelCardZoom}
           onZoomChange={setChannelCardZoom}
+          keyboard={keyboard}
+          onKeyboardChange={setKeyboard}
         />
       </div>
 
@@ -599,12 +607,20 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         selectedChannels={selectedChannels}
         selectedTrimRanks={selectedTrimRanks}
         postsInScopeCounts={postsInScopeCounts}
+        onFilterByTag={(tag) =>
+          setChannelFilter(addFunnel(channelFilter, "tag", tag))
+        }
         onRemoveChannel={actions.handleRemoveChannel}
         onResetAndSync={actions.handleResetAndSync}
         onSelectChannel={handleSelectChannel}
         hasMore={hasMoreChannels}
         onLoadMore={loadMoreChannels}
         scrollContainerRef={scrollContainerRef}
+        keyboard={keyboard}
+      />
+      <ChannelKeyHelp
+        on={keyboard}
+        keys={cardFace(channelCardZoom, settings).keys}
       />
 
       <ChannelGridDialogs

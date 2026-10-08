@@ -10,6 +10,7 @@ import {
   gotoWorkspace,
   mockBulkFollowJob,
   selectChannelsKeyboard,
+  showCards,
 } from "./utils/summarizer-helpers.ts"
 
 test.describe("TG Workspace channels and posts", () => {
@@ -322,6 +323,8 @@ test.describe("TG Workspace channels and posts", () => {
   }) => {
     const prefix = `zoom${Date.now()}`
     await gotoWorkspace(page, "summary")
+    // Start on cards, which have the checkbox; compact cards are the default.
+    await seedScopedStorage(page, { channelCardZoom: "0" })
     await seedBulkChannels(page, 4, prefix)
     // A Sync click must not reach Telegram; refusing the enqueue is enough.
     await page.route("**/api/v1/jobs/sync", (route) => route.abort())
@@ -413,14 +416,15 @@ test.describe("TG Workspace channels and posts", () => {
     await first.getByRole("button", { name: "Sync" }).click()
     await expect(toggle).toHaveAttribute("aria-pressed", after)
 
-    // -2: the tile is the toggle.
+    // -2: a click on the tile selects, through its selection overlay.
     await tiles.click()
     await expect(tiles).toHaveAttribute("aria-pressed", "true")
-    const tile = await cardNamed(1)
+    const tileFrame = await cardNamed(1)
+    const tile = tileFrame.locator("button[aria-pressed]")
     const tileBefore = await tile.getAttribute("aria-pressed")
-    await tile.click()
+    await tileFrame.click()
     await expect(tile).not.toHaveAttribute("aria-pressed", tileBefore ?? "")
-    await tile.click()
+    await tileFrame.click()
     await expect(tile).toHaveAttribute("aria-pressed", tileBefore ?? "")
 
     await page.reload()
@@ -431,7 +435,103 @@ test.describe("TG Workspace channels and posts", () => {
 
     // -2: the tile takes the shift-click, from mid-grid since still ungrouped.
     await clearChannelSelection(page)
-    await shiftRun((name) => page.locator(`[data-channel-name="${name}"]`), 1)
+    await shiftRun(checkboxOf, 1)
+  })
+
+  /**
+   * CARD-04: a compact card's photo sits above its selection layer and opens
+   * the Posts tab's viewer, whose arrows step to the next Channel's photo.
+   */
+  test("a Channel photo opens the viewer and steps to the next", async ({
+    page,
+  }) => {
+    const prefix = `photo${Date.now()}`
+    const photoBase = "https://photos.e2e.test/"
+    // A 1x1 PNG, so no photo request leaves the machine.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    )
+    await page.route(`${photoBase}**`, (route) =>
+      route.fulfill({ contentType: "image/png", body: png }),
+    )
+    await gotoWorkspace(page, "summary")
+    await seedScopedStorage(page, { channelCardZoom: "-1" })
+    await seedBulkChannels(page, 3, prefix, photoBase)
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+    const names = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+    const first = page.locator(`[data-channel-name="${names[0]}"]`)
+    await expect(
+      first.getByRole("link", { name: `Open ${names[0]} in Telegram` }),
+    ).toHaveAttribute("href", new RegExp(`/s/${names[0]}$`))
+
+    // The click must land on the photo, over the compact card's overlay.
+    await first
+      .getByRole("button", { name: `View ${names[0]}'s photo` })
+      .click()
+    const viewer = page.getByRole("dialog", { name: "Channel photo" })
+    const label = viewer.getByTestId("photo-viewer-label")
+    await expect(label).toContainText(`${names[0]} · 1 / 3`)
+    await viewer.getByRole("button", { name: "Next photo" }).click()
+    await expect(label).toContainText(`${names[1]} · 2 / 3`)
+    await page.keyboard.press("Escape")
+    await expect(viewer).toHaveCount(0)
+  })
+
+  test("keyboard mode moves through the grid and presses the highlighted card's controls", async ({
+    page,
+  }) => {
+    const prefix = `kbd${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 4, prefix)
+    await page.goto("/workspace?tab=channels")
+    await showCards(page)
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(4, { timeout: 30_000 })
+    await clearChannelSelection(page)
+    const names = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+    const highlighted = page.locator("[data-kbd-selected]")
+    const legend = page.locator("kbd")
+
+    await page.getByTestId("channel-keyboard").click()
+    await expect(legend).toHaveText(["j / k", "gg / G", ..."xstfobp", "esc"])
+
+    await page.keyboard.press("j")
+    await expect(highlighted).toHaveAttribute("data-channel-name", names[0])
+    await page.keyboard.press("j")
+    await expect(highlighted).toHaveAttribute("data-channel-name", names[1])
+    await page.keyboard.press("g")
+    await page.keyboard.press("g")
+    await expect(highlighted).toHaveAttribute("data-channel-name", names[0])
+
+    await page.keyboard.press("x")
+    await expect(
+      cards.first().getByRole("button", { name: `Deselect ${names[0]}` }),
+    ).toHaveAttribute("aria-pressed", "true")
+
+    // Telegram itself is never reached: the popup's request is answered here.
+    await page
+      .context()
+      .route(`**/s/${names[0]}`, (route) => route.fulfill({ body: "" }))
+    const popup = page.waitForEvent("popup")
+    await page.keyboard.press("o")
+    await expect(await popup).toHaveURL(new RegExp(`/s/${names[0]}$`))
+    await (await popup).close()
+
+    // A compact card carries no tag field, freeze or bio, and the legend says so.
+    await page.getByRole("button", { name: "Compact cards" }).click()
+    await expect(legend).toHaveText(["j / k", "gg / G", ..."xsop", "esc"])
+    await page.keyboard.press("Escape")
+    await expect(highlighted).toHaveCount(0)
   })
 
   /**
@@ -478,6 +578,117 @@ test.describe("TG Workspace channels and posts", () => {
     await page.getByRole("button", { name: "Cards", exact: true }).click()
     await expect(cards.first().getByText("Start ID")).toHaveCount(0)
     await expectRowsFlush()
+  })
+
+  /**
+   * CARD-02: each section of a card starts level with the same section on
+   * the cards beside it. Three Channels with no bio, a short one and a long
+   * one, and one tag against many, sit in one row; every section's top is
+   * compared across the row, at both card sizes that align.
+   */
+  test("card sections line up across a row whatever the bio", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const prefix = `align${Date.now()}`
+    await gotoWorkspace(page, "channels")
+    const long = "A bio that runs on and on. ".repeat(12)
+    await seedTestChannel(page, `${prefix}a`, ["one"])
+    await seedTestChannel(page, `${prefix}b`, [], { bio: "Short." })
+    await seedTestChannel(
+      page,
+      `${prefix}c`,
+      ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"],
+      { bio: long },
+    )
+    await showCards(page)
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+
+    const sections = [
+      "h4",
+      '[data-card-section="bio"]',
+      "[data-stat]",
+      '[data-card-section="tags"]',
+      '[data-card-section="about"]',
+      "[data-last-sync]",
+    ]
+    const expectAligned = async () => {
+      await page.waitForTimeout(300)
+      const tops = await cards.evaluateAll((elements, selectors) => {
+        const top = (el: Element, selector: string) => {
+          const found = el.querySelector(selector)
+          return found ? Math.round(found.getBoundingClientRect().top) : null
+        }
+        return elements.map((card) => ({
+          card: Math.round(card.getBoundingClientRect().top),
+          sections: selectors.map((selector) => top(card, selector)),
+        }))
+      }, sections)
+      // One row, or the comparison means nothing.
+      expect(new Set(tops.map((t) => t.card)).size).toBe(1)
+      for (const t of tops) expect(t.sections).toEqual(tops[0].sections)
+    }
+
+    await expectAligned()
+    // The long bio is cut, and its More is the only one in the row.
+    await expect(cards.getByRole("button", { name: "More" })).toHaveCount(1)
+    await page.getByRole("button", { name: "Detailed cards" }).click()
+    await expect(cards.first().getByText("Start ID")).toBeVisible()
+    await expectAligned()
+  })
+
+  // CARD-03: the suggestion list is portalled out of the card, so a card's
+  // clipped edges never hide it, and every row is the topmost element at its
+  // own centre, which fails if another card or bar paints over it. The
+  // screenshots are for eyeballing the Cards and Detailed sizes.
+  test("the tag field's suggestions are not clipped by the card", async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const prefix = `tagpop${Date.now()}`
+    const tags = Array.from({ length: 12 }, (_, i) => `${prefix}t${i}`)
+    await gotoWorkspace(page, "channels")
+    // The tags live on a Channel the search hides, so the suggestions are
+    // the only place they show.
+    await seedTestChannel(page, `src${Date.now()}`, tags)
+    await seedTestChannel(page, `${prefix}a`, [])
+    await seedTestChannel(page, `${prefix}b`, [])
+    await showCards(page)
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(2, { timeout: 30_000 })
+
+    const card = page.locator(`[data-channel-name="${prefix}b"]`)
+    await card.getByRole("combobox", { name: "Add tag" }).fill(prefix)
+    const list = page.getByRole("listbox")
+    // The list shows at most eight rows.
+    await expect(list.getByRole("option")).toHaveCount(8)
+    expect(await card.locator('[role="listbox"]').count()).toBe(0)
+    const covered = await list.getByRole("option").evaluateAll(
+      (options) =>
+        options.filter((option) => {
+          const r = option.getBoundingClientRect()
+          const top = document.elementFromPoint(
+            r.x + r.width / 2,
+            r.y + r.height / 2,
+          )
+          return !option.contains(top)
+        }).length,
+    )
+    expect(covered).toBe(0)
+    await page.screenshot({ path: testInfo.outputPath("tag-popover.png") })
+
+    await list.getByRole("option", { name: tags[0] }).click()
+    await expect(card.getByText(tags[0], { exact: true })).toBeVisible()
+    await page.keyboard.press("Escape")
+    await page.screenshot({ path: testInfo.outputPath("cards.png") })
+    await page.getByRole("button", { name: "Detailed cards" }).click()
+    await expect(cards.first().getByText("Start ID")).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath("detailed-cards.png") })
   })
 
   /**
@@ -781,5 +992,72 @@ test.describe("TG Workspace channels and posts", () => {
     from = writes.length
     await addTag(`${prefix}-b`)
     await expect.poll(() => written(from).sort()).toEqual([...names].sort())
+  })
+
+  /**
+   * CARD-06: Sync all asks first, and Stop sync cancels that exact job. The
+   * job is mocked so nothing reaches Telegram: its event stream stays open
+   * until the cancel arrives, then reports the job cancelled, as the endpoint
+   * does for the Channels still queued.
+   */
+  test("Sync all asks first, and Stop sync ends the job as cancelled", async ({
+    page,
+  }) => {
+    const jobId = `e2e-stop-${Date.now()}`
+    await gotoWorkspace(page, "channels")
+    await seedTestChannel(page)
+
+    const cancelled = {
+      jobId,
+      status: "cancelled",
+      source: "Manual (Sync All)",
+      channels: [],
+      createdAt: Date.now(),
+      finishedAt: Date.now(),
+    }
+    let release = () => {}
+    const cancelArrived = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const starts: { syncMode?: string }[] = []
+    const cancels: string[] = []
+    await page.route("**/api/v1/jobs/sync", async (route) => {
+      starts.push(route.request().postDataJSON())
+      await route.fulfill({ json: { jobId } })
+    })
+    await page.route("**/api/v1/jobs/sync/*/cancel", async (route) => {
+      cancels.push(route.request().url())
+      release()
+      await route.fulfill({ json: cancelled })
+    })
+    await page.route(`**/api/v1/jobs/sync/${jobId}/events`, async (route) => {
+      await cancelArrived
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify(cancelled)}\n\n`,
+      })
+    })
+
+    await page.goto("/workspace?tab=channels")
+    const syncAll = page.getByRole("button", { name: "Sync all" })
+    await syncAll.click()
+    await expect(page.getByRole("dialog")).toContainText(
+      /Sync \d+ channels? now\?/,
+    )
+    expect(starts).toEqual([])
+    await page.getByTestId("channel-sync-all-confirm").click()
+
+    const stop = page.getByTestId("channel-sync-all-stop")
+    await expect(stop).toBeVisible()
+    expect(starts.map((body) => body.syncMode)).toEqual(["sync_all"])
+    await stop.click()
+
+    await expect(page.getByText("Sync stopped")).toBeVisible()
+    expect(cancels).toHaveLength(1)
+    expect(cancels[0]).toContain(`/jobs/sync/${jobId}/cancel`)
+    // The stream reports the job cancelled, so the button comes back.
+    await expect(syncAll).toBeVisible()
+    await expect(stop).toBeHidden()
   })
 })

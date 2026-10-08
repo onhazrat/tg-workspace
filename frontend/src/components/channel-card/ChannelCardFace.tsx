@@ -1,4 +1,4 @@
-import type { CardFace } from "@/lib/channels/card-zoom"
+import { type CardFace, shortcut } from "@/lib/channels/card-zoom"
 import type { Channel, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
@@ -6,10 +6,11 @@ import {
   ChannelCardSyncingOverlay,
 } from "./ChannelCardChrome"
 import { ChannelCardFooter } from "./ChannelCardFooter"
-import { ChannelCardHeader } from "./ChannelCardHeader"
-import { ChannelCardMeta } from "./ChannelCardMeta"
+import { ChannelCardBio, ChannelCardHeader } from "./ChannelCardHeader"
+import { ChannelCardAbout, ChannelCardStatTiles } from "./ChannelCardStats"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
+  ALIGNED_SECTIONS_CLASS,
   channelCardFrameClass,
   selectionHandlers,
   selectLabel,
@@ -19,18 +20,23 @@ import {
 
 /**
  * The channel card at zooms -1, 0 and +1, drawn from a `CardFace`. Props only,
- * so every face is testable without the contexts `ChannelCard` reads.
+ * so every face is testable without the contexts `ChannelCard` reads: anything
+ * from app state (tag suggestions' source, the Channel filter, the selection)
+ * arrives as a prop.
  */
 export function ChannelCardFace({
   channel,
   stats,
   face,
   inScopeCount,
+  accountChannels,
+  onFilterByTag,
   isSelected,
   isScraping,
   busy,
   queuePosition,
   sortRank,
+  highlighted = false,
   onToggleSelected,
   onToggleFreeze,
   onResetAndSync,
@@ -43,6 +49,18 @@ export function ChannelCardFace({
   face: CardFace
   /** In-scope post count for this channel, from the shared counts query. */
   inScopeCount: number
+  /**
+   * The Account's Channels, which tag suggestions are drawn from. Passed in,
+   * never read from the data context, so the face renders in a test alone.
+   */
+  accountChannels: readonly Pick<Channel, "tags">[]
+  /** Adds a tag funnel to the Channel filter. */
+  onFilterByTag: (tag: string) => void
+  /**
+   * Among the Scope's selected Channels, the Hidden selection included. The
+   * selection control shows it, and the In scope count is only meaningful
+   * when it is true.
+   */
   isSelected: boolean
   isScraping: boolean
   /** A sync or summary is running. */
@@ -50,24 +68,33 @@ export function ChannelCardFace({
   /** 1-based place in the sync queue, or null when not queued. */
   queuePosition: number | null
   sortRank?: number
+  /** Keyboard mode's highlight is on this card. */
+  highlighted?: boolean
   onToggleSelected: (shift: boolean) => void
   onToggleFreeze: () => void
   onResetAndSync: () => void
   onRemove: () => void
-  onSaveChannel: (patch: Partial<Channel>) => void
+  /** Resolves once saved, so the tag field can send its saves in turn. */
+  onSaveChannel: (patch: Partial<Channel>) => Promise<void> | void
   onSync: () => void
 }) {
   const { virtualGroupTagName, inheritedSettingsHint } = settingGroupHints(
     channel.settingGroupName,
   )
+  // Cards and detailed cards line their sections up across the row; a
+  // compact card's body is the selection toggle and has no sections to align.
+  const aligned = !face.bodySelects
 
   return (
     <div
       data-channel-name={channel.name}
+      data-kbd-selected={highlighted || undefined}
       className={channelCardFrameClass({
         isFrozen: channel.isFrozen,
         isSelected,
         isScraping,
+        highlighted,
+        aligned,
       })}
     >
       {isScraping && (
@@ -85,6 +112,7 @@ export function ChannelCardFace({
           aria-pressed={isSelected}
           aria-label={selectLabel(channel.name, isSelected)}
           {...selectionHandlers(onToggleSelected)}
+          {...shortcut("x")}
           className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         />
       )}
@@ -110,36 +138,57 @@ export function ChannelCardFace({
       />
 
       <div
-        className={`flex flex-col h-full ${face.bodySelects ? "p-4 pt-9" : "p-5 pt-12"}`}
+        className={
+          aligned
+            ? `${ALIGNED_SECTIONS_CLASS} p-5 pt-12`
+            : "flex flex-col h-full p-4 pt-9"
+        }
       >
-        <ChannelCardHeader
-          channel={channel}
-          showBio={face.bio}
-          linkToTelegram={!face.bodySelects}
-        />
-        {face.meta && (
-          <ChannelCardMeta
-            channel={channel}
-            stats={stats}
-            inScopeCount={inScopeCount}
-            show={face.meta}
-          />
-        )}
-
-        {face.tags && (
-          <ChannelCardTags
-            tags={channel.tags}
-            virtualGroupTagName={virtualGroupTagName}
-            inheritedSettingsHint={inheritedSettingsHint}
-            onSave={(tags) => onSaveChannel({ tags })}
-          />
+        <ChannelCardHeader channel={channel} />
+        {aligned && (
+          <>
+            <div data-card-section="bio">
+              {face.bio && channel.bio && (
+                <ChannelCardBio
+                  bio={channel.bio}
+                  lines={face.detailed ? 4 : 2}
+                />
+              )}
+            </div>
+            <ChannelCardStatTiles
+              keys={face.statTiles}
+              channel={channel}
+              stats={stats}
+              inScope={isSelected ? inScopeCount : null}
+            />
+            <div data-card-section="tags">
+              {face.tags && (
+                <ChannelCardTags
+                  tags={channel.tags}
+                  virtualGroupTagName={virtualGroupTagName}
+                  inheritedSettingsHint={inheritedSettingsHint}
+                  accountChannels={accountChannels}
+                  onSave={(tags) => onSaveChannel({ tags })}
+                  onFilterByTag={onFilterByTag}
+                />
+              )}
+            </div>
+            <div data-card-section="about">
+              {face.detailed && (
+                <ChannelCardAbout
+                  channel={channel}
+                  showChatId={face.meta?.telegramChatId ?? false}
+                />
+              )}
+            </div>
+          </>
         )}
 
         <ChannelCardFooter
           channel={channel}
-          stats={stats}
           showStartId={face.startId}
           showStatus={face.syncStatus}
+          detailed={face.detailed}
           isScraping={isScraping}
           busy={busy}
           inheritedSettingsHint={inheritedSettingsHint}

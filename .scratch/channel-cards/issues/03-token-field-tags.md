@@ -6,7 +6,7 @@ implementation decisions on the tag field, tag saves and clicking a tag.
 
 **Blocked by:** CARD-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 The prototype (`prototype/channel-cards`, `?variant=E`) shows the field. Its saves send the whole
 tag list from an optimistic copy and can arrive out of order; the spec serialises them instead.
@@ -22,3 +22,7 @@ tag list from an optimistic copy and can arrive out of order; the spec serialise
 - [ ] Clicking a tag's name adds a tag funnel to the Channel filter, the same edit the facet menu makes; removing a tag keeps its hover remove button; AI-assigned tags stay marked
 - [ ] The bulk bar's tag fields are unchanged
 - [ ] The frontend CRAP ratchet passes, and every new or changed test is mutation-checked
+
+## Comments
+
+- 2026-10-08: implemented on `worktree-agent-aeb5f6af633988a8d` and merged into the integration branch in 54f8e753.

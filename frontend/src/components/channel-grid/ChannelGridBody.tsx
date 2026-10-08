@@ -18,6 +18,8 @@ type ChannelGridBodyProps = {
   selectedTrimRanks: Map<string, number>
   /** Per-channel in-scope post counts, shared from one query in ChannelGrid. */
   postsInScopeCounts: Record<string, number>
+  /** Adds a tag funnel to the Channel filter, as the facet menu does. */
+  onFilterByTag: (tag: string) => void
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
   /** One click on a card's selection control, and whether shift was held. */
@@ -27,6 +29,8 @@ type ChannelGridBodyProps = {
   onLoadMore: () => void
   /** The workspace scroll container the grid is windowed against. */
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  /** Keyboard mode is on. */
+  keyboard: boolean
 }
 
 /** Grid body: loading skeletons, empty state, or the ChannelCard grid with infinite-scroll sentinel. */
@@ -40,12 +44,14 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   selectedChannels,
   selectedTrimRanks,
   postsInScopeCounts,
+  onFilterByTag,
   onRemoveChannel,
   onResetAndSync,
   onSelectChannel,
   hasMore,
   onLoadMore,
   scrollContainerRef,
+  keyboard,
 }) => {
   if (isLoading) {
     return (
@@ -117,11 +123,13 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         zoom={zoom}
         selectedChannels={selectedChannels}
         selectedTrimRanks={selectedTrimRanks}
+        onFilterByTag={onFilterByTag}
         onRemoveChannel={onRemoveChannel}
         onResetAndSync={onResetAndSync}
         onSelectChannel={onSelectChannel}
         hasMore={hasMore}
         onLoadMore={onLoadMore}
+        keyboard={keyboard}
       />
 
       {/* Kept as a position marker for tests and as the visual end-of-list

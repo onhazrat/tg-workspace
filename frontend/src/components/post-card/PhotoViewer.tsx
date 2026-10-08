@@ -5,9 +5,9 @@
  * viewport units, whatever its shape. Scroll or pinch zooms about the pointer,
  * a double-click toggles 2.5x, drag pans a zoomed photo (arithmetic in
  * `photo-viewer-model.ts`). The arrow keys and two side buttons step through
- * every photo the feed has loaded, each starting whole again. A click at 1x,
- * Escape or the close button closes it, and the feed is left at the Post of
- * the last photo viewed.
+ * every photo the page has loaded, each starting whole again. A click at 1x,
+ * Escape or the close button closes it, and the page is left at the Post or
+ * Channel of the last photo viewed. The Channels tab's cards open it too.
  *
  * The photo is the card's cached thumbnail; there is no larger image.
  */
@@ -27,15 +27,24 @@ const BOX = "w-[96vw] h-[94vh]"
 /** The marker a card's photo carries so the gallery can find it. */
 export const GALLERY_CAPTION_ATTR = "data-gallery-caption"
 
+/**
+ * A window event naming a Channel (`detail`) whose card the Channels grid
+ * should scroll to the middle of the screen.
+ */
+export const REVEAL_CHANNEL = "tg:reveal-channel"
+
 export function PhotoViewerDialog({
   start,
   open,
   onOpenChange,
+  title = "Post image",
 }: {
   /** The photo clicked: its `src` on the card. */
   start: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** The dialog's accessible title. */
+  title?: string
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,7 +54,7 @@ export function PhotoViewerDialog({
         onCloseAutoFocus={(e) => e.preventDefault()}
         className={`${BOX} block max-w-none sm:max-w-none overflow-hidden border-0 bg-transparent p-0 shadow-none [&>[data-slot=dialog-close]]:rounded-full [&>[data-slot=dialog-close]]:bg-black/50 [&>[data-slot=dialog-close]]:p-2 [&>[data-slot=dialog-close]]:text-white`}
       >
-        <DialogTitle className="sr-only">Post image</DialogTitle>
+        <DialogTitle className="sr-only">{title}</DialogTitle>
         <PhotoViewer start={start} onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
@@ -61,7 +70,8 @@ function loadedPhotos(): GalleryPhoto[] {
   ).map((el) => ({
     src: el.src,
     caption: el.getAttribute(GALLERY_CAPTION_ATTR) ?? "",
-    card: el.closest<HTMLElement>("[data-post-key]"),
+    // A Post's card in the feed, or a Channel's card or tile in the grid.
+    card: el.closest<HTMLElement>("[data-post-key], [data-channel-name]"),
   }))
 }
 
@@ -92,9 +102,18 @@ export function PhotoViewer({
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   })
-  // Leave the feed where the browsing ended, once, on close (unmount).
+  // Leave the feed where the browsing ended, once, on close (unmount). The
+  // Channels grid is virtualised and may have unmounted that Channel's card,
+  // so it is asked to scroll its own way to the Channel.
   useEffect(
-    () => () => photos[last.current]?.card?.scrollIntoView({ block: "center" }),
+    () => () => {
+      const card = photos[last.current]?.card
+      if (card?.isConnected) card.scrollIntoView({ block: "center" })
+      else if (card?.dataset.channelName)
+        window.dispatchEvent(
+          new CustomEvent(REVEAL_CHANNEL, { detail: card.dataset.channelName }),
+        )
+    },
     [],
   )
 

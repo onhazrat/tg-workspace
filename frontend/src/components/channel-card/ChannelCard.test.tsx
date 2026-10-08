@@ -7,12 +7,8 @@
  * number.
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import {
-  type CardZoom,
-  type ChannelMetaVisibility,
-  cardFace,
-} from "@/lib/channels/card-zoom"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { type CardZoom, cardFace } from "@/lib/channels/card-zoom"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
@@ -22,7 +18,6 @@ import {
 import { ChannelCardFace } from "./ChannelCardFace"
 import { ChannelCardFooter } from "./ChannelCardFooter"
 import { ChannelCardHeader } from "./ChannelCardHeader"
-import { ChannelCardMeta } from "./ChannelCardMeta"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
   channelCardFrameClass,
@@ -53,20 +48,14 @@ const stats = (maxId: number, latestId?: number): ChannelStats => ({
 })
 
 describe("channel-card-status", () => {
-  test("restricted beats frozen beats progress", () => {
+  test("restricted beats frozen", () => {
     const both = { ...base, isUnavailableOnWebView: true, isFrozen: true }
-    expect(channelSyncStatus(both, stats(9, 9)).label).toBe("Restricted")
-    expect(
-      channelSyncStatus({ ...base, isFrozen: true }, stats(9, 9)).label,
-    ).toBe("Frozen")
+    expect(channelSyncStatus(both)?.label).toBe("Restricted")
+    expect(channelSyncStatus({ ...base, isFrozen: true })?.label).toBe("Frozen")
   })
 
-  test("up to date only once the local copy reaches the newest post", () => {
-    expect(channelSyncStatus(base, stats(9, 9)).label).toBe("Up to date")
-    expect(channelSyncStatus(base, stats(10, 9)).label).toBe("Up to date")
-    expect(channelSyncStatus(base, stats(8, 9)).label).toBe("Pending")
-    expect(channelSyncStatus(base, stats(8)).label).toBe("Pending")
-    expect(channelSyncStatus(base, undefined).label).toBe("Pending")
+  test("a channel neither Restricted nor Frozen has no status", () => {
+    expect(channelSyncStatus(base)).toBeNull()
   })
 
   test("progress is unknown without both ids", () => {
@@ -219,173 +208,274 @@ describe("ChannelCardBadges", () => {
   })
 })
 
-describe("ChannelCardMeta", () => {
-  const all: ChannelMetaVisibility = {
-    subscribers: true,
-    telegramChatId: true,
-    photos: true,
-    videos: true,
-    files: true,
-    links: true,
-  }
-  const counted: Channel = {
-    ...base,
-    subscribers: 1500,
-    telegramChatId: 777,
-    photos: 2,
-    videos: 3,
-    files: 4,
-    links: 5,
-  }
-
-  test("post count, in-scope count and activity rate", () => {
-    render(
-      <ChannelCardMeta
-        channel={base}
-        stats={{
-          count: 1234,
-          velocity: 0.4,
-          reach: null,
-          reachEstimated: false,
-        }}
-        inScopeCount={12}
-        show={all}
-      />,
-    )
-    expect(screen.getByText("1,234 Posts")).toBeTruthy()
-    expect(screen.getByText("(12 in scope)")).toBeTruthy()
-    expect(screen.getByText("< 1 / hr")).toBeTruthy()
-  })
-
-  test("each counter shows when its setting is on and hides when off", () => {
-    render(
-      <ChannelCardMeta
-        channel={counted}
-        stats={undefined}
-        inScopeCount={0}
-        show={all}
-      />,
-    )
-    for (const text of ["777", "2", "3", "4", "5"])
-      expect(screen.getByText(text)).toBeTruthy()
-    expect(screen.queryByText(/in scope/)).toBeNull()
-    expect(screen.queryByText(/\/ hr/)).toBeNull()
-    cleanup()
-    const none = Object.fromEntries(
-      Object.keys(all).map((k) => [k, false]),
-    ) as unknown as ChannelMetaVisibility
-    render(
-      <ChannelCardMeta
-        channel={counted}
-        stats={undefined}
-        inScopeCount={0}
-        show={none}
-      />,
-    )
-    for (const text of ["777", "2", "3", "4", "5"])
-      expect(screen.queryByText(text)).toBeNull()
-  })
-
-  test("reach reads measured, estimated or not measured", () => {
-    const withReach = (reach: number | null, reachEstimated: boolean) =>
-      render(
-        <ChannelCardMeta
-          channel={base}
-          stats={{ count: 5, reach, reachEstimated }}
-          inScopeCount={0}
-          show={all}
-        />,
-      )
-    withReach(12300, false)
-    expect(screen.getByText("Reach 12.3K")).toBeTruthy()
-    cleanup()
-    withReach(12300, true)
-    expect(screen.getByText("Reach ~12.3K")).toBeTruthy()
-    cleanup()
-    withReach(null, false)
-    expect(screen.getByText("Reach not measured")).toBeTruthy()
-    cleanup()
-    // Zero is a measurement, not an absence.
-    withReach(0, false)
-    expect(screen.getByText("Reach 0")).toBeTruthy()
-  })
-
-  test("no reach chip before the stats have loaded", () => {
-    render(
-      <ChannelCardMeta
-        channel={base}
-        stats={undefined}
-        inScopeCount={0}
-        show={all}
-      />,
-    )
-    expect(screen.queryByText(/Reach/)).toBeNull()
-  })
-
-  test("auto-followed channels say so", () => {
-    render(
-      <ChannelCardMeta
-        channel={{ ...base, discoveredVia: { channelName: "src" } } as Channel}
-        stats={undefined}
-        inScopeCount={0}
-        show={all}
-      />,
-    )
-    expect(screen.getByText("Auto-Followed")).toBeTruthy()
-  })
-})
-
 describe("ChannelCardTags", () => {
-  const renderTags = (onSave = mock()) => {
-    render(
-      <ChannelCardTags
-        tags={["news"]}
-        virtualGroupTagName="group:Fast"
-        inheritedSettingsHint="hint"
-        onSave={onSave}
-      />,
+  // This Channel carries "news". radar shares news on two Channels, tech on
+  // one; sport is on three Channels that share nothing with this one.
+  const account: Pick<Channel, "tags">[] = [
+    { tags: ["news"] },
+    { tags: ["news", "radar"] },
+    { tags: ["news", "radar"] },
+    { tags: ["news", "tech"] },
+    { tags: ["sport"] },
+    { tags: ["sport"] },
+    { tags: ["sport"] },
+    { tags: ["zoo"] },
+    { tags: ["art"] },
+    { tags: ["group:Slow"] },
+  ]
+  const renderTags = (
+    overrides: Partial<Parameters<typeof ChannelCardTags>[0]> = {},
+  ) => {
+    const props = {
+      tags: ["news"] as Channel["tags"],
+      virtualGroupTagName: "group:Fast",
+      inheritedSettingsHint: "hint",
+      accountChannels: account,
+      onSave: mock(),
+      onFilterByTag: mock(),
+      ...overrides,
+    }
+    render(<ChannelCardTags {...props} />)
+    return props
+  }
+  const field = () => screen.getByLabelText("Add tag") as HTMLInputElement
+  const type = (text: string) =>
+    fireEvent.change(field(), { target: { value: text } })
+  const key = (k: string) => fireEvent.keyDown(field(), { key: k })
+  /** Lets queued saves run, since each waits for the one before it. */
+  const settle = () => act(async () => {})
+  /** The tag names of each save, in the order they were sent. */
+  const saves = async (onSave: unknown) => {
+    await settle()
+    return (onSave as ReturnType<typeof mock>).mock.calls.map((call) =>
+      (call[0] as { name: string }[]).map((t) => t.name),
     )
-    return onSave
   }
-  const openInput = () => {
-    fireEvent.click(screen.getByText("Add Tag"))
-    return screen.getByPlaceholderText("Tag...") as HTMLInputElement
-  }
+  const suggestions = () =>
+    screen.queryAllByRole("option").map((o) => o.textContent)
 
-  test("shows the group tag beside the channel's own", () => {
+  test("the field is always there after the chips, with no button in front", () => {
     renderTags()
     expect(screen.getByText("group:Fast").getAttribute("title")).toBe("hint")
     expect(screen.getByText("news")).toBeTruthy()
+    expect(field()).toBeTruthy()
+    expect(screen.queryByText(/Add Tag/)).toBeNull()
   })
 
-  test("Enter saves the trimmed tag appended to the list", () => {
-    const onSave = renderTags()
-    const input = openInput()
-    input.value = "  tech "
-    fireEvent.keyDown(input, { key: "Enter" })
-    expect(onSave).toHaveBeenCalledTimes(1)
-    const saved = onSave.mock.calls[0]?.[0] as { name: string }[]
-    expect(saved.map((t) => t.name)).toEqual(["news", "tech"])
+  test("Enter adds exactly what was typed, trimmed, and empties the field", async () => {
+    const { onSave } = renderTags()
+    field().focus()
+    type("  rad ")
+    key("Enter")
+    expect(await saves(onSave)).toEqual([["news", "rad"]])
+    expect(field().value).toBe("")
   })
 
-  test("blank and reserved group: tags are not saved", () => {
-    const onSave = renderTags()
-    let input = openInput()
-    input.value = "   "
-    fireEvent.blur(input)
-    input = openInput()
-    input.value = "group:x"
-    fireEvent.keyDown(input, { key: "Enter" })
-    expect(onSave).not.toHaveBeenCalled()
-    expect(screen.queryByPlaceholderText("Tag...")).toBeNull()
+  test("suggestions appear only on focus, ranked by pairing, then use, then name", () => {
+    renderTags()
+    expect(suggestions()).toEqual([])
+    fireEvent.focus(field())
+    // radar pairs with news twice, tech once; sport is on more Channels than
+    // art or zoo; art and zoo tie and go alphabetically. news is already
+    // here and group:Slow is a Setting group's tag.
+    expect(suggestions()).toEqual(["radar", "tech", "sport", "art", "zoo"])
+    fireEvent.blur(field())
+    expect(suggestions()).toEqual([])
   })
 
-  test("Escape closes without saving; the remove button drops one tag", () => {
-    const onSave = renderTags()
-    fireEvent.keyDown(openInput(), { key: "Escape" })
-    expect(screen.queryByPlaceholderText("Tag...")).toBeNull()
+  test("typing puts prefix matches before substring matches", () => {
+    renderTags()
+    fireEvent.focus(field())
+    type("ar")
+    expect(suggestions()).toEqual(["art", "radar"])
+  })
+
+  test("Tab takes the top suggestion, or the one the arrows highlight", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("a")
+    key("Tab")
+    type("r")
+    expect(suggestions()).toEqual(["radar", "sport"])
+    key("ArrowDown")
+    key("ArrowUp")
+    expect(screen.queryByRole("option", { selected: true })).toBeNull()
+    key("ArrowDown")
+    key("ArrowDown")
+    key("ArrowDown")
+    expect(screen.getByRole("option", { selected: true }).textContent).toBe(
+      "sport",
+    )
+    key("Tab")
+    expect(await saves(onSave)).toEqual([
+      ["news", "art"],
+      ["news", "art", "sport"],
+    ])
+  })
+
+  test("Tab in an empty field with nothing highlighted leaves the field", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    const tab = new KeyboardEvent("keydown", {
+      key: "Tab",
+      bubbles: true,
+      cancelable: true,
+    })
+    field().dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(false)
+    expect(await saves(onSave)).toEqual([])
+  })
+
+  test("Enter adds the arrow-chosen suggestion, else what was typed in an existing tag's spelling", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("ra")
+    key("ArrowDown")
+    key("Enter")
+    type("SPORT")
+    key("Enter")
+    // A new tag that starts like an old one is still created.
+    type("ar")
+    key("Enter")
+    expect((await saves(onSave)).at(-1)).toEqual([
+      "news",
+      "radar",
+      "sport",
+      "ar",
+    ])
+  })
+
+  test("hovering a suggestion does not change what Enter adds", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("ra")
+    fireEvent.mouseEnter(screen.getByRole("option", { name: "radar" }))
+    key("Enter")
+    expect(await saves(onSave)).toEqual([["news", "ra"]])
+  })
+
+  test("a trailing comma adds the tag and leaves the field empty", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("Zoo,")
+    expect(await saves(onSave)).toEqual([["news", "zoo"]])
+    expect(field().value).toBe("")
+  })
+
+  test("Backspace in an empty field removes the last tag; with text it does not", async () => {
+    const { onSave } = renderTags({ tags: ["news", "tech"] })
+    fireEvent.focus(field())
+    type("x")
+    key("Backspace")
+    expect(await saves(onSave)).toEqual([])
+    type("")
+    key("Backspace")
+    expect(await saves(onSave)).toEqual([["news"]])
+  })
+
+  test("Escape leaves the field without adding anything", async () => {
+    const { onSave } = renderTags()
+    field().focus()
+    type("tech")
+    key("Escape")
+    expect(document.activeElement).not.toBe(field())
+    expect(field().value).toBe("")
+    expect(await saves(onSave)).toEqual([])
+  })
+
+  test("blank and reserved group: tags are not saved", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("   ")
+    key("Enter")
+    type("group:x")
+    key("Enter")
+    type("Group:y,")
+    expect(await saves(onSave)).toEqual([])
+  })
+
+  test("two quick adds are both kept: the second save waits for the first and carries both", async () => {
+    let finishFirst = () => {}
+    const onSave = mock()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishFirst = resolve
+          }),
+      )
+      .mockImplementation(() => Promise.resolve())
+    renderTags({ onSave })
+    fireEvent.focus(field())
+    type("tech,")
+    type("zoo,")
+    expect(screen.getByText("tech")).toBeTruthy()
+    expect(screen.getByText("zoo")).toBeTruthy()
+    expect(await saves(onSave)).toEqual([["news", "tech"]])
+    finishFirst()
+    expect(await saves(onSave)).toEqual([
+      ["news", "tech"],
+      ["news", "tech", "zoo"],
+    ])
+  })
+
+  test("tags changed elsewhere, such as by a Tag run, reach the chips", () => {
+    const props = renderTags()
+    cleanup()
+    const { rerender } = render(<ChannelCardTags {...props} />)
+    rerender(<ChannelCardTags {...props} tags={["news", "crypto"]} />)
+    expect(screen.getByRole("button", { name: "crypto" })).toBeTruthy()
+  })
+
+  test("a failed save puts the card back to the saved tags", async () => {
+    renderTags({ onSave: mock(() => Promise.reject(new Error("offline"))) })
+    fireEvent.focus(field())
+    type("tech,")
+    expect(screen.getByRole("button", { name: "tech" })).toBeTruthy()
+    await settle()
+    expect(screen.queryByRole("button", { name: "tech" })).toBeNull()
+    expect(screen.getByText("news")).toBeTruthy()
+  })
+
+  test("a failed save with a later one queued leaves the later save to carry both tags", async () => {
+    let failFirst = () => {}
+    const onSave = mock()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_, reject) => {
+            failFirst = () => reject(new Error("offline"))
+          }),
+      )
+      .mockImplementation(() => Promise.resolve())
+    renderTags({ onSave })
+    fireEvent.focus(field())
+    type("tech,")
+    type("zoo,")
+    await settle()
+    failFirst()
+    expect(await saves(onSave)).toEqual([
+      ["news", "tech"],
+      ["news", "tech", "zoo"],
+    ])
+    expect(screen.getByRole("button", { name: "tech" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "zoo" })).toBeTruthy()
+  })
+
+  test("clicking a tag's name filters by it; its remove button stays; AI tags stay marked", async () => {
+    const { onSave, onFilterByTag } = renderTags({
+      tags: [
+        { name: "news", source: "manual", assignedAt: 0 },
+        { name: "crypto", source: "ai", assignedAt: 0 },
+      ],
+    })
+    fireEvent.click(screen.getByRole("button", { name: "crypto" }))
+    expect(onFilterByTag).toHaveBeenCalledWith("crypto")
+    expect(screen.getByTitle("Added by AI")).toBeTruthy()
+    expect(
+      screen.getByRole("button", { name: "news" }).parentElement?.textContent,
+    ).not.toContain("Added by AI")
     fireEvent.click(screen.getByLabelText("Remove tag news"))
-    expect(onSave).toHaveBeenCalledWith([])
+    expect(onFilterByTag).toHaveBeenCalledTimes(1)
+    expect(await saves(onSave)).toEqual([["crypto"]])
   })
 })
 
@@ -396,9 +486,9 @@ describe("ChannelCardFooter", () => {
   ) => {
     const props = {
       channel,
-      stats: stats(9, 9),
       showStartId: true,
       showStatus: true,
+      detailed: false,
       isScraping: false,
       busy: false,
       inheritedSettingsHint: "hint",
@@ -412,7 +502,7 @@ describe("ChannelCardFooter", () => {
 
   test("status and sync label follow the channel", () => {
     const { onSync } = renderFooter(base)
-    expect(screen.getByText("Up to date")).toBeTruthy()
+    expect(screen.queryByText("Restricted")).toBeNull()
     fireEvent.click(screen.getByText("Sync"))
     expect(onSync).toHaveBeenCalledTimes(1)
     cleanup()
@@ -521,6 +611,20 @@ describe("the card shell's rules", () => {
     expect(frame("isScraping")).toContain("border-app-ink/10")
   })
 
+  test("keyboard mode's highlight rings the frame blue, over the syncing ring", () => {
+    const frame = (isScraping: boolean, highlighted: boolean) =>
+      channelCardFrameClass({
+        isFrozen: false,
+        isSelected: false,
+        isScraping,
+        highlighted,
+      })
+    expect(frame(false, false)).not.toContain("ring-blue-500")
+    expect(frame(false, true)).toContain("ring-2 ring-blue-500")
+    expect(frame(true, true)).toContain("ring-blue-500")
+    expect(frame(true, true)).not.toContain("ring-app-ink/20")
+  })
+
   test("a named group becomes a tag and names itself in the hint", () => {
     expect(settingGroupHints("Slow Feed")).toEqual({
       virtualGroupTagName: "group:Slow Feed",
@@ -536,46 +640,20 @@ describe("the card shell's rules", () => {
 
 describe("ChannelCardHeader", () => {
   test("titles by display name, falling back to the handle", () => {
-    render(
-      <ChannelCardHeader
-        linkToTelegram
-        channel={{ ...base, displayName: "Pavel" }}
-        showBio={false}
-      />,
-    )
+    render(<ChannelCardHeader channel={{ ...base, displayName: "Pavel" }} />)
     expect(screen.getByTitle("Pavel").textContent).toBe("Pavel")
     expect(screen.getByText("@durov")).toBeTruthy()
     cleanup()
-    render(<ChannelCardHeader linkToTelegram channel={base} showBio={false} />)
+    render(<ChannelCardHeader channel={base} />)
     expect(screen.getByTitle("durov").textContent).toBe("durov")
   })
 
   test("marks a frozen channel", () => {
-    render(<ChannelCardHeader linkToTelegram channel={base} showBio={false} />)
+    render(<ChannelCardHeader channel={base} />)
     expect(screen.queryByTestId("channel-card-frozen-mark")).toBeNull()
     cleanup()
-    render(
-      <ChannelCardHeader
-        linkToTelegram
-        channel={{ ...base, isFrozen: true }}
-        showBio={false}
-      />,
-    )
+    render(<ChannelCardHeader channel={{ ...base, isFrozen: true }} />)
     expect(screen.getByTestId("channel-card-frozen-mark")).toBeTruthy()
-  })
-
-  test("the bio shows only when the setting is on and there is one", () => {
-    const withBio = { ...base, bio: "about" }
-    render(<ChannelCardHeader linkToTelegram channel={withBio} showBio />)
-    expect(screen.getByTitle("about").getAttribute("dir")).toBe("auto")
-    cleanup()
-    render(
-      <ChannelCardHeader linkToTelegram channel={withBio} showBio={false} />,
-    )
-    expect(screen.queryByTitle("about")).toBeNull()
-    cleanup()
-    render(<ChannelCardHeader linkToTelegram channel={base} showBio />)
-    expect(screen.queryByText("about")).toBeNull()
   })
 })
 
@@ -602,6 +680,8 @@ describe("ChannelCardFace", () => {
         stats={stats(5, 9)}
         face={cardFace(zoom, settingsOff)}
         inScopeCount={0}
+        accountChannels={[]}
+        onFilterByTag={noop}
         isSelected={false}
         isScraping={isScraping}
         busy={false}
@@ -626,20 +706,19 @@ describe("ChannelCardFace", () => {
     expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
   })
 
-  test("at zoom -1 tags, status, hover actions and the Telegram link are gone", () => {
+  test("at zoom -1 tags, status and hover actions are gone", () => {
     renderFace(-1)
-    expect(screen.queryByText("Add Tag")).toBeNull()
-    expect(screen.queryByText("Status")).toBeNull()
+    expect(screen.queryByLabelText("Add tag")).toBeNull()
+    expect(screen.queryByText("Never synced")).toBeNull()
     expect(screen.queryByLabelText("Remove Channel")).toBeNull()
-    expect(document.querySelector("a[href]")).toBeNull()
   })
 
   test("at zoom 0 the checkbox selects and the card keeps its full face", () => {
     const h = renderFace(0)
     fireEvent.click(screen.getByLabelText("Select durov"))
     expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
-    expect(screen.getByText("Add Tag")).toBeTruthy()
-    expect(screen.getByText("Status")).toBeTruthy()
+    expect(screen.getByLabelText("Add tag")).toBeTruthy()
+    expect(screen.getByText("Never synced")).toBeTruthy()
     fireEvent.click(screen.getByLabelText("Remove Channel"))
     expect(h.onRemove).toHaveBeenCalledTimes(1)
   })

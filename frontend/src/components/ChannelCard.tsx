@@ -22,22 +22,29 @@ interface ChannelCardProps {
   channel: Channel
   /** In-scope post count for this channel, from the shared counts query. */
   inScopeCount: number
+  /** Adds a tag funnel to the Channel filter; the grid owns the filter. */
+  onFilterByTag: (tag: string) => void
   handleRemoveChannel: (channel: Channel) => void
   handleResetAndSync: (channel: Channel) => void
   /** One click on this card's selection control; the grid owns range select. */
   onSelectChannel: (name: string, shift: boolean) => void
   sortRank?: number
+  /** Keyboard mode's highlight is on this card. */
+  highlighted?: boolean
 }
 
 export const ChannelCard: React.FC<ChannelCardProps> = ({
   channel,
   inScopeCount,
+  onFilterByTag,
   handleRemoveChannel,
   handleResetAndSync,
   onSelectChannel,
   sortRank,
+  highlighted,
 }) => {
   const {
+    channels,
     channelStats,
     selectedChannels,
     setSelectedChannels,
@@ -83,6 +90,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       })
   }
 
+  const sync = () => addToSyncQueue(channel, "Manual (Single Sync)", () => {})
   const face = cardFace(settings.channelCardZoom, settings)
 
   if (face.layout === "tile") {
@@ -91,7 +99,10 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         channel={channel}
         isSelected={isSelected}
         isScraping={isScraping}
+        busy={busy}
+        highlighted={highlighted}
         onToggleSelected={onToggleSelected}
+        onSync={sync}
       />
     )
   }
@@ -102,17 +113,20 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       stats={stats}
       face={face}
       inScopeCount={inScopeCount}
+      accountChannels={channels}
+      onFilterByTag={onFilterByTag}
       isSelected={isSelected}
       isScraping={isScraping}
       busy={busy}
       queuePosition={queuePosition(syncQueue, channel.id)}
       sortRank={sortRank}
+      highlighted={highlighted}
       onToggleSelected={onToggleSelected}
       onToggleFreeze={handleToggleFreeze}
       onResetAndSync={() => handleResetAndSync(channel)}
       onRemove={() => handleRemoveChannel(channel)}
       onSaveChannel={saveChannel}
-      onSync={() => addToSyncQueue(channel, "Manual (Single Sync)", () => {})}
+      onSync={sync}
     />
   )
 }
