@@ -640,6 +640,57 @@ test.describe("TG Workspace channels and posts", () => {
     await expectAligned()
   })
 
+  // CARD-03: the suggestion list is portalled out of the card, so a card's
+  // clipped edges never hide it, and every row is the topmost element at its
+  // own centre, which fails if another card or bar paints over it. The
+  // screenshots are for eyeballing the Cards and Detailed sizes.
+  test("the tag field's suggestions are not clipped by the card", async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const prefix = `tagpop${Date.now()}`
+    const tags = Array.from({ length: 12 }, (_, i) => `${prefix}t${i}`)
+    await gotoWorkspace(page, "channels")
+    // The tags live on a Channel the search hides, so the suggestions are
+    // the only place they show.
+    await seedTestChannel(page, `src${Date.now()}`, tags)
+    await seedTestChannel(page, `${prefix}a`, [])
+    await seedTestChannel(page, `${prefix}b`, [])
+    await showCards(page)
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(2, { timeout: 30_000 })
+
+    const card = page.locator(`[data-channel-name="${prefix}b"]`)
+    await card.getByRole("combobox", { name: "Add tag" }).fill(prefix)
+    const list = page.getByRole("listbox")
+    // The list shows at most eight rows.
+    await expect(list.getByRole("option")).toHaveCount(8)
+    expect(await card.locator('[role="listbox"]').count()).toBe(0)
+    const covered = await list.getByRole("option").evaluateAll(
+      (options) =>
+        options.filter((option) => {
+          const r = option.getBoundingClientRect()
+          const top = document.elementFromPoint(
+            r.x + r.width / 2,
+            r.y + r.height / 2,
+          )
+          return !option.contains(top)
+        }).length,
+    )
+    expect(covered).toBe(0)
+    await page.screenshot({ path: testInfo.outputPath("tag-popover.png") })
+
+    await list.getByRole("option", { name: tags[0] }).click()
+    await expect(card.getByText(tags[0], { exact: true })).toBeVisible()
+    await page.keyboard.press("Escape")
+    await page.screenshot({ path: testInfo.outputPath("cards.png") })
+    await page.getByRole("button", { name: "Detailed cards" }).click()
+    await expect(cards.first().getByText("Start ID")).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath("detailed-cards.png") })
+  })
+
   /**
    * CTB-05: Follow is a paste box. Two new handles, a duplicate and one
    * already followed are pasted; the box marks each, follows the two into the
