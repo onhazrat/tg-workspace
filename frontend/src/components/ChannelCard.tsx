@@ -22,6 +22,8 @@ interface ChannelCardProps {
   channel: Channel
   /** In-scope post count for this channel, from the shared counts query. */
   inScopeCount: number
+  /** Adds a tag funnel to the Channel filter; the grid owns the filter. */
+  onFilterByTag: (tag: string) => void
   handleRemoveChannel: (channel: Channel) => void
   handleResetAndSync: (channel: Channel) => void
   /** One click on this card's selection control; the grid owns range select. */
@@ -32,12 +34,14 @@ interface ChannelCardProps {
 export const ChannelCard: React.FC<ChannelCardProps> = ({
   channel,
   inScopeCount,
+  onFilterByTag,
   handleRemoveChannel,
   handleResetAndSync,
   onSelectChannel,
   sortRank,
 }) => {
   const {
+    channels,
     channelStats,
     selectedChannels,
     setSelectedChannels,
@@ -102,6 +106,8 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       stats={stats}
       face={face}
       inScopeCount={inScopeCount}
+      accountChannels={channels}
+      onFilterByTag={onFilterByTag}
       isSelected={isSelected}
       isScraping={isScraping}
       busy={busy}

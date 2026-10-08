@@ -24,6 +24,7 @@ describe("ChannelGridBody", () => {
         selectedChannels={new Set()}
         selectedTrimRanks={new Map()}
         postsInScopeCounts={{}}
+        onFilterByTag={noop}
         onRemoveChannel={noop}
         onResetAndSync={noop}
         onSelectChannel={noop}

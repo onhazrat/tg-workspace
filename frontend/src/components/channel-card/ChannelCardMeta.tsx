@@ -1,6 +1,5 @@
 import {
   Activity,
-  Clock,
   Eye,
   File,
   Image as ImageIcon,
@@ -13,7 +12,6 @@ import type { ReactNode } from "react"
 import type { ChannelMetaVisibility } from "@/lib/channels/card-zoom"
 import { formatCount } from "@/lib/format-count"
 import type { Channel, ChannelStats } from "@/types"
-import { RelativeTime } from "../RelativeTime"
 import { TgMetaChip } from "../ui/tg-chips"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
 
@@ -99,11 +97,6 @@ export function ChannelCardMeta({
           <Counter key={key} label={label} Icon={Icon} value={value} />
         ) : null
       })}
-
-      <TgMetaChip size="card" className="uppercase tracking-wider">
-        <Clock size={10} className="opacity-50" />
-        <RelativeTime timestamp={channel.lastUpdated} />
-      </TgMetaChip>
       {channel.followedAt && (
         <ChipWithTooltip
           tooltip={

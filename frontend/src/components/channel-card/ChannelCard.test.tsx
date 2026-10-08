@@ -53,20 +53,14 @@ const stats = (maxId: number, latestId?: number): ChannelStats => ({
 })
 
 describe("channel-card-status", () => {
-  test("restricted beats frozen beats progress", () => {
+  test("restricted beats frozen", () => {
     const both = { ...base, isUnavailableOnWebView: true, isFrozen: true }
-    expect(channelSyncStatus(both, stats(9, 9)).label).toBe("Restricted")
-    expect(
-      channelSyncStatus({ ...base, isFrozen: true }, stats(9, 9)).label,
-    ).toBe("Frozen")
+    expect(channelSyncStatus(both)?.label).toBe("Restricted")
+    expect(channelSyncStatus({ ...base, isFrozen: true })?.label).toBe("Frozen")
   })
 
-  test("up to date only once the local copy reaches the newest post", () => {
-    expect(channelSyncStatus(base, stats(9, 9)).label).toBe("Up to date")
-    expect(channelSyncStatus(base, stats(10, 9)).label).toBe("Up to date")
-    expect(channelSyncStatus(base, stats(8, 9)).label).toBe("Pending")
-    expect(channelSyncStatus(base, stats(8)).label).toBe("Pending")
-    expect(channelSyncStatus(base, undefined).label).toBe("Pending")
+  test("a channel neither Restricted nor Frozen has no status", () => {
+    expect(channelSyncStatus(base)).toBeNull()
   })
 
   test("progress is unknown without both ids", () => {
@@ -396,9 +390,9 @@ describe("ChannelCardFooter", () => {
   ) => {
     const props = {
       channel,
-      stats: stats(9, 9),
       showStartId: true,
       showStatus: true,
+      detailed: false,
       isScraping: false,
       busy: false,
       inheritedSettingsHint: "hint",
@@ -412,7 +406,7 @@ describe("ChannelCardFooter", () => {
 
   test("status and sync label follow the channel", () => {
     const { onSync } = renderFooter(base)
-    expect(screen.getByText("Up to date")).toBeTruthy()
+    expect(screen.queryByText("Restricted")).toBeNull()
     fireEvent.click(screen.getByText("Sync"))
     expect(onSync).toHaveBeenCalledTimes(1)
     cleanup()
@@ -602,6 +596,8 @@ describe("ChannelCardFace", () => {
         stats={stats(5, 9)}
         face={cardFace(zoom, settingsOff)}
         inScopeCount={0}
+        accountChannels={[]}
+        onFilterByTag={noop}
         isSelected={false}
         isScraping={isScraping}
         busy={false}
@@ -629,7 +625,7 @@ describe("ChannelCardFace", () => {
   test("at zoom -1 tags, status, hover actions and the Telegram link are gone", () => {
     renderFace(-1)
     expect(screen.queryByText("Add Tag")).toBeNull()
-    expect(screen.queryByText("Status")).toBeNull()
+    expect(screen.queryByText("Never synced")).toBeNull()
     expect(screen.queryByLabelText("Remove Channel")).toBeNull()
     expect(document.querySelector("a[href]")).toBeNull()
   })
@@ -639,7 +635,7 @@ describe("ChannelCardFace", () => {
     fireEvent.click(screen.getByLabelText("Select durov"))
     expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
     expect(screen.getByText("Add Tag")).toBeTruthy()
-    expect(screen.getByText("Status")).toBeTruthy()
+    expect(screen.getByText("Never synced")).toBeTruthy()
     fireEvent.click(screen.getByLabelText("Remove Channel"))
     expect(h.onRemove).toHaveBeenCalledTimes(1)
   })

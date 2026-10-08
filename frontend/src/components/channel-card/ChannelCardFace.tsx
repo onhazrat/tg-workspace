@@ -19,7 +19,9 @@ import {
 
 /**
  * The channel card at zooms -1, 0 and +1, drawn from a `CardFace`. Props only,
- * so every face is testable without the contexts `ChannelCard` reads.
+ * so every face is testable without the contexts `ChannelCard` reads: anything
+ * from app state (tag suggestions' source, the Channel filter, the selection)
+ * arrives as a prop.
  */
 export function ChannelCardFace({
   channel,
@@ -43,6 +45,18 @@ export function ChannelCardFace({
   face: CardFace
   /** In-scope post count for this channel, from the shared counts query. */
   inScopeCount: number
+  /**
+   * The Account's Channels, which tag suggestions are drawn from. Passed in,
+   * never read from the data context, so the face renders in a test alone.
+   */
+  accountChannels: readonly Pick<Channel, "tags">[]
+  /** Adds a tag funnel to the Channel filter. */
+  onFilterByTag: (tag: string) => void
+  /**
+   * Among the Scope's selected Channels, the Hidden selection included. The
+   * selection control shows it, and the In scope count is only meaningful
+   * when it is true.
+   */
   isSelected: boolean
   isScraping: boolean
   /** A sync or summary is running. */
@@ -137,9 +151,9 @@ export function ChannelCardFace({
 
         <ChannelCardFooter
           channel={channel}
-          stats={stats}
           showStartId={face.startId}
           showStatus={face.syncStatus}
+          detailed={face.detailed}
           isScraping={isScraping}
           busy={busy}
           inheritedSettingsHint={inheritedSettingsHint}

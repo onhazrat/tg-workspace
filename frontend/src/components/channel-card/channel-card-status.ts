@@ -9,21 +9,30 @@ export function syncProgress(stats: ChannelStats | undefined): number | null {
 }
 
 export interface ChannelSyncStatus {
-  label: string
+  label: "Restricted" | "Frozen"
   dotClass: string
+  textClass: string
 }
 
-export function channelSyncStatus(
-  channel: Channel,
-  stats: ChannelStats | undefined,
-): ChannelSyncStatus {
+/**
+ * The card's status label, only for states that are always true. "Up to date"
+ * and "Pending" are gone: they compared against a newest post id only this
+ * browser tab remembers, so every card read "Pending" after a reload.
+ */
+export function channelSyncStatus(channel: Channel): ChannelSyncStatus | null {
   if (channel.isUnavailableOnWebView)
-    return { label: "Restricted", dotClass: "bg-red-500" }
-  if (channel.isFrozen) return { label: "Frozen", dotClass: "bg-blue-500" }
-  const progress = syncProgress(stats)
-  if (progress !== null && progress >= 100)
-    return { label: "Up to date", dotClass: "bg-emerald-500" }
-  return { label: "Pending", dotClass: "bg-amber-500 animate-pulse" }
+    return {
+      label: "Restricted",
+      dotClass: "bg-red-500",
+      textClass: "text-red-600",
+    }
+  if (channel.isFrozen)
+    return {
+      label: "Frozen",
+      dotClass: "bg-blue-500",
+      textClass: "text-blue-600",
+    }
+  return null
 }
 
 /** A typed Start ID, or null when the input is not a positive integer. */

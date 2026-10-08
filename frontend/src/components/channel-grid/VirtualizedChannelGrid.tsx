@@ -29,6 +29,7 @@ type VirtualizedChannelGridProps = {
   zoom: CardZoom
   selectedChannels: Set<string>
   selectedTrimRanks: Map<string, number>
+  onFilterByTag: (tag: string) => void
   onRemoveChannel: (channel: Channel) => void
   onResetAndSync: (channel: Channel) => void
   onSelectChannel: (name: string, shift: boolean) => void
@@ -63,6 +64,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   zoom,
   selectedChannels,
   selectedTrimRanks,
+  onFilterByTag,
   onRemoveChannel,
   onResetAndSync,
   onSelectChannel,
@@ -194,6 +196,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
                   key={channel.id}
                   channel={channel}
                   inScopeCount={postsInScopeCounts[channel.name] ?? 0}
+                  onFilterByTag={onFilterByTag}
                   handleRemoveChannel={onRemoveChannel}
                   handleResetAndSync={onResetAndSync}
                   onSelectChannel={onSelectChannel}
