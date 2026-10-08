@@ -1,6 +1,15 @@
 import type { CardFace } from "@/lib/channels/card-zoom"
 import type { Channel, ChannelStats } from "@/types"
 import {
+  AltCardLayout,
+  isAltLayout,
+} from "../channel-card-prototype/CardLayouts"
+import { useCardVariant } from "../channel-card-prototype/shared"
+import {
+  CHANNEL_SHORTCUTS,
+  KBD_RING,
+} from "../channel-grid/ChannelGridKeyboard"
+import {
   ChannelCardActions,
   ChannelCardBadges,
   ChannelCardSyncingOverlay,
@@ -21,23 +30,7 @@ import {
  * The channel card at zooms -1, 0 and +1, drawn from a `CardFace`. Props only,
  * so every face is testable without the contexts `ChannelCard` reads.
  */
-export function ChannelCardFace({
-  channel,
-  stats,
-  face,
-  inScopeCount,
-  isSelected,
-  isScraping,
-  busy,
-  queuePosition,
-  sortRank,
-  onToggleSelected,
-  onToggleFreeze,
-  onResetAndSync,
-  onRemove,
-  onSaveChannel,
-  onSync,
-}: {
+export type ChannelCardFaceProps = {
   channel: Channel
   stats: ChannelStats | undefined
   face: CardFace
@@ -50,13 +43,43 @@ export function ChannelCardFace({
   /** 1-based place in the sync queue, or null when not queued. */
   queuePosition: number | null
   sortRank?: number
+  /** Keyboard mode has ringed this card. */
+  keyboardRing?: boolean
   onToggleSelected: (shift: boolean) => void
   onToggleFreeze: () => void
   onResetAndSync: () => void
   onRemove: () => void
   onSaveChannel: (patch: Partial<Channel>) => void
   onSync: () => void
-}) {
+}
+
+export function ChannelCardFace(props: ChannelCardFaceProps) {
+  // PROTOTYPE: E, F and G rethink the card and the detailed card; compact
+  // cards stay D's.
+  const variant = useCardVariant()
+  if (!props.face.bodySelects && isAltLayout(variant))
+    return <AltCardLayout variant={variant} {...props} />
+  return <DCardFace {...props} />
+}
+
+function DCardFace({
+  channel,
+  stats,
+  face,
+  inScopeCount,
+  isSelected,
+  isScraping,
+  busy,
+  queuePosition,
+  sortRank,
+  keyboardRing = false,
+  onToggleSelected,
+  onToggleFreeze,
+  onResetAndSync,
+  onRemove,
+  onSaveChannel,
+  onSync,
+}: ChannelCardFaceProps) {
   const { virtualGroupTagName, inheritedSettingsHint } = settingGroupHints(
     channel.settingGroupName,
   )
@@ -64,11 +87,12 @@ export function ChannelCardFace({
   return (
     <div
       data-channel-name={channel.name}
-      className={channelCardFrameClass({
+      data-kbd-selected={keyboardRing ? "" : undefined}
+      className={`${channelCardFrameClass({
         isFrozen: channel.isFrozen,
         isSelected,
         isScraping,
-      })}
+      })} ${KBD_RING}`}
     >
       {isScraping && (
         <ChannelCardSyncingOverlay
@@ -84,6 +108,7 @@ export function ChannelCardFace({
           type="button"
           aria-pressed={isSelected}
           aria-label={selectLabel(channel.name, isSelected)}
+          data-shortcut={CHANNEL_SHORTCUTS.select}
           {...selectionHandlers(onToggleSelected)}
           className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         />
@@ -115,6 +140,7 @@ export function ChannelCardFace({
         <ChannelCardHeader
           channel={channel}
           showBio={face.bio}
+          fullBio={face.detailed}
           linkToTelegram={!face.bodySelects}
         />
         {face.meta && (
@@ -145,6 +171,7 @@ export function ChannelCardFace({
           inheritedSettingsHint={inheritedSettingsHint}
           onSaveStartId={(startId) => onSaveChannel({ startId })}
           onSync={onSync}
+          detailed={face.detailed}
         />
       </div>
     </div>

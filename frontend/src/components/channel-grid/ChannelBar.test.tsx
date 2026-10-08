@@ -158,6 +158,8 @@ describe("ChannelSelectionBar", () => {
         onShowSortRankChange={log("rank")}
         zoom={0}
         onZoomChange={log("zoom")}
+        keyboard={false}
+        onKeyboardChange={log("keyboard")}
         {...over}
       />,
     )

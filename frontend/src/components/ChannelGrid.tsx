@@ -1,7 +1,12 @@
-import { Languages, Layers, RefreshCw, Search, Tag } from "lucide-react"
+import { Languages, Layers, RefreshCw, Search, Square, Tag } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  CardVariantContext,
+  CardVariantSwitcher,
+  useUrlCardVariant,
+} from "@/components/channel-card-prototype/shared"
 import {
   AiContextPill,
   SortMenu,
@@ -14,6 +19,7 @@ import {
 import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
+import { ChannelKeyHelp } from "@/components/channel-grid/ChannelGridKeyboard"
 import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
@@ -23,6 +29,7 @@ import { useChannelGridSortState } from "@/components/channel-grid/useChannelGri
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
+import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { useSettingGroupsQuery } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import { bulkTagSuggestions } from "@/lib/channels/bulk-tag-suggestions"
@@ -132,11 +139,18 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     scrapingChannels,
     handleScrapeSelected,
     handleScrapeAll,
+    syncAllJobId,
+    stopSyncAll,
     followDiscoverChannels,
   } = useScraper()
 
   const [channelSearch, setChannelSearch] = useState("")
   const [tagSearch, setTagSearch] = useState("")
+  const [keyboard, setKeyboard] = useSessionFlag("channelGrid_keyboard")
+  const [confirmSyncAll, setConfirmSyncAll] = useState(false)
+  // PROTOTYPE: every change is D's; 0 stays exactly main.
+  const variant = useUrlCardVariant()
+  const keyboardOn = variant !== "0" && keyboard
   const { channelFilterText, setChannelFilterText } = useWorkspaceGroupParams()
 
   const { data: settingGroups = [] } = useSettingGroupsQuery()
@@ -520,17 +534,36 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             includeTags={includeChannelTagsInPrompt}
             onIncludeTagsChange={setIncludeChannelTagsInPrompt}
           />
-          <TgButton
-            type="button"
-            size="sm"
-            onClick={handleScrapeAll}
-            disabled={isScrapeAllDisabled}
-            loading={scrapingChannels.size > 0}
-            className="h-9"
-          >
-            <RefreshCw size={12} />
-            Sync all
-          </TgButton>
+          {variant !== "0" && syncAllJobId ? (
+            // PROTOTYPE: a running Sync All can be stopped, queue included.
+            <TgButton
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={stopSyncAll}
+              data-testid="channel-sync-all-stop"
+              className="h-9"
+            >
+              <Square size={11} className="fill-current" />
+              Stop sync
+            </TgButton>
+          ) : (
+            <TgButton
+              type="button"
+              size="sm"
+              onClick={
+                variant !== "0"
+                  ? () => setConfirmSyncAll(true)
+                  : handleScrapeAll
+              }
+              disabled={isScrapeAllDisabled}
+              loading={scrapingChannels.size > 0}
+              className="h-9"
+            >
+              <RefreshCw size={12} />
+              Sync all
+            </TgButton>
+          )}
         </div>
 
         <ChannelFilterRow
@@ -586,28 +619,44 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onShowSortRankChange={setShowSortRank}
           zoom={channelCardZoom}
           onZoomChange={setChannelCardZoom}
+          keyboard={keyboard}
+          onKeyboardChange={variant !== "0" ? setKeyboard : undefined}
         />
       </div>
 
-      <ChannelGridBody
-        isLoading={isInitialChannelsLoading}
-        totalChannelCount={channels.length}
-        filteredChannelCount={filteredChannels.length}
-        channels={renderedChannels}
-        showSortRank={showSortRank}
-        zoom={channelCardZoom}
-        selectedChannels={selectedChannels}
-        selectedTrimRanks={selectedTrimRanks}
-        postsInScopeCounts={postsInScopeCounts}
-        onRemoveChannel={actions.handleRemoveChannel}
-        onResetAndSync={actions.handleResetAndSync}
-        onSelectChannel={handleSelectChannel}
-        hasMore={hasMoreChannels}
-        onLoadMore={loadMoreChannels}
-        scrollContainerRef={scrollContainerRef}
-      />
+      {/* PROTOTYPE: channel card variants. */}
+      <CardVariantSwitcher />
+      <CardVariantContext.Provider value={variant}>
+        <ChannelGridBody
+          isLoading={isInitialChannelsLoading}
+          totalChannelCount={channels.length}
+          filteredChannelCount={filteredChannels.length}
+          channels={renderedChannels}
+          showSortRank={showSortRank}
+          zoom={channelCardZoom}
+          keyboard={keyboardOn}
+          selectedChannels={selectedChannels}
+          selectedTrimRanks={selectedTrimRanks}
+          postsInScopeCounts={postsInScopeCounts}
+          onRemoveChannel={actions.handleRemoveChannel}
+          onResetAndSync={actions.handleResetAndSync}
+          onSelectChannel={handleSelectChannel}
+          hasMore={hasMoreChannels}
+          onLoadMore={loadMoreChannels}
+          scrollContainerRef={scrollContainerRef}
+        />
+      </CardVariantContext.Provider>
+
+      <ChannelKeyHelp on={keyboardOn} />
 
       <ChannelGridDialogs
+        confirmSyncAll={confirmSyncAll}
+        onSyncAllOpenChange={setConfirmSyncAll}
+        onConfirmSyncAll={() => {
+          setConfirmSyncAll(false)
+          handleScrapeAll()
+        }}
+        channels={channels}
         confirmResetModal={actions.confirmResetModal}
         onCloseResetModal={() => actions.setConfirmResetModal(null)}
         onConfirmResetAndSync={actions.executeResetAndSync}

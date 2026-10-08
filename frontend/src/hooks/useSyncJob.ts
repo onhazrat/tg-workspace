@@ -71,6 +71,10 @@ export interface SyncJob {
     refresh?: boolean,
     syncMode?: SyncMode,
   ) => Promise<void>
+  /** The running Sync All job, from its start until it settles; else null. */
+  syncAllJobId: string | null
+  /** Cancel the running Sync All job, queued Channels included. */
+  stopSyncAll: () => Promise<void>
 }
 
 export function useSyncJob(deps: SyncJobDeps): SyncJob {
@@ -90,6 +94,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     null,
   )
   const [consecutiveFailures, setConsecutiveFailures] = useState<number>(0)
+  const [syncAllJobId, setSyncAllJobId] = useState<string | null>(null)
 
   const applySyncJobStatus = useCallback(
     (status: SyncJobStatus) => {
@@ -141,12 +146,18 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
       source: string,
       refresh = true,
       syncMode: SyncMode = "bulk",
-    ) =>
-      runServerSyncWith(
+    ) => {
+      const isSyncAll = syncMode === "sync_all"
+      return runServerSyncWith(
         {
           isOffline,
           channelCount,
-          startSyncJob: api.startSyncJob,
+          // Sync All's job id is kept so its button can stop it.
+          startSyncJob: async (request) => {
+            const started = await api.startSyncJob(request)
+            if (isSyncAll) setSyncAllJobId(started.jobId)
+            return started
+          },
           waitSyncJob,
           getChannelStats: (channelId) => getChannelStats(channelId),
           loadChannels,
@@ -159,7 +170,10 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
           now: Date.now,
         },
         { channelIds, channelNames, source, refresh, syncMode },
-      ),
+      ).finally(() => {
+        if (isSyncAll) setSyncAllJobId(null)
+      })
+    },
     [
       isOffline,
       channelCount,
@@ -170,6 +184,18 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     ],
   )
 
+  const stopSyncAll = useCallback(async () => {
+    if (!syncAllJobId) return
+    try {
+      await api.cancelSyncJob(syncAllJobId)
+      toast.info("Sync All stopped")
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not stop the sync",
+      )
+    }
+  }, [syncAllJobId])
+
   return {
     scrapingChannels,
     setScrapingChannels,
@@ -179,5 +205,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     setConsecutiveFailures,
     waitSyncJob,
     runServerSync,
+    syncAllJobId,
+    stopSyncAll,
   }
 }

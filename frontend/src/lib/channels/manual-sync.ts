@@ -72,6 +72,29 @@ export function planManualSync(
   return { channels: toSync, source, syncMode: mode }
 }
 
+/**
+ * What Sync All asks before it runs, from the button and the command palette
+ * alike: how many Channels it will send, and which ones it leaves out.
+ */
+export function syncAllConfirmation(channels: Channel[]): {
+  count: number
+  description: string
+} {
+  const count = filterChannelsForOperation(channels, "sync_all").length
+  const skipped = channels.length - count
+  return {
+    count,
+    description: [
+      `Sync ${count} channel${count === 1 ? "" : "s"} now?`,
+      skipped > 0
+        ? `${skipped} frozen or excluded from Sync All will be skipped.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }
+}
+
 export function manualSyncErrorText(
   err: unknown,
   mode: ManualSyncMode,

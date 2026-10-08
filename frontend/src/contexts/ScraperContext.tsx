@@ -104,6 +104,10 @@ interface ScraperContextType {
     source?: string,
   ) => Promise<void>
   handleScrapeAll: () => Promise<void>
+  /** The running Sync All job, or null. */
+  syncAllJobId: string | null
+  /** Cancel the running Sync All job, queued Channels included. */
+  stopSyncAll: () => Promise<void>
   /** Syncs `names`, or the whole selection when none are given. */
   handleScrapeSelected: (names?: Set<string>) => Promise<void>
   handleRecheckRestricted: () => Promise<void>
@@ -301,6 +305,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setConsecutiveFailures,
     waitSyncJob,
     runServerSync,
+    syncAllJobId,
+    stopSyncAll,
   } = useSyncJob({
     isOffline,
     channelCount: channels.length,
@@ -492,6 +498,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         getScopeSubmission,
         handleScrapeChannel,
         handleScrapeAll,
+        syncAllJobId,
+        stopSyncAll,
         handleScrapeSelected,
         handleRecheckRestricted,
         scrapeChannelsInParallel,

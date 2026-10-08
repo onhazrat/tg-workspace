@@ -13,6 +13,7 @@ import type { ReactNode } from "react"
 import type { ChannelMetaVisibility } from "@/lib/channels/card-zoom"
 import { formatCount } from "@/lib/format-count"
 import type { Channel, ChannelStats } from "@/types"
+import { useCardVariant } from "../channel-card-prototype/shared"
 import { RelativeTime } from "../RelativeTime"
 import { TgMetaChip } from "../ui/tg-chips"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
@@ -61,6 +62,7 @@ export function ChannelCardMeta({
   show: ChannelMetaVisibility
 }) {
   const velocity = stats?.velocity ?? 0
+  const variant = useCardVariant()
   return (
     <div className="flex flex-wrap items-center gap-2 mb-5">
       <TgMetaChip size="card" className="uppercase tracking-wider">
@@ -100,10 +102,13 @@ export function ChannelCardMeta({
         ) : null
       })}
 
-      <TgMetaChip size="card" className="uppercase tracking-wider">
-        <Clock size={10} className="opacity-50" />
-        <RelativeTime timestamp={channel.lastUpdated} />
-      </TgMetaChip>
+      {/* PROTOTYPE: D shows the last sync in the footer, so not here too. */}
+      {variant === "0" && (
+        <TgMetaChip size="card" className="uppercase tracking-wider">
+          <Clock size={10} className="opacity-50" />
+          <RelativeTime timestamp={channel.lastUpdated} />
+        </TgMetaChip>
+      )}
       {channel.followedAt && (
         <ChipWithTooltip
           tooltip={

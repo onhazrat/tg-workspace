@@ -1,7 +1,7 @@
 import { Keyboard, LayoutGrid } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import {
   isSemanticFeed,
@@ -29,11 +29,11 @@ import {
   postLinks,
   postsMarkdown,
 } from "@/lib/posts/selected-export"
-import { scopedSessionStorage } from "@/lib/storage/scoped"
 import { cn } from "@/lib/utils"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { useSessionFlag } from "../hooks/useSessionFlag"
 import { PostFeedResults } from "./PostFeedResults"
 import { PostFilter } from "./PostFilter"
 import { pillClass } from "./PostFilterParts"
@@ -50,21 +50,6 @@ interface PostFeedProps {
   setPostSearch: (val: string) => void
   loadMoreRef: React.RefObject<HTMLDivElement | null>
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
-}
-
-/**
- * A switch that lasts for the browser session, per Account. Not in the
- * settings schema, which persists to local storage and the server: the Compact
- * grid and Keyboard switches must reset with a new session (spec story 32).
- */
-function useSessionFlag(key: string): [boolean, (on: boolean) => void] {
-  const [on, setOn] = useState(() => scopedSessionStorage.getItem(key) === "1")
-  const set = (next: boolean) => {
-    setOn(next)
-    if (next) scopedSessionStorage.setItem(key, "1")
-    else scopedSessionStorage.removeItem(key)
-  }
-  return [on, set]
 }
 
 export const PostFeed: React.FC<PostFeedProps> = ({

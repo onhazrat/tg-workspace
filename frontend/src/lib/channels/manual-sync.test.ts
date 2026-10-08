@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test"
 
 import type { Channel } from "@/types"
-import { manualSyncErrorText, planManualSync } from "./manual-sync"
+import {
+  manualSyncErrorText,
+  planManualSync,
+  syncAllConfirmation,
+} from "./manual-sync"
 
 const open: Channel = { id: "1", name: "open" }
 const outOfAll: Channel = {
@@ -84,5 +88,17 @@ describe("manualSyncErrorText", () => {
     expect(manualSyncErrorText(null, "recheck_restricted")).toBe(
       "An unexpected error occurred during recheck",
     )
+  })
+})
+
+describe("syncAllConfirmation", () => {
+  test("counts what Sync All will send and says how many it skips", () => {
+    // The count must match what planManualSync sends.
+    expect(syncAllConfirmation(all)).toEqual({
+      count: 2,
+      description:
+        "Sync 2 channels now? 2 frozen or excluded from Sync All will be skipped.",
+    })
+    expect(syncAllConfirmation([open]).description).toBe("Sync 1 channel now?")
   })
 })

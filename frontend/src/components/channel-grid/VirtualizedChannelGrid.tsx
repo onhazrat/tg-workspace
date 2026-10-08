@@ -1,7 +1,8 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import type React from "react"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ChannelCard } from "@/components/ChannelCard"
+import { useChannelGridKeyboard } from "@/components/channel-grid/ChannelGridKeyboard"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import { GAP_PX, gridLanesForWidth } from "@/lib/channels/grid-lanes"
 import type { Channel } from "@/types"
@@ -27,6 +28,8 @@ type VirtualizedChannelGridProps = {
   postsInScopeCounts: Record<string, number>
   showSortRank: boolean
   zoom: CardZoom
+  /** Keyboard mode is on. */
+  keyboard: boolean
   selectedChannels: Set<string>
   selectedTrimRanks: Map<string, number>
   onRemoveChannel: (channel: Channel) => void
@@ -61,6 +64,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   postsInScopeCounts,
   showSortRank,
   zoom,
+  keyboard,
   selectedChannels,
   selectedTrimRanks,
   onRemoveChannel,
@@ -134,6 +138,16 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
 
   const virtualRows = virtualizer.getVirtualItems()
 
+  const names = useMemo(() => channels.map((c) => c.name), [channels])
+  const ring = useChannelGridKeyboard({
+    on: keyboard,
+    names,
+    lanes,
+    firstVisibleRow: virtualizer.range?.startIndex ?? 0,
+    // Centred, so the sticky bars above the grid never cover the ring.
+    scrollToRow: (row) => virtualizer.scrollToIndex(row, { align: "center" }),
+  })
+
   /**
    * Load-more is driven by the virtualizer's own last rendered row, not by an
    * IntersectionObserver on a sentinel below the grid.
@@ -197,6 +211,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
                   handleRemoveChannel={onRemoveChannel}
                   handleResetAndSync={onResetAndSync}
                   onSelectChannel={onSelectChannel}
+                  keyboardRing={ring === channel.name}
                   sortRank={
                     showSortRank && selectedChannels.has(channel.name)
                       ? selectedTrimRanks.get(channel.name)

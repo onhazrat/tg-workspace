@@ -1,6 +1,7 @@
 import { ShieldAlert } from "lucide-react"
 import type React from "react"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
+import { syncAllConfirmation } from "@/lib/channels/manual-sync"
 import type { Channel } from "@/types"
 
 type ChannelGridDialogsProps = {
@@ -20,9 +21,15 @@ type ChannelGridDialogsProps = {
   confirmBulkFreezeAction: "freeze" | "unfreeze" | null
   onCloseBulkFreezeAction: () => void
   onConfirmBulkFreezeAction: () => void
+  /** PROTOTYPE: Sync All's confirmation, which only variant D opens. */
+  confirmSyncAll?: boolean
+  onSyncAllOpenChange?: (open: boolean) => void
+  onConfirmSyncAll?: () => void
+  /** Every Channel, for Sync All's count. */
+  channels?: Channel[]
 }
 
-/** Confirm dialogs for reset-and-sync, single delete, bulk delete, and bulk freeze/unfreeze. */
+/** Confirm dialogs for Sync All, reset-and-sync, single delete, bulk delete, and bulk freeze/unfreeze. */
 export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
   confirmResetModal,
   onCloseResetModal,
@@ -38,9 +45,25 @@ export const ChannelGridDialogs: React.FC<ChannelGridDialogsProps> = ({
   confirmBulkFreezeAction,
   onCloseBulkFreezeAction,
   onConfirmBulkFreezeAction,
+  confirmSyncAll = false,
+  onSyncAllOpenChange = () => {},
+  onConfirmSyncAll = () => {},
+  channels = [],
 }) => {
+  const syncAll = syncAllConfirmation(confirmSyncAll ? channels : [])
   return (
     <>
+      <TgConfirmDialog
+        open={confirmSyncAll}
+        onOpenChange={onSyncAllOpenChange}
+        title="Sync All Channels?"
+        description={syncAll.description}
+        confirmLabel={`Sync ${syncAll.count} Channels`}
+        confirmTestId="channel-sync-all-confirm"
+        onConfirm={onConfirmSyncAll}
+        onCancel={() => onSyncAllOpenChange(false)}
+      />
+
       <TgConfirmDialog
         open={confirmResetModal !== null}
         onOpenChange={(nextOpen) => {

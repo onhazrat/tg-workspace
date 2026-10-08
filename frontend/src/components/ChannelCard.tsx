@@ -27,6 +27,8 @@ interface ChannelCardProps {
   /** One click on this card's selection control; the grid owns range select. */
   onSelectChannel: (name: string, shift: boolean) => void
   sortRank?: number
+  /** Keyboard mode has ringed this card. */
+  keyboardRing?: boolean
 }
 
 export const ChannelCard: React.FC<ChannelCardProps> = ({
@@ -36,6 +38,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   handleResetAndSync,
   onSelectChannel,
   sortRank,
+  keyboardRing = false,
 }) => {
   const {
     channelStats,
@@ -91,6 +94,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         channel={channel}
         isSelected={isSelected}
         isScraping={isScraping}
+        keyboardRing={keyboardRing}
         onToggleSelected={onToggleSelected}
       />
     )
@@ -107,6 +111,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       busy={busy}
       queuePosition={queuePosition(syncQueue, channel.id)}
       sortRank={sortRank}
+      keyboardRing={keyboardRing}
       onToggleSelected={onToggleSelected}
       onToggleFreeze={handleToggleFreeze}
       onResetAndSync={() => handleResetAndSync(channel)}

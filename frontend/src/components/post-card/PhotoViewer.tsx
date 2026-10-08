@@ -31,11 +31,14 @@ export function PhotoViewerDialog({
   start,
   open,
   onOpenChange,
+  title = "Post image",
 }: {
   /** The photo clicked: its `src` on the card. */
   start: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** For screen readers. */
+  title?: string
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,7 +48,7 @@ export function PhotoViewerDialog({
         onCloseAutoFocus={(e) => e.preventDefault()}
         className={`${BOX} block max-w-none sm:max-w-none overflow-hidden border-0 bg-transparent p-0 shadow-none [&>[data-slot=dialog-close]]:rounded-full [&>[data-slot=dialog-close]]:bg-black/50 [&>[data-slot=dialog-close]]:p-2 [&>[data-slot=dialog-close]]:text-white`}
       >
-        <DialogTitle className="sr-only">Post image</DialogTitle>
+        <DialogTitle className="sr-only">{title}</DialogTitle>
         <PhotoViewer start={start} onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
@@ -61,7 +64,8 @@ function loadedPhotos(): GalleryPhoto[] {
   ).map((el) => ({
     src: el.src,
     caption: el.getAttribute(GALLERY_CAPTION_ATTR) ?? "",
-    card: el.closest<HTMLElement>("[data-post-key]"),
+    // A Post, or a Channel card on the Channels tab.
+    card: el.closest<HTMLElement>("[data-post-key], [data-channel-name]"),
   }))
 }
 

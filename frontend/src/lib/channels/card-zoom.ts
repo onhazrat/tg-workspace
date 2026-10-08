@@ -32,6 +32,8 @@ export interface ChannelMetaVisibility {
 export interface CardFace {
   layout: "card" | "tile"
   bio: boolean
+  /** A detailed card: the whole bio, and (prototype D) both sync schedules. */
+  detailed: boolean
   startId: boolean
   /** The stat chips, or null when the card shows none at all. */
   meta: ChannelMetaVisibility | null
@@ -55,6 +57,7 @@ export function cardFace(
     return {
       layout: zoom === -2 ? "tile" : "card",
       bio: false,
+      detailed: false,
       startId: false,
       meta: null,
       tags: false,
@@ -71,6 +74,7 @@ export function cardFace(
   return {
     layout: "card",
     bio: detailed || s.showChannelBio,
+    detailed,
     startId: detailed || s.showChannelStartId,
     meta: {
       subscribers: detailed || s.showChannelSubscribers,

@@ -53,7 +53,7 @@ export function focusIsTyping(): boolean {
 }
 
 /** Keys belong to the page only when nothing else could be listening for them. */
-function keyBelongsElsewhere(e: KeyboardEvent): boolean {
+export function keyBelongsElsewhere(e: KeyboardEvent): boolean {
   if (e.metaKey || e.ctrlKey || e.altKey || focusIsTyping()) return true
   // Includes the photo viewer, which owns the arrow keys while it is open.
   return document.querySelector('[role="dialog"]') !== null
@@ -104,10 +104,18 @@ export function FeedKeyboard({ on }: { on: boolean }) {
     }
   }, [on])
 
-  if (!on) return null
+  return on ? <KeyHelp rows={KEY_HELP} /> : null
+}
+
+/** The key legend keyboard mode pins to the corner, on the Posts and Channels tabs. */
+export function KeyHelp({
+  rows,
+}: {
+  rows: readonly (readonly [string, string])[]
+}) {
   return (
     <div className="fixed bottom-4 left-4 z-50 hidden rounded-xl border border-app-ink/10 bg-app-card/95 p-3 text-[11px] shadow-lg backdrop-blur md:block">
-      {KEY_HELP.map(([key, what]) => (
+      {rows.map(([key, what]) => (
         <div key={key} className="flex gap-3">
           <kbd className="w-10 font-mono text-app-ink">{key}</kbd>
           <span className="text-app-ink/60">{what}</span>

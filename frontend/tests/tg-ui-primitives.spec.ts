@@ -383,6 +383,8 @@ test.describe("TG UI primitives", () => {
 
     const syncAll = page.getByRole("button", { name: /Sync All/i })
     await syncAll.click()
+    // Sync All asks first; nothing is sent until the confirmation.
+    await page.getByTestId("channel-sync-all-confirm").click()
     await expect(syncAll).toHaveAttribute("aria-busy", "true")
     release?.()
   })

@@ -1,4 +1,5 @@
 import { ExternalLink, Snowflake } from "lucide-react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import {
   Tooltip,
@@ -7,24 +8,39 @@ import {
 } from "@/components/ui/tg-tooltip"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel } from "@/types"
+import { useCardVariant } from "../channel-card-prototype/shared"
+import { CHANNEL_SHORTCUTS } from "../channel-grid/ChannelGridKeyboard"
 
 /** Avatar with its Telegram link, the title with a Frozen mark, the handle, and the bio. */
 export function ChannelCardHeader({
   channel,
   showBio,
+  fullBio = false,
   linkToTelegram,
 }: {
   channel: Channel
   showBio: boolean
+  /** The whole bio instead of two clamped lines. */
+  fullBio?: boolean
   /** Off where the card body selects, since the link would sit under it. */
   linkToTelegram: boolean
 }) {
   const channelTitle = channel.displayName || channel.name
+  // PROTOTYPE: the photo viewer, full bio and bio toggle are D's; 0 is main.
+  const isD = useCardVariant() !== "0"
   return (
     <>
       <div className="flex items-start gap-4 mb-4">
-        <div className="relative flex-shrink-0">
-          <ChannelAvatar channel={channel} />
+        <div
+          // PROTOTYPE: on D the photo sits above a compact card's selection
+          // overlay, so a click on it opens the viewer.
+          className={`relative flex-shrink-0 ${isD ? "z-20" : ""}`}
+        >
+          <ChannelAvatar
+            channel={channel}
+            viewable={isD}
+            viewShortcut={CHANNEL_SHORTCUTS.photo}
+          />
           {linkToTelegram && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -32,6 +48,7 @@ export function ChannelCardHeader({
                   href={telegramWebViewChannelUrl(channel.name)}
                   target="_blank"
                   rel="noopener noreferrer"
+                  data-shortcut={CHANNEL_SHORTCUTS.open}
                   onClick={(e) => e.stopPropagation()}
                   className="absolute -bottom-1 -right-1 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
                 >
@@ -76,17 +93,69 @@ export function ChannelCardHeader({
         </div>
       </div>
 
-      {showBio && channel.bio && (
-        <div className="mb-4">
-          <p
-            dir="auto"
-            className="text-[11px] leading-relaxed text-app-ink/70 line-clamp-2 whitespace-pre-wrap"
-            title={channel.bio}
-          >
-            {channel.bio}
-          </p>
-        </div>
-      )}
+      {showBio &&
+        channel.bio &&
+        (isD ? (
+          <ChannelBio bio={channel.bio} full={fullBio} />
+        ) : (
+          <div className="mb-4">
+            <p
+              dir="auto"
+              className="text-[11px] leading-relaxed text-app-ink/70 line-clamp-2 whitespace-pre-wrap"
+              title={channel.bio}
+            >
+              {channel.bio}
+            </p>
+          </div>
+        ))}
     </>
+  )
+}
+
+/**
+ * The bio, two lines on a normal card with a More/Less toggle when it runs
+ * longer, and whole on a detailed card. Whether it runs longer is measured,
+ * since it depends on the card's width, which changes with the column count.
+ */
+export function ChannelBio({ bio, full }: { bio: string; full: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  const [clamped, setClamped] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || full || expanded) return
+    const check = () => setClamped(el.scrollHeight > el.clientHeight + 1)
+    check()
+    const observer = new ResizeObserver(check)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [bio, full, expanded])
+
+  const open = full || expanded
+  return (
+    <div className="mb-4">
+      <p
+        ref={ref}
+        dir="auto"
+        className={`text-[11px] leading-relaxed text-app-ink/70 whitespace-pre-wrap ${open ? "" : "line-clamp-2"}`}
+      >
+        {bio}
+      </p>
+      {!full && (clamped || expanded) && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          data-shortcut={CHANNEL_SHORTCUTS.bio}
+          onClick={(e) => {
+            e.stopPropagation()
+            setExpanded(!expanded)
+          }}
+          className="mt-0.5 text-[10px] font-bold text-app-ink/50 hover:text-app-ink"
+        >
+          {expanded ? "Less" : "More"}
+        </button>
+      )}
+    </div>
   )
 }

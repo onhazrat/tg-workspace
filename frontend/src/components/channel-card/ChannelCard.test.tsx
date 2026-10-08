@@ -6,6 +6,7 @@
  * the reserved `group:` prefix, and the Start ID input refusing a non-positive
  * number.
  */
+
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import {
@@ -14,6 +15,7 @@ import {
   cardFace,
 } from "@/lib/channels/card-zoom"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
+import { CardVariantContext } from "../channel-card-prototype/shared"
 import {
   ChannelCardActions,
   ChannelCardBadges,
@@ -576,6 +578,44 @@ describe("ChannelCardHeader", () => {
     cleanup()
     render(<ChannelCardHeader linkToTelegram channel={base} showBio />)
     expect(screen.queryByText("about")).toBeNull()
+  })
+
+  test("on D, a bio longer than two lines toggles More and Less; a detailed card shows it whole", () => {
+    const proto = HTMLElement.prototype
+    const real = Object.getOwnPropertyDescriptor(proto, "scrollHeight")
+    // The clamp is measured, and the test DOM lays nothing out.
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get: () => 100,
+    })
+    try {
+      const withBio = { ...base, bio: "a long bio" }
+      render(
+        <CardVariantContext.Provider value="D">
+          <ChannelCardHeader linkToTelegram channel={withBio} showBio />
+        </CardVariantContext.Provider>,
+      )
+      const more = screen.getByRole("button", { name: "More" })
+      expect(more.getAttribute("aria-expanded")).toBe("false")
+      fireEvent.click(more)
+      const less = screen.getByRole("button", { name: "Less" })
+      expect(less.getAttribute("aria-expanded")).toBe("true")
+      expect(screen.getByText("a long bio").className).not.toContain(
+        "line-clamp-2",
+      )
+      cleanup()
+      render(
+        <CardVariantContext.Provider value="D">
+          <ChannelCardHeader linkToTelegram channel={withBio} showBio fullBio />
+        </CardVariantContext.Provider>,
+      )
+      expect(screen.queryByRole("button", { name: "More" })).toBeNull()
+      expect(screen.getByText("a long bio").className).not.toContain(
+        "line-clamp-2",
+      )
+    } finally {
+      if (real) Object.defineProperty(proto, "scrollHeight", real)
+    }
   })
 })
 

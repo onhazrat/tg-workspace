@@ -6,6 +6,12 @@ import {
   syncScheduleSummary,
 } from "@/lib/channels/sync-schedule-summary"
 import type { Channel, ChannelStats } from "@/types"
+import {
+  CardSyncStatus,
+  CompactSyncLine,
+} from "../channel-card-prototype/Freshness"
+import { useCardVariant } from "../channel-card-prototype/shared"
+import { CHANNEL_SHORTCUTS } from "../channel-grid/ChannelGridKeyboard"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
 import { channelSyncStatus, parseStartId } from "./channel-card-status"
 
@@ -20,6 +26,7 @@ export function ChannelCardFooter({
   inheritedSettingsHint,
   onSaveStartId,
   onSync,
+  detailed = false,
 }: {
   channel: Channel
   stats: ChannelStats | undefined
@@ -32,18 +39,27 @@ export function ChannelCardFooter({
   inheritedSettingsHint: string
   onSaveStartId: (startId: number) => void
   onSync: () => void
+  /** A detailed card, which has room for both schedules. */
+  detailed?: boolean
 }) {
   const status = channelSyncStatus(channel, stats)
+  // PROTOTYPE: the compact card gains a last-sync line.
+  const variant = useCardVariant()
+  const compactLine = !showStatus && variant !== "0"
   return (
     <div
-      className={`mt-auto flex items-center gap-3 ${showStatus ? "justify-between pt-4 border-t border-app-ink/5" : "justify-end"}`}
+      className={`mt-auto flex items-center gap-3 ${showStatus ? "justify-between pt-4 border-t border-app-ink/5" : compactLine ? "justify-between" : "justify-end"}`}
     >
+      {compactLine && <CompactSyncLine channel={channel} />}
       <div className="flex items-start gap-4 flex-wrap">
         {showStartId && (
           <StartIdField startId={channel.startId} onSave={onSaveStartId} />
         )}
 
-        {showStatus && (
+        {showStatus && variant !== "0" && (
+          <CardSyncStatus channel={channel} stats={stats} detailed={detailed} />
+        )}
+        {showStatus && variant === "0" && (
           <div>
             <p className="text-[10px] uppercase text-app-ink/60 font-bold tracking-widest mb-0.5">
               Status
@@ -72,33 +88,58 @@ export function ChannelCardFooter({
         )}
       </div>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onSync()
-            }}
-            disabled={busy || !channelAllows(channel, "individual")}
-            className="relative z-20 h-8 px-3 text-[10px] uppercase font-bold flex items-center justify-center gap-1.5 bg-app-ink/5 hover:bg-app-ink text-app-ink hover:text-app-bg transition-all disabled:opacity-30 rounded-lg border border-app-ink/10 hover:border-app-ink"
-          >
-            <RefreshCw size={12} className={isScraping ? "animate-spin" : ""} />
-            {channel.isUnavailableOnWebView ? "Recheck" : "Sync"}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>
-            {disabledReason(channel, "individual") ??
-              "Manual sync resets auto-sync timers"}
-          </p>
-        </TooltipContent>
-      </Tooltip>
+      <SyncButton
+        channel={channel}
+        busy={busy}
+        isScraping={isScraping}
+        onSync={onSync}
+      />
     </div>
   )
 }
 
-function StartIdField({
+/** The manual Sync button, or Recheck for a restricted channel. */
+export function SyncButton({
+  channel,
+  busy,
+  isScraping,
+  onSync,
+  className = "",
+}: {
+  channel: Channel
+  busy: boolean
+  isScraping: boolean
+  onSync: () => void
+  className?: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onSync()
+          }}
+          disabled={busy || !channelAllows(channel, "individual")}
+          data-shortcut={CHANNEL_SHORTCUTS.sync}
+          className={`relative z-20 h-8 px-3 text-[10px] uppercase font-bold flex items-center justify-center gap-1.5 bg-app-ink/5 hover:bg-app-ink text-app-ink hover:text-app-bg transition-all disabled:opacity-30 rounded-lg border border-app-ink/10 hover:border-app-ink ${className}`}
+        >
+          <RefreshCw size={12} className={isScraping ? "animate-spin" : ""} />
+          {channel.isUnavailableOnWebView ? "Recheck" : "Sync"}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>
+          {disabledReason(channel, "individual") ??
+            "Manual sync resets auto-sync timers"}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function StartIdField({
   startId,
   onSave,
 }: {

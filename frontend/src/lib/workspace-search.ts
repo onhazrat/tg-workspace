@@ -52,6 +52,8 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** PROTOTYPE: the channel card variant. */
+  variant?: string
 } & DirectoryParams
 
 /** The string params: kept trimmed when non-blank, dropped otherwise. */
@@ -64,6 +66,7 @@ const ID_PARAMS = [
   "summary",
   "chatSession",
   "tagRun",
+  "variant",
 ] as const
 
 function trimmedString(value: unknown): string | undefined {

@@ -59,6 +59,7 @@ describe("cardFace", () => {
     expect(cardFace(-1, allOn)).toEqual({
       layout: "card",
       bio: false,
+      detailed: false,
       startId: false,
       meta: null,
       tags: false,

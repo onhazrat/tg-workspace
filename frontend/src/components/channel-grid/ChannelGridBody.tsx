@@ -14,6 +14,8 @@ type ChannelGridBodyProps = {
   channels: Channel[]
   showSortRank: boolean
   zoom: CardZoom
+  /** Keyboard mode is on. */
+  keyboard?: boolean
   selectedChannels: Set<string>
   selectedTrimRanks: Map<string, number>
   /** Per-channel in-scope post counts, shared from one query in ChannelGrid. */
@@ -37,6 +39,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   channels,
   showSortRank,
   zoom,
+  keyboard = false,
   selectedChannels,
   selectedTrimRanks,
   postsInScopeCounts,
@@ -115,6 +118,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         postsInScopeCounts={postsInScopeCounts}
         showSortRank={showSortRank}
         zoom={zoom}
+        keyboard={keyboard}
         selectedChannels={selectedChannels}
         selectedTrimRanks={selectedTrimRanks}
         onRemoveChannel={onRemoveChannel}

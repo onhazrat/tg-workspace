@@ -8,6 +8,9 @@ import {
 } from "@/lib/channels/channel-tag-model"
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import type { Channel } from "@/types"
+import { useCardVariant } from "../channel-card-prototype/shared"
+import { PrototypeCardTags } from "../channel-card-prototype/TagVariants"
+import { CHANNEL_SHORTCUTS } from "../channel-grid/ChannelGridKeyboard"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
 
 type Tags = NonNullable<Channel["tags"]>
@@ -24,6 +27,18 @@ export function ChannelCardTags({
   onSave: (tags: Tags) => void
 }) {
   const [isAdding, setIsAdding] = useState(false)
+  // PROTOTYPE: ?variant= swaps the tag row.
+  const variant = useCardVariant()
+  if (variant !== "0")
+    return (
+      <PrototypeCardTags
+        variant={variant}
+        tags={tags}
+        virtualGroupTagName={virtualGroupTagName}
+        inheritedSettingsHint={inheritedSettingsHint}
+        onSave={onSave}
+      />
+    )
 
   const commit = (raw: string) => {
     setIsAdding(false)
@@ -85,6 +100,7 @@ export function ChannelCardTags({
           <TooltipTrigger asChild>
             <button
               type="button"
+              data-shortcut={CHANNEL_SHORTCUTS.tag}
               onClick={(e) => {
                 e.stopPropagation()
                 setIsAdding(true)

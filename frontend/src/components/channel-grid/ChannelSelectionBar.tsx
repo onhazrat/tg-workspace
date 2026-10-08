@@ -63,6 +63,9 @@ export type ChannelSelectionBarProps = {
   onShowSortRankChange: (value: boolean) => void
   zoom: CardZoom
   onZoomChange: (zoom: CardZoom) => void
+  keyboard?: boolean
+  /** PROTOTYPE: absent on variant 0, which hides the toggle. */
+  onKeyboardChange?: (on: boolean) => void
 }
 
 const actionClass =
@@ -275,6 +278,15 @@ export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
           title="Number each selected card by its place in the sort"
           testId="channel-show-sort-rank"
         />
+        {p.onKeyboardChange && (
+          <BarToggle
+            on={Boolean(p.keyboard)}
+            onClick={() => p.onKeyboardChange?.(!p.keyboard)}
+            label="Keyboard"
+            title="j / k to move, gg / G to jump, an action's letter to fire it"
+            testId="channel-keyboard"
+          />
+        )}
         <CardSizeSwitch zoom={p.zoom} onZoomChange={p.onZoomChange} />
       </div>
     </div>
