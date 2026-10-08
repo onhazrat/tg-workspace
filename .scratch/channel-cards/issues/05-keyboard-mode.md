@@ -6,7 +6,7 @@ user stories 50 to 67, and the implementation decisions on keyboard mode.
 
 **Blocked by:** CARD-02, CARD-03, CARD-04
 
-**Status:** ready-for-agent
+**Status:** done
 
 The prototype (`prototype/channel-cards`) shows the behaviour on every variant. Moving is a pure
 function of the current index, the move and the count; the highlight is a Channel name held in
@@ -25,3 +25,7 @@ legend become shared with the Posts tab.
 - [ ] The Posts tab's keyboard mode gains `gg` and `G`, with a test
 - [ ] The Channels end-to-end spec drives `j`, `gg`, `x` and `o`, and checks the legend changes with the card size
 - [ ] The frontend CRAP ratchet passes, and every new or changed test is mutation-checked
+
+## Comments
+
+- 2026-10-09: implemented on `worktree-agent-ad98b39481967cdf2` and merged into the integration branch in add0d360. Tiles gained a hover Sync button at the top left so `s` presses a real control, as the spec gives tiles `s` but they had no Sync control. The photo viewer now scrolls back to an unmounted Channel card through a `tg:reveal-channel` event; the Posts tab keeps that gap.
