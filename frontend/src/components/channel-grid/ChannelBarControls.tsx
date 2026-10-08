@@ -4,14 +4,21 @@ import {
   Grid3x3,
   LayoutGrid,
   LayoutList,
+  RefreshCw,
   Sparkles,
+  Square,
 } from "lucide-react"
+import { useState } from "react"
 import { BarHeading, BarPopover } from "@/components/BarPopover"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { pillClass } from "@/components/PostFilterParts"
+import { TgButton } from "@/components/ui/tg-button"
+import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import type { CardZoom } from "@/lib/channels/card-zoom"
+import { syncAllConfirmation } from "@/lib/channels/manual-sync"
 import type { ChannelGridSortOption } from "@/lib/channels/sort-channels-for-grid"
+import type { Channel } from "@/types"
 
 const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
   { value: "last_updated", label: "Last updated" },
@@ -184,5 +191,71 @@ export function BarToggle({
       />
       {label}
     </button>
+  )
+}
+
+/**
+ * Sync all, which asks first with the count it will send. While its job runs
+ * the button is Stop sync, which stops at once: stopping keeps what already
+ * synced, so it needs no confirmation.
+ */
+export function SyncAllButton({
+  channels,
+  onSync,
+  running,
+  onStop,
+  disabled,
+  loading,
+}: {
+  channels: Channel[]
+  onSync: () => void
+  /** A Sync All job is running, so the button stops it. */
+  running: boolean
+  onStop: () => void
+  disabled: boolean
+  loading: boolean
+}) {
+  const [asking, setAsking] = useState(false)
+  if (running) {
+    return (
+      <TgButton
+        type="button"
+        size="sm"
+        variant="secondary"
+        onClick={onStop}
+        data-testid="channel-sync-all-stop"
+        className="h-9"
+      >
+        <Square size={11} className="fill-current" />
+        Stop sync
+      </TgButton>
+    )
+  }
+  return (
+    <>
+      <TgButton
+        type="button"
+        size="sm"
+        onClick={() => setAsking(true)}
+        disabled={disabled}
+        loading={loading}
+        className="h-9"
+      >
+        <RefreshCw size={12} />
+        Sync all
+      </TgButton>
+      <TgConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title="Sync All Channels?"
+        description={syncAllConfirmation(channels).description}
+        confirmLabel="Sync"
+        confirmTestId="channel-sync-all-confirm"
+        onConfirm={() => {
+          setAsking(false)
+          onSync()
+        }}
+      />
+    </>
   )
 }

@@ -37,6 +37,18 @@ import type { ChannelStats } from "@/types"
 
 export type { SyncMode }
 
+/**
+ * The two syncs a button can stop: Sync All and Sync selected. Keyed on the
+ * user's action, not the mode, because Pre-Summary, Pre-Chat and
+ * Auto-Regenerate also sync as `bulk` and have no button to stop them.
+ */
+export type StoppableSync = "sync_all" | "selected"
+
+const NO_RUNNING_SYNCS: Record<StoppableSync, string | null> = {
+  sync_all: null,
+  selected: null,
+}
+
 export interface SyncJobDeps {
   isOffline: boolean
   /**
@@ -70,7 +82,12 @@ export interface SyncJob {
     source: string,
     refresh?: boolean,
     syncMode?: SyncMode,
+    stoppable?: StoppableSync,
   ) => Promise<void>
+  /** Each stoppable sync's job id, from its start until it settles. */
+  runningSyncJobs: Record<StoppableSync, string | null>
+  /** Cancel that sync's job, the Channels still queued included. */
+  stopSync: (kind: StoppableSync) => Promise<void>
 }
 
 export function useSyncJob(deps: SyncJobDeps): SyncJob {
@@ -90,6 +107,13 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     null,
   )
   const [consecutiveFailures, setConsecutiveFailures] = useState<number>(0)
+  const [runningSyncJobs, setRunningSyncJobs] = useState(NO_RUNNING_SYNCS)
+  const holdJob = useCallback(
+    (kind: StoppableSync | undefined, jobId: string | null) => {
+      if (kind) setRunningSyncJobs((prev) => ({ ...prev, [kind]: jobId }))
+    },
+    [],
+  )
 
   const applySyncJobStatus = useCallback(
     (status: SyncJobStatus) => {
@@ -141,12 +165,17 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
       source: string,
       refresh = true,
       syncMode: SyncMode = "bulk",
+      stoppable?: StoppableSync,
     ) =>
       runServerSyncWith(
         {
           isOffline,
           channelCount,
-          startSyncJob: api.startSyncJob,
+          startSyncJob: async (request) => {
+            const started = await api.startSyncJob(request)
+            holdJob(stoppable, started.jobId)
+            return started
+          },
           waitSyncJob,
           getChannelStats: (channelId) => getChannelStats(channelId),
           loadChannels,
@@ -159,8 +188,9 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
           now: Date.now,
         },
         { channelIds, channelNames, source, refresh, syncMode },
-      ),
+      ).finally(() => holdJob(stoppable, null)),
     [
+      holdJob,
       isOffline,
       channelCount,
       waitSyncJob,
@@ -168,6 +198,22 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
       invalidatePostViews,
       setChannelStats,
     ],
+  )
+
+  const stopSync = useCallback(
+    async (kind: StoppableSync) => {
+      const jobId = runningSyncJobs[kind]
+      if (!jobId) return
+      try {
+        await api.cancelSyncJob(jobId)
+        toast.info("Sync stopped")
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Could not stop the sync",
+        )
+      }
+    },
+    [runningSyncJobs],
   )
 
   return {
@@ -179,5 +225,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     setConsecutiveFailures,
     waitSyncJob,
     runServerSync,
+    runningSyncJobs,
+    stopSync,
   }
 }

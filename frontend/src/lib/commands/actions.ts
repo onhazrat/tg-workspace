@@ -2,6 +2,7 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import { getNextTheme } from "@/components/theme-provider"
+import { syncAllConfirmation } from "@/lib/channels/manual-sync"
 import { filterChannelsForOperation } from "@/lib/channels/sync-permissions"
 import type { CommandDef } from "@/lib/commands/types"
 import {
@@ -146,6 +147,9 @@ export function buildActionCommands(): CommandDef[] {
         }
         return { disabled: false }
       },
+      requiresConfirmation: true,
+      getConfirmDescription: (ctx) =>
+        syncAllConfirmation(ctx.channels).description,
       run: async (ctx) => {
         await ctx.handleScrapeAll()
       },
