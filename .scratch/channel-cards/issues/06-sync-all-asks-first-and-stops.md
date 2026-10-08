@@ -6,7 +6,7 @@ implementation decisions on Sync All's confirmation and Stop sync.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 The cancel endpoint already exists and already cancels the Channels still queued as well as the
 one in progress, across the API and worker processes, so this ticket is frontend only. The
@@ -22,3 +22,7 @@ Sync All.
 - [ ] The sync hook's test, with spies on the API object, covers holding the job id for Sync All and Sync selected only, and stopping the right job
 - [ ] The end-to-end and UI primitive specs that click Sync All confirm first, and the Channels end-to-end spec confirms a Sync All, stops it and sees the job end as cancelled
 - [ ] Every new or changed test is mutation-checked
+
+## Comments
+
+Merged into `t3code/implement-channel-card-spec` in 7974d9ac, on top of CARD-01. No conflicts; the CARD-06 e2e only clicks the toolbar Sync all, which compact cards keep, so it needs no `showCards()`. Verified as for CARD-01.

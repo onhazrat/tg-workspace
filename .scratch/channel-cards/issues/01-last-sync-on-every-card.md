@@ -13,7 +13,7 @@ schedule slots, the body chip and the defaults.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Start with the prefactor the later tickets build on: the card face and the tile take everything
 they read from app state as props (tag suggestions, whether the Channel is among the Scope's
@@ -36,3 +36,7 @@ note that its colour rule used fixed 1-day and 7-day ages, which the spec replac
 - [ ] The Posts tab's compact grid is on at the start of every browser session; turning it off lasts for the rest of the session; a test covers both
 - [ ] End-to-end specs that need cards or a non-compact Posts grid set them through the scoped-storage helper, and the whole Playwright suite passes with the new defaults
 - [ ] Every new or changed test is mutation-checked
+
+## Comments
+
+Merged into `t3code/implement-channel-card-spec` in b74255f5 (branch `card-01-last-sync`). Verified on the integration branch: both typechecks, biome, 2677 unit tests, the frontend CRAP ratchet, and Playwright `summarizer-channels` plus `tg-ui-primitives` with one worker.
