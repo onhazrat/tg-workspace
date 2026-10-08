@@ -1,6 +1,9 @@
 import { ExternalLink, Snowflake } from "lucide-react"
 import { useLayoutEffect, useRef, useState } from "react"
-import { ChannelAvatar } from "@/components/ChannelAvatar"
+import {
+  ChannelAvatar,
+  PHOTO_CORNER_BUTTON_CLASS,
+} from "@/components/ChannelAvatar"
 import {
   Tooltip,
   TooltipContent,
@@ -9,39 +12,50 @@ import {
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel } from "@/types"
 
-/** Avatar with its Telegram link, the title with a Frozen mark, and the handle. */
-export function ChannelCardHeader({
+/**
+ * The Channel's photo with "Open in Telegram" at its bottom right, the same
+ * at every card size. The photo opens the viewer: by itself on a card, by a
+ * magnifier at its bottom left on a tile, whose body selects.
+ */
+export function ChannelCardPhoto({
   channel,
-  linkToTelegram,
+  view,
+  className,
 }: {
   channel: Channel
-  /** Off where the card body selects, since the link would sit under it. */
-  linkToTelegram: boolean
+  view: "image" | "corner"
+  className?: string
 }) {
+  return (
+    <div className="relative flex-shrink-0">
+      <ChannelAvatar channel={channel} className={className} view={view} />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <a
+            href={telegramWebViewChannelUrl(channel.name)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open ${channel.displayName || channel.name} in Telegram`}
+            onClick={(e) => e.stopPropagation()}
+            className={`${PHOTO_CORNER_BUTTON_CLASS} -right-1`}
+          >
+            <ExternalLink size={10} />
+          </a>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Open in Telegram</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
+/** The photo, the title with a Frozen mark, and the handle. */
+export function ChannelCardHeader({ channel }: { channel: Channel }) {
   const channelTitle = channel.displayName || channel.name
   return (
     <div className="flex items-start gap-4 mb-4">
-      <div className="relative flex-shrink-0">
-        <ChannelAvatar channel={channel} />
-        {linkToTelegram && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={telegramWebViewChannelUrl(channel.name)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -bottom-1 -right-1 w-6 h-6 bg-app-bg border border-app-ink/10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all shadow-sm hover:bg-app-ink hover:text-app-bg"
-              >
-                <ExternalLink size={10} />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Open in Telegram</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
+      <ChannelCardPhoto channel={channel} view="image" />
 
       <div className="flex-1 min-w-0 pt-1">
         {/* `truncate` must sit on the text's own element. This <h4> is a flex

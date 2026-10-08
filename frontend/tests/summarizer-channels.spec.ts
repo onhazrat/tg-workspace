@@ -416,14 +416,15 @@ test.describe("TG Workspace channels and posts", () => {
     await first.getByRole("button", { name: "Sync" }).click()
     await expect(toggle).toHaveAttribute("aria-pressed", after)
 
-    // -2: the tile is the toggle.
+    // -2: a click on the tile selects, through its selection overlay.
     await tiles.click()
     await expect(tiles).toHaveAttribute("aria-pressed", "true")
-    const tile = await cardNamed(1)
+    const tileFrame = await cardNamed(1)
+    const tile = tileFrame.locator("button[aria-pressed]")
     const tileBefore = await tile.getAttribute("aria-pressed")
-    await tile.click()
+    await tileFrame.click()
     await expect(tile).not.toHaveAttribute("aria-pressed", tileBefore ?? "")
-    await tile.click()
+    await tileFrame.click()
     await expect(tile).toHaveAttribute("aria-pressed", tileBefore ?? "")
 
     await page.reload()
@@ -434,7 +435,53 @@ test.describe("TG Workspace channels and posts", () => {
 
     // -2: the tile takes the shift-click, from mid-grid since still ungrouped.
     await clearChannelSelection(page)
-    await shiftRun((name) => page.locator(`[data-channel-name="${name}"]`), 1)
+    await shiftRun(checkboxOf, 1)
+  })
+
+  /**
+   * CARD-04: a compact card's photo sits above its selection layer and opens
+   * the Posts tab's viewer, whose arrows step to the next Channel's photo.
+   */
+  test("a Channel photo opens the viewer and steps to the next", async ({
+    page,
+  }) => {
+    const prefix = `photo${Date.now()}`
+    const photoBase = "https://photos.e2e.test/"
+    // A 1x1 PNG, so no photo request leaves the machine.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    )
+    await page.route(`${photoBase}**`, (route) =>
+      route.fulfill({ contentType: "image/png", body: png }),
+    )
+    await gotoWorkspace(page, "summary")
+    await seedScopedStorage(page, { channelCardZoom: "-1" })
+    await seedBulkChannels(page, 3, prefix, photoBase)
+
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+    const names = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+    const first = page.locator(`[data-channel-name="${names[0]}"]`)
+    await expect(
+      first.getByRole("link", { name: `Open ${names[0]} in Telegram` }),
+    ).toHaveAttribute("href", new RegExp(`/s/${names[0]}$`))
+
+    // The click must land on the photo, over the compact card's overlay.
+    await first
+      .getByRole("button", { name: `View ${names[0]}'s photo` })
+      .click()
+    const viewer = page.getByRole("dialog", { name: "Channel photo" })
+    const label = viewer.getByTestId("photo-viewer-label")
+    await expect(label).toContainText(`${names[0]} · 1 / 3`)
+    await viewer.getByRole("button", { name: "Next photo" }).click()
+    await expect(label).toContainText(`${names[1]} · 2 / 3`)
+    await page.keyboard.press("Escape")
+    await expect(viewer).toHaveCount(0)
   })
 
   /**

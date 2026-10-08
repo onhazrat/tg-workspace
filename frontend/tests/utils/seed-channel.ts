@@ -97,6 +97,8 @@ export async function seedBulkChannels(
   page: Page,
   count: number,
   prefix: string,
+  /** Gives each Channel the photo `<photoUrlBase><handle>.png`. */
+  photoUrlBase?: string,
 ): Promise<void> {
   // Sequential, not Promise.all: each PUT ends in `touch_sync("channels")`,
   // which takes a row lock on the single `tg_sync_meta` etag. Firing 25–70
@@ -104,7 +106,7 @@ export async function seedBulkChannels(
   // answers 500 under CI load; Playwright then retries and `--fail-on-flaky-
   // tests` fails the shard. One-at-a-time is a few seconds slower and stable.
   await page.evaluate(
-    async ({ channelCount, channelPrefix }) => {
+    async ({ channelCount, channelPrefix, photoBase }) => {
       const token = localStorage.getItem("access_token")
       if (!token) {
         throw new Error("seedBulkChannels: missing access_token")
@@ -121,7 +123,11 @@ export async function seedBulkChannels(
           const response = await fetch(`/api/v1/data/channels/${name}`, {
             method: "PUT",
             headers,
-            body: JSON.stringify({ id: name, name }),
+            body: JSON.stringify({
+              id: name,
+              name,
+              ...(photoBase ? { photoUrl: `${photoBase}${name}.png` } : {}),
+            }),
           })
           if (response.ok) return
           lastError = `${response.status}: ${await response.text()}`
@@ -139,7 +145,7 @@ export async function seedBulkChannels(
         await putWithRetry(`${channelPrefix}${index}`)
       }
     },
-    { channelCount: count, channelPrefix: prefix },
+    { channelCount: count, channelPrefix: prefix, photoBase: photoUrlBase },
   )
 }
 

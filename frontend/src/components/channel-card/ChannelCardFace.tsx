@@ -138,10 +138,7 @@ export function ChannelCardFace({
             : "flex flex-col h-full p-4 pt-9"
         }
       >
-        <ChannelCardHeader
-          channel={channel}
-          linkToTelegram={!face.bodySelects}
-        />
+        <ChannelCardHeader channel={channel} />
         {aligned && (
           <>
             <div data-card-section="bio">

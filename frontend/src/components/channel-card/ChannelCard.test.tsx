@@ -593,29 +593,19 @@ describe("the card shell's rules", () => {
 
 describe("ChannelCardHeader", () => {
   test("titles by display name, falling back to the handle", () => {
-    render(
-      <ChannelCardHeader
-        linkToTelegram
-        channel={{ ...base, displayName: "Pavel" }}
-      />,
-    )
+    render(<ChannelCardHeader channel={{ ...base, displayName: "Pavel" }} />)
     expect(screen.getByTitle("Pavel").textContent).toBe("Pavel")
     expect(screen.getByText("@durov")).toBeTruthy()
     cleanup()
-    render(<ChannelCardHeader linkToTelegram channel={base} />)
+    render(<ChannelCardHeader channel={base} />)
     expect(screen.getByTitle("durov").textContent).toBe("durov")
   })
 
   test("marks a frozen channel", () => {
-    render(<ChannelCardHeader linkToTelegram channel={base} />)
+    render(<ChannelCardHeader channel={base} />)
     expect(screen.queryByTestId("channel-card-frozen-mark")).toBeNull()
     cleanup()
-    render(
-      <ChannelCardHeader
-        linkToTelegram
-        channel={{ ...base, isFrozen: true }}
-      />,
-    )
+    render(<ChannelCardHeader channel={{ ...base, isFrozen: true }} />)
     expect(screen.getByTestId("channel-card-frozen-mark")).toBeTruthy()
   })
 })
@@ -669,12 +659,11 @@ describe("ChannelCardFace", () => {
     expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
   })
 
-  test("at zoom -1 tags, status, hover actions and the Telegram link are gone", () => {
+  test("at zoom -1 tags, status and hover actions are gone", () => {
     renderFace(-1)
     expect(screen.queryByLabelText("Add tag")).toBeNull()
     expect(screen.queryByText("Never synced")).toBeNull()
     expect(screen.queryByLabelText("Remove Channel")).toBeNull()
-    expect(document.querySelector("a[href]")).toBeNull()
   })
 
   test("at zoom 0 the checkbox selects and the card keeps its full face", () => {
