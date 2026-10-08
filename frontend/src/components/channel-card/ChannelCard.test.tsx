@@ -416,20 +416,21 @@ describe("ChannelCardTags", () => {
     fireEvent.focus(field())
     type("a")
     key("Tab")
-    // art is on the card now, so radar is the only row left for "a".
-    type("a")
-    key("ArrowDown")
+    type("r")
+    expect(suggestions()).toEqual(["radar", "sport"])
     key("ArrowDown")
     key("ArrowUp")
     expect(screen.queryByRole("option", { selected: true })).toBeNull()
     key("ArrowDown")
+    key("ArrowDown")
+    key("ArrowDown")
     expect(screen.getByRole("option", { selected: true }).textContent).toBe(
-      "radar",
+      "sport",
     )
     key("Tab")
     expect(await saves(onSave)).toEqual([
       ["news", "art"],
-      ["news", "art", "radar"],
+      ["news", "art", "sport"],
     ])
   })
 
@@ -527,6 +528,24 @@ describe("ChannelCardTags", () => {
       ["news", "tech"],
       ["news", "tech", "zoo"],
     ])
+  })
+
+  test("tags changed elsewhere, such as by a Tag run, reach the chips", () => {
+    const props = renderTags()
+    cleanup()
+    const { rerender } = render(<ChannelCardTags {...props} />)
+    rerender(<ChannelCardTags {...props} tags={["news", "crypto"]} />)
+    expect(screen.getByRole("button", { name: "crypto" })).toBeTruthy()
+  })
+
+  test("a failed save puts the card back to the saved tags", async () => {
+    renderTags({ onSave: mock(() => Promise.reject(new Error("offline"))) })
+    fireEvent.focus(field())
+    type("tech,")
+    expect(screen.getByRole("button", { name: "tech" })).toBeTruthy()
+    await settle()
+    expect(screen.queryByRole("button", { name: "tech" })).toBeNull()
+    expect(screen.getByText("news")).toBeTruthy()
   })
 
   test("clicking a tag's name filters by it; its remove button stays; AI tags stay marked", async () => {

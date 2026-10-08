@@ -97,7 +97,7 @@ export function ChannelCardTags({
     [focused, accountChannels, namesKey],
   )
   const rows = matchCardTags(suggestions, value).slice(0, 8)
-  const open = focused && rows.length > 0
+  const open = rows.length > 0
 
   const add = (raw: string) => {
     setValue("")
