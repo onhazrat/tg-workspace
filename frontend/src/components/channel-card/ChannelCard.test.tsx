@@ -7,7 +7,7 @@
  * number.
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import {
   type CardZoom,
   type ChannelMetaVisibility,
@@ -330,56 +330,240 @@ describe("ChannelCardMeta", () => {
 })
 
 describe("ChannelCardTags", () => {
-  const renderTags = (onSave = mock()) => {
-    render(
-      <ChannelCardTags
-        tags={["news"]}
-        virtualGroupTagName="group:Fast"
-        inheritedSettingsHint="hint"
-        onSave={onSave}
-      />,
+  // This Channel carries "news". radar shares news on two Channels, tech on
+  // one; sport is on three Channels that share nothing with this one.
+  const account: Pick<Channel, "tags">[] = [
+    { tags: ["news"] },
+    { tags: ["news", "radar"] },
+    { tags: ["news", "radar"] },
+    { tags: ["news", "tech"] },
+    { tags: ["sport"] },
+    { tags: ["sport"] },
+    { tags: ["sport"] },
+    { tags: ["zoo"] },
+    { tags: ["art"] },
+    { tags: ["group:Slow"] },
+  ]
+  const renderTags = (
+    overrides: Partial<Parameters<typeof ChannelCardTags>[0]> = {},
+  ) => {
+    const props = {
+      tags: ["news"] as Channel["tags"],
+      virtualGroupTagName: "group:Fast",
+      inheritedSettingsHint: "hint",
+      accountChannels: account,
+      onSave: mock(),
+      onFilterByTag: mock(),
+      ...overrides,
+    }
+    render(<ChannelCardTags {...props} />)
+    return props
+  }
+  const field = () => screen.getByLabelText("Add tag") as HTMLInputElement
+  const type = (text: string) =>
+    fireEvent.change(field(), { target: { value: text } })
+  const key = (k: string) => fireEvent.keyDown(field(), { key: k })
+  /** Lets queued saves run, since each waits for the one before it. */
+  const settle = () => act(async () => {})
+  /** The tag names of each save, in the order they were sent. */
+  const saves = async (onSave: unknown) => {
+    await settle()
+    return (onSave as ReturnType<typeof mock>).mock.calls.map((call) =>
+      (call[0] as { name: string }[]).map((t) => t.name),
     )
-    return onSave
   }
-  const openInput = () => {
-    fireEvent.click(screen.getByText("Add Tag"))
-    return screen.getByPlaceholderText("Tag...") as HTMLInputElement
-  }
+  const suggestions = () =>
+    screen.queryAllByRole("option").map((o) => o.textContent)
 
-  test("shows the group tag beside the channel's own", () => {
+  test("the field is always there after the chips, with no button in front", () => {
     renderTags()
     expect(screen.getByText("group:Fast").getAttribute("title")).toBe("hint")
     expect(screen.getByText("news")).toBeTruthy()
+    expect(field()).toBeTruthy()
+    expect(screen.queryByText(/Add Tag/)).toBeNull()
   })
 
-  test("Enter saves the trimmed tag appended to the list", () => {
-    const onSave = renderTags()
-    const input = openInput()
-    input.value = "  tech "
-    fireEvent.keyDown(input, { key: "Enter" })
-    expect(onSave).toHaveBeenCalledTimes(1)
-    const saved = onSave.mock.calls[0]?.[0] as { name: string }[]
-    expect(saved.map((t) => t.name)).toEqual(["news", "tech"])
+  test("Enter adds exactly what was typed, trimmed, and empties the field", async () => {
+    const { onSave } = renderTags()
+    field().focus()
+    type("  rad ")
+    key("Enter")
+    expect(await saves(onSave)).toEqual([["news", "rad"]])
+    expect(field().value).toBe("")
   })
 
-  test("blank and reserved group: tags are not saved", () => {
-    const onSave = renderTags()
-    let input = openInput()
-    input.value = "   "
-    fireEvent.blur(input)
-    input = openInput()
-    input.value = "group:x"
-    fireEvent.keyDown(input, { key: "Enter" })
-    expect(onSave).not.toHaveBeenCalled()
-    expect(screen.queryByPlaceholderText("Tag...")).toBeNull()
+  test("suggestions appear only on focus, ranked by pairing, then use, then name", () => {
+    renderTags()
+    expect(suggestions()).toEqual([])
+    fireEvent.focus(field())
+    // radar pairs with news twice, tech once; sport is on more Channels than
+    // art or zoo; art and zoo tie and go alphabetically. news is already
+    // here and group:Slow is a Setting group's tag.
+    expect(suggestions()).toEqual(["radar", "tech", "sport", "art", "zoo"])
+    fireEvent.blur(field())
+    expect(suggestions()).toEqual([])
   })
 
-  test("Escape closes without saving; the remove button drops one tag", () => {
-    const onSave = renderTags()
-    fireEvent.keyDown(openInput(), { key: "Escape" })
-    expect(screen.queryByPlaceholderText("Tag...")).toBeNull()
+  test("typing puts prefix matches before substring matches", () => {
+    renderTags()
+    fireEvent.focus(field())
+    type("ar")
+    expect(suggestions()).toEqual(["art", "radar"])
+  })
+
+  test("Tab takes the top suggestion, or the one the arrows highlight", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("a")
+    key("Tab")
+    type("r")
+    expect(suggestions()).toEqual(["radar", "sport"])
+    key("ArrowDown")
+    key("ArrowUp")
+    expect(screen.queryByRole("option", { selected: true })).toBeNull()
+    key("ArrowDown")
+    key("ArrowDown")
+    key("ArrowDown")
+    expect(screen.getByRole("option", { selected: true }).textContent).toBe(
+      "sport",
+    )
+    key("Tab")
+    expect(await saves(onSave)).toEqual([
+      ["news", "art"],
+      ["news", "art", "sport"],
+    ])
+  })
+
+  test("Tab in an empty field with nothing highlighted leaves the field", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    const tab = new KeyboardEvent("keydown", {
+      key: "Tab",
+      bubbles: true,
+      cancelable: true,
+    })
+    field().dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(false)
+    expect(await saves(onSave)).toEqual([])
+  })
+
+  test("Enter adds the arrow-chosen suggestion, else what was typed in an existing tag's spelling", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("ra")
+    key("ArrowDown")
+    key("Enter")
+    type("SPORT")
+    key("Enter")
+    // A new tag that starts like an old one is still created.
+    type("ar")
+    key("Enter")
+    expect((await saves(onSave)).at(-1)).toEqual([
+      "news",
+      "radar",
+      "sport",
+      "ar",
+    ])
+  })
+
+  test("a trailing comma adds the tag and leaves the field empty", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("Zoo,")
+    expect(await saves(onSave)).toEqual([["news", "zoo"]])
+    expect(field().value).toBe("")
+  })
+
+  test("Backspace in an empty field removes the last tag; with text it does not", async () => {
+    const { onSave } = renderTags({ tags: ["news", "tech"] })
+    fireEvent.focus(field())
+    type("x")
+    key("Backspace")
+    expect(await saves(onSave)).toEqual([])
+    type("")
+    key("Backspace")
+    expect(await saves(onSave)).toEqual([["news"]])
+  })
+
+  test("Escape leaves the field without adding anything", async () => {
+    const { onSave } = renderTags()
+    field().focus()
+    type("tech")
+    key("Escape")
+    expect(document.activeElement).not.toBe(field())
+    expect(field().value).toBe("")
+    expect(await saves(onSave)).toEqual([])
+  })
+
+  test("blank and reserved group: tags are not saved", async () => {
+    const { onSave } = renderTags()
+    fireEvent.focus(field())
+    type("   ")
+    key("Enter")
+    type("group:x")
+    key("Enter")
+    type("Group:y,")
+    expect(await saves(onSave)).toEqual([])
+  })
+
+  test("two quick adds are both kept: the second save waits for the first and carries both", async () => {
+    let finishFirst = () => {}
+    const onSave = mock()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishFirst = resolve
+          }),
+      )
+      .mockImplementation(() => Promise.resolve())
+    renderTags({ onSave })
+    fireEvent.focus(field())
+    type("tech,")
+    type("zoo,")
+    expect(screen.getByText("tech")).toBeTruthy()
+    expect(screen.getByText("zoo")).toBeTruthy()
+    expect(await saves(onSave)).toEqual([["news", "tech"]])
+    finishFirst()
+    expect(await saves(onSave)).toEqual([
+      ["news", "tech"],
+      ["news", "tech", "zoo"],
+    ])
+  })
+
+  test("tags changed elsewhere, such as by a Tag run, reach the chips", () => {
+    const props = renderTags()
+    cleanup()
+    const { rerender } = render(<ChannelCardTags {...props} />)
+    rerender(<ChannelCardTags {...props} tags={["news", "crypto"]} />)
+    expect(screen.getByRole("button", { name: "crypto" })).toBeTruthy()
+  })
+
+  test("a failed save puts the card back to the saved tags", async () => {
+    renderTags({ onSave: mock(() => Promise.reject(new Error("offline"))) })
+    fireEvent.focus(field())
+    type("tech,")
+    expect(screen.getByRole("button", { name: "tech" })).toBeTruthy()
+    await settle()
+    expect(screen.queryByRole("button", { name: "tech" })).toBeNull()
+    expect(screen.getByText("news")).toBeTruthy()
+  })
+
+  test("clicking a tag's name filters by it; its remove button stays; AI tags stay marked", async () => {
+    const { onSave, onFilterByTag } = renderTags({
+      tags: [
+        { name: "news", source: "manual", assignedAt: 0 },
+        { name: "crypto", source: "ai", assignedAt: 0 },
+      ],
+    })
+    fireEvent.click(screen.getByRole("button", { name: "crypto" }))
+    expect(onFilterByTag).toHaveBeenCalledWith("crypto")
+    expect(screen.getByTitle("Added by AI")).toBeTruthy()
+    expect(
+      screen.getByRole("button", { name: "news" }).parentElement?.textContent,
+    ).not.toContain("Added by AI")
     fireEvent.click(screen.getByLabelText("Remove tag news"))
-    expect(onSave).toHaveBeenCalledWith([])
+    expect(onFilterByTag).toHaveBeenCalledTimes(1)
+    expect(await saves(onSave)).toEqual([["crypto"]])
   })
 })
 
@@ -624,7 +808,7 @@ describe("ChannelCardFace", () => {
 
   test("at zoom -1 tags, status, hover actions and the Telegram link are gone", () => {
     renderFace(-1)
-    expect(screen.queryByText("Add Tag")).toBeNull()
+    expect(screen.queryByLabelText("Add tag")).toBeNull()
     expect(screen.queryByText("Never synced")).toBeNull()
     expect(screen.queryByLabelText("Remove Channel")).toBeNull()
     expect(document.querySelector("a[href]")).toBeNull()
@@ -634,7 +818,7 @@ describe("ChannelCardFace", () => {
     const h = renderFace(0)
     fireEvent.click(screen.getByLabelText("Select durov"))
     expect(h.onToggleSelected).toHaveBeenCalledTimes(1)
-    expect(screen.getByText("Add Tag")).toBeTruthy()
+    expect(screen.getByLabelText("Add tag")).toBeTruthy()
     expect(screen.getByText("Never synced")).toBeTruthy()
     fireEvent.click(screen.getByLabelText("Remove Channel"))
     expect(h.onRemove).toHaveBeenCalledTimes(1)
