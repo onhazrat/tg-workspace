@@ -10,9 +10,9 @@
  * moving it scrolls the virtualiser rather than the element.
  */
 import { useEffect, useRef, useState } from "react"
+import { KeyHelp } from "@/components/KeyHelp"
 import type { CardKey } from "@/lib/channels/card-zoom"
-import { nextIndex, readMove } from "@/lib/keyboard-moves"
-import { KeyHelp, keyBelongsElsewhere } from "../post-card/FeedKeyboard"
+import { keyBelongsElsewhere, nextIndex, readMove } from "@/lib/keyboard-moves"
 import { REVEAL_CHANNEL } from "../post-card/PhotoViewer"
 
 const KEY_LABEL: Record<CardKey, string> = {

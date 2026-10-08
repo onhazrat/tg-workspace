@@ -5,13 +5,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
 import { shortcut } from "@/lib/channels/card-zoom"
-import { channelAllows } from "@/lib/channels/sync-permissions"
 import type { Channel } from "@/types"
 import { ChannelCardPhoto } from "./ChannelCardHeader"
 import {
   channelCardFrameClass,
   selectionHandlers,
   selectLabel,
+  syncButtonProps,
 } from "./channel-card-status"
 
 /**
@@ -44,6 +44,7 @@ export function ChannelCardTile({
   onToggleSelected: (shift: boolean) => void
   onSync: () => void
 }) {
+  const { label: syncLabel, ...sync } = syncButtonProps(channel, busy, onSync)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -72,13 +73,8 @@ export function ChannelCardTile({
           />
           <button
             type="button"
-            aria-label={channel.isUnavailableOnWebView ? "Recheck" : "Sync"}
-            {...shortcut("s")}
-            onClick={(e) => {
-              e.stopPropagation()
-              onSync()
-            }}
-            disabled={busy || !channelAllows(channel, "individual")}
+            aria-label={syncLabel}
+            {...sync}
             className="absolute top-1 left-1 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-app-ink/10 bg-app-bg opacity-0 shadow-sm transition-all group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:bg-app-ink hover:text-app-bg disabled:hidden"
           >
             <RefreshCw size={10} />

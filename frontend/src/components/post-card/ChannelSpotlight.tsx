@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { focusIsTyping } from "@/lib/keyboard-moves"
 import {
   type ChannelSpotlight,
   enterSpotlight,
@@ -22,7 +23,6 @@ import type { PostFilter } from "@/lib/posts/post-filter"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, Post } from "@/types"
 import { ChannelAvatar } from "../ChannelAvatar"
-import { focusIsTyping } from "./FeedKeyboard"
 
 export interface SpotlightApi {
   spotlight: ChannelSpotlight | null

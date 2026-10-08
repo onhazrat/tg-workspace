@@ -11,13 +11,14 @@ import {
   setSystemTime,
   test,
 } from "bun:test"
-import { cleanup, render, screen } from "@testing-library/react"
+import { act, cleanup, render, screen } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import {
   type CardFieldSettings,
   type CardZoom,
   cardFace,
 } from "@/lib/channels/card-zoom"
+import { notifyTick } from "@/lib/shared-ticker"
 import type { Channel, ChannelStats } from "@/types"
 import { ChannelCardFace } from "./ChannelCardFace"
 import { ChannelCardTile } from "./ChannelCardTile"
@@ -123,6 +124,14 @@ describe("the Last sync state", () => {
         nextRegularSyncAt: NOW - 30 * H,
       }),
     ).toBe("idle")
+  })
+
+  test("an open card turns due when its next sync passes, on the shared tick", () => {
+    renderCard({ ...synced, nextRegularSyncAt: NOW + H })
+    expect(lastSync().getAttribute("data-last-sync")).toBe("on-schedule")
+    setSystemTime(NOW + 2 * H)
+    act(() => notifyTick())
+    expect(lastSync().getAttribute("data-last-sync")).toBe("due")
   })
 
   test("exactly 24 hours past due is late, a moment less is due", () => {

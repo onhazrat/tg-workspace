@@ -1,8 +1,7 @@
 import { Edit2, RefreshCw } from "lucide-react"
 import { useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
-import { shortcut } from "@/lib/channels/card-zoom"
-import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
+import { disabledReason } from "@/lib/channels/sync-permissions"
 import {
   type LastSyncState,
   lastSyncState,
@@ -12,9 +11,14 @@ import {
   syncScheduleDetail,
   syncSlots,
 } from "@/lib/channels/sync-schedule-summary"
+import { useNow } from "@/lib/shared-ticker"
 import type { Channel } from "@/types"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
-import { channelSyncStatus, parseStartId } from "./channel-card-status"
+import {
+  channelSyncStatus,
+  parseStartId,
+  syncButtonProps,
+} from "./channel-card-status"
 
 /** Green on schedule, amber due, red late or never, grey when nothing is expected. */
 const LAST_SYNC_TONE: Record<LastSyncState, string> = {
@@ -54,7 +58,7 @@ export function ChannelCardFooter({
   onSaveStartId: (startId: number) => void
   onSync: () => void
 }) {
-  const now = Date.now()
+  const now = useNow()
   const slots = syncSlots(channel, now)
   const state = lastSyncState(channel, now)
   const status = channelSyncStatus(channel)
@@ -171,21 +175,17 @@ function SyncButton({
   busy: boolean
   onSync: () => void
 }) {
+  const { label, ...sync } = syncButtonProps(channel, busy, onSync)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          {...shortcut("s")}
-          onClick={(e) => {
-            e.stopPropagation()
-            onSync()
-          }}
-          disabled={busy || !channelAllows(channel, "individual")}
+          {...sync}
           className="relative z-20 h-8 px-3 text-[10px] uppercase font-bold flex items-center justify-center gap-1.5 bg-app-ink/5 hover:bg-app-ink text-app-ink hover:text-app-bg transition-all disabled:opacity-30 rounded-lg border border-app-ink/10 hover:border-app-ink"
         >
           <RefreshCw size={12} className={isScraping ? "animate-spin" : ""} />
-          {channel.isUnavailableOnWebView ? "Recheck" : "Sync"}
+          {label}
         </button>
       </TooltipTrigger>
       <TooltipContent>

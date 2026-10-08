@@ -5,6 +5,7 @@
  * 500-post feed scheduled 500 timers that all did the same thing at the same
  * cadence. One timer runs here, and only while something is subscribed.
  */
+import { useEffect, useState } from "react"
 
 type Listener = () => void
 
@@ -39,6 +40,13 @@ export function subscribeToTick(listener: Listener): () => void {
     // No subscribers means no reason to keep waking the event loop.
     if (listeners.size === 0) stop()
   }
+}
+
+/** The current time, refreshed on the shared tick, not by a timer of its own. */
+export function useNow(): number {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => subscribeToTick(() => setNow(Date.now())), [])
+  return now
 }
 
 /** Test seam. */
