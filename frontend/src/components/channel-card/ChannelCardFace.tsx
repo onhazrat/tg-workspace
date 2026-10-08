@@ -7,7 +7,7 @@ import {
 } from "./ChannelCardChrome"
 import { ChannelCardFooter } from "./ChannelCardFooter"
 import { ChannelCardHeader } from "./ChannelCardHeader"
-import { ChannelCardMeta } from "./ChannelCardMeta"
+import { ChannelCardStatTiles } from "./ChannelCardStats"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
   channelCardFrameClass,
@@ -131,12 +131,12 @@ export function ChannelCardFace({
           showBio={face.bio}
           linkToTelegram={!face.bodySelects}
         />
-        {face.meta && (
-          <ChannelCardMeta
+        {face.statTiles.length > 0 && (
+          <ChannelCardStatTiles
+            keys={face.statTiles}
             channel={channel}
             stats={stats}
-            inScopeCount={inScopeCount}
-            show={face.meta}
+            inScope={isSelected ? inScopeCount : null}
           />
         )}
 
