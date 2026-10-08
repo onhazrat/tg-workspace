@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { PhotoViewer, PhotoViewerDialog } from "./PhotoViewer"
+import { PhotoViewer, PhotoViewerDialog, REVEAL_CHANNEL } from "./PhotoViewer"
 
 /** Three cards on the page, as the feed draws them. */
 function feed() {
@@ -127,6 +127,29 @@ test("closing leaves the Channels grid at the Channel of the last photo viewed",
   unmount()
   grid.remove()
   expect(tile.scrollIntoView).toHaveBeenCalledTimes(1)
+})
+
+test("a Channel card that unmounted while open is revealed by the grid instead", () => {
+  const grid = document.createElement("div")
+  grid.innerHTML = `<div data-channel-name="durov"><img src="blob:d" data-gallery-caption="Pavel"></div>`
+  document.body.appendChild(grid)
+  const tile = grid.firstElementChild as HTMLElement
+  tile.scrollIntoView = mock()
+  const revealed: unknown[] = []
+  const onReveal = (e: Event) => revealed.push((e as CustomEvent).detail)
+  window.addEventListener(REVEAL_CHANNEL, onReveal)
+  try {
+    const { unmount } = render(
+      <PhotoViewer start="blob:d" onClose={() => {}} />,
+    )
+    // The virtualised grid drops the card, say after a resize or a re-sort.
+    grid.remove()
+    unmount()
+  } finally {
+    window.removeEventListener(REVEAL_CHANNEL, onReveal)
+  }
+  expect(tile.scrollIntoView).not.toHaveBeenCalled()
+  expect(revealed).toEqual(["durov"])
 })
 
 describe("PhotoViewerDialog", () => {

@@ -15,6 +15,7 @@ import {
 import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
+import { ChannelKeyHelp } from "@/components/channel-grid/ChannelGridKeyboard"
 import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
@@ -23,9 +24,11 @@ import { useChannelGridActions } from "@/components/channel-grid/useChannelGridA
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
+import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { useSettingGroupsQuery } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import { bulkTagSuggestions } from "@/lib/channels/bulk-tag-suggestions"
+import { cardFace } from "@/lib/channels/card-zoom"
 import {
   addFunnel,
   append,
@@ -116,6 +119,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setShowSortRank,
   } = useChannelGridSortState()
 
+  const settings = useSettings()
   const {
     showChannelSubscribers,
     channelCardZoom,
@@ -124,7 +128,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setChannelGridGroupBySelection,
     channelActionLimit,
     setChannelActionLimit,
-  } = useSettings()
+  } = settings
+  const [keyboard, setKeyboard] = useSessionFlag("channelGrid_keyboard")
 
   const { isOffline } = useApiStatus()
 
@@ -587,6 +592,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onShowSortRankChange={setShowSortRank}
           zoom={channelCardZoom}
           onZoomChange={setChannelCardZoom}
+          keyboard={keyboard}
+          onKeyboardChange={setKeyboard}
         />
       </div>
 
@@ -609,6 +616,11 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         hasMore={hasMoreChannels}
         onLoadMore={loadMoreChannels}
         scrollContainerRef={scrollContainerRef}
+        keyboard={keyboard}
+      />
+      <ChannelKeyHelp
+        on={keyboard}
+        keys={cardFace(channelCardZoom, settings).keys}
       />
 
       <ChannelGridDialogs

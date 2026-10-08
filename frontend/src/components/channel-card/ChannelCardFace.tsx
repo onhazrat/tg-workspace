@@ -1,4 +1,4 @@
-import type { CardFace } from "@/lib/channels/card-zoom"
+import { type CardFace, shortcut } from "@/lib/channels/card-zoom"
 import type { Channel, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
@@ -36,6 +36,7 @@ export function ChannelCardFace({
   busy,
   queuePosition,
   sortRank,
+  highlighted = false,
   onToggleSelected,
   onToggleFreeze,
   onResetAndSync,
@@ -67,6 +68,8 @@ export function ChannelCardFace({
   /** 1-based place in the sync queue, or null when not queued. */
   queuePosition: number | null
   sortRank?: number
+  /** Keyboard mode's highlight is on this card. */
+  highlighted?: boolean
   onToggleSelected: (shift: boolean) => void
   onToggleFreeze: () => void
   onResetAndSync: () => void
@@ -85,10 +88,12 @@ export function ChannelCardFace({
   return (
     <div
       data-channel-name={channel.name}
+      data-kbd-selected={highlighted || undefined}
       className={channelCardFrameClass({
         isFrozen: channel.isFrozen,
         isSelected,
         isScraping,
+        highlighted,
         aligned,
       })}
     >
@@ -107,6 +112,7 @@ export function ChannelCardFace({
           aria-pressed={isSelected}
           aria-label={selectLabel(channel.name, isSelected)}
           {...selectionHandlers(onToggleSelected)}
+          {...shortcut("x")}
           className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         />
       )}

@@ -93,16 +93,22 @@ export function selectionHandlers(onToggleSelected: (shift: boolean) => void) {
  */
 export const ALIGNED_SECTIONS_CLASS = "row-span-6 grid grid-rows-subgrid"
 
-/** The card frame: dimmed when frozen, outlined when selected, ringed while syncing. */
+/**
+ * The card frame: dimmed when frozen, outlined when selected, ringed while
+ * syncing, and ringed blue, over the syncing ring, while keyboard mode
+ * highlights it.
+ */
 export function channelCardFrameClass({
   isFrozen,
   isSelected,
   isScraping,
+  highlighted = false,
   aligned = false,
 }: {
   isFrozen: boolean | undefined
   isSelected: boolean
   isScraping: boolean
+  highlighted?: boolean
   /** Lines its sections up with the row's other cards; see above. */
   aligned?: boolean
 }): string {
@@ -113,7 +119,13 @@ export function channelCardFrameClass({
             ? "bg-app-card border-app-ink shadow-md"
             : "bg-app-card border-app-ink/10 shadow-sm hover:border-app-ink/30 hover:shadow-md"
         }
-        ${isScraping ? "ring-2 ring-app-ink/20" : ""}
+        ${
+          highlighted
+            ? "ring-2 ring-blue-500 border-transparent"
+            : isScraping
+              ? "ring-2 ring-app-ink/20"
+              : ""
+        }
       `
 }
 

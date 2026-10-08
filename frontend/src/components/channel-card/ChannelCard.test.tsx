@@ -578,6 +578,20 @@ describe("the card shell's rules", () => {
     expect(frame("isScraping")).toContain("border-app-ink/10")
   })
 
+  test("keyboard mode's highlight rings the frame blue, over the syncing ring", () => {
+    const frame = (isScraping: boolean, highlighted: boolean) =>
+      channelCardFrameClass({
+        isFrozen: false,
+        isSelected: false,
+        isScraping,
+        highlighted,
+      })
+    expect(frame(false, false)).not.toContain("ring-blue-500")
+    expect(frame(false, true)).toContain("ring-2 ring-blue-500")
+    expect(frame(true, true)).toContain("ring-blue-500")
+    expect(frame(true, true)).not.toContain("ring-app-ink/20")
+  })
+
   test("a named group becomes a tag and names itself in the hint", () => {
     expect(settingGroupHints("Slow Feed")).toEqual({
       virtualGroupTagName: "group:Slow Feed",

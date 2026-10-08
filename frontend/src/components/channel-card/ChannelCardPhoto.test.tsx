@@ -46,7 +46,9 @@ function renderAt(zoom: CardZoom, channel: Channel = pavel) {
         channel={channel}
         isSelected={false}
         isScraping={false}
+        busy={false}
         onToggleSelected={onToggleSelected}
+        onSync={noop}
       />,
     )
     return onToggleSelected

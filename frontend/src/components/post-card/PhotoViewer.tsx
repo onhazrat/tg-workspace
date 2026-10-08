@@ -27,6 +27,12 @@ const BOX = "w-[96vw] h-[94vh]"
 /** The marker a card's photo carries so the gallery can find it. */
 export const GALLERY_CAPTION_ATTR = "data-gallery-caption"
 
+/**
+ * A window event naming a Channel (`detail`) whose card the Channels grid
+ * should scroll to the middle of the screen.
+ */
+export const REVEAL_CHANNEL = "tg:reveal-channel"
+
 export function PhotoViewerDialog({
   start,
   open,
@@ -96,9 +102,18 @@ export function PhotoViewer({
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   })
-  // Leave the feed where the browsing ended, once, on close (unmount).
+  // Leave the feed where the browsing ended, once, on close (unmount). The
+  // Channels grid is virtualised and may have unmounted that Channel's card,
+  // so it is asked to scroll its own way to the Channel.
   useEffect(
-    () => () => photos[last.current]?.card?.scrollIntoView({ block: "center" }),
+    () => () => {
+      const card = photos[last.current]?.card
+      if (card?.isConnected) card.scrollIntoView({ block: "center" })
+      else if (card?.dataset.channelName)
+        window.dispatchEvent(
+          new CustomEvent(REVEAL_CHANNEL, { detail: card.dataset.channelName }),
+        )
+    },
     [],
   )
 

@@ -484,6 +484,56 @@ test.describe("TG Workspace channels and posts", () => {
     await expect(viewer).toHaveCount(0)
   })
 
+  test("keyboard mode moves through the grid and presses the highlighted card's controls", async ({
+    page,
+  }) => {
+    const prefix = `kbd${Date.now()}`
+    await gotoWorkspace(page, "summary")
+    await seedBulkChannels(page, 4, prefix)
+    await page.goto("/workspace?tab=channels")
+    await showCards(page)
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(4, { timeout: 30_000 })
+    await clearChannelSelection(page)
+    const names = await cards.evaluateAll((elements) =>
+      elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
+    )
+    const highlighted = page.locator("[data-kbd-selected]")
+    const legend = page.locator("kbd")
+
+    await page.getByTestId("channel-keyboard").click()
+    await expect(legend).toHaveText(["j / k", "gg / G", ..."xstfobp", "esc"])
+
+    await page.keyboard.press("j")
+    await expect(highlighted).toHaveAttribute("data-channel-name", names[0])
+    await page.keyboard.press("j")
+    await expect(highlighted).toHaveAttribute("data-channel-name", names[1])
+    await page.keyboard.press("g")
+    await page.keyboard.press("g")
+    await expect(highlighted).toHaveAttribute("data-channel-name", names[0])
+
+    await page.keyboard.press("x")
+    await expect(
+      cards.first().getByRole("button", { name: `Deselect ${names[0]}` }),
+    ).toHaveAttribute("aria-pressed", "true")
+
+    // Telegram itself is never reached: the popup's request is answered here.
+    await page
+      .context()
+      .route(`**/s/${names[0]}`, (route) => route.fulfill({ body: "" }))
+    const popup = page.waitForEvent("popup")
+    await page.keyboard.press("o")
+    await expect(await popup).toHaveURL(new RegExp(`/s/${names[0]}$`))
+    await (await popup).close()
+
+    // A compact card carries no tag field, freeze or bio, and the legend says so.
+    await page.getByRole("button", { name: "Compact cards" }).click()
+    await expect(legend).toHaveText(["j / k", "gg / G", ..."xsop", "esc"])
+    await page.keyboard.press("Escape")
+    await expect(highlighted).toHaveCount(0)
+  })
+
   /**
    * Regression guard: zooming from +1 back to 0 left rows at the grid's
    * starting estimate, so tall cards overlapped the row below and short ones

@@ -1,7 +1,11 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import type React from "react"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ChannelCard } from "@/components/ChannelCard"
+import {
+  useChannelGridKeyboard,
+  useRevealChannel,
+} from "@/components/channel-grid/ChannelGridKeyboard"
 import type { CardZoom } from "@/lib/channels/card-zoom"
 import { GAP_PX, gridLanesForWidth } from "@/lib/channels/grid-lanes"
 import type { Channel } from "@/types"
@@ -37,6 +41,8 @@ type VirtualizedChannelGridProps = {
   hasMore: boolean
   /** Called when the last virtual row comes into range. */
   onLoadMore: () => void
+  /** Keyboard mode is on. */
+  keyboard: boolean
 }
 
 /** Starting row height per zoom level; measured heights replace it as rows mount. */
@@ -70,6 +76,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   onSelectChannel,
   hasMore,
   onLoadMore,
+  keyboard,
 }) => {
   const gridRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(() =>
@@ -135,6 +142,21 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   }, [lanes, zoom])
 
   const virtualRows = virtualizer.getVirtualItems()
+
+  // Keyboard mode and the photo viewer's close move to a Channel whose card
+  // may not be mounted, so they scroll the virtualiser, centring the row
+  // below the bars above the grid.
+  const names = useMemo(() => channels.map((c) => c.name), [channels])
+  const scrollToRow = (row: number) =>
+    virtualizer.scrollToIndex(row, { align: "center" })
+  const highlighted = useChannelGridKeyboard({
+    on: keyboard,
+    names,
+    lanes,
+    firstVisibleRow: virtualizer.range?.startIndex ?? 0,
+    scrollToRow,
+  })
+  useRevealChannel({ names, lanes, scrollToRow })
 
   /**
    * Load-more is driven by the virtualizer's own last rendered row, not by an
@@ -208,6 +230,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
                       ? selectedTrimRanks.get(channel.name)
                       : undefined
                   }
+                  highlighted={highlighted === channel.name}
                 />
               ))}
             </div>

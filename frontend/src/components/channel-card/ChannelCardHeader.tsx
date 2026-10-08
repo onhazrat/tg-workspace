@@ -9,6 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
+import { shortcut } from "@/lib/channels/card-zoom"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel } from "@/types"
 
@@ -36,6 +37,7 @@ export function ChannelCardPhoto({
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`Open ${channel.displayName || channel.name} in Telegram`}
+            {...shortcut("o")}
             onClick={(e) => e.stopPropagation()}
             className={`${PHOTO_CORNER_BUTTON_CLASS} -right-1`}
           >
@@ -127,6 +129,7 @@ export function ChannelCardBio({ bio, lines }: { bio: string; lines: 2 | 4 }) {
         <button
           type="button"
           aria-expanded={expanded}
+          {...shortcut("b")}
           onClick={(e) => {
             e.stopPropagation()
             setExpanded(!expanded)

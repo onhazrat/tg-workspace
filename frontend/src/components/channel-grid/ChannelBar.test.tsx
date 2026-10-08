@@ -215,11 +215,29 @@ describe("ChannelSelectionBar", () => {
         onShowSortRankChange={log("rank")}
         zoom={0}
         onZoomChange={log("zoom")}
+        keyboard={false}
+        onKeyboardChange={log("keyboard")}
         {...over}
       />,
     )
     return calls
   }
+
+  test("the Keyboard switch sits with the card size and turns keyboard mode on and off", () => {
+    const calls = mount()
+    const sizes = screen.getByRole("group", { name: "Card size" })
+    const keyboard = screen.getByRole("button", { name: "Keyboard" })
+    expect(keyboard.getAttribute("aria-pressed")).toBe("false")
+    expect(keyboard.nextElementSibling).toBe(sizes)
+    fireEvent.click(keyboard)
+    expect(calls).toEqual([["keyboard", true]])
+    cleanup()
+    const on = mount({ keyboard: true })
+    const pressed = screen.getByRole("button", { name: "Keyboard" })
+    expect(pressed.getAttribute("aria-pressed")).toBe("true")
+    fireEvent.click(pressed)
+    expect(on).toEqual([["keyboard", false]])
+  })
 
   test("with nothing selected: the count and Select all, no bulk actions", () => {
     const calls = mount()
