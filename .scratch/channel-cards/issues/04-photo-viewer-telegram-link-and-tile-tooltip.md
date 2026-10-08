@@ -7,7 +7,7 @@ the photo viewer, the Telegram link and the tile tooltip.
 
 **Blocked by:** CARD-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 The viewer is the Posts tab's, unchanged in behaviour. The prototype (`prototype/channel-cards`,
 `?variant=E`) shows it at every size, with the magnifier at the tile's bottom right; the spec
@@ -22,3 +22,7 @@ moves the magnifier to the bottom left so the Telegram link can sit at the botto
 - [ ] A tile's name and handle appear in the app's tooltip component instead of the browser's native tooltip
 - [ ] The Channels end-to-end spec opens a Channel photo and steps to the next one
 - [ ] The frontend CRAP ratchet passes, and every new or changed test is mutation-checked
+
+## Comments
+
+- 2026-10-09: implemented on `worktree-agent-af971a86f97ef7213` and merged into the integration branch in 97d21705. Open: closing the viewer does not scroll back to a Channel card that unmounted while its photo was open (the Posts tab has the same gap); handed to CARD-05, which adds scrolling the virtualiser to a Channel.
