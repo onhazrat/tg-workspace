@@ -322,6 +322,8 @@ test.describe("TG Workspace channels and posts", () => {
   }) => {
     const prefix = `zoom${Date.now()}`
     await gotoWorkspace(page, "summary")
+    // Start on cards, which have the checkbox; compact cards are the default.
+    await seedScopedStorage(page, { channelCardZoom: "0" })
     await seedBulkChannels(page, 4, prefix)
     // A Sync click must not reach Telegram; refusing the enqueue is enough.
     await page.route("**/api/v1/jobs/sync", (route) => route.abort())

@@ -109,6 +109,17 @@ export async function gotoWorkspace(page: Page, tab = "summary") {
   await expect(page.getByTestId("command-palette-button")).toBeVisible()
 }
 
+/**
+ * Switch the Channels tab to cards and reload. Compact cards are the default
+ * and lack the checkbox, hover actions, tags, status and Start ID, so a spec
+ * that reaches for one of those sets the size it needs here.
+ */
+export async function showCards(page: Page) {
+  await seedScopedStorage(page, { channelCardZoom: "0" })
+  await page.reload()
+  await expect(page.getByTestId("command-palette-button")).toBeVisible()
+}
+
 type DiscoverForwardFixture = {
   carrierName: string
   /** Already-followed forward source (appears checked+disabled). */
