@@ -28,6 +28,8 @@ export function ChannelCardFace({
   stats,
   face,
   inScopeCount,
+  accountChannels,
+  onFilterByTag,
   isSelected,
   isScraping,
   busy,
@@ -68,7 +70,8 @@ export function ChannelCardFace({
   onToggleFreeze: () => void
   onResetAndSync: () => void
   onRemove: () => void
-  onSaveChannel: (patch: Partial<Channel>) => void
+  /** Resolves once saved, so the tag field can send its saves in turn. */
+  onSaveChannel: (patch: Partial<Channel>) => Promise<void> | void
   onSync: () => void
 }) {
   const { virtualGroupTagName, inheritedSettingsHint } = settingGroupHints(
@@ -145,7 +148,9 @@ export function ChannelCardFace({
             tags={channel.tags}
             virtualGroupTagName={virtualGroupTagName}
             inheritedSettingsHint={inheritedSettingsHint}
+            accountChannels={accountChannels}
             onSave={(tags) => onSaveChannel({ tags })}
+            onFilterByTag={onFilterByTag}
           />
         )}
 
