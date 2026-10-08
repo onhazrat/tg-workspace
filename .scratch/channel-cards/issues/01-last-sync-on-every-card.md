@@ -5,9 +5,11 @@ schedule, and the footer stops claiming "Pending" or "Up to date". A compact car
 sync as an age, coloured by the schedule rule, with the next sync under it. Cards and detailed
 cards show "Synced 3h ago" in the same colour, the status only when the Channel is Restricted or
 Frozen, and the next sync; a detailed card lists the Regular and the Dynamic schedule on a line
-each. The Last sync chip in the card body goes. See `.scratch/channel-cards/spec.md`: user
-stories 1 to 15, and the implementation decisions on the card face, what each size shows, the
-status label, the Last sync colour, the schedule slots and the body chip.
+each. The Last sync chip in the card body goes. Two defaults change: the Channels tab opens on
+compact cards, and the Posts tab's compact grid starts each session on. See
+`.scratch/channel-cards/spec.md`: user stories 1 to 15 and 75 to 78, and the implementation
+decisions on the card face, what each size shows, the status label, the Last sync colour, the
+schedule slots, the body chip and the defaults.
 
 **Blocked by:** None (can start immediately)
 
@@ -30,4 +32,7 @@ note that its colour rule used fixed 1-day and 7-day ages, which the spec replac
 - [ ] A detailed card lists Regular and Dynamic with one of four states each: "in 3h", "due, 2h ago" in amber, "not scheduled", or "off" (even with an old time stored); Regular defaults to on and Dynamic to off
 - [ ] Cards show the earliest enabled schedule as "next in …"
 - [ ] The Last sync chip in the card body is gone; a test fails if it comes back
+- [ ] An Account with no stored card size opens the Channels tab on compact cards; a stored choice, cards included, is kept
+- [ ] The Posts tab's compact grid is on at the start of every browser session; turning it off lasts for the rest of the session; a test covers both
+- [ ] End-to-end specs that need cards or a non-compact Posts grid set them through the scoped-storage helper, and the whole Playwright suite passes with the new defaults
 - [ ] Every new or changed test is mutation-checked

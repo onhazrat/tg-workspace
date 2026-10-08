@@ -144,9 +144,17 @@ sync and how many it skips, and while it runs the button becomes **Stop sync**.
 72. As an Account, I want stopping to cancel the Channels still waiting as well as the one syncing, and keep what was already synced, so that stopping is safe.
 73. As an Account, I want a message saying the sync stopped, so that I know the click worked.
 74. As an Account, I want a single Channel's Sync button to keep working as today, so that the common case does not change.
+75. As an Account opening the Channels tab in a browser where I have never picked a card size, I want compact cards, so that I see many Channels and their Last sync at once.
+76. As an Account, I want a card size I picked to stay picked, so that the new default never overrides my choice.
+77. As an Account starting a browser session, I want the Posts tab's compact grid on, so that I see more Posts at once without switching it on each session.
+78. As an Account, I want turning the compact grid off to last for the rest of the session, as switching it on does today, so that my choice holds until the session ends.
 
 ## Implementation Decisions
 
+- **Defaults change.** The Channels tab's card size defaults to compact cards instead of cards,
+  for an Account with no stored choice in this browser; a stored choice is kept. The Posts tab's
+  compact grid defaults to on: it is still a per-session switch that resets when the session
+  ends, now to on, so the session store has to record "off" rather than only "on".
 - **The redesign replaces today's card for everyone.** There is no setting to keep the old card,
   and the prototype's variant switch, its context and its search parameter go away.
 - **The card face stays the one tested module that draws every size.** The face that renders
@@ -285,6 +293,11 @@ sync and how many it skips, and while it runs the button becomes **Stop sync**.
   `G`; the pure keyboard-move test for `j`, `k`, `gg` and `G` at both ends.
 - Every new branching component gets a unit test, so the frontend CRAP ratchet stays green.
 - The Playwright mocks and end-to-end specs that click Sync All are updated to confirm first.
+- The new defaults are tested where they are declared: the card-size setting's default, and the
+  compact grid switch reading as on in a fresh session and as off once turned off. End-to-end specs
+  that click card controls compact cards lack (the selection checkbox, hover actions, Start ID) set
+  the card size they need through the scoped-storage test helper instead of relying on the
+  default; specs that assume the Posts grid is not compact do the same for the grid.
 - Every new guard or test is mutation-checked: break the behaviour it covers and watch it fail.
 
 ## Out of Scope
