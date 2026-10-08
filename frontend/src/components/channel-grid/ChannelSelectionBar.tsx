@@ -4,6 +4,7 @@ import {
   Layers,
   RefreshCw,
   Snowflake,
+  Square,
   Sun,
   Trash2,
   X,
@@ -42,6 +43,9 @@ export type ChannelSelectionBarProps = {
   onSync: () => void
   isSyncDisabled: boolean
   isSyncing: boolean
+  /** A Sync selected job is running, so Sync becomes Stop sync. */
+  syncJobRunning: boolean
+  onStopSync: () => void
   onFreeze: () => void
   onUnfreeze: () => void
   onDelete: () => void
@@ -122,15 +126,27 @@ function SelectionActions(p: ChannelSelectionBarProps) {
           Trim
         </button>
       </div>
-      <button
-        type="button"
-        onClick={p.onSync}
-        disabled={p.isSyncDisabled || p.isSyncing}
-        className={actionClass}
-      >
-        <RefreshCw size={12} className={p.isSyncing ? "animate-spin" : ""} />
-        Sync
-      </button>
+      {p.syncJobRunning ? (
+        <button
+          type="button"
+          onClick={p.onStopSync}
+          data-testid="channel-sync-selected-stop"
+          className={actionClass}
+        >
+          <Square size={11} className="fill-current" />
+          Stop sync
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={p.onSync}
+          disabled={p.isSyncDisabled || p.isSyncing}
+          className={actionClass}
+        >
+          <RefreshCw size={12} className={p.isSyncing ? "animate-spin" : ""} />
+          Sync
+        </button>
+      )}
       <button
         type="button"
         onClick={p.onFreeze}

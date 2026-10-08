@@ -784,4 +784,71 @@ test.describe("TG Workspace channels and posts", () => {
     await addTag(`${prefix}-b`)
     await expect.poll(() => written(from).sort()).toEqual([...names].sort())
   })
+
+  /**
+   * CARD-06: Sync all asks first, and Stop sync cancels that exact job. The
+   * job is mocked so nothing reaches Telegram: its event stream stays open
+   * until the cancel arrives, then reports the job cancelled, as the endpoint
+   * does for the Channels still queued.
+   */
+  test("Sync all asks first, and Stop sync ends the job as cancelled", async ({
+    page,
+  }) => {
+    const jobId = `e2e-stop-${Date.now()}`
+    await gotoWorkspace(page, "channels")
+    await seedTestChannel(page)
+
+    const cancelled = {
+      jobId,
+      status: "cancelled",
+      source: "Manual (Sync All)",
+      channels: [],
+      createdAt: Date.now(),
+      finishedAt: Date.now(),
+    }
+    let release = () => {}
+    const cancelArrived = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const starts: { syncMode?: string }[] = []
+    const cancels: string[] = []
+    await page.route("**/api/v1/jobs/sync", async (route) => {
+      starts.push(route.request().postDataJSON())
+      await route.fulfill({ json: { jobId } })
+    })
+    await page.route("**/api/v1/jobs/sync/*/cancel", async (route) => {
+      cancels.push(route.request().url())
+      release()
+      await route.fulfill({ json: cancelled })
+    })
+    await page.route(`**/api/v1/jobs/sync/${jobId}/events`, async (route) => {
+      await cancelArrived
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify(cancelled)}\n\n`,
+      })
+    })
+
+    await page.goto("/workspace?tab=channels")
+    const syncAll = page.getByRole("button", { name: "Sync all" })
+    await syncAll.click()
+    await expect(page.getByRole("dialog")).toContainText(
+      /Sync \d+ channels? now\?/,
+    )
+    expect(starts).toEqual([])
+    await page.getByTestId("channel-sync-all-confirm").click()
+
+    const stop = page.getByTestId("channel-sync-all-stop")
+    await expect(stop).toBeVisible()
+    expect(starts.map((body) => body.syncMode)).toEqual(["sync_all"])
+    await stop.click()
+
+    await expect(page.getByText("Sync stopped")).toBeVisible()
+    expect(cancels).toHaveLength(1)
+    expect(cancels[0]).toContain(`/jobs/sync/${jobId}/cancel`)
+    // The stream reports the job cancelled, so the button comes back.
+    await expect(syncAll).toBeVisible()
+    await expect(stop).toBeHidden()
+  })
 })

@@ -6,6 +6,7 @@ import type { CommandContext } from "@/lib/commands/types"
 import type { Channel } from "@/types"
 
 import { buildActionCommands } from "./actions"
+import { selectCommandAction } from "./palette-shell"
 
 const commands = buildActionCommands()
 const command = (id: string) => {
@@ -167,5 +168,15 @@ describe("import-database", () => {
     await command("import-database").run(ctx())
     expect(posted).toEqual([])
     expect(t.info).not.toHaveBeenCalled()
+  })
+})
+
+describe("sync-all confirmation", () => {
+  test("the palette asks before Sync All runs, with the count it will send", () => {
+    const syncAll = command("sync-all")
+    expect(selectCommandAction(syncAll, ctx())).toBe("confirm")
+    expect(syncAll.getConfirmDescription?.(ctx())).toBe(
+      "Sync 1 channel now? 1 frozen or excluded from Sync All will be skipped.",
+    )
   })
 })

@@ -5,7 +5,12 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ChannelSettingGroup } from "@/types"
-import { AiContextPill, CardSizeSwitch, SortMenu } from "./ChannelBarControls"
+import {
+  AiContextPill,
+  CardSizeSwitch,
+  SortMenu,
+  SyncAllButton,
+} from "./ChannelBarControls"
 import {
   ChannelSelectionBar,
   type ChannelSelectionBarProps,
@@ -110,6 +115,56 @@ describe("CardSizeSwitch", () => {
   })
 })
 
+describe("SyncAllButton", () => {
+  const channels = [
+    { id: "1", name: "open" },
+    { id: "2", name: "frozen", includeInSyncAll: false },
+  ]
+
+  test("asks first, with the count, and syncs only once confirmed", () => {
+    const calls: Calls = []
+    const log = logger(calls)
+    render(
+      <SyncAllButton
+        channels={channels}
+        onSync={log("sync")}
+        running={false}
+        onStop={log("stop")}
+        disabled={false}
+        loading={false}
+      />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Sync all" }))
+    expect(calls).toEqual([])
+    expect(
+      screen.getByText(
+        "Sync 1 channel now? 1 frozen or excluded from Sync All will be skipped.",
+      ),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByTestId("channel-sync-all-confirm"))
+    expect(calls.map(([name]) => name)).toEqual(["sync"])
+    expect(screen.queryByTestId("channel-sync-all-confirm")).toBeNull()
+  })
+
+  test("while Sync All runs it is Stop sync, which stops without asking", () => {
+    const calls: Calls = []
+    const log = logger(calls)
+    render(
+      <SyncAllButton
+        channels={channels}
+        onSync={log("sync")}
+        running
+        onStop={log("stop")}
+        disabled={false}
+        loading
+      />,
+    )
+    expect(screen.queryByRole("button", { name: "Sync all" })).toBeNull()
+    fireEvent.click(screen.getByTestId("channel-sync-all-stop"))
+    expect(calls.map(([name]) => name)).toEqual(["stop"])
+  })
+})
+
 describe("ChannelSelectionBar", () => {
   const groups = [
     { id: "g1", name: "Default", isDefault: true },
@@ -138,6 +193,8 @@ describe("ChannelSelectionBar", () => {
         onSync={log("sync")}
         isSyncDisabled={false}
         isSyncing={false}
+        syncJobRunning={false}
+        onStopSync={log("stop")}
         onFreeze={log("freeze")}
         onUnfreeze={log("unfreeze")}
         onDelete={log("delete")}
@@ -174,6 +231,17 @@ describe("ChannelSelectionBar", () => {
     expect(screen.queryByText("Delete")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Select all" }))
     expect(calls.map(([name]) => name)).toEqual(["all"])
+  })
+
+  test("while its sync runs, Sync becomes Stop sync and stops that sync", () => {
+    const calls = mount({
+      selection: selecting(5),
+      isSyncing: true,
+      syncJobRunning: true,
+    })
+    expect(screen.queryByRole("button", { name: "Sync" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Stop sync" }))
+    expect(calls.map(([name]) => name)).toEqual(["stop"])
   })
 
   test("with a selection: the count clears it, and the bulk actions reach it", () => {

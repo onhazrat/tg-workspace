@@ -28,7 +28,7 @@ import { type FollowOptions, useFollowJob } from "../hooks/useFollowJob"
 import { usePostFilterParam } from "../hooks/usePostFilterParam"
 import { usePostFilters } from "../hooks/usePostFilters"
 import { usePromptPosts } from "../hooks/usePromptPosts"
-import { useSyncJob } from "../hooks/useSyncJob"
+import { type StoppableSync, useSyncJob } from "../hooks/useSyncJob"
 import { useSyncQueue } from "../hooks/useSyncQueue"
 import { channelAllows, disabledReason } from "../lib/channels/sync-permissions"
 import type { PostFilter } from "../lib/posts/post-filter"
@@ -107,6 +107,9 @@ interface ScraperContextType {
   /** Syncs `names`, or the whole selection when none are given. */
   handleScrapeSelected: (names?: Set<string>) => Promise<void>
   handleRecheckRestricted: () => Promise<void>
+  /** Each running Sync All or Sync selected job, for its Stop sync button. */
+  runningSyncJobs: Record<StoppableSync, string | null>
+  stopSync: (kind: StoppableSync) => Promise<void>
   scrapeChannelsInParallel: (
     channelsToScrape: Channel[],
     source: string,
@@ -177,6 +180,12 @@ const FOLLOW_API = {
 }
 
 const ScraperContext = createContext<ScraperContextType | undefined>(undefined)
+
+/** Recheck Restricted has no Stop sync button, so its job is not held. */
+const STOP_BUTTON: Partial<Record<ManualSyncMode, StoppableSync>> = {
+  sync_all: "sync_all",
+  bulk: "selected",
+}
 
 export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -301,6 +310,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     setConsecutiveFailures,
     waitSyncJob,
     runServerSync,
+    runningSyncJobs,
+    stopSync,
   } = useSyncJob({
     isOffline,
     channelCount: channels.length,
@@ -407,6 +418,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       | "bulk"
       | "individual"
       | "recheck_restricted" = "bulk",
+    stoppable?: StoppableSync,
   ) => {
     if (isOffline) {
       toast.warning(
@@ -425,6 +437,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       source,
       true,
       syncMode,
+      stoppable,
     )
   }
 
@@ -438,7 +451,12 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
       return
     }
     try {
-      await scrapeChannelsInParallel(plan.channels, plan.source, plan.syncMode)
+      await scrapeChannelsInParallel(
+        plan.channels,
+        plan.source,
+        plan.syncMode,
+        STOP_BUTTON[mode],
+      )
       if (activeTab !== "channels") setActiveTab("posts")
     } catch (err: unknown) {
       console.error(err)
@@ -494,6 +512,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         handleScrapeAll,
         handleScrapeSelected,
         handleRecheckRestricted,
+        runningSyncJobs,
+        stopSync,
         scrapeChannelsInParallel,
         syncQueue,
         isProcessingQueue,

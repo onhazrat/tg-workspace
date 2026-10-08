@@ -1,10 +1,11 @@
-import { Languages, Layers, RefreshCw, Search, Tag } from "lucide-react"
+import { Languages, Layers, Search, Tag } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AiContextPill,
   SortMenu,
+  SyncAllButton,
 } from "@/components/channel-grid/ChannelBarControls"
 import type { ConditionOptions } from "@/components/channel-grid/ChannelConditionPicker"
 import {
@@ -20,7 +21,6 @@ import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
-import { TgButton } from "@/components/ui/tg-button"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
 import { useSettingGroupsQuery } from "@/hooks/useSettingGroups"
@@ -132,6 +132,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     scrapingChannels,
     handleScrapeSelected,
     handleScrapeAll,
+    runningSyncJobs,
+    stopSync,
     followDiscoverChannels,
   } = useScraper()
 
@@ -520,17 +522,14 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             includeTags={includeChannelTagsInPrompt}
             onIncludeTagsChange={setIncludeChannelTagsInPrompt}
           />
-          <TgButton
-            type="button"
-            size="sm"
-            onClick={handleScrapeAll}
+          <SyncAllButton
+            channels={channels}
+            onSync={() => void handleScrapeAll()}
+            running={runningSyncJobs.sync_all !== null}
+            onStop={() => void stopSync("sync_all")}
             disabled={isScrapeAllDisabled}
             loading={scrapingChannels.size > 0}
-            className="h-9"
-          >
-            <RefreshCw size={12} />
-            Sync all
-          </TgButton>
+          />
         </div>
 
         <ChannelFilterRow
@@ -564,6 +563,8 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onSync={() => void handleScrapeSelected(targets)}
           isSyncDisabled={isScrapeSelectedDisabled}
           isSyncing={scrapingChannels.size > 0}
+          syncJobRunning={runningSyncJobs.selected !== null}
+          onStopSync={() => void stopSync("selected")}
           onFreeze={() => actions.setConfirmBulkFreezeAction("freeze")}
           onUnfreeze={() => actions.setConfirmBulkFreezeAction("unfreeze")}
           onDelete={() => actions.setConfirmBulkDelete(true)}
