@@ -3,8 +3,8 @@
  * (CARD-02). Tiles are read through their `data-stat` key, the shown number
  * and label through text, and the exact value through the hover hint.
  */
-import { afterEach, describe, expect, test } from "bun:test"
-import { cleanup, render } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import {
   type CardFieldSettings,
@@ -229,7 +229,7 @@ describe("the detailed card's About line", () => {
     expect(about()).toBe("Chat ID 777")
     cleanup()
     renderCard(1)
-    expect(about()).toBeFalsy()
+    expect(document.querySelector("[data-card-about]")).toBeNull()
   })
 
   test("a card and a compact card have none", () => {
@@ -238,5 +238,88 @@ describe("the detailed card's About line", () => {
     cleanup()
     renderCard(-1, { channel: known })
     expect(about()).toBeFalsy()
+  })
+})
+
+describe("the bio", () => {
+  const bio = "A long bio that runs past the lines the card gives it."
+  const withBio = { ...channel, bio }
+  let overflowing = false
+  const resized: (() => void)[] = []
+  const RealResizeObserver = globalThis.ResizeObserver
+
+  // The test DOM does no layout, so the measured heights are stubbed: the
+  // text overflows when its scroll height passes its clamped height.
+  beforeEach(() => {
+    overflowing = false
+    resized.length = 0
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => (overflowing ? 80 : 20),
+    })
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get: () => 20,
+    })
+    globalThis.ResizeObserver = class {
+      constructor(private callback: () => void) {}
+      observe() {
+        resized.push(this.callback)
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+  })
+  afterEach(() => {
+    delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight
+    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight
+    globalThis.ResizeObserver = RealResizeObserver
+  })
+
+  const text = () => screen.getByText(bio)
+  const toggle = () => screen.queryByRole("button", { name: /^(More|Less)$/ })
+
+  test("a card cuts it at two lines and a detailed card at four", () => {
+    renderCard(0, { channel: withBio }, { showChannelBio: true })
+    expect(text().getAttribute("data-lines")).toBe("2")
+    cleanup()
+    renderCard(1, { channel: withBio })
+    expect(text().getAttribute("data-lines")).toBe("4")
+  })
+
+  test("More and Less appear only when text is hidden, at both lengths", () => {
+    for (const zoom of [0, 1] as const) {
+      overflowing = false
+      renderCard(zoom, { channel: withBio }, { showChannelBio: true })
+      expect(toggle()).toBeNull()
+      cleanup()
+      overflowing = true
+      renderCard(zoom, { channel: withBio }, { showChannelBio: true })
+      fireEvent.click(toggle() as HTMLElement)
+      expect(toggle()?.textContent).toBe("Less")
+      expect(toggle()?.getAttribute("aria-expanded")).toBe("true")
+      expect(text().getAttribute("data-lines")).toBeNull()
+      fireEvent.click(toggle() as HTMLElement)
+      expect(toggle()?.textContent).toBe("More")
+      cleanup()
+    }
+  })
+
+  test("is measured again when the card's width changes", () => {
+    renderCard(0, { channel: withBio }, { showChannelBio: true })
+    expect(toggle()).toBeNull()
+    overflowing = true
+    act(() => {
+      for (const callback of resized) callback()
+    })
+    expect(toggle()?.textContent).toBe("More")
+  })
+
+  test("is absent when the settings hide it or there is none", () => {
+    renderCard(0, { channel: withBio })
+    expect(screen.queryByText(bio)).toBeNull()
+    cleanup()
+    renderCard(1)
+    expect(document.querySelector("[data-lines]")).toBeNull()
   })
 })

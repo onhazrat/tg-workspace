@@ -8,11 +8,7 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import {
-  type CardZoom,
-  type ChannelMetaVisibility,
-  cardFace,
-} from "@/lib/channels/card-zoom"
+import { type CardZoom, cardFace } from "@/lib/channels/card-zoom"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
@@ -22,7 +18,6 @@ import {
 import { ChannelCardFace } from "./ChannelCardFace"
 import { ChannelCardFooter } from "./ChannelCardFooter"
 import { ChannelCardHeader } from "./ChannelCardHeader"
-import { ChannelCardMeta } from "./ChannelCardMeta"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
   channelCardFrameClass,
@@ -210,122 +205,6 @@ describe("ChannelCardBadges", () => {
     expect(screen.queryByTestId("channel-sort-rank")).toBeNull()
     expect(screen.queryByText("Unavailable")).toBeNull()
     expect(screen.queryByText("Partial history")).toBeNull()
-  })
-})
-
-describe("ChannelCardMeta", () => {
-  const all: ChannelMetaVisibility = {
-    subscribers: true,
-    telegramChatId: true,
-    photos: true,
-    videos: true,
-    files: true,
-    links: true,
-  }
-  const counted: Channel = {
-    ...base,
-    subscribers: 1500,
-    telegramChatId: 777,
-    photos: 2,
-    videos: 3,
-    files: 4,
-    links: 5,
-  }
-
-  test("post count, in-scope count and activity rate", () => {
-    render(
-      <ChannelCardMeta
-        channel={base}
-        stats={{
-          count: 1234,
-          velocity: 0.4,
-          reach: null,
-          reachEstimated: false,
-        }}
-        inScopeCount={12}
-        show={all}
-      />,
-    )
-    expect(screen.getByText("1,234 Posts")).toBeTruthy()
-    expect(screen.getByText("(12 in scope)")).toBeTruthy()
-    expect(screen.getByText("< 1 / hr")).toBeTruthy()
-  })
-
-  test("each counter shows when its setting is on and hides when off", () => {
-    render(
-      <ChannelCardMeta
-        channel={counted}
-        stats={undefined}
-        inScopeCount={0}
-        show={all}
-      />,
-    )
-    for (const text of ["777", "2", "3", "4", "5"])
-      expect(screen.getByText(text)).toBeTruthy()
-    expect(screen.queryByText(/in scope/)).toBeNull()
-    expect(screen.queryByText(/\/ hr/)).toBeNull()
-    cleanup()
-    const none = Object.fromEntries(
-      Object.keys(all).map((k) => [k, false]),
-    ) as unknown as ChannelMetaVisibility
-    render(
-      <ChannelCardMeta
-        channel={counted}
-        stats={undefined}
-        inScopeCount={0}
-        show={none}
-      />,
-    )
-    for (const text of ["777", "2", "3", "4", "5"])
-      expect(screen.queryByText(text)).toBeNull()
-  })
-
-  test("reach reads measured, estimated or not measured", () => {
-    const withReach = (reach: number | null, reachEstimated: boolean) =>
-      render(
-        <ChannelCardMeta
-          channel={base}
-          stats={{ count: 5, reach, reachEstimated }}
-          inScopeCount={0}
-          show={all}
-        />,
-      )
-    withReach(12300, false)
-    expect(screen.getByText("Reach 12.3K")).toBeTruthy()
-    cleanup()
-    withReach(12300, true)
-    expect(screen.getByText("Reach ~12.3K")).toBeTruthy()
-    cleanup()
-    withReach(null, false)
-    expect(screen.getByText("Reach not measured")).toBeTruthy()
-    cleanup()
-    // Zero is a measurement, not an absence.
-    withReach(0, false)
-    expect(screen.getByText("Reach 0")).toBeTruthy()
-  })
-
-  test("no reach chip before the stats have loaded", () => {
-    render(
-      <ChannelCardMeta
-        channel={base}
-        stats={undefined}
-        inScopeCount={0}
-        show={all}
-      />,
-    )
-    expect(screen.queryByText(/Reach/)).toBeNull()
-  })
-
-  test("auto-followed channels say so", () => {
-    render(
-      <ChannelCardMeta
-        channel={{ ...base, discoveredVia: { channelName: "src" } } as Channel}
-        stats={undefined}
-        inScopeCount={0}
-        show={all}
-      />,
-    )
-    expect(screen.getByText("Auto-Followed")).toBeTruthy()
   })
 })
 
@@ -718,42 +597,26 @@ describe("ChannelCardHeader", () => {
       <ChannelCardHeader
         linkToTelegram
         channel={{ ...base, displayName: "Pavel" }}
-        showBio={false}
       />,
     )
     expect(screen.getByTitle("Pavel").textContent).toBe("Pavel")
     expect(screen.getByText("@durov")).toBeTruthy()
     cleanup()
-    render(<ChannelCardHeader linkToTelegram channel={base} showBio={false} />)
+    render(<ChannelCardHeader linkToTelegram channel={base} />)
     expect(screen.getByTitle("durov").textContent).toBe("durov")
   })
 
   test("marks a frozen channel", () => {
-    render(<ChannelCardHeader linkToTelegram channel={base} showBio={false} />)
+    render(<ChannelCardHeader linkToTelegram channel={base} />)
     expect(screen.queryByTestId("channel-card-frozen-mark")).toBeNull()
     cleanup()
     render(
       <ChannelCardHeader
         linkToTelegram
         channel={{ ...base, isFrozen: true }}
-        showBio={false}
       />,
     )
     expect(screen.getByTestId("channel-card-frozen-mark")).toBeTruthy()
-  })
-
-  test("the bio shows only when the setting is on and there is one", () => {
-    const withBio = { ...base, bio: "about" }
-    render(<ChannelCardHeader linkToTelegram channel={withBio} showBio />)
-    expect(screen.getByTitle("about").getAttribute("dir")).toBe("auto")
-    cleanup()
-    render(
-      <ChannelCardHeader linkToTelegram channel={withBio} showBio={false} />,
-    )
-    expect(screen.queryByTitle("about")).toBeNull()
-    cleanup()
-    render(<ChannelCardHeader linkToTelegram channel={base} showBio />)
-    expect(screen.queryByText("about")).toBeNull()
   })
 })
 

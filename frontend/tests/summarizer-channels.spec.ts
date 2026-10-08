@@ -10,6 +10,7 @@ import {
   gotoWorkspace,
   mockBulkFollowJob,
   selectChannelsKeyboard,
+  showCards,
 } from "./utils/summarizer-helpers.ts"
 
 test.describe("TG Workspace channels and posts", () => {
@@ -480,6 +481,66 @@ test.describe("TG Workspace channels and posts", () => {
     await page.getByRole("button", { name: "Cards", exact: true }).click()
     await expect(cards.first().getByText("Start ID")).toHaveCount(0)
     await expectRowsFlush()
+  })
+
+  /**
+   * CARD-02: each section of a card starts level with the same section on
+   * the cards beside it. Three Channels with no bio, a short one and a long
+   * one, and one tag against many, sit in one row; every section's top is
+   * compared across the row, at both card sizes that align.
+   */
+  test("card sections line up across a row whatever the bio", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const prefix = `align${Date.now()}`
+    await gotoWorkspace(page, "channels")
+    const long = "A bio that runs on and on. ".repeat(12)
+    await seedTestChannel(page, `${prefix}a`, ["one"])
+    await seedTestChannel(page, `${prefix}b`, [], { bio: "Short." })
+    await seedTestChannel(
+      page,
+      `${prefix}c`,
+      ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"],
+      { bio: long },
+    )
+    await showCards(page)
+    await page.goto("/workspace?tab=channels")
+    await page.getByPlaceholder("Search channels...").fill(prefix)
+    const cards = page.locator(`[data-channel-name^="${prefix}"]`)
+    await expect(cards).toHaveCount(3, { timeout: 30_000 })
+
+    const sections = [
+      "h4",
+      '[data-card-section="bio"]',
+      "[data-stat]",
+      '[data-card-section="tags"]',
+      '[data-card-section="about"]',
+      "[data-last-sync]",
+    ]
+    const expectAligned = async () => {
+      await page.waitForTimeout(300)
+      const tops = await cards.evaluateAll((elements, selectors) => {
+        const top = (el: Element, selector: string) => {
+          const found = el.querySelector(selector)
+          return found ? Math.round(found.getBoundingClientRect().top) : null
+        }
+        return elements.map((card) => ({
+          card: Math.round(card.getBoundingClientRect().top),
+          sections: selectors.map((selector) => top(card, selector)),
+        }))
+      }, sections)
+      // One row, or the comparison means nothing.
+      expect(new Set(tops.map((t) => t.card)).size).toBe(1)
+      for (const t of tops) expect(t.sections).toEqual(tops[0].sections)
+    }
+
+    await expectAligned()
+    // The long bio is cut, and its More is the only one in the row.
+    await expect(cards.getByRole("button", { name: "More" })).toHaveCount(1)
+    await page.getByRole("button", { name: "Detailed cards" }).click()
+    await expect(cards.first().getByText("Start ID")).toBeVisible()
+    await expectAligned()
   })
 
   /**

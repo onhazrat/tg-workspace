@@ -185,8 +185,11 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
               }px)`,
             }}
           >
+            {/* No row gap: a card and a detailed card span six implicit rows
+                of this grid as a subgrid (ALIGNED_SECTIONS_CLASS), and a row
+                gap would land between their sections. */}
             <div
-              className="grid gap-4 pb-4"
+              className="grid gap-x-4 pb-4"
               style={{
                 gridTemplateColumns: `repeat(${lanes}, minmax(0, 1fr))`,
               }}
