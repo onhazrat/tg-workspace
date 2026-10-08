@@ -29,6 +29,8 @@ interface ChannelCardProps {
   /** One click on this card's selection control; the grid owns range select. */
   onSelectChannel: (name: string, shift: boolean) => void
   sortRank?: number
+  /** Keyboard mode's highlight is on this card. */
+  highlighted?: boolean
 }
 
 export const ChannelCard: React.FC<ChannelCardProps> = ({
@@ -39,6 +41,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
   handleResetAndSync,
   onSelectChannel,
   sortRank,
+  highlighted,
 }) => {
   const {
     channels,
@@ -87,6 +90,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       })
   }
 
+  const sync = () => addToSyncQueue(channel, "Manual (Single Sync)", () => {})
   const face = cardFace(settings.channelCardZoom, settings)
 
   if (face.layout === "tile") {
@@ -95,7 +99,10 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         channel={channel}
         isSelected={isSelected}
         isScraping={isScraping}
+        busy={busy}
+        highlighted={highlighted}
         onToggleSelected={onToggleSelected}
+        onSync={sync}
       />
     )
   }
@@ -113,12 +120,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       busy={busy}
       queuePosition={queuePosition(syncQueue, channel.id)}
       sortRank={sortRank}
+      highlighted={highlighted}
       onToggleSelected={onToggleSelected}
       onToggleFreeze={handleToggleFreeze}
       onResetAndSync={() => handleResetAndSync(channel)}
       onRemove={() => handleRemoveChannel(channel)}
       onSaveChannel={saveChannel}
-      onSync={() => addToSyncQueue(channel, "Manual (Single Sync)", () => {})}
+      onSync={sync}
     />
   )
 }

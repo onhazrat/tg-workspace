@@ -243,7 +243,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 aria-pressed={keyboard}
                 onClick={() => setKeyboard(!keyboard)}
                 className={pillClass(keyboard)}
-                title="j / k to move, an action's letter to fire it"
+                title="j / k to move, gg / G to jump, an action's letter to fire it"
               >
                 <Keyboard size={12} /> Keyboard
               </button>

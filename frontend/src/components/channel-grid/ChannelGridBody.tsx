@@ -29,6 +29,8 @@ type ChannelGridBodyProps = {
   onLoadMore: () => void
   /** The workspace scroll container the grid is windowed against. */
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  /** Keyboard mode is on. */
+  keyboard: boolean
 }
 
 /** Grid body: loading skeletons, empty state, or the ChannelCard grid with infinite-scroll sentinel. */
@@ -49,6 +51,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   hasMore,
   onLoadMore,
   scrollContainerRef,
+  keyboard,
 }) => {
   if (isLoading) {
     return (
@@ -126,6 +129,7 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         onSelectChannel={onSelectChannel}
         hasMore={hasMore}
         onLoadMore={onLoadMore}
+        keyboard={keyboard}
       />
 
       {/* Kept as a position marker for tests and as the visual end-of-list

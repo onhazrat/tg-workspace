@@ -1,6 +1,7 @@
 import { Edit2, RefreshCw } from "lucide-react"
 import { useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
+import { shortcut } from "@/lib/channels/card-zoom"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
 import {
   type LastSyncState,
@@ -175,6 +176,7 @@ function SyncButton({
       <TooltipTrigger asChild>
         <button
           type="button"
+          {...shortcut("s")}
           onClick={(e) => {
             e.stopPropagation()
             onSync()

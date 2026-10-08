@@ -5,6 +5,7 @@ import {
   GALLERY_CAPTION_ATTR,
   PhotoViewerDialog,
 } from "@/components/post-card/PhotoViewer"
+import { shortcut } from "@/lib/channels/card-zoom"
 import { getChannelPhotoSrc } from "@/lib/channels/channel-photo-cache"
 import type { Channel } from "@/types"
 
@@ -82,6 +83,7 @@ export function ChannelAvatar({
             <button
               type="button"
               aria-label={label}
+              {...shortcut("p")}
               onClick={open}
               className={`${PHOTO_CORNER_BUTTON_CLASS} -left-1`}
             >
@@ -93,6 +95,7 @@ export function ChannelAvatar({
           <button
             type="button"
             aria-label={label}
+            {...shortcut("p")}
             onClick={open}
             className="relative z-20 block cursor-zoom-in rounded-full"
           >

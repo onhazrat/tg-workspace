@@ -173,7 +173,9 @@ describe("the Last sync state", () => {
         channel={late}
         isSelected={false}
         isScraping={false}
+        busy={false}
         onToggleSelected={noop}
+        onSync={noop}
       />,
     )
     expect(document.querySelector("[data-last-sync]")).toBeNull()

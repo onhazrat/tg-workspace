@@ -54,6 +54,17 @@ describe("FeedKeyboard", () => {
     expect(translated.a).toHaveBeenCalledTimes(1)
   })
 
+  test("G rings the last card and gg the first", () => {
+    render(<Feed />)
+    press("G")
+    expect(ringed()).toEqual(["ch_b"])
+    press("g")
+    expect(ringed()).toEqual(["ch_b"])
+    press("g")
+    expect(ringed()).toEqual(["ch_a"])
+    expect(screen.getByText("first / last post")).toBeTruthy()
+  })
+
   test("lists the keys while on, and leaves no ring behind when switched off", () => {
     const { rerender } = render(<Feed />)
     expect(screen.getByText("next / previous post")).toBeTruthy()

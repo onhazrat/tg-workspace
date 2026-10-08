@@ -7,6 +7,7 @@ import {
   cardTagSuggestions,
   matchCardTags,
 } from "@/lib/channels/card-tag-suggestions"
+import { shortcut } from "@/lib/channels/card-zoom"
 import {
   addManualTag,
   normalizeChannelTags,
@@ -190,6 +191,7 @@ export function ChannelCardTags({
             value={value}
             role="combobox"
             aria-label="Add tag"
+            {...shortcut("t")}
             aria-expanded={open}
             aria-controls={listId}
             aria-autocomplete="list"

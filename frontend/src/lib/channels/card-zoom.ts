@@ -50,6 +50,9 @@ export type StatTileKey =
  */
 export type CardKey = "x" | "s" | "t" | "f" | "o" | "b" | "p"
 
+/** Marks the control keyboard mode presses for `key`. */
+export const shortcut = (key: CardKey) => ({ "data-shortcut": key })
+
 const SMALL_CARD_KEYS: CardKey[] = ["x", "s", "o", "p"]
 const CARD_KEYS: CardKey[] = ["x", "s", "t", "f", "o", "b", "p"]
 

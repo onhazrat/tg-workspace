@@ -8,6 +8,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { motion } from "motion/react"
+import { shortcut } from "@/lib/channels/card-zoom"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
 import { languageName } from "@/lib/language-name"
 import type { Channel } from "@/types"
@@ -83,6 +84,7 @@ export function ChannelCardActions({
           variant="frosted"
           aria-label={freezeLabel}
           tooltip={freezeLabel}
+          {...shortcut("f")}
           onClick={(e) => {
             e.stopPropagation()
             onToggleFreeze()
@@ -153,6 +155,7 @@ export function ChannelCardBadges({
         <button
           type="button"
           {...selectionHandlers(onToggleSelected)}
+          {...shortcut("x")}
           aria-label={selectLabel(channel.name, isSelected)}
           aria-pressed={isSelected}
           className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${

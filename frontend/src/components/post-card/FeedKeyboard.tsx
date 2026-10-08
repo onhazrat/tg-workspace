@@ -1,10 +1,11 @@
 /**
  * Keyboard mode for the Posts feed (PTR-02). j and k move a ring through the
- * cards; a letter clicks the element carrying `data-shortcut="<letter>"`
+ * cards, G jumps to the last and gg to the first; a letter clicks the element carrying `data-shortcut="<letter>"`
  * inside the ringed card, so each action keeps one implementation, its
  * button's. The ring is a `data-kbd-selected` attribute on the card.
  */
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
+import { nextIndex, readMove } from "@/lib/keyboard-moves"
 
 const CARD = "article[data-post-key]"
 const RING = "data-kbd-selected"
@@ -24,6 +25,7 @@ export const SHORTCUTS = {
 
 const KEY_HELP = [
   ["j / k", "next / previous post"],
+  ["gg / G", "first / last post"],
   [SHORTCUTS.photo, "open photo"],
   [SHORTCUTS.channel, "this channel alone"],
   [SHORTCUTS.translate, "translate"],
@@ -53,23 +55,29 @@ export function focusIsTyping(): boolean {
 }
 
 /** Keys belong to the page only when nothing else could be listening for them. */
-function keyBelongsElsewhere(e: KeyboardEvent): boolean {
+export function keyBelongsElsewhere(e: KeyboardEvent): boolean {
   if (e.metaKey || e.ctrlKey || e.altKey || focusIsTyping()) return true
   // Includes the photo viewer, which owns the arrow keys while it is open.
   return document.querySelector('[role="dialog"]') !== null
 }
 
 export function FeedKeyboard({ on }: { on: boolean }) {
+  // When an unanswered g was pressed, so a second one makes gg.
+  const lastG = useRef(0)
   useEffect(() => {
     if (!on) return
     const onKey = (e: KeyboardEvent) => {
       if (keyBelongsElsewhere(e)) return
       const cards = Array.from(document.querySelectorAll<HTMLElement>(CARD))
       const at = cards.findIndex((c) => c.hasAttribute(RING))
-      if (e.key === "j" || e.key === "k") {
+      const read = readMove(e.key, Date.now(), lastG.current)
+      lastG.current = read.lastG
+      const { move } = read
+      if (move || e.key === "g") {
         e.preventDefault()
+        if (!move) return
         const next =
-          at < 0
+          at < 0 && (move === "j" || move === "k")
             ? // Start from the first card on screen, not the top of the feed.
               Math.max(
                 0,
@@ -77,10 +85,7 @@ export function FeedKeyboard({ on }: { on: boolean }) {
                   (c) => c.getBoundingClientRect().bottom > HEADER_PX,
                 ),
               )
-            : Math.max(
-                0,
-                Math.min(cards.length - 1, at + (e.key === "j" ? 1 : -1)),
-              )
+            : nextIndex(at, move, cards.length)
         const card = cards[next]
         if (!card) return
         cards[at]?.removeAttribute(RING)
@@ -104,10 +109,18 @@ export function FeedKeyboard({ on }: { on: boolean }) {
     }
   }, [on])
 
-  if (!on) return null
+  return on ? <KeyHelp rows={KEY_HELP} /> : null
+}
+
+/** The key legend in the corner while keyboard mode is on, on either tab. */
+export function KeyHelp({
+  rows,
+}: {
+  rows: readonly (readonly [key: string, what: string])[]
+}) {
   return (
     <div className="fixed bottom-4 left-4 z-50 hidden rounded-xl border border-app-ink/10 bg-app-card/95 p-3 text-[11px] shadow-lg backdrop-blur md:block">
-      {KEY_HELP.map(([key, what]) => (
+      {rows.map(([key, what]) => (
         <div key={key} className="flex gap-3">
           <kbd className="w-10 font-mono text-app-ink">{key}</kbd>
           <span className="text-app-ink/60">{what}</span>
