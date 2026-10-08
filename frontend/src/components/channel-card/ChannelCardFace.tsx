@@ -6,10 +6,11 @@ import {
   ChannelCardSyncingOverlay,
 } from "./ChannelCardChrome"
 import { ChannelCardFooter } from "./ChannelCardFooter"
-import { ChannelCardHeader } from "./ChannelCardHeader"
-import { ChannelCardMeta } from "./ChannelCardMeta"
+import { ChannelCardBio, ChannelCardHeader } from "./ChannelCardHeader"
+import { ChannelCardAbout, ChannelCardStatTiles } from "./ChannelCardStats"
 import { ChannelCardTags } from "./ChannelCardTags"
 import {
+  ALIGNED_SECTIONS_CLASS,
   channelCardFrameClass,
   selectionHandlers,
   selectLabel,
@@ -77,6 +78,9 @@ export function ChannelCardFace({
   const { virtualGroupTagName, inheritedSettingsHint } = settingGroupHints(
     channel.settingGroupName,
   )
+  // Cards and detailed cards line their sections up across the row; a
+  // compact card's body is the selection toggle and has no sections to align.
+  const aligned = !face.bodySelects
 
   return (
     <div
@@ -85,6 +89,7 @@ export function ChannelCardFace({
         isFrozen: channel.isFrozen,
         isSelected,
         isScraping,
+        aligned,
       })}
     >
       {isScraping && (
@@ -127,31 +132,53 @@ export function ChannelCardFace({
       />
 
       <div
-        className={`flex flex-col h-full ${face.bodySelects ? "p-4 pt-9" : "p-5 pt-12"}`}
+        className={
+          aligned
+            ? `${ALIGNED_SECTIONS_CLASS} p-5 pt-12`
+            : "flex flex-col h-full p-4 pt-9"
+        }
       >
         <ChannelCardHeader
           channel={channel}
-          showBio={face.bio}
           linkToTelegram={!face.bodySelects}
         />
-        {face.meta && (
-          <ChannelCardMeta
-            channel={channel}
-            stats={stats}
-            inScopeCount={inScopeCount}
-            show={face.meta}
-          />
-        )}
-
-        {face.tags && (
-          <ChannelCardTags
-            tags={channel.tags}
-            virtualGroupTagName={virtualGroupTagName}
-            inheritedSettingsHint={inheritedSettingsHint}
-            accountChannels={accountChannels}
-            onSave={(tags) => onSaveChannel({ tags })}
-            onFilterByTag={onFilterByTag}
-          />
+        {aligned && (
+          <>
+            <div data-card-section="bio">
+              {face.bio && channel.bio && (
+                <ChannelCardBio
+                  bio={channel.bio}
+                  lines={face.detailed ? 4 : 2}
+                />
+              )}
+            </div>
+            <ChannelCardStatTiles
+              keys={face.statTiles}
+              channel={channel}
+              stats={stats}
+              inScope={isSelected ? inScopeCount : null}
+            />
+            <div data-card-section="tags">
+              {face.tags && (
+                <ChannelCardTags
+                  tags={channel.tags}
+                  virtualGroupTagName={virtualGroupTagName}
+                  inheritedSettingsHint={inheritedSettingsHint}
+                  accountChannels={accountChannels}
+                  onSave={(tags) => onSaveChannel({ tags })}
+                  onFilterByTag={onFilterByTag}
+                />
+              )}
+            </div>
+            <div data-card-section="about">
+              {face.detailed && (
+                <ChannelCardAbout
+                  channel={channel}
+                  showChatId={face.meta?.telegramChatId ?? false}
+                />
+              )}
+            </div>
+          </>
         )}
 
         <ChannelCardFooter

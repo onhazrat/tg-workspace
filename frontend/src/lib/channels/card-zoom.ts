@@ -58,7 +58,7 @@ export interface CardFace {
   layout: "card" | "tile"
   bio: boolean
   startId: boolean
-  /** The stat chips, or null when the card shows none at all. */
+  /** The optional fields shown, or null on the compact sizes. */
   meta: ChannelMetaVisibility | null
   tags: boolean
   /** The footer's status and schedule block; off on the compact card. */

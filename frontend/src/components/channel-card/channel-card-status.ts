@@ -84,17 +84,29 @@ export function selectionHandlers(onToggleSelected: (shift: boolean) => void) {
   }
 }
 
+/**
+ * The six sections a card and a detailed card share with the cards beside
+ * them: header, bio, tiles, tags, About and footer. The card spans one track
+ * of its grid row per section and takes them as a subgrid, so the tallest bio
+ * in a row sets that row's bio track and each section starts level with its
+ * neighbours'. A section a card lacks is an empty track, never a missing one.
+ */
+export const ALIGNED_SECTIONS_CLASS = "row-span-6 grid grid-rows-subgrid"
+
 /** The card frame: dimmed when frozen, outlined when selected, ringed while syncing. */
 export function channelCardFrameClass({
   isFrozen,
   isSelected,
   isScraping,
+  aligned = false,
 }: {
   isFrozen: boolean | undefined
   isSelected: boolean
   isScraping: boolean
+  /** Lines its sections up with the row's other cards; see above. */
+  aligned?: boolean
 }): string {
-  return `relative flex flex-col h-full rounded-2xl border transition-all duration-200 overflow-hidden group
+  return `relative ${aligned ? ALIGNED_SECTIONS_CLASS : "flex flex-col h-full"} rounded-2xl border transition-all duration-200 overflow-hidden group
         ${isFrozen ? "opacity-80" : ""}
         ${
           isSelected
