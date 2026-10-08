@@ -1,6 +1,6 @@
 # Channel cards
 
-Status: ready-for-agent
+Status: done
 
 Ticket prefix: `CARD`.
 
