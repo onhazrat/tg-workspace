@@ -385,6 +385,38 @@ Unrelated to the Languages of the Posts in its Scope: a Summary of Persian Posts
 may be written in English.
 _Avoid_: AI language, summary language, target language
 
+**Covered Post**:
+A Post in an Artifact's frozen Scope: one the Artifact was made from. A Summary
+of 679 Covered Posts was written from those 679 and no others. A Summary frozen
+before its Scope recorded them has none on record, which is not the same as
+having none.
+_Avoid_: used post, input post, source post
+
+**Citation**:
+A reference in a Summary's prose to one exact Post, by Channel and Post number.
+The same Post may be cited several times; each is a Citation.
+_Avoid_: source, footnote, link (a Link is something else)
+
+**Cited Post**:
+A Post that at least one Citation in a Summary points to. Usually a Covered
+Post too, but nothing guarantees it: the prose is AI-written and may cite a Post
+outside its Scope.
+_Avoid_: source post, referenced post
+
+### Publishing
+
+**Publication**:
+One act of sending a Summary to a Telegram chat through a bot: its prose and,
+when asked for, its metadata, as one or more Parts. Manual or scheduled, it is
+the same act. A Publication that stops partway is partial: the Parts already
+sent stay sent, and finishing it sends only the rest.
+_Avoid_: publish (as a noun), post (a Post is something else), send
+
+**Part**:
+One Telegram message of a Publication. A Summary longer than Telegram allows in
+one message becomes several Parts, cut between paragraphs.
+_Avoid_: message (a Post is the message the corpus holds), chunk, piece
+
 ### Chat modes
 
 **Selected posts**:
