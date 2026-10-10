@@ -372,3 +372,32 @@ def test_someone_elses_destination_is_refused_as_absent_before_any_decrypt(
     assert r.json()["detail"] == "Chat destination not found"
     assert decrypts == []
     assert _logs(mine) == []
+
+
+# --------------------------------------------------------------------------
+# Send metadata is off for every Summary, existing ones included
+# --------------------------------------------------------------------------
+
+
+def test_the_migration_turns_send_metadata_off_for_existing_summaries() -> None:
+    """Every browser-made Summary stored `sendMetadata: true` without anyone
+    asking, so an existing flag says nothing about a choice and is cleared."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.alembic.versions import (
+        e9a4c1b7d302_send_metadata_off_by_default_sumtab_09 as mig,
+    )
+
+    on = _summary(extra={"sendMetadata": True, "metadataText": "kept"})
+    off = _summary(extra={"sendMetadata": False})
+
+    with engine.begin() as connection:
+        with Operations.context(MigrationContext.configure(connection)):
+            mig.upgrade()
+
+    with Session(engine) as session:
+        on_row, off_row = session.get(Summary, on), session.get(Summary, off)
+        assert on_row is not None and off_row is not None
+        assert on_row.extra == {"metadataText": "kept"}
+        assert off_row.extra == {"sendMetadata": False}
