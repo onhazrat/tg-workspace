@@ -8,9 +8,9 @@ padding shrinks so every tab gets its width back. See `.scratch/summary-tab/spec
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Starting a Summary and switching to Posts, Channels, Settings or another Summary's tab shows that tab's own content, not the overlay
-- [ ] The overlay and the streamed text appear on the tab of the Summary being generated, and on the new-Summary tab while no id exists yet
-- [ ] On narrow screens the shell's horizontal padding is reduced for every tab; wide screens are unchanged
-- [ ] A component test covers the overlay staying off a different tab while a Summary generates
+- [x] Starting a Summary and switching to Posts, Channels, Settings or another Summary's tab shows that tab's own content, not the overlay
+- [x] The overlay and the streamed text appear on the tab of the Summary being generated, and on the new-Summary tab while no id exists yet
+- [x] On narrow screens the shell's horizontal padding is reduced for every tab; wide screens are unchanged
+- [x] A component test covers the overlay staying off a different tab while a Summary generates
