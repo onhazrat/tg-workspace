@@ -7,6 +7,7 @@ Every publish, manual, scheduled or the quick message, sends the Parts
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 from sqlmodel import Session
@@ -16,7 +17,7 @@ from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
 from app.services.network import fetch_with_retry, parse_telegram_entities
-from app.services.publication_parts import PublishingSettings, build_parts
+from app.services.publication_parts import Part, PublishingSettings, build_parts
 from app.services.settings_registry import PUBLISHING_KEY
 from app.services.tenancy import may_act_on
 from app.services.user_settings import get_user_setting
@@ -36,6 +37,14 @@ class BotCredentialNotFound(ValueError):
     """Absent or someone else's: the one refusal, so a route can answer 404."""
 
 
+class PartFailed(RuntimeError):
+    """A Part Telegram did not take; the Parts before it went out."""
+
+    def __init__(self, error: str, *, sent: int) -> None:
+        super().__init__(error)
+        self.sent = sent
+
+
 async def publish_summary_text(
     session: Session,
     *,
@@ -49,7 +58,37 @@ async def publish_summary_text(
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
 ) -> dict[str, Any]:
-    """Send `text` as the bot `credential_id` names, on behalf of one account.
+    """The free-text quick message: cut `text` into Parts and send them."""
+    prefs = load_publishing_settings(session, acting_user_id)
+    return await send_parts(
+        session,
+        acting_user_id=acting_user_id,
+        credential_id=credential_id,
+        chat_id=chat_id,
+        parts=build_parts(text, metadata_text, citation_style=prefs.citation_style),
+        proxies=proxies,
+        proxy_concurrency=proxy_concurrency,
+        tor_auto_rotate=tor_auto_rotate,
+        tor_rotation_threshold=tor_rotation_threshold,
+    )
+
+
+async def send_parts(
+    session: Session,
+    *,
+    acting_user_id: uuid.UUID | None,
+    credential_id: str,
+    chat_id: str,
+    parts: Sequence[Part],
+    proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int = 10,
+) -> dict[str, Any]:
+    """Send `parts` in order as the bot `credential_id` names, for one account.
+
+    Stops at the first Part that fails and raises `PartFailed` saying how many
+    went out before it.
 
     `acting_user_id` is whose send this is — the Summary's owner on the
     scheduled path, which has no `current_user` to ask. It has no default on
@@ -127,7 +166,10 @@ async def publish_summary_text(
         results.append(data)
         telemetry_logs.append(telem)
 
-    for part in build_parts(text, metadata_text, citation_style=prefs.citation_style):
-        await send_chunk(part.text)
+    for part in parts:
+        try:
+            await send_chunk(part.text)
+        except Exception as exc:
+            raise PartFailed(str(exc), sent=len(results)) from exc
 
     return {"success": True, "results": results, "telemetry": telemetry_logs}

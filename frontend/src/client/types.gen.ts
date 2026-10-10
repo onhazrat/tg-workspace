@@ -4820,6 +4820,50 @@ export type PublicationPlanResponse = {
 };
 
 /**
+ * PublicationSendRequest
+ */
+export type PublicationSendRequest = {
+    /**
+     * Includemetadata
+     */
+    includeMetadata?: boolean;
+    /**
+     * Metadatainfirstpart
+     */
+    metadataInFirstPart?: boolean;
+    /**
+     * Botid
+     */
+    botId: string;
+    /**
+     * Destinationid
+     */
+    destinationId: string;
+};
+
+/**
+ * PublicationSendResponse
+ */
+export type PublicationSendResponse = {
+    /**
+     * Status
+     */
+    status: 'success' | 'failed';
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Partssent
+     */
+    partsSent: number;
+    /**
+     * Partstotal
+     */
+    partsTotal: number;
+};
+
+/**
  * PublishLogListItemResponse
  *
  * A publish log without `fullRequest` / `fullResponse` / `textSent`.
@@ -9975,6 +10019,36 @@ export type DataPlanSummaryPublicationResponses = {
 };
 
 export type DataPlanSummaryPublicationResponse = DataPlanSummaryPublicationResponses[keyof DataPlanSummaryPublicationResponses];
+
+export type DataSendSummaryPublicationData = {
+    body: PublicationSendRequest;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/publication';
+};
+
+export type DataSendSummaryPublicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSendSummaryPublicationError = DataSendSummaryPublicationErrors[keyof DataSendSummaryPublicationErrors];
+
+export type DataSendSummaryPublicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicationSendResponse;
+};
+
+export type DataSendSummaryPublicationResponse = DataSendSummaryPublicationResponses[keyof DataSendSummaryPublicationResponses];
 
 export type DataListChatSessionsData = {
     body?: never;

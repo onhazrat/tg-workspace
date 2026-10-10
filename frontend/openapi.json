@@ -3424,6 +3424,53 @@
         }
       }
     },
+    "/api/v1/data/summaries/{summary_id}/publication": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Send Summary Publication",
+        "description": "Plan this Summary's Publication and send exactly those Parts.",
+        "operationId": "data-send_summary_publication",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicationSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSendResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/chat-sessions": {
       "get": {
         "tags": ["data"],
@@ -10469,6 +10516,43 @@
         "type": "object",
         "required": ["parts", "defaultMetadata", "limit"],
         "title": "PublicationPlanResponse"
+      },
+      "PublicationSendRequest": {
+        "properties": {
+          "includeMetadata": {
+            "type": "boolean",
+            "title": "Includemetadata",
+            "default": false
+          },
+          "metadataInFirstPart": {
+            "type": "boolean",
+            "title": "Metadatainfirstpart",
+            "default": false
+          },
+          "botId": { "type": "string", "title": "Botid" },
+          "destinationId": { "type": "string", "title": "Destinationid" }
+        },
+        "type": "object",
+        "required": ["botId", "destinationId"],
+        "title": "PublicationSendRequest"
+      },
+      "PublicationSendResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["success", "failed"],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "partsSent": { "type": "integer", "title": "Partssent" },
+          "partsTotal": { "type": "integer", "title": "Partstotal" }
+        },
+        "type": "object",
+        "required": ["status", "error", "partsSent", "partsTotal"],
+        "title": "PublicationSendResponse"
       },
       "PublishLogListItemResponse": {
         "properties": {
