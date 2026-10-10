@@ -121,3 +121,56 @@ def test_the_plan_names_the_window_in_the_accounts_time_zone(
     plan = _plan(client, superuser_token_headers, _summary())
 
     assert plan["defaultMetadata"] == GENERATED
+
+
+def test_a_plan_is_the_summary_alone_unless_metadata_is_asked_for(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    plan = _plan(client, superuser_token_headers, _summary("**Rates** rose."))
+
+    assert plan["parts"] == [
+        {
+            "kind": "summary",
+            "text": "**Rates** rose.",
+            "length": len("Rates rose."),
+            "cutInside": False,
+        }
+    ]
+    assert plan["limit"] == 4096
+
+
+def test_the_metadata_is_its_own_part_and_the_saved_text_wins(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    summary_id = _summary("Body.", extra={"metadataText": "My own words"})
+
+    plan = _plan(client, superuser_token_headers, summary_id, includeMetadata=True)
+
+    assert [(p["kind"], p["text"]) for p in plan["parts"]] == [
+        ("metadata", "My own words"),
+        ("summary", "Body."),
+    ]
+
+
+def test_the_metadata_rides_in_the_first_part_when_it_fits(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    paragraph = (
+        " ".join(["word"] * 816) + "."
+    )  # 4,080 characters: fits alone, not joined
+    summary_id = _summary(
+        f"Short.\n\n{paragraph}", extra={"metadataText": "My own words"}
+    )
+
+    plan = _plan(
+        client,
+        superuser_token_headers,
+        summary_id,
+        includeMetadata=True,
+        metadataInFirstPart=True,
+    )
+
+    assert [(p["kind"], p["text"]) for p in plan["parts"]] == [
+        ("both", "My own words\n\nShort."),
+        ("summary", paragraph),
+    ]
