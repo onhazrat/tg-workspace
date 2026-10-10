@@ -1,8 +1,6 @@
 import React from "react"
 import { formatDateToLocalISO } from "@/lib/utils"
 
-export const TELEGRAM_MESSAGE_LIMIT = 4096
-
 const isList = (node: unknown) =>
   React.isValidElement(node) && (node.type === "ul" || node.type === "ol")
 
@@ -26,17 +24,6 @@ export function relatedPostsQuery(text: string): string | null {
   const trimmed = text.trim()
   if (!trimmed) return null
   return text.replace(/\[([^\]]+?)\s*#(\d+)\]/g, "").trim() || trimmed
-}
-
-/** Length of the one Telegram message a publish sends: metadata, a blank line, then the body. */
-export function telegramMessageLength(
-  body: string | null,
-  metadataText: string | null,
-): number {
-  const bodyLength = body?.length ?? 0
-  return metadataText === null
-    ? bodyLength
-    : bodyLength + metadataText.length + 2
 }
 
 export function exportFilename(now: Date): string {

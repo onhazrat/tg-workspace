@@ -1,10 +1,8 @@
 /**
  * The rules a Summary is written and published by, with no React and no I/O,
- * so they can be tested directly. `AIContext` and `SummaryView` both call these;
- * before, each held its own copy of the metadata and published-text rules.
+ * so they can be tested directly. `AIContext` and `SummaryView` both call these.
+ * What a Publication sends is the server's plan (SUMTAB-09), not a rule here.
  */
-import { formatSummaryModelLabel } from "@/constants"
-import { scopeChannels, scopeRange } from "@/lib/scope/artifact-scope"
 import type {
   BotCredential,
   Channel,
@@ -43,26 +41,6 @@ export function extractCitedPosts(
   }
   return cited
 }
-
-export const generateDefaultMetadataText = (s: Summary): string => {
-  // Off the frozen Scope, which since AW-07 is the only window and channel list
-  // a Summary has. A row a legacy `PUT` opened records none, and the published
-  // metadata says so rather than reporting the epoch as a time range.
-  const channels = scopeChannels(s)
-  const range = scopeRange(s)
-  const timeRange = range
-    ? `${new Date(range.start).toLocaleString()} - ${new Date(range.end).toLocaleString()}`
-    : "not recorded"
-  return `📊 *Analysis Metadata*\n🕒 *Time Range:* ${timeRange}\n📡 *Channels Used:* ${channels.length}\n📋 *Channel List:* ${channels.map((c) => `@${c}`).join(", ")}\n🤖 *AI Model:* ${formatSummaryModelLabel(s.model)}\n📝 *Posts Analyzed:* ${s.postCount || 0}`
-}
-
-/** The metadata block a publish sends: the saved text, else the generated default. */
-export const summaryMetadataText = (s: Summary): string =>
-  s.metadataText || generateDefaultMetadataText(s)
-
-/** The one Telegram message a publish sends: metadata, a blank line, then the body. */
-export const publishedText = (metadata: string | null, body: string): string =>
-  metadata === null ? body : `${metadata}\n\n${body}`
 
 /** Channels in the summary that have not been synced up to `endMs`. */
 export function channelsNeedingSync(
@@ -110,8 +88,9 @@ export function successorSummary(
     autoPublish: previous.autoPublish,
     publishBotId: previous.publishBotId,
     publishChatId: previous.publishChatId,
-    sendMetadata:
-      previous.sendMetadata !== undefined ? previous.sendMetadata : true,
+    // Off unless it was set on explicitly (SUMTAB-09).
+    sendMetadata: previous.sendMetadata === true,
+    metadataInFirstPart: previous.metadataInFirstPart,
     postSearch: previous.postSearch,
     semanticSearchQuery: previous.semanticSearchQuery,
     semanticSearchRespectsChannels: previous.semanticSearchRespectsChannels,
