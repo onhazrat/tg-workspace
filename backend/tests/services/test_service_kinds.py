@@ -191,6 +191,9 @@ INVENTORY: dict[str, str] = {
     # PGMQ lane naming (ticket 09) — string constants and one function, no
     # Session, no network. See its module docstring.
     "proxy_pacing.py": PURE_TRANSFORM,
+    # SUMTAB-07: the only place a publish is cut into Parts and formatted for
+    # Telegram's parser. Strings in, Parts out.
+    "publication_parts.py": PURE_TRANSFORM,
     "sync_lanes.py": PURE_TRANSFORM,
     "sync_schedule.py": PURE_TRANSFORM,
     # The tenancy seam. Builds scoped select statements and compares owner ids, executes

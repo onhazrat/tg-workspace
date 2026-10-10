@@ -785,42 +785,47 @@ async def get_tor_status() -> dict[str, Any]:
     }
 
 
-def _utf16_len(text: str) -> int:
+def utf16_len(text: str) -> int:
     # The Bot API measures entity offset and length in UTF-16 code units, so an
     # astral character (most emoji) counts as two, not one code point.
     return len(text.encode("utf-16-le")) // 2
 
 
+#: What `parse_telegram_entities` pairs: `**bold**`, `*italic*`, `_italic_`,
+#: `[channel #id]` and `[text](url)`. Public because the Part builder needs to
+#: know when a cut lands inside one of these.
+TELEGRAM_MARKUP = re.compile(
+    r"(\*\*(.*?)\*\*)|(\*(.*?)\*)|(_(.*?)_)|"
+    r"(\[([a-zA-Z0-9_]+)\s+#(\d+)\])|(\[(.*?)\]\((.*?)\))"
+)
+
+
 def parse_telegram_entities(text: str) -> tuple[str, list[dict[str, Any]]]:
-    regex = re.compile(
-        r"(\*\*(.*?)\*\*)|(\*(.*?)\*)|(_(.*?)_)|"
-        r"(\[([a-zA-Z0-9_]+)\s+#(\d+)\])|(\[(.*?)\]\((.*?)\))"
-    )
     plain = ""
     entities: list[dict[str, Any]] = []
     last_index = 0
 
-    for match in regex.finditer(text):
+    for match in TELEGRAM_MARKUP.finditer(text):
         plain += text[last_index : match.start()]
-        offset = _utf16_len(plain)
+        offset = utf16_len(plain)
 
         if match.group(1):
             inner = match.group(2) or ""
             plain += inner
             entities.append(
-                {"type": "bold", "offset": offset, "length": _utf16_len(inner)}
+                {"type": "bold", "offset": offset, "length": utf16_len(inner)}
             )
         elif match.group(3):
             inner = match.group(4) or ""
             plain += inner
             entities.append(
-                {"type": "italic", "offset": offset, "length": _utf16_len(inner)}
+                {"type": "italic", "offset": offset, "length": utf16_len(inner)}
             )
         elif match.group(5):
             inner = match.group(6) or ""
             plain += inner
             entities.append(
-                {"type": "italic", "offset": offset, "length": _utf16_len(inner)}
+                {"type": "italic", "offset": offset, "length": utf16_len(inner)}
             )
         elif match.group(7):
             channel = match.group(8) or ""
@@ -831,7 +836,7 @@ def parse_telegram_entities(text: str) -> tuple[str, list[dict[str, Any]]]:
                 {
                     "type": "text_link",
                     "offset": offset,
-                    "length": _utf16_len(inner),
+                    "length": utf16_len(inner),
                     "url": telegram_channel_post_url(channel, int(post_id)),
                 }
             )
@@ -843,7 +848,7 @@ def parse_telegram_entities(text: str) -> tuple[str, list[dict[str, Any]]]:
                 {
                     "type": "text_link",
                     "offset": offset,
-                    "length": _utf16_len(inner),
+                    "length": utf16_len(inner),
                     "url": url,
                 }
             )

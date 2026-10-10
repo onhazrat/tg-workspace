@@ -10486,7 +10486,7 @@
         },
         "type": "object",
         "title": "PublishResponse",
-        "description": "Result of sending a summary, one entry per 4000-character chunk.\n\n`results` holds the raw Bot API replies \u2014 same reasoning as\n`BotInfoResponse`, so they stay untyped."
+        "description": "Result of sending a summary, one entry per Part sent.\n\n`results` holds the raw Bot API replies \u2014 same reasoning as\n`BotInfoResponse`, so they stay untyped."
       },
       "PurgeLogsResponse": {
         "properties": {

@@ -792,3 +792,45 @@ def test_your_own_destination_still_publishes(
     logs = _publish_logs(session, summary.id)
     assert len(logs) == 1
     assert logs[0].status == "success"
+
+
+def test_the_scheduler_sends_the_part_builders_parts(
+    session: Session,
+    user: User,
+    no_network: _Spy,
+    decrypt: _Spy,
+) -> None:
+    """SUMTAB-07: a scheduled publish is cut and fixed exactly like a manual one.
+
+    The metadata goes first as its own Part, then the Summary cut between
+    paragraphs, each message the builder's Part parsed for Telegram.
+    """
+    from app.services.network import parse_telegram_entities
+    from app.services.publication_parts import build_parts
+
+    paragraph = " ".join(["word"] * 300) + "."
+    full_text = "\n\n".join([paragraph] * 3)
+    metadata = "📝 *Posts Analyzed:* 3"
+    _seed_bot(session, "bot-of-mine", user.id)
+    _seed_dest(session, "dest-of-mine", user.id)
+    extra = {
+        **_extra("bot-of-mine", "dest-of-mine"),
+        "sendMetadata": True,
+        "metadataText": metadata,
+    }
+    summary = _seed_summary(session, user.id, extra)
+
+    asyncio.run(
+        auto_summary._auto_publish(session, summary, extra, full_text, owner_id=user.id)
+    )
+
+    sent = [c["kwargs"]["json_body"]["text"] for c in no_network.calls]
+    expected = [
+        parse_telegram_entities(p.text)[0] for p in build_parts(full_text, metadata)
+    ]
+    assert sent == expected
+    assert sent == [
+        "📝 Posts Analyzed: 3",
+        f"{paragraph}\n\n{paragraph}",
+        paragraph,
+    ]

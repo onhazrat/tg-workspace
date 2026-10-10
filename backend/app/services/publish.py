@@ -1,4 +1,8 @@
-"""Publish summary text to Telegram using encrypted bot credentials."""
+"""Publish summary text to Telegram using encrypted bot credentials.
+
+Every publish, manual, scheduled or the quick message, sends the Parts
+`publication_parts.build_parts` cuts; nothing here cuts or formats text.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,7 @@ from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
 from app.services.network import fetch_with_retry, parse_telegram_entities
+from app.services.publication_parts import build_parts
 from app.services.tenancy import may_act_on
 
 
@@ -103,10 +108,7 @@ async def publish_summary_text(
         results.append(data)
         telemetry_logs.append(telem)
 
-    if metadata_text:
-        for i in range(0, len(metadata_text), 4000):
-            await send_chunk(metadata_text[i : i + 4000])
-    for i in range(0, len(text), 4000):
-        await send_chunk(text[i : i + 4000])
+    for part in build_parts(text, metadata_text):
+        await send_chunk(part.text)
 
     return {"success": True, "results": results, "telemetry": telemetry_logs}
