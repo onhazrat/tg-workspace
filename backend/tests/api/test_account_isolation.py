@@ -119,6 +119,12 @@ PROBED: dict[tuple[str, str], str] = {
     ("PUT", f"{V1}/data/summaries/{{summary_id}}"): "artifact write by id",
     ("DELETE", f"{V1}/data/summaries/{{summary_id}}"): "artifact delete by id",
     ("GET", f"{V1}/data/summaries"): "artifact list",
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/publication/plan"): (
+        "a Summary's Publication planned by id (SUMTAB-09)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/publication"): (
+        "a Summary's Publication sent by id (SUMTAB-09)"
+    ),
     ("GET", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact by id",
     ("PUT", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact write by id",
     ("DELETE", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact delete",
@@ -814,6 +820,28 @@ def test_a_foreign_row_is_not_found_by_id(
         "a foreign row answered with a detail of its own. Absent and forbidden "
         "have to be indistinguishable, or the oracle moves into the body."
     )
+
+
+@pytest.mark.security
+@pytest.mark.parametrize("suffix", ["/publication/plan", "/publication"])
+def test_a_foreign_summary_cannot_be_planned_or_published(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+    suffix: str,
+) -> None:
+    """SUMTAB-09: the Publication answers as the Summary family does."""
+    row_id = f"iso-pub-{uuid.uuid4()}"
+    _seed(FAMILIES[0][1](row_id, alice[0].id))
+
+    response = client.post(
+        f"{DATA}/summaries/{row_id}{suffix}",
+        json={"botId": "b", "destinationId": "d"},
+        headers=bob[1],
+    )
+
+    assert response.status_code == 404, response.text[:200]
+    assert response.json()["detail"] == "Summary not found"
 
 
 @pytest.mark.security

@@ -1,5 +1,6 @@
+import re
 import uuid
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from typing import Annotated, NamedTuple
 
 import jwt
@@ -91,6 +92,10 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
     f"{settings.API_V1_STR}/login/test-token": (
         "echoes the caller back; the app uses it to confirm who it is acting as"
     ),
+    f"{settings.API_V1_STR}/data/summaries/{{summary_id}}/publication/plan": (
+        "the Parts a Publication would send, for the publish panel's preview "
+        "(SUMTAB-09); POST only because the options travel in the body"
+    ),
 }
 
 #: What a refused write says. One string, so the browser can recognise it and
@@ -163,6 +168,12 @@ VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
         "bot_credential",
         "sends as the target's bot, from a token this request decrypts",
     ),
+    f"{settings.API_V1_STR}/data/summaries/{{summary_id}}/publication": (
+        SpendableOperation(
+            "bot_credential",
+            "sends a Summary's Publication as the target's bot (SUMTAB-09)",
+        )
+    ),
     f"{settings.API_V1_STR}/telegram/bot-info": SpendableOperation(
         "bot_credential",
         "the *second* door to the same credential, and the wider one: it "
@@ -204,6 +215,9 @@ VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
 #: here the default is *permitted at the elevated tier*, which is why the
 #: reverse direction matters more on this inventory, not less.
 VIEW_AS_NON_SPENDING_PATHS: dict[str, str] = {
+    f"{settings.API_V1_STR}/data/summaries/{{summary_id}}/publication/plan": (
+        "plans the Parts and sends nothing; the send beside it is the spend"
+    ),
     f"{settings.API_V1_STR}/ai/summary/prompt": (
         "assembles the prompt text and calls no Provider; the Account pastes "
         "it into one themselves, which is the whole point of the route"
@@ -392,11 +406,10 @@ def view_as_allows(method: str, path: str, *, mode: str | None) -> bool:
     and putting the check above `SAFE_METHODS` is what stops that from being a
     fact about the verb.
 
-    Matched on the **raw path**, not on a route template, because that is what
-    exists here — and because every allowlisted path is literal, with no
-    parameters for the two to disagree about. A missing trailing slash is
-    treated as the path that has one, the same tolerance `is_public_path` needs
-    and for the same reason: the router's redirect never runs if this has
+    Matched on the **raw path**, because that is what exists here; an entry's
+    `{param}` matches exactly one segment (`_listed`). A missing trailing slash
+    is treated as the path that has one, the same tolerance `is_public_path`
+    needs and for the same reason: the router's redirect never runs if this has
     already refused.
     """
     if view_as_spends(path):
@@ -405,7 +418,23 @@ def view_as_allows(method: str, path: str, *, mode: str | None) -> bool:
         return True
     if mode in security.VIEW_AS_WRITING_MODES:
         return not view_as_elevation_refuses(path)
-    return path in VIEW_AS_READ_ONLY_PATHS or f"{path}/" in VIEW_AS_READ_ONLY_PATHS
+    return _listed(path, VIEW_AS_READ_ONLY_PATHS)
+
+
+def _template(entry: str) -> re.Pattern[str]:
+    """An inventory entry as a pattern: a `{param}` matches one path segment."""
+    return re.compile("[^/]+".join(map(re.escape, re.split(r"\{[^/}]+\}", entry))))
+
+
+def _listed(path: str, inventory: Mapping[str, object]) -> bool:
+    """Whether an inventory names `path`, a missing trailing slash tolerated.
+
+    A `{param}` in an entry matches one whole segment, never a prefix, so a
+    Summary's Publication can be listed without a prefix over `/data/summaries`.
+    """
+    return any(
+        _template(entry).fullmatch(p) for entry in inventory for p in (path, f"{path}/")
+    )
 
 
 def view_as_refusal_detail(path: str, *, mode: str | None) -> str:
@@ -431,11 +460,11 @@ def view_as_spends(path: str) -> bool:
     """Whether this path spends the **target's** money rather than the Owner's.
 
     Matched exactly, with the trailing-slash tolerance `view_as_allows`
-    documents: every entry is literal, because a spend route that took a path
-    parameter would need a prefix and a prefix over `/ai` would swallow the
-    prompt-assembly routes that call nobody.
+    documents. Never by prefix, because a prefix over `/ai` would swallow the
+    prompt-assembly routes that call nobody; a path parameter matches one
+    segment and nothing more.
     """
-    return path in VIEW_AS_SPEND_PATHS or f"{path}/" in VIEW_AS_SPEND_PATHS
+    return _listed(path, VIEW_AS_SPEND_PATHS)
 
 
 def view_as_elevation_refuses(path: str) -> bool:

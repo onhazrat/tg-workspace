@@ -151,11 +151,13 @@ def test_the_split_did_not_change_the_route_count() -> None:
     its bio, read by handle so a panel off the current page still opens) and
     `POST /directory/why` ("Why it's here"); and **91** with DIR-05's
     `GET /directory/{handle}/neighbours`, who cites a Channel most and whom
-    it cites most.
+    it cites most; and **93** with SUMTAB-09's `POST
+    /summaries/{id}/publication/plan` and `POST /summaries/{id}/publication`,
+    a Summary's Publication planned for the publish panel and then sent.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 91, (
-        f"expected 91 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 93, (
+        f"expected 93 /data endpoints, found {len(data_routes)}"
     )

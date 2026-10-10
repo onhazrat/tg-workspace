@@ -212,6 +212,9 @@ INVENTORY: dict[str, str] = {
     "bulk_follow.py": ORCHESTRATOR,
     "data_import_export.py": ORCHESTRATOR,
     "sync_orchestrator.py": ORCHESTRATOR,
+    # SUMTAB-09: plans a Summary's Publication (publication_parts), sends it
+    # (publish) and files its one publish log (logs).
+    "publications.py": ORCHESTRATOR,
     # One workflow — an Admin operating a lane (ticket 12) — coordinating the
     # modules that own the pieces: `settings_store` for the paused set,
     # `pgmq` for the messages, `scraper_jobs` for the jobs a purge cancels.
