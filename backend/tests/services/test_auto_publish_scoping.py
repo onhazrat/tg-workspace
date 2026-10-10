@@ -120,9 +120,10 @@ from app.core.db import engine
 from app.jobs import auto_summary
 from app.models import User
 from app.models_tg import BotCredential, ChatDestination, PublishLog, Summary
+from app.services import publications as publications_service
 from app.services import publish as publish_service
 from app.services import tenancy
-from app.services.publish import publish_summary_text
+from app.services.publish import publish_summary_text, send_parts
 from tests.utils.user import create_random_user
 
 BOTH_FLAG_STATES = pytest.mark.parametrize("enforced", [False, True])
@@ -136,15 +137,16 @@ BOTH_FLAG_STATES = pytest.mark.parametrize("enforced", [False, True])
 #: forbids and the reason `test_only_reads_use_the_gated_ownership_guard`
 #: exists. Same rule, applied to the primitive this ticket added.
 MAY_ACT_ON_CALLERS: dict[str, str] = {
-    "publish.publish_summary_text": (
+    "publish.send_parts": (
         "Decrypts a bot token and sends as that bot. A write by ticket 31's "
         "measure, and it runs in the scheduler with no response to put a 404 "
         "in — so it raises `ValueError`, not `HTTPException`."
     ),
-    "auto_summary._auto_publish": (
-        "Resolves the chat destination a send goes to, in the same scheduler "
-        "with the same absence of a response. Writes a failed publish log "
-        "instead of raising."
+    "publications.send_publication": (
+        "Resolves the chat destination a Publication goes to (SUMTAB-09), for "
+        "the Summary tab and the scheduler alike; the scheduler has no "
+        "response, so it raises `ValueError` and `_auto_publish` writes a "
+        "failed publish log."
     ),
     "data_import_export._import_channels": (
         "Resolves the setting group an import document names for a Channel it "
@@ -267,9 +269,8 @@ def _auto_publish(session: Session, summary: Summary, extra: dict[str, Any]) -> 
     """
     owner_id = summary.user_id
     assert owner_id is not None, "the caller selects only owned Summaries"
-    asyncio.run(
-        auto_summary._auto_publish(session, summary, extra, "body", owner_id=owner_id)
-    )
+    summary.extra = extra
+    asyncio.run(auto_summary._auto_publish(session, summary, owner_id=owner_id))
 
 
 def _extra(bot_id: str, chat_id: str) -> dict[str, Any]:
@@ -320,9 +321,9 @@ def decrypt(monkeypatch: pytest.MonkeyPatch) -> _Spy:
 
 @pytest.fixture
 def no_send(monkeypatch: pytest.MonkeyPatch) -> _Spy:
-    """Stand in for the service, so `_auto_publish`'s own checks are what run."""
+    """Stand in for the send, so the destination check ahead of it is what runs."""
     spy = _Spy(result={"success": True, "results": [], "telemetry": []})
-    monkeypatch.setattr(auto_summary, "publish_summary_text", spy.acall)
+    monkeypatch.setattr(publications_service, "send_parts", spy.acall)
     return spy
 
 
@@ -590,10 +591,10 @@ def test_the_acting_owner_is_a_required_keyword() -> None:
     and still passing tests, which is a check that exists and is never applied.
     A caller has to say whose send this is.
     """
-    parameter = inspect.signature(publish_summary_text).parameters["acting_user_id"]
-
-    assert parameter.default is inspect.Parameter.empty
-    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    for send in (publish_summary_text, send_parts):
+        parameter = inspect.signature(send).parameters["acting_user_id"]
+        assert parameter.default is inspect.Parameter.empty
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
 
 
 # --------------------------------------------------------------------------
@@ -794,22 +795,21 @@ def test_your_own_destination_still_publishes(
     assert logs[0].status == "success"
 
 
-def test_the_scheduler_sends_the_part_builders_parts(
+def test_the_scheduler_sends_the_parts_the_plan_returns(
     session: Session,
     user: User,
     no_network: _Spy,
     decrypt: _Spy,
 ) -> None:
-    """SUMTAB-07: a scheduled publish is cut and fixed exactly like a manual one.
+    """SUMTAB-09: a scheduled Publication is the plan the Summary tab previews.
 
     The metadata goes first as its own Part, then the Summary cut between
-    paragraphs, each message the builder's Part parsed for Telegram.
+    paragraphs, each message a planned Part parsed for Telegram.
     """
     from app.services.network import parse_telegram_entities
-    from app.services.publication_parts import build_parts
+    from app.services.publications import plan_publication
 
     paragraph = " ".join(["word"] * 300) + "."
-    full_text = "\n\n".join([paragraph] * 3)
     metadata = "📝 *Posts Analyzed:* 3"
     _seed_bot(session, "bot-of-mine", user.id)
     _seed_dest(session, "dest-of-mine", user.id)
@@ -819,21 +819,50 @@ def test_the_scheduler_sends_the_part_builders_parts(
         "metadataText": metadata,
     }
     summary = _seed_summary(session, user.id, extra)
+    summary.text = "\n\n".join([paragraph] * 3)
+    session.add(summary)
+    session.commit()
 
-    asyncio.run(
-        auto_summary._auto_publish(session, summary, extra, full_text, owner_id=user.id)
-    )
+    asyncio.run(auto_summary._auto_publish(session, summary, owner_id=user.id))
 
     sent = [c["kwargs"]["json_body"]["text"] for c in no_network.calls]
-    expected = [
-        parse_telegram_entities(p.text)[0] for p in build_parts(full_text, metadata)
-    ]
-    assert sent == expected
+    plan = plan_publication(
+        session,
+        summary,
+        user_id=user.id,
+        include_metadata=True,
+        metadata_in_first_part=False,
+    )
+    assert sent == [parse_telegram_entities(p.text)[0] for p in plan.parts]
     assert sent == [
         "📝 Posts Analyzed: 3",
         f"{paragraph}\n\n{paragraph}",
         paragraph,
     ]
+    [log] = _publish_logs(session, summary.id)
+    assert log.status == "success"
+
+
+def test_a_summary_with_no_metadata_flag_publishes_no_metadata(
+    session: Session,
+    user: User,
+    no_network: _Spy,
+    decrypt: _Spy,
+) -> None:
+    """SUMTAB-09: metadata is off unless the Summary's flag was set on."""
+    _seed_bot(session, "bot-of-mine", user.id)
+    _seed_dest(session, "dest-of-mine", user.id)
+    extra = {
+        "autoPublish": True,
+        "publishBotId": "bot-of-mine",
+        "publishChatId": "dest-of-mine",
+        "metadataText": "Saved, but not asked for",
+    }
+    summary = _seed_summary(session, user.id, extra)
+
+    asyncio.run(auto_summary._auto_publish(session, summary, owner_id=user.id))
+
+    assert [c["kwargs"]["json_body"]["text"] for c in no_network.calls] == ["body"]
 
 
 def _scheduled_metadata(
@@ -855,9 +884,7 @@ def _scheduled_metadata(
     session.add(summary)
     session.commit()
 
-    asyncio.run(
-        auto_summary._auto_publish(session, summary, extra, "body", owner_id=user.id)
-    )
+    asyncio.run(auto_summary._auto_publish(session, summary, owner_id=user.id))
     return str(no_network.calls[0]["kwargs"]["json_body"]["text"])
 
 
