@@ -162,11 +162,11 @@ export const SummaryView: React.FC = () => {
             await saveCurrent({ metadataText: text })
             toast.success("Metadata updated.")
           }}
-          markdown={
+          renderMarkdown={(markdown) => (
             <ReactMarkdown components={summaryMarkdownComponents}>
-              {summaryBody}
+              {markdown}
             </ReactMarkdown>
-          }
+          )}
           scopeLine={(artifact, className) => (
             <ArtifactScopeLine artifact={artifact} className={className} />
           )}

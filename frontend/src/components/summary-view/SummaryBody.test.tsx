@@ -6,6 +6,7 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import ReactMarkdown from "react-markdown"
 
 import {
   loadAppSettings,
@@ -56,7 +57,7 @@ function renderBody(props: Partial<SummaryBodyProps>) {
       onSendMetadataChange={() => {}}
       onMetadataTextChange={() => {}}
       onSaveMetadata={noop}
-      markdown={<p>rendered markdown</p>}
+      renderMarkdown={(md) => <p>{md}</p>}
       scopeLine={(s, className) => (
         <p data-testid="scope" className={className}>
           scope of {s.id}
@@ -90,10 +91,10 @@ describe("SummaryBody", () => {
   test("a saved report: body in its direction, note, metadata and footer", () => {
     const { onRerun, onEditingNoteChange } = renderBody({
       summary,
-      body: "body",
+      body: "rendered markdown",
     })
     expect(screen.getByText("Analysis Report")).toBeTruthy()
-    const prose = screen.getByText("rendered markdown").parentElement
+    const prose = screen.getByText("rendered markdown").closest("[dir]")
     expect(prose?.getAttribute("dir")).toBe("rtl")
     expect(prose?.className).toContain("font-fa")
     expect(screen.getByTestId("scope").textContent).toBe("scope of s1")
@@ -134,16 +135,49 @@ describe("SummaryBody", () => {
 })
 
 describe("reading controls", () => {
+  test("every section, by heading or single bold line, folds and unfolds", () => {
+    renderBody({
+      summary,
+      body: [
+        "Intro with **bold** inside.",
+        "## Economy",
+        "Rates rose.",
+        "**Politics:**",
+        "A vote passed.",
+      ].join("\n\n"),
+      renderMarkdown: (md) => <ReactMarkdown>{md}</ReactMarkdown>,
+    })
+    // The intro has no heading, so nothing folds it.
+    expect(screen.getAllByRole("button", { name: /^Fold / })).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "Fold Economy" }))
+    expect(screen.queryByText("Rates rose.")).toBeNull()
+    expect(screen.getByText("Economy")).toBeTruthy()
+    expect(screen.getByText("A vote passed.")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "Unfold Economy" }))
+    expect(screen.getByText("Rates rose.")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "Fold Politics" }))
+    expect(screen.queryByText("A vote passed.")).toBeNull()
+    expect(screen.getByText(/Intro with/)).toBeTruthy()
+  })
+
   test("text size S, M or L sizes the prose and survives the settings store", () => {
     const onTextSizeChange = mock()
-    renderBody({ summary, body: "body", textSize: "M", onTextSizeChange })
-    const prose = () => screen.getByText("rendered markdown").parentElement
+    renderBody({
+      summary,
+      body: "rendered markdown",
+      textSize: "M",
+      onTextSizeChange,
+    })
+    const prose = () => screen.getByText("rendered markdown").closest("[dir]")
     expect(prose()?.className).not.toContain("prose-lg")
     fireEvent.click(screen.getByRole("button", { name: "L" }))
     expect(onTextSizeChange).toHaveBeenCalledWith("L")
     cleanup()
 
-    renderBody({ summary, body: "body", textSize: "L" })
+    renderBody({ summary, body: "rendered markdown", textSize: "L" })
     expect(prose()?.className).toContain("prose-lg")
 
     // Remembered per Account: the setting round-trips through the store
