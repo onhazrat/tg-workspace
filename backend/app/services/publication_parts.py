@@ -1,8 +1,9 @@
 """Cut a Publication into Parts, and fix what Telegram's parser would mangle.
 
 The only place cutting and formatting for a publish happen (SUMTAB-07). Every
-send goes through `publish_summary_text`, which sends exactly these Parts: the
-Summary tab, the scheduler and the free-text quick message alike.
+send goes through `publish.send_parts`, which sends exactly these Parts: a
+Publication from the Summary tab or the scheduler (`publications.py`, SUMTAB-09)
+and the free-text quick message alike.
 
 **Rewrites, before cutting.** `parse_telegram_entities` reads `* **Label:**` as
 an empty italic then an italic label, so the bullet and the bold both vanish; a
