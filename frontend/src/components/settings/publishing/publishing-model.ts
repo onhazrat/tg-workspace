@@ -235,5 +235,6 @@ export function visiblePanels(
     destinations: all || focus === "destinations",
     quickMessage:
       (all || focus === "quick-message") && botCount > 0 && destCount > 0,
+    options: all,
   }
 }

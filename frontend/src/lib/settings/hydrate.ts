@@ -14,6 +14,7 @@ export type HydrationRows = {
   retention: Section | null | undefined
   translation: Section | null | undefined
   reach: Section | null | undefined
+  publishing?: Section | null
   jobsStatus: Record<string, { enabled?: unknown }> | null
 }
 
@@ -39,11 +40,17 @@ function legacyInt(
 /**
  * Merge the server's backend-synced sections with the legacy values an older
  * build kept in browser storage. The server wins wherever it has a value.
+ *
+ * The time zone is the one exception: while the account has none, it is the
+ * browser's (`browserTimeZone`), which the push effect then saves. Once saved
+ * it is the server's, so travelling does not move it.
  */
 export function hydrateAppSettings(
   rows: HydrationRows,
   storage: { getItem(key: string): string | null },
+  browserTimeZone = "",
 ): Hydration {
+  const publishing = decodeServerSection("publishing", rows.publishing ?? {})
   const sync = rows.sync ?? {}
   const retention = rows.retention ?? {}
   const legacySync = legacyInt(
@@ -70,6 +77,8 @@ export function hydrateAppSettings(
     }),
     ...decodeServerSection("translation", rows.translation ?? {}),
     ...decodeServerSection("reach", rows.reach ?? {}),
+    ...publishing,
+    timeZone: publishing.timeZone || browserTimeZone,
   }
   const embeddings = rows.jobsStatus?.embeddings?.enabled
   if (typeof embeddings === "boolean") updates.embeddingsEnabled = embeddings

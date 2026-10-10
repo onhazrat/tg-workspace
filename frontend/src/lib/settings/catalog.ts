@@ -806,6 +806,26 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     control: { kind: "panel", sectionId: "destinations" },
   },
   {
+    id: "panel-publication-options",
+    label: "Publication Options",
+    description:
+      "Citation style, link previews and the time zone every Publication uses.",
+    keywords: [
+      "citation",
+      "citations",
+      "numbered",
+      "link preview",
+      "time zone",
+      "timezone",
+      "metadata",
+      "publishing",
+    ],
+    group: "publishing",
+    source: "app",
+    defaultValue: null,
+    control: { kind: "panel", sectionId: "publishing" },
+  },
+  {
     id: "panel-quick-message",
     label: "Quick Message",
     description: "Send a quick test message via the bot.",
