@@ -170,6 +170,9 @@ export const SummaryView: React.FC = () => {
           scopeLine={(artifact, className) => (
             <ArtifactScopeLine artifact={artifact} className={className} />
           )}
+          zone={{
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }}
           emptyState={
             <GoToActionEmptyState
               what="summary"

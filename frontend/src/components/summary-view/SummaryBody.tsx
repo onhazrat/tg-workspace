@@ -3,20 +3,10 @@ import type React from "react"
 import { summaryMetadataText } from "@/lib/summaries/summary-model"
 import type { BotCredential, ChatDestination, Summary } from "@/types"
 import { PublishMetadataPanel } from "./PublishMetadataPanel"
+import { type ReaderZone, SummaryHeader } from "./SummaryHeader"
 import { SummaryNote } from "./SummaryNote"
-import {
-  GeneratingSkeleton,
-  PendingSummaryPanel,
-  SummaryCounts,
-  SummaryMetaChips,
-} from "./SummaryParts"
-import {
-  ExportButtons,
-  NoteToggleButton,
-  PublishControls,
-  RerunButton,
-  TelegramLengthHint,
-} from "./SummaryToolbar"
+import { GeneratingSkeleton, PendingSummaryPanel } from "./SummaryParts"
+import { PublishControls, TelegramLengthHint } from "./SummaryToolbar"
 import { telegramMessageLength } from "./summary-text"
 
 export interface SummaryBodyProps {
@@ -48,6 +38,8 @@ export interface SummaryBodyProps {
   scopeLine: (summary: Summary, className?: string) => React.ReactNode
   /** Shown with no result; a slot because it reads `useUI`. */
   emptyState: React.ReactNode
+  /** The zone the header writes the Analysis window in. */
+  zone: ReaderZone
 }
 
 /** The Summary card's contents: pending, report, generating or empty. */
@@ -72,33 +64,22 @@ export function SummaryBody(props: SummaryBodyProps) {
   if (body)
     return (
       <>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10 border-b border-app-ink/10 pb-6">
-          <div>
-            <h3 className="text-2xl font-bold tracking-tight mb-3">
-              Analysis Report
-            </h3>
-            <SummaryMetaChips
-              timestamp={summary?.timestamp ?? Date.now()}
-              model={summary?.model}
-              language={summary?.language}
-            />
-          </div>
-          <div className="flex items-center gap-1.5 bg-app-muted/20 p-1.5 rounded-xl border border-app-ink/5">
-            <PublishControls
-              bots={props.bots}
-              destinations={props.destinations}
-              onPublish={(bot, dest) => props.onPublish(bot, dest, body)}
-            />
-            {summary && (
-              <NoteToggleButton
-                note={summary.note}
-                editing={props.editingNote}
-                onToggle={() => props.onEditingNoteChange(!props.editingNote)}
-              />
-            )}
-            <RerunButton running={props.running} onRerun={props.onRerun} />
-            <ExportButtons body={body} />
-          </div>
+        <SummaryHeader
+          summary={summary}
+          body={body}
+          zone={props.zone}
+          editingNote={props.editingNote}
+          onToggleNote={() => props.onEditingNoteChange(!props.editingNote)}
+          running={props.running}
+          onRerun={props.onRerun}
+        />
+        {/* The old publish controls, until SUMTAB-09's publish panel replaces them. */}
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <PublishControls
+            bots={props.bots}
+            destinations={props.destinations}
+            onPublish={(bot, dest) => props.onPublish(bot, dest, body)}
+          />
           <TelegramLengthHint
             length={telegramMessageLength(body, props.metadataToSend)}
           />
@@ -127,21 +108,12 @@ export function SummaryBody(props: SummaryBodyProps) {
               onTextChange={props.onMetadataTextChange}
               onSave={props.onSaveMetadata}
             />
-            <div className="mt-12 pt-6 border-t border-app-ink/10 flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex items-center gap-2">
-                <SummaryCounts
-                  postsLabel={`${summary.postCount} Posts Analyzed`}
-                  summary={summary}
-                />
-              </div>
-              {/*
-               * The Summary's own window, not the workspace's. This read
-               * `startDate`/`endDate` off live Scope until AW-08, so a
-               * Summary generated last week described whatever window Posts
-               * happened to be showing while you read it.
-               */}
-              {scopeLine(summary)}
-            </div>
+            {/*
+             * The Summary's own window, not the workspace's (AW-08), kept
+             * here for its "Use this Scope" action; the counts are in the
+             * header now.
+             */}
+            {scopeLine(summary, "mt-12 pt-6 border-t border-app-ink/10")}
           </>
         )}
       </>

@@ -13,12 +13,7 @@ import type { BotCredential, ChatDestination, Summary } from "@/types"
 import { PublishMetadataPanel } from "./PublishMetadataPanel"
 import { SummaryNote } from "./SummaryNote"
 import { PendingSummaryPanel, SummaryMetaChips } from "./SummaryParts"
-import {
-  ExportButtons,
-  NoteToggleButton,
-  PublishControls,
-  TelegramLengthHint,
-} from "./SummaryToolbar"
+import { PublishControls, TelegramLengthHint } from "./SummaryToolbar"
 import {
   exportFilename,
   extractText,
@@ -142,27 +137,6 @@ describe("PublishControls", () => {
 })
 
 describe("toolbar", () => {
-  test("the note button highlights a saved note and toggles", () => {
-    const onToggle = mock()
-    render(<NoteToggleButton note="hi" editing={false} onToggle={onToggle} />)
-    const button = screen.getByText("Note").closest("button") as HTMLElement
-    expect(button.className).toContain("text-amber-600")
-    fireEvent.click(button)
-    expect(onToggle).toHaveBeenCalledTimes(1)
-  })
-
-  test("copy writes the body and says so", async () => {
-    const writes: string[] = []
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: async (t: string) => void writes.push(t) },
-    })
-    render(<ExportButtons body="the body" />)
-    fireEvent.click(screen.getByText("Copy Text"))
-    expect(writes).toEqual(["the body"])
-    expect(screen.getByText("Copied")).toBeTruthy()
-  })
-
   test("the length hint warns only past Telegram's limit", () => {
     render(<TelegramLengthHint length={TELEGRAM_MESSAGE_LIMIT} />)
     expect(screen.queryByText(/may exceed/)).toBeNull()

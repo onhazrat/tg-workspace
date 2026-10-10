@@ -57,6 +57,7 @@ function renderBody(props: Partial<SummaryBodyProps>) {
         </p>
       )}
       emptyState={<p>go to Action</p>}
+      zone={{ timeZone: "Asia/Tehran", locale: "en-US" }}
       {...handlers}
       {...props}
     />,
@@ -87,14 +88,11 @@ describe("SummaryBody", () => {
     const prose = screen.getByText("rendered markdown").parentElement
     expect(prose?.getAttribute("dir")).toBe("rtl")
     expect(prose?.className).toContain("font-fa")
-    expect(screen.getByText("12 Posts Analyzed")).toBeTruthy()
     expect(screen.getByTestId("scope").textContent).toBe("scope of s1")
 
-    fireEvent.click(screen.getByText("Note").closest("button") as HTMLElement)
+    fireEvent.click(screen.getByRole("button", { name: "Add note" }))
     expect(onEditingNoteChange).toHaveBeenCalledWith(true)
-    fireEvent.click(
-      screen.getByText("Re-analyze Window").closest("button") as HTMLElement,
-    )
+    fireEvent.click(screen.getByRole("button", { name: "Re-analyze window" }))
     expect(onRerun).toHaveBeenCalled()
   })
 
@@ -113,7 +111,7 @@ describe("SummaryBody", () => {
   test("a live stream with nothing saved has no note, metadata or footer", () => {
     renderBody({ body: "streamed" })
     expect(screen.getByText("Analysis Report")).toBeTruthy()
-    expect(screen.queryByText("Note")).toBeNull()
+    expect(screen.queryByRole("button", { name: "Add note" })).toBeNull()
     expect(screen.queryByTestId("scope")).toBeNull()
   })
 
@@ -124,5 +122,88 @@ describe("SummaryBody", () => {
 
     renderBody({})
     expect(screen.getByText("go to Action")).toBeTruthy()
+  })
+})
+
+/** A `<p>` whose text includes `needle`, whitespace normalised (Intl uses thin spaces). */
+function lineWith(needle: string): string {
+  const line = screen.getByText(
+    (_, el) => el?.tagName === "P" && (el.textContent ?? "").includes(needle),
+  )
+  return (line.textContent ?? "").replace(/\s+/g, " ")
+}
+
+describe("the Summary header", () => {
+  const start = Date.UTC(2026, 9, 7, 5, 57)
+  const scoped: Summary = {
+    ...summary,
+    model: "gemini-x",
+    timestamp: Date.now() - 2 * 60 * 60 * 1000,
+    scope: {
+      channels: ["a", "b", "c"],
+      start,
+      end: start + 3 * 60 * 60 * 1000,
+      scopedPostCount: 447,
+    },
+  }
+
+  test("line one reads the window, its zone's city, Channels and Covered Posts", () => {
+    renderBody({ summary: scoped, body: "body" })
+    expect(lineWith("channels")).toBe(
+      "3h · Oct 7, 2026, 9:27 AM – 12:27 PM (Tehran) · 3 channels · 447 posts",
+    )
+  })
+
+  test("a Scope with no window says so, and no Covered Posts on record is not zero", () => {
+    renderBody({
+      summary: { ...scoped, scope: { ...scoped.scope!, start: 0, end: 0 } },
+      body: "body",
+    })
+    expect(lineWith("channels")).toBe(
+      "Analysis window not recorded · 3 channels · 447 posts",
+    )
+    cleanup()
+
+    renderBody({
+      summary: {
+        ...scoped,
+        scope: { ...scoped.scope!, channels: ["a"], scopedPostCount: null },
+      },
+      body: "body",
+    })
+    expect(lineWith("channel")).toBe(
+      "3h · Oct 7, 2026, 9:27 AM – 12:27 PM (Tehran) · 1 channel",
+    )
+  })
+
+  test("line two reads the model, Output language and age", () => {
+    renderBody({ summary: scoped, body: "body" })
+    expect(lineWith("gemini-x")).toBe("gemini-x · English · 2h ago")
+  })
+
+  test("the note action is named for an existing note", () => {
+    const { onEditingNoteChange } = renderBody({
+      summary: { ...summary, note: "hi" },
+      body: "body",
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Edit note" }))
+    expect(onEditingNoteChange).toHaveBeenCalledWith(true)
+  })
+
+  test("copy writes the body and says so", () => {
+    const writes: string[] = []
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (t: string) => void writes.push(t) },
+    })
+    renderBody({ summary, body: "the body" })
+    fireEvent.click(screen.getByRole("button", { name: "Copy text" }))
+    expect(writes).toEqual(["the body"])
+    expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy()
+  })
+
+  test("export is an icon action with a spoken name", () => {
+    renderBody({ summary, body: "body" })
+    expect(screen.getByRole("button", { name: "Export Markdown" })).toBeTruthy()
   })
 })
