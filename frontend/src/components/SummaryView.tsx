@@ -170,6 +170,8 @@ export const SummaryView: React.FC = () => {
           scopeLine={(artifact, className) => (
             <ArtifactScopeLine artifact={artifact} className={className} />
           )}
+          textSize={settings.summaryTextSize}
+          onTextSizeChange={settings.setSummaryTextSize}
           zone={{
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }}

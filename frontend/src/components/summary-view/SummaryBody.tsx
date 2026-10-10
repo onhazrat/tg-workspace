@@ -1,8 +1,10 @@
 import type React from "react"
 
+import type { SummaryTextSize } from "@/lib/settings/schema"
 import { summaryMetadataText } from "@/lib/summaries/summary-model"
 import type { BotCredential, ChatDestination, Summary } from "@/types"
 import { PublishMetadataPanel } from "./PublishMetadataPanel"
+import { PROSE_SIZE, ReadingControls } from "./ReadingControls"
 import { type ReaderZone, SummaryHeader } from "./SummaryHeader"
 import { SummaryNote } from "./SummaryNote"
 import { GeneratingSkeleton, PendingSummaryPanel } from "./SummaryParts"
@@ -40,6 +42,8 @@ export interface SummaryBodyProps {
   emptyState: React.ReactNode
   /** The zone the header writes the Analysis window in. */
   zone: ReaderZone
+  textSize: SummaryTextSize
+  onTextSizeChange: (size: SummaryTextSize) => void
 }
 
 /** The Summary card's contents: pending, report, generating or empty. */
@@ -84,9 +88,13 @@ export function SummaryBody(props: SummaryBodyProps) {
             length={telegramMessageLength(body, props.metadataToSend)}
           />
         </div>
+        <ReadingControls
+          textSize={props.textSize}
+          onTextSizeChange={props.onTextSizeChange}
+        />
         <div
           dir={props.direction.dir}
-          className={`prose prose-sm md:prose-base max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-p:leading-relaxed prose-p:text-app-ink/80 prose-li:text-app-ink/80 prose-li:my-1 dark:prose-invert ${props.direction.className}`}
+          className={`prose ${PROSE_SIZE[props.textSize]} max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-p:leading-relaxed prose-p:text-app-ink/80 prose-li:text-app-ink/80 prose-li:my-1 dark:prose-invert ${props.direction.className}`}
         >
           {props.markdown}
         </div>

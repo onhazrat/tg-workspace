@@ -37,6 +37,9 @@ export type BackendSection =
 export const CITATION_STYLES = ["asWritten", "channelName", "numbered"] as const
 export type CitationStyle = (typeof CITATION_STYLES)[number]
 
+export const SUMMARY_TEXT_SIZES = ["S", "M", "L"] as const
+export type SummaryTextSize = (typeof SUMMARY_TEXT_SIZES)[number]
+
 export interface SettingSpec<T> {
   /** Storage key — must stay identical to the historical key for back-compat.
    *  `scopedStorage` prefixes it per account; the name here is the unprefixed one. */
@@ -378,6 +381,13 @@ export const appSettingsSpec = {
     encode: (value: string) => value,
     section: "publishing",
   } satisfies SettingSpec<string>,
+  // The Summary tab's prose size (SUMTAB-03). Local only, per Account through
+  // `scopedStorage`.
+  summaryTextSize: enumSetting<SummaryTextSize>(
+    "summaryTextSize",
+    z.enum(SUMMARY_TEXT_SIZES),
+    "M",
+  ),
   // Discover tab candidate filters (local only — never mirrored to the backend).
   discoverSignals: jsonSetting(
     "discoverSignals",

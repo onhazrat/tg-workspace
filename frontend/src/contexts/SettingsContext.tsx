@@ -21,7 +21,11 @@ import type {
   DiscoverySignalKind,
 } from "@/lib/posts/discover-candidates"
 import { hydrateAppSettings } from "@/lib/settings/hydrate"
-import type { AppSettings, CitationStyle } from "@/lib/settings/schema"
+import type {
+  AppSettings,
+  CitationStyle,
+  SummaryTextSize,
+} from "@/lib/settings/schema"
 import { computeEffectiveGlobalStartTime } from "@/lib/settings/start-time"
 import {
   buildSectionPayload,
@@ -152,6 +156,8 @@ interface SettingsContextType {
   setLinkPreviews: (on: boolean) => void
   timeZone: string
   setTimeZone: (zone: string) => void
+  summaryTextSize: SummaryTextSize
+  setSummaryTextSize: (size: SummaryTextSize) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(

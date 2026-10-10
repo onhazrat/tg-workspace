@@ -7,6 +7,12 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 
+import {
+  loadAppSettings,
+  loadSetting,
+  persistAppSettings,
+  readerFromRecord,
+} from "@/lib/settings/store"
 import type { BotCredential, ChatDestination, Summary } from "@/types"
 import { SummaryBody, type SummaryBodyProps } from "./SummaryBody"
 
@@ -58,6 +64,8 @@ function renderBody(props: Partial<SummaryBodyProps>) {
       )}
       emptyState={<p>go to Action</p>}
       zone={{ timeZone: "Asia/Tehran", locale: "en-US" }}
+      textSize="M"
+      onTextSizeChange={() => {}}
       {...handlers}
       {...props}
     />,
@@ -122,6 +130,31 @@ describe("SummaryBody", () => {
 
     renderBody({})
     expect(screen.getByText("go to Action")).toBeTruthy()
+  })
+})
+
+describe("reading controls", () => {
+  test("text size S, M or L sizes the prose and survives the settings store", () => {
+    const onTextSizeChange = mock()
+    renderBody({ summary, body: "body", textSize: "M", onTextSizeChange })
+    const prose = () => screen.getByText("rendered markdown").parentElement
+    expect(prose()?.className).not.toContain("prose-lg")
+    fireEvent.click(screen.getByRole("button", { name: "L" }))
+    expect(onTextSizeChange).toHaveBeenCalledWith("L")
+    cleanup()
+
+    renderBody({ summary, body: "body", textSize: "L" })
+    expect(prose()?.className).toContain("prose-lg")
+
+    // Remembered per Account: the setting round-trips through the store
+    // `SettingsProvider` reads and writes through `scopedStorage`.
+    const stored: Record<string, string> = {}
+    persistAppSettings(
+      { ...loadAppSettings(readerFromRecord({})), summaryTextSize: "L" },
+      { setItem: (k, v) => void (stored[k] = v) },
+    )
+    expect(loadSetting("summaryTextSize", readerFromRecord(stored))).toBe("L")
+    expect(loadSetting("summaryTextSize", readerFromRecord({}))).toBe("M")
   })
 })
 
