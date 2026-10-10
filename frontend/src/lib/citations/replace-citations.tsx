@@ -9,9 +9,17 @@ export type CitationPostResolver = (
   postId: number,
 ) => Post | undefined
 
-export function replaceCitations(
+/** Draws one `[channel #id]`; `key` is unique within its text node. */
+export type CitationRenderer = (
+  channelName: string,
+  postId: number,
+  key: string,
+) => React.ReactNode
+
+/** Replace every `[channel #id]` in rendered Markdown with `render`'s node. */
+export function splitCitations(
   nodes: React.ReactNode,
-  resolvePost?: CitationPostResolver,
+  render: CitationRenderer,
 ): React.ReactNode {
   return React.Children.map(nodes, (child) => {
     if (typeof child === "string") {
@@ -23,15 +31,12 @@ export function replaceCitations(
         if (match.index > lastIndex) {
           parts.push(child.substring(lastIndex, match.index))
         }
-        const channelName = match[1].trim()
-        const postId = parseInt(match[2], 10)
         parts.push(
-          <CitationHover
-            key={`${match.index}-${match[2]}`}
-            channelName={channelName}
-            postId={postId}
-            postSnapshot={resolvePost?.(channelName, postId)}
-          />,
+          render(
+            match[1].trim(),
+            parseInt(match[2], 10),
+            `${match.index}-${match[2]}`,
+          ),
         )
         lastIndex = match.index + match[0].length
       }
@@ -46,9 +51,24 @@ export function replaceCitations(
       }>
       return React.cloneElement(element, {
         ...element.props,
-        children: replaceCitations(element.props.children, resolvePost),
+        children: splitCitations(element.props.children, render),
       })
     }
     return child
   })
+}
+
+/** The Chat tab's citations: a text hover, unchanged by SUMTAB-04. */
+export function replaceCitations(
+  nodes: React.ReactNode,
+  resolvePost?: CitationPostResolver,
+): React.ReactNode {
+  return splitCitations(nodes, (channelName, postId, key) => (
+    <CitationHover
+      key={key}
+      channelName={channelName}
+      postId={postId}
+      postSnapshot={resolvePost?.(channelName, postId)}
+    />
+  ))
 }
