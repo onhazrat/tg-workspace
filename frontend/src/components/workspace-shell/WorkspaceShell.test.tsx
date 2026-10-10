@@ -8,6 +8,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ArtifactListItem, Channel } from "@/types"
 import {
+  GeneratingOverlay,
   ShortcutsDialog,
   StatusBanners,
   WorkspaceStats,
@@ -215,5 +216,35 @@ describe("the tab strip (TABS-01)", () => {
     expect(say.onDragOver(args)).toBe("Alpha moved beside Chat.")
     expect(say.onDragEnd({ ...args, over: null })).toBe("Alpha dropped.")
     expect(say.onDragCancel(args)).toBe("Moving Alpha was cancelled.")
+  })
+})
+
+describe("GeneratingOverlay", () => {
+  const overlay = (over: Partial<Parameters<typeof GeneratingOverlay>[0]>) => {
+    render(
+      GeneratingOverlay({
+        summarizing: true,
+        activeTab: "summary",
+        summaryId: null,
+        ...over,
+      }),
+    )
+    return screen.queryByText("Generating Summary")
+  }
+
+  test("covers the new-Summary tab while a Summary generates", () => {
+    expect(overlay({})).toBeTruthy()
+  })
+
+  test("stays off every other tab, including another Summary's", () => {
+    for (const activeTab of ["posts", "channels", "settings"] as const) {
+      expect(overlay({ activeTab })).toBeNull()
+      cleanup()
+    }
+    expect(overlay({ summaryId: "other" })).toBeNull()
+  })
+
+  test("is off when nothing is generating", () => {
+    expect(overlay({ summarizing: false })).toBeNull()
   })
 })

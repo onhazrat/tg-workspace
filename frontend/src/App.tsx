@@ -8,7 +8,7 @@ import {
   Moon,
   Sun,
 } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence } from "motion/react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { api } from "@/api"
 import { ActionView } from "./components/ActionView"
@@ -29,6 +29,7 @@ import {
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
 import {
+  GeneratingOverlay,
   RateLimitBanner,
   ShortcutsDialog,
   StatusBanners,
@@ -68,7 +69,7 @@ const FULLSCREEN_CHROME = {
   off: {
     label: "Full screen",
     Icon: Maximize2,
-    main: "app-shell p-4 md:p-8",
+    main: "app-shell p-2 md:p-8",
     header: "flex",
   },
 }
@@ -78,8 +79,14 @@ export default function App() {
 
   const { channels, selectedChannels } = useData()
 
-  const { activeTab, setActiveTab, workspaceTabs, isRateLimited, summarizing } =
-    useUI()
+  const {
+    activeTab,
+    setActiveTab,
+    workspaceTabs,
+    isRateLimited,
+    summarizing,
+    currentSummaryId,
+  } = useUI()
 
   const {
     postSearch,
@@ -195,7 +202,14 @@ export default function App() {
 
   /** The view for `?tab=`; anything unrecognised falls through to Posts. */
   const tabView = () => {
-    if (summarizing) return <GeneratingSummary key="loading" />
+    // Only the tab of the Summary being generated; the run holds no id in the
+    // URL until it finishes, so that is the new-Summary tab.
+    const generating = GeneratingOverlay({
+      summarizing,
+      activeTab,
+      summaryId: currentSummaryId,
+    })
+    if (generating) return generating
     const views: Partial<Record<TabType, () => React.ReactNode>> = {
       history: () => (
         <HistoryView openArtifact={openArtifact} setActiveTab={setActiveTab} />
@@ -403,7 +417,7 @@ export default function App() {
               ref={scrollContainerRef}
               data-testid="workspace-scroll"
               data-tab={activeTab}
-              className="min-h-0 flex-1 overflow-y-auto p-8"
+              className="min-h-0 flex-1 overflow-y-auto p-3 md:p-8"
             >
               <AnimatePresence mode="wait">{tabView()}</AnimatePresence>
             </div>
@@ -411,27 +425,5 @@ export default function App() {
         </div>
       </main>
     </div>
-  )
-}
-
-function GeneratingSummary() {
-  return (
-    <motion.div
-      key="loading"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="h-full flex flex-col items-center justify-center text-center space-y-4"
-    >
-      <div className="w-12 h-12 border-2 border-app-ink border-t-transparent rounded-full animate-spin" />
-      <div className="space-y-1">
-        <p className="text-xs font-mono uppercase tracking-widest animate-pulse">
-          Generating Summary
-        </p>
-        <p className="text-[10px] opacity-40 italic serif">
-          AI is analyzing content...
-        </p>
-      </div>
-    </motion.div>
   )
 }

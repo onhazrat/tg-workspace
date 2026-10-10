@@ -1,8 +1,9 @@
 import { AlertCircle, AlertTriangle } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
+import type { TabType } from "@/types"
 import { RelativeTime } from "../RelativeTime"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog"
-import { shortcutGroups } from "./workspace-shell-model"
+import { generatesOnTab, shortcutGroups } from "./workspace-shell-model"
 
 const BANNER_MOTION = {
   initial: { height: 0, opacity: 0, marginBottom: 0 },
@@ -170,4 +171,35 @@ export function WorkspaceStats({
       <Stat label="Posts in Scope">{postsInScope.toLocaleString()}</Stat>
     </>
   )
+}
+
+function GeneratingSummary() {
+  return (
+    <motion.div
+      key="loading"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="h-full flex flex-col items-center justify-center text-center space-y-4"
+    >
+      <div className="w-12 h-12 border-2 border-app-ink border-t-transparent rounded-full animate-spin" />
+      <div className="space-y-1">
+        <p className="text-xs font-mono uppercase tracking-widest animate-pulse">
+          Generating Summary
+        </p>
+        <p className="text-[10px] opacity-40 italic serif">
+          AI is analyzing content...
+        </p>
+      </div>
+    </motion.div>
+  )
+}
+
+/** The "Generating Summary" cover, or null on every tab that is not the one generating. */
+export function GeneratingOverlay(state: {
+  summarizing: boolean
+  activeTab: TabType
+  summaryId: string | null
+}) {
+  return generatesOnTab(state) ? <GeneratingSummary key="loading" /> : null
 }

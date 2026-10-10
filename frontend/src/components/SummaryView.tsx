@@ -26,6 +26,7 @@ import {
   publishFromView,
   summaryViewState,
 } from "./summary-view/summary-view-model"
+import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
 
 export const SummaryView: React.FC = () => {
   const {
@@ -40,7 +41,13 @@ export const SummaryView: React.FC = () => {
   const chatDestinations = useChatDestinations()
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
-  const { currentSummaryId, summarizing } = useUI()
+  const { currentSummaryId, summarizing: runInFlight } = useUI()
+  // The run fills the new-Summary tab; another Summary's tab is not generating.
+  const summarizing = generatesOnTab({
+    summarizing: runInFlight,
+    activeTab: "summary",
+    summaryId: currentSummaryId,
+  })
   const settings = useSettings()
 
   // The prompt panel below needs the full promptText, which the list
