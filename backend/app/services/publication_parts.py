@@ -24,8 +24,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime, tzinfo
 from typing import Any, Literal, cast
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.schemas.scope import FrozenScope
 from app.services.network import TELEGRAM_MARKUP, parse_telegram_entities, utf16_len
 from app.services.telegram_web import telegram_channel_post_url, telegram_web_base_url
 
@@ -111,6 +114,67 @@ def build_parts(
 
     parts = _cut(prepare(metadata), "metadata") if metadata else []
     return parts + _cut(prepare(text), "summary")
+
+
+def default_metadata(
+    *, scope: FrozenScope | None, model: str, post_count: int, time_zone: str
+) -> str:
+    """The generated metadata block, the only generator of it (SUMTAB-08).
+
+    The window is written in the Account's zone and names it, so readers know
+    which moment it was; an empty or unknown zone is UTC. A Summary with no
+    frozen Scope says "not recorded" rather than reporting the epoch (AW-07).
+    """
+    channels = list(scope.channels) if scope else []
+    time_range = _time_range(scope.start, scope.end, time_zone) if scope else None
+    return (
+        f"📊 *Analysis Metadata*\n"
+        f"🕒 *Time Range:* {time_range or 'not recorded'}\n"
+        f"📡 *Channels Used:* {len(channels)}\n"
+        f"📋 *Channel List:* {', '.join(f'@{c}' for c in channels)}\n"
+        f"🤖 *AI Model:* {model}\n"
+        f"📝 *Posts Analyzed:* {post_count}"
+    )
+
+
+def _time_range(start_ms: int, end_ms: int, time_zone: str) -> str:
+    """`Oct 7, 2026, 9:27 AM – 12:27 PM (Asia/Tehran, GMT+3:30) · 3h`."""
+    zone: tzinfo
+    try:
+        zone, name = ZoneInfo(time_zone), time_zone
+    except ValueError, ZoneInfoNotFoundError:
+        zone, name = UTC, "UTC"
+    start = datetime.fromtimestamp(start_ms / 1000, zone)
+    end = datetime.fromtimestamp(end_ms / 1000, zone)
+    shown_end = _clock(end) if end.date() == start.date() else _moment(end)
+    return (
+        f"{_moment(start)} – {shown_end} ({name}, {_gmt(start)})"
+        f" · {_duration(end_ms - start_ms)}"
+    )
+
+
+def _moment(dt: datetime) -> str:
+    return f"{dt:%b} {dt.day}, {dt.year}, {_clock(dt)}"
+
+
+def _clock(dt: datetime) -> str:
+    return f"{dt.hour % 12 or 12}:{dt:%M} {'AM' if dt.hour < 12 else 'PM'}"
+
+
+def _gmt(dt: datetime) -> str:
+    offset = dt.utcoffset()
+    minutes = int(offset.total_seconds()) // 60 if offset else 0
+    if not minutes:
+        return "GMT"
+    h, m = divmod(abs(minutes), 60)
+    return f"GMT{'+' if minutes > 0 else '-'}{h}" + (f":{m:02d}" if m else "")
+
+
+def _duration(ms: int) -> str:
+    days, rest = divmod(round(ms / 60_000), 24 * 60)
+    hours, minutes = divmod(rest, 60)
+    units = ((days, "d"), (hours, "h"), (minutes, "m"))
+    return " ".join(f"{n}{u}" for n, u in units if n) or "0m"
 
 
 #: The parser's own Citation pattern, so a restyled one is what it would link.

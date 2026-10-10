@@ -834,3 +834,53 @@ def test_the_scheduler_sends_the_part_builders_parts(
         f"{paragraph}\n\n{paragraph}",
         paragraph,
     ]
+
+
+def _scheduled_metadata(
+    session: Session, user: User, no_network: _Spy, publishing: dict[str, Any]
+) -> str:
+    """The metadata Part the scheduler sends for a 9:27-12:27 Tehran window."""
+    from app.services.user_settings import put_user_setting
+
+    put_user_setting(session, "publishing", publishing, user_id=user.id)
+    _seed_bot(session, "bot-of-mine", user.id)
+    _seed_dest(session, "dest-of-mine", user.id)
+    extra = {**_extra("bot-of-mine", "dest-of-mine"), "sendMetadata": True}
+    summary = _seed_summary(session, user.id, extra)
+    summary.scope = {
+        "start": 1_791_352_620_000,  # 2026-10-07 05:57 UTC
+        "end": 1_791_363_420_000,  # 2026-10-07 08:57 UTC
+        "channels": ["news_ir", "tech"],
+    }
+    session.add(summary)
+    session.commit()
+
+    asyncio.run(
+        auto_summary._auto_publish(session, summary, extra, "body", owner_id=user.id)
+    )
+    return str(no_network.calls[0]["kwargs"]["json_body"]["text"])
+
+
+def test_scheduled_metadata_names_the_window_in_the_accounts_time_zone(
+    session: Session, user: User, no_network: _Spy, decrypt: _Spy
+) -> None:
+    """SUMTAB-08: no more raw UTC; the zone is named so readers know the moment."""
+    sent = _scheduled_metadata(session, user, no_network, {"timeZone": "Asia/Tehran"})
+
+    assert sent == (
+        "📊 Analysis Metadata\n"
+        "🕒 Time Range: Oct 7, 2026, 9:27 AM – 12:27 PM"
+        " (Asia/Tehran, GMT+3:30) · 3h\n"
+        "📡 Channels Used: 2\n"
+        "📋 Channel List: @news_ir, @tech\n"
+        "🤖 AI Model: test-model\n"
+        "📝 Posts Analyzed: 1"
+    )
+
+
+def test_scheduled_metadata_is_utc_until_the_account_has_a_time_zone(
+    session: Session, user: User, no_network: _Spy, decrypt: _Spy
+) -> None:
+    sent = _scheduled_metadata(session, user, no_network, {})
+
+    assert "Oct 7, 2026, 5:57 AM – 8:57 AM (UTC, GMT) · 3h" in sent

@@ -651,8 +651,9 @@ def test_published_metadata_never_invents_a_window() -> None:
     this way; the two halves of one message have to agree.
     """
     scopeless = Summary(id="x", user_id=uuid.uuid4(), text="t")
-    assert "1970" not in auto_summary._default_metadata(scopeless, {})
-    assert "not recorded" in auto_summary._default_metadata(scopeless, {})
+    metadata = auto_summary._default_metadata(scopeless, {}, "Asia/Tehran")
+    assert "1970" not in metadata
+    assert "not recorded" in metadata
 
 
 def test_the_import_door_refuses_a_report_that_predates_the_contract() -> None:
