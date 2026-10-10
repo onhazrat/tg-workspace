@@ -4876,11 +4876,7 @@ export type PublishRequest = {
     /**
      * Credentialid
      */
-    credentialId?: string | null;
-    /**
-     * Token
-     */
-    token?: string | null;
+    credentialId: string;
     /**
      * Chatid
      */

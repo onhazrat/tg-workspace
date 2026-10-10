@@ -15,6 +15,10 @@ from app.services.network import fetch_with_retry, parse_telegram_entities
 from app.services.tenancy import may_act_on
 
 
+class BotCredentialNotFound(ValueError):
+    """Absent or someone else's: the one refusal, so a route can answer 404."""
+
+
 async def publish_summary_text(
     session: Session,
     *,
@@ -66,7 +70,7 @@ async def publish_summary_text(
         # has no status code, so the message is the whole of the answer, and
         # credential ids are client-chosen — a refusal that reads differently
         # is a working oracle for guessing them.
-        raise ValueError(BOT_CREDENTIAL_NOT_FOUND)
+        raise BotCredentialNotFound(BOT_CREDENTIAL_NOT_FOUND)
 
     token = decrypt_token(bot.token_encrypted)
     target = f"https://api.telegram.org/bot{token}/sendMessage"

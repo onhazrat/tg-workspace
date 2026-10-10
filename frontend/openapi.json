@@ -10462,14 +10462,7 @@
             "title": "Torrotationthreshold",
             "default": 10
           },
-          "credentialId": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Credentialid"
-          },
-          "token": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Token"
-          },
+          "credentialId": { "type": "string", "title": "Credentialid" },
           "chatId": { "type": "string", "title": "Chatid" },
           "text": { "type": "string", "title": "Text" },
           "metadataText": {
@@ -10478,7 +10471,7 @@
           }
         },
         "type": "object",
-        "required": ["chatId", "text"],
+        "required": ["credentialId", "chatId", "text"],
         "title": "PublishRequest"
       },
       "PublishResponse": {
