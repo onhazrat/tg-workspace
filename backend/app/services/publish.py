@@ -16,8 +16,20 @@ from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
 from app.services.network import fetch_with_retry, parse_telegram_entities
-from app.services.publication_parts import build_parts
+from app.services.publication_parts import PublishingSettings, build_parts
+from app.services.settings_registry import PUBLISHING_KEY
 from app.services.tenancy import may_act_on
+from app.services.user_settings import get_user_setting
+
+
+def load_publishing_settings(
+    session: Session, user_id: uuid.UUID | None
+) -> PublishingSettings:
+    """The Account's Publishing settings (SUMTAB-08); defaults with no Account."""
+    stored = (
+        get_user_setting(session, PUBLISHING_KEY, user_id=user_id) if user_id else {}
+    )
+    return PublishingSettings.from_stored(stored)
 
 
 class BotCredentialNotFound(ValueError):
@@ -108,7 +120,8 @@ async def publish_summary_text(
         results.append(data)
         telemetry_logs.append(telem)
 
-    for part in build_parts(text, metadata_text):
+    prefs = load_publishing_settings(session, acting_user_id)
+    for part in build_parts(text, metadata_text, citation_style=prefs.citation_style):
         await send_chunk(part.text)
 
     return {"success": True, "results": results, "telemetry": telemetry_logs}

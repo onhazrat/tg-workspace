@@ -272,7 +272,17 @@ GLOBAL_KEYS: dict[str, str] = {
 }
 
 #: Per-User keys: one row per account, and two accounts never collide.
+PUBLISHING_KEY = "publishing"
+
 USER_KEYS: dict[str, str] = {
+    PUBLISHING_KEY: (
+        "How this account's Publications look (SUMTAB-08): `citationStyle` "
+        "(as written, by Channel name, or numbered), `linkPreviews` (off "
+        "unless turned on) and `timeZone` (the IANA zone the metadata's time "
+        "range is written in). Personal because each is about the account's "
+        "own channel and readers, and the scheduler reads them for the "
+        "Summary's owner, never for whoever saved last."
+    ),
     RETENTION_PREFS_KEY: (
         "How long to keep the log rows and Discover reports this account "
         "produced. Personal because the rows are: one person choosing a short "

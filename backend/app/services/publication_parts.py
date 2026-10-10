@@ -24,15 +24,42 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal, cast
 
 from app.services.network import TELEGRAM_MARKUP, parse_telegram_entities, utf16_len
-from app.services.telegram_web import telegram_web_base_url
+from app.services.telegram_web import telegram_channel_post_url, telegram_web_base_url
 
 #: Telegram's `sendMessage` text limit, after entity parsing.
 TELEGRAM_MESSAGE_LIMIT = 4096
 
 PartKind = Literal["metadata", "summary"]
+
+#: How a Citation reads once published (SUMTAB-08): `[chan #id]` as written,
+#: `(chan, chan)` by Channel name, or `[1][2]` numbered. Every form links the Post.
+CitationStyle = Literal["asWritten", "channelName", "numbered"]
+CITATION_STYLES: tuple[CitationStyle, ...] = ("asWritten", "channelName", "numbered")
+
+
+@dataclass(frozen=True)
+class PublishingSettings:
+    """The Account's `publishing` settings row, a default for anything unusable."""
+
+    citation_style: CitationStyle = "asWritten"
+    link_previews: bool = False
+    #: An IANA zone name; empty until the browser fills it the first time.
+    time_zone: str = ""
+
+    @classmethod
+    def from_stored(cls, value: dict[str, Any]) -> PublishingSettings:
+        style = value.get("citationStyle")
+        zone = value.get("timeZone")
+        return cls(
+            citation_style=cast(CitationStyle, style)
+            if style in CITATION_STYLES
+            else "asWritten",
+            link_previews=value.get("linkPreviews") is True,
+            time_zone=zone if isinstance(zone, str) else "",
+        )
 
 
 @dataclass(frozen=True)
@@ -66,10 +93,52 @@ def format_for_telegram(text: str) -> str:
     return _HANDLE.sub(lambda m: f"{m[1]}[@{m[2]}]({base}/{m[2]})", text)
 
 
-def build_parts(text: str, metadata: str | None = None) -> list[Part]:
-    """The Parts a publish sends, in order: the metadata's own, then the Summary's."""
-    parts = _cut(format_for_telegram(metadata), "metadata") if metadata else []
-    return parts + _cut(format_for_telegram(text), "summary")
+def build_parts(
+    text: str,
+    metadata: str | None = None,
+    *,
+    citation_style: CitationStyle = "asWritten",
+) -> list[Part]:
+    """The Parts a publish sends, in order: the metadata's own, then the Summary's.
+
+    Numbered Citations share one numbering, counted from the metadata into the
+    prose, so `[3]` means one Post wherever it appears.
+    """
+    numbers: dict[tuple[str, int], int] = {}
+
+    def prepare(t: str) -> str:
+        return _cite(format_for_telegram(t), citation_style, numbers)
+
+    parts = _cut(prepare(metadata), "metadata") if metadata else []
+    return parts + _cut(prepare(text), "summary")
+
+
+#: The parser's own Citation pattern, so a restyled one is what it would link.
+_CITATION = re.compile(r"\[([a-zA-Z0-9_]+)\s+#(\d+)\]")
+#: Citations side by side, separated by nothing but spaces or commas.
+_CITATION_RUN = re.compile(rf"{_CITATION.pattern}(?:[ ,]*{_CITATION.pattern})*")
+
+
+def _cite(text: str, style: CitationStyle, numbers: dict[tuple[str, int], int]) -> str:
+    if style == "numbered":
+
+        def number(m: re.Match[str]) -> str:
+            post = (m[1], int(m[2]))
+            n = numbers.setdefault(post, len(numbers) + 1)
+            return f"[[{n}]]({telegram_channel_post_url(*post)})"
+
+        return _CITATION.sub(number, text)
+    if style == "channelName":
+
+        def names(m: re.Match[str]) -> str:
+            links = (
+                f"[{c}]({telegram_channel_post_url(c, int(i))})"
+                for c, i in _CITATION.findall(m[0])
+            )
+            return f"({', '.join(links)})"
+
+        return _CITATION_RUN.sub(names, text)
+    return text
 
 
 @dataclass(frozen=True)
