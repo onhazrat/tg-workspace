@@ -1,17 +1,15 @@
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
-import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
   useInvalidateSummaries,
   useSummariesHistory,
 } from "@/hooks/useSummaries"
 import { saveSummary } from "@/lib/summaries/store"
-import { summaryMetadataText } from "@/lib/summaries/summary-model"
 import { useAI } from "../contexts/AIContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
@@ -22,10 +20,8 @@ import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import { summaryMarkdownComponents } from "./summary-view/SummaryMarkdown"
-import {
-  publishFromView,
-  summaryViewState,
-} from "./summary-view/summary-view-model"
+import { SummaryPublishPanel } from "./summary-view/SummaryPublishPanel"
+import { summaryViewState } from "./summary-view/summary-view-model"
 import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
 
 export const SummaryView: React.FC = () => {
@@ -37,8 +33,6 @@ export const SummaryView: React.FC = () => {
     completePendingSummary,
   } = useAI()
   const { isOffline } = useApiStatus()
-  const botCredentials = useBotCredentials()
-  const chatDestinations = useChatDestinations()
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
   const { currentSummaryId, summarizing: runInFlight } = useUI()
@@ -65,22 +59,12 @@ export const SummaryView: React.FC = () => {
 
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [isEditingNote, setIsEditingNote] = useState(false)
-  const [sendMetadata, setSendMetadata] = useState(true)
-  const [metadataText, setMetadataText] = useState("")
-
-  useEffect(() => {
-    if (!currentSummary) return
-    setSendMetadata(currentSummary.sendMetadata !== false)
-    setMetadataText(summaryMetadataText(currentSummary))
-  }, [currentSummary])
-
   // Read from the loaded record, so a saved report renders in its own language
   // without having to overwrite the user's setting for the next generation.
   const bodyDirection = reportDirection(
     currentSummary?.language,
     settings.aiLanguage,
   )
-  const metadataToSend = sendMetadata ? metadataText : null
 
   const saveCurrent = async (patch: Partial<Summary>) => {
     if (!currentSummary) return
@@ -123,19 +107,6 @@ export const SummaryView: React.FC = () => {
           summarizing={summarizing}
           running={running}
           direction={bodyDirection}
-          bots={botCredentials}
-          destinations={chatDestinations}
-          onPublish={(bot, dest, text) =>
-            publishFromView({
-              bot,
-              dest,
-              text,
-              summaryId: currentSummaryId,
-              metadata: metadataToSend,
-              isOffline,
-              settings,
-            })
-          }
           onRerun={handleRerun}
           onPaste={() => setPasteModalOpen(true)}
           editingNote={isEditingNote}
@@ -150,26 +121,22 @@ export const SummaryView: React.FC = () => {
             setIsEditingNote(false)
             toast.success("Note deleted.")
           }}
-          sendMetadata={sendMetadata}
-          metadataText={metadataText}
-          metadataToSend={metadataToSend}
-          onSendMetadataChange={(send) => {
-            setSendMetadata(send)
-            void saveCurrent({ sendMetadata: send })
-          }}
-          onMetadataTextChange={setMetadataText}
-          onSaveMetadata={async (text) => {
-            await saveCurrent({ metadataText: text })
-            toast.success("Metadata updated.")
-          }}
-          markdown={
+          publishPanel={(s) => (
+            <SummaryPublishPanel key={s.id} summary={s} onSave={saveCurrent} />
+          )}
+          renderMarkdown={(markdown) => (
             <ReactMarkdown components={summaryMarkdownComponents}>
-              {summaryBody}
+              {markdown}
             </ReactMarkdown>
-          }
+          )}
           scopeLine={(artifact, className) => (
             <ArtifactScopeLine artifact={artifact} className={className} />
           )}
+          textSize={settings.summaryTextSize}
+          onTextSizeChange={settings.setSummaryTextSize}
+          zone={{
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }}
           emptyState={
             <GoToActionEmptyState
               what="summary"

@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { PublicationPlanResponse } from "@/client"
 import type { BotCredential, ChatDestination } from "@/types"
 import { PublishPanel, type PublishPanelProps } from "./PublishPanel"
+import { publicationToast } from "./publish-panel-model"
 
 afterEach(cleanup)
 
@@ -188,6 +189,28 @@ describe("PublishPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publishing settings" }))
 
     expect(onOpenSettings).toHaveBeenCalled()
+  })
+
+  test("a send's answer is a success toast, or how far it got and why it stopped", () => {
+    expect(
+      publicationToast({
+        status: "success",
+        error: null,
+        partsSent: 2,
+        partsTotal: 2,
+      }),
+    ).toEqual({ kind: "success", text: "Published 2 messages." })
+    expect(
+      publicationToast({
+        status: "failed",
+        error: "chat not found",
+        partsSent: 1,
+        partsTotal: 3,
+      }),
+    ).toEqual({
+      kind: "error",
+      text: "Publishing stopped after 1 of 3 messages: chat not found",
+    })
   })
 
   test("with no bot or destination it says where to add one", () => {

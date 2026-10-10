@@ -10,7 +10,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { Summary } from "@/types"
 import { SummaryNote } from "./SummaryNote"
 import { PendingSummaryPanel, SummaryMetaChips } from "./SummaryParts"
-import { ExportButtons, NoteToggleButton } from "./SummaryToolbar"
 import { exportFilename, extractText, relatedPostsQuery } from "./summary-text"
 
 afterEach(cleanup)
@@ -83,29 +82,6 @@ describe("SummaryParts", () => {
     expect(screen.getByText("12 Posts")).toBeTruthy()
     fireEvent.click(screen.getByText("Paste AI Response"))
     expect(onPaste).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe("toolbar", () => {
-  test("the note button highlights a saved note and toggles", () => {
-    const onToggle = mock()
-    render(<NoteToggleButton note="hi" editing={false} onToggle={onToggle} />)
-    const button = screen.getByText("Note").closest("button") as HTMLElement
-    expect(button.className).toContain("text-amber-600")
-    fireEvent.click(button)
-    expect(onToggle).toHaveBeenCalledTimes(1)
-  })
-
-  test("copy writes the body and says so", async () => {
-    const writes: string[] = []
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: async (t: string) => void writes.push(t) },
-    })
-    render(<ExportButtons body="the body" />)
-    fireEvent.click(screen.getByText("Copy Text"))
-    expect(writes).toEqual(["the body"])
-    expect(screen.getByText("Copied")).toBeTruthy()
   })
 })
 
