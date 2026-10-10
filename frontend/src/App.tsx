@@ -19,8 +19,8 @@ import { DirectoryView } from "./components/DirectoryView"
 import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
-import { SettingsHub } from "./components/SettingsHub"
 import { SummaryView } from "./components/SummaryView"
+import { SettingsPrototype } from "./components/settings-prototype/SettingsPrototype"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import {
@@ -207,7 +207,7 @@ export default function App() {
       directory: () => <DirectoryView />,
       summary: () => <SummaryView />,
       action: () => <ActionView />,
-      settings: () => <SettingsHub />,
+      settings: () => <SettingsPrototype />,
     }
     const view = views[activeTab]
     return view ? (
