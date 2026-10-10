@@ -3379,6 +3379,51 @@
         }
       }
     },
+    "/api/v1/data/summaries/{summary_id}/publication/plan": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Plan Summary Publication",
+        "description": "The Parts a Publication of this Summary would send, and its default metadata.",
+        "operationId": "data-plan_summary_publication",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PublicationOptions" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationPlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/chat-sessions": {
       "get": {
         "tags": ["data"],
@@ -10378,6 +10423,52 @@
         "type": "object",
         "required": ["proxyUrl", "maxParallel", "inUse", "inCooldown"],
         "title": "ProxyLaneSnapshot"
+      },
+      "PublicationOptions": {
+        "properties": {
+          "includeMetadata": {
+            "type": "boolean",
+            "title": "Includemetadata",
+            "default": false
+          },
+          "metadataInFirstPart": {
+            "type": "boolean",
+            "title": "Metadatainfirstpart",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "PublicationOptions",
+        "description": "What the publish panel chose; both off unless asked, as a send is."
+      },
+      "PublicationPartResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["metadata", "summary", "both"],
+            "title": "Kind"
+          },
+          "text": { "type": "string", "title": "Text" },
+          "length": { "type": "integer", "title": "Length" },
+          "cutInside": { "type": "boolean", "title": "Cutinside" }
+        },
+        "type": "object",
+        "required": ["kind", "text", "length", "cutInside"],
+        "title": "PublicationPartResponse"
+      },
+      "PublicationPlanResponse": {
+        "properties": {
+          "parts": {
+            "items": { "$ref": "#/components/schemas/PublicationPartResponse" },
+            "type": "array",
+            "title": "Parts"
+          },
+          "defaultMetadata": { "type": "string", "title": "Defaultmetadata" },
+          "limit": { "type": "integer", "title": "Limit" }
+        },
+        "type": "object",
+        "required": ["parts", "defaultMetadata", "limit"],
+        "title": "PublicationPlanResponse"
       },
       "PublishLogListItemResponse": {
         "properties": {

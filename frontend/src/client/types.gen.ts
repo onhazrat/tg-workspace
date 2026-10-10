@@ -4764,6 +4764,62 @@ export type ProxyLaneSnapshot = {
 };
 
 /**
+ * PublicationOptions
+ *
+ * What the publish panel chose; both off unless asked, as a send is.
+ */
+export type PublicationOptions = {
+    /**
+     * Includemetadata
+     */
+    includeMetadata?: boolean;
+    /**
+     * Metadatainfirstpart
+     */
+    metadataInFirstPart?: boolean;
+};
+
+/**
+ * PublicationPartResponse
+ */
+export type PublicationPartResponse = {
+    /**
+     * Kind
+     */
+    kind: 'metadata' | 'summary' | 'both';
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Length
+     */
+    length: number;
+    /**
+     * Cutinside
+     */
+    cutInside: boolean;
+};
+
+/**
+ * PublicationPlanResponse
+ */
+export type PublicationPlanResponse = {
+    /**
+     * Parts
+     */
+    parts: Array<PublicationPartResponse>;
+    /**
+     * Defaultmetadata
+     */
+    defaultMetadata: string;
+    /**
+     * Limit
+     */
+    limit: number;
+};
+
+/**
  * PublishLogListItemResponse
  *
  * A publish log without `fullRequest` / `fullResponse` / `textSent`.
@@ -9889,6 +9945,36 @@ export type DataUpsertTagRunResponses = {
 };
 
 export type DataUpsertTagRunResponse = DataUpsertTagRunResponses[keyof DataUpsertTagRunResponses];
+
+export type DataPlanSummaryPublicationData = {
+    body: PublicationOptions;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/publication/plan';
+};
+
+export type DataPlanSummaryPublicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPlanSummaryPublicationError = DataPlanSummaryPublicationErrors[keyof DataPlanSummaryPublicationErrors];
+
+export type DataPlanSummaryPublicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicationPlanResponse;
+};
+
+export type DataPlanSummaryPublicationResponse = DataPlanSummaryPublicationResponses[keyof DataPlanSummaryPublicationResponses];
 
 export type DataListChatSessionsData = {
     body?: never;

@@ -26,6 +26,7 @@ from app.api.routes.data import (
     discover,
     logs,
     posts,
+    publications,
     summaries,
     vectors,
 )
@@ -37,6 +38,7 @@ router.include_router(posts.router)
 router.include_router(discover.router)
 router.include_router(directory.router)
 router.include_router(summaries.router)
+router.include_router(publications.router)
 router.include_router(chat_sessions.router)
 router.include_router(artifacts.router)
 router.include_router(credentials.router)

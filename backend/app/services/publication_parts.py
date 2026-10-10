@@ -23,7 +23,7 @@ UTF-16 units, because that is the text Telegram counts.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, tzinfo
 from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -35,7 +35,8 @@ from app.services.telegram_web import telegram_channel_post_url, telegram_web_ba
 #: Telegram's `sendMessage` text limit, after entity parsing.
 TELEGRAM_MESSAGE_LIMIT = 4096
 
-PartKind = Literal["metadata", "summary"]
+#: "both" is a first Part that carries the metadata and the Summary's start.
+PartKind = Literal["metadata", "summary", "both"]
 
 #: How a Citation reads once published (SUMTAB-08): `[chan #id]` as written,
 #: `(chan, chan)` by Channel name, or `[1][2]` numbered. Every form links the Post.
@@ -101,8 +102,12 @@ def build_parts(
     metadata: str | None = None,
     *,
     citation_style: CitationStyle = "asWritten",
+    metadata_in_first_part: bool = False,
 ) -> list[Part]:
     """The Parts a publish sends, in order: the metadata's own, then the Summary's.
+
+    With `metadata_in_first_part` the Summary's paragraphs are packed in after
+    the metadata as far as they fit, so a short Summary is one message.
 
     Numbered Citations share one numbering, counted from the metadata into the
     prose, so `[3]` means one Post wherever it appears.
@@ -112,8 +117,11 @@ def build_parts(
     def prepare(t: str) -> str:
         return _cite(format_for_telegram(t), citation_style, numbers)
 
-    parts = _cut(prepare(metadata), "metadata") if metadata else []
-    return parts + _cut(prepare(text), "summary")
+    meta = _units(prepare(metadata), "metadata") if metadata else []
+    body = _units(prepare(text), "summary")
+    if meta and body:
+        body[0] = replace(body[0], sep="\n\n")
+    return _cut(meta + body, joined=metadata_in_first_part)
 
 
 def default_metadata(
@@ -209,6 +217,7 @@ def _cite(text: str, style: CitationStyle, numbers: dict[tuple[str, int], int]) 
 class _Unit:
     text: str
     sep: str
+    kind: PartKind = "summary"
 
 
 def _measure(text: str) -> int:
@@ -219,12 +228,17 @@ def _join(units: list[_Unit]) -> str:
     return units[0].text + "".join(u.sep + u.text for u in units[1:])
 
 
-def _cut(text: str, kind: PartKind) -> list[Part]:
+def _units(text: str, kind: PartKind) -> list[_Unit]:
     paragraphs = [p for p in re.split(r"\n{2,}", text.strip()) if p.strip()]
     units = _glue_headings(
         [u for i, p in enumerate(paragraphs) for u in _fit(p, "\n\n" if i else "")]
     )
-    groups = _pack(units)
+    return [replace(u, kind=kind) for u in units]
+
+
+def _cut(units: list[_Unit], *, joined: bool) -> list[Part]:
+    """Pack `units` into Parts; unless `joined`, the metadata never shares one."""
+    groups = _pack(units, joined=joined)
     full = _join(units)
     parts: list[Part] = []
     end = 0
@@ -232,9 +246,10 @@ def _cut(text: str, kind: PartKind) -> list[Part]:
         part_text = _join(group)
         end += (len(group[0].sep) if k else 0) + len(part_text)
         following = groups[k + 1][0] if k + 1 < len(groups) else None
+        kinds = {u.kind for u in group}
         parts.append(
             Part(
-                kind=kind,
+                kind=kinds.pop() if len(kinds) == 1 else "both",
                 text=part_text,
                 length=_measure(part_text),
                 cut_inside=following is not None
@@ -288,10 +303,14 @@ def _glue_headings(units: list[_Unit]) -> list[_Unit]:
     return out
 
 
-def _pack(units: list[_Unit]) -> list[list[_Unit]]:
+def _pack(units: list[_Unit], *, joined: bool) -> list[list[_Unit]]:
     groups: list[list[_Unit]] = []
     for unit in units:
-        if groups and _measure(_join([*groups[-1], unit])) <= TELEGRAM_MESSAGE_LIMIT:
+        if (
+            groups
+            and (joined or groups[-1][-1].kind == unit.kind)
+            and _measure(_join([*groups[-1], unit])) <= TELEGRAM_MESSAGE_LIMIT
+        ):
             groups[-1].append(unit)
         else:
             groups.append([unit])
