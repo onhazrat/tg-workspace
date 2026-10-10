@@ -94,6 +94,9 @@ async def publish_summary_text(
     results: list[Any] = []
     telemetry_logs: list[Any] = []
 
+    # The sender's own settings, so a scheduled send follows them too.
+    prefs = load_publishing_settings(session, acting_user_id)
+
     async def send_chunk(chunk: str) -> None:
         parsed_text, entities = parse_telegram_entities(chunk)
         payload: dict[str, Any] = {
@@ -102,6 +105,10 @@ async def publish_summary_text(
         }
         if entities:
             payload["entities"] = entities
+        if not prefs.link_previews:
+            # Off unless the Account turned them on: a cited Post's card under
+            # every Part is noise in the channel (SUMTAB-08).
+            payload["link_preview_options"] = {"is_disabled": True}
         data, telem = await fetch_with_retry(
             target,
             retries=settings.TELEGRAM_API_RETRIES,
@@ -120,7 +127,6 @@ async def publish_summary_text(
         results.append(data)
         telemetry_logs.append(telem)
 
-    prefs = load_publishing_settings(session, acting_user_id)
     for part in build_parts(text, metadata_text, citation_style=prefs.citation_style):
         await send_chunk(part.text)
 

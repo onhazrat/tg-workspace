@@ -125,3 +125,70 @@ def test_numbered_citations_share_one_numbering_across_metadata_and_prose(
         ("[1]", _post("tech", 9)),
         ("[2]", _post("news_ir", 5)),
     ]
+
+
+def test_channel_name_citations_group_side_by_side_ones_in_parentheses(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    _set(client, superuser_token_headers, citationStyle="channelName")
+
+    _publish(client, superuser_token_headers, CITED)
+
+    assert telegram.texts == ["Rates rose (news_ir) and fell (tech, news_ir)."]
+    assert telegram.links() == [
+        ("news_ir", _post("news_ir", 5)),
+        ("tech", _post("tech", 9)),
+        ("news_ir", _post("news_ir", 5)),
+    ]
+
+
+def test_citations_go_out_as_written_until_the_account_chooses(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    _publish(client, superuser_token_headers, CITED)
+
+    assert telegram.texts == [CITED]
+    assert [url for _, url in telegram.links()] == [
+        _post("news_ir", 5),
+        _post("tech", 9),
+        _post("news_ir", 5),
+    ]
+
+
+# --------------------------------------------------------------------------
+# Link previews
+# --------------------------------------------------------------------------
+
+
+def test_every_part_goes_out_with_link_previews_off_by_default(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    _publish(client, superuser_token_headers, CITED, metadata_text="Meta")
+
+    assert len(telegram.bodies) == 2
+    assert all(
+        b["link_preview_options"] == {"is_disabled": True} for b in telegram.bodies
+    )
+
+
+def test_an_account_that_turned_link_previews_on_gets_them(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    _set(client, superuser_token_headers, linkPreviews=True)
+
+    _publish(client, superuser_token_headers, CITED, metadata_text="Meta")
+
+    assert len(telegram.bodies) == 2
+    assert all("link_preview_options" not in b for b in telegram.bodies)
