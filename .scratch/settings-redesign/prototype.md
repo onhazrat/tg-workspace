@@ -2,8 +2,9 @@
 
 Status: needs-triage
 
-Verdict (2026-10-11): **A wins.** B (scope-first tabs) and C (overview + drawer)
-were dropped and deleted from the branch; the earlier commit 3bfbaa14 still has them.
+Current state (2026-10-11): **only 0 and E remain.** Research, reasoning and
+learnings for a fold-in are in `research.md`; the rounds below are the history,
+and early rounds name files that later rounds deleted.
 
 Question: what should the workspace Settings tab look like once scope (browser /
 account / deployment) is first-class, tools leave it, and every plain setting
@@ -11,19 +12,22 @@ uses one row?
 
 Code: `frontend/src/components/settings-prototype/` (throwaway), mounted on the
 existing `?tab=settings` route through `App.tsx`; `?variant=` is a workspace
-search param.
+search param. The backend half is `backend/scripts/proto_settings_api.py`.
 
 | Variant | Idea | Borrowed from |
 |---|---|---|
 | 0 | main, unchanged | |
-| A | one scrolling list, scroll-spy tree, search + scope chips + "Modified only" | VS Code |
-| B, C | dropped, see verdict | |
+| E | rows generated from a backend JSON Schema, Configuration merged in, tools in a System tab, nested ids, Account and Admin pages | VS Code, Zed |
 
-Shared: `model.ts` derives each setting's scope from where it is stored
-(`schema.ts` section + the backend's SYNC_PREF_FIELDS / RETENTION_PREF_FIELDS);
-`ProtoRow.tsx` is the one row (scope badge, "Managed by Admin" when the account
-cannot write, modified bar, menu with reset / copy link / copy id, numbers commit
-600ms after typing stops); `panels.tsx` frames the hand-written panels.
+Dropped, each still in history: A (3bfbaa14 to 4cf760c2), B (0fa2df2e),
+C (1886c543), D (2b91926d), Users-only F/G/H (39704eca), app-styled F/G/H
+(708da088).
+
+Files: `VariantE.tsx` (layout by id prefix, groups, sidebar, `.env` values),
+`schema-settings.tsx` (rows drawn from the served schema, server validation
+before each write, reset / copy id / copy link menu), `row-parts.tsx` (scope
+badge, debounced number), `panels.tsx` (hand-written production panels),
+`pages.tsx` (Account and Admin pages), `SystemTab.tsx` (the tools tab).
 
 Admin is read from `useCanManageJobs()`, the client's only permission signal.
 
