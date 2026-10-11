@@ -116,8 +116,6 @@ export function SummaryCitation({
   // card or the sheet would reach a bullet, which searches for related posts
   // on click. One stop here covers the chip, the card, the overlay and Close.
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: stops propagation only
-    // biome-ignore lint/a11y/useKeyWithClickEvents: stops propagation only
     <span className="contents" onClick={(e) => e.stopPropagation()}>
       {inner}
     </span>

@@ -205,7 +205,6 @@ describe("a Citation in the report", () => {
   test("a click on the chip or inside its sheet never reaches the bullet, which searches on click", async () => {
     const onBulletClick = mock()
     render(
-      // biome-ignore lint/a11y/useKeyWithClickEvents: stands in for SummaryMarkdown's bullet
       <li onClick={onBulletClick}>
         <SummaryCitation
           cited={citedPostResolver({

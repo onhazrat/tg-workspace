@@ -1,25 +1,46 @@
 import React from "react"
 import type { Components } from "react-markdown"
+import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
+import { useCitedPosts } from "@/hooks/useCitedPosts"
 import { useSummaryDetailQuery } from "@/hooks/useSummaries"
-import { replaceCitations } from "@/lib/citations/replace-citations"
-import type { Summary } from "@/types"
+import {
+  type CitationRenderer,
+  splitCitations,
+} from "@/lib/citations/replace-citations"
+import { SummaryCitation, useCitationSheet } from "./SummaryCitation"
 import { extractText, relatedPostsQuery } from "./summary-text"
 
-const EMPTY_CITED_POSTS: NonNullable<Summary["citedPosts"]> = {}
-
-function useCitedPostResolver() {
+/** Draws each Citation as the Cited Post's hover card or bottom sheet (SUMTAB-04). */
+function useCitationRenderer(): CitationRenderer {
   const { currentSummaryId } = useUI()
-  // citedPosts is not in the list projection — fetch the row being viewed.
+  // citedPosts and the Scope's Post refs are not in the list projection.
   const { data: detail } = useSummaryDetailQuery(currentSummaryId)
-  const citedPosts = detail?.citedPosts ?? EMPTY_CITED_POSTS
-
-  return React.useCallback(
-    (channelName: string, postId: number) =>
-      citedPosts[`${channelName}-${postId}`],
-    [citedPosts],
+  const { resolve, loading } = useCitedPosts(detail)
+  const sheet = useCitationSheet()
+  const { channels } = useData()
+  const { addNewChannel } = useScraper()
+  const workspace = React.useMemo(
+    () => ({
+      channel: (name: string) =>
+        channels.find((c) => c.name.toLowerCase() === name.toLowerCase()),
+      onAddChannel: addNewChannel,
+    }),
+    [channels, addNewChannel],
+  )
+  return React.useCallback<CitationRenderer>(
+    (channelName, postId, key) => (
+      <SummaryCitation
+        key={key}
+        cited={resolve(channelName, postId)}
+        loading={loading}
+        sheet={sheet}
+        workspace={workspace}
+      />
+    ),
+    [resolve, loading, sheet, workspace],
   )
 }
 
@@ -28,8 +49,8 @@ const CitedParagraph: Components["p"] = ({
   children,
   ...props
 }) => {
-  const resolvePost = useCitedPostResolver()
-  return <p {...props}>{replaceCitations(children, resolvePost)}</p>
+  const renderCitation = useCitationRenderer()
+  return <p {...props}>{splitCitations(children, renderCitation)}</p>
 }
 
 /** A leaf bullet searches for related posts on click; a bullet holding a nested list renders as is. */
@@ -37,7 +58,7 @@ const SearchableListItem: Components["li"] = ({ node, children, ...props }) => {
   const { setSemanticSearchQuery } = useScraper()
   const { setActiveTab } = useUI()
   const { embeddingsEnabled } = useSettings()
-  const resolvePost = useCitedPostResolver()
+  const renderCitation = useCitationRenderer()
 
   const hasNestedList = node?.children?.some(
     (child) =>
@@ -64,7 +85,7 @@ const SearchableListItem: Components["li"] = ({ node, children, ...props }) => {
       }}
       title={embeddingsEnabled ? "Click to find related posts" : undefined}
     >
-      {replaceCitations(children, resolvePost)}
+      {splitCitations(children, renderCitation)}
     </li>
   )
 }
