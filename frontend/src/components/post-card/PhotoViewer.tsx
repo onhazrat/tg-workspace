@@ -109,12 +109,12 @@ function loadedPhotos(start: string): GalleryPhoto[] {
   return all
     .filter((el) => galleryOf(el) === gallery)
     .map((el) => ({
-    src: el.src,
-    caption: el.getAttribute(GALLERY_CAPTION_ATTR) ?? "",
-    // A Post's card in the feed, or a Channel's card or tile in the grid.
-    card: el.closest<HTMLElement>("[data-post-key], [data-channel-name]"),
-    rtl: el.closest("[dir]")?.getAttribute("dir") === "rtl",
-  }))
+      src: el.src,
+      caption: el.getAttribute(GALLERY_CAPTION_ATTR) ?? "",
+      // A Post's card in the feed, or a Channel's card or tile in the grid.
+      card: el.closest<HTMLElement>("[data-post-key], [data-channel-name]"),
+      rtl: el.closest("[dir]")?.getAttribute("dir") === "rtl",
+    }))
 }
 
 export function PhotoViewer({

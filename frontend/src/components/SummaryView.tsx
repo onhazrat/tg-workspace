@@ -1,6 +1,6 @@
 import { motion } from "motion/react"
 import type React from "react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
@@ -14,6 +14,7 @@ import { useAI } from "../contexts/AIContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
+import { useCitedPosts } from "../hooks/useCitedPosts"
 import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
@@ -47,6 +48,20 @@ export const SummaryView: React.FC = () => {
   // The prompt panel below needs the full promptText, which the list
   // projection omits (it was ~94% of that payload).
   const { data: currentSummaryDetail } = useSummaryDetailQuery(currentSummaryId)
+
+  const {
+    refs,
+    resolve,
+    loading: citedLoading,
+  } = useCitedPosts(currentSummaryDetail)
+  const cited = useMemo(
+    () => ({
+      posts: refs.map((r) => resolve(r.channelName, r.postId)),
+      // The detail holds the Summary's Citations; until it arrives, loading.
+      loading: citedLoading || (!!currentSummaryId && !currentSummaryDetail),
+    }),
+    [refs, resolve, citedLoading, currentSummaryId, currentSummaryDetail],
+  )
 
   const { currentSummary, summaryBody, isPending, running } = summaryViewState({
     history: summariesHistory,
@@ -132,6 +147,7 @@ export const SummaryView: React.FC = () => {
           scopeLine={(artifact, className) => (
             <ArtifactScopeLine artifact={artifact} className={className} />
           )}
+          cited={cited}
           textSize={settings.summaryTextSize}
           onTextSizeChange={settings.setSummaryTextSize}
           zone={{

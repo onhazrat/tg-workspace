@@ -1,7 +1,9 @@
 import type React from "react"
 
 import type { SummaryTextSize } from "@/lib/settings/schema"
+import type { CitedPost } from "@/lib/summaries/cited-posts"
 import type { Summary } from "@/types"
+import { PhotoStrip } from "./PhotoStrip"
 import {
   FoldableSections,
   PROSE_SIZE,
@@ -37,6 +39,11 @@ export interface SummaryBodyProps {
   zone: ReaderZone
   textSize: SummaryTextSize
   onTextSizeChange: (size: SummaryTextSize) => void
+  /**
+   * The saved Summary's Cited Posts in first-Citation order (`useCitedPosts`),
+   * for the photo strip; absent while nothing is saved.
+   */
+  cited?: { posts: CitedPost[]; loading: boolean }
 }
 
 /** The Summary card's contents: pending, report, generating or empty. */
@@ -70,6 +77,13 @@ export function SummaryBody(props: SummaryBodyProps) {
           running={props.running}
           onRerun={props.onRerun}
         />
+        {summary && props.cited && (
+          <PhotoStrip
+            cited={props.cited.posts}
+            loading={props.cited.loading}
+            dir={props.direction.dir}
+          />
+        )}
         <ReadingControls
           textSize={props.textSize}
           onTextSizeChange={props.onTextSizeChange}
