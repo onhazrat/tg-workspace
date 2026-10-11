@@ -1,5 +1,5 @@
 /**
- * PROTOTYPE (settings redesign), throwaway. Two variants of the workspace
+ * PROTOTYPE (settings redesign), throwaway. Variants of the workspace
  * Settings tab on the existing `?tab=settings` route, switched by `?variant=`:
  * 0 is main unchanged, A is the redesign, B is A drawn from a backend schema.
  */
@@ -16,6 +16,7 @@ const VARIANTS = [
   { key: "A", name: "One list (VS Code)" },
   { key: "B", name: "A, generated from the backend schema" },
   { key: "C", name: "B, with Configuration merged in" },
+  { key: "D", name: "C, with tools in a System tab" },
 ]
 
 export const SettingsPrototype: React.FC<{ current: React.ReactNode }> = ({
@@ -31,6 +32,8 @@ export const SettingsPrototype: React.FC<{ current: React.ReactNode }> = ({
         <VariantB highlightId={highlightId} />
       ) : variant === "C" ? (
         <VariantB highlightId={highlightId} merged />
+      ) : variant === "D" ? (
+        <VariantB highlightId={highlightId} merged toolsTab />
       ) : (
         current
       )}

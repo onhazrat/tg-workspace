@@ -9,6 +9,7 @@
  * edits here; Configuration is generated from the same classification.
  */
 import { useQuery } from "@tanstack/react-query"
+import { getRouteApi } from "@tanstack/react-router"
 import { ChevronDown, Search, X } from "lucide-react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -288,12 +289,25 @@ const B_PAGES: ProtoPage[] = PAGES.map((p) =>
 /** Groups that only hold `.env` values, so only variant C draws them. */
 const ENV_ONLY_GROUPS = new Set(["directory", "infrastructure"])
 const C_PAGES = PAGES.filter((p) => p.id !== "configuration")
+/** Variant D: the tools live in the System tab, not in Settings. */
+const TOOL_PAGES = new Set([
+  "logs",
+  "network-telemetry",
+  "table-sizes",
+  "query",
+  "transfer",
+])
+const D_PAGES = C_PAGES.filter((p) => !TOOL_PAGES.has(p.id))
+const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export const VariantB: React.FC<{
   highlightId: string | null
   /** Variant C: Configuration folded into Settings. */
   merged?: boolean
-}> = ({ highlightId, merged = false }) => {
+  /** Variant D: C, with the tools moved to a System tab. */
+  toolsTab?: boolean
+}> = ({ highlightId, merged = false, toolsTab = false }) => {
+  const navigate = workspaceRoute.useNavigate()
   const { data: rows, error, isLoading } = useSettingsSchema()
   const isModified = useIsModified()
   const [query, setQuery] = useState("")
@@ -302,7 +316,7 @@ export const VariantB: React.FC<{
   const [active, setActive] = useState("appearance")
   const [pageId, setPageId] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const pages = merged ? C_PAGES : B_PAGES
+  const pages = toolsTab ? D_PAGES : merged ? C_PAGES : B_PAGES
   const page = pages.find((p) => p.id === pageId)
   const isAdmin = useCanManageJobs()
   const { user } = useAuth()
@@ -440,6 +454,22 @@ export const VariantB: React.FC<{
             </div>
           ),
         )}
+        {toolsTab ? (
+          <div className="mt-5 border-t border-app-ink/10 pt-4">
+            <button
+              type="button"
+              onClick={() =>
+                navigate({ search: (prev) => ({ ...prev, tab: "system" }) })
+              }
+              className="w-full rounded px-2 py-1.5 text-left text-sm text-app-ink/70 hover:bg-app-ink/5"
+            >
+              Logs and tools →
+              <span className="block text-xs text-app-ink/45">
+                In the System tab
+              </span>
+            </button>
+          </div>
+        ) : null}
       </aside>
 
       {page ? (

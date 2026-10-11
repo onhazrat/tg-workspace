@@ -22,6 +22,7 @@ import { PostFeed } from "./components/PostFeed"
 import { SettingsHub } from "./components/SettingsHub"
 import { SummaryView } from "./components/SummaryView"
 import { SettingsPrototype } from "./components/settings-prototype/SettingsPrototype"
+import { SystemTabPrototype } from "./components/settings-prototype/SystemTab"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import {
@@ -223,6 +224,7 @@ export default function App() {
       summary: () => <SummaryView />,
       action: () => <ActionView />,
       settings: () => <SettingsPrototype current={<SettingsHub />} />,
+      system: () => <SystemTabPrototype />,
     }
     const view = views[activeTab]
     return view ? (

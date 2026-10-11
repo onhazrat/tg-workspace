@@ -128,3 +128,16 @@ source. Reason: `SECRET_KEY` signs every login and `TOKEN_ENCRYPTION_KEY`
 decrypts every account's bot tokens and AI keys; Admin is a grantable role, not
 "has server access", and showing them would turn one stolen Admin session into
 a permanent full compromise. The real backend already redacts them.
+
+## Round 6: variant D, tools in a System tab (2026-10-11)
+
+D is C with the tools moved out of Settings into a new workspace tab, System
+(`SystemTab.tsx`, `system` in `WORKSPACE_TABS`): Logs (everyone), Network
+telemetry, Database, Query console, Import / export (Admins). Settings keeps
+Account (Profile, Password, Usage, Delete account) and Admin (Users, Quotas),
+plus a "Logs and tools →" link that opens the tab.
+
+The tab is closable and closed by default. Variant 0 stays main: the "+" menu
+offers System only under `?variant=D`, and the palette's "Go to …" commands
+leave it out. Fold-in work: add it to the palette, and give failed publishes /
+summaries a "View logs" link into System → Logs.

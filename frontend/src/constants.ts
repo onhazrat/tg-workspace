@@ -28,6 +28,8 @@ export const WORKSPACE_TABS = [
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "history", label: "History", icon: "History" },
   { id: "settings", label: "Settings", icon: "Settings" },
+  // PROTOTYPE (settings redesign, variant D): tools out of Settings.
+  { id: "system", label: "System", icon: "Wrench" },
 ] as const
 
 /**

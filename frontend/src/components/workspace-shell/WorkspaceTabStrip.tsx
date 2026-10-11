@@ -14,7 +14,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable"
-import { Link } from "@tanstack/react-router"
+import { getRouteApi, Link } from "@tanstack/react-router"
 import {
   Activity,
   Compass,
@@ -29,6 +29,7 @@ import {
   Settings,
   Sparkles,
   Tag,
+  Wrench,
   X,
   Zap,
 } from "lucide-react"
@@ -54,6 +55,7 @@ const TAB_ICONS = {
   Library,
   Send,
   Settings,
+  Wrench,
   Sparkles,
   FileText,
   Activity,
@@ -68,6 +70,7 @@ function tabIcon(meta: (typeof WORKSPACE_TABS)[number]) {
 
 /** What the "+" menu offers: every kind that can be closed. */
 const CLOSABLE_TABS = WORKSPACE_TABS.filter((tab) => !isFixed(tab.id))
+const workspaceRoute = getRouteApi("/_tg/workspace")
 
 /**
  * Space picks a tab up, as the spec asks. Not Enter: on a link Enter follows
@@ -134,6 +137,8 @@ export function WorkspaceTabStrip({
     }),
   )
   const chose = useRef(false)
+  // PROTOTYPE: the System tab exists only in settings variant D.
+  const { variant } = workspaceRoute.useSearch()
   const { tabs } = workspaceTabs
   const closable = tabs.filter((tab) => !isFixed(tab.kind))
   const byKey = new Map(tabs.map((tab) => [tabKey(tab), tab]))
@@ -210,7 +215,9 @@ export function WorkspaceTabStrip({
             chose.current = false
           }}
         >
-          {CLOSABLE_TABS.map((meta) => {
+          {CLOSABLE_TABS.filter(
+            (meta) => meta.id !== "system" || variant === "D",
+          ).map((meta) => {
             const Icon = tabIcon(meta)
             return (
               <DropdownMenuItem
