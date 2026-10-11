@@ -83,6 +83,7 @@ from app.api.deps import (
     view_as_allows,
     view_as_elevation_refuses,
     view_as_refusal_detail,
+    view_as_spends,
 )
 from app.core import security
 from app.core.config import Settings, settings
@@ -413,6 +414,22 @@ def test_a_safe_method_on_a_spend_path_is_still_a_spend() -> None:
     )
 
 
+def test_a_path_parameter_in_an_inventory_matches_one_real_segment() -> None:
+    """SUMTAB-09 listed the first entries with a `{summary_id}` in them.
+
+    The sweeps above post the template itself, which a literal lookup would
+    also match, so this asserts a real id and that the match is one segment.
+    """
+    summary = f"{V1}/data/summaries/1791352620000"
+    assert view_as_spends(f"{summary}/publication")
+    assert not view_as_spends(f"{summary}/publication/plan")
+    assert not view_as_spends(f"{summary}/x/publication")
+    read_only = security.VIEW_AS_READ_ONLY
+    assert view_as_allows("POST", f"{summary}/publication/plan", mode=read_only)
+    assert not view_as_allows("POST", f"{summary}/publication", mode=read_only)
+    assert not view_as_allows("PUT", summary, mode=read_only)
+
+
 def test_every_spend_path_is_refused_to_an_elevated_session(
     client: TestClient,
     owner: tuple[User, dict[str, str]],
@@ -530,6 +547,34 @@ def test_every_spend_entry_names_a_route_that_exists() -> None:
         )
 
 
+def test_a_path_parameter_in_an_inventory_matches_one_segment_and_no_more() -> None:
+    """SUMTAB-09 let an entry carry `{summary_id}`, which widened matching for
+    every inventory at once. A parameter must stand for one whole non-empty
+    segment: never span a `/`, never act as a prefix, never match nothing,
+    because each of those turns an exact allowlist into a family of paths.
+    """
+    base = f"{settings.API_V1_STR}/data/summaries"
+
+    assert view_as_spends(f"{base}/abc/publication")
+    for wider in (
+        f"{base}/a/b/publication",  # spans a slash
+        f"{base}/abc/publication/more",  # a prefix
+        f"{base}//publication",  # an empty segment
+        f"{base}/abc/publications",
+    ):
+        assert not view_as_spends(wider), wider
+
+    plan = f"{base}/abc/publication/plan"
+    assert not view_as_spends(plan)
+    assert view_as_allows("POST", plan, mode=None)
+    assert not view_as_allows("POST", f"{base}/a/b/publication/plan", mode=None)
+    # A literal entry still matches itself and nothing longer.
+    assert view_as_allows("POST", f"{settings.API_V1_STR}/login/test-token", mode=None)
+    assert not view_as_allows(
+        "POST", f"{settings.API_V1_STR}/login/test-token/x", mode=None
+    )
+
+
 #: The functions that reach a paid resource. A route module naming one of these
 #: is a module where "does this spend?" has to be answered per route.
 #:
@@ -542,6 +587,7 @@ SPEND_SEAMS = frozenset(
     {
         "resolve_ai_key",
         "_resolve_bot_token",
+        "send_publication",
         "enqueue_sync_job",
         "create_follow_job",
         "metered",

@@ -26,7 +26,19 @@ import { DEFAULT_DISCOVER_SIGNAL_WEIGHTS } from "@/lib/posts/discover-candidates
 import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
 /** Backend settings sections pushed via api.putSetting(section, payload). */
-export type BackendSection = "sync" | "retention" | "translation" | "reach"
+export type BackendSection =
+  | "sync"
+  | "retention"
+  | "translation"
+  | "reach"
+  | "publishing"
+
+/** How Citations read in a Publication (SUMTAB-08); the server applies it. */
+export const CITATION_STYLES = ["asWritten", "channelName", "numbered"] as const
+export type CitationStyle = (typeof CITATION_STYLES)[number]
+
+export const SUMMARY_TEXT_SIZES = ["S", "M", "L"] as const
+export type SummaryTextSize = (typeof SUMMARY_TEXT_SIZES)[number]
 
 export interface SettingSpec<T> {
   /** Storage key — must stay identical to the historical key for back-compat.
@@ -348,6 +360,34 @@ export const appSettingsSpec = {
   curveRefitIntervalHours: intSetting("curveRefitIntervalHours", 24, {
     section: "reach",
   }),
+  // Publishing (SUMTAB-08). Personal, stored under the `publishing` key; every
+  // send, scheduled ones included, reads them on the server.
+  citationStyle: enumSetting<CitationStyle>(
+    "citationStyle",
+    z.enum(CITATION_STYLES),
+    "asWritten",
+    { section: "publishing" },
+  ),
+  linkPreviews: booleanSetting("linkPreviews", false, {
+    section: "publishing",
+  }),
+  // An IANA zone the metadata's time range is written in. Empty until the
+  // browser fills it from its own zone, once; after that only Settings moves it.
+  timeZone: {
+    storageKey: "timeZone",
+    schema: z.string(),
+    defaultValue: "",
+    decode: (raw: string) => raw,
+    encode: (value: string) => value,
+    section: "publishing",
+  } satisfies SettingSpec<string>,
+  // The Summary tab's prose size (SUMTAB-03). Local only, per Account through
+  // `scopedStorage`.
+  summaryTextSize: enumSetting<SummaryTextSize>(
+    "summaryTextSize",
+    z.enum(SUMMARY_TEXT_SIZES),
+    "M",
+  ),
   // Discover tab candidate filters (local only — never mirrored to the backend).
   discoverSignals: jsonSetting(
     "discoverSignals",

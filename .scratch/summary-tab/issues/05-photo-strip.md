@@ -11,11 +11,11 @@ Implementation Decisions.
 **Blocked by:** SUMTAB-01 (the viewer it opens), SUMTAB-04 (Cited Post resolution and finding a
 Citation).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The strip lists only Cited Posts with a photo, in first-Citation order, and skips the rest; with none it says so (or that Posts are loading)
-- [ ] In a right-to-left Summary the strip runs right to left, and the viewer's next/previous follow it
-- [ ] The viewer accepts an optional action over the photo on screen; the strip uses it for "Find in report", which closes the viewer and then finds the Citation
-- [ ] Each tile has a corner Locate button, translucent and tucked into the corner, that finds the Citation without opening the viewer
-- [ ] Stepping through the viewer covers every strip photo
-- [ ] A rendered Summary test covers the order, the right-to-left direction, and both ways to find a Citation
+- [x] The strip lists only Cited Posts with a photo, in first-Citation order, and skips the rest; with none it says so (or that Posts are loading)
+- [x] In a right-to-left Summary the strip runs right to left, and the viewer's next/previous follow it
+- [x] The viewer accepts an optional action over the photo on screen; the strip uses it for "Find in report", which closes the viewer and then finds the Citation
+- [x] Each tile has a corner Locate button, translucent and tucked into the corner, that finds the Citation without opening the viewer
+- [x] Stepping through the viewer covers every strip photo
+- [x] A rendered Summary test covers the order, the right-to-left direction, and both ways to find a Citation

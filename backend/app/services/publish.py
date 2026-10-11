@@ -1,8 +1,13 @@
-"""Publish summary text to Telegram using encrypted bot credentials."""
+"""Publish summary text to Telegram using encrypted bot credentials.
+
+Every publish, manual, scheduled or the quick message, sends the Parts
+`publication_parts.build_parts` cuts; nothing here cuts or formats text.
+"""
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 from sqlmodel import Session
@@ -12,7 +17,37 @@ from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
 from app.services.network import fetch_with_retry, parse_telegram_entities
+from app.services.publication_parts import PublishingSettings, build_parts
+from app.services.settings_registry import PUBLISHING_KEY
 from app.services.tenancy import may_act_on
+from app.services.user_settings import get_user_setting
+
+
+def load_publishing_settings(
+    session: Session, user_id: uuid.UUID | None
+) -> PublishingSettings:
+    """The Account's Publishing settings (SUMTAB-08); defaults with no Account."""
+    stored = (
+        get_user_setting(session, PUBLISHING_KEY, user_id=user_id) if user_id else {}
+    )
+    return PublishingSettings.from_stored(stored)
+
+
+class BotCredentialNotFound(ValueError):
+    """Absent or someone else's: the one refusal, so a route can answer 404."""
+
+
+class PartFailed(RuntimeError):
+    """A Part Telegram did not take; the Parts before it went out.
+
+    `responses` are Telegram's answers to those Parts, so the publish log
+    keeps one per sent Part across a stop and its resume.
+    """
+
+    def __init__(self, error: str, *, responses: list[Any]) -> None:
+        super().__init__(error)
+        self.responses = responses
+        self.sent = len(responses)
 
 
 async def publish_summary_text(
@@ -28,7 +63,41 @@ async def publish_summary_text(
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
 ) -> dict[str, Any]:
-    """Send `text` as the bot `credential_id` names, on behalf of one account.
+    """The free-text quick message: cut `text` into Parts and send them.
+
+    Cut and rewritten like a Publication, but its Citations stay as typed:
+    "citation style has nothing to act on there" (spec). Link previews still
+    follow the Account, as `send_parts` applies them to every Part.
+    """
+    return await send_parts(
+        session,
+        acting_user_id=acting_user_id,
+        credential_id=credential_id,
+        chat_id=chat_id,
+        parts=[p.text for p in build_parts(text, metadata_text)],
+        proxies=proxies,
+        proxy_concurrency=proxy_concurrency,
+        tor_auto_rotate=tor_auto_rotate,
+        tor_rotation_threshold=tor_rotation_threshold,
+    )
+
+
+async def send_parts(
+    session: Session,
+    *,
+    acting_user_id: uuid.UUID | None,
+    credential_id: str,
+    chat_id: str,
+    parts: Sequence[str],
+    proxies: list[str] | None = None,
+    proxy_concurrency: tuple[int, dict[str, int]] | None = None,
+    tor_auto_rotate: bool = False,
+    tor_rotation_threshold: int = 10,
+) -> dict[str, Any]:
+    """Send `parts` in order as the bot `credential_id` names, for one account.
+
+    Stops at the first Part that fails and raises `PartFailed` saying how many
+    went out before it.
 
     `acting_user_id` is whose send this is — the Summary's owner on the
     scheduled path, which has no `current_user` to ask. It has no default on
@@ -66,12 +135,20 @@ async def publish_summary_text(
         # has no status code, so the message is the whole of the answer, and
         # credential ids are client-chosen — a refusal that reads differently
         # is a working oracle for guessing them.
-        raise ValueError(BOT_CREDENTIAL_NOT_FOUND)
+        raise BotCredentialNotFound(BOT_CREDENTIAL_NOT_FOUND)
 
     token = decrypt_token(bot.token_encrypted)
     target = f"https://api.telegram.org/bot{token}/sendMessage"
     results: list[Any] = []
     telemetry_logs: list[Any] = []
+
+    # The sender's own settings, so a scheduled send follows them too.
+    prefs = load_publishing_settings(session, acting_user_id)
+    # Every read is in hand as a plain value, so the transaction ends here,
+    # before seconds of waiting on Telegram: one held across the sends sits
+    # `idle in transaction` and pins the xmin horizon (CLAUDE.md). Whatever the
+    # caller writes afterwards runs in a fresh, short transaction of its own.
+    session.commit()
 
     async def send_chunk(chunk: str) -> None:
         parsed_text, entities = parse_telegram_entities(chunk)
@@ -81,6 +158,10 @@ async def publish_summary_text(
         }
         if entities:
             payload["entities"] = entities
+        if not prefs.link_previews:
+            # Off unless the Account turned them on: a cited Post's card under
+            # every Part is noise in the channel (SUMTAB-08).
+            payload["link_preview_options"] = {"is_disabled": True}
         data, telem = await fetch_with_retry(
             target,
             retries=settings.TELEGRAM_API_RETRIES,
@@ -99,10 +180,10 @@ async def publish_summary_text(
         results.append(data)
         telemetry_logs.append(telem)
 
-    if metadata_text:
-        for i in range(0, len(metadata_text), 4000):
-            await send_chunk(metadata_text[i : i + 4000])
-    for i in range(0, len(text), 4000):
-        await send_chunk(text[i : i + 4000])
+    for part in parts:
+        try:
+            await send_chunk(part)
+        except Exception as exc:
+            raise PartFailed(str(exc), responses=results) from exc
 
     return {"success": True, "results": results, "telemetry": telemetry_logs}

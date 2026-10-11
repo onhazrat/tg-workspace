@@ -1,0 +1,137 @@
+"""A Summary's Publication: the plan the publish panel previews (SUMTAB-09)."""
+
+from fastapi import APIRouter, HTTPException
+
+from app.api.deps import CurrentUser, SessionDep
+from app.models_tg import Summary
+from app.schemas.publications import (
+    MetadataRowResponse,
+    PartialPublicationResponse,
+    PublicationOptions,
+    PublicationPartResponse,
+    PublicationPlanResponse,
+    PublicationSendRequest,
+    PublicationSendResponse,
+    TelegramSegmentResponse,
+)
+from app.services.network import telegram_segments
+from app.services.publication_parts import TELEGRAM_MESSAGE_LIMIT
+from app.services.publications import (
+    DestinationNotFound,
+    latest_partial,
+    plan_publication,
+    resume_publication,
+    send_publication,
+)
+from app.services.publish import BotCredentialNotFound
+from app.services.summaries import SUMMARY_NOT_FOUND
+from app.services.tenancy import assert_owner, assert_owner_on_write
+
+router = APIRouter()
+
+
+# A read expressed as POST, so the options travel in a body; it writes nothing
+# and sends nothing, which is why View-as may call it unelevated.
+@router.post("/summaries/{summary_id}/publication/plan")
+def plan_summary_publication(
+    summary_id: str,
+    body: PublicationOptions,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PublicationPlanResponse:
+    """The Parts a Publication of this Summary would send, and its default metadata."""
+    summary = session.get(Summary, summary_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    assert_owner(summary.user_id, current_user.id, detail=SUMMARY_NOT_FOUND)
+    plan = plan_publication(
+        session,
+        summary,
+        user_id=current_user.id,
+        include_metadata=body.include_metadata,
+        metadata_in_first_part=body.metadata_in_first_part,
+    )
+    return PublicationPlanResponse(
+        parts=[
+            PublicationPartResponse(
+                kind=p.kind,
+                text=p.text,
+                length=p.length,
+                cutInside=p.cut_inside,
+                segments=[
+                    TelegramSegmentResponse(kind=s.kind, text=s.text, url=s.url)
+                    for s in telegram_segments(p.text)
+                ],
+            )
+            for p in plan.parts
+        ],
+        defaultMetadata=plan.default_metadata,
+        metadataRows=[
+            MetadataRowResponse(
+                key=row.key, label=row.label, value=row.value, sent=sent
+            )
+            for row, sent in plan.metadata_rows
+        ],
+        limit=TELEGRAM_MESSAGE_LIMIT,
+        partial=(
+            PartialPublicationResponse(
+                id=partial.id,
+                partsSent=partial.parts_sent,
+                partsTotal=partial.parts_total,
+            )
+            if (partial := latest_partial(session, summary.id, user_id=current_user.id))
+            else None
+        ),
+    )
+
+
+# Sends as the caller's bot, so View-as needs the spend tier for it. A Part
+# Telegram refuses is a 200 with `status: failed`: the publish log has the row.
+@router.post("/summaries/{summary_id}/publication")
+async def send_summary_publication(
+    summary_id: str,
+    body: PublicationSendRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PublicationSendResponse:
+    """Plan this Summary's Publication and send exactly those Parts.
+
+    Given `publicationId`, finish that partial Publication instead: only its
+    remaining stored Parts, to the bot and chat it started with.
+    """
+    summary = session.get(Summary, summary_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    assert_owner_on_write(summary.user_id, current_user.id, detail=SUMMARY_NOT_FOUND)
+    try:
+        if body.publication_id is not None:
+            outcome = await resume_publication(
+                session,
+                summary,
+                user_id=current_user.id,
+                publication_id=body.publication_id,
+            )
+        elif not (body.bot_id and body.destination_id):
+            # The schema's validator refuses this first; a check rather than
+            # an `assert`, which `python -O` strips.
+            raise HTTPException(
+                status_code=422, detail="botId and destinationId are required"
+            )
+        else:
+            outcome = await send_publication(
+                session,
+                summary,
+                user_id=current_user.id,
+                bot_id=body.bot_id,
+                destination_id=body.destination_id,
+                include_metadata=body.include_metadata,
+                metadata_in_first_part=body.metadata_in_first_part,
+            )
+    except (BotCredentialNotFound, DestinationNotFound) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return PublicationSendResponse(
+        status=outcome.status,
+        error=outcome.error,
+        partsSent=outcome.parts_sent,
+        partsTotal=outcome.parts_total,
+    )

@@ -10,11 +10,11 @@ finishes one itself. See `.scratch/summary-tab/spec.md`, user stories 69-71, and
 
 **Blocked by:** SUMTAB-09 (the Publication routes and the publish panel).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A send stops at the first failed Part; the publish-log row records sent and total Parts and the failure
-- [ ] The Publication route, given a partial Publication's id, sends only its remaining stored Parts and updates the same row
-- [ ] The scheduler records a partial Publication the same way and does not resume it
-- [ ] The panel shows the latest partial Publication of the Summary with "Send the remaining K"
-- [ ] Route-level tests cover a failure at Part 3 of 5, resuming exactly Parts 3 to 5, and refusing to resume another Account's Publication
-- [ ] The scheduler test covers a partial scheduled Publication left for a person to finish
+- [x] A send stops at the first failed Part; the publish-log row records sent and total Parts and the failure
+- [x] The Publication route, given a partial Publication's id, sends only its remaining stored Parts and updates the same row
+- [x] The scheduler records a partial Publication the same way and does not resume it
+- [x] The panel shows the latest partial Publication of the Summary with "Send the remaining K"
+- [x] Route-level tests cover a failure at Part 3 of 5, resuming exactly Parts 3 to 5, and refusing to resume another Account's Publication
+- [x] The scheduler test covers a partial scheduled Publication left for a person to finish

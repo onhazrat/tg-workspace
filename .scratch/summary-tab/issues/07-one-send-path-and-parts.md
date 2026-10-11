@@ -11,22 +11,22 @@ Implementation Decisions.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### Prefactor
 
-- [ ] The free-text publish route sends through the shared publish service; existing publish tests pass unchanged
+- [x] The free-text publish route sends through the shared publish service; existing publish tests pass unchanged
 
 ### Part builder
 
-- [ ] A pure-transform Part builder is the only place cutting and formatting happen, and the shared send path uses it for manual, scheduled and quick-message publishes
-- [ ] Rewrites before cutting: a line-start `* ` or `- ` becomes `• `; a single-asterisk label after a leading emoji or word becomes bold; an @handle containing `_` becomes a link to the Channel with the handle as its text
-- [ ] Cutting, from the prototype: paragraphs on blank lines; a heading-only paragraph glued to the next; anything too long split at lines, then sentence ends, then whitespace, then hard; pieces packed greedily, keeping their separators
-- [ ] The limit is Telegram's, measured on the text after entity parsing in UTF-16 units
-- [ ] The metadata, when sent, is its own Part(s)
-- [ ] A Part whose cut had to fall inside a word or a formatting pair is flagged
+- [x] A pure-transform Part builder is the only place cutting and formatting happen, and the shared send path uses it for manual, scheduled and quick-message publishes
+- [x] Rewrites before cutting: a line-start `* ` or `- ` becomes `• `; a single-asterisk label after a leading emoji or word becomes bold; an @handle containing `_` becomes a link to the Channel with the handle as its text
+- [x] Cutting, from the prototype: paragraphs on blank lines; a heading-only paragraph glued to the next; anything too long split at lines, then sentence ends, then whitespace, then hard; pieces packed greedily, keeping their separators
+- [x] The limit is Telegram's, measured on the text after entity parsing in UTF-16 units
+- [x] The metadata, when sent, is its own Part(s)
+- [x] A Part whose cut had to fall inside a word or a formatting pair is flagged
 
 ### Tests
 
-- [ ] Route-level tests with the Telegram call faked cover the cuts (heading never ending a Part, the line, sentence and word fallbacks), the three rewrites, and the limit after parsing
-- [ ] The scheduler's existing seam asserts it sends the builder's Parts
+- [x] Route-level tests with the Telegram call faked cover the cuts (heading never ending a Part, the line, sentence and word fallbacks), the three rewrites, and the limit after parsing
+- [x] The scheduler's existing seam asserts it sends the builder's Parts

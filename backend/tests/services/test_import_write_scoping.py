@@ -942,6 +942,10 @@ def test_credential_crud_still_writes_your_own(
 #: to write a sentence for.
 GATED_READS: dict[str, str] = {
     "summaries.get_summary": "Reads one summary; hiding it is a visibility change.",
+    "publications.plan_summary_publication": (
+        "Plans one Summary's Publication and writes nothing (SUMTAB-09); its "
+        "send sibling takes `assert_owner_on_write`, because sending is a write."
+    ),
     "chat_sessions.get_chat_session": "Reads one chat session.",
     "tag_runs.get_tag_run": "Reads one tag run.",
     "discover_reports.get_report": "Reads one Discover report.",

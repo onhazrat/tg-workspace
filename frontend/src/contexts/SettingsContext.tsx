@@ -21,7 +21,11 @@ import type {
   DiscoverySignalKind,
 } from "@/lib/posts/discover-candidates"
 import { hydrateAppSettings } from "@/lib/settings/hydrate"
-import type { AppSettings } from "@/lib/settings/schema"
+import type {
+  AppSettings,
+  CitationStyle,
+  SummaryTextSize,
+} from "@/lib/settings/schema"
 import { computeEffectiveGlobalStartTime } from "@/lib/settings/start-time"
 import {
   buildSectionPayload,
@@ -146,6 +150,14 @@ interface SettingsContextType {
   setDiscoverSignalWeights: (weights: DiscoverSignalWeights) => void
   workspaceFocusMode: boolean
   setWorkspaceFocusMode: (on: boolean) => void
+  citationStyle: CitationStyle
+  setCitationStyle: (style: CitationStyle) => void
+  linkPreviews: boolean
+  setLinkPreviews: (on: boolean) => void
+  timeZone: string
+  setTimeZone: (zone: string) => void
+  summaryTextSize: SummaryTextSize
+  setSummaryTextSize: (size: SummaryTextSize) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(
@@ -201,6 +213,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       api.getSetting("retention"),
       api.getSetting("translation"),
       api.getSetting("reach"),
+      api.getSetting("publishing"),
       // Optional, and the `catch` is the point. `GET /jobs/status` became
       // Admin-only in ticket 18, and one rejection inside `Promise.all` rejects
       // the whole thing: sync, retention and translation would never be
@@ -210,24 +223,37 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       // the only thing this call feeds, so a non-Admin simply does not get it.
       api.jobsStatus().catch(() => null),
     ])
-      .then(([syncRow, retentionRow, translationRow, reachRow, jobsStatus]) => {
-        const { updates, writeBack } = hydrateAppSettings(
-          {
-            sync: syncRow.value,
-            retention: retentionRow.value,
-            translation: translationRow.value,
-            reach: reachRow.value,
-            jobsStatus,
-          },
-          scopedStorage,
-        )
-        setSettings((prev) => ({ ...prev, ...updates }))
-        appSettingsHydrated.current = true
-        if (writeBack) {
-          api.putSetting("sync", writeBack.sync).catch(console.error)
-          api.putSetting("retention", writeBack.retention).catch(console.error)
-        }
-      })
+      .then(
+        ([
+          syncRow,
+          retentionRow,
+          translationRow,
+          reachRow,
+          publishingRow,
+          jobsStatus,
+        ]) => {
+          const { updates, writeBack } = hydrateAppSettings(
+            {
+              sync: syncRow.value,
+              retention: retentionRow.value,
+              translation: translationRow.value,
+              reach: reachRow.value,
+              publishing: publishingRow.value,
+              jobsStatus,
+            },
+            scopedStorage,
+            Intl.DateTimeFormat().resolvedOptions().timeZone,
+          )
+          setSettings((prev) => ({ ...prev, ...updates }))
+          appSettingsHydrated.current = true
+          if (writeBack) {
+            api.putSetting("sync", writeBack.sync).catch(console.error)
+            api
+              .putSetting("retention", writeBack.retention)
+              .catch(console.error)
+          }
+        },
+      )
       .catch(console.error)
   }, [])
 
@@ -284,6 +310,20 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         })
     },
     sectionValues("reach", settings),
+  )
+
+  // Publishing (SUMTAB-08). Also the write that saves the time zone the
+  // hydration above filled from the browser.
+  useEffect(
+    () => {
+      if (!hasSession() || !appSettingsHydrated.current) return
+      api
+        .putSetting("publishing", buildSectionPayload("publishing", settings))
+        .catch((err) =>
+          console.warn("[Settings] Failed to sync publishing settings:", err),
+        )
+    },
+    sectionValues("publishing", settings),
   )
 
   // Embeddings toggle maps onto the "embeddings" job rather than a section.

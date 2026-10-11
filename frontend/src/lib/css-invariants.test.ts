@@ -207,8 +207,6 @@ function hoverRevealWithoutFocus(classes: string): boolean {
 const DECORATIVE_HOVER_REVEALS = [
   // SummaryView — truncation warning pill.
   "opacity-0 group-hover:opacity-100 text-[11px] font-medium text-amber-700/80 transition-opacity bg-amber-500/10 px-2 py-0.5 rounded-full",
-  // SummaryView — section-anchor hint overlay.
-  "absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-app-bg/80 backdrop-blur-sm px-2 py-1 rounded text-[11px] font-bold uppercase border border-app-ink/10",
   // ChannelCard — chevron hint on the config row; the row itself is the control.
   "opacity-0 group-hover/config:opacity-40 transition-opacity",
 ]

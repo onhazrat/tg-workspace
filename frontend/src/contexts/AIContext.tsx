@@ -4,6 +4,7 @@ import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
+import { dataSendSummaryPublication } from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
@@ -23,7 +24,7 @@ import {
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
 import { staleSelectedChannels } from "@/lib/chat-sessions/chat-turn"
-import { saveLLMLog, savePublishLog } from "@/lib/logs/write"
+import { saveLLMLog } from "@/lib/logs/write"
 import { DEFAULT_SELECTION } from "@/lib/posts/post-selection"
 import { lookupPosts } from "@/lib/posts/store"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
@@ -38,10 +39,8 @@ import {
   classifyAiError,
   noPostsText,
   successorSummary,
-  summaryMetadataText,
 } from "@/lib/summaries/summary-model"
 import {
-  autoPublishLog,
   checkPastedSummary,
   countRegeneratedPosts,
   NO_POSTS_MESSAGE,
@@ -52,13 +51,11 @@ import {
 } from "@/lib/summaries/summary-run"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
-import { buildActiveProxies } from "../lib/syncSettings"
 import {
   generateSummary,
   generateSummaryStream,
   getSummaryPrompt,
 } from "../services/ai"
-import { publishSummary } from "../services/telegram"
 import type { BotCredential, ChatDestination, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
 import { useData } from "./DataContext"
@@ -104,18 +101,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     includeChannelBioInPrompt,
     includeChannelTagsInPrompt,
   } = useUI()
-  const {
-    aiLanguage,
-    selectedModel,
-    aiTemperature,
-    proxyEnabled,
-    defaultProxyUrls,
-    torEnabled,
-    torMode,
-    torProxyUrls,
-    torAutoRotate,
-    torRotationThreshold,
-  } = useSettings()
+  const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
     scrapeChannelsInParallel,
     postSearch,
@@ -133,15 +119,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     Set<string>
   >(new Set())
   const [copied, setCopied] = useState(false)
-
-  const getActiveProxies = () =>
-    buildActiveProxies({
-      proxyEnabled,
-      defaultProxyUrls,
-      torEnabled,
-      torMode,
-      torProxyUrls,
-    })
 
   const selectedChannelNames = () =>
     channels
@@ -193,7 +170,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       model: selectedModel,
       postCount: posts.postCount,
       extra: {
-        sendMetadata: true,
         ...searchFilterExtra({
           postSearch,
           semanticSearchQuery,
@@ -668,39 +644,28 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     return text
   }
 
+  /** The server plans and sends it, and files the publish log (SUMTAB-09). */
   const autoPublish = async (
     newSummary: Summary,
     bot: BotCredential,
     dest: ChatDestination,
   ) => {
-    const metadata = newSummary.sendMetadata
-      ? summaryMetadataText(newSummary)
-      : null
-    const result = await publishSummary(
-      bot.id,
-      dest.chatId,
-      newSummary.text,
-      metadata ?? undefined,
-      getActiveProxies().length > 0,
-      torAutoRotate,
-      torRotationThreshold,
-    )
-    await savePublishLog(
-      autoPublishLog({
-        id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-        summary: newSummary,
-        bot,
-        dest,
-        metadata,
-        result,
-        now: Date.now(),
-      }),
-    )
-    if (result.success) {
-      toast.success(`Auto-published summary to ${dest.name}`)
-    } else {
-      console.error("Auto-publish failed:", result.error)
-      toast.error(`Auto-publish failed: ${result.error}`)
+    try {
+      const result = await dataSendSummaryPublication({
+        path: { summary_id: newSummary.id },
+        body: {
+          botId: bot.id,
+          destinationId: dest.id,
+          includeMetadata: newSummary.sendMetadata === true,
+          metadataInFirstPart: newSummary.metadataInFirstPart === true,
+        },
+      })
+      if (result.status === "success")
+        toast.success(`Auto-published summary to ${dest.name}`)
+      else toast.error(`Auto-publish failed: ${result.error}`)
+    } catch (err) {
+      console.error("Auto-publish failed:", err)
+      toast.error(`Auto-publish failed: ${errorText(err, "unknown error")}`)
     }
   }
 

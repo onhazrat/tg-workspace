@@ -11,11 +11,8 @@ import {
   channelsNeedingSync,
   classifyAiError,
   extractCitedPosts,
-  generateDefaultMetadataText,
   parseCitationRefs,
-  publishedText,
   successorSummary,
-  summaryMetadataText,
 } from "./summary-model"
 
 /**
@@ -53,28 +50,6 @@ describe("citations", () => {
   })
 })
 
-describe("metadata and the published text", () => {
-  it("the saved metadata wins over the generated default", () => {
-    expect(summaryMetadataText({ ...summary, metadataText: "mine" })).toBe(
-      "mine",
-    )
-    expect(summaryMetadataText(summary)).toBe(
-      generateDefaultMetadataText(summary),
-    )
-  })
-
-  it("the default says the window is not recorded rather than inventing one", () => {
-    const text = generateDefaultMetadataText(summary)
-    expect(text).toContain("*Time Range:* not recorded")
-    expect(text).toContain("*Posts Analyzed:* 3")
-  })
-
-  it("metadata goes first, separated by a blank line, only when sent", () => {
-    expect(publishedText("meta", "body")).toBe("meta\n\nbody")
-    expect(publishedText(null, "body")).toBe("body")
-  })
-})
-
 describe("regeneration", () => {
   it("syncs only summary channels not already synced past the new end", () => {
     const channels = [
@@ -101,6 +76,7 @@ describe("regeneration", () => {
       publishBotId: "b",
       publishChatId: "d",
       postSearch: "q",
+      metadataOmittedRows: ["aiModel"],
     }
     const run = {
       id: "s2",
@@ -120,14 +96,17 @@ describe("regeneration", () => {
       aiKeyId: "live-key",
       publishBotId: "b",
       postSearch: "q",
-      sendMetadata: true,
+      // Row choices are keys, so the successor's metadata is generated afresh.
+      metadataOmittedRows: ["aiModel"],
+      // Off unless the Summary it follows had it on (SUMTAB-09).
+      sendMetadata: false,
     })
     expect(
       successorSummary(previous, { ...run, selectedAiKeyId: null }).aiKeyId,
     ).toBe("old-key")
     expect(
-      successorSummary({ ...previous, sendMetadata: false }, run).sendMetadata,
-    ).toBe(false)
+      successorSummary({ ...previous, sendMetadata: true }, run).sendMetadata,
+    ).toBe(true)
   })
 
   it("auto-publishes only when enabled, non-empty, and both ends still exist", () => {

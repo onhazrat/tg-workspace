@@ -3832,6 +3832,30 @@ export type Message = {
 };
 
 /**
+ * MetadataRowResponse
+ *
+ * One generated metadata row, for the panel's checklist.
+ */
+export type MetadataRowResponse = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Sent
+     */
+    sent: boolean;
+};
+
+/**
  * MigrateCredentialsResponse
  *
  * Result of importing credentials from the client's local store.
@@ -4145,6 +4169,26 @@ export type NewPassword = {
      * New Password
      */
     new_password: string;
+};
+
+/**
+ * PartialPublicationResponse
+ *
+ * The Summary's latest Publication, stopped after some of its Parts.
+ */
+export type PartialPublicationResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Partssent
+     */
+    partsSent: number;
+    /**
+     * Partstotal
+     */
+    partsTotal: number;
 };
 
 /**
@@ -4764,6 +4808,122 @@ export type ProxyLaneSnapshot = {
 };
 
 /**
+ * PublicationOptions
+ *
+ * What the publish panel chose; both off unless asked, as a send is.
+ */
+export type PublicationOptions = {
+    /**
+     * Includemetadata
+     */
+    includeMetadata?: boolean;
+    /**
+     * Metadatainfirstpart
+     */
+    metadataInFirstPart?: boolean;
+};
+
+/**
+ * PublicationPartResponse
+ */
+export type PublicationPartResponse = {
+    /**
+     * Kind
+     */
+    kind: 'metadata' | 'summary' | 'both';
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Length
+     */
+    length: number;
+    /**
+     * Cutinside
+     */
+    cutInside: boolean;
+    /**
+     * Segments
+     */
+    segments: Array<TelegramSegmentResponse>;
+};
+
+/**
+ * PublicationPlanResponse
+ */
+export type PublicationPlanResponse = {
+    /**
+     * Parts
+     */
+    parts: Array<PublicationPartResponse>;
+    /**
+     * Defaultmetadata
+     */
+    defaultMetadata: string;
+    /**
+     * Metadatarows
+     */
+    metadataRows: Array<MetadataRowResponse>;
+    /**
+     * Limit
+     */
+    limit: number;
+    partial: PartialPublicationResponse | null;
+};
+
+/**
+ * PublicationSendRequest
+ *
+ * A new Publication names its bot and destination; a resume names only
+ * the partial Publication, whose stored bot, chat and Parts it keeps.
+ */
+export type PublicationSendRequest = {
+    /**
+     * Includemetadata
+     */
+    includeMetadata?: boolean;
+    /**
+     * Metadatainfirstpart
+     */
+    metadataInFirstPart?: boolean;
+    /**
+     * Botid
+     */
+    botId?: string | null;
+    /**
+     * Destinationid
+     */
+    destinationId?: string | null;
+    /**
+     * Publicationid
+     */
+    publicationId?: string | null;
+};
+
+/**
+ * PublicationSendResponse
+ */
+export type PublicationSendResponse = {
+    /**
+     * Status
+     */
+    status: 'success' | 'failed';
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Partssent
+     */
+    partsSent: number;
+    /**
+     * Partstotal
+     */
+    partsTotal: number;
+};
+
+/**
  * PublishLogListItemResponse
  *
  * A publish log without `fullRequest` / `fullResponse` / `textSent`.
@@ -4876,11 +5036,7 @@ export type PublishRequest = {
     /**
      * Credentialid
      */
-    credentialId?: string | null;
-    /**
-     * Token
-     */
-    token?: string | null;
+    credentialId: string;
     /**
      * Chatid
      */
@@ -4898,7 +5054,7 @@ export type PublishRequest = {
 /**
  * PublishResponse
  *
- * Result of sending a summary, one entry per 4000-character chunk.
+ * Result of sending a summary, one entry per Part sent.
  *
  * `results` holds the raw Bot API replies — same reasoning as
  * `BotInfoResponse`, so they stay untyped.
@@ -6785,6 +6941,26 @@ export type TagRunSubmitRequest = {
     extra?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * TelegramSegmentResponse
+ *
+ * A run of a Part as Telegram shows it, from the parser the send uses.
+ */
+export type TelegramSegmentResponse = {
+    /**
+     * Kind
+     */
+    kind: 'plain' | 'bold' | 'italic' | 'link';
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Url
+     */
+    url: string | null;
 };
 
 export type Telemetry = unknown;
@@ -9893,6 +10069,66 @@ export type DataUpsertTagRunResponses = {
 };
 
 export type DataUpsertTagRunResponse = DataUpsertTagRunResponses[keyof DataUpsertTagRunResponses];
+
+export type DataPlanSummaryPublicationData = {
+    body: PublicationOptions;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/publication/plan';
+};
+
+export type DataPlanSummaryPublicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPlanSummaryPublicationError = DataPlanSummaryPublicationErrors[keyof DataPlanSummaryPublicationErrors];
+
+export type DataPlanSummaryPublicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicationPlanResponse;
+};
+
+export type DataPlanSummaryPublicationResponse = DataPlanSummaryPublicationResponses[keyof DataPlanSummaryPublicationResponses];
+
+export type DataSendSummaryPublicationData = {
+    body: PublicationSendRequest;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/publication';
+};
+
+export type DataSendSummaryPublicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSendSummaryPublicationError = DataSendSummaryPublicationErrors[keyof DataSendSummaryPublicationErrors];
+
+export type DataSendSummaryPublicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicationSendResponse;
+};
+
+export type DataSendSummaryPublicationResponse = DataSendSummaryPublicationResponses[keyof DataSendSummaryPublicationResponses];
 
 export type DataListChatSessionsData = {
     body?: never;

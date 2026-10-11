@@ -31,6 +31,7 @@ import {
   DestinationsPanel,
   type DestValidationState,
 } from "./settings/publishing/DestinationsPanel"
+import { PublicationOptionsPanel } from "./settings/publishing/PublicationOptionsPanel"
 import {
   autofillName,
   BOT_NETWORK_ERROR,
@@ -79,6 +80,12 @@ export const BotManagement: React.FC<BotManagementProps> = ({
     torProxyUrls,
     torAutoRotate,
     torRotationThreshold,
+    citationStyle,
+    setCitationStyle,
+    linkPreviews,
+    setLinkPreviews,
+    timeZone,
+    setTimeZone,
   } = useSettings()
 
   const [selectedQuickBotId, setSelectedQuickBotId] = useState<string>("")
@@ -450,6 +457,22 @@ export const BotManagement: React.FC<BotManagementProps> = ({
         </div>
 
         <div className="space-y-8">
+          {show.options && (
+            <SettingAnchor
+              settingId="panel-publication-options"
+              highlighted={highlightId === "panel-publication-options"}
+            >
+              <PublicationOptionsPanel
+                citationStyle={citationStyle}
+                linkPreviews={linkPreviews}
+                timeZone={timeZone}
+                onCitationStyle={setCitationStyle}
+                onLinkPreviews={setLinkPreviews}
+                onTimeZone={setTimeZone}
+              />
+            </SettingAnchor>
+          )}
+
           {show.destinations && (
             <SettingAnchor
               settingId="panel-destinations"

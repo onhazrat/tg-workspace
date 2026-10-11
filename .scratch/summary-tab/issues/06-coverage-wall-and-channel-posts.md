@@ -13,24 +13,24 @@ button, then "Also covered", loading 20 at a time. See `.scratch/summary-tab/spe
 
 **Blocked by:** SUMTAB-04 (Cited Post resolution, finding a Citation, and the highlight).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### Wall
 
-- [ ] Coverage is derived in the browser from the Citations, the resolved Cited Posts, and the frozen Scope's Post references on the Summary detail; no backend change
-- [ ] Order, from the prototype: `rows.sort((a, b) => b.citedPosts - a.citedPosts || b.coveredPosts - a.coveredPosts)`, where citedPosts counts distinct Cited Posts (not Citations)
-- [ ] The badge is one pill, blue then grey, each half omitted when it has nothing to say; it starts a few pixels inside the photo's bottom-right corner and grows outward without covering the next avatar
-- [ ] Never-cited Channels are greyed out but keep their Covered Posts count; a cited Channel outside the Scope is shown and flagged
-- [ ] A Summary with no Covered Posts on record shows Citations only and says the input was not recorded
-- [ ] Every avatar has a spoken label with its name, Covered Posts and Cited Posts
+- [x] Coverage is derived in the browser from the Citations, the resolved Cited Posts, and the frozen Scope's Post references on the Summary detail; no backend change
+- [x] Order, from the prototype: `rows.sort((a, b) => b.citedPosts - a.citedPosts || b.coveredPosts - a.coveredPosts)`, where citedPosts counts distinct Cited Posts (not Citations)
+- [x] The badge is one pill, blue then grey, each half omitted when it has nothing to say; it starts a few pixels inside the photo's bottom-right corner and grows outward without covering the next avatar
+- [x] Never-cited Channels are greyed out but keep their Covered Posts count; a cited Channel outside the Scope is shown and flagged
+- [x] A Summary with no Covered Posts on record shows Citations only and says the input was not recorded
+- [x] Every avatar has a spoken label with its name, Covered Posts and Cited Posts
 
 ### Channel posts sheet
 
-- [ ] Tapping an avatar highlights its Citations (only if it has any) and opens the sheet; tapping it again closes both; never-cited Channels open too
-- [ ] The sheet shows "Cited in the summary (n)" first, then "Also covered (n)" newest first, 20 at a time as the reader scrolls, through the batch Post lookup
-- [ ] Cited Posts carry a blue outline and a "Cited in the report · Find" strip; Find closes the sheet and finds the Citation
-- [ ] Side sheet on wide screens, bottom sheet on phones
+- [x] Tapping an avatar highlights its Citations (only if it has any) and opens the sheet; tapping it again closes both; never-cited Channels open too
+- [x] The sheet shows "Cited in the summary (n)" first, then "Also covered (n)" newest first, 20 at a time as the reader scrolls, through the batch Post lookup
+- [x] Cited Posts carry a blue outline and a "Cited in the report · Find" strip; Find closes the sheet and finds the Citation
+- [x] Side sheet on wide screens, bottom sheet on phones
 
 ### Tests
 
-- [ ] A rendered Summary test covers the order, badges, out-of-Scope and not-recorded states, and the sheet's grouping and Find
+- [x] A rendered Summary test covers the order, badges, out-of-Scope and not-recorded states, and the sheet's grouping and Find

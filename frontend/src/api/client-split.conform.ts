@@ -65,6 +65,9 @@ import type {
   MyQuotaResponse,
   PostResponse,
   ProxyHealthResponse,
+  PublicationPartResponse,
+  PublicationPlanResponse,
+  PublicationSendResponse,
   PublishResponse,
   QuotaLimitsResponse,
   QuotaUsageEntry,
@@ -113,6 +116,10 @@ export type RagStatusIsClosed = Assert<IsClosed<RagStatusResponse>>
 export type RagEmbedIsClosed = Assert<IsClosed<RagEmbedResponse>>
 export type ChannelInfoIsClosed = Assert<IsClosed<ChannelInfoResponse>>
 export type PublishIsClosed = Assert<IsClosed<PublishResponse>>
+// SUMTAB-09: the publish panel reads the plan and the send off the generated client.
+export type PublicationPlanIsClosed = Assert<IsClosed<PublicationPlanResponse>>
+export type PublicationPartIsClosed = Assert<IsClosed<PublicationPartResponse>>
+export type PublicationSendIsClosed = Assert<IsClosed<PublicationSendResponse>>
 export type ConfigurationCatalogIsClosed = Assert<
   IsClosed<ConfigurationCatalogResponse>
 >

@@ -71,7 +71,6 @@ from app.alembic.versions import (
     c9e4a8b71d25_aw07_drop_incomplete_legacy_artifacts as mig,
 )
 from app.core.db import engine
-from app.jobs import auto_summary
 from app.models_tg import (
     ChatSession,
     ChatSessionPayload,
@@ -82,6 +81,7 @@ from app.models_tg import (
 from app.services import discover_reports
 from app.services.data_import_export import import_data
 from app.services.discover_reports import list_reports
+from app.services.publication_parts import default_metadata
 from tests.utils.scope import stored_scope
 from tests.utils.tenancy import ANY_READER
 
@@ -650,9 +650,11 @@ def test_published_metadata_never_invents_a_window() -> None:
     where nobody is present to disbelieve it. The browser's twin already answers
     this way; the two halves of one message have to agree.
     """
-    scopeless = Summary(id="x", user_id=uuid.uuid4(), text="t")
-    assert "1970" not in auto_summary._default_metadata(scopeless, {})
-    assert "not recorded" in auto_summary._default_metadata(scopeless, {})
+    metadata = default_metadata(
+        scope=None, model="m", post_count=0, time_zone="Asia/Tehran"
+    )
+    assert "1970" not in metadata
+    assert "not recorded" in metadata
 
 
 def test_the_import_door_refuses_a_report_that_predates_the_contract() -> None:

@@ -271,11 +271,12 @@ describe("publishLogFor", () => {
 })
 
 describe("visiblePanels", () => {
-  test("publishing shows all three; quick message needs a bot and a destination", () => {
+  test("publishing shows every panel; quick message needs a bot and a destination", () => {
     expect(visiblePanels("publishing", 1, 1)).toEqual({
       credentials: true,
       destinations: true,
       quickMessage: true,
+      options: true,
     })
     expect(visiblePanels("publishing", 0, 1).quickMessage).toBe(false)
     expect(visiblePanels("publishing", 1, 0).quickMessage).toBe(false)
@@ -286,16 +287,19 @@ describe("visiblePanels", () => {
       credentials: true,
       destinations: false,
       quickMessage: false,
+      options: false,
     })
     expect(visiblePanels("destinations", 1, 1)).toEqual({
       credentials: false,
       destinations: true,
       quickMessage: false,
+      options: false,
     })
     expect(visiblePanels("quick-message", 1, 1)).toEqual({
       credentials: false,
       destinations: false,
       quickMessage: true,
+      options: false,
     })
   })
 })

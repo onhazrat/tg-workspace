@@ -113,7 +113,7 @@ class BotInfoResponse(BaseModel):
 
 
 class PublishResponse(BaseModel):
-    """Result of sending a summary, one entry per 4000-character chunk.
+    """Result of sending a summary, one entry per Part sent.
 
     `results` holds the raw Bot API replies — same reasoning as
     `BotInfoResponse`, so they stay untyped.

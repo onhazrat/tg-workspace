@@ -41,3 +41,18 @@ export function zoomAbout(
     photo,
   )
 }
+
+/**
+ * Two fingers that started `from` px apart and are now `to` px apart: the
+ * scale the pinch started at times their ratio, about the starting midpoint.
+ */
+export function pinchZoom(
+  start: ZoomView,
+  mid: { x: number; y: number },
+  from: number,
+  to: number,
+  box: Size,
+  photo: Size,
+): ZoomView {
+  return zoomAbout(start, mid, (start.s * to) / from, box, photo)
+}

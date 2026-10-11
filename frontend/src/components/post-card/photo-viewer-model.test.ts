@@ -5,7 +5,7 @@
  * photo can be dragged off screen.
  */
 import { describe, expect, test } from "bun:test"
-import { clampView, MAX_ZOOM, zoomAbout } from "./photo-viewer-model"
+import { clampView, MAX_ZOOM, pinchZoom, zoomAbout } from "./photo-viewer-model"
 
 const box = { w: 1000, h: 1000 }
 const narrow = { w: 100, h: 1000 } // drawn 100x1000 at 1x
@@ -32,6 +32,31 @@ describe("zoomAbout", () => {
     // 2x about 200px right of centre: that point moves to 400 unless panned back.
     const v = zoomAbout(whole, { x: 200, y: 0 }, 2, box, wide)
     expect(v).toEqual({ s: 2, x: -200, y: 0 })
+  })
+})
+
+describe("pinchZoom", () => {
+  test("fingers spread to twice their distance double the scale about their midpoint", () => {
+    // Started 100px apart around 200px right of centre, now 200px apart.
+    expect(pinchZoom(whole, { x: 200, y: 0 }, 100, 200, box, wide)).toEqual({
+      s: 2,
+      x: -200,
+      y: 0,
+    })
+  })
+
+  test("the ratio applies to the scale the pinch started from", () => {
+    const start = { s: 2, x: 0, y: 0 }
+    expect(pinchZoom(start, { x: 0, y: 0 }, 100, 150, box, wide).s).toBe(3)
+  })
+
+  test("a pinch is clamped like any zoom: closing past 1x is whole, spreading stops at 8x", () => {
+    expect(pinchZoom(whole, { x: 200, y: 0 }, 200, 50, box, wide)).toEqual(
+      whole,
+    )
+    expect(pinchZoom(whole, { x: 0, y: 0 }, 10, 900, box, wide).s).toBe(
+      MAX_ZOOM,
+    )
   })
 })
 

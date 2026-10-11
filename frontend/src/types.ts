@@ -300,8 +300,14 @@ export interface Summary {
   publishBotId?: string
   publishChatId?: string
   note?: string
+  /** Send the metadata with a Publication; off unless set on (SUMTAB-09). */
   sendMetadata?: boolean
+  /** Hand-written metadata; empty or absent means the server's generated rows. */
   metadataText?: string
+  /** Keys of the generated metadata rows this Summary leaves out. */
+  metadataOmittedRows?: string[]
+  /** Put the metadata in the first Part when it fits (SUMTAB-09). */
+  metadataInFirstPart?: boolean
   isStarred?: boolean
   postSearch?: string
   semanticSearchQuery?: string

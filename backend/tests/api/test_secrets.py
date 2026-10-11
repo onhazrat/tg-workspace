@@ -149,7 +149,7 @@ def test_bot_info_by_credential_id(mock_fetch: AsyncMock, client: TestClient) ->
     client.delete(f"{PREFIX}/bot-credentials/cred-bot-1", headers=headers)
 
 
-@patch("app.api.routes.telegram.fetch_with_retry", new_callable=AsyncMock)
+@patch("app.services.publish.fetch_with_retry", new_callable=AsyncMock)
 def test_publish_by_credential_id(mock_fetch: AsyncMock, client: TestClient) -> None:
     headers = _auth(client)
     client.put(

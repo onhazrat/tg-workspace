@@ -174,3 +174,22 @@ export function tabAnnouncements(
     onDragCancel: ({ active }) => `Moving ${labelOf(active.id)} was cancelled.`,
   }
 }
+
+/**
+ * Is the Summary being generated the one this tab holds?
+ *
+ * The run puts no id in the URL until it finishes, so the tab it fills is the
+ * new-Summary tab (no id). Another Summary's tab, and every other kind, keeps
+ * its own content.
+ */
+export function generatesOnTab(state: {
+  summarizing: boolean
+  activeTab: TabType
+  summaryId: string | null
+}): boolean {
+  return (
+    state.summarizing &&
+    state.activeTab === "summary" &&
+    state.summaryId === null
+  )
+}

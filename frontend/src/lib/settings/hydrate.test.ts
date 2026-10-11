@@ -74,6 +74,40 @@ describe("hydrateAppSettings", () => {
     expect(updates.reachSampleSize).toBe(50)
     expect(updates.curveRefitIntervalHours).toBe(6)
   })
+
+  it("takes the Publishing settings from the server's publishing row", () => {
+    const { updates } = hydrateAppSettings(
+      {
+        ...empty,
+        publishing: {
+          citationStyle: "numbered",
+          linkPreviews: true,
+          timeZone: "Europe/Berlin",
+        },
+      },
+      readerFromRecord({}),
+      "Asia/Tehran",
+    )
+    expect(updates.citationStyle).toBe("numbered")
+    expect(updates.linkPreviews).toBe(true)
+    expect(updates.timeZone).toBe("Europe/Berlin")
+  })
+
+  it("fills the time zone from the browser only until the account saves one", () => {
+    const fresh = hydrateAppSettings(
+      { ...empty, publishing: {} },
+      readerFromRecord({}),
+      "Asia/Tehran",
+    )
+    const cleared = hydrateAppSettings(
+      { ...empty, publishing: { timeZone: "" } },
+      readerFromRecord({}),
+      "Asia/Tehran",
+    )
+    expect(fresh.updates.timeZone).toBe("Asia/Tehran")
+    // Saved empty is the Account's choice (UTC), not a gap to fill again.
+    expect(cleared.updates.timeZone).toBe("")
+  })
 })
 
 describe("refusalMessage", () => {
