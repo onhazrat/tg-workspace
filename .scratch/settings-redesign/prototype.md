@@ -69,3 +69,43 @@ This is the work left to fold in:
   workspace today. Give it a place in the workspace header.
 - The Admin section must use a real permission read, not `useCanManageJobs()`.
 - e2e: `admin.spec.ts`, `user-settings.spec.ts` navigate to the old paths.
+
+## Round 4: variant B, generated from a backend schema (2026-10-11)
+
+B is A's layout with every row drawn from JSON Schema served by a standalone
+prototype API, `backend/scripts/proto_settings_api.py` (never mounted in the
+real API). Each settings row is a pydantic model; a field carries its title,
+description, default (from `config.py` where one exists), bounds, enum, and the
+row carries scope (device / account / deployment) and store. The frontend keeps
+only a layout (`LAYOUT` in `VariantB.tsx`, VS Code-style `"sync.*"` patterns),
+plus the hand-written panels.
+
+- Device rows (Appearance) are declared in the schema but stay in the browser.
+- AI model, language and temperature moved from the browser to the account.
+- `.env` policy knobs became rows: Access (`USERS_OPEN_REGISTRATION`,
+  `USERS_REQUIRE_APPROVAL`), Sessions (token and View-as lifetimes),
+  Housekeeping (`SYNC_JOB_RETENTION_DAYS`, `SLOW_REQUEST_LOG_MS`).
+- Every write is validated by the server first (`POST /settings/{row}/validate`).
+- Admin → Configuration lists all 119 `config.py` fields classified as editable
+  (8), seed of an existing setting (24), read at startup (56), bootstrap (22) or
+  secret (9), each with its reason.
+
+Stores: `browser` and `server` rows write through `SettingsContext`, as today
+(real writes). `proto` rows (AI prefs, the new knobs) go to
+`proto.settings_overrides` on the deployment's scratch schema; **the live app
+never reads them**, so flipping "Open registration" changes nothing yet.
+
+Run the API (needs the DB tunnel on :5433 and `~/.pgpass`):
+
+```
+cd backend
+PROTO_DSN="host=localhost port=5433 dbname=app user=<role>" \
+PROTO_API_BASE=<deployment api base> PROTO_PORT=8030 \
+uv run python scripts/proto_settings_api.py
+```
+
+and start Vite with `PROTO_API_PORT=8030` so `/proto` is proxied.
+
+Found while building it: frontend and backend defaults already disagree in
+places (the frontend schema guessed some), which is the drift a single schema
+removes.

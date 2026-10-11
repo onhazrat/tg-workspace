@@ -61,6 +61,15 @@ export default defineConfig(({ mode }) => {
             "http://localhost:8000",
           changeOrigin: true,
         },
+        // PROTOTYPE (settings redesign): the standalone schema API.
+        ...(process.env.PROTO_API_PORT
+          ? {
+              "/proto": {
+                target: `http://127.0.0.1:${process.env.PROTO_API_PORT}`,
+                rewrite: (p: string) => p.replace(/^\/proto/, ""),
+              },
+            }
+          : {}),
       },
       hmr: process.env.DISABLE_HMR !== "true",
     },

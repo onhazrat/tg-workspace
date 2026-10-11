@@ -212,7 +212,7 @@ const RowMenu: React.FC<{
 }
 
 /** Number fields keep a draft and commit 600ms after the last keystroke. */
-const DebouncedNumber: React.FC<{
+export const DebouncedNumber: React.FC<{
   value: number
   min?: number
   max?: number
@@ -316,7 +316,7 @@ const Control: React.FC<{
   }
 }
 
-const StartTime: React.FC = () => {
+export const StartTime: React.FC = () => {
   const s = useSettings()
   return (
     <StartTimeSetting

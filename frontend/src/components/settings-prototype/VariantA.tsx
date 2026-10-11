@@ -271,7 +271,7 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
   )
 }
 
-const Chip: React.FC<{
+export const Chip: React.FC<{
   on: boolean
   onClick: () => void
   children: React.ReactNode
@@ -291,7 +291,7 @@ const Chip: React.FC<{
 )
 
 /** Settings in a group that differ from their default. */
-const ModifiedCount: React.FC<{ n: number; label?: boolean }> = ({
+export const ModifiedCount: React.FC<{ n: number; label?: boolean }> = ({
   n,
   label,
 }) => (
