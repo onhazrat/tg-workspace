@@ -15,9 +15,13 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import { errorText } from "@/lib/artifacts/artifact-run"
-import type { PublishingOptions, Summary } from "@/types"
+import type { Summary } from "@/types"
 import { PublishPanel } from "./PublishPanel"
-import { publicationToast } from "./publish-panel-model"
+import {
+  publicationToast,
+  publishingAfterChange,
+  summaryPublishing,
+} from "./publish-panel-model"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
@@ -45,11 +49,7 @@ export function SummaryPublishPanel({
   // Only what this Summary changed; the rest follows Settings, on the server
   // as here.
   const [ownPublishing, setOwnPublishing] = useState(summary.publishing ?? {})
-  const publishing: PublishingOptions = {
-    citationStyle: ownPublishing.citationStyle ?? settings.citationStyle,
-    linkPreviews: ownPublishing.linkPreviews ?? settings.linkPreviews,
-    timeZone: ownPublishing.timeZone ?? settings.timeZone,
-  }
+  const publishing = summaryPublishing(ownPublishing, settings)
   const metadataText = summary.metadataText ?? ""
   const plan = useQuery({
     queryKey: queryKeys.publicationPlan(summary.id, {
@@ -111,14 +111,8 @@ export function SummaryPublishPanel({
       publishing={publishing}
       publishingCustomized={Object.keys(ownPublishing).length > 0}
       onPublishingChange={(change) => {
-        // Picking what it already publishes with changes nothing, so it does
-        // not stop the Summary following Settings.
-        const same = Object.entries(change).every(
-          ([key, value]) =>
-            publishing[key as keyof PublishingOptions] === value,
-        )
-        if (same) return
-        const next = { ...ownPublishing, ...change }
+        const next = publishingAfterChange(ownPublishing, publishing, change)
+        if (!next) return
         setOwnPublishing(next)
         void onSave({ publishing: next })
       }}

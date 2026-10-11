@@ -9,7 +9,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { PublicationPlanResponse } from "@/client"
 import type { BotCredential, ChatDestination } from "@/types"
 import { PublishPanel, type PublishPanelProps } from "./PublishPanel"
-import { publicationToast } from "./publish-panel-model"
+import {
+  publicationToast,
+  publishingAfterChange,
+  summaryPublishing,
+} from "./publish-panel-model"
 
 afterEach(cleanup)
 
@@ -352,5 +356,39 @@ describe("PublishPanel", () => {
     renderPanel({ bots: [] })
     expect(screen.getByText(/Add a bot and a destination/)).toBeTruthy()
     expect(screen.queryByRole("button", { name: /^Publish($| \d)/ })).toBeNull()
+  })
+})
+
+describe("a Summary's Publication Options", () => {
+  const defaults = {
+    citationStyle: "asWritten" as const,
+    linkPreviews: false,
+    timeZone: "Asia/Tehran",
+  }
+
+  test("follow Settings for every option the Summary did not change", () => {
+    expect(summaryPublishing({}, defaults)).toEqual(defaults)
+    expect(
+      summaryPublishing({ linkPreviews: true, timeZone: "" }, defaults),
+    ).toEqual({
+      ...defaults,
+      linkPreviews: true,
+      // Empty is a choice (UTC), not "unset".
+      timeZone: "",
+    })
+  })
+
+  test("keep a change on top of the earlier ones", () => {
+    expect(
+      publishingAfterChange({ linkPreviews: true }, defaults, {
+        citationStyle: "numbered",
+      }),
+    ).toEqual({ linkPreviews: true, citationStyle: "numbered" })
+  })
+
+  test("picking what it already publishes with saves nothing", () => {
+    expect(
+      publishingAfterChange({}, defaults, { citationStyle: "asWritten" }),
+    ).toBeNull()
   })
 })
