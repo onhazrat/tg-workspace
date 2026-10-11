@@ -24,7 +24,7 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { valuesEqual } from "@/lib/settings/catalog"
 import { cn } from "@/lib/utils"
 import type { Scope as UiScope } from "./model"
-import { DebouncedNumber, ScopeBadge, StartTime } from "./ProtoRow"
+import { DebouncedNumber, ScopeBadge, StartTime } from "./row-parts"
 
 export type SchemaScope = "device" | "account" | "deployment"
 export type Store = "browser" | "server" | "proto"
@@ -46,12 +46,16 @@ export interface SchemaRowDef {
   store: Store
   editable: boolean
   schema: { properties: Record<string, JsonProp> }
+  /** Variant E: each field's nested id, from the backend. */
+  ids?: Record<string, string>
 }
 
 type Values = Record<string, Record<string, { value: unknown; source: string }>>
 
 export interface SchemaField {
-  key: string // "row.field"
+  key: string // "row.field", the storage address
+  /** `namespace.section.name` (variant E); the key where none is served. */
+  id: string
   row: SchemaRowDef
   name: string
   prop: JsonProp
@@ -83,6 +87,7 @@ export function fieldsOf(rows: SchemaRowDef[]): SchemaField[] {
   return rows.flatMap((row) =>
     Object.entries(row.schema.properties).map(([name, prop]) => ({
       key: `${row.row}.${name}`,
+      id: row.ids?.[name] ?? `${row.row}.${name}`,
       row,
       name,
       prop,
@@ -90,15 +95,21 @@ export function fieldsOf(rows: SchemaRowDef[]): SchemaField[] {
   )
 }
 
-/** VS Code-style layout patterns: `"sync.*"` or `"jobs.embeddingsEnabled"`. */
+/**
+ * VS Code-style layout patterns: `"sync.*"` or `"jobs.embeddingsEnabled"`.
+ * By storage row (variant D) or by nested id prefix (variant E).
+ */
 export function select(
   fields: SchemaField[],
   patterns: string[],
+  byId = false,
 ): SchemaField[] {
   return patterns.flatMap((p) =>
     p.endsWith(".*")
-      ? fields.filter((f) => f.row.row === p.slice(0, -2))
-      : fields.filter((f) => f.key === p),
+      ? fields.filter((f) =>
+          byId ? f.id.startsWith(p.slice(0, -1)) : f.row.row === p.slice(0, -2),
+        )
+      : fields.filter((f) => (byId ? f.id : f.key) === p),
   )
 }
 
@@ -140,7 +151,7 @@ export function matchesField(f: SchemaField, q: string): boolean {
   const needle = q.trim().toLowerCase()
   return (
     !needle ||
-    `${f.key} ${f.prop.title ?? ""} ${f.prop.description ?? ""}`
+    `${f.key} ${f.id} ${f.prop.title ?? ""} ${f.prop.description ?? ""}`
       .toLowerCase()
       .includes(needle)
   )
@@ -170,7 +181,10 @@ export const SchemaRow: React.FC<{
   field: SchemaField
   highlighted?: boolean
   seed?: Seed
-}> = ({ field: f, highlighted, seed }) => {
+  /** Variant E: address the row by its nested id. */
+  nested?: boolean
+}> = ({ field: f, highlighted, seed, nested = false }) => {
+  const address = nested ? f.id : f.key
   const [value, write, source] = useFieldValue(f)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -204,7 +218,7 @@ export const SchemaRow: React.FC<{
 
   return (
     <div
-      id={`setting-${f.key}`}
+      id={`setting-${address}`}
       className={cn(
         "relative scroll-mt-28 border-l-2 border-transparent py-4 pl-4 pr-2",
         modified && "border-l-amber-500/80",
@@ -236,7 +250,8 @@ export const SchemaRow: React.FC<{
             </p>
           ) : null}
           <p className="mt-1 font-mono text-[11px] text-app-ink/35">
-            {f.key}
+            {address}
+            {nested ? ` · stored as ${f.key}` : ""}
             {source ? ` · ${source}` : ""}
             {seed
               ? seeded
@@ -278,12 +293,24 @@ export const SchemaRow: React.FC<{
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={async () => {
-                await navigator.clipboard.writeText(f.key)
+                await navigator.clipboard.writeText(address)
                 toast.success("Copied setting id")
               }}
             >
               Copy setting id
             </DropdownMenuItem>
+            {nested ? (
+              <DropdownMenuItem
+                onClick={async () => {
+                  const url = new URL(window.location.href)
+                  url.searchParams.set("setting", f.id)
+                  await navigator.clipboard.writeText(url.toString())
+                  toast.success("Copied link")
+                }}
+              >
+                Copy link to setting
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

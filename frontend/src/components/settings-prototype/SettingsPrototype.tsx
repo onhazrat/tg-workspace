@@ -1,22 +1,19 @@
 /**
- * PROTOTYPE (settings redesign), throwaway. Variants of the workspace
- * Settings tab on the existing `?tab=settings` route, switched by `?variant=`:
- * 0 is main unchanged, A is the redesign, B is A drawn from a backend schema.
+ * PROTOTYPE (settings redesign), throwaway. Variants of the workspace Settings
+ * tab on the existing `?tab=settings` route, switched by `?variant=`: 0 is main
+ * unchanged, D and E are the redesign (see `VariantD.tsx`).
  */
 import { getRouteApi } from "@tanstack/react-router"
 import type React from "react"
 import { PrototypeSwitcher } from "./PrototypeSwitcher"
-import { VariantA } from "./VariantA"
-import { VariantB } from "./VariantB"
+import { VariantD } from "./VariantD"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
 const VARIANTS = [
   { key: "0", name: "Current (main)" },
-  { key: "A", name: "One list (VS Code)" },
-  { key: "B", name: "A, generated from the backend schema" },
-  { key: "C", name: "B, with Configuration merged in" },
-  { key: "D", name: "C, with tools in a System tab" },
+  { key: "D", name: "Generated, Configuration merged, tools in System" },
+  { key: "E", name: "D, with nested VS Code-style ids" },
 ]
 
 export const SettingsPrototype: React.FC<{ current: React.ReactNode }> = ({
@@ -26,14 +23,10 @@ export const SettingsPrototype: React.FC<{ current: React.ReactNode }> = ({
   const highlightId = setting ?? null
   return (
     <>
-      {variant === "A" ? (
-        <VariantA highlightId={highlightId} />
-      ) : variant === "B" ? (
-        <VariantB highlightId={highlightId} />
-      ) : variant === "C" ? (
-        <VariantB highlightId={highlightId} merged />
-      ) : variant === "D" ? (
-        <VariantB highlightId={highlightId} merged toolsTab />
+      {variant === "D" ? (
+        <VariantD highlightId={highlightId} />
+      ) : variant === "E" ? (
+        <VariantD highlightId={highlightId} nested />
       ) : (
         current
       )}

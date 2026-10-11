@@ -18,7 +18,7 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { JOB_LABELS, useJobToggles } from "@/hooks/useJobToggles"
 import { cn } from "@/lib/utils"
 import { PANEL_INFO, type ProtoPanelId } from "./model"
-import { ScopeBadge, useCanWrite } from "./ProtoRow"
+import { ScopeBadge, useCanWrite } from "./row-parts"
 
 const Jobs: React.FC = () => {
   const { jobStatus, refreshJobStatus, toggleJob } = useJobToggles()

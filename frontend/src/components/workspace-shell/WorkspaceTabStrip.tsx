@@ -137,7 +137,7 @@ export function WorkspaceTabStrip({
     }),
   )
   const chose = useRef(false)
-  // PROTOTYPE: the System tab exists only in settings variant D.
+  // PROTOTYPE: the System tab exists only in settings variants D and E.
   const { variant } = workspaceRoute.useSearch()
   const { tabs } = workspaceTabs
   const closable = tabs.filter((tab) => !isFixed(tab.kind))
@@ -216,7 +216,8 @@ export function WorkspaceTabStrip({
           }}
         >
           {CLOSABLE_TABS.filter(
-            (meta) => meta.id !== "system" || variant === "D",
+            (meta) =>
+              meta.id !== "system" || variant === "D" || variant === "E",
           ).map((meta) => {
             const Icon = tabIcon(meta)
             return (

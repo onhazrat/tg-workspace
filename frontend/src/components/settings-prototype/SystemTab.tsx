@@ -69,10 +69,10 @@ export const SystemTabPrototype: React.FC = () => {
     if (loadsDbStats(tool.id)) void loadDBStats()
   }, [tool.id, loadDBStats])
 
-  if (variant !== "D")
+  if (variant !== "D" && variant !== "E")
     return (
       <p className="p-8 text-sm text-app-ink/50">
-        The System tab belongs to settings prototype variant D.
+        The System tab belongs to settings prototype variants D and E.
       </p>
     )
 

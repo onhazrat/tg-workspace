@@ -141,3 +141,19 @@ The tab is closable and closed by default. Variant 0 stays main: the "+" menu
 offers System only under `?variant=D`, and the palette's "Go to …" commands
 leave it out. Fold-in work: add it to the palette, and give failed publishes /
 summaries a "View logs" link into System → Logs.
+
+## Round 7: A, B, C dropped; variant E, nested ids (2026-10-11)
+
+A, B and C left the switcher and their code is deleted (`VariantA.tsx`, the
+B/C modes and the generated Configuration page). D's code moved to
+`VariantD.tsx`; the shared row pieces are in `row-parts.tsx`.
+
+E is D with every setting addressed by a VS Code-style id the backend serves
+(`NESTED_IDS` in the proto API): `namespace.section.name`, e.g.
+`sync.schedule.intervalMinutes`, `appearance.channelCard.showBio`,
+`retention.shared.postDays`, `access.registration.open`. Storage keys do not
+change; each row shows "stored as <row.field>". The layout selects by id prefix
+(`"sync.*"`), the second segment becomes a sub-heading, and search,
+`?setting=<id>` deep links, "Copy setting id" and "Copy link to setting" use the
+id. `.env` values get a derived id too (`NETWORK_FETCH_RETRIES` →
+`network.fetch.retries`), shown next to their `.env` name.

@@ -359,6 +359,74 @@ ROWS: dict[str, Row] = {
     ),
 }
 
+#: Variant E: each setting's VS Code-style id, `namespace.section.name`. The id
+#: is the address (search, deep links, layout); storage keys stay as they are.
+NESTED_IDS: dict[str, str] = {
+    "appearance.theme": "appearance.colorTheme",
+    "appearance.showChannelBio": "appearance.channelCard.showBio",
+    "appearance.showChannelSubscribers": "appearance.channelCard.showSubscribers",
+    "appearance.showChannelTelegramChatId": "appearance.channelCard.showTelegramChatId",
+    "appearance.showChannelPhotos": "appearance.channelCard.showPhotoCount",
+    "appearance.showChannelVideos": "appearance.channelCard.showVideoCount",
+    "appearance.showChannelFiles": "appearance.channelCard.showFileCount",
+    "appearance.showChannelLinks": "appearance.channelCard.showLinkCount",
+    "appearance.showChannelStartId": "appearance.channelCard.showStartMessageId",
+    "ai_prefs.selectedModel": "ai.model",
+    "ai_prefs.aiLanguage": "ai.language",
+    "ai_prefs.aiTemperature": "ai.temperature",
+    "translation.translationEnabled": "ai.translation.enabled",
+    "translation.autoTranslate": "ai.translation.automatic",
+    "translation.translationTargetLanguage": "ai.translation.targetLanguage",
+    "translation.translationModel": "ai.translation.model",
+    "jobs.embeddingsEnabled": "ai.embeddings.enabled",
+    "sync_prefs.dynamicSyncEnabledDefault": "sync.newFollows.dynamicSync",
+    "sync_prefs.dynamicSyncExpectedPostsDefault": "sync.newFollows.expectedPostsPerInterval",
+    "sync_prefs.globalStartTimeMode": "sync.newFollows.startFrom",
+    "sync.regularSyncIntervalMinutes": "sync.schedule.intervalMinutes",
+    "sync.syncFailureBackoffMinutes": "sync.schedule.failureBackoffMinutes",
+    "reach.settlingAgeHours": "sync.reach.settlingAgeHours",
+    "reach.estimationFloorHours": "sync.reach.estimationFloorHours",
+    "reach.reachSampleSize": "sync.reach.sampleSize",
+    "reach.curveRefitIntervalHours": "sync.reach.curveRefitIntervalHours",
+    "publishing.citationStyle": "publishing.citationStyle",
+    "publishing.linkPreviews": "publishing.linkPreviews",
+    "publishing.timeZone": "publishing.timeZone",
+    "retention_prefs.logRetentionDays": "retention.yours.logDays",
+    "retention_prefs.reportRetentionDays": "retention.yours.discoverReportDays",
+    "retention_prefs.reportRetentionMax": "retention.yours.discoverReportLimit",
+    "retention.postRetentionDays": "retention.shared.postDays",
+    "retention.sharedLogRetentionDays": "retention.shared.logDays",
+    "retention.payloadRetentionDays": "retention.shared.syncBodyDays",
+    "access.USERS_OPEN_REGISTRATION": "access.registration.open",
+    "access.USERS_REQUIRE_APPROVAL": "access.registration.requireApproval",
+    "sessions.ACCESS_TOKEN_EXPIRE_MINUTES": "access.sessions.loginMinutes",
+    "sessions.VIEW_AS_TOKEN_EXPIRE_MINUTES": "access.viewAs.sessionMinutes",
+    "sessions.VIEW_AS_ELEVATED_MAX_MINUTES": "access.viewAs.writeWindowMaxMinutes",
+    "sessions.VIEW_AS_SPEND_MAX_MINUTES": "access.viewAs.spendWindowMaxMinutes",
+    "housekeeping.SYNC_JOB_RETENTION_DAYS": "system.syncJobs.historyDays",
+    "housekeeping.SLOW_REQUEST_LOG_MS": "system.requests.slowThresholdMs",
+}
+
+#: A `.env` name's leading word that just repeats its group.
+_GROUP_WORDS = {
+    "network": {"network"},
+    "sync": {"sync"},
+    "retention": {"retention"},
+    "directory": {"directory"},
+}
+
+
+def env_id(name: str, group: str) -> str:
+    """`NETWORK_FETCH_INITIAL_DELAY_MS` under network → `network.fetch.initialDelayMs`."""
+    words = name.lower().split("_")
+    while len(words) > 1 and words[0] in _GROUP_WORDS.get(group, set()):
+        words = words[1:]
+    head, rest = words[0], words[1:]
+    if not rest:
+        return f"{group}.{head}"
+    return f"{group}.{head}.{rest[0]}{''.join(w.capitalize() for w in rest[1:])}"
+
+
 #: Every `config.py` field that is not a policy knob, with why it stays in `.env`.
 SECRET = {
     "SECRET_KEY",
@@ -569,6 +637,10 @@ def schema(authorization: str | None = Header(None)) -> list[dict[str, Any]]:
             "store": row.store,
             "editable": can_edit(row, who),
             "schema": row.model.model_json_schema(),
+            "ids": {
+                name: NESTED_IDS.get(f"{row_id}.{name}", f"{row_id}.{name}")
+                for name in row.model.model_fields
+            },
         }
         for row_id, row in ROWS.items()
     ]
@@ -668,6 +740,7 @@ def env(authorization: str | None = Header(None)) -> list[dict[str, Any]]:
                 "configured": bool(entry.get("configured")),
                 "codeDefault": None if name in SECRET else _jsonable(env_default(name)),
                 "group": env_group(name),
+                "id": env_id(name, env_group(name)),
                 "seedOf": SEED_OF.get(name),
                 **env_kind(name),
             }

@@ -1,12 +1,14 @@
 /**
- * PROTOTYPE variant B, "Generated" (A's layout, rows from the backend schema).
+ * PROTOTYPE variants D and E. Every plain row is drawn from the backend's
+ * JSON Schema (`GET /proto/settings/schema`); the frontend keeps only a layout.
+ * Configuration is folded in: `.env` policy knobs are rows, seeds sit in the
+ * row they seed, everything else is read-only under its group for Admins. The
+ * tools live in the System tab.
  *
- * The frontend holds only a layout: which group shows which setting, in
- * VS Code's pattern style (`"sync.*"`). Every label, description, default,
- * bound, scope and editability comes from the backend's pydantic models via
- * `GET /proto/settings/schema`. Device-scoped rows (Appearance) are declared
- * there too but stay in this browser; `.env` policy knobs became rows an Admin
- * edits here; Configuration is generated from the same classification.
+ * E (`nested`) addresses every setting by a VS Code-style id from the backend,
+ * `namespace.section.name` (`sync.schedule.intervalMinutes`): the layout
+ * selects by id prefix, the second segment becomes a sub-heading, and search,
+ * deep links (`?setting=<id>`) and "Copy setting id" all use it.
  */
 import { useQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
@@ -19,7 +21,7 @@ import useAuth from "@/hooks/useAuth"
 import { useCanManageJobs } from "@/hooks/useJobsStatus"
 import { cn } from "@/lib/utils"
 import type { ProtoPanelId } from "./model"
-import { AREA_LABEL, PAGES, PageView, type ProtoPage } from "./pages"
+import { AREA_LABEL, PAGES, PageView } from "./pages"
 import { ProtoPanel } from "./panels"
 import {
   fieldsOf,
@@ -30,14 +32,16 @@ import {
   useIsModified,
   useSettingsSchema,
 } from "./schema-settings"
-import { Chip, ModifiedCount } from "./VariantA"
 
 /** The only settings knowledge the frontend keeps: where things go. */
 const LAYOUT: {
   id: string
   label: string
   blurb: string
+  /** D: storage rows. */
   items: string[]
+  /** E: nested id prefixes. */
+  idItems: string[]
   panels: ProtoPanelId[]
 }[] = [
   {
@@ -45,6 +49,7 @@ const LAYOUT: {
     label: "Appearance",
     blurb: "Kept per browser, so each device can look different.",
     items: ["appearance.*"],
+    idItems: ["appearance.*"],
     panels: [],
   },
   {
@@ -53,6 +58,7 @@ const LAYOUT: {
     blurb:
       "Your models and language follow you; translation is deployment-wide.",
     items: ["ai_prefs.*", "translation.*", "jobs.embeddingsEnabled"],
+    idItems: ["ai.*"],
     panels: ["ai-keys"],
   },
   {
@@ -60,6 +66,7 @@ const LAYOUT: {
     label: "Channels & sync",
     blurb: "Your defaults for new follows, then the deployment's schedule.",
     items: ["sync_prefs.*", "sync.*", "reach.*"],
+    idItems: ["sync.*"],
     panels: ["setting-groups", "jobs"],
   },
   {
@@ -67,6 +74,7 @@ const LAYOUT: {
     label: "Publishing",
     blurb: "How a Publication reads, and the bots that send it.",
     items: ["publishing.*"],
+    idItems: ["publishing.*"],
     panels: ["bots", "destinations", "quick-message"],
   },
   {
@@ -74,6 +82,7 @@ const LAYOUT: {
     label: "Retention",
     blurb: "How long your logs and the shared corpus are kept.",
     items: ["retention_prefs.*", "retention.*"],
+    idItems: ["retention.*"],
     panels: [],
   },
   {
@@ -81,6 +90,7 @@ const LAYOUT: {
     label: "Network",
     blurb: "Proxies and Tor.",
     items: [],
+    idItems: [],
     panels: ["proxy", "tor"],
   },
   {
@@ -88,6 +98,7 @@ const LAYOUT: {
     label: "Directory & Discover",
     blurb: "How the Directory harvest and Discover probes run.",
     items: [],
+    idItems: [],
     panels: [],
   },
   {
@@ -95,6 +106,7 @@ const LAYOUT: {
     label: "Infrastructure",
     blurb: "Database, mail, secrets: what the app needs before it starts.",
     items: [],
+    idItems: [],
     panels: [],
   },
   {
@@ -102,6 +114,7 @@ const LAYOUT: {
     label: "Access & sessions",
     blurb: "Were `.env` only. Now an Admin changes them without a redeploy.",
     items: ["access.*", "sessions.*", "housekeeping.*"],
+    idItems: ["access.*", "system.*"],
     panels: [],
   },
 ]
@@ -120,6 +133,8 @@ interface EnvRow {
   configured: boolean
   codeDefault: unknown
   group: string
+  /** Variant E: the derived nested id, `network.fetch.retries`. */
+  id: string
   seedOf: string | null
   kind: "policy" | "secret" | "bootstrap" | "startup" | "seed"
   reason: string
@@ -139,11 +154,12 @@ function useEnvRows(enabled: boolean) {
 const show = (v: unknown) =>
   v === null || v === undefined || v === "" ? "not set" : JSON.stringify(v)
 
-/** Variant C: a group's `.env` values, read-only, behind a disclosure. */
-const EnvSection: React.FC<{ rows: EnvRow[]; open: boolean }> = ({
-  rows,
-  open: forced,
-}) => {
+/** A group's `.env` values, read-only, behind a disclosure. */
+const EnvSection: React.FC<{
+  rows: EnvRow[]
+  open: boolean
+  nested: boolean
+}> = ({ rows, open: forced, nested }) => {
   const [open, setOpen] = useState(false)
   const expanded = open || forced
   return (
@@ -165,14 +181,19 @@ const EnvSection: React.FC<{ rows: EnvRow[]; open: boolean }> = ({
           {rows.map((r) => (
             <div
               key={r.key}
-              id={`setting-env-${r.key}`}
+              id={nested ? `setting-${r.id}` : `setting-env-${r.key}`}
               className="flex items-start gap-4 px-4 py-2.5"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs font-semibold">
-                    {r.key}
+                    {nested ? r.id : r.key}
                   </span>
+                  {nested ? (
+                    <span className="font-mono text-[11px] text-app-ink/40">
+                      .env {r.key}
+                    </span>
+                  ) : null}
                   <Badge variant="secondary">{KIND_LABEL[r.kind]}</Badge>
                 </div>
                 <p className="mt-0.5 text-[12px] text-app-ink/50">
@@ -215,81 +236,9 @@ const KIND_LABEL: Record<EnvRow["kind"], string> = {
   secret: "secret",
 }
 
-/** Configuration, generated from the same backend classification. */
-const EnvConfig: React.FC = () => {
-  const { data = [], isLoading } = useQuery({
-    queryKey: ["proto-settings-env"],
-    queryFn: async () =>
-      (
-        await fetch("/proto/settings/env", { headers: headers() })
-      ).json() as Promise<EnvRow[]>,
-  })
-  const [kind, setKind] = useState<EnvRow["kind"] | "all">("all")
-  const counts: Record<string, number> = {}
-  for (const r of data) counts[r.kind] = (counts[r.kind] ?? 0) + 1
-  if (isLoading) return <p className="text-sm text-app-ink/50">Loading…</p>
-  return (
-    <div>
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        <Chip on={kind === "all"} onClick={() => setKind("all")}>
-          All ({data.length})
-        </Chip>
-        {(Object.keys(KIND_LABEL) as EnvRow["kind"][]).map((k) => (
-          <Chip key={k} on={kind === k} onClick={() => setKind(k)}>
-            {KIND_LABEL[k]} ({counts[k] ?? 0})
-          </Chip>
-        ))}
-      </div>
-      <div className="divide-y divide-app-ink/5 rounded-md border border-app-ink/10">
-        {data
-          .filter((r) => kind === "all" || r.kind === kind)
-          .map((r) => (
-            <div key={r.key} className="flex items-start gap-4 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs font-semibold">
-                    {r.key}
-                  </span>
-                  <Badge
-                    variant={r.kind === "policy" ? "default" : "secondary"}
-                  >
-                    {KIND_LABEL[r.kind]}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-[12px] text-app-ink/55">{r.reason}</p>
-              </div>
-              <div className="max-w-64 shrink-0 text-right">
-                <div className="truncate font-mono text-xs">
-                  {r.value === null || r.value === undefined
-                    ? "—"
-                    : JSON.stringify(r.value)}
-                </div>
-                <div className="text-[11px] text-app-ink/40">
-                  {r.source ?? ""}
-                </div>
-              </div>
-            </div>
-          ))}
-      </div>
-    </div>
-  )
-}
-
-const B_PAGES: ProtoPage[] = PAGES.map((p) =>
-  p.id === "configuration"
-    ? {
-        ...p,
-        section: undefined,
-        body: EnvConfig,
-        from: "Settings → Tools → Configuration catalog (read-only)",
-      }
-    : p,
-)
-
-/** Groups that only hold `.env` values, so only variant C draws them. */
+/** Groups that only hold `.env` values, so only Admins see them. */
 const ENV_ONLY_GROUPS = new Set(["directory", "infrastructure"])
-const C_PAGES = PAGES.filter((p) => p.id !== "configuration")
-/** Variant D: the tools live in the System tab, not in Settings. */
+/** Configuration is folded into the groups; the tools live in the System tab. */
 const TOOL_PAGES = new Set([
   "logs",
   "network-telemetry",
@@ -297,16 +246,16 @@ const TOOL_PAGES = new Set([
   "query",
   "transfer",
 ])
-const D_PAGES = C_PAGES.filter((p) => !TOOL_PAGES.has(p.id))
+const D_PAGES = PAGES.filter(
+  (p) => p.id !== "configuration" && !TOOL_PAGES.has(p.id),
+)
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
-export const VariantB: React.FC<{
+export const VariantD: React.FC<{
   highlightId: string | null
-  /** Variant C: Configuration folded into Settings. */
-  merged?: boolean
-  /** Variant D: C, with the tools moved to a System tab. */
-  toolsTab?: boolean
-}> = ({ highlightId, merged = false, toolsTab = false }) => {
+  /** Variant E: nested VS Code-style ids. */
+  nested?: boolean
+}> = ({ highlightId, nested = false }) => {
   const navigate = workspaceRoute.useNavigate()
   const { data: rows, error, isLoading } = useSettingsSchema()
   const isModified = useIsModified()
@@ -316,30 +265,31 @@ export const VariantB: React.FC<{
   const [active, setActive] = useState("appearance")
   const [pageId, setPageId] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const pages = toolsTab ? D_PAGES : merged ? C_PAGES : B_PAGES
+  const pages = D_PAGES
   const page = pages.find((p) => p.id === pageId)
   const isAdmin = useCanManageJobs()
   const { user } = useAuth()
-  const { data: envRows = [] } = useEnvRows(merged && isAdmin)
+  const { data: envRows = [] } = useEnvRows(isAdmin)
   const seedByField = Object.fromEntries(
     envRows.filter((e) => e.seedOf).map((e) => [e.seedOf, e]),
   )
   const envMatches = (e: EnvRow) => {
     const q = query.trim().toLowerCase()
-    return !q || `${e.key} ${e.reason}`.toLowerCase().includes(q)
+    return !q || `${e.key} ${e.id} ${e.reason}`.toLowerCase().includes(q)
   }
 
   const fields = useMemo(() => fieldsOf(rows ?? []), [rows])
   const groups = LAYOUT.filter(
     (g) =>
-      (g.id !== "access" || isAdmin) &&
-      (!ENV_ONLY_GROUPS.has(g.id) || (merged && isAdmin)),
+      (g.id !== "access" || isAdmin) && (!ENV_ONLY_GROUPS.has(g.id) || isAdmin),
   ).map((g) => {
-    const all = select(fields, g.items)
+    const all = nested
+      ? select(fields, g.idItems, true)
+      : select(fields, g.items)
     return {
       group: g,
       env:
-        merged && !modifiedOnly && (scope === "all" || scope === "deployment")
+        !modifiedOnly && (scope === "all" || scope === "deployment")
           ? envRows.filter(
               (e) =>
                 e.group === g.id &&
@@ -387,6 +337,16 @@ export const VariantB: React.FC<{
     for (const el of root.querySelectorAll("[id^=proto-group-]")) io.observe(el)
     return () => io.disconnect()
   })
+
+  // Deep link: `?setting=<id>` scrolls to the row once the schema is in.
+  useEffect(() => {
+    if (!highlightId || !rows) return
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`setting-${highlightId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+    )
+  }, [highlightId, rows])
 
   const jump = (id: string) =>
     document
@@ -454,7 +414,7 @@ export const VariantB: React.FC<{
             </div>
           ),
         )}
-        {toolsTab ? (
+        {
           <div className="mt-5 border-t border-app-ink/10 pt-4">
             <button
               type="button"
@@ -469,7 +429,7 @@ export const VariantB: React.FC<{
               </span>
             </button>
           </div>
-        ) : null}
+        }
       </aside>
 
       {page ? (
@@ -546,19 +506,41 @@ export const VariantB: React.FC<{
                   {group.blurb}
                 </p>
                 <div className="divide-y divide-app-ink/5">
-                  {fs.map((f) => (
-                    <SchemaRow
-                      key={f.key}
-                      field={f}
-                      highlighted={highlightId === f.key}
-                      seed={merged ? seedByField[f.key] : undefined}
-                    />
-                  ))}
+                  {fs.map((f, i) => {
+                    const section = nested ? sectionOf(f.id) : null
+                    const prev =
+                      i > 0 && nested ? sectionOf(fs[i - 1].id) : null
+                    return (
+                      <div key={f.key}>
+                        {section && section !== prev ? (
+                          <h4 className="pb-1 pt-5 text-[13px] font-semibold text-app-ink/70">
+                            {humanize(section)}
+                            <span className="ml-2 font-mono text-[11px] font-normal text-app-ink/35">
+                              {f.id.split(".").slice(0, 2).join(".")}.*
+                            </span>
+                          </h4>
+                        ) : null}
+                        <SchemaRow
+                          field={f}
+                          nested={nested}
+                          highlighted={highlightId === (nested ? f.id : f.key)}
+                          seed={seedByField[f.key]}
+                        />
+                      </div>
+                    )
+                  })}
                   {panels.map((p) => (
                     <ProtoPanel key={p} id={p} />
                   ))}
                   {env.length > 0 ? (
-                    <EnvSection rows={env} open={query.trim() !== ""} />
+                    <EnvSection
+                      rows={env}
+                      nested={nested}
+                      open={
+                        query.trim() !== "" ||
+                        env.some((e) => e.id === highlightId)
+                      }
+                    />
                   ) : null}
                 </div>
               </section>
@@ -569,3 +551,47 @@ export const VariantB: React.FC<{
     </div>
   )
 }
+
+/** `sync.schedule.intervalMinutes` → `schedule`; two-segment ids have none. */
+function sectionOf(id: string): string | null {
+  const parts = id.split(".")
+  return parts.length > 2 ? parts[1] : null
+}
+
+/** `newFollows` → `New follows`. */
+function humanize(segment: string): string {
+  const words = segment.replace(/([A-Z])/g, " $1").toLowerCase()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+export const Chip: React.FC<{
+  on: boolean
+  onClick: () => void
+  children: React.ReactNode
+}> = ({ on, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      "rounded-full border px-3 py-1 text-xs",
+      on
+        ? "border-app-ink bg-app-ink text-app-card"
+        : "border-app-ink/15 text-app-ink/70 hover:border-app-ink/40",
+    )}
+  >
+    {children}
+  </button>
+)
+
+/** Settings in a group that differ from their default. */
+export const ModifiedCount: React.FC<{ n: number; label?: boolean }> = ({
+  n,
+  label,
+}) => (
+  <span
+    title={`${n} setting${n === 1 ? "" : "s"} changed from the default`}
+    className="rounded-full bg-amber-500/15 px-1.5 py-px text-[11px] font-medium leading-4 text-amber-700 dark:text-amber-300"
+  >
+    {label ? `${n} modified` : n}
+  </span>
+)
