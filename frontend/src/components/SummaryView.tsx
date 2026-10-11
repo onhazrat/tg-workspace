@@ -21,6 +21,7 @@ import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
+  CitationRendererProvider,
   summaryMarkdownComponents,
   useCitationWorkspace,
 } from "./summary-view/SummaryMarkdown"
@@ -145,9 +146,15 @@ export const SummaryView: React.FC = () => {
             <SummaryPublishPanel key={s.id} summary={s} onSave={saveCurrent} />
           )}
           renderMarkdown={(markdown) => (
-            <ReactMarkdown components={summaryMarkdownComponents}>
-              {markdown}
-            </ReactMarkdown>
+            <CitationRendererProvider
+              resolve={resolve}
+              loading={citedLoading}
+              workspace={workspace}
+            >
+              <ReactMarkdown components={summaryMarkdownComponents}>
+                {markdown}
+              </ReactMarkdown>
+            </CitationRendererProvider>
           )}
           scopeLine={(artifact, className) => (
             <ArtifactScopeLine artifact={artifact} className={className} />
@@ -156,8 +163,12 @@ export const SummaryView: React.FC = () => {
           workspace={workspace}
           textSize={settings.summaryTextSize}
           onTextSizeChange={settings.setSummaryTextSize}
+          // The Account's zone, as the published metadata uses; the browser's
+          // only until the Account has one.
           zone={{
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone:
+              settings.timeZone ||
+              Intl.DateTimeFormat().resolvedOptions().timeZone,
           }}
           emptyState={
             <GoToActionEmptyState

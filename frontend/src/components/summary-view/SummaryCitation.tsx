@@ -185,14 +185,18 @@ export function CitedPostCard({
 
 const HOVER_WIDE = "(hover: hover) and (min-width: 768px)"
 
+// Module-level so `useSyncExternalStore` keeps one subscription rather than
+// resubscribing on every render.
+function subscribeHoverWide(onChange: () => void): () => void {
+  const mql = window.matchMedia?.(HOVER_WIDE)
+  mql?.addEventListener("change", onChange)
+  return () => mql?.removeEventListener("change", onChange)
+}
+
 /** True where a Citation opens a bottom sheet: no hover, or a narrow screen. */
 export function useCitationSheet(): boolean {
   return useSyncExternalStore(
-    (onChange) => {
-      const mql = window.matchMedia?.(HOVER_WIDE)
-      mql?.addEventListener("change", onChange)
-      return () => mql?.removeEventListener("change", onChange)
-    },
+    subscribeHoverWide,
     () => !(window.matchMedia?.(HOVER_WIDE).matches ?? true),
   )
 }

@@ -245,6 +245,29 @@ describe("PublishPanel", () => {
     ).toBeNull()
   })
 
+  test("a lone bot and destination are chosen, even when they load after the panel", () => {
+    const props = {
+      destinations: [dests[0]],
+      plan,
+      options: { includeMetadata: false, metadataInFirstPart: false },
+      metadataText: "",
+      citationStyle: "asWritten" as const,
+      linkPreviews: false,
+      onOptionsChange: mock(),
+      onSaveMetadataText: mock(async () => {}),
+      onSaveOmittedRows: mock(async () => {}),
+      onOpenSettings: mock(),
+      onPublish: mock(async () => {}),
+    }
+    const { rerender } = render(<PublishPanel {...props} bots={[]} />)
+
+    rerender(<PublishPanel {...props} bots={bots} />)
+
+    const publish = screen.getByRole("button", { name: /^Publish($| \d)/ })
+    expect(publish.textContent).toBe("Publish 2 messages to News Desk")
+    expect((publish as HTMLButtonElement).disabled).toBe(false)
+  })
+
   test("with no bot or destination it says where to add one", () => {
     renderPanel({ bots: [] })
     expect(screen.getByText(/Add a bot and a destination/)).toBeTruthy()

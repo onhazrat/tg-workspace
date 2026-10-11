@@ -93,7 +93,7 @@ describe("hydrateAppSettings", () => {
     expect(updates.timeZone).toBe("Europe/Berlin")
   })
 
-  it("fills the time zone from the browser only while the account has none", () => {
+  it("fills the time zone from the browser only until the account saves one", () => {
     const fresh = hydrateAppSettings(
       { ...empty, publishing: {} },
       readerFromRecord({}),
@@ -105,7 +105,8 @@ describe("hydrateAppSettings", () => {
       "Asia/Tehran",
     )
     expect(fresh.updates.timeZone).toBe("Asia/Tehran")
-    expect(cleared.updates.timeZone).toBe("Asia/Tehran")
+    // Saved empty is the Account's choice (UTC), not a gap to fill again.
+    expect(cleared.updates.timeZone).toBe("")
   })
 })
 

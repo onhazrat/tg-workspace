@@ -1,5 +1,6 @@
 import { Settings2 } from "lucide-react"
 import type React from "react"
+import { useState } from "react"
 import {
   TgFieldLabel,
   TgHelpText,
@@ -19,6 +20,43 @@ const CITATION_LABELS: Record<CitationStyle, string> = {
 // Every zone the browser knows, offered as suggestions; the server falls back
 // to UTC for a name it cannot resolve.
 const TIME_ZONES = Intl.supportedValuesOf?.("timeZone") ?? []
+
+/** Whether the browser's `Intl` knows `zone`; empty is UTC, so it is known. */
+function isKnownZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", zone ? { timeZone: zone } : {})
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Saved once left, never per keystroke: a half-typed zone saved on the way
+ * would publish in UTC. A zone nobody knows puts the saved one back.
+ */
+function TimeZoneInput(p: {
+  timeZone: string
+  onTimeZone: (zone: string) => void
+}) {
+  const [draft, setDraft] = useState(p.timeZone)
+  const commit = () => {
+    const zone = draft.trim()
+    if (zone === p.timeZone) return
+    if (isKnownZone(zone)) p.onTimeZone(zone)
+    else setDraft(p.timeZone)
+  }
+  return (
+    <TgInput
+      id="publishing-time-zone"
+      list="publishing-time-zones"
+      value={draft}
+      placeholder="UTC"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+    />
+  )
+}
 
 type PublicationOptionsPanelProps = {
   citationStyle: CitationStyle
@@ -82,12 +120,10 @@ export const PublicationOptionsPanel: React.FC<
 
       <div>
         <TgFieldLabel htmlFor="publishing-time-zone">Time zone</TgFieldLabel>
-        <TgInput
-          id="publishing-time-zone"
-          list="publishing-time-zones"
-          value={timeZone}
-          placeholder="UTC"
-          onChange={(e) => onTimeZone(e.target.value)}
+        <TimeZoneInput
+          key={timeZone}
+          timeZone={timeZone}
+          onTimeZone={onTimeZone}
         />
         <datalist id="publishing-time-zones">
           {TIME_ZONES.map((zone) => (

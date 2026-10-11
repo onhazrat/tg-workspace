@@ -88,13 +88,18 @@ export function PublishPanel(props: PublishPanelProps) {
   )
 }
 
+const loneId = (items: { id: string }[]) =>
+  items.length === 1 ? items[0].id : ""
+
 /** Bot and destination pickers, and the button that names what it sends. */
 function PublishTarget(p: PublishPanelProps) {
-  const [botId, setBotId] = useState(p.bots.length === 1 ? p.bots[0].id : "")
-  const [destId, setDestId] = useState(
-    p.destinations.length === 1 ? p.destinations[0].id : "",
-  )
+  const [pickedBot, setBotId] = useState("")
+  const [pickedDest, setDestId] = useState("")
   const [sending, setSending] = useState(false)
+  // A lone one is chosen whenever it arrives, the query answering after mount
+  // included; a pick made by hand wins.
+  const botId = pickedBot || loneId(p.bots)
+  const destId = pickedDest || loneId(p.destinations)
   if (p.bots.length === 0 || p.destinations.length === 0)
     return (
       <p className="text-xs text-app-ink/60">

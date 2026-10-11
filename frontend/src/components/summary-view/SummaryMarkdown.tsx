@@ -4,12 +4,11 @@ import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
-import { useCitedPosts } from "@/hooks/useCitedPosts"
-import { useSummaryDetailQuery } from "@/hooks/useSummaries"
 import {
   type CitationRenderer,
   splitCitations,
 } from "@/lib/citations/replace-citations"
+import type { CitedPost } from "@/lib/summaries/cited-posts"
 import {
   type CitationWorkspace,
   SummaryCitation,
@@ -31,15 +30,33 @@ export function useCitationWorkspace(): CitationWorkspace {
   )
 }
 
-/** Draws each Citation as the Cited Post's hover card or bottom sheet (SUMTAB-04). */
-function useCitationRenderer(): CitationRenderer {
-  const { currentSummaryId } = useUI()
-  // citedPosts and the Scope's Post refs are not in the list projection.
-  const { data: detail } = useSummaryDetailQuery(currentSummaryId)
-  const { resolve, loading } = useCitedPosts(detail)
+const CitationRendererContext = React.createContext<CitationRenderer | null>(
+  null,
+)
+
+/** A Citation as written, where no Summary body provides the hover cards. */
+const plainCitation: CitationRenderer = (channelName, postId, key) => (
+  <React.Fragment key={key}>{`[${channelName} #${postId}]`}</React.Fragment>
+)
+
+/**
+ * Draws each Citation as the Cited Post's hover card or bottom sheet
+ * (SUMTAB-04). Built once per Summary body and read by every paragraph and
+ * bullet, rather than each one running the lookups again.
+ */
+export function CitationRendererProvider({
+  resolve,
+  loading,
+  workspace,
+  children,
+}: {
+  resolve: (channelName: string, postId: number) => CitedPost
+  loading: boolean
+  workspace: CitationWorkspace
+  children: React.ReactNode
+}) {
   const sheet = useCitationSheet()
-  const workspace = useCitationWorkspace()
-  return React.useCallback<CitationRenderer>(
+  const render = React.useCallback<CitationRenderer>(
     (channelName, postId, key) => (
       <SummaryCitation
         key={key}
@@ -51,7 +68,15 @@ function useCitationRenderer(): CitationRenderer {
     ),
     [resolve, loading, sheet, workspace],
   )
+  return (
+    <CitationRendererContext.Provider value={render}>
+      {children}
+    </CitationRendererContext.Provider>
+  )
 }
+
+const useCitationRenderer = () =>
+  React.useContext(CitationRendererContext) ?? plainCitation
 
 const CitedParagraph: Components["p"] = ({
   node: _node,

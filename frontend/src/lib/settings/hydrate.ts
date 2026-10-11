@@ -41,9 +41,9 @@ function legacyInt(
  * Merge the server's backend-synced sections with the legacy values an older
  * build kept in browser storage. The server wins wherever it has a value.
  *
- * The time zone is the one exception: while the account has none, it is the
- * browser's (`browserTimeZone`), which the push effect then saves. Once saved
- * it is the server's, so travelling does not move it.
+ * The time zone is the one exception: until the account has saved one, it is
+ * the browser's (`browserTimeZone`), which the push effect then saves. Once
+ * saved, empty included, it is the server's, so travelling does not move it.
  */
 export function hydrateAppSettings(
   rows: HydrationRows,
@@ -78,7 +78,11 @@ export function hydrateAppSettings(
     ...decodeServerSection("translation", rows.translation ?? {}),
     ...decodeServerSection("reach", rows.reach ?? {}),
     ...publishing,
-    timeZone: publishing.timeZone || browserTimeZone,
+    // Absent, not empty: an Account that emptied it chose UTC.
+    timeZone:
+      typeof rows.publishing?.timeZone === "string"
+        ? publishing.timeZone
+        : browserTimeZone,
   }
   const embeddings = rows.jobsStatus?.embeddings?.enabled
   if (typeof embeddings === "boolean") updates.embeddingsEnabled = embeddings

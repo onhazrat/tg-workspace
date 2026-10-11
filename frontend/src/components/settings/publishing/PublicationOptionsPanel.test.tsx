@@ -41,12 +41,36 @@ describe("PublicationOptionsPanel", () => {
     expect(onLinkPreviews).toHaveBeenCalledWith(true)
   })
 
-  test("shows the saved time zone and saves an edit", () => {
+  test("shows the saved time zone and saves an edit once it is left", () => {
     const { onTimeZone } = mount()
     const input = screen.getByLabelText("Time zone") as HTMLInputElement
 
     expect(input.value).toBe("Asia/Tehran")
+    fireEvent.change(input, { target: { value: "Europe/Ber" } })
     fireEvent.change(input, { target: { value: "Europe/Berlin" } })
+    expect(onTimeZone).not.toHaveBeenCalled()
+    fireEvent.blur(input)
     expect(onTimeZone).toHaveBeenCalledWith("Europe/Berlin")
+  })
+
+  test("a zone nobody knows is not saved, and the saved one comes back", () => {
+    const { onTimeZone } = mount()
+    const input = screen.getByLabelText("Time zone") as HTMLInputElement
+
+    fireEvent.change(input, { target: { value: "Asia/Teh" } })
+    fireEvent.blur(input)
+
+    expect(onTimeZone).not.toHaveBeenCalled()
+    expect(input.value).toBe("Asia/Tehran")
+  })
+
+  test("an emptied zone is saved as UTC", () => {
+    const { onTimeZone } = mount()
+    const input = screen.getByLabelText("Time zone") as HTMLInputElement
+
+    fireEvent.change(input, { target: { value: "" } })
+    fireEvent.blur(input)
+
+    expect(onTimeZone).toHaveBeenCalledWith("")
   })
 })
