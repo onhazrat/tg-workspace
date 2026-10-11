@@ -43,6 +43,16 @@ class PublicationPartResponse(BaseModel):
     cut_inside: bool = Field(alias="cutInside")
 
 
+class MetadataRowResponse(BaseModel):
+    """One generated metadata row, for the panel's checklist."""
+
+    #: What `metadataOmittedRows` names to leave this row out.
+    key: str
+    label: str
+    value: str
+    sent: bool
+
+
 class PartialPublicationResponse(BaseModel):
     """The Summary's latest Publication, stopped after some of its Parts."""
 
@@ -58,8 +68,10 @@ class PublicationPlanResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     parts: list[PublicationPartResponse]
-    #: The generated metadata, for the editor's rows and its reset.
+    #: The generated metadata without the rows the Summary leaves out, for
+    #: edit-as-text and its reset.
     default_metadata: str = Field(alias="defaultMetadata")
+    metadata_rows: list[MetadataRowResponse] = Field(alias="metadataRows")
     limit: int
     #: Set when the Summary's latest Publication is partial, for the panel's
     #: "Send the remaining K".

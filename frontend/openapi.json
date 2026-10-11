@@ -9480,6 +9480,18 @@
         "required": ["message"],
         "title": "Message"
       },
+      "MetadataRowResponse": {
+        "properties": {
+          "key": { "type": "string", "title": "Key" },
+          "label": { "type": "string", "title": "Label" },
+          "value": { "type": "string", "title": "Value" },
+          "sent": { "type": "boolean", "title": "Sent" }
+        },
+        "type": "object",
+        "required": ["key", "label", "value", "sent"],
+        "title": "MetadataRowResponse",
+        "description": "One generated metadata row, for the panel's checklist."
+      },
       "MigrateCredentialsResponse": {
         "properties": {
           "migrated": { "type": "integer", "title": "Migrated", "default": 0 },
@@ -10522,6 +10534,11 @@
             "title": "Parts"
           },
           "defaultMetadata": { "type": "string", "title": "Defaultmetadata" },
+          "metadataRows": {
+            "items": { "$ref": "#/components/schemas/MetadataRowResponse" },
+            "type": "array",
+            "title": "Metadatarows"
+          },
           "limit": { "type": "integer", "title": "Limit" },
           "partial": {
             "anyOf": [
@@ -10531,7 +10548,13 @@
           }
         },
         "type": "object",
-        "required": ["parts", "defaultMetadata", "limit", "partial"],
+        "required": [
+          "parts",
+          "defaultMetadata",
+          "metadataRows",
+          "limit",
+          "partial"
+        ],
         "title": "PublicationPlanResponse"
       },
       "PublicationSendRequest": {

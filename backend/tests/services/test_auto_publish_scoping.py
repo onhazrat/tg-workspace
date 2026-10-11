@@ -908,7 +908,11 @@ def test_a_summary_with_no_metadata_flag_publishes_no_metadata(
 
 
 def _scheduled_metadata(
-    session: Session, user: User, no_network: _Spy, publishing: dict[str, Any]
+    session: Session,
+    user: User,
+    no_network: _Spy,
+    publishing: dict[str, Any],
+    saved: dict[str, Any] | None = None,
 ) -> str:
     """The metadata Part the scheduler sends for a 9:27-12:27 Tehran window."""
     from app.services.user_settings import put_user_setting
@@ -916,7 +920,11 @@ def _scheduled_metadata(
     put_user_setting(session, "publishing", publishing, user_id=user.id)
     _seed_bot(session, "bot-of-mine", user.id)
     _seed_dest(session, "dest-of-mine", user.id)
-    extra = {**_extra("bot-of-mine", "dest-of-mine"), "sendMetadata": True}
+    extra = {
+        **_extra("bot-of-mine", "dest-of-mine"),
+        "sendMetadata": True,
+        **(saved or {}),
+    }
     summary = _seed_summary(session, user.id, extra)
     summary.scope = {
         "start": 1_791_352_620_000,  # 2026-10-07 05:57 UTC
@@ -953,3 +961,25 @@ def test_scheduled_metadata_is_utc_until_the_account_has_a_time_zone(
     sent = _scheduled_metadata(session, user, no_network, {})
 
     assert "Oct 7, 2026, 5:57 AM – 8:57 AM (UTC, GMT) · 3h" in sent
+
+
+def test_scheduled_metadata_generates_the_rows_the_summary_keeps(
+    session: Session, user: User, no_network: _Spy, decrypt: _Spy
+) -> None:
+    """Stories 64 and 77: row choices are keys, so the scheduled send is this
+    Summary's own window and count, never a copy frozen from an earlier one."""
+    sent = _scheduled_metadata(
+        session,
+        user,
+        no_network,
+        {"timeZone": "Asia/Tehran"},
+        {"metadataOmittedRows": ["channelsUsed", "channelList"]},
+    )
+
+    assert sent == (
+        "📊 Analysis Metadata\n"
+        "🕒 Time Range: Oct 7, 2026, 9:27 AM – 12:27 PM"
+        " (Asia/Tehran, GMT+3:30) · 3h\n"
+        "🤖 AI Model: test-model\n"
+        "📝 Posts Analyzed: 1"
+    )

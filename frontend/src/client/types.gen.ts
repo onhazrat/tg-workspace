@@ -3832,6 +3832,30 @@ export type Message = {
 };
 
 /**
+ * MetadataRowResponse
+ *
+ * One generated metadata row, for the panel's checklist.
+ */
+export type MetadataRowResponse = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Sent
+     */
+    sent: boolean;
+};
+
+/**
  * MigrateCredentialsResponse
  *
  * Result of importing credentials from the client's local store.
@@ -4833,6 +4857,10 @@ export type PublicationPlanResponse = {
      * Defaultmetadata
      */
     defaultMetadata: string;
+    /**
+     * Metadatarows
+     */
+    metadataRows: Array<MetadataRowResponse>;
     /**
      * Limit
      */

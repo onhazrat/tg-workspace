@@ -24,6 +24,7 @@ UTF-16 units, because that is the text Telegram counts.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, tzinfo
 from typing import Any, Literal, cast
@@ -125,10 +126,31 @@ def build_parts(
     return _cut(meta + body, joined=metadata_in_first_part)
 
 
-def default_metadata(
+#: The metadata's rows in order: the key a Summary saves to leave one out
+#: (`metadataOmittedRows`), the label as published, and as the panel shows it.
+METADATA_ROWS: tuple[tuple[str, str, str], ...] = (
+    ("timeRange", "🕒 *Time Range:*", "Time range"),
+    ("channelsUsed", "📡 *Channels Used:*", "Channels used"),
+    ("channelList", "📋 *Channel List:*", "Channel list"),
+    ("aiModel", "🤖 *AI Model:*", "AI model"),
+    ("postsAnalyzed", "📝 *Posts Analyzed:*", "Posts analyzed"),
+)
+METADATA_HEADING = "📊 *Analysis Metadata*"
+
+
+@dataclass(frozen=True)
+class MetadataRow:
+    key: str
+    #: The row as published, `🕒 *Time Range:* value`.
+    line: str
+    label: str
+    value: str
+
+
+def metadata_rows(
     *, scope: FrozenScope | None, model: str, post_count: int, time_zone: str
-) -> str:
-    """The generated metadata block, the only generator of it (SUMTAB-08).
+) -> list[MetadataRow]:
+    """The generated metadata's rows, the only generator of them (SUMTAB-08).
 
     The window is written in the Account's zone and names it, so readers know
     which moment it was; an empty or unknown zone is UTC. A Summary with no
@@ -136,13 +158,39 @@ def default_metadata(
     """
     channels = list(scope.channels) if scope else []
     time_range = _time_range(scope.start, scope.end, time_zone) if scope else None
-    return (
-        f"📊 *Analysis Metadata*\n"
-        f"🕒 *Time Range:* {time_range or 'not recorded'}\n"
-        f"📡 *Channels Used:* {len(channels)}\n"
-        f"📋 *Channel List:* {', '.join(f'@{c}' for c in channels)}\n"
-        f"🤖 *AI Model:* {model}\n"
-        f"📝 *Posts Analyzed:* {post_count}"
+    values = {
+        "timeRange": time_range or "not recorded",
+        "channelsUsed": str(len(channels)),
+        "channelList": ", ".join(f"@{c}" for c in channels),
+        "aiModel": model,
+        "postsAnalyzed": str(post_count),
+    }
+    return [
+        MetadataRow(key, f"{published} {values[key]}", label, values[key])
+        for key, published, label in METADATA_ROWS
+    ]
+
+
+def metadata_text(rows: list[MetadataRow], omitted: Collection[str] = ()) -> str:
+    """The heading and every row not left out, generated afresh each time.
+
+    A Summary saves the keys it leaves out rather than a copy of the text, so a
+    scheduled Publication of its successor reports the successor's own window
+    and count instead of repeating the first one's (stories 64, 77).
+    """
+    return "\n".join(
+        [METADATA_HEADING, *(r.line for r in rows if r.key not in omitted)]
+    )
+
+
+def default_metadata(
+    *, scope: FrozenScope | None, model: str, post_count: int, time_zone: str
+) -> str:
+    """Every generated row under the heading."""
+    return metadata_text(
+        metadata_rows(
+            scope=scope, model=model, post_count=post_count, time_zone=time_zone
+        )
     )
 
 

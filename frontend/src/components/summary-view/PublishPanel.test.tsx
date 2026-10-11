@@ -39,6 +39,18 @@ const plan: PublicationPlanResponse = {
     { kind: "summary", text: "Second part.", length: 12, cutInside: true },
   ],
   defaultMetadata: DEFAULT_METADATA,
+  metadataRows: [
+    { key: "timeRange", label: "Time range", value: "Oct 7, 2026", sent: true },
+    { key: "channelsUsed", label: "Channels used", value: "2", sent: true },
+    {
+      key: "channelList",
+      label: "Channel list",
+      value: "@news_ir, @tech",
+      sent: true,
+    },
+    { key: "aiModel", label: "AI model", value: "test-model", sent: false },
+    { key: "postsAnalyzed", label: "Posts analyzed", value: "42", sent: true },
+  ],
   limit: 4096,
   partial: null,
 }
@@ -47,6 +59,7 @@ function renderPanel(props: Partial<PublishPanelProps> = {}) {
   const handlers = {
     onOptionsChange: mock(),
     onSaveMetadataText: mock(async () => {}),
+    onSaveOmittedRows: mock(async () => {}),
     onOpenSettings: mock(),
     onPublish: mock(async () => {}),
   }
@@ -114,8 +127,8 @@ describe("PublishPanel", () => {
     })
   })
 
-  test("each metadata row shows its value; unticking one saves the text without it", () => {
-    const { onSaveMetadataText } = renderPanel({
+  test("each metadata row shows its value; unticking one saves the rows left out", () => {
+    const { onSaveOmittedRows, onSaveMetadataText } = renderPanel({
       options: { includeMetadata: true, metadataInFirstPart: false },
     })
     const row = screen.getByRole("checkbox", { name: /Channel list/ })
@@ -124,26 +137,20 @@ describe("PublishPanel", () => {
 
     fireEvent.click(row)
 
-    expect(onSaveMetadataText).toHaveBeenCalledWith(
-      DEFAULT_METADATA.split("\n")
-        .filter((l) => !l.includes("Channel List"))
-        .join("\n"),
-    )
+    expect(onSaveOmittedRows).toHaveBeenCalledWith(["channelList", "aiModel"])
+    expect(onSaveMetadataText).not.toHaveBeenCalled()
   })
 
-  test("ticking every row back is the generated text, saved as empty", () => {
-    const { onSaveMetadataText } = renderPanel({
+  test("ticking a row back leaves it out no longer", () => {
+    const { onSaveOmittedRows } = renderPanel({
       options: { includeMetadata: true, metadataInFirstPart: false },
-      metadataText: DEFAULT_METADATA.split("\n")
-        .filter((l) => !l.includes("AI Model"))
-        .join("\n"),
     })
     const row = screen.getByRole("checkbox", { name: /AI model/ })
     expect((row as HTMLInputElement).checked).toBe(false)
 
     fireEvent.click(row)
 
-    expect(onSaveMetadataText).toHaveBeenCalledWith("")
+    expect(onSaveOmittedRows).toHaveBeenCalledWith([])
   })
 
   test("edit as text saves what was typed, and reset goes back to generated", () => {

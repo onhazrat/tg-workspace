@@ -91,6 +91,7 @@ export function successorSummary(
     // Off unless it was set on explicitly (SUMTAB-09).
     sendMetadata: previous.sendMetadata === true,
     metadataInFirstPart: previous.metadataInFirstPart,
+    metadataOmittedRows: previous.metadataOmittedRows,
     postSearch: previous.postSearch,
     semanticSearchQuery: previous.semanticSearchQuery,
     semanticSearchRespectsChannels: previous.semanticSearchRespectsChannels,

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.api.deps import CurrentUser, SessionDep
 from app.models_tg import Summary
 from app.schemas.publications import (
+    MetadataRowResponse,
     PartialPublicationResponse,
     PublicationOptions,
     PublicationPartResponse,
@@ -56,6 +57,12 @@ def plan_summary_publication(
             for p in plan.parts
         ],
         defaultMetadata=plan.default_metadata,
+        metadataRows=[
+            MetadataRowResponse(
+                key=row.key, label=row.label, value=row.value, sent=sent
+            )
+            for row, sent in plan.metadata_rows
+        ],
         limit=TELEGRAM_MESSAGE_LIMIT,
         partial=(
             PartialPublicationResponse(

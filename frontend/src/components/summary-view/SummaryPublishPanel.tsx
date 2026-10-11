@@ -47,6 +47,7 @@ export function SummaryPublishPanel({
     queryKey: queryKeys.publicationPlan(summary.id, {
       ...options,
       metadataText,
+      metadataOmittedRows: summary.metadataOmittedRows ?? [],
       text: summary.text,
     }),
     queryFn: () =>
@@ -91,6 +92,7 @@ export function SummaryPublishPanel({
       }}
       metadataText={metadataText}
       onSaveMetadataText={(text) => onSave({ metadataText: text })}
+      onSaveOmittedRows={(keys) => onSave({ metadataOmittedRows: keys })}
       citationStyle={settings.citationStyle}
       linkPreviews={settings.linkPreviews}
       onOpenSettings={() =>

@@ -156,6 +156,41 @@ def test_the_metadata_is_its_own_part_and_the_saved_text_wins(
     ]
 
 
+def test_rows_left_out_are_dropped_from_freshly_generated_metadata(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """Stories 64 and 77: the Summary saves which rows to leave out, never a
+    copy of the text, so every plan generates the rows it keeps afresh."""
+    summary_id = _summary(
+        "Body.", extra={"metadataOmittedRows": ["channelList", "aiModel"]}
+    )
+
+    plan = _plan(client, superuser_token_headers, summary_id, includeMetadata=True)
+
+    kept = (
+        "📊 *Analysis Metadata*\n"
+        "🕒 *Time Range:* Oct 7, 2026, 5:57 AM – 8:57 AM (UTC, GMT) · 3h\n"
+        "📡 *Channels Used:* 2\n"
+        "📝 *Posts Analyzed:* 42"
+    )
+    assert plan["defaultMetadata"] == kept
+    # The labels go bold on their way out (SUMTAB-07's rewrite).
+    assert plan["parts"][0]["text"] == (
+        "📊 *Analysis Metadata*\n"
+        "🕒 **Time Range:** Oct 7, 2026, 5:57 AM – 8:57 AM (UTC, GMT) · 3h\n"
+        "📡 **Channels Used:** 2\n"
+        "📝 **Posts Analyzed:** 42"
+    )
+    assert [(r["key"], r["label"], r["sent"]) for r in plan["metadataRows"]] == [
+        ("timeRange", "Time range", True),
+        ("channelsUsed", "Channels used", True),
+        ("channelList", "Channel list", False),
+        ("aiModel", "AI model", False),
+        ("postsAnalyzed", "Posts analyzed", True),
+    ]
+    assert plan["metadataRows"][2]["value"] == "@news_ir, @tech"
+
+
 def test_the_metadata_rides_in_the_first_part_when_it_fits(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
@@ -405,6 +440,49 @@ def test_the_migration_turns_send_metadata_off_for_existing_summaries() -> None:
         assert on_row is not None and off_row is not None
         assert on_row.extra == {"metadataText": "kept"}
         assert off_row.extra == {"sendMetadata": False}
+
+
+def test_the_migration_turns_saved_row_copies_into_row_keys() -> None:
+    """A metadata text that is the heading and some of the generated rows was
+    saved by a row toggle (or by the old panel's Save), not written by anyone,
+    so it becomes the rows it leaves out and follows the generator again. Any
+    other text is somebody's own and stays."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.alembic.versions import (
+        f3b8d1a6c925_metadata_rows_as_keys_sumtab as mig,
+    )
+
+    copy = _summary(
+        extra={
+            "sendMetadata": True,
+            "metadataText": (
+                "📊 *Analysis Metadata*\n"
+                "🕒 *Time Range:* 05/10/2026 09:00 - 05/10/2026 12:00\n"
+                "📋 *Channel List:* @old_one\n"
+                "📝 *Posts Analyzed:* 7"
+            ),
+        }
+    )
+    full = _summary(extra={"metadataText": GENERATED})
+    own = _summary(extra={"metadataText": "📊 *Analysis Metadata*\nBy the desk"})
+
+    with engine.begin() as connection:
+        with Operations.context(MigrationContext.configure(connection)):
+            mig.upgrade()
+
+    with Session(engine) as session:
+        rows = {i: session.get(Summary, i) for i in (copy, full, own)}
+        assert rows[copy] and rows[full] and rows[own]
+        assert rows[copy].extra == {
+            "sendMetadata": True,
+            "metadataOmittedRows": ["channelsUsed", "aiModel"],
+        }
+        assert rows[full].extra == {}
+        assert rows[own].extra == {
+            "metadataText": "📊 *Analysis Metadata*\nBy the desk"
+        }
 
 
 # --------------------------------------------------------------------------

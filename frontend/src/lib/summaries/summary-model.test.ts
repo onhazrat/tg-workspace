@@ -76,6 +76,7 @@ describe("regeneration", () => {
       publishBotId: "b",
       publishChatId: "d",
       postSearch: "q",
+      metadataOmittedRows: ["aiModel"],
     }
     const run = {
       id: "s2",
@@ -95,6 +96,8 @@ describe("regeneration", () => {
       aiKeyId: "live-key",
       publishBotId: "b",
       postSearch: "q",
+      // Row choices are keys, so the successor's metadata is generated afresh.
+      metadataOmittedRows: ["aiModel"],
       // Off unless the Summary it follows had it on (SUMTAB-09).
       sendMetadata: false,
     })

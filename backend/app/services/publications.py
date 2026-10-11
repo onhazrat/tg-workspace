@@ -25,7 +25,13 @@ from app.services.network_settings import (
     resolve_proxies,
     resolve_proxy_concurrency,
 )
-from app.services.publication_parts import Part, build_parts, default_metadata
+from app.services.publication_parts import (
+    MetadataRow,
+    Part,
+    build_parts,
+    metadata_rows,
+    metadata_text,
+)
 from app.services.publish import PartFailed, load_publishing_settings, send_parts
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import assert_owner_on_write, may_act_on, scoped_select
@@ -34,8 +40,17 @@ from app.services.tenancy import assert_owner_on_write, may_act_on, scoped_selec
 @dataclass(frozen=True)
 class Plan:
     parts: list[Part]
-    #: The generated metadata, whatever the Summary saved in its place.
+    #: The generated metadata without the rows the Summary leaves out,
+    #: whatever text the Summary saved in its place.
     default_metadata: str
+    #: Every generated row, each with whether the Summary sends it.
+    metadata_rows: list[tuple[MetadataRow, bool]]
+
+
+def omitted_rows(extra: dict[str, Any]) -> list[str]:
+    """The metadata rows a Summary leaves out; anything unusable is none."""
+    value = extra.get("metadataOmittedRows")
+    return [k for k in value if isinstance(k, str)] if isinstance(value, list) else []
 
 
 def plan_publication(
@@ -48,17 +63,19 @@ def plan_publication(
 ) -> Plan:
     """The Parts a Publication of `summary` sends, in `user_id`'s settings.
 
-    The metadata is the Summary's saved text when it has one, else generated
-    in the Account's time zone.
+    The metadata is the Summary's hand-written text when it has one, else
+    generated in the Account's time zone without the rows it leaves out.
     """
     prefs = load_publishing_settings(session, user_id)
     extra = summary.extra or {}
-    generated = default_metadata(
+    rows = metadata_rows(
         scope=FrozenScope.from_stored(summary.scope),
         model=summary.model or default_model(),
         post_count=extra.get("postCount") or summary.post_count or 0,
         time_zone=prefs.time_zone,
     )
+    omitted = omitted_rows(extra)
+    generated = metadata_text(rows, omitted)
     metadata = (extra.get("metadataText") or generated) if include_metadata else None
     parts = build_parts(
         summary.text or "",
@@ -66,7 +83,11 @@ def plan_publication(
         citation_style=prefs.citation_style,
         metadata_in_first_part=metadata_in_first_part,
     )
-    return Plan(parts=parts, default_metadata=generated)
+    return Plan(
+        parts=parts,
+        default_metadata=generated,
+        metadata_rows=[(row, row.key not in omitted) for row in rows],
+    )
 
 
 class DestinationNotFound(ValueError):

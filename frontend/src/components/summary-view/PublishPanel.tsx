@@ -13,10 +13,9 @@ import type { CitationStyle } from "@/lib/settings/schema"
 import { cn } from "@/lib/utils"
 import type { BotCredential, ChatDestination } from "@/types"
 import {
-  metadataRows,
+  omittedAfterToggle,
   partsLabel,
   telegramSegments,
-  withRowToggled,
 } from "./publish-panel-model"
 
 export interface PublishPanelProps {
@@ -26,9 +25,11 @@ export interface PublishPanelProps {
   plan: PublicationPlanResponse | undefined
   options: Required<PublicationOptions>
   onOptionsChange: (options: Required<PublicationOptions>) => void
-  /** The Summary's saved metadata; empty means the generated text. */
+  /** The Summary's hand-written metadata; empty means the generated rows. */
   metadataText: string
   onSaveMetadataText: (text: string) => Promise<void>
+  /** Save the keys of the generated rows the Summary leaves out. */
+  onSaveOmittedRows: (keys: string[]) => Promise<void>
   citationStyle: CitationStyle
   linkPreviews: boolean
   onOpenSettings: () => void
@@ -224,7 +225,7 @@ function MetadataOptions(p: PublishPanelProps) {
       />
       {options.includeMetadata && p.plan && (
         <div className="flex flex-col gap-2 rounded-lg bg-app-muted/20 p-3">
-          <MetadataRows {...p} generated={p.plan.defaultMetadata} />
+          <MetadataRows {...p} rows={p.plan.metadataRows} />
           <Switch
             label="In the first Part when it fits"
             checked={options.metadataInFirstPart}
@@ -240,20 +241,20 @@ function MetadataOptions(p: PublishPanelProps) {
 }
 
 /** Each generated row with its value; a hand-written text turns them off. */
-function MetadataRows(p: PublishPanelProps & { generated: string }) {
-  const rows = metadataRows(p.generated, p.metadataText)
+function MetadataRows(
+  p: PublishPanelProps & { rows: PublicationPlanResponse["metadataRows"] },
+) {
+  const custom = p.metadataText !== ""
   return (
     <>
-      {rows.rows.map((row) => (
-        <label key={row.line} className="flex items-start gap-2 text-xs">
+      {p.rows.map((row) => (
+        <label key={row.key} className="flex items-start gap-2 text-xs">
           <input
             type="checkbox"
-            disabled={rows.custom}
-            checked={!rows.custom && row.sent}
+            disabled={custom}
+            checked={!custom && row.sent}
             onChange={() =>
-              void p.onSaveMetadataText(
-                withRowToggled(rows.heading, rows.rows, row),
-              )
+              void p.onSaveOmittedRows(omittedAfterToggle(p.rows, row.key))
             }
             className="mt-0.5 size-3.5 accent-app-ink disabled:opacity-30"
           />
@@ -265,7 +266,7 @@ function MetadataRows(p: PublishPanelProps & { generated: string }) {
           </span>
         </label>
       ))}
-      {rows.custom && (
+      {custom && (
         <p className="text-[11px] text-app-ink/60">
           Hand-written metadata; the rows are off until you reset it.
         </p>
