@@ -748,35 +748,38 @@ export const VariantE: React.FC = () => {
 }
 
 /* ------------------------------------------------------------------ */
-/* F. E's look, A's audience tabs, B's one page per audience.          */
+/* F. E's sidebar over B's one page, sectioned by A's audiences.       */
 /* ------------------------------------------------------------------ */
 
+const F_PAGE: { area: Area["id"]; label: string | null }[] = [
+  { area: "account", label: null },
+  { area: "you", label: null },
+  { area: "deployment", label: "Deployment · admins" },
+]
+
 export const VariantF: React.FC = () => {
-  const scroller = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLElement>(null)
   const modified = useModifiedIds()
-  const [audience, setAudience] = useState<Area["id"]>("you")
-  const [active, setActive] = useState(area("you").groups[0].id)
+  const [active, setActive] = useState("profile")
+  const [toolId, setToolId] = useState<string | null>(null)
   const [jumpTo, setJumpTo] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const q = query.trim().toLowerCase()
-  const isTools = audience === "tools"
-  const groups = area(audience).groups
-  // Tools are not settings: one at a time, never all mounted on one page.
-  const tool = isTools
-    ? (groups.find((g) => g.id === active) ?? groups[0])
-    : null
+  const matches = (g: Group) =>
+    !q || g.items.some((i) => itemText(i, g).includes(q))
+  const tool = toolId ? findGroup(toolId) : undefined
+  const accountIds = area("account").groups.map((g) => g.id)
 
-  const go = (to: Area["id"], groupId: string) => {
-    setQuery("")
-    setAudience(to)
-    setActive(groupId)
-    setJumpTo(groupId)
+  const jump = (id: string) => {
+    setToolId(null)
+    setActive(id)
+    setJumpTo(id)
   }
 
-  // B's scroll-spy, re-armed whenever the audience swaps the page.
+  // B's scroll-spy; the page remounts when a tool closes, so re-arm then.
   useEffect(() => {
     const root = scroller.current
-    if (!root || isTools) return
+    if (!root || toolId) return
     const io = new IntersectionObserver(
       (entries) => {
         const top = entries
@@ -786,111 +789,91 @@ export const VariantF: React.FC = () => {
           )[0]
         if (top) setActive(top.target.id.replace("f-", ""))
       },
-      { root, rootMargin: "-64px 0px -70% 0px" },
+      { root, rootMargin: "0px 0px -70% 0px" },
     )
     for (const el of root.querySelectorAll("[data-f-group]")) io.observe(el)
     return () => io.disconnect()
-  }, [isTools])
+  }, [toolId])
 
-  // Jump after the audience's page has rendered.
+  // Jump once the page is back, when coming from a tool.
   useEffect(() => {
     if (!jumpTo) return
-    const el = isTools ? null : document.getElementById(`f-${jumpTo}`)
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
-    else scroller.current?.scrollTo({ top: 0 })
+    document
+      .getElementById(`f-${jumpTo}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" })
     setJumpTo(null)
-  }, [jumpTo, isTools])
+  }, [jumpTo])
+
+  const sidebar: { label: string | null; groups: Group[] }[] = [
+    ...F_PAGE.filter((p) => p.area !== "account").map((p) => ({
+      label: p.label,
+      groups: area(p.area).groups,
+    })),
+    { label: "Tools", groups: area("tools").groups },
+  ]
 
   return (
     <div className="-m-8 flex h-full">
       <aside className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-app-ink/10 bg-app-muted/50 p-3">
         <SidebarSearch value={query} onChange={setQuery} />
         <AccountCard
-          selected={audience === "account"}
-          onClick={() => go("account", area("account").groups[0].id)}
+          selected={!tool && accountIds.includes(active)}
+          onClick={() => jump(accountIds[0])}
         />
-        {q ? (
-          A_TABS.map((t) => {
-            const hits = area(t.id).groups.filter((g) =>
-              g.items.some((i) => itemText(i, g).includes(q)),
-            )
-            if (hits.length === 0) return null
-            return (
-              <div key={t.id} className="space-y-0.5">
+        {sidebar.map((sec) => {
+          const groups = sec.groups.filter(matches)
+          if (groups.length === 0) return null
+          return (
+            <div key={sec.label ?? "you"} className="space-y-0.5">
+              {sec.label && (
                 <div className="px-2 pb-1 pt-2 text-[10px] font-semibold opacity-50">
-                  {t.label}
+                  {sec.label}
                 </div>
-                {hits.map((g) => (
-                  <SidebarRow
-                    key={g.id}
-                    group={g}
-                    selected={false}
-                    changed={modified(g).length}
-                    onClick={() => go(t.id, g.id)}
-                  />
-                ))}
-              </div>
-            )
-          })
-        ) : (
-          <div className="space-y-0.5">
-            <div className="px-2 pb-1 pt-2 text-[10px] font-semibold opacity-50">
-              {isTools ? "Open one" : "On this page"}
+              )}
+              {groups.map((g) => (
+                <SidebarRow
+                  key={g.id}
+                  group={g}
+                  selected={tool ? tool.id === g.id : active === g.id}
+                  changed={modified(g).length}
+                  onClick={() =>
+                    g.scope === "tool" ? setToolId(g.id) : jump(g.id)
+                  }
+                />
+              ))}
             </div>
-            {groups.map((g) => (
-              <SidebarRow
-                key={g.id}
-                group={g}
-                selected={active === g.id}
-                changed={modified(g).length}
-                onClick={() => go(audience, g.id)}
-              />
-            ))}
-          </div>
-        )}
+          )
+        })}
       </aside>
-      <main ref={scroller} className="min-w-0 flex-1 overflow-y-auto">
-        <div className="sticky top-0 z-10 flex justify-center border-b border-app-ink/10 bg-app-card/90 py-3 backdrop-blur">
-          <div className="flex rounded-lg bg-app-ink/5 p-0.5">
-            {A_TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => go(t.id, area(t.id).groups[0].id)}
-                className={cn(
-                  "rounded-md px-4 py-1 text-xs font-semibold",
-                  t.id === audience
-                    ? "bg-app-card shadow-sm"
-                    : "opacity-60 hover:opacity-100",
-                  t.id === audience &&
-                    t.id === "deployment" &&
-                    "text-amber-700 ring-1 ring-amber-500/50 dark:text-amber-300",
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="mx-auto max-w-3xl px-10 py-8">
+      <main
+        ref={scroller}
+        className="min-w-0 flex-1 overflow-y-auto px-10 py-8"
+      >
+        <div className="mx-auto max-w-3xl">
           {tool ? (
             <InsetGroup group={tool} />
           ) : (
-            <>
-              {audience === "deployment" && <DeploymentBanner />}
-              <div className="space-y-14">
-                {groups.map((g) => (
-                  <section
-                    key={g.id}
-                    id={`f-${g.id}`}
-                    data-f-group
-                    className="scroll-mt-20"
-                  >
-                    <InsetGroup group={g} banner={false} />
-                  </section>
-                ))}
-              </div>
-            </>
+            <div className="space-y-16">
+              {F_PAGE.map((p) => (
+                <div key={p.area} className="space-y-14">
+                  {p.area === "deployment" && (
+                    <div className="border-t border-amber-500/40 pt-8">
+                      <DeploymentBanner />
+                    </div>
+                  )}
+                  {area(p.area).groups.map((g) => (
+                    <section
+                      key={g.id}
+                      id={`f-${g.id}`}
+                      data-f-group
+                      className="scroll-mt-8"
+                    >
+                      <InsetGroup group={g} banner={false} />
+                    </section>
+                  ))}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </main>
