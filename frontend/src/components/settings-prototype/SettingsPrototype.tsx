@@ -5,7 +5,14 @@ import { useEffect } from "react"
 import { PrototypeSwitcher } from "@/components/Common/PrototypeSwitcher"
 import { SettingsHub } from "@/components/SettingsHub"
 import { useLoadDBStats } from "@/hooks/useDBStats"
-import { VariantA, VariantB, VariantC, VariantD, VariantE } from "./Variants"
+import {
+  VariantA,
+  VariantB,
+  VariantC,
+  VariantD,
+  VariantE,
+  VariantF,
+} from "./Variants"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
@@ -16,6 +23,7 @@ const VARIANTS: { key: string; name: string; view: React.FC }[] = [
   { key: "C", name: "Search first", view: VariantC },
   { key: "D", name: "Tasks", view: VariantD },
   { key: "E", name: "System Settings", view: VariantE },
+  { key: "F", name: "E + A + B", view: VariantF },
 ]
 
 export const SettingsPrototype: React.FC = () => {

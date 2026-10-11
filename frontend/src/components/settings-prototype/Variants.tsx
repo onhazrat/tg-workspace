@@ -586,8 +586,116 @@ const ACCOUNT_GROUP: Group = {
   items: area("account").groups.flatMap((g) => g.items),
 }
 
-export const VariantE: React.FC = () => {
+const AccountCard: React.FC<{ selected: boolean; onClick: () => void }> = ({
+  selected,
+  onClick,
+}) => {
   const { user } = useAuth()
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 rounded-lg p-2 text-left",
+        selected ? "bg-sky-600 text-white" : "hover:bg-app-ink/5",
+      )}
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-400 to-zinc-600 text-lg font-bold text-white">
+        {(user?.full_name || user?.email || "?").charAt(0).toUpperCase()}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">
+          {user?.full_name || "Your account"}
+        </span>
+        <span className="block truncate text-xs opacity-70">{user?.email}</span>
+      </span>
+    </button>
+  )
+}
+
+const SidebarSearch: React.FC<{
+  value: string
+  onChange: (v: string) => void
+}> = ({ value, onChange }) => (
+  <div className="relative">
+    <Search
+      size={13}
+      className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 opacity-40"
+    />
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Search"
+      className="w-full rounded-md border border-app-ink/10 bg-app-card py-1.5 pl-8 pr-2 text-sm outline-none"
+    />
+  </div>
+)
+
+const SidebarRow: React.FC<{
+  group: Group
+  selected: boolean
+  onClick: () => void
+  changed?: number
+}> = ({ group: g, selected, onClick, changed = 0 }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm",
+      selected ? "bg-sky-600 text-white" : "hover:bg-app-ink/5",
+    )}
+  >
+    <span
+      className={cn(
+        "flex size-6 items-center justify-center rounded-md text-white",
+        E_TINT[g.scope],
+      )}
+    >
+      <g.icon size={14} />
+    </span>
+    <span className="flex-1">{g.label}</span>
+    {changed > 0 && (
+      <span
+        title={`${changed} changed from default`}
+        className={cn(
+          "text-[10px]",
+          selected ? "text-white" : "text-amber-600",
+        )}
+      >
+        {changed}
+      </span>
+    )}
+  </button>
+)
+
+/** E's group pane: title, blurb, then the items in one inset card. */
+const InsetGroup: React.FC<{ group: Group; banner?: boolean }> = ({
+  group,
+  banner = true,
+}) => (
+  <>
+    <h2 className="mb-1 text-xl font-semibold">{group.label}</h2>
+    <p className="mb-6 text-xs opacity-60">
+      {group.blurb} <ScopeChip scope={group.scope} className="ml-1" />
+    </p>
+    {banner && group.scope === "deployment" && <DeploymentBanner />}
+    <div
+      className={cn(
+        group.scope === "tool"
+          ? "terminal-theme text-app-ink"
+          : "rounded-xl border border-app-ink/10 bg-app-muted/40 px-5 py-2 [&>*+*]:border-t [&>*+*]:border-app-ink/10",
+      )}
+    >
+      {group.items.map((item) => (
+        <div key={item.id} className="py-2">
+          <ItemView item={item} />
+        </div>
+      ))}
+    </div>
+  </>
+)
+
+export const VariantE: React.FC = () => {
   const [selected, setSelected] = useState("display")
   const [query, setQuery] = useState("")
   const q = query.trim().toLowerCase()
@@ -601,40 +709,11 @@ export const VariantE: React.FC = () => {
   return (
     <div className="-m-8 flex h-full">
       <aside className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-app-ink/10 bg-app-muted/50 p-3">
-        <div className="relative">
-          <Search
-            size={13}
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 opacity-40"
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search"
-            className="w-full rounded-md border border-app-ink/10 bg-app-card py-1.5 pl-8 pr-2 text-sm outline-none"
-          />
-        </div>
-        <button
-          type="button"
+        <SidebarSearch value={query} onChange={setQuery} />
+        <AccountCard
+          selected={selected === "account"}
           onClick={() => setSelected("account")}
-          className={cn(
-            "flex items-center gap-3 rounded-lg p-2 text-left",
-            selected === "account"
-              ? "bg-sky-600 text-white"
-              : "hover:bg-app-ink/5",
-          )}
-        >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-400 to-zinc-600 text-lg font-bold text-white">
-            {(user?.full_name || user?.email || "?").charAt(0).toUpperCase()}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">
-              {user?.full_name || "Your account"}
-            </span>
-            <span className="block truncate text-xs opacity-70">
-              {user?.email}
-            </span>
-          </span>
-        </button>
+        />
         {E_SECTIONS.map((sec) => {
           const groups = sec.groups
             .map((id) => findGroup(id))
@@ -648,27 +727,12 @@ export const VariantE: React.FC = () => {
                 </div>
               )}
               {groups.map((g) => (
-                <button
+                <SidebarRow
                   key={g.id}
-                  type="button"
+                  group={g}
+                  selected={selected === g.id}
                   onClick={() => setSelected(g.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm",
-                    selected === g.id
-                      ? "bg-sky-600 text-white"
-                      : "hover:bg-app-ink/5",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex size-6 items-center justify-center rounded-md text-white",
-                      E_TINT[g.scope],
-                    )}
-                  >
-                    <g.icon size={14} />
-                  </span>
-                  {g.label}
-                </button>
+                />
               ))}
             </div>
           )
@@ -676,24 +740,158 @@ export const VariantE: React.FC = () => {
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto px-10 py-8">
         <div className="mx-auto max-w-3xl">
-          <h2 className="mb-1 text-xl font-semibold">{group.label}</h2>
-          <p className="mb-6 text-xs opacity-60">
-            {group.blurb} <ScopeChip scope={group.scope} className="ml-1" />
-          </p>
-          {group.scope === "deployment" && <DeploymentBanner />}
-          <div
-            className={cn(
-              group.scope === "tool"
-                ? "terminal-theme text-app-ink"
-                : "rounded-xl border border-app-ink/10 bg-app-muted/40 px-5 py-2 [&>*+*]:border-t [&>*+*]:border-app-ink/10",
-            )}
-          >
-            {group.items.map((item) => (
-              <div key={item.id} className="py-2">
-                <ItemView item={item} />
+          <InsetGroup group={group} />
+        </div>
+      </main>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* F. E's look, A's audience tabs, B's one page per audience.          */
+/* ------------------------------------------------------------------ */
+
+export const VariantF: React.FC = () => {
+  const scroller = useRef<HTMLDivElement>(null)
+  const modified = useModifiedIds()
+  const [audience, setAudience] = useState<Area["id"]>("you")
+  const [active, setActive] = useState(area("you").groups[0].id)
+  const [jumpTo, setJumpTo] = useState<string | null>(null)
+  const [query, setQuery] = useState("")
+  const q = query.trim().toLowerCase()
+  const isTools = audience === "tools"
+  const groups = area(audience).groups
+  // Tools are not settings: one at a time, never all mounted on one page.
+  const tool = isTools
+    ? (groups.find((g) => g.id === active) ?? groups[0])
+    : null
+
+  const go = (to: Area["id"], groupId: string) => {
+    setQuery("")
+    setAudience(to)
+    setActive(groupId)
+    setJumpTo(groupId)
+  }
+
+  // B's scroll-spy, re-armed whenever the audience swaps the page.
+  useEffect(() => {
+    const root = scroller.current
+    if (!root || isTools) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        const top = entries
+          .filter((e) => e.isIntersecting)
+          .sort(
+            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
+          )[0]
+        if (top) setActive(top.target.id.replace("f-", ""))
+      },
+      { root, rootMargin: "-64px 0px -70% 0px" },
+    )
+    for (const el of root.querySelectorAll("[data-f-group]")) io.observe(el)
+    return () => io.disconnect()
+  }, [isTools])
+
+  // Jump after the audience's page has rendered.
+  useEffect(() => {
+    if (!jumpTo) return
+    const el = isTools ? null : document.getElementById(`f-${jumpTo}`)
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+    else scroller.current?.scrollTo({ top: 0 })
+    setJumpTo(null)
+  }, [jumpTo, isTools])
+
+  return (
+    <div className="-m-8 flex h-full">
+      <aside className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-app-ink/10 bg-app-muted/50 p-3">
+        <SidebarSearch value={query} onChange={setQuery} />
+        <AccountCard
+          selected={audience === "account"}
+          onClick={() => go("account", area("account").groups[0].id)}
+        />
+        {q ? (
+          A_TABS.map((t) => {
+            const hits = area(t.id).groups.filter((g) =>
+              g.items.some((i) => itemText(i, g).includes(q)),
+            )
+            if (hits.length === 0) return null
+            return (
+              <div key={t.id} className="space-y-0.5">
+                <div className="px-2 pb-1 pt-2 text-[10px] font-semibold opacity-50">
+                  {t.label}
+                </div>
+                {hits.map((g) => (
+                  <SidebarRow
+                    key={g.id}
+                    group={g}
+                    selected={false}
+                    changed={modified(g).length}
+                    onClick={() => go(t.id, g.id)}
+                  />
+                ))}
               </div>
+            )
+          })
+        ) : (
+          <div className="space-y-0.5">
+            <div className="px-2 pb-1 pt-2 text-[10px] font-semibold opacity-50">
+              {isTools ? "Open one" : "On this page"}
+            </div>
+            {groups.map((g) => (
+              <SidebarRow
+                key={g.id}
+                group={g}
+                selected={active === g.id}
+                changed={modified(g).length}
+                onClick={() => go(audience, g.id)}
+              />
             ))}
           </div>
+        )}
+      </aside>
+      <main ref={scroller} className="min-w-0 flex-1 overflow-y-auto">
+        <div className="sticky top-0 z-10 flex justify-center border-b border-app-ink/10 bg-app-card/90 py-3 backdrop-blur">
+          <div className="flex rounded-lg bg-app-ink/5 p-0.5">
+            {A_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => go(t.id, area(t.id).groups[0].id)}
+                className={cn(
+                  "rounded-md px-4 py-1 text-xs font-semibold",
+                  t.id === audience
+                    ? "bg-app-card shadow-sm"
+                    : "opacity-60 hover:opacity-100",
+                  t.id === audience &&
+                    t.id === "deployment" &&
+                    "text-amber-700 ring-1 ring-amber-500/50 dark:text-amber-300",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mx-auto max-w-3xl px-10 py-8">
+          {tool ? (
+            <InsetGroup group={tool} />
+          ) : (
+            <>
+              {audience === "deployment" && <DeploymentBanner />}
+              <div className="space-y-14">
+                {groups.map((g) => (
+                  <section
+                    key={g.id}
+                    id={`f-${g.id}`}
+                    data-f-group
+                    className="scroll-mt-20"
+                  >
+                    <InsetGroup group={g} banner={false} />
+                  </section>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </main>
     </div>
