@@ -140,6 +140,11 @@ async def send_parts(
 
     # The sender's own settings, so a scheduled send follows them too.
     prefs = load_publishing_settings(session, acting_user_id)
+    # Every read is in hand as a plain value, so the transaction ends here,
+    # before seconds of waiting on Telegram: one held across the sends sits
+    # `idle in transaction` and pins the xmin horizon (CLAUDE.md). Whatever the
+    # caller writes afterwards runs in a fresh, short transaction of its own.
+    session.commit()
 
     async def send_chunk(chunk: str) -> None:
         parsed_text, entities = parse_telegram_entities(chunk)

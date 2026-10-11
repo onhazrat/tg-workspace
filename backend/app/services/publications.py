@@ -184,6 +184,10 @@ async def _deliver(
 
     The row records every Part's text, how many have gone out in all, and
     the failure that stopped it; a resume overwrites the same row.
+
+    Reads before the send and writes after it: `send_parts` ends the
+    transaction before the first Part goes out, so the log row is written in
+    a fresh one that commits at once.
     """
     network = load_network_settings(session)
     responses = list(earlier_responses)
@@ -222,8 +226,8 @@ async def _deliver(
         },
         user_id,
     )
+    touch_sync(session, "publish_logs", commit=False)
     session.commit()
-    touch_sync(session, "publish_logs")
     return outcome
 
 

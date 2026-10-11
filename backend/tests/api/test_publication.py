@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql
 from sqlmodel import Session, col, select
 
 from app import crud
@@ -620,3 +621,60 @@ def test_a_new_publication_still_names_its_bot_and_destination(
     r = _send(client, superuser_token_headers, _summary(), {"botId": "pub-bot"})
 
     assert r.status_code == 422, r.text
+
+
+# --------------------------------------------------------------------------
+# No transaction held across the send (CLAUDE.md, "Cost and performance")
+# --------------------------------------------------------------------------
+
+
+def _open_transactions() -> int:
+    """Backends of this database sitting `idle in transaction`, bar this one."""
+    with engine.connect() as connection:
+        return int(
+            connection.execute(
+                sql(
+                    "SELECT count(*) FROM pg_stat_activity"
+                    " WHERE datname = current_database()"
+                    " AND state LIKE 'idle in transaction%'"
+                    " AND pid <> pg_backend_pid()"
+                )
+            ).scalar_one()
+        )
+
+
+class _WatchingTelegram(_FlakyTelegram):
+    """Notes, at every request, how many transactions were left open."""
+
+    def __init__(self, fail_at: int = 0) -> None:
+        super().__init__(fail_at)
+        self.open_during_send: list[int] = []
+
+    async def __call__(self, url: str, **kwargs: Any) -> tuple[Any, Any]:
+        self.open_during_send.append(_open_transactions())
+        return await super().__call__(url, **kwargs)
+
+
+def test_no_transaction_is_open_while_a_part_goes_out(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    target: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A send waits on Telegram for seconds, retries included; a transaction
+    held across it pins the xmin horizon, so it is closed first, for the new
+    Publication and the resume alike."""
+    watching = _WatchingTelegram(fail_at=2)
+    monkeypatch.setattr(publish_service, "fetch_with_retry", watching)
+    summary_id = _summary("\n\n".join(_five_paragraphs()[:3]))
+    # Whatever an earlier test's fixtures left open, which is not this send's.
+    before = _open_transactions()
+
+    _send(client, superuser_token_headers, summary_id, target)
+    [log] = _logs(summary_id)
+    resumed = _send(
+        client, superuser_token_headers, summary_id, {"publicationId": log.id}
+    )
+
+    assert resumed.json()["status"] == "success", resumed.text
+    assert watching.open_during_send == [before] * 4
