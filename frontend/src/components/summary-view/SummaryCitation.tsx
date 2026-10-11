@@ -57,42 +57,35 @@ export function SummaryCitation({
     <CitedPostCard cited={cited} loading={loading} workspace={workspace} />
   )
 
-  if (sheet)
-    return (
-      <>
-        <button
-          type="button"
-          {...target}
-          aria-label={`Show cited post ${label}`}
-          className={`${CHIP} cursor-pointer`}
-          onClick={(e) => {
-            // A bullet searches for related posts on click; this is not that.
-            e.stopPropagation()
-            setOpen(true)
-          }}
+  const inner = sheet ? (
+    <>
+      <button
+        type="button"
+        {...target}
+        aria-label={`Show cited post ${label}`}
+        className={`${CHIP} cursor-pointer`}
+        onClick={() => setOpen(true)}
+      >
+        {label}
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[85dvh] gap-0 rounded-t-2xl"
         >
-          {label}
-        </button>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent
-            side="bottom"
-            className="max-h-[85dvh] gap-0 rounded-t-2xl"
-          >
-            <SheetHeader className="pb-2">
-              <SheetTitle className="font-mono text-sm">{label}</SheetTitle>
-              <SheetDescription className="sr-only">
-                The post this Citation names
-              </SheetDescription>
-            </SheetHeader>
-            <div className="overflow-y-auto overscroll-contain px-4 pb-6">
-              {card}
-            </div>
-          </SheetContent>
-        </Sheet>
-      </>
-    )
-
-  return (
+          <SheetHeader className="pb-2">
+            <SheetTitle className="font-mono text-sm">{label}</SheetTitle>
+            <SheetDescription className="sr-only">
+              The post this Citation names
+            </SheetDescription>
+          </SheetHeader>
+          <div className="overflow-y-auto overscroll-contain px-4 pb-6">
+            {card}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  ) : (
     <PreviewCard.Root>
       <PreviewCard.Trigger
         {...target}
@@ -101,7 +94,6 @@ export function SummaryCitation({
         rel="noopener noreferrer"
         delay={150}
         className={`${CHIP} cursor-help`}
-        onClick={(e) => e.stopPropagation()}
       >
         {label}
       </PreviewCard.Trigger>
@@ -118,6 +110,17 @@ export function SummaryCitation({
         </PreviewCard.Positioner>
       </PreviewCard.Portal>
     </PreviewCard.Root>
+  )
+
+  // React bubbles a portal's events through the tree, so a click in the hover
+  // card or the sheet would reach a bullet, which searches for related posts
+  // on click. One stop here covers the chip, the card, the overlay and Close.
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: stops propagation only
+    // biome-ignore lint/a11y/useKeyWithClickEvents: stops propagation only
+    <span className="contents" onClick={(e) => e.stopPropagation()}>
+      {inner}
+    </span>
   )
 }
 

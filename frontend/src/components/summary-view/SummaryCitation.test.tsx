@@ -171,9 +171,7 @@ describe("a Citation in the report", () => {
     )
     fireEvent.click(screen.getByRole("button", { name: /news #8/ }))
     const sheet = await screen.findByRole("dialog")
-    expect(
-      within(sheet).getByText(/Outside this Summary's Scope/),
-    ).toBeTruthy()
+    expect(within(sheet).getByText(/Outside this Summary's Scope/)).toBeTruthy()
     cleanup()
 
     renderReport(
@@ -186,7 +184,9 @@ describe("a Citation in the report", () => {
     )
     fireEvent.click(screen.getByRole("button", { name: /news #7/ }))
     const inScope = await screen.findByRole("dialog")
-    expect(within(inScope).queryByText(/Outside this Summary's Scope/)).toBeNull()
+    expect(
+      within(inScope).queryByText(/Outside this Summary's Scope/),
+    ).toBeNull()
     cleanup()
 
     // No Covered Posts on record: nothing to be outside of.
@@ -202,12 +202,37 @@ describe("a Citation in the report", () => {
     ).toBeNull()
   })
 
+  test("a click on the chip or inside its sheet never reaches the bullet, which searches on click", async () => {
+    const onBulletClick = mock()
+    render(
+      // biome-ignore lint/a11y/useKeyWithClickEvents: stands in for SummaryMarkdown's bullet
+      <li onClick={onBulletClick}>
+        <SummaryCitation
+          cited={citedPostResolver({
+            live: [post("news", 7, "the post")],
+            snapshot: {},
+            covered: null,
+          })("news", 7)}
+          loading={false}
+          sheet
+          workspace={{ channel: () => undefined, onAddChannel: mock() }}
+        />
+      </li>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /news #7/ }))
+    const sheet = await screen.findByRole("dialog")
+    fireEvent.click(within(sheet).getByText("the post"))
+    fireEvent.click(within(sheet).getByRole("button", { name: "Close" }))
+    expect(onBulletClick).not.toHaveBeenCalled()
+  })
+
   test("every Citation carries its Post's key, so it can be found", () => {
     renderReport("See [News #7].", {})
     expect(
-      screen.getByText("News #7").closest(`[${CITATION_ATTR}]`)?.getAttribute(
-        CITATION_ATTR,
-      ),
+      screen
+        .getByText("News #7")
+        .closest(`[${CITATION_ATTR}]`)
+        ?.getAttribute(CITATION_ATTR),
     ).toBe(citationKey("news", 7))
   })
 })
