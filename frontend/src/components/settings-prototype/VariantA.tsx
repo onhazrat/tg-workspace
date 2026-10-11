@@ -10,6 +10,7 @@ import { useSettings } from "@/contexts/SettingsContext"
 import useAuth from "@/hooks/useAuth"
 import { useCanManageJobs } from "@/hooks/useJobsStatus"
 import { isSettingModified } from "@/lib/settings/catalog"
+import type { SettingCatalogEntry } from "@/lib/settings/catalog-types"
 import { cn } from "@/lib/utils"
 import {
   entryFor,
@@ -41,6 +42,24 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
   const page = PAGES.find((p) => p.id === pageId)
   const isAdmin = useCanManageJobs()
   const { user } = useAuth()
+
+  const isModified = (e: SettingCatalogEntry) =>
+    isSettingModified(
+      e,
+      e.id === "theme" ? settings.theme : settings[e.sliceKey ?? e.id],
+    )
+
+  // Counted over the whole group, whatever the search or scope filter hides.
+  const modifiedIn = useMemo(() => {
+    const counts = {} as Record<ProtoGroupId, number>
+    for (const g of PROTO_GROUPS)
+      counts[g.id] = g.rows
+        .filter((id) => !NOT_A_ROW.has(id))
+        .map(entryFor)
+        .filter((e) => e !== undefined && isModified(e)).length
+    return counts
+  }, [settings])
+  const modifiedTotal = Object.values(modifiedIn).reduce((a, b) => a + b, 0)
 
   const visible = useMemo(
     () =>
@@ -122,8 +141,13 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
             )}
           >
             {group.label}
-            <span className="text-xs text-app-ink/40">
-              {rows.length + panels.length}
+            <span className="flex items-center gap-1.5">
+              {modifiedIn[group.id] > 0 ? (
+                <ModifiedCount n={modifiedIn[group.id]} />
+              ) : null}
+              <span className="text-xs text-app-ink/40">
+                {rows.length + panels.length}
+              </span>
             </span>
           </button>
         ))}
@@ -199,7 +223,7 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
             ))}
             <span className="mx-1 h-4 w-px bg-app-ink/15" />
             <Chip on={modifiedOnly} onClick={() => setModifiedOnly((m) => !m)}>
-              Modified only
+              Modified only{modifiedTotal > 0 ? ` (${modifiedTotal})` : ""}
             </Chip>
           </div>
         </div>
@@ -217,7 +241,12 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
                 id={`proto-group-${group.id}`}
                 className="scroll-mt-4 pt-8"
               >
-                <h3 className="text-lg font-semibold">{group.label}</h3>
+                <h3 className="flex items-center gap-2 text-lg font-semibold">
+                  {group.label}
+                  {modifiedIn[group.id] > 0 ? (
+                    <ModifiedCount n={modifiedIn[group.id]} label />
+                  ) : null}
+                </h3>
                 <p className="mb-2 text-[13px] text-app-ink/55">
                   {group.blurb}
                 </p>
@@ -259,4 +288,17 @@ const Chip: React.FC<{
   >
     {children}
   </button>
+)
+
+/** Settings in a group that differ from their default. */
+const ModifiedCount: React.FC<{ n: number; label?: boolean }> = ({
+  n,
+  label,
+}) => (
+  <span
+    title={`${n} setting${n === 1 ? "" : "s"} changed from the default`}
+    className="rounded-full bg-amber-500/15 px-1.5 py-px text-[11px] font-medium leading-4 text-amber-700 dark:text-amber-300"
+  >
+    {label ? `${n} modified` : n}
+  </span>
 )
