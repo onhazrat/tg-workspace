@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from fastapi import HTTPException
+from sqlalchemy import update
 from sqlmodel import Session, col, select
 
 from app.ai.registry import default_model
@@ -234,6 +235,32 @@ async def _deliver(
 PUBLICATION_NOT_FOUND = "Publication not found"
 
 
+def _claim(
+    session: Session, log_id: str, request: dict[str, Any], partial: Partial
+) -> bool:
+    """Take the resume, or learn somebody else already has.
+
+    Conditional on the count this caller read, so of two resumes racing from
+    the same count exactly one row comes back; the loser would otherwise send
+    the same Parts again. The claim marks every Part sent, which also stops
+    the panel offering a resume while this one runs; `_deliver` then writes
+    the real count. A process that dies mid-send leaves the remainder unsent
+    rather than sent twice.
+    """
+    claimed = session.execute(
+        update(PublishLog)
+        .where(
+            col(PublishLog.id) == log_id,
+            col(PublishLog.full_request)["partsSent"].as_integer()
+            == partial.parts_sent,
+        )
+        .values(full_request={**request, "partsSent": partial.parts_total})
+        .returning(col(PublishLog.id))
+    ).first()
+    session.commit()
+    return claimed is not None
+
+
 async def resume_publication(
     session: Session,
     summary: Summary,
@@ -253,9 +280,9 @@ async def resume_publication(
         raise HTTPException(status_code=404, detail=PUBLICATION_NOT_FOUND)
     assert_owner_on_write(log.user_id, user_id, detail=PUBLICATION_NOT_FOUND)
     partial = _as_partial(log)
-    if partial is None:
-        raise HTTPException(status_code=409, detail="Publication is not partial")
     request = cast(dict[str, Any], log.full_request)
+    if partial is None or not _claim(session, log.id, request, partial):
+        raise HTTPException(status_code=409, detail="Publication is not partial")
     earlier = log.full_response if isinstance(log.full_response, list) else []
     return await _deliver(
         session,

@@ -9,10 +9,12 @@ asserted is what the panel previews and what Telegram would receive.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import text as sql
 from sqlmodel import Session, col, select
@@ -22,6 +24,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import PublishLog, Summary
 from app.services import publish as publish_service
+from app.services.publications import resume_publication
 
 DATA = f"{settings.API_V1_STR}/data"
 
@@ -599,6 +602,53 @@ def test_a_publication_someone_else_filed_against_my_summary_is_not_resumed(
     assert r.json()["detail"] == "Publication not found"
     assert len(flaky.bodies) == sent_before
     assert decrypts == []
+
+
+def test_two_resumes_at_once_send_each_remaining_part_once(
+    partial: tuple[str, _FlakyTelegram],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A double-click, or two tabs: the row is claimed before anything goes
+    out, so the second resume is refused rather than sending Parts 3-5 again.
+
+    The second session read the row before the first claimed it, which is the
+    race a check-then-send loses and a conditional claim does not.
+    """
+    summary_id, flaky = partial
+    [log] = _logs(summary_id)
+
+    async def yielding(url: str, **kwargs: Any) -> tuple[Any, Any]:
+        await asyncio.sleep(0)  # Telegram takes a while; the other one runs.
+        return await flaky(url, **kwargs)
+
+    monkeypatch.setattr(publish_service, "fetch_with_retry", yielding)
+
+    async def both() -> list[Any]:
+        with Session(engine) as first, Session(engine) as second:
+            stale = second.get(PublishLog, log.id)
+            assert stale is not None
+            return await asyncio.gather(
+                *(
+                    resume_publication(
+                        s,
+                        cast(Summary, s.get(Summary, summary_id)),
+                        user_id=_superuser_id(),
+                        publication_id=log.id,
+                    )
+                    for s in (first, second)
+                ),
+                return_exceptions=True,
+            )
+
+    outcomes = asyncio.run(both())
+
+    assert [t.split(" ", 1)[0] for t in flaky.texts] == ["P1", "P2", "P3", "P4", "P5"]
+    done, refused = outcomes
+    assert getattr(done, "status", None) == "success", outcomes
+    assert isinstance(refused, HTTPException) and refused.status_code == 409
+    [after] = _logs(summary_id)
+    assert after.status == "success"
+    assert after.full_request == {"parts": _five_paragraphs(), "partsSent": 5}
 
 
 def test_a_publication_is_resumed_only_through_its_own_summary(
