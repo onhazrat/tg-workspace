@@ -32,6 +32,7 @@ import {
   useIsModified,
   useSettingsSchema,
 } from "./schema-settings"
+import type { UsersStyle } from "./users-variants"
 
 /** The only settings knowledge the frontend keeps: where things go. */
 const LAYOUT: {
@@ -255,7 +256,9 @@ export const VariantD: React.FC<{
   highlightId: string | null
   /** Variant E: nested VS Code-style ids. */
   nested?: boolean
-}> = ({ highlightId, nested = false }) => {
+  /** Variants F to H: the Users page restyled. */
+  users?: UsersStyle
+}> = ({ highlightId, nested = false, users }) => {
   const navigate = workspaceRoute.useNavigate()
   const { data: rows, error, isLoading } = useSettingsSchema()
   const isModified = useIsModified()
@@ -434,7 +437,7 @@ export const VariantD: React.FC<{
 
       {page ? (
         <div className="min-w-0 flex-1 overflow-y-auto bg-app-card pb-32">
-          <PageView page={page} onBack={() => setPageId(null)} />
+          <PageView page={page} users={users} onBack={() => setPageId(null)} />
         </div>
       ) : null}
       <div

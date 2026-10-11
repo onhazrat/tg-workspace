@@ -157,3 +157,21 @@ change; each row shows "stored as <row.field>". The layout selects by id prefix
 `?setting=<id>` deep links, "Copy setting id" and "Copy link to setting" use the
 id. `.env` values get a derived id too (`NETWORK_FETCH_RETRIES` →
 `network.fetch.retries`), shown next to their `.env` name.
+
+## Round 8: Users page styling (F, G, H)
+
+Question: why does Admin → Users look foreign, and what would make it match the
+settings rows? It was the template's shadcn table (stock tokens, boxed table,
+Title Case, a floating filled button, `is_superuser` as the role). All three
+variants are E with only the Users page swapped (`users-variants.tsx`):
+
+- F: one settings-style row per account (name, You/role/status chips, a mono
+  meta line, the `…` menu), "Add user" in the page header.
+- G: F plus the settings search and filter chips (Everyone, Admins, Waiting for
+  approval, Inactive), pending accounts first with an inline Approve.
+- H: list on the left, the selected account's fields as auto-saving setting
+  rows on the right, actions as rows below.
+
+Roles come from `GET /proto/users/roles` (reads `rbac_user_roles`, Admin only),
+because `UserPublic` has no roles. Folding in needs a real roles field on the
+Admin users list, and a decision on whether H's auto-save fits account edits.

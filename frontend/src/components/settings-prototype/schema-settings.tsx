@@ -399,7 +399,7 @@ const JsonControl: React.FC<{
   }
 }
 
-const TextField: React.FC<{
+export const TextField: React.FC<{
   value: string
   label: string
   onCommit: (v: string) => void

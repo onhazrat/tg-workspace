@@ -216,8 +216,7 @@ export function WorkspaceTabStrip({
           }}
         >
           {CLOSABLE_TABS.filter(
-            (meta) =>
-              meta.id !== "system" || variant === "D" || variant === "E",
+            (meta) => meta.id !== "system" || "DEFGH".includes(variant || "0"),
           ).map((meta) => {
             const Icon = tabIcon(meta)
             return (
