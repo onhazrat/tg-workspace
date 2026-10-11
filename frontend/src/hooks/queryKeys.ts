@@ -26,9 +26,9 @@ export const queryKeys = {
   aiModels: (aiKeyId: string | null) => ["aiModels", aiKeyId] as const,
   summaries: ["summaries"] as const,
   summary: (id: string) => ["summary", id] as const,
-  /** The server's plan for one Summary's Publication, per option set (SUMTAB-09). */
   /** Every plan of one Summary, whatever the options: a send changes `partial`. */
   publicationPlans: (id: string) => ["publicationPlan", id] as const,
+  /** The server's plan for one Summary's Publication, per option set (SUMTAB-09). */
   publicationPlan: (id: string, options: unknown) =>
     ["publicationPlan", id, options] as const,
   /** A Summary's Cited Posts as they are now, keyed by the refs (SUMTAB-04). */
