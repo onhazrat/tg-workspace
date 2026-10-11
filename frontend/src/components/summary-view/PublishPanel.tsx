@@ -12,11 +12,7 @@ import { TgToggle } from "@/components/ui/tg-toggle"
 import type { CitationStyle } from "@/lib/settings/schema"
 import { cn } from "@/lib/utils"
 import type { BotCredential, ChatDestination } from "@/types"
-import {
-  omittedAfterToggle,
-  partsLabel,
-  telegramSegments,
-} from "./publish-panel-model"
+import { omittedAfterToggle, partsLabel } from "./publish-panel-model"
 
 export interface PublishPanelProps {
   bots: BotCredential[]
@@ -376,7 +372,7 @@ function PartsPreview({ plan }: { plan: PublicationPlanResponse }) {
             dir="auto"
             className="max-h-44 overflow-y-auto overscroll-contain rounded-2xl rounded-tl-sm bg-sky-500/10 px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap break-words"
           >
-            <TelegramText text={part.text} />
+            <TelegramText segments={part.segments} />
           </div>
         </li>
       ))}
@@ -384,11 +380,15 @@ function PartsPreview({ plan }: { plan: PublicationPlanResponse }) {
   )
 }
 
-/** A Part's text drawn the way the server's entity parser sends it. */
-function TelegramText({ text }: { text: string }) {
+/** A Part drawn from the segments the server parsed it into for the send. */
+function TelegramText({
+  segments,
+}: {
+  segments: PublicationPartResponse["segments"]
+}) {
   return (
     <>
-      {telegramSegments(text).map((s, i) => {
+      {segments.map((s, i) => {
         const key = `${i}-${s.kind}`
         if (s.kind === "bold") return <b key={key}>{s.text}</b>
         if (s.kind === "italic") return <i key={key}>{s.text}</i>
@@ -396,7 +396,7 @@ function TelegramText({ text }: { text: string }) {
           return (
             <a
               key={key}
-              href={s.url}
+              href={s.url ?? undefined}
               target="_blank"
               rel="noreferrer"
               className="text-sky-600 underline dark:text-sky-400"

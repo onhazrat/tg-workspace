@@ -25,6 +25,7 @@ from app.core.db import engine
 from app.models_tg import PublishLog, Summary
 from app.services import publish as publish_service
 from app.services.publications import resume_publication
+from app.services.telegram_web import telegram_channel_post_url
 
 DATA = f"{settings.API_V1_STR}/data"
 
@@ -138,9 +139,34 @@ def test_a_plan_is_the_summary_alone_unless_metadata_is_asked_for(
             "text": "**Rates** rose.",
             "length": len("Rates rose."),
             "cutInside": False,
+            "segments": [
+                {"kind": "bold", "text": "Rates", "url": None},
+                {"kind": "plain", "text": " rose.", "url": None},
+            ],
         }
     ]
     assert plan["limit"] == 4096
+
+
+def test_each_part_carries_its_text_as_telegram_parses_it(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """The preview draws these segments, so it cannot drift from the parser
+    the send uses (CLAUDE.md: guard the pair, or keep one of it)."""
+    plan = _plan(
+        client, superuser_token_headers, _summary("**Rates** rose [news_ir #5].")
+    )
+
+    assert plan["parts"][0]["segments"] == [
+        {"kind": "bold", "text": "Rates", "url": None},
+        {"kind": "plain", "text": " rose ", "url": None},
+        {
+            "kind": "link",
+            "text": "[news_ir #5]",
+            "url": telegram_channel_post_url("news_ir", 5),
+        },
+        {"kind": "plain", "text": ".", "url": None},
+    ]
 
 
 def test_the_metadata_is_its_own_part_and_the_saved_text_wins(

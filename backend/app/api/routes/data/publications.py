@@ -12,7 +12,9 @@ from app.schemas.publications import (
     PublicationPlanResponse,
     PublicationSendRequest,
     PublicationSendResponse,
+    TelegramSegmentResponse,
 )
+from app.services.network import telegram_segments
 from app.services.publication_parts import TELEGRAM_MESSAGE_LIMIT
 from app.services.publications import (
     DestinationNotFound,
@@ -52,7 +54,14 @@ def plan_summary_publication(
     return PublicationPlanResponse(
         parts=[
             PublicationPartResponse(
-                kind=p.kind, text=p.text, length=p.length, cutInside=p.cut_inside
+                kind=p.kind,
+                text=p.text,
+                length=p.length,
+                cutInside=p.cut_inside,
+                segments=[
+                    TelegramSegmentResponse(kind=s.kind, text=s.text, url=s.url)
+                    for s in telegram_segments(p.text)
+                ],
             )
             for p in plan.parts
         ],

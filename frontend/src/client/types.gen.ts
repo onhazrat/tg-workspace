@@ -4843,6 +4843,10 @@ export type PublicationPartResponse = {
      * Cutinside
      */
     cutInside: boolean;
+    /**
+     * Segments
+     */
+    segments: Array<TelegramSegmentResponse>;
 };
 
 /**
@@ -6937,6 +6941,26 @@ export type TagRunSubmitRequest = {
     extra?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * TelegramSegmentResponse
+ *
+ * A run of a Part as Telegram shows it, from the parser the send uses.
+ */
+export type TelegramSegmentResponse = {
+    /**
+     * Kind
+     */
+    kind: 'plain' | 'bold' | 'italic' | 'link';
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Url
+     */
+    url: string | null;
 };
 
 export type Telemetry = unknown;

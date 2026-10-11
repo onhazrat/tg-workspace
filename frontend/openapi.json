@@ -10520,10 +10520,15 @@
           },
           "text": { "type": "string", "title": "Text" },
           "length": { "type": "integer", "title": "Length" },
-          "cutInside": { "type": "boolean", "title": "Cutinside" }
+          "cutInside": { "type": "boolean", "title": "Cutinside" },
+          "segments": {
+            "items": { "$ref": "#/components/schemas/TelegramSegmentResponse" },
+            "type": "array",
+            "title": "Segments"
+          }
         },
         "type": "object",
-        "required": ["kind", "text", "length", "cutInside"],
+        "required": ["kind", "text", "length", "cutInside", "segments"],
         "title": "PublicationPartResponse"
       },
       "PublicationPlanResponse": {
@@ -12379,6 +12384,24 @@
         "required": ["id", "scope"],
         "title": "TagRunSubmitRequest",
         "description": "Body for `POST /data/tag-runs` \u2014 opens a tag run at a frozen Scope."
+      },
+      "TelegramSegmentResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["plain", "bold", "italic", "link"],
+            "title": "Kind"
+          },
+          "text": { "type": "string", "title": "Text" },
+          "url": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": ["kind", "text", "url"],
+        "title": "TelegramSegmentResponse",
+        "description": "A run of a Part as Telegram shows it, from the parser the send uses."
       },
       "Telemetry": {},
       "TestProxyRequest": {

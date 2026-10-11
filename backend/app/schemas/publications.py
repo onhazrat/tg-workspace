@@ -31,6 +31,15 @@ class PublicationSendRequest(PublicationOptions):
         return self
 
 
+class TelegramSegmentResponse(BaseModel):
+    """A run of a Part as Telegram shows it, from the parser the send uses."""
+
+    kind: Literal["plain", "bold", "italic", "link"]
+    text: str
+    #: Set on a link, null otherwise.
+    url: str | None
+
+
 class PublicationPartResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -41,6 +50,8 @@ class PublicationPartResponse(BaseModel):
     length: int
     #: The cut ending this Part fell inside a word or a formatting pair.
     cut_inside: bool = Field(alias="cutInside")
+    #: `text` as Telegram will show it, for the preview.
+    segments: list[TelegramSegmentResponse]
 
 
 class MetadataRowResponse(BaseModel):

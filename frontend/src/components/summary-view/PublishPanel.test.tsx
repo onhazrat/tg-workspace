@@ -35,8 +35,25 @@ const plan: PublicationPlanResponse = {
       text: "**Rates** rose [news_ir #5].",
       length: 1200,
       cutInside: false,
+      // As the server's parser cut it; the panel draws these, never the text.
+      segments: [
+        { kind: "bold", text: "Rates", url: null },
+        { kind: "plain", text: " rose ", url: null },
+        {
+          kind: "link",
+          text: "[news_ir #5]",
+          url: "https://t.me/news_ir/5",
+        },
+        { kind: "plain", text: ".", url: null },
+      ],
     },
-    { kind: "summary", text: "Second part.", length: 12, cutInside: true },
+    {
+      kind: "summary",
+      text: "Second part.",
+      length: 12,
+      cutInside: true,
+      segments: [{ kind: "plain", text: "Second part.", url: null }],
+    },
   ],
   defaultMetadata: DEFAULT_METADATA,
   metadataRows: [
@@ -90,6 +107,9 @@ describe("PublishPanel", () => {
     expect(parts[0].querySelector("b")?.textContent).toBe("Rates")
     expect(parts[0].textContent).toContain("Rates rose [news_ir #5].")
     expect(parts[0].querySelector("a")?.textContent).toBe("[news_ir #5]")
+    expect(parts[0].querySelector("a")?.getAttribute("href")).toBe(
+      "https://t.me/news_ir/5",
+    )
     expect(parts[1].textContent).toContain("cut inside a word")
   })
 

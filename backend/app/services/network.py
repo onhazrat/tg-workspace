@@ -9,7 +9,8 @@ import re
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, cast
+from dataclasses import dataclass
+from typing import Any, Literal, cast
 
 import httpx
 from stem import Signal
@@ -800,60 +801,59 @@ TELEGRAM_MARKUP = re.compile(
 )
 
 
+@dataclass(frozen=True)
+class TelegramSegment:
+    """A run of a message as Telegram shows it: plain, bold, italic or a link."""
+
+    kind: Literal["plain", "bold", "italic", "link"]
+    text: str
+    url: str | None = None
+
+
+def _marked(match: re.Match[str]) -> TelegramSegment:
+    if match.group(1):
+        return TelegramSegment("bold", match.group(2) or "")
+    if match.group(3) or match.group(5):
+        return TelegramSegment("italic", match.group(4) or match.group(6) or "")
+    if match.group(7):
+        url = telegram_channel_post_url(match.group(8), int(match.group(9)))
+        return TelegramSegment("link", match.group(7), url)
+    return TelegramSegment("link", match.group(11) or "", match.group(12) or "")
+
+
+def telegram_segments(text: str) -> list[TelegramSegment]:
+    """`text` cut into the runs Telegram shows, the one reading of the markup.
+
+    The send turns these into entities and the publish panel's preview draws
+    them, so the two cannot disagree about what a Part looks like.
+    """
+    segments: list[TelegramSegment] = []
+    last_index = 0
+    for match in TELEGRAM_MARKUP.finditer(text):
+        if match.start() > last_index:
+            segments.append(TelegramSegment("plain", text[last_index : match.start()]))
+        segments.append(_marked(match))
+        last_index = match.end()
+    if last_index < len(text):
+        segments.append(TelegramSegment("plain", text[last_index:]))
+    return segments
+
+
+_ENTITY_TYPE = {"bold": "bold", "italic": "italic", "link": "text_link"}
+
+
 def parse_telegram_entities(text: str) -> tuple[str, list[dict[str, Any]]]:
     plain = ""
     entities: list[dict[str, Any]] = []
-    last_index = 0
-
-    for match in TELEGRAM_MARKUP.finditer(text):
-        plain += text[last_index : match.start()]
-        offset = utf16_len(plain)
-
-        if match.group(1):
-            inner = match.group(2) or ""
-            plain += inner
-            entities.append(
-                {"type": "bold", "offset": offset, "length": utf16_len(inner)}
-            )
-        elif match.group(3):
-            inner = match.group(4) or ""
-            plain += inner
-            entities.append(
-                {"type": "italic", "offset": offset, "length": utf16_len(inner)}
-            )
-        elif match.group(5):
-            inner = match.group(6) or ""
-            plain += inner
-            entities.append(
-                {"type": "italic", "offset": offset, "length": utf16_len(inner)}
-            )
-        elif match.group(7):
-            channel = match.group(8) or ""
-            post_id = match.group(9) or ""
-            inner = match.group(7)
-            plain += inner
-            entities.append(
-                {
-                    "type": "text_link",
-                    "offset": offset,
-                    "length": utf16_len(inner),
-                    "url": telegram_channel_post_url(channel, int(post_id)),
-                }
-            )
-        elif match.group(10):
-            inner = match.group(11) or ""
-            url = match.group(12) or ""
-            plain += inner
-            entities.append(
-                {
-                    "type": "text_link",
-                    "offset": offset,
-                    "length": utf16_len(inner),
-                    "url": url,
-                }
-            )
-
-        last_index = match.end()
-
-    plain += text[last_index:]
+    for segment in telegram_segments(text):
+        if segment.kind != "plain":
+            entity: dict[str, Any] = {
+                "type": _ENTITY_TYPE[segment.kind],
+                "offset": utf16_len(plain),
+                "length": utf16_len(segment.text),
+            }
+            if segment.url is not None:
+                entity["url"] = segment.url
+            entities.append(entity)
+        plain += segment.text
     return plain, entities
