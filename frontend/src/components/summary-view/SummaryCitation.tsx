@@ -40,7 +40,7 @@ export interface SummaryCitationProps {
 }
 
 const CHIP =
-  "inline-flex items-center justify-center px-1.5 py-0.5 mx-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-app-ink/10 text-app-ink rounded transition-colors hover:bg-app-ink hover:text-app-bg scroll-my-24 data-[citation-found]:bg-amber-300 data-[citation-found]:text-app-ink data-[citation-found]:ring-2 data-[citation-found]:ring-amber-400"
+  "inline-flex items-center justify-center px-1.5 py-0.5 mx-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-app-ink/10 text-app-ink rounded transition-colors hover:bg-app-ink hover:text-app-bg scroll-my-24 data-[channel-highlight]:bg-blue-500/20 data-[channel-highlight]:ring-1 data-[channel-highlight]:ring-blue-500 data-[citation-found]:bg-amber-300 data-[citation-found]:text-app-ink data-[citation-found]:ring-2 data-[citation-found]:ring-amber-400"
 
 export function SummaryCitation({
   cited,

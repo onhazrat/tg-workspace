@@ -87,7 +87,10 @@ function StripTile({
   if (!src) return null
   const label = `${cited.channelName} #${cited.postId}`
   return (
-    <div data-post-key={tileKey(cited)} className="relative shrink-0">
+    <div
+      data-post-key={tileKey(cited)}
+      className="relative shrink-0 rounded-lg data-[channel-highlight]:ring-2 data-[channel-highlight]:ring-blue-500"
+    >
       <button
         type="button"
         aria-label={`Photo from ${label}`}

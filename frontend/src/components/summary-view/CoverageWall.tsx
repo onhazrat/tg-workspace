@@ -1,17 +1,44 @@
 /**
  * The coverage wall (SUMTAB-06): every Channel the Summary drew on as its
  * avatar, with one split badge growing out of the photo's bottom-right corner,
- * Cited Posts on the blue half and Covered Posts on the grey one.
+ * Cited Posts on the blue half and Covered Posts on the grey one. Tapping an
+ * avatar highlights the Channel's Citations and strip photos in the report and
+ * opens its posts sheet; tapping it again closes both.
  */
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { ScopedPostRef } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
+import { CITATION_ATTR } from "@/lib/citations/find-citation"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import { type CoverageRow, coverageRows } from "@/lib/summaries/coverage"
+import { ChannelPostsSheet } from "./ChannelPostsSheet"
 import type { CitationWorkspace } from "./SummaryCitation"
 
 /** Set on a highlighted Channel's Citations and strip tiles. */
 export const HIGHLIGHT_ATTR = "data-channel-highlight"
+
+/** Where a strip tile names its Post, `channel_id`. */
+const STRIP_KEY = "data-post-key"
+
+/** `news#7` or `my_news_7` → `news`, `my_news`: a handle holds `_`, never `#`. */
+const channelOf = (el: Element) => {
+  const key = el.getAttribute(CITATION_ATTR) ?? el.getAttribute(STRIP_KEY) ?? ""
+  return key.slice(0, key.search(/[#_]\d+$/)).toLowerCase()
+}
+
+/** Mark one Channel's Citations and strip tiles while it is open. */
+function useChannelHighlight(channel: string | null) {
+  useEffect(() => {
+    if (!channel) return
+    const marked = [
+      ...document.querySelectorAll(`[${CITATION_ATTR}], [${STRIP_KEY}]`),
+    ].filter((el) => channelOf(el) === channel.toLowerCase())
+    for (const el of marked) el.setAttribute(HIGHLIGHT_ATTR, "")
+    return () => {
+      for (const el of marked) el.removeAttribute(HIGHLIGHT_ATTR)
+    }
+  }, [channel])
+}
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`
 
@@ -22,6 +49,7 @@ export function CoverageWall({
   workspace,
 }: {
   scopeChannels: string[]
+  /** Resolved: the wall waits for the lookup, so no card is still loading. */
   cited: CitedPost[]
   /** The frozen Scope's Post refs; null when none were recorded. */
   covered: ScopedPostRef[] | null | undefined
@@ -31,10 +59,21 @@ export function CoverageWall({
     () => coverageRows(scopeChannels, cited, covered),
     [scopeChannels, cited, covered],
   )
+  const wall = useRef<HTMLElement>(null)
+  // The last Channel opened stays named while its sheet animates out.
+  const [picked, setPicked] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const row = rows.find((r) => r.channelName === picked)
+  useChannelHighlight(open && row?.cited.length ? row.channelName : null)
+  const toggle = (name: string) => {
+    setOpen(!(open && picked === name))
+    setPicked(name)
+  }
   const citedChannels = rows.filter((r) => r.cited.length).length
   const outside = rows.filter((r) => r.outsideScope)
   return (
     <section
+      ref={wall}
       aria-labelledby="coverage-heading"
       className="mt-10 border-t border-app-ink/10 pt-6"
     >
@@ -45,10 +84,16 @@ export function CoverageWall({
         {`${citedChannels} of ${plural(rows.length, "channel")} cited`}
         {covered ? ` · ${plural(covered.length, "post")} used` : ""}
       </p>
+      {/* The column gap leaves room for a badge growing out to the right. */}
       <ul className="mt-4 flex flex-wrap gap-x-12 gap-y-4">
-        {rows.map((row) => (
-          <li key={row.channelName}>
-            <CoverageAvatar row={row} workspace={workspace} />
+        {rows.map((r) => (
+          <li key={r.channelName}>
+            <CoverageAvatar
+              row={r}
+              workspace={workspace}
+              pressed={open && picked === r.channelName}
+              onPress={() => toggle(r.channelName)}
+            />
           </li>
         ))}
       </ul>
@@ -74,16 +119,29 @@ export function CoverageWall({
           </span>
         )}
       </p>
+      <ChannelPostsSheet
+        row={row}
+        open={open && !!row}
+        onClose={() => setOpen(false)}
+        workspace={workspace}
+        wall={wall}
+      />
     </section>
   )
 }
 
+const RING = "ring-2 ring-offset-2 ring-offset-app-card"
+
 function CoverageAvatar({
   row,
   workspace,
+  pressed,
+  onPress,
 }: {
   row: CoverageRow
   workspace: CitationWorkspace
+  pressed: boolean
+  onPress: () => void
 }) {
   const name = row.channelName
   const label = [
@@ -91,13 +149,19 @@ function CoverageAvatar({
     ...(row.covered ? [`${row.covered.length} covered`] : []),
     ...(row.outsideScope ? ["outside the Scope"] : []),
   ].join(", ")
+  const ring = pressed
+    ? `${RING} ring-blue-500`
+    : row.outsideScope
+      ? `${RING} ring-amber-500`
+      : ""
   return (
     <button
       type="button"
       aria-label={label}
-      aria-pressed={false}
+      aria-pressed={pressed}
       title={name}
-      className={`relative block rounded-full ${row.cited.length ? "" : "opacity-50 grayscale"} ${row.outsideScope ? "ring-2 ring-amber-500 ring-offset-2 ring-offset-app-card" : ""}`}
+      onClick={onPress}
+      className={`relative block rounded-full ${row.cited.length ? "" : "opacity-50 grayscale"} ${ring}`}
     >
       <ChannelAvatar
         channel={workspace.channel(name) ?? { id: name, name }}
