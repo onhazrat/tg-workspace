@@ -191,6 +191,24 @@ def test_rows_left_out_are_dropped_from_freshly_generated_metadata(
     assert plan["metadataRows"][2]["value"] == "@news_ir, @tech"
 
 
+def test_posts_analyzed_is_the_covered_post_count_the_header_shows(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """Spec line 306: the Covered Post count, which the frozen Scope records
+    and the Summary header renders, rather than a separately stored count."""
+    summary_id = _summary("Body.")
+    with Session(engine) as session:
+        row = session.get(Summary, summary_id)
+        assert row is not None
+        row.scope = {**SCOPE, "scopedPostCount": 17}
+        session.add(row)
+        session.commit()
+
+    plan = _plan(client, superuser_token_headers, summary_id)
+
+    assert plan["metadataRows"][-1]["value"] == "17"
+
+
 def test_the_metadata_rides_in_the_first_part_when_it_fits(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:

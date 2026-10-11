@@ -68,10 +68,16 @@ def plan_publication(
     """
     prefs = load_publishing_settings(session, user_id)
     extra = summary.extra or {}
+    scope = FrozenScope.from_stored(summary.scope)
+    covered = scope.scoped_post_count if scope else None
     rows = metadata_rows(
-        scope=FrozenScope.from_stored(summary.scope),
+        scope=scope,
         model=summary.model or default_model(),
-        post_count=extra.get("postCount") or summary.post_count or 0,
+        # The Covered Post count the header shows; a Scope that recorded
+        # none falls back to the count stored beside it.
+        post_count=covered
+        if covered is not None
+        else extra.get("postCount") or summary.post_count or 0,
         time_zone=prefs.time_zone,
     )
     omitted = omitted_rows(extra)
