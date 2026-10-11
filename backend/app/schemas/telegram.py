@@ -45,18 +45,14 @@ class BotInfoRequest(ProxyConfig):
         return self
 
 
+# The free-text quick message. A credential id only: the raw `token` it used to
+# accept (local only, sent by no caller) has no place in the shared publish
+# service, which checks the credential before it decrypts it (SUMTAB-07).
 class PublishRequest(ProxyConfig):
-    credential_id: str | None = Field(None, alias="credentialId")
-    token: str | None = None
+    credential_id: str = Field(..., alias="credentialId")
     chat_id: str = Field(..., alias="chatId")
     text: str
     metadata_text: str | None = Field(None, alias="metadataText")
-
-    @model_validator(mode="after")
-    def require_credential_or_token(self) -> PublishRequest:
-        if not self.credential_id and not self.token:
-            raise ValueError("credentialId or token is required")
-        return self
 
 
 class TestProxyRequest(BaseModel):

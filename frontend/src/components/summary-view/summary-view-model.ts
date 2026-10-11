@@ -1,20 +1,9 @@
 /**
- * `SummaryView`'s decisions, with the network and the toasts passed in, so
- * they can be tested without its providers. `SummaryView` renders them.
+ * `SummaryView`'s decisions, so they can be tested without its providers.
+ * `SummaryView` renders them.
  */
-import { toast } from "sonner"
-
 import { isPendingSummary } from "@/constants"
-import { savePublishLog } from "@/lib/logs/write"
-import { publishedText } from "@/lib/summaries/summary-model"
-import { buildActiveProxies, type ProxySettings } from "@/lib/syncSettings"
-import { publishSummary } from "@/services/telegram"
-import type {
-  BotCredential,
-  ChatDestination,
-  Summary,
-  SummaryListItem,
-} from "@/types"
+import type { Summary, SummaryListItem } from "@/types"
 
 /** Which Summary is open, what its body is, and whether it is being made. */
 export function summaryViewState(input: {
@@ -59,78 +48,5 @@ export function summaryViewState(input: {
     running:
       input.summarizing ||
       (currentSummary ? input.regenerating.has(currentSummary.id) : false),
-  }
-}
-
-/** What a manual publish reaches for, injectable so a test sends nothing. */
-export interface PublishIo {
-  publish: typeof publishSummary
-  saveLog: typeof savePublishLog
-  notify: Pick<typeof toast, "success" | "error" | "warning">
-  now: () => number
-}
-
-const defaultIo: PublishIo = {
-  publish: publishSummary,
-  saveLog: savePublishLog,
-  notify: toast,
-  now: () => Date.now(),
-}
-
-/**
- * Publish from the Summary tab and file the publish log, success or not.
- * Offline refuses before sending anything; a thrown send is a toast, not a log.
- */
-export async function publishFromView(
-  run: {
-    bot: BotCredential
-    dest: ChatDestination
-    text: string
-    summaryId: string | null
-    metadata: string | null
-    isOffline: boolean
-    settings: ProxySettings & {
-      torAutoRotate: boolean
-      torRotationThreshold: number
-    }
-  },
-  io: PublishIo = defaultIo,
-): Promise<void> {
-  const { bot, dest, text, metadata, settings } = run
-  if (run.isOffline) {
-    io.notify.warning("Server offline — publish disabled.")
-    return
-  }
-  try {
-    const result = await io.publish(
-      bot.id,
-      dest.chatId,
-      text,
-      metadata ?? undefined,
-      buildActiveProxies(settings).length > 0,
-      settings.torAutoRotate,
-      settings.torRotationThreshold,
-    )
-    await io.saveLog({
-      id: io.now().toString() + Math.random().toString(36).substring(2, 7),
-      summaryId: run.summaryId || `manual-${io.now()}`,
-      botId: bot.id,
-      botName: bot.name,
-      chatId: dest.chatId,
-      chatName: dest.name,
-      status: result.success ? "success" : "failed",
-      error: result.error,
-      timestamp: io.now(),
-      fullRequest: result.requests,
-      fullResponse: result.responses,
-      textSent: publishedText(metadata, text),
-    })
-    if (result.success)
-      io.notify.success(`Successfully published using ${bot.name}!`)
-    else io.notify.error(`Error publishing: ${result.error}`)
-  } catch (e: unknown) {
-    io.notify.error(
-      `Error publishing: ${e instanceof Error ? e.message : String(e)}`,
-    )
   }
 }

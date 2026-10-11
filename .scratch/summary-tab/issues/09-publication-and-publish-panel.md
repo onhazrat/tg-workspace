@@ -13,7 +13,7 @@ See `.scratch/summary-tab/spec.md`, user stories 45-48, 62-66, 72 and 74-75, "Pu
 
 **Blocked by:** SUMTAB-08 (the settings and metadata generator the plan uses).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### Routes
 

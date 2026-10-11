@@ -28,13 +28,14 @@ from app.schemas.telegram_ops import (
 )
 from app.services.channel_photos import read_cached_photo
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
-from app.services.network import fetch_with_retry, parse_telegram_entities
+from app.services.network import fetch_with_retry
 from app.services.network_settings import (
     load_network_settings,
     resolve_proxies_for_user,
     resolve_proxy_concurrency,
 )
 from app.services.post_thumbnails import read_cached_thumb
+from app.services.publish import BotCredentialNotFound, publish_summary_text
 from app.services.scraper import (
     get_channel_info,
     resolve_start_time_to_id,
@@ -262,51 +263,27 @@ async def api_publish(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> PublishResponse:
-    token = _resolve_bot_token(
-        session, body.credential_id, body.token, current_user=current_user
-    )
-    target = f"https://api.telegram.org/bot{token}/sendMessage"
-    results: list[Any] = []
-    telemetry_logs: list[Any] = []
-
-    async def send_chunk(chunk: str) -> None:
-        parsed_text, entities = parse_telegram_entities(chunk)
-        payload: dict[str, Any] = {
-            "chat_id": body.chat_id,
-            "text": parsed_text,
-        }
-        if entities:
-            payload["entities"] = entities
-        data, telem = await fetch_with_retry(
-            target,
-            retries=settings.TELEGRAM_API_RETRIES,
-            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
+    try:
+        result = await publish_summary_text(
+            session,
+            acting_user_id=current_user.id,
+            credential_id=body.credential_id,
+            chat_id=body.chat_id,
+            text=body.text,
+            metadata_text=body.metadata_text,
             proxies=_resolve_proxies(body, session=session, user_id=current_user.id),
-            tor_auto_rotate=body.tor_auto_rotate,
-            tor_rotation_threshold=body.tor_rotation_threshold,
             proxy_concurrency=_resolve_proxy_concurrency(
                 body, session=session, user_id=current_user.id
             ),
-            method="POST",
-            json_body=payload,
+            tor_auto_rotate=body.tor_auto_rotate,
+            tor_rotation_threshold=body.tor_rotation_threshold,
         )
-        if isinstance(data, str):
-            import json
-
-            data = json.loads(data)
-        results.append(data)
-        telemetry_logs.append(telem)
-
-    try:
-        if body.metadata_text:
-            for i in range(0, len(body.metadata_text), 4000):
-                await send_chunk(body.metadata_text[i : i + 4000])
-        for i in range(0, len(body.text), 4000):
-            await send_chunk(body.text[i : i + 4000])
-        return PublishResponse(success=True, results=results, telemetry=telemetry_logs)
+    except BotCredentialNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("Publish request failed")
         raise HTTPException(status_code=500, detail="Publish request failed") from exc
+    return PublishResponse.model_validate(result)
 
 
 def _image_response(

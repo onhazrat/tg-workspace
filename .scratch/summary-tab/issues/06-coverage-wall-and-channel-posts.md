@@ -13,7 +13,7 @@ button, then "Also covered", loading 20 at a time. See `.scratch/summary-tab/spe
 
 **Blocked by:** SUMTAB-04 (Cited Post resolution, finding a Citation, and the highlight).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ### Wall
 

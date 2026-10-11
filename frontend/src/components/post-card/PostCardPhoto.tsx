@@ -52,7 +52,7 @@ export function PostCardPhoto({
 }
 
 /** The cached thumbnail as an object URL; null until loaded or after a failure. */
-function usePostThumbSrc(thumbApiPath: string) {
+export function usePostThumbSrc(thumbApiPath: string) {
   const [src, setSrc] = useState<string | null>(null)
 
   useEffect(() => {

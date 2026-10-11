@@ -83,6 +83,7 @@ from app.api.deps import (
     view_as_allows,
     view_as_elevation_refuses,
     view_as_refusal_detail,
+    view_as_spends,
 )
 from app.core import security
 from app.core.config import Settings, settings
@@ -413,6 +414,22 @@ def test_a_safe_method_on_a_spend_path_is_still_a_spend() -> None:
     )
 
 
+def test_a_path_parameter_in_an_inventory_matches_one_real_segment() -> None:
+    """SUMTAB-09 listed the first entries with a `{summary_id}` in them.
+
+    The sweeps above post the template itself, which a literal lookup would
+    also match, so this asserts a real id and that the match is one segment.
+    """
+    summary = f"{V1}/data/summaries/1791352620000"
+    assert view_as_spends(f"{summary}/publication")
+    assert not view_as_spends(f"{summary}/publication/plan")
+    assert not view_as_spends(f"{summary}/x/publication")
+    read_only = security.VIEW_AS_READ_ONLY
+    assert view_as_allows("POST", f"{summary}/publication/plan", mode=read_only)
+    assert not view_as_allows("POST", f"{summary}/publication", mode=read_only)
+    assert not view_as_allows("PUT", summary, mode=read_only)
+
+
 def test_every_spend_path_is_refused_to_an_elevated_session(
     client: TestClient,
     owner: tuple[User, dict[str, str]],
@@ -542,6 +559,7 @@ SPEND_SEAMS = frozenset(
     {
         "resolve_ai_key",
         "_resolve_bot_token",
+        "send_publication",
         "enqueue_sync_job",
         "create_follow_job",
         "metered",

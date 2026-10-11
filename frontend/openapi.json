@@ -3379,6 +3379,98 @@
         }
       }
     },
+    "/api/v1/data/summaries/{summary_id}/publication/plan": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Plan Summary Publication",
+        "description": "The Parts a Publication of this Summary would send, and its default metadata.",
+        "operationId": "data-plan_summary_publication",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PublicationOptions" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationPlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/publication": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Send Summary Publication",
+        "description": "Plan this Summary's Publication and send exactly those Parts.",
+        "operationId": "data-send_summary_publication",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicationSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSendResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/chat-sessions": {
       "get": {
         "tags": ["data"],
@@ -10379,6 +10471,89 @@
         "required": ["proxyUrl", "maxParallel", "inUse", "inCooldown"],
         "title": "ProxyLaneSnapshot"
       },
+      "PublicationOptions": {
+        "properties": {
+          "includeMetadata": {
+            "type": "boolean",
+            "title": "Includemetadata",
+            "default": false
+          },
+          "metadataInFirstPart": {
+            "type": "boolean",
+            "title": "Metadatainfirstpart",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "PublicationOptions",
+        "description": "What the publish panel chose; both off unless asked, as a send is."
+      },
+      "PublicationPartResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["metadata", "summary", "both"],
+            "title": "Kind"
+          },
+          "text": { "type": "string", "title": "Text" },
+          "length": { "type": "integer", "title": "Length" },
+          "cutInside": { "type": "boolean", "title": "Cutinside" }
+        },
+        "type": "object",
+        "required": ["kind", "text", "length", "cutInside"],
+        "title": "PublicationPartResponse"
+      },
+      "PublicationPlanResponse": {
+        "properties": {
+          "parts": {
+            "items": { "$ref": "#/components/schemas/PublicationPartResponse" },
+            "type": "array",
+            "title": "Parts"
+          },
+          "defaultMetadata": { "type": "string", "title": "Defaultmetadata" },
+          "limit": { "type": "integer", "title": "Limit" }
+        },
+        "type": "object",
+        "required": ["parts", "defaultMetadata", "limit"],
+        "title": "PublicationPlanResponse"
+      },
+      "PublicationSendRequest": {
+        "properties": {
+          "includeMetadata": {
+            "type": "boolean",
+            "title": "Includemetadata",
+            "default": false
+          },
+          "metadataInFirstPart": {
+            "type": "boolean",
+            "title": "Metadatainfirstpart",
+            "default": false
+          },
+          "botId": { "type": "string", "title": "Botid" },
+          "destinationId": { "type": "string", "title": "Destinationid" }
+        },
+        "type": "object",
+        "required": ["botId", "destinationId"],
+        "title": "PublicationSendRequest"
+      },
+      "PublicationSendResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["success", "failed"],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "partsSent": { "type": "integer", "title": "Partssent" },
+          "partsTotal": { "type": "integer", "title": "Partstotal" }
+        },
+        "type": "object",
+        "required": ["status", "error", "partsSent", "partsTotal"],
+        "title": "PublicationSendResponse"
+      },
       "PublishLogListItemResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -10462,14 +10637,7 @@
             "title": "Torrotationthreshold",
             "default": 10
           },
-          "credentialId": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Credentialid"
-          },
-          "token": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Token"
-          },
+          "credentialId": { "type": "string", "title": "Credentialid" },
           "chatId": { "type": "string", "title": "Chatid" },
           "text": { "type": "string", "title": "Text" },
           "metadataText": {
@@ -10478,7 +10646,7 @@
           }
         },
         "type": "object",
-        "required": ["chatId", "text"],
+        "required": ["credentialId", "chatId", "text"],
         "title": "PublishRequest"
       },
       "PublishResponse": {
@@ -10493,7 +10661,7 @@
         },
         "type": "object",
         "title": "PublishResponse",
-        "description": "Result of sending a summary, one entry per 4000-character chunk.\n\n`results` holds the raw Bot API replies \u2014 same reasoning as\n`BotInfoResponse`, so they stay untyped."
+        "description": "Result of sending a summary, one entry per Part sent.\n\n`results` holds the raw Bot API replies \u2014 same reasoning as\n`BotInfoResponse`, so they stay untyped."
       },
       "PurgeLogsResponse": {
         "properties": {

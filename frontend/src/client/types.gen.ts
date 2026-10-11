@@ -4764,6 +4764,106 @@ export type ProxyLaneSnapshot = {
 };
 
 /**
+ * PublicationOptions
+ *
+ * What the publish panel chose; both off unless asked, as a send is.
+ */
+export type PublicationOptions = {
+    /**
+     * Includemetadata
+     */
+    includeMetadata?: boolean;
+    /**
+     * Metadatainfirstpart
+     */
+    metadataInFirstPart?: boolean;
+};
+
+/**
+ * PublicationPartResponse
+ */
+export type PublicationPartResponse = {
+    /**
+     * Kind
+     */
+    kind: 'metadata' | 'summary' | 'both';
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Length
+     */
+    length: number;
+    /**
+     * Cutinside
+     */
+    cutInside: boolean;
+};
+
+/**
+ * PublicationPlanResponse
+ */
+export type PublicationPlanResponse = {
+    /**
+     * Parts
+     */
+    parts: Array<PublicationPartResponse>;
+    /**
+     * Defaultmetadata
+     */
+    defaultMetadata: string;
+    /**
+     * Limit
+     */
+    limit: number;
+};
+
+/**
+ * PublicationSendRequest
+ */
+export type PublicationSendRequest = {
+    /**
+     * Includemetadata
+     */
+    includeMetadata?: boolean;
+    /**
+     * Metadatainfirstpart
+     */
+    metadataInFirstPart?: boolean;
+    /**
+     * Botid
+     */
+    botId: string;
+    /**
+     * Destinationid
+     */
+    destinationId: string;
+};
+
+/**
+ * PublicationSendResponse
+ */
+export type PublicationSendResponse = {
+    /**
+     * Status
+     */
+    status: 'success' | 'failed';
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Partssent
+     */
+    partsSent: number;
+    /**
+     * Partstotal
+     */
+    partsTotal: number;
+};
+
+/**
  * PublishLogListItemResponse
  *
  * A publish log without `fullRequest` / `fullResponse` / `textSent`.
@@ -4876,11 +4976,7 @@ export type PublishRequest = {
     /**
      * Credentialid
      */
-    credentialId?: string | null;
-    /**
-     * Token
-     */
-    token?: string | null;
+    credentialId: string;
     /**
      * Chatid
      */
@@ -4898,7 +4994,7 @@ export type PublishRequest = {
 /**
  * PublishResponse
  *
- * Result of sending a summary, one entry per 4000-character chunk.
+ * Result of sending a summary, one entry per Part sent.
  *
  * `results` holds the raw Bot API replies — same reasoning as
  * `BotInfoResponse`, so they stay untyped.
@@ -9893,6 +9989,66 @@ export type DataUpsertTagRunResponses = {
 };
 
 export type DataUpsertTagRunResponse = DataUpsertTagRunResponses[keyof DataUpsertTagRunResponses];
+
+export type DataPlanSummaryPublicationData = {
+    body: PublicationOptions;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/publication/plan';
+};
+
+export type DataPlanSummaryPublicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPlanSummaryPublicationError = DataPlanSummaryPublicationErrors[keyof DataPlanSummaryPublicationErrors];
+
+export type DataPlanSummaryPublicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicationPlanResponse;
+};
+
+export type DataPlanSummaryPublicationResponse = DataPlanSummaryPublicationResponses[keyof DataPlanSummaryPublicationResponses];
+
+export type DataSendSummaryPublicationData = {
+    body: PublicationSendRequest;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/publication';
+};
+
+export type DataSendSummaryPublicationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSendSummaryPublicationError = DataSendSummaryPublicationErrors[keyof DataSendSummaryPublicationErrors];
+
+export type DataSendSummaryPublicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicationSendResponse;
+};
+
+export type DataSendSummaryPublicationResponse = DataSendSummaryPublicationResponses[keyof DataSendSummaryPublicationResponses];
 
 export type DataListChatSessionsData = {
     body?: never;

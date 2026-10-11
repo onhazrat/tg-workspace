@@ -15,26 +15,19 @@ from sqlmodel import Session, col, select
 
 from app.ai.registry import default_model, get_provider, is_credential_rejection
 from app.core.db import engine
-from app.models_tg import ChatDestination, Post, Summary, utc_now
+from app.models_tg import Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
 from app.schemas.scope import FrozenScope
 from app.services.ai_keys import Purpose, record_validation, resolve_ai_key
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
-from app.services.credentials import CHAT_DESTINATION_NOT_FOUND
 from app.services.follows import followed_channels_for
 from app.services.logs import upsert_llm_log, upsert_publish_log
-from app.services.network_settings import (
-    load_network_settings,
-    resolve_proxies,
-    resolve_proxy_concurrency,
-)
 from app.services.post_filters import apply_analysis_window
-from app.services.publish import publish_summary_text
+from app.services.publications import DestinationNotFound, send_publication
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import apply_summary_payload, derived_scope
 from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
-from app.services.tenancy import may_act_on
 
 logger = logging.getLogger(__name__)
 
@@ -260,34 +253,6 @@ def _scope_of(summary: Summary) -> FrozenScope | None:
     return FrozenScope.from_stored(summary.scope)
 
 
-def _default_metadata(summary: Summary, extra: dict[str, Any]) -> str:
-    """The metadata block published beside an auto-regenerated Summary.
-
-    A Summary with no frozen Scope says so rather than reporting the epoch
-    twice. `0`/`0` formats as `1970-01-01T00:00:00` in both halves of the range,
-    which is a *claim about which Posts this covered* and exactly the invented
-    window AW-07 exists to refuse — published, in this case, to a Telegram
-    channel. The browser's twin, `generateDefaultMetadataText`, answers "not
-    recorded" here, and the two halves of one message have to agree.
-    """
-    scope = _scope_of(summary)
-    channels = list(scope.channels) if scope else []
-    time_range = (
-        f"{datetime.utcfromtimestamp(scope.start / 1000).isoformat()} - "
-        f"{datetime.utcfromtimestamp(scope.end / 1000).isoformat()}"
-        if scope
-        else "not recorded"
-    )
-    return (
-        f"📊 *Analysis Metadata*\n"
-        f"🕒 *Time Range:* {time_range}\n"
-        f"📡 *Channels Used:* {len(channels)}\n"
-        f"📋 *Channel List:* {', '.join(f'@{c}' for c in channels)}\n"
-        f"🤖 *AI Model:* {summary.model or default_model()}\n"
-        f"📝 *Posts Analyzed:* {extra.get('postCount') or summary.post_count or 0}"
-    )
-
-
 def _summary_extra(s: Summary) -> dict[str, Any]:
     return s.extra or {}
 
@@ -494,7 +459,8 @@ async def _regenerate_one(
         "autoPublish": extra.get("autoPublish"),
         "publishBotId": extra.get("publishBotId"),
         "publishChatId": extra.get("publishChatId"),
-        "sendMetadata": extra.get("sendMetadata", True),
+        # Off unless set on explicitly (SUMTAB-09).
+        "sendMetadata": extra.get("sendMetadata") is True,
         "metadataText": extra.get("metadataText"),
         "postSearch": extra.get("postSearch"),
         "semanticSearchQuery": extra.get("semanticSearchQuery"),
@@ -536,49 +502,53 @@ async def _regenerate_one(
         and extra.get("publishChatId")
         and posts
     ):
-        await _auto_publish(
-            session, new_summary, new_extra, full_text, owner_id=owner_id
-        )
+        await _auto_publish(session, new_summary, owner_id=owner_id)
 
     return new_id
 
 
 async def _auto_publish(
-    session: Session,
-    summary: Summary,
-    extra: dict[str, Any],
-    full_text: str,
-    *,
-    owner_id: uuid.UUID,
+    session: Session, summary: Summary, *, owner_id: uuid.UUID
 ) -> None:
     """Publish a regenerated Summary, as its own owner and nobody else.
+
+    Planned and sent by `send_publication`, exactly as the Summary tab's
+    Publish does (SUMTAB-09): the owner's settings, the Summary's own
+    send-metadata flag (off unless set on explicitly), one publish log.
 
     Both ids come out of `Summary.extra`, which `upsert_summary` fills from
     unknown keys in the request body — so they are whatever the account that
     saved the Summary typed, not something the server chose. Resolving either by
     primary key alone let a Summary name another account's credential and
     destination, and the scheduler would decrypt that account's token and send
-    as its bot (ticket 33).
+    as its bot (ticket 33). `send_publication` refuses both before any decrypt.
 
     The acting owner is `owner_id`, the Summary's own owner, because there is
     no `current_user` out here. It arrives as a required keyword rather than
     being read off the row: ticket 21 made the caller's query select only owned
     Summaries, and passing the narrowed id is what carries that guarantee here
-    instead of re-deriving it from a column the type still calls optional. The credential half is checked inside `publish_summary_text`,
-    where the token is decrypted; this function owns the destination half,
-    which never reaches that service — only the `chat_id` string does.
+    instead of re-deriving it from a column the type still calls optional.
 
     A refusal writes a **failed publish log** rather than returning quietly.
     Nobody is watching the scheduler, so a silent return makes "auto-publish is
     misconfigured" and "auto-publish is off" the same observation. An absent
-    destination used to do exactly that; it now answers as the foreign one does,
-    with the same text, which is `assert_owner`'s rule that the body is the
-    other half of the answer.
+    destination answers as the foreign one does, with the same text, which is
+    `assert_owner`'s rule that the body is the other half of the answer.
     """
+    extra = _summary_extra(summary)
     bot_id = str(extra.get("publishBotId"))
     chat_dest_id = str(extra.get("publishChatId"))
-    dest = session.get(ChatDestination, chat_dest_id)
-    if not dest or not may_act_on(owner_id=dest.user_id, user_id=owner_id):
+    try:
+        await send_publication(
+            session,
+            summary,
+            user_id=owner_id,
+            bot_id=bot_id,
+            destination_id=chat_dest_id,
+            include_metadata=extra.get("sendMetadata") is True,
+            metadata_in_first_part=extra.get("metadataInFirstPart") is True,
+        )
+    except DestinationNotFound as exc:
         logger.warning(
             "Chat destination %s not available for auto-publish", chat_dest_id
         )
@@ -587,60 +557,16 @@ async def _auto_publish(
             summary,
             owner_id=owner_id,
             bot_id=bot_id,
-            # `chat_id` holds a **Telegram** chat id everywhere else in this
-            # function, and it is one of the columns the publish-log search
-            # covers. Putting the `ChatDestination` row id here instead would
-            # hide these refusals from an operator filtering by their real chat
-            # id, and hand anyone who did match one a value that looks like a
-            # chat id and is not. There is no Telegram chat id to record — that
-            # is the whole failure — so both columns stay empty and the row id
-            # travels in the error, where nothing parses it.
+            # `chat_id` holds a **Telegram** chat id everywhere else, and it is
+            # one of the columns the publish-log search covers. There is no
+            # Telegram chat id to record — that is the whole failure — so both
+            # columns stay empty and the row id travels in the error, where
+            # nothing parses it.
             chat_id="",
             chat_name="",
-            error=f"{CHAT_DESTINATION_NOT_FOUND}: {chat_dest_id}",
-            text_sent=full_text,
+            error=f"{exc}: {chat_dest_id}",
+            text_sent=summary.text,
         )
-        return
-
-    network = load_network_settings(session)
-    proxies = resolve_proxies(network)
-    proxy_concurrency = resolve_proxy_concurrency(network)
-    metadata = None
-    if extra.get("sendMetadata", True):
-        metadata = extra.get("metadataText") or _default_metadata(summary, extra)
-
-    try:
-        result = await publish_summary_text(
-            session,
-            acting_user_id=owner_id,
-            credential_id=bot_id,
-            chat_id=dest.chat_id,
-            text=full_text,
-            metadata_text=metadata,
-            proxies=proxies,
-            proxy_concurrency=proxy_concurrency,
-            tor_auto_rotate=bool(network.get("torAutoRotate")),
-            tor_rotation_threshold=int(network.get("torRotationThreshold") or 10),
-        )
-        text_sent = f"{metadata}\n\n{full_text}" if metadata else full_text
-        upsert_publish_log(
-            session,
-            {
-                "id": str(uuid.uuid4()),
-                "summary_id": summary.id,
-                "bot_id": bot_id,
-                "bot_name": bot_id,
-                "chat_id": dest.chat_id,
-                "chat_name": dest.name,
-                "status": "success",
-                "timestamp": int(time.time() * 1000),
-                "full_response": result,
-                "text_sent": text_sent,
-            },
-            owner_id,
-        )
-        session.commit()
-        touch_sync(session, "publish_logs")
     except Exception as exc:  # noqa: BLE001
         logger.exception("Auto-publish failed for summary %s", summary.id)
         _log_publish_failure(
@@ -648,10 +574,10 @@ async def _auto_publish(
             summary,
             owner_id=owner_id,
             bot_id=bot_id,
-            chat_id=dest.chat_id,
-            chat_name=dest.name,
+            chat_id="",
+            chat_name="",
             error=str(exc),
-            text_sent=full_text,
+            text_sent=summary.text,
         )
 
 

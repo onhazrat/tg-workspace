@@ -1,22 +1,12 @@
 /**
- * `SummaryView`'s two decisions. What is pinned: the list row wins over the
+ * `SummaryView`'s decision. What is pinned: the list row wins over the
  * detail fetch but the detail alone still opens a Summary, the live stream wins
- * over the stored text, and a manual publish logs every answer Telegram gives,
- * refuses while offline and turns a throw into a toast.
+ * over the stored text.
  */
-import { describe, expect, mock, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 
-import type {
-  BotCredential,
-  ChatDestination,
-  PublishLog,
-  Summary,
-} from "@/types"
-import {
-  type PublishIo,
-  publishFromView,
-  summaryViewState,
-} from "./summary-view-model"
+import type { Summary } from "@/types"
+import { summaryViewState } from "./summary-view-model"
 
 const saved = (over: Partial<Summary>): Summary => ({
   id: "s1",
@@ -81,105 +71,5 @@ describe("summaryViewState", () => {
     expect(live.isPending).toBe(false)
     expect(live.running).toBe(true)
     expect(state({ detail }).isPending).toBe(true)
-  })
-})
-
-const bot = { id: "b1", name: "Bot" } as BotCredential
-const dest = { chatId: "c1", name: "Chat" } as ChatDestination
-const settings = {
-  proxyEnabled: true,
-  defaultProxyUrls: "http://proxy:1",
-  torEnabled: false,
-  torMode: "auto" as const,
-  torProxyUrls: "",
-  torAutoRotate: true,
-  torRotationThreshold: 7,
-}
-
-function fakeIo(publish: PublishIo["publish"]) {
-  const logs: PublishLog[] = []
-  const io = {
-    publish: mock(publish),
-    saveLog: mock(async (log: PublishLog) => {
-      logs.push(log)
-    }),
-    notify: { success: mock(), error: mock(), warning: mock() },
-    now: () => 1000,
-  }
-  return { io, logs }
-}
-
-const run = {
-  bot,
-  dest,
-  text: "body",
-  summaryId: "s1",
-  metadata: "meta",
-  isOffline: false,
-  settings,
-}
-
-describe("publishFromView", () => {
-  test("offline sends nothing and says why", async () => {
-    const { io } = fakeIo(async () => ({ success: true }))
-    await publishFromView({ ...run, isOffline: true }, io as never)
-    expect(io.publish).not.toHaveBeenCalled()
-    expect(io.notify.warning).toHaveBeenCalledWith(
-      "Server offline — publish disabled.",
-    )
-  })
-
-  test("a success is sent with the metadata and routing, logged and toasted", async () => {
-    const { io, logs } = fakeIo(async () => ({ success: true }))
-    await publishFromView(run, io as never)
-    expect(io.publish).toHaveBeenCalledWith(
-      "b1",
-      "c1",
-      "body",
-      "meta",
-      true,
-      true,
-      7,
-    )
-    expect(logs[0]).toMatchObject({
-      summaryId: "s1",
-      botName: "Bot",
-      chatName: "Chat",
-      status: "success",
-      timestamp: 1000,
-      textSent: "meta\n\nbody",
-    })
-    expect(io.notify.success).toHaveBeenCalledWith(
-      "Successfully published using Bot!",
-    )
-  })
-
-  test("a refusal is logged as failed, and an unsaved summary is manual", async () => {
-    const { io, logs } = fakeIo(async () => ({ success: false, error: "nope" }))
-    await publishFromView(
-      { ...run, summaryId: null, metadata: null },
-      io as never,
-    )
-    expect(io.publish.mock.calls[0][3]).toBeUndefined()
-    expect(logs[0]).toMatchObject({
-      summaryId: "manual-1000",
-      status: "failed",
-      error: "nope",
-      textSent: "body",
-    })
-    expect(io.notify.error).toHaveBeenCalledWith("Error publishing: nope")
-  })
-
-  test("a throw is a toast and no log", async () => {
-    const { io, logs } = fakeIo(async () => {
-      throw new Error("down")
-    })
-    await publishFromView(run, io as never)
-    expect(logs).toEqual([])
-    expect(io.notify.error).toHaveBeenCalledWith("Error publishing: down")
-
-    const { io: io2 } = fakeIo(() => Promise.reject("raw"))
-    await publishFromView(run, io2 as never)
-    expect(io2.notify.error).toHaveBeenCalledWith("Error publishing: raw")
   })
 })

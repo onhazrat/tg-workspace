@@ -12,7 +12,7 @@ Account's zone ("Oct 7, 2026, 9:27 AM – 12:27 PM (Asia/Tehran, GMT+3:30) · 3h
 
 **Blocked by:** SUMTAB-07 (the Part builder these options feed).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Citation style, link previews and time zone are personal settings, each classified in the settings registry, and editable in Settings
 - [ ] The time zone is filled from the browser's IANA zone only while it is empty
