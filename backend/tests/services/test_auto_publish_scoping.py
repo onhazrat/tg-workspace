@@ -843,6 +843,48 @@ def test_the_scheduler_sends_the_parts_the_plan_returns(
     assert log.status == "success"
 
 
+def test_a_partial_scheduled_publication_is_left_for_a_person_to_finish(
+    session: Session,
+    user: User,
+    decrypt: _Spy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SUMTAB-10: recorded as partial like a manual one, and never resumed here.
+
+    The Summary tab offers it from the plan's `partial`; the scheduler's next
+    tick plans a new Publication of a new Summary rather than finishing this.
+    """
+    from app.services.publications import Partial, latest_partial
+
+    sent: list[str] = []
+
+    async def refuse_second(url: str, **kwargs: Any) -> tuple[Any, Any]:
+        if len(sent) == 1:
+            raise RuntimeError("Too Many Requests: retry after 30")
+        sent.append(kwargs["json_body"]["text"])
+        return {"ok": True}, {}
+
+    monkeypatch.setattr(publish_service, "fetch_with_retry", refuse_second)
+    paragraph = " ".join(["word"] * 600) + "."
+    _seed_bot(session, "bot-of-mine", user.id)
+    _seed_dest(session, "dest-of-mine", user.id)
+    summary = _seed_summary(session, user.id, _extra("bot-of-mine", "dest-of-mine"))
+    summary.text = "\n\n".join([paragraph] * 3)
+    session.add(summary)
+    session.commit()
+
+    asyncio.run(auto_summary._auto_publish(session, summary, owner_id=user.id))
+
+    assert sent == [paragraph]
+    [log] = _publish_logs(session, summary.id)
+    assert log.status == "failed"
+    assert log.error == "Too Many Requests: retry after 30"
+    assert log.full_request == {"parts": [paragraph] * 3, "partsSent": 1}
+    assert latest_partial(session, summary.id, user_id=user.id) == Partial(
+        id=log.id, parts_sent=1, parts_total=3
+    )
+
+
 def test_a_summary_with_no_metadata_flag_publishes_no_metadata(
     session: Session,
     user: User,

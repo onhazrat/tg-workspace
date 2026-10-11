@@ -68,7 +68,12 @@ export function SummaryPublishPanel({
     } catch (err) {
       toast.error(`Error publishing: ${errorText(err, "unknown error")}`)
     }
-    await queryClient.invalidateQueries({ queryKey: queryKeys.logs.publish })
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.logs.publish }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.publicationPlans(summary.id),
+      }),
+    ])
   }
 
   return (

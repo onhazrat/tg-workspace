@@ -1,6 +1,7 @@
 import { AlertTriangle, Pencil, RotateCcw, Send } from "lucide-react"
 import { useState } from "react"
 import type {
+  PartialPublicationResponse,
   PublicationOptions,
   PublicationPartResponse,
   PublicationPlanResponse,
@@ -55,6 +56,12 @@ export function PublishPanel(props: PublishPanelProps) {
         <Send size={14} />
         <h4 className="text-sm font-bold">Publish to Telegram</h4>
       </div>
+      {props.plan?.partial && (
+        <FinishPartial
+          partial={props.plan.partial}
+          onPublish={props.onPublish}
+        />
+      )}
       <PublishTarget {...props} />
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -123,6 +130,40 @@ function PublishTarget(p: PublishPanelProps) {
         {dest && p.plan
           ? `Publish ${partsLabel(p.plan.parts.length)} to ${dest.name}`
           : "Publish"}
+      </TgButton>
+    </div>
+  )
+}
+
+/** The last Publication stopped partway: send what it did not (SUMTAB-10). */
+function FinishPartial(p: {
+  partial: PartialPublicationResponse
+  onPublish: PublishPanelProps["onPublish"]
+}) {
+  const [sending, setSending] = useState(false)
+  const { id, partsSent, partsTotal } = p.partial
+  const send = async () => {
+    setSending(true)
+    try {
+      await p.onPublish({ publicationId: id })
+    } finally {
+      setSending(false)
+    }
+  }
+  return (
+    <div className="mb-4 flex flex-col gap-2 rounded-lg bg-amber-500/10 p-3 text-xs md:flex-row md:items-center md:justify-between">
+      <span className="flex items-center gap-1.5">
+        <AlertTriangle size={12} className="text-amber-600" />
+        Last Publication was partial: {partsSent} of {partsTotal} Parts sent
+      </span>
+      <TgButton
+        size="sm"
+        variant="primary"
+        loading={sending}
+        loadingLabel="Sending…"
+        onClick={send}
+      >
+        Send the remaining {partsTotal - partsSent}
       </TgButton>
     </div>
   )

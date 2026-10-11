@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PublicationOptions(BaseModel):
@@ -17,8 +17,18 @@ class PublicationOptions(BaseModel):
 
 
 class PublicationSendRequest(PublicationOptions):
-    bot_id: str = Field(alias="botId")
-    destination_id: str = Field(alias="destinationId")
+    """A new Publication names its bot and destination; a resume names only
+    the partial Publication, whose stored bot, chat and Parts it keeps."""
+
+    bot_id: str | None = Field(default=None, alias="botId")
+    destination_id: str | None = Field(default=None, alias="destinationId")
+    publication_id: str | None = Field(default=None, alias="publicationId")
+
+    @model_validator(mode="after")
+    def _names_a_target(self) -> PublicationSendRequest:
+        if self.publication_id is None and not (self.bot_id and self.destination_id):
+            raise ValueError("botId and destinationId are required")
+        return self
 
 
 class PublicationPartResponse(BaseModel):
@@ -33,6 +43,17 @@ class PublicationPartResponse(BaseModel):
     cut_inside: bool = Field(alias="cutInside")
 
 
+class PartialPublicationResponse(BaseModel):
+    """The Summary's latest Publication, stopped after some of its Parts."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    #: The publish-log row; given back as `publicationId` to send the rest.
+    id: str
+    parts_sent: int = Field(alias="partsSent")
+    parts_total: int = Field(alias="partsTotal")
+
+
 class PublicationPlanResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -40,6 +61,9 @@ class PublicationPlanResponse(BaseModel):
     #: The generated metadata, for the editor's rows and its reset.
     default_metadata: str = Field(alias="defaultMetadata")
     limit: int
+    #: Set when the Summary's latest Publication is partial, for the panel's
+    #: "Send the remaining K".
+    partial: PartialPublicationResponse | None
 
 
 class PublicationSendResponse(BaseModel):

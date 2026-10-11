@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.api.deps import CurrentUser, SessionDep
 from app.models_tg import Summary
 from app.schemas.publications import (
+    PartialPublicationResponse,
     PublicationOptions,
     PublicationPartResponse,
     PublicationPlanResponse,
@@ -14,7 +15,9 @@ from app.schemas.publications import (
 from app.services.publication_parts import TELEGRAM_MESSAGE_LIMIT
 from app.services.publications import (
     DestinationNotFound,
+    latest_partial,
     plan_publication,
+    resume_publication,
     send_publication,
 )
 from app.services.publish import BotCredentialNotFound
@@ -54,6 +57,15 @@ def plan_summary_publication(
         ],
         defaultMetadata=plan.default_metadata,
         limit=TELEGRAM_MESSAGE_LIMIT,
+        partial=(
+            PartialPublicationResponse(
+                id=partial.id,
+                partsSent=partial.parts_sent,
+                partsTotal=partial.parts_total,
+            )
+            if (partial := latest_partial(session, summary.id, user_id=current_user.id))
+            else None
+        ),
     )
 
 
@@ -66,21 +78,34 @@ async def send_summary_publication(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> PublicationSendResponse:
-    """Plan this Summary's Publication and send exactly those Parts."""
+    """Plan this Summary's Publication and send exactly those Parts.
+
+    Given `publicationId`, finish that partial Publication instead: only its
+    remaining stored Parts, to the bot and chat it started with.
+    """
     summary = session.get(Summary, summary_id)
     if summary is None:
         raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
     assert_owner_on_write(summary.user_id, current_user.id, detail=SUMMARY_NOT_FOUND)
     try:
-        outcome = await send_publication(
-            session,
-            summary,
-            user_id=current_user.id,
-            bot_id=body.bot_id,
-            destination_id=body.destination_id,
-            include_metadata=body.include_metadata,
-            metadata_in_first_part=body.metadata_in_first_part,
-        )
+        if body.publication_id is not None:
+            outcome = await resume_publication(
+                session,
+                summary,
+                user_id=current_user.id,
+                publication_id=body.publication_id,
+            )
+        else:
+            assert body.bot_id and body.destination_id  # the schema's validator
+            outcome = await send_publication(
+                session,
+                summary,
+                user_id=current_user.id,
+                bot_id=body.bot_id,
+                destination_id=body.destination_id,
+                include_metadata=body.include_metadata,
+                metadata_in_first_part=body.metadata_in_first_part,
+            )
     except (BotCredentialNotFound, DestinationNotFound) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return PublicationSendResponse(

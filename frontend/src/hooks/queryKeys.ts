@@ -27,6 +27,8 @@ export const queryKeys = {
   summaries: ["summaries"] as const,
   summary: (id: string) => ["summary", id] as const,
   /** The server's plan for one Summary's Publication, per option set (SUMTAB-09). */
+  /** Every plan of one Summary, whatever the options: a send changes `partial`. */
+  publicationPlans: (id: string) => ["publicationPlan", id] as const,
   publicationPlan: (id: string, options: unknown) =>
     ["publicationPlan", id, options] as const,
   dbStats: ["dbStats"] as const,

@@ -1450,6 +1450,9 @@ export const dataPlanSummaryPublication = <ThrowOnError extends boolean = true>(
  * Send Summary Publication
  *
  * Plan this Summary's Publication and send exactly those Parts.
+ *
+ * Given `publicationId`, finish that partial Publication instead: only its
+ * remaining stored Parts, to the bot and chat it started with.
  */
 export const dataSendSummaryPublication = <ThrowOnError extends boolean = true>(options: Options<DataSendSummaryPublicationData, ThrowOnError>) => (options.client ?? client).post<DataSendSummaryPublicationResponses, DataSendSummaryPublicationErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

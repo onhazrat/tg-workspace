@@ -40,6 +40,7 @@ const plan: PublicationPlanResponse = {
   ],
   defaultMetadata: DEFAULT_METADATA,
   limit: 4096,
+  partial: null,
 }
 
 function renderPanel(props: Partial<PublishPanelProps> = {}) {
@@ -211,6 +212,30 @@ describe("PublishPanel", () => {
       kind: "error",
       text: "Publishing stopped after 1 of 3 messages: chat not found",
     })
+  })
+
+  test("a partial last Publication offers to send exactly its remaining Parts", () => {
+    const { onPublish } = renderPanel({
+      bots: [],
+      plan: { ...plan, partial: { id: "log-1", partsSent: 2, partsTotal: 5 } },
+    })
+    expect(
+      screen.getByText("Last Publication was partial: 2 of 5 Parts sent"),
+    ).toBeTruthy()
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send the remaining 3" }),
+    )
+
+    expect(onPublish).toHaveBeenCalledWith({ publicationId: "log-1" })
+  })
+
+  test("with no partial Publication there is nothing to finish", () => {
+    renderPanel()
+    expect(screen.queryByText(/Last Publication was partial/)).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: /Send the remaining/ }),
+    ).toBeNull()
   })
 
   test("with no bot or destination it says where to add one", () => {

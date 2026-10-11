@@ -17,7 +17,7 @@ from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
 from app.services.network import fetch_with_retry, parse_telegram_entities
-from app.services.publication_parts import Part, PublishingSettings, build_parts
+from app.services.publication_parts import PublishingSettings, build_parts
 from app.services.settings_registry import PUBLISHING_KEY
 from app.services.tenancy import may_act_on
 from app.services.user_settings import get_user_setting
@@ -65,7 +65,12 @@ async def publish_summary_text(
         acting_user_id=acting_user_id,
         credential_id=credential_id,
         chat_id=chat_id,
-        parts=build_parts(text, metadata_text, citation_style=prefs.citation_style),
+        parts=[
+            p.text
+            for p in build_parts(
+                text, metadata_text, citation_style=prefs.citation_style
+            )
+        ],
         proxies=proxies,
         proxy_concurrency=proxy_concurrency,
         tor_auto_rotate=tor_auto_rotate,
@@ -79,7 +84,7 @@ async def send_parts(
     acting_user_id: uuid.UUID | None,
     credential_id: str,
     chat_id: str,
-    parts: Sequence[Part],
+    parts: Sequence[str],
     proxies: list[str] | None = None,
     proxy_concurrency: tuple[int, dict[str, int]] | None = None,
     tor_auto_rotate: bool = False,
@@ -168,7 +173,7 @@ async def send_parts(
 
     for part in parts:
         try:
-            await send_chunk(part.text)
+            await send_chunk(part)
         except Exception as exc:
             raise PartFailed(str(exc), sent=len(results)) from exc
 

@@ -3428,7 +3428,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Send Summary Publication",
-        "description": "Plan this Summary's Publication and send exactly those Parts.",
+        "description": "Plan this Summary's Publication and send exactly those Parts.\n\nGiven `publicationId`, finish that partial Publication instead: only its\nremaining stored Parts, to the bot and chat it started with.",
         "operationId": "data-send_summary_publication",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -9744,6 +9744,17 @@
         "required": ["token", "new_password"],
         "title": "NewPassword"
       },
+      "PartialPublicationResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "partsSent": { "type": "integer", "title": "Partssent" },
+          "partsTotal": { "type": "integer", "title": "Partstotal" }
+        },
+        "type": "object",
+        "required": ["id", "partsSent", "partsTotal"],
+        "title": "PartialPublicationResponse",
+        "description": "The Summary's latest Publication, stopped after some of its Parts."
+      },
       "PostCountsResponse": {
         "properties": {
           "counts": {
@@ -10511,10 +10522,16 @@
             "title": "Parts"
           },
           "defaultMetadata": { "type": "string", "title": "Defaultmetadata" },
-          "limit": { "type": "integer", "title": "Limit" }
+          "limit": { "type": "integer", "title": "Limit" },
+          "partial": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PartialPublicationResponse" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
-        "required": ["parts", "defaultMetadata", "limit"],
+        "required": ["parts", "defaultMetadata", "limit", "partial"],
         "title": "PublicationPlanResponse"
       },
       "PublicationSendRequest": {
@@ -10529,12 +10546,22 @@
             "title": "Metadatainfirstpart",
             "default": false
           },
-          "botId": { "type": "string", "title": "Botid" },
-          "destinationId": { "type": "string", "title": "Destinationid" }
+          "botId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Botid"
+          },
+          "destinationId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Destinationid"
+          },
+          "publicationId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Publicationid"
+          }
         },
         "type": "object",
-        "required": ["botId", "destinationId"],
-        "title": "PublicationSendRequest"
+        "title": "PublicationSendRequest",
+        "description": "A new Publication names its bot and destination; a resume names only\nthe partial Publication, whose stored bot, chat and Parts it keeps."
       },
       "PublicationSendResponse": {
         "properties": {

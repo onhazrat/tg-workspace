@@ -4148,6 +4148,26 @@ export type NewPassword = {
 };
 
 /**
+ * PartialPublicationResponse
+ *
+ * The Summary's latest Publication, stopped after some of its Parts.
+ */
+export type PartialPublicationResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Partssent
+     */
+    partsSent: number;
+    /**
+     * Partstotal
+     */
+    partsTotal: number;
+};
+
+/**
  * PostCountsResponse
  *
  * Per-channel Post counts for a scope, and how many were too new to judge.
@@ -4817,10 +4837,14 @@ export type PublicationPlanResponse = {
      * Limit
      */
     limit: number;
+    partial: PartialPublicationResponse | null;
 };
 
 /**
  * PublicationSendRequest
+ *
+ * A new Publication names its bot and destination; a resume names only
+ * the partial Publication, whose stored bot, chat and Parts it keeps.
  */
 export type PublicationSendRequest = {
     /**
@@ -4834,11 +4858,15 @@ export type PublicationSendRequest = {
     /**
      * Botid
      */
-    botId: string;
+    botId?: string | null;
     /**
      * Destinationid
      */
-    destinationId: string;
+    destinationId?: string | null;
+    /**
+     * Publicationid
+     */
+    publicationId?: string | null;
 };
 
 /**

@@ -401,3 +401,196 @@ def test_the_migration_turns_send_metadata_off_for_existing_summaries() -> None:
         assert on_row is not None and off_row is not None
         assert on_row.extra == {"metadataText": "kept"}
         assert off_row.extra == {"sendMetadata": False}
+
+
+# --------------------------------------------------------------------------
+# Partial Publications (SUMTAB-10)
+# --------------------------------------------------------------------------
+
+
+class _FlakyTelegram(_FakeTelegram):
+    """Refuses the `fail_at`-th request (1-based), then takes the rest."""
+
+    def __init__(self, fail_at: int) -> None:
+        super().__init__()
+        self.fail_at = fail_at
+        self.calls = 0
+
+    async def __call__(self, url: str, **kwargs: Any) -> tuple[Any, Any]:
+        self.calls += 1
+        if self.calls == self.fail_at:
+            raise RuntimeError("Too Many Requests: retry after 30")
+        return await super().__call__(url, **kwargs)
+
+
+def _five_paragraphs() -> list[str]:
+    # Each about 3,000 characters, so no two share a Part.
+    return [f"P{i} " + " ".join(["word"] * 600) + "." for i in range(1, 6)]
+
+
+@pytest.fixture
+def partial(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    target: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[str, _FlakyTelegram]:
+    """A Summary of five Parts whose Publication stopped at Part 3."""
+    flaky = _FlakyTelegram(fail_at=3)
+    monkeypatch.setattr(publish_service, "fetch_with_retry", flaky)
+    summary_id = _summary("\n\n".join(_five_paragraphs()))
+    r = _send(client, superuser_token_headers, summary_id, target)
+    assert r.status_code == 200, r.text
+    assert r.json()["partsSent"] == 2
+    return summary_id, flaky
+
+
+def test_a_failure_at_part_3_of_5_is_recorded_as_partial(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    partial: tuple[str, _FlakyTelegram],
+) -> None:
+    summary_id, flaky = partial
+
+    assert [t.split(" ", 1)[0] for t in flaky.texts] == ["P1", "P2"]
+    [log] = _logs(summary_id)
+    assert log.status == "failed"
+    assert log.error == "Too Many Requests: retry after 30"
+    assert log.full_request == {"parts": _five_paragraphs(), "partsSent": 2}
+    plan = _plan(client, superuser_token_headers, summary_id)
+    assert plan["partial"] == {"id": log.id, "partsSent": 2, "partsTotal": 5}
+
+
+def test_a_summary_with_no_partial_publication_offers_none(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    target: dict[str, str],
+    telegram: _FakeTelegram,
+) -> None:
+    summary_id = _summary("Body.")
+    assert _plan(client, superuser_token_headers, summary_id)["partial"] is None
+
+    _send(client, superuser_token_headers, summary_id, target)
+
+    assert _plan(client, superuser_token_headers, summary_id)["partial"] is None
+
+
+def test_resuming_sends_exactly_the_remaining_stored_parts_and_updates_the_row(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    partial: tuple[str, _FlakyTelegram],
+) -> None:
+    summary_id, flaky = partial
+    paragraphs = _five_paragraphs()
+    [log] = _logs(summary_id)
+    # Edited since: a resume sends what was planned, never re-planned text.
+    with Session(engine) as session:
+        row = session.get(Summary, summary_id)
+        assert row is not None
+        row.text = "Rewritten."
+        session.add(row)
+        session.commit()
+
+    r = _send(client, superuser_token_headers, summary_id, {"publicationId": log.id})
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "status": "success",
+        "error": None,
+        "partsSent": 5,
+        "partsTotal": 5,
+    }
+    assert flaky.texts == paragraphs
+    assert {b["chat_id"] for b in flaky.bodies} == {"-100777"}
+    [after] = _logs(summary_id)
+    assert after.id == log.id
+    assert after.status == "success"
+    assert after.error is None
+    assert after.full_request == {"parts": paragraphs, "partsSent": 5}
+    assert _plan(client, superuser_token_headers, summary_id)["partial"] is None
+
+
+def test_a_resume_that_fails_again_keeps_counting_from_where_it_stopped(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    partial: tuple[str, _FlakyTelegram],
+) -> None:
+    summary_id, flaky = partial
+    flaky.fail_at = flaky.calls + 2  # Part 4 is refused this time.
+    [log] = _logs(summary_id)
+
+    r = _send(client, superuser_token_headers, summary_id, {"publicationId": log.id})
+
+    assert r.json()["status"] == "failed"
+    assert r.json()["partsSent"] == 3
+    plan = _plan(client, superuser_token_headers, summary_id)
+    assert plan["partial"] == {"id": log.id, "partsSent": 3, "partsTotal": 5}
+
+
+def test_a_finished_publication_is_not_resumed(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    target: dict[str, str],
+    telegram: _FakeTelegram,
+) -> None:
+    summary_id = _summary("Body.")
+    _send(client, superuser_token_headers, summary_id, target)
+    [log] = _logs(summary_id)
+
+    r = _send(client, superuser_token_headers, summary_id, {"publicationId": log.id})
+
+    assert r.status_code == 409, r.text
+    assert len(telegram.bodies) == 1
+
+
+def test_someone_elses_publication_answers_as_absent_before_any_decrypt(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    normal_user_token_headers: dict[str, str],
+    partial: tuple[str, _FlakyTelegram],
+    decrypts: list[str],
+) -> None:
+    theirs, flaky = partial
+    [log] = _logs(theirs)
+    sent_before = len(flaky.bodies)
+    mine = _summary(owner=_normal_user_id())
+
+    through_theirs = _send(
+        client, normal_user_token_headers, theirs, {"publicationId": log.id}
+    )
+    through_mine = _send(
+        client, normal_user_token_headers, mine, {"publicationId": log.id}
+    )
+    absent = _send(client, normal_user_token_headers, mine, {"publicationId": "nope"})
+
+    assert through_theirs.status_code == 404
+    assert through_theirs.json()["detail"] == "Summary not found"
+    for r in (through_mine, absent):
+        assert r.status_code == 404, r.text
+        assert r.json()["detail"] == "Publication not found"
+    assert len(flaky.bodies) == sent_before
+    assert decrypts == []
+    [after] = _logs(theirs)
+    assert after.full_request == log.full_request
+
+
+def test_a_publication_is_resumed_only_through_its_own_summary(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    partial: tuple[str, _FlakyTelegram],
+) -> None:
+    summary_id, _ = partial
+    [log] = _logs(summary_id)
+
+    r = _send(client, superuser_token_headers, _summary(), {"publicationId": log.id})
+
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"] == "Publication not found"
+
+
+def test_a_new_publication_still_names_its_bot_and_destination(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    r = _send(client, superuser_token_headers, _summary(), {"botId": "pub-bot"})
+
+    assert r.status_code == 422, r.text
