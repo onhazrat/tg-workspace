@@ -1,11 +1,11 @@
 /**
- * PROTOTYPE variants D and E. Every plain row is drawn from the backend's
+ * PROTOTYPE variant E. Every plain row is drawn from the backend's
  * JSON Schema (`GET /proto/settings/schema`); the frontend keeps only a layout.
  * Configuration is folded in: `.env` policy knobs are rows, seeds sit in the
  * row they seed, everything else is read-only under its group for Admins. The
  * tools live in the System tab.
  *
- * E (`nested`) addresses every setting by a VS Code-style id from the backend,
+ * Every setting is addressed by a VS Code-style id from the backend,
  * `namespace.section.name` (`sync.schedule.intervalMinutes`): the layout
  * selects by id prefix, the second segment becomes a sub-heading, and search,
  * deep links (`?setting=<id>`) and "Copy setting id" all use it.
@@ -16,7 +16,6 @@ import { ChevronDown, Search, X } from "lucide-react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { headers } from "@/api/base"
-import { pillClass } from "@/components/PostFilterParts"
 import { Badge } from "@/components/ui/badge"
 import useAuth from "@/hooks/useAuth"
 import { useCanManageJobs } from "@/hooks/useJobsStatus"
@@ -24,7 +23,6 @@ import { cn } from "@/lib/utils"
 import type { ProtoPanelId } from "./model"
 import { AREA_LABEL, PAGES, PageView } from "./pages"
 import { ProtoPanel } from "./panels"
-import { useLook } from "./row-parts"
 import {
   fieldsOf,
   matchesField,
@@ -36,14 +34,12 @@ import {
 } from "./schema-settings"
 
 /** The only settings knowledge the frontend keeps: where things go. */
-export const LAYOUT: {
+const LAYOUT: {
   id: string
   label: string
   blurb: string
-  /** D: storage rows. */
+  /** Nested id prefixes, `"sync.*"`. */
   items: string[]
-  /** E: nested id prefixes. */
-  idItems: string[]
   panels: ProtoPanelId[]
 }[] = [
   {
@@ -51,7 +47,6 @@ export const LAYOUT: {
     label: "Appearance",
     blurb: "Kept per browser, so each device can look different.",
     items: ["appearance.*"],
-    idItems: ["appearance.*"],
     panels: [],
   },
   {
@@ -59,16 +54,14 @@ export const LAYOUT: {
     label: "AI",
     blurb:
       "Your models and language follow you; translation is deployment-wide.",
-    items: ["ai_prefs.*", "translation.*", "jobs.embeddingsEnabled"],
-    idItems: ["ai.*"],
+    items: ["ai.*"],
     panels: ["ai-keys"],
   },
   {
     id: "sync",
     label: "Channels & sync",
     blurb: "Your defaults for new follows, then the deployment's schedule.",
-    items: ["sync_prefs.*", "sync.*", "reach.*"],
-    idItems: ["sync.*"],
+    items: ["sync.*"],
     panels: ["setting-groups", "jobs"],
   },
   {
@@ -76,15 +69,13 @@ export const LAYOUT: {
     label: "Publishing",
     blurb: "How a Publication reads, and the bots that send it.",
     items: ["publishing.*"],
-    idItems: ["publishing.*"],
     panels: ["bots", "destinations", "quick-message"],
   },
   {
     id: "retention",
     label: "Retention",
     blurb: "How long your logs and the shared corpus are kept.",
-    items: ["retention_prefs.*", "retention.*"],
-    idItems: ["retention.*"],
+    items: ["retention.*"],
     panels: [],
   },
   {
@@ -92,7 +83,6 @@ export const LAYOUT: {
     label: "Network",
     blurb: "Proxies and Tor.",
     items: [],
-    idItems: [],
     panels: ["proxy", "tor"],
   },
   {
@@ -100,7 +90,6 @@ export const LAYOUT: {
     label: "Directory & Discover",
     blurb: "How the Directory harvest and Discover probes run.",
     items: [],
-    idItems: [],
     panels: [],
   },
   {
@@ -108,21 +97,19 @@ export const LAYOUT: {
     label: "Infrastructure",
     blurb: "Database, mail, secrets: what the app needs before it starts.",
     items: [],
-    idItems: [],
     panels: [],
   },
   {
     id: "access",
     label: "Access & sessions",
     blurb: "Were `.env` only. Now an Admin changes them without a redeploy.",
-    items: ["access.*", "sessions.*", "housekeeping.*"],
-    idItems: ["access.*", "system.*"],
+    items: ["access.*", "system.*"],
     panels: [],
   },
 ]
 
-export type ScopeFilter = SchemaScope | "all"
-export const SCOPE_CHIP: Record<SchemaScope, string> = {
+type ScopeFilter = SchemaScope | "all"
+const SCOPE_CHIP: Record<SchemaScope, string> = {
   device: "This browser",
   account: "My account",
   deployment: "Deployment",
@@ -135,7 +122,7 @@ interface EnvRow {
   configured: boolean
   codeDefault: unknown
   group: string
-  /** Variant E: the derived nested id, `network.fetch.retries`. */
+  /** The derived nested id, `network.fetch.retries`. */
   id: string
   seedOf: string | null
   kind: "policy" | "secret" | "bootstrap" | "startup" | "seed"
@@ -157,11 +144,10 @@ const show = (v: unknown) =>
   v === null || v === undefined || v === "" ? "not set" : JSON.stringify(v)
 
 /** A group's `.env` values, read-only, behind a disclosure. */
-export const EnvSection: React.FC<{
+const EnvSection: React.FC<{
   rows: EnvRow[]
   open: boolean
-  nested: boolean
-}> = ({ rows, open: forced, nested }) => {
+}> = ({ rows, open: forced }) => {
   const [open, setOpen] = useState(false)
   const expanded = open || forced
   return (
@@ -183,19 +169,17 @@ export const EnvSection: React.FC<{
           {rows.map((r) => (
             <div
               key={r.key}
-              id={nested ? `setting-${r.id}` : `setting-env-${r.key}`}
+              id={`setting-${r.id}`}
               className="flex items-start gap-4 px-4 py-2.5"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs font-semibold">
-                    {nested ? r.id : r.key}
+                    {r.id}
                   </span>
-                  {nested ? (
-                    <span className="font-mono text-[11px] text-app-ink/40">
-                      .env {r.key}
-                    </span>
-                  ) : null}
+                  <span className="font-mono text-[11px] text-app-ink/40">
+                    .env {r.key}
+                  </span>
                   <Badge variant="secondary">{KIND_LABEL[r.kind]}</Badge>
                 </div>
                 <p className="mt-0.5 text-[12px] text-app-ink/50">
@@ -253,17 +237,18 @@ const D_PAGES = PAGES.filter(
 )
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
-/**
- * Everything a layout needs: the groups with their filtered rows, the pages,
- * the filters' state. Variant E and the app-styled variants (I-K) share it.
- */
-export function useSettingsModel(nested: boolean) {
+export const VariantE: React.FC<{ highlightId: string | null }> = ({
+  highlightId,
+}) => {
+  const navigate = workspaceRoute.useNavigate()
   const { data: rows, error, isLoading } = useSettingsSchema()
   const isModified = useIsModified()
   const [query, setQuery] = useState("")
   const [scope, setScope] = useState<ScopeFilter>("all")
   const [modifiedOnly, setModifiedOnly] = useState(false)
+  const [active, setActive] = useState("appearance")
   const [pageId, setPageId] = useState<string | null>(null)
+  const scroller = useRef<HTMLDivElement>(null)
   const pages = D_PAGES
   const page = pages.find((p) => p.id === pageId)
   const isAdmin = useCanManageJobs()
@@ -282,9 +267,7 @@ export function useSettingsModel(nested: boolean) {
     (g) =>
       (g.id !== "access" || isAdmin) && (!ENV_ONLY_GROUPS.has(g.id) || isAdmin),
   ).map((g) => {
-    const all = nested
-      ? select(fields, g.idItems, true)
-      : select(fields, g.items)
+    const all = select(fields, g.items)
     return {
       group: g,
       env:
@@ -318,58 +301,6 @@ export function useSettingsModel(nested: boolean) {
     (g) => g.fields.length + g.panels.length + g.env.length > 0,
   )
   const modifiedTotal = groups.reduce((a, g) => a + g.modified, 0)
-  return {
-    rows,
-    error,
-    isLoading,
-    query,
-    setQuery,
-    scope,
-    setScope,
-    modifiedOnly,
-    setModifiedOnly,
-    pageId,
-    setPageId,
-    pages,
-    page,
-    isAdmin,
-    user,
-    seedByField,
-    visible,
-    modifiedTotal,
-  }
-}
-
-export type SettingsModel = ReturnType<typeof useSettingsModel>
-
-export const VariantD: React.FC<{
-  highlightId: string | null
-  /** Variant E: nested VS Code-style ids. */
-  nested?: boolean
-}> = ({ highlightId, nested = false }) => {
-  const navigate = workspaceRoute.useNavigate()
-  const [active, setActive] = useState("appearance")
-  const scroller = useRef<HTMLDivElement>(null)
-  const {
-    rows,
-    error,
-    isLoading,
-    query,
-    setQuery,
-    scope,
-    setScope,
-    modifiedOnly,
-    setModifiedOnly,
-    pageId,
-    setPageId,
-    pages,
-    page,
-    isAdmin,
-    user,
-    seedByField,
-    visible,
-    modifiedTotal,
-  } = useSettingsModel(nested)
 
   useEffect(() => {
     const root = scroller.current
@@ -558,9 +489,8 @@ export const VariantD: React.FC<{
                 </p>
                 <div className="divide-y divide-app-ink/5">
                   {fs.map((f, i) => {
-                    const section = nested ? sectionOf(f.id) : null
-                    const prev =
-                      i > 0 && nested ? sectionOf(fs[i - 1].id) : null
+                    const section = sectionOf(f.id)
+                    const prev = i > 0 ? sectionOf(fs[i - 1].id) : null
                     return (
                       <div key={f.key}>
                         {section && section !== prev ? (
@@ -573,8 +503,7 @@ export const VariantD: React.FC<{
                         ) : null}
                         <SchemaRow
                           field={f}
-                          nested={nested}
-                          highlighted={highlightId === (nested ? f.id : f.key)}
+                          highlighted={highlightId === f.id}
                           seed={seedByField[f.key]}
                         />
                       </div>
@@ -586,7 +515,6 @@ export const VariantD: React.FC<{
                   {env.length > 0 ? (
                     <EnvSection
                       rows={env}
-                      nested={nested}
                       open={
                         query.trim() !== "" ||
                         env.some((e) => e.id === highlightId)
@@ -604,13 +532,13 @@ export const VariantD: React.FC<{
 }
 
 /** `sync.schedule.intervalMinutes` → `schedule`; two-segment ids have none. */
-export function sectionOf(id: string): string | null {
+function sectionOf(id: string): string | null {
   const parts = id.split(".")
   return parts.length > 2 ? parts[1] : null
 }
 
 /** `newFollows` → `New follows`. */
-export function humanize(segment: string): string {
+function humanize(segment: string): string {
   const words = segment.replace(/([A-Z])/g, " $1").toLowerCase()
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
@@ -619,27 +547,20 @@ export const Chip: React.FC<{
   on: boolean
   onClick: () => void
   children: React.ReactNode
-}> = ({ on, onClick, children }) => {
-  const look = useLook()
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        look === "e"
-          ? cn(
-              "rounded-full border px-3 py-1 text-xs",
-              on
-                ? "border-app-ink bg-app-ink text-app-card"
-                : "border-app-ink/15 text-app-ink/70 hover:border-app-ink/40",
-            )
-          : pillClass(on)
-      }
-    >
-      {children}
-    </button>
-  )
-}
+}> = ({ on, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      "rounded-full border px-3 py-1 text-xs",
+      on
+        ? "border-app-ink bg-app-ink text-app-card"
+        : "border-app-ink/15 text-app-ink/70 hover:border-app-ink/40",
+    )}
+  >
+    {children}
+  </button>
+)
 
 /** Settings in a group that differ from their default. */
 export const ModifiedCount: React.FC<{ n: number; label?: boolean }> = ({

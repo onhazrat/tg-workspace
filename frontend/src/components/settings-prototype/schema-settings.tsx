@@ -17,20 +17,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { tgFieldClassName } from "@/components/ui/tg-input"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { TgToggle } from "@/components/ui/tg-toggle"
 import { useSettings } from "@/contexts/SettingsContext"
 import { valuesEqual } from "@/lib/settings/catalog"
 import { cn } from "@/lib/utils"
 import type { Scope as UiScope } from "./model"
-import {
-  DebouncedNumber,
-  humanizeValue,
-  ScopeBadge,
-  StartTime,
-  useFieldClass,
-  useLook,
-} from "./row-parts"
+import { DebouncedNumber, ScopeBadge, StartTime } from "./row-parts"
 
 export type SchemaScope = "device" | "account" | "deployment"
 export type Store = "browser" | "server" | "proto"
@@ -52,7 +46,7 @@ export interface SchemaRowDef {
   store: Store
   editable: boolean
   schema: { properties: Record<string, JsonProp> }
-  /** Variant E: each field's nested id, from the backend. */
+  /** Each field's nested id, from the backend. */
   ids?: Record<string, string>
 }
 
@@ -103,19 +97,16 @@ export function fieldsOf(rows: SchemaRowDef[]): SchemaField[] {
 
 /**
  * VS Code-style layout patterns: `"sync.*"` or `"jobs.embeddingsEnabled"`.
- * By storage row (variant D) or by nested id prefix (variant E).
+ * Matched on the nested id.
  */
 export function select(
   fields: SchemaField[],
   patterns: string[],
-  byId = false,
 ): SchemaField[] {
   return patterns.flatMap((p) =>
     p.endsWith(".*")
-      ? fields.filter((f) =>
-          byId ? f.id.startsWith(p.slice(0, -1)) : f.row.row === p.slice(0, -2),
-        )
-      : fields.filter((f) => (byId ? f.id : f.key) === p),
+      ? fields.filter((f) => f.id.startsWith(p.slice(0, -1)))
+      : fields.filter((f) => f.id === p),
   )
 }
 
@@ -187,10 +178,8 @@ export const SchemaRow: React.FC<{
   field: SchemaField
   highlighted?: boolean
   seed?: Seed
-  /** Variant E: address the row by its nested id. */
-  nested?: boolean
-}> = ({ field: f, highlighted, seed, nested = false }) => {
-  const address = nested ? f.id : f.key
+}> = ({ field: f, highlighted, seed }) => {
+  const address = f.id
   const [value, write, source] = useFieldValue(f)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -221,176 +210,10 @@ export const SchemaRow: React.FC<{
   }
 
   useEffect(() => setError(null), [value])
-  const look = useLook()
-  const title = f.prop.title ?? f.name
-  const isStart = f.name === "globalStartTimeMode"
-
-  const status = (
-    <>
-      {modified ? (
-        <span className="text-[11px] text-amber-600 dark:text-amber-400">
-          Modified
-        </span>
-      ) : null}
-      {saved ? (
-        <span className="inline-flex items-center gap-0.5 text-[11px] text-emerald-600">
-          <Check size={11} /> Saved
-        </span>
-      ) : null}
-    </>
-  )
-  const meta = [
-    address,
-    nested ? `stored as ${f.key}` : "",
-    source ?? "",
-    seed
-      ? seeded
-        ? `default ${JSON.stringify(seed.value)} from ${seed.key} (${seed.source})`
-        : `default from ${seed.key}, not set, so ${JSON.stringify(f.prop.default)}`
-      : "",
-    f.row.store === "proto"
-      ? "prototype store, the live app does not read it yet"
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" · ")
-  const control = isStart ? null : (
-    <div className={cn("shrink-0", locked && "pointer-events-none opacity-50")}>
-      <JsonControl field={f} value={value} onChange={set} />
-    </div>
-  )
-  const startTime = isStart ? (
-    <div className={cn("mt-3", locked && "pointer-events-none opacity-50")}>
-      <StartTime />
-    </div>
-  ) : null
-  const errorLine = error ? (
-    <p className="mt-1 text-[11px] text-red-500">{error}</p>
-  ) : null
-  const menu = (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label={`Options for ${title}`}
-        className="mt-0.5 rounded p-1 text-app-ink/40 hover:bg-app-ink/5 hover:text-app-ink"
-      >
-        <MoreHorizontal size={16} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          disabled={!modified || locked}
-          onClick={() => set(f.prop.default)}
-        >
-          <RotateCcw size={14} /> Reset to default ({String(f.prop.default)})
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={async () => {
-            await navigator.clipboard.writeText(address)
-            toast.success("Copied setting id")
-          }}
-        >
-          Copy setting id
-        </DropdownMenuItem>
-        {nested ? (
-          <DropdownMenuItem
-            onClick={async () => {
-              const url = new URL(window.location.href)
-              url.searchParams.set("setting", f.id)
-              await navigator.clipboard.writeText(url.toString())
-              toast.success("Copied link")
-            }}
-          >
-            Copy link to setting
-          </DropdownMenuItem>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-  const id = `setting-${address}`
-
-  if (look === "action")
-    // The Action tab's row: name on a fixed column, the rest in a second,
-    // the control in the column every row's control shares.
-    return (
-      <div
-        id={id}
-        className={cn(
-          "scroll-mt-28 p-4",
-          highlighted && "bg-amber-500/10",
-          error && "bg-red-500/5",
-        )}
-      >
-        <div className="grid items-start gap-x-6 gap-y-2 md:grid-cols-[18rem_minmax(0,1fr)_auto]">
-          <div className="min-w-0">
-            <h4 className="flex items-center gap-1.5 text-sm font-bold">
-              {modified ? (
-                <span
-                  title="Changed from the default"
-                  className="size-1.5 shrink-0 rounded-full bg-amber-500"
-                />
-              ) : null}
-              {title}
-            </h4>
-            {f.prop.description ? (
-              <p className="text-[11px] leading-snug text-app-ink/60">
-                {f.prop.description}
-              </p>
-            ) : null}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <ScopeBadge scope={UI_SCOPE[f.row.scope]} locked={locked} />
-              {status}
-            </div>
-            <p
-              className="mt-1 truncate font-mono text-[10px] text-app-ink/35"
-              title={meta}
-            >
-              {meta}
-            </p>
-            {errorLine}
-          </div>
-          <div className="flex items-start justify-end gap-1">
-            {control}
-            {menu}
-          </div>
-        </div>
-        {startTime}
-      </div>
-    )
-
-  if (look === "compact")
-    // A Channels card line: name and control, the rest on hover.
-    return (
-      <div
-        id={id}
-        title={[f.prop.description, meta].filter(Boolean).join("\n")}
-        className={cn(
-          "scroll-mt-28 px-4 py-2",
-          highlighted && "bg-amber-500/10",
-          error && "bg-red-500/5",
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs font-semibold">
-            {modified ? (
-              <span className="size-1.5 shrink-0 rounded-full bg-amber-500" />
-            ) : null}
-            <span className="truncate">{title}</span>
-            {locked ? (
-              <ScopeBadge scope={UI_SCOPE[f.row.scope]} locked />
-            ) : null}
-          </span>
-          {control}
-          {menu}
-        </div>
-        {errorLine}
-        {startTime}
-      </div>
-    )
 
   return (
     <div
-      id={id}
+      id={`setting-${address}`}
       className={cn(
         "relative scroll-mt-28 border-l-2 border-transparent py-4 pl-4 pr-2",
         modified && "border-l-amber-500/80",
@@ -401,24 +224,94 @@ export const SchemaRow: React.FC<{
       <div className="flex items-start gap-6">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold">{title}</span>
+            <span className="text-sm font-semibold">
+              {f.prop.title ?? f.name}
+            </span>
             <ScopeBadge scope={UI_SCOPE[f.row.scope]} locked={locked} />
-            {status}
+            {modified ? (
+              <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                Modified
+              </span>
+            ) : null}
+            {saved ? (
+              <span className="inline-flex items-center gap-0.5 text-[11px] text-emerald-600">
+                <Check size={11} /> Saved
+              </span>
+            ) : null}
           </div>
           {f.prop.description ? (
             <p className="mt-1 text-[13px] leading-snug text-app-ink/60">
               {f.prop.description}
             </p>
           ) : null}
-          <p className="mt-1 font-mono text-[11px] text-app-ink/35">{meta}</p>
+          <p className="mt-1 font-mono text-[11px] text-app-ink/35">
+            {address}
+            {` · stored as ${f.key}`}
+            {source ? ` · ${source}` : ""}
+            {seed
+              ? seeded
+                ? ` · default ${JSON.stringify(seed.value)} from ${seed.key} (${seed.source})`
+                : ` · default from ${seed.key}, not set, so ${JSON.stringify(f.prop.default)}`
+              : ""}
+            {f.row.store === "proto"
+              ? " · prototype store, the live app does not read it yet"
+              : ""}
+          </p>
           {error ? (
             <p className="mt-1 text-[13px] text-red-500">{error}</p>
           ) : null}
         </div>
-        {control}
-        {menu}
+        {f.name !== "globalStartTimeMode" ? (
+          <div
+            className={cn(
+              "shrink-0",
+              locked && "pointer-events-none opacity-50",
+            )}
+          >
+            <JsonControl field={f} value={value} onChange={set} />
+          </div>
+        ) : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Options for ${f.prop.title}`}
+            className="mt-0.5 rounded p-1 text-app-ink/40 hover:bg-app-ink/5 hover:text-app-ink"
+          >
+            <MoreHorizontal size={16} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              disabled={!modified || locked}
+              onClick={() => set(f.prop.default)}
+            >
+              <RotateCcw size={14} /> Reset to default ({String(f.prop.default)}
+              )
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                await navigator.clipboard.writeText(address)
+                toast.success("Copied setting id")
+              }}
+            >
+              Copy setting id
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                const url = new URL(window.location.href)
+                url.searchParams.set("setting", f.id)
+                await navigator.clipboard.writeText(url.toString())
+                toast.success("Copied link")
+              }}
+            >
+              Copy link to setting
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      {startTime}
+      {f.name === "globalStartTimeMode" ? (
+        <div className={cn("mt-3", locked && "pointer-events-none opacity-50")}>
+          <StartTime />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -431,9 +324,6 @@ const JsonControl: React.FC<{
 }> = ({ field: f, value, onChange }) => {
   const { prop } = f
   const label = prop.title ?? f.name
-  const look = useLook()
-  const fieldClass = useFieldClass()
-  const optionLabel = (v: string) => (look === "e" ? v : humanizeValue(v))
   if (f.name === "selectedModel" || f.name === "translationModel") {
     return (
       <div className="w-72">
@@ -453,21 +343,18 @@ const JsonControl: React.FC<{
         aria-label={label}
         value={String(value)}
         onChange={(v) => onChange(v)}
-        options={prop.enum.map((v) => ({ value: v, label: optionLabel(v) }))}
-        optionClassName={
-          look === "e" ? undefined : "normal-case tracking-normal text-[11px]"
-        }
+        options={prop.enum.map((v) => ({ value: v, label: v }))}
       />
     ) : (
       <select
         aria-label={label}
         value={String(value)}
         onChange={(e) => onChange(e.target.value)}
-        className={cn(fieldClass, "w-56 text-sm normal-case")}
+        className={cn(tgFieldClassName, "w-56 text-sm normal-case")}
       >
         {prop.enum.map((v) => (
           <option key={v} value={v} className="bg-app-card text-app-ink">
-            {optionLabel(v)}
+            {v}
           </option>
         ))}
       </select>
@@ -511,7 +398,6 @@ const TextField: React.FC<{
   onCommit: (v: string) => void
 }> = ({ value, label, onCommit }) => {
   const [draft, setDraft] = useState(value)
-  const fieldClass = useFieldClass()
   useEffect(() => setDraft(value), [value])
   return (
     <input
@@ -519,7 +405,10 @@ const TextField: React.FC<{
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => draft !== value && onCommit(draft)}
-      className={cn(fieldClass, "w-56 text-sm normal-case tracking-normal")}
+      className={cn(
+        tgFieldClassName,
+        "w-56 text-sm normal-case tracking-normal",
+      )}
     />
   )
 }

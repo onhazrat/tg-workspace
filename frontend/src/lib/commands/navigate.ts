@@ -23,7 +23,7 @@ function flattenToc(
 
 export function buildNavigateCommands(): CommandDef[] {
   const workspaceCommands = WORKSPACE_TABS.filter(
-    (tab) => tab.id !== "system", // PROTOTYPE: variant D only
+    (tab) => tab.id !== "system", // PROTOTYPE: variant E only
   ).map((tab) => ({
     id: `navigate-tab-${tab.id}`,
     kind: "action" as const,

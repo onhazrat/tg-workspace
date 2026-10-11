@@ -18,7 +18,7 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { JOB_LABELS, useJobToggles } from "@/hooks/useJobToggles"
 import { cn } from "@/lib/utils"
 import { PANEL_INFO, type ProtoPanelId } from "./model"
-import { ScopeBadge, useCanWrite, useLook } from "./row-parts"
+import { ScopeBadge, useCanWrite } from "./row-parts"
 
 const Jobs: React.FC = () => {
   const { jobStatus, refreshJobStatus, toggleJob } = useJobToggles()
@@ -85,25 +85,6 @@ export const ProtoPanel: React.FC<{
   const info = PANEL_INFO[id]
   const canWrite = useCanWrite(info.scope)
   const Body = PANEL_BODY[id]
-  const look = useLook()
-  if (look !== "e" && !bare)
-    // Action-row header over the production panel, padded like a row.
-    return (
-      <section id={`proto-panel-${id}`} className="scroll-mt-28 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <h4 className="text-sm font-bold">{info.label}</h4>
-          <ScopeBadge scope={info.scope} locked={!canWrite} />
-        </div>
-        <p className="-mt-2 mb-3 text-[11px] text-app-ink/60">{info.blurb}</p>
-        {canWrite ? (
-          <Body />
-        ) : (
-          <p className="rounded-lg border border-dashed border-app-ink/15 p-4 text-[11px] text-app-ink/60">
-            Your Admin manages this for the whole deployment.
-          </p>
-        )}
-      </section>
-    )
   return (
     <section
       id={`proto-panel-${id}`}

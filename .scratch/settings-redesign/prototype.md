@@ -183,3 +183,9 @@ those primitives through a `LookContext` (`app-skins.tsx`):
 Still old-style inside all three: the production panels (AI keys, proxies, bots,
 start time) and the Account/Admin page bodies (Users table, profile form).
 Folding in means restyling those to the same primitives.
+
+## Round 9: only 0 and E remain
+
+D, and the app-styled F, G, H, are dropped. E is the one redesign left: its
+component is `VariantE.tsx`, always addressed by nested ids (the storage-row
+layout D used is gone). F, G and H stay in history at 708da088.

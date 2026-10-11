@@ -1,5 +1,5 @@
 /**
- * PROTOTYPE (settings redesign, variant D), throwaway. The tools that left
+ * PROTOTYPE (settings redesign, variant E), throwaway. The tools that left
  * Settings, as a workspace tab of their own. Logs are for everyone (an account
  * reads its own publish, LLM and embedding logs today); the rest is Admin-only.
  * Each body is the production section, unchanged.
@@ -69,10 +69,10 @@ export const SystemTabPrototype: React.FC = () => {
     if (loadsDbStats(tool.id)) void loadDBStats()
   }, [tool.id, loadDBStats])
 
-  if (!"DEFGH".includes(variant || "0"))
+  if (variant !== "E")
     return (
       <p className="p-8 text-sm text-app-ink/50">
-        The System tab belongs to settings prototype variants D to H.
+        The System tab belongs to settings prototype variant E.
       </p>
     )
 

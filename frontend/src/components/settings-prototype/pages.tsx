@@ -167,24 +167,6 @@ export const AREA_LABEL: Record<PageArea, string> = {
   admin: "Admin",
 }
 
-/** A page's content without its header, for hosts that frame it themselves. */
-export const PageBody: React.FC<{ page: ProtoPage }> = ({ page }) => {
-  const loadDBStats = useLoadDBStats()
-  useEffect(() => {
-    if (page.section && loadsDbStats(page.section)) void loadDBStats()
-  }, [page, loadDBStats])
-  const Body = page.body
-  return (
-    <div className={cn(page.section && sectionThemeClass(page.section))}>
-      {Body ? (
-        <Body />
-      ) : page.section ? (
-        SETTINGS_SECTION_CONTENT[page.section]({ highlightId: null })
-      ) : null}
-    </div>
-  )
-}
-
 export const PageView: React.FC<{ page: ProtoPage; onBack: () => void }> = ({
   page,
   onBack,
