@@ -62,22 +62,6 @@ const PANEL_SCOPE: Record<string, Scope> = {
   "panel-publication-options": "account",
 }
 
-/** Catalog ids that read as "advanced": tuning most people never touch. */
-export const ADVANCED_IDS = new Set([
-  "showChannelTelegramChatId",
-  "showChannelStartId",
-  "dynamicSyncExpectedPostsDefault",
-  "syncFailureBackoffMinutes",
-  "settlingAgeHours",
-  "estimationFloorHours",
-  "reachSampleSize",
-  "curveRefitIntervalHours",
-  "aiTemperature",
-  "embeddingsPaused",
-  "reportRetentionMax",
-  "sharedLogRetentionDays",
-])
-
 /** Settings drawn by a bespoke control or panel rather than a plain row. */
 export const NOT_A_ROW = new Set(["globalStartTimeValue"])
 

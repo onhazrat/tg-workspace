@@ -2,6 +2,9 @@
 
 Status: needs-triage
 
+Verdict (2026-10-11): **A wins.** B (scope-first tabs) and C (overview + drawer)
+were dropped and deleted from the branch; the earlier commit 3bfbaa14 still has them.
+
 Question: what should the workspace Settings tab look like once scope (browser /
 account / deployment) is first-class, tools leave it, and every plain setting
 uses one row?
@@ -14,8 +17,7 @@ search param.
 |---|---|---|
 | 0 | main, unchanged | |
 | A | one scrolling list, scroll-spy tree, search + scope chips + "Modified only" | VS Code |
-| B | top-level tabs by scope; account absorbs `/settings`; deployment edits collect into a draft with an explicit "Save for everyone" bar | Zed, VS Code User/Workspace |
-| C | one-sentence summary per area, edit in a side drawer, advanced settings behind a disclosure, tools in an Admin "System" strip | Home Assistant, GitLab |
+| B, C | dropped, see verdict | |
 
 Shared: `model.ts` derives each setting's scope from where it is stored
 (`schema.ts` section + the backend's SYNC_PREF_FIELDS / RETENTION_PREF_FIELDS);
@@ -42,5 +44,4 @@ Open `/workspace?tab=settings&variant=A` and log in; the pink bar (or ← →) s
 ## Not covered
 
 - `payloadRetentionDays` and the bulk re-sync button have no row in A/B/C.
-- Deployment panels (proxies, Tor, jobs) keep their own save flows in B.
 - The "moved to System" tools are listed, not mounted anywhere new.
