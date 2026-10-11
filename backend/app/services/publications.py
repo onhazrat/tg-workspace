@@ -94,6 +94,20 @@ class DestinationNotFound(ValueError):
     """Absent or someone else's, answered alike so ids cannot be probed."""
 
 
+def resolve_destination(
+    session: Session, destination_id: str, *, user_id: uuid.UUID
+) -> ChatDestination:
+    """`user_id`'s destination by id, or `DestinationNotFound`.
+
+    Its own function so the scheduler can name the chat in a failed publish
+    log whenever the destination resolved, whatever failed after it.
+    """
+    dest = session.get(ChatDestination, destination_id)
+    if not dest or not may_act_on(owner_id=dest.user_id, user_id=user_id):
+        raise DestinationNotFound(CHAT_DESTINATION_NOT_FOUND)
+    return dest
+
+
 @dataclass(frozen=True)
 class Outcome:
     status: Literal["success", "failed"]
@@ -119,9 +133,7 @@ async def send_publication(
     anything is logged. A Part Telegram refuses stops the send; the log row
     records it as failed with every planned Part's text.
     """
-    dest = session.get(ChatDestination, destination_id)
-    if not dest or not may_act_on(owner_id=dest.user_id, user_id=user_id):
-        raise DestinationNotFound(CHAT_DESTINATION_NOT_FOUND)
+    dest = resolve_destination(session, destination_id, user_id=user_id)
     parts = plan_publication(
         session,
         summary,
@@ -229,6 +241,7 @@ async def _deliver(
         responses += result["results"]
     except PartFailed as exc:
         outcome = Outcome("failed", str(exc), already_sent + exc.sent, len(parts))
+        responses += exc.responses
     bot = session.get(BotCredential, bot_id)
     upsert_publish_log(
         session,

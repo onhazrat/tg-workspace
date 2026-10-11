@@ -1,22 +1,27 @@
 """SUMTAB-08: the Account's Publishing settings shape every send.
 
 Three personal settings live under the `publishing` key: the citation style,
-link previews and the time zone. They are read where the token is decrypted,
-in `publish_summary_text`, so the quick message, the Summary tab and the
-scheduler all apply them without being told. Driven through
-`POST /telegram/publish` with the outbound Telegram call faked, asserting what
-Telegram would receive.
+link previews and the time zone. Link previews are read where the token is
+decrypted, in `send_parts`, so every send applies them; the citation style
+is applied to Publications and never to the hand-typed quick message. Driven
+through the Publication route and `POST /telegram/publish` with the outbound
+Telegram call faked, asserting what Telegram would receive.
 """
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
+from app import crud
 from app.core.config import settings
+from app.core.db import engine
+from app.models_tg import Summary
 from app.services import publish as publish_service
 from app.services.telegram_web import telegram_web_base_url
 
@@ -88,6 +93,49 @@ def _publish(
     assert r.status_code == 200, r.text
 
 
+def _publish_summary(
+    client: TestClient,
+    headers: dict[str, str],
+    text: str,
+    metadata_text: str | None = None,
+) -> None:
+    """Publish a Summary of `text`, its metadata the hand-written text given."""
+    r = client.put(
+        f"{DATA}/chat-destinations/settings-dest",
+        json={"name": "Desk", "chatId": "-100123"},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    summary_id = f"settings-{uuid.uuid4()}"
+    with Session(engine) as session:
+        owner = crud.get_user_by_email(session=session, email=settings.FIRST_SUPERUSER)
+        assert owner is not None
+        session.add(
+            Summary(
+                id=summary_id,
+                user_id=owner.id,
+                text=text,
+                language="en",
+                model="m",
+                post_count=1,
+                timestamp=0,
+                extra={"metadataText": metadata_text} if metadata_text else {},
+            )
+        )
+        session.commit()
+    r = client.post(
+        f"{DATA}/summaries/{summary_id}/publication",
+        json={
+            "botId": "settings-bot",
+            "destinationId": "settings-dest",
+            "includeMetadata": metadata_text is not None,
+        },
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "success", r.text
+
+
 def _post(channel: str, post_id: int) -> str:
     return f"{telegram_web_base_url()}/{channel}/{post_id}"
 
@@ -108,7 +156,7 @@ def test_numbered_citations_share_one_numbering_across_metadata_and_prose(
 ) -> None:
     _set(client, superuser_token_headers, citationStyle="numbered")
 
-    _publish(
+    _publish_summary(
         client,
         superuser_token_headers,
         CITED,
@@ -135,7 +183,7 @@ def test_channel_name_citations_group_side_by_side_ones_in_parentheses(
 ) -> None:
     _set(client, superuser_token_headers, citationStyle="channelName")
 
-    _publish(client, superuser_token_headers, CITED)
+    _publish_summary(client, superuser_token_headers, CITED)
 
     assert telegram.texts == ["Rates rose (news_ir) and fell (tech, news_ir)."]
     assert telegram.links() == [
@@ -151,7 +199,7 @@ def test_citations_go_out_as_written_until_the_account_chooses(
     bot: str,
     telegram: _FakeTelegram,
 ) -> None:
-    _publish(client, superuser_token_headers, CITED)
+    _publish_summary(client, superuser_token_headers, CITED)
 
     assert telegram.texts == [CITED]
     assert [url for _, url in telegram.links()] == [
@@ -159,6 +207,21 @@ def test_citations_go_out_as_written_until_the_account_chooses(
         _post("tech", 9),
         _post("news_ir", 5),
     ]
+
+
+def test_the_quick_message_takes_no_citation_style(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    """Spec: "Citation style has nothing to act on there". A quick message is
+    typed by hand, so a `[chan #id]` in it is sent as the person wrote it."""
+    _set(client, superuser_token_headers, citationStyle="numbered")
+
+    _publish(client, superuser_token_headers, CITED, metadata_text="See [tech #9]")
+
+    assert telegram.texts == ["See [tech #9]", CITED]
 
 
 # --------------------------------------------------------------------------

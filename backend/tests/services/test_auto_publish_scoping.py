@@ -142,7 +142,7 @@ MAY_ACT_ON_CALLERS: dict[str, str] = {
         "measure, and it runs in the scheduler with no response to put a 404 "
         "in — so it raises `ValueError`, not `HTTPException`."
     ),
-    "publications.send_publication": (
+    "publications.resolve_destination": (
         "Resolves the chat destination a Publication goes to (SUMTAB-09), for "
         "the Summary tab and the scheduler alike; the scheduler has no "
         "response, so it raises `ValueError` and `_auto_publish` writes a "
@@ -696,6 +696,9 @@ def test_a_foreign_credential_says_why_in_the_publish_log(
     assert logs[0].error and "credential" in logs[0].error.lower()
     assert decrypt.calls == []
     assert no_network.calls == []
+    # The destination did resolve, so the row names its chat: the publish-log
+    # search covers `chat_id`, and an empty one hides where it was going.
+    assert (logs[0].chat_id, logs[0].chat_name) == ("chat-dest-of-mine", "dest-of-mine")
 
 
 @BOTH_FLAG_STATES
@@ -883,6 +886,23 @@ def test_a_partial_scheduled_publication_is_left_for_a_person_to_finish(
     assert latest_partial(session, summary.id, user_id=user.id) == Partial(
         id=log.id, parts_sent=1, parts_total=3
     )
+
+    # The next tick's publish, with Telegram answering again: a new
+    # Publication of every planned Part, and the partial row left as it was.
+    resent: list[str] = []
+
+    async def answer(url: str, **kwargs: Any) -> tuple[Any, Any]:
+        resent.append(kwargs["json_body"]["text"])
+        return {"ok": True}, {}
+
+    monkeypatch.setattr(publish_service, "fetch_with_retry", answer)
+    asyncio.run(auto_summary._auto_publish(session, summary, owner_id=user.id))
+
+    assert resent == [paragraph] * 3
+    logs = {row.id: row for row in _publish_logs(session, summary.id)}
+    assert len(logs) == 2
+    assert logs[log.id].status == "failed"
+    assert logs[log.id].full_request == {"parts": [paragraph] * 3, "partsSent": 1}
 
 
 def test_a_summary_with_no_metadata_flag_publishes_no_metadata(

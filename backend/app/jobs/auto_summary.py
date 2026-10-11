@@ -23,7 +23,11 @@ from app.services.channel_setting_groups import channel_is_frozen, load_groups_b
 from app.services.follows import followed_channels_for
 from app.services.logs import upsert_llm_log, upsert_publish_log
 from app.services.post_filters import apply_analysis_window
-from app.services.publications import DestinationNotFound, send_publication
+from app.services.publications import (
+    DestinationNotFound,
+    resolve_destination,
+    send_publication,
+)
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import apply_summary_payload, derived_scope
 from app.services.sync_meta import touch_sync
@@ -538,7 +542,12 @@ async def _auto_publish(
     extra = _summary_extra(summary)
     bot_id = str(extra.get("publishBotId"))
     chat_dest_id = str(extra.get("publishChatId"))
+    # Named in any failure after the destination resolved, as the searchable
+    # chat columns; empty only when the destination itself is the failure.
+    chat_id = chat_name = ""
     try:
+        dest = resolve_destination(session, chat_dest_id, user_id=owner_id)
+        chat_id, chat_name = dest.chat_id, dest.name
         await send_publication(
             session,
             summary,
@@ -574,8 +583,8 @@ async def _auto_publish(
             summary,
             owner_id=owner_id,
             bot_id=bot_id,
-            chat_id="",
-            chat_name="",
+            chat_id=chat_id,
+            chat_name=chat_name,
             error=str(exc),
             text_sent=summary.text,
         )

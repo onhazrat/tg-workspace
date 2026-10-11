@@ -38,11 +38,16 @@ class BotCredentialNotFound(ValueError):
 
 
 class PartFailed(RuntimeError):
-    """A Part Telegram did not take; the Parts before it went out."""
+    """A Part Telegram did not take; the Parts before it went out.
 
-    def __init__(self, error: str, *, sent: int) -> None:
+    `responses` are Telegram's answers to those Parts, so the publish log
+    keeps one per sent Part across a stop and its resume.
+    """
+
+    def __init__(self, error: str, *, responses: list[Any]) -> None:
         super().__init__(error)
-        self.sent = sent
+        self.responses = responses
+        self.sent = len(responses)
 
 
 async def publish_summary_text(
@@ -58,19 +63,18 @@ async def publish_summary_text(
     tor_auto_rotate: bool = False,
     tor_rotation_threshold: int = 10,
 ) -> dict[str, Any]:
-    """The free-text quick message: cut `text` into Parts and send them."""
-    prefs = load_publishing_settings(session, acting_user_id)
+    """The free-text quick message: cut `text` into Parts and send them.
+
+    Cut and rewritten like a Publication, but its Citations stay as typed:
+    "citation style has nothing to act on there" (spec). Link previews still
+    follow the Account, as `send_parts` applies them to every Part.
+    """
     return await send_parts(
         session,
         acting_user_id=acting_user_id,
         credential_id=credential_id,
         chat_id=chat_id,
-        parts=[
-            p.text
-            for p in build_parts(
-                text, metadata_text, citation_style=prefs.citation_style
-            )
-        ],
+        parts=[p.text for p in build_parts(text, metadata_text)],
         proxies=proxies,
         proxy_concurrency=proxy_concurrency,
         tor_auto_rotate=tor_auto_rotate,
@@ -180,6 +184,6 @@ async def send_parts(
         try:
             await send_chunk(part)
         except Exception as exc:
-            raise PartFailed(str(exc), sent=len(results)) from exc
+            raise PartFailed(str(exc), responses=results) from exc
 
     return {"success": True, "results": results, "telemetry": telemetry_logs}

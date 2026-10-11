@@ -539,6 +539,10 @@ def test_a_failure_at_part_3_of_5_is_recorded_as_partial(
     assert log.status == "failed"
     assert log.error == "Too Many Requests: retry after 30"
     assert log.full_request == {"parts": _five_paragraphs(), "partsSent": 2}
+    # Telegram's answer to each Part that went out, one per sent Part.
+    assert log.full_response == [
+        {"ok": True, "result": {"message_id": n}} for n in (1, 2)
+    ]
     plan = _plan(client, superuser_token_headers, summary_id)
     assert plan["partial"] == {"id": log.id, "partsSent": 2, "partsTotal": 5}
 
@@ -589,6 +593,7 @@ def test_resuming_sends_exactly_the_remaining_stored_parts_and_updates_the_row(
     assert after.status == "success"
     assert after.error is None
     assert after.full_request == {"parts": paragraphs, "partsSent": 5}
+    assert after.full_response is not None and len(after.full_response) == 5
     assert _plan(client, superuser_token_headers, summary_id)["partial"] is None
 
 

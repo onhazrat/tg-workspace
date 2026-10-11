@@ -102,8 +102,13 @@ async def send_summary_publication(
                 user_id=current_user.id,
                 publication_id=body.publication_id,
             )
+        elif not (body.bot_id and body.destination_id):
+            # The schema's validator refuses this first; a check rather than
+            # an `assert`, which `python -O` strips.
+            raise HTTPException(
+                status_code=422, detail="botId and destinationId are required"
+            )
         else:
-            assert body.bot_id and body.destination_id  # the schema's validator
             outcome = await send_publication(
                 session,
                 summary,
