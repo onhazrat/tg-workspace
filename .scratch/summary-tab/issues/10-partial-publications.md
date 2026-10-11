@@ -10,7 +10,7 @@ finishes one itself. See `.scratch/summary-tab/spec.md`, user stories 69-71, and
 
 **Blocked by:** SUMTAB-09 (the Publication routes and the publish panel).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] A send stops at the first failed Part; the publish-log row records sent and total Parts and the failure
 - [ ] The Publication route, given a partial Publication's id, sends only its remaining stored Parts and updates the same row

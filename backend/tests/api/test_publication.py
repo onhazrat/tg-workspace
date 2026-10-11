@@ -251,7 +251,7 @@ def test_a_send_delivers_the_planned_parts_in_order_and_logs_once(
     assert log.status == "success"
     assert log.chat_name == "News Desk"
     assert log.bot_name == "Pub Bot"
-    assert log.full_request == {"parts": planned}
+    assert log.full_request == {"parts": planned, "partsSent": 3}
 
 
 def test_a_part_telegram_refuses_stops_the_send_and_is_logged_failed(
@@ -284,7 +284,7 @@ def test_a_part_telegram_refuses_stops_the_send_and_is_logged_failed(
     [log] = _logs(summary_id)
     assert log.status == "failed"
     assert log.error == "Bad Request: chat not found"
-    assert log.full_request == {"parts": [paragraph] * 3}
+    assert log.full_request == {"parts": [paragraph] * 3, "partsSent": 1}
 
 
 # --------------------------------------------------------------------------
@@ -572,6 +572,32 @@ def test_someone_elses_publication_answers_as_absent_before_any_decrypt(
     assert decrypts == []
     [after] = _logs(theirs)
     assert after.full_request == log.full_request
+
+
+def test_a_publication_someone_else_filed_against_my_summary_is_not_resumed(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    partial: tuple[str, _FlakyTelegram],
+    decrypts: list[str],
+) -> None:
+    """The log door takes any `summary_id`, so the row's owner is checked too."""
+    theirs, flaky = partial
+    [log] = _logs(theirs)
+    mine = _summary(owner=_normal_user_id())
+    with Session(engine) as session:
+        row = session.get(PublishLog, log.id)
+        assert row is not None
+        row.summary_id = mine
+        session.add(row)
+        session.commit()
+    sent_before = len(flaky.bodies)
+
+    r = _send(client, normal_user_token_headers, mine, {"publicationId": log.id})
+
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"] == "Publication not found"
+    assert len(flaky.bodies) == sent_before
+    assert decrypts == []
 
 
 def test_a_publication_is_resumed_only_through_its_own_summary(
