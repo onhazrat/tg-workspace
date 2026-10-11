@@ -1,4 +1,4 @@
-// PROTOTYPE: Settings tab redesign. Five variants on `?tab=settings&variant=`,
+// PROTOTYPE: Settings tab redesign. Variants on `?tab=settings&variant=`,
 // 0 is today's hub untouched. Never merge; fold the winner in properly.
 //
 // Every variant renders the same regrouping, by who a setting affects:
