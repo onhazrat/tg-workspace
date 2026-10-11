@@ -131,3 +131,9 @@ export function needsTranslation(
   if (language == null) return true
   return language !== "zxx" && language !== LANGUAGE_CODES[translationLanguage]
 }
+
+/** Below this width the app lays out for a phone; one number for every "narrow". */
+export const MOBILE_BREAKPOINT = 768
+
+/** The media query for a phone-width screen. */
+export const NARROW_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`

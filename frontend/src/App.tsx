@@ -29,7 +29,7 @@ import {
   TooltipTrigger,
 } from "./components/ui/tg-tooltip"
 import {
-  GeneratingOverlay,
+  generatingOverlay,
   RateLimitBanner,
   ShortcutsDialog,
   StatusBanners,
@@ -204,7 +204,7 @@ export default function App() {
   const tabView = () => {
     // Only the tab of the Summary being generated; the run holds no id in the
     // URL until it finishes, so that is the new-Summary tab.
-    const generating = GeneratingOverlay({
+    const generating = generatingOverlay({
       summarizing,
       activeTab,
       summaryId: currentSummaryId,

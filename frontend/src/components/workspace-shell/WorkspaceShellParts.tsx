@@ -196,7 +196,7 @@ function GeneratingSummary() {
 }
 
 /** The "Generating Summary" cover, or null on every tab that is not the one generating. */
-export function GeneratingOverlay(state: {
+export function generatingOverlay(state: {
   summarizing: boolean
   activeTab: TabType
   summaryId: string | null

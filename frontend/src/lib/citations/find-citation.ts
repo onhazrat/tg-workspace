@@ -10,6 +10,7 @@
  * wait is capped, so a dialog that never closes delays a Find rather than
  * losing it.
  */
+import { NARROW_QUERY } from "@/constants"
 
 /** The attribute every rendered Citation carries, valued `citationKey(...)`. */
 export const CITATION_ATTR = "data-citation"
@@ -20,7 +21,6 @@ export const FOUND_ATTR = "data-citation-found"
 export const citationKey = (channelName: string, postId: number) =>
   `${channelName.toLowerCase()}#${postId}`
 
-const NARROW = "(max-width: 767px)"
 const POLL_MS = 16
 const MAX_WAIT_MS = 2000
 
@@ -48,7 +48,8 @@ export async function findCitation(
     `[${CITATION_ATTR}="${CSS.escape(citationKey(channelName, postId))}"]`,
   )
   if (!el) return false
-  const narrow = options.narrow ?? window.matchMedia?.(NARROW).matches ?? false
+  const narrow =
+    options.narrow ?? window.matchMedia?.(NARROW_QUERY).matches ?? false
   el.scrollIntoView({
     behavior: narrow ? "instant" : "smooth",
     block: "center",

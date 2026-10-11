@@ -11,6 +11,7 @@
 import { PreviewCard } from "@base-ui/react/preview-card"
 import { ExternalLink, Loader2 } from "lucide-react"
 import { useState, useSyncExternalStore } from "react"
+import { MOBILE_BREAKPOINT } from "@/constants"
 import { CITATION_ATTR, citationKey } from "@/lib/citations/find-citation"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import { telegramWebViewPostUrl } from "@/lib/telegram-web"
@@ -183,7 +184,7 @@ export function CitedPostCard({
   )
 }
 
-const HOVER_WIDE = "(hover: hover) and (min-width: 768px)"
+const HOVER_WIDE = `(hover: hover) and (min-width: ${MOBILE_BREAKPOINT}px)`
 
 // Module-level so `useSyncExternalStore` keeps one subscription rather than
 // resubscribing on every render.

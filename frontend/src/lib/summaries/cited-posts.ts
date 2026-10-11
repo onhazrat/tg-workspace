@@ -7,6 +7,7 @@
  * writes a handle however it likes and the lookup answers with the stored one.
  */
 import type { ScopedPostRef } from "@/client"
+import { citationKey } from "@/lib/citations/find-citation"
 import type { Post } from "@/types"
 
 export interface CitedPost {
@@ -27,20 +28,19 @@ export interface CitedPostSources {
   covered: ScopedPostRef[] | null | undefined
 }
 
-const refKey = (channelName: string, postId: number) =>
-  `${channelName.toLowerCase()}#${postId}`
-
 /** Resolve Citations against one Summary's sources. */
 export function citedPostResolver({
   live,
   snapshot,
   covered,
 }: CitedPostSources): (channelName: string, postId: number) => CitedPost {
-  const liveByKey = new Map(live.map((p) => [refKey(p.channelName, p.id), p]))
+  const liveByKey = new Map(
+    live.map((p) => [citationKey(p.channelName, p.id), p]),
+  )
   const coveredKeys =
-    covered && new Set(covered.map((r) => refKey(r.channelName, r.postId)))
+    covered && new Set(covered.map((r) => citationKey(r.channelName, r.postId)))
   return (channelName, postId) => {
-    const key = refKey(channelName, postId)
+    const key = citationKey(channelName, postId)
     const livePost = liveByKey.get(key)
     const stored = snapshot?.[`${channelName}-${postId}`]
     return {

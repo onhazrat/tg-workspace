@@ -8,7 +8,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ArtifactListItem, Channel } from "@/types"
 import {
-  GeneratingOverlay,
+  generatingOverlay,
   ShortcutsDialog,
   StatusBanners,
   WorkspaceStats,
@@ -219,10 +219,10 @@ describe("the tab strip (TABS-01)", () => {
   })
 })
 
-describe("GeneratingOverlay", () => {
-  const overlay = (over: Partial<Parameters<typeof GeneratingOverlay>[0]>) => {
+describe("generatingOverlay", () => {
+  const overlay = (over: Partial<Parameters<typeof generatingOverlay>[0]>) => {
     render(
-      GeneratingOverlay({
+      generatingOverlay({
         summarizing: true,
         activeTab: "summary",
         summaryId: null,
