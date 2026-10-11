@@ -91,6 +91,7 @@ export type ProtoPanelId =
   | "publication-options"
   | "proxy"
   | "tor"
+  | "quick-message"
 
 export const PANEL_INFO: Record<
   ProtoPanelId,
@@ -125,6 +126,12 @@ export const PANEL_INFO: Record<
     label: "Publication options",
     scope: "account",
     blurb: "How a published Summary reads: citations, previews, time zone.",
+  },
+  "quick-message": {
+    label: "Quick message",
+    scope: "account",
+    blurb:
+      "Send a one-off message through one of your bots. Shows once you have a bot and a destination.",
   },
   proxy: {
     label: "Proxies",
@@ -187,7 +194,7 @@ export const PROTO_GROUPS: ProtoGroup[] = [
     label: "Publishing",
     blurb: "Bots, destinations and how a Publication reads.",
     rows: [],
-    panels: ["publication-options", "bots", "destinations"],
+    panels: ["publication-options", "bots", "destinations", "quick-message"],
   },
   {
     id: "retention",
@@ -208,33 +215,6 @@ export const PROTO_GROUPS: ProtoGroup[] = [
     blurb: "Proxies and Tor for outbound Telegram traffic.",
     rows: [],
     panels: ["proxy", "tor"],
-  },
-]
-
-/** The sections that move out of Settings into an Admin "System" area. */
-export const MOVED_OUT: { section: string; label: string; why: string }[] = [
-  {
-    section: "diagnostics",
-    label: "Diagnostics",
-    why: "a tool, not a setting",
-  },
-  {
-    section: "network-telemetry",
-    label: "Network telemetry",
-    why: "a log view",
-  },
-  {
-    section: "configuration",
-    label: "Configuration catalog",
-    why: "read-only env values",
-  },
-  { section: "table-sizes", label: "Table sizes", why: "a report" },
-  { section: "query", label: "Query console", why: "a tool" },
-  { section: "transfer", label: "Import / export", why: "an action" },
-  {
-    section: "quick-message",
-    label: "Quick message",
-    why: "belongs next to Publish",
   },
 ]
 

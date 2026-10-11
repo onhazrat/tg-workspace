@@ -7,11 +7,12 @@ import { Search, X } from "lucide-react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSettings } from "@/contexts/SettingsContext"
+import useAuth from "@/hooks/useAuth"
+import { useCanManageJobs } from "@/hooks/useJobsStatus"
 import { isSettingModified } from "@/lib/settings/catalog"
 import { cn } from "@/lib/utils"
 import {
   entryFor,
-  MOVED_OUT,
   matches,
   NOT_A_ROW,
   PANEL_INFO,
@@ -22,7 +23,8 @@ import {
   scopeOf,
 } from "./model"
 import { ProtoRow } from "./ProtoRow"
-import { ProtoPanel, SystemTool } from "./panels"
+import { AREA_LABEL, PAGES, PageView } from "./pages"
+import { ProtoPanel } from "./panels"
 
 type ScopeFilter = Scope | "all"
 
@@ -35,7 +37,10 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
   const [modifiedOnly, setModifiedOnly] = useState(false)
   const [active, setActive] = useState<ProtoGroupId>("appearance")
   const scroller = useRef<HTMLDivElement>(null)
-  const [tool, setTool] = useState<string | null>(null)
+  const [pageId, setPageId] = useState<string | null>(null)
+  const page = PAGES.find((p) => p.id === pageId)
+  const isAdmin = useCanManageJobs()
+  const { user } = useAuth()
 
   const visible = useMemo(
     () =>
@@ -106,12 +111,12 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
             key={group.id}
             type="button"
             onClick={() => {
-              setTool(null)
+              setPageId(null)
               requestAnimationFrame(() => jump(group.id))
             }}
             className={cn(
               "flex items-center justify-between rounded px-2 py-1.5 text-left text-sm",
-              !tool && active === group.id
+              !page && active === group.id
                 ? "bg-app-ink/10 font-semibold"
                 : "text-app-ink/70 hover:bg-app-ink/5",
             )}
@@ -122,41 +127,44 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
             </span>
           </button>
         ))}
-        <div className="mt-6 border-t border-app-ink/10 px-2 pt-4">
-          <div className="text-xs font-semibold text-app-ink/50">
-            Moving to Admin → System
-          </div>
-          <ul className="mt-2 space-y-0.5 text-[13px]">
-            {MOVED_OUT.map((m) => (
-              <li key={m.section}>
+        {(["account", "admin"] as const).map((area) =>
+          area === "admin" && !isAdmin ? null : (
+            <div key={area} className="mt-5 border-t border-app-ink/10 pt-4">
+              <div className="mb-1 px-2 text-xs font-semibold text-app-ink/50">
+                {AREA_LABEL[area]}
+              </div>
+              {PAGES.filter(
+                (p) =>
+                  p.area === area && !(p.notForSuperuser && user?.is_superuser),
+              ).map((p) => (
                 <button
+                  key={p.id}
                   type="button"
-                  title={m.why}
-                  onClick={() => setTool(m.section)}
+                  onClick={() => setPageId(p.id)}
                   className={cn(
-                    "w-full rounded px-2 py-1 text-left -mx-2",
-                    tool === m.section
+                    "w-full rounded px-2 py-1.5 text-left text-sm",
+                    pageId === p.id
                       ? "bg-app-ink/10 font-semibold"
-                      : "text-app-ink/60 hover:bg-app-ink/5 hover:text-app-ink",
+                      : "text-app-ink/70 hover:bg-app-ink/5",
                   )}
                 >
-                  {m.label}
+                  {p.label}
                 </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+              ))}
+            </div>
+          ),
+        )}
       </aside>
 
-      {tool ? (
+      {page ? (
         <div className="min-w-0 flex-1 overflow-y-auto bg-app-card pb-32">
-          <SystemTool section={tool} onBack={() => setTool(null)} />
+          <PageView page={page} onBack={() => setPageId(null)} />
         </div>
       ) : null}
       <div
         className={cn(
           "flex min-w-0 flex-1 flex-col bg-app-card",
-          tool && "hidden",
+          page && "hidden",
         )}
       >
         <div className="sticky top-0 z-10 border-b border-app-ink/10 bg-app-card/95 px-8 py-3 backdrop-blur">
