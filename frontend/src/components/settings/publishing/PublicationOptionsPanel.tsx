@@ -33,11 +33,14 @@ function isKnownZone(zone: string): boolean {
 
 /**
  * Saved once left, never per keystroke: a half-typed zone saved on the way
- * would publish in UTC. A zone nobody knows puts the saved one back.
+ * would publish in UTC. A zone nobody knows puts the saved one back. Remount
+ * it (`key`) when the saved zone changes elsewhere.
  */
-function TimeZoneInput(p: {
+export function TimeZoneInput(p: {
+  id: string
   timeZone: string
   onTimeZone: (zone: string) => void
+  className?: string
 }) {
   const [draft, setDraft] = useState(p.timeZone)
   const commit = () => {
@@ -47,14 +50,22 @@ function TimeZoneInput(p: {
     else setDraft(p.timeZone)
   }
   return (
-    <TgInput
-      id="publishing-time-zone"
-      list="publishing-time-zones"
-      value={draft}
-      placeholder="UTC"
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-    />
+    <>
+      <TgInput
+        id={p.id}
+        list={`${p.id}-options`}
+        value={draft}
+        placeholder="UTC"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        className={p.className}
+      />
+      <datalist id={`${p.id}-options`}>
+        {TIME_ZONES.map((zone) => (
+          <option key={zone} value={zone} />
+        ))}
+      </datalist>
+    </>
   )
 }
 
@@ -67,7 +78,10 @@ type PublicationOptionsPanelProps = {
   onTimeZone: (zone: string) => void
 }
 
-/** The Account's Publishing settings (SUMTAB-08); every send applies them. */
+/**
+ * The Account's Publishing settings (SUMTAB-08): the defaults every Summary
+ * publishes with until its own publish panel changes one.
+ */
 export const PublicationOptionsPanel: React.FC<
   PublicationOptionsPanelProps
 > = ({
@@ -98,7 +112,8 @@ export const PublicationOptionsPanel: React.FC<
         </select>
         <TgHelpText className="mt-1.5">
           How Citations read in a Publication. Numbered ones share one numbering
-          across the metadata and the Summary.
+          across the metadata and the Summary. A Summary can change any of these
+          for itself in its publish panel.
         </TgHelpText>
       </div>
 
@@ -122,14 +137,10 @@ export const PublicationOptionsPanel: React.FC<
         <TgFieldLabel htmlFor="publishing-time-zone">Time zone</TgFieldLabel>
         <TimeZoneInput
           key={timeZone}
+          id="publishing-time-zone"
           timeZone={timeZone}
           onTimeZone={onTimeZone}
         />
-        <datalist id="publishing-time-zones">
-          {TIME_ZONES.map((zone) => (
-            <option key={zone} value={zone} />
-          ))}
-        </datalist>
         <TgHelpText className="mt-1.5">
           The metadata's time range is written in this zone. Taken from your
           browser the first time.

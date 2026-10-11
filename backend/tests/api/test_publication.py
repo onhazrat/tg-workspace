@@ -128,6 +128,17 @@ def test_the_plan_names_the_window_in_the_accounts_time_zone(
     assert plan["defaultMetadata"] == GENERATED
 
 
+def test_a_summarys_own_time_zone_wins_over_the_accounts(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """The Account has no zone, so it would print UTC; the Summary named one."""
+    summary_id = _summary(extra={"publishing": {"timeZone": "Asia/Tehran"}})
+
+    plan = _plan(client, superuser_token_headers, summary_id)
+
+    assert plan["defaultMetadata"] == GENERATED
+
+
 def test_a_plan_is_the_summary_alone_unless_metadata_is_asked_for(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:

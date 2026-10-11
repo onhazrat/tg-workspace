@@ -78,6 +78,8 @@ function renderPanel(props: Partial<PublishPanelProps> = {}) {
     onSaveMetadataText: mock(async () => {}),
     onSaveOmittedRows: mock(async () => {}),
     onOpenSettings: mock(),
+    onPublishingChange: mock(),
+    onPublishingReset: mock(),
     onPublish: mock(async () => {}),
   }
   render(
@@ -87,8 +89,12 @@ function renderPanel(props: Partial<PublishPanelProps> = {}) {
       plan={plan}
       options={{ includeMetadata: false, metadataInFirstPart: false }}
       metadataText=""
-      citationStyle="numbered"
-      linkPreviews={false}
+      publishing={{
+        citationStyle: "numbered",
+        linkPreviews: false,
+        timeZone: "Asia/Tehran",
+      }}
+      publishingCustomized={false}
       {...handlers}
       {...props}
     />,
@@ -209,14 +215,62 @@ describe("PublishPanel", () => {
     })
   })
 
-  test("shows the Account's citation style and link previews, with a way to Settings", () => {
+  test("shows the options it publishes with, from Settings until changed here", () => {
     const { onOpenSettings } = renderPanel()
-    expect(screen.getByText(/Citations numbered/)).toBeTruthy()
-    expect(screen.getByText(/link previews off/)).toBeTruthy()
+    expect(screen.getByText(/Your defaults from/)).toBeTruthy()
+    expect(
+      screen
+        .getByRole("button", { name: "[1][2]" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true")
+    expect(
+      (screen.getByLabelText("Time zone of the metadata") as HTMLInputElement)
+        .value,
+    ).toBe("Asia/Tehran")
+    expect(screen.queryByRole("button", { name: "Use my defaults" })).toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "Publishing settings" }))
 
     expect(onOpenSettings).toHaveBeenCalled()
+  })
+
+  test("changes an option for this Summary alone, and goes back to Settings", () => {
+    const { onPublishingChange, onPublishingReset } = renderPanel({
+      publishingCustomized: true,
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "(chan, chan)" }))
+    fireEvent.click(screen.getByRole("switch", { name: "Link previews" }))
+    const zone = screen.getByLabelText("Time zone of the metadata")
+    fireEvent.change(zone, { target: { value: "Europe/Berlin" } })
+    fireEvent.blur(zone)
+    fireEvent.click(screen.getByRole("button", { name: "Use my defaults" }))
+
+    expect(onPublishingChange.mock.calls).toEqual([
+      [{ citationStyle: "channelName" }],
+      [{ linkPreviews: true }],
+      [{ timeZone: "Europe/Berlin" }],
+    ])
+    expect(onPublishingReset).toHaveBeenCalled()
+    expect(screen.getByText(/Changed for this Summary/)).toBeTruthy()
+  })
+
+  test("with link previews on, a Part's first link shows the card Telegram draws", () => {
+    renderPanel()
+    expect(screen.queryByText("Link preview")).toBeNull()
+
+    cleanup()
+    renderPanel({
+      publishing: {
+        citationStyle: "numbered",
+        linkPreviews: true,
+        timeZone: "",
+      },
+    })
+
+    // Only the first Part has a link.
+    expect(screen.getAllByText("Link preview")).toHaveLength(1)
+    expect(screen.getByText("t.me/news_ir/5")).toBeTruthy()
   })
 
   test("a send's answer is a success toast, or how far it got and why it stopped", () => {
@@ -271,8 +325,14 @@ describe("PublishPanel", () => {
       plan,
       options: { includeMetadata: false, metadataInFirstPart: false },
       metadataText: "",
-      citationStyle: "asWritten" as const,
-      linkPreviews: false,
+      publishing: {
+        citationStyle: "asWritten" as const,
+        linkPreviews: false,
+        timeZone: "",
+      },
+      publishingCustomized: false,
+      onPublishingChange: mock(),
+      onPublishingReset: mock(),
       onOptionsChange: mock(),
       onSaveMetadataText: mock(async () => {}),
       onSaveOmittedRows: mock(async () => {}),

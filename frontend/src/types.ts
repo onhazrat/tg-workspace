@@ -15,6 +15,7 @@ import type {
   TagArtifactResponse,
   TagRunResponse,
 } from "@/client"
+import type { CitationStyle } from "@/lib/settings/schema"
 
 /**
  * Domain types (B7).
@@ -308,6 +309,12 @@ export interface Summary {
   metadataOmittedRows?: string[]
   /** Put the metadata in the first Part when it fits (SUMTAB-09). */
   metadataInFirstPart?: boolean
+  /**
+   * This Summary's own Publication Options, laid key by key over the
+   * Account's in Settings; an absent one follows Settings. `null` on a save
+   * removes them all, back to Settings.
+   */
+  publishing?: Partial<PublishingOptions> | null
   isStarred?: boolean
   postSearch?: string
   semanticSearchQuery?: string
@@ -599,3 +606,11 @@ export type ArtifactListItem =
   | ChatArtifactResponse
   | TagArtifactResponse
   | DiscoveryArtifactResponse
+
+/** The Publication Options: the Account's defaults, or one Summary's. */
+export interface PublishingOptions {
+  citationStyle: CitationStyle
+  linkPreviews: boolean
+  /** An IANA zone; empty is UTC. */
+  timeZone: string
+}

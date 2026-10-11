@@ -15,7 +15,7 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import { errorText } from "@/lib/artifacts/artifact-run"
-import type { Summary } from "@/types"
+import type { PublishingOptions, Summary } from "@/types"
 import { PublishPanel } from "./PublishPanel"
 import { publicationToast } from "./publish-panel-model"
 
@@ -42,12 +42,27 @@ export function SummaryPublishPanel({
     includeMetadata: summary.sendMetadata === true,
     metadataInFirstPart: summary.metadataInFirstPart === true,
   })
+  // Only what this Summary changed; the rest follows Settings, on the server
+  // as here.
+  const [ownPublishing, setOwnPublishing] = useState(summary.publishing ?? {})
+  const publishing: PublishingOptions = {
+    citationStyle: ownPublishing.citationStyle ?? settings.citationStyle,
+    linkPreviews: ownPublishing.linkPreviews ?? settings.linkPreviews,
+    timeZone: ownPublishing.timeZone ?? settings.timeZone,
+  }
   const metadataText = summary.metadataText ?? ""
   const plan = useQuery({
     queryKey: queryKeys.publicationPlan(summary.id, {
       ...options,
       metadataText,
       metadataOmittedRows: summary.metadataOmittedRows ?? [],
+      // The saved copy, not the pick: the plan reads it from the row.
+      publishing: summary.publishing ?? null,
+      defaults: [
+        settings.citationStyle,
+        settings.linkPreviews,
+        settings.timeZone,
+      ],
       text: summary.text,
     }),
     queryFn: () =>
@@ -93,8 +108,25 @@ export function SummaryPublishPanel({
       metadataText={metadataText}
       onSaveMetadataText={(text) => onSave({ metadataText: text })}
       onSaveOmittedRows={(keys) => onSave({ metadataOmittedRows: keys })}
-      citationStyle={settings.citationStyle}
-      linkPreviews={settings.linkPreviews}
+      publishing={publishing}
+      publishingCustomized={Object.keys(ownPublishing).length > 0}
+      onPublishingChange={(change) => {
+        // Picking what it already publishes with changes nothing, so it does
+        // not stop the Summary following Settings.
+        const same = Object.entries(change).every(
+          ([key, value]) =>
+            publishing[key as keyof PublishingOptions] === value,
+        )
+        if (same) return
+        const next = { ...ownPublishing, ...change }
+        setOwnPublishing(next)
+        void onSave({ publishing: next })
+      }}
+      onPublishingReset={() => {
+        setOwnPublishing({})
+        // An explicit null is what removes it from the Summary.
+        void onSave({ publishing: null })
+      }}
       onOpenSettings={() =>
         navigate({
           search: (prev) => ({

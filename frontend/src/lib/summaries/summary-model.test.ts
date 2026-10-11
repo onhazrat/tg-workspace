@@ -77,6 +77,7 @@ describe("regeneration", () => {
       publishChatId: "d",
       postSearch: "q",
       metadataOmittedRows: ["aiModel"],
+      publishing: { citationStyle: "numbered" },
     }
     const run = {
       id: "s2",
@@ -98,6 +99,7 @@ describe("regeneration", () => {
       postSearch: "q",
       // Row choices are keys, so the successor's metadata is generated afresh.
       metadataOmittedRows: ["aiModel"],
+      publishing: { citationStyle: "numbered" },
       // Off unless the Summary it follows had it on (SUMTAB-09).
       sendMetadata: false,
     })

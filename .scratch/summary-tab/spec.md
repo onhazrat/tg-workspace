@@ -330,9 +330,13 @@ layout.
 Three new personal settings, each classified in the settings registry: **citation style** (as
 written, by Channel name, numbered; default as written), **link previews** (default off), and **time
 zone** (an IANA zone name; empty until the browser fills it from its own zone the first time, then
-only changed by the Account in Settings). The scheduler reads them; the publish panel shows the
-current citation style and link-preview choice with a link to the Publishing settings rather than
-per-Publication switches.
+only changed by the Account in Settings). They are the **defaults**: the publish panel carries a
+copy of all three for the Summary on screen (link previews, then a Formatting box with the citation
+style and the time zone), and a change there is saved on that Summary alone, key by key, under
+`publishing` in its `extra`. Every option a Summary did not change follows Settings, including later
+changes to Settings; "Use my defaults" drops the Summary's changes. Plan, send, resume and the
+scheduler all apply the Summary's options over the Account's, and a regenerated Summary inherits
+them. (Changed on 2026-10-11 from "a link to Settings rather than per-Publication switches".)
 
 ### The publish panel
 

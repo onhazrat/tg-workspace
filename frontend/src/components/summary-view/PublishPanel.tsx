@@ -7,11 +7,12 @@ import type {
   PublicationPlanResponse,
   PublicationSendRequest,
 } from "@/client"
+import { TimeZoneInput } from "@/components/settings/publishing/PublicationOptionsPanel"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgToggle } from "@/components/ui/tg-toggle"
-import type { CitationStyle } from "@/lib/settings/schema"
+import { CITATION_STYLES, type CitationStyle } from "@/lib/settings/schema"
 import { cn } from "@/lib/utils"
-import type { BotCredential, ChatDestination } from "@/types"
+import type { BotCredential, ChatDestination, PublishingOptions } from "@/types"
 import { omittedAfterToggle, partsLabel } from "./publish-panel-model"
 
 export interface PublishPanelProps {
@@ -26,8 +27,13 @@ export interface PublishPanelProps {
   onSaveMetadataText: (text: string) => Promise<void>
   /** Save the keys of the generated rows the Summary leaves out. */
   onSaveOmittedRows: (keys: string[]) => Promise<void>
-  citationStyle: CitationStyle
-  linkPreviews: boolean
+  /** What this Summary publishes with: Settings, under its own changes. */
+  publishing: PublishingOptions
+  /** The Summary changed at least one option from Settings. */
+  publishingCustomized: boolean
+  onPublishingChange: (change: Partial<PublishingOptions>) => void
+  /** Drop the Summary's changes; it follows Settings again. */
+  onPublishingReset: () => void
   onOpenSettings: () => void
   onPublish: (send: PublicationSendRequest) => Promise<void>
 }
@@ -36,10 +42,11 @@ const LABEL = "text-[11px] font-bold uppercase tracking-widest text-app-ink/60"
 const SELECT =
   "w-full rounded-lg border border-app-ink/15 bg-app-card px-2.5 py-2 text-xs focus:outline-none focus:border-app-ink/50"
 
-const CITATION_WORDS: Record<CitationStyle, string> = {
-  asWritten: "as written",
-  channelName: "by Channel name",
-  numbered: "numbered",
+/** Each citation style as a sample of how it reads. */
+const CITATION_SAMPLES: Record<CitationStyle, string> = {
+  asWritten: "[chan #id]",
+  channelName: "(chan, chan)",
+  numbered: "[1][2]",
 }
 
 /**
@@ -63,21 +70,16 @@ export function PublishPanel(props: PublishPanelProps) {
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <MetadataOptions {...props} />
-          <p className="text-xs text-app-ink/60">
-            Citations {CITATION_WORDS[props.citationStyle]}, link previews{" "}
-            {props.linkPreviews ? "on" : "off"}.{" "}
-            <button
-              type="button"
-              onClick={props.onOpenSettings}
-              className="underline hover:text-app-ink"
-            >
-              Publishing settings
-            </button>
-          </p>
+          <PublishingControls {...props} />
         </div>
         <div className="min-w-0">
           <div className={cn(LABEL, "mb-2")}>What the channel receives</div>
-          {props.plan && <PartsPreview plan={props.plan} />}
+          {props.plan && (
+            <PartsPreview
+              plan={props.plan}
+              linkPreviews={props.publishing.linkPreviews}
+            />
+          )}
         </div>
       </div>
     </section>
@@ -340,6 +342,92 @@ function MetadataText(p: PublishPanelProps) {
   )
 }
 
+/**
+ * Settings' Publication Options, copied here for this Summary: Settings is the
+ * default, a change here is this Summary's alone, scheduled sends included.
+ */
+function PublishingControls(p: PublishPanelProps) {
+  const { publishing, onPublishingChange } = p
+  return (
+    <>
+      <Switch
+        label="Link previews"
+        checked={publishing.linkPreviews}
+        onChange={(on) => onPublishingChange({ linkPreviews: on })}
+      />
+      <details className="group rounded-lg border border-app-ink/10 px-3 py-2">
+        <summary className="cursor-pointer list-none text-xs">
+          <span className="font-bold">Formatting</span>{" "}
+          <span className="text-app-ink/50">
+            · citations{" "}
+            <span className="font-mono">
+              {CITATION_SAMPLES[publishing.citationStyle]}
+            </span>{" "}
+            · {publishing.timeZone || "UTC"}
+          </span>
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs">Citations</span>
+            <div className="flex flex-wrap gap-1">
+              {CITATION_STYLES.map((style) => (
+                <button
+                  key={style}
+                  type="button"
+                  aria-pressed={publishing.citationStyle === style}
+                  onClick={() => onPublishingChange({ citationStyle: style })}
+                  className={cn(
+                    "rounded-md border px-2 py-1 font-mono text-[11px]",
+                    publishing.citationStyle === style
+                      ? "border-app-ink bg-app-ink text-app-bg"
+                      : "border-app-ink/15 hover:border-app-ink/40",
+                  )}
+                >
+                  {CITATION_SAMPLES[style]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs">Time zone of the metadata</span>
+            <TimeZoneInput
+              key={publishing.timeZone}
+              id="summary-publishing-time-zone"
+              timeZone={publishing.timeZone}
+              onTimeZone={(zone) => onPublishingChange({ timeZone: zone })}
+              className={cn(SELECT, "font-sans tracking-normal")}
+            />
+          </label>
+        </div>
+      </details>
+      <p className="text-[11px] text-app-ink/60">
+        {p.publishingCustomized
+          ? "Changed for this Summary. "
+          : "Your defaults from "}
+        {p.publishingCustomized && (
+          <>
+            <button
+              type="button"
+              onClick={p.onPublishingReset}
+              className="underline hover:text-app-ink"
+            >
+              Use my defaults
+            </button>
+            {" · "}
+          </>
+        )}
+        <button
+          type="button"
+          onClick={p.onOpenSettings}
+          className="underline hover:text-app-ink"
+        >
+          Publishing settings
+        </button>
+      </p>
+    </>
+  )
+}
+
 const KIND_LABEL: Record<PublicationPartResponse["kind"], string> = {
   metadata: "metadata",
   summary: "summary",
@@ -347,7 +435,13 @@ const KIND_LABEL: Record<PublicationPartResponse["kind"], string> = {
 }
 
 /** One bubble per Part, in the order Telegram receives them. */
-function PartsPreview({ plan }: { plan: PublicationPlanResponse }) {
+function PartsPreview({
+  plan,
+  linkPreviews,
+}: {
+  plan: PublicationPlanResponse
+  linkPreviews: boolean
+}) {
   const count = plan.parts.length
   return (
     <ol className="flex max-h-[40rem] flex-col gap-3 overflow-y-auto overscroll-contain pr-1">
@@ -374,9 +468,30 @@ function PartsPreview({ plan }: { plan: PublicationPlanResponse }) {
           >
             <TelegramText segments={part.segments} />
           </div>
+          {linkPreviews && <PreviewCard segments={part.segments} />}
         </li>
       ))}
     </ol>
+  )
+}
+
+/** Stands in for the card Telegram draws under a Part's first link. */
+function PreviewCard({
+  segments,
+}: {
+  segments: PublicationPartResponse["segments"]
+}) {
+  const url = segments.find((s) => s.kind === "link")?.url
+  if (!url) return null
+  return (
+    <div className="mt-1 ml-3 border-l-2 border-sky-500 pl-2 text-[11px] text-app-ink/60">
+      <div className="font-bold text-sky-700 dark:text-sky-300">
+        Link preview
+      </div>
+      <div className="truncate font-mono">
+        {url.replace(/^https?:\/\//, "")}
+      </div>
+    </div>
   )
 }
 
