@@ -22,7 +22,7 @@ import {
   scopeOf,
 } from "./model"
 import { ProtoRow } from "./ProtoRow"
-import { ProtoPanel } from "./panels"
+import { ProtoPanel, SystemTool } from "./panels"
 
 type ScopeFilter = Scope | "all"
 
@@ -35,6 +35,7 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
   const [modifiedOnly, setModifiedOnly] = useState(false)
   const [active, setActive] = useState<ProtoGroupId>("appearance")
   const scroller = useRef<HTMLDivElement>(null)
+  const [tool, setTool] = useState<string | null>(null)
 
   const visible = useMemo(
     () =>
@@ -104,10 +105,13 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
           <button
             key={group.id}
             type="button"
-            onClick={() => jump(group.id)}
+            onClick={() => {
+              setTool(null)
+              requestAnimationFrame(() => jump(group.id))
+            }}
             className={cn(
               "flex items-center justify-between rounded px-2 py-1.5 text-left text-sm",
-              active === group.id
+              !tool && active === group.id
                 ? "bg-app-ink/10 font-semibold"
                 : "text-app-ink/70 hover:bg-app-ink/5",
             )}
@@ -122,17 +126,39 @@ export const VariantA: React.FC<{ highlightId: string | null }> = ({
           <div className="text-xs font-semibold text-app-ink/50">
             Moving to Admin → System
           </div>
-          <ul className="mt-2 space-y-1 text-[13px] text-app-ink/50">
+          <ul className="mt-2 space-y-0.5 text-[13px]">
             {MOVED_OUT.map((m) => (
-              <li key={m.section} title={m.why}>
-                {m.label}
+              <li key={m.section}>
+                <button
+                  type="button"
+                  title={m.why}
+                  onClick={() => setTool(m.section)}
+                  className={cn(
+                    "w-full rounded px-2 py-1 text-left -mx-2",
+                    tool === m.section
+                      ? "bg-app-ink/10 font-semibold"
+                      : "text-app-ink/60 hover:bg-app-ink/5 hover:text-app-ink",
+                  )}
+                >
+                  {m.label}
+                </button>
               </li>
             ))}
           </ul>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-app-card">
+      {tool ? (
+        <div className="min-w-0 flex-1 overflow-y-auto bg-app-card pb-32">
+          <SystemTool section={tool} onBack={() => setTool(null)} />
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col bg-app-card",
+          tool && "hidden",
+        )}
+      >
         <div className="sticky top-0 z-10 border-b border-app-ink/10 bg-app-card/95 px-8 py-3 backdrop-blur">
           <div className="relative max-w-4xl">
             <Search

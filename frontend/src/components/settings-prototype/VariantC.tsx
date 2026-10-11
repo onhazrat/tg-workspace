@@ -35,7 +35,7 @@ import {
   sentenceCase,
 } from "./model"
 import { ProtoRow, ScopeBadge } from "./ProtoRow"
-import { ProtoPanel } from "./panels"
+import { ProtoPanel, SystemTool } from "./panels"
 
 type S = ReturnType<typeof useSettings>
 
@@ -133,6 +133,13 @@ export const VariantC: React.FC<{ highlightId: string | null }> = ({
   }
 
   const group = PROTO_GROUPS.find((g) => g.id === open)
+  const [tool, setTool] = useState<string | null>(null)
+  if (tool)
+    return (
+      <div className="-m-8 h-full overflow-y-auto bg-app-card pb-32">
+        <SystemTool section={tool} onBack={() => setTool(null)} />
+      </div>
+    )
 
   return (
     <div className="-m-8 h-full overflow-y-auto bg-app-muted/30">
@@ -221,13 +228,15 @@ export const VariantC: React.FC<{ highlightId: string | null }> = ({
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {MOVED_OUT.map((m) => (
-                <span
+                <button
+                  type="button"
                   key={m.section}
                   title={m.why}
-                  className="rounded-full border border-app-ink/15 bg-app-card px-3 py-1 text-xs text-app-ink/70"
+                  onClick={() => setTool(m.section)}
+                  className="rounded-full border border-app-ink/15 bg-app-card px-3 py-1 text-xs text-app-ink/70 hover:border-app-ink/40 hover:text-app-ink"
                 >
                   {m.label}
-                </span>
+                </button>
               ))}
             </div>
           </div>
