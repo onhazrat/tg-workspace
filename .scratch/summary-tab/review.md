@@ -45,3 +45,25 @@ Scope creep:
 - `PublishRequest` lost its raw `token` field and validator (defensible, nothing sent it; an API change).
 - `deps.py` View-as inventories accept `{param}` templates, widening matching for every inventory; needs its own guard test.
 - The quick message picked up link-preview suppression and the citation style; check the spec on whether link previews apply to it.
+
+# SUMTAB-10 review (572fa333...b3e1605d)
+
+## Standards
+
+- Extends the session finding: `_deliver` holds the request session across `await send_parts(...)` (network settings before, `BotCredential` after), and `resume_publication` adds the `PublishLog` read before it. Both manual and scheduled sends go through it.
+- Correctness: two concurrent resumes send the same Parts twice. `resume_publication` reads `partsSent` and sends with no claim. Claim the row first with a conditional `UPDATE ... WHERE partsSent = n RETURNING` and add a concurrent-resume test.
+- Correctness: `PartFailed` carries only `sent` and drops the responses of the Parts that went out, so after a resume `full_response` holds 3 responses against 5 Parts.
+- Smells: `partsSent` in untyped `full_request` JSON (acceptable, no migration); `_deliver` takes 10 keyword arguments; the service raises `HTTPException` 404/409 where its sibling raises domain exceptions the route maps; the route validates with a bare `assert` (stripped by `-O`); a JSDoc in `queryKeys.ts` sits above the wrong key.
+
+## Spec
+
+- The scheduler test runs `_auto_publish` once; nothing asserts that a second tick leaves the partial alone.
+- A stop at Part 1 is plain `failed`, not partial (`0 < sent`). Decision: keep it; nothing was delivered, so a fresh Publish is the same act.
+- Ticket 10's boxes are unticked too.
+
+# Decisions for the fixer (lead, 2026-10-11)
+
+- The header's range uses the Account's `timeZone` setting, falling back to the browser zone while it is empty, so the header and the published metadata agree.
+- The quick message takes neither the citation style (spec lines 321-322); check the spec for link previews and follow it.
+- Keep the `PublishRequest` token removal and the JSON `partsSent`.
+- Tick the checkboxes of every ticket whose behaviour is implemented.
