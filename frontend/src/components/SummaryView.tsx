@@ -1,6 +1,6 @@
 import { motion } from "motion/react"
 import type React from "react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
@@ -14,12 +14,16 @@ import { useAI } from "../contexts/AIContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
+import { useCitedPosts } from "../hooks/useCitedPosts"
 import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { SummaryBody } from "./summary-view/SummaryBody"
-import { summaryMarkdownComponents } from "./summary-view/SummaryMarkdown"
+import {
+  summaryMarkdownComponents,
+  useCitationWorkspace,
+} from "./summary-view/SummaryMarkdown"
 import { SummaryPublishPanel } from "./summary-view/SummaryPublishPanel"
 import { summaryViewState } from "./summary-view/summary-view-model"
 import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
@@ -48,6 +52,21 @@ export const SummaryView: React.FC = () => {
   // projection omits (it was ~94% of that payload).
   const { data: currentSummaryDetail } = useSummaryDetailQuery(currentSummaryId)
 
+  const {
+    refs,
+    resolve,
+    loading: citedLoading,
+  } = useCitedPosts(currentSummaryDetail)
+  const cited = useMemo(
+    () => ({
+      posts: refs.map((r) => resolve(r.channelName, r.postId)),
+      // The detail holds the Summary's Citations; until it arrives, loading.
+      loading: citedLoading || (!!currentSummaryId && !currentSummaryDetail),
+      covered: currentSummaryDetail?.scope?.posts,
+    }),
+    [refs, resolve, citedLoading, currentSummaryId, currentSummaryDetail],
+  )
+
   const { currentSummary, summaryBody, isPending, running } = summaryViewState({
     history: summariesHistory,
     currentSummaryId,
@@ -57,6 +76,7 @@ export const SummaryView: React.FC = () => {
     summarizing,
   })
 
+  const workspace = useCitationWorkspace()
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [isEditingNote, setIsEditingNote] = useState(false)
   // Read from the loaded record, so a saved report renders in its own language
@@ -132,6 +152,8 @@ export const SummaryView: React.FC = () => {
           scopeLine={(artifact, className) => (
             <ArtifactScopeLine artifact={artifact} className={className} />
           )}
+          cited={cited}
+          workspace={workspace}
           textSize={settings.summaryTextSize}
           onTextSizeChange={settings.setSummaryTextSize}
           zone={{

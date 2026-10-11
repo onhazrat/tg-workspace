@@ -1,12 +1,17 @@
 import type React from "react"
-
+import type { ScopedPostRef } from "@/client"
+import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { SummaryTextSize } from "@/lib/settings/schema"
+import type { CitedPost } from "@/lib/summaries/cited-posts"
 import type { Summary } from "@/types"
+import { CoverageWall } from "./CoverageWall"
+import { PhotoStrip } from "./PhotoStrip"
 import {
   FoldableSections,
   PROSE_SIZE,
   ReadingControls,
 } from "./ReadingControls"
+import type { CitationWorkspace } from "./SummaryCitation"
 import { type ReaderZone, SummaryHeader } from "./SummaryHeader"
 import { SummaryNote } from "./SummaryNote"
 import { GeneratingSkeleton, PendingSummaryPanel } from "./SummaryParts"
@@ -37,6 +42,18 @@ export interface SummaryBodyProps {
   zone: ReaderZone
   textSize: SummaryTextSize
   onTextSizeChange: (size: SummaryTextSize) => void
+  /**
+   * The saved Summary's Cited Posts in first-Citation order (`useCitedPosts`),
+   * for the photo strip and the coverage wall, with the frozen Scope's Post
+   * refs (null when none were recorded); absent while nothing is saved.
+   */
+  cited?: {
+    posts: CitedPost[]
+    loading: boolean
+    covered?: ScopedPostRef[] | null
+  }
+  /** The workspace's Channels, for the coverage wall's avatars and cards. */
+  workspace: CitationWorkspace
 }
 
 /** The Summary card's contents: pending, report, generating or empty. */
@@ -70,6 +87,13 @@ export function SummaryBody(props: SummaryBodyProps) {
           running={props.running}
           onRerun={props.onRerun}
         />
+        {summary && props.cited && (
+          <PhotoStrip
+            cited={props.cited.posts}
+            loading={props.cited.loading}
+            dir={props.direction.dir}
+          />
+        )}
         <ReadingControls
           textSize={props.textSize}
           onTextSizeChange={props.onTextSizeChange}
@@ -80,6 +104,20 @@ export function SummaryBody(props: SummaryBodyProps) {
         >
           <FoldableSections markdown={body} render={props.renderMarkdown} />
         </div>
+        {summary &&
+          props.cited &&
+          (props.cited.loading ? (
+            <p className="mt-10 text-xs text-app-ink/50">
+              Loading the coverage…
+            </p>
+          ) : (
+            <CoverageWall
+              scopeChannels={scopeChannels(summary)}
+              cited={props.cited.posts}
+              covered={props.cited.covered}
+              workspace={props.workspace}
+            />
+          ))}
 
         {summary && (
           <>

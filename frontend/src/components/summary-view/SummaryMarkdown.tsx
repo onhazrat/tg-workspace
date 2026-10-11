@@ -10,8 +10,26 @@ import {
   type CitationRenderer,
   splitCitations,
 } from "@/lib/citations/replace-citations"
-import { SummaryCitation, useCitationSheet } from "./SummaryCitation"
+import {
+  type CitationWorkspace,
+  SummaryCitation,
+  useCitationSheet,
+} from "./SummaryCitation"
 import { extractText, relatedPostsQuery } from "./summary-text"
+
+/** The workspace's Channels, which a post card and an avatar read. */
+export function useCitationWorkspace(): CitationWorkspace {
+  const { channels } = useData()
+  const { addNewChannel } = useScraper()
+  return React.useMemo(
+    () => ({
+      channel: (name: string) =>
+        channels.find((c) => c.name.toLowerCase() === name.toLowerCase()),
+      onAddChannel: addNewChannel,
+    }),
+    [channels, addNewChannel],
+  )
+}
 
 /** Draws each Citation as the Cited Post's hover card or bottom sheet (SUMTAB-04). */
 function useCitationRenderer(): CitationRenderer {
@@ -20,16 +38,7 @@ function useCitationRenderer(): CitationRenderer {
   const { data: detail } = useSummaryDetailQuery(currentSummaryId)
   const { resolve, loading } = useCitedPosts(detail)
   const sheet = useCitationSheet()
-  const { channels } = useData()
-  const { addNewChannel } = useScraper()
-  const workspace = React.useMemo(
-    () => ({
-      channel: (name: string) =>
-        channels.find((c) => c.name.toLowerCase() === name.toLowerCase()),
-      onAddChannel: addNewChannel,
-    }),
-    [channels, addNewChannel],
-  )
+  const workspace = useCitationWorkspace()
   return React.useCallback<CitationRenderer>(
     (channelName, postId, key) => (
       <SummaryCitation

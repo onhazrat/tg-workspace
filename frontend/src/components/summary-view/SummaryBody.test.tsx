@@ -56,6 +56,7 @@ function renderBody(props: Partial<SummaryBodyProps>) {
       zone={{ timeZone: "Asia/Tehran", locale: "en-US" }}
       textSize="M"
       onTextSizeChange={() => {}}
+      workspace={{ channel: () => undefined, onAddChannel: () => {} }}
       {...handlers}
       {...props}
     />,
