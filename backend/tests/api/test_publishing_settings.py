@@ -98,8 +98,10 @@ def _publish_summary(
     headers: dict[str, str],
     text: str,
     metadata_text: str | None = None,
+    publishing: dict[str, Any] | None = None,
 ) -> None:
-    """Publish a Summary of `text`, its metadata the hand-written text given."""
+    """Publish a Summary of `text`, its metadata the hand-written text given,
+    with `publishing` as the Summary's own Publication Options."""
     r = client.put(
         f"{DATA}/chat-destinations/settings-dest",
         json={"name": "Desk", "chatId": "-100123"},
@@ -119,7 +121,10 @@ def _publish_summary(
                 model="m",
                 post_count=1,
                 timestamp=0,
-                extra={"metadataText": metadata_text} if metadata_text else {},
+                extra={
+                    **({"metadataText": metadata_text} if metadata_text else {}),
+                    **({"publishing": publishing} if publishing else {}),
+                },
             )
         )
         session.commit()
@@ -254,4 +259,60 @@ def test_an_account_that_turned_link_previews_on_gets_them(
     _publish(client, superuser_token_headers, CITED, metadata_text="Meta")
 
     assert len(telegram.bodies) == 2
+    assert all("link_preview_options" not in b for b in telegram.bodies)
+
+
+# --------------------------------------------------------------------------
+# A Summary's own Publication Options
+# --------------------------------------------------------------------------
+
+
+def test_a_summarys_own_citation_style_wins_over_the_accounts(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    """Settings is the default; the Summary tab changes it for one Summary."""
+    _set(client, superuser_token_headers, citationStyle="numbered")
+
+    _publish_summary(
+        client,
+        superuser_token_headers,
+        CITED,
+        publishing={"citationStyle": "channelName"},
+    )
+
+    assert telegram.texts == ["Rates rose (news_ir) and fell (tech, news_ir)."]
+
+
+def test_a_summarys_own_link_preview_choice_wins_over_the_accounts(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    _publish_summary(
+        client, superuser_token_headers, CITED, publishing={"linkPreviews": True}
+    )
+
+    assert telegram.bodies
+    assert all("link_preview_options" not in b for b in telegram.bodies)
+
+
+def test_a_summary_follows_settings_for_every_option_it_did_not_change(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    bot: str,
+    telegram: _FakeTelegram,
+) -> None:
+    """The override is key by key, so a later change in Settings still reaches
+    a Summary that changed only its link previews."""
+    _set(client, superuser_token_headers, citationStyle="channelName")
+
+    _publish_summary(
+        client, superuser_token_headers, CITED, publishing={"linkPreviews": True}
+    )
+
+    assert telegram.texts == ["Rates rose (news_ir) and fell (tech, news_ir)."]
     assert all("link_preview_options" not in b for b in telegram.bodies)

@@ -17,7 +17,11 @@ import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { Summary } from "@/types"
 import { PublishPanel } from "./PublishPanel"
-import { publicationToast } from "./publish-panel-model"
+import {
+  publicationToast,
+  publishingAfterChange,
+  summaryPublishing,
+} from "./publish-panel-model"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
@@ -42,12 +46,23 @@ export function SummaryPublishPanel({
     includeMetadata: summary.sendMetadata === true,
     metadataInFirstPart: summary.metadataInFirstPart === true,
   })
+  // Only what this Summary changed; the rest follows Settings, on the server
+  // as here.
+  const [ownPublishing, setOwnPublishing] = useState(summary.publishing ?? {})
+  const publishing = summaryPublishing(ownPublishing, settings)
   const metadataText = summary.metadataText ?? ""
   const plan = useQuery({
     queryKey: queryKeys.publicationPlan(summary.id, {
       ...options,
       metadataText,
       metadataOmittedRows: summary.metadataOmittedRows ?? [],
+      // The saved copy, not the pick: the plan reads it from the row.
+      publishing: summary.publishing ?? null,
+      defaults: [
+        settings.citationStyle,
+        settings.linkPreviews,
+        settings.timeZone,
+      ],
       text: summary.text,
     }),
     queryFn: () =>
@@ -93,8 +108,19 @@ export function SummaryPublishPanel({
       metadataText={metadataText}
       onSaveMetadataText={(text) => onSave({ metadataText: text })}
       onSaveOmittedRows={(keys) => onSave({ metadataOmittedRows: keys })}
-      citationStyle={settings.citationStyle}
-      linkPreviews={settings.linkPreviews}
+      publishing={publishing}
+      publishingCustomized={Object.keys(ownPublishing).length > 0}
+      onPublishingChange={(change) => {
+        const next = publishingAfterChange(ownPublishing, publishing, change)
+        if (!next) return
+        setOwnPublishing(next)
+        void onSave({ publishing: next })
+      }}
+      onPublishingReset={() => {
+        setOwnPublishing({})
+        // An explicit null is what removes it from the Summary.
+        void onSave({ publishing: null })
+      }}
       onOpenSettings={() =>
         navigate({
           search: (prev) => ({

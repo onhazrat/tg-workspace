@@ -24,12 +24,20 @@ from app.services.user_settings import get_user_setting
 
 
 def load_publishing_settings(
-    session: Session, user_id: uuid.UUID | None
+    session: Session, user_id: uuid.UUID | None, overrides: Any = None
 ) -> PublishingSettings:
-    """The Account's Publishing settings (SUMTAB-08); defaults with no Account."""
+    """The Account's Publishing settings (SUMTAB-08); defaults with no Account.
+
+    `overrides` is a Summary's own `publishing` choices, laid key by key over
+    the Account's: Settings is the default every Summary starts from, and a
+    Summary keeps only what it changed, so a later change in Settings still
+    reaches every option it did not.
+    """
     stored = (
         get_user_setting(session, PUBLISHING_KEY, user_id=user_id) if user_id else {}
     )
+    if isinstance(overrides, dict):
+        stored = {**stored, **{k: v for k, v in overrides.items() if v is not None}}
     return PublishingSettings.from_stored(stored)
 
 
@@ -67,14 +75,16 @@ async def publish_summary_text(
 
     Cut and rewritten like a Publication, but its Citations stay as typed:
     "citation style has nothing to act on there" (spec). Link previews still
-    follow the Account, as `send_parts` applies them to every Part.
+    follow the Account.
     """
+    prefs = load_publishing_settings(session, acting_user_id)
     return await send_parts(
         session,
         acting_user_id=acting_user_id,
         credential_id=credential_id,
         chat_id=chat_id,
         parts=[p.text for p in build_parts(text, metadata_text)],
+        link_previews=prefs.link_previews,
         proxies=proxies,
         proxy_concurrency=proxy_concurrency,
         tor_auto_rotate=tor_auto_rotate,
@@ -89,6 +99,7 @@ async def send_parts(
     credential_id: str,
     chat_id: str,
     parts: Sequence[str],
+    link_previews: bool,
     proxies: list[str] | None = None,
     proxy_concurrency: tuple[int, dict[str, int]] | None = None,
     tor_auto_rotate: bool = False,
@@ -142,8 +153,6 @@ async def send_parts(
     results: list[Any] = []
     telemetry_logs: list[Any] = []
 
-    # The sender's own settings, so a scheduled send follows them too.
-    prefs = load_publishing_settings(session, acting_user_id)
     # Every read is in hand as a plain value, so the transaction ends here,
     # before seconds of waiting on Telegram: one held across the sends sits
     # `idle in transaction` and pins the xmin horizon (CLAUDE.md). Whatever the
@@ -158,8 +167,8 @@ async def send_parts(
         }
         if entities:
             payload["entities"] = entities
-        if not prefs.link_previews:
-            # Off unless the Account turned them on: a cited Post's card under
+        if not link_previews:
+            # Off unless the Account or the Summary turned them on: a cited Post's card under
             # every Part is noise in the channel (SUMTAB-08).
             payload["link_preview_options"] = {"is_disabled": True}
         data, telem = await fetch_with_retry(

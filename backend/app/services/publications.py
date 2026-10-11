@@ -28,6 +28,7 @@ from app.services.network_settings import (
 from app.services.publication_parts import (
     MetadataRow,
     Part,
+    PublishingSettings,
     build_parts,
     metadata_rows,
     metadata_text,
@@ -45,12 +46,24 @@ class Plan:
     default_metadata: str
     #: Every generated row, each with whether the Summary sends it.
     metadata_rows: list[tuple[MetadataRow, bool]]
+    #: The Account's settings with the Summary's own choices over them.
+    settings: PublishingSettings
 
 
 def omitted_rows(extra: dict[str, Any]) -> list[str]:
     """The metadata rows a Summary leaves out; anything unusable is none."""
     value = extra.get("metadataOmittedRows")
     return [k for k in value if isinstance(k, str)] if isinstance(value, list) else []
+
+
+def summary_publishing(
+    session: Session, summary: Summary, *, user_id: uuid.UUID
+) -> PublishingSettings:
+    """What a Publication of `summary` follows: its own Publication Options
+    where it set them, the Account's Settings everywhere else."""
+    return load_publishing_settings(
+        session, user_id, (summary.extra or {}).get("publishing")
+    )
 
 
 def plan_publication(
@@ -61,12 +74,12 @@ def plan_publication(
     include_metadata: bool,
     metadata_in_first_part: bool,
 ) -> Plan:
-    """The Parts a Publication of `summary` sends, in `user_id`'s settings.
+    """The Parts a Publication of `summary` sends, in `summary_publishing`.
 
     The metadata is the Summary's hand-written text when it has one, else
-    generated in the Account's time zone without the rows it leaves out.
+    generated in that time zone without the rows it leaves out.
     """
-    prefs = load_publishing_settings(session, user_id)
+    prefs = summary_publishing(session, summary, user_id=user_id)
     extra = summary.extra or {}
     scope = FrozenScope.from_stored(summary.scope)
     covered = scope.scoped_post_count if scope else None
@@ -93,6 +106,7 @@ def plan_publication(
         parts=parts,
         default_metadata=generated,
         metadata_rows=[(row, row.key not in omitted) for row in rows],
+        settings=prefs,
     )
 
 
@@ -140,13 +154,13 @@ async def send_publication(
     records it as failed with every planned Part's text.
     """
     dest = resolve_destination(session, destination_id, user_id=user_id)
-    parts = plan_publication(
+    plan = plan_publication(
         session,
         summary,
         user_id=user_id,
         include_metadata=include_metadata,
         metadata_in_first_part=metadata_in_first_part,
-    ).parts
+    )
     return await _deliver(
         session,
         summary_id=summary.id,
@@ -155,9 +169,10 @@ async def send_publication(
         bot_id=bot_id,
         chat_id=dest.chat_id,
         chat_name=dest.name,
-        parts=[p.text for p in parts],
+        parts=[p.text for p in plan.parts],
         already_sent=0,
         earlier_responses=[],
+        link_previews=plan.settings.link_previews,
     )
 
 
@@ -219,6 +234,7 @@ async def _deliver(
     parts: list[str],
     already_sent: int,
     earlier_responses: list[Any],
+    link_previews: bool,
 ) -> Outcome:
     """Send `parts[already_sent:]` and file them as publish log `log_id`.
 
@@ -238,6 +254,7 @@ async def _deliver(
             credential_id=bot_id,
             chat_id=chat_id,
             parts=parts[already_sent:],
+            link_previews=link_previews,
             proxies=resolve_proxies(network),
             proxy_concurrency=resolve_proxy_concurrency(network),
             tor_auto_rotate=bool(network.get("torAutoRotate")),
@@ -335,4 +352,7 @@ async def resume_publication(
         parts=[str(text) for text in request["parts"]],
         already_sent=partial.parts_sent,
         earlier_responses=earlier,
+        link_previews=summary_publishing(
+            session, summary, user_id=user_id
+        ).link_previews,
     )

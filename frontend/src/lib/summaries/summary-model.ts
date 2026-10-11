@@ -92,6 +92,7 @@ export function successorSummary(
     sendMetadata: previous.sendMetadata === true,
     metadataInFirstPart: previous.metadataInFirstPart,
     metadataOmittedRows: previous.metadataOmittedRows,
+    publishing: previous.publishing,
     postSearch: previous.postSearch,
     semanticSearchQuery: previous.semanticSearchQuery,
     semanticSearchRespectsChannels: previous.semanticSearchRespectsChannels,
