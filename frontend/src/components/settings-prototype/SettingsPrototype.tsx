@@ -15,6 +15,7 @@ const VARIANTS = [
   { key: "0", name: "Current (main)" },
   { key: "A", name: "One list (VS Code)" },
   { key: "B", name: "A, generated from the backend schema" },
+  { key: "C", name: "B, with Configuration merged in" },
 ]
 
 export const SettingsPrototype: React.FC<{ current: React.ReactNode }> = ({
@@ -28,6 +29,8 @@ export const SettingsPrototype: React.FC<{ current: React.ReactNode }> = ({
         <VariantA highlightId={highlightId} />
       ) : variant === "B" ? (
         <VariantB highlightId={highlightId} />
+      ) : variant === "C" ? (
+        <VariantB highlightId={highlightId} merged />
       ) : (
         current
       )}

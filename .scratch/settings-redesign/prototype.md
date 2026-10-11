@@ -109,3 +109,22 @@ and start Vite with `PROTO_API_PORT=8030` so `/proto` is proxied.
 Found while building it: frontend and backend defaults already disagree in
 places (the frontend schema guessed some), which is the drift a single schema
 removes.
+
+## Round 5: variant C, Configuration merged into Settings (2026-10-11)
+
+C is B with `merged` on (`VariantB.tsx`); the separate Configuration page is
+gone. Every `config.py` field now lives in a Settings group:
+
+- policy knobs (8) are rows, as in B;
+- seeds (10 mapped via `SEED_OF`) are folded into the row they seed: the row
+  says where its default comes from, and reset goes to the deployment's default;
+- everything else sits under its group in a collapsed "Show N deployment values
+  (read-only, set in .env)" for Admins, grouped by name prefix
+  (`GROUP_BY_PREFIX`); unmatched names land in a new Infrastructure group, and
+  Directory & Discover is new too.
+
+Admins see every value except the 9 secrets, which show set / not set and their
+source. Reason: `SECRET_KEY` signs every login and `TOKEN_ENCRYPTION_KEY`
+decrypts every account's bot tokens and AI keys; Admin is a grantable role, not
+"has server access", and showing them would turn one stolen Admin session into
+a permanent full compromise. The real backend already redacts them.

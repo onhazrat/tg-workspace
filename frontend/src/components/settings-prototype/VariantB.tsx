@@ -9,7 +9,7 @@
  * edits here; Configuration is generated from the same classification.
  */
 import { useQuery } from "@tanstack/react-query"
-import { Search, X } from "lucide-react"
+import { ChevronDown, Search, X } from "lucide-react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { headers } from "@/api/base"
@@ -83,6 +83,20 @@ const LAYOUT: {
     panels: ["proxy", "tor"],
   },
   {
+    id: "directory",
+    label: "Directory & Discover",
+    blurb: "How the Directory harvest and Discover probes run.",
+    items: [],
+    panels: [],
+  },
+  {
+    id: "infrastructure",
+    label: "Infrastructure",
+    blurb: "Database, mail, secrets: what the app needs before it starts.",
+    items: [],
+    panels: [],
+  },
+  {
     id: "access",
     label: "Access & sessions",
     blurb: "Were `.env` only. Now an Admin changes them without a redeploy.",
@@ -102,8 +116,94 @@ interface EnvRow {
   key: string
   value: unknown
   source: string | null
+  configured: boolean
+  codeDefault: unknown
+  group: string
+  seedOf: string | null
   kind: "policy" | "secret" | "bootstrap" | "startup" | "seed"
   reason: string
+}
+
+function useEnvRows(enabled: boolean) {
+  return useQuery({
+    queryKey: ["proto-settings-env"],
+    enabled,
+    queryFn: async () =>
+      (
+        await fetch("/proto/settings/env", { headers: headers() })
+      ).json() as Promise<EnvRow[]>,
+  })
+}
+
+const show = (v: unknown) =>
+  v === null || v === undefined || v === "" ? "not set" : JSON.stringify(v)
+
+/** Variant C: a group's `.env` values, read-only, behind a disclosure. */
+const EnvSection: React.FC<{ rows: EnvRow[]; open: boolean }> = ({
+  rows,
+  open: forced,
+}) => {
+  const [open, setOpen] = useState(false)
+  const expanded = open || forced
+  return (
+    <section className="py-3 pl-4 pr-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 text-[13px] text-app-ink/60 hover:text-app-ink"
+      >
+        <ChevronDown
+          size={14}
+          className={cn("transition-transform", !expanded && "-rotate-90")}
+        />
+        {expanded ? "Hide" : "Show"} {rows.length} deployment value
+        {rows.length === 1 ? "" : "s"} (read-only, set in .env)
+      </button>
+      {expanded ? (
+        <div className="mt-2 divide-y divide-app-ink/5 rounded-md border border-app-ink/10 bg-app-muted/20">
+          {rows.map((r) => (
+            <div
+              key={r.key}
+              id={`setting-env-${r.key}`}
+              className="flex items-start gap-4 px-4 py-2.5"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs font-semibold">
+                    {r.key}
+                  </span>
+                  <Badge variant="secondary">{KIND_LABEL[r.kind]}</Badge>
+                </div>
+                <p className="mt-0.5 text-[12px] text-app-ink/50">
+                  {r.reason}
+                  {r.kind === "startup" || r.kind === "seed"
+                    ? " Change it in .env; it applies after a restart."
+                    : ""}
+                </p>
+              </div>
+              <div className="max-w-72 shrink-0 text-right">
+                <div className="truncate font-mono text-xs">
+                  {r.kind === "secret"
+                    ? r.configured
+                      ? "set (hidden)"
+                      : "not set"
+                    : show(r.value ?? r.codeDefault)}
+                </div>
+                <div className="text-[11px] text-app-ink/40">
+                  {r.configured ? (r.source ?? ".env") : "code default"}
+                  {r.kind !== "secret" &&
+                  r.configured &&
+                  JSON.stringify(r.value) !== JSON.stringify(r.codeDefault)
+                    ? ` · code default ${show(r.codeDefault)}`
+                    : ""}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
 }
 
 const KIND_LABEL: Record<EnvRow["kind"], string> = {
@@ -185,9 +285,15 @@ const B_PAGES: ProtoPage[] = PAGES.map((p) =>
     : p,
 )
 
-export const VariantB: React.FC<{ highlightId: string | null }> = ({
-  highlightId,
-}) => {
+/** Groups that only hold `.env` values, so only variant C draws them. */
+const ENV_ONLY_GROUPS = new Set(["directory", "infrastructure"])
+const C_PAGES = PAGES.filter((p) => p.id !== "configuration")
+
+export const VariantB: React.FC<{
+  highlightId: string | null
+  /** Variant C: Configuration folded into Settings. */
+  merged?: boolean
+}> = ({ highlightId, merged = false }) => {
   const { data: rows, error, isLoading } = useSettingsSchema()
   const isModified = useIsModified()
   const [query, setQuery] = useState("")
@@ -196,15 +302,38 @@ export const VariantB: React.FC<{ highlightId: string | null }> = ({
   const [active, setActive] = useState("appearance")
   const [pageId, setPageId] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const page = B_PAGES.find((p) => p.id === pageId)
+  const pages = merged ? C_PAGES : B_PAGES
+  const page = pages.find((p) => p.id === pageId)
   const isAdmin = useCanManageJobs()
   const { user } = useAuth()
+  const { data: envRows = [] } = useEnvRows(merged && isAdmin)
+  const seedByField = Object.fromEntries(
+    envRows.filter((e) => e.seedOf).map((e) => [e.seedOf, e]),
+  )
+  const envMatches = (e: EnvRow) => {
+    const q = query.trim().toLowerCase()
+    return !q || `${e.key} ${e.reason}`.toLowerCase().includes(q)
+  }
 
   const fields = useMemo(() => fieldsOf(rows ?? []), [rows])
-  const groups = LAYOUT.filter((g) => g.id !== "access" || isAdmin).map((g) => {
+  const groups = LAYOUT.filter(
+    (g) =>
+      (g.id !== "access" || isAdmin) &&
+      (!ENV_ONLY_GROUPS.has(g.id) || (merged && isAdmin)),
+  ).map((g) => {
     const all = select(fields, g.items)
     return {
       group: g,
+      env:
+        merged && !modifiedOnly && (scope === "all" || scope === "deployment")
+          ? envRows.filter(
+              (e) =>
+                e.group === g.id &&
+                e.kind !== "policy" &&
+                !e.seedOf &&
+                envMatches(e),
+            )
+          : [],
       modified: all.filter(isModified).length,
       fields: all
         .filter((f) => matchesField(f, query))
@@ -222,7 +351,9 @@ export const VariantB: React.FC<{ highlightId: string | null }> = ({
       ),
     }
   })
-  const visible = groups.filter((g) => g.fields.length + g.panels.length > 0)
+  const visible = groups.filter(
+    (g) => g.fields.length + g.panels.length + g.env.length > 0,
+  )
   const modifiedTotal = groups.reduce((a, g) => a + g.modified, 0)
 
   useEffect(() => {
@@ -254,7 +385,7 @@ export const VariantB: React.FC<{ highlightId: string | null }> = ({
         <div className="mb-2 px-2 text-xs font-semibold text-app-ink/50">
           Settings
         </div>
-        {visible.map(({ group, fields: fs, panels, modified }) => (
+        {visible.map(({ group, fields: fs, panels, env, modified }) => (
           <button
             key={group.id}
             type="button"
@@ -274,6 +405,7 @@ export const VariantB: React.FC<{ highlightId: string | null }> = ({
               {modified > 0 ? <ModifiedCount n={modified} /> : null}
               <span className="text-xs text-app-ink/40">
                 {fs.length + panels.length}
+                {env.length > 0 ? ` + ${env.length}` : ""}
               </span>
             </span>
           </button>
@@ -284,24 +416,27 @@ export const VariantB: React.FC<{ highlightId: string | null }> = ({
               <div className="mb-1 px-2 text-xs font-semibold text-app-ink/50">
                 {AREA_LABEL[area]}
               </div>
-              {B_PAGES.filter(
-                (p) =>
-                  p.area === area && !(p.notForSuperuser && user?.is_superuser),
-              ).map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPageId(p.id)}
-                  className={cn(
-                    "w-full rounded px-2 py-1.5 text-left text-sm",
-                    pageId === p.id
-                      ? "bg-app-ink/10 font-semibold"
-                      : "text-app-ink/70 hover:bg-app-ink/5",
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {pages
+                .filter(
+                  (p) =>
+                    p.area === area &&
+                    !(p.notForSuperuser && user?.is_superuser),
+                )
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPageId(p.id)}
+                    className={cn(
+                      "w-full rounded px-2 py-1.5 text-left text-sm",
+                      pageId === p.id
+                        ? "bg-app-ink/10 font-semibold"
+                        : "text-app-ink/70 hover:bg-app-ink/5",
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
             </div>
           ),
         )}
@@ -367,7 +502,7 @@ export const VariantB: React.FC<{ highlightId: string | null }> = ({
                 The prototype schema API is not reachable ({String(error)}).
               </p>
             ) : null}
-            {visible.map(({ group, fields: fs, panels, modified }) => (
+            {visible.map(({ group, fields: fs, panels, env, modified }) => (
               <section
                 key={group.id}
                 id={`proto-group-${group.id}`}
@@ -386,11 +521,15 @@ export const VariantB: React.FC<{ highlightId: string | null }> = ({
                       key={f.key}
                       field={f}
                       highlighted={highlightId === f.key}
+                      seed={merged ? seedByField[f.key] : undefined}
                     />
                   ))}
                   {panels.map((p) => (
                     <ProtoPanel key={p} id={p} />
                   ))}
+                  {env.length > 0 ? (
+                    <EnvSection rows={env} open={query.trim() !== ""} />
+                  ) : null}
                 </div>
               </section>
             ))}

@@ -39,6 +39,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import Settings
 from app.jobs.translation_batch import TRANSLATION_LANGUAGE_CODES
+from app.services.configuration_catalog import _jsonable
 
 DSN = os.environ["PROTO_DSN"]
 API_BASE = os.environ["PROTO_API_BASE"].rstrip("/")
@@ -241,7 +242,7 @@ class Reach(BaseModel):
 
 class Jobs(BaseModel):
     embeddingsEnabled: bool = Field(
-        False,
+        env_default("JOBS_EMBEDDINGS_ENABLED_DEFAULT"),
         title="Embeddings",
         description="Embed posts for semantic search and RAG.",
     )
@@ -396,6 +397,63 @@ BOOTSTRAP = {
 }
 
 
+#: A seed is the starting value of a setting a row already edits; C shows it in
+#: that row instead of as an entry of its own.
+SEED_OF = {
+    "AUTO_SYNC_INTERVAL_MINUTES_DEFAULT": "sync.regularSyncIntervalMinutes",
+    "JOBS_EMBEDDINGS_ENABLED_DEFAULT": "jobs.embeddingsEnabled",
+    "RETENTION_POST_DAYS_DEFAULT": "retention.postRetentionDays",
+    "RETENTION_SHARED_LOG_DAYS_DEFAULT": "retention.sharedLogRetentionDays",
+    "RETENTION_PAYLOAD_DAYS_DEFAULT": "retention.payloadRetentionDays",
+    "RETENTION_LOG_DAYS_DEFAULT": "retention_prefs.logRetentionDays",
+    "RETENTION_REPORT_DAYS_DEFAULT": "retention_prefs.reportRetentionDays",
+    "RETENTION_REPORT_MAX_DEFAULT": "retention_prefs.reportRetentionMax",
+    "TRANSLATION_TARGET_LANGUAGE_DEFAULT": "translation.translationTargetLanguage",
+    "DEFAULT_AI_MODEL": "ai_prefs.selectedModel",
+}
+
+#: Which Settings group a `.env` value is shown under, by name prefix. First
+#: match wins; anything unmatched is infrastructure.
+GROUP_BY_PREFIX: tuple[tuple[str, str], ...] = (
+    ("SYNC_JOB_RETENTION", "access"),
+    ("SLOW_REQUEST", "access"),
+    ("ACCESS_TOKEN", "access"),
+    ("VIEW_AS_", "access"),
+    ("USERS_", "access"),
+    ("EMAIL_RESET", "access"),
+    ("RETENTION_", "retention"),
+    ("CHANNEL_PHOTO_ORPHAN", "retention"),
+    ("CHANNEL_IMAGE_", "retention"),
+    ("POST_THUMB_CACHE", "retention"),
+    ("SYNC_", "sync"),
+    ("AUTO_SYNC_", "sync"),
+    ("SCRAPER_", "sync"),
+    ("QUOTA_", "sync"),
+    ("JOBS_", "sync"),
+    ("AUTO_SUMMARY_", "sync"),
+    ("NETWORK_", "network"),
+    ("TOR_", "network"),
+    ("PROXY_", "network"),
+    ("DEFAULT_PROXY", "network"),
+    ("DIRECT_LANE", "network"),
+    ("TELEGRAM_API", "network"),
+    ("EMBEDDING", "ai"),
+    ("RAG_", "ai"),
+    ("TRANSLATION_", "ai"),
+    ("DEFAULT_AI_MODEL", "ai"),
+    ("GEMINI_", "ai"),
+    ("DIRECTORY_", "directory"),
+    ("DISCOVER_", "directory"),
+    ("POST_REFERENCE", "directory"),
+    ("VIEW_OBSERVATION", "directory"),
+    ("POST_LANGUAGE", "directory"),
+)
+
+
+def env_group(name: str) -> str:
+    return next((g for p, g in GROUP_BY_PREFIX if name.startswith(p)), "infrastructure")
+
+
 def env_kind(name: str) -> dict[str, Any]:
     for row_id, row in ROWS.items():
         if name in row.model.model_fields:
@@ -407,7 +465,7 @@ def env_kind(name: str) -> dict[str, Any]:
     if name in SECRET:
         return {
             "kind": "secret",
-            "reason": "A secret: an Admin page that could change it turns a stolen session into a stolen deployment.",
+            "reason": "A secret, so never shown: anyone who reads it can sign in as any account or decrypt every stored credential, and a page that showed it would turn one stolen Admin session into that.",
         }
     if name in BOOTSTRAP:
         return {
@@ -607,6 +665,10 @@ def env(authorization: str | None = Header(None)) -> list[dict[str, Any]]:
                 "key": name,
                 "value": entry.get("value"),
                 "source": entry.get("source"),
+                "configured": bool(entry.get("configured")),
+                "codeDefault": None if name in SECRET else _jsonable(env_default(name)),
+                "group": env_group(name),
+                "seedOf": SEED_OF.get(name),
                 **env_kind(name),
             }
         )

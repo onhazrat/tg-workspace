@@ -158,14 +158,26 @@ export function useIsModified() {
   }
 }
 
+/** The `.env` value that seeds a row's default (variant C). */
+export interface Seed {
+  key: string
+  value: unknown
+  configured: boolean
+  source: string | null
+}
+
 export const SchemaRow: React.FC<{
   field: SchemaField
   highlighted?: boolean
-}> = ({ field: f, highlighted }) => {
+  seed?: Seed
+}> = ({ field: f, highlighted, seed }) => {
   const [value, write, source] = useFieldValue(f)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  const modified = value !== undefined && !valuesEqual(value, f.prop.default)
+  // The deployment can move a default from `.env`; then that is the default.
+  const seeded = seed?.configured === true && seed.value !== undefined
+  const fallback = seeded ? seed.value : f.prop.default
+  const modified = value !== undefined && !valuesEqual(value, fallback)
   const locked = !f.row.editable
 
   const set = async (v: unknown) => {
@@ -226,6 +238,11 @@ export const SchemaRow: React.FC<{
           <p className="mt-1 font-mono text-[11px] text-app-ink/35">
             {f.key}
             {source ? ` · ${source}` : ""}
+            {seed
+              ? seeded
+                ? ` · default ${JSON.stringify(seed.value)} from ${seed.key} (${seed.source})`
+                : ` · default from ${seed.key}, not set, so ${JSON.stringify(f.prop.default)}`
+              : ""}
             {f.row.store === "proto"
               ? " · prototype store, the live app does not read it yet"
               : ""}
