@@ -27,14 +27,18 @@ test("opening a summary from History renders its body", async ({ page }) => {
 
   await expect(page).toHaveURL(/tab=summary/)
   await expect(page).toHaveURL(/summary=e2e-open-summary/)
-  await expect(page.getByText("Three things happened this week")).toBeVisible({
+  await expect(
+    page.getByText("Three things happened this week.", { exact: true }),
+  ).toBeVisible({
     timeout: 20_000,
   })
 })
 
 test("a summary opens from its URL alone", async ({ page }) => {
   await page.goto("/workspace?tab=summary&summary=e2e-open-summary")
-  await expect(page.getByText("Three things happened this week")).toBeVisible({
+  await expect(
+    page.getByText("Three things happened this week.", { exact: true }),
+  ).toBeVisible({
     timeout: 20_000,
   })
 })

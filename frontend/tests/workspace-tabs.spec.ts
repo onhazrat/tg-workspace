@@ -80,7 +80,7 @@ test("each Summary opened from History gets its own tab, once", async ({
     "page",
   )
   await expect.poll(() => tabs(page)).toEqual([...FIXED, "history", OPEN, WIDE])
-  await expect(page.getByText(OPEN_SUMMARY_BODY)).toBeVisible()
+  await expect(page.getByText(OPEN_SUMMARY_BODY, { exact: true })).toBeVisible()
 
   // The set survives a reload.
   await page.reload()
@@ -120,7 +120,7 @@ test('"+" opens an empty tab, so a closed Summary stays put away', async ({
   page,
 }) => {
   await page.goto(`/workspace?tab=summary&summary=${OPEN_SUMMARY_ID}`)
-  await expect(page.getByText(OPEN_SUMMARY_BODY)).toBeVisible({
+  await expect(page.getByText(OPEN_SUMMARY_BODY, { exact: true })).toBeVisible({
     timeout: 20_000,
   })
   await strip(page)
