@@ -9,14 +9,17 @@ export function PostCardBody({
   text,
   linkSpans,
   postSearch,
+  whole = false,
 }: {
   text: string
   /** Link positions in `text`; null for a translation, which has none of its own (ADR-022). */
   linkSpans: Post["linkSpans"] | null
   postSearch: string
+  /** Never collapse: the card scrolls inside its own container (SUMTAB-04). */
+  whole?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
-  const long = isLongPost(text)
+  const long = !whole && isLongPost(text)
   const clipped = long && !expanded
   return (
     <>

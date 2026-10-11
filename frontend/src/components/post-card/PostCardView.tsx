@@ -33,6 +33,8 @@ export interface PostCardViewProps extends PostCardHeaderProps {
    * click.
    */
   onToggleSelected?: (shift: boolean) => void
+  /** Show long text whole, never behind "Show More" (a Citation's card). */
+  wholeText?: boolean
 }
 
 /** Ticked when an Action covers the Post; x fires it from the keyboard. */
@@ -75,6 +77,7 @@ export function PostCardView({
   translation,
   onFindRelated,
   onToggleSelected,
+  wholeText = false,
   ...rest
 }: PostCardViewProps) {
   const { selected } = rest.post
@@ -157,7 +160,7 @@ export function PostCardView({
         </div>
       )}
       <div className="flex flex-col gap-3 px-5 pt-3 pb-2">
-        <PostCardBody {...body} />
+        <PostCardBody {...body} whole={wholeText} />
         <PostCardMedia post={post} />
       </div>
       <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-app-ink/5 px-5 py-1.5 text-[12px] text-app-ink/50">

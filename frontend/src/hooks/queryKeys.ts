@@ -31,6 +31,9 @@ export const queryKeys = {
   publicationPlans: (id: string) => ["publicationPlan", id] as const,
   publicationPlan: (id: string, options: unknown) =>
     ["publicationPlan", id, options] as const,
+  /** A Summary's Cited Posts as they are now, keyed by the refs (SUMTAB-04). */
+  citedPosts: (refs: readonly { channelName: string; postId: number }[]) =>
+    ["citedPosts", refs] as const,
   dbStats: ["dbStats"] as const,
   health: ["health"] as const,
   torStatus: ["torStatus"] as const,

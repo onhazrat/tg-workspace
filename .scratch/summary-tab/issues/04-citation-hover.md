@@ -13,12 +13,12 @@ the hover" under Implementation Decisions.
 
 **Blocked by:** SUMTAB-03 (both change how the report renders; sequenced to avoid conflicts).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Cited Posts resolve live through the existing batch Post lookup, with the stored snapshot as the fallback; a Post in neither shows a clear "not found" state
-- [ ] On hover-capable wide screens the card opens on hover, its height capped to the available space, scrolling inside, with the Post's text expanded rather than clipped behind "Show more"
-- [ ] With no hover or a narrow screen, a tap opens the card in a bottom sheet that scrolls a long Post
-- [ ] The out-of-Scope notice appears only when Covered Posts are on record and the Cited Post is not one of them
-- [ ] Finding a Citation scrolls it into view and highlights it briefly; when called as a dialog closes, it waits for the dialog to be gone so the scroll lock does not swallow it
-- [ ] The Chat tab's citation hovers behave exactly as before
-- [ ] A rendered Summary test covers the hover card (live and snapshot), the phone sheet, and the out-of-Scope notice
+- [x] Cited Posts resolve live through the existing batch Post lookup, with the stored snapshot as the fallback; a Post in neither shows a clear "not found" state
+- [x] On hover-capable wide screens the card opens on hover, its height capped to the available space, scrolling inside, with the Post's text expanded rather than clipped behind "Show more"
+- [x] With no hover or a narrow screen, a tap opens the card in a bottom sheet that scrolls a long Post
+- [x] The out-of-Scope notice appears only when Covered Posts are on record and the Cited Post is not one of them
+- [x] Finding a Citation scrolls it into view and highlights it briefly; when called as a dialog closes, it waits for the dialog to be gone so the scroll lock does not swallow it
+- [x] The Chat tab's citation hovers behave exactly as before
+- [x] A rendered Summary test covers the hover card (live and snapshot), the phone sheet, and the out-of-Scope notice
