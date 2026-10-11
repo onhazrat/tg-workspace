@@ -20,7 +20,10 @@ import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
 import { SummaryBody } from "./summary-view/SummaryBody"
-import { summaryMarkdownComponents } from "./summary-view/SummaryMarkdown"
+import {
+  summaryMarkdownComponents,
+  useCitationWorkspace,
+} from "./summary-view/SummaryMarkdown"
 import { SummaryPublishPanel } from "./summary-view/SummaryPublishPanel"
 import { summaryViewState } from "./summary-view/summary-view-model"
 import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
@@ -59,6 +62,7 @@ export const SummaryView: React.FC = () => {
       posts: refs.map((r) => resolve(r.channelName, r.postId)),
       // The detail holds the Summary's Citations; until it arrives, loading.
       loading: citedLoading || (!!currentSummaryId && !currentSummaryDetail),
+      covered: currentSummaryDetail?.scope?.posts,
     }),
     [refs, resolve, citedLoading, currentSummaryId, currentSummaryDetail],
   )
@@ -72,6 +76,7 @@ export const SummaryView: React.FC = () => {
     summarizing,
   })
 
+  const workspace = useCitationWorkspace()
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [isEditingNote, setIsEditingNote] = useState(false)
   // Read from the loaded record, so a saved report renders in its own language
@@ -148,6 +153,7 @@ export const SummaryView: React.FC = () => {
             <ArtifactScopeLine artifact={artifact} className={className} />
           )}
           cited={cited}
+          workspace={workspace}
           textSize={settings.summaryTextSize}
           onTextSizeChange={settings.setSummaryTextSize}
           zone={{

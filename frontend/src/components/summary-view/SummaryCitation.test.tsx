@@ -74,6 +74,7 @@ function renderReport(
       zone={{ timeZone: "UTC", locale: "en-US" }}
       textSize="M"
       onTextSizeChange={() => {}}
+      workspace={{ channel: () => undefined, onAddChannel: () => {} }}
       renderMarkdown={(md) => (
         <ReactMarkdown
           components={{
