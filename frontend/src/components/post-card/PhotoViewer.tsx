@@ -6,8 +6,10 @@
  * the pointer or the fingers, a double-click or double-tap toggles 2.5x, drag
  * pans a zoomed photo (arithmetic in `photo-viewer-model.ts`). The arrow keys,
  * two side buttons and, at 1x, a sideways swipe step through every photo the
- * page has loaded, each starting whole again; a swipe follows the page's
- * reading direction. A click at 1x, a swipe down, Escape or the close button
+ * page has loaded (or every photo of the start photo's own gallery, such as a
+ * Summary's strip), each starting whole again; swipes, arrows and buttons
+ * follow the page's reading direction. An optional action, such as the strip's
+ * "Find in report", sits over the photo on screen. A click at 1x, a swipe down, Escape or the close button
  * closes it, and the page is left at the Post or Channel of the last photo
  * viewed. On touch a single tap shows or hides the caption, arrows and close
  * button instead. The Channels tab's cards open it too.
@@ -15,7 +17,7 @@
  * The photo is the card's cached thumbnail; there is no larger image.
  */
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog"
 import {
   clampView,
@@ -33,6 +35,13 @@ const BOX = "w-[96vw] h-[94vh]"
 export const GALLERY_CAPTION_ATTR = "data-gallery-caption"
 
 /**
+ * Marks an element whose photos are a gallery of their own, as a Summary's
+ * photo strip is (SUMTAB-05): a photo inside steps through its siblings only,
+ * and a photo outside never steps into it.
+ */
+export const GALLERY_ATTR = "data-gallery"
+
+/**
  * A window event naming a Channel (`detail`) whose card the Channels grid
  * should scroll to the middle of the screen.
  */
@@ -43,6 +52,7 @@ export function PhotoViewerDialog({
   open,
   onOpenChange,
   title = "Post image",
+  action,
 }: {
   /** The photo clicked: its `src` on the card. */
   start: string
@@ -50,6 +60,7 @@ export function PhotoViewerDialog({
   onOpenChange: (open: boolean) => void
   /** The dialog's accessible title. */
   title?: string
+  action?: PhotoAction
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,24 +71,44 @@ export function PhotoViewerDialog({
         className={`${BOX} block max-w-none sm:max-w-none overflow-hidden border-0 bg-transparent p-0 shadow-none [&>[data-slot=dialog-close]]:rounded-full [&>[data-slot=dialog-close]]:bg-black/50 [&>[data-slot=dialog-close]]:p-2 [&>[data-slot=dialog-close]]:text-white [&:has([data-controls=hidden])>[data-slot=dialog-close]]:hidden`}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
-        <PhotoViewer start={start} onClose={() => onOpenChange(false)} />
+        <PhotoViewer
+          start={start}
+          onClose={() => onOpenChange(false)}
+          action={action}
+        />
       </DialogContent>
     </Dialog>
   )
 }
 
-type GalleryPhoto = {
+export type GalleryPhoto = {
   src: string
   caption: string
   card: HTMLElement | null
   rtl: boolean
 }
 
-/** Every photo the feed has loaded, in feed order, read off the page once. */
-function loadedPhotos(): GalleryPhoto[] {
-  return Array.from(
+/**
+ * Drawn over the photo on screen with the controls, as the strip's "Find in
+ * report" is. `close` closes the viewer; anything that must outlive the dialog
+ * waits for it to be gone, as `findCitation` does.
+ */
+export type PhotoAction = (photo: GalleryPhoto, close: () => void) => ReactNode
+
+/**
+ * Every photo the page has loaded in the start photo's gallery, in page order,
+ * read off the page once.
+ */
+function loadedPhotos(start: string): GalleryPhoto[] {
+  const all = Array.from(
     document.querySelectorAll<HTMLImageElement>(`img[${GALLERY_CAPTION_ATTR}]`),
-  ).map((el) => ({
+  )
+  const galleryOf = (el: Element) => el.closest(`[${GALLERY_ATTR}]`)
+  const from = all.find((el) => el.src === start)
+  const gallery = from ? galleryOf(from) : null
+  return all
+    .filter((el) => galleryOf(el) === gallery)
+    .map((el) => ({
     src: el.src,
     caption: el.getAttribute(GALLERY_CAPTION_ATTR) ?? "",
     // A Post's card in the feed, or a Channel's card or tile in the grid.
@@ -89,11 +120,13 @@ function loadedPhotos(): GalleryPhoto[] {
 export function PhotoViewer({
   start,
   onClose,
+  action,
 }: {
   start: string
   onClose: () => void
+  action?: PhotoAction
 }) {
-  const [photos] = useState(loadedPhotos)
+  const [photos] = useState(() => loadedPhotos(start))
   const [at, setAt] = useState(() =>
     Math.max(
       0,
@@ -107,11 +140,14 @@ export function PhotoViewer({
   last.current = at
   const step = (d: number) =>
     setAt((n) => Math.min(photos.length - 1, Math.max(0, n + d)))
+  // The step the right arrow takes: next, or previous on a right-to-left page.
+  const right = rtl ? -1 : 1
+  const atEnd = (d: number) => (d < 0 ? at === 0 : at === photos.length - 1)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") step(-1)
-      if (e.key === "ArrowRight") step(1)
+      if (e.key === "ArrowLeft") step(-right)
+      if (e.key === "ArrowRight") step(right)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -131,7 +167,7 @@ export function PhotoViewer({
     [],
   )
 
-  const photo = photos[at] ?? { src: start, caption: "", card: null }
+  const photo = photos[at] ?? { src: start, caption: "", card: null, rtl }
   const nav =
     "absolute top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white hover:bg-black/70 disabled:opacity-20"
   return (
@@ -155,23 +191,28 @@ export function PhotoViewer({
             : photo.caption
         }
       />
+      {controls && action && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2">
+          {action(photo, onClose)}
+        </div>
+      )}
       {controls && photos.length > 1 && (
         <>
           <button
             type="button"
-            aria-label="Previous photo"
+            aria-label={rtl ? "Next photo" : "Previous photo"}
             className={`${nav} left-2`}
-            disabled={at === 0}
-            onClick={() => step(-1)}
+            disabled={atEnd(-right)}
+            onClick={() => step(-right)}
           >
             <ChevronLeft size={22} />
           </button>
           <button
             type="button"
-            aria-label="Next photo"
+            aria-label={rtl ? "Previous photo" : "Next photo"}
             className={`${nav} right-2`}
-            disabled={at === photos.length - 1}
-            onClick={() => step(1)}
+            disabled={atEnd(right)}
+            onClick={() => step(right)}
           >
             <ChevronRight size={22} />
           </button>

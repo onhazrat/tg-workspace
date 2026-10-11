@@ -6,7 +6,12 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { PhotoViewer, PhotoViewerDialog, REVEAL_CHANNEL } from "./PhotoViewer"
+import {
+  GALLERY_ATTR,
+  PhotoViewer,
+  PhotoViewerDialog,
+  REVEAL_CHANNEL,
+} from "./PhotoViewer"
 
 /** Three cards on the page, as the feed draws them. */
 function feed() {
@@ -302,6 +307,80 @@ test("a Channel card that unmounted while open is revealed by the grid instead",
   }
   expect(tile.scrollIntoView).not.toHaveBeenCalled()
   expect(revealed).toEqual(["durov"])
+})
+
+describe("a gallery of its own (SUMTAB-05)", () => {
+  /** A Summary's photo strip beside the feed, reading `dir`. */
+  function strip(dir = "ltr") {
+    const root = document.createElement("div")
+    root.id = "strip"
+    root.dir = dir
+    root.setAttribute(GALLERY_ATTR, "")
+    root.innerHTML = ["x", "y"]
+      .map(
+        (id) =>
+          `<div data-post-key="s_${id}"><img src="blob:${id}" data-gallery-caption="Strip ${id}"></div>`,
+      )
+      .join("")
+    document.body.appendChild(root)
+  }
+  afterEach(() => document.getElementById("strip")?.remove())
+
+  test("steps through its own photos only, and the feed through the rest", () => {
+    strip()
+    render(<PhotoViewer start="blob:x" onClose={() => {}} />)
+    expect(label()).toContain("Strip x · 1 / 2")
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(label()).toContain("Strip y · 2 / 2")
+    cleanup()
+
+    render(<PhotoViewer start="blob:c" onClose={() => {}} />)
+    expect(label()).toContain("Chan c · 3 / 3")
+  })
+
+  test("right to left, next sits on the left and ArrowLeft steps to it", () => {
+    strip("rtl")
+    render(<PhotoViewer start="blob:x" onClose={() => {}} />)
+    const next = screen.getByRole("button", { name: "Next photo" })
+    expect(next.className).toContain("left-2")
+    fireEvent.click(next)
+    expect(label()).toContain("Strip y · 2 / 2")
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(label()).toContain("Strip x · 1 / 2")
+    fireEvent.keyDown(window, { key: "ArrowLeft" })
+    expect(label()).toContain("Strip y · 2 / 2")
+    swipe(200, 10)
+    swipe(-200, 10)
+    expect(label()).toContain("Strip x · 1 / 2")
+  })
+
+  test("an action over the photo on screen gets that photo and a way to close", () => {
+    strip()
+    const onClose = mock()
+    const seen: (string | undefined)[] = []
+    render(
+      <PhotoViewer
+        start="blob:x"
+        onClose={onClose}
+        action={(photo, close) => (
+          <button
+            type="button"
+            onClick={() => {
+              seen.push(photo.card?.dataset.postKey)
+              close()
+            }}
+          >
+            Find in report
+          </button>
+        )}
+      />,
+    )
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    fireEvent.click(screen.getByRole("button", { name: "Find in report" }))
+    expect(seen).toEqual(["s_y"])
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("PhotoViewerDialog", () => {
