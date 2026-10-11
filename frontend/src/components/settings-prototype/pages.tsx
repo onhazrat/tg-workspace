@@ -27,7 +27,6 @@ import useAuth from "@/hooks/useAuth"
 import { useLoadDBStats } from "@/hooks/useDBStats"
 import type { SettingsSection } from "@/lib/settings/toc"
 import { cn } from "@/lib/utils"
-import { AddUserAction, USERS_BODY, type UsersStyle } from "./users-variants"
 
 export type PageArea = "account" | "admin"
 
@@ -168,19 +167,35 @@ export const AREA_LABEL: Record<PageArea, string> = {
   admin: "Admin",
 }
 
-export const PageView: React.FC<{
-  page: ProtoPage
-  onBack: () => void
-  users?: UsersStyle
-}> = ({ page, onBack, users }) => {
+/** A page's content without its header, for hosts that frame it themselves. */
+export const PageBody: React.FC<{ page: ProtoPage }> = ({ page }) => {
+  const loadDBStats = useLoadDBStats()
+  useEffect(() => {
+    if (page.section && loadsDbStats(page.section)) void loadDBStats()
+  }, [page, loadDBStats])
+  const Body = page.body
+  return (
+    <div className={cn(page.section && sectionThemeClass(page.section))}>
+      {Body ? (
+        <Body />
+      ) : page.section ? (
+        SETTINGS_SECTION_CONTENT[page.section]({ highlightId: null })
+      ) : null}
+    </div>
+  )
+}
+
+export const PageView: React.FC<{ page: ProtoPage; onBack: () => void }> = ({
+  page,
+  onBack,
+}) => {
   const loadDBStats = useLoadDBStats()
   const top = useRef<HTMLDivElement>(null)
   useEffect(() => {
     top.current?.scrollIntoView({ block: "start" })
     if (page.section && loadsDbStats(page.section)) void loadDBStats()
   }, [page, loadDBStats])
-  const restyled = page.id === "users" && users
-  const Body = restyled ? USERS_BODY[users] : page.body
+  const Body = page.body
   return (
     <div
       ref={top}
@@ -197,16 +212,9 @@ export const PageView: React.FC<{
         >
           <ArrowLeft size={14} /> Back
         </button>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-xs text-app-ink/50">
-              {AREA_LABEL[page.area]}
-            </div>
-            <h3 className="text-lg font-semibold">{page.label}</h3>
-            <p className="text-[13px] text-app-ink/45">Today: {page.from}</p>
-          </div>
-          {restyled ? <AddUserAction /> : null}
-        </div>
+        <div className="text-xs text-app-ink/50">{AREA_LABEL[page.area]}</div>
+        <h3 className="text-lg font-semibold">{page.label}</h3>
+        <p className="text-[13px] text-app-ink/45">Today: {page.from}</p>
       </div>
       <div className="max-w-5xl p-8">
         {Body ? (

@@ -16,6 +16,7 @@ import { ChevronDown, Search, X } from "lucide-react"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { headers } from "@/api/base"
+import { pillClass } from "@/components/PostFilterParts"
 import { Badge } from "@/components/ui/badge"
 import useAuth from "@/hooks/useAuth"
 import { useCanManageJobs } from "@/hooks/useJobsStatus"
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils"
 import type { ProtoPanelId } from "./model"
 import { AREA_LABEL, PAGES, PageView } from "./pages"
 import { ProtoPanel } from "./panels"
+import { useLook } from "./row-parts"
 import {
   fieldsOf,
   matchesField,
@@ -32,10 +34,9 @@ import {
   useIsModified,
   useSettingsSchema,
 } from "./schema-settings"
-import type { UsersStyle } from "./users-variants"
 
 /** The only settings knowledge the frontend keeps: where things go. */
-const LAYOUT: {
+export const LAYOUT: {
   id: string
   label: string
   blurb: string
@@ -120,8 +121,8 @@ const LAYOUT: {
   },
 ]
 
-type ScopeFilter = SchemaScope | "all"
-const SCOPE_CHIP: Record<SchemaScope, string> = {
+export type ScopeFilter = SchemaScope | "all"
+export const SCOPE_CHIP: Record<SchemaScope, string> = {
   device: "This browser",
   account: "My account",
   deployment: "Deployment",
@@ -156,7 +157,7 @@ const show = (v: unknown) =>
   v === null || v === undefined || v === "" ? "not set" : JSON.stringify(v)
 
 /** A group's `.env` values, read-only, behind a disclosure. */
-const EnvSection: React.FC<{
+export const EnvSection: React.FC<{
   rows: EnvRow[]
   open: boolean
   nested: boolean
@@ -252,22 +253,17 @@ const D_PAGES = PAGES.filter(
 )
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
-export const VariantD: React.FC<{
-  highlightId: string | null
-  /** Variant E: nested VS Code-style ids. */
-  nested?: boolean
-  /** Variants F to H: the Users page restyled. */
-  users?: UsersStyle
-}> = ({ highlightId, nested = false, users }) => {
-  const navigate = workspaceRoute.useNavigate()
+/**
+ * Everything a layout needs: the groups with their filtered rows, the pages,
+ * the filters' state. Variant E and the app-styled variants (I-K) share it.
+ */
+export function useSettingsModel(nested: boolean) {
   const { data: rows, error, isLoading } = useSettingsSchema()
   const isModified = useIsModified()
   const [query, setQuery] = useState("")
   const [scope, setScope] = useState<ScopeFilter>("all")
   const [modifiedOnly, setModifiedOnly] = useState(false)
-  const [active, setActive] = useState("appearance")
   const [pageId, setPageId] = useState<string | null>(null)
-  const scroller = useRef<HTMLDivElement>(null)
   const pages = D_PAGES
   const page = pages.find((p) => p.id === pageId)
   const isAdmin = useCanManageJobs()
@@ -322,6 +318,58 @@ export const VariantD: React.FC<{
     (g) => g.fields.length + g.panels.length + g.env.length > 0,
   )
   const modifiedTotal = groups.reduce((a, g) => a + g.modified, 0)
+  return {
+    rows,
+    error,
+    isLoading,
+    query,
+    setQuery,
+    scope,
+    setScope,
+    modifiedOnly,
+    setModifiedOnly,
+    pageId,
+    setPageId,
+    pages,
+    page,
+    isAdmin,
+    user,
+    seedByField,
+    visible,
+    modifiedTotal,
+  }
+}
+
+export type SettingsModel = ReturnType<typeof useSettingsModel>
+
+export const VariantD: React.FC<{
+  highlightId: string | null
+  /** Variant E: nested VS Code-style ids. */
+  nested?: boolean
+}> = ({ highlightId, nested = false }) => {
+  const navigate = workspaceRoute.useNavigate()
+  const [active, setActive] = useState("appearance")
+  const scroller = useRef<HTMLDivElement>(null)
+  const {
+    rows,
+    error,
+    isLoading,
+    query,
+    setQuery,
+    scope,
+    setScope,
+    modifiedOnly,
+    setModifiedOnly,
+    pageId,
+    setPageId,
+    pages,
+    page,
+    isAdmin,
+    user,
+    seedByField,
+    visible,
+    modifiedTotal,
+  } = useSettingsModel(nested)
 
   useEffect(() => {
     const root = scroller.current
@@ -437,7 +485,7 @@ export const VariantD: React.FC<{
 
       {page ? (
         <div className="min-w-0 flex-1 overflow-y-auto bg-app-card pb-32">
-          <PageView page={page} users={users} onBack={() => setPageId(null)} />
+          <PageView page={page} onBack={() => setPageId(null)} />
         </div>
       ) : null}
       <div
@@ -556,13 +604,13 @@ export const VariantD: React.FC<{
 }
 
 /** `sync.schedule.intervalMinutes` → `schedule`; two-segment ids have none. */
-function sectionOf(id: string): string | null {
+export function sectionOf(id: string): string | null {
   const parts = id.split(".")
   return parts.length > 2 ? parts[1] : null
 }
 
 /** `newFollows` → `New follows`. */
-function humanize(segment: string): string {
+export function humanize(segment: string): string {
   const words = segment.replace(/([A-Z])/g, " $1").toLowerCase()
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
@@ -571,20 +619,27 @@ export const Chip: React.FC<{
   on: boolean
   onClick: () => void
   children: React.ReactNode
-}> = ({ on, onClick, children }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={cn(
-      "rounded-full border px-3 py-1 text-xs",
-      on
-        ? "border-app-ink bg-app-ink text-app-card"
-        : "border-app-ink/15 text-app-ink/70 hover:border-app-ink/40",
-    )}
-  >
-    {children}
-  </button>
-)
+}> = ({ on, onClick, children }) => {
+  const look = useLook()
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        look === "e"
+          ? cn(
+              "rounded-full border px-3 py-1 text-xs",
+              on
+                ? "border-app-ink bg-app-ink text-app-card"
+                : "border-app-ink/15 text-app-ink/70 hover:border-app-ink/40",
+            )
+          : pillClass(on)
+      }
+    >
+      {children}
+    </button>
+  )
+}
 
 /** Settings in a group that differ from their default. */
 export const ModifiedCount: React.FC<{ n: number; label?: boolean }> = ({

@@ -748,19 +748,5 @@ def env(authorization: str | None = Header(None)) -> list[dict[str, Any]]:
     return out
 
 
-@app.get("/users/roles")
-def user_roles(authorization: str | None = Header(None)) -> dict[str, list[str]]:
-    """Each account's RBAC roles, which `UserPublic` does not carry. Admin only,
-    the same audience `GET /users/` already has, so no Owner list leaks wider."""
-    if not whoami(authorization)["admin"]:
-        raise HTTPException(403, "Not enough permissions")
-    with connect() as conn:
-        rows = conn.execute(
-            "SELECT user_id::text, array_agg(role_id ORDER BY role_id)"
-            " FROM rbac_user_roles GROUP BY user_id"
-        ).fetchall()
-    return dict(rows)
-
-
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=PORT)

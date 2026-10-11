@@ -158,20 +158,28 @@ change; each row shows "stored as <row.field>". The layout selects by id prefix
 id. `.env` values get a derived id too (`NETWORK_FETCH_RETRIES` →
 `network.fetch.retries`), shown next to their `.env` name.
 
-## Round 8: Users page styling (F, G, H)
+## Round 8: the Settings tab in the workspace's own style (F, G, H)
 
-Question: why does Admin → Users look foreign, and what would make it match the
-settings rows? It was the template's shadcn table (stock tokens, boxed table,
-Title Case, a floating filled button, `is_superuser` as the role). All three
-variants are E with only the Users page swapped (`users-variants.tsx`):
+Question: Settings looks like a different app from Channels, Posts and Action.
+Why, and what would make it coherent? E breaks out of the tab's padding with a
+full-height grey sidebar (no other tab has one), uses page-style text-lg
+headings, Title-Case outline chips, a rectangular search box, flat rows with
+13px help text, and the old settings fields (tall `p-3` mono inputs, all-caps
+segments, raw enum values). The other tabs sit inside the padding in
+`rounded-xl` bordered panels, with one toolbar (muted `h-9` search, `Label
+value` pills from `PostFilterParts`), uppercase 10px micro-labels, and Action
+rows on a fixed three-column grid.
 
-- F: one settings-style row per account (name, You/role/status chips, a mono
-  meta line, the `…` menu), "Add user" in the page header.
-- G: F plus the settings search and filter chips (Everyone, Admins, Waiting for
-  approval, Inactive), pending accounts first with an inline Approve.
-- H: list on the left, the selected account's fields as auto-saving setting
-  rows on the right, actions as rows below.
+All three variants are E's content (same hook, `useSettingsModel`) drawn with
+those primitives through a `LookContext` (`app-skins.tsx`):
 
-Roles come from `GET /proto/users/roles` (reads `rbac_user_roles`, Admin only),
-because `UserPublic` has no roles. Folding in needs a real roles field on the
-Admin users list, and a decision on whether H's auto-save fits account edits.
+- F `panels`: toolbar with a Settings/Account/Admin segmented control, scope and
+  modified pills and a "Go to" pill; one Action-style panel per group, stacked.
+- G `rail`: a navigation panel (the app's selected style) left, one group at a
+  time right; search widens to every group.
+- H `cards`: compact two-column group cards (name and control only, the rest on
+  hover); big production panels open in a sheet.
+
+Still old-style inside all three: the production panels (AI keys, proxies, bots,
+start time) and the Account/Admin page bodies (Users table, profile form).
+Folding in means restyling those to the same primitives.
