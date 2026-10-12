@@ -68,7 +68,7 @@ const citing = (
 
 function mount(over: Partial<ComponentProps<typeof DirectoryPanel>> = {}) {
   const calls = { follow: 0, close: 0, dismiss: [] as boolean[] }
-  render(
+  const panel = (props: typeof over) => (
     <DirectoryPanel
       handle="chan"
       entry={entry()}
@@ -81,10 +81,13 @@ function mount(over: Partial<ComponentProps<typeof DirectoryPanel>> = {}) {
       onClose={() => calls.close++}
       neighbours={{ citedBy: [], cites: [] }}
       onFilter={() => {}}
-      {...over}
-    />,
+      {...props}
+    />
   )
-  return calls
+  const view = render(panel(over))
+  /** Re-renders the same panel with other props, keeping its state. */
+  const remount = (next: typeof over) => view.rerender(panel(next))
+  return Object.assign(calls, { remount })
 }
 
 describe("the header", () => {
@@ -189,6 +192,27 @@ describe("why it's here", () => {
       },
     })
     expect(screen.getByText("and 24 more")).toBeTruthy()
+  })
+
+  test("shows three citing Posts until Show more, and another Channel opens collapsed (DFP-01)", () => {
+    const why = {
+      posts: [1, 2, 3, 4, 5].map((n) => citing(`src_${n}`, n)),
+      total: 5,
+      parents: null,
+      children: null,
+    }
+    const shown = () =>
+      [1, 2, 3, 4, 5].filter((n) => screen.queryByText(`src_${n} says ${n}`))
+    const view = mount({ why })
+    expect(shown()).toEqual([1, 2, 3])
+    fireEvent.click(screen.getByRole("button", { name: "Show 2 more posts" }))
+    expect(shown()).toEqual([1, 2, 3, 4, 5])
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }))
+    expect(shown()).toEqual([1, 2, 3])
+    fireEvent.click(screen.getByRole("button", { name: "Show 2 more posts" }))
+    // The same panel, switched to another Channel, as keyboard mode does.
+    view.remount({ why, handle: "other" })
+    expect(shown()).toEqual([1, 2, 3])
   })
 
   test("says when none of your channels cite it", () => {

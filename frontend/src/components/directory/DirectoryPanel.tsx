@@ -20,7 +20,7 @@ import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
-import { DirectorySamples, PostText } from "./DirectorySamples"
+import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
 import { cell, FollowCell } from "./DirectoryTable"
 
 const HEADING =
@@ -106,9 +106,11 @@ function CitingPost({ post }: { post: DirectoryCitingPostResponse }) {
  * and the "Cited by your channels" Condition count.
  */
 function WhyHere({
+  handle,
   why,
   windowDays,
 }: {
+  handle: string
   why: DirectoryWhyResponse | undefined
   windowDays: number | null
 }) {
@@ -130,11 +132,18 @@ function WhyHere({
             {why.total} Post{why.total === 1 ? "" : "s"} of your channels cite
             it{within}
           </p>
-          <ul className="mt-2 space-y-2">
-            {why.posts.map((post) => (
-              <CitingPost key={`${post.channel}/${post.postId}`} post={post} />
-            ))}
-          </ul>
+          <FirstFew owner={handle} items={why.posts}>
+            {(visible) => (
+              <ul className="mt-2 space-y-2">
+                {visible.map((post) => (
+                  <CitingPost
+                    key={`${post.channel}/${post.postId}`}
+                    post={post}
+                  />
+                ))}
+              </ul>
+            )}
+          </FirstFew>
           {why.total > why.posts.length && (
             <p className="mt-1 text-[10px] text-app-ink/40">
               and {why.total - why.posts.length} more
@@ -365,7 +374,7 @@ export function DirectoryPanel({
             onFollow={onFollow}
             onDismiss={onDismiss}
           />
-          <WhyHere why={why} windowDays={windowDays} />
+          <WhyHere handle={handle} why={why} windowDays={windowDays} />
           <h4 className={HEADING}>Recent posts</h4>
           {posts ? (
             <DirectorySamples handle={handle} posts={posts} />
