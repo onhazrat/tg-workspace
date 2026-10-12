@@ -118,6 +118,36 @@ function loadedPhotos(start: string): GalleryPhoto[] {
     }))
 }
 
+/**
+ * PROTOTYPE (variant A): the gallery after the page changed. The current photo
+ * keeps its place; a rescan that no longer finds it is ignored, so the viewer
+ * never jumps (to the first photo, or anywhere else).
+ */
+/** The current photo's src as the page has it now, its card's if it changed. */
+const currentSrc = (
+  photo: { src: string; card: Element | null } | undefined,
+  start: string,
+) =>
+  photo?.card?.querySelector<HTMLImageElement>(`img[${GALLERY_CAPTION_ATTR}]`)
+    ?.src ??
+  photo?.src ??
+  start
+
+export function rescanGallery<P extends { src: string; card: Element | null }>(
+  view: { photos: P[]; at: number },
+  next: P[],
+): { photos: P[]; at: number } {
+  // A Post's card outlives its thumbnail's object URL, so it is the identity.
+  const same = (a: P, b: P) => (a.card ? a.card === b.card : a.src === b.src)
+  const current = view.photos[view.at]
+  const at = current ? next.findIndex((p) => same(p, current)) : -1
+  if (at < 0) return view
+  const unchanged =
+    next.length === view.photos.length &&
+    next.every((p, i) => p.src === view.photos[i].src)
+  return unchanged ? view : { photos: next, at }
+}
+
 export function PhotoViewer({
   start,
   onClose,
@@ -127,31 +157,29 @@ export function PhotoViewer({
   onClose: () => void
   action?: PhotoAction
 }) {
-  const [photos, setPhotos] = useState(() => loadedPhotos(start))
-  const [at, setAt] = useState(() =>
-    Math.max(
-      0,
-      photos.findIndex((p) => p.src === start),
-    ),
-  )
+  // The list and the position change together, so they never disagree.
+  const [view, setView] = useState(() => {
+    const photos = loadedPhotos(start)
+    return {
+      photos,
+      at: Math.max(
+        0,
+        photos.findIndex((p) => p.src === start),
+      ),
+    }
+  })
+  const { photos, at } = view
   // PROTOTYPE (variant A): near the last loaded photo, page the feed, and
   // take in each thumbnail as it lands in the page.
   const paging = useContext(FeedPagingContext)
   const pages = useIsVariantA() && paging !== null
-  const current = useRef(start)
-  current.current = photos[at]?.src ?? start
   useEffect(() => {
     if (!pages) return
-    const observer = new MutationObserver(() => {
-      const next = loadedPhotos(current.current)
-      setPhotos((prev) => (next.length === prev.length ? prev : next))
-      setAt(
-        Math.max(
-          0,
-          next.findIndex((p) => p.src === current.current),
-        ),
-      )
-    })
+    const observer = new MutationObserver(() =>
+      setView((v) =>
+        rescanGallery(v, loadedPhotos(currentSrc(v.photos[v.at], start))),
+      ),
+    )
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -159,7 +187,7 @@ export function PhotoViewer({
       attributeFilter: ["src"],
     })
     return () => observer.disconnect()
-  }, [pages])
+  }, [pages, start])
   useEffect(() => {
     if (pages && paging.hasMore && at >= photos.length - 3) paging.loadMore()
   }, [pages, paging, at, photos.length])
@@ -169,8 +197,12 @@ export function PhotoViewer({
   const [controls, setControls] = useState(true)
   const last = useRef(at)
   last.current = at
+  // Clamped, never wrapped: past the last photo is the last photo.
   const step = (d: number) =>
-    setAt((n) => Math.min(photos.length - 1, Math.max(0, n + d)))
+    setView((v) => ({
+      ...v,
+      at: Math.min(v.photos.length - 1, Math.max(0, v.at + d)),
+    }))
   // The step the right arrow takes: next, or previous on a right-to-left page.
   const right = rtl ? -1 : 1
   const atEnd = (d: number) => (d < 0 ? at === 0 : at === photos.length - 1)

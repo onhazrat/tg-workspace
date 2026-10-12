@@ -7,6 +7,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import {
+  FeedPagingContext,
+  PostsVariantContext,
+} from "../posts-prototype/variant"
+import {
   GALLERY_ATTR,
   PhotoViewer,
   PhotoViewerDialog,
@@ -397,5 +401,56 @@ describe("PhotoViewerDialog", () => {
     onOpenChange.mockClear()
     fireEvent.click(screen.getByRole("button", { name: "Close" }))
     expect(onOpenChange).toHaveBeenLastCalledWith(false)
+  })
+})
+
+describe("PROTOTYPE variant A: paging the feed", () => {
+  const viewer = (loadMore = () => {}) =>
+    render(
+      <PostsVariantContext.Provider value="A">
+        <FeedPagingContext.Provider
+          value={{ loadMore, hasMore: true, postCount: 3, spotlight: null }}
+        >
+          <PhotoViewer start="blob:c" onClose={() => {}} />
+        </FeedPagingContext.Provider>
+      </PostsVariantContext.Provider>,
+    )
+  const next = () => screen.getByLabelText("Next photo") as HTMLButtonElement
+
+  test("past the last photo is the last photo, by key and by button", () => {
+    const loadMore = mock(() => {})
+    viewer(loadMore)
+    for (let i = 0; i < 3; i++) {
+      fireEvent.keyDown(window, { key: "ArrowRight" })
+      fireEvent.click(next())
+    }
+    expect(label()).toContain("Chan c · 3 / 3")
+    expect(loadMore).toHaveBeenCalled()
+  })
+
+  test("a refreshed thumbnail keeps the place, and new photos join the end", async () => {
+    viewer()
+    for (const id of ["a", "b", "c"])
+      card(id).querySelector("img")?.setAttribute("src", `blob:${id}2`)
+    await sleep(0)
+    expect(label()).toContain("Chan c · 3 / 3")
+
+    const more = document.createElement("article")
+    more.dataset.postKey = "ch_d"
+    more.innerHTML = `<img src="blob:d" data-gallery-caption="Chan d">`
+    document.getElementById("feed")?.appendChild(more)
+    await sleep(0)
+    expect(label()).toContain("Chan c · 3 / 4")
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(label()).toContain("Chan d · 4 / 4")
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(label()).toContain("Chan d · 4 / 4")
+  })
+
+  test("a rescan that loses the current photo moves nothing", async () => {
+    viewer()
+    card("c").remove()
+    await sleep(0)
+    expect(label()).toContain("Chan c · 3 / 3")
   })
 })
