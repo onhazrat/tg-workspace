@@ -25,6 +25,7 @@ import {
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import { pillClass } from "@/components/PostFilterParts"
+import { useIsVariantA } from "@/components/posts-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -69,6 +70,8 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
   channel_posts: Hash,
 }
 
+const CHANNEL_POSTS_LABEL = "Channel posts in unfiltered range"
+
 /** PROTOTYPE (variant A): the Channel-posts-in-window bound's editor. */
 function ChannelPostsEditor({
   initial,
@@ -105,7 +108,7 @@ function ChannelPostsEditor({
             ←
           </button>
         )}
-        Channel posts in window
+        {CHANNEL_POSTS_LABEL}
       </div>
       <p className="text-[11px] text-app-ink/50">
         How many Posts the Post's Channel has in the Analysis window, counted
@@ -288,7 +291,7 @@ export function postVocabulary(
                 {
                   kind: "editor" as const,
                   id: "channel_posts",
-                  label: "Channel posts in window",
+                  label: CHANNEL_POSTS_LABEL,
                   icon: Hash,
                   render: ({
                     start,
@@ -417,13 +420,21 @@ export function PostFiltersMenu({
   floorHours: number
 }) {
   const [open, setOpen] = useState(false)
-  const [picked, setPicked] = useState<ViewMeasure | null>(null)
+  const [picked, setPicked] = useState<ViewMeasure | "channel_posts" | null>(
+    null,
+  )
   const [query, setQuery] = useState("")
+  const variantA = useIsVariantA()
   const bounds = atoms(filter).filter(
     (a): a is AtomNode<PostCond> & { cond: PostViewsCond } =>
       a.cond.type === "views",
   )
-  const active = bounds.length > 0
+  // PROTOTYPE (variant A): the Channel-posts bound sits beside the views ones.
+  const channelBounds = atoms(filter).filter(
+    (a): a is AtomNode<PostCond> & { cond: PostChannelPostsCond } =>
+      a.cond.type === "channel_posts",
+  )
+  const active = bounds.length + channelBounds.length > 0
   const onOpenChange = (next: boolean) => {
     setOpen(next)
     if (!next) setPicked(null)
@@ -442,14 +453,22 @@ export function PostFiltersMenu({
           <SlidersHorizontal size={12} /> Filters
           {active && (
             <span className="rounded-full bg-app-bg/20 px-1.5 text-[10px] tabular-nums">
-              {bounds.length}
+              {bounds.length + channelBounds.length}
             </span>
           )}
           <ChevronDown size={12} className="opacity-60" />
         </button>
       }
     >
-      {picked ? (
+      {picked === "channel_posts" ? (
+        <ChannelPostsEditor
+          onBack={() => setPicked(null)}
+          onSubmit={(cond) => {
+            onChange(append(filter, "root", cond))
+            onOpenChange(false)
+          }}
+        />
+      ) : picked ? (
         <PostViewsEditor
           measure={picked}
           floorHours={floorHours}
@@ -486,6 +505,24 @@ export function PostFiltersMenu({
               </span>
             </button>
           ))}
+          {variantA &&
+            CHANNEL_POSTS_LABEL.toLowerCase().includes(
+              query.trim().toLowerCase(),
+            ) && (
+              <button
+                type="button"
+                data-testid="post-filters-channel-posts"
+                onClick={() => setPicked("channel_posts")}
+                className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5"
+              >
+                {CHANNEL_POSTS_LABEL}
+                <span className="text-[11px] font-normal tabular-nums text-app-ink/50">
+                  {channelBounds
+                    .map((a) => `${a.not ? "not " : ""}${boundText(a.cond)}`)
+                    .join(", ")}
+                </span>
+              </button>
+            )}
         </>
       )}
     </BarPopover>

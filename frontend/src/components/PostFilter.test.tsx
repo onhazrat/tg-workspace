@@ -25,6 +25,7 @@ import {
   PostFilterBar,
   type PostFilterBarProps,
 } from "./PostFilter"
+import { PostsVariantContext } from "./posts-prototype/variant"
 
 afterEach(cleanup)
 
@@ -70,6 +71,7 @@ function controls(
 function mount(
   over: Partial<FilterBarControls> = {},
   props: Partial<PostFilterBarProps> = {},
+  variant: "0" | "A" = "0",
 ) {
   const calls: Calls = []
   const opened: boolean[] = []
@@ -104,6 +106,13 @@ function mount(
       onCountingPillOpenChange={(open) => opened.push(open)}
       {...props}
     />,
+    {
+      wrapper: ({ children }) => (
+        <PostsVariantContext.Provider value={variant}>
+          {children}
+        </PostsVariantContext.Provider>
+      ),
+    },
   )
   return { calls, opened }
 }
@@ -308,6 +317,23 @@ describe("the Filters menu", () => {
     expect(screen.getByTestId("post-filters-views").textContent).toContain(
       "not ≥ 1K",
     )
+  })
+})
+
+describe("PROTOTYPE variant A: Channel posts in unfiltered range", () => {
+  test("the Filters menu adds the bound in A and offers nothing new in 0", () => {
+    mount()
+    fireEvent.click(screen.getByTestId("post-filters"))
+    expect(screen.queryByTestId("post-filters-channel-posts")).toBeNull()
+    cleanup()
+
+    const { calls } = mount({}, {}, "A")
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-channel-posts"))
+    fireEvent.click(screen.getByRole("button", { name: "at most" }))
+    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "5" } })
+    fireEvent.click(screen.getByRole("button", { name: "Add" }))
+    expect(calls).toEqual([["filter", "chposts <= 5"]])
   })
 })
 
