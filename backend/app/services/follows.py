@@ -9,7 +9,10 @@ backfills it, and dual-writes it from every path that creates a Channel. The
 read paths adopt the seam's `EXISTS` in tickets 15-16, and `Channel`'s copies
 of these columns are dropped in ticket 22. Until then the write is additive:
 `ensure_follow` never overwrites an existing row, so a channel created a second
-time cannot silently reset the follower's tags or start time.
+time cannot silently reset the follower's start time.
+
+Tags are not the Follow's (ADR-029): `services/tags.py` owns them, and nothing
+here reads or writes one.
 
 ## Why the owner falls back to the operator
 
@@ -42,10 +45,6 @@ from sqlmodel import Session, col, func, select
 from app.core.config import settings
 from app.models import User
 from app.models_tg import Channel, ChannelFollow, utc_now
-from app.services.channel_tags import (
-    normalize_channel_tags,
-    reject_reserved_virtual_group_tags,
-)
 from app.services.settings_store import get_global_setting
 from app.services.tenancy import scoped_select
 
@@ -135,7 +134,6 @@ def ensure_follow(
     user_id: uuid.UUID | None,
     setting_group_id: str | None = None,
     followed_at: int | None = None,
-    tags: list[Any] | None = None,
     start_id: int | None = None,
     start_time: int | None = None,
     discovered_via: dict[str, Any] | None = None,
@@ -147,7 +145,7 @@ def ensure_follow(
     already makes a duplicate impossible, and checking first would turn that
     guarantee into a race between two concurrent auto-follows of the same
     channel. Existing rows are left exactly as they are — re-creating a channel
-    is not a reason to reset somebody's tags.
+    is not a reason to reset somebody's start time.
 
     Does **not** commit. The caller owns the transaction, so the follow lands
     with the Channel that necessitated it rather than in a separate one that
@@ -165,7 +163,6 @@ def ensure_follow(
             channel_id=channel_id,
             setting_group_id=setting_group_id,
             followed_at=followed_at,
-            tags=tags if tags is not None else [],
             start_id=start_id,
             start_time=start_time,
             discovered_via=discovered_via,
@@ -668,7 +665,6 @@ def visible_channel_names(session: Session, *, user_id: uuid.UUID) -> set[str]:
 FOLLOW_OWNED_FIELDS = (
     "setting_group_id",
     "followed_at",
-    "tags",
     "start_id",
     "start_time",
     "discovered_via",
@@ -682,20 +678,13 @@ def follow_field_values(values: Mapping[str, Any] | None) -> dict[str, Any]:
     always writes the whole row and a caller cannot leave a column silently
     absent. Keys that are not follow-owned are dropped rather than passed
     through: callers hand this a normalised request body, which carries plenty
-    of Channel fields too, and forwarding one would raise on a column
-    `ChannelFollow` does not have.
-
-    `tags` defaults to a fresh list per call and is copied rather than
-    referenced. It is a JSON column backed by a mutable list, and writing one
-    shared list object into two rows lets a later mutation of either show up on
-    the other.
+    of Channel fields too (and `tags`, which `services/tags.py` owns), and
+    forwarding one would raise on a column `ChannelFollow` does not have.
     """
     filled: dict[str, Any] = dict.fromkeys(FOLLOW_OWNED_FIELDS)
-    filled["tags"] = []
     for field in FOLLOW_OWNED_FIELDS:
         if values is not None and field in values:
             filled[field] = values[field]
-    filled["tags"] = list(filled["tags"] or [])
     return filled
 
 
@@ -705,12 +694,9 @@ def follow_values_from_body(body: Mapping[str, Any]) -> dict[str, Any]:
     The counterpart to `channels.apply_channel_fields`, which writes a body's
     *Channel* fields onto the Channel. Ticket 22 dropped these from `Channel`,
     so `key in Channel.model_fields` is simply false for them now and that path
-    would **silently discard** an edit to `tags` or `startTime` rather than fail
-    it. This is where they land instead.
-
-    Tag validation moved here with the write, for the same reason: it sat next
-    to the `setattr` in `apply_channel_fields`, and moving the write without the
-    check would have let a reserved virtual-group tag through into a Follow.
+    would **silently discard** an edit to `startTime` rather than fail it. This
+    is where they land instead. A body's `tags` are not among them since
+    ADR-029: the caller hands those to `services/tags.py`.
 
     `setting_group_id` is deliberately **not** taken from a body. It is resolved
     from the caller's own setting groups — `PUT /data/channels/{id}` answers 400
@@ -724,11 +710,7 @@ def follow_values_from_body(body: Mapping[str, Any]) -> dict[str, Any]:
     for field in FOLLOW_OWNED_FIELDS:
         if field == "setting_group_id" or field not in body:
             continue
-        value = body[field]
-        if field == "tags":
-            reject_reserved_virtual_group_tags(value)
-            value = normalize_channel_tags(value)
-        values[field] = value
+        values[field] = body[field]
     return values
 
 
@@ -742,9 +724,9 @@ def sync_follow_settings(
     """Write an explicit edit's per-User fields onto the caller's Follow.
 
     `ensure_follow`/`ensure_follow_for_channel` are additive on purpose — a
-    second follower of an already-scraped channel must not have their tags
-    reset by somebody else re-creating it. An explicit edit through
-    `PUT /data/channels/{id}`, the bulk-tags endpoint, or an import overwriting
+    second follower of an already-scraped channel must not have their start
+    time reset by somebody else re-creating it. An explicit edit through
+    `PUT /data/channels/{id}` or an import overwriting
     an existing channel is the opposite case: the caller means for the value to
     change, and since ticket 22 dropped these columns from `Channel` this row is
     the only place the new value can land.

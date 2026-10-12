@@ -80,6 +80,7 @@ from app.models_tg import (
     SummaryPayload,
     SyncLog,
     SyncLogPayload,
+    Tag,
     TagRun,
     UserSetting,
     utc_now,
@@ -91,6 +92,7 @@ from app.services.channel_setting_groups import (
     load_groups_by_id,
     setting_group_to_camel,
 )
+from app.services.channel_tags import reject_reserved_virtual_group_tags
 from app.services.channels import SERVER_MANAGED_CHANNEL_FIELDS, apply_channel_fields
 from app.services.chat_sessions import (
     CHAT_SESSION_NOT_FOUND,
@@ -150,6 +152,13 @@ from app.services.summaries import (
 )
 from app.services.sync_meta import touch_sync
 from app.services.tag_runs import TAG_RUN_NOT_FOUND, tag_run_to_camel
+from app.services.tags import (
+    add_tags,
+    replace_channel_tags,
+    tag_to_camel,
+    tags_by_handle,
+)
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import (
     Scope,
     assert_owner_on_write,
@@ -227,6 +236,12 @@ IMPORT_WRITES: dict[type[Any], str] = {
         "half of the address and a write cannot reach another account's row at "
         "all. `write_user_setting` is still the one writer, and `require_home` "
         "there refuses a deployment-policy key that a document names."
+    ),
+    Tag: (
+        "Excused: the primary key is `(user_id, handle, tag_key)` and "
+        "`tags.add_tags` and `tags.replace_channel_tags` stamp the subject's "
+        "id, never one the document names, so a write cannot reach another "
+        "account's Tag at all, exactly as `UserSetting`."
     ),
     ChannelSettingGroup: (
         "Excused: never merged by an id the document supplies. "
@@ -416,6 +431,13 @@ def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) 
             }
         session.add(ch)
         touched.append((ch, follow_values))
+        # A channel item's `tags` replace the subject's Tags on it, as `PUT`
+        # does; a document from before ADR-029 carries its Tags only here.
+        if "tags" in normalized:
+            reject_reserved_virtual_group_tags(normalized["tags"])
+            replace_channel_tags(
+                session, user_id=user_id, handle=ch.name, tags=normalized["tags"]
+            )
 
     # One flush for the batch, still inside the document's single transaction:
     # `sync_follow_settings` is a Core INSERT that executes immediately, so
@@ -425,6 +447,19 @@ def _import_channels(session: Session, items: list[Any], *, user_id: uuid.UUID) 
     for channel, follow_values in touched:
         sync_follow_settings(session, channel, user_id=user_id, values=follow_values)
     return len(items)
+
+
+def _import_tags(session: Session, items: list[Any], *, user_id: uuid.UUID) -> int:
+    """Restore the `tags` section, unfollowed Channels' Tags included.
+
+    Added beside what the subject already has rather than replacing it, and
+    stamped with the subject, never an owner the document names: `add_tags`
+    takes no owner from a row. A `group:` name is refused, as on every Tag
+    write, because those are derived from Setting groups and never stored.
+    """
+    rows = [item for item in items if isinstance(item, dict)]
+    reject_reserved_virtual_group_tags(rows)
+    return add_tags(session, user_id=user_id, rows=rows)
 
 
 #: Summary columns with their own field; everything else on an exported summary
@@ -1180,6 +1215,9 @@ def import_data(
             session, payload["channels"], user_id=user_id
         )
 
+    if payload.get("tags"):
+        counts["tags"] = _import_tags(session, payload["tags"], user_id=user_id)
+
     if payload.get("posts"):
         # Follow first: the write path labels the Channels its Posts touch, and
         # a Channel this creates must exist by then or it stays unlabelled.
@@ -1477,6 +1515,7 @@ def export_sections(
     follow_owner = viewer_id if subject.is_everyone else subject.user_id
     assert follow_owner is not None  # `is_everyone` is the only None case
     follows = follows_for_user(session, user_id=follow_owner)
+    tags = tags_by_handle(session, user_id=follow_owner)
 
     def channel_row(channel: Channel) -> dict[str, Any]:
         follow = follows.get(channel.id)
@@ -1485,7 +1524,12 @@ def export_sections(
             if follow is not None and follow.setting_group_id is not None
             else None
         )
-        return channel_to_camel(channel, group=group, follow=follow)
+        return channel_to_camel(
+            channel,
+            group=group,
+            follow=follow,
+            tags=tags.get(normalize_handle(channel.name), []),
+        )
 
     return (
         ExportSection("setting_groups", ChannelSettingGroup, setting_group_to_camel),
@@ -1523,6 +1567,8 @@ def export_sections(
         ExportSection("tag_runs", TagRun, tag_run_to_camel),
         ExportSection("discover_reports", DiscoverReport, report_export_to_camel),
         ExportSection("user_settings", UserSetting, user_setting_to_camel),
+        # ADR-029: every Tag the subject holds, on followed Channels or not.
+        ExportSection("tags", Tag, tag_to_camel),
     )
 
 

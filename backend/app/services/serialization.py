@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.models_tg import (
@@ -23,7 +23,7 @@ from app.models_tg import (
     SyncLogPayload,
 )
 from app.services.channel_photos import channel_photo_api_path, has_cached_photo
-from app.services.channel_tags import normalize_channel_tags
+from app.services.channel_tags import ChannelTag
 
 _CAMEL_OVERRIDES = {
     "display_name": "displayName",
@@ -132,12 +132,18 @@ def channel_to_camel(
     *,
     group: ChannelSettingGroup | None = None,
     follow: ChannelFollow | None = None,
+    tags: Sequence[ChannelTag] = (),
 ) -> dict[str, Any]:
     """Build one channel's payload.
 
+    `tags` are the caller's Tags on this Channel, from `services/tags.py`.
+    They belong to the Account rather than the Follow (ADR-029), so they are
+    passed on their own: a Channel the caller has unfollowed can still carry
+    them.
+
     `follow` is the caller's `ChannelFollow` row for this channel, when the
-    caller has one (ticket 15). `tags`, `startId`, `startTime`, `followedAt`
-    and `discoveredVia` are the per-User fields ticket 04 copied onto
+    caller has one (ticket 15). `startId`, `startTime`, `followedAt` and
+    `discoveredVia` are the per-User fields ticket 04 copied onto
     `ChannelFollow` and ticket 22 dropped from `Channel`, so the Follow is now
     the only place they exist: it is the copy a second follower of the same
     handle can have its own values in.
@@ -172,7 +178,7 @@ def channel_to_camel(
         "links": ch.links,
         "startId": follow.start_id if follow is not None else None,
         "startTime": follow.start_time if follow is not None else None,
-        "tags": normalize_channel_tags(follow.tags if follow is not None else []),
+        "tags": list(tags),
         "lastUpdated": ch.last_updated,
         "nextRegularSyncAt": ch.next_regular_sync_at,
         "nextDynamicSyncAt": ch.next_dynamic_sync_at,

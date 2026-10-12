@@ -173,7 +173,6 @@ def create_followed_channel(
                 values={
                     "setting_group_id": group.id,
                     "followed_at": int(time.time() * 1000),
-                    "tags": [],
                     "start_time": effective_start_time,
                     "discovered_via": discovered_via,
                 },
@@ -219,7 +218,6 @@ def create_followed_channel(
             values={
                 "setting_group_id": group.id,
                 "followed_at": now,
-                "tags": [],
                 "start_time": effective_start_time,
                 "discovered_via": discovered_via,
             },
