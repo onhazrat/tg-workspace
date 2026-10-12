@@ -18,7 +18,8 @@ import { ArrowLeft, Clock } from "lucide-react"
 import { Popover } from "radix-ui"
 import type React from "react"
 import { useEffect, useId, useState } from "react"
-
+import { useIsVariantA } from "@/components/posts-prototype/variant"
+import { WindowHistogram } from "@/components/posts-prototype/WindowHistogram"
 import {
   Sheet,
   SheetContent,
@@ -132,6 +133,7 @@ const WindowField: React.FC<WindowFieldProps> = ({
 const WindowEditor: React.FC<{ onReturn?: () => void }> = ({ onReturn }) => {
   const { mode, setMode, applyValue } = useScope()
   const [elapsedFocus, setElapsedFocus] = useState<ScopeField | null>(null)
+  const variantA = useIsVariantA()
 
   return (
     <div className="flex flex-col gap-4">
@@ -167,6 +169,8 @@ const WindowEditor: React.FC<{ onReturn?: () => void }> = ({ onReturn }) => {
           { value: "fixed", label: "Fixed" },
         ]}
       />
+
+      {variantA && <WindowHistogram />}
 
       <div className="grid grid-cols-2 gap-3">
         {FIELDS.map(({ field, label }) => (

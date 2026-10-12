@@ -136,6 +136,7 @@ def _matched(
         tree=rule.tree,
         tree_readings=tree_readings(session, rule.tree),
         reading=reading,
+        window=(scope.start_date, scope.end_date),
     )
     clauses = [*scope.clauses(), *post_filter_clauses(filters, followed_names=followed)]
     if rule.max_per_channel <= 0:

@@ -53,7 +53,17 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE (posts-tab-improvements): the Tailscale HTTPS name, and the
+      // changed posts routes to the local prototype API.
+      allowedHosts: [".ts.net"],
       proxy: {
+        ...(process.env.PROTO_API_PORT
+          ? {
+              "^/api/v1/data/posts": {
+                target: `http://127.0.0.1:${process.env.PROTO_API_PORT}`,
+              },
+            }
+          : {}),
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

@@ -2032,6 +2032,43 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/posts/histogram": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Posts Histogram",
+        "description": "PROTOTYPE: the filtered Posts over time, for the Analysis window's chart.",
+        "operationId": "data-posts_histogram",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostHistogramRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostHistogramResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/posts/view-estimate": {
       "get": {
         "tags": ["data"],
@@ -6402,6 +6439,34 @@
         "title": "ChannelInfoResponse",
         "description": "What one fetch of a channel's meta page reports.\n\nUnlike `ScrapeChannelResponse`, `photoUrl` and `bio` here are nullable:\n`_parse_channel_meta` returns them straight from the parsed page without the\n`or \"\"` coercion that the scrape path applies. Same fields, different\nnullability \u2014 that difference is real and is why these are two models."
       },
+      "ChannelPostsCondition": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "channel_posts",
+            "title": "Type"
+          },
+          "min": {
+            "anyOf": [
+              { "type": "integer", "minimum": 0.0 },
+              { "type": "null" }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              { "type": "integer", "minimum": 0.0 },
+              { "type": "null" }
+            ],
+            "title": "Max"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type"],
+        "title": "ChannelPostsCondition",
+        "description": "PROTOTYPE: the Post's Channel has between min and max Posts in the window."
+      },
       "ChannelResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -8762,13 +8827,15 @@
               { "$ref": "#/components/schemas/MediaCondition" },
               { "$ref": "#/components/schemas/LanguageCondition" },
               { "$ref": "#/components/schemas/ChannelCondition" },
-              { "$ref": "#/components/schemas/ViewsCondition" }
+              { "$ref": "#/components/schemas/ViewsCondition" },
+              { "$ref": "#/components/schemas/ChannelPostsCondition" }
             ],
             "title": "Cond",
             "discriminator": {
               "propertyName": "type",
               "mapping": {
                 "channel": "#/components/schemas/ChannelCondition",
+                "channel_posts": "#/components/schemas/ChannelPostsCondition",
                 "language": "#/components/schemas/LanguageCondition",
                 "media": "#/components/schemas/MediaCondition",
                 "type": "#/components/schemas/TypeCondition",
@@ -10187,6 +10254,120 @@
         "type": "object",
         "title": "PostFilteredRequest",
         "description": "`PostScopeRequest` plus the Post filter's tree and the Post selection."
+      },
+      "PostHistogramRequest": {
+        "properties": {
+          "channelNames": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Channelnames"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
+                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
+                ],
+                "discriminator": {
+                  "propertyName": "mode",
+                  "mapping": {
+                    "fixed": "#/components/schemas/FixedAnalysisWindow",
+                    "live": "#/components/schemas/LiveAnalysisWindow"
+                  }
+                }
+              },
+              { "type": "null" }
+            ],
+            "title": "Window"
+          },
+          "keyword": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyword"
+          },
+          "viewMeasure": {
+            "type": "string",
+            "enum": ["views", "estimated"],
+            "title": "Viewmeasure",
+            "default": "estimated"
+          },
+          "maxPerChannel": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Maxperchannel",
+            "default": 0
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FilterGroup-Input" },
+              { "type": "null" }
+            ]
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SelectionRule-Input" },
+                    { "$ref": "#/components/schemas/SelectionPick" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "pick": "#/components/schemas/SelectionPick",
+                      "rule": "#/components/schemas/SelectionRule-Input"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Selection"
+          },
+          "maxPerChannelMode": {
+            "type": "string",
+            "enum": ["ordered", "random"],
+            "title": "Maxperchannelmode",
+            "default": "ordered"
+          },
+          "sort": {
+            "type": "string",
+            "enum": ["newest", "oldest", "most_views", "fewest_views"],
+            "title": "Sort",
+            "default": "newest"
+          },
+          "seed": { "type": "integer", "title": "Seed", "default": 0 },
+          "extentStart": { "type": "integer", "title": "Extentstart" },
+          "extentEnd": { "type": "integer", "title": "Extentend" },
+          "buckets": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Buckets",
+            "default": 60
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["extentStart", "extentEnd"],
+        "title": "PostHistogramRequest",
+        "description": "PROTOTYPE: the filtered scope bucketed over an explicit time extent."
+      },
+      "PostHistogramResponse": {
+        "properties": {
+          "counts": {
+            "items": { "type": "integer" },
+            "type": "array",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": ["counts"],
+        "title": "PostHistogramResponse",
+        "description": "PROTOTYPE: one count per equal slice of the extent."
       },
       "PostLinkSpan": {
         "properties": {
@@ -12525,7 +12706,13 @@
           "type": { "type": "string", "const": "type", "title": "Type" },
           "value": {
             "type": "string",
-            "enum": ["forwarded", "original", "unfollowed_forwarded"],
+            "enum": [
+              "forwarded",
+              "original",
+              "unfollowed_forwarded",
+              "is_reply",
+              "has_reply"
+            ],
             "title": "Value"
           }
         },

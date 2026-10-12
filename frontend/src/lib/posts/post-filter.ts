@@ -34,7 +34,13 @@ import {
 } from "@/lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS, type MediaKind } from "@/lib/posts/post-media"
 
-export type PostType = "forwarded" | "original" | "unfollowed_forwarded"
+export type PostType =
+  | "forwarded"
+  | "original"
+  | "unfollowed_forwarded"
+  // PROTOTYPE (posts-tab-improvements, variant A)
+  | "is_reply"
+  | "has_reply"
 
 export type PostValueCond =
   | { type: "type"; value: PostType }
@@ -46,7 +52,13 @@ export type PostViewsCond = {
   type: "views"
   measure: ViewMeasure
 } & MetricBound
-export type PostCond = PostValueCond | PostViewsCond
+/** PROTOTYPE: a bound on the Post's Channel's Posts in the window, unfiltered. */
+export type PostChannelPostsCond = {
+  type: "channel_posts"
+  min?: number
+  max?: number
+}
+export type PostCond = PostValueCond | PostViewsCond | PostChannelPostsCond
 export type PostFilter = FilterTree<PostCond>
 /** The Conditions a dropdown funnels. */
 export type PostFacet = "type" | "media" | "language"
@@ -61,6 +73,12 @@ export const POST_TYPE_VALUES: { label: string; value: PostType }[] = [
     label: "Forwarded from unfollowed channels",
     value: "unfollowed_forwarded",
   },
+]
+
+/** PROTOTYPE (variant A): the reply Types, offered only in variant A. */
+export const PROTO_REPLY_TYPE_VALUES: { label: string; value: PostType }[] = [
+  { label: "Is a reply", value: "is_reply" },
+  { label: "Has a reply", value: "has_reply" },
 ]
 
 /**
@@ -85,7 +103,12 @@ export const measureLabel = (measure: ViewMeasure): string =>
 export function postConditionLabel(cond: PostCond): string {
   switch (cond.type) {
     case "type":
-      return labelOf(POST_TYPE_VALUES, cond.value)
+      return labelOf(
+        [...POST_TYPE_VALUES, ...PROTO_REPLY_TYPE_VALUES],
+        cond.value,
+      )
+    case "channel_posts":
+      return `Channel posts in window ${boundText(cond)}`
     case "media":
       return labelOf(MEDIA_KIND_OPTIONS, cond.value)
     case "language":
@@ -107,6 +130,12 @@ const PREFIX: Record<PostValueCond["type"], string> = {
 }
 
 function condText(cond: PostCond): string {
+  if (cond.type === "channel_posts")
+    return cond.min !== undefined && cond.max !== undefined
+      ? `chposts ${cond.min}..${cond.max}`
+      : cond.min !== undefined
+        ? `chposts >= ${cond.min}`
+        : `chposts <= ${cond.max}`
   if (cond.type !== "views") return `${PREFIX[cond.type]}:${quote(cond.value)}`
   const m = cond.measure
   return {
@@ -128,11 +157,19 @@ export const printPostFilter = (filter: PostFilter): string =>
 const NUM = String.raw`(\d+(?:\.\d+)?(?:e[+-]?\d+)?)`
 /** `views >= 200`, `estimated 200..1000` or `views = none`. */
 const BOUND = new RegExp(
-  String.raw`^(views|estimated)(?:\s*(>=|<=|>|<)\s*${NUM}|\s*=\s*none(?![\p{L}\p{N}_])|\s+${NUM}\s*\.\.\s*${NUM})`,
+  String.raw`^(views|estimated|chposts)(?:\s*(>=|<=|>|<)\s*${NUM}|\s*=\s*none(?![\p{L}\p{N}_])|\s+${NUM}\s*\.\.\s*${NUM})`,
   "iu",
 )
 
-function boundCond(m: RegExpExecArray): PostViewsCond {
+function boundCond(m: RegExpExecArray): PostCond {
+  if (m[1].toLowerCase() === "chposts") {
+    if (m[4] !== undefined)
+      return { type: "channel_posts", min: Number(m[4]), max: Number(m[5]) }
+    if (m[2] === undefined) throw new ParseError("chposts has no none")
+    return m[2].startsWith(">")
+      ? { type: "channel_posts", min: Number(m[3]) }
+      : { type: "channel_posts", max: Number(m[3]) }
+  }
   const measure = m[1].toLowerCase() as ViewMeasure
   if (m[4] !== undefined)
     return { type: "views", measure, min: Number(m[4]), max: Number(m[5]) }
@@ -143,7 +180,9 @@ function boundCond(m: RegExpExecArray): PostViewsCond {
     : { type: "views", measure, max: Number(m[3]) }
 }
 
-const TYPES = new Set<string>(POST_TYPE_VALUES.map((t) => t.value))
+const TYPES = new Set<string>(
+  [...POST_TYPE_VALUES, ...PROTO_REPLY_TYPE_VALUES].map((t) => t.value),
+)
 const MEDIA = new Set<string>(MEDIA_KIND_OPTIONS.map((m) => m.value))
 
 const POST_TEXT: TextVocabulary<PostCond> = {

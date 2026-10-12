@@ -37,10 +37,13 @@ from sqlalchemy import (
     literal,
     not_,
     or_,
+    select,
     true,
+    tuple_,
     type_coerce,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import aliased
 from sqlmodel import col
 
 from app.models_tg import Post
@@ -50,7 +53,10 @@ from app.services.reach import MS_PER_HOUR, CurvePoints, ReachSettings
 ForwardedFilter = Literal["all", "forwarded", "original", "unfollowed_forwarded"]
 #: A Type Condition's values: `ForwardedFilter` without `all`, which a tree
 #: says by having no Type Condition at all.
-PostType = Literal["forwarded", "original", "unfollowed_forwarded"]
+# PROTOTYPE (posts-tab-improvements): `is_reply` and `has_reply`.
+PostType = Literal[
+    "forwarded", "original", "unfollowed_forwarded", "is_reply", "has_reply"
+]
 POST_TYPE_ORDER: tuple[PostType, ...] = get_args(PostType)
 #: One media kind. A Scope carries a *set* of them (PFB-01): empty means any
 #: media, and a Post matches when it matches any kind in the set. The set
@@ -176,7 +182,18 @@ class ViewsCond:
     none: bool = False
 
 
-TreeCond = TypeCond | MediaCond | LanguageCond | ChannelCond | ViewsCond
+@dataclass(frozen=True)
+class ChannelPostsCond:
+    """PROTOTYPE: a bound on how many Posts the Post's Channel has in the window,
+    counted before any other filter."""
+
+    min: int | None = None
+    max: int | None = None
+
+
+TreeCond = (
+    TypeCond | MediaCond | LanguageCond | ChannelCond | ViewsCond | ChannelPostsCond
+)
 
 
 # Generic over the Condition, so the Directory filter (DIR-02) is the same tree
@@ -265,6 +282,8 @@ class PostFilters:
     tree_readings: Mapping[ViewMeasure, ViewReading] = field(default_factory=dict)
     #: The measure the views orders read. Not the tree's: a bound names its own.
     reading: ViewReading = ViewReading()
+    #: PROTOTYPE: the Analysis window a Channel-posts bound counts in.
+    window: tuple[int | None, int | None] = (None, None)
 
     def active_tree(self) -> PostTree | None:
         """The tree, when it holds anything to filter by; an empty root keeps all."""
@@ -351,12 +370,27 @@ def _keyword_clause(term: str) -> ColumnElement[bool]:
 
 
 def post_type_clause(
-    value: PostType, followed_names: frozenset[str] | None
+    value: PostType,
+    followed_names: frozenset[str] | None,
+    window: tuple[int | None, int | None] = (None, None),
 ) -> ColumnElement[bool]:
     if value == "forwarded":
         return col(Post.forwarded_from).is_not(None)
     if value == "original":
         return col(Post.forwarded_from).is_(None)
+    if value == "is_reply":
+        return col(Post.reply_to_post_id).is_not(None)
+    if value == "has_reply":
+        # A hashed semi-join over the replies made since the window opened (a
+        # reply comes after its parent): a correlated EXISTS costs ~9s on the
+        # facets' scan of a week, an unbounded reply set ~15s.
+        reply = aliased(Post)
+        replies = select(reply.channel_name, reply.reply_to_post_id).where(
+            reply.reply_to_post_id.is_not(None)
+        )
+        if window[0] is not None:
+            replies = replies.where(reply.timestamp >= window[0])
+        return tuple_(col(Post.channel_name), col(Post.post_id)).in_(replies)
     followed = followed_names or frozenset()
     return and_(
         col(Post.forwarded_from).is_not(None),
@@ -383,13 +417,34 @@ def media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
     raise ValueError(f"unknown media kind: {value}")
 
 
+def channel_posts_clause(
+    cond: ChannelPostsCond, window: tuple[int | None, int | None]
+) -> ColumnElement[bool]:
+    """PROTOTYPE: Posts whose Channel has between min and max Posts in the window."""
+    counted = aliased(Post)
+    stmt = select(counted.channel_name).group_by(counted.channel_name)
+    start, end = window
+    if start is not None:
+        stmt = stmt.where(counted.timestamp >= start)
+    if end is not None:
+        stmt = stmt.where(counted.timestamp < end)
+    if cond.min is not None:
+        stmt = stmt.having(func.count() >= cond.min)
+    if cond.max is not None:
+        stmt = stmt.having(func.count() <= cond.max)
+    return col(Post.channel_name).in_(stmt)
+
+
 def _atom_clause(
     cond: TreeCond,
     readings: Mapping[ViewMeasure, ViewReading],
     followed_names: frozenset[str] | None,
+    window: tuple[int | None, int | None] = (None, None),
 ) -> ColumnElement[bool]:
+    if isinstance(cond, ChannelPostsCond):
+        return channel_posts_clause(cond, window)
     if isinstance(cond, TypeCond):
-        return post_type_clause(cond.value, followed_names)
+        return post_type_clause(cond.value, followed_names, window)
     if isinstance(cond, MediaCond):
         return media_kind_clause(cond.value)
     if isinstance(cond, LanguageCond):
@@ -414,9 +469,12 @@ def tree_clause(
     *,
     readings: Mapping[ViewMeasure, ViewReading],
     followed_names: frozenset[str] | None = None,
+    window: tuple[int | None, int | None] = (None, None),
 ) -> ColumnElement[bool]:
     """`node` as one predicate, evaluated the way the Channels tab evaluates."""
-    return compile_tree(node, lambda cond: _atom_clause(cond, readings, followed_names))
+    return compile_tree(
+        node, lambda cond: _atom_clause(cond, readings, followed_names, window)
+    )
 
 
 def post_filter_clauses(
@@ -429,7 +487,10 @@ def post_filter_clauses(
     if (tree := filters.active_tree()) is not None:
         clauses.append(
             tree_clause(
-                tree, readings=filters.tree_readings, followed_names=followed_names
+                tree,
+                readings=filters.tree_readings,
+                followed_names=followed_names,
+                window=filters.window,
             )
         )
     return clauses

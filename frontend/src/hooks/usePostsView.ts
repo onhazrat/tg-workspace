@@ -75,7 +75,7 @@ export function useLiveWindowRefresh(refresh: () => void): void {
   }, [liveTick, refresh])
 }
 
-function useSelectedChannelNames(): string[] {
+export function useSelectedChannelNames(): string[] {
   const { channels, selectedChannels } = useData()
   return useMemo(
     () =>

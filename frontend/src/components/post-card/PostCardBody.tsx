@@ -90,3 +90,79 @@ export function PostCardClampedBody({
     </div>
   )
 }
+
+/**
+ * PROTOTYPE (variant A): a compact card's text fills whatever height the grid
+ * row gives the card, in whole lines, three at least, then "More". The text
+ * sits in an absolute box so it never sets the row's height itself.
+ */
+export function PostCardFillBody({
+  text,
+  linkSpans,
+  postSearch,
+}: {
+  text: string
+  linkSpans: Post["linkSpans"] | null
+  postSearch: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [height, setHeight] = useState<number | null>(null)
+  const [over, setOver] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const para = useRef<HTMLParagraphElement>(null)
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el || open) return
+    const fit = () => {
+      const line = Number.parseFloat(getComputedStyle(el).lineHeight)
+      const lines = Math.max(3, Math.floor(el.clientHeight / line))
+      setHeight(lines * line)
+      setOver((para.current?.scrollHeight ?? 0) > lines * line + 2)
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text, open])
+  const content = renderPostText(text, postSearch, linkSpans)
+  const toggle = (
+    <button
+      type="button"
+      onClick={() => setOpen((o) => !o)}
+      className="mt-0.5 self-start text-[12px] font-medium text-blue-500 hover:underline"
+    >
+      {open ? "Less" : "More"}
+    </button>
+  )
+  if (open)
+    return (
+      <div className="flex flex-col text-[13px] leading-[1.5em]">
+        <p dir="auto" className="whitespace-pre-wrap text-app-ink/80">
+          {content}
+        </p>
+        {toggle}
+      </div>
+    )
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div
+        ref={box}
+        className="relative min-h-[4.5em] flex-1 text-[13px] leading-[1.5em]"
+      >
+        <div
+          className="absolute inset-x-0 top-0 overflow-hidden"
+          style={{ height: height ?? undefined }}
+        >
+          <p
+            ref={para}
+            dir="auto"
+            className="whitespace-pre-wrap text-app-ink/80"
+          >
+            {content}
+          </p>
+        </div>
+      </div>
+      {over && toggle}
+    </div>
+  )
+}

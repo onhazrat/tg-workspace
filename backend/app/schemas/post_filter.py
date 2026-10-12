@@ -16,6 +16,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 from app.services.post_filters import (
     CapMode,
     ChannelCond,
+    ChannelPostsCond,
     FeedSort,
     LanguageCond,
     MediaCond,
@@ -115,12 +116,24 @@ class ViewsCondition(_Cond):
         return ViewsCond(self.measure, self.min, self.max, self.none)
 
 
+class ChannelPostsCondition(_Cond):
+    """PROTOTYPE: the Post's Channel has between min and max Posts in the window."""
+
+    type: Literal["channel_posts"]
+    min: int | None = Field(None, ge=0)
+    max: int | None = Field(None, ge=0)
+
+    def to_cond(self) -> TreeCond:
+        return ChannelPostsCond(self.min, self.max)
+
+
 PostCondition = Annotated[
     TypeCondition
     | MediaCondition
     | LanguageCondition
     | ChannelCondition
-    | ViewsCondition,
+    | ViewsCondition
+    | ChannelPostsCondition,
     Field(discriminator="type"),
 ]
 

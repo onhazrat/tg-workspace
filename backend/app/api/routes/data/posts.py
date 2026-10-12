@@ -19,6 +19,8 @@ from app.schemas.posts import (
     PostFacetsResponse,
     PostFeedRequest,
     PostFilteredRequest,
+    PostHistogramRequest,
+    PostHistogramResponse,
     PostLookupRequest,
     SelectablePostResponse,
     ViewCurveResponse,
@@ -30,6 +32,7 @@ from app.services.posts import (
     bulk_upsert_posts,
     count_facets_in_scope,
     count_shown_and_selected,
+    post_histogram,
 )
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -124,6 +127,27 @@ def posts_counts(
         selected=counted["selected"],
         selectedShown=counted["selected_shown"],
         tooNewToJudge=counted["too_new"],
+    )
+
+
+@router.post("/posts/histogram")
+def posts_histogram(
+    body: PostHistogramRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostHistogramResponse:
+    """PROTOTYPE: the filtered Posts over time, for the Analysis window's chart."""
+    window = resolve_analysis_window(body.window)
+    return PostHistogramResponse(
+        counts=post_histogram(
+            session,
+            user_id=current_user.id,
+            channel_names=body.cleaned_channel_names(),
+            window=(window.start, window.end),
+            extent=(body.extent_start, body.extent_end),
+            buckets=body.buckets,
+            filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
+        )
     )
 
 

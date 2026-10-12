@@ -44,6 +44,12 @@ import {
   useSpotlightState,
 } from "./post-card/ChannelSpotlight"
 import { FeedKeyboard } from "./post-card/FeedKeyboard"
+import {
+  FeedPagingContext,
+  PostsVariantContext,
+  PrototypeSwitcher,
+  useVariantFromUrl,
+} from "./posts-prototype/variant"
 
 interface PostFeedProps {
   postSearch: string
@@ -100,6 +106,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   })
 
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
+  const variant = useVariantFromUrl()
 
   // The Post selection (PTR-05): window-wide, so neither a spotlight nor the
   // filter changes these two numbers.
@@ -215,92 +222,100 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   }, [loadMoreRef, loadMore])
 
   return (
-    <SpotlightProvider value={spotlightApi}>
-      <motion.div
-        key="posts"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-6 pb-10"
+    <PostsVariantContext.Provider value={variant}>
+      <FeedPagingContext.Provider
+        value={{ loadMore, hasMore, postCount: posts.length, spotlight }}
       >
-        <PostFilter
-          postSearch={postSearch}
-          setPostSearch={setPostSearch}
-          shownCount={totalInScope}
-          subtitle={subtitle}
-          tooNewToJudge={tooNewToJudge}
-          trailing={
-            <>
-              <button
-                type="button"
-                aria-pressed={compact}
-                onClick={() => setCompact(!compact)}
-                className={cn(pillClass(compact), "ml-auto")}
-              >
-                <LayoutGrid size={12} /> Compact grid
-              </button>
-              <button
-                type="button"
-                aria-pressed={keyboard}
-                onClick={() => setKeyboard(!keyboard)}
-                className={pillClass(keyboard)}
-                title="j / k to move, gg / G to jump, an action's letter to fire it"
-              >
-                <Keyboard size={12} /> Keyboard
-              </button>
-            </>
-          }
-        />
+        <PrototypeSwitcher />
+        <SpotlightProvider value={spotlightApi}>
+          <motion.div
+            key="posts"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6 pb-10"
+          >
+            <PostFilter
+              postSearch={postSearch}
+              setPostSearch={setPostSearch}
+              shownCount={totalInScope}
+              subtitle={subtitle}
+              tooNewToJudge={tooNewToJudge}
+              trailing={
+                <>
+                  <button
+                    type="button"
+                    aria-pressed={compact}
+                    onClick={() => setCompact(!compact)}
+                    className={cn(pillClass(compact), "ml-auto")}
+                  >
+                    <LayoutGrid size={12} /> Compact grid
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={keyboard}
+                    onClick={() => setKeyboard(!keyboard)}
+                    className={pillClass(keyboard)}
+                    title="j / k to move, gg / G to jump, an action's letter to fire it"
+                  >
+                    <Keyboard size={12} /> Keyboard
+                  </button>
+                </>
+              }
+            />
 
-        <PostSelectionBar
-          selected={selectedCount}
-          total={windowTotal}
-          chips={selectionChips(postSelection)}
-          ranked={ranked}
-          onSelectAll={() => selectShown(true)}
-          onDeselectAll={() => selectShown(false)}
-          onRemoveChip={removeSelectionChip}
-          regions={
-            ranked
-              ? undefined
-              : regionCounts({
-                  selected: selectedCount,
-                  selectedShown,
-                  shown: totalInScope,
-                })
-          }
-          onAdjust={(keep) =>
-            appendSelection(regionSteps(keep, shownSnapshot()))
-          }
-          selectedFirst={selectedFirst}
-          onSelectedFirstChange={setSelectedFirst}
-          onCopyLinks={copyLinks}
-          onExportMarkdown={exportMarkdown}
-        />
+            <PostSelectionBar
+              selected={selectedCount}
+              total={windowTotal}
+              chips={selectionChips(postSelection)}
+              ranked={ranked}
+              onSelectAll={() => selectShown(true)}
+              onDeselectAll={() => selectShown(false)}
+              onRemoveChip={removeSelectionChip}
+              regions={
+                ranked
+                  ? undefined
+                  : regionCounts({
+                      selected: selectedCount,
+                      selectedShown,
+                      shown: totalInScope,
+                    })
+              }
+              onAdjust={(keep) =>
+                appendSelection(regionSteps(keep, shownSnapshot()))
+              }
+              selectedFirst={selectedFirst}
+              onSelectedFirstChange={setSelectedFirst}
+              onCopyLinks={copyLinks}
+              onExportMarkdown={exportMarkdown}
+            />
 
-        {spotlight && (
-          <SpotlightBanner
-            name={spotlight.channel}
-            channel={channels.find(
-              (c) => c.name.toLowerCase() === spotlight.channel.toLowerCase(),
+            {spotlight && (
+              <SpotlightBanner
+                name={spotlight.channel}
+                channel={channels.find(
+                  (c) =>
+                    c.name.toLowerCase() === spotlight.channel.toLowerCase(),
+                )}
+                keepFilters={spotlight.keepFilters}
+                onKeepFiltersChange={spotlightApi.setKeepFilters}
+                onBack={spotlightApi.leave}
+              />
             )}
-            keepFilters={spotlight.keepFilters}
-            onKeepFiltersChange={spotlightApi.setKeepFilters}
-            onBack={spotlightApi.leave}
-          />
-        )}
 
-        <PostFeedResults
-          isInitialLoading={isInitialLoading}
-          posts={posts}
-          showLoadMore={hasMore || isLoadingMore}
-          loadMoreRef={loadMoreRef}
-          postSearch={postSearch}
-          compact={compact}
-          keyboard={keyboard}
-          onToggleSelected={onToggleSelected}
-        />
-        <FeedKeyboard on={keyboard} />
-      </motion.div>
-    </SpotlightProvider>
+            <PostFeedResults
+              isInitialLoading={isInitialLoading}
+              posts={posts}
+              showLoadMore={hasMore || isLoadingMore}
+              loadMoreRef={loadMoreRef}
+              postSearch={postSearch}
+              compact={compact}
+              keyboard={keyboard}
+              onToggleSelected={onToggleSelected}
+            />
+            <FeedKeyboard on={keyboard} />
+          </motion.div>
+        </SpotlightProvider>
+      </FeedPagingContext.Provider>
+    </PostsVariantContext.Provider>
   )
 }

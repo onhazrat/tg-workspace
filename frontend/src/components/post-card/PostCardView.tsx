@@ -1,6 +1,11 @@
 import { cn } from "@/lib/utils"
+import { useIsVariantA } from "../posts-prototype/variant"
 import { SHORTCUTS } from "./FeedKeyboard"
-import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
+import {
+  PostCardBody,
+  PostCardClampedBody,
+  PostCardFillBody,
+} from "./PostCardBody"
 import {
   PostCardActions,
   PostCardReactions,
@@ -81,6 +86,7 @@ export function PostCardView({
   ...rest
 }: PostCardViewProps) {
   const { selected } = rest.post
+  const variantA = useIsVariantA()
   const header = {
     ...rest,
     trailing: selected !== undefined && onToggleSelected && (
@@ -130,7 +136,11 @@ export function PostCardView({
             <PostCardPhoto thumbApiPath={thumb} caption={title} compact />
           </div>
         )}
-        <PostCardClampedBody {...body} />
+        {variantA ? (
+          <PostCardFillBody {...body} />
+        ) : (
+          <PostCardClampedBody {...body} />
+        )}
         {/* Pinned to the bottom, so footers line up across a grid row. */}
         <footer className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-app-ink/5 pt-1.5 text-[12px] text-app-ink/50">
           <PostIdLink post={post} />

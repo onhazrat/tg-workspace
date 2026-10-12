@@ -17,7 +17,8 @@
  * The photo is the card's cached thumbnail; there is no larger image.
  */
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { type ReactNode, useEffect, useRef, useState } from "react"
+import { type ReactNode, useContext, useEffect, useRef, useState } from "react"
+import { FeedPagingContext, useIsVariantA } from "../posts-prototype/variant"
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog"
 import {
   clampView,
@@ -126,13 +127,43 @@ export function PhotoViewer({
   onClose: () => void
   action?: PhotoAction
 }) {
-  const [photos] = useState(() => loadedPhotos(start))
+  const [photos, setPhotos] = useState(() => loadedPhotos(start))
   const [at, setAt] = useState(() =>
     Math.max(
       0,
       photos.findIndex((p) => p.src === start),
     ),
   )
+  // PROTOTYPE (variant A): near the last loaded photo, page the feed, and
+  // take in each thumbnail as it lands in the page.
+  const paging = useContext(FeedPagingContext)
+  const pages = useIsVariantA() && paging !== null
+  const current = useRef(start)
+  current.current = photos[at]?.src ?? start
+  useEffect(() => {
+    if (!pages) return
+    const observer = new MutationObserver(() => {
+      const next = loadedPhotos(current.current)
+      setPhotos((prev) => (next.length === prev.length ? prev : next))
+      setAt(
+        Math.max(
+          0,
+          next.findIndex((p) => p.src === current.current),
+        ),
+      )
+    })
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["src"],
+    })
+    return () => observer.disconnect()
+  }, [pages])
+  useEffect(() => {
+    if (pages && paging.hasMore && at >= photos.length - 3) paging.loadMore()
+  }, [pages, paging, at, photos.length])
+  const morePending = pages && paging.hasMore && at === photos.length - 1
   // A swipe's "next" follows the page the viewer was opened from.
   const [rtl] = useState(() => photos[at]?.rtl === true)
   const [controls, setControls] = useState(true)
@@ -187,7 +218,7 @@ export function PhotoViewer({
         onToggleControls={() => setControls((c) => !c)}
         caption={
           photos.length > 1
-            ? `${photo.caption} · ${at + 1} / ${photos.length}`
+            ? `${photo.caption} · ${at + 1} / ${photos.length}${morePending ? " · loading more…" : ""}`
             : photo.caption
         }
       />

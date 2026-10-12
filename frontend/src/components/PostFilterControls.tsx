@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Eye,
   Forward,
+  Hash,
   Image,
   Languages,
   type LucideIcon,
@@ -45,10 +46,12 @@ import {
   addPostFunnel,
   measureLabel,
   POST_TYPE_VALUES,
+  type PostChannelPostsCond,
   type PostCond,
   type PostFacet,
   type PostFilter,
   type PostViewsCond,
+  PROTO_REPLY_TYPE_VALUES,
   postConditionLabel,
 } from "@/lib/posts/post-filter"
 import {
@@ -63,6 +66,65 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
   language: Languages,
   channel: AtSign,
   views: Eye,
+  channel_posts: Hash,
+}
+
+/** PROTOTYPE (variant A): the Channel-posts-in-window bound's editor. */
+function ChannelPostsEditor({
+  initial,
+  onSubmit,
+  onBack,
+}: {
+  initial?: PostChannelPostsCond
+  onSubmit: (cond: PostChannelPostsCond) => void
+  onBack?: () => void
+}) {
+  const [op, setOp] = useState<BoundKind>(boundKind(initial))
+  const [a, setA] = useState(
+    String((op === "lte" ? initial?.max : initial?.min) ?? ""),
+  )
+  const [b, setB] = useState(String(initial?.max ?? ""))
+  const bound = op === "none" ? null : parseBound(op, a, b, { min: 0 })
+  return (
+    <form
+      className="space-y-2 p-1"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (bound)
+          onSubmit({ type: "channel_posts", min: bound.min, max: bound.max })
+      }}
+    >
+      <div className="flex items-center gap-2 text-xs font-semibold">
+        {onBack && (
+          <button
+            type="button"
+            aria-label="Back to the criteria"
+            onClick={onBack}
+            className="text-app-ink/50 hover:text-app-ink"
+          >
+            ←
+          </button>
+        )}
+        Channel posts in window
+      </div>
+      <p className="text-[11px] text-app-ink/50">
+        How many Posts the Post's Channel has in the Analysis window, counted
+        before every other filter. "At most 5" hides the noisy channels.
+      </p>
+      <BoundFields
+        op={op}
+        setOp={setOp}
+        a={a}
+        setA={setA}
+        b={b}
+        setB={setB}
+        min={0}
+      />
+      <TgButton type="submit" size="sm" disabled={!bound} className="w-full">
+        {initial ? "Update" : "Add"}
+      </TgButton>
+    </form>
+  )
 }
 
 // ---- The views editor ------------------------------------------------------
@@ -177,6 +239,7 @@ const LISTS: {
 export function postVocabulary(
   options: PostConditionOptions,
   floorHours: number,
+  variantA = false,
 ): FilterVocabulary<PostCond> {
   return {
     sections: [
@@ -186,7 +249,14 @@ export function postVocabulary(
           id: type,
           label,
           icon: POST_CONDITION_ICON[type],
-          options: of(options),
+          // PROTOTYPE: variant A offers the reply Types too.
+          options:
+            variantA && type === "type"
+              ? [...POST_TYPE_VALUES, ...PROTO_REPLY_TYPE_VALUES].map((t) => ({
+                  id: t.value,
+                  label: t.label,
+                }))
+              : of(options),
           make: (value: string) => ({ type, value }) as PostCond,
           current: (cond: PostCond) =>
             cond.type === type && "value" in cond ? cond.value : undefined,
@@ -210,6 +280,38 @@ export function postVocabulary(
           ),
         })),
       },
+      ...(variantA
+        ? [
+            {
+              heading: "Channel",
+              entries: [
+                {
+                  kind: "editor" as const,
+                  id: "channel_posts",
+                  label: "Channel posts in window",
+                  icon: Hash,
+                  render: ({
+                    start,
+                    onSubmit,
+                    onBack,
+                  }: {
+                    start?: PostCond
+                    onSubmit: (cond: PostCond) => void
+                    onBack?: () => void
+                  }) => (
+                    <ChannelPostsEditor
+                      initial={
+                        start?.type === "channel_posts" ? start : undefined
+                      }
+                      onBack={onBack}
+                      onSubmit={onSubmit}
+                    />
+                  ),
+                },
+              ],
+            },
+          ]
+        : []),
     ],
     entryOf: (cond) =>
       cond.type === "views" ? `views:${cond.measure}` : cond.type,
@@ -218,7 +320,9 @@ export function postVocabulary(
     chipId: (cond) =>
       cond.type === "views"
         ? `views-${cond.measure}`
-        : `${cond.type}-${cond.value}`,
+        : cond.type === "channel_posts"
+          ? "channel-posts"
+          : `${cond.type}-${cond.value}`,
   }
 }
 

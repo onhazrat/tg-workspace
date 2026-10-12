@@ -252,6 +252,20 @@ class PostFilteredRequest(PostScopeRequest):
     seed: int = 0
 
 
+class PostHistogramRequest(PostFilteredRequest):
+    """PROTOTYPE: the filtered scope bucketed over an explicit time extent."""
+
+    extent_start: int = PydanticField(alias="extentStart")
+    extent_end: int = PydanticField(alias="extentEnd")
+    buckets: int = PydanticField(60, ge=1, le=500)
+
+
+class PostHistogramResponse(BaseModel):
+    """PROTOTYPE: one count per equal slice of the extent."""
+
+    counts: list[int]
+
+
 class PostFeedRequest(PostFilteredRequest):
     """`PostFilteredRequest` plus the feed's paging, grouping and the selection's order.
 

@@ -945,6 +945,7 @@ def count_scope(
             tree,
             readings=filters.tree_readings,
             followed_names=_followed_for(session, filters, user_id),
+            window=(start_date, end_date),
         )
         kept = func.count().filter(shown)
         too_new = func.count().filter(and_(not_(shown), estimate.too_new(Post)))
@@ -1032,7 +1033,9 @@ def count_facets_in_scope(
                 *(
                     agg
                     for value in POST_TYPE_ORDER
-                    for agg in both(post_type_clause(value, followed))
+                    for agg in both(
+                        post_type_clause(value, followed, (start_date, end_date))
+                    )
                 ),
                 *(
                     agg
@@ -1099,6 +1102,8 @@ def _in_scope(
     if channel_names:
         stmt = stmt.where(col(Post.channel_name).in_(channel_names))
     stmt = apply_analysis_window(stmt, start_date, end_date)
+    if filters is not None:
+        filters = replace(filters, window=(start_date, end_date))
     return _filtered(session, stmt, user_id, filters)
 
 
@@ -1107,3 +1112,31 @@ def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str,
     session.commit()
     touch_sync(session, "posts")
     return {"upserted": count}
+
+
+def post_histogram(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None,
+    window: tuple[int | None, int | None],
+    extent: tuple[int, int],
+    buckets: int,
+    filters: PostFilters,
+) -> list[int]:
+    """PROTOTYPE: how many Posts the filter shows in each of `buckets` equal
+    slices of `extent`. The cap is ignored; a Channel-posts bound still counts
+    in the Analysis window, not the extent."""
+    start, end = extent
+    width = max(1, (end - start) // buckets)
+    bucket = func.floor((col(Post.timestamp) - start) / width)
+    stmt = scoped_select(select(bucket, func.count()), Post, user_id)
+    if channel_names:
+        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
+    stmt = apply_analysis_window(stmt, start, end)
+    stmt = _filtered(session, stmt, user_id, replace(filters, window=window))
+    counts = [0] * buckets
+    for index, n in session.exec(stmt.group_by(bucket)).all():
+        if 0 <= int(index) < buckets:
+            counts[int(index)] += n
+    return counts

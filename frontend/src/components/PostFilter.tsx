@@ -22,6 +22,7 @@ import {
   POST_TYPE_VALUES,
   type PostFacet,
   type PostFilter as PostFilterTree,
+  PROTO_REPLY_TYPE_VALUES,
 } from "@/lib/posts/post-filter"
 import type { PostFacetsResponse } from "../client"
 import { useData } from "../contexts/DataContext"
@@ -59,6 +60,7 @@ import {
 } from "./PostFilterControls"
 import { PerChannelForm, Pill, pillClass } from "./PostFilterParts"
 import { useSpotlight } from "./post-card/ChannelSpotlight"
+import { useIsVariantA } from "./posts-prototype/variant"
 
 /** What the bar reads and writes; `ScraperContext` provides all of it. */
 export interface FilterBarControls {
@@ -261,6 +263,7 @@ const countOf = (facets: FacetCount[] | undefined) => {
 export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
   const { postSearch, setPostSearch, controls: s, facets } = props
   const filter = s.postFilter
+  const variantA = useIsVariantA()
   const typeCount = countOf(facets?.types)
   const mediaCount = countOf(facets?.media)
   const languageCount = countOf(facets?.languages)
@@ -274,7 +277,10 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
     ...languageCount(code),
   }))
   const values: Record<PostFacet, PostFacetValue[]> = {
-    type: POST_TYPE_VALUES.map((t) => ({
+    type: (variantA
+      ? [...POST_TYPE_VALUES, ...PROTO_REPLY_TYPE_VALUES]
+      : POST_TYPE_VALUES
+    ).map((t) => ({
       id: t.value,
       label: t.label,
       ...typeCount(t.value),
@@ -297,6 +303,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
       })),
     },
     props.estimationFloorHours,
+    variantA,
   )
   const chips = activeFilters({
     meaning: s.semanticSearchQuery,

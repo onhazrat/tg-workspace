@@ -787,6 +787,26 @@ export type ChannelInfoResponse = {
 };
 
 /**
+ * ChannelPostsCondition
+ *
+ * PROTOTYPE: the Post's Channel has between min and max Posts in the window.
+ */
+export type ChannelPostsCondition = {
+    /**
+     * Type
+     */
+    type: 'channel_posts';
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+};
+
+/**
  * ChannelResponse
  *
  * One channel, as `channel_to_camel` builds it.
@@ -3112,7 +3132,9 @@ export type FilterAtom = {
         type: 'channel';
     } & ChannelCondition) | ({
         type: 'views';
-    } & ViewsCondition);
+    } & ViewsCondition) | ({
+        type: 'channel_posts';
+    } & ChannelPostsCondition);
 };
 
 /**
@@ -4490,6 +4512,83 @@ export type PostFilteredRequest = {
      * Seed
      */
     seed?: number;
+};
+
+/**
+ * PostHistogramRequest
+ *
+ * PROTOTYPE: the filtered scope bucketed over an explicit time extent.
+ */
+export type PostHistogramRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Extentstart
+     */
+    extentStart: number;
+    /**
+     * Extentend
+     */
+    extentEnd: number;
+    /**
+     * Buckets
+     */
+    buckets?: number;
+};
+
+/**
+ * PostHistogramResponse
+ *
+ * PROTOTYPE: one count per equal slice of the extent.
+ */
+export type PostHistogramResponse = {
+    /**
+     * Counts
+     */
+    counts: Array<number>;
 };
 
 /**
@@ -7124,7 +7223,7 @@ export type TypeCondition = {
     /**
      * Value
      */
-    value: 'forwarded' | 'original' | 'unfollowed_forwarded';
+    value: 'forwarded' | 'original' | 'unfollowed_forwarded' | 'is_reply' | 'has_reply';
 };
 
 /**
@@ -9098,6 +9197,31 @@ export type DataPostsCountsResponses = {
 };
 
 export type DataPostsCountsResponse = DataPostsCountsResponses[keyof DataPostsCountsResponses];
+
+export type DataPostsHistogramData = {
+    body: PostHistogramRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/histogram';
+};
+
+export type DataPostsHistogramErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsHistogramError = DataPostsHistogramErrors[keyof DataPostsHistogramErrors];
+
+export type DataPostsHistogramResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostHistogramResponse;
+};
+
+export type DataPostsHistogramResponse = DataPostsHistogramResponses[keyof DataPostsHistogramResponses];
 
 export type DataPostsViewEstimateData = {
     body?: never;
