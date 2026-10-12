@@ -117,6 +117,21 @@ export function DirectorySwitches({
 /** The server refuses a longer search. */
 const SEARCH_MAX = 256
 
+const FIELD_NOUN: Record<SearchField, string> = {
+  name: "names",
+  bio: "bios",
+  posts: "posts",
+}
+
+/** "Search names", "Search names and bios", "Search names, bios and posts". */
+function searchPlaceholder(fields: SearchField[]): string {
+  const words = SEARCH_FIELDS.filter((f) => fields.includes(f)).map(
+    (f) => FIELD_NOUN[f],
+  )
+  const last = words.pop()
+  return `Search ${words.length ? `${words.join(", ")} and ` : ""}${last}`
+}
+
 /**
  * The Posts tab's search box, with Name, Bio and Posts as a segment inside
  * it; any mix of the three, never none.
@@ -142,7 +157,7 @@ export function DirectorySearch({
         data-testid="directory-search"
         value={search}
         maxLength={SEARCH_MAX}
-        placeholder="Search names, bios and posts"
+        placeholder={searchPlaceholder(fields)}
         onChange={(e) => onSearch(e.target.value)}
         className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
       />

@@ -12,6 +12,7 @@ import {
   parseDirectoryFilter,
   printDirectoryFilter,
 } from "@/lib/directory/directory-filter"
+import type { SearchField } from "@/lib/directory/directory-view"
 import { DirectoryBar, type DirectoryBarProps } from "./DirectoryBar"
 import { directoryVocabulary } from "./directory-vocabulary"
 
@@ -218,6 +219,22 @@ describe("the search box (DIR-04)", () => {
     fireEvent.click(screen.getByTestId("directory-search-field-bio"))
     fireEvent.click(screen.getByTestId("directory-search-field-posts"))
     expect(calls.fields).toEqual([["name"], ["name", "bio", "posts"]])
+  })
+
+  test("the placeholder names the fields searched, in their fixed order (DFP-01)", () => {
+    const placeholder = (fields: SearchField[]) => {
+      cleanup()
+      mount({ fields })
+      return screen
+        .getByLabelText("Search the Directory")
+        .getAttribute("placeholder")
+    }
+    expect(placeholder(["name"])).toBe("Search names")
+    expect(placeholder(["bio", "name"])).toBe("Search names and bios")
+    expect(placeholder(["posts", "name"])).toBe("Search names and posts")
+    expect(placeholder(["posts", "bio", "name"])).toBe(
+      "Search names, bios and posts",
+    )
   })
 
   test("a search is a chip even with no Condition, and the chip clears it", () => {
