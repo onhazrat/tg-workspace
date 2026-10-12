@@ -78,7 +78,7 @@ const MATCH = {
   },
 }
 
-async function mockDirectory(page: Page) {
+async function mockDirectory(page: Page, shown: typeof ROWS = ROWS) {
   const lists: ListBody[] = []
   await page.route("**/api/v1/data/directory/list", async (route) => {
     const body = route.request().postDataJSON() as ListBody
@@ -88,7 +88,7 @@ async function mockDirectory(page: Page) {
     if (body.search) await new Promise((r) => setTimeout(r, 1500))
     const rows = body.showMatches
       ? ROWS.map((r, i) => (i === 0 ? { ...r, match: MATCH } : r))
-      : ROWS
+      : shown
     // The page may have aborted the read while it waited.
     await route
       .fulfill({
@@ -544,6 +544,88 @@ test.describe("TG Workspace directory", () => {
     await expect.poll(() => sent.at(-1)).toEqual([])
     await expect(selectedFirst).toHaveAttribute("aria-pressed", "true")
     expect(bodies.at(-1)?.selectedFirst).toBeUndefined()
+  })
+
+  // DFP-01: a follow ticks as a Seed, and keyboard mode walks the rows with
+  // the panel following the highlight.
+  test("tick a follow as a Seed, and walk the rows by keyboard", async ({
+    page,
+  }) => {
+    await mockDirectory(
+      page,
+      ROWS.map((r) => (r.handle === "a1" ? { ...r, followed: true } : r)),
+    )
+    await page.route("**/api/v1/data/directory/*/entry", (route) => {
+      const handle = new URL(route.request().url()).pathname.split("/").at(-2)
+      const entry = ROWS.find((r) => r.handle === handle)
+      return route.fulfill({ json: { ...entry, bio: `The bio of ${handle}` } })
+    })
+    await page.route("**/api/v1/data/directory/*/posts", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await page.route("**/api/v1/data/directory/*/neighbours", (route) =>
+      route.fulfill({ json: { citedBy: [], cites: [] } }),
+    )
+    await page.route("**/api/v1/data/directory/why", (route) =>
+      route.fulfill({
+        json: { posts: [], total: 0, parents: null, children: null },
+      }),
+    )
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // A followed row ticks; Follow and Dismiss count only the unfollowed.
+    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    await expect(page.getByText("2 ticked")).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Follow 1 of 2" }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Dismiss 1 of 2" }),
+    ).toBeVisible()
+    // Both Ticks, the follow included, are "the channels ticked here".
+    await page.getByTestId("directory-filters").click()
+    await page.getByPlaceholder("Search conditions...").fill("shared parents")
+    await page.getByRole("button", { name: /Shared parents with/ }).click()
+    await expect(
+      page.getByRole("radio", { name: /ticked in this list \(2\)/ }),
+    ).toBeChecked()
+    await page.keyboard.press("Escape")
+    await page.getByRole("button", { name: "Clear", exact: true }).click()
+
+    // j highlights the first row, x ticks it, Enter opens its panel, and the
+    // panel follows the next j.
+    await page.getByRole("button", { name: "Keyboard", exact: true }).click()
+    await expect(page.getByText("open or close the panel")).toBeVisible()
+    await page.keyboard.press("j")
+    const a1 = page.getByTestId("directory-row-a1")
+    await expect(a1).toHaveAttribute("data-kbd-selected", "true")
+    await page.keyboard.press("x")
+    await expect(page.getByRole("checkbox", { name: "Tick @a1" })).toBeChecked()
+    await page.keyboard.press("Enter")
+    const aside = page.getByTestId("directory-panel")
+    await expect(aside.getByText("The bio of a1")).toBeVisible()
+    await page.keyboard.press("j")
+    await expect(page.getByTestId("directory-row-a2")).toHaveAttribute(
+      "data-kbd-selected",
+      "true",
+    )
+    await expect(aside.getByText("The bio of a2")).toBeVisible()
+
+    // Enter closes it again; Esc drops the highlight.
+    await page.keyboard.press("Enter")
+    await expect(aside).toHaveCount(0)
+    await page.keyboard.press("Escape")
+    await expect(page.locator("[data-kbd-selected]")).toHaveCount(0)
   })
 })
 

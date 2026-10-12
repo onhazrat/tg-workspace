@@ -233,6 +233,7 @@ export function DirectoryView() {
     ),
     d.sets,
   )
+  const total = shown.total ?? 0
   const [keyboard, setKeyboard] = useSessionFlag("directory_keyboard")
   const ring = useDirectoryKeyboard({
     on: keyboard,
@@ -240,7 +241,7 @@ export function DirectoryView() {
     open: d.open,
     onOpen: d.setOpen,
     page: view.page,
-    lastPage: Math.max(0, Math.ceil((shown.total ?? 0) / PAGE_SIZE) - 1),
+    lastPage: Math.max(0, Math.ceil(total / PAGE_SIZE) - 1),
     onPage: (page) => patch({ page }),
   })
   const picksOf = (relation: "parents" | "children") => {
@@ -309,7 +310,7 @@ export function DirectoryView() {
       />
       <DirectoryTable
         rows={shown.rows}
-        total={shown.total ?? 0}
+        total={total}
         page={view.page}
         sort={view.sort}
         descending={view.descending}
