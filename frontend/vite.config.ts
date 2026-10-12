@@ -53,7 +53,18 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE (directory-follow-picks): the Tailscale HTTPS name.
+      allowedHosts: [".ts.net"],
       proxy: {
+        // PROTOTYPE (directory-follow-picks): the Directory reads go to this
+        // branch's router (the "in" Condition), everything else to the API.
+        ...(process.env.PROTO_API_PORT
+          ? {
+              "^/api/v1/data/directory": {
+                target: `http://127.0.0.1:${process.env.PROTO_API_PORT}`,
+              },
+            }
+          : {}),
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

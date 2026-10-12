@@ -22,6 +22,7 @@ from app.services.directory_reads import (
     DirectorySort,
     DirectoryTree,
     FlagCond,
+    InCond,
     LanguageCond,
     MeasureCond,
     MineCond,
@@ -197,6 +198,19 @@ class DirectorySharedCondition(_Cond):
         return SharedCond(self.type, _normalised(self.handles), self.min)
 
 
+class DirectoryInCondition(_Cond):
+    """PROTOTYPE (directory-follow-picks F): in a named pick set."""
+
+    type: Literal["in"]
+    #: Resolved by the browser; none matches nothing.
+    handles: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
+        max_length=MAX_PICKS
+    )
+
+    def to_cond(self) -> DirectoryCond:
+        return InCond(_normalised(self.handles))
+
+
 DirectoryCondition = Annotated[
     DirectoryLanguageCondition
     | DirectoryNameCondition
@@ -205,7 +219,8 @@ DirectoryCondition = Annotated[
     | DirectoryMineCondition
     | DirectoryCitedByCondition
     | DirectoryCitesCondition
-    | DirectorySharedCondition,
+    | DirectorySharedCondition
+    | DirectoryInCondition,
     Field(discriminator="type"),
 ]
 

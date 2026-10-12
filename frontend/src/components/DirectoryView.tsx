@@ -4,7 +4,7 @@
  * `components/directory/`; this file only connects them to the server.
  */
 import { useQuery } from "@tanstack/react-query"
-
+import { Keyboard } from "lucide-react"
 import {
   dataCountDirectory,
   dataGetDirectoryDistribution,
@@ -17,14 +17,29 @@ import { DirectoryBar } from "@/components/directory/DirectoryBar"
 import { DirectoryBoundEditor } from "@/components/directory/DirectoryBoundEditor"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
 import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
-import { DirectoryTable } from "@/components/directory/DirectoryTable"
+import {
+  DirectoryTable,
+  PAGE_SIZE,
+} from "@/components/directory/DirectoryTable"
 import {
   directoryVocabulary,
   type MeasureEditorRender,
 } from "@/components/directory/directory-vocabulary"
+import {
+  DirectoryKeyHelp,
+  useDirectoryKeyboard,
+} from "@/components/directory-prototype/DirectoryKeyboard"
+import { PickSetsMenu } from "@/components/directory-prototype/PickSetsMenu"
+import {
+  DirectoryVariantContext,
+  PrototypeSwitcher,
+  useVariantFromUrl,
+} from "@/components/directory-prototype/variant"
+import { pillClass } from "@/components/PostFilterParts"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
+import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import {
@@ -210,6 +225,10 @@ function DirectoryPanelReads({
 
 export function DirectoryView() {
   const d = useDirectory()
+  const variant = useVariantFromUrl()
+  // PROTOTYPE (A, B): keyboard mode, a switch for the browser session.
+  const [keyboardFlag, setKeyboard] = useSessionFlag("directory_keyboard")
+  const keyboard = variant === "F" && keyboardFlag
   const { view, patch, list } = d
   const shown = listSummary(list.data, list.isFetching, d.yours.source)
   const vocabulary = directoryVocabulary(
@@ -223,90 +242,130 @@ export function DirectoryView() {
       />
     ),
     d.sets,
+    variant === "F",
   )
+  const ring = useDirectoryKeyboard({
+    on: keyboard,
+    handles: shown.rows.map((r) => r.handle),
+    follow: variant === "F",
+    open: d.open,
+    onOpen: d.setOpen,
+    page: view.page,
+    lastPage: Math.max(0, Math.ceil((shown.total ?? 0) / PAGE_SIZE) - 1),
+    onPage: (page) => patch({ page }),
+  })
   const picksOf = (relation: "parents" | "children") => {
     const cond = firstShared(d.filter, relation)
     return cond ? resolvePicks(cond, d.sets) : null
   }
   return (
-    <div className="pt-4" data-testid="directory-view">
-      <DirectoryBar
-        filter={d.filter}
-        onFilter={d.setFilter}
-        vocabulary={vocabulary}
-        languages={shown.languages}
-        kinds={view.kinds}
-        onKinds={(kinds) => patch({ kinds })}
-        sortValue={sortValue(view, d.yours.source)}
-        onSort={(value) => patch(chooseSort(value))}
-        descending={view.descending}
-        onToggleDirection={() => patch({ descending: !view.descending })}
-        hidden={d.hidden}
-        onHidden={d.setHidden}
-        total={shown.total}
-        size={d.size}
-        ms={shown.ms}
-        emptyYours={shown.emptyYours}
-        search={d.draft}
-        onSearch={d.setSearch}
-        fields={view.fields}
-        onFields={(fields) => patch({ fields })}
-        matches={view.matches}
-        onMatches={(matches) => patch({ matches })}
-        selectedFirst={d.selectedFirst}
-        onSelectedFirst={d.setSelectedFirst}
-        onClearAll={d.clearAll}
-      />
-      {list.error && (
-        <p className="mb-2 text-xs text-red-500">
-          {errorText(list.error, "The Directory did not load.")}
-        </p>
-      )}
-      <DirectoryBulkBar
-        ticks={d.ticks}
-        busy={[...d.ticks].some((h) => d.following.has(h))}
-        onFollow={(handles) => void d.follow(handles)}
-        onDismiss={(handles) => void d.dismiss(handles)}
-        onClear={() => d.setTicks([])}
-      />
-      <DirectoryTable
-        rows={shown.rows}
-        total={shown.total ?? 0}
-        page={view.page}
-        sort={view.sort}
-        descending={view.descending}
-        hidden={d.hidden}
-        ticks={d.ticks}
-        onTicks={d.setTicks}
-        following={d.following}
-        onFollow={(handle) => void d.follow([handle])}
-        onDismiss={(handle, dismissed) => void d.dismiss([handle], dismissed)}
-        onSort={(key) => patch(headerSort(view, key, d.yours.source))}
-        onPage={(page) => patch({ page })}
-        onOpen={d.setOpen}
-      />
-      {d.open && (
-        <DirectoryPanelReads
-          handle={d.open}
-          request={d.request}
-          shared={{
-            parents: picksOf("parents"),
-            children: picksOf("children"),
-          }}
-          windowDays={mineWindow(d.filter)}
-          following={d.following.has(d.open)}
-          onFollow={() => d.open && void d.follow([d.open])}
-          onDismiss={(dismissed) =>
-            d.open && void d.dismiss([d.open], dismissed)
-          }
-          onClose={() => d.setOpen(null)}
-          onFilter={(cond) => {
-            // As the prototype did: close, so the narrowed list shows.
-            d.setFilter(appendAnd(d.filter, cond))
-            d.setOpen(null)
-          }}
+    <DirectoryVariantContext.Provider value={variant}>
+      <div
+        className={`pt-4 ${variant === "F" && d.open ? "max-md:pb-[55vh]" : ""}`}
+        data-testid="directory-view"
+      >
+        <DirectoryBar
+          filter={d.filter}
+          onFilter={d.setFilter}
+          vocabulary={vocabulary}
+          languages={shown.languages}
+          kinds={view.kinds}
+          onKinds={(kinds) => patch({ kinds })}
+          sortValue={sortValue(view, d.yours.source)}
+          onSort={(value) => patch(chooseSort(value))}
+          descending={view.descending}
+          onToggleDirection={() => patch({ descending: !view.descending })}
+          hidden={d.hidden}
+          onHidden={d.setHidden}
+          total={shown.total}
+          size={d.size}
+          ms={shown.ms}
+          emptyYours={shown.emptyYours}
+          search={d.draft}
+          onSearch={d.setSearch}
+          fields={view.fields}
+          onFields={(fields) => patch({ fields })}
+          matches={view.matches}
+          onMatches={(matches) => patch({ matches })}
+          selectedFirst={d.selectedFirst}
+          onSelectedFirst={d.setSelectedFirst}
+          onClearAll={d.clearAll}
         />
-      )}
-    </div>
+        {list.error && (
+          <p className="mb-2 text-xs text-red-500">
+            {errorText(list.error, "The Directory did not load.")}
+          </p>
+        )}
+        {variant === "F" && (
+          // PROTOTYPE (F): Sets, and Keyboard where there is a keyboard.
+          <div className="mb-2 flex items-center justify-end gap-2">
+            <PickSetsMenu ticks={d.ticks} onTicks={d.setTicks} />
+            <button
+              type="button"
+              aria-pressed={keyboard}
+              onClick={() => setKeyboard(!keyboard)}
+              className={`${pillClass(keyboard)} max-md:hidden`}
+              title="j / k to move, gg / G to jump, ] / [ to turn the page, an action's letter to fire it"
+            >
+              <Keyboard size={12} /> Keyboard
+            </button>
+          </div>
+        )}
+        <DirectoryBulkBar
+          ticks={d.ticks}
+          busy={[...d.ticks].some((h) => d.following.has(h))}
+          onFollow={(handles) => void d.follow(handles)}
+          onDismiss={(handles) => void d.dismiss(handles)}
+          onClear={() => d.setTicks([])}
+          followed={
+            new Set([
+              ...d.sets.follows.map((h) => h.toLowerCase()),
+              ...shown.rows.filter((r) => r.followed).map((r) => r.handle),
+            ])
+          }
+        />
+        <DirectoryTable
+          rows={shown.rows}
+          total={shown.total ?? 0}
+          page={view.page}
+          sort={view.sort}
+          descending={view.descending}
+          hidden={d.hidden}
+          ticks={d.ticks}
+          onTicks={d.setTicks}
+          following={d.following}
+          onFollow={(handle) => void d.follow([handle])}
+          onDismiss={(handle, dismissed) => void d.dismiss([handle], dismissed)}
+          onSort={(key) => patch(headerSort(view, key, d.yours.source))}
+          onPage={(page) => patch({ page })}
+          onOpen={d.setOpen}
+          ring={ring}
+        />
+        {d.open && (
+          <DirectoryPanelReads
+            handle={d.open}
+            request={d.request}
+            shared={{
+              parents: picksOf("parents"),
+              children: picksOf("children"),
+            }}
+            windowDays={mineWindow(d.filter)}
+            following={d.following.has(d.open)}
+            onFollow={() => d.open && void d.follow([d.open])}
+            onDismiss={(dismissed) =>
+              d.open && void d.dismiss([d.open], dismissed)
+            }
+            onClose={() => d.setOpen(null)}
+            onFilter={(cond) => {
+              // As the prototype did: close, so the narrowed list shows.
+              d.setFilter(appendAnd(d.filter, cond))
+              d.setOpen(null)
+            }}
+          />
+        )}
+        <DirectoryKeyHelp on={keyboard} follow />
+        <PrototypeSwitcher />
+      </div>
+    </DirectoryVariantContext.Provider>
   )
 }

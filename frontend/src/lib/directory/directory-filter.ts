@@ -54,15 +54,27 @@ export type DirectoryCond =
   | { type: "cites"; handles: string[] }
   | DirectorySharedCond
   | DirectoryMeasureCond
+  /** PROTOTYPE (F): in a named pick set, resolved live like Shared picks. */
+  | { type: "inset"; set: string }
 
 /**
  * Whom Shared parents / children compare with (DIR-07): the Channels ticked in
  * the list (live), the Channels tab selection, every follow, or typed
  * `handles`. The browser resolves them to handles as it sends the filter.
  */
-export type PicksSource = "picked" | "selection" | "follows" | "handles"
+export type PicksSource =
+  | "picked"
+  | "selection"
+  | "follows"
+  | "handles"
+  /** PROTOTYPE (F): a named pick set, live. */
+  | `set:${string}`
+type LiveSource = "picked" | "selection" | "follows"
 /** The picks' handles as they are now, for every source but typed handles. */
-export type PickSets = Record<Exclude<PicksSource, "handles">, string[]>
+export type PickSets = Record<LiveSource, string[]> & {
+  /** PROTOTYPE (F): the named pick sets, by name. */
+  named?: Record<string, string[]>
+}
 
 /** Shared parents or Shared children with the picks, at least `min` shared. */
 export type DirectorySharedCond = {
@@ -206,7 +218,7 @@ export const SHARED_LABEL: Record<DirectorySharedCond["type"], string> = {
   children: "Shared children",
 }
 
-const PICKS_LABEL: Record<Exclude<PicksSource, "handles">, string> = {
+const PICKS_LABEL: Record<LiveSource, string> = {
   picked: "the channels ticked here",
   selection: "your selected channels",
   follows: "your follows",
@@ -255,10 +267,14 @@ export function directoryConditionLabel(
       return `${cond.min}+ shared ${cond.type} with ${
         cond.picks === "handles"
           ? cond.handles.map((h) => `@${h}`).join(", ")
-          : PICKS_LABEL[cond.picks]
+          : cond.picks.startsWith("set:")
+            ? `the set "${cond.picks.slice(4)}"`
+            : PICKS_LABEL[cond.picks as LiveSource]
       }`
     case "measure":
       return `${measureOf(cond.measure).label}${cond.none ? ":" : ""} ${boundText(cond)}`
+    case "inset":
+      return `In the set "${cond.set}"`
   }
 }
 
@@ -277,6 +293,8 @@ function condText(cond: DirectoryCond): string {
     case "citedby":
     case "cites":
       return `${cond.type}:${quote(cond.handles.join(" "))}`
+    case "inset":
+      return `inset:${quote(cond.set)}`
     case "parents":
     case "children": {
       const words = cond.picks === "handles" ? cond.handles : [cond.picks]
@@ -335,7 +353,10 @@ function sharedCond(
   const last = words.at(-1) ?? ""
   const min = /^\d+$/.test(last) ? Number(words.pop()) : SHARED_MIN
   if (min < 1 || !words.length) return null
-  if (words.length === 1 && SOURCES.has(words[0]))
+  if (
+    words.length === 1 &&
+    (SOURCES.has(words[0]) || /^set:\S+$/.test(words[0]))
+  )
     return { type, picks: words[0] as PicksSource, handles: [], min }
   return { type, picks: "handles", handles: parseHandles(words.join(" ")), min }
 }
@@ -366,6 +387,7 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
           ? { type: "cites", handles }
           : { type: "citedby", handles }
     }
+    if (prefix === "inset" && text) return { type: "inset", set: text }
     if (prefix === "parents" || prefix === "children") {
       const cond = sharedCond(prefix, text)
       if (cond && (cond.picks !== "handles" || cond.handles.length)) return cond
@@ -433,13 +455,22 @@ export function parseDirectoryFilter(src: string): DirectoryFilter | null {
 
 /** A Shared Condition's picks as handles, resolved against `sets` now. */
 export const resolvePicks = (cond: DirectorySharedCond, sets: PickSets) =>
-  cond.picks === "handles" ? cond.handles : sets[cond.picks]
+  cond.picks === "handles"
+    ? cond.handles
+    : cond.picks.startsWith("set:")
+      ? (sets.named?.[cond.picks.slice(4)] ?? [])
+      : sets[cond.picks as LiveSource]
 
 /** One Condition as the wire takes it: Shared picks become their handles. */
 function wireCond(
   cond: DirectoryCond,
   sets: PickSets,
 ): DirectoryFilterAtom["cond"] {
+  if (cond.type === "inset")
+    return {
+      type: "in",
+      handles: sets.named?.[cond.set] ?? [],
+    } as unknown as DirectoryFilterAtom["cond"]
   if (cond.type !== "parents" && cond.type !== "children") return cond
   return { type: cond.type, handles: resolvePicks(cond, sets), min: cond.min }
 }

@@ -13,6 +13,9 @@ import {
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
+import { DIRECTORY_SHORTCUTS } from "../directory-prototype/DirectoryKeyboard"
+import { usePickSets } from "../directory-prototype/pick-sets"
+import { useIsF } from "../directory-prototype/variant"
 import { DirectoryMatchRow } from "./DirectoryMatches"
 
 export const PAGE_SIZE = 100
@@ -144,15 +147,21 @@ function HeaderTick({
   ticks: ReadonlySet<string>
   onTicks: (next: Set<string>) => void
 }) {
+  // PROTOTYPE (F): every row is tickable, so a followed one can be a pick.
+  const all = useIsF()
   const selectable = rows.map((r) => ({
     name: r.handle,
-    isFollowed: r.followed,
+    isFollowed: all ? false : r.followed,
   }))
   const state = headerCheckboxState(selectable, ticks)
   return (
     <input
       type="checkbox"
-      aria-label="Tick every unfollowed channel on this page"
+      aria-label={
+        all
+          ? "Tick every channel on this page"
+          : "Tick every unfollowed channel on this page"
+      }
       checked={state === "checked"}
       ref={(el) => {
         if (el) el.indeterminate = state === "indeterminate"
@@ -186,6 +195,7 @@ function FollowButton({
       variant="secondary"
       size="sm"
       aria-label={`Follow @${row.handle}`}
+      data-shortcut={DIRECTORY_SHORTCUTS.follow}
       loading={busy}
       onClick={(e) => {
         e.stopPropagation()
@@ -225,6 +235,7 @@ export function FollowCell({
         variant="ghost"
         size="sm"
         aria-label={`${verb} @${row.handle}`}
+        data-shortcut={DIRECTORY_SHORTCUTS.dismiss}
         title={
           row.dismissed
             ? "Take the Dismissal back, here and in Discover"
@@ -243,7 +254,7 @@ export function FollowCell({
   )
 }
 
-function ChannelCell({ row }: { row: Row }) {
+function ChannelCell({ row, sets }: { row: Row; sets?: string[] }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <ChannelAvatar
@@ -267,10 +278,24 @@ function ChannelCell({ row }: { row: Row }) {
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           data-testid={`directory-channel-link-${row.handle}`}
+          data-shortcut={DIRECTORY_SHORTCUTS.open}
           className="block truncate font-mono text-[10px] text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.handle}
         </a>
+        {/* PROTOTYPE (F): the named pick sets this channel is in. */}
+        {sets && sets.length > 0 && (
+          <span className="mt-0.5 flex flex-wrap gap-1">
+            {sets.map((s) => (
+              <span
+                key={s}
+                className="rounded bg-violet-500/15 px-1 text-[10px] text-violet-700 dark:text-violet-300"
+              >
+                {s}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -377,7 +402,10 @@ export function DirectoryTable({
   onSort,
   onPage,
   onOpen,
+  ring,
 }: {
+  /** PROTOTYPE: the keyboard highlight's handle. */
+  ring?: string | null
   rows: Row[]
   total: number
   page: number
@@ -397,6 +425,9 @@ export function DirectoryTable({
   onOpen: (handle: string) => void
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
+  // PROTOTYPE (F): a followed row ticks like any other.
+  const all = useIsF()
+  const locked = (r: Row) => (all ? false : r.followed)
   const columns = [
     ...COLUMNS.filter((c) => !hidden.includes(c.key)),
     ...SHARED_COLUMNS.filter((c) =>
@@ -408,10 +439,85 @@ export function DirectoryTable({
   const kept = columns.some((c) => c.key === sortedColumn)
     ? sortedColumn
     : "subscribers"
+  // PROTOTYPE (F): on a phone the rows are cards; the table is for md and up.
+  const cards = all
+  // PROTOTYPE (F): each row names the pick sets it is in.
+  const named = usePickSets()
+  const setsOf = (handle: string) =>
+    all
+      ? named.filter((s) => s.handles.includes(handle)).map((s) => s.name)
+      : undefined
+  const cardKeys = [
+    ...new Set([
+      kept,
+      "subscribers",
+      "reach",
+      "posts_per_week",
+      "language",
+      "shared_parents",
+      "shared_children",
+    ]),
+  ].flatMap((key) => columns.filter((c) => c.key === key))
   const narrow = (key: string) => (key === kept ? "" : "hidden md:table-cell")
   return (
     <div className="overflow-x-auto rounded-xl border border-app-ink/10 bg-app-card">
-      <table className="w-full text-xs">
+      {cards && (
+        <ul className="divide-y divide-app-ink/5 md:hidden">
+          {rows.map((r) => (
+            <li
+              key={r.handle}
+              data-testid={`directory-card-${r.handle}`}
+              onClick={() => onOpen(r.handle)}
+              className={`flex items-start gap-2 px-2 py-3 ${ticks.has(r.handle) ? "bg-blue-500/5" : ""} ${r.dismissed ? "opacity-50" : ""}`}
+            >
+              <label
+                className="-my-1 flex h-9 w-9 shrink-0 items-center justify-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  aria-label={
+                    locked(r)
+                      ? `@${r.handle} already followed`
+                      : `Tick @${r.handle}`
+                  }
+                  checked={locked(r) || ticks.has(r.handle)}
+                  disabled={locked(r)}
+                  onChange={() =>
+                    onTicks(
+                      toggleUnfollowedSelection(r.handle, locked(r), ticks),
+                    )
+                  }
+                  className="h-5 w-5 accent-blue-600"
+                />
+              </label>
+              <div className="min-w-0 flex-1 text-xs">
+                <ChannelCell row={r} sets={setsOf(r.handle)} />
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-app-ink/60">
+                  {cardKeys.map((c) => {
+                    const value = cell(c.key, r)
+                    return value ? (
+                      <span key={c.key} className="whitespace-nowrap">
+                        <span className="text-app-ink/40">{c.label}</span>{" "}
+                        <span className="font-mono">{value}</span>
+                      </span>
+                    ) : null
+                  })}
+                </div>
+              </div>
+              <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                <FollowCell
+                  row={r}
+                  busy={following.has(r.handle)}
+                  onFollow={onFollow}
+                  onDismiss={onDismiss}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <table className={`w-full text-xs ${cards ? "hidden md:table" : ""}`}>
         <thead className="text-left text-[11px] text-app-ink/60">
           <tr>
             <th className="w-8 pl-3">
@@ -436,29 +542,32 @@ export function DirectoryTable({
             <tr
               key={r.handle}
               data-testid={`directory-row-${r.handle}`}
+              data-directory-handle={r.handle}
+              data-kbd-selected={ring === r.handle || undefined}
               onClick={() => onOpen(r.handle)}
-              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""}`}
+              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
             >
               <td className="pl-3" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
+                  data-shortcut={DIRECTORY_SHORTCUTS.tick}
                   aria-label={
-                    r.followed
+                    locked(r)
                       ? `@${r.handle} already followed`
                       : `Tick @${r.handle}`
                   }
-                  checked={r.followed || ticks.has(r.handle)}
-                  disabled={r.followed}
+                  checked={locked(r) || ticks.has(r.handle)}
+                  disabled={locked(r)}
                   onChange={() =>
                     onTicks(
-                      toggleUnfollowedSelection(r.handle, r.followed, ticks),
+                      toggleUnfollowedSelection(r.handle, locked(r), ticks),
                     )
                   }
                   className="accent-blue-600"
                 />
               </td>
               <td className="max-w-72 px-2 py-1.5">
-                <ChannelCell row={r} />
+                <ChannelCell row={r} sets={setsOf(r.handle)} />
               </td>
               {columns.map((c) => (
                 <td

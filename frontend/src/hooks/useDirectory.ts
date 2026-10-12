@@ -16,6 +16,8 @@ import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { dataGetDirectorySize, dataListDirectory } from "@/client"
+import { usePickSets } from "@/components/directory-prototype/pick-sets"
+import { useVariantFromUrl } from "@/components/directory-prototype/variant"
 import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
@@ -148,6 +150,8 @@ export function useDirectory() {
   const [opened, setOpened] = useStoredList(OPEN_KEY)
   const [following, setFollowing] = useState<ReadonlySet<string>>(new Set())
   const dismissal = useDiscoverIgnoreMutation()
+  // PROTOTYPE (F): ticks are picks too, so a follow leaves them ticked.
+  const keepTicks = useVariantFromUrl() === "F"
 
   const filter = useMemo(
     () =>
@@ -173,6 +177,8 @@ export function useDirectory() {
     [selectedChannels],
   )
   const ticks = useMemo(() => new Set(ticked), [ticked])
+  // PROTOTYPE (F): named pick sets resolve live, like the other sources.
+  const named = usePickSets()
   // What Shared parents / children compare with, re-resolved on every read,
   // so the live ticked choice follows the ticks (DIR-07).
   const sets: PickSets = useMemo(
@@ -180,8 +186,9 @@ export function useDirectory() {
       picked: [...ticked].sort(),
       selection,
       follows: channels.map((c) => c.name).sort(),
+      named: Object.fromEntries(named.map((s) => [s.name, s.handles])),
     }),
-    [ticked, selection, channels],
+    [ticked, selection, channels, named],
   )
   const yours = resolveYours(view.yours, {
     selection,
@@ -228,7 +235,8 @@ export function useDirectory() {
         handles.map((name) => ({ name })),
         { directory: { yours, referenceKinds: view.kinds } },
       )
-      if (status) setTicked(pruneSelectionAfterFollow(ticks, status.results))
+      if (status && !keepTicks)
+        setTicked(pruneSelectionAfterFollow(ticks, status.results))
       await queryClient.invalidateQueries({ queryKey: queryKeys.directory })
     } finally {
       setFollowing(

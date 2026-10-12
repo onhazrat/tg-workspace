@@ -45,6 +45,7 @@ import {
   switchOn,
 } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
+import { useIsF } from "../directory-prototype/variant"
 import { COLUMNS } from "./DirectoryTable"
 
 const matches = (query: string, ...texts: string[]) =>
@@ -117,6 +118,21 @@ export function DirectorySwitches({
 /** The server refuses a longer search. */
 const SEARCH_MAX = 256
 
+const FIELD_NOUN: Record<SearchField, string> = {
+  name: "names",
+  bio: "bios",
+  posts: "posts",
+}
+
+/** PROTOTYPE (F): "Search names", "Search names and bios", "Search names, bios and posts". */
+export function searchPlaceholder(fields: SearchField[]): string {
+  const words = SEARCH_FIELDS.filter((f) => fields.includes(f)).map(
+    (f) => FIELD_NOUN[f],
+  )
+  const last = words.pop()
+  return `Search ${words.length ? `${words.join(", ")} and ` : ""}${last ?? ""}`
+}
+
 /**
  * The Posts tab's search box, with Name, Bio and Posts as a segment inside
  * it; any mix of the three, never none.
@@ -126,11 +142,17 @@ export function DirectorySearch({
   onSearch,
   fields,
   onFields,
+  proto,
 }: {
   search: string
   onSearch: (text: string) => void
   fields: SearchField[]
   onFields: (next: SearchField[]) => void
+  /**
+   * PROTOTYPE (F): on a phone the fields leave the box for the controls
+   * sheet, and the placeholder names what the search looks in.
+   */
+  proto?: boolean
 }) {
   return (
     <div className="flex items-center gap-2 rounded-xl border border-app-ink/10 bg-app-muted pl-3 pr-1.5 transition-colors focus-within:border-app-ink/30">
@@ -142,31 +164,52 @@ export function DirectorySearch({
         data-testid="directory-search"
         value={search}
         maxLength={SEARCH_MAX}
-        placeholder="Search names, bios and posts"
+        placeholder={
+          proto ? searchPlaceholder(fields) : "Search names, bios and posts"
+        }
         onChange={(e) => onSearch(e.target.value)}
         className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
       />
-      <fieldset
-        aria-label="Search in"
-        className="flex items-center gap-0.5 rounded-lg bg-app-ink/5 p-0.5 text-[11px]"
-      >
-        {SEARCH_FIELDS.map((f) => {
-          const on = fields.includes(f)
-          return (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={on}
-              data-testid={`directory-search-field-${f}`}
-              onClick={() => onFields(toggleField(fields, f))}
-              className={`rounded-md px-2 py-1 capitalize ${on ? "bg-app-card font-semibold shadow-sm" : "text-app-ink/50 hover:text-app-ink"}`}
-            >
-              {f}
-            </button>
-          )
-        })}
-      </fieldset>
+      <SearchFields
+        fields={fields}
+        onFields={onFields}
+        className={proto ? "max-md:hidden" : ""}
+      />
     </div>
+  )
+}
+
+/** Name, Bio and Posts: where the search looks. */
+function SearchFields({
+  fields,
+  onFields,
+  className = "",
+}: {
+  fields: SearchField[]
+  onFields: (next: SearchField[]) => void
+  className?: string
+}) {
+  return (
+    <fieldset
+      aria-label="Search in"
+      className={`flex items-center gap-0.5 rounded-lg bg-app-ink/5 p-0.5 text-[11px] ${className}`}
+    >
+      {SEARCH_FIELDS.map((f) => {
+        const on = fields.includes(f)
+        return (
+          <button
+            key={f}
+            type="button"
+            aria-pressed={on}
+            data-testid={`directory-search-field-${f}`}
+            onClick={() => onFields(toggleField(fields, f))}
+            className={`rounded-md px-2 py-1 capitalize ${on ? "bg-app-card font-semibold shadow-sm" : "text-app-ink/50 hover:text-app-ink"}`}
+          >
+            {f}
+          </button>
+        )
+      })}
+    </fieldset>
   )
 }
 
@@ -350,17 +393,59 @@ export type DirectoryBarProps = {
 export function DirectoryBar(p: DirectoryBarProps) {
   const conditions = atoms(p.filter).length
   const funnelled = funnelledValues(p.filter, "language")
+  // PROTOTYPE (F): on a phone the controls move into a sheet behind one
+  // button beside the search.
+  const cBar = useIsF()
+  const [sheet, setSheet] = useState(false)
+  const controls = cBar
+    ? sheet
+      ? "fixed inset-0 z-40 flex flex-wrap content-start items-center gap-2.5 overflow-y-auto bg-app-bg p-4 pb-24"
+      : "hidden md:flex md:flex-wrap md:items-center md:gap-2 md:p-4"
+    : "flex flex-wrap items-center gap-2 p-4"
   return (
     <section className="mb-3 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
-      <div className="px-4 pt-4">
-        <DirectorySearch
-          search={p.search}
-          onSearch={p.onSearch}
-          fields={p.fields}
-          onFields={p.onFields}
-        />
+      <div
+        className={`flex items-start gap-2 px-4 pt-4 ${cBar ? "max-md:pb-3" : ""}`}
+      >
+        <div className="min-w-0 flex-1">
+          <DirectorySearch
+            search={p.search}
+            onSearch={p.onSearch}
+            fields={p.fields}
+            onFields={p.onFields}
+            proto={cBar}
+          />
+        </div>
+        {cBar && (
+          <button
+            type="button"
+            onClick={() => setSheet(true)}
+            className={`${pillClass(conditions > 0)} h-9 shrink-0 md:hidden`}
+          >
+            <ListFilter size={14} />
+            {conditions > 0 ? conditions : "Filters"}
+          </button>
+        )}
       </div>
-      <div className="flex flex-wrap items-center gap-2 p-4">
+      <div className={controls}>
+        {sheet && cBar && (
+          <div className="mb-1 flex w-full items-center justify-between md:hidden">
+            <b className="text-sm">Filters and sort</b>
+            <button
+              type="button"
+              onClick={() => setSheet(false)}
+              className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white"
+            >
+              Done
+            </button>
+          </div>
+        )}
+        {sheet && cBar && (
+          <div className="mb-1 flex w-full items-center gap-2 text-xs md:hidden">
+            <span className="text-app-ink/60">Search in</span>
+            <SearchFields fields={p.fields} onFields={p.onFields} />
+          </div>
+        )}
         <FacetMenu
           label="Language"
           noun="language"
@@ -412,7 +497,9 @@ export function DirectoryBar(p: DirectoryBarProps) {
         />
         <DirectorySwitches filter={p.filter} onFilter={p.onFilter} />
         <ReferenceKindsPill kinds={p.kinds} onKinds={p.onKinds} />
-        <span className="mx-1 h-5 w-px bg-app-ink/10" />
+        <span
+          className={`mx-1 h-5 w-px bg-app-ink/10 ${cBar ? "max-md:hidden" : ""}`}
+        />
         <SortPicker
           options={sortOptions(p.search.trim() !== "", sharedOn(p.filter))}
           value={p.sortValue}

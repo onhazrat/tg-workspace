@@ -1,4 +1,5 @@
 import { ExternalLink, Filter, X } from "lucide-react"
+import { useState } from "react"
 import type {
   DirectoryCitingPostResponse,
   DirectoryEntryResponse,
@@ -20,7 +21,13 @@ import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
-import { DirectorySamples, PostText } from "./DirectorySamples"
+import { useIsF } from "../directory-prototype/variant"
+import {
+  DirectorySamples,
+  FIRST_POSTS,
+  PostText,
+  plural,
+} from "./DirectorySamples"
 import { cell, FollowCell } from "./DirectoryTable"
 
 const HEADING =
@@ -106,13 +113,22 @@ function CitingPost({ post }: { post: DirectoryCitingPostResponse }) {
  * and the "Cited by your channels" Condition count.
  */
 function WhyHere({
+  handle,
   why,
   windowDays,
 }: {
+  handle: string
   why: DirectoryWhyResponse | undefined
   windowDays: number | null
 }) {
   const within = windowDays ? ` in the last ${windowDays} days` : ""
+  // PROTOTYPE (B): the first few until "Show N more", as Recent posts does;
+  // the expansion belongs to the handle, so another Channel opens collapsed.
+  const collapse = useIsF()
+  const [expandedFor, setExpandedFor] = useState<string | null>(null)
+  const expanded = !collapse || expandedFor === handle
+  const posts = why?.posts ?? []
+  const visible = expanded ? posts : posts.slice(0, FIRST_POSTS)
   return (
     <section className="mt-5 rounded-lg border border-app-ink/10 bg-app-ink/5 p-3">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-app-ink/50">
@@ -131,10 +147,21 @@ function WhyHere({
             it{within}
           </p>
           <ul className="mt-2 space-y-2">
-            {why.posts.map((post) => (
+            {visible.map((post) => (
               <CitingPost key={`${post.channel}/${post.postId}`} post={post} />
             ))}
           </ul>
+          {collapse && posts.length > FIRST_POSTS && (
+            <button
+              type="button"
+              onClick={() => setExpandedFor(expanded ? null : handle)}
+              className="mt-2 w-full rounded-md border border-app-ink/15 py-1.5 text-xs text-app-ink/70 hover:bg-app-ink/5"
+            >
+              {expanded
+                ? "Show fewer"
+                : `Show ${plural(posts.length - FIRST_POSTS)}`}
+            </button>
+          )}
           {why.total > why.posts.length && (
             <p className="mt-1 text-[10px] text-app-ink/40">
               and {why.total - why.posts.length} more
@@ -335,12 +362,17 @@ export function DirectoryPanel({
   /** Adds a Condition to the view's filter. */
   onFilter: (cond: DirectoryCond) => void
 }) {
+  // PROTOTYPE (D): on a phone the panel is a bottom sheet over the list.
+  const sheet = useIsF()
   return (
     <aside
       data-testid="directory-panel"
       aria-label={`@${handle}`}
-      className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl md:left-auto md:w-[440px] md:border-l md:border-app-ink/15"
+      className={`fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl md:left-auto md:w-[440px] md:border-l md:border-app-ink/15 ${sheet ? "max-md:top-auto max-md:h-[55vh] max-md:rounded-t-2xl max-md:border-t max-md:border-app-ink/15 max-md:pt-3" : ""}`}
     >
+      {sheet && (
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-app-ink/20 md:hidden" />
+      )}
       <button
         type="button"
         onClick={onClose}
@@ -365,7 +397,7 @@ export function DirectoryPanel({
             onFollow={onFollow}
             onDismiss={onDismiss}
           />
-          <WhyHere why={why} windowDays={windowDays} />
+          <WhyHere handle={handle} why={why} windowDays={windowDays} />
           <h4 className={HEADING}>Recent posts</h4>
           {posts ? (
             <DirectorySamples handle={handle} posts={posts} />

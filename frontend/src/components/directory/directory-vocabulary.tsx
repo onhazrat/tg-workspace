@@ -4,6 +4,7 @@
  * References. A bound's editor is the container's, since it reads the server.
  */
 import {
+  Bookmark,
   CircleDot,
   CornerDownLeft,
   CornerUpRight,
@@ -53,6 +54,7 @@ const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   parents: Users,
   children: GitFork,
   measure: Hash,
+  inset: Bookmark,
 }
 
 /** Renders one measure's bound editor, wired to the server by the container. */
@@ -96,6 +98,8 @@ export function directoryVocabulary(
   renderMeasure: MeasureEditorRender,
   /** What Shared parents / children can compare with, as it is now (DIR-07). */
   sets: PickSets,
+  /** PROTOTYPE (F): offer "In the set" with the named pick sets. */
+  withSets = false,
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
   return {
@@ -124,6 +128,29 @@ export function directoryVocabulary(
             make: (value) => ({ type: "flag", value: value as DirectoryFlag }),
             current: (c) => (c.type === "flag" ? c.value : undefined),
           },
+          ...(withSets
+            ? [
+                {
+                  kind: "list" as const,
+                  id: "inset",
+                  label: "Pick set",
+                  icon: Bookmark,
+                  options: Object.entries(sets.named ?? {}).map(
+                    ([name, handles]) => ({
+                      id: name,
+                      label: name,
+                      hint: String(handles.length),
+                    }),
+                  ),
+                  make: (value: string): DirectoryCond => ({
+                    type: "inset",
+                    set: value,
+                  }),
+                  current: (c: DirectoryCond) =>
+                    c.type === "inset" ? c.set : undefined,
+                },
+              ]
+            : []),
           {
             kind: "editor",
             id: "name",
@@ -168,6 +195,7 @@ export function directoryVocabulary(
               render: ({ start, ...rest }) => (
                 <HandlesEditor
                   type={type}
+                  sets={sets}
                   start={start?.type === type ? start : undefined}
                   {...rest}
                 />
@@ -201,10 +229,12 @@ export function directoryVocabulary(
         ? `measure-${c.measure}`
         : c.type === "parents" || c.type === "children"
           ? `${c.type}-${c.picks}`
-          : "value" in c
-            ? `${c.type}-${c.value}`
-            : "handles" in c
-              ? `${c.type}-${c.handles.join("-")}`
-              : c.type,
+          : c.type === "inset"
+            ? `inset-${c.set}`
+            : "value" in c
+              ? `${c.type}-${c.value}`
+              : "handles" in c
+                ? `${c.type}-${c.handles.join("-")}`
+                : c.type,
   }
 }

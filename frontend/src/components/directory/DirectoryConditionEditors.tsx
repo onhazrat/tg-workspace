@@ -7,6 +7,7 @@ import type React from "react"
 import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import {
+  DIRECTORY_FILTER_BOUNDS,
   type DirectoryCond,
   type DirectoryHandlesCond,
   type DirectorySharedCond,
@@ -17,6 +18,15 @@ import {
   SHARED_LABEL,
   SHARED_MIN,
 } from "@/lib/directory/directory-filter"
+import { usePickSets } from "../directory-prototype/pick-sets"
+import { useIsF } from "../directory-prototype/variant"
+
+/** PROTOTYPE (A): where "Fill from" copies handles, as they are now. */
+const FILL_FROM: [Exclude<keyof PickSets, "named">, string][] = [
+  ["picked", "Ticked here"],
+  ["selection", "Channels tab selection"],
+  ["follows", "Every follow"],
+]
 
 type EditorProps<C> = {
   start?: C
@@ -113,16 +123,28 @@ export function HandlesEditor({
   start,
   onSubmit,
   onBack,
-}: EditorProps<DirectoryHandlesCond> & { type: DirectoryHandlesCond["type"] }) {
+  sets,
+}: EditorProps<DirectoryHandlesCond> & {
+  type: DirectoryHandlesCond["type"]
+  /** PROTOTYPE (A): the picks "Fill from" copies. */
+  sets?: PickSets
+}) {
   const [text, setText] = useState(start?.handles.join(" ") ?? "")
   const handles = parseHandles(text)
+  const fill = useIsF() && sets
+  // PROTOTYPE (F): a named set fills in too, fixed like the others.
+  const named = usePickSets()
+  const withSets = useIsF()
+  const over = handles.length > DIRECTORY_FILTER_BOUNDS.handles
   return (
     <Shell
       title={HANDLES_LABEL[type]}
       explain={HANDLES_EXPLAIN[type]}
       onBack={onBack}
       submit={start ? "Update" : "Add"}
-      onSubmit={handles.length ? () => onSubmit({ type, handles }) : null}
+      onSubmit={
+        handles.length && !over ? () => onSubmit({ type, handles }) : null
+      }
     >
       <input
         // biome-ignore lint/a11y/noAutofocus: the editor is this one field
@@ -133,6 +155,45 @@ export function HandlesEditor({
         onChange={(e) => setText(e.target.value)}
         className={fieldClass}
       />
+      {fill && (
+        <div className="flex flex-wrap items-center gap-1 text-[11px]">
+          <span className="text-app-ink/50">Fill from</span>
+          {FILL_FROM.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              disabled={!sets[key].length}
+              onClick={() => setText(sets[key].map((h) => `@${h}`).join(" "))}
+              className="rounded-full border border-app-ink/15 px-2 py-0.5 hover:bg-app-ink/5 disabled:opacity-30"
+            >
+              {label} ({sets[key].length})
+            </button>
+          ))}
+          {withSets &&
+            named.map((set) => (
+              <button
+                key={set.name}
+                type="button"
+                onClick={() =>
+                  setText(set.handles.map((h) => `@${h}`).join(" "))
+                }
+                className="rounded-full border border-violet-500/40 px-2 py-0.5 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300"
+              >
+                {set.name} ({set.handles.length})
+              </button>
+            ))}
+        </div>
+      )}
+      {fill && handles.length > 0 && (
+        <p
+          className={`text-[11px] ${over ? "text-red-500" : "text-app-ink/50"}`}
+        >
+          {handles.length} channels
+          {over
+            ? `; the Directory takes ${DIRECTORY_FILTER_BOUNDS.handles} at most. Tick fewer, or use Shared parents / children, which take ${DIRECTORY_FILTER_BOUNDS.picks.toLocaleString()}.`
+            : ". Fixed: later ticks leave it alone."}
+        </p>
+      )}
     </Shell>
   )
 }
@@ -160,6 +221,8 @@ export function SharedEditor({
   sets: PickSets
 }) {
   const ticked = sets.picked.length > 0
+  const named = usePickSets()
+  const withSets = useIsF()
   const [choice, setChoice] = useState<PickChoice>(
     start?.picks ??
       (ticked ? "picked" : sets.selection.length ? "selection" : "follows"),
@@ -192,6 +255,15 @@ export function SharedEditor({
       "Live: follows your follows.",
       false,
     ],
+    // PROTOTYPE (F): each named pick set, live.
+    ...(withSets
+      ? named.map((s): [PickChoice, string, string, boolean] => [
+          `set:${s.name}`,
+          `The set "${s.name}" (${s.handles.length})`,
+          "Live: follows the set as you change it.",
+          false,
+        ])
+      : []),
     ["handles", "These channels", "Fixed: the handles you type.", false],
   ]
   const cond = (): DirectorySharedCond =>

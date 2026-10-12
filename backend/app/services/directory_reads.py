@@ -211,6 +211,13 @@ class CitesCond:
 
 
 @dataclass(frozen=True)
+class InCond:
+    """PROTOTYPE (directory-follow-picks F): one of these handles, a pick set."""
+
+    handles: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class SharedCond:
     """Shared parents or Shared children with `picks`, at least `min` shared."""
 
@@ -228,6 +235,7 @@ DirectoryCond = (
     | CitedByCond
     | CitesCond
     | SharedCond
+    | InCond
 )
 DirectoryTree = TreeGroup[DirectoryCond]
 
@@ -582,6 +590,8 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
         return handle.in_(
             _shared(cond).with_only_columns(candidate).having(func.count() >= cond.min)
         )
+    if isinstance(cond, InCond):
+        return handle == any_(_handles(cond.handles)) if cond.handles else false()
     if isinstance(cond, LanguageCond):
         return col(DirectoryEntry.language) == cond.value
     if isinstance(cond, NameCond):

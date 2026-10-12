@@ -16,6 +16,8 @@ import type { TabType } from "@/types"
 
 export type WorkspaceSearch = {
   tab?: TabType
+  /** PROTOTYPE (directory-follow-picks): the Directory tab variant. */
+  variant?: string
   section?: SettingsSection
   /** Deep-link to a catalog setting id (scroll + highlight). */
   setting?: string
@@ -83,6 +85,7 @@ export function validateWorkspaceSearch(
 ): WorkspaceSearch {
   if (search.tab === "network") return { tab: "settings", section: "network" }
   const result: WorkspaceSearch = { tab: workspaceTab(search.tab) }
+  if (typeof search.variant === "string") result.variant = search.variant
   if (typeof search.section === "string") {
     result.section = normalizeSettingsSection(search.section)
   }

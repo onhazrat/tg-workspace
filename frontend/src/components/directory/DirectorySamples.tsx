@@ -13,9 +13,9 @@ import { telegramWebViewPostUrl } from "@/lib/telegram-web"
 import { getRelativeTime } from "@/lib/utils"
 
 /** Posts shown before "Show N more". */
-const FIRST_POSTS = 3
+export const FIRST_POSTS = 3
 
-const plural = (n: number) => `${n} more post${n === 1 ? "" : "s"}`
+export const plural = (n: number) => `${n} more post${n === 1 ? "" : "s"}`
 
 /** One Post's words, clamped to six lines with "Read more" when long. */
 export function PostText({ postId, text }: { postId: number; text: string }) {
