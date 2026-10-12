@@ -35,6 +35,7 @@ vocabulary" and "Evaluating the new Conditions" under Implementation Decisions; 
 ### Filters menu and histograms
 
 - [ ] The menu lists Views, Estimated views, Channel posts in window, Channel posts in filtered window, in that order, each with its current bounds; the pill counts all four kinds; the condition picker offers the same
+- [ ] The Filters menu and the condition picker read their number entries from **one list**. Today the menu hard-codes Views and Estimated views beside the vocabulary's own list, and the prototype's Channel posts entry reached the picker but not the menu. A test fails when an entry is in one and not the other
 - [ ] The value histogram read gains `channel_posts` (Channels by unfiltered count) and `channel_posts_filtered` (Channels by filtered count, applying the request's filter and keyword); both count Channels and the caption says "channels"
 
 ### Tests

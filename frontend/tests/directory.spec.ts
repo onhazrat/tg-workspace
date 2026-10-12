@@ -522,7 +522,9 @@ test.describe("TG Workspace directory", () => {
     ).toBeVisible()
 
     // A Channel ticked while it is on is a pick now, so it leaves the list.
-    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    // A click, not `check()`: `check()` waits to see the box ticked, and the
+    // row it sits in may already be gone, which timed the test out on CI.
+    await page.getByRole("checkbox", { name: "Tick @a2" }).click()
     await expect.poll(() => sent.at(-1)).toEqual(["a1", "a2"])
     await expect(page.getByTestId("directory-row-a2")).toHaveCount(0)
 

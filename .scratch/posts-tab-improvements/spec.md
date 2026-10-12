@@ -270,6 +270,9 @@ POST, and both read through the tenancy seam exactly as the feed does.
 - The menu lists Views, Estimated views, Channel posts in window, Channel posts in filtered window,
   in that order, each showing the bounds already in the filter beside it; the pill counts all four
   kinds. The filter row's condition picker offers the same four under its Numbers heading.
+- The menu and the picker read their number entries from one list, never two: a separate
+  hard-coded menu list is how the prototype's Channel posts entry reached the picker and missed
+  the menu.
 - Each editor shows the histogram, the operator and fields, and Add/Update. A drag fills the
   fields; typing redraws the solid bars.
 
