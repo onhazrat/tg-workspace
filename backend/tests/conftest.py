@@ -45,6 +45,7 @@ from app.services.follows import FOLLOW_OWNED_FIELDS, sync_follow_settings
 from tests.utils.legacy_owner_schema import (  # noqa: F401
     legacy_channel_group_column,
     legacy_channel_per_user_columns,
+    legacy_follow_tags_column,
     legacy_owner_schema,
 )
 
