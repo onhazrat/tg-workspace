@@ -167,6 +167,24 @@ describe("ticks", () => {
   })
 })
 
+describe("keyboard mode (DFP-01)", () => {
+  test("the highlighted row is marked, and x, f, d and o press its tick, Follow, Dismiss and link", () => {
+    mount({ ring: "beta" })
+    const ringed = document.querySelectorAll("[data-kbd-selected]")
+    expect(
+      [...ringed].map((r) => r.getAttribute("data-directory-handle")),
+    ).toEqual(["beta"])
+    const row = screen.getByTestId("directory-row-beta")
+    const key = (k: string) =>
+      row.querySelector(`[data-shortcut="${k}"]`)?.getAttribute("aria-label") ??
+      row.querySelector(`[data-shortcut="${k}"]`)?.textContent
+    expect(key("x")).toBe("Tick @beta")
+    expect(key("f")).toBe("Follow @beta")
+    expect(key("d")).toBe("Dismiss @beta")
+    expect(key("o")).toBe("@beta")
+  })
+})
+
 describe("columns and sorting", () => {
   test("a hidden column is gone; the Channel and the actions stay", () => {
     mount({ hidden: ["reach", "language"] })

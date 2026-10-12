@@ -13,6 +13,7 @@ import {
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
+import { DIRECTORY_SHORTCUTS } from "./DirectoryKeyboard"
 import { DirectoryMatchRow } from "./DirectoryMatches"
 
 export const PAGE_SIZE = 100
@@ -184,6 +185,7 @@ function FollowButton({
       variant="secondary"
       size="sm"
       aria-label={`Follow @${row.handle}`}
+      data-shortcut={DIRECTORY_SHORTCUTS.follow}
       loading={busy}
       onClick={(e) => {
         e.stopPropagation()
@@ -223,6 +225,7 @@ export function FollowCell({
         variant="ghost"
         size="sm"
         aria-label={`${verb} @${row.handle}`}
+        data-shortcut={DIRECTORY_SHORTCUTS.dismiss}
         title={
           row.dismissed
             ? "Take the Dismissal back, here and in Discover"
@@ -265,6 +268,7 @@ function ChannelCell({ row }: { row: Row }) {
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           data-testid={`directory-channel-link-${row.handle}`}
+          data-shortcut={DIRECTORY_SHORTCUTS.open}
           className="block truncate font-mono text-[10px] text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.handle}
@@ -375,6 +379,7 @@ export function DirectoryTable({
   onSort,
   onPage,
   onOpen,
+  ring,
 }: {
   rows: Row[]
   total: number
@@ -393,6 +398,8 @@ export function DirectoryTable({
   onPage: (page: number) => void
   /** A click anywhere on the row but its links and controls opens the panel. */
   onOpen: (handle: string) => void
+  /** The keyboard highlight's handle (DFP-01). */
+  ring?: string | null
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
@@ -434,13 +441,16 @@ export function DirectoryTable({
             <tr
               key={r.handle}
               data-testid={`directory-row-${r.handle}`}
+              data-directory-handle={r.handle}
+              data-kbd-selected={ring === r.handle || undefined}
               onClick={() => onOpen(r.handle)}
-              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""}`}
+              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
             >
               <td className="pl-3" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
                   aria-label={`Tick @${r.handle}`}
+                  data-shortcut={DIRECTORY_SHORTCUTS.tick}
                   checked={ticks.has(r.handle)}
                   onChange={() =>
                     onTicks(toggleUnfollowedSelection(r.handle, false, ticks))

@@ -4,7 +4,7 @@
  * `components/directory/`; this file only connects them to the server.
  */
 import { useQuery } from "@tanstack/react-query"
-
+import { Keyboard } from "lucide-react"
 import {
   dataCountDirectory,
   dataGetDirectoryDistribution,
@@ -16,8 +16,15 @@ import {
 import { DirectoryBar } from "@/components/directory/DirectoryBar"
 import { DirectoryBoundEditor } from "@/components/directory/DirectoryBoundEditor"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
+import {
+  DirectoryKeyHelp,
+  useDirectoryKeyboard,
+} from "@/components/directory/DirectoryKeyboard"
 import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
-import { DirectoryTable } from "@/components/directory/DirectoryTable"
+import {
+  DirectoryTable,
+  PAGE_SIZE,
+} from "@/components/directory/DirectoryTable"
 import {
   directoryVocabulary,
   type MeasureEditorRender,
@@ -25,6 +32,7 @@ import {
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
+import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import {
@@ -46,6 +54,7 @@ import {
   sortValue,
 } from "@/lib/directory/directory-view"
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
+import { pillClass } from "./PostFilterParts"
 
 /** The filter without `measure`'s bounds: what its spread is drawn under. */
 const withoutMeasure = (filter: DirectoryFilter, measure: string) =>
@@ -224,6 +233,16 @@ export function DirectoryView() {
     ),
     d.sets,
   )
+  const [keyboard, setKeyboard] = useSessionFlag("directory_keyboard")
+  const ring = useDirectoryKeyboard({
+    on: keyboard,
+    handles: shown.rows.map((r) => r.handle),
+    open: d.open,
+    onOpen: d.setOpen,
+    page: view.page,
+    lastPage: Math.max(0, Math.ceil((shown.total ?? 0) / PAGE_SIZE) - 1),
+    onPage: (page) => patch({ page }),
+  })
   const picksOf = (relation: "parents" | "children") => {
     const cond = firstShared(d.filter, relation)
     return cond ? resolvePicks(cond, d.sets) : null
@@ -262,6 +281,17 @@ export function DirectoryView() {
           {errorText(list.error, "The Directory did not load.")}
         </p>
       )}
+      <div className="mb-2 flex justify-end max-md:hidden">
+        <button
+          type="button"
+          aria-pressed={keyboard}
+          onClick={() => setKeyboard(!keyboard)}
+          className={pillClass(keyboard)}
+          title="j / k to move, gg / G to jump, ] / [ to turn the page, an action's letter to fire it"
+        >
+          <Keyboard size={12} /> Keyboard
+        </button>
+      </div>
       <DirectoryBulkBar
         ticks={d.ticks}
         busy={[...d.ticks].some((h) => d.following.has(h))}
@@ -292,6 +322,7 @@ export function DirectoryView() {
         onSort={(key) => patch(headerSort(view, key, d.yours.source))}
         onPage={(page) => patch({ page })}
         onOpen={d.setOpen}
+        ring={ring}
       />
       {d.open && (
         <DirectoryPanelReads
@@ -315,6 +346,7 @@ export function DirectoryView() {
           }}
         />
       )}
+      <DirectoryKeyHelp on={keyboard} />
     </div>
   )
 }
