@@ -265,6 +265,14 @@ export function DirectoryView() {
       <DirectoryBulkBar
         ticks={d.ticks}
         busy={[...d.ticks].some((h) => d.following.has(h))}
+        followed={
+          new Set(
+            [
+              ...d.sets.follows,
+              ...shown.rows.filter((r) => r.followed).map((r) => r.handle),
+            ].map((h) => h.toLowerCase()),
+          )
+        }
         onFollow={(handles) => void d.follow(handles)}
         onDismiss={(handles) => void d.dismiss(handles)}
         onClear={() => d.setTicks([])}

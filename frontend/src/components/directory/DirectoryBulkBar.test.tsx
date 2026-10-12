@@ -9,7 +9,7 @@ import { DirectoryBulkBar } from "./DirectoryBulkBar"
 
 afterEach(cleanup)
 
-function mount(handles: string[], busy = false) {
+function mount(handles: string[], busy = false, followed: string[] = []) {
   const calls = {
     follow: [] as string[][],
     dismiss: [] as string[][],
@@ -19,6 +19,7 @@ function mount(handles: string[], busy = false) {
     <DirectoryBulkBar
       ticks={new Set(handles)}
       busy={busy}
+      followed={new Set(followed)}
       onFollow={(h) => calls.follow.push(h)}
       onDismiss={(h) => calls.dismiss.push(h)}
       onClear={() => calls.clear++}
@@ -69,5 +70,29 @@ describe("the bulk bar", () => {
       (screen.getByRole("button", { name: "Clear" }) as HTMLButtonElement)
         .disabled,
     ).toBe(true)
+  })
+
+  test("Follow and Dismiss act on the unfollowed ticks only, and say of how many", () => {
+    // `followed` is lowercase; a tick keeps the handle's own case.
+    const calls = mount(["a", "News", "c"], false, ["news"])
+    expect(screen.getByText("3 ticked")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Follow 2 of 3" }))
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss 2 of 3" }))
+    expect(calls.follow).toEqual([["a", "c"]])
+    expect(calls.dismiss).toEqual([["a", "c"]])
+  })
+
+  test("asks first only when five or more would be followed", () => {
+    const calls = mount(["a", "b", "c", "d", "e"], false, ["e"])
+    fireEvent.click(screen.getByRole("button", { name: "Follow 4 of 5" }))
+    expect(calls.follow).toEqual([["a", "b", "c", "d"]])
+  })
+
+  test("with only follows ticked, says so and offers neither Follow nor Dismiss", () => {
+    mount(["a", "b"], false, ["a", "b"])
+    expect(screen.getByText("All followed")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /^Follow/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: /^Dismiss/ })).toBeNull()
+    expect(screen.getByRole("button", { name: "Clear" })).toBeTruthy()
   })
 })

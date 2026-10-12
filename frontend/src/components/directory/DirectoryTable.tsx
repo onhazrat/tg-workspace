@@ -144,15 +144,13 @@ function HeaderTick({
   ticks: ReadonlySet<string>
   onTicks: (next: Set<string>) => void
 }) {
-  const selectable = rows.map((r) => ({
-    name: r.handle,
-    isFollowed: r.followed,
-  }))
+  // Every row ticks, followed or not, so a follow can be a Seed (DFP-01).
+  const selectable = rows.map((r) => ({ name: r.handle, isFollowed: false }))
   const state = headerCheckboxState(selectable, ticks)
   return (
     <input
       type="checkbox"
-      aria-label="Tick every unfollowed channel on this page"
+      aria-label="Tick every channel on this page"
       checked={state === "checked"}
       ref={(el) => {
         if (el) el.indeterminate = state === "indeterminate"
@@ -442,17 +440,10 @@ export function DirectoryTable({
               <td className="pl-3" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
-                  aria-label={
-                    r.followed
-                      ? `@${r.handle} already followed`
-                      : `Tick @${r.handle}`
-                  }
-                  checked={r.followed || ticks.has(r.handle)}
-                  disabled={r.followed}
+                  aria-label={`Tick @${r.handle}`}
+                  checked={ticks.has(r.handle)}
                   onChange={() =>
-                    onTicks(
-                      toggleUnfollowedSelection(r.handle, r.followed, ticks),
-                    )
+                    onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
                   }
                   className="accent-blue-600"
                 />

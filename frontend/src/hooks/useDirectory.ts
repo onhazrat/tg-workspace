@@ -44,7 +44,6 @@ import {
   selectedFirstRequest,
   viewFromParams,
 } from "@/lib/directory/directory-view"
-import { pruneSelectionAfterFollow } from "@/lib/posts/discover-selection"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { queryKeys } from "./queryKeys"
 import { useDirectorySearchBox } from "./useDirectorySearchBox"
@@ -224,11 +223,11 @@ export function useDirectory() {
   const follow = async (handles: string[]) => {
     setFollowing((prev) => new Set([...prev, ...handles]))
     try {
-      const status = await followDiscoverChannels(
+      // The Ticks stay: a Channel just followed is still a Seed (DFP-01).
+      await followDiscoverChannels(
         handles.map((name) => ({ name })),
         { directory: { yours, referenceKinds: view.kinds } },
       )
-      if (status) setTicked(pruneSelectionAfterFollow(ticks, status.results))
       await queryClient.invalidateQueries({ queryKey: queryKeys.directory })
     } finally {
       setFollowing(

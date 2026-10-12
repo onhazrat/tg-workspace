@@ -1,6 +1,6 @@
 /**
  * The Directory's table (DIR-02), props-only: the columns of user story 7
- * (Cited by and Cites come with DIR-05), ticks with the followed ones locked,
+ * (Cited by and Cites come with DIR-05), ticks on every row, followed or not,
  * the header's partial tick, sorting from a header, Follow, the Telegram web
  * view link and the pages.
  */
@@ -141,23 +141,27 @@ describe("opening the panel", () => {
 })
 
 describe("ticks", () => {
-  test("a followed row is ticked and locked", () => {
-    mount()
-    expect(box("@gamma already followed").checked).toBe(true)
-    expect(box("@gamma already followed").disabled).toBe(true)
+  test("a followed row ticks and unticks like any other (DFP-01)", () => {
+    const calls = mount()
+    expect(box("Tick @gamma").checked).toBe(false)
+    expect(box("Tick @gamma").disabled).toBe(false)
+    fireEvent.click(box("Tick @gamma"))
+    cleanup()
+    const again = mount({ ticks: new Set(["gamma"]) })
+    expect(box("Tick @gamma").checked).toBe(true)
+    fireEvent.click(box("Tick @gamma"))
+    expect([...calls.ticks, ...again.ticks]).toEqual([["gamma"], []])
   })
 
-  test("the header ticks every unfollowed row on the page", () => {
+  test("the header ticks every row on the page, followed or not", () => {
     const calls = mount({ ticks: new Set(["zeta"]) })
-    fireEvent.click(box("Tick every unfollowed channel on this page"))
-    expect(calls.ticks).toEqual([["alpha", "beta", "zeta"]])
+    fireEvent.click(box("Tick every channel on this page"))
+    expect(calls.ticks).toEqual([["alpha", "beta", "gamma", "zeta"]])
   })
 
   test("the header is partial while some are ticked, and a row ticks itself", () => {
     const calls = mount({ ticks: new Set(["alpha"]) })
-    expect(
-      box("Tick every unfollowed channel on this page").indeterminate,
-    ).toBe(true)
+    expect(box("Tick every channel on this page").indeterminate).toBe(true)
     fireEvent.click(box("Tick @beta"))
     expect(calls.ticks).toEqual([["alpha", "beta"]])
   })
