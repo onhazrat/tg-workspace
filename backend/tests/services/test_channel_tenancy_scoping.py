@@ -3,10 +3,10 @@
 With `TENANCY_ENFORCED` on, `list_channels`/`list_channel_bios`/
 `list_all_channel_stats`/`get_channel_stats` show only the Channels the caller
 Follows — a thin wiring of the seam `test_follows.py` already proved works for
-`Channel` and `Post`. What is new here is the other half of the ticket: tags,
+`Channel` and `Post`. What is new here is the other half of the ticket:
 startId, startTime, followedAt and discoveredVia are read off the caller's own
-`ChannelFollow` row, not `Channel`, so two followers of the same handle can see
-their own values — and the write paths that edit those fields
+`ChannelFollow` row, not `Channel`, and tags off the caller's own `tg_tags` rows
+(ADR-029), so two followers of the same handle can see their own values — and the write paths that edit those fields
 (`upsert_channel`, `bulk_update_channel_tags`) have to keep the actor's Follow
 current or the list would show the value from before the edit.
 """
@@ -29,6 +29,7 @@ from app.services.channels import (
     upsert_channel,
 )
 from app.services.follows import ensure_follow
+from app.services.tags import replace_channel_tags, tags_for_channel
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
 
@@ -174,8 +175,9 @@ def test_channel_list_reads_tags_from_the_callers_own_follow(
 ) -> None:
     """Two followers of the same handle see their own tags, not the Channel's."""
     add_test_channel(session, "shared-handle", user_id=user.id, tags=["from-channel"])
-    ensure_follow(
-        session, channel_id="shared-handle", user_id=other_user.id, tags=["theirs"]
+    ensure_follow(session, channel_id="shared-handle", user_id=other_user.id)
+    replace_channel_tags(
+        session, user_id=other_user.id, handle="shared-handle", tags=["theirs"]
     )
     session.commit()
 
@@ -229,7 +231,7 @@ def test_the_no_follow_fallback_is_unreachable_through_the_list(
         if c["id"] == "no-follow-tags"
     )
     assert [t["name"] for t in listed["tags"]] == ["channel-tag"], (
-        "the tags live on the follow now, and the list reads them from there — "
+        "the tags live in `tg_tags` now, and the list reads them from there — "
         "if this is empty the values were lost rather than moved"
     )
 
@@ -266,9 +268,8 @@ def test_upsert_channel_mirrors_an_edit_into_the_actors_follow(
 
     upsert_channel(session, "edit-me", {"tags": ["new"]}, user_id=user.id)
 
-    follow = session.get(ChannelFollow, (user.id, "edit-me"))
-    assert follow is not None
-    assert [t["name"] for t in follow.tags] == ["new"]
+    tags = tags_for_channel(session, user_id=user.id, handle="edit-me")
+    assert [t["name"] for t in tags] == ["new"]
 
     row = next(
         c for c in list_channels(session, user_id=user.id) if c["id"] == "edit-me"
@@ -310,9 +311,8 @@ def test_bulk_update_channel_tags_mirrors_into_the_operators_follow(
         operator_id=operator_id,
     )
 
-    follow = session.get(ChannelFollow, (operator_id, "bulk-tag-me"))
-    assert follow is not None
-    assert [t["name"] for t in follow.tags] == ["fresh"]
+    tags = tags_for_channel(session, user_id=operator_id, handle="bulk-tag-me")
+    assert [t["name"] for t in tags] == ["fresh"]
 
 
 # --------------------------------------------------------------------------
@@ -325,19 +325,13 @@ def test_upsert_channel_editing_bio_does_not_clobber_a_diverged_follows_tags(
 ) -> None:
     """The first cut of `sync_follow_settings` mirrored every field on every
     call, so an edit to a field that is not even mirrored (bio) still
-    overwrote the actor's Follow tags with whatever the Channel currently
-    held — clobbering a legitimate divergence between the two."""
-    add_test_channel(session, "bio-only-edit", user_id=user.id, tags=["channel-tag"])
-    follow = session.get(ChannelFollow, (user.id, "bio-only-edit"))
-    assert follow is not None
-    follow.tags = [{"name": "mine-alone", "source": "manual", "assignedAt": 0}]
-    session.add(follow)
-    session.commit()
+    overwrote the actor's tags. A body with no `tags` must leave them alone."""
+    add_test_channel(session, "bio-only-edit", user_id=user.id, tags=["mine-alone"])
 
     upsert_channel(session, "bio-only-edit", {"bio": "new bio"}, user_id=user.id)
 
-    session.refresh(follow)
-    assert [t["name"] for t in follow.tags] == ["mine-alone"]
+    tags = tags_for_channel(session, user_id=user.id, handle="bio-only-edit")
+    assert [t["name"] for t in tags] == ["mine-alone"]
 
 
 def test_bulk_update_channel_tags_does_not_touch_the_follows_start_time(
@@ -384,6 +378,5 @@ def test_import_channels_mirrors_an_edit_into_an_existing_follow(
     )
     session.commit()
 
-    follow = session.get(ChannelFollow, (user.id, "reimported"))
-    assert follow is not None
-    assert [t["name"] for t in follow.tags] == ["after"]
+    tags = tags_for_channel(session, user_id=user.id, handle="reimported")
+    assert [t["name"] for t in tags] == ["after"]

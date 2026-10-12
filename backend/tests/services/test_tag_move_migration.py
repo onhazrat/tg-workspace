@@ -121,7 +121,9 @@ def test_case_duplicates_merge_keeping_the_name_first_written(
         "Gamma",
         [{"name": "news", "source": "manual", "assignedAt": 9}, "Sports", "SPORTS"],
     )
-    _follow(session, alice, "gamma", [{"name": "News", "source": "ai", "assignedAt": 4}])
+    _follow(
+        session, alice, "gamma", [{"name": "News", "source": "ai", "assignedAt": 4}]
+    )
     session.commit()
 
     _move(session)

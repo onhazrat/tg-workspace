@@ -113,6 +113,7 @@ from app.models_tg import (
     SyncLog,
     SyncLogPayload,
     SyncMeta,
+    Tag,
     TagRun,
     UserSetting,
     ViewObservation,
@@ -161,6 +162,10 @@ SCOPES: dict[type[SQLModel], Scope] = {
     ChatSessionPayload: Scope.USER_OWNED,
     DiscoverReport: Scope.USER_OWNED,
     Dismissal: Scope.USER_OWNED,
+    # An Account's Tags (ADR-029). User-owned rather than follow-scoped: a
+    # Tag describes a Channel as the Account sees it, and it has to outlive
+    # the Follow, which an `EXISTS` against `tg_channel_follows` would undo.
+    Tag: Scope.USER_OWNED,
     TagRun: Scope.USER_OWNED,
     BotCredential: Scope.USER_OWNED,
     # An Account's AI Key. `USER_OWNED` for `BotCredential`'s reason and

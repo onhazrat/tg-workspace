@@ -132,7 +132,7 @@ def test_the_backfilled_follow_starts_empty_but_keeps_the_schedule(
 ) -> None:
     """There are no per-User columns on the Channel left to copy (ticket 22).
 
-    The follow is created with unset tags, follow date and start id, which is
+    The follow is created with an unset follow date and start id, which is
     the honest row: those were one account's choices and the Channel never held
     anyone's but the first scraper's.
 
@@ -158,7 +158,7 @@ def test_the_backfilled_follow_starts_empty_but_keeps_the_schedule(
 
     follow = session.get(ChannelFollow, (operator_id, "bf_copy"))
     assert follow is not None
-    assert (follow.tags, follow.followed_at, follow.start_id) == ([], None, None)
+    assert (follow.followed_at, follow.start_id) == (None, None)
     assert follow.setting_group_id is not None
     assert follow.next_sync_at == 777
 

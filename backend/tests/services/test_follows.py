@@ -115,8 +115,8 @@ def test_ensure_follow_does_not_reset_an_existing_row(
 ) -> None:
     """Re-creating a Channel must not wipe the follower's own values.
 
-    This is why the write is DO NOTHING rather than an upsert: `tags` and
-    `start_time` are the follower's, and a second pass through the creation
+    This is why the write is DO NOTHING rather than an upsert: `followed_at`
+    and `start_time` are the follower's, and a second pass through the creation
     path — an import, a re-follow, a Discover hit on a channel already
     followed — has no business overwriting them with its own defaults.
     """
@@ -125,19 +125,23 @@ def test_ensure_follow_does_not_reset_an_existing_row(
         session,
         channel_id="ch_keep",
         user_id=user.id,
-        tags=["mine"],
+        followed_at=55,
         start_time=1234,
     )
     session.commit()
 
     ensure_follow(
-        session, channel_id="ch_keep", user_id=user.id, tags=[], start_time=None
+        session,
+        channel_id="ch_keep",
+        user_id=user.id,
+        followed_at=None,
+        start_time=None,
     )
     session.commit()
 
     follow = session.get(ChannelFollow, (user.id, "ch_keep"))
     assert follow is not None
-    assert (follow.tags, follow.start_time) == (["mine"], 1234)
+    assert (follow.followed_at, follow.start_time) == (55, 1234)
 
 
 def test_ownerless_channel_falls_back_to_the_operator(session: Session) -> None:
@@ -214,7 +218,6 @@ def test_ensure_follow_for_channel_takes_the_caller_s_per_user_values(
             values={
                 "setting_group_id": "default-global",
                 "followed_at": 111,
-                "tags": ["a", "b"],
                 "start_id": 7,
                 "start_time": 222,
                 "discovered_via": {"source": "discover"},
@@ -228,7 +231,6 @@ def test_ensure_follow_for_channel_takes_the_caller_s_per_user_values(
     assert follow is not None
     assert follow.setting_group_id == "default-global"
     assert follow.followed_at == 111
-    assert follow.tags == ["a", "b"]
     assert follow.start_id == 7
     assert follow.start_time == 222
     assert follow.discovered_via == {"source": "discover"}
@@ -254,7 +256,6 @@ def test_a_follow_with_no_supplied_values_is_empty_rather_than_inherited(
     assert follow is not None
     assert follow.setting_group_id is None
     assert follow.followed_at is None
-    assert follow.tags == []
     assert follow.start_id is None
     assert follow.start_time is None
     assert follow.discovered_via is None
@@ -298,12 +299,14 @@ def test_a_second_account_can_follow_the_same_channel(session: Session) -> None:
     second = create_random_user(session)
     _channel(session, "ch_shared")
 
-    ensure_follow(session, channel_id="ch_shared", user_id=first.id, tags=["x"])
-    ensure_follow(session, channel_id="ch_shared", user_id=second.id, tags=["y"])
+    ensure_follow(session, channel_id="ch_shared", user_id=first.id, start_time=1)
+    ensure_follow(session, channel_id="ch_shared", user_id=second.id, start_time=2)
     session.commit()
 
-    follows = {f.user_id: f.tags for f in follows_for_channels(session, ["ch_shared"])}
-    assert follows == {first.id: ["x"], second.id: ["y"]}
+    follows = {
+        f.user_id: f.start_time for f in follows_for_channels(session, ["ch_shared"])
+    }
+    assert follows == {first.id: 1, second.id: 2}
 
     session.exec(delete(User).where(col(User.id).in_([first.id, second.id])))
     session.commit()
