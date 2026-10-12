@@ -256,8 +256,9 @@ _Avoid_: directory query, directory search, browse filter
 **Condition**:
 One test in a Channel filter, a Directory filter or a Post filter. In a Channel filter: a tag, a
 Setting group, a Language, or a bound on a number such as Reach or
-subscribers. In a Post filter: a Type, a media kind, a Language, a Channel, or
-a bound on a View count or an Estimated View count. In a Directory filter: a
+subscribers. In a Post filter: a Type (Is a reply and Has a reply among them), a media
+kind, a Language, a Channel, or a bound on a View count, an Estimated View
+count, Channel posts in window or Channel posts in filtered window. In a Directory filter: a
 Language, part of the handle or name, the followability verdict, being followed
 or dismissed, a citation, or a bound on a number such as Reach or subscribers. Anything with no value for
 that number fails a bound on it, and a separate Condition asks whether it has
@@ -305,6 +306,29 @@ _Avoid_: saved filter, auto-selection, rule (unqualified)
 A step of the Post selection that selects or deselects one exact Post. It
 follows that Post into any Analysis window and never reaches another.
 _Avoid_: exception, override, manual selection
+
+**Channel posts in window**:
+How many Posts a Post's Channel has in the Analysis window, counted before any
+Post filter. A bound on it keeps the Posts of quiet Channels or of busy ones.
+It is a whole number, so a bound on it is too.
+_Avoid_: unfiltered range, channel posts in unfiltered window, channel volume,
+posting rate
+
+**Channel posts in filtered window**:
+How many of a Post's Channel's Posts in the Analysis window the Post filter
+keeps before its per-Channel cap, with every Channel posts Condition set aside
+so none counts itself.
+Under "Type: Original", a Channel with 200 Posts of which 20 are original has
+20. A whole number, like Channel posts in window.
+_Avoid_: filtered channel posts, matching posts per channel
+
+**Reply**:
+A Post that answers another Post, its parent, in its own Channel or in another.
+A Post is a reply whether or not its parent is stored. A Post has a reply only
+when a Post of its own Channel answers it, so a forward has one when the
+forwarding Channel answers it there; an answer from another Channel makes the
+answering Post a reply and leaves its parent without one.
+_Avoid_: comment, thread, response
 
 **Channel spotlight**:
 Showing one Channel's Posts alone in the Posts tab for a moment, as a Post
