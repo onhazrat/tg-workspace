@@ -59,24 +59,39 @@ ALTER ROLE <role> SET statement_timeout = '10min';
 
 ## 3. The tunnel
 
-The database port is usually not published. Forward it over SSH to a local port:
+The database port is usually not published. Forward it over SSH to a local port, in a loop
+that reconnects and looks the container's IP up again each time, because the IP changes when the
+container is recreated. Save it outside the repo as `tunnel.sh` and start it with
+`nohup bash tunnel.sh > tunnel.log 2>&1 &`:
 
-```
-ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
-    -N -L 5433:<db-container-ip>:5432 <host>
+```bash
+while true; do
+  ip=$(ssh -o BatchMode=yes -o ConnectTimeout=20 <host> \
+    "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' <db-container>")
+  ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
+      -o ServerAliveCountMax=3 -N -L 5433:"$ip":5432 <host>
+  echo "$(date) tunnel exited $?"; sleep 5
+done
 ```
 
-- Get the container's IP with `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' <db-container>`;
-  it changes when the container is recreated.
-- Run the tunnel as a **launch configuration** (`.claude/launch.json`, which is gitignored) and
-  start it with the preview tool. A backgrounded shell command is killed at the 30-minute
-  background limit, and every query fails after that.
+- A lone `ssh -N` dies when the link stalls ("server not responding"), and every query fails
+  after it. The loop keeps a long session up, and `nohup` keeps it past the agent's
+  background-command limit. Where the agent has a preview tool, a launch configuration
+  (`.claude/launch.json`, gitignored) running the same loop works too.
 - `~/.pgpass` gets a line for `localhost:5433:<database>:<role>:<password>`, so nothing else needs
   the password.
+- **Ad-hoc queries** go through `psql`, which on macOS comes from Homebrew's `libpq`. It is
+  keg-only, so call it by its full path (or add its `bin` to `PATH`), and pass the parallel-workers
+  setting (see the next section) through the environment:
+  `PGOPTIONS='-c max_parallel_workers_per_gather=0' /opt/homebrew/opt/libpq/bin/psql -h localhost -p 5433 -U <role> <database> -c "…"`.
+  A millisecond timestamp span past 2^31 needs a `::bigint` literal, or the query fails with
+  "integer out of range".
 
 ## 4. The prototype API
 
-One file, `backend/scripts/proto_<name>_api.py`, run with `uv run python …`.
+One file, `backend/scripts/proto_<name>_api.py`, started **from `backend/`**
+(`cd backend && uv run python scripts/proto_<name>_api.py`): the settings read `.env` relative
+to that directory, and from the repo root the import fails on missing fields before it serves.
 
 - **Configuration only from the environment, with no defaults that name a deployment**:
   `PROTO_DSN` (a libpq connection string), the deployment's API base for identity, `PROTO_PORT`.
@@ -99,6 +114,16 @@ One file, `backend/scripts/proto_<name>_api.py`, run with `uv run python …`.
 - Measure with `EXPLAIN (ANALYZE, BUFFERS)` on the deployment before optimising; the network, not
   the database, was most of the time here.
 
+**When the prototype changes routes the app already has** (a new filter on the feed, a new
+count), serve this branch's real router instead of rewriting it, so the change being prototyped
+is the code that folds in later. The script sets `POSTGRES_*` to the tunnel (the password read
+from `~/.pgpass`) and a small `DB_POOL_SIZE` **before** importing the app, mounts only the
+changed router under the real prefix, overrides `get_current_user` with the forwarding identity
+above, and registers a connect listener on the engine that runs the parallel-workers `SET`. The
+frontend then proxies just those paths to it (next section). The posts-tab improvements
+prototype (`prototype/posts-tab-improvements`, `backend/scripts/proto_posts_api.py`) is a worked
+example.
+
 ## 5. The frontend
 
 - Run the app's dev server with `/api` proxied to the deployment:
@@ -108,6 +133,14 @@ One file, `backend/scripts/proto_<name>_api.py`, run with `uv run python …`.
 - Add a `/proto` proxy entry to `vite.config.ts` that strips the prefix and targets
   `127.0.0.1:${process.env.PROTO_API_PORT}`. The browser then sees one origin, and the prototype's
   fetches reuse the app's auth headers.
+- For changed routes the app already has, add a regex key **ahead of** `/api` in `server.proxy`
+  (`"^/api/v1/data/posts": { target: "http://127.0.0.1:" + process.env.PROTO_API_PORT }`), so
+  those paths reach the local copy and everything else the deployment.
+- **Sharing with the user's other devices over Tailscale.** Add `allowedHosts: [".ts.net"]` to
+  `server` (Vite refuses an unknown `Host` otherwise), start the dev server on
+  `127.0.0.1:<port>`, then `tailscale serve --bg --https=<port> http://127.0.0.1:<port>`. The
+  prototype is at `https://<machine>.<tailnet>.ts.net:<port>/`, tailnet only, hot reload
+  included. `tailscale serve status` lists the ports already taken.
 - Mount the prototype as a workspace tab: an entry in `WORKSPACE_TABS`, its view in `App.tsx`, its
   icon, and `variant` in the workspace search. Put the code in
   `frontend/src/components/<name>-prototype/` and switch variants with `?variant=` and the shared
@@ -132,12 +165,16 @@ One file, `backend/scripts/proto_<name>_api.py`, run with `uv run python …`.
   `prototype/<name>`. Then scan every added line for hosts, IPs, account ids, emails and keys
   before pushing.
 - Never commit data from the deployment: exports, fixtures, dumps or JSON captured from it.
+- Commit on the prototype branch with `--no-verify`: mypy and ty reject throwaway code, and the
+  env-catalog hook rewrites `.env.example` for every `PROTO_*` variable. Every commit bound for
+  `main` keeps the hooks.
 - Write the design down (glossary, ADRs, spec, tickets) and send it to `main` as a docs PR. The
   prototype code is never promoted as is.
 
 ## 7. Cleaning up
 
-Stop the prototype servers and the tunnel. Drop scratch tables nobody needs; they are the
+Stop the prototype servers, the tunnel loop and its `ssh`, and each
+`tailscale serve --https=<port> off`. Drop scratch tables nobody needs; they are the
 prototype's, not the app's. Leave the role unless the user asks to remove it, and note in the
 handoff that it exists.
 
