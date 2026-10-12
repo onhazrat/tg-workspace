@@ -56,6 +56,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [ADR-021](./ADR-021-post-language.md) | A Post has a Language, read on the server by fastText, superseding ADR-015's `script` |
 | [ADR-022](./ADR-022-post-links.md) | A Post keeps its Links as UTF-16 positions over its plain text, beside `links`, with no rescrape |
 | [ADR-025](./ADR-025-posts-are-judged-by-estimated-views.md) | Posts are filtered and ordered by their Estimated View count, never by Channel Reach — extends ADR-024 |
+| [ADR-029](./ADR-029-tags-belong-to-the-account.md) | Tags belong to the Account, not the Follow |
 
 ## Code references
 

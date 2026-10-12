@@ -134,20 +134,42 @@ twenty Posts from one Channel, count once.
 _Avoid_: referrer, source channel, inbound link
 
 **Shared parent**:
-A Citing Channel that cites both a Channel the Account picked and the Channel
-being judged. Many Shared parents mean the two are read by the same people.
+A Citing Channel that cites both a Seed and the Channel being judged. Many
+Shared parents mean the two are read by the same people.
 _Avoid_: co-citer, common source
 
 **Shared child**:
-A Channel that both a picked Channel and the Channel being judged cite. Many
-Shared children mean the two point their readers at the same places.
+A Channel that both a Seed and the Channel being judged cite. Many Shared
+children mean the two point their readers at the same places.
 _Avoid_: common target, shared link
+
+**Tick**:
+A Directory entry marked in the Directory list, for a bulk action (Follow,
+Dismiss, Tag) or as Seeds. Any entry can be ticked, followed or not. Ticks are
+kept per browser and never travel in a link.
+_Avoid_: selection (the Channels tab's), check, mark
+
+**Seed**:
+A Channel that a Shared parent or Shared child Condition compares the Directory
+with. The Seeds come from one place, chosen with the Condition: the Channels
+ticked in the Directory, the Channels selected on the Channels tab, every
+followed Channel, a Tag, or handles typed in. All but typed handles are read
+afresh, so the Condition follows them as they change.
+_Avoid_: pick, picked Channel (a Pick is a Post), anchor, source
 
 **Follow**:
 The relation between an Account and a Channel, carrying everything private
 about watching it. Following is what makes a Channel's Posts visible to an
 Account; unfollowing removes the relation and nothing else.
 _Avoid_: subscription, watch, membership
+
+**Tag**:
+A name an Account puts on a Channel, whether or not it follows it. A Channel
+can carry many Tags and a Tag many Channels; the Account sees only its own.
+Tags describe the Channel as the Account sees it, so unfollowing keeps them and
+following again brings them back. A Tag is how an Account names a group of
+Channels to filter by, or to compare others with.
+_Avoid_: list, set, pick set, label, collection
 
 **First sync**:
 The sync queued for a Channel when an Account creates a Follow on it, whether
@@ -259,7 +281,7 @@ Setting group, a Language, or a bound on a number such as Reach or
 subscribers. In a Post filter: a Type (Is a reply and Has a reply among them), a media
 kind, a Language, a Channel, or a bound on a View count, an Estimated View
 count, Channel posts in window or Channel posts in filtered window. In a Directory filter: a
-Language, part of the handle or name, the followability verdict, being followed
+Tag, a Language, part of the handle or name, the followability verdict, being followed
 or dismissed, a citation, or a bound on a number such as Reach or subscribers. Anything with no value for
 that number fails a bound on it, and a separate Condition asks whether it has
 one.
