@@ -9,6 +9,7 @@ the generated client, so the reasoning lives in comments.
 
 from __future__ import annotations
 
+import math
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
@@ -120,11 +121,16 @@ class ChannelPostsCondition(_Cond):
     """PROTOTYPE: the Post's Channel has between min and max Posts in the window."""
 
     type: Literal["channel_posts"]
-    min: int | None = Field(None, ge=0)
-    max: int | None = Field(None, ge=0)
+    min: float | None = Field(None, ge=0)
+    max: float | None = Field(None, ge=0)
 
     def to_cond(self) -> TreeCond:
-        return ChannelPostsCond(self.min, self.max)
+        # A Post count is whole: the low end rounds up, the high end down,
+        # which keeps the same Channels ("<= 29.5" is "<= 29").
+        return ChannelPostsCond(
+            None if self.min is None else math.ceil(self.min),
+            None if self.max is None else math.floor(self.max),
+        )
 
 
 PostCondition = Annotated[

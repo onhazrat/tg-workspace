@@ -92,7 +92,7 @@ export function WindowHistogram() {
     placeholderData: (previous) => previous,
   })
   const counts = query.data ?? []
-  const max = Math.max(1, ...counts)
+  const _max = Math.max(1, ...counts)
 
   const inWindow = (i: number) => {
     const t = extentStart + i * width

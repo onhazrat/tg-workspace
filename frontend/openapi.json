@@ -6486,17 +6486,11 @@
             "title": "Type"
           },
           "min": {
-            "anyOf": [
-              { "type": "integer", "minimum": 0.0 },
-              { "type": "null" }
-            ],
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
             "title": "Min"
           },
           "max": {
-            "anyOf": [
-              { "type": "integer", "minimum": 0.0 },
-              { "type": "null" }
-            ],
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
             "title": "Max"
           }
         },

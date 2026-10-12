@@ -2,7 +2,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { PostViewsEditor } from "@/components/PostFilterControls"
+import { PostViewsEditor, wholeBound } from "@/components/PostFilterControls"
 import { ValueHistogramContext } from "./ValueHistogram"
 import { PostsVariantContext } from "./variant"
 
@@ -58,4 +58,11 @@ test("variant 0 draws no histogram", async () => {
   mount("0")
   await new Promise((r) => setTimeout(r, 10))
   expect(screen.queryByTestId("metric-bar-0")).toBeNull()
+})
+
+test("a Channel-posts bound is whole: low rounds up, high rounds down", () => {
+  expect(wholeBound({ max: 29.5 })).toEqual({ min: undefined, max: 29 })
+  expect(wholeBound({ min: 2.1, max: 30 })).toEqual({ min: 3, max: 30 })
+  expect(wholeBound({ min: 29.2, max: 29.8 })).toBeNull()
+  expect(wholeBound({ none: true })).toEqual({ none: true })
 })

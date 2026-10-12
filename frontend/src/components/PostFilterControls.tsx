@@ -73,6 +73,20 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
 
 const CHANNEL_POSTS_LABEL = "Channel posts in window"
 
+/**
+ * A Post count is whole, so a bound on one is too: the low end rounds up and
+ * the high end down, which keeps exactly the same Channels ("<= 29.5" is
+ * "<= 29"). A dragged histogram edge is rarely whole, and the server takes
+ * only integers. Null when nothing whole is left between the ends.
+ */
+export function wholeBound(bound: MetricBound | null): MetricBound | null {
+  if (!bound || bound.none) return bound
+  const min = bound.min === undefined ? undefined : Math.ceil(bound.min)
+  const max = bound.max === undefined ? undefined : Math.floor(bound.max)
+  if (min !== undefined && max !== undefined && min > max) return null
+  return { min, max }
+}
+
 /** PROTOTYPE (variant A): the Channel-posts-in-window bound's editor. */
 function ChannelPostsEditor({
   initial,
@@ -88,8 +102,12 @@ function ChannelPostsEditor({
     String((op === "lte" ? initial?.max : initial?.min) ?? ""),
   )
   const [b, setB] = useState(String(initial?.max ?? ""))
-  const bound = op === "none" ? null : parseBound(op, a, b, { min: 0 })
-  const select = (next: MetricBound) => {
+  const bound = wholeBound(
+    op === "none" ? null : parseBound(op, a, b, { min: 0 }),
+  )
+  const select = (dragged: MetricBound) => {
+    const next = wholeBound(dragged)
+    if (!next) return
     setOp(boundKind(next))
     setA(String(next.min ?? next.max))
     setB(String(next.max ?? ""))
