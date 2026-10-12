@@ -194,5 +194,7 @@ The Directory tab
 ## Further Notes
 
 - The prototype's pick sets lived in browser storage and were expanded by the browser; both are replaced here (server-side Tags, server-side resolution). Its keyboard hook, card layout, sheet and placeholder are the reference for behaviour, not code to copy.
-- A natural ticket order, each landing on its own: Ticks on every row with the bulk bar's counts; the placeholder and the collapsed "Why it's here"; keyboard mode; the phone layout; Tags off the Follow (behaviour unchanged, unfollow keeps them); Tags in the Directory (routes, the `tag` Condition, Tag Seeds, the 500 cap, the Seed rename, the UI). The Tag move must land before Tags in the Directory, because a Tag on an unfollowed Channel needs somewhere to live.
+- The tickets are `issues/01` to `05` (DFP-01 to DFP-05), each landing on its own. DFP-03, the Tag
+  move, can run beside DFP-01 and DFP-02; it must land before DFP-04, because a Tag on an
+  unfollowed Channel needs somewhere to live.
 - The prototype ran against staging through a read-only role and a local copy of this branch's Directory router; `docs/agents/prototyping-with-live-data.md` describes the setup.
