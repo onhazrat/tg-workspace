@@ -290,7 +290,9 @@ class Post(SQLModel, table=True):
     # were read; an empty list means Telegram marked nothing.
     # Shape: [{"offset": int, "length": int, "url": str}]
     link_spans: list[Any] | None = Field(default=None, sa_column=Column(JSON))
-    # The post this one replies to. `reply_to["text"]` is Telegram's truncated
+    # The post this one replies to. The id is a post id in the Channel
+    # `reply_to["channel"]` names, which may be another Channel: match on both,
+    # never on the id alone. `reply_to["text"]` is Telegram's truncated
     # excerpt of the parent, not its full body.
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
     reply_to_post_id: int | None = Field(default=None, index=True)
