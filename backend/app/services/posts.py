@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 import uuid
 from collections import defaultdict
@@ -10,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import (
     ColumnElement,
+    Float,
     Integer,
     and_,
     cast,
@@ -1140,3 +1142,97 @@ def post_histogram(
         if 0 <= int(index) < buckets:
             counts[int(index)] += n
     return counts
+
+
+#: PROTOTYPE: the value histogram's bars, as the Channels tab draws (CTB-02).
+VALUE_BINS = 32
+
+
+def post_value_histogram(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None,
+    start_date: int | None,
+    end_date: int | None,
+    measure: str,
+) -> dict[str, Any]:
+    """PROTOTYPE: one measure's distribution over the window, filters aside.
+
+    `views` and `estimated` count Posts, `channel_posts` counts Channels by how
+    many Posts each has in the window. 32 bars from the lowest value to the
+    highest, logarithmic past two orders of magnitude, exactly the Channels
+    tab's rule (`ChannelMetricEditor.histogram`), so one component draws both.
+    """
+    from app.services.settling_curve import current_estimate
+
+    if measure == "channel_posts":
+        measured_values = _in_scope(
+            session,
+            select(func.count().label("x")).select_from(Post),
+            user_id=user_id,
+            channel_names=channel_names,
+            start_date=start_date,
+            end_date=end_date,
+            filters=None,
+        ).group_by(col(Post.channel_name))
+    else:
+        reading = (
+            ViewReading("views")
+            if measure == "views"
+            else ViewReading("estimated", *current_estimate(session))
+        )
+        measured_values = _in_scope(
+            session,
+            select(reading.of(Post).label("x")).select_from(Post),
+            user_id=user_id,
+            channel_names=channel_names,
+            start_date=start_date,
+            end_date=end_date,
+            filters=None,
+        )
+    inner = measured_values.subquery()
+    x = inner.c.x
+    lo, hi, measured, total, med = session.exec(
+        select(
+            func.min(x),
+            func.max(x),
+            func.count(x),
+            func.count(),
+            func.percentile_disc(0.5).within_group(x),
+        ).select_from(inner)
+    ).one()
+    if not measured:
+        return {"bins": [], "edges": [], "log": False, "median": None,
+                "measured": 0, "total": total}
+    lo, hi = float(lo), float(hi)
+    log = lo >= 0 and hi / (lo if lo > 0 else 1) > 100
+    f, inv, fsql = (
+        (lambda v: v, lambda v: v, lambda c: c)
+        if not log
+        else (math.log, math.exp, func.ln)
+        if lo > 0
+        else (math.log1p, math.expm1, lambda c: func.ln(1 + c))
+    )
+    span = f(hi) - f(lo)
+    index = (
+        literal(0)
+        if span == 0
+        else func.least(
+            VALUE_BINS - 1,
+            func.floor((fsql(cast(x, Float)) - f(lo)) / span * VALUE_BINS),
+        )
+    )
+    bins = [0] * VALUE_BINS
+    for i, n in session.exec(
+        select(index, func.count()).select_from(inner).where(x.is_not(None)).group_by(index)
+    ).all():
+        bins[int(i)] += n
+    return {
+        "bins": bins,
+        "edges": [inv(f(lo) + span * i / VALUE_BINS) for i in range(VALUE_BINS + 1)],
+        "log": log,
+        "median": float(med),
+        "measured": measured,
+        "total": total,
+    }

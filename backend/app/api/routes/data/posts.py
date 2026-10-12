@@ -21,6 +21,8 @@ from app.schemas.posts import (
     PostFilteredRequest,
     PostHistogramRequest,
     PostHistogramResponse,
+    PostValueHistogramRequest,
+    PostValueHistogramResponse,
     PostLookupRequest,
     SelectablePostResponse,
     ViewCurveResponse,
@@ -33,6 +35,7 @@ from app.services.posts import (
     count_facets_in_scope,
     count_shown_and_selected,
     post_histogram,
+    post_value_histogram,
 )
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -147,6 +150,26 @@ def posts_histogram(
             extent=(body.extent_start, body.extent_end),
             buckets=body.buckets,
             filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
+        )
+    )
+
+
+@router.post("/posts/value-histogram")
+def posts_value_histogram(
+    body: PostValueHistogramRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostValueHistogramResponse:
+    """PROTOTYPE: a filter editor's histogram over the window, filters aside."""
+    window = resolve_analysis_window(body.window)
+    return PostValueHistogramResponse(
+        **post_value_histogram(
+            session,
+            user_id=current_user.id,
+            channel_names=body.cleaned_channel_names(),
+            start_date=window.start,
+            end_date=window.end,
+            measure=body.measure,
         )
     )
 

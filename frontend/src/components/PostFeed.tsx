@@ -3,12 +3,16 @@ import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
+import { shownPostsBody } from "@/api/data"
+import { dataPostsValueHistogram } from "@/client"
+import { useScope } from "@/contexts/ScopeContext"
 import {
   isSemanticFeed,
   useLiveWindowRefresh,
   usePostFacets,
   usePostsFeed,
   useScopedPostCounts,
+  useSelectedChannelNames,
   useShownPostCounts,
 } from "@/hooks/usePostsView"
 import { useCompactPostGrid, useSessionFlag } from "@/hooks/useSessionFlag"
@@ -44,6 +48,7 @@ import {
   useSpotlightState,
 } from "./post-card/ChannelSpotlight"
 import { FeedKeyboard } from "./post-card/FeedKeyboard"
+import { ValueHistogramContext } from "./posts-prototype/ValueHistogram"
 import {
   FeedPagingContext,
   PostsVariantContext,
@@ -107,6 +112,30 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
   const variant = useVariantFromUrl()
+  // PROTOTYPE (variant A): the filter editors' histograms, over the window and
+  // the Channels the feed reads, the filters aside.
+  const { startDate, endDate } = useScope()
+  const histogramNames = spotlightView(spotlight, {
+    channelNames: useSelectedChannelNames(),
+    keyword: "",
+    filter: postFilter,
+    maxPerChannel: 0,
+    groupByChannel: false,
+  }).channelNames
+  const valueHistograms = {
+    key: [histogramNames, startDate, endDate],
+    fetch: (measure: "views" | "estimated" | "channel_posts") =>
+      dataPostsValueHistogram({
+        body: {
+          ...shownPostsBody({
+            channelNames: histogramNames,
+            startDate,
+            endDate,
+          }),
+          measure,
+        } as never,
+      }),
+  }
 
   // The Post selection (PTR-05): window-wide, so neither a spotlight nor the
   // filter changes these two numbers.
@@ -226,95 +255,97 @@ export const PostFeed: React.FC<PostFeedProps> = ({
       <FeedPagingContext.Provider
         value={{ loadMore, hasMore, postCount: posts.length, spotlight }}
       >
-        <PrototypeSwitcher />
-        <SpotlightProvider value={spotlightApi}>
-          <motion.div
-            key="posts"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6 pb-10"
-          >
-            <PostFilter
-              postSearch={postSearch}
-              setPostSearch={setPostSearch}
-              shownCount={totalInScope}
-              subtitle={subtitle}
-              tooNewToJudge={tooNewToJudge}
-              trailing={
-                <>
-                  <button
-                    type="button"
-                    aria-pressed={compact}
-                    onClick={() => setCompact(!compact)}
-                    className={cn(pillClass(compact), "ml-auto")}
-                  >
-                    <LayoutGrid size={12} /> Compact grid
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={keyboard}
-                    onClick={() => setKeyboard(!keyboard)}
-                    className={pillClass(keyboard)}
-                    title="j / k to move, gg / G to jump, an action's letter to fire it"
-                  >
-                    <Keyboard size={12} /> Keyboard
-                  </button>
-                </>
-              }
-            />
-
-            <PostSelectionBar
-              selected={selectedCount}
-              total={windowTotal}
-              chips={selectionChips(postSelection)}
-              ranked={ranked}
-              onSelectAll={() => selectShown(true)}
-              onDeselectAll={() => selectShown(false)}
-              onRemoveChip={removeSelectionChip}
-              regions={
-                ranked
-                  ? undefined
-                  : regionCounts({
-                      selected: selectedCount,
-                      selectedShown,
-                      shown: totalInScope,
-                    })
-              }
-              onAdjust={(keep) =>
-                appendSelection(regionSteps(keep, shownSnapshot()))
-              }
-              selectedFirst={selectedFirst}
-              onSelectedFirstChange={setSelectedFirst}
-              onCopyLinks={copyLinks}
-              onExportMarkdown={exportMarkdown}
-            />
-
-            {spotlight && (
-              <SpotlightBanner
-                name={spotlight.channel}
-                channel={channels.find(
-                  (c) =>
-                    c.name.toLowerCase() === spotlight.channel.toLowerCase(),
-                )}
-                keepFilters={spotlight.keepFilters}
-                onKeepFiltersChange={spotlightApi.setKeepFilters}
-                onBack={spotlightApi.leave}
+        <ValueHistogramContext.Provider value={valueHistograms}>
+          <PrototypeSwitcher />
+          <SpotlightProvider value={spotlightApi}>
+            <motion.div
+              key="posts"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6 pb-10"
+            >
+              <PostFilter
+                postSearch={postSearch}
+                setPostSearch={setPostSearch}
+                shownCount={totalInScope}
+                subtitle={subtitle}
+                tooNewToJudge={tooNewToJudge}
+                trailing={
+                  <>
+                    <button
+                      type="button"
+                      aria-pressed={compact}
+                      onClick={() => setCompact(!compact)}
+                      className={cn(pillClass(compact), "ml-auto")}
+                    >
+                      <LayoutGrid size={12} /> Compact grid
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={keyboard}
+                      onClick={() => setKeyboard(!keyboard)}
+                      className={pillClass(keyboard)}
+                      title="j / k to move, gg / G to jump, an action's letter to fire it"
+                    >
+                      <Keyboard size={12} /> Keyboard
+                    </button>
+                  </>
+                }
               />
-            )}
 
-            <PostFeedResults
-              isInitialLoading={isInitialLoading}
-              posts={posts}
-              showLoadMore={hasMore || isLoadingMore}
-              loadMoreRef={loadMoreRef}
-              postSearch={postSearch}
-              compact={compact}
-              keyboard={keyboard}
-              onToggleSelected={onToggleSelected}
-            />
-            <FeedKeyboard on={keyboard} />
-          </motion.div>
-        </SpotlightProvider>
+              <PostSelectionBar
+                selected={selectedCount}
+                total={windowTotal}
+                chips={selectionChips(postSelection)}
+                ranked={ranked}
+                onSelectAll={() => selectShown(true)}
+                onDeselectAll={() => selectShown(false)}
+                onRemoveChip={removeSelectionChip}
+                regions={
+                  ranked
+                    ? undefined
+                    : regionCounts({
+                        selected: selectedCount,
+                        selectedShown,
+                        shown: totalInScope,
+                      })
+                }
+                onAdjust={(keep) =>
+                  appendSelection(regionSteps(keep, shownSnapshot()))
+                }
+                selectedFirst={selectedFirst}
+                onSelectedFirstChange={setSelectedFirst}
+                onCopyLinks={copyLinks}
+                onExportMarkdown={exportMarkdown}
+              />
+
+              {spotlight && (
+                <SpotlightBanner
+                  name={spotlight.channel}
+                  channel={channels.find(
+                    (c) =>
+                      c.name.toLowerCase() === spotlight.channel.toLowerCase(),
+                  )}
+                  keepFilters={spotlight.keepFilters}
+                  onKeepFiltersChange={spotlightApi.setKeepFilters}
+                  onBack={spotlightApi.leave}
+                />
+              )}
+
+              <PostFeedResults
+                isInitialLoading={isInitialLoading}
+                posts={posts}
+                showLoadMore={hasMore || isLoadingMore}
+                loadMoreRef={loadMoreRef}
+                postSearch={postSearch}
+                compact={compact}
+                keyboard={keyboard}
+                onToggleSelected={onToggleSelected}
+              />
+              <FeedKeyboard on={keyboard} />
+            </motion.div>
+          </SpotlightProvider>
+        </ValueHistogramContext.Provider>
       </FeedPagingContext.Provider>
     </PostsVariantContext.Provider>
   )

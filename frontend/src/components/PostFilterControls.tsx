@@ -25,6 +25,7 @@ import {
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import { pillClass } from "@/components/PostFilterParts"
+import { PostValueHistogram } from "@/components/posts-prototype/ValueHistogram"
 import { useIsVariantA } from "@/components/posts-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import {
@@ -70,7 +71,7 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
   channel_posts: Hash,
 }
 
-const CHANNEL_POSTS_LABEL = "Channel posts in unfiltered range"
+const CHANNEL_POSTS_LABEL = "Channel posts in window"
 
 /** PROTOTYPE (variant A): the Channel-posts-in-window bound's editor. */
 function ChannelPostsEditor({
@@ -88,6 +89,11 @@ function ChannelPostsEditor({
   )
   const [b, setB] = useState(String(initial?.max ?? ""))
   const bound = op === "none" ? null : parseBound(op, a, b, { min: 0 })
+  const select = (next: MetricBound) => {
+    setOp(boundKind(next))
+    setA(String(next.min ?? next.max))
+    setB(String(next.max ?? ""))
+  }
   return (
     <form
       className="space-y-2 p-1"
@@ -114,6 +120,11 @@ function ChannelPostsEditor({
         How many Posts the Post's Channel has in the Analysis window, counted
         before every other filter. "At most 5" hides the noisy channels.
       </p>
+      <PostValueHistogram
+        measure="channel_posts"
+        bound={bound}
+        onSelect={select}
+      />
       <BoundFields
         op={op}
         setOp={setOp}
@@ -156,6 +167,12 @@ export function PostViewsEditor({
   )
   const [b, setB] = useState(String(initial?.max ?? ""))
   const bound = parseBound(op, a, b, { min: 0 })
+  const variantA = useIsVariantA()
+  const select = (next: MetricBound) => {
+    setOp(boundKind(next))
+    setA(String(next.min ?? next.max))
+    setB(String(next.max ?? ""))
+  }
   return (
     <form
       className="space-y-2 p-1"
@@ -180,6 +197,9 @@ export function PostViewsEditor({
       <p className="text-[11px] text-app-ink/50">
         {viewMeasureDescription(measure, floorHours)}
       </p>
+      {variantA && (
+        <PostValueHistogram measure={measure} bound={bound} onSelect={select} />
+      )}
       <BoundFields
         op={op}
         setOp={setOp}

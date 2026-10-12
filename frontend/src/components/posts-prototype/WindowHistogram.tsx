@@ -1,12 +1,14 @@
 /**
  * PROTOTYPE (variant A): the filtered Posts over time, in the Analysis window
- * editor. The window's bars are dark, the context around it light; drag across
- * the bars to set a Fixed window, click one bar to take just that bucket.
+ * editor, drawn by the same `BarHistogram` as the filter editors. The window's
+ * bars are solid, the context around it light; drag across the bars to set a
+ * Fixed window, click one bar to take just that bucket.
  */
 import { useQuery } from "@tanstack/react-query"
-import { useContext, useRef, useState } from "react"
+import { useContext, useState } from "react"
 import { shownPostsBody } from "@/api/data"
 import { type DataPostsHistogramData, dataPostsHistogram } from "@/client"
+import { BarHistogram } from "@/components/filter-tree/BarHistogram"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -16,8 +18,6 @@ import { printPostFilter } from "@/lib/posts/post-filter"
 import { FeedPagingContext } from "./variant"
 
 const BUCKETS = 60
-const W = 400
-const H = 64
 const DAY = 86_400_000
 
 const fmt = (ms: number, span: number) =>
@@ -94,26 +94,14 @@ export function WindowHistogram() {
   const counts = query.data ?? []
   const max = Math.max(1, ...counts)
 
-  const svg = useRef<SVGSVGElement>(null)
-  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null)
-  const [hover, setHover] = useState<number | null>(null)
-  const bucketAt = (clientX: number) => {
-    const box = svg.current?.getBoundingClientRect()
-    if (!box) return 0
-    const x = ((clientX - box.left) / box.width) * BUCKETS
-    return Math.min(BUCKETS - 1, Math.max(0, Math.floor(x)))
-  }
-  const bw = W / BUCKETS
   const inWindow = (i: number) => {
     const t = extentStart + i * width
     return t + width > startDate && t < endDate
   }
-  const lo = drag ? Math.min(drag.from, drag.to) : null
-  const hi = drag ? Math.max(drag.from, drag.to) : null
   const total = counts.reduce((a, b) => a + b, 0)
 
   return (
-    <div className="mt-3 space-y-1">
+    <div className="space-y-1">
       <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-app-ink/50">
         <span>
           Posts over time{query.isFetching ? " …" : ""} ·{" "}
@@ -137,87 +125,24 @@ export function WindowHistogram() {
           </button>
         </span>
       </div>
-      <div className="relative">
-        <svg
-          ref={svg}
-          viewBox={`0 0 ${W} ${H}`}
-          preserveAspectRatio="none"
-          className="block h-16 w-full cursor-crosshair touch-none select-none"
-          role="img"
-          aria-label="Posts over time; drag to choose a window"
-          onPointerDown={(e) => {
-            e.currentTarget.setPointerCapture(e.pointerId)
-            const i = bucketAt(e.clientX)
-            setDrag({ from: i, to: i })
-          }}
-          onPointerMove={(e) => {
-            const i = bucketAt(e.clientX)
-            setHover(i)
-            if (drag) setDrag({ ...drag, to: i })
-          }}
-          onPointerLeave={() => setHover(null)}
-          onPointerUp={() => {
-            if (lo !== null && hi !== null)
-              setFixedRange(
-                Math.round(extentStart + lo * width),
-                Math.round(extentStart + (hi + 1) * width),
-              )
-            setDrag(null)
-          }}
-        >
-          <line
-            x1={0}
-            x2={W}
-            y1={H - 0.5}
-            y2={H - 0.5}
-            className="stroke-app-ink/15"
-          />
-          {counts.map((n, i) => {
-            const h = n === 0 ? 0 : Math.max(2, (n / max) * (H - 4))
-            const picked = lo !== null && hi !== null && i >= lo && i <= hi
-            return (
-              <rect
-                // biome-ignore lint/suspicious/noArrayIndexKey: buckets are positional
-                key={i}
-                x={i * bw + 1}
-                y={H - h}
-                width={Math.max(1, bw - 2)}
-                height={h}
-                rx={1.5}
-                className={
-                  picked
-                    ? "fill-blue-500"
-                    : inWindow(i)
-                      ? "fill-app-ink/70"
-                      : "fill-app-ink/20"
-                }
-              />
-            )
-          })}
-          {hover !== null && (
-            <rect
-              x={hover * bw}
-              y={0}
-              width={bw}
-              height={H}
-              className="fill-app-ink/5"
-            />
-          )}
-        </svg>
-        {hover !== null && counts[hover] !== undefined && (
-          <div
-            className="pointer-events-none absolute -top-7 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-app-ink px-1.5 py-0.5 text-[10px] text-app-bg tabular-nums"
-            style={{ left: `${((hover + 0.5) / BUCKETS) * 100}%` }}
-          >
-            {fmt(extentStart + hover * width, extentSpan)} ·{" "}
-            {counts[hover].toLocaleString()} posts
-          </div>
-        )}
-      </div>
-      <div className="flex justify-between text-[10px] tabular-nums text-app-ink/50">
-        <span>{fmt(extentStart, extentSpan)}</span>
-        <span>{fmt(extentEnd, extentSpan)}</span>
-      </div>
+      <BarHistogram
+        testIdPrefix="window"
+        bins={counts}
+        solid={inWindow}
+        onSelect={(run) =>
+          setFixedRange(
+            Math.round(extentStart + Math.min(run.from, run.to) * width),
+            Math.round(extentStart + (Math.max(run.from, run.to) + 1) * width),
+          )
+        }
+        caption={(shown) => [
+          fmt(extentStart, extentSpan),
+          shown !== null && counts[shown] !== undefined
+            ? `${counts[shown].toLocaleString()} posts, ${fmt(extentStart + shown * width, extentSpan)}`
+            : "drag to set the window",
+          fmt(extentEnd, extentSpan),
+        ]}
+      />
     </div>
   )
 }

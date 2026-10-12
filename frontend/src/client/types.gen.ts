@@ -4810,6 +4810,95 @@ export type PostTranslationResponse = {
 };
 
 /**
+ * PostValueHistogramRequest
+ *
+ * PROTOTYPE: one measure's distribution over the window, filters aside.
+ */
+export type PostValueHistogramRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Measure
+     */
+    measure: 'views' | 'estimated' | 'channel_posts';
+};
+
+/**
+ * PostValueHistogramResponse
+ *
+ * PROTOTYPE: 32 bars and their 33 edges, as the Channels tab draws them.
+ */
+export type PostValueHistogramResponse = {
+    /**
+     * Bins
+     */
+    bins: Array<number>;
+    /**
+     * Edges
+     */
+    edges: Array<number>;
+    /**
+     * Log
+     */
+    log: boolean;
+    /**
+     * Median
+     */
+    median: number | null;
+    /**
+     * Measured
+     */
+    measured: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * PromptResponse
  *
  * The assembled prompt, for the "show me what you would send" surfaces.
@@ -9222,6 +9311,31 @@ export type DataPostsHistogramResponses = {
 };
 
 export type DataPostsHistogramResponse = DataPostsHistogramResponses[keyof DataPostsHistogramResponses];
+
+export type DataPostsValueHistogramData = {
+    body: PostValueHistogramRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/value-histogram';
+};
+
+export type DataPostsValueHistogramErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsValueHistogramError = DataPostsValueHistogramErrors[keyof DataPostsValueHistogramErrors];
+
+export type DataPostsValueHistogramResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostValueHistogramResponse;
+};
+
+export type DataPostsValueHistogramResponse = DataPostsValueHistogramResponses[keyof DataPostsValueHistogramResponses];
 
 export type DataPostsViewEstimateData = {
     body?: never;

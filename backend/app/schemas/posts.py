@@ -24,7 +24,7 @@ fourteen scalar fields still gain real types.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
@@ -264,6 +264,24 @@ class PostHistogramResponse(BaseModel):
     """PROTOTYPE: one count per equal slice of the extent."""
 
     counts: list[int]
+
+
+class PostValueHistogramRequest(PostFilteredRequest):
+    """PROTOTYPE: one measure's distribution over the window, filters aside."""
+
+    measure: Literal["views", "estimated", "channel_posts"]
+
+
+class PostValueHistogramResponse(BaseModel):
+    """PROTOTYPE: 32 bars and their 33 edges, as the Channels tab draws them."""
+
+    bins: list[int]
+    edges: list[float]
+    log: bool
+    median: float | None
+    # Posts (or Channels) with a value, and all of them.
+    measured: int
+    total: int
 
 
 class PostFeedRequest(PostFilteredRequest):

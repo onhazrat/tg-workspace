@@ -320,7 +320,7 @@ describe("the Filters menu", () => {
   })
 })
 
-describe("PROTOTYPE variant A: Channel posts in unfiltered range", () => {
+describe("PROTOTYPE variant A: Channel posts in window", () => {
   test("the Filters menu adds the bound in A and offers nothing new in 0", () => {
     mount()
     fireEvent.click(screen.getByTestId("post-filters"))

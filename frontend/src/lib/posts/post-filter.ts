@@ -108,7 +108,7 @@ export function postConditionLabel(cond: PostCond): string {
         cond.value,
       )
     case "channel_posts":
-      return `Channel posts in unfiltered range ${boundText(cond)}`
+      return `Channel posts in window ${boundText(cond)}`
     case "media":
       return labelOf(MEDIA_KIND_OPTIONS, cond.value)
     case "language":
