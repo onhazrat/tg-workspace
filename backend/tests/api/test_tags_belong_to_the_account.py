@@ -45,3 +45,81 @@ def test_unfollowing_keeps_the_tags_and_refollowing_shows_them(
     assert refollowed.status_code == 200, refollowed.text[:300]
     assert refollowed.json()["tags"] == [tag]
     assert _listed(client, headers, "keep_tags")["tags"] == [tag]
+
+
+def test_a_tag_run_still_tags_only_followed_channels(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """Tag runs apply through the bulk route, which refuses an unfollowed Channel.
+
+    ADR-029 leaves AI-tagging unfollowed Channels to its own decision, because
+    it would spend the Account's AI Key on Channels it does not follow.
+    """
+    headers = superuser_token_headers
+    client.put(
+        f"{DATA}/channels/run_scope", json={"name": "run_scope"}, headers=headers
+    )
+    client.delete(f"{DATA}/channels/run_scope", headers=headers)
+
+    refused = client.patch(
+        f"{DATA}/channels/bulk-tags",
+        json={
+            "updates": [
+                {
+                    "channelId": "run_scope",
+                    "tags": [{"name": "Ai", "source": "ai", "assignedAt": 1}],
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert refused.status_code == 404
+
+    client.put(
+        f"{DATA}/channels/run_scope", json={"name": "run_scope"}, headers=headers
+    )
+    assert _listed(client, headers, "run_scope")["tags"] == []
+
+
+def test_case_never_splits_a_tag_and_the_first_spelling_wins(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    headers = superuser_token_headers
+    response = client.put(
+        f"{DATA}/channels/case_tags",
+        json={"name": "case_tags", "tags": [" News ", "news", "NEWS"]},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text[:300]
+    assert [t["name"] for t in response.json()["tags"]] == ["News"]
+
+
+def test_group_names_stay_reserved_on_every_write(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """`group:` Tags are derived from Setting groups and never stored."""
+    headers = superuser_token_headers
+    client.put(
+        f"{DATA}/channels/group_tags",
+        json={"name": "group_tags", "tags": ["kept"]},
+        headers=headers,
+    )
+    reserved = {"name": "group:Daily", "source": "manual", "assignedAt": 1}
+
+    put = client.put(
+        f"{DATA}/channels/group_tags", json={"tags": [reserved]}, headers=headers
+    )
+    bulk = client.patch(
+        f"{DATA}/channels/bulk-tags",
+        json={"updates": [{"channelId": "group_tags", "tags": [reserved]}]},
+        headers=headers,
+    )
+    imported = client.post(
+        f"{DATA}/import",
+        json={"tags": [{"handle": "group_tags", **reserved}]},
+        headers=headers,
+    )
+
+    assert (put.status_code, bulk.status_code, imported.status_code) == (400, 400, 400)
+    tags = _listed(client, headers, "group_tags")["tags"]
+    assert [t["name"] for t in tags] == ["kept"]

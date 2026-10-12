@@ -166,10 +166,12 @@ class ChannelFollow(SQLModel, table=True):
     The Channel and its Posts are a shared corpus — `Channel.id` is the handle
     and `Post` is unique per `(channel_name, post_id)`, so one scrape serves
     every follower. What is *not* shared is the relation: which Channels you
-    watch, what you tagged them, when you started, and when yours next syncs.
+    watch, when you started, and when yours next syncs.
     Those columns used to sit on `tg_channels`, where a second follower of the
     same handle had to overwrite the first one's values to have any of their
     own. Ticket 22 dropped them there, so this table is now their only home.
+    What you tagged them used to live here too; DFP-03 moved it to `Tag`
+    (ADR-029), so unfollowing keeps it.
 
     Composite natural key `(user_id, channel_id)`, so following twice is
     impossible by construction rather than by a check somebody remembers, and
