@@ -17,7 +17,7 @@ and "Evaluating the new Conditions" under Implementation Decisions; the **Reply*
 - [x] Is a reply: the Post names a parent post id
 - [x] Has a reply: some stored Post names this Post as its parent **and** names this Post's Channel as the parent's Channel, case-insensitively. An id-only match is wrong, because a reply stores its parent's id even across Channels
 - [x] Evaluated as a semi-join against the replies made since the window opened (a reply comes after its parent), computed once per read; not a correlated per-row `EXISTS` and not an unbounded reply set (both measured far too slow for the Type counts)
-- [ ] The Type counts gain both Types as filtered aggregates in their existing single scan (done) and are not measurably slower; check against the deployment's numbers in the spec's Further Notes before merging (not measured: the implementer has no deployment access)
+- [x] The Type counts gain both Types as filtered aggregates in their existing single scan and are not measurably slower: measured on staging 2026-10-13, one week of the account with 348 Follows (38,502 Posts), median 5.12 s with three Types and 4.95 s with five, over three alternating runs each
 - [x] The dropdown shows both rows with their counts and ticks like the others
 
 ### Tests

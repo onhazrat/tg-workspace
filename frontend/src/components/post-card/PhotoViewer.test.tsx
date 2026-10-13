@@ -435,14 +435,30 @@ describe("opened from the Posts feed, it pages the feed (PTI-05)", () => {
     expect(loadMore).toHaveBeenCalled()
   })
 
-  test("past the last photo is the last photo, by key and by button", () => {
+  test("past the last photo is the last photo, by key, by button and by swipe", () => {
     viewer("blob:c")
     expect(label()).toContain("Chan c · 3 / 3 · loading more")
-    for (let i = 0; i < 3; i++) {
-      fireEvent.keyDown(window, { key: "ArrowRight" })
-      fireEvent.click(next())
+    // One step at a time: an even number of steps round three photos would
+    // land a wrapping viewer back on this one.
+    for (const press of [
+      () => fireEvent.keyDown(window, { key: "ArrowRight" }),
+      () => fireEvent.click(next()),
+      () => swipe(-200, 10),
+    ]) {
+      press()
+      expect(label()).toContain("Chan c · 3 / 3")
     }
-    expect(label()).toContain("Chan c · 3 / 3")
+  })
+
+  test("before the first photo is the first photo, by key and by swipe", () => {
+    viewer("blob:a")
+    for (const press of [
+      () => fireEvent.keyDown(window, { key: "ArrowLeft" }),
+      () => swipe(200, -10),
+    ]) {
+      press()
+      expect(label()).toContain("Chan a · 1 / 3")
+    }
   })
 
   test("a refreshed thumbnail keeps the place, and new photos join the end", async () => {
