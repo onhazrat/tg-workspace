@@ -17,7 +17,7 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * memory only, not in storage (DIR-03); the list read not handed its abort
  * `signal`, so a superseded search runs on; the search chip's clear doing
  * nothing (DIR-04); a Dismissal that never refreshes the list, or a row
- * whose Dismiss also opens the panel (DIR-06); the live ticked picks sent
+ * whose Dismiss also opens the panel (DIR-06); the live ticked Seeds sent
  * as they were when the Condition was added, not re-resolved per tick
  * (DIR-07); Selected first sent without the ticks; a Tag sent for the
  * unfollowed Ticks only, or an "In the Tag" chip that leaves the request
@@ -485,16 +485,16 @@ test.describe("TG Workspace directory", () => {
       route.fulfill({ json: [] }),
     )
     // Registered after `mockDirectory`, so it answers the list instead: the
-    // picks are never results, and each row carries its shared count.
+    // Seeds are never results, and each row carries its shared count.
     const sent: (string[] | undefined)[] = []
     const bodies: ListBody[] = []
     await page.route("**/api/v1/data/directory/list", async (route) => {
-      const picks = parentsPicks(route.request().postDataJSON())
-      sent.push(picks)
+      const seeds = parentsSeeds(route.request().postDataJSON())
+      sent.push(seeds)
       bodies.push(route.request().postDataJSON())
-      const rows = ROWS.filter((r) => !picks?.includes(r.handle)).map((r) => ({
+      const rows = ROWS.filter((r) => !seeds?.includes(r.handle)).map((r) => ({
         ...r,
-        sharedParents: picks ? 2 : null,
+        sharedParents: seeds ? 2 : null,
       }))
       await route.fulfill({
         json: { rows, total: 250, languages: [], yoursSize: 3 },
@@ -518,16 +518,16 @@ test.describe("TG Workspace directory", () => {
       page.getByRole("radio", { name: /ticked in this list \(1\)/ }),
     ).toBeChecked()
     await page.getByRole("button", { name: "Add", exact: true }).click()
-    await expect(chip(page, "parents-picked")).toContainText(
+    await expect(chip(page, "parents-ticked")).toContainText(
       "2+ shared parents with the channels ticked here",
     )
-    expect(param(page, "dirFilter")).toContain("parents:picked")
+    expect(param(page, "dirFilter")).toContain("parents:ticked")
     await expect.poll(() => sent.at(-1)).toEqual(["a1"])
     await expect(
       page.getByRole("columnheader", { name: "Parents" }),
     ).toBeVisible()
 
-    // A Channel ticked while it is on is a pick now, so it leaves the list.
+    // A Channel ticked while it is on is a Seed now, so it leaves the list.
     // A click, not `check()`: `check()` waits to see the box ticked, and the
     // row it sits in may already be gone, which timed the test out on CI.
     await page.getByRole("checkbox", { name: "Tick @a2" }).click()
@@ -546,7 +546,7 @@ test.describe("TG Workspace directory", () => {
     const link = page.url()
     await clearScopedStorage(page, ["directory.ticks"])
     await page.goto(link)
-    await expect(chip(page, "parents-picked")).toBeVisible()
+    await expect(chip(page, "parents-ticked")).toBeVisible()
     await expect.poll(() => sent.at(-1)).toEqual([])
     await expect(selectedFirst).toHaveAttribute("aria-pressed", "true")
     expect(bodies.at(-1)?.selectedFirst).toBeUndefined()
@@ -712,6 +712,24 @@ test.describe("TG Workspace directory", () => {
       )
       .toBe(true)
     expect(param(page, "dirFilter")).toContain('tag:"World news"')
+
+    // DFP-05: the Tag as the Seeds of Shared parents goes by name too.
+    await page.getByTestId("directory-filters").click()
+    await page.getByPlaceholder("Search conditions...").fill("shared parents")
+    await page.getByRole("button", { name: /Shared parents with/ }).click()
+    await page.getByRole("radio", { name: /A Tag/ }).check()
+    await page.getByRole("button", { name: "Add", exact: true }).click()
+    await expect(chip(page, "parents-tag-World news")).toContainText(
+      "2+ shared parents with the Tag World news",
+    )
+    await expect
+      .poll(() =>
+        JSON.stringify(filters.at(-1) ?? null).includes(
+          '{"type":"parents","tag":"World news","min":2}',
+        ),
+      )
+      .toBe(true)
+    expect(param(page, "dirFilter")).toContain('parents:"tag:World news"')
   })
 
   test("on a phone: the controls sheet, cards, and a bottom-sheet panel", async ({
@@ -791,8 +809,8 @@ test.describe("TG Workspace directory", () => {
   })
 })
 
-/** The handles a list body sends as the Shared parents picks, if any. */
-function parentsPicks(body: {
+/** The handles a list body sends as the Shared parents Seeds, if any. */
+function parentsSeeds(body: {
   filter?: { children?: { cond?: { type?: string; handles?: string[] } }[] }
 }): string[] | undefined {
   return (body.filter?.children ?? []).find((c) => c.cond?.type === "parents")

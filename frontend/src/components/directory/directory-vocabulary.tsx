@@ -37,7 +37,9 @@ import {
   MEASURES,
   type Measure,
   type MeasureSection,
-  type PickSets,
+  namedTag,
+  type SeedSets,
+  type SeedSource,
   SHARED_LABEL,
 } from "@/lib/directory/directory-filter"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
@@ -98,18 +100,30 @@ export type TagChoices = {
 
 const lower = (s: string) => s.trim().toLowerCase()
 
-/** Why a `tag` Condition matches nothing: the reader has no Tag of that name. */
+/**
+ * Why a Condition naming a Tag matches nothing: the reader has no Tag of that
+ * name, as In the Tag or as its Seeds (DFP-05).
+ */
 export function staleTag(cond: DirectoryCond, choices: TagChoices) {
-  if (cond.type !== "tag" || !choices.loaded) return undefined
-  const known = isVirtualGroupTag(cond.name)
+  const name = namedTag(cond)
+  if (name === undefined || !choices.loaded) return undefined
+  const known = isVirtualGroupTag(name)
     ? choices.groups.some(
-        (g) => lower(toVirtualGroupTagName(g)) === lower(cond.name),
+        (g) => lower(toVirtualGroupTagName(g)) === lower(name),
       )
-    : choices.tags.some((t) => lower(t.name) === lower(cond.name))
+    : choices.tags.some((t) => lower(t.name) === lower(name))
   return known
     ? undefined
-    : `You have no Tag named "${cond.name}", so this matches nothing`
+    : `You have no Tag named "${name}", so this matches nothing`
 }
+
+/** A chip id's part for the Seeds: the source word, the Tag or the handles. */
+const seedsId = (seeds: SeedSource) =>
+  seeds.kind === "handles"
+    ? seeds.handles.join("-")
+    : seeds.kind === "tag"
+      ? `tag-${seeds.name}`
+      : seeds.kind
 
 /** The Languages a count read named, as picker options; "no Language" has none. */
 const languageOptions = (
@@ -125,7 +139,7 @@ export function directoryVocabulary(
   languageCounts: DirectoryLanguageCountResponse[],
   renderMeasure: MeasureEditorRender,
   /** What Shared parents / children can compare with, as it is now (DIR-07). */
-  sets: PickSets,
+  sets: SeedSets,
   tags: TagChoices = { tags: [], groups: [], loaded: false },
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
@@ -218,6 +232,8 @@ export function directoryVocabulary(
               render: ({ start, ...rest }) => (
                 <HandlesEditor
                   type={type}
+                  sets={sets}
+                  tags={tags}
                   start={start?.type === type ? start : undefined}
                   {...rest}
                 />
@@ -234,6 +250,7 @@ export function directoryVocabulary(
                 <SharedEditor
                   type={type}
                   sets={sets}
+                  tags={tags}
                   start={start?.type === type ? start : undefined}
                   {...rest}
                 />
@@ -250,14 +267,12 @@ export function directoryVocabulary(
     chipId: (c) =>
       c.type === "measure"
         ? `measure-${c.measure}`
-        : c.type === "parents" || c.type === "children"
-          ? `${c.type}-${c.picks}`
-          : c.type === "tag"
-            ? `tag-${c.name}`
-            : "value" in c
-              ? `${c.type}-${c.value}`
-              : "handles" in c
-                ? `${c.type}-${c.handles.join("-")}`
-                : c.type,
+        : c.type === "tag"
+          ? `tag-${c.name}`
+          : "value" in c
+            ? `${c.type}-${c.value}`
+            : "seeds" in c
+              ? `${c.type}-${seedsId(c.seeds)}`
+              : c.type,
   }
 }

@@ -6,6 +6,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { Keyboard } from "lucide-react"
 import {
+  type DirectoryWhyRequest,
   dataCountDirectory,
   dataGetDirectoryDistribution,
   dataGetDirectoryEntry,
@@ -46,8 +47,8 @@ import {
   firstShared,
   type Measure,
   type MeasureKey,
-  type PickSets,
-  resolvePicks,
+  type SeedSets,
+  wireSeeds,
 } from "@/lib/directory/directory-filter"
 import { mineWindow } from "@/lib/directory/directory-panel"
 import {
@@ -87,7 +88,7 @@ function MeasureEditor({
 }: {
   request: DirectoryViewRequest
   filter: DirectoryFilter
-  sets: PickSets
+  sets: SeedSets
   measure: Measure
   initial?: MetricBound
   onSubmit: Parameters<MeasureEditorRender>[0]["onSubmit"]
@@ -170,8 +171,8 @@ function DirectoryPanelReads({
 }: {
   handle: string
   request: DirectoryViewRequest
-  /** Each Shared relation's picks while it is on, for Why (DIR-07). */
-  shared: { parents: string[] | null; children: string[] | null }
+  /** Each Shared relation's Seeds while it is on, for Why (DIR-07). */
+  shared: Pick<DirectoryWhyRequest, "parents" | "children">
   windowDays: number | null
   following: boolean
   onFollow: () => void
@@ -257,9 +258,12 @@ export function DirectoryView() {
     lastPage: Math.max(0, Math.ceil(total / PAGE_SIZE) - 1),
     onPage: (page) => patch({ page }),
   })
-  const picksOf = (relation: "parents" | "children") => {
+  /** A Shared relation's Seeds while it is on, as Why takes them (DFP-05). */
+  const seedsOf = (relation: "parents" | "children") => {
     const cond = firstShared(d.filter, relation)
-    return cond ? resolvePicks(cond, d.sets) : null
+    if (!cond) return null
+    const seeds = wireSeeds(cond.seeds, d.sets)
+    return "tag" in seeds ? seeds : seeds.handles
   }
   return (
     <div className="pt-4" data-testid="directory-view">
@@ -357,8 +361,8 @@ export function DirectoryView() {
           handle={d.open}
           request={d.request}
           shared={{
-            parents: picksOf("parents"),
-            children: picksOf("children"),
+            parents: seedsOf("parents"),
+            children: seedsOf("children"),
           }}
           windowDays={mineWindow(d.filter)}
           following={d.following.has(d.open)}

@@ -159,12 +159,12 @@ function WhyHere({
 
 const SHARED_WHY = {
   parents: {
-    link: "cite it and your picks",
-    none: "nothing citing your picks cites it",
+    link: "cite it and your Seeds",
+    none: "nothing citing your Seeds cites it",
   },
   children: {
-    link: "are cited by it and your picks",
-    none: "it cites nothing your picks cite",
+    link: "are cited by it and your Seeds",
+    none: "it cites nothing your Seeds cite",
   },
 }
 
@@ -217,7 +217,10 @@ function Neighbours({
       ) : (
         <ul className="space-y-1 text-xs">
           {list.map((n) => {
-            const cond = { type, handles: [n.handle] }
+            const cond: DirectoryHandlesCond = {
+              type,
+              seeds: { kind: "handles", handles: [n.handle] },
+            }
             const label = directoryConditionLabel(cond)
             return (
               <li key={n.handle} className="flex items-center gap-2">

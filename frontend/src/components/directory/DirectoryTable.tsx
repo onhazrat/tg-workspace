@@ -117,13 +117,13 @@ const SHARED_COLUMNS: DirectoryColumn[] = [
     key: "shared_parents",
     label: "Parents",
     description:
-      "Shared parents: how many channels citing your picks also cite it. Sorts by that count weighed against how many cite it overall.",
+      "Shared parents: how many channels citing your Seeds also cite it. Sorts by that count weighed against how many cite it overall.",
   },
   {
     key: "shared_children",
     label: "Children",
     description:
-      "Shared children: how many channels your picks cite it cites too. Sorts by that count weighed against how many it cites overall.",
+      "Shared children: how many channels your Seeds cite it cites too. Sorts by that count weighed against how many it cites overall.",
   },
 ]
 

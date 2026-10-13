@@ -236,12 +236,12 @@ describe("why it's here", () => {
     })
     expect(
       screen.getByText(
-        "Shared parents: @s1, @s2 and 5 more cite it and your picks",
+        "Shared parents: @s1, @s2 and 5 more cite it and your Seeds",
       ),
     ).toBeTruthy()
     expect(
       screen.getByText(
-        "Shared children: none; it cites nothing your picks cite",
+        "Shared children: none; it cites nothing your Seeds cite",
       ),
     ).toBeTruthy()
   })
@@ -285,8 +285,8 @@ describe("who cites it and whom it cites (DIR-05)", () => {
       screen.getByRole("button", { name: 'Filter by "Cites @dst_one"' }),
     )
     expect(got).toEqual([
-      { type: "citedby", handles: ["src_one"] },
-      { type: "cites", handles: ["dst_one"] },
+      { type: "citedby", seeds: { kind: "handles", handles: ["src_one"] } },
+      { type: "cites", seeds: { kind: "handles", handles: ["dst_one"] } },
     ])
   })
 })

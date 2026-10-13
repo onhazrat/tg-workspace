@@ -39,7 +39,7 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
       vocabulary={directoryVocabulary(
         [{ language: "fa", count: 12 }],
         ({ measure }) => <p>editor for {measure.key}</p>,
-        { picked: [], selection: [], follows: [] },
+        { ticked: [], selection: [], follows: [] },
       )}
       languages={[
         { language: "fa", count: 12 },
@@ -338,7 +338,7 @@ describe("a Tag Condition (DFP-04)", () => {
   const vocabulary = directoryVocabulary(
     [],
     () => null,
-    { picked: [], selection: [], follows: [] },
+    { ticked: [], selection: [], follows: [] },
     {
       tags: [{ name: "News", channels: 2 }],
       groups: ["Slow Feed"],
@@ -362,13 +362,26 @@ describe("a Tag Condition (DFP-04)", () => {
     expect(chip.getAttribute("title")).toContain("matches nothing")
   })
 
+  test("a Tag the reader lacks as the Seeds is struck through too (DFP-05)", () => {
+    mount({
+      text: 'parents:"tag:gone" and citedby:"tag:News"',
+      vocabulary,
+    })
+    const gone = screen.getByRole("button", {
+      name: "2+ shared parents with the Tag gone",
+    })
+    expect(gone.getAttribute("data-stale")).toBe("true")
+    const known = screen.getByRole("button", { name: "Cited by the Tag News" })
+    expect(known.getAttribute("data-stale")).toBeNull()
+  })
+
   test("nothing is struck through before the Tags arrive", () => {
     mount({
       text: "tag:gone",
       vocabulary: directoryVocabulary(
         [],
         () => null,
-        { picked: [], selection: [], follows: [] },
+        { ticked: [], selection: [], follows: [] },
         { tags: [], groups: [], loaded: false },
       ),
     })

@@ -9,9 +9,11 @@
  * `is:followed`, `is:followable`, `subscribers >= 1000`, `reach 100..5000`,
  * `reach = none`, `mine:all`, `mine:14d`, with `not`, `and`, `or` and
  * parentheses. DIR-05 adds `citedby:` and `cites:`; DIR-07 adds
- * `parents:` and `children:` (`picked`, `selection`, `follows` or typed
+ * `parents:` and `children:` (`ticked`, `selection`, `follows` or typed
  * handles, a trailing number being the minimum). DFP-04 adds `tag:"news"`, In
- * the Tag, which the server resolves against the reader's own Tags.
+ * the Tag, which the server resolves against the reader's own Tags. DFP-05
+ * lets a Tag be the Seeds of all four: `parents:"tag:news 3"`,
+ * `citedby:"tag:news"`; the old word `picked` still reads as `ticked`.
  */
 
 import type {
@@ -49,30 +51,35 @@ export type DirectoryCond =
   | { type: "flag"; value: DirectoryFlag }
   /** Cited by "your channels", ever or within the last `days`. */
   | { type: "mine"; days?: number }
-  /** Cited by any of these handles, in the view's Reference kinds (DIR-05). */
-  | { type: "citedby"; handles: string[] }
-  /** Cites any of these handles, in the view's Reference kinds (DIR-05). */
-  | { type: "cites"; handles: string[] }
+  /** Cited by any of the Seeds, in the view's Reference kinds (DIR-05). */
+  | { type: "citedby"; seeds: FixedSeeds }
+  /** Cites any of the Seeds, in the view's Reference kinds (DIR-05). */
+  | { type: "cites"; seeds: FixedSeeds }
   | DirectorySharedCond
   | DirectoryMeasureCond
   /** In the reader's Tag of this name; one they do not have matches nothing. */
   | { type: "tag"; name: string }
 
 /**
- * Whom Shared parents / children compare with (DIR-07): the Channels ticked in
- * the list (live), the Channels tab selection, every follow, or typed
- * `handles`. The browser resolves them to handles as it sends the filter.
+ * Where a Condition's Seeds come from (DIR-07, DFP-05): the Channels ticked in
+ * the list, the Channels tab selection or every follow, which the browser
+ * resolves to handles as it sends the filter; a Tag, which the server
+ * resolves; or typed handles. All but typed handles are live.
  */
-export type PicksSource = "picked" | "selection" | "follows" | "handles"
-/** The picks' handles as they are now, for every source but typed handles. */
-export type PickSets = Record<Exclude<PicksSource, "handles">, string[]>
+export type SeedSource =
+  | { kind: LiveSource }
+  | { kind: "tag"; name: string }
+  | { kind: "handles"; handles: string[] }
+export type LiveSource = "ticked" | "selection" | "follows"
+/** Cited by and Cites take fixed handles or a Tag; the editor fills the handles. */
+export type FixedSeeds = Extract<SeedSource, { kind: "tag" | "handles" }>
+/** Each live source's handles as they are now. */
+export type SeedSets = Record<LiveSource, string[]>
 
-/** Shared parents or Shared children with the picks, at least `min` shared. */
+/** Shared parents or Shared children with the Seeds, at least `min` shared. */
 export type DirectorySharedCond = {
   type: "parents" | "children"
-  picks: PicksSource
-  /** Only for typed handles; `[]` otherwise. */
-  handles: string[]
+  seeds: SeedSource
   min: number
 }
 
@@ -209,10 +216,27 @@ export const SHARED_LABEL: Record<DirectorySharedCond["type"], string> = {
   children: "Shared children",
 }
 
-const PICKS_LABEL: Record<Exclude<PicksSource, "handles">, string> = {
-  picked: "the channels ticked here",
+const LIVE_LABEL: Record<LiveSource, string> = {
+  ticked: "the channels ticked here",
   selection: "your selected channels",
   follows: "your follows",
+}
+
+const atHandles = (handles: string[]) => handles.map((h) => `@${h}`).join(", ")
+
+/** The Seeds as a chip names them: "@a, @b", "the Tag news", "your follows". */
+const seedsLabel = (seeds: SeedSource) =>
+  seeds.kind === "handles"
+    ? atHandles(seeds.handles)
+    : seeds.kind === "tag"
+      ? `the Tag ${seeds.name}`
+      : LIVE_LABEL[seeds.kind]
+
+/** The Tag a Condition names, as In the Tag or as its Seeds; none otherwise. */
+export function namedTag(cond: DirectoryCond): string | undefined {
+  if (cond.type === "tag") return cond.name
+  if ("seeds" in cond && cond.seeds.kind === "tag") return cond.seeds.name
+  return undefined
 }
 
 /** The default minimum shared count. */
@@ -254,14 +278,10 @@ export function directoryConditionLabel(
         : "Cited by your channels"
     case "citedby":
     case "cites":
-      return `${HANDLES_LABEL[cond.type]} ${cond.handles.map((h) => `@${h}`).join(", ")}`
+      return `${HANDLES_LABEL[cond.type]} ${seedsLabel(cond.seeds)}`
     case "parents":
     case "children":
-      return `${cond.min}+ shared ${cond.type} with ${
-        cond.picks === "handles"
-          ? cond.handles.map((h) => `@${h}`).join(", ")
-          : PICKS_LABEL[cond.picks]
-      }`
+      return `${cond.min}+ shared ${cond.type} with ${seedsLabel(cond.seeds)}`
     case "measure":
       return `${measureOf(cond.measure).label}${cond.none ? ":" : ""} ${boundText(cond)}`
   }
@@ -283,11 +303,13 @@ function condText(cond: DirectoryCond): string {
       return `mine:${cond.days ? `${cond.days}d` : "all"}`
     case "citedby":
     case "cites":
-      return `${cond.type}:${quote(cond.handles.join(" "))}`
+      return `${cond.type}:${quote(seedsText(cond.seeds))}`
     case "parents":
     case "children": {
-      const words = cond.picks === "handles" ? cond.handles : [cond.picks]
-      if (cond.min !== SHARED_MIN) words.push(String(cond.min))
+      const words = [seedsText(cond.seeds)]
+      // A Tag name ending in a number would read back as the minimum.
+      const ambiguous = cond.seeds.kind === "tag" && TRAILING_MIN.test(words[0])
+      if (cond.min !== SHARED_MIN || ambiguous) words.push(String(cond.min))
       return `${cond.type}:${quote(words.join(" "))}`
     }
     case "measure": {
@@ -301,6 +323,16 @@ function condText(cond: DirectoryCond): string {
     }
   }
 }
+
+const TAG_SEEDS = "tag:"
+const TRAILING_MIN = /(?:^|\s)(\d+)$/
+
+const seedsText = (seeds: SeedSource) =>
+  seeds.kind === "handles"
+    ? seeds.handles.join(" ")
+    : seeds.kind === "tag"
+      ? `${TAG_SEEDS}${seeds.name}`
+      : seeds.kind
 
 export const printDirectoryFilter = (filter: DirectoryFilter): string =>
   printTree(filter, condText)
@@ -327,24 +359,43 @@ function boundCond(m: RegExpExecArray): DirectoryMeasureCond | null {
 }
 
 const FLAGS = new Set<string>(Object.keys(FLAG_LABEL))
-const SOURCES = new Set<string>(Object.keys(PICKS_LABEL))
+/** The live source words, and the one a link written before DFP-05 used. */
+const SOURCES: Record<string, LiveSource> = {
+  ticked: "ticked",
+  selection: "selection",
+  follows: "follows",
+  picked: "ticked",
+}
+
+/** `tag:<name>` or handles; `null` for no name or no handle. */
+function fixedSeeds(text: string): FixedSeeds | null {
+  if (text.startsWith(TAG_SEEDS)) {
+    const name = text.slice(TAG_SEEDS.length).trim()
+    return name ? { kind: "tag", name } : null
+  }
+  const handles = parseHandles(text)
+  return handles.length ? { kind: "handles", handles } : null
+}
 
 /**
- * `parents:` / `children:`'s value: a source word or handles, then maybe the
- * minimum. ponytail: a typed handle spelled like a source word (`follows`)
- * reads as that source; Telegram allows such a handle, nobody has asked.
+ * `parents:` / `children:`'s value: a source word, `tag:<name>` or handles,
+ * then maybe the minimum. ponytail: a typed handle spelled like a source word
+ * (`follows`) reads as that source; Telegram allows such a handle, nobody has
+ * asked.
  */
 function sharedCond(
   type: DirectorySharedCond["type"],
   text: string,
 ): DirectorySharedCond | null {
-  const words = text.split(/[\s,]+/).filter(Boolean)
-  const last = words.at(-1) ?? ""
-  const min = /^\d+$/.test(last) ? Number(words.pop()) : SHARED_MIN
-  if (min < 1 || !words.length) return null
-  if (words.length === 1 && SOURCES.has(words[0]))
-    return { type, picks: words[0] as PicksSource, handles: [], min }
-  return { type, picks: "handles", handles: parseHandles(words.join(" ")), min }
+  const trimmed = text.trim()
+  const trailing = TRAILING_MIN.exec(trimmed)
+  const min = trailing ? Number(trailing[1]) : SHARED_MIN
+  const rest = trailing ? trimmed.slice(0, trailing.index).trim() : trimmed
+  if (min < 1) return null
+  const source = SOURCES[rest]
+  if (source) return { type, seeds: { kind: source }, min }
+  const seeds = fixedSeeds(rest)
+  return seeds && { type, seeds, min }
 }
 const WINDOW = /^(\d+)d$/
 
@@ -368,15 +419,15 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
       if (days >= 1) return { type: "mine", days }
     }
     if (prefix === "citedby" || prefix === "cites") {
-      const handles = parseHandles(text)
-      if (handles.length)
+      const seeds = fixedSeeds(text.trim())
+      if (seeds)
         return prefix === "cites"
-          ? { type: "cites", handles }
-          : { type: "citedby", handles }
+          ? { type: "cites", seeds }
+          : { type: "citedby", seeds }
     }
     if (prefix === "parents" || prefix === "children") {
       const cond = sharedCond(prefix, text)
-      if (cond && (cond.picks !== "handles" || cond.handles.length)) return cond
+      if (cond) return cond
     }
     // An unknown value would be a 422 from the server, so it does not parse.
     throw new ParseError(`Unknown ${prefix}:${text}`)
@@ -393,12 +444,20 @@ export const DIRECTORY_FILTER_BOUNDS = {
   languageLength: 16,
   nameLength: 256,
   maxDays: 36_500,
-  handles: 50,
+  /** Cited by and Cites: fixed handles per Condition; past it, use a Tag. */
+  handles: 500,
   handleLength: 256,
-  /** Shared parents / children: picks per Condition, and the minimum. */
-  picks: 10_000,
+  /** Shared parents / children: Seeds per Condition, and the minimum. */
+  seeds: 10_000,
   min: 10_000,
 } as const
+
+const seedsFit = (seeds: SeedSource, most: number) =>
+  seeds.kind !== "handles" ||
+  (seeds.handles.length <= most &&
+    seeds.handles.every(
+      (h) => h.length <= DIRECTORY_FILTER_BOUNDS.handleLength,
+    ))
 
 /** Whether the server accepts `filter`: depth, node count and values. */
 export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
@@ -414,16 +473,9 @@ export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
     if (cond.type === "name") return cond.value.length <= b.nameLength
     if (cond.type === "mine") return (cond.days ?? 0) <= b.maxDays
     if (cond.type === "citedby" || cond.type === "cites")
-      return (
-        cond.handles.length <= b.handles &&
-        cond.handles.every((h) => h.length <= b.handleLength)
-      )
+      return seedsFit(cond.seeds, b.handles)
     if (cond.type === "parents" || cond.type === "children")
-      return (
-        cond.handles.length <= b.picks &&
-        cond.handles.every((h) => h.length <= b.handleLength) &&
-        cond.min <= b.min
-      )
+      return seedsFit(cond.seeds, b.seeds) && cond.min <= b.min
     return true
   }
   return fits(filter, 1) && nodes <= b.nodes
@@ -439,22 +491,33 @@ export function parseDirectoryFilter(src: string): DirectoryFilter | null {
   return filter && withinDirectoryFilterBounds(filter) ? filter : null
 }
 
-/** A Shared Condition's picks as handles, resolved against `sets` now. */
-export const resolvePicks = (cond: DirectorySharedCond, sets: PickSets) =>
-  cond.picks === "handles" ? cond.handles : sets[cond.picks]
+/**
+ * The Seeds as the wire takes them: a Tag by name, which the server resolves,
+ * or handles, a live source's resolved against `sets` now.
+ */
+export const wireSeeds = (
+  seeds: SeedSource,
+  sets: SeedSets,
+): { handles: string[] } | { tag: string } =>
+  seeds.kind === "tag"
+    ? { tag: seeds.name }
+    : { handles: seeds.kind === "handles" ? seeds.handles : sets[seeds.kind] }
 
-/** One Condition as the wire takes it: Shared picks become their handles. */
+/** One Condition as the wire takes it: its Seeds as handles or a Tag. */
 function wireCond(
   cond: DirectoryCond,
-  sets: PickSets,
+  sets: SeedSets,
 ): DirectoryFilterAtom["cond"] {
-  if (cond.type !== "parents" && cond.type !== "children") return cond
-  return { type: cond.type, handles: resolvePicks(cond, sets), min: cond.min }
+  if (cond.type === "citedby" || cond.type === "cites")
+    return { type: cond.type, ...wireSeeds(cond.seeds, sets) }
+  if (cond.type === "parents" || cond.type === "children")
+    return { type: cond.type, ...wireSeeds(cond.seeds, sets), min: cond.min }
+  return cond
 }
 
 const toWire = (
   node: FilterNode<DirectoryCond>,
-  sets: PickSets,
+  sets: SeedSets,
 ): DirectoryFilterAtom | DirectoryFilterGroup =>
   node.kind === "atom"
     ? { ...node, cond: wireCond(node.cond, sets) }
@@ -462,18 +525,18 @@ const toWire = (
 
 /**
  * The tree as the Directory reads take it, or `null` for an empty one. The
- * picks are resolved here, so a live choice follows the ticks, the selection
- * and the follows on every read (DIR-07).
+ * live Seeds are resolved here, so they follow the ticks, the selection and
+ * the follows on every read (DIR-07); a Tag goes by name.
  */
 export const directoryFilterBody = (
   filter: DirectoryFilter,
-  sets: PickSets,
+  sets: SeedSets,
 ): DirectoryFilterGroup | null =>
   filter.children.length === 0
     ? null
     : (toWire(filter, sets) as DirectoryFilterGroup)
 
-/** The first Shared Condition of `type`, whose picks a column and Why read. */
+/** The first Shared Condition of `type`, whose Seeds a column and Why read. */
 export const firstShared = (
   filter: DirectoryFilter,
   type: DirectorySharedCond["type"],
