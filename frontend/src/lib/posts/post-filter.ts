@@ -34,7 +34,12 @@ import {
 } from "@/lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS, type MediaKind } from "@/lib/posts/post-media"
 
-export type PostType = "forwarded" | "original" | "unfollowed_forwarded"
+export type PostType =
+  | "forwarded"
+  | "original"
+  | "unfollowed_forwarded"
+  | "is_reply"
+  | "has_reply"
 
 export type PostValueCond =
   | { type: "type"; value: PostType }
@@ -116,6 +121,8 @@ export const POST_TYPE_VALUES: { label: string; value: PostType }[] = [
     label: "Forwarded from unfollowed channels",
     value: "unfollowed_forwarded",
   },
+  { label: "Is a reply", value: "is_reply" },
+  { label: "Has a reply", value: "has_reply" },
 ]
 
 /**

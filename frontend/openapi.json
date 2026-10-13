@@ -12737,7 +12737,13 @@
           "type": { "type": "string", "const": "type", "title": "Type" },
           "value": {
             "type": "string",
-            "enum": ["forwarded", "original", "unfollowed_forwarded"],
+            "enum": [
+              "forwarded",
+              "original",
+              "unfollowed_forwarded",
+              "is_reply",
+              "has_reply"
+            ],
             "title": "Value"
           }
         },

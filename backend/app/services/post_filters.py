@@ -39,20 +39,24 @@ from sqlalchemy import (
     not_,
     or_,
     true,
+    tuple_,
     type_coerce,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import aliased
 from sqlmodel import col, select
 
 from app.models_tg import Post
 from app.services.post_media_parser import LEGACY_MEDIA_PLACEHOLDER
 from app.services.reach import MS_PER_HOUR, CurvePoints, ReachSettings
-from app.services.tenancy import scoped_select
+from app.services.tenancy import scoped_select, unscoped_select
 
 ForwardedFilter = Literal["all", "forwarded", "original", "unfollowed_forwarded"]
 #: A Type Condition's values: `ForwardedFilter` without `all`, which a tree
-#: says by having no Type Condition at all.
-PostType = Literal["forwarded", "original", "unfollowed_forwarded"]
+#: says by having no Type Condition at all, then the two reply Types (PTI-04).
+PostType = Literal[
+    "forwarded", "original", "unfollowed_forwarded", "is_reply", "has_reply"
+]
 POST_TYPE_ORDER: tuple[PostType, ...] = get_args(PostType)
 #: One media kind. A Scope carries a *set* of them (PFB-01): empty means any
 #: media, and a Post matches when it matches any kind in the set. The set
@@ -399,9 +403,41 @@ def _keyword_clause(term: str) -> ColumnElement[bool]:
     )
 
 
+def _has_reply_clause(scope: PostScope | None) -> ColumnElement[bool]:
+    """The Posts a Post of their own Channel answers (PTI-04, the **Reply** term).
+
+    The reply names its parent's id **and** Channel, and is in that Channel
+    itself: a reply stores its parent's id even across Channels, so an id-only
+    match marks a Post of the answering Channel. One uncorrelated set of the
+    replies made since the window opened (a reply comes after its parent),
+    probed per row; a correlated `EXISTS` and an unbounded set were both far
+    too slow for the Type counts.
+    """
+    if scope is None:
+        raise ValueError("Has a reply needs the window its replies are read from")
+    reply = aliased(Post)
+    channel = func.lower(reply.channel_name)
+    replies = unscoped_select(
+        select(channel, col(reply.reply_to_post_id)),
+        reason="matched only to a Post of the reply's own Channel, already scoped",
+    ).where(
+        col(reply.reply_to_post_id).is_not(None),
+        channel == func.lower(cast(reply.reply_to, JSONB).op("->>")("channel")),
+    )
+    if scope.start_date is not None:
+        replies = replies.where(reply.timestamp >= scope.start_date)
+    return tuple_(func.lower(col(Post.channel_name)), col(Post.post_id)).in_(replies)
+
+
 def post_type_clause(
-    value: PostType, followed_names: frozenset[str] | None
+    value: PostType,
+    followed_names: frozenset[str] | None,
+    scope: PostScope | None = None,
 ) -> ColumnElement[bool]:
+    if value == "is_reply":
+        return col(Post.reply_to_post_id).is_not(None)
+    if value == "has_reply":
+        return _has_reply_clause(scope)
     if value == "forwarded":
         return col(Post.forwarded_from).is_not(None)
     if value == "original":
@@ -453,7 +489,9 @@ def _channel_posts_clause(
     if cond.filtered:
         counted = counted.where(
             *post_filter_clauses(
-                channel_posts_aside(filters), followed_names=followed_names
+                channel_posts_aside(filters),
+                followed_names=followed_names,
+                scope=scope,
             )
         )
     n = func.count()
@@ -480,7 +518,7 @@ def _atom_clause(
     followed_names: frozenset[str] | None,
 ) -> ColumnElement[bool]:
     if isinstance(cond, TypeCond):
-        return post_type_clause(cond.value, followed_names)
+        return post_type_clause(cond.value, followed_names, scope)
     if isinstance(cond, MediaCond):
         return media_kind_clause(cond.value)
     if isinstance(cond, LanguageCond):

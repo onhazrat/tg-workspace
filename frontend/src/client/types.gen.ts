@@ -7259,7 +7259,7 @@ export type TypeCondition = {
     /**
      * Value
      */
-    value: 'forwarded' | 'original' | 'unfollowed_forwarded';
+    value: 'forwarded' | 'original' | 'unfollowed_forwarded' | 'is_reply' | 'has_reply';
 };
 
 /**

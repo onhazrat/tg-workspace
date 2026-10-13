@@ -1012,7 +1012,7 @@ def count_facets_in_scope(
     selects, which is what its tick reads (PTR-06). No keyword, no tree, no cap.
 
     Languages are the ones present, most frequent first, an unread Post left
-    out because it has no Language to funnel. The Types are all three and the
+    out because it has no Language to funnel. The Types are all five and the
     media kinds all six, in the dropdowns' order, zero included; both overlap,
     so they are filtered aggregates over one scan rather than a `GROUP BY`.
     `total` is every Post in the window, in the same scan. Each value is
@@ -1035,6 +1035,7 @@ def count_facets_in_scope(
         return [func.count().filter(clause), func.count().filter(and_(clause, chosen))]
 
     followed = frozenset(visible_channel_names(session, user_id=user_id))
+    scope = PostScope(user_id, channel_names, start_date, end_date)
     language_rows = session.exec(
         scoped(select(col(Post.language), func.count(), func.count().filter(chosen)))
         .where(col(Post.language).is_not(None))
@@ -1047,7 +1048,7 @@ def count_facets_in_scope(
                 *(
                     agg
                     for value in POST_TYPE_ORDER
-                    for agg in both(post_type_clause(value, followed))
+                    for agg in both(post_type_clause(value, followed, scope))
                 ),
                 *(
                     agg
@@ -1183,6 +1184,7 @@ def value_histogram(
         kept = post_filter_clauses(
             aside,
             followed_names=_followed_for(session, aside, user_id),
+            scope=PostScope(user_id, channel_names, start_date, end_date),
         )
         value = func.count().filter(and_(true(), *kept))
     stmt = _in_scope(

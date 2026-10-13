@@ -217,6 +217,50 @@ describe("the dropdowns", () => {
     fireEvent.click(screen.getByTestId("post-filter-type-funnel-original"))
     expect(calls).toEqual([["filter", "media:photo and type:original"]])
   })
+
+  test("Type lists both reply Types last, with their counts and text forms (PTI-04)", () => {
+    const { calls } = mount(
+      {},
+      {
+        facets: {
+          total: 50,
+          types: [
+            { value: "is_reply", count: 12, selected: 3 },
+            { value: "has_reply", count: 7, selected: 7 },
+          ],
+          languages: [],
+          media: [],
+        },
+      },
+    )
+    fireEvent.click(screen.getByTestId("post-filter-type"))
+    const rows = [
+      ...document.querySelectorAll("[data-testid^='post-filter-type-row-']"),
+    ]
+    expect(rows.map((row) => row.textContent?.slice(1)).slice(-2)).toEqual([
+      "Is a reply",
+      "Has a reply",
+    ])
+    expect(rows.map((row) => row.getAttribute("aria-checked"))).toEqual([
+      "false",
+      "false",
+      "false",
+      "mixed",
+      "true",
+    ])
+    expect(
+      screen.getByTestId("post-filter-type-count-is_reply").textContent,
+    ).toBe("3/12")
+    expect(
+      screen.getByTestId("post-filter-type-count-has_reply").textContent,
+    ).toBe("7/7")
+    fireEvent.click(screen.getByTestId("post-filter-type-funnel-is_reply"))
+    fireEvent.click(screen.getByTestId("post-filter-type-funnel-has_reply"))
+    expect(calls).toEqual([
+      ["filter", "type:is_reply"],
+      ["filter", "type:has_reply"],
+    ])
+  })
 })
 
 describe("the ticks (PTR-06)", () => {
