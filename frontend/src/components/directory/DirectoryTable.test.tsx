@@ -334,3 +334,63 @@ describe("the matches (DIR-04)", () => {
     expect(screen.queryByTestId("directory-match-alpha")).toBeNull()
   })
 })
+
+describe("as cards on a phone (DFP-02)", () => {
+  const card = (handle: string) =>
+    screen.getByTestId(`directory-card-${handle}`)
+  const measures = (handle: string) =>
+    [...card(handle).querySelectorAll("[data-measure]")].map(
+      (m) => m.textContent,
+    )
+
+  test("each row is a card with a tick, name, handle and the key numbers; no table", () => {
+    mount({ cards: true, sort: "cites", rows: [row("alpha", { cites: 7 })] })
+    expect(screen.queryByRole("table")).toBeNull()
+    expect(card("alpha").textContent).toContain("alpha name")
+    expect(screen.getByRole("link", { name: "@alpha" })).toBeTruthy()
+    expect(box("Tick @alpha")).toBeTruthy()
+    // The sorted measure leads, then Subscribers, Reach, Posts per week, Language.
+    expect(measures("alpha")).toEqual([
+      "Cites 7",
+      "Subs 12.3K",
+      "Reach 450",
+      "Posts/wk 3.3",
+      "Lang fa",
+    ])
+  })
+
+  test("Shared counts show while a Shared Condition is on", () => {
+    mount({
+      cards: true,
+      sort: "subscribers",
+      rows: [row("alpha", { sharedParents: 4 })],
+    })
+    expect(measures("alpha")).toEqual([
+      "Subs 12.3K",
+      "Reach 450",
+      "Posts/wk 3.3",
+      "Lang fa",
+      "Parents 4",
+    ])
+  })
+
+  test("tapping a card opens it; its tick and Follow do not", () => {
+    const calls = mount({ cards: true })
+    fireEvent.click(box("Tick @alpha"))
+    fireEvent.click(screen.getByRole("button", { name: "Follow @alpha" }))
+    expect(calls.ticks).toEqual([["alpha"]])
+    expect(calls.follow).toEqual(["alpha"])
+    expect(calls.open).toEqual([])
+    fireEvent.click(screen.getByText("beta name"))
+    expect(calls.open).toEqual(["beta"])
+  })
+
+  test("a followed card ticks too, and the pages stay", () => {
+    const calls = mount({ cards: true, ticks: new Set(["beta"]) })
+    expect(box("Tick @beta").checked).toBe(true)
+    fireEvent.click(box("Tick @gamma"))
+    expect(calls.ticks).toEqual([["beta", "gamma"]])
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    expect(calls.page).toEqual([1])
+  })
+})

@@ -380,6 +380,7 @@ export function DirectoryTable({
   onPage,
   onOpen,
   ring,
+  cards = false,
 }: {
   rows: Row[]
   total: number
@@ -400,6 +401,8 @@ export function DirectoryTable({
   onOpen: (handle: string) => void
   /** The keyboard highlight's handle (DFP-01). */
   ring?: string | null
+  /** Below `md`, two-line cards instead of the table (DFP-02). */
+  cards?: boolean
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
@@ -414,6 +417,26 @@ export function DirectoryTable({
     ? sortedColumn
     : "subscribers"
   const narrow = (key: string) => (key === kept ? "" : "hidden md:table-cell")
+  const pages = total > 0 && <Pages page={page} total={total} onPage={onPage} />
+  if (cards) {
+    return (
+      <div className="rounded-xl border border-app-ink/10 bg-app-card">
+        <DirectoryCards
+          rows={rows}
+          columns={CARD_MEASURES.flatMap((key) =>
+            columns.filter((c) => c.key === (key ?? kept)),
+          ).filter((c, i, all) => all.indexOf(c) === i)}
+          ticks={ticks}
+          onTicks={onTicks}
+          following={following}
+          onFollow={onFollow}
+          onDismiss={onDismiss}
+          onOpen={onOpen}
+        />
+        {pages}
+      </div>
+    )
+  }
   return (
     <div className="overflow-x-auto rounded-xl border border-app-ink/10 bg-app-card">
       <table className="w-full text-xs">
@@ -490,7 +513,96 @@ export function DirectoryTable({
           ])}
         </tbody>
       </table>
-      {total > 0 && <Pages page={page} total={total} onPage={onPage} />}
+      {pages}
     </div>
+  )
+}
+
+/**
+ * What a card shows, in order: the sorted measure (`null`), then Subscribers,
+ * Reach, Posts per week and Language, and the Shared counts while a Shared
+ * Condition is on. A hidden column stays hidden here too.
+ */
+const CARD_MEASURES: (DirectoryColumn["key"] | null)[] = [
+  null,
+  "subscribers",
+  "reach",
+  "posts_per_week",
+  "language",
+  "shared_parents",
+  "shared_children",
+]
+
+/**
+ * The rows as two-line cards with a large tick (DFP-02). A tap anywhere but
+ * the tick, the links and the actions opens the panel, as a table row does.
+ */
+function DirectoryCards({
+  rows,
+  columns,
+  ticks,
+  onTicks,
+  following,
+  onFollow,
+  onDismiss,
+  onOpen,
+}: {
+  rows: Row[]
+  columns: DirectoryColumn[]
+  ticks: ReadonlySet<string>
+  onTicks: (next: Set<string>) => void
+  following: ReadonlySet<string>
+  onFollow: (handle: string) => void
+  onDismiss: (handle: string, dismissed: boolean) => void
+  onOpen: (handle: string) => void
+}) {
+  return (
+    <ul className="divide-y divide-app-ink/5">
+      {rows.map((r) => (
+        <li
+          key={r.handle}
+          data-testid={`directory-card-${r.handle}`}
+          onClick={() => onOpen(r.handle)}
+          className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${ticks.has(r.handle) ? "bg-blue-500/5" : ""} ${r.dismissed ? "opacity-50" : ""}`}
+        >
+          <label
+            className="-my-1 flex h-9 w-9 shrink-0 items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              aria-label={`Tick @${r.handle}`}
+              checked={ticks.has(r.handle)}
+              onChange={() =>
+                onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
+              }
+              className="h-5 w-5 accent-blue-600"
+            />
+          </label>
+          <div className="min-w-0 flex-1 text-xs">
+            <ChannelCell row={r} />
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-app-ink/60">
+              {columns.map((c) => {
+                const value = cell(c.key, r)
+                return value ? (
+                  <span key={c.key} data-measure className="whitespace-nowrap">
+                    <span className="text-app-ink/40">{c.label}</span>{" "}
+                    <span className="font-mono">{value}</span>
+                  </span>
+                ) : null
+              })}
+            </div>
+          </div>
+          <div className="shrink-0">
+            <FollowCell
+              row={r}
+              busy={following.has(r.handle)}
+              onFollow={onFollow}
+              onDismiss={onDismiss}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
   )
 }
