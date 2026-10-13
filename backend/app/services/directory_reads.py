@@ -302,19 +302,7 @@ def resolve_view(
     `search` is what was typed and the fields it looks in.
     """
     followed = frozenset(visible_channel_names(session, user_id=user_id))
-    named = (
-        {}
-        if tree is None
-        else {
-            tags.tag_key(name): name
-            for name in map(_named_tag, tree_conds(tree))
-            if name is not None
-        }
-    )
-    found = {
-        key: frozenset(tags.handles_for_tag(session, user_id=user_id, name=name))
-        for key, name in named.items()
-    }
+    found = _resolve_tags(session, user_id, tree)
     sources = (
         followed
         if source == "follows"
@@ -331,6 +319,23 @@ def resolve_view(
         search=None if search is None else resolve_search(session, *search),
         tags=found,
     )
+
+
+def _resolve_tags(
+    session: Session, user_id: uuid.UUID, tree: DirectoryTree | None
+) -> dict[str, frozenset[str]]:
+    """Each Tag `tree` names, by its key, resolved to `user_id`'s handles."""
+    if tree is None:
+        return {}
+    named = {
+        tags.tag_key(name): name
+        for name in map(_named_tag, tree_conds(tree))
+        if name is not None
+    }
+    return {
+        key: frozenset(tags.handles_for_tag(session, user_id=user_id, name=name))
+        for key, name in named.items()
+    }
 
 
 def _named_tag(cond: DirectoryCond) -> str | None:
@@ -1136,9 +1141,14 @@ def count_view(
     """How many entries the view leaves, with `candidate` added with AND when given."""
     if candidate is None:
         return _totals(session, view)[0]
-    parts: tuple[TreeAtom[DirectoryCond] | TreeGroup[DirectoryCond], ...] = (
-        (candidate,) if view.tree is None else (view.tree, candidate)
+    # The candidate is not in `view.tree`, so `resolve_view` never saw its Tag:
+    # resolve it here, exactly as the tree's were.
+    alone = TreeGroup(op="and", children=(candidate,))
+    view = replace(
+        view, tags={**view.tags, **_resolve_tags(session, view.user_id, alone)}
     )
+    added = _seeded(alone, view.tags)
+    parts = (added,) if view.tree is None else (view.tree, added)
     return _count(session, view, TreeGroup(op="and", children=parts))
 
 

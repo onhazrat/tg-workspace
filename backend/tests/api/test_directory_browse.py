@@ -1613,3 +1613,30 @@ def test_cited_by_and_cites_take_500_handles_or_a_tag(
     assert status({"type": kind, "handles": ["a"], "tag": "news"}) == 422
     assert status({"type": kind}) == 422
     assert status({"type": kind, "handles": []}) == 422
+
+
+def test_the_count_resolves_a_candidates_tag(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """The candidate joins the view after it resolves, so it resolves its own
+    Tag: In a Tag, and a Tag as the Seeds, count what the list would show."""
+    operator, _ = accounts
+    _tag(client, operator, "News", "dt_fa_big", "dt_ru")
+    _tag(client, operator, "Sources", "src_a1")
+
+    def count(candidate: dict[str, Any]) -> int:
+        response = client.post(
+            f"{DIRECTORY}/count", json={"candidate": atom(candidate)}, headers=operator
+        )
+        assert response.status_code == 200, response.text
+        return int(response.json()["total"])
+
+    assert count(tag("news")) == 2
+    assert count({"type": "citedby", "tag": "sources"}) == 2
+    # And beside a tree naming a different Tag.
+    body = {
+        "filter": root(atom({"type": "citedby", "tag": "sources"})),
+        "candidate": atom(tag("news")),
+    }
+    response = client.post(f"{DIRECTORY}/count", json=body, headers=operator)
+    assert response.json() == {"total": 1}
