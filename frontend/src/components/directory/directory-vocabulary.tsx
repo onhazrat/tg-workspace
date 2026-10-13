@@ -17,17 +17,13 @@ import {
   Users,
 } from "lucide-react"
 import type React from "react"
-import type { DirectoryLanguageCountResponse, TagResponse } from "@/client"
+import type { DirectoryLanguageCountResponse } from "@/client"
 import type {
   ConditionOption,
   PickerEntry,
 } from "@/components/filter-tree/ConditionPicker"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
-import {
-  isVirtualGroupTag,
-  toVirtualGroupTagName,
-} from "@/lib/channels/virtual-group-tags"
 import {
   type DirectoryCond,
   type DirectoryFlag,
@@ -37,11 +33,15 @@ import {
   MEASURES,
   type Measure,
   type MeasureSection,
-  namedTag,
   type SeedSets,
-  type SeedSource,
   SHARED_LABEL,
+  seedForms,
 } from "@/lib/directory/directory-filter"
+import {
+  staleTag,
+  type TagChoices,
+  tagNames,
+} from "@/lib/directory/directory-tags"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
 import {
   HandlesEditor,
@@ -88,42 +88,6 @@ const measureEntries = (
         onSubmit,
       }),
   }))
-
-/** What "In the Tag" can name: the Account's Tags and its Setting groups' (DFP-04). */
-export type TagChoices = {
-  tags: TagResponse[]
-  /** Setting group names; each is the Tag `group:<name>`. */
-  groups: string[]
-  /** Until both lists arrive, no Tag is known to be missing. */
-  loaded: boolean
-}
-
-const lower = (s: string) => s.trim().toLowerCase()
-
-/**
- * Why a Condition naming a Tag matches nothing: the reader has no Tag of that
- * name, as In the Tag or as its Seeds (DFP-05).
- */
-export function staleTag(cond: DirectoryCond, choices: TagChoices) {
-  const name = namedTag(cond)
-  if (name === undefined || !choices.loaded) return undefined
-  const known = isVirtualGroupTag(name)
-    ? choices.groups.some(
-        (g) => lower(toVirtualGroupTagName(g)) === lower(name),
-      )
-    : choices.tags.some((t) => lower(t.name) === lower(name))
-  return known
-    ? undefined
-    : `You have no Tag named "${name}", so this matches nothing`
-}
-
-/** A chip id's part for the Seeds: the source word, the Tag or the handles. */
-const seedsId = (seeds: SeedSource) =>
-  seeds.kind === "handles"
-    ? seeds.handles.join("-")
-    : seeds.kind === "tag"
-      ? `tag-${seeds.name}`
-      : seeds.kind
 
 /** The Languages a count read named, as picker options; "no Language" has none. */
 const languageOptions = (
@@ -174,17 +138,14 @@ export function directoryVocabulary(
             id: "tag",
             label: "In the Tag",
             icon: Tag,
-            options: [
-              ...tags.tags.map((t) => ({
-                id: t.name,
-                label: t.name,
-                hint: String(t.channels),
-              })),
-              ...tags.groups.map((g) => ({
-                id: toVirtualGroupTagName(g),
-                label: toVirtualGroupTagName(g),
-              })),
-            ],
+            options: tagNames(tags).map((name) => {
+              const listed = tags.tags.find((t) => t.name === name)
+              return {
+                id: name,
+                label: name,
+                hint: listed && String(listed.channels),
+              }
+            }),
             make: (name) => ({ type: "tag", name }),
             current: (c) => (c.type === "tag" ? c.name : undefined),
           },
@@ -272,7 +233,7 @@ export function directoryVocabulary(
           : "value" in c
             ? `${c.type}-${c.value}`
             : "seeds" in c
-              ? `${c.type}-${seedsId(c.seeds)}`
+              ? `${c.type}-${seedForms(c.seeds).id}`
               : c.type,
   }
 }

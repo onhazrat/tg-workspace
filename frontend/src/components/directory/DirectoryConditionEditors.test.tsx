@@ -10,13 +10,13 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryCond } from "@/lib/directory/directory-filter"
+import type { TagChoices } from "@/lib/directory/directory-tags"
 import {
   HandlesEditor,
   MineEditor,
   NameEditor,
   SharedEditor,
 } from "./DirectoryConditionEditors"
-import type { TagChoices } from "./directory-vocabulary"
 
 afterEach(cleanup)
 

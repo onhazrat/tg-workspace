@@ -7,7 +7,6 @@
 import type React from "react"
 import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
-import { toVirtualGroupTagName } from "@/lib/channels/virtual-group-tags"
 import {
   DIRECTORY_FILTER_BOUNDS,
   type DirectoryCond,
@@ -21,7 +20,7 @@ import {
   SHARED_LABEL,
   SHARED_MIN,
 } from "@/lib/directory/directory-filter"
-import type { TagChoices } from "./directory-vocabulary"
+import { type TagChoices, tagNames } from "@/lib/directory/directory-tags"
 
 type EditorProps<C> = {
   start?: C
@@ -111,12 +110,6 @@ const HANDLES_EXPLAIN: Record<DirectoryHandlesCond["type"], string> = {
   cites:
     "Channels that forwarded, mentioned, linked or replied to any of these. The Reference kinds narrow it.",
 }
-
-/** The Tags a Seed source can name: the Account's, then its Setting groups'. */
-const tagNames = (tags: TagChoices) => [
-  ...tags.tags.map((t) => t.name),
-  ...tags.groups.map(toVirtualGroupTagName),
-]
 
 /** One radio of a Seed source choice, its hint under the label. */
 function SourceChoice({

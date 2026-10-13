@@ -16,12 +16,13 @@ import {
   MEASURES,
   SHARED_LABEL,
 } from "@/lib/directory/directory-filter"
+import type { Tagging } from "@/lib/directory/directory-tags"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
 import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
-import { cell, FollowCell, type RowTagging } from "./DirectoryTable"
+import { cell, FollowCell } from "./DirectoryTable"
 import { TagBadges, TagPicker } from "./DirectoryTags"
 
 const HEADING =
@@ -349,7 +350,7 @@ export function DirectoryPanel({
   /** Adds a Condition to the view's filter. */
   onFilter: (cond: DirectoryCond) => void
   /** The open Channel's Tags, added and removed here (DFP-04). */
-  tagging?: RowTagging
+  tagging?: Tagging
 }) {
   return (
     <>
@@ -394,13 +395,13 @@ export function DirectoryPanel({
               >
                 <TagBadges
                   tags={entry.tags}
-                  onRemove={(name) => tagging.onTag(handle, name, false)}
+                  onRemove={(name) => tagging.onUntag(name, [handle])}
                 />
                 <TagPicker
                   tags={tagging.tags}
                   current={entry.tags}
-                  onPick={(name) => tagging.onTag(handle, name, true)}
-                  onUnpick={(name) => tagging.onTag(handle, name, false)}
+                  onPick={(name) => tagging.onTag(name, [handle])}
+                  onUnpick={(name) => tagging.onUntag(name, [handle])}
                   trigger={
                     <button
                       type="button"

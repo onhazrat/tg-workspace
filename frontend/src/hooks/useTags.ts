@@ -16,13 +16,28 @@ import {
   dataRenameTag,
   type TagResponse,
 } from "@/client"
-import type { RowTagging } from "@/components/directory/DirectoryTable"
-import type { TagChoices } from "@/components/directory/directory-vocabulary"
 import { errorText } from "@/lib/artifacts/artifact-run"
+import type { TagChoices, Tagging } from "@/lib/directory/directory-tags"
 import { queryKeys } from "./queryKeys"
 import { useSettingGroupsQuery } from "./useSettingGroups"
 
 const NO_TAGS: TagResponse[] = []
+
+/**
+ * The most handles one Tag request carries: the server's `MAX_TAG_HANDLES`,
+ * a trust boundary it keeps. A Tag is not capped, so a longer list goes in
+ * batches of this size.
+ */
+export const TAG_BATCH = 10_000
+
+/** Run `send` on each batch of `handles`, one after the other. */
+async function inBatches(
+  handles: string[],
+  send: (batch: string[]) => Promise<unknown>,
+) {
+  for (let i = 0; i < handles.length; i += TAG_BATCH)
+    await send(handles.slice(i, i + TAG_BATCH))
+}
 
 export function useTags() {
   const queryClient = useQueryClient()
@@ -51,12 +66,18 @@ export function useTags() {
     loaded: list.isSuccess,
     tag: (name: string, handles: string[]) =>
       write(
-        () => dataAddTagChannels({ body: { name, handles } }),
+        () =>
+          inBatches(handles, (batch) =>
+            dataAddTagChannels({ body: { name, handles: batch } }),
+          ),
         "The Tag did not save.",
       ),
     untag: (name: string, handles: string[]) =>
       write(
-        () => dataRemoveTagChannels({ body: { name, handles } }),
+        () =>
+          inBatches(handles, (batch) =>
+            dataRemoveTagChannels({ body: { name, handles: batch } }),
+          ),
         "The Tag was not removed.",
       ),
     rename: (name: string, to: string) =>
@@ -69,9 +90,15 @@ export function useTags() {
         () => dataDeleteTag({ body: { name } }),
         "The Tag was not deleted.",
       ),
-    /** The handles carrying `name` now, `group:` names included. */
-    handlesOf: async (name: string) =>
-      (await dataListTagChannels({ query: { name } })).handles,
+    /** Hand `onTicks` the handles carrying `name` now, `group:` names included. */
+    tickTag: async (name: string, onTicks: (handles: string[]) => void) => {
+      try {
+        const { handles } = await dataListTagChannels({ query: { name } })
+        onTicks(handles)
+      } catch (error) {
+        toast.error(errorText(error, "The Tag's channels did not load."))
+      }
+    },
   }
 }
 
@@ -79,10 +106,10 @@ export function useTags() {
 export function useDirectoryTags() {
   const tags = useTags()
   const groups = useSettingGroupsQuery()
-  const tagging: RowTagging = {
+  const tagging: Tagging = {
     tags: tags.tags,
-    onTag: (handle, name, on) =>
-      void (on ? tags.tag : tags.untag)(name, [handle]),
+    onTag: (name, handles) => void tags.tag(name, handles),
+    onUntag: (name, handles) => void tags.untag(name, handles),
   }
   const choices: TagChoices = {
     tags: tags.tags,

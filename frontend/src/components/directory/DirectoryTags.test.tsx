@@ -135,3 +135,40 @@ describe("the Tags menu", () => {
     expect(calls.del).toEqual(["News"])
   })
 })
+
+describe("a group: Tag (story 23)", () => {
+  const WITH_GROUP = [...TAGS, { name: "group:Fast", channels: 2 }]
+
+  test("shows as a badge with no x, since a Setting group owns it", () => {
+    render(<TagBadges tags={["News", "group:Fast"]} onRemove={() => {}} />)
+    expect(screen.getByTestId("directory-tags").textContent).toBe(
+      "Newsgroup:Fast",
+    )
+    expect(screen.getByLabelText("Remove the Tag News")).toBeTruthy()
+    expect(screen.queryByLabelText("Remove the Tag group:Fast")).toBeNull()
+  })
+
+  test("is never offered by the picker, to put on or take off", () => {
+    picker({ tags: WITH_GROUP, current: ["group:Fast"] })
+    expect(screen.queryByText("group:Fast")).toBeNull()
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2)
+  })
+
+  test("ticks its Channels from the menu but is neither renamed nor deleted", () => {
+    const ticked: string[] = []
+    render(
+      <TagsMenu
+        tags={WITH_GROUP}
+        onTick={(n) => ticked.push(n)}
+        onRename={() => {}}
+        onDelete={() => {}}
+      />,
+    )
+    fireEvent.click(screen.getByTestId("directory-tags-menu"))
+    fireEvent.click(screen.getByLabelText("Tick the channels in group:Fast"))
+    expect(ticked).toEqual(["group:Fast"])
+    expect(screen.queryByLabelText("Rename group:Fast")).toBeNull()
+    expect(screen.queryByLabelText("Delete group:Fast")).toBeNull()
+    expect(screen.getByLabelText("Rename News")).toBeTruthy()
+  })
+})

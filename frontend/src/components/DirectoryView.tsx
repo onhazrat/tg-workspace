@@ -25,7 +25,6 @@ import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
 import {
   DirectoryTable,
   PAGE_SIZE,
-  type RowTagging,
 } from "@/components/directory/DirectoryTable"
 import { TagsMenu } from "@/components/directory/DirectoryTags"
 import {
@@ -48,9 +47,10 @@ import {
   type Measure,
   type MeasureKey,
   type SeedSets,
-  wireSeeds,
+  seedForms,
 } from "@/lib/directory/directory-filter"
 import { mineWindow } from "@/lib/directory/directory-panel"
+import type { Tagging } from "@/lib/directory/directory-tags"
 import {
   chooseSort,
   type DirectoryViewRequest,
@@ -179,7 +179,7 @@ function DirectoryPanelReads({
   onDismiss: (dismissed: boolean) => void
   onClose: () => void
   onFilter: (cond: DirectoryCond) => void
-  tagging: RowTagging
+  tagging: Tagging
 }) {
   const path = { handle }
   const entry = useQuery({
@@ -262,7 +262,7 @@ export function DirectoryView() {
   const seedsOf = (relation: "parents" | "children") => {
     const cond = firstShared(d.filter, relation)
     if (!cond) return null
-    const seeds = wireSeeds(cond.seeds, d.sets)
+    const seeds = seedForms(cond.seeds).wire(d.sets)
     return "tag" in seeds ? seeds : seeds.handles
   }
   return (
@@ -303,7 +303,7 @@ export function DirectoryView() {
       <div className="mb-2 flex justify-end gap-2">
         <TagsMenu
           tags={tags.tags}
-          onTick={async (name) => d.setTicks(await tags.handlesOf(name))}
+          onTick={(name) => void tags.tickTag(name, d.setTicks)}
           onRename={(name, to) => void tags.rename(name, to)}
           onDelete={(name) => void tags.remove(name)}
         />
@@ -331,11 +331,7 @@ export function DirectoryView() {
         onFollow={(handles) => void d.follow(handles)}
         onDismiss={(handles) => void d.dismiss(handles)}
         onClear={() => d.setTicks([])}
-        tagging={{
-          tags: tags.tags,
-          onTag: (name, handles) => void tags.tag(name, handles),
-          onUntag: (name, handles) => void tags.untag(name, handles),
-        }}
+        tagging={tagging}
       />
       <DirectoryTable
         rows={shown.rows}

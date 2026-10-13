@@ -1,8 +1,8 @@
 import { EyeOff, Plus, Tag, TagsIcon } from "lucide-react"
 import { useState } from "react"
-import type { TagResponse } from "@/client"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
+import { ownTags, type Tagging } from "@/lib/directory/directory-tags"
 import { needsBulkFollowConfirm } from "@/lib/posts/discover-selection"
 import { TagPicker } from "./DirectoryTags"
 
@@ -36,11 +36,7 @@ export function DirectoryBulkBar({
   onDismiss: (handles: string[]) => void
   onClear: () => void
   /** The Account's Tags, to put one on every Tick or take it off. */
-  tagging?: {
-    tags: TagResponse[]
-    onTag: (name: string, handles: string[]) => void
-    onUntag: (name: string, handles: string[]) => void
-  }
+  tagging?: Tagging
 }) {
   const [confirming, setConfirming] = useState(false)
   if (ticks.size === 0) return null
@@ -82,7 +78,7 @@ export function DirectoryBulkBar({
                 </TgButton>
               }
             />
-            {tagging.tags.length > 0 && (
+            {ownTags(tagging.tags).length > 0 && (
               <TagPicker
                 tags={tagging.tags}
                 create={false}

@@ -3,7 +3,8 @@
  * Tag on or takes it off, and the Tags menu that ticks a Tag's Channels,
  * renames it and deletes it. Props only; `DirectoryView` wires them to
  * `useTags`. A Tag is the Account's and sits on any Channel, followed or not
- * (ADR-029); `group:` names are a Setting group's and never typed here.
+ * (ADR-029); `group:` names are a Setting group's: shown and ticked, never
+ * typed, put on, taken off, renamed or deleted here (story 23).
  */
 import { ListChecks, Pencil, Plus, Tag, Trash2, X } from "lucide-react"
 import { useState } from "react"
@@ -12,13 +13,11 @@ import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { pillClass } from "@/components/PostFilterParts"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
-
-const same = (a: string, b: string) =>
-  a.trim().toLowerCase() === b.trim().toLowerCase()
+import { ownTags, sameTag } from "@/lib/directory/directory-tags"
 
 const channels = (n: number) => `${n} channel${n === 1 ? "" : "s"}`
 
-/** A Channel's Tags as badges; `onRemove` gives each an x. */
+/** A Channel's Tags as badges; `onRemove` gives each but a `group:` one an x. */
 export function TagBadges({
   tags,
   onRemove,
@@ -37,7 +36,7 @@ export function TagBadges({
         >
           <Tag size={9} aria-hidden />
           {name}
-          {onRemove && (
+          {onRemove && !isVirtualGroupTag(name) && (
             <button
               type="button"
               aria-label={`Remove the Tag ${name}`}
@@ -59,7 +58,7 @@ export function TagBadges({
 /**
  * Choose one of the Account's Tags, or type a new name. A Tag in `current` is
  * ticked, and choosing it calls `onUnpick`. With `create` off only existing
- * Tags are offered, for taking one off.
+ * Tags are offered, for taking one off. A `group:` Tag is never offered.
  */
 export function TagPicker({
   tags,
@@ -81,15 +80,16 @@ export function TagPicker({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const typed = query.trim()
-  const shown = tags.filter((t) =>
+  const own = ownTags(tags)
+  const shown = own.filter((t) =>
     t.name.toLowerCase().includes(typed.toLowerCase()),
   )
-  const existing = tags.find((t) => same(t.name, typed))
+  const existing = own.find((t) => sameTag(t.name, typed))
   const reserved = isVirtualGroupTag(typed)
   const choose = (name: string) => {
     setOpen(false)
     setQuery("")
-    if (onUnpick && current.some((c) => same(c, name))) onUnpick(name)
+    if (onUnpick && current.some((c) => sameTag(c, name))) onUnpick(name)
     else onPick(name)
   }
   return (
@@ -141,7 +141,7 @@ export function TagPicker({
           <input
             type="checkbox"
             className="accent-violet-600"
-            checked={current.some((c) => same(c, t.name))}
+            checked={current.some((c) => sameTag(c, t.name))}
             onChange={() => choose(t.name)}
           />
           <span dir="auto" className="flex-1 truncate font-semibold">
@@ -157,7 +157,7 @@ export function TagPicker({
 /**
  * The Account's Tags: tick exactly a Tag's Channels, rename it (onto an
  * existing name merges the two) or delete it after saying how many Channels
- * it is on.
+ * it is on. A `group:` Tag ticks but is a Setting group's to rename or delete.
  */
 export function TagsMenu({
   tags,
@@ -245,25 +245,29 @@ export function TagsMenu({
             >
               <ListChecks size={12} />
             </button>
-            <button
-              type="button"
-              aria-label={`Rename ${t.name}`}
-              onClick={() => {
-                setRenaming(t.name)
-                setDraft(t.name)
-              }}
-              className={icon}
-            >
-              <Pencil size={12} />
-            </button>
-            <button
-              type="button"
-              aria-label={`Delete ${t.name}`}
-              onClick={() => setDeleting(t)}
-              className={icon}
-            >
-              <Trash2 size={12} />
-            </button>
+            {!isVirtualGroupTag(t.name) && (
+              <>
+                <button
+                  type="button"
+                  aria-label={`Rename ${t.name}`}
+                  onClick={() => {
+                    setRenaming(t.name)
+                    setDraft(t.name)
+                  }}
+                  className={icon}
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Delete ${t.name}`}
+                  onClick={() => setDeleting(t)}
+                  className={icon}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
           </div>
         ))}
       </BarPopover>

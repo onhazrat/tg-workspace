@@ -8,11 +8,12 @@ import {
   Undo2,
 } from "lucide-react"
 import type React from "react"
-import type { DirectoryRowResponse, TagResponse } from "@/client"
+import type { DirectoryRowResponse } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { type MeasureKey, measureOf } from "@/lib/directory/directory-filter"
+import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
 import { formatCount } from "@/lib/format-count"
 import {
@@ -30,18 +31,13 @@ export const PAGE_SIZE = 100
 type Row = DirectoryRowResponse
 
 /** The Account's Tags and how one Channel's change (DFP-04). */
-export type RowTagging = {
-  tags: TagResponse[]
-  onTag: (handle: string, name: string, on: boolean) => void
-}
-
 /** A row's Tag picker; `t` presses it in keyboard mode. */
 export function RowTagButton({
   row,
   tagging,
 }: {
   row: Pick<Row, "handle" | "tags">
-  tagging: RowTagging
+  tagging: Tagging
 }) {
   return (
     <span onClick={(e) => e.stopPropagation()}>
@@ -49,8 +45,8 @@ export function RowTagButton({
         tags={tagging.tags}
         current={row.tags}
         align="end"
-        onPick={(name) => tagging.onTag(row.handle, name, true)}
-        onUnpick={(name) => tagging.onTag(row.handle, name, false)}
+        onPick={(name) => tagging.onTag(name, [row.handle])}
+        onUnpick={(name) => tagging.onUntag(name, [row.handle])}
         trigger={
           <TgButton
             type="button"
@@ -454,7 +450,7 @@ export function DirectoryTable({
   /** Below `md`, two-line cards instead of the table (DFP-02). */
   cards?: boolean
   /** Each row's Tag picker (DFP-04); none while the Tags have not loaded. */
-  tagging?: RowTagging
+  tagging?: Tagging
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
@@ -610,7 +606,7 @@ function DirectoryCards({
   onFollow: (handle: string) => void
   onDismiss: (handle: string, dismissed: boolean) => void
   onOpen: (handle: string) => void
-  tagging?: RowTagging
+  tagging?: Tagging
 }) {
   return (
     <ul className="divide-y divide-app-ink/5">

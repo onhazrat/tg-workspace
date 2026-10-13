@@ -224,13 +224,61 @@ const LIVE_LABEL: Record<LiveSource, string> = {
 
 const atHandles = (handles: string[]) => handles.map((h) => `@${h}`).join(", ")
 
-/** The Seeds as a chip names them: "@a, @b", "the Tag news", "your follows". */
-const seedsLabel = (seeds: SeedSource) =>
-  seeds.kind === "handles"
-    ? atHandles(seeds.handles)
-    : seeds.kind === "tag"
-      ? `the Tag ${seeds.name}`
-      : LIVE_LABEL[seeds.kind]
+const TAG_SEEDS = "tag:"
+
+/** The Seeds as the wire takes them. */
+export type WireSeeds = { handles: string[] } | { tag: string }
+
+/** One Seed source in each of the forms the Directory writes it. */
+type SeedForms = {
+  /** As a chip names them: "@a, @b", "the Tag news", "your follows". */
+  label: string
+  /** As the filter's text form writes them. */
+  text: string
+  /** A chip id's part. */
+  id: string
+  /**
+   * As the wire takes them: a Tag by name, which the server resolves, or
+   * handles, a live source's resolved against `sets` now.
+   */
+  wire: (sets: SeedSets) => WireSeeds
+}
+
+type SeedKind = SeedSource["kind"]
+type SeedOf<K extends SeedKind> = K extends LiveSource
+  ? { kind: K }
+  : Extract<SeedSource, { kind: K }>
+
+const liveSeeds = (seeds: { kind: LiveSource }): SeedForms => ({
+  label: LIVE_LABEL[seeds.kind],
+  text: seeds.kind,
+  id: seeds.kind,
+  wire: (sets) => ({ handles: sets[seeds.kind] }),
+})
+
+/** Each kind of Seed source's forms, the one place a kind is described. */
+const SEED_FORMS: { [K in SeedKind]: (seeds: SeedOf<K>) => SeedForms } = {
+  handles: ({ handles }) => ({
+    label: atHandles(handles),
+    text: handles.join(" "),
+    id: handles.join("-"),
+    wire: () => ({ handles }),
+  }),
+  tag: ({ name }) => ({
+    label: `the Tag ${name}`,
+    text: `${TAG_SEEDS}${name}`,
+    id: `tag-${name}`,
+    wire: () => ({ tag: name }),
+  }),
+  ticked: liveSeeds,
+  selection: liveSeeds,
+  follows: liveSeeds,
+}
+
+/** `seeds` in each of its forms. */
+export const seedForms = (seeds: SeedSource): SeedForms =>
+  // TypeScript cannot pair a union member's kind with its own entry.
+  (SEED_FORMS[seeds.kind] as (seeds: SeedSource) => SeedForms)(seeds)
 
 /** The Tag a Condition names, as In the Tag or as its Seeds; none otherwise. */
 export function namedTag(cond: DirectoryCond): string | undefined {
@@ -278,10 +326,10 @@ export function directoryConditionLabel(
         : "Cited by your channels"
     case "citedby":
     case "cites":
-      return `${HANDLES_LABEL[cond.type]} ${seedsLabel(cond.seeds)}`
+      return `${HANDLES_LABEL[cond.type]} ${seedForms(cond.seeds).label}`
     case "parents":
     case "children":
-      return `${cond.min}+ shared ${cond.type} with ${seedsLabel(cond.seeds)}`
+      return `${cond.min}+ shared ${cond.type} with ${seedForms(cond.seeds).label}`
     case "measure":
       return `${measureOf(cond.measure).label}${cond.none ? ":" : ""} ${boundText(cond)}`
   }
@@ -303,10 +351,10 @@ function condText(cond: DirectoryCond): string {
       return `mine:${cond.days ? `${cond.days}d` : "all"}`
     case "citedby":
     case "cites":
-      return `${cond.type}:${quote(seedsText(cond.seeds))}`
+      return `${cond.type}:${quote(seedForms(cond.seeds).text)}`
     case "parents":
     case "children": {
-      const words = [seedsText(cond.seeds)]
+      const words = [seedForms(cond.seeds).text]
       // A Tag name ending in a number would read back as the minimum.
       const ambiguous = cond.seeds.kind === "tag" && TRAILING_MIN.test(words[0])
       if (cond.min !== SHARED_MIN || ambiguous) words.push(String(cond.min))
@@ -324,15 +372,7 @@ function condText(cond: DirectoryCond): string {
   }
 }
 
-const TAG_SEEDS = "tag:"
 const TRAILING_MIN = /(?:^|\s)(\d+)$/
-
-const seedsText = (seeds: SeedSource) =>
-  seeds.kind === "handles"
-    ? seeds.handles.join(" ")
-    : seeds.kind === "tag"
-      ? `${TAG_SEEDS}${seeds.name}`
-      : seeds.kind
 
 export const printDirectoryFilter = (filter: DirectoryFilter): string =>
   printTree(filter, condText)
@@ -491,27 +531,19 @@ export function parseDirectoryFilter(src: string): DirectoryFilter | null {
   return filter && withinDirectoryFilterBounds(filter) ? filter : null
 }
 
-/**
- * The Seeds as the wire takes them: a Tag by name, which the server resolves,
- * or handles, a live source's resolved against `sets` now.
- */
-export const wireSeeds = (
-  seeds: SeedSource,
-  sets: SeedSets,
-): { handles: string[] } | { tag: string } =>
-  seeds.kind === "tag"
-    ? { tag: seeds.name }
-    : { handles: seeds.kind === "handles" ? seeds.handles : sets[seeds.kind] }
-
 /** One Condition as the wire takes it: its Seeds as handles or a Tag. */
 function wireCond(
   cond: DirectoryCond,
   sets: SeedSets,
 ): DirectoryFilterAtom["cond"] {
   if (cond.type === "citedby" || cond.type === "cites")
-    return { type: cond.type, ...wireSeeds(cond.seeds, sets) }
+    return { type: cond.type, ...seedForms(cond.seeds).wire(sets) }
   if (cond.type === "parents" || cond.type === "children")
-    return { type: cond.type, ...wireSeeds(cond.seeds, sets), min: cond.min }
+    return {
+      type: cond.type,
+      ...seedForms(cond.seeds).wire(sets),
+      min: cond.min,
+    }
   return cond
 }
 

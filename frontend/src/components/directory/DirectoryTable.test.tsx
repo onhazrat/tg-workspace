@@ -186,13 +186,14 @@ describe("keyboard mode (DFP-01)", () => {
   })
 
   test("t presses the row's Tag picker, and a row shows its Tags (DFP-04)", () => {
-    const tagged: [string, string, boolean][] = []
+    const tagged: [string, string[], boolean][] = []
     mount({
       rows: [row("alpha", { tags: ["News"] })],
       ring: "alpha",
       tagging: {
         tags: [{ name: "News", channels: 1 }],
-        onTag: (...args) => tagged.push(args),
+        onTag: (name, handles) => tagged.push([name, handles, true]),
+        onUntag: (name, handles) => tagged.push([name, handles, false]),
       },
     })
     const row_ = screen.getByTestId("directory-row-alpha")
@@ -203,7 +204,7 @@ describe("keyboard mode (DFP-01)", () => {
     expect(button?.getAttribute("aria-label")).toBe("Tag @alpha")
     fireEvent.click(button as HTMLElement)
     fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
-    expect(tagged).toEqual([["alpha", "News", false]])
+    expect(tagged).toEqual([["News", ["alpha"], false]])
   })
 })
 

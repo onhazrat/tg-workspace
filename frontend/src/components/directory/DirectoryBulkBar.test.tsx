@@ -120,4 +120,23 @@ describe("tagging the Ticks (DFP-04)", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
     expect(calls.untag).toEqual([["News", ["a", "b"]]])
   })
+
+  test("Untag never offers a group: Tag, and is absent with only those", () => {
+    render(
+      <DirectoryBulkBar
+        ticks={new Set(["a"])}
+        busy={false}
+        followed={new Set()}
+        onFollow={() => {}}
+        onDismiss={() => {}}
+        onClear={() => {}}
+        tagging={{
+          tags: [{ name: "group:Fast", channels: 2 }],
+          onTag: () => {},
+          onUntag: () => {},
+        }}
+      />,
+    )
+    expect(screen.queryByTestId("directory-bulk-untag")).toBeNull()
+  })
 })
