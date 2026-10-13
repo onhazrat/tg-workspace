@@ -290,3 +290,46 @@ describe("the search box (DIR-04)", () => {
     expect(calls.selectedFirst).toEqual([true])
   })
 })
+
+describe("on a phone (DFP-02)", () => {
+  const sheet = () => screen.queryByRole("dialog", { name: "Filters and sort" })
+
+  test("the controls fold behind one button that counts the Conditions", () => {
+    mount({ phone: true })
+    expect(screen.queryByTestId("directory-filters")).toBeNull()
+    expect(screen.queryByRole("group", { name: "Search in" })).toBeNull()
+    expect(screen.getByTestId("directory-search")).toBeTruthy()
+    expect(screen.getByTestId("directory-controls-button").textContent).toBe(
+      "3",
+    )
+    expect(sheet()).toBeNull()
+  })
+
+  test("with no Condition on, the button says Filters", () => {
+    mount({ phone: true, text: "" })
+    expect(screen.getByTestId("directory-controls-button").textContent).toBe(
+      "Filters",
+    )
+  })
+
+  test("the button opens a sheet with every control and the search fields; Done closes it", () => {
+    const calls = mount({ phone: true })
+    fireEvent.click(screen.getByTestId("directory-controls-button"))
+    const open = sheet() as HTMLElement
+    expect(open).toBeTruthy()
+    expect(open.querySelector('[data-testid="directory-filters"]')).toBeTruthy()
+    expect(open.querySelector('[data-testid="directory-sort"]')).toBeTruthy()
+    fireEvent.click(screen.getByTestId("directory-search-field-posts"))
+    expect(calls.fields).toEqual([["name", "bio"]])
+    fireEvent.click(screen.getByRole("button", { name: "Done" }))
+    expect(sheet()).toBeNull()
+  })
+
+  test("a wide screen keeps the controls inline and no button", () => {
+    mount()
+    expect(screen.getByTestId("directory-filters")).toBeTruthy()
+    expect(screen.getByRole("group", { name: "Search in" })).toBeTruthy()
+    expect(screen.queryByTestId("directory-controls-button")).toBeNull()
+    expect(sheet()).toBeNull()
+  })
+})

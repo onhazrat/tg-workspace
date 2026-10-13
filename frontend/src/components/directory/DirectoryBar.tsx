@@ -134,18 +134,21 @@ function searchPlaceholder(fields: SearchField[]): string {
 
 /**
  * The Posts tab's search box, with Name, Bio and Posts as a segment inside
- * it; any mix of the three, never none.
+ * it; any mix of the three, never none. On a phone the segment leaves the box
+ * for the controls sheet, so the box keeps the width (DFP-02).
  */
 export function DirectorySearch({
   search,
   onSearch,
   fields,
   onFields,
+  phone = false,
 }: {
   search: string
   onSearch: (text: string) => void
   fields: SearchField[]
   onFields: (next: SearchField[]) => void
+  phone?: boolean
 }) {
   return (
     <div className="flex items-center gap-2 rounded-xl border border-app-ink/10 bg-app-muted pl-3 pr-1.5 transition-colors focus-within:border-app-ink/30">
@@ -161,27 +164,40 @@ export function DirectorySearch({
         onChange={(e) => onSearch(e.target.value)}
         className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
       />
-      <fieldset
-        aria-label="Search in"
-        className="flex items-center gap-0.5 rounded-lg bg-app-ink/5 p-0.5 text-[11px]"
-      >
-        {SEARCH_FIELDS.map((f) => {
-          const on = fields.includes(f)
-          return (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={on}
-              data-testid={`directory-search-field-${f}`}
-              onClick={() => onFields(toggleField(fields, f))}
-              className={`rounded-md px-2 py-1 capitalize ${on ? "bg-app-card font-semibold shadow-sm" : "text-app-ink/50 hover:text-app-ink"}`}
-            >
-              {f}
-            </button>
-          )
-        })}
-      </fieldset>
+      {!phone && <SearchFields fields={fields} onFields={onFields} />}
     </div>
+  )
+}
+
+/** Name, Bio and Posts: where the search looks. */
+function SearchFields({
+  fields,
+  onFields,
+}: {
+  fields: SearchField[]
+  onFields: (next: SearchField[]) => void
+}) {
+  return (
+    <fieldset
+      aria-label="Search in"
+      className="flex items-center gap-0.5 rounded-lg bg-app-ink/5 p-0.5 text-[11px]"
+    >
+      {SEARCH_FIELDS.map((f) => {
+        const on = fields.includes(f)
+        return (
+          <button
+            key={f}
+            type="button"
+            aria-pressed={on}
+            data-testid={`directory-search-field-${f}`}
+            onClick={() => onFields(toggleField(fields, f))}
+            className={`rounded-md px-2 py-1 capitalize ${on ? "bg-app-card font-semibold shadow-sm" : "text-app-ink/50 hover:text-app-ink"}`}
+          >
+            {f}
+          </button>
+        )
+      })}
+    </fieldset>
   )
 }
 
@@ -360,99 +376,152 @@ export type DirectoryBarProps = {
   onSelectedFirst: (on: boolean) => void
   /** The filter row's Clear all: the search and every Condition, as one change. */
   onClearAll: () => void
+  /**
+   * Below `md` (DFP-02): the controls fold into a full-screen sheet behind
+   * one button beside the search box.
+   */
+  phone?: boolean
 }
 
 export function DirectoryBar(p: DirectoryBarProps) {
   const conditions = atoms(p.filter).length
   const funnelled = funnelledValues(p.filter, "language")
+  const [sheet, setSheet] = useState(false)
+  const search = (
+    <DirectorySearch
+      search={p.search}
+      onSearch={p.onSearch}
+      fields={p.fields}
+      onFields={p.onFields}
+      phone={p.phone}
+    />
+  )
+  const controls = (
+    <>
+      <FacetMenu
+        label="Language"
+        noun="language"
+        testId="directory-language"
+        countLabel="channels"
+        rows={p.languages.flatMap(({ language, count }) =>
+          language
+            ? [
+                {
+                  id: language,
+                  label: languageLabel(language),
+                  hint: language,
+                  selected: 0,
+                  total: count,
+                  tick: "false" as const,
+                },
+              ]
+            : [],
+        )}
+        funnelled={funnelled}
+        labelOf={(id) => languageLabel(id)}
+        onFunnel={(value, on) =>
+          p.onFilter(
+            on
+              ? addFunnel(p.filter, { type: "language", value })
+              : removeFunnel(p.filter, "language", value),
+          )
+        }
+        onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "language"))}
+      />
+      <ConditionPicker
+        vocabulary={p.vocabulary}
+        onPick={(cond) => p.onFilter(appendAnd(p.filter, cond))}
+        trigger={
+          <button
+            type="button"
+            data-testid="directory-filters"
+            className={pillClass(false)}
+          >
+            <ListFilter size={12} /> Filters
+            {conditions > 0 && (
+              <span className="rounded-full bg-app-ink/15 px-1.5 text-[10px] tabular-nums">
+                {conditions}
+              </span>
+            )}
+            <ChevronDown size={12} className="opacity-60" />
+          </button>
+        }
+      />
+      <DirectorySwitches filter={p.filter} onFilter={p.onFilter} />
+      <ReferenceKindsPill kinds={p.kinds} onKinds={p.onKinds} />
+      <span className="mx-1 h-5 w-px bg-app-ink/10" />
+      <SortPicker
+        options={sortOptions(p.search.trim() !== "", sharedOn(p.filter))}
+        value={p.sortValue}
+        onChange={p.onSort}
+        direction={p.descending ? "desc" : "asc"}
+        onToggleDirection={p.onToggleDirection}
+        testId="directory-sort"
+      />
+      <BarToggle
+        on={p.matches}
+        label="Show matches"
+        title="Quote the matching bio and post under each row while searching"
+        testId="directory-switch-matches"
+        onClick={() => p.onMatches(!p.matches)}
+      />
+      <BarToggle
+        on={p.selectedFirst}
+        label="Selected first"
+        title="Ticked channels first, each part in the list's order"
+        testId="directory-switch-selected-first"
+        onClick={() => p.onSelectedFirst(!p.selectedFirst)}
+      />
+      <span className="ml-auto" />
+      <ColumnsPill hidden={p.hidden} onHidden={p.onHidden} />
+    </>
+  )
   return (
     <section className="mb-3 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
-      <div className="px-4 pt-4">
-        <DirectorySearch
-          search={p.search}
-          onSearch={p.onSearch}
-          fields={p.fields}
-          onFields={p.onFields}
-        />
-      </div>
-      <div className="flex flex-wrap items-center gap-2 p-4">
-        <FacetMenu
-          label="Language"
-          noun="language"
-          testId="directory-language"
-          countLabel="channels"
-          rows={p.languages.flatMap(({ language, count }) =>
-            language
-              ? [
-                  {
-                    id: language,
-                    label: languageLabel(language),
-                    hint: language,
-                    selected: 0,
-                    total: count,
-                    tick: "false" as const,
-                  },
-                ]
-              : [],
-          )}
-          funnelled={funnelled}
-          labelOf={(id) => languageLabel(id)}
-          onFunnel={(value, on) =>
-            p.onFilter(
-              on
-                ? addFunnel(p.filter, { type: "language", value })
-                : removeFunnel(p.filter, "language", value),
-            )
-          }
-          onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "language"))}
-        />
-        <ConditionPicker
-          vocabulary={p.vocabulary}
-          onPick={(cond) => p.onFilter(appendAnd(p.filter, cond))}
-          trigger={
+      {p.phone ? (
+        <div className="flex items-center gap-2 px-4 pt-4">
+          <div className="min-w-0 flex-1">{search}</div>
+          <button
+            type="button"
+            data-testid="directory-controls-button"
+            aria-label={`Filters and sort${conditions > 0 ? `, ${conditions} on` : ""}`}
+            onClick={() => setSheet(true)}
+            className={`${pillClass(conditions > 0)} h-9 shrink-0`}
+          >
+            <ListFilter size={14} />
+            {conditions > 0 ? conditions : "Filters"}
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 pt-4">{search}</div>
+      )}
+      {!p.phone && (
+        <div className="flex flex-wrap items-center gap-2 p-4">{controls}</div>
+      )}
+      {p.phone && sheet && (
+        // z-40 covers the list; the controls' popovers open at z-50, above it.
+        <div
+          role="dialog"
+          aria-label="Filters and sort"
+          className="fixed inset-0 z-40 flex flex-wrap content-start items-center gap-2.5 overflow-y-auto bg-app-bg p-4 pb-24"
+        >
+          <div className="mb-1 flex w-full items-center justify-between">
+            <b className="text-sm">Filters and sort</b>
             <button
               type="button"
-              data-testid="directory-filters"
-              className={pillClass(false)}
+              onClick={() => setSheet(false)}
+              className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white"
             >
-              <ListFilter size={12} /> Filters
-              {conditions > 0 && (
-                <span className="rounded-full bg-app-ink/15 px-1.5 text-[10px] tabular-nums">
-                  {conditions}
-                </span>
-              )}
-              <ChevronDown size={12} className="opacity-60" />
+              Done
             </button>
-          }
-        />
-        <DirectorySwitches filter={p.filter} onFilter={p.onFilter} />
-        <ReferenceKindsPill kinds={p.kinds} onKinds={p.onKinds} />
-        <span className="mx-1 h-5 w-px bg-app-ink/10" />
-        <SortPicker
-          options={sortOptions(p.search.trim() !== "", sharedOn(p.filter))}
-          value={p.sortValue}
-          onChange={p.onSort}
-          direction={p.descending ? "desc" : "asc"}
-          onToggleDirection={p.onToggleDirection}
-          testId="directory-sort"
-        />
-        <BarToggle
-          on={p.matches}
-          label="Show matches"
-          title="Quote the matching bio and post under each row while searching"
-          testId="directory-switch-matches"
-          onClick={() => p.onMatches(!p.matches)}
-        />
-        <BarToggle
-          on={p.selectedFirst}
-          label="Selected first"
-          title="Ticked channels first, each part in the list's order"
-          testId="directory-switch-selected-first"
-          onClick={() => p.onSelectedFirst(!p.selectedFirst)}
-        />
-        <span className="ml-auto" />
-        <ColumnsPill hidden={p.hidden} onHidden={p.onHidden} />
-      </div>
+          </div>
+          <div className="mb-1 flex w-full items-center gap-2 text-xs">
+            <span className="text-app-ink/60">Search in</span>
+            <SearchFields fields={p.fields} onFields={p.onFields} />
+          </div>
+          {controls}
+        </div>
+      )}
 
       <FilterRow
         filter={p.filter}
