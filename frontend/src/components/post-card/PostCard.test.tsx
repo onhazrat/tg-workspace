@@ -398,7 +398,12 @@ describe("PostCardClampedBody", () => {
       })
       render(
         <PostCardView
-          post={{ ...post, media: thumbApiPath ? { thumbApiPath } : undefined }}
+          post={{
+            ...post,
+            media: thumbApiPath
+              ? { kinds: ["photo"], thumbApiPath }
+              : undefined,
+          }}
           channel={undefined}
           followsForwardSource={false}
           onAddChannel={() => {}}

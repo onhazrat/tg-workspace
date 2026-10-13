@@ -29,7 +29,7 @@ from app.schemas.posts import (
     ViewEstimateResponse,
 )
 from app.services.analysis_window import resolve_analysis_window
-from app.services.post_filters import PostScope, ViewReading
+from app.services.post_filters import PostScope
 from app.services.posts import (
     bulk_upsert_posts,
     count_facets_in_scope,
@@ -152,23 +152,15 @@ def posts_value_histogram(
     other bars hold still while the Account changes another Condition.
     """
     window = resolve_analysis_window(body.window)
-    reading = None
-    filters = None
-    if body.measure == "views":
-        reading = ViewReading("views")
-    elif body.measure == "estimated":
-        reading = ViewReading("estimated", *current_estimate(session))
-    elif body.measure == "channel_posts_filtered":
-        filters = parse_post_filters(session, body, tree=body.filter)
     histogram = value_histogram(
         session,
-        user_id=current_user.id,
-        channel_names=body.cleaned_channel_names(),
-        start_date=window.start,
-        end_date=window.end,
+        scope=PostScope(
+            current_user.id, body.cleaned_channel_names(), window.start, window.end
+        ),
         measure=body.measure,
-        reading=reading,
-        filters=filters,
+        filters=parse_post_filters(session, body, tree=body.filter)
+        if body.measure == "channel_posts_filtered"
+        else None,
     )
     return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
 
@@ -193,10 +185,9 @@ def posts_window_histogram(
     return PostWindowHistogramResponse(
         counts=window_histogram(
             session,
-            user_id=current_user.id,
-            channel_names=body.cleaned_channel_names(),
-            start_date=window.start,
-            end_date=window.end,
+            scope=PostScope(
+                current_user.id, body.cleaned_channel_names(), window.start, window.end
+            ),
             extent_start=body.extent_start,
             extent_end=body.extent_end,
             buckets=body.buckets,

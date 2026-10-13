@@ -214,17 +214,12 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
   const { isOffline } = useApiStatus()
   const queryClient = useQueryClient()
 
-  // Refetch the server-backed post views (feed, per-channel counts, Discover)
-  // after a sync adds posts — a sync changes no scope/filter, so the query keys
-  // are unchanged and only an explicit invalidation makes new posts appear.
-  // Prefixes must match queryKeys.postsFeed / postsCounts / discoverCandidates.
+  // Refetch the server-backed post views after a sync adds posts — a sync
+  // changes no scope/filter, so the query keys are unchanged and only an
+  // explicit invalidation makes new posts appear.
   const invalidatePostViews = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["postsFeed"] })
-    queryClient.invalidateQueries({ queryKey: ["postsCounts"] })
-    queryClient.invalidateQueries({ queryKey: ["postsFacets"] })
-    queryClient.invalidateQueries({ queryKey: ["postsValueHistogram"] })
-    queryClient.invalidateQueries({ queryKey: ["postsWindowHistogram"] })
-    queryClient.invalidateQueries({ queryKey: ["discoverCandidates"] })
+    for (const queryKey of queryKeys.postViews)
+      queryClient.invalidateQueries({ queryKey })
   }, [queryClient])
 
   const {

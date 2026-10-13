@@ -406,7 +406,7 @@ def _keyword_clause(term: str) -> ColumnElement[bool]:
     )
 
 
-def _has_reply_clause(scope: PostScope | None) -> ColumnElement[bool]:
+def _has_reply_clause(scope: PostScope) -> ColumnElement[bool]:
     """The Posts a Post of their own Channel answers (PTI-04, the **Reply** term).
 
     The reply names its parent's id **and** Channel, and is in that Channel
@@ -416,8 +416,6 @@ def _has_reply_clause(scope: PostScope | None) -> ColumnElement[bool]:
     probed per row; a correlated `EXISTS` and an unbounded set were both far
     too slow for the Type counts.
     """
-    if scope is None:
-        raise ValueError("Has a reply needs the window its replies are read from")
     reply = aliased(Post)
     channel = func.lower(reply.channel_name)
     replies = unscoped_select(
@@ -436,7 +434,7 @@ def _has_reply_clause(scope: PostScope | None) -> ColumnElement[bool]:
 def post_type_clause(
     value: PostType,
     followed_names: frozenset[str] | None,
-    scope: PostScope | None = None,
+    scope: PostScope,
 ) -> ColumnElement[bool]:
     if value == "is_reply":
         return col(Post.reply_to_post_id).is_not(None)
@@ -475,7 +473,7 @@ def media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
 def _channel_posts_clause(
     cond: ChannelPostsCond,
     filters: PostFilters,
-    scope: PostScope | None,
+    scope: PostScope,
     followed_names: frozenset[str] | None,
 ) -> ColumnElement[bool]:
     """The Posts whose Channel's count in the scope's window lies in the bound.
@@ -485,8 +483,6 @@ def _channel_posts_clause(
     absent from any group, so when the bound admits zero the clause keeps
     every Channel *not* among those whose count falls outside it.
     """
-    if scope is None:
-        raise ValueError("a Channel posts Condition needs the window it counts in")
     counted = scoped_select(select(col(Post.channel_name)), Post, scope.user_id).where(
         *scope.clauses()
     )
@@ -518,7 +514,7 @@ def _channel_posts_clause(
 def _atom_clause(
     cond: TreeCond,
     filters: PostFilters,
-    scope: PostScope | None,
+    scope: PostScope,
     followed_names: frozenset[str] | None,
 ) -> ColumnElement[bool]:
     if isinstance(cond, TypeCond):
@@ -549,7 +545,7 @@ def tree_clause(
     *,
     filters: PostFilters,
     followed_names: frozenset[str] | None = None,
-    scope: PostScope | None = None,
+    scope: PostScope,
 ) -> ColumnElement[bool]:
     """`node` as one predicate, evaluated the way the Channels tab evaluates.
 
@@ -566,7 +562,7 @@ def post_filter_clauses(
     filters: PostFilters,
     *,
     followed_names: frozenset[str] | None = None,
-    scope: PostScope | None = None,
+    scope: PostScope,
 ) -> list[ColumnElement[bool]]:
     """Build the WHERE predicates for `filters` (channel/date handled elsewhere)."""
     clauses: list[ColumnElement[bool]] = []
@@ -586,7 +582,7 @@ def apply_post_filters(
     filters: PostFilters,
     *,
     followed_names: frozenset[str] | None = None,
-    scope: PostScope | None = None,
+    scope: PostScope,
 ) -> Any:
     """Return `stmt` narrowed by every predicate `filters` implies."""
     for clause in post_filter_clauses(

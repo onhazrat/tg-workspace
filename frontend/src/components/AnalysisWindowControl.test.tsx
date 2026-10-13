@@ -19,9 +19,9 @@ import { useState } from "react"
 import {
   AnalysisWindowControl,
   WindowHistogramContext,
-  type WindowHistogramQuery,
 } from "@/components/AnalysisWindowControl"
 import { ScopeProvider, useScope } from "@/contexts/ScopeContext"
+import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { DAY_MS, formatLocalMinute, HOUR_MS } from "@/lib/scope/window"
 
 const NOW = Date.UTC(2026, 8, 11, 14, 30)

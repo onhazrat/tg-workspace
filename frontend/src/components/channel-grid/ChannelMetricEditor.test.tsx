@@ -193,10 +193,10 @@ describe("the binning rule the server shares", () => {
       median: 99,
     },
   ])("$name", ({ values, log, bars, mid, median }) => {
-    const got = histogram(values)
+    const got = histogram([...values])
     expect(got.log).toBe(log)
     expect(got.bins.length).toBe(32)
-    expect(filled(got.bins)).toEqual(bars)
+    expect(filled(got.bins)).toEqual([...bars])
     expect(got.edge(0)).toBe(values[0])
     expect(got.edge(16)).toBeCloseTo(mid, 6)
     expect(got.edge(32)).toBeCloseTo(values[values.length - 1], 6)

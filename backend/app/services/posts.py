@@ -53,6 +53,7 @@ from app.services.post_filters import (
 )
 from app.services.reach import MS_PER_HOUR, REFRESH_HORIZON_HOURS
 from app.services.serialization import post_to_camel
+from app.services.settling_curve import current_estimate
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import scoped_select, unscoped_select
 from app.services.view_observations import Sighting, record_view_observations
@@ -1132,8 +1133,16 @@ def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str,
 VALUE_BINS = 32
 
 
-def _same(v: float) -> float:
+def _identity(v: float) -> float:
     return v
+
+
+def _bucket_counts(session: Session, stmt: Any, index: Any, n: int) -> list[int]:
+    """`stmt`, selecting `(index, count)`, grouped by `index` into `n` buckets."""
+    counts = [0] * n
+    for i, c in session.exec(stmt.group_by(index)).all():
+        counts[int(i)] += c
+    return counts
 
 
 @dataclass(frozen=True)
@@ -1148,18 +1157,36 @@ class ValueHistogram:
     total: int
 
 
+def _measured_value(
+    session: Session,
+    scope: PostScope,
+    measure: ValueMeasure,
+    filters: PostFilters | None,
+) -> Any:
+    """What one row of `measure` reads: a Post's views, or a Channel's count."""
+    if measure == "views":
+        return ViewReading("views").of(Post)
+    if measure == "estimated":
+        return ViewReading("estimated", *current_estimate(session)).of(Post)
+    if measure == "channel_posts":
+        return func.count()
+    aside = channel_posts_aside(filters or PostFilters())
+    kept = post_filter_clauses(
+        aside,
+        followed_names=_followed_for(session, aside, scope.user_id),
+        scope=scope,
+    )
+    return func.count().filter(and_(true(), *kept))
+
+
 def value_histogram(
     session: Session,
     *,
-    user_id: uuid.UUID,
-    channel_names: list[str] | None,
-    start_date: int | None,
-    end_date: int | None,
+    scope: PostScope,
     measure: ValueMeasure,
-    reading: ViewReading | None = None,
     filters: PostFilters | None = None,
 ) -> ValueHistogram:
-    """One measure across the Posts, or the Channels, in the window.
+    """One measure across the Posts, or the Channels, in the scope.
 
     The Channels tab's rule, so the Posts editors draw what its editors draw:
     32 bars from the lowest value to the highest, and past two orders of
@@ -1168,34 +1195,16 @@ def value_histogram(
     no place. A Post with no value (none recorded, or too new to estimate) is
     in `total` and not in `measured`.
 
-    `views` and `estimated` read `reading` per Post, the Post filter aside.
+    `views` and `estimated` read each Post, the Post filter aside.
     `channel_posts` and `channel_posts_filtered` count Channels by their
     count in the window (PTI-02); the filtered one counts only what `filters`
     keeps with every Channel posts Condition set aside, as the Condition
     counts, and a Channel whose Posts it all hides is a 0.
     """
-    if measure == "views" or measure == "estimated":
-        assert reading is not None
-        value: Any = reading.of(Post)
-    elif measure == "channel_posts":
-        value = func.count()
-    else:
-        aside = channel_posts_aside(filters or PostFilters())
-        kept = post_filter_clauses(
-            aside,
-            followed_names=_followed_for(session, aside, user_id),
-            scope=PostScope(user_id, channel_names, start_date, end_date),
-        )
-        value = func.count().filter(and_(true(), *kept))
-    stmt = _in_scope(
-        session,
-        select(value.label("x")).select_from(Post),
-        user_id=user_id,
-        channel_names=channel_names,
-        start_date=start_date,
-        end_date=end_date,
-        filters=None,
-    )
+    value = _measured_value(session, scope, measure, filters)
+    stmt = scoped_select(
+        select(value.label("x")).select_from(Post), Post, scope.user_id
+    ).where(*scope.clauses())
     if measure.startswith("channel_posts"):
         stmt = stmt.group_by(col(Post.channel_name))
     inner = stmt.subquery()
@@ -1218,7 +1227,7 @@ def value_histogram(
     log = lo >= 0 and hi / (lo if lo > 0 else 1) > 100
     scale: tuple[Callable[[float], float], Callable[[float], float], Any]
     if not log:
-        scale = (_same, _same, x)
+        scale = (_identity, _identity, x)
     elif lo > 0:
         scale = (math.log, math.exp, func.ln(x))
     else:
@@ -1234,11 +1243,12 @@ def value_histogram(
             func.greatest(0, func.floor((axis - f(lo)) / span * VALUE_BINS)),
         )
     )
-    bins = [0] * VALUE_BINS
-    for i, n in session.exec(
-        select(index, func.count()).where(x.is_not(None)).group_by(index)
-    ).all():
-        bins[int(i)] += n
+    bins = _bucket_counts(
+        session,
+        select(index, func.count()).where(x.is_not(None)),
+        index,
+        VALUE_BINS,
+    )
     edges = [inv(f(lo) + span * i / VALUE_BINS) for i in range(VALUE_BINS + 1)]
     edges[0], edges[-1] = lo, hi
     return ValueHistogram(bins, edges, log, float(median), int(measured), int(total))
@@ -1250,10 +1260,7 @@ def value_histogram(
 def window_histogram(
     session: Session,
     *,
-    user_id: uuid.UUID,
-    channel_names: list[str] | None,
-    start_date: int | None,
-    end_date: int | None,
+    scope: PostScope,
     extent_start: int,
     extent_end: int,
     buckets: int,
@@ -1264,28 +1271,19 @@ def window_histogram(
     The extent is half-open like the Analysis window, so a Post on a slice's
     edge belongs to the later slice only: whole-number division, never a
     float that could put it on either side. `filters` apply without the cap,
-    and against the Analysis window (`start_date`, `end_date`) rather than
-    the extent, which is where a Channel posts Condition counts. Has a reply
-    reads replies from the earlier of the two starts, since the extent can
-    open before the window.
+    and against the scope's Analysis window rather than the extent, which is
+    where a Channel posts Condition counts. Has a reply reads replies from the
+    earlier of the two starts, since the extent can open before the window.
     """
     index = (
         (col(Post.timestamp) - extent_start) * buckets // (extent_end - extent_start)
     )
-    extent = PostScope(user_id, channel_names, extent_start, extent_end)
-    window = PostScope(
-        user_id,
-        channel_names,
-        start_date,
-        end_date,
-        replies_since=None if start_date is None else min(start_date, extent_start),
-    )
-    stmt = scoped_select(select(index, func.count()), Post, user_id).where(
+    extent = replace(scope, start_date=extent_start, end_date=extent_end)
+    if scope.start_date is not None:
+        scope = replace(scope, replies_since=min(scope.start_date, extent_start))
+    stmt = scoped_select(select(index, func.count()), Post, scope.user_id).where(
         *extent.clauses()
     )
-    counts = [0] * buckets
-    for i, n in session.exec(
-        _filtered(session, stmt, filters, window).group_by(index)
-    ).all():
-        counts[int(i)] += n
-    return counts
+    return _bucket_counts(
+        session, _filtered(session, stmt, filters, scope), index, buckets
+    )

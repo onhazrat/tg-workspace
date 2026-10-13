@@ -15,11 +15,11 @@ import React from "react"
 import {
   AnalysisWindowControl,
   WindowHistogramContext,
-  type WindowHistogramQuery,
 } from "@/components/AnalysisWindowControl"
 import { FilterRow } from "@/components/filter-tree/FilterRow"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { funnelledValues } from "@/lib/filter-tree"
 import {
   emptyPostFilter,

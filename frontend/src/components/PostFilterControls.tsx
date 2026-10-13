@@ -44,8 +44,9 @@ import {
 } from "@/lib/filter-tree"
 import {
   addPostFunnel,
-  isChannelPosts,
   measureLabel,
+  numberCond,
+  POST_NUMBER,
   POST_NUMBERS,
   POST_TYPE_VALUES,
   type PostCond,
@@ -56,7 +57,6 @@ import {
   postNumberOf,
   wholeBound,
 } from "@/lib/posts/post-filter"
-import { viewMeasureDescription } from "@/lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS } from "@/lib/posts/post-media"
 
 export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
@@ -115,25 +115,10 @@ function PostValueHistogram({
         log: d.log,
       }}
       bound={bound}
-      noun={isChannelPosts(measure) ? "channels" : "posts"}
+      noun={POST_NUMBER[measure].noun}
       onSelect={onSelect}
     />
   )
-}
-
-/** What a number counts, in one line. */
-function numberDescription(measure: PostNumber, floorHours: number): string {
-  if (measure === "channel_posts")
-    return "How many posts the post's channel has in the window."
-  if (measure === "channel_posts_filtered")
-    return "How many of the channel's posts in the window the rest of the filter and the search keep."
-  return viewMeasureDescription(measure, floorHours)
-}
-
-/** A number and its bound as the Condition it spells. */
-function numberCond(measure: PostNumber, bound: MetricBound): PostCond {
-  if (!isChannelPosts(measure)) return { type: "views", measure, ...bound }
-  return { type: measure, min: bound.min, max: bound.max }
 }
 
 /**
@@ -156,7 +141,7 @@ export function PostNumberEditor({
   onSubmit: (cond: PostCond) => void
   onBack?: () => void
 }) {
-  const counts = isChannelPosts(measure)
+  const counts = POST_NUMBER[measure].whole
   const [op, setOp] = useState<BoundKind>(boundKind(initial))
   const [a, setA] = useState(
     String((op === "lte" ? initial?.max : initial?.min) ?? ""),
@@ -192,7 +177,7 @@ export function PostNumberEditor({
         {measureLabel(measure)}
       </div>
       <p className="text-[11px] text-app-ink/50">
-        {numberDescription(measure, floorHours)}
+        {POST_NUMBER[measure].description(floorHours)}
       </p>
       {read && (
         <PostValueHistogram
@@ -263,9 +248,11 @@ const LISTS: {
   { type: "channel", label: "Channel", options: (o) => o.channels },
 ]
 
-/** A number's picker entry; the views measures keep the ids they had. */
-const numberEntry = (number: PostNumber): string =>
-  isChannelPosts(number) ? number : `views:${number}`
+/** `start`'s bound when it bounds `number`, the Condition that editor changes. */
+const numberStart = (start: PostCond | undefined, number: PostNumber) => {
+  const n = start && postNumberOf(start)
+  return n && n.number === number ? n.bound : undefined
+}
 
 /** The Post Conditions as the shared filter row and picker read them. */
 export function postVocabulary(
@@ -290,17 +277,13 @@ export function postVocabulary(
         heading: "Numbers",
         entries: POST_NUMBERS.map((m) => ({
           kind: "editor" as const,
-          id: numberEntry(m.value),
+          id: m.entry,
           label: m.label,
-          icon: isChannelPosts(m.value) ? Hash : Eye,
+          icon: m.icon,
           render: ({ start, onSubmit, onBack }) => (
             <PostNumberEditor
               measure={m.value}
-              initial={
-                start && postNumberOf(start) === m.value
-                  ? (start as MetricBound)
-                  : undefined
-              }
+              initial={numberStart(start, m.value)}
               floorHours={floorHours}
               onBack={onBack}
               onSubmit={onSubmit}
@@ -310,8 +293,8 @@ export function postVocabulary(
       },
     ],
     entryOf: (cond) => {
-      const number = postNumberOf(cond)
-      return number === null ? cond.type : numberEntry(number)
+      const number = postNumberOf(cond)?.number
+      return number === undefined ? cond.type : POST_NUMBER[number].entry
     },
     label: postConditionLabel,
     icon: (cond) => POST_CONDITION_ICON[cond.type],
@@ -418,10 +401,8 @@ export function PostFiltersMenu({
   const [picked, setPicked] = useState<PostNumber | null>(null)
   const [query, setQuery] = useState("")
   const bounds = atoms(filter).flatMap((a) => {
-    const number = postNumberOf(a.cond)
-    return number === null
-      ? []
-      : [{ number, not: a.not, bound: a.cond as MetricBound }]
+    const n = postNumberOf(a.cond)
+    return n ? [{ ...n, not: a.not }] : []
   })
   const active = bounds.length > 0
   const onOpenChange = (next: boolean) => {

@@ -23,11 +23,11 @@ import {
   type PostWindowHistogramRequest,
   type ViewEstimateResponse,
 } from "@/client"
-import type { WindowHistogramQuery } from "@/components/AnalysisWindowControl"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
@@ -277,6 +277,25 @@ export function usePostFacets(
 }
 
 /**
+ * The window, the selected Channels, and the Post filter and keyword as a
+ * spotlight shows them with the cap aside: what the two histograms read.
+ */
+function useUncappedView(spotlight: ChannelSpotlight | null) {
+  const { startDate, endDate, windowKey } = useScope()
+  const { postFilter, postSearch } = useScraper()
+  const keyword = useDebouncedValue(postSearch, 300)
+  const selected = useSelectedChannelNames()
+  const view = spotlightView(spotlight, {
+    channelNames: selected,
+    keyword,
+    filter: postFilter,
+    maxPerChannel: 0,
+    groupByChannel: false,
+  })
+  return { startDate, endDate, windowKey, selected, view }
+}
+
+/**
  * One number's bars over the window and the selected Channels, or the
  * spotlit one, for a number filter's editor (PTI-01). Filters aside, so it is
  * keyed on the Channels, the window and the number alone, and the bars hold
@@ -288,16 +307,7 @@ export function usePostValueHistogram(
   measure: PostNumber,
   spotlight: ChannelSpotlight | null,
 ): PostValueHistogramResponse | undefined {
-  const { startDate, endDate, windowKey } = useScope()
-  const { postFilter, postSearch } = useScraper()
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
-  const view = spotlightView(spotlight, {
-    channelNames: useSelectedChannelNames(),
-    keyword: debouncedPostSearch,
-    filter: postFilter,
-    maxPerChannel: 0,
-    groupByChannel: false,
-  })
+  const { startDate, endDate, windowKey, view } = useUncappedView(spotlight)
   const { channelNames } = view
   const filtered = measure === "channel_posts_filtered"
   const filters = filtered
@@ -335,17 +345,8 @@ export function usePostWindowHistogram(
   query: WindowHistogramQuery,
   spotlight: ChannelSpotlight | null,
 ): number[] | undefined {
-  const { startDate, endDate, windowKey } = useScope()
-  const { postFilter, postSearch } = useScraper()
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
-  const selected = useSelectedChannelNames()
-  const view = spotlightView(spotlight, {
-    channelNames: selected,
-    keyword: debouncedPostSearch,
-    filter: postFilter,
-    maxPerChannel: 0,
-    groupByChannel: false,
-  })
+  const { startDate, endDate, windowKey, selected, view } =
+    useUncappedView(spotlight)
   const scope = query.unfiltered
     ? { channelNames: selected }
     : {

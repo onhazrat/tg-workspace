@@ -33,6 +33,7 @@ import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { useScope } from "@/contexts/ScopeContext"
 import { useUI } from "@/contexts/UIContext"
 import { useIsMobile } from "@/hooks/useMobile"
+import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { MINUTE_MS } from "@/lib/analysis-window"
 import { formatCount } from "@/lib/format-count"
 import {
@@ -44,15 +45,6 @@ import {
 } from "@/lib/scope/window"
 
 // ---- The chart (PTI-03) ------------------------------------------------------
-
-/** What the chart asks for: Posts per equal slice of `[extentStart, extentEnd)`. */
-export type WindowHistogramQuery = {
-  extentStart: number
-  extentEnd: number
-  buckets: number
-  /** Every Post of the selected Channels, rather than what the filter keeps. */
-  unfiltered: boolean
-}
 
 /**
  * A hook answering a query's counts, `undefined` while they load. Context

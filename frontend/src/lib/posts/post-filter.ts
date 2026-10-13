@@ -8,6 +8,7 @@
  * It lives in the workspace URL as `?postFilter=`, the text form below.
  */
 
+import { Eye, Hash, type LucideIcon } from "lucide-react"
 import {
   boundKind,
   boundText,
@@ -31,6 +32,7 @@ import {
   labelOf,
   languageLabel,
   VIEW_MEASURE_OPTIONS,
+  viewMeasureDescription,
 } from "@/lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS, type MediaKind } from "@/lib/posts/post-media"
 
@@ -66,31 +68,90 @@ export type ChannelPostsNumber = "channel_posts" | "channel_posts_filtered"
 /** A number the Filters menu bounds; also the measure its histogram reads. */
 export type PostNumber = ViewMeasure | ChannelPostsNumber
 
+/** Everything the editors, the menu and the picker say about one number. */
+export type PostNumberRow = {
+  label: string
+  value: PostNumber
+  /** The condition picker's entry id; the views measures keep theirs. */
+  entry: string
+  icon: LucideIcon
+  /** What its histogram's bars count. */
+  noun: "posts" | "channels"
+  /** A count: whole bounds, rounded inward, and never "no value" (PTI-02). */
+  whole: boolean
+  /** What it counts, in one line. */
+  description: (floorHours: number) => string
+}
+
+const viewsNumber = (value: ViewMeasure): PostNumberRow => ({
+  label: labelOf(VIEW_MEASURE_OPTIONS, value),
+  value,
+  entry: `views:${value}`,
+  icon: Eye,
+  noun: "posts",
+  whole: false,
+  description: (floorHours) => viewMeasureDescription(value, floorHours),
+})
+
+const channelPostsNumber = (
+  value: ChannelPostsNumber,
+  label: string,
+  description: string,
+): PostNumberRow => ({
+  label,
+  value,
+  entry: value,
+  icon: Hash,
+  noun: "channels",
+  whole: true,
+  description: () => description,
+})
+
+export const POST_NUMBER: Record<PostNumber, PostNumberRow> = {
+  views: viewsNumber("views"),
+  estimated: viewsNumber("estimated"),
+  channel_posts: channelPostsNumber(
+    "channel_posts",
+    "Channel posts in window",
+    "How many posts the post's channel has in the window.",
+  ),
+  channel_posts_filtered: channelPostsNumber(
+    "channel_posts_filtered",
+    "Channel posts in filtered window",
+    "How many of the channel's posts in the window the rest of the filter and the search keep.",
+  ),
+}
+
 /**
  * The number filters, in the Filters menu's order. The menu and the
  * condition picker both read this list, so neither can offer one the other
  * does not.
  */
-export const POST_NUMBERS: { label: string; value: PostNumber }[] = [
-  ...VIEW_MEASURE_OPTIONS,
-  { label: "Channel posts in window", value: "channel_posts" },
-  {
-    label: "Channel posts in filtered window",
-    value: "channel_posts_filtered",
-  },
-]
+export const POST_NUMBERS: PostNumberRow[] = Object.values(POST_NUMBER)
 
-export const isChannelPosts = (
-  number: PostNumber,
-): number is ChannelPostsNumber =>
-  number === "channel_posts" || number === "channel_posts_filtered"
+export const isChannelPosts = (type: string): type is ChannelPostsNumber =>
+  type === "channel_posts" || type === "channel_posts_filtered"
 
-/** The number a bound Condition bounds, or `null` for a value Condition. */
-export function postNumberOf(cond: PostCond): PostNumber | null {
-  if (cond.type === "views") return cond.measure
-  if (cond.type === "channel_posts" || cond.type === "channel_posts_filtered")
-    return cond.type
-  return null
+type PostNumberCond = PostViewsCond | PostChannelPostsCond
+
+const isNumberCond = (cond: PostCond): cond is PostNumberCond =>
+  cond.type === "views" || isChannelPosts(cond.type)
+
+const numberOf = (cond: PostNumberCond): PostNumber =>
+  cond.type === "views" ? cond.measure : cond.type
+
+/** The number a bound Condition bounds and its bound, or `null` for a value Condition. */
+export function postNumberOf(
+  cond: PostCond,
+): { number: PostNumber; bound: MetricBound } | null {
+  return isNumberCond(cond) ? { number: numberOf(cond), bound: cond } : null
+}
+
+/** A number and its bound as the Condition it spells. */
+export function numberCond(number: PostNumber, bound: MetricBound): PostCond {
+  if (!isChannelPosts(number))
+    return { type: "views", measure: number, ...bound }
+  return { type: number, min: bound.min, max: bound.max }
 }
 
 /**
@@ -141,7 +202,7 @@ export const isEmptyPostFilter = (filter: PostFilter): boolean =>
 // ---- Labels ----------------------------------------------------------------
 
 export const measureLabel = (measure: PostNumber): string =>
-  labelOf(POST_NUMBERS, measure)
+  POST_NUMBER[measure].label
 
 /** A chip's label: "Persian", "Photo", "Forwarded", "@channel", "Views ≥ 10K". */
 export function postConditionLabel(cond: PostCond): string {
@@ -172,9 +233,7 @@ const PREFIX: Record<PostValueCond["type"], string> = {
 }
 
 function condText(cond: PostCond): string {
-  if (cond.type === "views") return boundWords(cond.measure, cond)
-  if (cond.type === "channel_posts" || cond.type === "channel_posts_filtered")
-    return boundWords(cond.type, cond)
+  if (isNumberCond(cond)) return boundWords(numberOf(cond), cond)
   return `${PREFIX[cond.type]}:${quote(cond.value)}`
 }
 
