@@ -10,17 +10,17 @@ reference (as browser-side pick sets; here they are server-side Tags).
 
 **Blocked by:** DFP-02, DFP-03
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Routes to tag or untag a list of handles (followed or not) with one Tag, list the Account's Tags with Channel counts, rename a Tag Account-wide (onto an existing name merges), and delete a Tag Account-wide; each with a response model, approval-gated, refused in View-as without elevation, and classified by every route guard
-- [ ] The bulk bar tags or untags the Ticks with an existing or new Tag; the panel adds and removes the open Channel's Tags; rows, cards and the panel show Tags
-- [ ] A Tags control ticks exactly a Tag's Channels, renames it and deletes it after a confirmation stating how many Channels it is on
-- [ ] A `tag` Condition in the Directory filter, `tag:"news"` in the text form, resolved by the server in the read for the caller (the target under View-as); NOT negates it
-- [ ] A Condition naming a Tag the reader does not have keeps its chip, struck through, and matches nothing
-- [ ] `group:` Tags resolve in the Directory to the Account's followed Channels in that Setting group
-- [ ] `t` in keyboard mode opens the Tag picker for the highlighted row
-- [ ] Tag state is server state through TanStack Query; nothing about Tags is kept in browser storage
-- [ ] Backend tests through the Directory reads: a `tag` Condition and its negation for two Accounts holding a Tag of the same name with different Channels; an unknown Tag matches nothing
-- [ ] Backend tests through the Tag routes, including a foreign Account's Tags untouched in both flag states
-- [ ] Playwright: tag the Ticks and see the badge; add "In the Tag" and see the request name the Tag
-- [ ] The generated client is regenerated and the Playwright mocks follow any changed response shape
+- [x] Routes to tag or untag a list of handles (followed or not) with one Tag, list the Account's Tags with Channel counts, rename a Tag Account-wide (onto an existing name merges), and delete a Tag Account-wide; each with a response model, approval-gated, refused in View-as without elevation, and classified by every route guard
+- [x] The bulk bar tags or untags the Ticks with an existing or new Tag; the panel adds and removes the open Channel's Tags; rows, cards and the panel show Tags
+- [x] A Tags control ticks exactly a Tag's Channels, renames it and deletes it after a confirmation stating how many Channels it is on
+- [x] A `tag` Condition in the Directory filter, `tag:"news"` in the text form, resolved by the server in the read for the caller (the target under View-as); NOT negates it
+- [x] A Condition naming a Tag the reader does not have keeps its chip, struck through, and matches nothing
+- [x] `group:` Tags resolve in the Directory to the Account's followed Channels in that Setting group
+- [x] `t` in keyboard mode opens the Tag picker for the highlighted row
+- [x] Tag state is server state through TanStack Query; nothing about Tags is kept in browser storage
+- [x] Backend tests through the Directory reads: a `tag` Condition and its negation for two Accounts holding a Tag of the same name with different Channels; an unknown Tag matches nothing
+- [x] Backend tests through the Tag routes, including a foreign Account's Tags untouched in both flag states
+- [x] Playwright: tag the Ticks and see the badge; add "In the Tag" and see the request name the Tag
+- [x] The generated client is regenerated and the Playwright mocks follow any changed response shape
