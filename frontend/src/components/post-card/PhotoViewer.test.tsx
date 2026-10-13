@@ -5,6 +5,8 @@
  * `photo-viewer-model.test.ts`; this pins the behaviour around it.
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import {
   FeedPagingContext,
@@ -402,6 +404,23 @@ describe("PhotoViewerDialog", () => {
 })
 
 describe("opened from the Posts feed, it pages the feed (PTI-05)", () => {
+  // Only `PostFeed` provides the paging, and rendering it needs the whole
+  // app, so its source is what is read: the provider must wrap the cards.
+  test("the Posts feed provides its paging around the cards", () => {
+    const src = readFileSync(
+      join(import.meta.dir, "..", "PostFeed.tsx"),
+      "utf8",
+    )
+    const open = src.indexOf(
+      "<FeedPagingContext.Provider value={{ loadMore, hasMore }}>",
+    )
+    const cards = src.indexOf("<PostFeedResults")
+    const close = src.indexOf("</FeedPagingContext.Provider>")
+    expect(open).toBeGreaterThan(-1)
+    expect(cards).toBeGreaterThan(open)
+    expect(close).toBeGreaterThan(cards)
+  })
+
   const viewer = (start: string, loadMore = () => {}, hasMore = true) =>
     render(
       <FeedPagingContext.Provider value={{ loadMore, hasMore }}>

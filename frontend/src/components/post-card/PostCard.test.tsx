@@ -383,11 +383,11 @@ describe("PostCardClampedBody", () => {
   })
 
   // The real row heights are pinned in summarizer-posts-compact.spec.ts.
-  test("shows the whole lines its box has room for, never under three", () => {
+  test("a text-only card shows the lines its row has room for, never under three", () => {
     const { getComputedStyle: real } = globalThis
     const proto = HTMLElement.prototype
     const clientHeight = Object.getOwnPropertyDescriptor(proto, "clientHeight")
-    const roomFor = (px: number) => {
+    const roomFor = (px: number, thumbApiPath?: string) => {
       globalThis.getComputedStyle = ((el: Element) => ({
         ...real(el),
         lineHeight: "20px",
@@ -396,7 +396,18 @@ describe("PostCardClampedBody", () => {
         configurable: true,
         get: () => px,
       })
-      render(<PostCardClampedBody text="t" linkSpans={null} postSearch="" />)
+      render(
+        <PostCardView
+          post={{ ...post, media: thumbApiPath ? { thumbApiPath } : undefined }}
+          channel={undefined}
+          followsForwardSource={false}
+          onAddChannel={() => {}}
+          postSearch=""
+          text={post.text}
+          translation={{ showing: false, busy: false, onToggle: () => {} }}
+          compact
+        />,
+      )
       const height = screen.getByTestId("compact-text").style.height
       cleanup()
       return height
@@ -404,6 +415,8 @@ describe("PostCardClampedBody", () => {
     try {
       expect(roomFor(139)).toBe("9em") // 6 lines of 1.5em
       expect(roomFor(20)).toBe("4.5em")
+      // A photo card's text keeps its three lines: only text-only cards grow.
+      expect(roomFor(139, "/api/v1/thumb")).toBe("4.5em")
     } finally {
       globalThis.getComputedStyle = real
       // happy-dom's own getter, which a bare `delete` would lose for good.

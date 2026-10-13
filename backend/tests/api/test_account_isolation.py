@@ -245,12 +245,14 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ("POST", f"{DATA}/posts/value-histogram"): (
         Reason.COVERED_ELSEWHERE,
         "two live accounts, a foreign Channel named and none named; "
-        "test_post_value_histogram.py",
+        "test_post_value_histogram.py. Not PROBED here: it answers bar counts, not rows, "
+        "so this file's by-id and list probes have no id to look for",
     ),
     ("POST", f"{DATA}/posts/window-histogram"): (
         Reason.COVERED_ELSEWHERE,
         "two live accounts, a foreign Channel named and none named; "
-        "test_post_window_histogram.py",
+        "test_post_window_histogram.py. Not PROBED here: it answers bar counts, not rows, "
+        "so this file's by-id and list probes have no id to look for",
     ),
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,

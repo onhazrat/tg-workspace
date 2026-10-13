@@ -1206,7 +1206,10 @@ def value_histogram(
             func.max(x),
             func.count(x),
             func.count(),
-            func.percentile_cont(0.5).within_group(x),
+            # The Channels tab's median, `sorted[floor(n / 2)]`: the
+            # ceil(n / 2)-th largest is that element, where `percentile_cont`
+            # would interpolate and ascending `percentile_disc` takes the lower.
+            func.percentile_disc(0.5).within_group(x.desc()),
         ).select_from(inner)
     ).one()
     if not measured:
@@ -1262,13 +1265,21 @@ def window_histogram(
     edge belongs to the later slice only: whole-number division, never a
     float that could put it on either side. `filters` apply without the cap,
     and against the Analysis window (`start_date`, `end_date`) rather than
-    the extent, which is where a Channel posts Condition counts.
+    the extent, which is where a Channel posts Condition counts. Has a reply
+    reads replies from the earlier of the two starts, since the extent can
+    open before the window.
     """
     index = (
         (col(Post.timestamp) - extent_start) * buckets // (extent_end - extent_start)
     )
     extent = PostScope(user_id, channel_names, extent_start, extent_end)
-    window = PostScope(user_id, channel_names, start_date, end_date)
+    window = PostScope(
+        user_id,
+        channel_names,
+        start_date,
+        end_date,
+        replies_since=None if start_date is None else min(start_date, extent_start),
+    )
     stmt = scoped_select(select(index, func.count()), Post, user_id).where(
         *extent.clauses()
     )

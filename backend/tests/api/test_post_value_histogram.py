@@ -15,6 +15,14 @@ the second account `vh_est` and `vh_x`, over one shared corpus.
 * count a Post with no value as measured -> `measured` against `total`
 * read without the tenancy seam -> another account's Posts
 * apply the Post filter or keyword -> `test_the_filter_and_keyword_are_aside`
+* interpolate the median (`percentile_cont`) -> 550 for `vh_lin`, 54 for `vh_zero`
+
+## Twin of the Channels tab
+
+`ChannelMetricEditor.test.tsx` pins the same three cases (`vh_lin`, `vh_log`,
+`vh_zero`) to the same bars, edges and median, the median being the value at
+`floor(n / 2)` of the sorted values. Change the rule on one side and the other
+side's copy of these cases is what tells you.
 """
 
 from __future__ import annotations
@@ -128,7 +136,7 @@ def test_two_orders_of_magnitude_or_fewer_bin_linearly(
     assert got["edges"][16] == 550
     assert got["edges"][32] == 1000
     assert _filled(got["bins"]) == [0, 3, 7, 10, 14, 17, 21, 24, 28, 31]
-    assert got["median"] == 550
+    assert got["median"] == 600
     assert (got["measured"], got["total"]) == (10, 10)
 
 
@@ -158,6 +166,7 @@ def test_a_range_from_zero_is_logarithmic_on_one_plus_the_value(
     assert _filled(got["bins"]) == [0, 10, 21, 31]
     assert got["edges"][0] == 0
     assert got["edges"][16] == pytest.approx(1000**0.5 - 1)
+    assert got["median"] == 99
 
 
 def test_a_post_with_no_value_is_counted_but_not_measured(

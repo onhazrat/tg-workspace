@@ -27,7 +27,7 @@ const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
  * nearly every Channel would land in the first bar. A range starting at 0 is
  * measured from 1 and drawn on log(1 + x), since log 0 has no place.
  */
-function histogram(values: number[]): Distribution {
+export function histogram(values: number[]): Distribution {
   const lo = values[0]
   const hi = values[values.length - 1]
   const log = lo >= 0 && hi / (lo > 0 ? lo : 1) > 100

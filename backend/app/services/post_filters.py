@@ -305,13 +305,16 @@ class PostFilters:
 class PostScope:
     """The account, Channels and window a read covers, and a rule is applied again over.
 
-    A Channel posts Condition counts within it (PTI-02).
+    A Channel posts Condition counts within it (PTI-02). `replies_since` is
+    where Has a reply starts reading replies, the window's start unless the
+    read tests Posts from before it (PTI-03's context bars).
     """
 
     user_id: uuid.UUID
     channel_names: list[str] | None = None
     start_date: int | None = None
     end_date: int | None = None
+    replies_since: int | None = None
 
     def clauses(self) -> list[ColumnElement[bool]]:
         clauses = analysis_window_clauses(self.start_date, self.end_date)
@@ -424,8 +427,9 @@ def _has_reply_clause(scope: PostScope | None) -> ColumnElement[bool]:
         col(reply.reply_to_post_id).is_not(None),
         channel == func.lower(cast(reply.reply_to, JSONB).op("->>")("channel")),
     )
-    if scope.start_date is not None:
-        replies = replies.where(reply.timestamp >= scope.start_date)
+    since = scope.replies_since if scope.replies_since is not None else scope.start_date
+    if since is not None:
+        replies = replies.where(reply.timestamp >= since)
     return tuple_(func.lower(col(Post.channel_name)), col(Post.post_id)).in_(replies)
 
 

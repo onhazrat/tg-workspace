@@ -23,6 +23,7 @@ The Operator follows `wh_a` and `wh_b`, the second account `wh_b` and `wh_x`.
 * a closed end, or a floor that puts a boundary in both buckets -> `test_the_extent_is_half_open`
 * count Channel posts over the extent -> `test_channel_posts_count_within_the_window`
 * read without the tenancy seam -> `test_another_accounts_posts_are_never_counted`
+* bound the replies by the window's start -> `test_has_a_reply_reads_replies_from_the_extent`
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ from app import crud
 from app.core.config import settings
 from app.core.db import engine
 from app.models import User, UserUpdate
+from app.models_tg import Post
 from tests.utils.tenancy import follow_channels
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.utils import get_superuser_token_headers
@@ -201,6 +203,38 @@ def test_another_accounts_posts_are_never_counted(
     assert sum(_counts(client, operator, channelNames=["wh_x"], unfiltered=True)) == 0
     assert _counts(client, operator, unfiltered=True)[2] == 0
     assert _counts(client, other, unfiltered=True) == [0, 0, 1, 0, 0, 1, 0, 0, 0, 0]
+
+
+def test_has_a_reply_reads_replies_from_the_extent(client: TestClient) -> None:
+    """A parent answered before the window opens, both inside the extent, has a reply.
+
+    The context bars reach back past the window, so the replies Has a reply
+    reads must start where the extent does.
+    """
+    with Session(engine) as session:
+        for post_id, minutes, parent in ((1, 1, None), (2, 2, 1)):
+            session.add(
+                Post(
+                    channel_name="wh_r",
+                    post_id=post_id,
+                    text="r",
+                    timestamp=E0 + minutes * MINUTE,
+                    reply_to_post_id=parent,
+                    reply_to=None if parent is None else {"channel": "wh_r"},
+                )
+            )
+        session.commit()
+        follow_channels(session, "wh_r")
+        session.commit()
+    answered = _atom({"type": "type", "value": "has_reply"})
+    late = {"mode": "fixed", "start": E0 + 5 * MINUTE, "end": E0 + 7 * MINUTE}
+    response = client.post(
+        URL,
+        json={**EXTENT, "window": late, "channelNames": ["wh_r"], "filter": answered},
+        headers=get_superuser_token_headers(client),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["counts"] == [0, 1] + [0] * 8
 
 
 @pytest.mark.parametrize("buckets", [0, 501])
