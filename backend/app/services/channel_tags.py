@@ -70,11 +70,30 @@ def get_tag_names(raw: Any) -> list[str]:
     return [tag["name"] for tag in normalize_channel_tags(raw)]
 
 
+#: The prefix reserving a Tag name for a Setting group's derived Tag.
+GROUP_TAG_PREFIX = "group:"
+
+
+def tag_key(name: str) -> str:
+    """The case-folded key `name` is stored under; "" for a blank name."""
+    return name.strip().lower()
+
+
+def is_group_tag(name: str) -> bool:
+    """Whether `name` is a Setting group's Tag: derived, never stored."""
+    return tag_key(name).startswith(GROUP_TAG_PREFIX)
+
+
+def group_tag_name(group: str) -> str:
+    """The `group:` Tag a Setting group named `group` shows as."""
+    return f"{GROUP_TAG_PREFIX}{group}"
+
+
 def reject_reserved_virtual_group_tags(raw: Any) -> None:
     from fastapi import HTTPException
 
     for tag in normalize_channel_tags(raw):
-        if tag["name"].lower().startswith("group:"):
+        if is_group_tag(tag["name"]):
             raise HTTPException(
                 status_code=400,
                 detail="Tags starting with 'group:' are reserved for setting groups",

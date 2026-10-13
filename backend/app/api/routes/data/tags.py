@@ -9,8 +9,6 @@ The handler function names here are settled and never renamed: the operation id
 derives from the function name.
 """
 
-import time
-
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import Session
 
@@ -69,11 +67,7 @@ def add_tag_channels(
     """Put a Tag on handles, followed or not; a new name makes a new Tag."""
     reject_reserved_virtual_group_tags([body.name])
     changed = tags.assign_tag(
-        session,
-        user_id=current_user.id,
-        name=body.name,
-        handles=body.handles,
-        assigned_at=int(time.time() * 1000),
+        session, user_id=current_user.id, name=body.name, handles=body.handles
     )
     _commit(session)
     return TagChangeResponse(changed=changed)
@@ -97,15 +91,14 @@ def rename_tag(
 ) -> TagResponse:
     """Rename a Tag on every Channel; onto a name the caller has, the two merge."""
     reject_reserved_virtual_group_tags([body.to])
-    if tags.is_group_tag(body.name) or not tags.handles_for_tag(
-        session, user_id=current_user.id, name=body.name
-    ):
-        raise HTTPException(status_code=404, detail=TAG_NOT_FOUND)
-    count = tags.rename_tag(
+    renamed = tags.rename_tag(
         session, user_id=current_user.id, name=body.name, to=body.to
     )
+    if renamed is None:
+        raise HTTPException(status_code=404, detail=TAG_NOT_FOUND)
     _commit(session)
-    return TagResponse(name=body.to, channels=count)
+    name, count = renamed
+    return TagResponse(name=name, channels=count)
 
 
 @router.delete("/tags")
@@ -113,10 +106,8 @@ def delete_tag(
     body: TagDeleteRequest, session: SessionDep, current_user: CurrentUser
 ) -> TagChangeResponse:
     """Take a Tag off every Channel."""
-    if tags.is_group_tag(body.name):
-        raise HTTPException(status_code=404, detail=TAG_NOT_FOUND)
     changed = tags.delete_tag(session, user_id=current_user.id, name=body.name)
-    if not changed:
+    if changed is None:
         raise HTTPException(status_code=404, detail=TAG_NOT_FOUND)
     _commit(session)
     return TagChangeResponse(changed=changed)

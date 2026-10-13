@@ -44,8 +44,9 @@ from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
 from app.models import User
-from app.models_tg import Channel, ChannelFollow, utc_now
+from app.models_tg import Channel, ChannelFollow, ChannelSettingGroup, utc_now
 from app.services.settings_store import get_global_setting
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import scoped_select
 
 #: Global `AppSetting` key recording that the follow backfill ran to completion.
@@ -585,6 +586,27 @@ def followed_channels_for(
         .order_by(col(Channel.id))
     ).all()
     return [(channel, follow) for channel, follow in rows]
+
+
+def followed_handles_by_group(
+    session: Session, *, user_id: uuid.UUID
+) -> list[tuple[str, str]]:
+    """`(Setting group name, normalized handle)` for each Channel `user_id`
+    follows, by the group *their* follow files it under.
+
+    What a `group:` Tag derives from (DFP-04, story 23). Ordered by group name
+    then handle.
+    """
+    rows = session.exec(
+        select(ChannelSettingGroup.name, Channel.name)
+        .join(ChannelFollow, col(Channel.id) == col(ChannelFollow.channel_id))
+        .join(
+            ChannelSettingGroup,
+            col(ChannelSettingGroup.id) == col(ChannelFollow.setting_group_id),
+        )
+        .where(ChannelFollow.user_id == user_id)
+    ).all()
+    return sorted((str(group), normalize_handle(str(name))) for group, name in rows)
 
 
 def followed_channel_names(

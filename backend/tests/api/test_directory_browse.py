@@ -1564,6 +1564,20 @@ def test_a_group_tag_is_the_followed_channels_in_that_setting_group(
     in_group = root(atom(tag("group:morning reads")))
     assert _handles(client, operator, filter=in_group) == ["dt_followed_a"]
 
+    # Story 23: listed among the Tags with its count, and on the row's badges.
+    listed = client.get(TAGS, headers=operator).json()
+    assert {"name": "group:Morning Reads", "channels": 1} in listed
+    rows = {r["handle"]: r["tags"] for r in _list(client, operator)["rows"]}
+    assert rows["dt_followed_a"] == ["group:Morning Reads"]
+    entry = _entry(client, operator, "dt_followed_a").json()
+    assert entry["tags"] == ["group:Morning Reads"]
+    # Derived, so neither renamed nor deleted.
+    named = {"name": "group:Morning Reads"}
+    renamed = client.patch(TAGS, json={**named, "to": "x"}, headers=operator)
+    assert renamed.status_code == 404
+    deleted = client.request("DELETE", TAGS, json=named, headers=operator)
+    assert deleted.status_code == 404
+
 
 # ---- A Tag as Seeds (DFP-05) ----------------------------------------------------
 

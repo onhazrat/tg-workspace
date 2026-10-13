@@ -17,6 +17,7 @@ the rest of the Directory filter, in `test_directory_browse.py`.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from typing import Any
 
@@ -76,10 +77,17 @@ def _remove(client: TestClient, headers: Headers, name: str, *handles: str) -> A
     )
 
 
-def _tags(client: TestClient, headers: Headers) -> list[tuple[str, int]]:
+def _tags(
+    client: TestClient, headers: Headers, *, groups: bool = False
+) -> list[tuple[str, int]]:
+    """The caller's Tags; the derived `group:` ones only when asked for."""
     response = client.get(TAGS, headers=headers)
     assert response.status_code == 200, response.text
-    return [(t["name"], t["channels"]) for t in response.json()]
+    return [
+        (t["name"], t["channels"])
+        for t in response.json()
+        if groups or not t["name"].startswith("group:")
+    ]
 
 
 def _handles(client: TestClient, headers: Headers, name: str) -> list[str]:
@@ -123,9 +131,35 @@ def test_rename_respells_and_merges_onto_an_existing_tag(
     assert respelled.json() == {"name": "News", "channels": 2}
     merged = client.patch(TAGS, json={"name": "news", "to": "world"}, headers=operator)
     assert merged.status_code == 200, merged.text
-    assert merged.json() == {"name": "world", "channels": 3}
+    # The survivor's spelling, not what was typed.
+    assert merged.json() == {"name": "World", "channels": 3}
     assert [name.lower() for name, _ in _tags(client, operator)] == ["world"]
     assert _handles(client, operator, "world") == ["a_both", "a_one", "a_two"]
+
+
+def test_a_merge_leaves_one_spelling_the_targets_first(
+    client: TestClient, accounts: tuple[Headers, Headers]
+) -> None:
+    """Every row ends with the surviving Tag's first-written spelling, not a
+    mix of it, its later spellings and what was typed."""
+    operator, _ = accounts
+    with Session(engine) as session:
+        follow_channels(session, "tg_first", "tg_later")
+        session.commit()
+    _add(client, operator, "World", "tg_first")
+    time.sleep(0.01)
+    _add(client, operator, "world", "tg_later")
+    _add(client, operator, "news", "tg_followed", "tg_first")
+
+    merged = client.patch(TAGS, json={"name": "news", "to": "WORLD"}, headers=operator)
+    assert merged.json() == {"name": "World", "channels": 3}
+    channels = client.get(f"{settings.API_V1_STR}/data/channels", headers=operator)
+    spellings = {c["id"]: [t["name"] for t in c["tags"]] for c in channels.json()}
+    assert spellings == {
+        "tg_followed": ["World"],
+        "tg_first": ["World"],
+        "tg_later": ["World"],
+    }
 
 
 def test_delete_takes_a_tag_off_every_channel(

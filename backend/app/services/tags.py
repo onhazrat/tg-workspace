@@ -16,6 +16,7 @@ No function commits. The caller owns the transaction, matching `follows.py`.
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Iterable
 from typing import Any
@@ -24,10 +25,32 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
+from sqlmodel.sql.expression import SelectOfScalar
 
 from app.models_tg import Tag
-from app.services.channel_tags import ChannelTag, TagSource, normalize_channel_tags
+from app.services.channel_tags import (
+    ChannelTag,
+    TagSource,
+    group_tag_name,
+    is_group_tag,
+    normalize_channel_tags,
+    tag_key,
+)
+from app.services.follows import followed_handles_by_group
 from app.services.telegram_web import normalize_handle
+from app.services.tenancy import subject_select
+
+__all__ = ["is_group_tag", "tag_key"]
+
+
+def _mine(user_id: uuid.UUID) -> SelectOfScalar[Tag]:
+    """`user_id`'s Tag rows, in either flag state.
+
+    Through `subject_select`, the seam's ungated twin of `scoped_select`: these
+    are the caller's own rows by key, and a flag may gate visibility, never
+    identity. Every read here starts from this.
+    """
+    return subject_select(select(Tag), Tag, user_id)
 
 
 def tag_to_camel(row: Tag) -> dict[str, Any]:
@@ -50,11 +73,9 @@ def tags_by_handle(
 ) -> dict[str, list[ChannelTag]]:
     """`user_id`'s Tags, keyed by normalized handle, oldest first.
 
-    `handles=None` is every handle the Account has tagged. Filtering on the
-    owner directly rather than through `scoped_select`: these are the caller's
-    own rows by key, and a flag may gate visibility, never identity.
+    `handles=None` is every handle the Account has tagged.
     """
-    statement = select(Tag).where(col(Tag.user_id) == user_id)
+    statement = _mine(user_id)
     if handles is not None:
         keys = {normalize_handle(handle) for handle in handles}
         if not keys:
@@ -134,34 +155,28 @@ def add_tags(
 # ---- The Account's Tags as a whole (DFP-04) -------------------------------------
 #
 # What the Directory's Tag routes do: a Tag is named, never addressed by id, and
-# every statement is keyed by `user_id`, so another Account's rows are out of
-# reach in both flag states by construction rather than by a check.
-
-
-def tag_key(name: str) -> str:
-    """The case-folded key `name` is stored under; "" for a blank name."""
-    return name.strip().lower()
-
-
-def is_group_tag(name: str) -> bool:
-    return tag_key(name).startswith("group:")
+# every statement is keyed by `user_id` (each read through `subject_select`), so
+# another Account's rows are out of reach in both flag states by construction
+# rather than by a check.
 
 
 def tag_counts(session: Session, *, user_id: uuid.UUID) -> list[tuple[str, int]]:
     """Each of `user_id`'s Tags with how many Channels carry it, by name.
 
-    A Tag is shown as first written: the spelling on its oldest row.
+    A Tag is shown as first written: the spelling on its oldest row. Each
+    Setting group the Account follows Channels in is a `group:` Tag here too.
     """
     rows = session.exec(
-        select(Tag)
-        .where(col(Tag.user_id) == user_id)
-        .order_by(col(Tag.assigned_at), col(Tag.handle))
+        _mine(user_id).order_by(col(Tag.assigned_at), col(Tag.handle))
     ).all()
     names: dict[str, str] = {}
     counts: dict[str, int] = {}
-    for row in rows:
-        names.setdefault(row.tag_key, row.name)
-        counts[row.tag_key] = counts.get(row.tag_key, 0) + 1
+    pairs = [(row.tag_key, row.name) for row in rows] + [
+        (tag_key(name), name) for name, _ in _group_tags(session, user_id=user_id)
+    ]
+    for key, name in pairs:
+        names.setdefault(key, name)
+        counts[key] = counts.get(key, 0) + 1
     return sorted(
         ((names[key], counts[key]) for key in names), key=lambda t: t[0].lower()
     )
@@ -173,44 +188,57 @@ def handles_for_tag(session: Session, *, user_id: uuid.UUID, name: str) -> list[
     A `group:` name is derived, never stored: the Account's followed Channels
     in the Setting group of that name, as the Channels tab shows it.
     """
+    key = tag_key(name)
     if is_group_tag(name):
-        return _group_tag_handles(session, user_id=user_id, name=name)
+        return sorted(
+            {
+                handle
+                for group, handle in _group_tags(session, user_id=user_id)
+                if tag_key(group) == key
+            }
+        )
     return [
-        str(handle)
-        for handle in session.exec(
-            select(Tag.handle)
-            .where(col(Tag.user_id) == user_id, col(Tag.tag_key) == tag_key(name))
-            .order_by(col(Tag.handle))
+        row.handle
+        for row in session.exec(
+            _mine(user_id).where(col(Tag.tag_key) == key).order_by(col(Tag.handle))
         ).all()
     ]
 
 
-def _group_tag_handles(session: Session, *, user_id: uuid.UUID, name: str) -> list[str]:
-    from app.services.channel_setting_groups import load_groups_by_id
-    from app.services.follows import followed_channels_for
+def tag_names_by_handle(
+    session: Session, *, user_id: uuid.UUID, handles: Iterable[str]
+) -> dict[str, list[str]]:
+    """The Tag names a Directory row shows, keyed by normalized handle.
 
-    group = tag_key(name).removeprefix("group:").strip()
-    groups = load_groups_by_id(session)
-    return sorted(
-        normalize_handle(channel.name)
-        for channel, follow in followed_channels_for(session, user_id=user_id)
-        if follow.setting_group_id in groups
-        and groups[follow.setting_group_id].name.strip().lower() == group
-    )
+    `user_id`'s stored Tags, oldest first, then the `group:` Tag of the Setting
+    group a followed Channel is filed under (story 23).
+    """
+    keys = {normalize_handle(handle) for handle in handles}
+    found = tags_by_handle(session, user_id=user_id, handles=keys)
+    names = {handle: [t["name"] for t in tags] for handle, tags in found.items()}
+    for group, handle in _group_tags(session, user_id=user_id):
+        if handle in keys:
+            names.setdefault(handle, []).append(group)
+    return names
+
+
+def _group_tags(session: Session, *, user_id: uuid.UUID) -> list[tuple[str, str]]:
+    """`(group: Tag name, handle)` for each Channel `user_id` follows."""
+    return [
+        (group_tag_name(group), handle)
+        for group, handle in followed_handles_by_group(session, user_id=user_id)
+    ]
 
 
 def assign_tag(
-    session: Session,
-    *,
-    user_id: uuid.UUID,
-    name: str,
-    handles: Iterable[str],
-    assigned_at: int,
+    session: Session, *, user_id: uuid.UUID, name: str, handles: Iterable[str]
 ) -> int:
     """Put `name` on every handle, followed or not; returns how many it was new on.
 
-    A handle already carrying the Tag keeps its row, spelling and time.
+    A handle already carrying the Tag keeps its row, spelling and time; a new
+    row is stamped now.
     """
+    assigned_at = int(time.time() * 1000)
     keys = {normalize_handle(h) for h in handles} - {""}
     before = _carrying(session, user_id=user_id, key=tag_key(name), handles=keys)
     add_tags(
@@ -242,35 +270,51 @@ def unassign_tag(
     return removed
 
 
-def rename_tag(session: Session, *, user_id: uuid.UUID, name: str, to: str) -> int:
-    """Rename `name` to `to` on every Channel; returns how many carry `to` after.
+def rename_tag(
+    session: Session, *, user_id: uuid.UUID, name: str, to: str
+) -> tuple[str, int] | None:
+    """Rename `name` to `to` on every Channel; the surviving name and how many
+    carry it after, or `None` for a Tag the Account lacks (a `group:` one too).
 
     Renaming onto a Tag the Account already has merges the two: a Channel
-    carrying both keeps one row, the target's. A change of case only respells.
+    carrying both keeps one row, the target's, and every row ends with the
+    target's first-written spelling. With no target, `to` as typed. A change
+    of case only respells.
     """
+    if is_group_tag(name) or not handles_for_tag(session, user_id=user_id, name=name):
+        return None
     old, new = tag_key(name), tag_key(to)
+    spelling = to.strip()
     if old != new:
-        target = select(Tag.handle).where(
-            col(Tag.user_id) == user_id, col(Tag.tag_key) == new
-        )
+        target = _mine(user_id).where(col(Tag.tag_key) == new)
+        first = session.exec(
+            target.order_by(col(Tag.assigned_at), col(Tag.handle)).limit(1)
+        ).first()
+        if first is not None:
+            spelling = first.name
         session.execute(
             sa_delete(Tag).where(
                 col(Tag.user_id) == user_id,
                 col(Tag.tag_key) == old,
-                col(Tag.handle).in_(target),
+                col(Tag.handle).in_(target.with_only_columns(col(Tag.handle))),
             )
         )
     session.execute(
         sa_update(Tag)
-        .where(col(Tag.user_id) == user_id, col(Tag.tag_key) == old)
-        .values(tag_key=new, name=to.strip())
+        .where(col(Tag.user_id) == user_id, col(Tag.tag_key).in_({old, new}))
+        .values(tag_key=new, name=spelling)
     )
-    return len(handles_for_tag(session, user_id=user_id, name=to))
+    return spelling, len(handles_for_tag(session, user_id=user_id, name=spelling))
 
 
-def delete_tag(session: Session, *, user_id: uuid.UUID, name: str) -> int:
-    """Take `name` off every Channel; returns how many carried it."""
+def delete_tag(session: Session, *, user_id: uuid.UUID, name: str) -> int | None:
+    """Take `name` off every Channel; how many carried it, or `None` for a Tag
+    the Account lacks (a `group:` one too)."""
+    if is_group_tag(name):
+        return None
     removed = len(handles_for_tag(session, user_id=user_id, name=name))
+    if not removed:
+        return None
     session.execute(
         sa_delete(Tag).where(
             col(Tag.user_id) == user_id, col(Tag.tag_key) == tag_key(name)
@@ -286,10 +330,6 @@ def _carrying(
         return 0
     return len(
         session.exec(
-            select(Tag.handle).where(
-                col(Tag.user_id) == user_id,
-                col(Tag.tag_key) == key,
-                col(Tag.handle).in_(handles),
-            )
+            _mine(user_id).where(col(Tag.tag_key) == key, col(Tag.handle).in_(handles))
         ).all()
     )

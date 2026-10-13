@@ -974,7 +974,7 @@ def _rows(
         if show_matches and view.search is not None
         else {}
     )
-    tagged = tags.tags_by_handle(session, user_id=view.user_id, handles=handles)
+    tagged = tags.tag_names_by_handle(session, user_id=view.user_id, handles=handles)
     rows = []
     for handle in handles:
         e = entries[handle]
@@ -1007,7 +1007,7 @@ def _rows(
                 cites=counted.get(handle, (0, 0))[1],
                 mine=n,
                 mine_last_at=last_at,
-                tags=[t["name"] for t in tagged.get(handle, [])],
+                tags=tagged.get(handle, []),
                 shared_parents=_count_of(shared["parents"], handle),
                 shared_children=_count_of(shared["children"], handle),
                 match=matches.get(handle),
