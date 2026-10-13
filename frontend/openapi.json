@@ -7259,16 +7259,19 @@
           "handles": {
             "items": { "type": "string", "maxLength": 256, "minLength": 1 },
             "type": "array",
-            "maxItems": 50,
-            "minItems": 1,
+            "maxItems": 500,
             "title": "Handles"
+          },
+          "tag": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Tag"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["type", "handles"],
+        "required": ["type"],
         "title": "DirectoryCitedByCondition",
-        "description": "Cited by any of these handles, in the view's Reference kinds."
+        "description": "Cited by any of the Seeds, in the view's Reference kinds."
       },
       "DirectoryCitesCondition": {
         "properties": {
@@ -7276,16 +7279,19 @@
           "handles": {
             "items": { "type": "string", "maxLength": 256, "minLength": 1 },
             "type": "array",
-            "maxItems": 50,
-            "minItems": 1,
+            "maxItems": 500,
             "title": "Handles"
+          },
+          "tag": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Tag"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["type", "handles"],
+        "required": ["type"],
         "title": "DirectoryCitesCondition",
-        "description": "Cites any of these handles, in the view's Reference kinds."
+        "description": "Cites any of the Seeds, in the view's Reference kinds."
       },
       "DirectoryCitingPostResponse": {
         "properties": {
@@ -8137,7 +8143,7 @@
         "type": "object",
         "required": ["handle", "displayName"],
         "title": "DirectorySharedChannelResponse",
-        "description": "A Channel linking the candidate to the picks."
+        "description": "A Channel linking the candidate to the Seeds."
       },
       "DirectorySharedCondition": {
         "properties": {
@@ -8152,6 +8158,10 @@
             "maxItems": 10000,
             "title": "Handles"
           },
+          "tag": {
+            "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }],
+            "title": "Tag"
+          },
           "min": {
             "type": "integer",
             "maximum": 10000.0,
@@ -8162,9 +8172,9 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["type", "handles"],
+        "required": ["type"],
         "title": "DirectorySharedCondition",
-        "description": "Shared parents or Shared children with these picks, at least `min` shared."
+        "description": "Shared parents or Shared children with the Seeds, at least `min` shared."
       },
       "DirectorySharedWhyResponse": {
         "properties": {
@@ -8180,7 +8190,7 @@
         "type": "object",
         "required": ["channels", "total"],
         "title": "DirectorySharedWhyResponse",
-        "description": "A few of the Channels shared with the picks, and how many in all."
+        "description": "A few of the Channels shared with the Seeds, and how many in all."
       },
       "DirectorySizeResponse": {
         "properties": { "size": { "type": "integer", "title": "Size" } },
@@ -8209,6 +8219,16 @@
         "required": ["type", "name"],
         "title": "DirectoryTagCondition",
         "description": "In one of the reader's Tags; a Tag they do not have matches nothing."
+      },
+      "DirectoryTagSeeds": {
+        "properties": {
+          "tag": { "type": "string", "minLength": 1, "title": "Tag" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["tag"],
+        "title": "DirectoryTagSeeds",
+        "description": "Seeds from one of the reader's Tags, resolved by the server."
       },
       "DirectoryWhyRequest": {
         "properties": {
@@ -8242,6 +8262,7 @@
                 "type": "array",
                 "maxItems": 10000
               },
+              { "$ref": "#/components/schemas/DirectoryTagSeeds" },
               { "type": "null" }
             ],
             "title": "Parents"
@@ -8253,6 +8274,7 @@
                 "type": "array",
                 "maxItems": 10000
               },
+              { "$ref": "#/components/schemas/DirectoryTagSeeds" },
               { "type": "null" }
             ],
             "title": "Children"

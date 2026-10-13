@@ -1541,7 +1541,7 @@ export type DirectoryBinResponse = {
 /**
  * DirectoryCitedByCondition
  *
- * Cited by any of these handles, in the view's Reference kinds.
+ * Cited by any of the Seeds, in the view's Reference kinds.
  */
 export type DirectoryCitedByCondition = {
     /**
@@ -1551,13 +1551,17 @@ export type DirectoryCitedByCondition = {
     /**
      * Handles
      */
-    handles: Array<string>;
+    handles?: Array<string>;
+    /**
+     * Tag
+     */
+    tag?: string | null;
 };
 
 /**
  * DirectoryCitesCondition
  *
- * Cites any of these handles, in the view's Reference kinds.
+ * Cites any of the Seeds, in the view's Reference kinds.
  */
 export type DirectoryCitesCondition = {
     /**
@@ -1567,7 +1571,11 @@ export type DirectoryCitesCondition = {
     /**
      * Handles
      */
-    handles: Array<string>;
+    handles?: Array<string>;
+    /**
+     * Tag
+     */
+    tag?: string | null;
 };
 
 /**
@@ -2294,7 +2302,7 @@ export type DirectorySearchRequest = {
 /**
  * DirectorySharedChannelResponse
  *
- * A Channel linking the candidate to the picks.
+ * A Channel linking the candidate to the Seeds.
  */
 export type DirectorySharedChannelResponse = {
     /**
@@ -2310,7 +2318,7 @@ export type DirectorySharedChannelResponse = {
 /**
  * DirectorySharedCondition
  *
- * Shared parents or Shared children with these picks, at least `min` shared.
+ * Shared parents or Shared children with the Seeds, at least `min` shared.
  */
 export type DirectorySharedCondition = {
     /**
@@ -2320,7 +2328,11 @@ export type DirectorySharedCondition = {
     /**
      * Handles
      */
-    handles: Array<string>;
+    handles?: Array<string>;
+    /**
+     * Tag
+     */
+    tag?: string | null;
     /**
      * Min
      */
@@ -2330,7 +2342,7 @@ export type DirectorySharedCondition = {
 /**
  * DirectorySharedWhyResponse
  *
- * A few of the Channels shared with the picks, and how many in all.
+ * A few of the Channels shared with the Seeds, and how many in all.
  */
 export type DirectorySharedWhyResponse = {
     /**
@@ -2388,6 +2400,18 @@ export type DirectoryTagCondition = {
 };
 
 /**
+ * DirectoryTagSeeds
+ *
+ * Seeds from one of the reader's Tags, resolved by the server.
+ */
+export type DirectoryTagSeeds = {
+    /**
+     * Tag
+     */
+    tag: string;
+};
+
+/**
  * DirectoryWhyRequest
  *
  * Whose Posts citing `handle` "Why it's here" lists.
@@ -2409,11 +2433,11 @@ export type DirectoryWhyRequest = {
     /**
      * Parents
      */
-    parents?: Array<string> | null;
+    parents?: Array<string> | DirectoryTagSeeds | null;
     /**
      * Children
      */
-    children?: Array<string> | null;
+    children?: Array<string> | DirectoryTagSeeds | null;
 };
 
 /**
