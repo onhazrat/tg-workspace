@@ -17,7 +17,14 @@
  * The photo is the card's cached thumbnail; there is no larger image.
  */
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { type ReactNode, useEffect, useRef, useState } from "react"
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog"
 import {
   clampView,
@@ -46,6 +53,18 @@ export const GALLERY_ATTR = "data-gallery"
  * should scroll to the middle of the screen.
  */
 export const REVEAL_CHANNEL = "tg:reveal-channel"
+
+/**
+ * The Posts feed's paging (PTI-05). Only the feed provides it; any other
+ * gallery is complete already and steps through what it has.
+ */
+export const FeedPagingContext = createContext<{
+  loadMore: () => void
+  hasMore: boolean
+} | null>(null)
+
+/** How near the last loaded photo the viewer asks the feed for its next page. */
+const PAGE_AHEAD = 3
 
 export function PhotoViewerDialog({
   start,
@@ -117,6 +136,33 @@ function loadedPhotos(start: string): GalleryPhoto[] {
     }))
 }
 
+type Gallery = { photos: GalleryPhoto[]; at: number }
+
+/**
+ * The gallery after the page changed. A photo is known by its Post's card,
+ * falling back to its address, because a card outlives its thumbnail's object
+ * address, which changes when the feed refreshes. A rescan that no longer
+ * finds the current photo is ignored: the viewer never jumps.
+ */
+function rescan(view: Gallery): Gallery {
+  const current = view.photos[view.at]
+  if (!current) return view
+  const src =
+    current.card?.querySelector<HTMLImageElement>(
+      `img[${GALLERY_CAPTION_ATTR}]`,
+    )?.src ?? current.src
+  const next = loadedPhotos(src)
+  const at = next.findIndex((p) =>
+    current.card ? p.card === current.card : p.src === current.src,
+  )
+  if (at < 0) return view
+  const unchanged =
+    next.length === view.photos.length &&
+    next.every((p, i) => p.src === view.photos[i]?.src)
+  // The same object when nothing moved, so the observer cannot loop.
+  return unchanged ? view : { photos: next, at }
+}
+
 export function PhotoViewer({
   start,
   onClose,
@@ -126,20 +172,47 @@ export function PhotoViewer({
   onClose: () => void
   action?: PhotoAction
 }) {
-  const [photos] = useState(() => loadedPhotos(start))
-  const [at, setAt] = useState(() =>
-    Math.max(
-      0,
-      photos.findIndex((p) => p.src === start),
-    ),
-  )
+  // The gallery and the position change together, so they never disagree.
+  const [view, setView] = useState<Gallery>(() => {
+    const photos = loadedPhotos(start)
+    return {
+      photos,
+      at: Math.max(
+        0,
+        photos.findIndex((p) => p.src === start),
+      ),
+    }
+  })
+  const { photos, at } = view
+  const paging = useContext(FeedPagingContext)
+  // The feed takes its next page in while the viewer is open; each photo
+  // joins the gallery as it lands, and a refreshed thumbnail keeps its place.
+  const pages = paging !== null
+  useEffect(() => {
+    if (!pages) return
+    const observer = new MutationObserver(() => setView(rescan))
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributeFilter: ["src"],
+    })
+    return () => observer.disconnect()
+  }, [pages])
+  useEffect(() => {
+    if (paging?.hasMore && at >= photos.length - PAGE_AHEAD) paging.loadMore()
+  }, [paging, at, photos.length])
+  const loadingMore = paging?.hasMore && at === photos.length - 1
   // A swipe's "next" follows the page the viewer was opened from.
   const [rtl] = useState(() => photos[at]?.rtl === true)
   const [controls, setControls] = useState(true)
-  const last = useRef(at)
-  last.current = at
+  const last = useRef(photos[at])
+  last.current = photos[at]
+  // Clamped, never wrapped: past the last photo is the last photo.
   const step = (d: number) =>
-    setAt((n) => Math.min(photos.length - 1, Math.max(0, n + d)))
+    setView((v) => ({
+      ...v,
+      at: Math.min(v.photos.length - 1, Math.max(0, v.at + d)),
+    }))
   // The step the right arrow takes: next, or previous on a right-to-left page.
   const right = rtl ? -1 : 1
   const atEnd = (d: number) => (d < 0 ? at === 0 : at === photos.length - 1)
@@ -157,7 +230,7 @@ export function PhotoViewer({
   // so it is asked to scroll its own way to the Channel.
   useEffect(
     () => () => {
-      const card = photos[last.current]?.card
+      const card = last.current?.card
       if (card?.isConnected) card.scrollIntoView({ block: "center" })
       else if (card?.dataset.channelName)
         window.dispatchEvent(
@@ -176,9 +249,10 @@ export function PhotoViewer({
       // The dialog hides its close button off this.
       data-controls={controls ? undefined : "hidden"}
     >
-      {/* Keyed by photo, so each step starts whole again. */}
+      {/* Keyed by position, so each step starts whole again and a refreshed
+          thumbnail does not. */}
       <PanZoom
-        key={photo.src}
+        key={at}
         src={photo.src}
         rtl={rtl}
         controls={controls}
@@ -187,7 +261,7 @@ export function PhotoViewer({
         onToggleControls={() => setControls((c) => !c)}
         caption={
           photos.length > 1
-            ? `${photo.caption} · ${at + 1} / ${photos.length}`
+            ? `${photo.caption} · ${at + 1} / ${photos.length}${loadingMore ? " · loading more…" : ""}`
             : photo.caption
         }
       />
