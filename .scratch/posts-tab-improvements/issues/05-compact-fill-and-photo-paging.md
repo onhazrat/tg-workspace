@@ -13,7 +13,7 @@ compact card" under Implementation Decisions.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ### Compact cards
 
