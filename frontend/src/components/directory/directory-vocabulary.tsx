@@ -12,17 +12,22 @@ import {
   Inbox,
   Languages,
   type LucideIcon,
+  Tag,
   Type,
   Users,
 } from "lucide-react"
 import type React from "react"
-import type { DirectoryLanguageCountResponse } from "@/client"
+import type { DirectoryLanguageCountResponse, TagResponse } from "@/client"
 import type {
   ConditionOption,
   PickerEntry,
 } from "@/components/filter-tree/ConditionPicker"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
+import {
+  isVirtualGroupTag,
+  toVirtualGroupTagName,
+} from "@/lib/channels/virtual-group-tags"
 import {
   type DirectoryCond,
   type DirectoryFlag,
@@ -46,6 +51,7 @@ import {
 const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   language: Languages,
   name: Type,
+  tag: Tag,
   flag: CircleDot,
   mine: Inbox,
   citedby: CornerDownLeft,
@@ -81,6 +87,30 @@ const measureEntries = (
       }),
   }))
 
+/** What "In the Tag" can name: the Account's Tags and its Setting groups' (DFP-04). */
+export type TagChoices = {
+  tags: TagResponse[]
+  /** Setting group names; each is the Tag `group:<name>`. */
+  groups: string[]
+  /** Until both lists arrive, no Tag is known to be missing. */
+  loaded: boolean
+}
+
+const lower = (s: string) => s.trim().toLowerCase()
+
+/** Why a `tag` Condition matches nothing: the reader has no Tag of that name. */
+export function staleTag(cond: DirectoryCond, choices: TagChoices) {
+  if (cond.type !== "tag" || !choices.loaded) return undefined
+  const known = isVirtualGroupTag(cond.name)
+    ? choices.groups.some(
+        (g) => lower(toVirtualGroupTagName(g)) === lower(cond.name),
+      )
+    : choices.tags.some((t) => lower(t.name) === lower(cond.name))
+  return known
+    ? undefined
+    : `You have no Tag named "${cond.name}", so this matches nothing`
+}
+
 /** The Languages a count read named, as picker options; "no Language" has none. */
 const languageOptions = (
   counts: DirectoryLanguageCountResponse[],
@@ -96,6 +126,7 @@ export function directoryVocabulary(
   renderMeasure: MeasureEditorRender,
   /** What Shared parents / children can compare with, as it is now (DIR-07). */
   sets: PickSets,
+  tags: TagChoices = { tags: [], groups: [], loaded: false },
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
   return {
@@ -123,6 +154,25 @@ export function directoryVocabulary(
             })),
             make: (value) => ({ type: "flag", value: value as DirectoryFlag }),
             current: (c) => (c.type === "flag" ? c.value : undefined),
+          },
+          {
+            kind: "list",
+            id: "tag",
+            label: "In the Tag",
+            icon: Tag,
+            options: [
+              ...tags.tags.map((t) => ({
+                id: t.name,
+                label: t.name,
+                hint: String(t.channels),
+              })),
+              ...tags.groups.map((g) => ({
+                id: toVirtualGroupTagName(g),
+                label: toVirtualGroupTagName(g),
+              })),
+            ],
+            make: (name) => ({ type: "tag", name }),
+            current: (c) => (c.type === "tag" ? c.name : undefined),
           },
           {
             kind: "editor",
@@ -196,15 +246,18 @@ export function directoryVocabulary(
     entryOf: (c) => (c.type === "measure" ? `measure:${c.measure}` : c.type),
     label: (c) => directoryConditionLabel(c),
     icon: (c) => ICON[c.type],
+    stale: (c) => staleTag(c, tags),
     chipId: (c) =>
       c.type === "measure"
         ? `measure-${c.measure}`
         : c.type === "parents" || c.type === "children"
           ? `${c.type}-${c.picks}`
-          : "value" in c
-            ? `${c.type}-${c.value}`
-            : "handles" in c
-              ? `${c.type}-${c.handles.join("-")}`
-              : c.type,
+          : c.type === "tag"
+            ? `tag-${c.name}`
+            : "value" in c
+              ? `${c.type}-${c.value}`
+              : "handles" in c
+                ? `${c.type}-${c.handles.join("-")}`
+                : c.type,
   }
 }

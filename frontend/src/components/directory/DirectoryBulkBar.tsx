@@ -1,8 +1,10 @@
-import { EyeOff, Plus } from "lucide-react"
+import { EyeOff, Plus, Tag, TagsIcon } from "lucide-react"
 import { useState } from "react"
+import type { TagResponse } from "@/client"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { needsBulkFollowConfirm } from "@/lib/posts/discover-selection"
+import { TagPicker } from "./DirectoryTags"
 
 const SHOWN = 3
 
@@ -14,6 +16,7 @@ const SHOWN = 3
  *
  * A followed row ticks like any other, as a Seed (DFP-01), so Follow and
  * Dismiss act on the unfollowed Ticks only and say "of M" when that is fewer.
+ * Tag and Untag act on every Tick, followed or not (DFP-04).
  */
 export function DirectoryBulkBar({
   ticks,
@@ -22,6 +25,7 @@ export function DirectoryBulkBar({
   onFollow,
   onDismiss,
   onClear,
+  tagging,
 }: {
   ticks: ReadonlySet<string>
   /** Lowercase handles the Account follows: every Follow, not only this page's. */
@@ -31,6 +35,12 @@ export function DirectoryBulkBar({
   onFollow: (handles: string[]) => void
   onDismiss: (handles: string[]) => void
   onClear: () => void
+  /** The Account's Tags, to put one on every Tick or take it off. */
+  tagging?: {
+    tags: TagResponse[]
+    onTag: (name: string, handles: string[]) => void
+    onUntag: (name: string, handles: string[]) => void
+  }
 }) {
   const [confirming, setConfirming] = useState(false)
   if (ticks.size === 0) return null
@@ -53,6 +63,47 @@ export function DirectoryBulkBar({
         {more > 0 ? ` +${more}` : ""}
       </span>
       <div className="ml-auto flex items-center gap-1.5">
+        {tagging && (
+          <>
+            <TagPicker
+              tags={tagging.tags}
+              align="end"
+              onPick={(name) => tagging.onTag(name, ticked)}
+              trigger={
+                <TgButton
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  data-testid="directory-bulk-tag"
+                  className="rounded-full"
+                >
+                  <Tag size={12} />
+                  Tag {ticked.length}
+                </TgButton>
+              }
+            />
+            {tagging.tags.length > 0 && (
+              <TagPicker
+                tags={tagging.tags}
+                create={false}
+                align="end"
+                onPick={(name) => tagging.onUntag(name, ticked)}
+                trigger={
+                  <TgButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    data-testid="directory-bulk-untag"
+                    className="rounded-full"
+                  >
+                    <TagsIcon size={12} />
+                    Untag
+                  </TgButton>
+                }
+              />
+            )}
+          </>
+        )}
         {handles.length === 0 ? (
           <span className="text-app-ink/50">All followed</span>
         ) : (

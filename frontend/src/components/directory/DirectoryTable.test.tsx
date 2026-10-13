@@ -43,6 +43,7 @@ const row = (handle: string, over: Partial<DirectoryRowResponse> = {}) =>
     match: null,
     sharedParents: null,
     sharedChildren: null,
+    tags: [],
     ...over,
   }) satisfies DirectoryRowResponse
 
@@ -182,6 +183,27 @@ describe("keyboard mode (DFP-01)", () => {
     expect(key("f")).toBe("Follow @beta")
     expect(key("d")).toBe("Dismiss @beta")
     expect(key("o")).toBe("@beta")
+  })
+
+  test("t presses the row's Tag picker, and a row shows its Tags (DFP-04)", () => {
+    const tagged: [string, string, boolean][] = []
+    mount({
+      rows: [row("alpha", { tags: ["News"] })],
+      ring: "alpha",
+      tagging: {
+        tags: [{ name: "News", channels: 1 }],
+        onTag: (...args) => tagged.push(args),
+      },
+    })
+    const row_ = screen.getByTestId("directory-row-alpha")
+    expect(
+      row_.querySelector("[data-testid=directory-tags]")?.textContent,
+    ).toBe("News")
+    const button = row_.querySelector<HTMLElement>('[data-shortcut="t"]')
+    expect(button?.getAttribute("aria-label")).toBe("Tag @alpha")
+    fireEvent.click(button as HTMLElement)
+    fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
+    expect(tagged).toEqual([["alpha", "News", false]])
   })
 })
 

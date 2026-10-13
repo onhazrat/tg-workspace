@@ -49,6 +49,7 @@ const entry = (
   citedBy: 5,
   cites: 1,
   bio: "A bio about things",
+  tags: [],
   ...over,
 })
 

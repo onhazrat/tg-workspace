@@ -14,6 +14,8 @@ function mount(handles: string[], busy = false, followed: string[] = []) {
     follow: [] as string[][],
     dismiss: [] as string[][],
     clear: 0,
+    tag: [] as [string, string[]][],
+    untag: [] as [string, string[]][],
   }
   render(
     <DirectoryBulkBar
@@ -23,6 +25,11 @@ function mount(handles: string[], busy = false, followed: string[] = []) {
       onFollow={(h) => calls.follow.push(h)}
       onDismiss={(h) => calls.dismiss.push(h)}
       onClear={() => calls.clear++}
+      tagging={{
+        tags: [{ name: "News", channels: 2 }],
+        onTag: (n, h) => calls.tag.push([n, h]),
+        onUntag: (n, h) => calls.untag.push([n, h]),
+      }}
     />,
   )
   return calls
@@ -94,5 +101,23 @@ describe("the bulk bar", () => {
     expect(screen.queryByRole("button", { name: /^Follow/ })).toBeNull()
     expect(screen.queryByRole("button", { name: /^Dismiss/ })).toBeNull()
     expect(screen.getByRole("button", { name: "Clear" })).toBeTruthy()
+  })
+})
+
+describe("tagging the Ticks (DFP-04)", () => {
+  test("Tag and Untag act on every Tick, followed or not", () => {
+    const calls = mount(["a", "b"], false, ["a"])
+    expect(screen.getByTestId("directory-bulk-tag").textContent).toContain(
+      "Tag 2",
+    )
+    fireEvent.click(screen.getByTestId("directory-bulk-tag"))
+    fireEvent.change(screen.getByTestId("directory-tag-search"), {
+      target: { value: "fresh" },
+    })
+    fireEvent.click(screen.getByText('Create the Tag "fresh"'))
+    expect(calls.tag).toEqual([["fresh", ["a", "b"]]])
+    fireEvent.click(screen.getByTestId("directory-bulk-untag"))
+    fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
+    expect(calls.untag).toEqual([["News", ["a", "b"]]])
   })
 })

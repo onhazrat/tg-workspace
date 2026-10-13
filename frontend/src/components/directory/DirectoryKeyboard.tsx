@@ -21,6 +21,7 @@ export const DIRECTORY_SHORTCUTS = {
   follow: "f",
   dismiss: "d",
   open: "o",
+  tag: "t",
 } as const
 
 const rowOf = (handle: string) =>
@@ -131,6 +132,7 @@ const KEY_HELP = [
   [DIRECTORY_SHORTCUTS.follow, "follow"],
   [DIRECTORY_SHORTCUTS.dismiss, "dismiss or take back"],
   [DIRECTORY_SHORTCUTS.open, "open in Telegram"],
+  [DIRECTORY_SHORTCUTS.tag, "tag"],
   ["esc", "drop the highlight"],
 ] as const
 

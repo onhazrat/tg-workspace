@@ -333,3 +333,55 @@ describe("on a phone (DFP-02)", () => {
     expect(sheet()).toBeNull()
   })
 })
+
+describe("a Tag Condition (DFP-04)", () => {
+  const vocabulary = directoryVocabulary(
+    [],
+    () => null,
+    { picked: [], selection: [], follows: [] },
+    {
+      tags: [{ name: "News", channels: 2 }],
+      groups: ["Slow Feed"],
+      loaded: true,
+    },
+  )
+
+  test("a Tag the reader has, or a Setting group's, is an ordinary chip", () => {
+    mount({ text: 'tag:news and tag:"group:slow feed"', vocabulary })
+    const chips = ["In the Tag news", "In the Tag group:slow feed"].map(
+      (name) => screen.getByRole("button", { name }),
+    )
+    expect(chips.map((c) => c.getAttribute("data-stale"))).toEqual([null, null])
+  })
+
+  test("a Tag the reader lacks keeps its chip, struck through, and says why", () => {
+    mount({ text: "tag:gone", vocabulary })
+    const chip = screen.getByRole("button", { name: "In the Tag gone" })
+    expect(chip.getAttribute("data-stale")).toBe("true")
+    expect(chip.className).toContain("line-through")
+    expect(chip.getAttribute("title")).toContain("matches nothing")
+  })
+
+  test("nothing is struck through before the Tags arrive", () => {
+    mount({
+      text: "tag:gone",
+      vocabulary: directoryVocabulary(
+        [],
+        () => null,
+        { picked: [], selection: [], follows: [] },
+        { tags: [], groups: [], loaded: false },
+      ),
+    })
+    const chip = screen.getByRole("button", { name: "In the Tag gone" })
+    expect(chip.getAttribute("data-stale")).toBeNull()
+  })
+
+  test("the Filters picker offers each Tag and Setting group by name", () => {
+    const calls = mount({ text: "", vocabulary })
+    fireEvent.click(screen.getByTestId("directory-filters"))
+    fireEvent.click(screen.getByText("In the Tag"))
+    expect(screen.getByText("group:Slow Feed")).toBeTruthy()
+    fireEvent.click(screen.getByText("News"))
+    expect(calls.filters).toEqual(["tag:News"])
+  })
+})

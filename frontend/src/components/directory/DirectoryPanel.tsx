@@ -1,4 +1,4 @@
-import { ExternalLink, Filter, X } from "lucide-react"
+import { ExternalLink, Filter, Plus, X } from "lucide-react"
 import type {
   DirectoryCitingPostResponse,
   DirectoryEntryResponse,
@@ -21,7 +21,8 @@ import {
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
 import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
-import { cell, FollowCell } from "./DirectoryTable"
+import { cell, FollowCell, type RowTagging } from "./DirectoryTable"
+import { TagBadges, TagPicker } from "./DirectoryTags"
 
 const HEADING =
   "mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wider text-app-ink/50"
@@ -327,6 +328,7 @@ export function DirectoryPanel({
   onClose,
   neighbours,
   onFilter,
+  tagging,
 }: {
   handle: string
   entry: DirectoryEntryResponse | null | undefined
@@ -343,6 +345,8 @@ export function DirectoryPanel({
   neighbours: DirectoryNeighboursResponse | undefined
   /** Adds a Condition to the view's filter. */
   onFilter: (cond: DirectoryCond) => void
+  /** The open Channel's Tags, added and removed here (DFP-04). */
+  tagging?: RowTagging
 }) {
   return (
     <>
@@ -380,6 +384,31 @@ export function DirectoryPanel({
               onFollow={onFollow}
               onDismiss={onDismiss}
             />
+            {tagging && (
+              <div
+                data-testid="directory-panel-tags"
+                className="mb-3 flex flex-wrap items-center gap-1.5"
+              >
+                <TagBadges
+                  tags={entry.tags}
+                  onRemove={(name) => tagging.onTag(handle, name, false)}
+                />
+                <TagPicker
+                  tags={tagging.tags}
+                  current={entry.tags}
+                  onPick={(name) => tagging.onTag(handle, name, true)}
+                  onUnpick={(name) => tagging.onTag(handle, name, false)}
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-app-ink/25 px-2 text-[10px] font-semibold text-app-ink/60 hover:text-app-ink"
+                    >
+                      <Plus size={9} /> Tag
+                    </button>
+                  }
+                />
+              </div>
+            )}
             <WhyHere handle={handle} why={why} windowDays={windowDays} />
             <h4 className={HEADING}>Recent posts</h4>
             {posts ? (

@@ -24,7 +24,9 @@ import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
 import {
   DirectoryTable,
   PAGE_SIZE,
+  type RowTagging,
 } from "@/components/directory/DirectoryTable"
+import { TagsMenu } from "@/components/directory/DirectoryTags"
 import {
   directoryVocabulary,
   type MeasureEditorRender,
@@ -34,6 +36,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useSessionFlag } from "@/hooks/useSessionFlag"
+import { useDirectoryTags } from "@/hooks/useTags"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import {
@@ -163,6 +166,7 @@ function DirectoryPanelReads({
   onDismiss,
   onClose,
   onFilter,
+  tagging,
 }: {
   handle: string
   request: DirectoryViewRequest
@@ -174,6 +178,7 @@ function DirectoryPanelReads({
   onDismiss: (dismissed: boolean) => void
   onClose: () => void
   onFilter: (cond: DirectoryCond) => void
+  tagging: RowTagging
 }) {
   const path = { handle }
   const entry = useQuery({
@@ -214,6 +219,7 @@ function DirectoryPanelReads({
       onClose={onClose}
       neighbours={neighbours.data}
       onFilter={onFilter}
+      tagging={tagging}
     />
   )
 }
@@ -222,6 +228,7 @@ export function DirectoryView() {
   const d = useDirectory()
   const { view, patch, list } = d
   const shown = listSummary(list.data, list.isFetching, d.yours.source)
+  const { tags, tagging, choices } = useDirectoryTags()
   const vocabulary = directoryVocabulary(
     shown.languages,
     (props) => (
@@ -233,6 +240,7 @@ export function DirectoryView() {
       />
     ),
     d.sets,
+    choices,
   )
   const total = shown.total ?? 0
   // Below md (DFP-02): the controls in a sheet, the rows as cards.
@@ -288,12 +296,18 @@ export function DirectoryView() {
           {errorText(list.error, "The Directory did not load.")}
         </p>
       )}
-      <div className="mb-2 flex justify-end max-md:hidden">
+      <div className="mb-2 flex justify-end gap-2">
+        <TagsMenu
+          tags={tags.tags}
+          onTick={async (name) => d.setTicks(await tags.handlesOf(name))}
+          onRename={(name, to) => void tags.rename(name, to)}
+          onDelete={(name) => void tags.remove(name)}
+        />
         <button
           type="button"
           aria-pressed={keyboard}
           onClick={() => setKeyboard(!keyboard)}
-          className={pillClass(keyboard)}
+          className={`${pillClass(keyboard)} max-md:hidden`}
           title="j / k to move, gg / G to jump, ] / [ to turn the page, an action's letter to fire it"
         >
           <Keyboard size={12} /> Keyboard
@@ -313,6 +327,11 @@ export function DirectoryView() {
         onFollow={(handles) => void d.follow(handles)}
         onDismiss={(handles) => void d.dismiss(handles)}
         onClear={() => d.setTicks([])}
+        tagging={{
+          tags: tags.tags,
+          onTag: (name, handles) => void tags.tag(name, handles),
+          onUntag: (name, handles) => void tags.untag(name, handles),
+        }}
       />
       <DirectoryTable
         rows={shown.rows}
@@ -331,6 +350,7 @@ export function DirectoryView() {
         onOpen={d.setOpen}
         ring={ring}
         cards={phone}
+        tagging={tagging}
       />
       {d.open && (
         <DirectoryPanelReads
@@ -352,6 +372,7 @@ export function DirectoryView() {
             d.setFilter(appendAnd(d.filter, cond))
             d.setOpen(null)
           }}
+          tagging={tagging}
         />
       )}
       <DirectoryKeyHelp on={keyboard} />

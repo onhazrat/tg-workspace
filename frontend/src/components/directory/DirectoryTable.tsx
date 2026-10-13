@@ -1,6 +1,14 @@
-import { ArrowDown, ArrowUp, Check, EyeOff, Plus, Undo2 } from "lucide-react"
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  EyeOff,
+  Plus,
+  Tag,
+  Undo2,
+} from "lucide-react"
 import type React from "react"
-import type { DirectoryRowResponse } from "@/client"
+import type { DirectoryRowResponse, TagResponse } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
@@ -15,10 +23,50 @@ import {
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import { DIRECTORY_SHORTCUTS } from "./DirectoryKeyboard"
 import { DirectoryMatchRow } from "./DirectoryMatches"
+import { TagBadges, TagPicker } from "./DirectoryTags"
 
 export const PAGE_SIZE = 100
 
 type Row = DirectoryRowResponse
+
+/** The Account's Tags and how one Channel's change (DFP-04). */
+export type RowTagging = {
+  tags: TagResponse[]
+  onTag: (handle: string, name: string, on: boolean) => void
+}
+
+/** A row's Tag picker; `t` presses it in keyboard mode. */
+export function RowTagButton({
+  row,
+  tagging,
+}: {
+  row: Pick<Row, "handle" | "tags">
+  tagging: RowTagging
+}) {
+  return (
+    <span onClick={(e) => e.stopPropagation()}>
+      <TagPicker
+        tags={tagging.tags}
+        current={row.tags}
+        align="end"
+        onPick={(name) => tagging.onTag(row.handle, name, true)}
+        onUnpick={(name) => tagging.onTag(row.handle, name, false)}
+        trigger={
+          <TgButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Tag @${row.handle}`}
+            data-shortcut={DIRECTORY_SHORTCUTS.tag}
+            className="h-7 rounded-full px-2 text-app-ink/50"
+          >
+            <Tag size={11} />
+          </TgButton>
+        }
+      />
+    </span>
+  )
+}
 
 type SharedKey = "shared_parents" | "shared_children"
 
@@ -273,6 +321,7 @@ function ChannelCell({ row }: { row: Row }) {
         >
           @{row.handle}
         </a>
+        <TagBadges tags={row.tags} />
       </div>
     </div>
   )
@@ -381,6 +430,7 @@ export function DirectoryTable({
   onOpen,
   ring,
   cards = false,
+  tagging,
 }: {
   rows: Row[]
   total: number
@@ -403,6 +453,8 @@ export function DirectoryTable({
   ring?: string | null
   /** Below `md`, two-line cards instead of the table (DFP-02). */
   cards?: boolean
+  /** Each row's Tag picker (DFP-04); none while the Tags have not loaded. */
+  tagging?: RowTagging
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
@@ -432,6 +484,7 @@ export function DirectoryTable({
           onFollow={onFollow}
           onDismiss={onDismiss}
           onOpen={onOpen}
+          tagging={tagging}
         />
         {pages}
       </div>
@@ -493,6 +546,7 @@ export function DirectoryTable({
                 </td>
               ))}
               <td className="whitespace-nowrap px-2 text-right">
+                {tagging && <RowTagButton row={r} tagging={tagging} />}
                 <FollowCell
                   row={r}
                   busy={following.has(r.handle)}
@@ -546,6 +600,7 @@ function DirectoryCards({
   onFollow,
   onDismiss,
   onOpen,
+  tagging,
 }: {
   rows: Row[]
   columns: DirectoryColumn[]
@@ -555,6 +610,7 @@ function DirectoryCards({
   onFollow: (handle: string) => void
   onDismiss: (handle: string, dismissed: boolean) => void
   onOpen: (handle: string) => void
+  tagging?: RowTagging
 }) {
   return (
     <ul className="divide-y divide-app-ink/5">
@@ -593,7 +649,8 @@ function DirectoryCards({
               })}
             </div>
           </div>
-          <div className="shrink-0">
+          <div className="flex shrink-0 items-center">
+            {tagging && <RowTagButton row={r} tagging={tagging} />}
             <FollowCell
               row={r}
               busy={following.has(r.handle)}

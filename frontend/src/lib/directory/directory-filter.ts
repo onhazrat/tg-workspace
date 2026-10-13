@@ -10,7 +10,8 @@
  * `reach = none`, `mine:all`, `mine:14d`, with `not`, `and`, `or` and
  * parentheses. DIR-05 adds `citedby:` and `cites:`; DIR-07 adds
  * `parents:` and `children:` (`picked`, `selection`, `follows` or typed
- * handles, a trailing number being the minimum).
+ * handles, a trailing number being the minimum). DFP-04 adds `tag:"news"`, In
+ * the Tag, which the server resolves against the reader's own Tags.
  */
 
 import type {
@@ -54,6 +55,8 @@ export type DirectoryCond =
   | { type: "cites"; handles: string[] }
   | DirectorySharedCond
   | DirectoryMeasureCond
+  /** In the reader's Tag of this name; one they do not have matches nothing. */
+  | { type: "tag"; name: string }
 
 /**
  * Whom Shared parents / children compare with (DIR-07): the Channels ticked in
@@ -241,6 +244,8 @@ export function directoryConditionLabel(
       return languageLabel(cond.value, locale)
     case "name":
       return `Name contains "${cond.value}"`
+    case "tag":
+      return `In the Tag ${cond.name}`
     case "flag":
       return FLAG_LABEL[cond.value]
     case "mine":
@@ -270,6 +275,8 @@ function condText(cond: DirectoryCond): string {
       return `lang:${quote(cond.value)}`
     case "name":
       return `name:${quote(cond.value)}`
+    case "tag":
+      return `tag:${quote(cond.name)}`
     case "flag":
       return `is:${cond.value}`
     case "mine":
@@ -352,6 +359,7 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
     if (prefix === "name" || prefix === undefined)
       return { type: "name", value: text }
     if (prefix === "lang") return { type: "language", value: text }
+    if (prefix === "tag" && text.trim()) return { type: "tag", name: text }
     if (prefix === "is" && FLAGS.has(text))
       return { type: "flag", value: text as DirectoryFlag }
     if (prefix === "mine") {

@@ -19,7 +19,9 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * nothing (DIR-04); a Dismissal that never refreshes the list, or a row
  * whose Dismiss also opens the panel (DIR-06); the live ticked picks sent
  * as they were when the Condition was added, not re-resolved per tick
- * (DIR-07); Selected first sent without the ticks.
+ * (DIR-07); Selected first sent without the ticks; a Tag sent for the
+ * unfollowed Ticks only, or an "In the Tag" chip that leaves the request
+ * without the Tag's name (DFP-04).
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -48,6 +50,7 @@ const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
   match: null,
   sharedParents: null as number | null,
   sharedChildren: null,
+  tags: [] as string[],
 }))
 
 type ListBody = {
@@ -126,6 +129,9 @@ async function mockDirectory(page: Page, shown: typeof ROWS = ROWS) {
   )
   await page.route("**/api/v1/data/directory/size", (route) =>
     route.fulfill({ json: { size: 297_345 } }),
+  )
+  await page.route("**/api/v1/data/tags", (route) =>
+    route.fulfill({ json: [] }),
   )
   return { lastList: () => lists.at(-1) as ListBody }
 }
@@ -629,6 +635,85 @@ test.describe("TG Workspace directory", () => {
   })
 
   // DFP-02 at iPhone 12 Pro size: rows on the first screen.
+  test("tag the Ticks, see the badge, and filter by the Tag", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    const filters: unknown[] = []
+    // The Tags, kept as the server keeps them.
+    const tagged = new Map<string, string[]>()
+    const sent: { name: string; handles: string[] }[] = []
+    await page.route("**/api/v1/data/tags", (route) =>
+      route.fulfill({
+        json: [...tagged].map(([name, handles]) => ({
+          name,
+          channels: handles.length,
+        })),
+      }),
+    )
+    await page.route("**/api/v1/data/tags/channels", async (route) => {
+      const body = route.request().postDataJSON() as {
+        name: string
+        handles: string[]
+      }
+      sent.push(body)
+      tagged.set(body.name, body.handles)
+      await route.fulfill({ json: { changed: body.handles.length } })
+    })
+    // Registered after `mockDirectory`, so it answers the list instead.
+    await page.route("**/api/v1/data/directory/list", async (route) => {
+      filters.push((route.request().postDataJSON() as ListBody).filter)
+      const rows = ROWS.map((r) => ({
+        ...r,
+        followed: r.handle === "a1",
+        tags: [...tagged].flatMap(([name, handles]) =>
+          handles.includes(r.handle) ? [name] : [],
+        ),
+      }))
+      await route.fulfill({
+        json: { rows, total: 250, languages: [], yoursSize: 3 },
+      })
+    })
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // A followed Tick is tagged too: a Tag sits on any Channel.
+    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    await page.getByTestId("directory-bulk-tag").click()
+    await page.getByTestId("directory-tag-search").fill("World news")
+    await page.getByText('Create the Tag "World news"').click()
+    await expect
+      .poll(() => sent)
+      .toEqual([{ name: "World news", handles: ["a1", "a2"] }])
+    await expect(
+      page.getByTestId("directory-row-a2").getByTestId("directory-tags"),
+    ).toHaveText("World news")
+
+    // "In the Tag", from the Filters picker, names the Tag in the request.
+    await page.getByTestId("directory-filters").click()
+    const picker = page.getByRole("dialog")
+    await picker.getByRole("button", { name: /^In the Tag/ }).click()
+    await picker.getByRole("button", { name: /^World news/ }).click()
+    await expect(chip(page, "tag-World news")).toBeVisible()
+    await expect
+      .poll(() =>
+        JSON.stringify(filters.at(-1) ?? null).includes(
+          '{"type":"tag","name":"World news"}',
+        ),
+      )
+      .toBe(true)
+    expect(param(page, "dirFilter")).toContain('tag:"World news"')
+  })
+
   test("on a phone: the controls sheet, cards, and a bottom-sheet panel", async ({
     page,
   }) => {

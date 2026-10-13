@@ -28,6 +28,11 @@ export type FilterVocabulary<C extends BaseCond> = PickerVocabulary<C> & {
   icon: (cond: C) => LucideIcon
   /** The chip's test id suffix. */
   chipId: (cond: C) => string
+  /**
+   * Why a Condition matches nothing as it stands (a Tag the reader does not
+   * have, DFP-04); its chip is struck through and says so.
+   */
+  stale?: (cond: C) => string | undefined
 }
 
 /** What every block needs, passed down the tree as one. */
@@ -190,6 +195,7 @@ function Chip<C extends BaseCond>({
   const { cond } = node
   const label = ed.vocabulary.label(cond)
   const Icon = ed.vocabulary.icon(cond)
+  const stale = ed.vocabulary.stale?.(cond)
   return (
     <span
       data-testid={`${ed.testId}-chip-${ed.vocabulary.chipId(cond)}`}
@@ -208,7 +214,12 @@ function Chip<C extends BaseCond>({
         vocabulary={ed.vocabulary}
         onPick={(next) => ed.onChange(replaceCond(ed.filter, node.id, next))}
         trigger={
-          <button type="button" className="hover:underline">
+          <button
+            type="button"
+            title={stale}
+            data-stale={stale ? true : undefined}
+            className={stale ? "line-through opacity-60" : "hover:underline"}
+          >
             {label}
           </button>
         }

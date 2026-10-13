@@ -11,6 +11,8 @@ export const queryKeys = {
   /** Also separate: 40% of the list's bytes, for two clamped lines on a card. */
   channelBios: ["channelBios"] as const,
   settingGroups: ["settingGroups"] as const,
+  /** The Account's Tags with their counts (DFP-04); any Tag write refetches it. */
+  tags: ["tags"] as const,
   bots: ["bots"] as const,
   /**
    * The account's AI Keys (BYOK-01). Separate from `bots` because an AI Key

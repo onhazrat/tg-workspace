@@ -57,6 +57,10 @@ describe("every Condition prints and parses back unchanged", () => {
     "cites <= 0",
     "citedby:durov",
     'cites:"alpha beta"',
+    "tag:news",
+    'tag:"slow reads"',
+    'tag:"group:Slow Feed"',
+    "not tag:news",
   ])("%s", (text) => {
     expect(roundTrip(text)).toBe(text)
   })
@@ -130,7 +134,7 @@ describe("cited by @x and cites @x", () => {
 describe("text the server would refuse does not parse", () => {
   test.each([
     ["another unknown is:", "is:available"],
-    ["an unknown prefix", "tag:news"],
+    ["an unknown prefix", "topic:news"],
     ["a window that is not days", "mine:week"],
     ["a zero window", "mine:0d"],
     ["an unknown measure", "indeg >= 3"],
@@ -273,5 +277,26 @@ describe("Shared parents and Shared children (DIR-07)", () => {
       { type: "parents", handles: ["s1", "s2"], min: 2 },
       { type: "children", handles: ["x"], min: 4 },
     ])
+  })
+})
+
+describe("the tag Condition (DFP-04)", () => {
+  test("names the Tag as typed and goes to the server as it is", () => {
+    const filter = parseDirectoryFilter('not tag:"World News"')
+    expect(conds('tag:"World News"')).toEqual([
+      { cond: { type: "tag", name: "World News" }, not: false },
+    ])
+    expect(directoryConditionLabel({ type: "tag", name: "news" })).toBe(
+      "In the Tag news",
+    )
+    const body = directoryFilterBody(filter as NonNullable<typeof filter>, {
+      picked: [],
+      selection: [],
+      follows: [],
+    })
+    expect(body?.children?.[0]).toMatchObject({
+      not: true,
+      cond: { type: "tag", name: "World News" },
+    })
   })
 })
