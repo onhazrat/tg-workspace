@@ -86,6 +86,9 @@ export const queryKeys = {
   /** A Posts number filter's bars over the window, filters aside (PTI-01). */
   postsValueHistogram: (scope: unknown) =>
     ["postsValueHistogram", scope] as const,
+  /** The Analysis window chart's Posts per slice of time (PTI-03). */
+  postsWindowHistogram: (scope: unknown) =>
+    ["postsWindowHistogram", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,
   /**

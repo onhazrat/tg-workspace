@@ -4846,6 +4846,92 @@ export type PostValueHistogramResponse = {
 };
 
 /**
+ * PostWindowHistogramRequest
+ *
+ * `PostFilteredRequest` plus the stretch of time the Analysis window chart draws.
+ *
+ * `[extentStart, extentEnd)` is cut into `buckets` equal slices. Filtered,
+ * the Post filter and keyword apply and the per-Channel cap does not;
+ * `unfiltered` sets the filter and keyword aside too. `window` stays the
+ * Analysis window, which a Channel posts Condition counts within.
+ */
+export type PostWindowHistogramRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Extentstart
+     */
+    extentStart: number;
+    /**
+     * Extentend
+     */
+    extentEnd: number;
+    /**
+     * Buckets
+     */
+    buckets: number;
+    /**
+     * Unfiltered
+     */
+    unfiltered?: boolean;
+};
+
+/**
+ * PostWindowHistogramResponse
+ *
+ * The Posts in each slice of the extent, earliest first.
+ */
+export type PostWindowHistogramResponse = {
+    /**
+     * Counts
+     */
+    counts: Array<number>;
+};
+
+/**
  * PromptResponse
  *
  * The assembled prompt, for the "show me what you would send" surfaces.
@@ -9258,6 +9344,31 @@ export type DataPostsValueHistogramResponses = {
 };
 
 export type DataPostsValueHistogramResponse = DataPostsValueHistogramResponses[keyof DataPostsValueHistogramResponses];
+
+export type DataPostsWindowHistogramData = {
+    body: PostWindowHistogramRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/window-histogram';
+};
+
+export type DataPostsWindowHistogramErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsWindowHistogramError = DataPostsWindowHistogramErrors[keyof DataPostsWindowHistogramErrors];
+
+export type DataPostsWindowHistogramResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostWindowHistogramResponse;
+};
+
+export type DataPostsWindowHistogramResponse = DataPostsWindowHistogramResponses[keyof DataPostsWindowHistogramResponses];
 
 export type DataPostsViewEstimateData = {
     body?: never;

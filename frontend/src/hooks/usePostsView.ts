@@ -14,13 +14,16 @@ import {
   dataPostsFacets,
   dataPostsValueHistogram,
   dataPostsViewEstimate,
+  dataPostsWindowHistogram,
   type PostFacetsRequest,
   type PostFacetsResponse,
   type PostFilteredRequest,
   type PostValueHistogramRequest,
   type PostValueHistogramResponse,
+  type PostWindowHistogramRequest,
   type ViewEstimateResponse,
 } from "@/client"
+import type { WindowHistogramQuery } from "@/components/AnalysisWindowControl"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
@@ -318,6 +321,56 @@ export function usePostValueHistogram(
         } as PostValueHistogramRequest,
       }),
     enabled: channelNames.length > 0,
+    staleTime: SUMMARIZER_STALE_TIME,
+    placeholderData: (previous) => previous,
+  }).data
+}
+
+/**
+ * The Posts in each slice of the Analysis window chart's extent (PTI-03).
+ * Filtered, what the Post filter, keyword and spotlight keep, the cap aside;
+ * unfiltered, every Post of the selected Channels.
+ */
+export function usePostWindowHistogram(
+  query: WindowHistogramQuery,
+  spotlight: ChannelSpotlight | null,
+): number[] | undefined {
+  const { startDate, endDate, windowKey } = useScope()
+  const { postFilter, postSearch } = useScraper()
+  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
+  const selected = useSelectedChannelNames()
+  const view = spotlightView(spotlight, {
+    channelNames: selected,
+    keyword: debouncedPostSearch,
+    filter: postFilter,
+    maxPerChannel: 0,
+    groupByChannel: false,
+  })
+  const scope = query.unfiltered
+    ? { channelNames: selected }
+    : {
+        channelNames: view.channelNames,
+        keyword: view.keyword,
+        filter: view.filter,
+      }
+  return useQuery({
+    queryKey: queryKeys.postsWindowHistogram({
+      ...query,
+      ...scope,
+      filter: scope.filter && printPostFilter(scope.filter),
+      // A Channel posts Condition counts within the window.
+      window: windowKey,
+    }),
+    queryFn: async () =>
+      (
+        await dataPostsWindowHistogram({
+          body: {
+            ...postScopeBody({ ...scope, startDate, endDate }),
+            ...query,
+          } as PostWindowHistogramRequest,
+        })
+      ).counts,
+    enabled: scope.channelNames.length > 0,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
   }).data

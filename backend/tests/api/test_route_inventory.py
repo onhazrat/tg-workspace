@@ -156,11 +156,13 @@ def test_the_split_did_not_change_the_route_count() -> None:
     a Summary's Publication planned for the publish panel and then sent; and
     **94** with PTI-01's `POST /posts/value-histogram`, the bars a Posts
     number filter's editor draws, a sibling of `posts/counts` rather than
-    more of its answer because it sets the Post filter aside.
+    more of its answer because it sets the Post filter aside; and **95** with
+    PTI-03's `POST /posts/window-histogram`, the Posts across the time the
+    Analysis window editor's chart draws.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 94, (
-        f"expected 94 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 95, (
+        f"expected 95 /data endpoints, found {len(data_routes)}"
     )

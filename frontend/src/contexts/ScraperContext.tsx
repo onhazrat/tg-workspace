@@ -223,6 +223,7 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
     queryClient.invalidateQueries({ queryKey: ["postsCounts"] })
     queryClient.invalidateQueries({ queryKey: ["postsFacets"] })
     queryClient.invalidateQueries({ queryKey: ["postsValueHistogram"] })
+    queryClient.invalidateQueries({ queryKey: ["postsWindowHistogram"] })
     queryClient.invalidateQueries({ queryKey: ["discoverCandidates"] })
   }, [queryClient])
 

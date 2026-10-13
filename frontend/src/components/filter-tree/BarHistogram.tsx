@@ -19,6 +19,7 @@ export function BarHistogram({
   solid,
   onSelect,
   caption,
+  testId = "metric",
 }: {
   bins: number[]
   /** Whether bar `i` is inside the selection, while nobody drags. */
@@ -26,6 +27,8 @@ export function BarHistogram({
   onSelect: (run: Run) => void
   /** The caption's left, middle and right; `shown` is the bar under the pointer. */
   caption: (shown: number | null) => [ReactNode, ReactNode, ReactNode]
+  /** Prefixes the bars' and caption's test ids, for two charts on one screen. */
+  testId?: string
 }) {
   const [drag, setDrag] = useState<Run | null>(null)
   const [hover, setHover] = useState<number | null>(null)
@@ -54,7 +57,7 @@ export function BarHistogram({
         {bins.map((n, i) => (
           <div
             key={i}
-            data-testid={`metric-bar-${i}`}
+            data-testid={`${testId}-bar-${i}`}
             data-solid={isSolid(i)}
             className={`flex-1 rounded-t-[2px] ${isSolid(i) ? "bg-app-ink/70" : "bg-app-ink/15"} ${shown === i ? "ring-1 ring-app-ink/60" : ""}`}
             style={{
@@ -75,7 +78,7 @@ export function BarHistogram({
         ))}
       </div>
       <div
-        data-testid="metric-histogram-caption"
+        data-testid={`${testId}-histogram-caption`}
         className="flex justify-between gap-2 text-[10px] tabular-nums text-app-ink/50"
       >
         <span>{left}</span>

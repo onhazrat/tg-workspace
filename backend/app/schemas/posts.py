@@ -279,6 +279,33 @@ class PostValueHistogramResponse(BaseModel):
     total: int
 
 
+class PostWindowHistogramRequest(PostFilteredRequest):
+    """`PostFilteredRequest` plus the stretch of time the Analysis window chart draws.
+
+    `[extentStart, extentEnd)` is cut into `buckets` equal slices. Filtered,
+    the Post filter and keyword apply and the per-Channel cap does not;
+    `unfiltered` sets the filter and keyword aside too. `window` stays the
+    Analysis window, which a Channel posts Condition counts within.
+    """
+
+    extent_start: int = PydanticField(alias="extentStart")
+    extent_end: int = PydanticField(alias="extentEnd")
+    buckets: int = PydanticField(ge=1, le=500)
+    unfiltered: bool = False
+
+    @model_validator(mode="after")
+    def _extent_has_length(self) -> PostWindowHistogramRequest:
+        if self.extent_end <= self.extent_start:
+            raise ValueError("extentEnd must be after extentStart")
+        return self
+
+
+class PostWindowHistogramResponse(BaseModel):
+    """The Posts in each slice of the extent, earliest first."""
+
+    counts: list[int]
+
+
 class PostFeedRequest(PostFilteredRequest):
     """`PostFilteredRequest` plus the feed's paging, grouping and the selection's order.
 

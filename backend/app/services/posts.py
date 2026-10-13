@@ -1239,3 +1239,42 @@ def value_histogram(
     edges = [inv(f(lo) + span * i / VALUE_BINS) for i in range(VALUE_BINS + 1)]
     edges[0], edges[-1] = lo, hi
     return ValueHistogram(bins, edges, log, float(median), int(measured), int(total))
+
+
+# ---- The Posts across time (PTI-03) ----------------------------------------------
+
+
+def window_histogram(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None,
+    start_date: int | None,
+    end_date: int | None,
+    extent_start: int,
+    extent_end: int,
+    buckets: int,
+    filters: PostFilters | None,
+) -> list[int]:
+    """How many Posts fall in each of `buckets` equal slices of the extent.
+
+    The extent is half-open like the Analysis window, so a Post on a slice's
+    edge belongs to the later slice only: whole-number division, never a
+    float that could put it on either side. `filters` apply without the cap,
+    and against the Analysis window (`start_date`, `end_date`) rather than
+    the extent, which is where a Channel posts Condition counts.
+    """
+    index = (
+        (col(Post.timestamp) - extent_start) * buckets // (extent_end - extent_start)
+    )
+    extent = PostScope(user_id, channel_names, extent_start, extent_end)
+    window = PostScope(user_id, channel_names, start_date, end_date)
+    stmt = scoped_select(select(index, func.count()), Post, user_id).where(
+        *extent.clauses()
+    )
+    counts = [0] * buckets
+    for i, n in session.exec(
+        _filtered(session, stmt, filters, window).group_by(index)
+    ).all():
+        counts[int(i)] += n
+    return counts

@@ -247,6 +247,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "two live accounts, a foreign Channel named and none named; "
         "test_post_value_histogram.py",
     ),
+    ("POST", f"{DATA}/posts/window-histogram"): (
+        Reason.COVERED_ELSEWHERE,
+        "two live accounts, a foreign Channel named and none named; "
+        "test_post_window_histogram.py",
+    ),
     ("POST", f"{DATA}/posts/bulk"): (
         Reason.CORPUS,
         "raw ingest; creates no Channel and no Follow, so what it writes is "

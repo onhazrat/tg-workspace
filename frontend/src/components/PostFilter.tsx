@@ -12,7 +12,11 @@
  */
 import { Layers, Search, Sparkles, X } from "lucide-react"
 import React from "react"
-import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
+import {
+  AnalysisWindowControl,
+  WindowHistogramContext,
+  type WindowHistogramQuery,
+} from "@/components/AnalysisWindowControl"
 import { FilterRow } from "@/components/filter-tree/FilterRow"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
@@ -32,6 +36,7 @@ import { useUI } from "../contexts/UIContext"
 import {
   usePostFacets,
   usePostValueHistogram,
+  usePostWindowHistogram,
   useViewEstimate,
 } from "../hooks/usePostsView"
 import { spotlitBar } from "../lib/posts/channel-spotlight"
@@ -447,6 +452,11 @@ function useSpotlitValueHistogram(measure: PostNumber) {
   return usePostValueHistogram(measure, useSpotlight().spotlight)
 }
 
+/** The Analysis window chart's read, over the spotlit Channel when one is. */
+function useSpotlitWindowHistogram(query: WindowHistogramQuery) {
+  return usePostWindowHistogram(query, useSpotlight().spotlight)
+}
+
 /** The bar wired to the workspace's state. */
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const spot = useSpotlight()
@@ -483,9 +493,11 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
         keywordIgnored={keywordIgnored}
         embeddingsEnabled={embeddingsEnabled}
         windowControl={
-          <AnalysisWindowControl
-            onReturnToAction={() => setActiveTab("action")}
-          />
+          <WindowHistogramContext.Provider value={useSpotlitWindowHistogram}>
+            <AnalysisWindowControl
+              onReturnToAction={() => setActiveTab("action")}
+            />
+          </WindowHistogramContext.Provider>
         }
         facets={facets}
         channelLanguages={channelLanguages}

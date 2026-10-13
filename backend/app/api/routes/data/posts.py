@@ -22,6 +22,8 @@ from app.schemas.posts import (
     PostLookupRequest,
     PostValueHistogramRequest,
     PostValueHistogramResponse,
+    PostWindowHistogramRequest,
+    PostWindowHistogramResponse,
     SelectablePostResponse,
     ViewCurveResponse,
     ViewEstimateResponse,
@@ -33,6 +35,7 @@ from app.services.posts import (
     count_facets_in_scope,
     count_shown_and_selected,
     value_histogram,
+    window_histogram,
 )
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -168,6 +171,40 @@ def posts_value_histogram(
         filters=filters,
     )
     return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
+
+
+# PTI-03. A read expressed as a POST for the reason `posts_counts` is one, and
+# on `VIEW_AS_READ_ONLY_PATHS` beside it.
+@router.post("/posts/window-histogram")
+def posts_window_histogram(
+    body: PostWindowHistogramRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostWindowHistogramResponse:
+    """How many Posts fall in each equal slice of a stretch of time.
+
+    What the Analysis window editor's chart draws. Filtered, the Post filter
+    and keyword apply but the per-Channel cap does not, so the bars do not
+    depend on the feed's order; `unfiltered` counts every Post of the
+    selected Channels. A Channel posts Condition counts within the Analysis
+    window, not the stretch drawn.
+    """
+    window = resolve_analysis_window(body.window)
+    return PostWindowHistogramResponse(
+        counts=window_histogram(
+            session,
+            user_id=current_user.id,
+            channel_names=body.cleaned_channel_names(),
+            start_date=window.start,
+            end_date=window.end,
+            extent_start=body.extent_start,
+            extent_end=body.extent_end,
+            buckets=body.buckets,
+            filters=None
+            if body.unfiltered
+            else parse_post_filters(session, body, tree=body.filter),
+        )
+    )
 
 
 # PFB-03. A GET: it reads the curve and two settings, nothing per account.
