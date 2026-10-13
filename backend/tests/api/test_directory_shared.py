@@ -1,13 +1,14 @@
 """Shared parents and Shared children, over HTTP (DIR-07).
 
-"Shared parents with" a set of picks keeps the Channels cited by the same
-Channels that cite the picks; "Shared children with" keeps the Channels that
-cite the same Channels the picks cite. Both read the citation pairs (ADR-028),
-so the corpus below is written through `write_references`, and the browser
-sends the picks as handles whatever it resolved them from (typed, ticked, the
-Channels tab selection or every Follow).
+"Shared parents with" a set of Seeds keeps the Channels cited by the same
+Channels that cite the Seeds; "Shared children with" keeps the Channels that
+cite the same Channels the Seeds cite. Both read the citation pairs (ADR-028),
+so the corpus below is written through `write_references`. The browser sends
+the Seeds as handles whatever it resolved them from (typed, ticked, the
+Channels tab selection or every Follow), or names a Tag the server resolves
+(DFP-05).
 
-Picks are `p1` and `p2` throughout.
+The Seeds are `p1` and `p2` throughout.
 
 | Channel | cites                                                     |
 |---------|-----------------------------------------------------------|
@@ -50,6 +51,13 @@ Each mutation was applied alone and this module went red:
   columns case
 * "Why it's here" naming every citing Channel, not the shared ones -> the
   Why case
+
+DFP-05, a Tag as the Seeds (two Accounts hold "seeds" on different Channels):
+
+* leave a Tag-sourced Condition unresolved -> the Tag-as-Seeds case
+* resolve a Tag across every Account -> the same, for the other Account
+* "Why it's here" ignoring the Tag -> the same
+* accept handles and a Tag together -> the never-both case
 """
 
 from __future__ import annotations

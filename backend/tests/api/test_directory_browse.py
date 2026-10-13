@@ -124,6 +124,14 @@ DFP-04 (the `tag` Condition and the rows' Tags; the routes' own guard is
 
 * leave the Tags out of the cached total's key -> the tag Condition's total
 * resolve a Tag across every Account -> the unknown-Tag case
+
+DFP-05 (a Tag as the Seeds of Cited by and Cites, and their 500-handle cap):
+
+* leave a Tag-sourced Condition unresolved -> the Tag-as-Seeds case
+* resolve a Tag across every Account -> the same, for the other Account
+* resolve the Tag by its name as sent, not case-folded -> the same
+* cap the handles at 499 or 501 -> the 500-handle case
+* accept handles and a Tag together, or neither -> the same
 """
 
 from __future__ import annotations
