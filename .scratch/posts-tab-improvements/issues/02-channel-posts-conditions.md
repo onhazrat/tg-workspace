@@ -13,13 +13,13 @@ vocabulary" and "Evaluating the new Conditions" under Implementation Decisions; 
 
 **Blocked by:** PTI-01 (the value histogram read and the editor histogram).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ### Vocabulary
 
-- [ ] Conditions `channel_posts` and `channel_posts_filtered`, each an optional `min`/`max` bound with no "no value" form, in the server's and the browser's vocabularies alike (the conformance check passes)
-- [ ] Text forms `channel_posts <= 5`, `channel_posts >= 50`, `channel_posts 10..30` and the same for `channel_posts_filtered`; chips "Channel posts in window ≤ 5" and "Channel posts in filtered window ≤ 5"
-- [ ] Whole bounds: the browser rounds inward before sending and refuses a bound with no whole number left; the server accepts a fraction and rounds the same way, so a stored one keeps working. The rule (from the prototype):
+- [x] Conditions `channel_posts` and `channel_posts_filtered`, each an optional `min`/`max` bound with no "no value" form, in the server's and the browser's vocabularies alike (the conformance check passes)
+- [x] Text forms `channel_posts <= 5`, `channel_posts >= 50`, `channel_posts 10..30` and the same for `channel_posts_filtered`; chips "Channel posts in window ≤ 5" and "Channel posts in filtered window ≤ 5"
+- [x] Whole bounds: the browser rounds inward before sending and refuses a bound with no whole number left; the server accepts a fraction and rounds the same way, so a stored one keeps working. The rule (from the prototype):
   ```ts
   const min = bound.min === undefined ? undefined : Math.ceil(bound.min)
   const max = bound.max === undefined ? undefined : Math.floor(bound.max)
@@ -28,18 +28,18 @@ vocabulary" and "Evaluating the new Conditions" under Implementation Decisions; 
 
 ### Evaluation
 
-- [ ] Both count within the Analysis window the read resolves: feed, counts, Type/Media/Language counts, and inside a Selection rule the window it is applied in, over the rule's own tree and keyword
-- [ ] Each is one grouped count per Channel, computed once per read and joined as a set of Channels, never a per-row count
-- [ ] The filtered count prunes every Channel posts Condition from the tree (same answer under AND, OR and NOT), applies the keyword, ignores the cap
+- [x] Both count within the Analysis window the read resolves: feed, counts, Type/Media/Language counts, and inside a Selection rule the window it is applied in, over the rule's own tree and keyword
+- [x] Each is one grouped count per Channel, computed once per read and joined as a set of Channels, never a per-row count
+- [x] The filtered count prunes every Channel posts Condition from the tree (same answer under AND, OR and NOT), applies the keyword, ignores the cap
 
 ### Filters menu and histograms
 
-- [ ] The menu lists Views, Estimated views, Channel posts in window, Channel posts in filtered window, in that order, each with its current bounds; the pill counts all four kinds; the condition picker offers the same
-- [ ] The Filters menu and the condition picker read their number entries from **one list**. Today the menu hard-codes Views and Estimated views beside the vocabulary's own list, and the prototype's Channel posts entry reached the picker but not the menu. A test fails when an entry is in one and not the other
-- [ ] The value histogram read gains `channel_posts` (Channels by unfiltered count) and `channel_posts_filtered` (Channels by filtered count, applying the request's filter and keyword); both count Channels and the caption says "channels"
+- [x] The menu lists Views, Estimated views, Channel posts in window, Channel posts in filtered window, in that order, each with its current bounds; the pill counts all four kinds; the condition picker offers the same
+- [x] The Filters menu and the condition picker read their number entries from **one list**. Today the menu hard-codes Views and Estimated views beside the vocabulary's own list, and the prototype's Channel posts entry reached the picker but not the menu. A test fails when an entry is in one and not the other
+- [x] The value histogram read gains `channel_posts` (Channels by unfiltered count) and `channel_posts_filtered` (Channels by filtered count, applying the request's filter and keyword); both count Channels and the caption says "channels"
 
 ### Tests
 
-- [ ] Backend, through the HTTP API: both ends and between; a fraction rounded inward; a different window changing the answer; inside a Selection rule; the Original example; the Condition set aside under OR and NOT; keyword counted; cap ignored; both histogram measures
-- [ ] Frontend, through the filter bar's test: the four entries in order, a histogram drag producing whole `channel_posts …` text, an empty whole range refused
-- [ ] Each new test watched failing against a mutation first
+- [x] Backend, through the HTTP API: both ends and between; a fraction rounded inward; a different window changing the answer; inside a Selection rule; the Original example; the Condition set aside under OR and NOT; keyword counted; cap ignored; both histogram measures
+- [x] Frontend, through the filter bar's test: the four entries in order, a histogram drag producing whole `channel_posts …` text, an empty whole range refused
+- [x] Each new test watched failing against a mutation first

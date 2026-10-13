@@ -12,23 +12,23 @@ stories 20-32, and "New reads" and "The Analysis window chart" under Implementat
 
 **Blocked by:** PTI-01 (the shared bar component).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ### The window histogram read
 
-- [ ] A POST read takes the filtered-request body plus `extentStart`, `extentEnd`, `buckets` (1 to 500) and `unfiltered`, and answers `{ counts }`, one count per equal slice of the extent
-- [ ] Filtered applies the Post filter, keyword and spotlight without the cap; unfiltered only the selected Channels; a Channel posts Condition inside the filter still counts within the Analysis window, not the extent
-- [ ] Reads through the tenancy seam; docstring without ticket id; client regenerated; account isolation probes it; the route guards pass
+- [x] A POST read takes the filtered-request body plus `extentStart`, `extentEnd`, `buckets` (1 to 500) and `unfiltered`, and answers `{ counts }`, one count per equal slice of the extent
+- [x] Filtered applies the Post filter, keyword and spotlight without the cap; unfiltered only the selected Channels; a Channel posts Condition inside the filter still counts within the Analysis window, not the extent
+- [x] Reads through the tenancy seam; docstring without ticket id; client regenerated; account isolation probes it; the route guards pass
 
 ### The chart
 
-- [ ] Drawn by the shared bar component with its own solid rule (the window's buckets) and caption (the extent's dates, the hovered bucket's start and count)
-- [ ] Extent: `span = max(end - start, 1 minute)`, the chart spans `span × 3 × 3^zoom`, centred on the window, never past now
-- [ ] A drag sets a Fixed window through the existing scope setter; a Live window keeps following as it advances
-- [ ] Toggle and zoom start at Filtered and the default each time the editor opens; neither is stored
+- [x] Drawn by the shared bar component with its own solid rule (the window's buckets) and caption (the extent's dates, the hovered bucket's start and count)
+- [x] Extent: `span = max(end - start, 1 minute)`, the chart spans `span × 3 × 3^zoom`, centred on the window, never past now
+- [x] A drag sets a Fixed window through the existing scope setter; a Live window keeps following as it advances
+- [x] Toggle and zoom start at Filtered and the default each time the editor opens; neither is stored
 
 ### Tests
 
-- [ ] Backend, through the HTTP API: filtered against unfiltered, cap ignored, the extent's edges (a Post on the boundary lands in exactly one bucket), spotlight respected, another account's Posts never counted
-- [ ] Frontend, through the Analysis window control's test with a fake read: the chart renders, a drag sets a Fixed window, the toggle changes what is requested, zoom widens the extent
-- [ ] Each new test watched failing against a mutation first
+- [x] Backend, through the HTTP API: filtered against unfiltered, cap ignored, the extent's edges (a Post on the boundary lands in exactly one bucket), spotlight respected, another account's Posts never counted
+- [x] Frontend, through the Analysis window control's test with a fake read: the chart renders, a drag sets a Fixed window, the toggle changes what is requested, zoom widens the extent
+- [x] Each new test watched failing against a mutation first

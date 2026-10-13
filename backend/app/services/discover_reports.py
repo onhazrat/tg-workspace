@@ -40,7 +40,8 @@ from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
-from app.services.post_selection import PostScope, selection_clause
+from app.services.post_filters import PostScope
+from app.services.post_selection import selection_clause
 from app.services.serialization import model_to_camel
 from app.services.telegram_web import normalize_handle
 from app.services.tenancy import (

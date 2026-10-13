@@ -121,3 +121,14 @@ export function fixedWindow(
 
   return { mode: "fixed", start, end }
 }
+
+// ---- The window chart (PTI-03) ----------------------------------------------
+
+/** What the chart asks for: Posts per equal slice of `[extentStart, extentEnd)`. */
+export type WindowHistogramQuery = {
+  extentStart: number
+  extentEnd: number
+  buckets: number
+  /** Every Post of the selected Channels, rather than what the filter keeps. */
+  unfiltered: boolean
+}

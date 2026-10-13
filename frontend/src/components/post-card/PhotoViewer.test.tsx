@@ -5,8 +5,11 @@
  * `photo-viewer-model.test.ts`; this pins the behaviour around it.
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import {
+  FeedPagingContext,
   GALLERY_ATTR,
   PhotoViewer,
   PhotoViewerDialog,
@@ -397,5 +400,107 @@ describe("PhotoViewerDialog", () => {
     onOpenChange.mockClear()
     fireEvent.click(screen.getByRole("button", { name: "Close" }))
     expect(onOpenChange).toHaveBeenLastCalledWith(false)
+  })
+})
+
+describe("opened from the Posts feed, it pages the feed (PTI-05)", () => {
+  // Only `PostFeed` provides the paging, and rendering it needs the whole
+  // app, so its source is what is read: the provider must wrap the cards.
+  test("the Posts feed provides its paging around the cards", () => {
+    const src = readFileSync(
+      join(import.meta.dir, "..", "PostFeed.tsx"),
+      "utf8",
+    )
+    const open = src.indexOf(
+      "<FeedPagingContext.Provider value={{ loadMore, hasMore }}>",
+    )
+    const cards = src.indexOf("<PostFeedResults")
+    const close = src.indexOf("</FeedPagingContext.Provider>")
+    expect(open).toBeGreaterThan(-1)
+    expect(cards).toBeGreaterThan(open)
+    expect(close).toBeGreaterThan(cards)
+  })
+
+  const viewer = (start: string, loadMore = () => {}, hasMore = true) =>
+    render(
+      <FeedPagingContext.Provider value={{ loadMore, hasMore }}>
+        <PhotoViewer start={start} onClose={() => {}} />
+      </FeedPagingContext.Provider>,
+    )
+  const next = () => screen.getByLabelText("Next photo") as HTMLButtonElement
+
+  test("within three photos of the end it asks the feed for its next page", () => {
+    const loadMore = mock(() => {})
+    viewer("blob:a", loadMore)
+    expect(loadMore).toHaveBeenCalled()
+  })
+
+  test("past the last photo is the last photo, by key, by button and by swipe", () => {
+    viewer("blob:c")
+    expect(label()).toContain("Chan c · 3 / 3 · loading more")
+    // One step at a time: an even number of steps round three photos would
+    // land a wrapping viewer back on this one.
+    for (const press of [
+      () => fireEvent.keyDown(window, { key: "ArrowRight" }),
+      () => fireEvent.click(next()),
+      () => swipe(-200, 10),
+    ]) {
+      press()
+      expect(label()).toContain("Chan c · 3 / 3")
+    }
+  })
+
+  test("before the first photo is the first photo, by key and by swipe", () => {
+    viewer("blob:a")
+    for (const press of [
+      () => fireEvent.keyDown(window, { key: "ArrowLeft" }),
+      () => swipe(200, -10),
+    ]) {
+      press()
+      expect(label()).toContain("Chan a · 1 / 3")
+    }
+  })
+
+  test("a refreshed thumbnail keeps the place, and new photos join the end", async () => {
+    viewer("blob:c")
+    // The feed refreshed: every thumbnail has a new object address.
+    for (const id of ["a", "b", "c"])
+      card(id).querySelector("img")?.setAttribute("src", `blob:${id}2`)
+    await act(() => sleep(0))
+    expect(label()).toContain("Chan c · 3 / 3")
+
+    const more = document.createElement("article")
+    more.dataset.postKey = "ch_d"
+    more.innerHTML = `<img src="blob:d" data-gallery-caption="Chan d">`
+    document.getElementById("feed")?.appendChild(more)
+    await act(() => sleep(0))
+    expect(label()).toContain("Chan c · 3 / 4")
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(label()).toContain("Chan d · 4 / 4")
+    expect(photo().src).toBe("blob:d")
+  })
+
+  test("a rescan that loses the current photo moves nothing", async () => {
+    viewer("blob:c")
+    card("c").remove()
+    await act(() => sleep(0))
+    expect(label()).toContain("Chan c · 3 / 3")
+  })
+
+  test("another gallery takes in nothing new", async () => {
+    render(<PhotoViewer start="blob:c" onClose={() => {}} />)
+    const more = document.createElement("article")
+    more.innerHTML = `<img src="blob:d" data-gallery-caption="Chan d">`
+    document.getElementById("feed")?.appendChild(more)
+    await act(() => sleep(0))
+    expect(label()).toContain("Chan c · 3 / 3")
+    expect(label()).not.toContain("loading more")
+  })
+
+  test("with nothing more to load the caption says nothing of loading", () => {
+    const loadMore = mock(() => {})
+    viewer("blob:c", loadMore, false)
+    expect(label()).not.toContain("loading more")
+    expect(loadMore).not.toHaveBeenCalled()
   })
 })

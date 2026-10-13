@@ -22,8 +22,14 @@ from app.prompts.posts import (
     format_posts_for_prompt,
     format_posts_for_tag_prompt,
 )
-from app.services.post_filters import FEED_SORTS, VIEW_MEASURES, PostFilters, Step
-from app.services.post_selection import PostScope, selection_clause
+from app.services.post_filters import (
+    FEED_SORTS,
+    VIEW_MEASURES,
+    PostFilters,
+    PostScope,
+    Step,
+)
+from app.services.post_selection import selection_clause
 from app.services.posts import count_selected, list_feed
 from app.services.settling_curve import view_reading
 

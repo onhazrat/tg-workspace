@@ -19,8 +19,8 @@ from app.core.db import engine
 from app.models_tg import Post
 from app.services.discover import compute_discover_candidates
 from app.services.discover_reports import create_report
-from app.services.post_filters import Pick, Rule, Step
-from app.services.post_selection import PostScope, selection_clause
+from app.services.post_filters import Pick, PostScope, Rule, Step
+from app.services.post_selection import selection_clause
 from tests.utils.discover import report_scope
 from tests.utils.tenancy import ANY_READER, follow_channels
 

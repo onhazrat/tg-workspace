@@ -130,7 +130,7 @@ export function PostCardView({
             <PostCardPhoto thumbApiPath={thumb} caption={title} compact />
           </div>
         )}
-        <PostCardClampedBody {...body} />
+        <PostCardClampedBody {...body} fill={!thumb} />
         {/* Pinned to the bottom, so footers line up across a grid row. */}
         <footer className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-app-ink/5 pt-1.5 text-[12px] text-app-ink/50">
           <PostIdLink post={post} />

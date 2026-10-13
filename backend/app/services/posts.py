@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 import time
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -22,6 +24,7 @@ from sqlalchemy import (
     update,
     values,
 )
+from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
@@ -38,15 +41,19 @@ from app.services.post_filters import (
     CapMode,
     FeedSort,
     PostFilters,
+    PostScope,
+    ValueMeasure,
     ViewReading,
-    apply_analysis_window,
     apply_post_filters,
+    channel_posts_aside,
     media_kind_clause,
+    post_filter_clauses,
     post_type_clause,
     tree_clause,
 )
 from app.services.reach import MS_PER_HOUR, REFRESH_HORIZON_HOURS
 from app.services.serialization import post_to_camel
+from app.services.settling_curve import current_estimate
 from app.services.sync_meta import touch_sync
 from app.services.tenancy import scoped_select, unscoped_select
 from app.services.view_observations import Sighting, record_view_observations
@@ -808,6 +815,8 @@ def lookup_posts(
     user_id: uuid.UUID,
     filters: PostFilters | None = None,
     selected: ColumnElement[bool] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch specific posts by their `(channel_name, post_id)` natural key.
 
@@ -827,12 +836,18 @@ def lookup_posts(
     `filters` narrows the batch to the Posts the Post filter shows, which is
     how a meaning search's ranked Posts pass it (PTR-03). A Post it hides is
     absent like any other. `selected` flags each row, as on the feed (PTR-05).
+    A Channel posts Condition counts within `start_date`..`end_date` (PTI-02).
     """
     unique = {(name, post_id) for name, post_id in pairs}
     if not unique:
         return []
     columns = select(Post) if selected is None else select(Post, selected)
-    stmt = _filtered(session, scoped_select(columns, Post, user_id), user_id, filters)
+    stmt = _filtered(
+        session,
+        scoped_select(columns, Post, user_id),
+        filters,
+        PostScope(user_id, None, start_date, end_date),
+    )
     stmt = stmt.where(
         or_(
             *[
@@ -943,8 +958,9 @@ def count_scope(
     if tree is not None and estimate is not None:
         shown = tree_clause(
             tree,
-            readings=filters.tree_readings,
+            filters=filters,
             followed_names=_followed_for(session, filters, user_id),
+            scope=PostScope(user_id, channel_names, start_date, end_date),
         )
         kept = func.count().filter(shown)
         too_new = func.count().filter(and_(not_(shown), estimate.too_new(Post)))
@@ -997,7 +1013,7 @@ def count_facets_in_scope(
     selects, which is what its tick reads (PTR-06). No keyword, no tree, no cap.
 
     Languages are the ones present, most frequent first, an unread Post left
-    out because it has no Language to funnel. The Types are all three and the
+    out because it has no Language to funnel. The Types are all five and the
     media kinds all six, in the dropdowns' order, zero included; both overlap,
     so they are filtered aggregates over one scan rather than a `GROUP BY`.
     `total` is every Post in the window, in the same scan. Each value is
@@ -1020,6 +1036,7 @@ def count_facets_in_scope(
         return [func.count().filter(clause), func.count().filter(and_(clause, chosen))]
 
     followed = frozenset(visible_channel_names(session, user_id=user_id))
+    scope = PostScope(user_id, channel_names, start_date, end_date)
     language_rows = session.exec(
         scoped(select(col(Post.language), func.count(), func.count().filter(chosen)))
         .where(col(Post.language).is_not(None))
@@ -1032,7 +1049,7 @@ def count_facets_in_scope(
                 *(
                     agg
                     for value in POST_TYPE_ORDER
-                    for agg in both(post_type_clause(value, followed))
+                    for agg in both(post_type_clause(value, followed, scope))
                 ),
                 *(
                     agg
@@ -1071,12 +1088,15 @@ def _followed_for(
 
 
 def _filtered(
-    session: Session, stmt: Any, user_id: uuid.UUID, filters: PostFilters | None
+    session: Session, stmt: Any, filters: PostFilters | None, scope: PostScope
 ) -> Any:
     if filters is None:
         return stmt
     return apply_post_filters(
-        stmt, filters, followed_names=_followed_for(session, filters, user_id)
+        stmt,
+        filters,
+        followed_names=_followed_for(session, filters, scope.user_id),
+        scope=scope,
     )
 
 
@@ -1095,11 +1115,9 @@ def _in_scope(
     The one spelling of "the Posts this Scope covers" the feed, the counts and
     the facets share, so none of them can count a Post another does not show.
     """
-    stmt = scoped_select(stmt, Post, user_id)
-    if channel_names:
-        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
-    stmt = apply_analysis_window(stmt, start_date, end_date)
-    return _filtered(session, stmt, user_id, filters)
+    scope = PostScope(user_id, channel_names, start_date, end_date)
+    stmt = scoped_select(stmt, Post, user_id).where(*scope.clauses())
+    return _filtered(session, stmt, filters, scope)
 
 
 def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:
@@ -1107,3 +1125,165 @@ def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str,
     session.commit()
     touch_sync(session, "posts")
     return {"upserted": count}
+
+
+# ---- A measure's spread (PTI-01) ------------------------------------------------
+
+#: The Channels tab's bar count (`ChannelMetricEditor`), so one component draws both.
+VALUE_BINS = 32
+
+
+def _identity(v: float) -> float:
+    return v
+
+
+def _bucket_counts(session: Session, stmt: Any, index: Any, n: int) -> list[int]:
+    """`stmt`, selecting `(index, count)`, grouped by `index` into `n` buckets."""
+    counts = [0] * n
+    for i, c in session.exec(stmt.group_by(index)).all():
+        counts[int(i)] += c
+    return counts
+
+
+@dataclass(frozen=True)
+class ValueHistogram:
+    """`bins[i]` holds the values from `edges[i]` up to `edges[i + 1]`."""
+
+    bins: list[int]
+    edges: list[float]
+    log: bool
+    median: float | None
+    measured: int
+    total: int
+
+
+def _measured_value(
+    session: Session,
+    scope: PostScope,
+    measure: ValueMeasure,
+    filters: PostFilters | None,
+) -> Any:
+    """What one row of `measure` reads: a Post's views, or a Channel's count."""
+    if measure == "views":
+        return ViewReading("views").of(Post)
+    if measure == "estimated":
+        return ViewReading("estimated", *current_estimate(session)).of(Post)
+    if measure == "channel_posts":
+        return func.count()
+    aside = channel_posts_aside(filters or PostFilters())
+    kept = post_filter_clauses(
+        aside,
+        followed_names=_followed_for(session, aside, scope.user_id),
+        scope=scope,
+    )
+    return func.count().filter(and_(true(), *kept))
+
+
+def value_histogram(
+    session: Session,
+    *,
+    scope: PostScope,
+    measure: ValueMeasure,
+    filters: PostFilters | None = None,
+) -> ValueHistogram:
+    """One measure across the Posts, or the Channels, in the scope.
+
+    The Channels tab's rule, so the Posts editors draw what its editors draw:
+    32 bars from the lowest value to the highest, and past two orders of
+    magnitude the axis is logarithmic, or nearly every Post would land in the
+    first bar. A range starting at 0 is drawn on log(1 + x), since log 0 has
+    no place. A Post with no value (none recorded, or too new to estimate) is
+    in `total` and not in `measured`.
+
+    `views` and `estimated` read each Post, the Post filter aside.
+    `channel_posts` and `channel_posts_filtered` count Channels by their
+    count in the window (PTI-02); the filtered one counts only what `filters`
+    keeps with every Channel posts Condition set aside, as the Condition
+    counts, and a Channel whose Posts it all hides is a 0.
+    """
+    value = _measured_value(session, scope, measure, filters)
+    stmt = scoped_select(
+        select(value.label("x")).select_from(Post), Post, scope.user_id
+    ).where(*scope.clauses())
+    if measure.startswith("channel_posts"):
+        stmt = stmt.group_by(col(Post.channel_name))
+    inner = stmt.subquery()
+    x = inner.c.x
+    lo, hi, measured, total, median = session.execute(
+        sa_select(
+            func.min(x),
+            func.max(x),
+            func.count(x),
+            func.count(),
+            # The Channels tab's median, `sorted[floor(n / 2)]`: the
+            # ceil(n / 2)-th largest is that element, where `percentile_cont`
+            # would interpolate and ascending `percentile_disc` takes the lower.
+            func.percentile_disc(0.5).within_group(x.desc()),
+        ).select_from(inner)
+    ).one()
+    if not measured:
+        return ValueHistogram([], [], False, None, 0, int(total))
+    lo, hi = float(lo), float(hi)
+    log = lo >= 0 and hi / (lo if lo > 0 else 1) > 100
+    scale: tuple[Callable[[float], float], Callable[[float], float], Any]
+    if not log:
+        scale = (_identity, _identity, x)
+    elif lo > 0:
+        scale = (math.log, math.exp, func.ln(x))
+    else:
+        scale = (math.log1p, math.expm1, func.ln(1 + x))
+    f, inv, axis = scale
+    span = f(hi) - f(lo)
+    # `greatest` because Postgres' ln and Python's can part by one ulp at lo.
+    index = (
+        literal(0)
+        if span == 0
+        else func.least(
+            VALUE_BINS - 1,
+            func.greatest(0, func.floor((axis - f(lo)) / span * VALUE_BINS)),
+        )
+    )
+    bins = _bucket_counts(
+        session,
+        select(index, func.count()).where(x.is_not(None)),
+        index,
+        VALUE_BINS,
+    )
+    edges = [inv(f(lo) + span * i / VALUE_BINS) for i in range(VALUE_BINS + 1)]
+    edges[0], edges[-1] = lo, hi
+    return ValueHistogram(bins, edges, log, float(median), int(measured), int(total))
+
+
+# ---- The Posts across time (PTI-03) ----------------------------------------------
+
+
+def window_histogram(
+    session: Session,
+    *,
+    scope: PostScope,
+    extent_start: int,
+    extent_end: int,
+    buckets: int,
+    filters: PostFilters | None,
+) -> list[int]:
+    """How many Posts fall in each of `buckets` equal slices of the extent.
+
+    The extent is half-open like the Analysis window, so a Post on a slice's
+    edge belongs to the later slice only: whole-number division, never a
+    float that could put it on either side. `filters` apply without the cap,
+    and against the scope's Analysis window rather than the extent, which is
+    where a Channel posts Condition counts. Has a reply reads replies from the
+    earlier of the two starts, since the extent can open before the window.
+    """
+    index = (
+        (col(Post.timestamp) - extent_start) * buckets // (extent_end - extent_start)
+    )
+    extent = replace(scope, start_date=extent_start, end_date=extent_end)
+    if scope.start_date is not None:
+        scope = replace(scope, replies_since=min(scope.start_date, extent_start))
+    stmt = scoped_select(select(index, func.count()), Post, scope.user_id).where(
+        *extent.clauses()
+    )
+    return _bucket_counts(
+        session, _filtered(session, stmt, filters, scope), index, buckets
+    )

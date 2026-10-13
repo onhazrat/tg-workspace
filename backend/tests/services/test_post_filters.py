@@ -9,6 +9,7 @@ sentinel text, and a regex.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from sqlmodel import Session, select
@@ -18,6 +19,7 @@ from app.models_tg import Post
 from app.services.post_filters import (
     MediaCond,
     PostFilters,
+    PostScope,
     TreeAtom,
     TreeCond,
     TreeGroup,
@@ -50,6 +52,7 @@ def _all(*conds: TreeCond, keyword: str | None = None) -> PostFilters:
 
 
 def _ids(session: Session, filters: PostFilters, **kw: Any) -> set[int]:
+    kw.setdefault("scope", PostScope(uuid.uuid4()))
     stmt = apply_post_filters(select(Post), filters, **kw)
     return {p.post_id for p in session.exec(stmt).all()}
 

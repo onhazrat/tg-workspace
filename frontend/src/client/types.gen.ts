@@ -787,6 +787,42 @@ export type ChannelInfoResponse = {
 };
 
 /**
+ * ChannelPostsCondition
+ */
+export type ChannelPostsCondition = {
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * Type
+     */
+    type: 'channel_posts';
+};
+
+/**
+ * ChannelPostsFilteredCondition
+ */
+export type ChannelPostsFilteredCondition = {
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * Type
+     */
+    type: 'channel_posts_filtered';
+};
+
+/**
  * ChannelResponse
  *
  * One channel, as `channel_to_camel` builds it.
@@ -3112,7 +3148,11 @@ export type FilterAtom = {
         type: 'channel';
     } & ChannelCondition) | ({
         type: 'views';
-    } & ViewsCondition);
+    } & ViewsCondition) | ({
+        type: 'channel_posts';
+    } & ChannelPostsCondition) | ({
+        type: 'channel_posts_filtered';
+    } & ChannelPostsFilteredCondition);
 };
 
 /**
@@ -4708,6 +4748,187 @@ export type PostTranslationResponse = {
      * Timestamp
      */
     timestamp?: number;
+};
+
+/**
+ * PostValueHistogramRequest
+ *
+ * `PostFilteredRequest` plus the measure a number filter's editor bounds.
+ *
+ * The body is the filtered request's so the editor sends the scope it
+ * already has; the Post filter and keyword in it are set aside, except by
+ * `channel_posts_filtered`, which counts what they keep.
+ */
+export type PostValueHistogramRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Measure
+     */
+    measure: 'views' | 'estimated' | 'channel_posts' | 'channel_posts_filtered';
+};
+
+/**
+ * PostValueHistogramResponse
+ *
+ * 32 bars and their 33 edges, binned by the Channels tab's rule.
+ *
+ * Empty `bins` and `edges` when nothing in the scope has a value.
+ */
+export type PostValueHistogramResponse = {
+    /**
+     * Bins
+     */
+    bins: Array<number>;
+    /**
+     * Edges
+     */
+    edges: Array<number>;
+    /**
+     * Log
+     */
+    log: boolean;
+    /**
+     * Median
+     */
+    median: number | null;
+    /**
+     * Measured
+     */
+    measured: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * PostWindowHistogramRequest
+ *
+ * `PostFilteredRequest` plus the stretch of time the Analysis window chart draws.
+ *
+ * `[extentStart, extentEnd)` is cut into `buckets` equal slices. Filtered,
+ * the Post filter and keyword apply and the per-Channel cap does not;
+ * `unfiltered` sets the filter and keyword aside too. `window` stays the
+ * Analysis window, which a Channel posts Condition counts within.
+ */
+export type PostWindowHistogramRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Extentstart
+     */
+    extentStart: number;
+    /**
+     * Extentend
+     */
+    extentEnd: number;
+    /**
+     * Buckets
+     */
+    buckets: number;
+    /**
+     * Unfiltered
+     */
+    unfiltered?: boolean;
+};
+
+/**
+ * PostWindowHistogramResponse
+ *
+ * The Posts in each slice of the extent, earliest first.
+ */
+export type PostWindowHistogramResponse = {
+    /**
+     * Counts
+     */
+    counts: Array<number>;
 };
 
 /**
@@ -7124,7 +7345,7 @@ export type TypeCondition = {
     /**
      * Value
      */
-    value: 'forwarded' | 'original' | 'unfollowed_forwarded';
+    value: 'forwarded' | 'original' | 'unfollowed_forwarded' | 'is_reply' | 'has_reply';
 };
 
 /**
@@ -9098,6 +9319,56 @@ export type DataPostsCountsResponses = {
 };
 
 export type DataPostsCountsResponse = DataPostsCountsResponses[keyof DataPostsCountsResponses];
+
+export type DataPostsValueHistogramData = {
+    body: PostValueHistogramRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/value-histogram';
+};
+
+export type DataPostsValueHistogramErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsValueHistogramError = DataPostsValueHistogramErrors[keyof DataPostsValueHistogramErrors];
+
+export type DataPostsValueHistogramResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostValueHistogramResponse;
+};
+
+export type DataPostsValueHistogramResponse = DataPostsValueHistogramResponses[keyof DataPostsValueHistogramResponses];
+
+export type DataPostsWindowHistogramData = {
+    body: PostWindowHistogramRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/window-histogram';
+};
+
+export type DataPostsWindowHistogramErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsWindowHistogramError = DataPostsWindowHistogramErrors[keyof DataPostsWindowHistogramErrors];
+
+export type DataPostsWindowHistogramResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostWindowHistogramResponse;
+};
+
+export type DataPostsWindowHistogramResponse = DataPostsWindowHistogramResponses[keyof DataPostsWindowHistogramResponses];
 
 export type DataPostsViewEstimateData = {
     body?: never;

@@ -370,18 +370,65 @@ describe("PostCardClampedBody", () => {
     expect(screen.queryByText("More")).toBeNull()
   })
 
-  test("text past three lines is clamped behind More, and Less clamps it again", () => {
+  const clip = () => screen.getByTestId("compact-text").className
+  test("text past its lines is clipped behind More, and Less clips it again", () => {
     overflowing(() => {
-      const { container } = render(
-        <PostCardClampedBody text="long" linkSpans={null} postSearch="" />,
-      )
-      const clamp = () => container.querySelector("p")?.parentElement
-      expect(clamp()?.className).toContain("max-h-[4.5em]")
+      render(<PostCardClampedBody text="long" linkSpans={null} postSearch="" />)
+      expect(clip()).toContain("overflow-hidden")
       fireEvent.click(screen.getByText("More"))
-      expect(clamp()?.className).not.toContain("max-h-[4.5em]")
+      expect(clip()).not.toContain("overflow-hidden")
       fireEvent.click(screen.getByText("Less"))
-      expect(clamp()?.className).toContain("max-h-[4.5em]")
+      expect(clip()).toContain("overflow-hidden")
     })
+  })
+
+  // The real row heights are pinned in summarizer-posts-compact.spec.ts.
+  test("a text-only card shows the lines its row has room for, never under three", () => {
+    const { getComputedStyle: real } = globalThis
+    const proto = HTMLElement.prototype
+    const clientHeight = Object.getOwnPropertyDescriptor(proto, "clientHeight")
+    const roomFor = (px: number, thumbApiPath?: string) => {
+      globalThis.getComputedStyle = ((el: Element) => ({
+        ...real(el),
+        lineHeight: "20px",
+      })) as typeof getComputedStyle
+      Object.defineProperty(proto, "clientHeight", {
+        configurable: true,
+        get: () => px,
+      })
+      render(
+        <PostCardView
+          post={{
+            ...post,
+            media: thumbApiPath
+              ? { kinds: ["photo"], thumbApiPath }
+              : undefined,
+          }}
+          channel={undefined}
+          followsForwardSource={false}
+          onAddChannel={() => {}}
+          postSearch=""
+          text={post.text}
+          translation={{ showing: false, busy: false, onToggle: () => {} }}
+          compact
+        />,
+      )
+      const height = screen.getByTestId("compact-text").style.height
+      cleanup()
+      return height
+    }
+    try {
+      expect(roomFor(139)).toBe("9em") // 6 lines of 1.5em
+      expect(roomFor(20)).toBe("4.5em")
+      // A photo card's text keeps its three lines: only text-only cards grow.
+      expect(roomFor(139, "/api/v1/thumb")).toBe("4.5em")
+    } finally {
+      globalThis.getComputedStyle = real
+      // happy-dom's own getter, which a bare `delete` would lose for good.
+      if (clientHeight)
+        Object.defineProperty(proto, "clientHeight", clientHeight)
+      else delete (proto as { clientHeight?: number }).clientHeight
+    }
   })
 })
 

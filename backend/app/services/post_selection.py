@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 from sqlalchemy import (
     ColumnElement,
@@ -48,11 +47,11 @@ from app.services.post_filters import (
     FeedSort,
     Pick,
     PostFilters,
+    PostScope,
     Rule,
     Step,
     TypeCond,
     ViewMeasure,
-    analysis_window_clauses,
     apply_analysis_window,
     post_filter_clauses,
     tree_conds,
@@ -60,22 +59,6 @@ from app.services.post_filters import (
 from app.services.posts import channel_order, feed_order_by, random_cap_order
 from app.services.settling_curve import tree_readings, view_reading
 from app.services.tenancy import scoped_select
-
-
-@dataclass(frozen=True)
-class PostScope:
-    """The Channels and the window a rule is applied again over."""
-
-    user_id: uuid.UUID
-    channel_names: list[str] | None = None
-    start_date: int | None = None
-    end_date: int | None = None
-
-    def clauses(self) -> list[ColumnElement[bool]]:
-        clauses = analysis_window_clauses(self.start_date, self.end_date)
-        if self.channel_names:
-            clauses.append(col(Post.channel_name).in_(self.channel_names))
-        return clauses
 
 
 def _compressed(steps: Sequence[Step]) -> list[Rule | tuple[bool, list[Pick]]]:
@@ -137,7 +120,10 @@ def _matched(
         tree_readings=tree_readings(session, rule.tree),
         reading=reading,
     )
-    clauses = [*scope.clauses(), *post_filter_clauses(filters, followed_names=followed)]
+    clauses = [
+        *scope.clauses(),
+        *post_filter_clauses(filters, followed_names=followed, scope=scope),
+    ]
     if rule.max_per_channel <= 0:
         return and_(true(), *clauses)
     # The cap ranks among the Posts the rule's filter keeps in this window, as

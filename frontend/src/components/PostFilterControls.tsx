@@ -1,6 +1,6 @@
 /**
  * The Post filter's controls (PTR-03): the Type, Media and Language dropdowns,
- * the Filters menu for a views bound, and the vocabulary the shared filter row
+ * the Filters menu for a number bound, and the vocabulary the shared filter row
  * and condition picker read. Each is a shared `filter-tree` component told
  * what a Post Condition is; the Channels tab's are the same components.
  */
@@ -9,13 +9,16 @@ import {
   ChevronDown,
   Eye,
   Forward,
+  Hash,
   Image,
   Languages,
   type LucideIcon,
   SlidersHorizontal,
 } from "lucide-react"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
+import type { PostValueHistogramResponse } from "@/client"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
+import { BoundHistogram } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import type { ConditionOption } from "@/components/filter-tree/ConditionPicker"
 import {
@@ -33,28 +36,27 @@ import {
   parseBound,
 } from "@/lib/channels/channel-metrics"
 import {
-  type AtomNode,
   append,
   atoms,
   clearFunnels,
   funnelledValues,
   removeFunnel,
 } from "@/lib/filter-tree"
-import type { ViewMeasure } from "@/lib/posts/estimated-views"
 import {
   addPostFunnel,
   measureLabel,
+  numberCond,
+  POST_NUMBER,
+  POST_NUMBERS,
   POST_TYPE_VALUES,
   type PostCond,
   type PostFacet,
   type PostFilter,
-  type PostViewsCond,
+  type PostNumber,
   postConditionLabel,
+  postNumberOf,
+  wholeBound,
 } from "@/lib/posts/post-filter"
-import {
-  VIEW_MEASURE_OPTIONS,
-  viewMeasureDescription,
-} from "@/lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS } from "@/lib/posts/post-media"
 
 export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
@@ -63,40 +65,102 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
   language: Languages,
   channel: AtSign,
   views: Eye,
+  channel_posts: Hash,
+  channel_posts_filtered: Hash,
 }
 
-// ---- The views editor ------------------------------------------------------
+// ---- The number editor -----------------------------------------------------
 
 /**
- * One measure's bound: at least, at most, between or no value, one or two
- * fields, Add or Update. No histogram: the server has no endpoint for one yet.
+ * A hook answering a number's bars over the window and the selected
+ * Channels, the filters aside but for Channel posts in filtered window, which
+ * counts what they keep; `undefined` while they load. Context rather
+ * than a prop so the filter bar renders, and tests, without the providers
+ * the read needs: with none, the editors draw no histogram.
  */
-export function PostViewsEditor({
+export type ValueHistogramRead = (
+  measure: PostNumber,
+) => PostValueHistogramResponse | undefined
+
+export const PostValueHistogramContext =
+  createContext<ValueHistogramRead | null>(null)
+
+function PostValueHistogram({
+  read,
+  measure,
+  bound,
+  onSelect,
+}: {
+  read: ValueHistogramRead
+  measure: PostNumber
+  bound: MetricBound | null
+  onSelect: (bound: MetricBound) => void
+}) {
+  const d = read(measure)
+  if (!d) return <p className="h-16 text-[11px] text-app-ink/50">Counting…</p>
+  if (!d.measured)
+    return (
+      <p className="text-[11px] text-app-ink/50">
+        Nothing in this window has a value yet.
+      </p>
+    )
+  return (
+    <BoundHistogram
+      distribution={{
+        bins: d.bins,
+        edge: (i) => d.edges[i],
+        lo: d.edges[0],
+        hi: d.edges[d.edges.length - 1],
+        median: d.median ?? 0,
+        log: d.log,
+      }}
+      bound={bound}
+      noun={POST_NUMBER[measure].noun}
+      onSelect={onSelect}
+    />
+  )
+}
+
+/**
+ * One number's bound: at least, at most, between or (for a views measure) no
+ * value, one or two fields, Add or Update, over the number's histogram,
+ * which a drag across fills the fields from. A Channel posts bound is whole:
+ * rounded inward, and refused when no whole number is left (PTI-02).
+ */
+export function PostNumberEditor({
   measure,
   initial,
   floorHours,
   onSubmit,
   onBack,
 }: {
-  measure: ViewMeasure
+  measure: PostNumber
   /** The Condition being changed; without one the editor adds. */
   initial?: MetricBound
   floorHours: number
-  onSubmit: (cond: PostViewsCond) => void
+  onSubmit: (cond: PostCond) => void
   onBack?: () => void
 }) {
+  const counts = POST_NUMBER[measure].whole
   const [op, setOp] = useState<BoundKind>(boundKind(initial))
   const [a, setA] = useState(
     String((op === "lte" ? initial?.max : initial?.min) ?? ""),
   )
   const [b, setB] = useState(String(initial?.max ?? ""))
-  const bound = parseBound(op, a, b, { min: 0 })
+  const typed = parseBound(op, a, b, { min: 0 })
+  const bound = counts && typed ? wholeBound(typed) : typed
+  const read = useContext(PostValueHistogramContext)
+  const select = (next: MetricBound) => {
+    setOp(boundKind(next))
+    setA(String(next.min ?? next.max))
+    setB(String(next.max ?? ""))
+  }
   return (
     <form
       className="space-y-2 p-1"
       onSubmit={(e) => {
         e.preventDefault()
-        if (bound) onSubmit({ type: "views", measure, ...bound })
+        if (bound) onSubmit(numberCond(measure, bound))
       }}
     >
       <div className="flex items-center gap-2 text-xs font-semibold">
@@ -113,8 +177,16 @@ export function PostViewsEditor({
         {measureLabel(measure)}
       </div>
       <p className="text-[11px] text-app-ink/50">
-        {viewMeasureDescription(measure, floorHours)}
+        {POST_NUMBER[measure].description(floorHours)}
       </p>
+      {read && (
+        <PostValueHistogram
+          read={read}
+          measure={measure}
+          bound={bound}
+          onSelect={select}
+        />
+      )}
       <BoundFields
         op={op}
         setOp={setOp}
@@ -123,14 +195,17 @@ export function PostViewsEditor({
         b={b}
         setB={setB}
         min={0}
+        noValue={!counts}
       />
-      <p className="text-[11px] text-app-ink/50">
-        A post with no {measureLabel(measure).toLowerCase()} does not match a
-        bound.
-        {op === "none"
-          ? " No value finds exactly those posts, and NOT on it the ones that have one."
-          : " Choose no value to find them."}
-      </p>
+      {!counts && (
+        <p className="text-[11px] text-app-ink/50">
+          A post with no {measureLabel(measure).toLowerCase()} does not match a
+          bound.
+          {op === "none"
+            ? " No value finds exactly those posts, and NOT on it the ones that have one."
+            : " Choose no value to find them."}
+        </p>
+      )}
       <TgButton
         type="submit"
         size="sm"
@@ -173,6 +248,12 @@ const LISTS: {
   { type: "channel", label: "Channel", options: (o) => o.channels },
 ]
 
+/** `start`'s bound when it bounds `number`, the Condition that editor changes. */
+const numberStart = (start: PostCond | undefined, number: PostNumber) => {
+  const n = start && postNumberOf(start)
+  return n && n.number === number ? n.bound : undefined
+}
+
 /** The Post Conditions as the shared filter row and picker read them. */
 export function postVocabulary(
   options: PostConditionOptions,
@@ -194,15 +275,15 @@ export function postVocabulary(
       },
       {
         heading: "Numbers",
-        entries: VIEW_MEASURE_OPTIONS.map((m) => ({
+        entries: POST_NUMBERS.map((m) => ({
           kind: "editor" as const,
-          id: `views:${m.value}`,
+          id: m.entry,
           label: m.label,
-          icon: Eye,
+          icon: m.icon,
           render: ({ start, onSubmit, onBack }) => (
-            <PostViewsEditor
+            <PostNumberEditor
               measure={m.value}
-              initial={start?.type === "views" ? start : undefined}
+              initial={numberStart(start, m.value)}
               floorHours={floorHours}
               onBack={onBack}
               onSubmit={onSubmit}
@@ -211,14 +292,18 @@ export function postVocabulary(
         })),
       },
     ],
-    entryOf: (cond) =>
-      cond.type === "views" ? `views:${cond.measure}` : cond.type,
+    entryOf: (cond) => {
+      const number = postNumberOf(cond)?.number
+      return number === undefined ? cond.type : POST_NUMBER[number].entry
+    },
     label: postConditionLabel,
     icon: (cond) => POST_CONDITION_ICON[cond.type],
     chipId: (cond) =>
       cond.type === "views"
         ? `views-${cond.measure}`
-        : `${cond.type}-${cond.value}`,
+        : "value" in cond
+          ? `${cond.type}-${cond.value}`
+          : cond.type,
   }
 }
 
@@ -299,9 +384,9 @@ export function PostFacetMenu({
 }
 
 /**
- * The Filters menu: Views and Estimated views, each with the bounds already
- * in the filter, and picking one opens its editor. Adding always makes a new
- * Condition, so one measure can be bound twice.
+ * The Filters menu: every number in `POST_NUMBERS`, each with the bounds
+ * already in the filter, and picking one opens its editor. Adding always
+ * makes a new Condition, so one number can be bound twice.
  */
 export function PostFiltersMenu({
   filter,
@@ -313,12 +398,12 @@ export function PostFiltersMenu({
   floorHours: number
 }) {
   const [open, setOpen] = useState(false)
-  const [picked, setPicked] = useState<ViewMeasure | null>(null)
+  const [picked, setPicked] = useState<PostNumber | null>(null)
   const [query, setQuery] = useState("")
-  const bounds = atoms(filter).filter(
-    (a): a is AtomNode<PostCond> & { cond: PostViewsCond } =>
-      a.cond.type === "views",
-  )
+  const bounds = atoms(filter).flatMap((a) => {
+    const n = postNumberOf(a.cond)
+    return n ? [{ ...n, not: a.not }] : []
+  })
   const active = bounds.length > 0
   const onOpenChange = (next: boolean) => {
     setOpen(next)
@@ -346,7 +431,7 @@ export function PostFiltersMenu({
       }
     >
       {picked ? (
-        <PostViewsEditor
+        <PostNumberEditor
           measure={picked}
           floorHours={floorHours}
           onBack={() => setPicked(null)}
@@ -363,7 +448,7 @@ export function PostFiltersMenu({
             placeholder="Search criteria..."
           />
           <BarHeading>Filter by</BarHeading>
-          {VIEW_MEASURE_OPTIONS.filter((m) =>
+          {POST_NUMBERS.filter((m) =>
             m.label.toLowerCase().includes(query.trim().toLowerCase()),
           ).map((m) => (
             <button
@@ -376,8 +461,8 @@ export function PostFiltersMenu({
               {m.label}
               <span className="text-[11px] font-normal tabular-nums text-app-ink/50">
                 {bounds
-                  .filter((a) => a.cond.measure === m.value)
-                  .map((a) => `${a.not ? "not " : ""}${boundText(a.cond)}`)
+                  .filter((a) => a.number === m.value)
+                  .map((a) => `${a.not ? "not " : ""}${boundText(a.bound)}`)
                   .join(", ")}
               </span>
             </button>

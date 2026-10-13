@@ -73,6 +73,15 @@ describe("the Post filter's labels", () => {
       { type: "views", measure: "estimated", none: true },
       "Estimated views: no value",
     ],
+    [{ type: "channel_posts", max: 5 }, "Channel posts in window ≤ 5"],
+    [
+      { type: "channel_posts_filtered", max: 5 },
+      "Channel posts in filtered window ≤ 5",
+    ],
+    [
+      { type: "channel_posts", min: 10, max: 30 },
+      "Channel posts in window 10–30",
+    ],
   ])("%o reads %s", (cond, label) => {
     expect(postConditionLabel(cond)).toBe(label)
   })
@@ -127,9 +136,25 @@ describe("the URL form", () => {
     { type: "views", measure: "estimated", max: 50 },
     { type: "views", measure: "views", min: 1.5, max: 2_000 },
     { type: "views", measure: "estimated", none: true },
+    { type: "channel_posts", max: 5 },
+    { type: "channel_posts", min: 50 },
+    { type: "channel_posts_filtered", min: 10, max: 30 },
   ])("every bound round-trips: %o", (cond) => {
     roundTrip(root("and", [atom(cond)]))
     roundTrip(root("and", [atom(cond, true)]))
+  })
+
+  test("a Channel posts bound reads as its own word", () => {
+    expect(
+      roundTrip(root("and", [atom({ type: "channel_posts", max: 5 })])),
+    ).toBe("channel_posts <= 5")
+    expect(
+      roundTrip(
+        root("and", [
+          atom({ type: "channel_posts_filtered", min: 10, max: 30 }),
+        ]),
+      ),
+    ).toBe("channel_posts_filtered 10..30")
   })
 
   test.each([
@@ -142,6 +167,8 @@ describe("the URL form", () => {
     "fa",
     "and",
     "views >= -1",
+    "channel_posts = none",
+    "chposts <= 5",
   ])("%s is ignored", (text) => {
     expect(parsePostFilter(text)).toBeNull()
   })

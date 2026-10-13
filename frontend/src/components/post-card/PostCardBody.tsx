@@ -50,39 +50,73 @@ export function PostCardBody({
   )
 }
 
-/** A compact card's text: three lines, then "More" when it runs past them. */
+/**
+ * A compact card's text (PTI-05): three lines, or with `fill` (a text-only
+ * card) as many whole lines as the height its grid row gives the card, then
+ * "More" when it still runs past them. The text sits in a layer positioned inside a box that grows to fill
+ * the card, so it never makes its row taller on its own; expanded, it is laid
+ * out normally and the card grows.
+ */
 export function PostCardClampedBody({
   text,
   linkSpans,
   postSearch,
+  fill = false,
 }: {
   text: string
   linkSpans: Post["linkSpans"] | null
   postSearch: string
+  /** Grow into the row's height, as a card with no photo does. */
+  fill?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [lines, setLines] = useState<number>()
   const [over, setOver] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const layer = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
-    const el = ref.current
-    if (el && !open) setOver(el.scrollHeight > el.clientHeight + 2)
-  }, [text, open])
+    const el = box.current
+    if (!el || open) return
+    const fit = () => {
+      const line = Number.parseFloat(getComputedStyle(el).lineHeight)
+      // Unmeasurable (no layout): the layer keeps its three-line minimum.
+      if (line > 0)
+        setLines(fill ? Math.max(3, Math.floor(el.clientHeight / line)) : 3)
+      const shown = layer.current
+      setOver(!!shown && shown.scrollHeight > shown.clientHeight + 2)
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text, open, fill])
+  const content = (
+    <p dir="auto" className="whitespace-pre-wrap text-app-ink/80">
+      {renderPostText(text, postSearch, linkSpans)}
+    </p>
+  )
+  // The font size sits on the box, so 4.5em is exactly three 1.5em lines.
   return (
-    <div>
-      {/* The font size sits on the clamp, so 4.5em is exactly three 1.5em lines. */}
-      <div
-        ref={ref}
-        className={`text-[13px] leading-[1.5em] ${open ? "" : "max-h-[4.5em] overflow-hidden"}`}
-      >
-        <p dir="auto" className="whitespace-pre-wrap text-app-ink/80">
-          {renderPostText(text, postSearch, linkSpans)}
-        </p>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col text-[13px] leading-[1.5em]">
+      {open ? (
+        <div data-testid="compact-text">{content}</div>
+      ) : (
+        <div ref={box} className="relative min-h-[4.5em] flex-1">
+          <div
+            ref={layer}
+            data-testid="compact-text"
+            className="absolute inset-x-0 top-0 h-[4.5em] overflow-hidden"
+            style={lines ? { height: `${lines * 1.5}em` } : undefined}
+          >
+            {content}
+          </div>
+        </div>
+      )}
       {(over || open) && (
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="mt-0.5 text-[12px] font-medium text-blue-500 hover:underline"
+          className="mt-0.5 self-start text-[12px] font-medium text-blue-500 hover:underline"
         >
           {open ? "Less" : "More"}
         </button>
