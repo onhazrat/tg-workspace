@@ -41,7 +41,8 @@ export function DirectoryBulkBar({
   return (
     <div
       data-testid="directory-bulk-bar"
-      className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs"
+      // One line on a phone, scrolled sideways (DFP-02).
+      className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs max-md:flex-nowrap max-md:overflow-x-auto max-md:*:shrink-0"
     >
       <b>{ticks.size} ticked</b>
       <span className="truncate text-app-ink/50" title={ticked.join(", ")}>

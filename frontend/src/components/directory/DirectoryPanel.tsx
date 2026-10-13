@@ -348,8 +348,11 @@ export function DirectoryPanel({
     <aside
       data-testid="directory-panel"
       aria-label={`@${handle}`}
-      className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl md:left-auto md:w-[440px] md:border-l md:border-app-ink/15"
+      // Below md a bottom sheet over the list, which stays scrollable above
+      // it so another card can switch it (DFP-02).
+      className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl max-md:top-auto max-md:h-[55vh] max-md:rounded-t-2xl max-md:border-t max-md:border-app-ink/15 max-md:pt-3 md:left-auto md:w-[440px] md:border-l md:border-app-ink/15"
     >
+      <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-app-ink/20 md:hidden" />
       <button
         type="button"
         onClick={onClose}

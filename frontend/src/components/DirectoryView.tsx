@@ -32,6 +32,7 @@ import {
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
+import { useIsMobile } from "@/hooks/useMobile"
 import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
@@ -234,7 +235,11 @@ export function DirectoryView() {
     d.sets,
   )
   const total = shown.total ?? 0
-  const [keyboard, setKeyboard] = useSessionFlag("directory_keyboard")
+  // Below md (DFP-02): the controls in a sheet, the rows as cards.
+  const phone = useIsMobile()
+  const [keyboardFlag, setKeyboard] = useSessionFlag("directory_keyboard")
+  // A phone has no Keyboard switch, so a flag left on at a desk stays off here.
+  const keyboard = keyboardFlag && !phone
   const ring = useDirectoryKeyboard({
     on: keyboard,
     handles: shown.rows.map((r) => r.handle),
@@ -249,7 +254,12 @@ export function DirectoryView() {
     return cond ? resolvePicks(cond, d.sets) : null
   }
   return (
-    <div className="pt-4" data-testid="directory-view">
+    <div
+      // On a phone the panel is a bottom sheet: room under the list keeps
+      // every card scrollable above it (DFP-02).
+      className={`pt-4 ${d.open ? "max-md:pb-[55vh]" : ""}`}
+      data-testid="directory-view"
+    >
       <DirectoryBar
         filter={d.filter}
         onFilter={d.setFilter}
@@ -276,6 +286,7 @@ export function DirectoryView() {
         selectedFirst={d.selectedFirst}
         onSelectedFirst={d.setSelectedFirst}
         onClearAll={d.clearAll}
+        phone={phone}
       />
       {list.error && (
         <p className="mb-2 text-xs text-red-500">
@@ -324,6 +335,7 @@ export function DirectoryView() {
         onPage={(page) => patch({ page })}
         onOpen={d.setOpen}
         ring={ring}
+        cards={phone}
       />
       {d.open && (
         <DirectoryPanelReads

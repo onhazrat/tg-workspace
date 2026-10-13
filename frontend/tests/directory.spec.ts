@@ -627,6 +627,80 @@ test.describe("TG Workspace directory", () => {
     await page.keyboard.press("Escape")
     await expect(page.locator("[data-kbd-selected]")).toHaveCount(0)
   })
+
+  // DFP-02 at iPhone 12 Pro size: rows on the first screen.
+  test("on a phone: the controls sheet, cards, and a bottom-sheet panel", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await mockDirectory(page)
+    await page.route("**/api/v1/data/directory/*/entry", (route) => {
+      const handle = new URL(route.request().url()).pathname.split("/").at(-2)
+      const entry = ROWS.find((r) => r.handle === handle)
+      return route.fulfill({ json: { ...entry, bio: `The bio of ${handle}` } })
+    })
+    await page.route("**/api/v1/data/directory/*/posts", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await page.route("**/api/v1/data/directory/*/neighbours", (route) =>
+      route.fulfill({ json: { citedBy: [], cites: [] } }),
+    )
+    await page.route("**/api/v1/data/directory/why", (route) =>
+      route.fulfill({
+        json: { posts: [], total: 0, parents: null, children: null },
+      }),
+    )
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // The controls fold behind one button that counts the Conditions; no
+    // Keyboard switch.
+    const button = page.getByTestId("directory-controls-button")
+    await expect(button).toHaveText("3")
+    await expect(page.getByTestId("directory-filters")).toBeHidden()
+    await expect(
+      page.getByRole("button", { name: "Keyboard", exact: true }),
+    ).toBeHidden()
+
+    // The sheet holds every control; a control's popover opens above it.
+    await button.click()
+    const sheet = page.getByRole("dialog", { name: "Filters and sort" })
+    await expect(sheet.getByTestId("directory-filters")).toBeVisible()
+    await expect(
+      sheet.getByTestId("directory-search-field-posts"),
+    ).toBeVisible()
+    await sheet.getByTestId("directory-filters").click()
+    await page.getByPlaceholder("Search conditions...").click()
+    await page.keyboard.press("Escape")
+    await sheet.getByRole("button", { name: "Done" }).click()
+    await expect(sheet).toHaveCount(0)
+
+    // Cards, not the table; a card's tick ticks without opening the panel,
+    // and the bulk bar stays one line.
+    await expect(page.getByTestId("directory-row-a1")).toHaveCount(0)
+    await expect(page.getByTestId("directory-card-a1")).toBeVisible()
+    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    const aside = page.getByTestId("directory-panel")
+    await expect(aside).toHaveCount(0)
+    const bulk = page.getByTestId("directory-bulk-bar")
+    await expect(bulk).toHaveCSS("flex-wrap", "nowrap")
+
+    // A card opens a bottom sheet; another card above it switches it.
+    await page.getByTestId("directory-card-a2").click()
+    await expect(aside.getByText("The bio of a2")).toBeVisible()
+    const box = await aside.boundingBox()
+    expect(box?.y).toBeGreaterThan(844 * 0.4)
+    await page.getByTestId("directory-card-a1").click()
+    await expect(aside.getByText("The bio of a1")).toBeVisible()
+  })
 })
 
 /** The handles a list body sends as the Shared parents picks, if any. */
