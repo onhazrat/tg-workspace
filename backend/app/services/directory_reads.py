@@ -87,6 +87,7 @@ from app.models_tg import (
 from app.services import search_text, tags
 from app.services.channel_directory import LISTED_KIND
 from app.services.channel_directory_samples import samples_by_handle
+from app.services.channel_tags import tag_key
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_filters import (
@@ -328,7 +329,7 @@ def _resolve_tags(
     if tree is None:
         return {}
     named = {
-        tags.tag_key(name): name
+        tag_key(name): name
         for name in map(_named_tag, tree_conds(tree))
         if name is not None
     }
@@ -354,7 +355,7 @@ def _seeded(tree: DirectoryTree, found: Mapping[str, frozenset[str]]) -> Directo
     def seeded(c: DirectoryCond) -> DirectoryCond:
         if not isinstance(c, SharedCond | CitedByCond | CitesCond) or not c.tag:
             return c
-        seeds = tuple(sorted(found.get(tags.tag_key(c.tag), frozenset())))
+        seeds = tuple(sorted(found.get(tag_key(c.tag), frozenset())))
         return replace(c, seeds=seeds, tag=None)
 
     return map_tree(tree, seeded)
@@ -645,7 +646,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     if isinstance(cond, LanguageCond):
         return col(DirectoryEntry.language) == cond.value
     if isinstance(cond, TagCond):
-        tagged = view.tags.get(tags.tag_key(cond.name), frozenset())
+        tagged = view.tags.get(tag_key(cond.name), frozenset())
         return handle == any_(_handles(tagged)) if tagged else false()
     if isinstance(cond, NameCond):
         return or_(

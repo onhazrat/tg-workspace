@@ -40,8 +40,6 @@ from app.services.follows import followed_handles_by_group
 from app.services.telegram_web import normalize_handle
 from app.services.tenancy import subject_select
 
-__all__ = ["is_group_tag", "tag_key"]
-
 
 def _mine(user_id: uuid.UUID) -> SelectOfScalar[Tag]:
     """`user_id`'s Tag rows, in either flag state.
