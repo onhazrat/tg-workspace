@@ -345,61 +345,65 @@ export function DirectoryPanel({
   onFilter: (cond: DirectoryCond) => void
 }) {
   return (
-    <aside
-      data-testid="directory-panel"
-      aria-label={`@${handle}`}
-      // Below md a bottom sheet over the list, which stays scrollable above
-      // it so another card can switch it (DFP-02).
-      className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl max-md:top-auto max-md:h-[55vh] max-md:rounded-t-2xl max-md:border-t max-md:border-app-ink/15 max-md:pt-3 md:left-auto md:w-[440px] md:border-l md:border-app-ink/15"
-    >
-      <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-app-ink/20 md:hidden" />
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="absolute right-3 top-3 rounded p-1 hover:bg-app-ink/10"
+    <>
+      {/* Room under the list, so its last card scrolls above the sheet. */}
+      <div aria-hidden className="h-[55vh] md:hidden" />
+      <aside
+        data-testid="directory-panel"
+        aria-label={`@${handle}`}
+        // Below md a bottom sheet over the list, which stays scrollable above
+        // it so another card can switch it (DFP-02).
+        className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl max-md:top-auto max-md:h-[55vh] max-md:rounded-t-2xl max-md:border-t max-md:border-app-ink/15 max-md:pt-3 md:left-auto md:w-[440px] md:border-l md:border-app-ink/15"
       >
-        <X size={16} />
-      </button>
-      {entry === undefined && (
-        <p className="text-xs text-app-ink/40">Loading…</p>
-      )}
-      {entry === null && (
-        <p className="text-sm text-app-ink/60">
-          The Directory holds nothing about @{handle}.
-        </p>
-      )}
-      {entry && (
-        <>
-          <Header
-            entry={entry}
-            following={following}
-            onFollow={onFollow}
-            onDismiss={onDismiss}
-          />
-          <WhyHere handle={handle} why={why} windowDays={windowDays} />
-          <h4 className={HEADING}>Recent posts</h4>
-          {posts ? (
-            <DirectorySamples handle={handle} posts={posts} />
-          ) : (
-            <p className="text-xs text-app-ink/40">Loading recent posts…</p>
-          )}
-          <Neighbours
-            title="Cited most by"
-            type="citedby"
-            list={neighbours?.citedBy}
-            empty="No channel we know of cites it."
-            onFilter={onFilter}
-          />
-          <Neighbours
-            title="Cites most"
-            type="cites"
-            list={neighbours?.cites}
-            empty="It cites no channel we know of."
-            onFilter={onFilter}
-          />
-        </>
-      )}
-    </aside>
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-app-ink/20 md:hidden" />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 rounded p-1 hover:bg-app-ink/10"
+        >
+          <X size={16} />
+        </button>
+        {entry === undefined && (
+          <p className="text-xs text-app-ink/40">Loading…</p>
+        )}
+        {entry === null && (
+          <p className="text-sm text-app-ink/60">
+            The Directory holds nothing about @{handle}.
+          </p>
+        )}
+        {entry && (
+          <>
+            <Header
+              entry={entry}
+              following={following}
+              onFollow={onFollow}
+              onDismiss={onDismiss}
+            />
+            <WhyHere handle={handle} why={why} windowDays={windowDays} />
+            <h4 className={HEADING}>Recent posts</h4>
+            {posts ? (
+              <DirectorySamples handle={handle} posts={posts} />
+            ) : (
+              <p className="text-xs text-app-ink/40">Loading recent posts…</p>
+            )}
+            <Neighbours
+              title="Cited most by"
+              type="citedby"
+              list={neighbours?.citedBy}
+              empty="No channel we know of cites it."
+              onFilter={onFilter}
+            />
+            <Neighbours
+              title="Cites most"
+              type="cites"
+              list={neighbours?.cites}
+              empty="It cites no channel we know of."
+              onFilter={onFilter}
+            />
+          </>
+        )}
+      </aside>
+    </>
   )
 }

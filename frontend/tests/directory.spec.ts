@@ -700,6 +700,9 @@ test.describe("TG Workspace directory", () => {
     expect(box?.y).toBeGreaterThan(844 * 0.4)
     await page.getByTestId("directory-card-a1").click()
     await expect(aside.getByText("The bio of a1")).toBeVisible()
+    // The last card scrolls clear of the sheet.
+    await page.getByTestId("directory-card-a6").click({ timeout: 5000 })
+    await expect(aside.getByText("The bio of a6")).toBeVisible()
   })
 })
 

@@ -254,12 +254,7 @@ export function DirectoryView() {
     return cond ? resolvePicks(cond, d.sets) : null
   }
   return (
-    <div
-      // On a phone the panel is a bottom sheet: room under the list keeps
-      // every card scrollable above it (DFP-02).
-      className={`pt-4 ${d.open ? "max-md:pb-[55vh]" : ""}`}
-      data-testid="directory-view"
-    >
+    <div className="pt-4" data-testid="directory-view">
       <DirectoryBar
         filter={d.filter}
         onFilter={d.setFilter}
