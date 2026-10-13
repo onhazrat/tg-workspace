@@ -232,17 +232,12 @@ def get_directory_why(
     view = directory_reads.resolve_view(
         session,
         current_user.id,
-        tree=None,
+        tree=body.shared(),
         source=body.yours.source,
         handles=body.yours.handles,
         kinds=body.reference_kinds,
     )
     why = directory_reads.why_its_here(
-        session,
-        view,
-        normalize_handle(body.handle),
-        days=body.days,
-        parents=body.parents,
-        children=body.children,
+        session, view, normalize_handle(body.handle), days=body.days
     )
     return DirectoryWhyResponse.model_validate(asdict(why))

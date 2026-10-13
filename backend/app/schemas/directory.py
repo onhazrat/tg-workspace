@@ -147,55 +147,85 @@ class DirectoryMineCondition(_Cond):
         return MineCond(self.days)
 
 
-#: How many handles one "cited by" or "cites" Condition names.
-MAX_CONDITION_HANDLES = 50
+#: How many fixed handles one "cited by" or "cites" Condition names: 500 keeps
+#: a shared link under the 8 KB request line common proxies accept, and
+#: anything larger is a Tag (DFP-05).
+MAX_CONDITION_HANDLES = 500
+#: How many Seeds one Shared parents / children Condition sends: every follow,
+#: or a Channels tab selection, which can be the whole account.
+MAX_SEEDS = 10_000
+
+_SeedHandle = Annotated[str, Field(min_length=1, max_length=256)]
 
 
 def _normalised(handles: list[str]) -> tuple[str, ...]:
     return tuple(sorted({normalize_handle(h) for h in handles}))
 
 
+def _one_source(handles: list[str], tag: str | None, *, required: bool) -> None:
+    if handles and tag is not None:
+        raise ValueError("Seeds are handles or a tag, never both")
+    if required and not handles and tag is None:
+        raise ValueError("Seeds need handles or a tag")
+
+
 class DirectoryCitedByCondition(_Cond):
-    """Cited by any of these handles, in the view's Reference kinds."""
+    """Cited by any of the Seeds, in the view's Reference kinds."""
 
     type: Literal["citedby"]
-    handles: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
-        min_length=1, max_length=MAX_CONDITION_HANDLES
+    #: Fixed Seeds; send these or `tag`.
+    handles: list[_SeedHandle] = Field(
+        default_factory=list, max_length=MAX_CONDITION_HANDLES
     )
+    #: One of the reader's Tags, resolved by the server on every read.
+    tag: str | None = Field(None, min_length=1)
+
+    @model_validator(mode="after")
+    def _seeds(self) -> DirectoryCitedByCondition:
+        _one_source(self.handles, self.tag, required=True)
+        return self
 
     def to_cond(self) -> DirectoryCond:
-        return CitedByCond(_normalised(self.handles))
+        return CitedByCond(_normalised(self.handles), self.tag)
 
 
 class DirectoryCitesCondition(_Cond):
-    """Cites any of these handles, in the view's Reference kinds."""
+    """Cites any of the Seeds, in the view's Reference kinds."""
 
     type: Literal["cites"]
-    handles: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
-        min_length=1, max_length=MAX_CONDITION_HANDLES
+    #: Fixed Seeds; send these or `tag`.
+    handles: list[_SeedHandle] = Field(
+        default_factory=list, max_length=MAX_CONDITION_HANDLES
     )
+    #: One of the reader's Tags, resolved by the server on every read.
+    tag: str | None = Field(None, min_length=1)
+
+    @model_validator(mode="after")
+    def _seeds(self) -> DirectoryCitesCondition:
+        _one_source(self.handles, self.tag, required=True)
+        return self
 
     def to_cond(self) -> DirectoryCond:
-        return CitesCond(_normalised(self.handles))
-
-
-#: How many picks one Shared parents / children Condition sends: every follow,
-#: or a Channels tab selection, which can be the whole account.
-MAX_PICKS = 10_000
+        return CitesCond(_normalised(self.handles), self.tag)
 
 
 class DirectorySharedCondition(_Cond):
-    """Shared parents or Shared children with these picks, at least `min` shared."""
+    """Shared parents or Shared children with the Seeds, at least `min` shared."""
 
     type: SharedRelation
-    #: Resolved by the browser; none matches nothing.
-    handles: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
-        max_length=MAX_PICKS
-    )
+    #: Resolved by the browser; none matches nothing. Send these or `tag`.
+    handles: list[_SeedHandle] = Field(default_factory=list, max_length=MAX_SEEDS)
+    #: One of the reader's Tags, resolved by the server on every read.
+    tag: str | None = Field(None, min_length=1)
     min: int = Field(2, ge=1, le=10_000)
 
+    @model_validator(mode="after")
+    def _seeds(self) -> DirectorySharedCondition:
+        _one_source(self.handles, self.tag, required=False)
+        return self
+
     def to_cond(self) -> DirectoryCond:
-        return SharedCond(self.type, _normalised(self.handles), self.min)
+        return SharedCond(self.type, _normalised(self.handles), self.min, self.tag)
 
 
 class DirectoryTagCondition(_Cond):
@@ -425,9 +455,9 @@ class DirectoryRowResponse(_DirectoryEntryFields):
     mine_last_at: int | None = Field(alias="mineLastAt")
     #: Set only while a search is on and `showMatches` asked for it.
     match: DirectoryMatchResponse | None
-    #: Shared parents with the first such Condition's picks; `null` while off.
+    #: Shared parents with the first such Condition's Seeds; `null` while off.
     shared_parents: int | None = Field(alias="sharedParents")
-    #: Shared children with the first such Condition's picks; `null` while off.
+    #: Shared children with the first such Condition's Seeds; `null` while off.
     shared_children: int | None = Field(alias="sharedChildren")
 
 
@@ -438,16 +468,48 @@ class DirectoryEntryResponse(_DirectoryEntryFields):
     bio: str | None
 
 
+class DirectoryTagSeeds(BaseModel):
+    """Seeds from one of the reader's Tags, resolved by the server."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tag: str = Field(min_length=1)
+
+
+#: A Shared Condition's Seeds: handles the browser resolved, or a Tag.
+Seeds = Annotated[list[Handle], Field(max_length=MAX_SEEDS)] | DirectoryTagSeeds
+
+
 class DirectoryWhyRequest(DirectoryYoursRequest):
     """Whose Posts citing `handle` "Why it's here" lists."""
 
     handle: Handle
     #: The "Cited by your channels" Condition's window; every Post when absent.
     days: int | None = Field(None, ge=1, le=36_500)
-    #: The Shared parents Condition's picks, when it is on (DIR-07).
-    parents: list[Handle] | None = Field(None, max_length=MAX_PICKS)
-    #: The Shared children Condition's picks, when it is on.
-    children: list[Handle] | None = Field(None, max_length=MAX_PICKS)
+    #: The Shared parents Condition's Seeds, when it is on (DIR-07).
+    parents: Seeds | None = None
+    #: The Shared children Condition's Seeds, when it is on.
+    children: Seeds | None = None
+
+    def shared(self) -> DirectoryTree:
+        """The Shared Conditions whose Seeds the panel names, as a tree, so
+        `resolve_view` resolves a Tag here as it does for the list."""
+        sides: tuple[tuple[SharedRelation, Seeds | None], ...] = (
+            ("parents", self.parents),
+            ("children", self.children),
+        )
+        return TreeGroup(
+            op="and",
+            children=tuple(
+                TreeAtom(
+                    cond=SharedCond(relation, (), tag=seeds.tag)
+                    if isinstance(seeds, DirectoryTagSeeds)
+                    else SharedCond(relation, _normalised(seeds))
+                )
+                for relation, seeds in sides
+                if seeds is not None
+            ),
+        )
 
 
 class DirectoryCitingPostResponse(BaseModel):
@@ -467,7 +529,7 @@ class DirectoryCitingPostResponse(BaseModel):
 
 
 class DirectorySharedChannelResponse(BaseModel):
-    """A Channel linking the candidate to the picks."""
+    """A Channel linking the candidate to the Seeds."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -476,7 +538,7 @@ class DirectorySharedChannelResponse(BaseModel):
 
 
 class DirectorySharedWhyResponse(BaseModel):
-    """A few of the Channels shared with the picks, and how many in all."""
+    """A few of the Channels shared with the Seeds, and how many in all."""
 
     channels: list[DirectorySharedChannelResponse]
     total: int
@@ -487,9 +549,9 @@ class DirectoryWhyResponse(BaseModel):
 
     posts: list[DirectoryCitingPostResponse]
     total: int
-    #: `null` unless the request sent Shared parents picks.
+    #: `null` unless the request sent Shared parents Seeds.
     parents: DirectorySharedWhyResponse | None
-    #: `null` unless the request sent Shared children picks.
+    #: `null` unless the request sent Shared children Seeds.
     children: DirectorySharedWhyResponse | None
 
 

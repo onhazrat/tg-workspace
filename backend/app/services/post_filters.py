@@ -238,6 +238,20 @@ def prune_tree[C](node: TreeGroup[C], drop: Callable[[C], bool]) -> TreeGroup[C]
     )
 
 
+def map_tree[C](node: TreeGroup[C], change: Callable[[C], C]) -> TreeGroup[C]:
+    """`node` with every Condition replaced by `change` of it, shape kept."""
+    return TreeGroup(
+        op=node.op,
+        negated=node.negated,
+        children=tuple(
+            TreeAtom(cond=change(child.cond), negated=child.negated)
+            if isinstance(child, TreeAtom)
+            else map_tree(child, change)
+            for child in node.children
+        ),
+    )
+
+
 def tree_conds[C](node: TreeNode[C]) -> list[C]:
     """Every Condition in the tree, in order."""
     if isinstance(node, TreeAtom):

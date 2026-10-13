@@ -94,6 +94,7 @@ from app.services.post_filters import (
     TreeGroup,
     TreeNode,
     compile_tree,
+    map_tree,
     prune_tree,
     tree_conds,
 )
@@ -146,8 +147,8 @@ DirectorySort = Literal[
 ]
 DirectoryFlag = Literal["followed", "followable", "dismissed"]
 ReferenceKind = Literal["forward", "mention", "link", "reply"]
-#: Shared parents: cited by whoever cites the picks. Shared children: cites
-#: what the picks cite (DIR-07).
+#: Shared parents: cited by whoever cites the Seeds. Shared children: cites
+#: what the Seeds cite (DIR-07).
 SharedRelation = Literal["parents", "children"]
 #: Every follow, the Channels tab selection, or the Channels ticked here.
 YoursSource = Literal["follows", "selection", "ticked"]
@@ -196,27 +197,35 @@ class MineCond:
     days: int | None = None
 
 
+# The three Conditions taking Seeds hold either the handles the browser
+# resolved or `tag`, a Tag of the reader's that `resolve_view` swaps for its
+# handles before anything compiles (DFP-05).
+
+
 @dataclass(frozen=True)
 class CitedByCond:
-    """Cited by any of these handles, in the view's Reference kinds."""
+    """Cited by any of the Seeds, in the view's Reference kinds."""
 
-    handles: tuple[str, ...]
+    seeds: tuple[str, ...]
+    tag: str | None = None
 
 
 @dataclass(frozen=True)
 class CitesCond:
-    """Cites any of these handles, in the view's Reference kinds."""
+    """Cites any of the Seeds, in the view's Reference kinds."""
 
-    handles: tuple[str, ...]
+    seeds: tuple[str, ...]
+    tag: str | None = None
 
 
 @dataclass(frozen=True)
 class SharedCond:
-    """Shared parents or Shared children with `picks`, at least `min` shared."""
+    """Shared parents or Shared children with the Seeds, at least `min` shared."""
 
     relation: SharedRelation
-    picks: tuple[str, ...]
+    seeds: tuple[str, ...]
     min: int = 2
+    tag: str | None = None
 
 
 @dataclass(frozen=True)
@@ -297,11 +306,15 @@ def resolve_view(
         {}
         if tree is None
         else {
-            tags.tag_key(c.name): c.name
-            for c in tree_conds(tree)
-            if isinstance(c, TagCond)
+            tags.tag_key(name): name
+            for name in map(_named_tag, tree_conds(tree))
+            if name is not None
         }
     )
+    found = {
+        key: frozenset(tags.handles_for_tag(session, user_id=user_id, name=name))
+        for key, name in named.items()
+    }
     sources = (
         followed
         if source == "follows"
@@ -309,18 +322,37 @@ def resolve_view(
     )
     return DirectoryView(
         user_id=user_id,
-        tree=tree,
+        tree=None if tree is None else _seeded(tree, found),
         followed=followed,
         dismissed=frozenset(dismissed_handles(session, user_id=user_id)),
         sources=sources,
         kinds=tuple(sorted(set(kinds))),
         now=utc_now(),
         search=None if search is None else resolve_search(session, *search),
-        tags={
-            key: frozenset(tags.handles_for_tag(session, user_id=user_id, name=name))
-            for key, name in named.items()
-        },
+        tags=found,
     )
+
+
+def _named_tag(cond: DirectoryCond) -> str | None:
+    """The Tag a Condition names: In the Tag's, or the one its Seeds come from."""
+    if isinstance(cond, TagCond):
+        return cond.name
+    if isinstance(cond, SharedCond | CitedByCond | CitesCond):
+        return cond.tag
+    return None
+
+
+def _seeded(tree: DirectoryTree, found: Mapping[str, frozenset[str]]) -> DirectoryTree:
+    """`tree` with every Tag-sourced Seed list swapped for the Tag's handles,
+    so a Tag reads exactly as the handles it holds now (DFP-05)."""
+
+    def seeded(c: DirectoryCond) -> DirectoryCond:
+        if not isinstance(c, SharedCond | CitedByCond | CitesCond) or not c.tag:
+            return c
+        seeds = tuple(sorted(found.get(tags.tag_key(c.tag), frozenset())))
+        return replace(c, seeds=seeds, tag=None)
+
+    return map_tree(tree, seeded)
 
 
 # ---- Search (DIR-04, ADR-027) ---------------------------------------------------
@@ -527,26 +559,26 @@ def _ends(relation: SharedRelation) -> tuple[Any, Any]:
 
 
 def _middle(cond: SharedCond) -> Any:
-    """The Channels between the picks and a candidate: who cites the picks
-    (parents) or whom they cite (children), past aggregators and the picks."""
-    middle, pick = _ends(cond.relation)
+    """The Channels between the Seeds and a candidate: who cites the Seeds
+    (parents) or whom they cite (children), past aggregators and the Seeds."""
+    middle, seed = _ends(cond.relation)
     degree = (
         CitationCount.cites if cond.relation == "parents" else CitationCount.cited_by
     )
-    picks = _handles(cond.picks)
+    seeds = _handles(cond.seeds)
     return (
         sa_select(middle)
         .distinct()
         .join(CitationCount, col(CitationCount.handle) == middle)
-        .where(pick == any_(picks), middle != all_(picks))
+        .where(seed == any_(seeds), middle != all_(seeds))
         .where(col(degree) <= AGGREGATOR_LINKS)
     )
 
 
 def _shared(cond: SharedCond, among: Sequence[str] | None = None) -> Any:
-    """Per candidate, how many middle Channels it shares with the picks; never a pick."""
+    """Per candidate, how many middle Channels it shares with the Seeds; never a Seed."""
     middle, candidate = _ends(cond.relation)
-    where = [middle.in_(_middle(cond)), candidate != all_(_handles(cond.picks))]
+    where = [middle.in_(_middle(cond)), candidate != all_(_handles(cond.seeds))]
     if among is not None:
         where.append(candidate == any_(_handles(among)))
     return (
@@ -599,7 +631,7 @@ def _first_shared(
 def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     handle = col(DirectoryEntry.handle)
     if isinstance(cond, SharedCond):
-        if not cond.picks:
+        if not cond.seeds:
             return false()
         _, candidate = _ends(cond.relation)
         return handle.in_(
@@ -638,7 +670,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
         )
         return handle.in_(
             sa_select(col(entry_end)).where(
-                col(named_end) == any_(_handles(cond.handles)), *_of_kinds(view)
+                col(named_end) == any_(_handles(cond.seeds)), *_of_kinds(view)
             )
         )
     value = measure_sql(cond.measure, view.now)
@@ -731,7 +763,7 @@ class DirectoryRow:
     mine_last_at: int | None
     #: The reader's Tags on it, as first written (DFP-04).
     tags: list[str] = field(default_factory=list)
-    #: Shared parents / children with the first such Condition's picks;
+    #: Shared parents / children with the first such Condition's Seeds;
     #: `None` while the view has no such Condition (DIR-07).
     shared_parents: int | None = None
     shared_children: int | None = None
@@ -1226,10 +1258,10 @@ class Why:
     posts: list[CitingPost]
     #: Every citing Post, of which `posts` are the newest.
     total: int
-    #: The Channels shared with the Shared parents picks; `None` when that
+    #: The Channels shared with the Shared parents Seeds; `None` when that
     #: Condition is off (DIR-07).
     parents: SharedWhy | None = None
-    #: The same for the Shared children picks.
+    #: The same for the Shared children Seeds.
     children: SharedWhy | None = None
 
 
@@ -1239,24 +1271,21 @@ def why_its_here(
     handle: str,
     *,
     days: int | None,
-    parents: Sequence[str] | None = None,
-    children: Sequence[str] | None = None,
 ) -> Why:
     """The Posts of "your channels" that cite `handle`, newest first, and the
-    Channels it shares with each Shared Condition's picks, when one is on.
+    Channels it shares with the Seeds of each Shared Condition in the view's
+    tree, whatever the Seeds came from (DFP-05).
 
     One entry per Post, with every kind it cites in; inside the last `days`
     when the "Cited by your channels" Condition sets a window, so the panel
     counts what the sort and the Condition count.
     """
+    parents = _first_shared(view.tree, "parents")
+    children = _first_shared(view.tree, "children")
     return replace(
         _citing_posts(session, view, handle, days=days),
-        parents=None
-        if parents is None
-        else shared_why(session, handle, "parents", parents),
-        children=None
-        if children is None
-        else shared_why(session, handle, "children", children),
+        parents=None if parents is None else shared_why(session, handle, parents),
+        children=None if children is None else shared_why(session, handle, children),
     )
 
 
@@ -1361,19 +1390,16 @@ class SharedChannel:
 
 @dataclass(frozen=True)
 class SharedWhy:
-    #: The middle Channels linking `handle` to the picks, most References first.
+    #: The middle Channels linking `handle` to the Seeds, most References first.
     channels: list[SharedChannel]
     total: int
 
 
-def shared_why(
-    session: Session, handle: str, relation: SharedRelation, picks: Sequence[str]
-) -> SharedWhy:
-    """The Channels `handle` shares with the picks: for parents, those citing both
-    it and a pick; for children, those both it and a pick cite (DIR-07)."""
-    cond = SharedCond(relation, tuple(sorted({normalize_handle(h) for h in picks})))
-    middle, candidate = _ends(relation)
-    if not cond.picks:
+def shared_why(session: Session, handle: str, cond: SharedCond) -> SharedWhy:
+    """The Channels `handle` shares with the Seeds: for parents, those citing both
+    it and a Seed; for children, those both it and a Seed cite (DIR-07)."""
+    middle, candidate = _ends(cond.relation)
+    if not cond.seeds:
         return SharedWhy(channels=[], total=0)
     rows = (
         session.execute(

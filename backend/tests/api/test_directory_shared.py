@@ -301,3 +301,75 @@ def test_why_its_here_names_the_shared_channels(
     }
     off = why("x_a")
     assert off["parents"] is None and off["children"] is None
+
+
+# ---- A Tag as Seeds (DFP-05) ----------------------------------------------------
+
+
+TAGS = f"{settings.API_V1_STR}/data/tags"
+
+
+def _tag(client: TestClient, headers: dict[str, str], name: str, *handles: str) -> None:
+    response = client.post(
+        f"{TAGS}/channels",
+        json={"name": name, "handles": list(handles)},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+
+def tagged(relation: str, tag: str) -> dict[str, Any]:
+    return {"kind": "atom", "id": relation, "cond": {"type": relation, "tag": tag}}
+
+
+def test_a_tag_is_the_seeds_of_shared_parents_and_children(
+    client: TestClient,
+    operator: dict[str, str],
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    """Two Accounts hold "Seeds" on different Channels: each compares with their
+    own, and the Condition follows the Tag as Channels are tagged."""
+    other = normal_user_token_headers
+    parents = root(tagged("parents", "seeds"))
+    assert _found(client, operator, parents) == []
+
+    _tag(client, operator, "Seeds", "p1")
+    _tag(client, other, "seeds", "y_a")
+    # p1 alone: s1 and s3 cite it, and both cite x_a.
+    assert _found(client, operator, parents) == ["x_a"]
+    _tag(client, operator, "SEEDS", "p2")
+    assert _found(client, operator, parents) == ["x_a", "x_b"]
+    # Nobody cites y_a, so the other Account's Seeds share no parents.
+    assert _found(client, other, parents) == []
+
+    children = root(tagged("children", "seeds"))
+    assert _found(client, operator, children) == ["x_b", "y_a", "y_b"]
+    # y_a cites t1, t2 and t3: p1, p2, x_b and y_b each cite two of them.
+    assert _found(client, other, children) == ["p1", "p2", "x_b", "y_b"]
+
+    # Why it's here resolves the Tag the same way, for the reader.
+    response = client.post(
+        f"{DIRECTORY}/why",
+        json={"handle": "x_a", "parents": {"tag": "seeds"}},
+        headers=operator,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["parents"]["total"] == 3
+    response = client.post(
+        f"{DIRECTORY}/why",
+        json={"handle": "x_a", "parents": {"tag": "seeds"}},
+        headers=other,
+    )
+    assert response.json()["parents"] == {"channels": [], "total": 0}
+
+
+def test_a_shared_condition_takes_handles_or_a_tag_never_both(
+    client: TestClient, operator: dict[str, str]
+) -> None:
+    cond = {"type": "parents", "handles": ["p1"], "tag": "seeds"}
+    response = client.post(
+        f"{DIRECTORY}/list",
+        json={"filter": root({"kind": "atom", "cond": cond})},
+        headers=operator,
+    )
+    assert response.status_code == 422

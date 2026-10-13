@@ -1555,3 +1555,53 @@ def test_a_group_tag_is_the_followed_channels_in_that_setting_group(
     assert moved.status_code == 200, moved.text
     in_group = root(atom(tag("group:morning reads")))
     assert _handles(client, operator, filter=in_group) == ["dt_followed_a"]
+
+
+# ---- A Tag as Seeds (DFP-05) ----------------------------------------------------
+
+
+def test_a_tag_is_the_seeds_of_cited_by_and_cites(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Two Accounts hold "sources" on different Channels; each reads their own,
+    and the Condition follows the Tag as Channels are tagged."""
+    operator, other = accounts
+    by = root(atom({"type": "citedby", "tag": "Sources"}))
+    assert _list(client, operator, filter=by)["total"] == 0
+
+    _tag(client, operator, "Sources", "src_a1")
+    _tag(client, other, "sources", "src_b1")
+
+    # The cached total moves at once, as it does for the tag Condition.
+    assert _list(client, operator, filter=by)["total"] == 2
+    assert set(_handles(client, operator, filter=by)) == {"dt_fa_big", "dt_en_news"}
+    assert set(_handles(client, other, filter=by)) == {"dt_ru", "dt_fa_small"}
+
+    _tag(client, operator, "sources", "src_b1")
+    assert _list(client, operator, filter=by)["total"] == 4
+
+    of = root(atom({"type": "cites", "tag": "targets"}))
+    _tag(client, operator, "targets", "dt_en_news")
+    assert set(_handles(client, operator, filter=of)) == {"dt_fa_big", "dt_ru"}
+    assert _handles(client, other, filter=of) == []
+
+
+@pytest.mark.parametrize("kind", ["citedby", "cites"])
+def test_cited_by_and_cites_take_500_handles_or_a_tag(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]], kind: str
+) -> None:
+    operator, _ = accounts
+
+    def status(cond: dict[str, Any]) -> int:
+        return client.post(
+            f"{DIRECTORY}/list", json={"filter": root(atom(cond))}, headers=operator
+        ).status_code
+
+    many = [f"h{i}" for i in range(501)]
+    assert status({"type": kind, "handles": many[:500]}) == 200
+    assert status({"type": kind, "handles": many}) == 422
+    # Exactly one source: handles or a Tag.
+    assert status({"type": kind, "tag": "news"}) == 200
+    assert status({"type": kind, "handles": ["a"], "tag": "news"}) == 422
+    assert status({"type": kind}) == 422
+    assert status({"type": kind, "handles": []}) == 422
