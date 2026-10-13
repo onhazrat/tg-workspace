@@ -46,8 +46,63 @@ export type PostViewsCond = {
   type: "views"
   measure: ViewMeasure
 } & MetricBound
-export type PostCond = PostValueCond | PostViewsCond
+/**
+ * A bound on how many Posts the Post's Channel has in the Analysis window
+ * (PTI-02): every one, or only those the rest of the filter keeps. Whole
+ * numbers, and never "no value": every Channel with a Post has a count.
+ */
+export type PostChannelPostsCond = (
+  | { type: "channel_posts" }
+  | { type: "channel_posts_filtered" }
+) & { min?: number; max?: number }
+export type PostCond = PostValueCond | PostViewsCond | PostChannelPostsCond
 export type PostFilter = FilterTree<PostCond>
+export type ChannelPostsNumber = "channel_posts" | "channel_posts_filtered"
+/** A number the Filters menu bounds; also the measure its histogram reads. */
+export type PostNumber = ViewMeasure | ChannelPostsNumber
+
+/**
+ * The number filters, in the Filters menu's order. The menu and the
+ * condition picker both read this list, so neither can offer one the other
+ * does not.
+ */
+export const POST_NUMBERS: { label: string; value: PostNumber }[] = [
+  ...VIEW_MEASURE_OPTIONS,
+  { label: "Channel posts in window", value: "channel_posts" },
+  {
+    label: "Channel posts in filtered window",
+    value: "channel_posts_filtered",
+  },
+]
+
+export const isChannelPosts = (
+  number: PostNumber,
+): number is ChannelPostsNumber =>
+  number === "channel_posts" || number === "channel_posts_filtered"
+
+/** The number a bound Condition bounds, or `null` for a value Condition. */
+export function postNumberOf(cond: PostCond): PostNumber | null {
+  if (cond.type === "views") return cond.measure
+  if (cond.type === "channel_posts" || cond.type === "channel_posts_filtered")
+    return cond.type
+  return null
+}
+
+/**
+ * A Channel posts bound rounded inward to whole numbers, low end up and high
+ * end down, so "<= 29.5" keeps exactly what "<= 29" keeps; `null` when no
+ * whole number is left between its ends.
+ */
+export function wholeBound(bound: MetricBound): MetricBound | null {
+  const min = bound.min === undefined ? undefined : Math.ceil(bound.min)
+  const max = bound.max === undefined ? undefined : Math.floor(bound.max)
+  if (min !== undefined && max !== undefined && min > max) return null
+  return {
+    ...(min === undefined ? {} : { min }),
+    ...(max === undefined ? {} : { max }),
+  }
+}
+
 /** The Conditions a dropdown funnels. */
 export type PostFacet = "type" | "media" | "language"
 
@@ -78,8 +133,8 @@ export const isEmptyPostFilter = (filter: PostFilter): boolean =>
 
 // ---- Labels ----------------------------------------------------------------
 
-export const measureLabel = (measure: ViewMeasure): string =>
-  labelOf(VIEW_MEASURE_OPTIONS, measure)
+export const measureLabel = (measure: PostNumber): string =>
+  labelOf(POST_NUMBERS, measure)
 
 /** A chip's label: "Persian", "Photo", "Forwarded", "@channel", "Views ≥ 10K". */
 export function postConditionLabel(cond: PostCond): string {
@@ -94,6 +149,9 @@ export function postConditionLabel(cond: PostCond): string {
       return `@${cond.value}`
     case "views":
       return `${measureLabel(cond.measure)}${cond.none ? ":" : ""} ${boundText(cond)}`
+    case "channel_posts":
+    case "channel_posts_filtered":
+      return `${measureLabel(cond.type)} ${boundText(cond)}`
   }
 }
 
@@ -107,40 +165,54 @@ const PREFIX: Record<PostValueCond["type"], string> = {
 }
 
 function condText(cond: PostCond): string {
-  if (cond.type !== "views") return `${PREFIX[cond.type]}:${quote(cond.value)}`
-  const m = cond.measure
-  return {
-    none: `${m} = none`,
-    between: `${m} ${cond.min}..${cond.max}`,
-    gte: `${m} >= ${cond.min}`,
-    lte: `${m} <= ${cond.max}`,
-  }[boundKind(cond)]
+  if (cond.type === "views") return boundWords(cond.measure, cond)
+  if (cond.type === "channel_posts" || cond.type === "channel_posts_filtered")
+    return boundWords(cond.type, cond)
+  return `${PREFIX[cond.type]}:${quote(cond.value)}`
 }
+
+const boundWords = (m: PostNumber, b: MetricBound): string =>
+  ({
+    none: `${m} = none`,
+    between: `${m} ${b.min}..${b.max}`,
+    gte: `${m} >= ${b.min}`,
+    lte: `${m} <= ${b.max}`,
+  })[boundKind(b)]
 
 /**
  * The readable text form: `type:forwarded`, `media:photo`, `lang:fa`,
  * `channel:name`, `views >= 1000`, `estimated <= 500`, `views 100..1000`,
- * `views = none`, `not`, `and`, `or` and parentheses.
+ * `views = none`, `channel_posts <= 5`, `channel_posts_filtered 10..30`,
+ * `not`, `and`, `or` and parentheses.
  */
 export const printPostFilter = (filter: PostFilter): string =>
   printTree(filter, condText)
 
 const NUM = String.raw`(\d+(?:\.\d+)?(?:e[+-]?\d+)?)`
-/** `views >= 200`, `estimated 200..1000` or `views = none`. */
+/**
+ * `views >= 200`, `estimated 200..1000`, `views = none` or
+ * `channel_posts <= 5`; a Channel posts bound has no `= none`.
+ */
 const BOUND = new RegExp(
-  String.raw`^(views|estimated)(?:\s*(>=|<=|>|<)\s*${NUM}|\s*=\s*none(?![\p{L}\p{N}_])|\s+${NUM}\s*\.\.\s*${NUM})`,
+  String.raw`^(views|estimated|channel_posts_filtered|channel_posts)(?:\s*(>=|<=|>|<)\s*${NUM}|\s*=\s*none(?![\p{L}\p{N}_])|\s+${NUM}\s*\.\.\s*${NUM})`,
   "iu",
 )
 
-function boundCond(m: RegExpExecArray): PostViewsCond {
-  const measure = m[1].toLowerCase() as ViewMeasure
-  if (m[4] !== undefined)
-    return { type: "views", measure, min: Number(m[4]), max: Number(m[5]) }
-  if (m[2] === undefined) return { type: "views", measure, none: true }
+function boundCond(m: RegExpExecArray): PostCond {
+  const number = m[1].toLowerCase() as PostNumber
   // Inclusive, as on Channels: ">" reads as ">=" and "<" as "<=".
-  return m[2].startsWith(">")
-    ? { type: "views", measure, min: Number(m[3]) }
-    : { type: "views", measure, max: Number(m[3]) }
+  const bound: MetricBound =
+    m[4] !== undefined
+      ? { min: Number(m[4]), max: Number(m[5]) }
+      : m[2] === undefined
+        ? { none: true }
+        : m[2].startsWith(">")
+          ? { min: Number(m[3]) }
+          : { max: Number(m[3]) }
+  if (!isChannelPosts(number))
+    return { type: "views", measure: number, ...bound }
+  if (bound.none) throw new ParseError(`${number} has no "none"`)
+  return { type: number, ...bound }
 }
 
 const TYPES = new Set<string>(POST_TYPE_VALUES.map((t) => t.value))

@@ -22,6 +22,7 @@ import {
   POST_TYPE_VALUES,
   type PostFacet,
   type PostFilter as PostFilterTree,
+  type PostNumber,
 } from "@/lib/posts/post-filter"
 import type { PostFacetsResponse } from "../client"
 import { useData } from "../contexts/DataContext"
@@ -442,7 +443,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 }
 
 /** The editors' histogram read, over the spotlit Channel when one is. */
-function useSpotlitValueHistogram(measure: ViewMeasure) {
+function useSpotlitValueHistogram(measure: PostNumber) {
   return usePostValueHistogram(measure, useSpotlight().spotlight)
 }
 

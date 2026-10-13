@@ -2036,7 +2036,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Posts Value Histogram",
-        "description": "One measure's bars over the window and the Channels, the filters aside.\n\nWhat a number filter's editor draws: 32 bars from the lowest value to the\nhighest, logarithmic when the highest is over 100 times the lowest. The\nPost filter and the keyword in the body are not applied, so the bars hold\nstill while the Account changes another Condition.",
+        "description": "One measure's bars over the window and the Channels.\n\nWhat a number filter's editor draws: 32 bars from the lowest value to the\nhighest, logarithmic when the highest is over 100 times the lowest.\n`views` and `estimated` count Posts, `channel_posts` and\n`channel_posts_filtered` count Channels by their Posts in the window. The\nPost filter and the keyword in the body are applied only by\n`channel_posts_filtered`, whose count is the Posts they keep, so the\nother bars hold still while the Account changes another Condition.",
         "operationId": "data-posts_value_histogram",
         "requestBody": {
           "content": {
@@ -6441,6 +6441,48 @@
         "title": "ChannelInfoResponse",
         "description": "What one fetch of a channel's meta page reports.\n\nUnlike `ScrapeChannelResponse`, `photoUrl` and `bio` here are nullable:\n`_parse_channel_meta` returns them straight from the parsed page without the\n`or \"\"` coercion that the scrape path applies. Same fields, different\nnullability \u2014 that difference is real and is why these are two models."
       },
+      "ChannelPostsCondition": {
+        "properties": {
+          "min": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Max"
+          },
+          "type": {
+            "type": "string",
+            "const": "channel_posts",
+            "title": "Type"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type"],
+        "title": "ChannelPostsCondition"
+      },
+      "ChannelPostsFilteredCondition": {
+        "properties": {
+          "min": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number", "minimum": 0.0 }, { "type": "null" }],
+            "title": "Max"
+          },
+          "type": {
+            "type": "string",
+            "const": "channel_posts_filtered",
+            "title": "Type"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type"],
+        "title": "ChannelPostsFilteredCondition"
+      },
       "ChannelResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -8801,13 +8843,17 @@
               { "$ref": "#/components/schemas/MediaCondition" },
               { "$ref": "#/components/schemas/LanguageCondition" },
               { "$ref": "#/components/schemas/ChannelCondition" },
-              { "$ref": "#/components/schemas/ViewsCondition" }
+              { "$ref": "#/components/schemas/ViewsCondition" },
+              { "$ref": "#/components/schemas/ChannelPostsCondition" },
+              { "$ref": "#/components/schemas/ChannelPostsFilteredCondition" }
             ],
             "title": "Cond",
             "discriminator": {
               "propertyName": "type",
               "mapping": {
                 "channel": "#/components/schemas/ChannelCondition",
+                "channel_posts": "#/components/schemas/ChannelPostsCondition",
+                "channel_posts_filtered": "#/components/schemas/ChannelPostsFilteredCondition",
                 "language": "#/components/schemas/LanguageCondition",
                 "media": "#/components/schemas/MediaCondition",
                 "type": "#/components/schemas/TypeCondition",
@@ -10527,8 +10573,13 @@
           },
           "seed": { "type": "integer", "title": "Seed", "default": 0 },
           "measure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
+            "anyOf": [
+              { "type": "string", "enum": ["views", "estimated"] },
+              {
+                "type": "string",
+                "enum": ["channel_posts", "channel_posts_filtered"]
+              }
+            ],
             "title": "Measure"
           }
         },
@@ -10536,7 +10587,7 @@
         "type": "object",
         "required": ["measure"],
         "title": "PostValueHistogramRequest",
-        "description": "`PostFilteredRequest` plus the measure a number filter's editor bounds.\n\nThe body is the filtered request's so the editor sends the scope it\nalready has; the Post filter and keyword in it are set aside."
+        "description": "`PostFilteredRequest` plus the measure a number filter's editor bounds.\n\nThe body is the filtered request's so the editor sends the scope it\nalready has; the Post filter and keyword in it are set aside, except by\n`channel_posts_filtered`, which counts what they keep."
       },
       "PostValueHistogramResponse": {
         "properties": {

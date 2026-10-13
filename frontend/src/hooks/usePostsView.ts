@@ -31,8 +31,7 @@ import {
   type ChannelSpotlight,
   spotlightView,
 } from "@/lib/posts/channel-spotlight"
-import type { ViewMeasure } from "@/lib/posts/estimated-views"
-import { printPostFilter } from "@/lib/posts/post-filter"
+import { type PostNumber, printPostFilter } from "@/lib/posts/post-filter"
 import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
 import type { Post } from "@/types"
 import {
@@ -275,28 +274,46 @@ export function usePostFacets(
 }
 
 /**
- * One measure's bars over the window and the selected Channels, or the
+ * One number's bars over the window and the selected Channels, or the
  * spotlit one, for a number filter's editor (PTI-01). Filters aside, so it is
- * keyed on the Channels, the window and the measure alone, and the bars hold
- * still while the Account changes another Condition.
+ * keyed on the Channels, the window and the number alone, and the bars hold
+ * still while the Account changes another Condition. Channel posts in
+ * filtered window is the exception: its count is what the filter and the
+ * keyword keep, so it sends and is keyed on them too (PTI-02).
  */
 export function usePostValueHistogram(
-  measure: ViewMeasure,
+  measure: PostNumber,
   spotlight: ChannelSpotlight | null,
 ): PostValueHistogramResponse | undefined {
   const { startDate, endDate, windowKey } = useScope()
-  const selected = useSelectedChannelNames()
-  const channelNames = spotlight ? [spotlight.channel] : selected
+  const { postFilter, postSearch } = useScraper()
+  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
+  const view = spotlightView(spotlight, {
+    channelNames: useSelectedChannelNames(),
+    keyword: debouncedPostSearch,
+    filter: postFilter,
+    maxPerChannel: 0,
+    groupByChannel: false,
+  })
+  const { channelNames } = view
+  const filtered = measure === "channel_posts_filtered"
+  const filters = filtered
+    ? { keyword: view.keyword, filter: view.filter }
+    : undefined
   return useQuery({
     queryKey: queryKeys.postsValueHistogram({
       channelNames,
       window: windowKey,
       measure,
+      ...(filters && {
+        keyword: filters.keyword,
+        filter: printPostFilter(filters.filter),
+      }),
     }),
     queryFn: () =>
       dataPostsValueHistogram({
         body: {
-          ...postScopeBody({ channelNames, startDate, endDate }),
+          ...postScopeBody({ channelNames, startDate, endDate, ...filters }),
           measure,
         } as PostValueHistogramRequest,
       }),

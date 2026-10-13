@@ -16,8 +16,8 @@ from sqlmodel import Session
 
 from app.schemas.post_filter import FilterGroup, SelectionPick, SelectionRule, to_steps
 from app.schemas.posts import PostScopeRequest
-from app.services.post_filters import PostFilters
-from app.services.post_selection import PostScope, selection_clause
+from app.services.post_filters import PostFilters, PostScope
+from app.services.post_selection import selection_clause
 from app.services.settling_curve import tree_readings, view_reading
 
 

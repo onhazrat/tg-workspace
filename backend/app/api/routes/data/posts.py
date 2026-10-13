@@ -27,8 +27,7 @@ from app.schemas.posts import (
     ViewEstimateResponse,
 )
 from app.services.analysis_window import resolve_analysis_window
-from app.services.post_filters import ViewReading
-from app.services.post_selection import PostScope
+from app.services.post_filters import PostScope, ViewReading
 from app.services.posts import (
     bulk_upsert_posts,
     count_facets_in_scope,
@@ -139,26 +138,34 @@ def posts_value_histogram(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> PostValueHistogramResponse:
-    """One measure's bars over the window and the Channels, the filters aside.
+    """One measure's bars over the window and the Channels.
 
     What a number filter's editor draws: 32 bars from the lowest value to the
-    highest, logarithmic when the highest is over 100 times the lowest. The
-    Post filter and the keyword in the body are not applied, so the bars hold
-    still while the Account changes another Condition.
+    highest, logarithmic when the highest is over 100 times the lowest.
+    `views` and `estimated` count Posts, `channel_posts` and
+    `channel_posts_filtered` count Channels by their Posts in the window. The
+    Post filter and the keyword in the body are applied only by
+    `channel_posts_filtered`, whose count is the Posts they keep, so the
+    other bars hold still while the Account changes another Condition.
     """
     window = resolve_analysis_window(body.window)
-    reading = (
-        ViewReading("views")
-        if body.measure == "views"
-        else ViewReading("estimated", *current_estimate(session))
-    )
+    reading = None
+    filters = None
+    if body.measure == "views":
+        reading = ViewReading("views")
+    elif body.measure == "estimated":
+        reading = ViewReading("estimated", *current_estimate(session))
+    elif body.measure == "channel_posts_filtered":
+        filters = parse_post_filters(session, body, tree=body.filter)
     histogram = value_histogram(
         session,
         user_id=current_user.id,
         channel_names=body.cleaned_channel_names(),
         start_date=window.start,
         end_date=window.end,
+        measure=body.measure,
         reading=reading,
+        filters=filters,
     )
     return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
 
@@ -228,6 +235,8 @@ def lookup_posts_route(
             user_id=current_user.id,
             filters=None if body.filter is None else tree_filters(session, body.filter),
             selected=selected_in(session, body.selection, scope),
+            start_date=window.start,
+            end_date=window.end,
         )
     ]
 

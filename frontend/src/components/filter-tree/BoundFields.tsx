@@ -23,6 +23,7 @@ export function BoundFields({
   b,
   setB,
   min,
+  noValue = true,
 }: {
   op: BoundKind
   setOp: (op: BoundKind) => void
@@ -32,6 +33,8 @@ export function BoundFields({
   setB: (text: string) => void
   /** The lowest value a field offers, where the measure has one. */
   min?: number
+  /** Whether "no value" is offered; a count always has one. */
+  noValue?: boolean
 }) {
   const field = (label: string, value: string, set: (t: string) => void) => (
     <input
@@ -47,21 +50,23 @@ export function BoundFields({
   return (
     <>
       <fieldset aria-label="Operator" className="m-0 flex gap-1 border-0 p-0">
-        {OPS.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={op === key}
-            onClick={() => setOp(key)}
-            className={`flex-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold ${
-              op === key
-                ? "border-app-ink bg-app-ink text-app-bg"
-                : "border-app-ink/15 hover:border-app-ink/40"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {OPS.filter(([key]) => noValue || key !== "none").map(
+          ([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={op === key}
+              onClick={() => setOp(key)}
+              className={`flex-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold ${
+                op === key
+                  ? "border-app-ink bg-app-ink text-app-bg"
+                  : "border-app-ink/15 hover:border-app-ink/40"
+              }`}
+            >
+              {label}
+            </button>
+          ),
+        )}
       </fieldset>
       {op !== "none" && (
         <div className="flex items-center gap-1.5">

@@ -37,6 +37,7 @@ from app.schemas.scope import (
     ViewMeasure,
     upgrade_legacy_scope_fields,
 )
+from app.services.post_filters import ValueMeasure
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
     MAX_POST_LOOKUP_BATCH,
@@ -256,10 +257,11 @@ class PostValueHistogramRequest(PostFilteredRequest):
     """`PostFilteredRequest` plus the measure a number filter's editor bounds.
 
     The body is the filtered request's so the editor sends the scope it
-    already has; the Post filter and keyword in it are set aside.
+    already has; the Post filter and keyword in it are set aside, except by
+    `channel_posts_filtered`, which counts what they keep.
     """
 
-    measure: ViewMeasure
+    measure: ValueMeasure
 
 
 class PostValueHistogramResponse(BaseModel):

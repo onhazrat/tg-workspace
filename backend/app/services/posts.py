@@ -41,10 +41,13 @@ from app.services.post_filters import (
     CapMode,
     FeedSort,
     PostFilters,
+    PostScope,
+    ValueMeasure,
     ViewReading,
-    apply_analysis_window,
     apply_post_filters,
+    channel_posts_aside,
     media_kind_clause,
+    post_filter_clauses,
     post_type_clause,
     tree_clause,
 )
@@ -811,6 +814,8 @@ def lookup_posts(
     user_id: uuid.UUID,
     filters: PostFilters | None = None,
     selected: ColumnElement[bool] | None = None,
+    start_date: int | None = None,
+    end_date: int | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch specific posts by their `(channel_name, post_id)` natural key.
 
@@ -830,12 +835,18 @@ def lookup_posts(
     `filters` narrows the batch to the Posts the Post filter shows, which is
     how a meaning search's ranked Posts pass it (PTR-03). A Post it hides is
     absent like any other. `selected` flags each row, as on the feed (PTR-05).
+    A Channel posts Condition counts within `start_date`..`end_date` (PTI-02).
     """
     unique = {(name, post_id) for name, post_id in pairs}
     if not unique:
         return []
     columns = select(Post) if selected is None else select(Post, selected)
-    stmt = _filtered(session, scoped_select(columns, Post, user_id), user_id, filters)
+    stmt = _filtered(
+        session,
+        scoped_select(columns, Post, user_id),
+        filters,
+        PostScope(user_id, None, start_date, end_date),
+    )
     stmt = stmt.where(
         or_(
             *[
@@ -946,8 +957,9 @@ def count_scope(
     if tree is not None and estimate is not None:
         shown = tree_clause(
             tree,
-            readings=filters.tree_readings,
+            filters=filters,
             followed_names=_followed_for(session, filters, user_id),
+            scope=PostScope(user_id, channel_names, start_date, end_date),
         )
         kept = func.count().filter(shown)
         too_new = func.count().filter(and_(not_(shown), estimate.too_new(Post)))
@@ -1074,12 +1086,15 @@ def _followed_for(
 
 
 def _filtered(
-    session: Session, stmt: Any, user_id: uuid.UUID, filters: PostFilters | None
+    session: Session, stmt: Any, filters: PostFilters | None, scope: PostScope
 ) -> Any:
     if filters is None:
         return stmt
     return apply_post_filters(
-        stmt, filters, followed_names=_followed_for(session, filters, user_id)
+        stmt,
+        filters,
+        followed_names=_followed_for(session, filters, scope.user_id),
+        scope=scope,
     )
 
 
@@ -1098,11 +1113,9 @@ def _in_scope(
     The one spelling of "the Posts this Scope covers" the feed, the counts and
     the facets share, so none of them can count a Post another does not show.
     """
-    stmt = scoped_select(stmt, Post, user_id)
-    if channel_names:
-        stmt = stmt.where(col(Post.channel_name).in_(channel_names))
-    stmt = apply_analysis_window(stmt, start_date, end_date)
-    return _filtered(session, stmt, user_id, filters)
+    scope = PostScope(user_id, channel_names, start_date, end_date)
+    stmt = scoped_select(stmt, Post, user_id).where(*scope.clauses())
+    return _filtered(session, stmt, filters, scope)
 
 
 def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:
@@ -1141,9 +1154,11 @@ def value_histogram(
     channel_names: list[str] | None,
     start_date: int | None,
     end_date: int | None,
-    reading: ViewReading,
+    measure: ValueMeasure,
+    reading: ViewReading | None = None,
+    filters: PostFilters | None = None,
 ) -> ValueHistogram:
-    """One measure across the Posts in the window, the Post filter aside.
+    """One measure across the Posts, or the Channels, in the window.
 
     The Channels tab's rule, so the Posts editors draw what its editors draw:
     32 bars from the lowest value to the highest, and past two orders of
@@ -1151,17 +1166,37 @@ def value_histogram(
     first bar. A range starting at 0 is drawn on log(1 + x), since log 0 has
     no place. A Post with no value (none recorded, or too new to estimate) is
     in `total` and not in `measured`.
+
+    `views` and `estimated` read `reading` per Post, the Post filter aside.
+    `channel_posts` and `channel_posts_filtered` count Channels by their
+    count in the window (PTI-02); the filtered one counts only what `filters`
+    keeps with every Channel posts Condition set aside, as the Condition
+    counts, and a Channel whose Posts it all hides is a 0.
     """
-    value = reading.of(Post).label("x")
-    inner = _in_scope(
+    if measure == "views" or measure == "estimated":
+        assert reading is not None
+        value: Any = reading.of(Post)
+    elif measure == "channel_posts":
+        value = func.count()
+    else:
+        aside = channel_posts_aside(filters or PostFilters())
+        kept = post_filter_clauses(
+            aside,
+            followed_names=_followed_for(session, aside, user_id),
+        )
+        value = func.count().filter(and_(true(), *kept))
+    stmt = _in_scope(
         session,
-        select(value).select_from(Post),
+        select(value.label("x")).select_from(Post),
         user_id=user_id,
         channel_names=channel_names,
         start_date=start_date,
         end_date=end_date,
         filters=None,
-    ).subquery()
+    )
+    if measure.startswith("channel_posts"):
+        stmt = stmt.group_by(col(Post.channel_name))
+    inner = stmt.subquery()
     x = inner.c.x
     lo, hi, measured, total, median = session.execute(
         sa_select(

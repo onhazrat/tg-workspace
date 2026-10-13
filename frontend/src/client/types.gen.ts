@@ -787,6 +787,42 @@ export type ChannelInfoResponse = {
 };
 
 /**
+ * ChannelPostsCondition
+ */
+export type ChannelPostsCondition = {
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * Type
+     */
+    type: 'channel_posts';
+};
+
+/**
+ * ChannelPostsFilteredCondition
+ */
+export type ChannelPostsFilteredCondition = {
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * Type
+     */
+    type: 'channel_posts_filtered';
+};
+
+/**
  * ChannelResponse
  *
  * One channel, as `channel_to_camel` builds it.
@@ -3112,7 +3148,11 @@ export type FilterAtom = {
         type: 'channel';
     } & ChannelCondition) | ({
         type: 'views';
-    } & ViewsCondition);
+    } & ViewsCondition) | ({
+        type: 'channel_posts';
+    } & ChannelPostsCondition) | ({
+        type: 'channel_posts_filtered';
+    } & ChannelPostsFilteredCondition);
 };
 
 /**
@@ -4716,7 +4756,8 @@ export type PostTranslationResponse = {
  * `PostFilteredRequest` plus the measure a number filter's editor bounds.
  *
  * The body is the filtered request's so the editor sends the scope it
- * already has; the Post filter and keyword in it are set aside.
+ * already has; the Post filter and keyword in it are set aside, except by
+ * `channel_posts_filtered`, which counts what they keep.
  */
 export type PostValueHistogramRequest = {
     /**
@@ -4767,7 +4808,7 @@ export type PostValueHistogramRequest = {
     /**
      * Measure
      */
-    measure: 'views' | 'estimated';
+    measure: 'views' | 'estimated' | 'channel_posts' | 'channel_posts_filtered';
 };
 
 /**

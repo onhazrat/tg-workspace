@@ -879,12 +879,15 @@ export const dataPostsCounts = <ThrowOnError extends boolean = true>(options: Op
 /**
  * Posts Value Histogram
  *
- * One measure's bars over the window and the Channels, the filters aside.
+ * One measure's bars over the window and the Channels.
  *
  * What a number filter's editor draws: 32 bars from the lowest value to the
- * highest, logarithmic when the highest is over 100 times the lowest. The
- * Post filter and the keyword in the body are not applied, so the bars hold
- * still while the Account changes another Condition.
+ * highest, logarithmic when the highest is over 100 times the lowest.
+ * `views` and `estimated` count Posts, `channel_posts` and
+ * `channel_posts_filtered` count Channels by their Posts in the window. The
+ * Post filter and the keyword in the body are applied only by
+ * `channel_posts_filtered`, whose count is the Posts they keep, so the
+ * other bars hold still while the Account changes another Condition.
  */
 export const dataPostsValueHistogram = <ThrowOnError extends boolean = true>(options: Options<DataPostsValueHistogramData, ThrowOnError>) => (options.client ?? client).post<DataPostsValueHistogramResponses, DataPostsValueHistogramErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

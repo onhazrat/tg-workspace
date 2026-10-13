@@ -20,7 +20,9 @@ import type { ViewMeasure } from "@/lib/posts/estimated-views"
 import {
   addPostFunnel,
   emptyPostFilter,
+  type PostCond,
   type PostFilter,
+  type PostNumber,
   printPostFilter,
 } from "@/lib/posts/post-filter"
 import {
@@ -314,6 +316,117 @@ describe("the Filters menu", () => {
     expect(screen.getByTestId("post-filters-views").textContent).toContain(
       "not ≥ 1K",
     )
+  })
+})
+
+describe("the Channel posts bounds (PTI-02)", () => {
+  const NUMBERS = [
+    "Views",
+    "Estimated views",
+    "Channel posts in window",
+    "Channel posts in filtered window",
+  ]
+
+  test("the Filters menu and the condition picker list the same four numbers, in order", () => {
+    // The filter row, and its "+", shows once the filter holds anything.
+    mount({ postFilter: addPostFunnel(emptyPostFilter(), "type", "original") })
+    fireEvent.click(screen.getByTestId("post-filters"))
+    const menu = screen
+      .getAllByTestId(/^post-filters-/)
+      .map((b) => b.firstChild?.textContent)
+    expect(menu).toEqual(NUMBERS)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByRole("button", { name: "Add a condition" }))
+    const numbers = screen.getByText("Numbers").parentElement as HTMLElement
+    const picker = within(numbers)
+      .getAllByRole("button")
+      .map((b) => b.textContent)
+    expect(picker).toEqual(NUMBERS)
+  })
+
+  test("the pill counts every number bound, Channel posts included", () => {
+    const bound = (cond: PostCond) => ({
+      kind: "atom" as const,
+      id: JSON.stringify(cond),
+      not: false,
+      cond,
+    })
+    mount({
+      postFilter: {
+        ...emptyPostFilter(),
+        children: [
+          bound({ type: "views", measure: "views", min: 1000 }),
+          bound({ type: "channel_posts", max: 5 }),
+          bound({ type: "channel_posts_filtered", min: 2 }),
+        ],
+      },
+    })
+    expect(screen.getByTestId("post-filters").textContent).toContain("3")
+    fireEvent.click(screen.getByTestId("post-filters"))
+    expect(
+      screen.getByTestId("post-filters-channel_posts").textContent,
+    ).toContain("≤ 5")
+    expect(
+      screen.getByTestId("post-filters-channel_posts_filtered").textContent,
+    ).toContain("≥ 2")
+  })
+
+  /** 0 to 49.6 in 32 bars of 1.55 Channels' counts. */
+  const COUNTS: PostValueHistogramResponse = {
+    bins: Array.from({ length: 32 }, (_, i) => i + 1),
+    edges: Array.from({ length: 33 }, (_, i) => i * 1.55),
+    log: false,
+    median: 12,
+    measured: 40,
+    total: 40,
+  }
+
+  test("a drag on Channel posts in window rounds to a whole channel_posts bound", () => {
+    const asked: PostNumber[] = []
+    const read = (measure: PostNumber) => {
+      asked.push(measure)
+      return COUNTS
+    }
+    const { calls } = mount({}, {}, ({ children }) => (
+      <PostValueHistogramContext.Provider value={read}>
+        {children}
+      </PostValueHistogramContext.Provider>
+    ))
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-channel_posts"))
+    expect(asked).toContain("channel_posts")
+    expect(screen.queryByRole("button", { name: "no value" })).toBeNull()
+    fireEvent.pointerEnter(screen.getByTestId("metric-bar-2"))
+    expect(
+      screen.getByTestId("metric-histogram-caption").textContent,
+    ).toContain("3 channels")
+    // Bars 0-3 end at 6.2, which is at most 6.
+    fireEvent.pointerDown(screen.getByTestId("metric-bar-0"))
+    for (const i of [1, 2, 3])
+      fireEvent.pointerEnter(screen.getByTestId(`metric-bar-${i}`))
+    fireEvent.pointerUp(screen.getByTestId("metric-bar-3"))
+    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    expect(calls).toEqual([["filter", "channel_posts <= 6"]])
+  })
+
+  test("a range with no whole number in it cannot be added; one with one is rounded in", () => {
+    const { calls } = mount()
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-channel_posts_filtered"))
+    fireEvent.click(screen.getByRole("button", { name: "between" }))
+    fireEvent.change(screen.getByLabelText("From"), {
+      target: { value: "3.2" },
+    })
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "3.8" } })
+    const submit = () =>
+      screen.getByTestId("post-views-editor-submit") as HTMLButtonElement
+    expect(submit().disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText("From"), {
+      target: { value: "2.5" },
+    })
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "30.5" } })
+    fireEvent.click(submit())
+    expect(calls).toEqual([["filter", "channel_posts_filtered 3..30"]])
   })
 })
 
