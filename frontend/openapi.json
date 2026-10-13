@@ -2970,6 +2970,196 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/tags": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Tags",
+        "description": "The caller's Tags with how many Channels carry each, by name.",
+        "operationId": "data-list_tags",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "$ref": "#/components/schemas/TagResponse" },
+                  "type": "array",
+                  "title": "Response Data-List Tags"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Delete Tag",
+        "description": "Take a Tag off every Channel.",
+        "operationId": "data-delete_tag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagDeleteRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TagChangeResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      },
+      "patch": {
+        "tags": ["data"],
+        "summary": "Rename Tag",
+        "description": "Rename a Tag on every Channel; onto a name the caller has, the two merge.",
+        "operationId": "data-rename_tag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagRenameRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TagResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/tags/channels": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Tag Channels",
+        "description": "The handles carrying one of the caller's Tags; a `group:` name included.",
+        "operationId": "data-list_tag_channels",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "title": "Name" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TagHandlesResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["data"],
+        "summary": "Add Tag Channels",
+        "description": "Put a Tag on handles, followed or not; a new name makes a new Tag.",
+        "operationId": "data-add_tag_channels",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagHandlesRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TagChangeResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["data"],
+        "summary": "Remove Tag Channels",
+        "description": "Take a Tag off handles. A body rather than a path, matching the POST.",
+        "operationId": "data-remove_tag_channels",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagHandlesRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TagChangeResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/summaries": {
       "get": {
         "tags": ["data"],
@@ -7320,6 +7510,11 @@
           "followed": { "type": "boolean", "title": "Followed" },
           "dismissed": { "type": "boolean", "title": "Dismissed" },
           "citedBy": { "type": "integer", "title": "Citedby" },
+          "tags": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Tags"
+          },
           "cites": { "type": "integer", "title": "Cites" },
           "bio": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -7347,6 +7542,7 @@
           "followed",
           "dismissed",
           "citedBy",
+          "tags",
           "cites",
           "bio"
         ],
@@ -7370,7 +7566,8 @@
               { "$ref": "#/components/schemas/DirectoryMineCondition" },
               { "$ref": "#/components/schemas/DirectoryCitedByCondition" },
               { "$ref": "#/components/schemas/DirectoryCitesCondition" },
-              { "$ref": "#/components/schemas/DirectorySharedCondition" }
+              { "$ref": "#/components/schemas/DirectorySharedCondition" },
+              { "$ref": "#/components/schemas/DirectoryTagCondition" }
             ],
             "title": "Cond",
             "discriminator": {
@@ -7384,7 +7581,8 @@
                 "measure": "#/components/schemas/DirectoryMeasureCondition",
                 "mine": "#/components/schemas/DirectoryMineCondition",
                 "name": "#/components/schemas/DirectoryNameCondition",
-                "parents": "#/components/schemas/DirectorySharedCondition"
+                "parents": "#/components/schemas/DirectorySharedCondition",
+                "tag": "#/components/schemas/DirectoryTagCondition"
               }
             }
           }
@@ -7807,6 +8005,11 @@
           "followed": { "type": "boolean", "title": "Followed" },
           "dismissed": { "type": "boolean", "title": "Dismissed" },
           "citedBy": { "type": "integer", "title": "Citedby" },
+          "tags": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Tags"
+          },
           "cites": { "type": "integer", "title": "Cites" },
           "mine": { "type": "integer", "title": "Mine" },
           "mineLastAt": {
@@ -7849,6 +8052,7 @@
           "followed",
           "dismissed",
           "citedBy",
+          "tags",
           "cites",
           "mine",
           "mineLastAt",
@@ -7994,6 +8198,17 @@
         "required": ["text", "hit"],
         "title": "DirectorySnippetPartResponse",
         "description": "A run of snippet text; `hit` marks a matched word."
+      },
+      "DirectoryTagCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "tag", "title": "Type" },
+          "name": { "type": "string", "minLength": 1, "title": "Name" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "name"],
+        "title": "DirectoryTagCondition",
+        "description": "In one of the reader's Tags; a Tag they do not have matches nothing."
       },
       "DirectoryWhyRequest": {
         "properties": {
@@ -12178,6 +12393,65 @@
         "required": ["id", "kind"],
         "title": "TagArtifactResponse"
       },
+      "TagChangeResponse": {
+        "properties": { "changed": { "type": "integer", "title": "Changed" } },
+        "type": "object",
+        "required": ["changed"],
+        "title": "TagChangeResponse",
+        "description": "How many Channels a Tag change reached."
+      },
+      "TagDeleteRequest": {
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "title": "Name" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["name"],
+        "title": "TagDeleteRequest",
+        "description": "Take a Tag off every Channel."
+      },
+      "TagHandlesRequest": {
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "title": "Name" },
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Handles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["name", "handles"],
+        "title": "TagHandlesRequest",
+        "description": "One Tag and the handles, followed or not, to put it on or take it off."
+      },
+      "TagHandlesResponse": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "handles": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Handles"
+          }
+        },
+        "type": "object",
+        "required": ["name", "handles"],
+        "title": "TagHandlesResponse",
+        "description": "The handles carrying a Tag; none for a Tag the Account does not have."
+      },
+      "TagRenameRequest": {
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "title": "Name" },
+          "to": { "type": "string", "minLength": 1, "title": "To" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["name", "to"],
+        "title": "TagRenameRequest",
+        "description": "Rename a Tag on every Channel; onto a name the Account has, the two merge."
+      },
       "TagRequest": {
         "properties": {
           "channels": {
@@ -12232,6 +12506,16 @@
         "type": "object",
         "required": ["channels"],
         "title": "TagRequest"
+      },
+      "TagResponse": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "channels": { "type": "integer", "title": "Channels" }
+        },
+        "type": "object",
+        "required": ["name", "channels"],
+        "title": "TagResponse",
+        "description": "One of the Account's Tags, as first written, and how many Channels carry it."
       },
       "TagRunListItemResponse": {
         "properties": {

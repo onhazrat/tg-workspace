@@ -31,6 +31,7 @@ from app.services.directory_reads import (
     SearchField,
     SharedCond,
     SharedRelation,
+    TagCond,
     YoursSource,
 )
 from app.services.post_filters import TreeAtom, TreeGroup
@@ -197,6 +198,16 @@ class DirectorySharedCondition(_Cond):
         return SharedCond(self.type, _normalised(self.handles), self.min)
 
 
+class DirectoryTagCondition(_Cond):
+    """In one of the reader's Tags; a Tag they do not have matches nothing."""
+
+    type: Literal["tag"]
+    name: str = Field(min_length=1)
+
+    def to_cond(self) -> DirectoryCond:
+        return TagCond(self.name)
+
+
 DirectoryCondition = Annotated[
     DirectoryLanguageCondition
     | DirectoryNameCondition
@@ -205,7 +216,8 @@ DirectoryCondition = Annotated[
     | DirectoryMineCondition
     | DirectoryCitedByCondition
     | DirectoryCitesCondition
-    | DirectorySharedCondition,
+    | DirectorySharedCondition
+    | DirectoryTagCondition,
     Field(discriminator="type"),
 ]
 
@@ -398,6 +410,8 @@ class _DirectoryEntryFields(BaseModel):
     dismissed: bool
     #: Distinct Channels citing it, every Reference kind.
     cited_by: int = Field(alias="citedBy")
+    #: The reader's Tags on it, as first written (DFP-04).
+    tags: list[str]
     #: Distinct Channels it cites, every Reference kind.
     cites: int
 

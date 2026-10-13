@@ -366,6 +366,16 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "same file: test_a_tag_on_an_unfollowed_channel_stays_its_accounts_own",
     ),
+    # --- tags (DFP-04) --------------------------------------------------------
+    ("GET", f"{DATA}/tags"): (
+        Reason.COVERED_ELSEWHERE,
+        "keyed by the caller; test_directory_tags.py, both flag states",
+    ),
+    ("GET", f"{DATA}/tags/channels"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("POST", f"{DATA}/tags/channels"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("DELETE", f"{DATA}/tags/channels"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("PATCH", f"{DATA}/tags"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("DELETE", f"{DATA}/tags"): (Reason.COVERED_ELSEWHERE, "same file"),
     # --- logs ----------------------------------------------------------------
     ("GET", f"{DATA}/logs/{{log_type}}"): (
         Reason.COVERED_ELSEWHERE,

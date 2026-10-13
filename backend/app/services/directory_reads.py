@@ -46,8 +46,8 @@ from __future__ import annotations
 import math
 import time
 import uuid
-from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Literal, get_args
 
@@ -84,7 +84,7 @@ from app.models_tg import (
     PostReference,
     utc_now,
 )
-from app.services import search_text
+from app.services import search_text, tags
 from app.services.channel_directory import LISTED_KIND
 from app.services.channel_directory_samples import samples_by_handle
 from app.services.dismissals import dismissed_handles
@@ -219,6 +219,13 @@ class SharedCond:
     min: int = 2
 
 
+@dataclass(frozen=True)
+class TagCond:
+    """In one of the reader's Tags, by name; a Tag they lack matches nothing (DFP-04)."""
+
+    name: str
+
+
 DirectoryCond = (
     LanguageCond
     | NameCond
@@ -228,6 +235,7 @@ DirectoryCond = (
     | CitedByCond
     | CitesCond
     | SharedCond
+    | TagCond
 )
 DirectoryTree = TreeGroup[DirectoryCond]
 
@@ -264,6 +272,8 @@ class DirectoryView:
     kinds: tuple[ReferenceKind, ...]
     now: datetime
     search: SearchQuery | None = None
+    #: Each Tag the tree names, by its key, resolved to the reader's handles.
+    tags: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 def resolve_view(
@@ -283,6 +293,15 @@ def resolve_view(
     `search` is what was typed and the fields it looks in.
     """
     followed = frozenset(visible_channel_names(session, user_id=user_id))
+    named = (
+        {}
+        if tree is None
+        else {
+            tags.tag_key(c.name): c.name
+            for c in tree_conds(tree)
+            if isinstance(c, TagCond)
+        }
+    )
     sources = (
         followed
         if source == "follows"
@@ -297,6 +316,10 @@ def resolve_view(
         kinds=tuple(sorted(set(kinds))),
         now=utc_now(),
         search=None if search is None else resolve_search(session, *search),
+        tags={
+            key: frozenset(tags.handles_for_tag(session, user_id=user_id, name=name))
+            for key, name in named.items()
+        },
     )
 
 
@@ -584,6 +607,9 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
         )
     if isinstance(cond, LanguageCond):
         return col(DirectoryEntry.language) == cond.value
+    if isinstance(cond, TagCond):
+        tagged = view.tags.get(tags.tag_key(cond.name), frozenset())
+        return handle == any_(_handles(tagged)) if tagged else false()
     if isinstance(cond, NameCond):
         return or_(
             handle.icontains(cond.value, autoescape=True),
@@ -703,6 +729,8 @@ class DirectoryRow:
     cites: int
     mine: int
     mine_last_at: int | None
+    #: The reader's Tags on it, as first written (DFP-04).
+    tags: list[str] = field(default_factory=list)
     #: Shared parents / children with the first such Condition's picks;
     #: `None` while the view has no such Condition (DIR-07).
     shared_parents: int | None = None
@@ -909,6 +937,7 @@ def _rows(
         if show_matches and view.search is not None
         else {}
     )
+    tagged = tags.tags_by_handle(session, user_id=view.user_id, handles=handles)
     rows = []
     for handle in handles:
         e = entries[handle]
@@ -941,6 +970,7 @@ def _rows(
                 cites=counted.get(handle, (0, 0))[1],
                 mine=n,
                 mine_last_at=last_at,
+                tags=[t["name"] for t in tagged.get(handle, [])],
                 shared_parents=_count_of(shared["parents"], handle),
                 shared_children=_count_of(shared["children"], handle),
                 match=matches.get(handle),
@@ -979,6 +1009,8 @@ def _view_key(view: DirectoryView, tree: DirectoryTree | None) -> str:
             # A Dismissal or a take-back changes the key, so the total moves
             # at once rather than after the TTL (DIR-06).
             hash(view.dismissed) if _reads_dismissed(tree) else None,
+            # Tagging a Channel moves the total at once, like a Dismissal.
+            sorted((k, hash(v)) for k, v in view.tags.items()),
         )
     )
 

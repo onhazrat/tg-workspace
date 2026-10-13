@@ -1769,6 +1769,10 @@ export type DirectoryEntryResponse = {
      */
     citedBy: number;
     /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
      * Cites
      */
     cites: number;
@@ -1815,7 +1819,9 @@ export type DirectoryFilterAtom = {
         type: 'cites';
     } & DirectoryCitesCondition) | ({
         type: 'children' | 'parents';
-    } & DirectorySharedCondition);
+    } & DirectorySharedCondition) | ({
+        type: 'tag';
+    } & DirectoryTagCondition);
 };
 
 /**
@@ -2189,6 +2195,10 @@ export type DirectoryRowResponse = {
      */
     citedBy: number;
     /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
      * Cites
      */
     cites: number;
@@ -2359,6 +2369,22 @@ export type DirectorySnippetPartResponse = {
      * Hit
      */
     hit: boolean;
+};
+
+/**
+ * DirectoryTagCondition
+ *
+ * In one of the reader's Tags; a Tag they do not have matches nothing.
+ */
+export type DirectoryTagCondition = {
+    /**
+     * Type
+     */
+    type: 'tag';
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -6712,6 +6738,78 @@ export type TagArtifactResponse = {
 };
 
 /**
+ * TagChangeResponse
+ *
+ * How many Channels a Tag change reached.
+ */
+export type TagChangeResponse = {
+    /**
+     * Changed
+     */
+    changed: number;
+};
+
+/**
+ * TagDeleteRequest
+ *
+ * Take a Tag off every Channel.
+ */
+export type TagDeleteRequest = {
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * TagHandlesRequest
+ *
+ * One Tag and the handles, followed or not, to put it on or take it off.
+ */
+export type TagHandlesRequest = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+};
+
+/**
+ * TagHandlesResponse
+ *
+ * The handles carrying a Tag; none for a Tag the Account does not have.
+ */
+export type TagHandlesResponse = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+};
+
+/**
+ * TagRenameRequest
+ *
+ * Rename a Tag on every Channel; onto a name the Account has, the two merge.
+ */
+export type TagRenameRequest = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * To
+     */
+    to: string;
+};
+
+/**
  * TagRequest
  */
 export type TagRequest = {
@@ -6756,6 +6854,22 @@ export type TagRequest = {
      * Tagsperchannelmax
      */
     tagsPerChannelMax?: number | null;
+};
+
+/**
+ * TagResponse
+ *
+ * One of the Account's Tags, as first written, and how many Channels carry it.
+ */
+export type TagResponse = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Channels
+     */
+    channels: number;
 };
 
 /**
@@ -9758,6 +9872,154 @@ export type DataGetDirectoryWhyResponses = {
 };
 
 export type DataGetDirectoryWhyResponse = DataGetDirectoryWhyResponses[keyof DataGetDirectoryWhyResponses];
+
+export type DataDeleteTagData = {
+    body: TagDeleteRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tags';
+};
+
+export type DataDeleteTagErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataDeleteTagError = DataDeleteTagErrors[keyof DataDeleteTagErrors];
+
+export type DataDeleteTagResponses = {
+    /**
+     * Successful Response
+     */
+    200: TagChangeResponse;
+};
+
+export type DataDeleteTagResponse = DataDeleteTagResponses[keyof DataDeleteTagResponses];
+
+export type DataListTagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tags';
+};
+
+export type DataListTagsResponses = {
+    /**
+     * Response Data-List Tags
+     *
+     * Successful Response
+     */
+    200: Array<TagResponse>;
+};
+
+export type DataListTagsResponse = DataListTagsResponses[keyof DataListTagsResponses];
+
+export type DataRenameTagData = {
+    body: TagRenameRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tags';
+};
+
+export type DataRenameTagErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRenameTagError = DataRenameTagErrors[keyof DataRenameTagErrors];
+
+export type DataRenameTagResponses = {
+    /**
+     * Successful Response
+     */
+    200: TagResponse;
+};
+
+export type DataRenameTagResponse = DataRenameTagResponses[keyof DataRenameTagResponses];
+
+export type DataRemoveTagChannelsData = {
+    body: TagHandlesRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tags/channels';
+};
+
+export type DataRemoveTagChannelsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRemoveTagChannelsError = DataRemoveTagChannelsErrors[keyof DataRemoveTagChannelsErrors];
+
+export type DataRemoveTagChannelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: TagChangeResponse;
+};
+
+export type DataRemoveTagChannelsResponse = DataRemoveTagChannelsResponses[keyof DataRemoveTagChannelsResponses];
+
+export type DataListTagChannelsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/v1/data/tags/channels';
+};
+
+export type DataListTagChannelsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataListTagChannelsError = DataListTagChannelsErrors[keyof DataListTagChannelsErrors];
+
+export type DataListTagChannelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: TagHandlesResponse;
+};
+
+export type DataListTagChannelsResponse = DataListTagChannelsResponses[keyof DataListTagChannelsResponses];
+
+export type DataAddTagChannelsData = {
+    body: TagHandlesRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tags/channels';
+};
+
+export type DataAddTagChannelsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataAddTagChannelsError = DataAddTagChannelsErrors[keyof DataAddTagChannelsErrors];
+
+export type DataAddTagChannelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: TagChangeResponse;
+};
+
+export type DataAddTagChannelsResponse = DataAddTagChannelsResponses[keyof DataAddTagChannelsResponses];
 
 export type DataListSummariesData = {
     body?: never;

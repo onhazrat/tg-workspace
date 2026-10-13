@@ -118,6 +118,12 @@ Selected first (`selectedFirst` with the ticked handles on `/directory/list`):
 * match the ticks without normalising `@` and case -> the same
 * read `ticked` when "Channels ticked here" already carries them -> its
   ticked-source case
+
+DFP-04 (the `tag` Condition and the rows' Tags; the routes' own guard is
+`tests/api/test_directory_tags.py`):
+
+* leave the Tags out of the cached total's key -> the tag Condition's total
+* resolve a Tag across every Account -> the unknown-Tag case
 """
 
 from __future__ import annotations
@@ -1471,3 +1477,81 @@ def test_an_elevated_session_may_dismiss_and_take_back(
     assert _flags(client, operator, DISMISSED) == []
     assert _take_back(client, elevated, "dt_ru").status_code == 200
     assert _flags(client, other, DISMISSED) == []
+
+
+# ---- Tags (DFP-04) ----------------------------------------------------------------
+
+TAGS = f"{settings.API_V1_STR}/data/tags"
+
+
+def tag(name: str) -> dict[str, Any]:
+    return {"type": "tag", "name": name}
+
+
+def _tag(client: TestClient, headers: dict[str, str], name: str, *handles: str) -> None:
+    response = client.post(
+        f"{TAGS}/channels",
+        json={"name": name, "handles": list(handles)},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_a_tag_condition_is_the_readers_own_tag(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Two Accounts hold "news" on different Channels; each reads their own."""
+    operator, other = accounts
+    everything = set(_handles(client, operator))
+    in_news = root(atom(tag("NEWS")))
+    assert _list(client, operator, filter=in_news)["total"] == 0
+
+    _tag(client, operator, "News", "dt_fa_big", "@DT_RU")
+    _tag(client, other, "news", "dt_en_news")
+
+    # The cached total moves at once, as it does for a Dismissal.
+    assert _list(client, operator, filter=in_news)["total"] == 2
+    assert set(_handles(client, operator, filter=in_news)) == {"dt_fa_big", "dt_ru"}
+    assert _handles(client, other, filter=in_news) == ["dt_en_news"]
+    not_news = root(atom(tag("news"), negated=True))
+    assert set(_handles(client, operator, filter=not_news)) == everything - {
+        "dt_fa_big",
+        "dt_ru",
+    }
+    assert set(_handles(client, other, filter=not_news)) == everything - {"dt_en_news"}
+
+    rows = {r["handle"]: r["tags"] for r in _list(client, operator)["rows"]}
+    assert rows["dt_ru"] == ["News"]
+    assert rows["dt_en_news"] == []
+    assert _entry(client, other, "dt_en_news").json()["tags"] == ["news"]
+    assert _entry(client, other, "dt_ru").json()["tags"] == []
+
+
+def test_a_tag_the_reader_does_not_have_matches_nothing(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, other = accounts
+    _tag(client, other, "theirs", "dt_ru")
+    assert _handles(client, operator, filter=root(atom(tag("theirs")))) == []
+    assert set(
+        _handles(client, operator, filter=root(atom(tag("theirs"), negated=True)))
+    ) == set(_handles(client, operator))
+
+
+def test_a_group_tag_is_the_followed_channels_in_that_setting_group(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    data = f"{settings.API_V1_STR}/data"
+    created = client.post(
+        f"{data}/setting-groups", json={"name": "Morning Reads"}, headers=operator
+    )
+    assert created.status_code == 200, created.text
+    moved = client.patch(
+        f"{data}/channels/bulk-setting-group",
+        json={"channelIds": ["dt_followed_a"], "settingGroupId": created.json()["id"]},
+        headers=operator,
+    )
+    assert moved.status_code == 200, moved.text
+    in_group = root(atom(tag("group:morning reads")))
+    assert _handles(client, operator, filter=in_group) == ["dt_followed_a"]
