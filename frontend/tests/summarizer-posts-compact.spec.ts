@@ -67,6 +67,15 @@ const height = (c: Locator) =>
   c.evaluate((el) => Math.round(el.getBoundingClientRect().height))
 const bottom = (l: Locator) =>
   l.evaluate((el) => Math.round(el.getBoundingClientRect().bottom))
+/**
+ * How far apart two measures are, polled until they settle within a pixel:
+ * a card's height is fractional, so two rounded heights of one row can differ
+ * by 1, and the row is still laying out when the first lines show.
+ */
+const settlesWith = (a: () => Promise<number>, b: () => Promise<number>) =>
+  expect
+    .poll(async () => Math.abs((await a()) - (await b())))
+    .toBeLessThanOrEqual(1)
 
 test("a text-only compact card fills its row in whole lines, then More", async ({
   page,
@@ -91,9 +100,13 @@ test("a text-only compact card fills its row in whole lines, then More", async (
 
   // The photo card sets the row; the long text fills it and adds nothing.
   await expect.poll(() => linesShown(long)).toBeGreaterThan(3)
-  expect(await height(long)).toBe(await height(photo))
-  expect(await bottom(long.locator("footer"))).toBe(
-    await bottom(photo.locator("footer")),
+  await settlesWith(
+    () => height(long),
+    () => height(photo),
+  )
+  await settlesWith(
+    () => bottom(long.locator("footer")),
+    () => bottom(photo.locator("footer")),
   )
   await expect(long.getByRole("button", { name: "More" })).toBeVisible()
   await expect(short.getByRole("button", { name: "More" })).toHaveCount(0)
@@ -104,5 +117,8 @@ test("a text-only compact card fills its row in whole lines, then More", async (
   expect(await height(long)).toBeGreaterThan(before)
   await long.getByRole("button", { name: "Less" }).click()
   await expect(long.getByRole("button", { name: "More" })).toBeVisible()
-  expect(await height(long)).toBe(before)
+  await settlesWith(
+    () => height(long),
+    async () => before,
+  )
 })
