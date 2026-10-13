@@ -4711,6 +4711,100 @@ export type PostTranslationResponse = {
 };
 
 /**
+ * PostValueHistogramRequest
+ *
+ * `PostFilteredRequest` plus the measure a number filter's editor bounds.
+ *
+ * The body is the filtered request's so the editor sends the scope it
+ * already has; the Post filter and keyword in it are set aside.
+ */
+export type PostValueHistogramRequest = {
+    /**
+     * Channelnames
+     */
+    channelNames?: Array<string> | null;
+    /**
+     * Window
+     */
+    window?: ({
+        mode: 'live';
+    } & LiveAnalysisWindow) | ({
+        mode: 'fixed';
+    } & FixedAnalysisWindow) | null;
+    /**
+     * Keyword
+     */
+    keyword?: string | null;
+    /**
+     * Viewmeasure
+     */
+    viewMeasure?: 'views' | 'estimated';
+    /**
+     * Maxperchannel
+     */
+    maxPerChannel?: number;
+    filter?: FilterGroupInput | null;
+    /**
+     * Selection
+     */
+    selection?: Array<({
+        kind: 'rule';
+    } & SelectionRuleInput) | ({
+        kind: 'pick';
+    } & SelectionPick)> | null;
+    /**
+     * Maxperchannelmode
+     */
+    maxPerChannelMode?: 'ordered' | 'random';
+    /**
+     * Sort
+     */
+    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Measure
+     */
+    measure: 'views' | 'estimated';
+};
+
+/**
+ * PostValueHistogramResponse
+ *
+ * 32 bars and their 33 edges, binned by the Channels tab's rule.
+ *
+ * Empty `bins` and `edges` when nothing in the scope has a value.
+ */
+export type PostValueHistogramResponse = {
+    /**
+     * Bins
+     */
+    bins: Array<number>;
+    /**
+     * Edges
+     */
+    edges: Array<number>;
+    /**
+     * Log
+     */
+    log: boolean;
+    /**
+     * Median
+     */
+    median: number | null;
+    /**
+     * Measured
+     */
+    measured: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * PromptResponse
  *
  * The assembled prompt, for the "show me what you would send" surfaces.
@@ -9098,6 +9192,31 @@ export type DataPostsCountsResponses = {
 };
 
 export type DataPostsCountsResponse = DataPostsCountsResponses[keyof DataPostsCountsResponses];
+
+export type DataPostsValueHistogramData = {
+    body: PostValueHistogramRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/posts/value-histogram';
+};
+
+export type DataPostsValueHistogramErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPostsValueHistogramError = DataPostsValueHistogramErrors[keyof DataPostsValueHistogramErrors];
+
+export type DataPostsValueHistogramResponses = {
+    /**
+     * Successful Response
+     */
+    200: PostValueHistogramResponse;
+};
+
+export type DataPostsValueHistogramResponse = DataPostsValueHistogramResponses[keyof DataPostsValueHistogramResponses];
 
 export type DataPostsViewEstimateData = {
     body?: never;

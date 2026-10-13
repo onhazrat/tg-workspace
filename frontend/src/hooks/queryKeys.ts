@@ -83,6 +83,9 @@ export const queryKeys = {
   viewEstimate: ["viewEstimate"] as const,
   /** Per-value counts for the Type, Media and Language dropdowns (PTR-03). */
   postsFacets: (scope: unknown) => ["postsFacets", scope] as const,
+  /** A Posts number filter's bars over the window, filters aside (PTI-01). */
+  postsValueHistogram: (scope: unknown) =>
+    ["postsValueHistogram", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,
   /**

@@ -28,7 +28,11 @@ import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
-import { usePostFacets, useViewEstimate } from "../hooks/usePostsView"
+import {
+  usePostFacets,
+  usePostValueHistogram,
+  useViewEstimate,
+} from "../hooks/usePostsView"
 import { spotlitBar } from "../lib/posts/channel-spotlight"
 import {
   activeFilters,
@@ -55,6 +59,7 @@ import {
   PostFacetMenu,
   type PostFacetValue,
   PostFiltersMenu,
+  PostValueHistogramContext,
   postVocabulary,
 } from "./PostFilterControls"
 import { PerChannelForm, Pill, pillClass } from "./PostFilterParts"
@@ -436,6 +441,11 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
   )
 }
 
+/** The editors' histogram read, over the spotlit Channel when one is. */
+function useSpotlitValueHistogram(measure: ViewMeasure) {
+  return usePostValueHistogram(measure, useSpotlight().spotlight)
+}
+
 /** The bar wired to the workspace's state. */
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const spot = useSpotlight()
@@ -465,30 +475,32 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
     [selectedChannels],
   )
   return (
-    <PostFilterBar
-      {...props}
-      controls={controls}
-      keywordIgnored={keywordIgnored}
-      embeddingsEnabled={embeddingsEnabled}
-      windowControl={
-        <AnalysisWindowControl
-          onReturnToAction={() => setActiveTab("action")}
-        />
-      }
-      facets={facets}
-      channelLanguages={channelLanguages}
-      channelNames={channelNames}
-      estimationFloorHours={
-        estimate?.estimationFloorHours ?? DEFAULT_ESTIMATION_FLOOR_HOURS
-      }
-      onCountingPillOpenChange={(open) =>
-        setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
-      }
-      onFacetTick={(facet, value, select) =>
-        scraper.appendSelection([
-          facetRule(select, facet, value, spot.spotlight?.channel),
-        ])
-      }
-    />
+    <PostValueHistogramContext.Provider value={useSpotlitValueHistogram}>
+      <PostFilterBar
+        {...props}
+        controls={controls}
+        keywordIgnored={keywordIgnored}
+        embeddingsEnabled={embeddingsEnabled}
+        windowControl={
+          <AnalysisWindowControl
+            onReturnToAction={() => setActiveTab("action")}
+          />
+        }
+        facets={facets}
+        channelLanguages={channelLanguages}
+        channelNames={channelNames}
+        estimationFloorHours={
+          estimate?.estimationFloorHours ?? DEFAULT_ESTIMATION_FLOOR_HOURS
+        }
+        onCountingPillOpenChange={(open) =>
+          setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
+        }
+        onFacetTick={(facet, value, select) =>
+          scraper.appendSelection([
+            facetRule(select, facet, value, spot.spotlight?.channel),
+          ])
+        }
+      />
+    </PostValueHistogramContext.Provider>
   )
 }

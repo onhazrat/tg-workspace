@@ -14,8 +14,10 @@ import {
   type LucideIcon,
   SlidersHorizontal,
 } from "lucide-react"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
+import type { PostValueHistogramResponse } from "@/client"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
+import { BoundHistogram } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import type { ConditionOption } from "@/components/filter-tree/ConditionPicker"
 import {
@@ -68,8 +70,58 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
 // ---- The views editor ------------------------------------------------------
 
 /**
+ * A hook answering a measure's bars over the window and the selected
+ * Channels, the filters aside; `undefined` while they load. Context rather
+ * than a prop so the filter bar renders, and tests, without the providers
+ * the read needs: with none, the editors draw no histogram.
+ */
+export type ValueHistogramRead = (
+  measure: ViewMeasure,
+) => PostValueHistogramResponse | undefined
+
+export const PostValueHistogramContext =
+  createContext<ValueHistogramRead | null>(null)
+
+function PostValueHistogram({
+  read,
+  measure,
+  bound,
+  onSelect,
+}: {
+  read: ValueHistogramRead
+  measure: ViewMeasure
+  bound: MetricBound | null
+  onSelect: (bound: MetricBound) => void
+}) {
+  const d = read(measure)
+  if (!d) return <p className="h-16 text-[11px] text-app-ink/50">Counting…</p>
+  if (!d.measured)
+    return (
+      <p className="text-[11px] text-app-ink/50">
+        Nothing in this window has a value yet.
+      </p>
+    )
+  return (
+    <BoundHistogram
+      distribution={{
+        bins: d.bins,
+        edge: (i) => d.edges[i],
+        lo: d.edges[0],
+        hi: d.edges[d.edges.length - 1],
+        median: d.median ?? 0,
+        log: d.log,
+      }}
+      bound={bound}
+      noun="posts"
+      onSelect={onSelect}
+    />
+  )
+}
+
+/**
  * One measure's bound: at least, at most, between or no value, one or two
- * fields, Add or Update. No histogram: the server has no endpoint for one yet.
+ * fields, Add or Update, over the measure's histogram, which a drag across
+ * fills the fields from.
  */
 export function PostViewsEditor({
   measure,
@@ -91,6 +143,12 @@ export function PostViewsEditor({
   )
   const [b, setB] = useState(String(initial?.max ?? ""))
   const bound = parseBound(op, a, b, { min: 0 })
+  const read = useContext(PostValueHistogramContext)
+  const select = (next: MetricBound) => {
+    setOp(boundKind(next))
+    setA(String(next.min ?? next.max))
+    setB(String(next.max ?? ""))
+  }
   return (
     <form
       className="space-y-2 p-1"
@@ -115,6 +173,14 @@ export function PostViewsEditor({
       <p className="text-[11px] text-app-ink/50">
         {viewMeasureDescription(measure, floorHours)}
       </p>
+      {read && (
+        <PostValueHistogram
+          read={read}
+          measure={measure}
+          bound={bound}
+          onSelect={select}
+        />
+      )}
       <BoundFields
         op={op}
         setOp={setOp}

@@ -252,6 +252,31 @@ class PostFilteredRequest(PostScopeRequest):
     seed: int = 0
 
 
+class PostValueHistogramRequest(PostFilteredRequest):
+    """`PostFilteredRequest` plus the measure a number filter's editor bounds.
+
+    The body is the filtered request's so the editor sends the scope it
+    already has; the Post filter and keyword in it are set aside.
+    """
+
+    measure: ViewMeasure
+
+
+class PostValueHistogramResponse(BaseModel):
+    """32 bars and their 33 edges, binned by the Channels tab's rule.
+
+    Empty `bins` and `edges` when nothing in the scope has a value.
+    """
+
+    bins: list[int]
+    edges: list[float]
+    log: bool
+    median: float | None
+    # Posts with a value, and all of them.
+    measured: int
+    total: int
+
+
 class PostFeedRequest(PostFilteredRequest):
     """`PostFilteredRequest` plus the feed's paging, grouping and the selection's order.
 

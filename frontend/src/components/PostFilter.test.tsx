@@ -14,6 +14,9 @@ import {
   screen,
   within,
 } from "@testing-library/react"
+import type React from "react"
+import type { PostValueHistogramResponse } from "@/client"
+import type { ViewMeasure } from "@/lib/posts/estimated-views"
 import {
   addPostFunnel,
   emptyPostFilter,
@@ -25,6 +28,7 @@ import {
   PostFilterBar,
   type PostFilterBarProps,
 } from "./PostFilter"
+import { PostValueHistogramContext } from "./PostFilterControls"
 
 afterEach(cleanup)
 
@@ -70,6 +74,7 @@ function controls(
 function mount(
   over: Partial<FilterBarControls> = {},
   props: Partial<PostFilterBarProps> = {},
+  wrapper?: React.JSXElementConstructor<{ children: React.ReactNode }>,
 ) {
   const calls: Calls = []
   const opened: boolean[] = []
@@ -104,6 +109,7 @@ function mount(
       onCountingPillOpenChange={(open) => opened.push(open)}
       {...props}
     />,
+    { wrapper },
   )
   return { calls, opened }
 }
@@ -308,6 +314,113 @@ describe("the Filters menu", () => {
     expect(screen.getByTestId("post-filters-views").textContent).toContain(
       "not ≥ 1K",
     )
+  })
+})
+
+describe("the number filters' histograms", () => {
+  /** 0 to 3,200 in 32 bars of 100, linear, as the read would answer. */
+  const LINEAR: PostValueHistogramResponse = {
+    bins: Array.from({ length: 32 }, (_, i) => i + 1),
+    edges: Array.from({ length: 33 }, (_, i) => i * 100),
+    log: false,
+    median: 1600,
+    measured: 528,
+    total: 600,
+  }
+  const EMPTY: PostValueHistogramResponse = {
+    bins: [],
+    edges: [],
+    log: false,
+    median: null,
+    measured: 0,
+    total: 0,
+  }
+
+  function withHistogram(answer: PostValueHistogramResponse) {
+    const asked: string[] = []
+    const read = (measure: ViewMeasure) => {
+      asked.push(measure)
+      return answer
+    }
+    return {
+      asked,
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <PostValueHistogramContext.Provider value={read}>
+          {children}
+        </PostValueHistogramContext.Provider>
+      ),
+    }
+  }
+
+  const bar = (i: number) => screen.getByTestId(`metric-bar-${i}`)
+  const drag = (from: number, to: number) => {
+    fireEvent.pointerDown(bar(from))
+    for (let i = from; i !== to; i += Math.sign(to - from)) {
+      fireEvent.pointerEnter(bar(i + Math.sign(to - from)))
+    }
+    fireEvent.pointerUp(bar(to))
+  }
+
+  test("a drag from the first bar fills an at most bound on Views", () => {
+    const { asked, wrapper } = withHistogram(LINEAR)
+    const { calls } = mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-views"))
+    expect(asked).toContain("views")
+    expect(
+      screen.getByTestId("metric-histogram-caption").textContent,
+    ).toContain("median 1.6K")
+    drag(0, 3)
+    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    expect(calls).toEqual([["filter", "views <= 400"]])
+  })
+
+  test("Estimated views reads its own measure, and typing redraws the solid bars", () => {
+    const { asked, wrapper } = withHistogram(LINEAR)
+    mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-estimated"))
+    expect(asked).toContain("estimated")
+    fireEvent.change(screen.getByLabelText("Value"), {
+      target: { value: "2000" },
+    })
+    expect(bar(19).getAttribute("data-solid")).toBe("false")
+    expect(bar(20).getAttribute("data-solid")).toBe("true")
+    expect(bar(31).getAttribute("data-solid")).toBe("true")
+  })
+
+  test("a window with nothing measured says so instead of drawing bars", () => {
+    const { wrapper } = withHistogram(EMPTY)
+    mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-views"))
+    expect(screen.queryByTestId("metric-bar-0")).toBeNull()
+    expect(screen.getByText(/Nothing in this window has a value/)).toBeTruthy()
+  })
+
+  test("the filter row's condition picker opens on the same histogram", () => {
+    const { wrapper } = withHistogram(LINEAR)
+    mount(
+      {
+        postFilter: {
+          ...emptyPostFilter(),
+          children: [
+            {
+              kind: "atom",
+              id: "v",
+              not: false,
+              cond: { type: "views", measure: "views", min: 1000 },
+            },
+          ],
+        },
+      },
+      {},
+      wrapper,
+    )
+    const chip = screen.getByTestId("post-filter-chip-views-views")
+    fireEvent.click(within(chip).getByText(/Views/))
+    expect(bar(10).getAttribute("data-solid")).toBe("true")
+    expect(bar(9).getAttribute("data-solid")).toBe("false")
   })
 })
 

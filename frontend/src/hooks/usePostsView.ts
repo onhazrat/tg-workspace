@@ -12,10 +12,13 @@ import { type PostFeedQuery, postScopeBody, shownPostsBody } from "@/api/data"
 import {
   dataPostsCounts,
   dataPostsFacets,
+  dataPostsValueHistogram,
   dataPostsViewEstimate,
   type PostFacetsRequest,
   type PostFacetsResponse,
   type PostFilteredRequest,
+  type PostValueHistogramRequest,
+  type PostValueHistogramResponse,
   type ViewEstimateResponse,
 } from "@/client"
 import { useData } from "@/contexts/DataContext"
@@ -28,6 +31,7 @@ import {
   type ChannelSpotlight,
   spotlightView,
 } from "@/lib/posts/channel-spotlight"
+import type { ViewMeasure } from "@/lib/posts/estimated-views"
 import { printPostFilter } from "@/lib/posts/post-filter"
 import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
 import type { Post } from "@/types"
@@ -268,6 +272,38 @@ export function usePostFacets(
     placeholderData: (previous) => previous,
   })
   return query.data
+}
+
+/**
+ * One measure's bars over the window and the selected Channels, or the
+ * spotlit one, for a number filter's editor (PTI-01). Filters aside, so it is
+ * keyed on the Channels, the window and the measure alone, and the bars hold
+ * still while the Account changes another Condition.
+ */
+export function usePostValueHistogram(
+  measure: ViewMeasure,
+  spotlight: ChannelSpotlight | null,
+): PostValueHistogramResponse | undefined {
+  const { startDate, endDate, windowKey } = useScope()
+  const selected = useSelectedChannelNames()
+  const channelNames = spotlight ? [spotlight.channel] : selected
+  return useQuery({
+    queryKey: queryKeys.postsValueHistogram({
+      channelNames,
+      window: windowKey,
+      measure,
+    }),
+    queryFn: () =>
+      dataPostsValueHistogram({
+        body: {
+          ...postScopeBody({ channelNames, startDate, endDate }),
+          measure,
+        } as PostValueHistogramRequest,
+      }),
+    enabled: channelNames.length > 0,
+    staleTime: SUMMARIZER_STALE_TIME,
+    placeholderData: (previous) => previous,
+  }).data
 }
 
 /**

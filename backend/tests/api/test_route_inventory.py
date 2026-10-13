@@ -153,11 +153,14 @@ def test_the_split_did_not_change_the_route_count() -> None:
     `GET /directory/{handle}/neighbours`, who cites a Channel most and whom
     it cites most; and **93** with SUMTAB-09's `POST
     /summaries/{id}/publication/plan` and `POST /summaries/{id}/publication`,
-    a Summary's Publication planned for the publish panel and then sent.
+    a Summary's Publication planned for the publish panel and then sent; and
+    **94** with PTI-01's `POST /posts/value-histogram`, the bars a Posts
+    number filter's editor draws, a sibling of `posts/counts` rather than
+    more of its answer because it sets the Post filter aside.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 93, (
-        f"expected 93 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 94, (
+        f"expected 94 /data endpoints, found {len(data_routes)}"
     )

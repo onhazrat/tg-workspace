@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 import time
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -22,6 +24,7 @@ from sqlalchemy import (
     update,
     values,
 )
+from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
@@ -1107,3 +1110,95 @@ def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str,
     session.commit()
     touch_sync(session, "posts")
     return {"upserted": count}
+
+
+# ---- A measure's spread (PTI-01) ------------------------------------------------
+
+#: The Channels tab's bar count (`ChannelMetricEditor`), so one component draws both.
+VALUE_BINS = 32
+
+
+def _same(v: float) -> float:
+    return v
+
+
+@dataclass(frozen=True)
+class ValueHistogram:
+    """`bins[i]` holds the values from `edges[i]` up to `edges[i + 1]`."""
+
+    bins: list[int]
+    edges: list[float]
+    log: bool
+    median: float | None
+    measured: int
+    total: int
+
+
+def value_histogram(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    channel_names: list[str] | None,
+    start_date: int | None,
+    end_date: int | None,
+    reading: ViewReading,
+) -> ValueHistogram:
+    """One measure across the Posts in the window, the Post filter aside.
+
+    The Channels tab's rule, so the Posts editors draw what its editors draw:
+    32 bars from the lowest value to the highest, and past two orders of
+    magnitude the axis is logarithmic, or nearly every Post would land in the
+    first bar. A range starting at 0 is drawn on log(1 + x), since log 0 has
+    no place. A Post with no value (none recorded, or too new to estimate) is
+    in `total` and not in `measured`.
+    """
+    value = reading.of(Post).label("x")
+    inner = _in_scope(
+        session,
+        select(value).select_from(Post),
+        user_id=user_id,
+        channel_names=channel_names,
+        start_date=start_date,
+        end_date=end_date,
+        filters=None,
+    ).subquery()
+    x = inner.c.x
+    lo, hi, measured, total, median = session.execute(
+        sa_select(
+            func.min(x),
+            func.max(x),
+            func.count(x),
+            func.count(),
+            func.percentile_cont(0.5).within_group(x),
+        ).select_from(inner)
+    ).one()
+    if not measured:
+        return ValueHistogram([], [], False, None, 0, int(total))
+    lo, hi = float(lo), float(hi)
+    log = lo >= 0 and hi / (lo if lo > 0 else 1) > 100
+    scale: tuple[Callable[[float], float], Callable[[float], float], Any]
+    if not log:
+        scale = (_same, _same, x)
+    elif lo > 0:
+        scale = (math.log, math.exp, func.ln(x))
+    else:
+        scale = (math.log1p, math.expm1, func.ln(1 + x))
+    f, inv, axis = scale
+    span = f(hi) - f(lo)
+    # `greatest` because Postgres' ln and Python's can part by one ulp at lo.
+    index = (
+        literal(0)
+        if span == 0
+        else func.least(
+            VALUE_BINS - 1,
+            func.greatest(0, func.floor((axis - f(lo)) / span * VALUE_BINS)),
+        )
+    )
+    bins = [0] * VALUE_BINS
+    for i, n in session.exec(
+        select(index, func.count()).where(x.is_not(None)).group_by(index)
+    ).all():
+        bins[int(i)] += n
+    edges = [inv(f(lo) + span * i / VALUE_BINS) for i in range(VALUE_BINS + 1)]
+    edges[0], edges[-1] = lo, hi
+    return ValueHistogram(bins, edges, log, float(median), int(measured), int(total))

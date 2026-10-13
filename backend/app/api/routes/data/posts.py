@@ -20,16 +20,20 @@ from app.schemas.posts import (
     PostFeedRequest,
     PostFilteredRequest,
     PostLookupRequest,
+    PostValueHistogramRequest,
+    PostValueHistogramResponse,
     SelectablePostResponse,
     ViewCurveResponse,
     ViewEstimateResponse,
 )
 from app.services.analysis_window import resolve_analysis_window
+from app.services.post_filters import ViewReading
 from app.services.post_selection import PostScope
 from app.services.posts import (
     bulk_upsert_posts,
     count_facets_in_scope,
     count_shown_and_selected,
+    value_histogram,
 )
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -125,6 +129,38 @@ def posts_counts(
         selectedShown=counted["selected_shown"],
         tooNewToJudge=counted["too_new"],
     )
+
+
+# PTI-01. A read expressed as a POST for the reason `posts_counts` is one, and
+# on `VIEW_AS_READ_ONLY_PATHS` beside it.
+@router.post("/posts/value-histogram")
+def posts_value_histogram(
+    body: PostValueHistogramRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostValueHistogramResponse:
+    """One measure's bars over the window and the Channels, the filters aside.
+
+    What a number filter's editor draws: 32 bars from the lowest value to the
+    highest, logarithmic when the highest is over 100 times the lowest. The
+    Post filter and the keyword in the body are not applied, so the bars hold
+    still while the Account changes another Condition.
+    """
+    window = resolve_analysis_window(body.window)
+    reading = (
+        ViewReading("views")
+        if body.measure == "views"
+        else ViewReading("estimated", *current_estimate(session))
+    )
+    histogram = value_histogram(
+        session,
+        user_id=current_user.id,
+        channel_names=body.cleaned_channel_names(),
+        start_date=window.start,
+        end_date=window.end,
+        reading=reading,
+    )
+    return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
 
 
 # PFB-03. A GET: it reads the curve and two settings, nothing per account.
