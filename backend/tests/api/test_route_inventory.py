@@ -158,11 +158,13 @@ def test_the_split_did_not_change_the_route_count() -> None:
     number filter's editor draws, a sibling of `posts/counts` rather than
     more of its answer because it sets the Post filter aside; and **95** with
     PTI-03's `POST /posts/window-histogram`, the Posts across the time the
-    Analysis window editor's chart draws.
+    Analysis window editor's chart draws; and **101** with DFP-04's six Tag
+    routes under `/tags`, the Account's Tags as a whole for the Directory,
+    which tags handles rather than Channel ids.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 95, (
-        f"expected 95 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 101, (
+        f"expected 101 /data endpoints, found {len(data_routes)}"
     )

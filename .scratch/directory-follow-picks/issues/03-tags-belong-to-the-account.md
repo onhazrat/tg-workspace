@@ -9,15 +9,15 @@ decisions; read ADR-029 first.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A per-Account Tag table keyed by the Account, the Channel's normalized handle and the lowercased Tag name, keeping the name as first written, its source (manual or AI) and when it was assigned
-- [ ] One service is the table's sole writer, declared in the service-kind inventory; the Follow's writer no longer writes Tags
-- [ ] A migration moves every Follow's Tags, merging case-duplicates and keeping source and time; its test runs the migration's own statement
-- [ ] The Follow's tags column is dropped, and the superseded-columns guard covers it
-- [ ] Unfollowing leaves the Tag rows; refollowing shows them on the Channels tab
-- [ ] The Channels list, the bulk Tag route, Tag runs and the Channel filter keep their wire shapes and behaviour; Tag runs still tag only followed Channels in their Scope
-- [ ] The tenancy seam classifies the table as user-owned; the account-isolation probes, the export inventory (a Tags section, unfollowed Channels' Tags included) and the import write-scoping inventory list it; an import restores Tags on unfollowed Channels
-- [ ] `group:` names stay reserved and derived, never stored
-- [ ] No limit on Tags per Account or Channels per Tag; names keep today's rules (trimmed, case-insensitive, no length cap)
-- [ ] The `tg_*` cleanup inventory covers the table
+- [x] A per-Account Tag table keyed by the Account, the Channel's normalized handle and the lowercased Tag name, keeping the name as first written, its source (manual or AI) and when it was assigned
+- [x] One service is the table's sole writer, declared in the service-kind inventory; the Follow's writer no longer writes Tags
+- [x] A migration moves every Follow's Tags, merging case-duplicates and keeping source and time; its test runs the migration's own statement
+- [x] The Follow's tags column is dropped, and the superseded-columns guard covers it
+- [x] Unfollowing leaves the Tag rows; refollowing shows them on the Channels tab
+- [x] The Channels list, the bulk Tag route, Tag runs and the Channel filter keep their wire shapes and behaviour; Tag runs still tag only followed Channels in their Scope
+- [x] The tenancy seam classifies the table as user-owned; the account-isolation probes, the export inventory (a Tags section, unfollowed Channels' Tags included) and the import write-scoping inventory list it; an import restores Tags on unfollowed Channels
+- [x] `group:` names stay reserved and derived, never stored
+- [x] No limit on Tags per Account or Channels per Tag; names keep today's rules (trimmed, case-insensitive, no length cap)
+- [x] The `tg_*` cleanup inventory covers the table

@@ -1,10 +1,19 @@
-import { ArrowDown, ArrowUp, Check, EyeOff, Plus, Undo2 } from "lucide-react"
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  EyeOff,
+  Plus,
+  Tag,
+  Undo2,
+} from "lucide-react"
 import type React from "react"
 import type { DirectoryRowResponse } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { type MeasureKey, measureOf } from "@/lib/directory/directory-filter"
+import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
 import { formatCount } from "@/lib/format-count"
 import {
@@ -13,11 +22,47 @@ import {
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
+import { DIRECTORY_SHORTCUTS } from "./DirectoryKeyboard"
 import { DirectoryMatchRow } from "./DirectoryMatches"
+import { TagBadges, TagPicker } from "./DirectoryTags"
 
 export const PAGE_SIZE = 100
 
 type Row = DirectoryRowResponse
+
+/** The Account's Tags and how one Channel's change (DFP-04). */
+/** A row's Tag picker; `t` presses it in keyboard mode. */
+export function RowTagButton({
+  row,
+  tagging,
+}: {
+  row: Pick<Row, "handle" | "tags">
+  tagging: Tagging
+}) {
+  return (
+    <span onClick={(e) => e.stopPropagation()}>
+      <TagPicker
+        tags={tagging.tags}
+        current={row.tags}
+        align="end"
+        onPick={(name) => tagging.onTag(name, [row.handle])}
+        onUnpick={(name) => tagging.onUntag(name, [row.handle])}
+        trigger={
+          <TgButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Tag @${row.handle}`}
+            data-shortcut={DIRECTORY_SHORTCUTS.tag}
+            className="h-7 rounded-full px-2 text-app-ink/50"
+          >
+            <Tag size={11} />
+          </TgButton>
+        }
+      />
+    </span>
+  )
+}
 
 type SharedKey = "shared_parents" | "shared_children"
 
@@ -68,13 +113,13 @@ const SHARED_COLUMNS: DirectoryColumn[] = [
     key: "shared_parents",
     label: "Parents",
     description:
-      "Shared parents: how many channels citing your picks also cite it. Sorts by that count weighed against how many cite it overall.",
+      "Shared parents: how many channels citing your Seeds also cite it. Sorts by that count weighed against how many cite it overall.",
   },
   {
     key: "shared_children",
     label: "Children",
     description:
-      "Shared children: how many channels your picks cite it cites too. Sorts by that count weighed against how many it cites overall.",
+      "Shared children: how many channels your Seeds cite it cites too. Sorts by that count weighed against how many it cites overall.",
   },
 ]
 
@@ -144,15 +189,13 @@ function HeaderTick({
   ticks: ReadonlySet<string>
   onTicks: (next: Set<string>) => void
 }) {
-  const selectable = rows.map((r) => ({
-    name: r.handle,
-    isFollowed: r.followed,
-  }))
+  // Every row ticks, followed or not, so a follow can be a Seed (DFP-01).
+  const selectable = rows.map((r) => ({ name: r.handle, isFollowed: false }))
   const state = headerCheckboxState(selectable, ticks)
   return (
     <input
       type="checkbox"
-      aria-label="Tick every unfollowed channel on this page"
+      aria-label="Tick every channel on this page"
       checked={state === "checked"}
       ref={(el) => {
         if (el) el.indeterminate = state === "indeterminate"
@@ -186,6 +229,7 @@ function FollowButton({
       variant="secondary"
       size="sm"
       aria-label={`Follow @${row.handle}`}
+      data-shortcut={DIRECTORY_SHORTCUTS.follow}
       loading={busy}
       onClick={(e) => {
         e.stopPropagation()
@@ -225,6 +269,7 @@ export function FollowCell({
         variant="ghost"
         size="sm"
         aria-label={`${verb} @${row.handle}`}
+        data-shortcut={DIRECTORY_SHORTCUTS.dismiss}
         title={
           row.dismissed
             ? "Take the Dismissal back, here and in Discover"
@@ -267,10 +312,12 @@ function ChannelCell({ row }: { row: Row }) {
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           data-testid={`directory-channel-link-${row.handle}`}
+          data-shortcut={DIRECTORY_SHORTCUTS.open}
           className="block truncate font-mono text-[10px] text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.handle}
         </a>
+        <TagBadges tags={row.tags} />
       </div>
     </div>
   )
@@ -377,6 +424,9 @@ export function DirectoryTable({
   onSort,
   onPage,
   onOpen,
+  ring,
+  cards = false,
+  tagging,
 }: {
   rows: Row[]
   total: number
@@ -395,6 +445,12 @@ export function DirectoryTable({
   onPage: (page: number) => void
   /** A click anywhere on the row but its links and controls opens the panel. */
   onOpen: (handle: string) => void
+  /** The keyboard highlight's handle (DFP-01). */
+  ring?: string | null
+  /** Below `md`, two-line cards instead of the table (DFP-02). */
+  cards?: boolean
+  /** Each row's Tag picker (DFP-04); none while the Tags have not loaded. */
+  tagging?: Tagging
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
@@ -409,6 +465,27 @@ export function DirectoryTable({
     ? sortedColumn
     : "subscribers"
   const narrow = (key: string) => (key === kept ? "" : "hidden md:table-cell")
+  const pages = total > 0 && <Pages page={page} total={total} onPage={onPage} />
+  if (cards) {
+    return (
+      <div className="rounded-xl border border-app-ink/10 bg-app-card">
+        <DirectoryCards
+          rows={rows}
+          columns={CARD_MEASURES.flatMap((key) =>
+            columns.filter((c) => c.key === (key ?? kept)),
+          ).filter((c, i, all) => all.indexOf(c) === i)}
+          ticks={ticks}
+          onTicks={onTicks}
+          following={following}
+          onFollow={onFollow}
+          onDismiss={onDismiss}
+          onOpen={onOpen}
+          tagging={tagging}
+        />
+        {pages}
+      </div>
+    )
+  }
   return (
     <div className="overflow-x-auto rounded-xl border border-app-ink/10 bg-app-card">
       <table className="w-full text-xs">
@@ -436,23 +513,19 @@ export function DirectoryTable({
             <tr
               key={r.handle}
               data-testid={`directory-row-${r.handle}`}
+              data-directory-handle={r.handle}
+              data-kbd-selected={ring === r.handle || undefined}
               onClick={() => onOpen(r.handle)}
-              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""}`}
+              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
             >
               <td className="pl-3" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
-                  aria-label={
-                    r.followed
-                      ? `@${r.handle} already followed`
-                      : `Tick @${r.handle}`
-                  }
-                  checked={r.followed || ticks.has(r.handle)}
-                  disabled={r.followed}
+                  aria-label={`Tick @${r.handle}`}
+                  data-shortcut={DIRECTORY_SHORTCUTS.tick}
+                  checked={ticks.has(r.handle)}
                   onChange={() =>
-                    onTicks(
-                      toggleUnfollowedSelection(r.handle, r.followed, ticks),
-                    )
+                    onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
                   }
                   className="accent-blue-600"
                 />
@@ -469,6 +542,7 @@ export function DirectoryTable({
                 </td>
               ))}
               <td className="whitespace-nowrap px-2 text-right">
+                {tagging && <RowTagButton row={r} tagging={tagging} />}
                 <FollowCell
                   row={r}
                   busy={following.has(r.handle)}
@@ -489,7 +563,99 @@ export function DirectoryTable({
           ])}
         </tbody>
       </table>
-      {total > 0 && <Pages page={page} total={total} onPage={onPage} />}
+      {pages}
     </div>
+  )
+}
+
+/**
+ * What a card shows, in order: the sorted measure (`null`), then Subscribers,
+ * Reach, Posts per week and Language, and the Shared counts while a Shared
+ * Condition is on. A hidden column stays hidden here too.
+ */
+const CARD_MEASURES: (DirectoryColumn["key"] | null)[] = [
+  null,
+  "subscribers",
+  "reach",
+  "posts_per_week",
+  "language",
+  "shared_parents",
+  "shared_children",
+]
+
+/**
+ * The rows as two-line cards with a large tick (DFP-02). A tap anywhere but
+ * the tick, the links and the actions opens the panel, as a table row does.
+ */
+function DirectoryCards({
+  rows,
+  columns,
+  ticks,
+  onTicks,
+  following,
+  onFollow,
+  onDismiss,
+  onOpen,
+  tagging,
+}: {
+  rows: Row[]
+  columns: DirectoryColumn[]
+  ticks: ReadonlySet<string>
+  onTicks: (next: Set<string>) => void
+  following: ReadonlySet<string>
+  onFollow: (handle: string) => void
+  onDismiss: (handle: string, dismissed: boolean) => void
+  onOpen: (handle: string) => void
+  tagging?: Tagging
+}) {
+  return (
+    <ul className="divide-y divide-app-ink/5">
+      {rows.map((r) => (
+        <li
+          key={r.handle}
+          data-testid={`directory-card-${r.handle}`}
+          onClick={() => onOpen(r.handle)}
+          className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${ticks.has(r.handle) ? "bg-blue-500/5" : ""} ${r.dismissed ? "opacity-50" : ""}`}
+        >
+          <label
+            className="-my-1 flex h-9 w-9 shrink-0 items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              aria-label={`Tick @${r.handle}`}
+              checked={ticks.has(r.handle)}
+              onChange={() =>
+                onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
+              }
+              className="h-5 w-5 accent-blue-600"
+            />
+          </label>
+          <div className="min-w-0 flex-1 text-xs">
+            <ChannelCell row={r} />
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-app-ink/60">
+              {columns.map((c) => {
+                const value = cell(c.key, r)
+                return value ? (
+                  <span key={c.key} data-measure className="whitespace-nowrap">
+                    <span className="text-app-ink/40">{c.label}</span>{" "}
+                    <span className="font-mono">{value}</span>
+                  </span>
+                ) : null
+              })}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center">
+            {tagging && <RowTagButton row={r} tagging={tagging} />}
+            <FollowCell
+              row={r}
+              busy={following.has(r.handle)}
+              onFollow={onFollow}
+              onDismiss={onDismiss}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
   )
 }

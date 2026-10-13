@@ -38,6 +38,7 @@ from app.main import app
 from app.models import User
 from app.models_tg import Channel, ChannelSettingGroup
 from app.services.follows import FOLLOW_OWNED_FIELDS, sync_follow_settings
+from app.services.tags import replace_channel_tags
 
 # Re-exported so tests can request it by name. Ticket 21's guards need the
 # pre-NOT-NULL schema, and the fixture has to depend on `db` to release the
@@ -45,6 +46,7 @@ from app.services.follows import FOLLOW_OWNED_FIELDS, sync_follow_settings
 from tests.utils.legacy_owner_schema import (  # noqa: F401
     legacy_channel_group_column,
     legacy_channel_per_user_columns,
+    legacy_follow_tags_column,
     legacy_owner_schema,
 )
 
@@ -196,6 +198,11 @@ def tg_test_channel() -> Generator:
             sync_follow_settings(
                 session, channel, user_id=user_id, values=follow_values
             )
+            # Tags are the Account's, not the Follow's (ADR-029).
+            if "tags" in kwargs:
+                replace_channel_tags(
+                    session, user_id=user_id, handle=ch_name, tags=kwargs["tags"]
+                )
             session.commit()
         created.append(channel_id)
         if ch_name != channel_id:

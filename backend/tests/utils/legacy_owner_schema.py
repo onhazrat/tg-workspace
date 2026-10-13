@@ -222,3 +222,22 @@ def legacy_channel_per_user_columns(db: Session | None) -> Iterator[None]:
             for name, _sql_type in _CHANNEL_PER_USER_COLUMN_TYPES:
                 ddl.execute(sa.text(f"ALTER TABLE tg_channels DROP COLUMN {name}"))
             ddl.commit()
+
+
+@pytest.fixture
+def legacy_follow_tags_column(db: Session | None) -> Iterator[None]:
+    """Put `tg_channel_follows.tags` back, for one test.
+
+    DFP-03's `db2bb3daf99f` moved every Follow's Tags into `tg_tags` and
+    dropped the column. Its guard runs the move against rows seeded in the
+    column, and ticket 22's `rescue_null_follow_fields` still writes it.
+    **Request it first in the parameter list**, for the reason
+    `legacy_owner_schema` states.
+    """
+    if db is not None:
+        db.commit()
+    _ddl(["ALTER TABLE tg_channel_follows ADD COLUMN tags JSON"])
+    try:
+        yield
+    finally:
+        _ddl(["ALTER TABLE tg_channel_follows DROP COLUMN tags"])

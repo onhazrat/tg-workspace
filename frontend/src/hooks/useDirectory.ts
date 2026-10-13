@@ -5,7 +5,7 @@
  * one is remembered per Account through the scoped storage: a tab opened with
  * no `dir*` parameter adopts it. The ticks and the hidden columns are per
  * browser and Account and never in the URL; "Channels ticked here" and
- * DIR-07's picks read the ticks from here.
+ * DIR-07's Seeds read the ticks from here.
  */
 import {
   keepPreviousData,
@@ -25,9 +25,9 @@ import {
   type DirectoryFilter,
   directoryFilterBody,
   OPENING_FILTER,
-  type PickSets,
   parseDirectoryFilter,
   printDirectoryFilter,
+  type SeedSets,
   withinDirectoryFilterBounds,
 } from "@/lib/directory/directory-filter"
 import {
@@ -44,7 +44,6 @@ import {
   selectedFirstRequest,
   viewFromParams,
 } from "@/lib/directory/directory-view"
-import { pruneSelectionAfterFollow } from "@/lib/posts/discover-selection"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { queryKeys } from "./queryKeys"
 import { useDirectorySearchBox } from "./useDirectorySearchBox"
@@ -175,9 +174,9 @@ export function useDirectory() {
   const ticks = useMemo(() => new Set(ticked), [ticked])
   // What Shared parents / children compare with, re-resolved on every read,
   // so the live ticked choice follows the ticks (DIR-07).
-  const sets: PickSets = useMemo(
+  const sets: SeedSets = useMemo(
     () => ({
-      picked: [...ticked].sort(),
+      ticked: [...ticked].sort(),
       selection,
       follows: channels.map((c) => c.name).sort(),
     }),
@@ -185,7 +184,7 @@ export function useDirectory() {
   )
   const yours = resolveYours(view.yours, {
     selection,
-    ticked: sets.picked,
+    ticked: sets.ticked,
   })
   const search = searchRequest(view)
   const request: DirectoryViewRequest = {
@@ -201,7 +200,7 @@ export function useDirectory() {
     page: view.page,
     // Only while searching, so the switch leaves an unsearched read's key alone.
     ...(search && { showMatches: view.matches }),
-    ...selectedFirstRequest(directorySelectedFirst, yours, sets.picked),
+    ...selectedFirstRequest(directorySelectedFirst, yours, sets.ticked),
   }
   const list = useQuery({
     queryKey: queryKeys.directoryRead("list", body),
@@ -224,11 +223,11 @@ export function useDirectory() {
   const follow = async (handles: string[]) => {
     setFollowing((prev) => new Set([...prev, ...handles]))
     try {
-      const status = await followDiscoverChannels(
+      // The Ticks stay: a Channel just followed is still a Seed (DFP-01).
+      await followDiscoverChannels(
         handles.map((name) => ({ name })),
         { directory: { yours, referenceKinds: view.kinds } },
       )
-      if (status) setTicked(pruneSelectionAfterFollow(ticks, status.results))
       await queryClient.invalidateQueries({ queryKey: queryKeys.directory })
     } finally {
       setFollowing(

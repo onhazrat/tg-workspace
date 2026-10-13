@@ -17,6 +17,7 @@ from app.services.follows import (
     get_operator_user_id,
     sync_follow_settings,
 )
+from app.services.tags import replace_channel_tags
 from tests.utils.tenancy import ANY_READER
 
 
@@ -106,6 +107,9 @@ def upsert_sync_test_channel(
     # would seed a channel with no resolvable group — which every scheduler test
     # reads as "skip this channel", passing for the wrong reason.
     supplied = dict(channel_fields or {})
+    # Tags are the Account's, not the Follow's (ADR-029), and an unknown
+    # keyword on `Channel` would be dropped silently.
+    tags = supplied.pop("tags", None)
     follow_values: dict[str, Any] = {
         key: supplied.pop(key) for key in list(supplied) if key in FOLLOW_OWNED_FIELDS
     }
@@ -131,6 +135,8 @@ def upsert_sync_test_channel(
     # to touch it.
     session.flush()
     sync_follow_settings(session, channel, user_id=user_id, values=follow_values)
+    if tags is not None:
+        replace_channel_tags(session, user_id=user_id, handle=channel.name, tags=tags)
     session.commit()
     session.refresh(channel)
     return channel

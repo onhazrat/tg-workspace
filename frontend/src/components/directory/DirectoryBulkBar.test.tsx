@@ -9,19 +9,27 @@ import { DirectoryBulkBar } from "./DirectoryBulkBar"
 
 afterEach(cleanup)
 
-function mount(handles: string[], busy = false) {
+function mount(handles: string[], busy = false, followed: string[] = []) {
   const calls = {
     follow: [] as string[][],
     dismiss: [] as string[][],
     clear: 0,
+    tag: [] as [string, string[]][],
+    untag: [] as [string, string[]][],
   }
   render(
     <DirectoryBulkBar
       ticks={new Set(handles)}
       busy={busy}
+      followed={new Set(followed)}
       onFollow={(h) => calls.follow.push(h)}
       onDismiss={(h) => calls.dismiss.push(h)}
       onClear={() => calls.clear++}
+      tagging={{
+        tags: [{ name: "News", channels: 2 }],
+        onTag: (n, h) => calls.tag.push([n, h]),
+        onUntag: (n, h) => calls.untag.push([n, h]),
+      }}
     />,
   )
   return calls
@@ -69,5 +77,66 @@ describe("the bulk bar", () => {
       (screen.getByRole("button", { name: "Clear" }) as HTMLButtonElement)
         .disabled,
     ).toBe(true)
+  })
+
+  test("Follow and Dismiss act on the unfollowed ticks only, and say of how many", () => {
+    // `followed` is lowercase; a tick keeps the handle's own case.
+    const calls = mount(["a", "News", "c"], false, ["news"])
+    expect(screen.getByText("3 ticked")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Follow 2 of 3" }))
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss 2 of 3" }))
+    expect(calls.follow).toEqual([["a", "c"]])
+    expect(calls.dismiss).toEqual([["a", "c"]])
+  })
+
+  test("asks first only when five or more would be followed", () => {
+    const calls = mount(["a", "b", "c", "d", "e"], false, ["e"])
+    fireEvent.click(screen.getByRole("button", { name: "Follow 4 of 5" }))
+    expect(calls.follow).toEqual([["a", "b", "c", "d"]])
+  })
+
+  test("with only follows ticked, says so and offers neither Follow nor Dismiss", () => {
+    mount(["a", "b"], false, ["a", "b"])
+    expect(screen.getByText("All followed")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /^Follow/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: /^Dismiss/ })).toBeNull()
+    expect(screen.getByRole("button", { name: "Clear" })).toBeTruthy()
+  })
+})
+
+describe("tagging the Ticks (DFP-04)", () => {
+  test("Tag and Untag act on every Tick, followed or not", () => {
+    const calls = mount(["a", "b"], false, ["a"])
+    expect(screen.getByTestId("directory-bulk-tag").textContent).toContain(
+      "Tag 2",
+    )
+    fireEvent.click(screen.getByTestId("directory-bulk-tag"))
+    fireEvent.change(screen.getByTestId("directory-tag-search"), {
+      target: { value: "fresh" },
+    })
+    fireEvent.click(screen.getByText('Create the Tag "fresh"'))
+    expect(calls.tag).toEqual([["fresh", ["a", "b"]]])
+    fireEvent.click(screen.getByTestId("directory-bulk-untag"))
+    fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
+    expect(calls.untag).toEqual([["News", ["a", "b"]]])
+  })
+
+  test("Untag never offers a group: Tag, and is absent with only those", () => {
+    render(
+      <DirectoryBulkBar
+        ticks={new Set(["a"])}
+        busy={false}
+        followed={new Set()}
+        onFollow={() => {}}
+        onDismiss={() => {}}
+        onClear={() => {}}
+        tagging={{
+          tags: [{ name: "group:Fast", channels: 2 }],
+          onTag: () => {},
+          onUntag: () => {},
+        }}
+      />,
+    )
+    expect(screen.queryByTestId("directory-bulk-untag")).toBeNull()
   })
 })

@@ -74,6 +74,10 @@ INVENTORY: dict[str, str] = {
     "channel_directory_samples.py": AGGREGATE,
     "discover_reports.py": AGGREGATE,
     "follows.py": AGGREGATE,
+    # Owns `tg_tags` (DFP-03, ADR-029) and is its only writer
+    # (`test_tag_aggregate.py`). Not more of `follows.py`: a Tag outlives the
+    # Follow, so the Follow's writer must not be the one that removes it.
+    "tags.py": AGGREGATE,
     "logs.py": AGGREGATE,
     "post_sync_state.py": AGGREGATE,
     "posts.py": AGGREGATE,

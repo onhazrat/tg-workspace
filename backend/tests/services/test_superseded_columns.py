@@ -8,7 +8,9 @@ them existed, so the read paths could migrate one batch at a time:
   `SyncLogPayload`, all `FOLLOW_SCOPED` in `tenancy.SCOPES`, plus
   `AppSetting`, which ticket 06 made deployment-wide; and
 * the **per-User columns on `Channel`** that ticket 04 moved to
-  `ChannelFollow`.
+  `ChannelFollow`; and
+* the **Follow's `tags`**, which DFP-03 moved to `tg_tags` (ADR-029), so a
+  Tag outlives the Follow.
 
 Dropping them is the easy half. The half that decays is the *reaching*: a new
 feature writes `Channel.user_id` because every other model has one, or falls
@@ -50,7 +52,7 @@ import pytest
 from sqlmodel import SQLModel
 
 from app.alembic.versions import f7f6948f2c5d_drop_superseded_columns_ticket_22 as mig
-from app.models_tg import AppSetting, Channel
+from app.models_tg import AppSetting, Channel, ChannelFollow, Tag
 from app.services.tenancy import SCOPES, Scope
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -63,11 +65,15 @@ SCRIPTS_DIR = BACKEND_DIR / "scripts"
 MIGRATED_TO_FOLLOW = (
     "setting_group_id",
     "followed_at",
-    "tags",
     "start_id",
     "start_time",
     "discovered_via",
 )
+
+#: Fields that left the Follow as well, and the model they live on now. `tags`
+#: came off `Channel` with the rest in ticket 04, then off the Follow in DFP-03
+#: (ADR-029): a Tag belongs to the Account, so unfollowing keeps it.
+MOVED_OFF_THE_FOLLOW = {"tags": Tag}
 
 #: `AppSetting` is not follow-scoped — it is `OUT_OF_SCOPE` in `SCOPES`, because
 #: ticket 06 made it deployment-wide with `key` as its whole primary key. Its
@@ -139,6 +145,18 @@ def test_per_user_fields_live_only_on_the_follow(field: str) -> None:
     )
 
 
+@pytest.mark.parametrize("field", sorted(MOVED_OFF_THE_FOLLOW))
+def test_fields_moved_off_the_follow_are_on_neither_channel_nor_follow(
+    field: str,
+) -> None:
+    """Gone from both, so the only copy is the one that outlives the Follow."""
+    assert field not in ChannelFollow.model_fields, (
+        f"`{field}` is back on ChannelFollow. It moved to "
+        f"{MOVED_OFF_THE_FOLLOW[field].__name__} so that it outlives the Follow."
+    )
+    assert field not in Channel.model_fields
+
+
 def test_no_module_reaches_for_a_dropped_column() -> None:
     """No module names a dropped attribute on one of the owner-free classes.
 
@@ -155,6 +173,7 @@ def test_no_module_reaches_for_a_dropped_column() -> None:
     """
     owner_free = {model.__name__ for model in _owner_free_models()}
     channel_only = {Channel.__name__}
+    follow_only = {ChannelFollow.__name__}
     offenders: list[str] = []
 
     for path in _python_files():
@@ -172,6 +191,8 @@ def test_no_module_reaches_for_a_dropped_column() -> None:
             if cls in owner_free and attr == "user_id":
                 offenders.append(f"{_rel(path)}: {cls}.{attr}")
             elif cls in channel_only and attr in MIGRATED_TO_FOLLOW:
+                offenders.append(f"{_rel(path)}: {cls}.{attr}")
+            elif cls in {*channel_only, *follow_only} and attr in MOVED_OFF_THE_FOLLOW:
                 offenders.append(f"{_rel(path)}: {cls}.{attr}")
 
     assert not offenders, (
@@ -199,6 +220,7 @@ def test_no_module_constructs_a_model_with_a_dropped_column() -> None:
     """
     owner_free = {model.__name__ for model in _owner_free_models()}
     channel_only = {Channel.__name__}
+    follow_only = {ChannelFollow.__name__}
     offenders: list[str] = []
 
     for path in _python_files():
@@ -217,6 +239,11 @@ def test_no_module_constructs_a_model_with_a_dropped_column() -> None:
                 if cls in owner_free and keyword.arg == "user_id":
                     offenders.append(f"{_rel(path)}: {cls}({keyword.arg}=...)")
                 elif cls in channel_only and keyword.arg in MIGRATED_TO_FOLLOW:
+                    offenders.append(f"{_rel(path)}: {cls}({keyword.arg}=...)")
+                elif (
+                    cls in {*channel_only, *follow_only}
+                    and keyword.arg in MOVED_OFF_THE_FOLLOW
+                ):
                     offenders.append(f"{_rel(path)}: {cls}({keyword.arg}=...)")
 
     assert not offenders, (

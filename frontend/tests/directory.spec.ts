@@ -17,9 +17,11 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * memory only, not in storage (DIR-03); the list read not handed its abort
  * `signal`, so a superseded search runs on; the search chip's clear doing
  * nothing (DIR-04); a Dismissal that never refreshes the list, or a row
- * whose Dismiss also opens the panel (DIR-06); the live ticked picks sent
+ * whose Dismiss also opens the panel (DIR-06); the live ticked Seeds sent
  * as they were when the Condition was added, not re-resolved per tick
- * (DIR-07); Selected first sent without the ticks.
+ * (DIR-07); Selected first sent without the ticks; a Tag sent for the
+ * unfollowed Ticks only, or an "In the Tag" chip that leaves the request
+ * without the Tag's name (DFP-04).
  */
 
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
@@ -48,6 +50,7 @@ const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
   match: null,
   sharedParents: null as number | null,
   sharedChildren: null,
+  tags: [] as string[],
 }))
 
 type ListBody = {
@@ -78,7 +81,7 @@ const MATCH = {
   },
 }
 
-async function mockDirectory(page: Page) {
+async function mockDirectory(page: Page, shown: typeof ROWS = ROWS) {
   const lists: ListBody[] = []
   await page.route("**/api/v1/data/directory/list", async (route) => {
     const body = route.request().postDataJSON() as ListBody
@@ -88,7 +91,7 @@ async function mockDirectory(page: Page) {
     if (body.search) await new Promise((r) => setTimeout(r, 1500))
     const rows = body.showMatches
       ? ROWS.map((r, i) => (i === 0 ? { ...r, match: MATCH } : r))
-      : ROWS
+      : shown
     // The page may have aborted the read while it waited.
     await route
       .fulfill({
@@ -126,6 +129,9 @@ async function mockDirectory(page: Page) {
   )
   await page.route("**/api/v1/data/directory/size", (route) =>
     route.fulfill({ json: { size: 297_345 } }),
+  )
+  await page.route("**/api/v1/data/tags", (route) =>
+    route.fulfill({ json: [] }),
   )
   return { lastList: () => lists.at(-1) as ListBody }
 }
@@ -479,16 +485,16 @@ test.describe("TG Workspace directory", () => {
       route.fulfill({ json: [] }),
     )
     // Registered after `mockDirectory`, so it answers the list instead: the
-    // picks are never results, and each row carries its shared count.
+    // Seeds are never results, and each row carries its shared count.
     const sent: (string[] | undefined)[] = []
     const bodies: ListBody[] = []
     await page.route("**/api/v1/data/directory/list", async (route) => {
-      const picks = parentsPicks(route.request().postDataJSON())
-      sent.push(picks)
+      const seeds = parentsSeeds(route.request().postDataJSON())
+      sent.push(seeds)
       bodies.push(route.request().postDataJSON())
-      const rows = ROWS.filter((r) => !picks?.includes(r.handle)).map((r) => ({
+      const rows = ROWS.filter((r) => !seeds?.includes(r.handle)).map((r) => ({
         ...r,
-        sharedParents: picks ? 2 : null,
+        sharedParents: seeds ? 2 : null,
       }))
       await route.fulfill({
         json: { rows, total: 250, languages: [], yoursSize: 3 },
@@ -512,16 +518,16 @@ test.describe("TG Workspace directory", () => {
       page.getByRole("radio", { name: /ticked in this list \(1\)/ }),
     ).toBeChecked()
     await page.getByRole("button", { name: "Add", exact: true }).click()
-    await expect(chip(page, "parents-picked")).toContainText(
+    await expect(chip(page, "parents-ticked")).toContainText(
       "2+ shared parents with the channels ticked here",
     )
-    expect(param(page, "dirFilter")).toContain("parents:picked")
+    expect(param(page, "dirFilter")).toContain("parents:ticked")
     await expect.poll(() => sent.at(-1)).toEqual(["a1"])
     await expect(
       page.getByRole("columnheader", { name: "Parents" }),
     ).toBeVisible()
 
-    // A Channel ticked while it is on is a pick now, so it leaves the list.
+    // A Channel ticked while it is on is a Seed now, so it leaves the list.
     // A click, not `check()`: `check()` waits to see the box ticked, and the
     // row it sits in may already be gone, which timed the test out on CI.
     await page.getByRole("checkbox", { name: "Tick @a2" }).click()
@@ -540,15 +546,271 @@ test.describe("TG Workspace directory", () => {
     const link = page.url()
     await clearScopedStorage(page, ["directory.ticks"])
     await page.goto(link)
-    await expect(chip(page, "parents-picked")).toBeVisible()
+    await expect(chip(page, "parents-ticked")).toBeVisible()
     await expect.poll(() => sent.at(-1)).toEqual([])
     await expect(selectedFirst).toHaveAttribute("aria-pressed", "true")
     expect(bodies.at(-1)?.selectedFirst).toBeUndefined()
   })
+
+  // DFP-01: a follow ticks as a Seed, and keyboard mode walks the rows with
+  // the panel following the highlight.
+  test("tick a follow as a Seed, and walk the rows by keyboard", async ({
+    page,
+  }) => {
+    await mockDirectory(
+      page,
+      ROWS.map((r) => (r.handle === "a1" ? { ...r, followed: true } : r)),
+    )
+    await page.route("**/api/v1/data/directory/*/entry", (route) => {
+      const handle = new URL(route.request().url()).pathname.split("/").at(-2)
+      const entry = ROWS.find((r) => r.handle === handle)
+      return route.fulfill({ json: { ...entry, bio: `The bio of ${handle}` } })
+    })
+    await page.route("**/api/v1/data/directory/*/posts", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await page.route("**/api/v1/data/directory/*/neighbours", (route) =>
+      route.fulfill({ json: { citedBy: [], cites: [] } }),
+    )
+    await page.route("**/api/v1/data/directory/why", (route) =>
+      route.fulfill({
+        json: { posts: [], total: 0, parents: null, children: null },
+      }),
+    )
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // A followed row ticks; Follow and Dismiss count only the unfollowed.
+    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    await expect(page.getByText("2 ticked")).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Follow 1 of 2" }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole("button", { name: "Dismiss 1 of 2" }),
+    ).toBeVisible()
+    // Both Ticks, the follow included, are "the channels ticked here".
+    await page.getByTestId("directory-filters").click()
+    await page.getByPlaceholder("Search conditions...").fill("shared parents")
+    await page.getByRole("button", { name: /Shared parents with/ }).click()
+    await expect(
+      page.getByRole("radio", { name: /ticked in this list \(2\)/ }),
+    ).toBeChecked()
+    await page.keyboard.press("Escape")
+    await page.getByRole("button", { name: "Clear", exact: true }).click()
+
+    // j highlights the first row, x ticks it, Enter opens its panel, and the
+    // panel follows the next j.
+    await page.getByRole("button", { name: "Keyboard", exact: true }).click()
+    await expect(page.getByText("open or close the panel")).toBeVisible()
+    await page.keyboard.press("j")
+    const a1 = page.getByTestId("directory-row-a1")
+    await expect(a1).toHaveAttribute("data-kbd-selected", "true")
+    await page.keyboard.press("x")
+    await expect(page.getByRole("checkbox", { name: "Tick @a1" })).toBeChecked()
+    await page.keyboard.press("Enter")
+    const aside = page.getByTestId("directory-panel")
+    await expect(aside.getByText("The bio of a1")).toBeVisible()
+    await page.keyboard.press("j")
+    await expect(page.getByTestId("directory-row-a2")).toHaveAttribute(
+      "data-kbd-selected",
+      "true",
+    )
+    await expect(aside.getByText("The bio of a2")).toBeVisible()
+
+    // Enter closes it again; Esc drops the highlight.
+    await page.keyboard.press("Enter")
+    await expect(aside).toHaveCount(0)
+    await page.keyboard.press("Escape")
+    await expect(page.locator("[data-kbd-selected]")).toHaveCount(0)
+  })
+
+  // DFP-02 at iPhone 12 Pro size: rows on the first screen.
+  test("tag the Ticks, see the badge, and filter by the Tag", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    const filters: unknown[] = []
+    // The Tags, kept as the server keeps them.
+    const tagged = new Map<string, string[]>()
+    const sent: { name: string; handles: string[] }[] = []
+    await page.route("**/api/v1/data/tags", (route) =>
+      route.fulfill({
+        json: [...tagged].map(([name, handles]) => ({
+          name,
+          channels: handles.length,
+        })),
+      }),
+    )
+    await page.route("**/api/v1/data/tags/channels", async (route) => {
+      const body = route.request().postDataJSON() as {
+        name: string
+        handles: string[]
+      }
+      sent.push(body)
+      tagged.set(body.name, body.handles)
+      await route.fulfill({ json: { changed: body.handles.length } })
+    })
+    // Registered after `mockDirectory`, so it answers the list instead.
+    await page.route("**/api/v1/data/directory/list", async (route) => {
+      filters.push((route.request().postDataJSON() as ListBody).filter)
+      const rows = ROWS.map((r) => ({
+        ...r,
+        followed: r.handle === "a1",
+        tags: [...tagged].flatMap(([name, handles]) =>
+          handles.includes(r.handle) ? [name] : [],
+        ),
+      }))
+      await route.fulfill({
+        json: { rows, total: 250, languages: [], yoursSize: 3 },
+      })
+    })
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // A followed Tick is tagged too: a Tag sits on any Channel.
+    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    await page.getByRole("checkbox", { name: "Tick @a2" }).check()
+    await page.getByTestId("directory-bulk-tag").click()
+    await page.getByTestId("directory-tag-search").fill("World news")
+    await page.getByText('Create the Tag "World news"').click()
+    await expect
+      .poll(() => sent)
+      .toEqual([{ name: "World news", handles: ["a1", "a2"] }])
+    await expect(
+      page.getByTestId("directory-row-a2").getByTestId("directory-tags"),
+    ).toHaveText("World news")
+
+    // "In the Tag", from the Filters picker, names the Tag in the request.
+    await page.getByTestId("directory-filters").click()
+    const picker = page.getByRole("dialog")
+    await picker.getByRole("button", { name: /^In the Tag/ }).click()
+    await picker.getByRole("button", { name: /^World news/ }).click()
+    await expect(chip(page, "tag-World news")).toBeVisible()
+    await expect
+      .poll(() =>
+        JSON.stringify(filters.at(-1) ?? null).includes(
+          '{"type":"tag","name":"World news"}',
+        ),
+      )
+      .toBe(true)
+    expect(param(page, "dirFilter")).toContain('tag:"World news"')
+
+    // DFP-05: the Tag as the Seeds of Shared parents goes by name too.
+    await page.getByTestId("directory-filters").click()
+    await page.getByPlaceholder("Search conditions...").fill("shared parents")
+    await page.getByRole("button", { name: /Shared parents with/ }).click()
+    await page.getByRole("radio", { name: /A Tag/ }).check()
+    await page.getByRole("button", { name: "Add", exact: true }).click()
+    await expect(chip(page, "parents-tag-World news")).toContainText(
+      "2+ shared parents with the Tag World news",
+    )
+    await expect
+      .poll(() =>
+        JSON.stringify(filters.at(-1) ?? null).includes(
+          '{"type":"parents","tag":"World news","min":2}',
+        ),
+      )
+      .toBe(true)
+    expect(param(page, "dirFilter")).toContain('parents:"tag:World news"')
+  })
+
+  test("on a phone: the controls sheet, cards, and a bottom-sheet panel", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await mockDirectory(page)
+    await page.route("**/api/v1/data/directory/*/entry", (route) => {
+      const handle = new URL(route.request().url()).pathname.split("/").at(-2)
+      const entry = ROWS.find((r) => r.handle === handle)
+      return route.fulfill({ json: { ...entry, bio: `The bio of ${handle}` } })
+    })
+    await page.route("**/api/v1/data/directory/*/posts", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await page.route("**/api/v1/data/directory/*/neighbours", (route) =>
+      route.fulfill({ json: { citedBy: [], cites: [] } }),
+    )
+    await page.route("**/api/v1/data/directory/why", (route) =>
+      route.fulfill({
+        json: { posts: [], total: 0, parents: null, children: null },
+      }),
+    )
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // The controls fold behind one button that counts the Conditions; no
+    // Keyboard switch.
+    const button = page.getByTestId("directory-controls-button")
+    await expect(button).toHaveText("3")
+    await expect(page.getByTestId("directory-filters")).toBeHidden()
+    await expect(
+      page.getByRole("button", { name: "Keyboard", exact: true }),
+    ).toBeHidden()
+
+    // The sheet holds every control; a control's popover opens above it.
+    await button.click()
+    const sheet = page.getByRole("dialog", { name: "Filters and sort" })
+    await expect(sheet.getByTestId("directory-filters")).toBeVisible()
+    await expect(
+      sheet.getByTestId("directory-search-field-posts"),
+    ).toBeVisible()
+    await sheet.getByTestId("directory-filters").click()
+    await page.getByPlaceholder("Search conditions...").click()
+    await page.keyboard.press("Escape")
+    await sheet.getByRole("button", { name: "Done" }).click()
+    await expect(sheet).toHaveCount(0)
+
+    // Cards, not the table; a card's tick ticks without opening the panel,
+    // and the bulk bar stays one line.
+    await expect(page.getByTestId("directory-row-a1")).toHaveCount(0)
+    await expect(page.getByTestId("directory-card-a1")).toBeVisible()
+    await page.getByRole("checkbox", { name: "Tick @a1" }).check()
+    const aside = page.getByTestId("directory-panel")
+    await expect(aside).toHaveCount(0)
+    const bulk = page.getByTestId("directory-bulk-bar")
+    await expect(bulk).toHaveCSS("flex-wrap", "nowrap")
+
+    // A card opens a bottom sheet; another card above it switches it.
+    await page.getByTestId("directory-card-a2").click()
+    await expect(aside.getByText("The bio of a2")).toBeVisible()
+    const box = await aside.boundingBox()
+    expect(box?.y).toBeGreaterThan(844 * 0.4)
+    await page.getByTestId("directory-card-a1").click()
+    await expect(aside.getByText("The bio of a1")).toBeVisible()
+    // The last card scrolls clear of the sheet.
+    await page.getByTestId("directory-card-a6").click({ timeout: 5000 })
+    await expect(aside.getByText("The bio of a6")).toBeVisible()
+  })
 })
 
-/** The handles a list body sends as the Shared parents picks, if any. */
-function parentsPicks(body: {
+/** The handles a list body sends as the Shared parents Seeds, if any. */
+function parentsSeeds(body: {
   filter?: { children?: { cond?: { type?: string; handles?: string[] } }[] }
 }): string[] | undefined {
   return (body.filter?.children ?? []).find((c) => c.cond?.type === "parents")

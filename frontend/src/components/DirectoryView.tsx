@@ -4,8 +4,9 @@
  * `components/directory/`; this file only connects them to the server.
  */
 import { useQuery } from "@tanstack/react-query"
-
+import { Keyboard } from "lucide-react"
 import {
+  type DirectoryWhyRequest,
   dataCountDirectory,
   dataGetDirectoryDistribution,
   dataGetDirectoryEntry,
@@ -16,8 +17,16 @@ import {
 import { DirectoryBar } from "@/components/directory/DirectoryBar"
 import { DirectoryBoundEditor } from "@/components/directory/DirectoryBoundEditor"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
+import {
+  DirectoryKeyHelp,
+  useDirectoryKeyboard,
+} from "@/components/directory/DirectoryKeyboard"
 import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
-import { DirectoryTable } from "@/components/directory/DirectoryTable"
+import {
+  DirectoryTable,
+  PAGE_SIZE,
+} from "@/components/directory/DirectoryTable"
+import { TagsMenu } from "@/components/directory/DirectoryTags"
 import {
   directoryVocabulary,
   type MeasureEditorRender,
@@ -25,6 +34,9 @@ import {
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
+import { useIsMobile } from "@/hooks/useMobile"
+import { useSessionFlag } from "@/hooks/useSessionFlag"
+import { useDirectoryTags } from "@/hooks/useTags"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import {
@@ -34,10 +46,11 @@ import {
   firstShared,
   type Measure,
   type MeasureKey,
-  type PickSets,
-  resolvePicks,
+  type SeedSets,
+  seedForms,
 } from "@/lib/directory/directory-filter"
 import { mineWindow } from "@/lib/directory/directory-panel"
+import type { Tagging } from "@/lib/directory/directory-tags"
 import {
   chooseSort,
   type DirectoryViewRequest,
@@ -46,6 +59,7 @@ import {
   sortValue,
 } from "@/lib/directory/directory-view"
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
+import { pillClass } from "./PostFilterParts"
 
 /** The filter without `measure`'s bounds: what its spread is drawn under. */
 const withoutMeasure = (filter: DirectoryFilter, measure: string) =>
@@ -74,7 +88,7 @@ function MeasureEditor({
 }: {
   request: DirectoryViewRequest
   filter: DirectoryFilter
-  sets: PickSets
+  sets: SeedSets
   measure: Measure
   initial?: MetricBound
   onSubmit: Parameters<MeasureEditorRender>[0]["onSubmit"]
@@ -153,17 +167,19 @@ function DirectoryPanelReads({
   onDismiss,
   onClose,
   onFilter,
+  tagging,
 }: {
   handle: string
   request: DirectoryViewRequest
-  /** Each Shared relation's picks while it is on, for Why (DIR-07). */
-  shared: { parents: string[] | null; children: string[] | null }
+  /** Each Shared relation's Seeds while it is on, for Why (DIR-07). */
+  shared: Pick<DirectoryWhyRequest, "parents" | "children">
   windowDays: number | null
   following: boolean
   onFollow: () => void
   onDismiss: (dismissed: boolean) => void
   onClose: () => void
   onFilter: (cond: DirectoryCond) => void
+  tagging: Tagging
 }) {
   const path = { handle }
   const entry = useQuery({
@@ -204,6 +220,7 @@ function DirectoryPanelReads({
       onClose={onClose}
       neighbours={neighbours.data}
       onFilter={onFilter}
+      tagging={tagging}
     />
   )
 }
@@ -212,6 +229,7 @@ export function DirectoryView() {
   const d = useDirectory()
   const { view, patch, list } = d
   const shown = listSummary(list.data, list.isFetching, d.yours.source)
+  const { tags, tagging, choices } = useDirectoryTags()
   const vocabulary = directoryVocabulary(
     shown.languages,
     (props) => (
@@ -223,10 +241,29 @@ export function DirectoryView() {
       />
     ),
     d.sets,
+    choices,
   )
-  const picksOf = (relation: "parents" | "children") => {
+  const total = shown.total ?? 0
+  // Below md (DFP-02): the controls in a sheet, the rows as cards.
+  const phone = useIsMobile()
+  const [keyboardFlag, setKeyboard] = useSessionFlag("directory_keyboard")
+  // A phone has no Keyboard switch, so a flag left on at a desk stays off here.
+  const keyboard = keyboardFlag && !phone
+  const ring = useDirectoryKeyboard({
+    on: keyboard,
+    handles: shown.rows.map((r) => r.handle),
+    open: d.open,
+    onOpen: d.setOpen,
+    page: view.page,
+    lastPage: Math.max(0, Math.ceil(total / PAGE_SIZE) - 1),
+    onPage: (page) => patch({ page }),
+  })
+  /** A Shared relation's Seeds while it is on, as Why takes them (DFP-05). */
+  const seedsOf = (relation: "parents" | "children") => {
     const cond = firstShared(d.filter, relation)
-    return cond ? resolvePicks(cond, d.sets) : null
+    if (!cond) return null
+    const seeds = seedForms(cond.seeds).wire(d.sets)
+    return "tag" in seeds ? seeds : seeds.handles
   }
   return (
     <div className="pt-4" data-testid="directory-view">
@@ -256,22 +293,49 @@ export function DirectoryView() {
         selectedFirst={d.selectedFirst}
         onSelectedFirst={d.setSelectedFirst}
         onClearAll={d.clearAll}
+        phone={phone}
       />
       {list.error && (
         <p className="mb-2 text-xs text-red-500">
           {errorText(list.error, "The Directory did not load.")}
         </p>
       )}
+      <div className="mb-2 flex justify-end gap-2">
+        <TagsMenu
+          tags={tags.tags}
+          onTick={(name) => void tags.tickTag(name, d.setTicks)}
+          onRename={(name, to) => void tags.rename(name, to)}
+          onDelete={(name) => void tags.remove(name)}
+        />
+        <button
+          type="button"
+          aria-pressed={keyboard}
+          onClick={() => setKeyboard(!keyboard)}
+          className={`${pillClass(keyboard)} max-md:hidden`}
+          title="j / k to move, gg / G to jump, ] / [ to turn the page, an action's letter to fire it"
+        >
+          <Keyboard size={12} /> Keyboard
+        </button>
+      </div>
       <DirectoryBulkBar
         ticks={d.ticks}
         busy={[...d.ticks].some((h) => d.following.has(h))}
+        followed={
+          new Set(
+            [
+              ...d.sets.follows,
+              ...shown.rows.filter((r) => r.followed).map((r) => r.handle),
+            ].map((h) => h.toLowerCase()),
+          )
+        }
         onFollow={(handles) => void d.follow(handles)}
         onDismiss={(handles) => void d.dismiss(handles)}
         onClear={() => d.setTicks([])}
+        tagging={tagging}
       />
       <DirectoryTable
         rows={shown.rows}
-        total={shown.total ?? 0}
+        total={total}
         page={view.page}
         sort={view.sort}
         descending={view.descending}
@@ -284,14 +348,17 @@ export function DirectoryView() {
         onSort={(key) => patch(headerSort(view, key, d.yours.source))}
         onPage={(page) => patch({ page })}
         onOpen={d.setOpen}
+        ring={ring}
+        cards={phone}
+        tagging={tagging}
       />
       {d.open && (
         <DirectoryPanelReads
           handle={d.open}
           request={d.request}
           shared={{
-            parents: picksOf("parents"),
-            children: picksOf("children"),
+            parents: seedsOf("parents"),
+            children: seedsOf("children"),
           }}
           windowDays={mineWindow(d.filter)}
           following={d.following.has(d.open)}
@@ -305,8 +372,10 @@ export function DirectoryView() {
             d.setFilter(appendAnd(d.filter, cond))
             d.setOpen(null)
           }}
+          tagging={tagging}
         />
       )}
+      <DirectoryKeyHelp on={keyboard} />
     </div>
   )
 }

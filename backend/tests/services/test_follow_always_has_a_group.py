@@ -127,6 +127,7 @@ def test_run_db_checks_its_arguments_against_the_callee() -> None:
 
 
 def test_the_migration_rescues_a_follow_that_never_got_a_copy(
+    legacy_follow_tags_column: None,
     legacy_channel_per_user_columns: None,
     session: Session,
     user: User,

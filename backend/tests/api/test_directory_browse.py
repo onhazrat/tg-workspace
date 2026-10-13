@@ -118,6 +118,20 @@ Selected first (`selectedFirst` with the ticked handles on `/directory/list`):
 * match the ticks without normalising `@` and case -> the same
 * read `ticked` when "Channels ticked here" already carries them -> its
   ticked-source case
+
+DFP-04 (the `tag` Condition and the rows' Tags; the routes' own guard is
+`tests/api/test_directory_tags.py`):
+
+* leave the Tags out of the cached total's key -> the tag Condition's total
+* resolve a Tag across every Account -> the unknown-Tag case
+
+DFP-05 (a Tag as the Seeds of Cited by and Cites, and their 500-handle cap):
+
+* leave a Tag-sourced Condition unresolved -> the Tag-as-Seeds case
+* resolve a Tag across every Account -> the same, for the other Account
+* resolve the Tag by its name as sent, not case-folded -> the same
+* cap the handles at 499 or 501 -> the 500-handle case
+* accept handles and a Tag together, or neither -> the same
 """
 
 from __future__ import annotations
@@ -1471,3 +1485,172 @@ def test_an_elevated_session_may_dismiss_and_take_back(
     assert _flags(client, operator, DISMISSED) == []
     assert _take_back(client, elevated, "dt_ru").status_code == 200
     assert _flags(client, other, DISMISSED) == []
+
+
+# ---- Tags (DFP-04) ----------------------------------------------------------------
+
+TAGS = f"{settings.API_V1_STR}/data/tags"
+
+
+def tag(name: str) -> dict[str, Any]:
+    return {"type": "tag", "name": name}
+
+
+def _tag(client: TestClient, headers: dict[str, str], name: str, *handles: str) -> None:
+    response = client.post(
+        f"{TAGS}/channels",
+        json={"name": name, "handles": list(handles)},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_a_tag_condition_is_the_readers_own_tag(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Two Accounts hold "news" on different Channels; each reads their own."""
+    operator, other = accounts
+    everything = set(_handles(client, operator))
+    in_news = root(atom(tag("NEWS")))
+    assert _list(client, operator, filter=in_news)["total"] == 0
+
+    _tag(client, operator, "News", "dt_fa_big", "@DT_RU")
+    _tag(client, other, "news", "dt_en_news")
+
+    # The cached total moves at once, as it does for a Dismissal.
+    assert _list(client, operator, filter=in_news)["total"] == 2
+    assert set(_handles(client, operator, filter=in_news)) == {"dt_fa_big", "dt_ru"}
+    assert _handles(client, other, filter=in_news) == ["dt_en_news"]
+    not_news = root(atom(tag("news"), negated=True))
+    assert set(_handles(client, operator, filter=not_news)) == everything - {
+        "dt_fa_big",
+        "dt_ru",
+    }
+    assert set(_handles(client, other, filter=not_news)) == everything - {"dt_en_news"}
+
+    rows = {r["handle"]: r["tags"] for r in _list(client, operator)["rows"]}
+    assert rows["dt_ru"] == ["News"]
+    assert rows["dt_en_news"] == []
+    assert _entry(client, other, "dt_en_news").json()["tags"] == ["news"]
+    assert _entry(client, other, "dt_ru").json()["tags"] == []
+
+
+def test_a_tag_the_reader_does_not_have_matches_nothing(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, other = accounts
+    _tag(client, other, "theirs", "dt_ru")
+    assert _handles(client, operator, filter=root(atom(tag("theirs")))) == []
+    assert set(
+        _handles(client, operator, filter=root(atom(tag("theirs"), negated=True)))
+    ) == set(_handles(client, operator))
+
+
+def test_a_group_tag_is_the_followed_channels_in_that_setting_group(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    data = f"{settings.API_V1_STR}/data"
+    created = client.post(
+        f"{data}/setting-groups", json={"name": "Morning Reads"}, headers=operator
+    )
+    assert created.status_code == 200, created.text
+    moved = client.patch(
+        f"{data}/channels/bulk-setting-group",
+        json={"channelIds": ["dt_followed_a"], "settingGroupId": created.json()["id"]},
+        headers=operator,
+    )
+    assert moved.status_code == 200, moved.text
+    in_group = root(atom(tag("group:morning reads")))
+    assert _handles(client, operator, filter=in_group) == ["dt_followed_a"]
+
+    # Story 23: listed among the Tags with its count, and on the row's badges.
+    listed = client.get(TAGS, headers=operator).json()
+    assert {"name": "group:Morning Reads", "channels": 1} in listed
+    rows = {r["handle"]: r["tags"] for r in _list(client, operator)["rows"]}
+    assert rows["dt_followed_a"] == ["group:Morning Reads"]
+    entry = _entry(client, operator, "dt_followed_a").json()
+    assert entry["tags"] == ["group:Morning Reads"]
+    # Derived, so neither renamed nor deleted.
+    named = {"name": "group:Morning Reads"}
+    renamed = client.patch(TAGS, json={**named, "to": "x"}, headers=operator)
+    assert renamed.status_code == 404
+    deleted = client.request("DELETE", TAGS, json=named, headers=operator)
+    assert deleted.status_code == 404
+
+
+# ---- A Tag as Seeds (DFP-05) ----------------------------------------------------
+
+
+def test_a_tag_is_the_seeds_of_cited_by_and_cites(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """Two Accounts hold "sources" on different Channels; each reads their own,
+    and the Condition follows the Tag as Channels are tagged."""
+    operator, other = accounts
+    by = root(atom({"type": "citedby", "tag": "Sources"}))
+    assert _list(client, operator, filter=by)["total"] == 0
+
+    _tag(client, operator, "Sources", "src_a1")
+    _tag(client, other, "sources", "src_b1")
+
+    # The cached total moves at once, as it does for the tag Condition.
+    assert _list(client, operator, filter=by)["total"] == 2
+    assert set(_handles(client, operator, filter=by)) == {"dt_fa_big", "dt_en_news"}
+    assert set(_handles(client, other, filter=by)) == {"dt_ru", "dt_fa_small"}
+
+    _tag(client, operator, "sources", "src_b1")
+    assert _list(client, operator, filter=by)["total"] == 4
+
+    of = root(atom({"type": "cites", "tag": "targets"}))
+    _tag(client, operator, "targets", "dt_en_news")
+    assert set(_handles(client, operator, filter=of)) == {"dt_fa_big", "dt_ru"}
+    assert _handles(client, other, filter=of) == []
+
+
+@pytest.mark.parametrize("kind", ["citedby", "cites"])
+def test_cited_by_and_cites_take_500_handles_or_a_tag(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]], kind: str
+) -> None:
+    operator, _ = accounts
+
+    def status(cond: dict[str, Any]) -> int:
+        return client.post(
+            f"{DIRECTORY}/list", json={"filter": root(atom(cond))}, headers=operator
+        ).status_code
+
+    many = [f"h{i}" for i in range(501)]
+    assert status({"type": kind, "handles": many[:500]}) == 200
+    assert status({"type": kind, "handles": many}) == 422
+    # Exactly one source: handles or a Tag.
+    assert status({"type": kind, "tag": "news"}) == 200
+    assert status({"type": kind, "handles": ["a"], "tag": "news"}) == 422
+    assert status({"type": kind}) == 422
+    assert status({"type": kind, "handles": []}) == 422
+
+
+def test_the_count_resolves_a_candidates_tag(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """The candidate joins the view after it resolves, so it resolves its own
+    Tag: In a Tag, and a Tag as the Seeds, count what the list would show."""
+    operator, _ = accounts
+    _tag(client, operator, "News", "dt_fa_big", "dt_ru")
+    _tag(client, operator, "Sources", "src_a1")
+
+    def count(candidate: dict[str, Any]) -> int:
+        response = client.post(
+            f"{DIRECTORY}/count", json={"candidate": atom(candidate)}, headers=operator
+        )
+        assert response.status_code == 200, response.text
+        return int(response.json()["total"])
+
+    assert count(tag("news")) == 2
+    assert count({"type": "citedby", "tag": "sources"}) == 2
+    # And beside a tree naming a different Tag.
+    body = {
+        "filter": root(atom({"type": "citedby", "tag": "sources"})),
+        "candidate": atom(tag("news")),
+    }
+    response = client.post(f"{DIRECTORY}/count", json=body, headers=operator)
+    assert response.json() == {"total": 1}

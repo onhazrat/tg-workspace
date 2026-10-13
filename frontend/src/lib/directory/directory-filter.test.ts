@@ -2,7 +2,9 @@
  * The Directory filter's text form (DIR-02): what `?dirFilter=` holds. Every
  * Condition prints and parses back unchanged, a bare word reads as Name
  * contains, and anything the server would refuse (an unknown `is:`, a
- * malformed window, a tree past the bounds) does not parse.
+ * malformed window, a tree past the bounds) does not parse. DFP-05 renames
+ * the Shared picks to Seeds, adds a Tag as their source, and keeps reading
+ * the old `picked`.
  */
 import { describe, expect, test } from "bun:test"
 import type { FilterNode } from "@/lib/filter-tree"
@@ -57,6 +59,12 @@ describe("every Condition prints and parses back unchanged", () => {
     "cites <= 0",
     "citedby:durov",
     'cites:"alpha beta"',
+    'citedby:"tag:news"',
+    'cites:"tag:World News"',
+    "tag:news",
+    'tag:"slow reads"',
+    'tag:"group:Slow Feed"',
+    "not tag:news",
   ])("%s", (text) => {
     expect(roundTrip(text)).toBe(text)
   })
@@ -114,23 +122,44 @@ describe("what each piece of text means", () => {
 describe("cited by @x and cites @x", () => {
   test("one or several handles, lowercased, @ optional inside quotes", () => {
     expect(conds('citedby:Durov cites:"alpha, @Beta"')).toEqual([
-      { cond: { type: "citedby", handles: ["durov"] }, not: false },
-      { cond: { type: "cites", handles: ["alpha", "beta"] }, not: false },
+      {
+        cond: {
+          type: "citedby",
+          seeds: { kind: "handles", handles: ["durov"] },
+        },
+        not: false,
+      },
+      {
+        cond: {
+          type: "cites",
+          seeds: { kind: "handles", handles: ["alpha", "beta"] },
+        },
+        not: false,
+      },
     ])
   })
 
-  test("the server's limit of 50 handles", () => {
+  test("a Tag as the Seeds, named as typed (DFP-05)", () => {
+    expect(conds('citedby:"tag:World News"')).toEqual([
+      {
+        cond: { type: "citedby", seeds: { kind: "tag", name: "World News" } },
+        not: false,
+      },
+    ])
+  })
+
+  test("the server's limit of 500 handles (DFP-05)", () => {
     const handles = (n: number) =>
       Array.from({ length: n }, (_, i) => `h${i}`).join(" ")
-    expect(parseDirectoryFilter(`cites:"${handles(50)}"`)).not.toBeNull()
-    expect(parseDirectoryFilter(`cites:"${handles(51)}"`)).toBeNull()
+    expect(parseDirectoryFilter(`cites:"${handles(500)}"`)).not.toBeNull()
+    expect(parseDirectoryFilter(`cites:"${handles(501)}"`)).toBeNull()
   })
 })
 
 describe("text the server would refuse does not parse", () => {
   test.each([
     ["another unknown is:", "is:available"],
-    ["an unknown prefix", "tag:news"],
+    ["an unknown prefix", "topic:news"],
     ["a window that is not days", "mine:week"],
     ["a zero window", "mine:0d"],
     ["an unknown measure", "indeg >= 3"],
@@ -139,6 +168,7 @@ describe("text the server would refuse does not parse", () => {
     ["a stray character", "lang:fa $"],
     ["a backwards range", "reach 10..1"],
     ["no handle", 'citedby:"@"'],
+    ["no Tag name", 'citedby:"tag:"'],
   ])("%s", (_, text) => {
     expect(parseDirectoryFilter(text)).toBeNull()
   })
@@ -191,8 +221,18 @@ describe("chip labels", () => {
       { type: "measure", measure: "cited_by", min: 10 },
       "Cited by (channels) ≥ 10",
     ],
-    [{ type: "citedby", handles: ["durov"] }, "Cited by @durov"],
-    [{ type: "cites", handles: ["a", "b"] }, "Cites @a, @b"],
+    [
+      { type: "citedby", seeds: { kind: "handles", handles: ["durov"] } },
+      "Cited by @durov",
+    ],
+    [
+      { type: "cites", seeds: { kind: "handles", handles: ["a", "b"] } },
+      "Cites @a, @b",
+    ],
+    [
+      { type: "citedby", seeds: { kind: "tag", name: "news" } },
+      "Cited by the Tag news",
+    ],
   ])("%j", (cond, label) => {
     expect(directoryConditionLabel(cond, "en")).toBe(label)
   })
@@ -200,37 +240,54 @@ describe("chip labels", () => {
 
 describe("Shared parents and Shared children (DIR-07)", () => {
   test.each([
-    "parents:picked",
+    "parents:ticked",
     "parents:selection",
     "parents:follows",
+    'parents:"tag:news"',
+    'children:"tag:World News 3"',
+    // A Tag name ending in a number keeps its minimum written out.
+    'parents:"tag:top 10 2"',
     'children:"a b 3"',
-    'parents:"picked 3"',
+    'parents:"ticked 3"',
     'children:"alpha beta"',
     'not parents:follows and children:"follows 5"',
   ])("%s prints and parses back unchanged", (text) => {
     expect(roundTrip(text)).toBe(text)
   })
 
-  test("the picks, and a trailing number as the minimum (default 2)", () => {
-    expect(conds('parents:picked children:"@Alpha, beta 3"')).toEqual([
+  test("the Seeds, and a trailing number as the minimum (default 2)", () => {
+    expect(
+      conds('parents:ticked children:"@Alpha, beta 3" parents:"tag:news 4"'),
+    ).toEqual([
       {
-        cond: { type: "parents", picks: "picked", handles: [], min: 2 },
+        cond: { type: "parents", seeds: { kind: "ticked" }, min: 2 },
         not: false,
       },
       {
         cond: {
           type: "children",
-          picks: "handles",
-          handles: ["alpha", "beta"],
+          seeds: { kind: "handles", handles: ["alpha", "beta"] },
           min: 3,
         },
+        not: false,
+      },
+      {
+        cond: { type: "parents", seeds: { kind: "tag", name: "news" }, min: 4 },
         not: false,
       },
     ])
   })
 
   test.each([
-    ["no picks", 'parents:"3"'],
+    ["parents:picked", "parents:ticked"],
+    ['children:"picked 3"', 'children:"ticked 3"'],
+  ])("a link with the old word %s still parses, as %s", (old, now) => {
+    expect(roundTrip(old)).toBe(now)
+  })
+
+  test.each([
+    ["no Seeds", 'parents:"3"'],
+    ["no Tag name", 'parents:"tag: 3"'],
     ["a zero minimum", 'parents:"follows 0"'],
     ["no handle", 'children:"@ 3"'],
   ])("%s does not parse", (_, text) => {
@@ -239,31 +296,39 @@ describe("Shared parents and Shared children (DIR-07)", () => {
 
   test.each<[DirectoryCond, string]>([
     [
-      { type: "parents", picks: "picked", handles: [], min: 2 },
+      { type: "parents", seeds: { kind: "ticked" }, min: 2 },
       "2+ shared parents with the channels ticked here",
     ],
     [
-      { type: "children", picks: "selection", handles: [], min: 3 },
+      { type: "children", seeds: { kind: "selection" }, min: 3 },
       "3+ shared children with your selected channels",
     ],
     [
-      { type: "parents", picks: "follows", handles: [], min: 2 },
+      { type: "parents", seeds: { kind: "follows" }, min: 2 },
       "2+ shared parents with your follows",
     ],
     [
-      { type: "children", picks: "handles", handles: ["a", "b"], min: 2 },
+      {
+        type: "children",
+        seeds: { kind: "handles", handles: ["a", "b"] },
+        min: 2,
+      },
       "2+ shared children with @a, @b",
+    ],
+    [
+      { type: "parents", seeds: { kind: "tag", name: "news" }, min: 2 },
+      "2+ shared parents with the Tag news",
     ],
   ])("%j reads as its chip", (cond, label) => {
     expect(directoryConditionLabel(cond, "en")).toBe(label)
   })
 
-  test("the body sends the picks as handles, resolved now", () => {
+  test("the body sends the Seeds as handles resolved now, or the Tag's name", () => {
     const filter = parseDirectoryFilter(
-      'parents:picked or children:follows or parents:selection or children:"x 4"',
+      'parents:ticked or children:follows or parents:selection or children:"x 4" or parents:"tag:News" or citedby:"tag:news" or cites:y',
     )
     const body = directoryFilterBody(filter as NonNullable<typeof filter>, {
-      picked: ["t1"],
+      ticked: ["t1"],
       selection: ["s1", "s2"],
       follows: ["f1"],
     })
@@ -272,6 +337,30 @@ describe("Shared parents and Shared children (DIR-07)", () => {
       { type: "children", handles: ["f1"], min: 2 },
       { type: "parents", handles: ["s1", "s2"], min: 2 },
       { type: "children", handles: ["x"], min: 4 },
+      { type: "parents", tag: "News", min: 2 },
+      { type: "citedby", tag: "news" },
+      { type: "cites", handles: ["y"] },
     ])
+  })
+})
+
+describe("the tag Condition (DFP-04)", () => {
+  test("names the Tag as typed and goes to the server as it is", () => {
+    const filter = parseDirectoryFilter('not tag:"World News"')
+    expect(conds('tag:"World News"')).toEqual([
+      { cond: { type: "tag", name: "World News" }, not: false },
+    ])
+    expect(directoryConditionLabel({ type: "tag", name: "news" })).toBe(
+      "In the Tag news",
+    )
+    const body = directoryFilterBody(filter as NonNullable<typeof filter>, {
+      ticked: [],
+      selection: [],
+      follows: [],
+    })
+    expect(body?.children?.[0]).toMatchObject({
+      not: true,
+      cond: { type: "tag", name: "World News" },
+    })
   })
 })

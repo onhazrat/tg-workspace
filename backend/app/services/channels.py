@@ -33,7 +33,6 @@ from app.services.channel_setting_groups import (
     update_default_group_sync_settings,
 )
 from app.services.channel_tags import (
-    normalize_channel_tags,
     reject_reserved_virtual_group_tags,
 )
 from app.services.follows import (
@@ -53,6 +52,8 @@ from app.services.sync_meta import touch_sync
 from app.services.sync_schedule import (
     compute_next_regular_sync_at_from_last_updated,
 )
+from app.services.tags import replace_channel_tags, tags_by_handle, tags_for_channel
+from app.services.telegram_web import normalize_handle
 from app.services.tenancy import scoped_select
 
 #: Columns the server owns outright. A request naming one is refused, and an
@@ -439,9 +440,6 @@ def apply_channel_fields(
             "user_id",
             "setting_group_id",
         ):
-            if key == "tags":
-                reject_reserved_virtual_group_tags(value)
-                value = normalize_channel_tags(value)
             setattr(ch, key, value)
 
 
@@ -476,8 +474,8 @@ def list_channels(
     model.
 
     Scoped to the Channels `user_id` follows (ticket 15) — a no-op while
-    enforcement is off. Each row's tags/startId/startTime/followedAt/
-    discoveredVia come from `user_id`'s own Follow when one exists, not from
+    enforcement is off. Each row's tags are `user_id`'s own (ADR-029), and its
+    startId/startTime/followedAt/discoveredVia come from `user_id`'s own Follow when one exists, not from
     the Channel — see `channel_to_camel`.
     """
     channels = session.exec(scoped_select(select(Channel), Channel, user_id)).all()
@@ -485,6 +483,7 @@ def list_channels(
     follows_by_channel_id = follows_for_user(
         session, user_id=user_id, channel_ids=[c.id for c in channels]
     )
+    tags = tags_by_handle(session, user_id=user_id, handles=[c.name for c in channels])
     stats_map: dict[str, dict[str, Any]] = {}
     if include_stats and channels:
         stats_map = compute_channel_stats_batch(session, [c.name for c in channels])
@@ -499,7 +498,9 @@ def list_channels(
             if follow is not None and follow.setting_group_id is not None
             else None
         )
-        row = channel_to_camel(ch, group=group, follow=follow)
+        row = channel_to_camel(
+            ch, group=group, follow=follow, tags=tags.get(normalize_handle(ch.name), [])
+        )
         row.pop("bio", None)
         if include_stats and ch.name in stats_map:
             row["stats"] = stats_map[ch.name]
@@ -516,6 +517,8 @@ def upsert_channel(
 ) -> dict[str, Any]:
     normalized = normalize_body(body)
     _reject_server_managed_channel_fields(normalized)
+    if "tags" in normalized:
+        reject_reserved_virtual_group_tags(normalized["tags"])
     ch = session.get(Channel, channel_id)
     if ch:
         reject_inherited_channel_fields(body)
@@ -596,6 +599,10 @@ def upsert_channel(
     # these columns, so a value that does not reach the follow is simply lost.
     session.flush()
     sync_follow_settings(session, ch, user_id=user_id, values=follow_values)
+    if "tags" in normalized:
+        replace_channel_tags(
+            session, user_id=user_id, handle=ch.name, tags=normalized["tags"]
+        )
     session.commit()
     session.refresh(ch)
     touch_sync(session, "channels")
@@ -607,6 +614,7 @@ def upsert_channel(
         ch,
         group=group,
         follow=get_follow(session, user_id=user_id, channel_id=ch.id),
+        tags=tags_for_channel(session, user_id=user_id, handle=ch.name),
     )
 
 
@@ -824,25 +832,13 @@ def bulk_update_channel_tags(
         reject_reserved_virtual_group_tags(raw_tags)
         channel.updated_at = utc_now()
         session.add(channel)
-        # Tags live only on the Follow since ticket 22, so this write *is* the
-        # edit rather than a mirror of one made on the Channel. Just `tags`,
-        # not the full follow-owned set: this endpoint only ever changes tags,
-        # and writing the rest would overwrite a Follow's own start time and
-        # discovered-via on a request that never touched either.
-        sync_follow_settings(
-            session,
-            channel,
-            user_id=operator_id,
-            values={"tags": normalize_channel_tags(raw_tags)},
+        # Still only the caller's followed Channels (the 404 above): a Tag run
+        # applies through here, and ADR-029 keeps it to followed Channels so it
+        # never spends an AI Key on one the Account does not follow.
+        replace_channel_tags(
+            session, user_id=operator_id, handle=channel.name, tags=raw_tags
         )
-        # `sync_follow_settings` is a Core INSERT, so the ORM's identity map
-        # still holds the row `followed_channels_for` loaded a few lines up,
-        # with the *old* tags. Expiring it makes the read below reload inside
-        # this transaction — without it the endpoint answers every edit with the
-        # tags it just replaced.
         follow = follows_by_id.get(channel.id)
-        if follow is not None:
-            session.expire(follow)
         updated_rows.append(
             channel_to_camel(
                 channel,
@@ -852,6 +848,9 @@ def bulk_update_channel_tags(
                     else None
                 ),
                 follow=follow,
+                tags=tags_for_channel(
+                    session, user_id=operator_id, handle=channel.name
+                ),
             )
         )
 

@@ -12,6 +12,7 @@ import {
   Inbox,
   Languages,
   type LucideIcon,
+  Tag,
   Type,
   Users,
 } from "lucide-react"
@@ -32,9 +33,15 @@ import {
   MEASURES,
   type Measure,
   type MeasureSection,
-  type PickSets,
+  type SeedSets,
   SHARED_LABEL,
+  seedForms,
 } from "@/lib/directory/directory-filter"
+import {
+  staleTag,
+  type TagChoices,
+  tagNames,
+} from "@/lib/directory/directory-tags"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
 import {
   HandlesEditor,
@@ -46,6 +53,7 @@ import {
 const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   language: Languages,
   name: Type,
+  tag: Tag,
   flag: CircleDot,
   mine: Inbox,
   citedby: CornerDownLeft,
@@ -95,7 +103,8 @@ export function directoryVocabulary(
   languageCounts: DirectoryLanguageCountResponse[],
   renderMeasure: MeasureEditorRender,
   /** What Shared parents / children can compare with, as it is now (DIR-07). */
-  sets: PickSets,
+  sets: SeedSets,
+  tags: TagChoices = { tags: [], groups: [], loaded: false },
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
   return {
@@ -123,6 +132,22 @@ export function directoryVocabulary(
             })),
             make: (value) => ({ type: "flag", value: value as DirectoryFlag }),
             current: (c) => (c.type === "flag" ? c.value : undefined),
+          },
+          {
+            kind: "list",
+            id: "tag",
+            label: "In the Tag",
+            icon: Tag,
+            options: tagNames(tags).map((name) => {
+              const listed = tags.tags.find((t) => t.name === name)
+              return {
+                id: name,
+                label: name,
+                hint: listed && String(listed.channels),
+              }
+            }),
+            make: (name) => ({ type: "tag", name }),
+            current: (c) => (c.type === "tag" ? c.name : undefined),
           },
           {
             kind: "editor",
@@ -168,6 +193,8 @@ export function directoryVocabulary(
               render: ({ start, ...rest }) => (
                 <HandlesEditor
                   type={type}
+                  sets={sets}
+                  tags={tags}
                   start={start?.type === type ? start : undefined}
                   {...rest}
                 />
@@ -184,6 +211,7 @@ export function directoryVocabulary(
                 <SharedEditor
                   type={type}
                   sets={sets}
+                  tags={tags}
                   start={start?.type === type ? start : undefined}
                   {...rest}
                 />
@@ -196,15 +224,16 @@ export function directoryVocabulary(
     entryOf: (c) => (c.type === "measure" ? `measure:${c.measure}` : c.type),
     label: (c) => directoryConditionLabel(c),
     icon: (c) => ICON[c.type],
+    stale: (c) => staleTag(c, tags),
     chipId: (c) =>
       c.type === "measure"
         ? `measure-${c.measure}`
-        : c.type === "parents" || c.type === "children"
-          ? `${c.type}-${c.picks}`
+        : c.type === "tag"
+          ? `tag-${c.name}`
           : "value" in c
             ? `${c.type}-${c.value}`
-            : "handles" in c
-              ? `${c.type}-${c.handles.join("-")}`
+            : "seeds" in c
+              ? `${c.type}-${seedForms(c.seeds).id}`
               : c.type,
   }
 }

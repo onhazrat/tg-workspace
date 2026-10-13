@@ -29,7 +29,11 @@ export function BarPopover({
         <Popover.Content
           align={align}
           sideOffset={6}
-          className={`z-50 ${width} max-h-[70vh] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-app-ink/10 bg-app-card p-2 text-xs text-app-ink shadow-xl`}
+          collisionPadding={8}
+          // Never taller than the room Radix found, so a tall editor scrolls
+          // inside the popover rather than running off the screen (DFP-05).
+          // `max-h-(--var)` cannot hold the 70vh ceiling too, hence min().
+          className={`z-50 ${width} max-h-[min(70vh,var(--radix-popover-content-available-height))] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-app-ink/10 bg-app-card p-2 text-xs text-app-ink shadow-xl`}
         >
           {children}
         </Popover.Content>

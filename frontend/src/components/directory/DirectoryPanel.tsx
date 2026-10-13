@@ -1,4 +1,4 @@
-import { ExternalLink, Filter, X } from "lucide-react"
+import { ExternalLink, Filter, Plus, X } from "lucide-react"
 import type {
   DirectoryCitingPostResponse,
   DirectoryEntryResponse,
@@ -16,12 +16,14 @@ import {
   MEASURES,
   SHARED_LABEL,
 } from "@/lib/directory/directory-filter"
+import type { Tagging } from "@/lib/directory/directory-tags"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
-import { DirectorySamples, PostText } from "./DirectorySamples"
+import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
 import { cell, FollowCell } from "./DirectoryTable"
+import { TagBadges, TagPicker } from "./DirectoryTags"
 
 const HEADING =
   "mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wider text-app-ink/50"
@@ -106,9 +108,11 @@ function CitingPost({ post }: { post: DirectoryCitingPostResponse }) {
  * and the "Cited by your channels" Condition count.
  */
 function WhyHere({
+  handle,
   why,
   windowDays,
 }: {
+  handle: string
   why: DirectoryWhyResponse | undefined
   windowDays: number | null
 }) {
@@ -130,11 +134,18 @@ function WhyHere({
             {why.total} Post{why.total === 1 ? "" : "s"} of your channels cite
             it{within}
           </p>
-          <ul className="mt-2 space-y-2">
-            {why.posts.map((post) => (
-              <CitingPost key={`${post.channel}/${post.postId}`} post={post} />
-            ))}
-          </ul>
+          <FirstFew owner={handle} items={why.posts}>
+            {(visible) => (
+              <ul className="mt-2 space-y-2">
+                {visible.map((post) => (
+                  <CitingPost
+                    key={`${post.channel}/${post.postId}`}
+                    post={post}
+                  />
+                ))}
+              </ul>
+            )}
+          </FirstFew>
           {why.total > why.posts.length && (
             <p className="mt-1 text-[10px] text-app-ink/40">
               and {why.total - why.posts.length} more
@@ -149,12 +160,12 @@ function WhyHere({
 
 const SHARED_WHY = {
   parents: {
-    link: "cite it and your picks",
-    none: "nothing citing your picks cites it",
+    link: "cite it and your Seeds",
+    none: "nothing citing your Seeds cites it",
   },
   children: {
-    link: "are cited by it and your picks",
-    none: "it cites nothing your picks cite",
+    link: "are cited by it and your Seeds",
+    none: "it cites nothing your Seeds cite",
   },
 }
 
@@ -207,7 +218,10 @@ function Neighbours({
       ) : (
         <ul className="space-y-1 text-xs">
           {list.map((n) => {
-            const cond = { type, handles: [n.handle] }
+            const cond: DirectoryHandlesCond = {
+              type,
+              seeds: { kind: "handles", handles: [n.handle] },
+            }
             const label = directoryConditionLabel(cond)
             return (
               <li key={n.handle} className="flex items-center gap-2">
@@ -318,6 +332,7 @@ export function DirectoryPanel({
   onClose,
   neighbours,
   onFilter,
+  tagging,
 }: {
   handle: string
   entry: DirectoryEntryResponse | null | undefined
@@ -334,60 +349,94 @@ export function DirectoryPanel({
   neighbours: DirectoryNeighboursResponse | undefined
   /** Adds a Condition to the view's filter. */
   onFilter: (cond: DirectoryCond) => void
+  /** The open Channel's Tags, added and removed here (DFP-04). */
+  tagging?: Tagging
 }) {
   return (
-    <aside
-      data-testid="directory-panel"
-      aria-label={`@${handle}`}
-      className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl md:left-auto md:w-[440px] md:border-l md:border-app-ink/15"
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="absolute right-3 top-3 rounded p-1 hover:bg-app-ink/10"
+    <>
+      {/* Room under the list, so its last card scrolls above the sheet. */}
+      <div aria-hidden className="h-[55vh] md:hidden" />
+      <aside
+        data-testid="directory-panel"
+        aria-label={`@${handle}`}
+        // Below md a bottom sheet over the list, which stays scrollable above
+        // it so another card can switch it (DFP-02).
+        className="fixed inset-0 z-40 overflow-y-auto bg-app-bg p-5 shadow-2xl max-md:top-auto max-md:h-[55vh] max-md:rounded-t-2xl max-md:border-t max-md:border-app-ink/15 max-md:pt-3 md:left-auto md:w-[440px] md:border-l md:border-app-ink/15"
       >
-        <X size={16} />
-      </button>
-      {entry === undefined && (
-        <p className="text-xs text-app-ink/40">Loading…</p>
-      )}
-      {entry === null && (
-        <p className="text-sm text-app-ink/60">
-          The Directory holds nothing about @{handle}.
-        </p>
-      )}
-      {entry && (
-        <>
-          <Header
-            entry={entry}
-            following={following}
-            onFollow={onFollow}
-            onDismiss={onDismiss}
-          />
-          <WhyHere why={why} windowDays={windowDays} />
-          <h4 className={HEADING}>Recent posts</h4>
-          {posts ? (
-            <DirectorySamples handle={handle} posts={posts} />
-          ) : (
-            <p className="text-xs text-app-ink/40">Loading recent posts…</p>
-          )}
-          <Neighbours
-            title="Cited most by"
-            type="citedby"
-            list={neighbours?.citedBy}
-            empty="No channel we know of cites it."
-            onFilter={onFilter}
-          />
-          <Neighbours
-            title="Cites most"
-            type="cites"
-            list={neighbours?.cites}
-            empty="It cites no channel we know of."
-            onFilter={onFilter}
-          />
-        </>
-      )}
-    </aside>
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-app-ink/20 md:hidden" />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 rounded p-1 hover:bg-app-ink/10"
+        >
+          <X size={16} />
+        </button>
+        {entry === undefined && (
+          <p className="text-xs text-app-ink/40">Loading…</p>
+        )}
+        {entry === null && (
+          <p className="text-sm text-app-ink/60">
+            The Directory holds nothing about @{handle}.
+          </p>
+        )}
+        {entry && (
+          <>
+            <Header
+              entry={entry}
+              following={following}
+              onFollow={onFollow}
+              onDismiss={onDismiss}
+            />
+            {tagging && (
+              <div
+                data-testid="directory-panel-tags"
+                className="mb-3 flex flex-wrap items-center gap-1.5"
+              >
+                <TagBadges
+                  tags={entry.tags}
+                  onRemove={(name) => tagging.onUntag(name, [handle])}
+                />
+                <TagPicker
+                  tags={tagging.tags}
+                  current={entry.tags}
+                  onPick={(name) => tagging.onTag(name, [handle])}
+                  onUnpick={(name) => tagging.onUntag(name, [handle])}
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-app-ink/25 px-2 text-[10px] font-semibold text-app-ink/60 hover:text-app-ink"
+                    >
+                      <Plus size={9} /> Tag
+                    </button>
+                  }
+                />
+              </div>
+            )}
+            <WhyHere handle={handle} why={why} windowDays={windowDays} />
+            <h4 className={HEADING}>Recent posts</h4>
+            {posts ? (
+              <DirectorySamples handle={handle} posts={posts} />
+            ) : (
+              <p className="text-xs text-app-ink/40">Loading recent posts…</p>
+            )}
+            <Neighbours
+              title="Cited most by"
+              type="citedby"
+              list={neighbours?.citedBy}
+              empty="No channel we know of cites it."
+              onFilter={onFilter}
+            />
+            <Neighbours
+              title="Cites most"
+              type="cites"
+              list={neighbours?.cites}
+              empty="It cites no channel we know of."
+              onFilter={onFilter}
+            />
+          </>
+        )}
+      </aside>
+    </>
   )
 }

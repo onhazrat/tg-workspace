@@ -1,5 +1,5 @@
 import { ExternalLink, Eye } from "lucide-react"
-import { useState } from "react"
+import { type ReactNode, useState } from "react"
 import type { DirectorySamplePostResponse } from "@/client"
 import { RelativeTime } from "@/components/RelativeTime"
 import {
@@ -124,31 +124,53 @@ export function DirectorySamples({
   handle: string
   posts: DirectorySamplePostResponse[]
 }) {
-  const [expandedFor, setExpandedFor] = useState<string | null>(null)
   if (!posts.length)
     return <p className="text-xs text-app-ink/40">No sample posts stored.</p>
-  const expanded = expandedFor === handle
-  const visible = expanded ? posts : posts.slice(0, FIRST_POSTS)
+  return (
+    <FirstFew owner={handle} items={posts}>
+      {(visible) => (
+        <ul className="space-y-2">
+          {visible.map((post) => (
+            <Sample
+              key={`${handle}/${post.postId}`}
+              handle={handle}
+              post={post}
+            />
+          ))}
+        </ul>
+      )}
+    </FirstFew>
+  )
+}
+
+/**
+ * The first three of a list of Posts until "Show N more", then "Show fewer".
+ * The expansion belongs to `owner`, the open Channel, so switching the panel
+ * to another Channel shows it collapsed.
+ */
+export function FirstFew<T>({
+  owner,
+  items,
+  children,
+}: {
+  owner: string
+  items: T[]
+  children: (visible: T[]) => ReactNode
+}) {
+  const [expandedFor, setExpandedFor] = useState<string | null>(null)
+  const expanded = expandedFor === owner
   return (
     <>
-      <ul className="space-y-2">
-        {visible.map((post) => (
-          <Sample
-            key={`${handle}/${post.postId}`}
-            handle={handle}
-            post={post}
-          />
-        ))}
-      </ul>
-      {posts.length > FIRST_POSTS && (
+      {children(expanded ? items : items.slice(0, FIRST_POSTS))}
+      {items.length > FIRST_POSTS && (
         <button
           type="button"
-          onClick={() => setExpandedFor(expanded ? null : handle)}
+          onClick={() => setExpandedFor(expanded ? null : owner)}
           className="mt-2 w-full rounded-md border border-app-ink/15 py-1.5 text-xs text-app-ink/70 hover:bg-app-ink/5"
         >
           {expanded
             ? "Show fewer"
-            : `Show ${plural(posts.length - FIRST_POSTS)}`}
+            : `Show ${plural(items.length - FIRST_POSTS)}`}
         </button>
       )}
     </>

@@ -12,6 +12,7 @@ import {
   parseDirectoryFilter,
   printDirectoryFilter,
 } from "@/lib/directory/directory-filter"
+import type { SearchField } from "@/lib/directory/directory-view"
 import { DirectoryBar, type DirectoryBarProps } from "./DirectoryBar"
 import { directoryVocabulary } from "./directory-vocabulary"
 
@@ -38,7 +39,7 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
       vocabulary={directoryVocabulary(
         [{ language: "fa", count: 12 }],
         ({ measure }) => <p>editor for {measure.key}</p>,
-        { picked: [], selection: [], follows: [] },
+        { ticked: [], selection: [], follows: [] },
       )}
       languages={[
         { language: "fa", count: 12 },
@@ -220,6 +221,22 @@ describe("the search box (DIR-04)", () => {
     expect(calls.fields).toEqual([["name"], ["name", "bio", "posts"]])
   })
 
+  test("the placeholder names the fields searched, in their fixed order (DFP-01)", () => {
+    const placeholder = (fields: SearchField[]) => {
+      cleanup()
+      mount({ fields })
+      return screen
+        .getByLabelText("Search the Directory")
+        .getAttribute("placeholder")
+    }
+    expect(placeholder(["name"])).toBe("Search names")
+    expect(placeholder(["bio", "name"])).toBe("Search names and bios")
+    expect(placeholder(["posts", "name"])).toBe("Search names and posts")
+    expect(placeholder(["posts", "bio", "name"])).toBe(
+      "Search names, bios and posts",
+    )
+  })
+
   test("a search is a chip even with no Condition, and the chip clears it", () => {
     const calls = mount({ text: "", search: "crypto" })
     const row = screen.getByTestId("directory-filter-row")
@@ -271,5 +288,113 @@ describe("the search box (DIR-04)", () => {
     ).toBe(toggle)
     fireEvent.click(toggle)
     expect(calls.selectedFirst).toEqual([true])
+  })
+})
+
+describe("on a phone (DFP-02)", () => {
+  const sheet = () => screen.queryByRole("dialog", { name: "Filters and sort" })
+
+  test("the controls fold behind one button that counts the Conditions", () => {
+    mount({ phone: true })
+    expect(screen.queryByTestId("directory-filters")).toBeNull()
+    expect(screen.queryByRole("group", { name: "Search in" })).toBeNull()
+    expect(screen.getByTestId("directory-search")).toBeTruthy()
+    expect(screen.getByTestId("directory-controls-button").textContent).toBe(
+      "3",
+    )
+    expect(sheet()).toBeNull()
+  })
+
+  test("with no Condition on, the button says Filters", () => {
+    mount({ phone: true, text: "" })
+    expect(screen.getByTestId("directory-controls-button").textContent).toBe(
+      "Filters",
+    )
+  })
+
+  test("the button opens a sheet with every control and the search fields; Done closes it", () => {
+    const calls = mount({ phone: true })
+    fireEvent.click(screen.getByTestId("directory-controls-button"))
+    const open = sheet() as HTMLElement
+    expect(open).toBeTruthy()
+    expect(open.querySelector('[data-testid="directory-filters"]')).toBeTruthy()
+    expect(open.querySelector('[data-testid="directory-sort"]')).toBeTruthy()
+    fireEvent.click(screen.getByTestId("directory-search-field-posts"))
+    expect(calls.fields).toEqual([["name", "bio"]])
+    fireEvent.click(screen.getByRole("button", { name: "Done" }))
+    expect(sheet()).toBeNull()
+  })
+
+  test("a wide screen keeps the controls inline and no button", () => {
+    mount()
+    expect(screen.getByTestId("directory-filters")).toBeTruthy()
+    expect(screen.getByRole("group", { name: "Search in" })).toBeTruthy()
+    expect(screen.queryByTestId("directory-controls-button")).toBeNull()
+    expect(sheet()).toBeNull()
+  })
+})
+
+describe("a Tag Condition (DFP-04)", () => {
+  const vocabulary = directoryVocabulary(
+    [],
+    () => null,
+    { ticked: [], selection: [], follows: [] },
+    {
+      tags: [{ name: "News", channels: 2 }],
+      groups: ["Slow Feed"],
+      loaded: true,
+    },
+  )
+
+  test("a Tag the reader has, or a Setting group's, is an ordinary chip", () => {
+    mount({ text: 'tag:news and tag:"group:slow feed"', vocabulary })
+    const chips = ["In the Tag news", "In the Tag group:slow feed"].map(
+      (name) => screen.getByRole("button", { name }),
+    )
+    expect(chips.map((c) => c.getAttribute("data-stale"))).toEqual([null, null])
+  })
+
+  test("a Tag the reader lacks keeps its chip, struck through, and says why", () => {
+    mount({ text: "tag:gone", vocabulary })
+    const chip = screen.getByRole("button", { name: "In the Tag gone" })
+    expect(chip.getAttribute("data-stale")).toBe("true")
+    expect(chip.className).toContain("line-through")
+    expect(chip.getAttribute("title")).toContain("matches nothing")
+  })
+
+  test("a Tag the reader lacks as the Seeds is struck through too (DFP-05)", () => {
+    mount({
+      text: 'parents:"tag:gone" and citedby:"tag:News"',
+      vocabulary,
+    })
+    const gone = screen.getByRole("button", {
+      name: "2+ shared parents with the Tag gone",
+    })
+    expect(gone.getAttribute("data-stale")).toBe("true")
+    const known = screen.getByRole("button", { name: "Cited by the Tag News" })
+    expect(known.getAttribute("data-stale")).toBeNull()
+  })
+
+  test("nothing is struck through before the Tags arrive", () => {
+    mount({
+      text: "tag:gone",
+      vocabulary: directoryVocabulary(
+        [],
+        () => null,
+        { ticked: [], selection: [], follows: [] },
+        { tags: [], groups: [], loaded: false },
+      ),
+    })
+    const chip = screen.getByRole("button", { name: "In the Tag gone" })
+    expect(chip.getAttribute("data-stale")).toBeNull()
+  })
+
+  test("the Filters picker offers each Tag and Setting group by name", () => {
+    const calls = mount({ text: "", vocabulary })
+    fireEvent.click(screen.getByTestId("directory-filters"))
+    fireEvent.click(screen.getByText("In the Tag"))
+    expect(screen.getByText("group:Slow Feed")).toBeTruthy()
+    fireEvent.click(screen.getByText("News"))
+    expect(calls.filters).toEqual(["tag:News"])
   })
 })

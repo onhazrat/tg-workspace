@@ -1,6 +1,6 @@
 /**
  * The Directory's table (DIR-02), props-only: the columns of user story 7
- * (Cited by and Cites come with DIR-05), ticks with the followed ones locked,
+ * (Cited by and Cites come with DIR-05), ticks on every row, followed or not,
  * the header's partial tick, sorting from a header, Follow, the Telegram web
  * view link and the pages.
  */
@@ -43,6 +43,7 @@ const row = (handle: string, over: Partial<DirectoryRowResponse> = {}) =>
     match: null,
     sharedParents: null,
     sharedChildren: null,
+    tags: [],
     ...over,
   }) satisfies DirectoryRowResponse
 
@@ -141,25 +142,69 @@ describe("opening the panel", () => {
 })
 
 describe("ticks", () => {
-  test("a followed row is ticked and locked", () => {
-    mount()
-    expect(box("@gamma already followed").checked).toBe(true)
-    expect(box("@gamma already followed").disabled).toBe(true)
+  test("a followed row ticks and unticks like any other (DFP-01)", () => {
+    const calls = mount()
+    expect(box("Tick @gamma").checked).toBe(false)
+    expect(box("Tick @gamma").disabled).toBe(false)
+    fireEvent.click(box("Tick @gamma"))
+    cleanup()
+    const again = mount({ ticks: new Set(["gamma"]) })
+    expect(box("Tick @gamma").checked).toBe(true)
+    fireEvent.click(box("Tick @gamma"))
+    expect([...calls.ticks, ...again.ticks]).toEqual([["gamma"], []])
   })
 
-  test("the header ticks every unfollowed row on the page", () => {
+  test("the header ticks every row on the page, followed or not", () => {
     const calls = mount({ ticks: new Set(["zeta"]) })
-    fireEvent.click(box("Tick every unfollowed channel on this page"))
-    expect(calls.ticks).toEqual([["alpha", "beta", "zeta"]])
+    fireEvent.click(box("Tick every channel on this page"))
+    expect(calls.ticks).toEqual([["alpha", "beta", "gamma", "zeta"]])
   })
 
   test("the header is partial while some are ticked, and a row ticks itself", () => {
     const calls = mount({ ticks: new Set(["alpha"]) })
-    expect(
-      box("Tick every unfollowed channel on this page").indeterminate,
-    ).toBe(true)
+    expect(box("Tick every channel on this page").indeterminate).toBe(true)
     fireEvent.click(box("Tick @beta"))
     expect(calls.ticks).toEqual([["alpha", "beta"]])
+  })
+})
+
+describe("keyboard mode (DFP-01)", () => {
+  test("the highlighted row is marked, and x, f, d and o press its tick, Follow, Dismiss and link", () => {
+    mount({ ring: "beta" })
+    const ringed = document.querySelectorAll("[data-kbd-selected]")
+    expect(
+      [...ringed].map((r) => r.getAttribute("data-directory-handle")),
+    ).toEqual(["beta"])
+    const row = screen.getByTestId("directory-row-beta")
+    const key = (k: string) =>
+      row.querySelector(`[data-shortcut="${k}"]`)?.getAttribute("aria-label") ??
+      row.querySelector(`[data-shortcut="${k}"]`)?.textContent
+    expect(key("x")).toBe("Tick @beta")
+    expect(key("f")).toBe("Follow @beta")
+    expect(key("d")).toBe("Dismiss @beta")
+    expect(key("o")).toBe("@beta")
+  })
+
+  test("t presses the row's Tag picker, and a row shows its Tags (DFP-04)", () => {
+    const tagged: [string, string[], boolean][] = []
+    mount({
+      rows: [row("alpha", { tags: ["News"] })],
+      ring: "alpha",
+      tagging: {
+        tags: [{ name: "News", channels: 1 }],
+        onTag: (name, handles) => tagged.push([name, handles, true]),
+        onUntag: (name, handles) => tagged.push([name, handles, false]),
+      },
+    })
+    const row_ = screen.getByTestId("directory-row-alpha")
+    expect(
+      row_.querySelector("[data-testid=directory-tags]")?.textContent,
+    ).toBe("News")
+    const button = row_.querySelector<HTMLElement>('[data-shortcut="t"]')
+    expect(button?.getAttribute("aria-label")).toBe("Tag @alpha")
+    fireEvent.click(button as HTMLElement)
+    fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
+    expect(tagged).toEqual([["News", ["alpha"], false]])
   })
 })
 
@@ -310,5 +355,65 @@ describe("the matches (DIR-04)", () => {
   test("a name-only match quotes nothing", () => {
     mount({ rows: [row("alpha", { match: { bio: null, post: null } })] })
     expect(screen.queryByTestId("directory-match-alpha")).toBeNull()
+  })
+})
+
+describe("as cards on a phone (DFP-02)", () => {
+  const card = (handle: string) =>
+    screen.getByTestId(`directory-card-${handle}`)
+  const measures = (handle: string) =>
+    [...card(handle).querySelectorAll("[data-measure]")].map(
+      (m) => m.textContent,
+    )
+
+  test("each row is a card with a tick, name, handle and the key numbers; no table", () => {
+    mount({ cards: true, sort: "cites", rows: [row("alpha", { cites: 7 })] })
+    expect(screen.queryByRole("table")).toBeNull()
+    expect(card("alpha").textContent).toContain("alpha name")
+    expect(screen.getByRole("link", { name: "@alpha" })).toBeTruthy()
+    expect(box("Tick @alpha")).toBeTruthy()
+    // The sorted measure leads, then Subscribers, Reach, Posts per week, Language.
+    expect(measures("alpha")).toEqual([
+      "Cites 7",
+      "Subs 12.3K",
+      "Reach 450",
+      "Posts/wk 3.3",
+      "Lang fa",
+    ])
+  })
+
+  test("Shared counts show while a Shared Condition is on", () => {
+    mount({
+      cards: true,
+      sort: "subscribers",
+      rows: [row("alpha", { sharedParents: 4 })],
+    })
+    expect(measures("alpha")).toEqual([
+      "Subs 12.3K",
+      "Reach 450",
+      "Posts/wk 3.3",
+      "Lang fa",
+      "Parents 4",
+    ])
+  })
+
+  test("tapping a card opens it; its tick and Follow do not", () => {
+    const calls = mount({ cards: true })
+    fireEvent.click(box("Tick @alpha"))
+    fireEvent.click(screen.getByRole("button", { name: "Follow @alpha" }))
+    expect(calls.ticks).toEqual([["alpha"]])
+    expect(calls.follow).toEqual(["alpha"])
+    expect(calls.open).toEqual([])
+    fireEvent.click(screen.getByText("beta name"))
+    expect(calls.open).toEqual(["beta"])
+  })
+
+  test("a followed card ticks too, and the pages stay", () => {
+    const calls = mount({ cards: true, ticks: new Set(["beta"]) })
+    expect(box("Tick @beta").checked).toBe(true)
+    fireEvent.click(box("Tick @gamma"))
+    expect(calls.ticks).toEqual([["beta", "gamma"]])
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    expect(calls.page).toEqual([1])
   })
 })

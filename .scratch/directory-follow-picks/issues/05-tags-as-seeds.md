@@ -9,13 +9,13 @@ filter decisions, including the Seed source shape the prototype settled on.
 
 **Blocked by:** DFP-04
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The Shared Condition takes either browser-resolved handles (Ticks, selection, Follows, typed) or a Tag name the server resolves; Cited by and Cites do the same
-- [ ] A Tag-sourced Condition follows the Tag as Channels are tagged and untagged
-- [ ] Cited by and Cites accept up to 500 fixed handles (from 50); the Shared cap stays 10,000; the editor says when a list passes 500 and points to a Tag
-- [ ] Cited by and Cites fill their handles from the Ticks, the Channels tab selection, every Follow or a Tag
-- [ ] `picks` is renamed to Seeds across the wire, the text form and the frontend types; the text form's source words read `ticked`, `selection`, `follows`, `tag:<name>`; a link written with the old words still parses
-- [ ] "Why it's here" names the Shared Channels against the Seeds, whatever their source
-- [ ] Backend tests through the Directory reads: a Tag as Shared Seeds and as Cited Seeds, for two Accounts with the same Tag name; 500 handles accepted and 501 refused
-- [ ] Text-form tests round-trip the new and old Seed words, mutation-tested
+- [x] The Shared Condition takes either browser-resolved handles (Ticks, selection, Follows, typed) or a Tag name the server resolves; Cited by and Cites do the same
+- [x] A Tag-sourced Condition follows the Tag as Channels are tagged and untagged
+- [x] Cited by and Cites accept up to 500 fixed handles (from 50); the Shared cap stays 10,000; the editor says when a list passes 500 and points to a Tag
+- [x] Cited by and Cites fill their handles from the Ticks, the Channels tab selection, every Follow or a Tag
+- [x] `picks` is renamed to Seeds across the wire, the text form and the frontend types; the text form's source words read `ticked`, `selection`, `follows`, `tag:<name>`; a link written with the old words still parses
+- [x] "Why it's here" names the Shared Channels against the Seeds, whatever their source
+- [x] Backend tests through the Directory reads: a Tag as Shared Seeds and as Cited Seeds, for two Accounts with the same Tag name; 500 handles accepted and 501 refused
+- [x] Text-form tests round-trip the new and old Seed words, mutation-tested

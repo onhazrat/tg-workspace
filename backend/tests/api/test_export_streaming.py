@@ -78,6 +78,8 @@ EXPECTED_SECTIONS = {
     "tag_runs",
     "discover_reports",
     "user_settings",
+    # ADR-029: every Tag the subject holds, followed Channel or not.
+    "tags",
 }
 
 
@@ -86,8 +88,8 @@ def test_streamed_export_is_a_complete_document(db: Session) -> None:
     operator_id = get_operator_user_id(db)
     assert operator_id is not None
     # Ticket 22: the export carries the *caller's* per-User channel fields,
-    # because tags and start times moved onto `tg_channel_follows` and
-    # "this channel's tags" stopped having one answer.
+    # because start times moved onto `tg_channel_follows` and tags onto
+    # `tg_tags`, so "this channel's tags" stopped having one answer.
     document = json.loads(
         "".join(
             stream_export_data(

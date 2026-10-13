@@ -69,6 +69,7 @@ from app.models_tg import (
     DiscoverReport,
     Post,
     Summary,
+    Tag,
     TagRun,
     UserSetting,
 )
@@ -79,6 +80,7 @@ from app.services.data_import_export import (
 )
 from app.services.follows import ensure_follow_for_channel
 from app.services.settings_registry import SYNC_PREFS_KEY
+from app.services.tags import add_tags, replace_channel_tags, tags_by_handle
 from app.services.tenancy import SCOPES
 from tests.utils.discover import stored_report_scope
 from tests.utils.user import user_authentication_headers
@@ -172,8 +174,9 @@ def _seed_account(session: Session, owner: User, tag: str) -> None:
         session,
         channel,
         user_id=owner.id,
-        values={"tags": [tag], "followed_at": 1},
+        values={"followed_at": 1},
     )
+    replace_channel_tags(session, user_id=owner.id, handle=tag, tags=[tag])
     session.add(
         Post(channel_name=tag, post_id=1, text=f"post {tag}", date="", timestamp=1)
     )
@@ -368,7 +371,7 @@ def test_the_document_carries_the_subjects_follow_not_the_callers(
     subject: tuple[User, dict[str, str]],
     either_flag_state: bool,
 ) -> None:
-    """Ticket 22 moved `tags` onto the Follow, so a channel has no one answer.
+    """Tags are per Account (ADR-029), so a channel has no one answer.
 
     The Admin follows the same handle with different tags. The subject's
     document has to say the subject's — otherwise a backup restores values its
@@ -381,8 +384,9 @@ def test_the_document_carries_the_subjects_follow_not_the_callers(
         channel = session.exec(
             select(Channel).where(col(Channel.name) == "shared")
         ).one()
-        ensure_follow_for_channel(
-            session, channel, user_id=admin_user.id, values={"tags": ["admins-tag"]}
+        ensure_follow_for_channel(session, channel, user_id=admin_user.id)
+        replace_channel_tags(
+            session, user_id=admin_user.id, handle="shared", tags=["admins-tag"]
         )
         session.commit()
 
@@ -840,3 +844,53 @@ def test_a_round_trip_restores_every_family(
         setting = session.get(UserSetting, (SYNC_PREFS_KEY, subject_user.id))
         assert setting is not None
         assert setting.value["defaultStartId"] == "theirs"
+
+
+def test_tags_on_unfollowed_channels_travel_and_come_back(
+    client: TestClient,
+    admin: tuple[User, dict[str, str]],
+    subject: tuple[User, dict[str, str]],
+) -> None:
+    """ADR-029: a Tag outlives the Follow, so the backup has to carry it too.
+
+    The channel rows only reach followed Channels, so the `tags` section is the
+    one place a Tag on an unfollowed Channel travels.
+    """
+    admin_user, headers = admin
+    subject_user, _ = subject
+    with Session(engine) as session:
+        _seed_account(session, subject_user, "theirs")
+        add_tags(
+            session,
+            user_id=subject_user.id,
+            rows=[{"handle": "gone", "name": "Later", "source": "ai", "assignedAt": 7}],
+        )
+        add_tags(
+            session, user_id=admin_user.id, rows=[{"handle": "gone", "name": "Mine"}]
+        )
+        session.commit()
+
+    document = _export(client, headers, str(subject_user.id))
+
+    assert sorted((row["handle"], row["name"]) for row in document["data"]["tags"]) == [
+        ("gone", "Later"),
+        ("theirs", "theirs"),
+    ]
+
+    with Session(engine) as session:
+        session.exec(delete(Tag))  # type: ignore[call-overload]
+        session.commit()
+    restored = client.post(
+        f"{DATA}/import",
+        headers=headers,
+        params={"subject": str(subject_user.id)},
+        json=document,
+    )
+    assert restored.status_code == 200, restored.text
+
+    with Session(engine) as session:
+        assert tags_by_handle(session, user_id=subject_user.id) == {
+            "theirs": [{"name": "theirs", "source": "manual", "assignedAt": 0}],
+            "gone": [{"name": "Later", "source": "ai", "assignedAt": 7}],
+        }
+        assert tags_by_handle(session, user_id=admin_user.id) == {}

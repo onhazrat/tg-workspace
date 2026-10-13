@@ -374,7 +374,20 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "the caller's followed channels; test_bulk_channels.py",
     ),
-    ("PATCH", f"{DATA}/channels/bulk-tags"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("PATCH", f"{DATA}/channels/bulk-tags"): (
+        Reason.COVERED_ELSEWHERE,
+        "same file: test_a_tag_on_an_unfollowed_channel_stays_its_accounts_own",
+    ),
+    # --- tags (DFP-04) --------------------------------------------------------
+    ("GET", f"{DATA}/tags"): (
+        Reason.COVERED_ELSEWHERE,
+        "keyed by the caller; test_directory_tags.py, both flag states",
+    ),
+    ("GET", f"{DATA}/tags/channels"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("POST", f"{DATA}/tags/channels"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("DELETE", f"{DATA}/tags/channels"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("PATCH", f"{DATA}/tags"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("DELETE", f"{DATA}/tags"): (Reason.COVERED_ELSEWHERE, "same file"),
     # --- logs ----------------------------------------------------------------
     ("GET", f"{DATA}/logs/{{log_type}}"): (
         Reason.COVERED_ELSEWHERE,
@@ -1294,6 +1307,53 @@ def test_a_strangers_channel_edit_does_not_reach_your_own_view(
         if c["id"] == "put-chan"
     )
     assert [t["name"] for t in his["tags"]] == ["his"]
+
+
+@pytest.mark.security
+def test_a_tag_on_an_unfollowed_channel_stays_its_accounts_own(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+) -> None:
+    """Tags outlive the Follow (ADR-029), so they must not leak once it is gone.
+
+    Alice tags a Channel and unfollows it; her Tag row stays. Bob then follows
+    the same handle and bulk-tags it: he sees none of hers, his edit reaches
+    none of hers, and his bulk Tag on a Channel only she follows is refused.
+    """
+    with Session(engine) as session:
+        add_test_channel(session, "tag-left", user_id=alice[0].id, tags=["hers"])
+        add_test_channel(session, "tag-hers", user_id=alice[0].id, tags=["hers"])
+        session.commit()
+    assert (
+        client.delete(f"{DATA}/channels/tag-left", headers=alice[1]).status_code == 200
+    )
+
+    followed = client.put(f"{DATA}/channels/tag-left", json={}, headers=bob[1])
+    assert followed.status_code == 200, followed.text[:300]
+    assert followed.json()["tags"] == []
+    his = {"name": "his", "source": "manual", "assignedAt": 1}
+    tagged = client.patch(
+        f"{DATA}/channels/bulk-tags",
+        json={"updates": [{"channelId": "tag-left", "tags": [his]}]},
+        headers=bob[1],
+    )
+    assert tagged.status_code == 200, tagged.text[:300]
+    refused = client.patch(
+        f"{DATA}/channels/bulk-tags",
+        json={"updates": [{"channelId": "tag-hers", "tags": [his]}]},
+        headers=bob[1],
+    )
+    assert refused.status_code == 404
+
+    refollowed = client.put(f"{DATA}/channels/tag-left", json={}, headers=alice[1])
+    assert [t["name"] for t in refollowed.json()["tags"]] == ["hers"]
+    hers = next(
+        c
+        for c in client.get(f"{DATA}/channels", headers=alice[1]).json()
+        if c["id"] == "tag-hers"
+    )
+    assert [t["name"] for t in hers["tags"]] == ["hers"]
 
 
 # --------------------------------------------------------------------------

@@ -166,10 +166,12 @@ class ChannelFollow(SQLModel, table=True):
     The Channel and its Posts are a shared corpus — `Channel.id` is the handle
     and `Post` is unique per `(channel_name, post_id)`, so one scrape serves
     every follower. What is *not* shared is the relation: which Channels you
-    watch, what you tagged them, when you started, and when yours next syncs.
+    watch, when you started, and when yours next syncs.
     Those columns used to sit on `tg_channels`, where a second follower of the
     same handle had to overwrite the first one's values to have any of their
     own. Ticket 22 dropped them there, so this table is now their only home.
+    What you tagged them used to live here too; DFP-03 moved it to `Tag`
+    (ADR-029), so unfollowing keeps it.
 
     Composite natural key `(user_id, channel_id)`, so following twice is
     impossible by construction rather than by a check somebody remembers, and
@@ -212,7 +214,6 @@ class ChannelFollow(SQLModel, table=True):
     #: there is no longer anything to fall back to.
     setting_group_id: str | None = Field(default=None)
     followed_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
-    tags: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
     start_id: int | None = None
     start_time: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
     discovered_via: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
@@ -222,6 +223,38 @@ class ChannelFollow(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class Tag(SQLModel, table=True):
+    """One Account's Tag on one Channel (ADR-029, DFP-03).
+
+    A Tag used to be a JSON list on the Follow, so it could sit only on a
+    Channel the Account follows and unfollowing deleted it. It describes the
+    Channel as the Account sees it, not the act of watching it, so it lives
+    here, keyed by the Account rather than the Follow: unfollowing leaves these
+    rows, and following again shows them.
+
+    Keyed by the Channel's **normalized handle** (`telegram_web.normalize_handle`),
+    the key the Directory, the Dismissals and the References use, never
+    `Channel.id`, whose case can differ from the handle's. `tag_key` is the
+    name lowercased, so "News" and "news" are one Tag; `name` keeps the
+    spelling as first written. `services/tags.py` is the sole writer.
+    """
+
+    __tablename__ = "tg_tags"
+
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        primary_key=True,
+        ondelete="CASCADE",
+    )
+    handle: str = Field(primary_key=True)
+    tag_key: str = Field(primary_key=True)
+    name: str
+    #: `manual` or `ai`: who put the Tag here, a person or a Tag run.
+    source: str = Field(default="manual")
+    #: Millisecond epoch; 0 for a Tag that predates the field.
+    assigned_at: int = Field(default=0, sa_column=_ms_ts())
 
 
 class Post(SQLModel, table=True):
