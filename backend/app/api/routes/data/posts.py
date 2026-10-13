@@ -20,16 +20,22 @@ from app.schemas.posts import (
     PostFeedRequest,
     PostFilteredRequest,
     PostLookupRequest,
+    PostValueHistogramRequest,
+    PostValueHistogramResponse,
+    PostWindowHistogramRequest,
+    PostWindowHistogramResponse,
     SelectablePostResponse,
     ViewCurveResponse,
     ViewEstimateResponse,
 )
 from app.services.analysis_window import resolve_analysis_window
-from app.services.post_selection import PostScope
+from app.services.post_filters import PostScope
 from app.services.posts import (
     bulk_upsert_posts,
     count_facets_in_scope,
     count_shown_and_selected,
+    value_histogram,
+    window_histogram,
 )
 from app.services.posts import list_feed as list_feed_impl
 from app.services.posts import lookup_posts as lookup_posts_impl
@@ -127,6 +133,71 @@ def posts_counts(
     )
 
 
+# PTI-01. A read expressed as a POST for the reason `posts_counts` is one, and
+# on `VIEW_AS_READ_ONLY_PATHS` beside it.
+@router.post("/posts/value-histogram")
+def posts_value_histogram(
+    body: PostValueHistogramRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostValueHistogramResponse:
+    """One measure's bars over the window and the Channels.
+
+    What a number filter's editor draws: 32 bars from the lowest value to the
+    highest, logarithmic when the highest is over 100 times the lowest.
+    `views` and `estimated` count Posts, `channel_posts` and
+    `channel_posts_filtered` count Channels by their Posts in the window. The
+    Post filter and the keyword in the body are applied only by
+    `channel_posts_filtered`, whose count is the Posts they keep, so the
+    other bars hold still while the Account changes another Condition.
+    """
+    window = resolve_analysis_window(body.window)
+    histogram = value_histogram(
+        session,
+        scope=PostScope(
+            current_user.id, body.cleaned_channel_names(), window.start, window.end
+        ),
+        measure=body.measure,
+        filters=parse_post_filters(session, body, tree=body.filter)
+        if body.measure == "channel_posts_filtered"
+        else None,
+    )
+    return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
+
+
+# PTI-03. A read expressed as a POST for the reason `posts_counts` is one, and
+# on `VIEW_AS_READ_ONLY_PATHS` beside it.
+@router.post("/posts/window-histogram")
+def posts_window_histogram(
+    body: PostWindowHistogramRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> PostWindowHistogramResponse:
+    """How many Posts fall in each equal slice of a stretch of time.
+
+    What the Analysis window editor's chart draws. Filtered, the Post filter
+    and keyword apply but the per-Channel cap does not, so the bars do not
+    depend on the feed's order; `unfiltered` counts every Post of the
+    selected Channels. A Channel posts Condition counts within the Analysis
+    window, not the stretch drawn.
+    """
+    window = resolve_analysis_window(body.window)
+    return PostWindowHistogramResponse(
+        counts=window_histogram(
+            session,
+            scope=PostScope(
+                current_user.id, body.cleaned_channel_names(), window.start, window.end
+            ),
+            extent_start=body.extent_start,
+            extent_end=body.extent_end,
+            buckets=body.buckets,
+            filters=None
+            if body.unfiltered
+            else parse_post_filters(session, body, tree=body.filter),
+        )
+    )
+
+
 # PFB-03. A GET: it reads the curve and two settings, nothing per account.
 @router.get("/posts/view-estimate")
 def posts_view_estimate(
@@ -192,6 +263,8 @@ def lookup_posts_route(
             user_id=current_user.id,
             filters=None if body.filter is None else tree_filters(session, body.filter),
             selected=selected_in(session, body.selection, scope),
+            start_date=window.start,
+            end_date=window.end,
         )
     ]
 

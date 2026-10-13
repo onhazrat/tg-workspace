@@ -37,6 +37,7 @@ from app.schemas.scope import (
     ViewMeasure,
     upgrade_legacy_scope_fields,
 )
+from app.services.post_filters import ValueMeasure
 from app.services.posts import (
     DEFAULT_POST_PAGE_SIZE,
     MAX_POST_LOOKUP_BATCH,
@@ -250,6 +251,59 @@ class PostFilteredRequest(PostScopeRequest):
     max_per_channel_mode: CapMode = PydanticField("ordered", alias="maxPerChannelMode")
     sort: SortOrder = "newest"
     seed: int = 0
+
+
+class PostValueHistogramRequest(PostFilteredRequest):
+    """`PostFilteredRequest` plus the measure a number filter's editor bounds.
+
+    The body is the filtered request's so the editor sends the scope it
+    already has; the Post filter and keyword in it are set aside, except by
+    `channel_posts_filtered`, which counts what they keep.
+    """
+
+    measure: ValueMeasure
+
+
+class PostValueHistogramResponse(BaseModel):
+    """32 bars and their 33 edges, binned by the Channels tab's rule.
+
+    Empty `bins` and `edges` when nothing in the scope has a value.
+    """
+
+    bins: list[int]
+    edges: list[float]
+    log: bool
+    median: float | None
+    # Posts with a value, and all of them.
+    measured: int
+    total: int
+
+
+class PostWindowHistogramRequest(PostFilteredRequest):
+    """`PostFilteredRequest` plus the stretch of time the Analysis window chart draws.
+
+    `[extentStart, extentEnd)` is cut into `buckets` equal slices. Filtered,
+    the Post filter and keyword apply and the per-Channel cap does not;
+    `unfiltered` sets the filter and keyword aside too. `window` stays the
+    Analysis window, which a Channel posts Condition counts within.
+    """
+
+    extent_start: int = PydanticField(alias="extentStart")
+    extent_end: int = PydanticField(alias="extentEnd")
+    buckets: int = PydanticField(ge=1, le=500)
+    unfiltered: bool = False
+
+    @model_validator(mode="after")
+    def _extent_has_length(self) -> PostWindowHistogramRequest:
+        if self.extent_end <= self.extent_start:
+            raise ValueError("extentEnd must be after extentStart")
+        return self
+
+
+class PostWindowHistogramResponse(BaseModel):
+    """The Posts in each slice of the extent, earliest first."""
+
+    counts: list[int]
 
 
 class PostFeedRequest(PostFilteredRequest):

@@ -13,11 +13,11 @@ Implementation Decisions.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ### The shared component
 
-- [ ] The Channels number editor's bars, drag, hover and caption move into one presentational component, behaviour unchanged. Its interface (from the prototype):
+- [x] The Channels number editor's bars, drag, hover and caption move into one presentational component, behaviour unchanged. Its interface (from the prototype):
   ```ts
   BarHistogram({
     bins: number[]
@@ -26,23 +26,23 @@ Implementation Decisions.
     caption: (shown: number | null) => [left, middle, right]
   })
   ```
-- [ ] A bound histogram on top of it takes a distribution (`bins`, `edge(i)`, `lo`, `hi`, `median`, `log`), draws the bars a bound keeps solid, turns a run into a bound and captions it; the Channels editor builds its distribution in the browser exactly as today
-- [ ] The Channels number editor's existing tests pass **unchanged**
+- [x] A bound histogram on top of it takes a distribution (`bins`, `edge(i)`, `lo`, `hi`, `median`, `log`), draws the bars a bound keeps solid, turns a run into a bound and captions it; the Channels editor builds its distribution in the browser exactly as today
+- [x] The Channels number editor's existing tests pass **unchanged**
 
 ### The value histogram read
 
-- [ ] A POST read takes the filtered-request body plus `measure` (`views` or `estimated` in this ticket) and answers `{ bins: int[32], edges: float[33], log, median, measured, total }`, the Channels tab's binning rule (logarithmic, or log(1 + x) from zero, when the highest is over 100 times the lowest)
-- [ ] It reads through the tenancy seam like the feed, over the Analysis window and the selected Channels (spotlight included), ignoring the Post filter and keyword
-- [ ] Its docstring carries no ticket id (a comment above the decorator does); the client is regenerated
-- [ ] Account isolation probes it with two live accounts; route inventory, approval gate, route-module hygiene and the View-as read-only check pass
+- [x] A POST read takes the filtered-request body plus `measure` (`views` or `estimated` in this ticket) and answers `{ bins: int[32], edges: float[33], log, median, measured, total }`, the Channels tab's binning rule (logarithmic, or log(1 + x) from zero, when the highest is over 100 times the lowest) (changed: a window with nothing measured answers empty `bins` and `edges` and `median: null`; the editor reads `measured`)
+- [x] It reads through the tenancy seam like the feed, over the Analysis window and the selected Channels (spotlight included), ignoring the Post filter and keyword
+- [x] Its docstring carries no ticket id (a comment above the decorator does); the client is regenerated
+- [x] Account isolation probes it with two live accounts; route inventory, approval gate, route-module hygiene and the View-as read-only check pass (changed: the probe finds rows by id and this read answers bar counts, so `test_account_isolation.py` excuses it as covered elsewhere and `test_post_value_histogram.py` runs the two-account checks)
 
 ### The editors
 
-- [ ] Views and Estimated views open on the histogram; a drag fills the fields; typing redraws the solid bars; an empty window says nothing has a value instead of drawing nothing
-- [ ] The histogram's read reaches the editor through context, so the filter bar still renders (and tests) without providers
+- [x] Views and Estimated views open on the histogram; a drag fills the fields; typing redraws the solid bars; an empty window says nothing has a value instead of drawing nothing
+- [x] The histogram's read reaches the editor through context, so the filter bar still renders (and tests) without providers
 
 ### Tests
 
-- [ ] Backend, through the HTTP API: linear against logarithmic bins, `measured` against `total` for Estimated views (Posts under the floor have no value), an empty window, another account's Posts never counted
-- [ ] Frontend, through the filter bar's props-only test with a fake read: a drag over bars produces the expected `views <= …` text
-- [ ] Each new test watched failing against a mutation first
+- [x] Backend, through the HTTP API: linear against logarithmic bins, `measured` against `total` for Estimated views (Posts under the floor have no value), an empty window, another account's Posts never counted
+- [x] Frontend, through the filter bar's props-only test with a fake read: a drag over bars produces the expected `views <= …` text
+- [x] Each new test watched failing against a mutation first

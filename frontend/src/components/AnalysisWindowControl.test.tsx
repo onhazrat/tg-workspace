@@ -16,8 +16,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 
-import { AnalysisWindowControl } from "@/components/AnalysisWindowControl"
+import {
+  AnalysisWindowControl,
+  WindowHistogramContext,
+} from "@/components/AnalysisWindowControl"
 import { ScopeProvider, useScope } from "@/contexts/ScopeContext"
+import type { WindowHistogramQuery } from "@/lib/analysis-window"
+import { DAY_MS, formatLocalMinute, HOUR_MS } from "@/lib/scope/window"
 
 const NOW = Date.UTC(2026, 8, 11, 14, 30)
 
@@ -383,5 +388,158 @@ describe("a request from another surface", () => {
 
     expect(screen.getByLabelText("Duration")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Back to Action" })).toBeNull()
+  })
+})
+
+describe("the chart (PTI-03)", () => {
+  /** A fake read: every query it was asked, and bucket `i` holding `i` Posts. */
+  function renderCharted() {
+    const asked: WindowHistogramQuery[] = []
+    const read = (q: WindowHistogramQuery) => {
+      asked.push(q)
+      return Array.from({ length: q.buckets }, (_, i) => i)
+    }
+    render(
+      <ScopeProvider clock={() => NOW}>
+        <WindowHistogramContext.Provider value={read}>
+          <AnalysisWindowControl />
+        </WindowHistogramContext.Provider>
+      </ScopeProvider>,
+    )
+    return { last: () => asked[asked.length - 1] }
+  }
+
+  const bar = (i: number) => screen.getByTestId(`window-bar-${i}`)
+  const solid = () =>
+    screen
+      .getAllByTestId(/^window-bar-/)
+      .flatMap((el, i) => (el.dataset.solid === "true" ? [i] : []))
+
+  test("three times the window, centred on it but never past now, the window solid", () => {
+    const { last } = renderCharted()
+    open()
+
+    // The default Live day ends now, so the chart is the three days before it.
+    expect(last()).toEqual({
+      extentStart: NOW - 3 * DAY_MS,
+      extentEnd: NOW,
+      buckets: 60,
+      unfiltered: false,
+    })
+    expect(screen.getAllByTestId(/^window-bar-/)).toHaveLength(60)
+    expect(solid()).toEqual(Array.from({ length: 20 }, (_, i) => 40 + i))
+  })
+
+  test("a window in the past is centred", () => {
+    const { last } = renderCharted()
+    open()
+    typeAndCommit("End gap", "3d")
+
+    expect(last().extentStart).toBe(NOW - 5 * DAY_MS)
+    expect(last().extentEnd).toBe(NOW - 2 * DAY_MS)
+    expect(solid()).toEqual(Array.from({ length: 20 }, (_, i) => 20 + i))
+  })
+
+  test("a drag sets a Fixed window from the first bucket's start to the last's end", () => {
+    renderCharted()
+    open()
+
+    // 72-minute buckets: 10 through 19 are 12h to 24h into the three days.
+    // Each event its own render, as a person's are.
+    fireEvent.pointerDown(bar(10))
+    for (let i = 11; i <= 19; i++) fireEvent.pointerEnter(bar(i))
+    fireEvent.pointerUp(bar(19))
+
+    expect(trigger().textContent).toContain("Fixed")
+    expect(value("Start")).toBe(
+      formatLocalMinute(NOW - 3 * DAY_MS + 12 * HOUR_MS),
+    )
+    expect(value("End")).toBe(formatLocalMinute(NOW - 2 * DAY_MS))
+  })
+
+  test("a click sets the window to that one bucket", () => {
+    renderCharted()
+    open()
+
+    fireEvent.pointerDown(bar(59))
+    fireEvent.pointerUp(bar(59))
+
+    expect(trigger().textContent).toContain("Fixed")
+    expect(value("Duration")).toBe("1h 12m")
+    expect(value("End gap")).toBe("0m")
+  })
+
+  test("hovering a bucket names its start and its count", () => {
+    renderCharted()
+    open()
+
+    act(() => {
+      fireEvent.pointerEnter(bar(7))
+    })
+
+    expect(
+      screen.getByTestId("window-histogram-caption").textContent,
+    ).toContain("7 posts")
+  })
+
+  test("the toggle changes what is requested", () => {
+    const { last } = renderCharted()
+    open()
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "All posts" }))
+    })
+    expect(last().unfiltered).toBe(true)
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Filtered" }))
+    })
+    expect(last().unfiltered).toBe(false)
+  })
+
+  test("zoom out triples the extent and zoom in returns, never past the default", () => {
+    const { last } = renderCharted()
+    open()
+    const zoomIn = () =>
+      screen.getByRole("button", { name: "Zoom in" }) as HTMLButtonElement
+
+    expect(zoomIn().disabled).toBe(true)
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Zoom out" }))
+    })
+    expect(last().extentEnd - last().extentStart).toBe(9 * DAY_MS)
+    expect(last().extentEnd).toBe(NOW)
+
+    act(() => {
+      fireEvent.click(zoomIn())
+    })
+    expect(last().extentEnd - last().extentStart).toBe(3 * DAY_MS)
+  })
+
+  test("the toggle and the zoom start over each time the editor opens", async () => {
+    const { last } = renderCharted()
+    open()
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Zoom out" }))
+    })
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "All posts" }))
+    })
+    act(() => {
+      fireEvent.keyDown(field("Duration"), { key: "Escape" })
+    })
+    await act(() => new Promise((done) => setTimeout(done, 0)))
+
+    open()
+
+    expect(last().extentEnd - last().extentStart).toBe(3 * DAY_MS)
+    expect(last().unfiltered).toBe(false)
+  })
+
+  test("without a read the editor draws no chart", () => {
+    renderControl()
+    open()
+
+    expect(screen.queryByTestId("window-bar-0")).toBeNull()
   })
 })

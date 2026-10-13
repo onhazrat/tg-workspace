@@ -9,6 +9,7 @@ the generated client, so the reasoning lives in comments.
 
 from __future__ import annotations
 
+import math
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
@@ -16,6 +17,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 from app.services.post_filters import (
     CapMode,
     ChannelCond,
+    ChannelPostsCond,
     FeedSort,
     LanguageCond,
     MediaCond,
@@ -115,12 +117,43 @@ class ViewsCondition(_Cond):
         return ViewsCond(self.measure, self.min, self.max, self.none)
 
 
+# PTI-02. Whole bounds: a fraction is accepted, so a stored one keeps working,
+# and rounded inward as the browser rounds it before sending (low end up, high
+# end down). No `none` form: every Channel with a Post in the window has a count.
+class _ChannelPostsBound(_Cond):
+    min: float | None = Field(None, ge=0)
+    max: float | None = Field(None, ge=0)
+
+    def _bound(self, filtered: bool) -> TreeCond:
+        return ChannelPostsCond(
+            filtered,
+            None if self.min is None else math.ceil(self.min),
+            None if self.max is None else math.floor(self.max),
+        )
+
+
+class ChannelPostsCondition(_ChannelPostsBound):
+    type: Literal["channel_posts"]
+
+    def to_cond(self) -> TreeCond:
+        return self._bound(filtered=False)
+
+
+class ChannelPostsFilteredCondition(_ChannelPostsBound):
+    type: Literal["channel_posts_filtered"]
+
+    def to_cond(self) -> TreeCond:
+        return self._bound(filtered=True)
+
+
 PostCondition = Annotated[
     TypeCondition
     | MediaCondition
     | LanguageCondition
     | ChannelCondition
-    | ViewsCondition,
+    | ViewsCondition
+    | ChannelPostsCondition
+    | ChannelPostsFilteredCondition,
     Field(discriminator="type"),
 ]
 

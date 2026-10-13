@@ -72,7 +72,8 @@ from app.services.dismissals import (
     list_dismissals,
     take_back_dismissals,
 )
-from app.services.post_selection import PostScope, freeze_selection
+from app.services.post_filters import PostScope
+from app.services.post_selection import freeze_selection
 
 router = APIRouter()
 

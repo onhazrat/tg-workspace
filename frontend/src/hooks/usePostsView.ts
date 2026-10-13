@@ -12,23 +12,29 @@ import { type PostFeedQuery, postScopeBody, shownPostsBody } from "@/api/data"
 import {
   dataPostsCounts,
   dataPostsFacets,
+  dataPostsValueHistogram,
   dataPostsViewEstimate,
+  dataPostsWindowHistogram,
   type PostFacetsRequest,
   type PostFacetsResponse,
   type PostFilteredRequest,
+  type PostValueHistogramRequest,
+  type PostValueHistogramResponse,
+  type PostWindowHistogramRequest,
   type ViewEstimateResponse,
 } from "@/client"
 import { useData } from "@/contexts/DataContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
 import {
   type ChannelSpotlight,
   spotlightView,
 } from "@/lib/posts/channel-spotlight"
-import { printPostFilter } from "@/lib/posts/post-filter"
+import { type PostNumber, printPostFilter } from "@/lib/posts/post-filter"
 import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
 import type { Post } from "@/types"
 import {
@@ -268,6 +274,107 @@ export function usePostFacets(
     placeholderData: (previous) => previous,
   })
   return query.data
+}
+
+/**
+ * The window, the selected Channels, and the Post filter and keyword as a
+ * spotlight shows them with the cap aside: what the two histograms read.
+ */
+function useUncappedView(spotlight: ChannelSpotlight | null) {
+  const { startDate, endDate, windowKey } = useScope()
+  const { postFilter, postSearch } = useScraper()
+  const keyword = useDebouncedValue(postSearch, 300)
+  const selected = useSelectedChannelNames()
+  const view = spotlightView(spotlight, {
+    channelNames: selected,
+    keyword,
+    filter: postFilter,
+    maxPerChannel: 0,
+    groupByChannel: false,
+  })
+  return { startDate, endDate, windowKey, selected, view }
+}
+
+/**
+ * One number's bars over the window and the selected Channels, or the
+ * spotlit one, for a number filter's editor (PTI-01). Filters aside, so it is
+ * keyed on the Channels, the window and the number alone, and the bars hold
+ * still while the Account changes another Condition. Channel posts in
+ * filtered window is the exception: its count is what the filter and the
+ * keyword keep, so it sends and is keyed on them too (PTI-02).
+ */
+export function usePostValueHistogram(
+  measure: PostNumber,
+  spotlight: ChannelSpotlight | null,
+): PostValueHistogramResponse | undefined {
+  const { startDate, endDate, windowKey, view } = useUncappedView(spotlight)
+  const { channelNames } = view
+  const filtered = measure === "channel_posts_filtered"
+  const filters = filtered
+    ? { keyword: view.keyword, filter: view.filter }
+    : undefined
+  return useQuery({
+    queryKey: queryKeys.postsValueHistogram({
+      channelNames,
+      window: windowKey,
+      measure,
+      ...(filters && {
+        keyword: filters.keyword,
+        filter: printPostFilter(filters.filter),
+      }),
+    }),
+    queryFn: () =>
+      dataPostsValueHistogram({
+        body: {
+          ...postScopeBody({ channelNames, startDate, endDate, ...filters }),
+          measure,
+        } as PostValueHistogramRequest,
+      }),
+    enabled: channelNames.length > 0,
+    staleTime: SUMMARIZER_STALE_TIME,
+    placeholderData: (previous) => previous,
+  }).data
+}
+
+/**
+ * The Posts in each slice of the Analysis window chart's extent (PTI-03).
+ * Filtered, what the Post filter, keyword and spotlight keep, the cap aside;
+ * unfiltered, every Post of the selected Channels.
+ */
+export function usePostWindowHistogram(
+  query: WindowHistogramQuery,
+  spotlight: ChannelSpotlight | null,
+): number[] | undefined {
+  const { startDate, endDate, windowKey, selected, view } =
+    useUncappedView(spotlight)
+  const scope = query.unfiltered
+    ? { channelNames: selected }
+    : {
+        channelNames: view.channelNames,
+        keyword: view.keyword,
+        filter: view.filter,
+      }
+  return useQuery({
+    queryKey: queryKeys.postsWindowHistogram({
+      ...query,
+      ...scope,
+      filter: scope.filter && printPostFilter(scope.filter),
+      // A Channel posts Condition counts within the window.
+      window: windowKey,
+    }),
+    queryFn: async () =>
+      (
+        await dataPostsWindowHistogram({
+          body: {
+            ...postScopeBody({ ...scope, startDate, endDate }),
+            ...query,
+          } as PostWindowHistogramRequest,
+        })
+      ).counts,
+    enabled: scope.channelNames.length > 0,
+    staleTime: SUMMARIZER_STALE_TIME,
+    placeholderData: (previous) => previous,
+  }).data
 }
 
 /**

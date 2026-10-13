@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { MetricBound, MetricData } from "@/lib/channels/channel-metrics"
-import { ChannelMetricEditor } from "./ChannelMetricEditor"
+import { ChannelMetricEditor, histogram } from "./ChannelMetricEditor"
 
 afterEach(cleanup)
 
@@ -156,5 +156,50 @@ describe("the count and the Condition", () => {
       target: { value: "" },
     })
     expect((submit() as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+/**
+ * The server's twin of `histogram()` is `value_histogram` (PTI-01), which bins
+ * the Posts editors' bars. `test_post_value_histogram.py` pins these three
+ * cases, its `vh_lin`, `vh_log` and `vh_zero`, to the same bars, edges and
+ * median: change the rule here and that copy is what disagrees.
+ */
+describe("the binning rule the server shares", () => {
+  const filled = (bins: number[]) => bins.flatMap((n, i) => (n > 0 ? [i] : []))
+  test.each([
+    {
+      name: "linear",
+      values: [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000],
+      log: false,
+      bars: [0, 3, 7, 10, 14, 17, 21, 24, 28, 31],
+      mid: 550,
+      median: 600,
+    },
+    {
+      name: "logarithmic",
+      values: [1, 5, 50, 500, 5000],
+      log: true,
+      bars: [0, 6, 14, 23, 31],
+      mid: 5000 ** 0.5,
+      median: 50,
+    },
+    {
+      name: "logarithmic on one plus the value from zero",
+      values: [0, 9, 99, 999],
+      log: true,
+      bars: [0, 10, 21, 31],
+      mid: 1000 ** 0.5 - 1,
+      median: 99,
+    },
+  ])("$name", ({ values, log, bars, mid, median }) => {
+    const got = histogram([...values])
+    expect(got.log).toBe(log)
+    expect(got.bins.length).toBe(32)
+    expect(filled(got.bins)).toEqual([...bars])
+    expect(got.edge(0)).toBe(values[0])
+    expect(got.edge(16)).toBeCloseTo(mid, 6)
+    expect(got.edge(32)).toBeCloseTo(values[values.length - 1], 6)
+    expect(got.median).toBe(median)
   })
 })

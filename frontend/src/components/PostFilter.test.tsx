@@ -14,10 +14,15 @@ import {
   screen,
   within,
 } from "@testing-library/react"
+import type React from "react"
+import type { PostValueHistogramResponse } from "@/client"
+import type { ViewMeasure } from "@/lib/posts/estimated-views"
 import {
   addPostFunnel,
   emptyPostFilter,
+  type PostCond,
   type PostFilter,
+  type PostNumber,
   printPostFilter,
 } from "@/lib/posts/post-filter"
 import {
@@ -25,6 +30,7 @@ import {
   PostFilterBar,
   type PostFilterBarProps,
 } from "./PostFilter"
+import { PostValueHistogramContext } from "./PostFilterControls"
 
 afterEach(cleanup)
 
@@ -70,6 +76,7 @@ function controls(
 function mount(
   over: Partial<FilterBarControls> = {},
   props: Partial<PostFilterBarProps> = {},
+  wrapper?: React.JSXElementConstructor<{ children: React.ReactNode }>,
 ) {
   const calls: Calls = []
   const opened: boolean[] = []
@@ -104,6 +111,7 @@ function mount(
       onCountingPillOpenChange={(open) => opened.push(open)}
       {...props}
     />,
+    { wrapper },
   )
   return { calls, opened }
 }
@@ -209,6 +217,50 @@ describe("the dropdowns", () => {
     fireEvent.click(screen.getByTestId("post-filter-type-funnel-original"))
     expect(calls).toEqual([["filter", "media:photo and type:original"]])
   })
+
+  test("Type lists both reply Types last, with their counts and text forms (PTI-04)", () => {
+    const { calls } = mount(
+      {},
+      {
+        facets: {
+          total: 50,
+          types: [
+            { value: "is_reply", count: 12, selected: 3 },
+            { value: "has_reply", count: 7, selected: 7 },
+          ],
+          languages: [],
+          media: [],
+        },
+      },
+    )
+    fireEvent.click(screen.getByTestId("post-filter-type"))
+    const rows = [
+      ...document.querySelectorAll("[data-testid^='post-filter-type-row-']"),
+    ]
+    expect(rows.map((row) => row.textContent?.slice(1)).slice(-2)).toEqual([
+      "Is a reply",
+      "Has a reply",
+    ])
+    expect(rows.map((row) => row.getAttribute("aria-checked"))).toEqual([
+      "false",
+      "false",
+      "false",
+      "mixed",
+      "true",
+    ])
+    expect(
+      screen.getByTestId("post-filter-type-count-is_reply").textContent,
+    ).toBe("3/12")
+    expect(
+      screen.getByTestId("post-filter-type-count-has_reply").textContent,
+    ).toBe("7/7")
+    fireEvent.click(screen.getByTestId("post-filter-type-funnel-is_reply"))
+    fireEvent.click(screen.getByTestId("post-filter-type-funnel-has_reply"))
+    expect(calls).toEqual([
+      ["filter", "type:is_reply"],
+      ["filter", "type:has_reply"],
+    ])
+  })
 })
 
 describe("the ticks (PTR-06)", () => {
@@ -308,6 +360,224 @@ describe("the Filters menu", () => {
     expect(screen.getByTestId("post-filters-views").textContent).toContain(
       "not ≥ 1K",
     )
+  })
+})
+
+describe("the Channel posts bounds (PTI-02)", () => {
+  const NUMBERS = [
+    "Views",
+    "Estimated views",
+    "Channel posts in window",
+    "Channel posts in filtered window",
+  ]
+
+  test("the Filters menu and the condition picker list the same four numbers, in order", () => {
+    // The filter row, and its "+", shows once the filter holds anything.
+    mount({ postFilter: addPostFunnel(emptyPostFilter(), "type", "original") })
+    fireEvent.click(screen.getByTestId("post-filters"))
+    const menu = screen
+      .getAllByTestId(/^post-filters-/)
+      .map((b) => b.firstChild?.textContent)
+    expect(menu).toEqual(NUMBERS)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByRole("button", { name: "Add a condition" }))
+    const numbers = screen.getByText("Numbers").parentElement as HTMLElement
+    const picker = within(numbers)
+      .getAllByRole("button")
+      .map((b) => b.textContent)
+    expect(picker).toEqual(NUMBERS)
+  })
+
+  test("the pill counts every number bound, Channel posts included", () => {
+    const bound = (cond: PostCond) => ({
+      kind: "atom" as const,
+      id: JSON.stringify(cond),
+      not: false,
+      cond,
+    })
+    mount({
+      postFilter: {
+        ...emptyPostFilter(),
+        children: [
+          bound({ type: "views", measure: "views", min: 1000 }),
+          bound({ type: "channel_posts", max: 5 }),
+          bound({ type: "channel_posts_filtered", min: 2 }),
+        ],
+      },
+    })
+    expect(screen.getByTestId("post-filters").textContent).toContain("3")
+    fireEvent.click(screen.getByTestId("post-filters"))
+    expect(
+      screen.getByTestId("post-filters-channel_posts").textContent,
+    ).toContain("≤ 5")
+    expect(
+      screen.getByTestId("post-filters-channel_posts_filtered").textContent,
+    ).toContain("≥ 2")
+  })
+
+  /** 0 to 49.6 in 32 bars of 1.55 Channels' counts. */
+  const COUNTS: PostValueHistogramResponse = {
+    bins: Array.from({ length: 32 }, (_, i) => i + 1),
+    edges: Array.from({ length: 33 }, (_, i) => i * 1.55),
+    log: false,
+    median: 12,
+    measured: 40,
+    total: 40,
+  }
+
+  test("a drag on Channel posts in window rounds to a whole channel_posts bound", () => {
+    const asked: PostNumber[] = []
+    const read = (measure: PostNumber) => {
+      asked.push(measure)
+      return COUNTS
+    }
+    const { calls } = mount({}, {}, ({ children }) => (
+      <PostValueHistogramContext.Provider value={read}>
+        {children}
+      </PostValueHistogramContext.Provider>
+    ))
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-channel_posts"))
+    expect(asked).toContain("channel_posts")
+    expect(screen.queryByRole("button", { name: "no value" })).toBeNull()
+    fireEvent.pointerEnter(screen.getByTestId("metric-bar-2"))
+    expect(
+      screen.getByTestId("metric-histogram-caption").textContent,
+    ).toContain("3 channels")
+    // Bars 0-3 end at 6.2, which is at most 6.
+    fireEvent.pointerDown(screen.getByTestId("metric-bar-0"))
+    for (const i of [1, 2, 3])
+      fireEvent.pointerEnter(screen.getByTestId(`metric-bar-${i}`))
+    fireEvent.pointerUp(screen.getByTestId("metric-bar-3"))
+    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    expect(calls).toEqual([["filter", "channel_posts <= 6"]])
+  })
+
+  test("a range with no whole number in it cannot be added; one with one is rounded in", () => {
+    const { calls } = mount()
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-channel_posts_filtered"))
+    fireEvent.click(screen.getByRole("button", { name: "between" }))
+    fireEvent.change(screen.getByLabelText("From"), {
+      target: { value: "3.2" },
+    })
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "3.8" } })
+    const submit = () =>
+      screen.getByTestId("post-views-editor-submit") as HTMLButtonElement
+    expect(submit().disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText("From"), {
+      target: { value: "2.5" },
+    })
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "30.5" } })
+    fireEvent.click(submit())
+    expect(calls).toEqual([["filter", "channel_posts_filtered 3..30"]])
+  })
+})
+
+describe("the number filters' histograms", () => {
+  /** 0 to 3,200 in 32 bars of 100, linear, as the read would answer. */
+  const LINEAR: PostValueHistogramResponse = {
+    bins: Array.from({ length: 32 }, (_, i) => i + 1),
+    edges: Array.from({ length: 33 }, (_, i) => i * 100),
+    log: false,
+    median: 1600,
+    measured: 528,
+    total: 600,
+  }
+  const EMPTY: PostValueHistogramResponse = {
+    bins: [],
+    edges: [],
+    log: false,
+    median: null,
+    measured: 0,
+    total: 0,
+  }
+
+  function withHistogram(answer: PostValueHistogramResponse) {
+    const asked: string[] = []
+    const read = (measure: ViewMeasure) => {
+      asked.push(measure)
+      return answer
+    }
+    return {
+      asked,
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <PostValueHistogramContext.Provider value={read}>
+          {children}
+        </PostValueHistogramContext.Provider>
+      ),
+    }
+  }
+
+  const bar = (i: number) => screen.getByTestId(`metric-bar-${i}`)
+  const drag = (from: number, to: number) => {
+    fireEvent.pointerDown(bar(from))
+    for (let i = from; i !== to; i += Math.sign(to - from)) {
+      fireEvent.pointerEnter(bar(i + Math.sign(to - from)))
+    }
+    fireEvent.pointerUp(bar(to))
+  }
+
+  test("a drag from the first bar fills an at most bound on Views", () => {
+    const { asked, wrapper } = withHistogram(LINEAR)
+    const { calls } = mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-views"))
+    expect(asked).toContain("views")
+    expect(
+      screen.getByTestId("metric-histogram-caption").textContent,
+    ).toContain("median 1.6K")
+    drag(0, 3)
+    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    expect(calls).toEqual([["filter", "views <= 400"]])
+  })
+
+  test("Estimated views reads its own measure, and typing redraws the solid bars", () => {
+    const { asked, wrapper } = withHistogram(LINEAR)
+    mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-estimated"))
+    expect(asked).toContain("estimated")
+    fireEvent.change(screen.getByLabelText("Value"), {
+      target: { value: "2000" },
+    })
+    expect(bar(19).getAttribute("data-solid")).toBe("false")
+    expect(bar(20).getAttribute("data-solid")).toBe("true")
+    expect(bar(31).getAttribute("data-solid")).toBe("true")
+  })
+
+  test("a window with nothing measured says so instead of drawing bars", () => {
+    const { wrapper } = withHistogram(EMPTY)
+    mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-views"))
+    expect(screen.queryByTestId("metric-bar-0")).toBeNull()
+    expect(screen.getByText(/Nothing in this window has a value/)).toBeTruthy()
+  })
+
+  test("the filter row's condition picker opens on the same histogram", () => {
+    const { wrapper } = withHistogram(LINEAR)
+    mount(
+      {
+        postFilter: {
+          ...emptyPostFilter(),
+          children: [
+            {
+              kind: "atom",
+              id: "v",
+              not: false,
+              cond: { type: "views", measure: "views", min: 1000 },
+            },
+          ],
+        },
+      },
+      {},
+      wrapper,
+    )
+    const chip = screen.getByTestId("post-filter-chip-views-views")
+    fireEvent.click(within(chip).getByText(/Views/))
+    expect(bar(10).getAttribute("data-solid")).toBe("true")
+    expect(bar(9).getAttribute("data-solid")).toBe("false")
   })
 })
 

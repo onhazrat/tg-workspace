@@ -1,4 +1,9 @@
 import { useMemo, useState } from "react"
+import {
+  BoundHistogram,
+  type Distribution,
+  nice,
+} from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import { TgButton } from "@/components/ui/tg-button"
 import {
@@ -11,12 +16,8 @@ import {
   metric,
   parseBound,
 } from "@/lib/channels/channel-metrics"
-import { formatCount } from "@/lib/format-count"
 
 const BINS = 32
-
-/** Two significant figures, so a dragged edge reads 1,200 and not 1,187.43. */
-const nice = (v: number) => Number(v.toPrecision(2))
 
 const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
 
@@ -26,7 +27,7 @@ const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
  * nearly every Channel would land in the first bar. A range starting at 0 is
  * measured from 1 and drawn on log(1 + x), since log 0 has no place.
  */
-function histogram(values: number[]) {
+export function histogram(values: number[]): Distribution {
   const lo = values[0]
   const hi = values[values.length - 1]
   const log = lo >= 0 && hi / (lo > 0 ? lo : 1) > 100
@@ -40,97 +41,7 @@ function histogram(values: number[]) {
     const i = span === 0 ? 0 : Math.floor(((f(v) - f(lo)) / span) * BINS)
     bins[Math.min(BINS - 1, i)]++
   }
-  return { lo, hi, log, edge, bins, peak: Math.max(...bins) }
-}
-
-type Run = { from: number; to: number }
-
-/**
- * A run of bars as a bound: touching the first bar leaves the low end open
- * ("at most"), touching the last the high end ("at least"), both is every
- * measured Channel.
- */
-function runBound(run: Run, h: ReturnType<typeof histogram>): MetricBound {
-  const s = Math.min(run.from, run.to)
-  const t = Math.max(run.from, run.to)
-  const min = s === 0 ? undefined : nice(h.edge(s))
-  const max = t === BINS - 1 ? undefined : nice(h.edge(t + 1))
-  if (min === undefined && max === undefined) return { min: h.lo }
-  return { min, max }
-}
-
-function Histogram({
-  values,
-  bound,
-  onSelect,
-}: {
-  values: number[]
-  bound: MetricBound | null
-  onSelect: (bound: MetricBound) => void
-}) {
-  const [drag, setDrag] = useState<Run | null>(null)
-  const [hover, setHover] = useState<number | null>(null)
-  const h = histogram(values)
-  const end = () => {
-    if (drag) onSelect(runBound(drag, h))
-    setDrag(null)
-  }
-  const solid = (i: number) =>
-    drag
-      ? i >= Math.min(drag.from, drag.to) && i <= Math.max(drag.from, drag.to)
-      : !!bound &&
-        !bound.none &&
-        (bound.min === undefined || h.edge(i + 1) > bound.min) &&
-        (bound.max === undefined || h.edge(i) <= bound.max)
-  const shown = drag ? drag.to : hover
-  return (
-    <div className="space-y-1">
-      <div
-        role="presentation"
-        className="flex h-16 cursor-crosshair touch-none select-none items-end gap-px rounded-md bg-app-ink/[0.03] px-0.5"
-        onPointerUp={end}
-        onPointerLeave={() => {
-          setHover(null)
-          end()
-        }}
-      >
-        {h.bins.map((n, i) => (
-          <div
-            key={i}
-            data-testid={`metric-bar-${i}`}
-            data-solid={solid(i)}
-            className={`flex-1 rounded-t-[2px] ${solid(i) ? "bg-app-ink/70" : "bg-app-ink/15"} ${shown === i ? "ring-1 ring-app-ink/60" : ""}`}
-            style={{
-              height: `${n === 0 ? 2 : Math.max(8, (n / h.peak) * 100)}%`,
-            }}
-            onPointerDown={(e) => {
-              // A touch captures the pointer to the first bar, which would
-              // keep every other bar from hearing the drag.
-              if (e.currentTarget.hasPointerCapture?.(e.pointerId))
-                e.currentTarget.releasePointerCapture(e.pointerId)
-              setDrag({ from: i, to: i })
-            }}
-            onPointerEnter={() => {
-              setHover(i)
-              if (drag) setDrag({ ...drag, to: i })
-            }}
-          />
-        ))}
-      </div>
-      <div
-        data-testid="metric-histogram-caption"
-        className="flex justify-between gap-2 text-[10px] tabular-nums text-app-ink/50"
-      >
-        <span>{formatCount(h.lo)}</span>
-        <span className="text-center">
-          {shown !== null
-            ? `${h.bins[shown]} channels, ${formatCount(nice(h.edge(shown)))}–${formatCount(nice(h.edge(shown + 1)))}`
-            : `median ${formatCount(median(values))}${h.log ? ", log scale" : ""}`}
-        </span>
-        <span>{formatCount(h.hi)}</span>
-      </div>
-    </div>
-  )
+  return { lo, hi, log, edge, bins, median: median(values) }
 }
 
 /**
@@ -196,7 +107,12 @@ export function ChannelMetricEditor({
         )}
       </div>
       {values.length > 0 ? (
-        <Histogram values={values} bound={bound} onSelect={select} />
+        <BoundHistogram
+          distribution={histogram(values)}
+          bound={bound}
+          noun="channels"
+          onSelect={select}
+        />
       ) : (
         <p className="text-[11px] text-app-ink/50">
           None of your channels has a value yet.

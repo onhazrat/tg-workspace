@@ -20,8 +20,9 @@ one name one set of values (PFB-01).
 from __future__ import annotations
 
 import math
+import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal, get_args
 
 from sqlalchemy import (
@@ -38,19 +39,24 @@ from sqlalchemy import (
     not_,
     or_,
     true,
+    tuple_,
     type_coerce,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import col
+from sqlalchemy.orm import aliased
+from sqlmodel import col, select
 
 from app.models_tg import Post
 from app.services.post_media_parser import LEGACY_MEDIA_PLACEHOLDER
 from app.services.reach import MS_PER_HOUR, CurvePoints, ReachSettings
+from app.services.tenancy import scoped_select, unscoped_select
 
 ForwardedFilter = Literal["all", "forwarded", "original", "unfollowed_forwarded"]
 #: A Type Condition's values: `ForwardedFilter` without `all`, which a tree
-#: says by having no Type Condition at all.
-PostType = Literal["forwarded", "original", "unfollowed_forwarded"]
+#: says by having no Type Condition at all, then the two reply Types (PTI-04).
+PostType = Literal[
+    "forwarded", "original", "unfollowed_forwarded", "is_reply", "has_reply"
+]
 POST_TYPE_ORDER: tuple[PostType, ...] = get_args(PostType)
 #: One media kind. A Scope carries a *set* of them (PFB-01): empty means any
 #: media, and a Post matches when it matches any kind in the set. The set
@@ -75,6 +81,9 @@ VIEW_SORTS: frozenset[str] = frozenset(("most_views", "fewest_views"))
 #: shows now, or the Estimated View count (ADR-025).
 ViewMeasure = Literal["views", "estimated"]
 VIEW_MEASURES: frozenset[str] = frozenset(get_args(ViewMeasure))
+#: What a number filter's histogram bins (PTI-01, PTI-02): a views measure per
+#: Post, or a Channel posts count per Channel.
+ValueMeasure = ViewMeasure | Literal["channel_posts", "channel_posts_filtered"]
 #: At least (`gte`) or at most (`lte`): a frozen Scope's views threshold from
 #: before PTR-03, kept so an old Artifact still reads.
 ViewsOp = Literal["gte", "lte"]
@@ -176,7 +185,22 @@ class ViewsCond:
     none: bool = False
 
 
-TreeCond = TypeCond | MediaCond | LanguageCond | ChannelCond | ViewsCond
+@dataclass(frozen=True)
+class ChannelPostsCond:
+    """A bound on how many Posts the Post's Channel has in the window (PTI-02).
+
+    `filtered` counts only the Posts the rest of the Post filter and the
+    keyword keep. Whole bounds: the wire rounds a fraction inward.
+    """
+
+    filtered: bool
+    min: int | None = None
+    max: int | None = None
+
+
+TreeCond = (
+    TypeCond | MediaCond | LanguageCond | ChannelCond | ViewsCond | ChannelPostsCond
+)
 
 
 # Generic over the Condition, so the Directory filter (DIR-02) is the same tree
@@ -291,6 +315,38 @@ class PostFilters:
         )
 
 
+@dataclass(frozen=True)
+class PostScope:
+    """The account, Channels and window a read covers, and a rule is applied again over.
+
+    A Channel posts Condition counts within it (PTI-02). `replies_since` is
+    where Has a reply starts reading replies, the window's start unless the
+    read tests Posts from before it (PTI-03's context bars).
+    """
+
+    user_id: uuid.UUID
+    channel_names: list[str] | None = None
+    start_date: int | None = None
+    end_date: int | None = None
+    replies_since: int | None = None
+
+    def clauses(self) -> list[ColumnElement[bool]]:
+        clauses = analysis_window_clauses(self.start_date, self.end_date)
+        if self.channel_names:
+            clauses.append(col(Post.channel_name).in_(self.channel_names))
+        return clauses
+
+
+def channel_posts_aside(filters: PostFilters) -> PostFilters:
+    """`filters` with every Channel posts Condition pruned: what a filtered count counts."""
+    if filters.tree is None:
+        return filters
+    return replace(
+        filters,
+        tree=prune_tree(filters.tree, lambda c: isinstance(c, ChannelPostsCond)),
+    )
+
+
 # ---- The Post selection's steps (PTR-05, ADR-026) ---------------------------
 #
 # The vocabulary only; `post_selection` evaluates them.
@@ -364,9 +420,40 @@ def _keyword_clause(term: str) -> ColumnElement[bool]:
     )
 
 
+def _has_reply_clause(scope: PostScope) -> ColumnElement[bool]:
+    """The Posts a Post of their own Channel answers (PTI-04, the **Reply** term).
+
+    The reply names its parent's id **and** Channel, and is in that Channel
+    itself: a reply stores its parent's id even across Channels, so an id-only
+    match marks a Post of the answering Channel. One uncorrelated set of the
+    replies made since the window opened (a reply comes after its parent),
+    probed per row; a correlated `EXISTS` and an unbounded set were both far
+    too slow for the Type counts.
+    """
+    reply = aliased(Post)
+    channel = func.lower(reply.channel_name)
+    replies = unscoped_select(
+        select(channel, col(reply.reply_to_post_id)),
+        reason="matched only to a Post of the reply's own Channel, already scoped",
+    ).where(
+        col(reply.reply_to_post_id).is_not(None),
+        channel == func.lower(cast(reply.reply_to, JSONB).op("->>")("channel")),
+    )
+    since = scope.replies_since if scope.replies_since is not None else scope.start_date
+    if since is not None:
+        replies = replies.where(reply.timestamp >= since)
+    return tuple_(func.lower(col(Post.channel_name)), col(Post.post_id)).in_(replies)
+
+
 def post_type_clause(
-    value: PostType, followed_names: frozenset[str] | None
+    value: PostType,
+    followed_names: frozenset[str] | None,
+    scope: PostScope,
 ) -> ColumnElement[bool]:
+    if value == "is_reply":
+        return col(Post.reply_to_post_id).is_not(None)
+    if value == "has_reply":
+        return _has_reply_clause(scope)
     if value == "forwarded":
         return col(Post.forwarded_from).is_not(None)
     if value == "original":
@@ -397,13 +484,55 @@ def media_kind_clause(value: MediaKind) -> ColumnElement[bool]:
     raise ValueError(f"unknown media kind: {value}")
 
 
+def _channel_posts_clause(
+    cond: ChannelPostsCond,
+    filters: PostFilters,
+    scope: PostScope,
+    followed_names: frozenset[str] | None,
+) -> ColumnElement[bool]:
+    """The Posts whose Channel's count in the scope's window lies in the bound.
+
+    One grouped count per Channel, uncorrelated so Postgres runs it once per
+    read and probes it as a set. A Channel with none of the counted Posts is
+    absent from any group, so when the bound admits zero the clause keeps
+    every Channel *not* among those whose count falls outside it.
+    """
+    counted = scoped_select(select(col(Post.channel_name)), Post, scope.user_id).where(
+        *scope.clauses()
+    )
+    if cond.filtered:
+        counted = counted.where(
+            *post_filter_clauses(
+                channel_posts_aside(filters),
+                followed_names=followed_names,
+                scope=scope,
+            )
+        )
+    n = func.count()
+    bound = and_(
+        true(),
+        *([n >= cond.min] if cond.min is not None else []),
+        *([n <= cond.max] if cond.max is not None else []),
+    )
+    admits_zero = cond.min is None or cond.min <= 0
+    groups = (
+        counted.group_by(col(Post.channel_name))
+        .having(not_(bound) if admits_zero else bound)
+        .subquery()
+    )
+    channel = col(Post.channel_name)
+    listed = select(groups.c.channel_name)
+    return channel.notin_(listed) if admits_zero else channel.in_(listed)
+
+
 def _atom_clause(
     cond: TreeCond,
-    readings: Mapping[ViewMeasure, ViewReading],
+    filters: PostFilters,
+    scope: PostScope,
     followed_names: frozenset[str] | None,
 ) -> ColumnElement[bool]:
     if isinstance(cond, TypeCond):
-        return post_type_clause(cond.value, followed_names)
+        return post_type_clause(cond.value, followed_names, scope)
     if isinstance(cond, MediaCond):
         return media_kind_clause(cond.value)
     if isinstance(cond, LanguageCond):
@@ -412,7 +541,9 @@ def _atom_clause(
         # The read is already narrowed to the caller's Follows, so a Channel
         # they do not follow matches nothing here without a check of its own.
         return col(Post.channel_name) == cond.value
-    value = readings[cond.measure].of(Post)
+    if isinstance(cond, ChannelPostsCond):
+        return _channel_posts_clause(cond, filters, scope, followed_names)
+    value = filters.tree_readings[cond.measure].of(Post)
     if cond.none:
         return value.is_(None)
     bounds: list[ColumnElement[bool]] = [value.is_not(None)]
@@ -426,15 +557,26 @@ def _atom_clause(
 def tree_clause(
     node: TreeNode[TreeCond],
     *,
-    readings: Mapping[ViewMeasure, ViewReading],
+    filters: PostFilters,
     followed_names: frozenset[str] | None = None,
+    scope: PostScope,
 ) -> ColumnElement[bool]:
-    """`node` as one predicate, evaluated the way the Channels tab evaluates."""
-    return compile_tree(node, lambda cond: _atom_clause(cond, readings, followed_names))
+    """`node` as one predicate, evaluated the way the Channels tab evaluates.
+
+    `filters` supplies the readings and, for a filtered Channel posts count,
+    the whole filter and keyword; `scope` the window a Channel posts
+    Condition counts in.
+    """
+    return compile_tree(
+        node, lambda cond: _atom_clause(cond, filters, scope, followed_names)
+    )
 
 
 def post_filter_clauses(
-    filters: PostFilters, *, followed_names: frozenset[str] | None = None
+    filters: PostFilters,
+    *,
+    followed_names: frozenset[str] | None = None,
+    scope: PostScope,
 ) -> list[ColumnElement[bool]]:
     """Build the WHERE predicates for `filters` (channel/date handled elsewhere)."""
     clauses: list[ColumnElement[bool]] = []
@@ -443,17 +585,23 @@ def post_filter_clauses(
     if (tree := filters.active_tree()) is not None:
         clauses.append(
             tree_clause(
-                tree, readings=filters.tree_readings, followed_names=followed_names
+                tree, filters=filters, followed_names=followed_names, scope=scope
             )
         )
     return clauses
 
 
 def apply_post_filters(
-    stmt: Any, filters: PostFilters, *, followed_names: frozenset[str] | None = None
+    stmt: Any,
+    filters: PostFilters,
+    *,
+    followed_names: frozenset[str] | None = None,
+    scope: PostScope,
 ) -> Any:
     """Return `stmt` narrowed by every predicate `filters` implies."""
-    for clause in post_filter_clauses(filters, followed_names=followed_names):
+    for clause in post_filter_clauses(
+        filters, followed_names=followed_names, scope=scope
+    ):
         stmt = stmt.where(clause)
     return stmt
 

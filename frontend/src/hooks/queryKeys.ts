@@ -85,8 +85,26 @@ export const queryKeys = {
   viewEstimate: ["viewEstimate"] as const,
   /** Per-value counts for the Type, Media and Language dropdowns (PTR-03). */
   postsFacets: (scope: unknown) => ["postsFacets", scope] as const,
+  /** A Posts number filter's bars over the window, filters aside (PTI-01). */
+  postsValueHistogram: (scope: unknown) =>
+    ["postsValueHistogram", scope] as const,
+  /** The Analysis window chart's Posts per slice of time (PTI-03). */
+  postsWindowHistogram: (scope: unknown) =>
+    ["postsWindowHistogram", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,
+  /**
+   * The prefixes of every read over the Posts a sync adds to, which
+   * `invalidatePostViews` refetches. Each must match its factory above.
+   */
+  postViews: [
+    ["postsFeed"],
+    ["postsCounts"],
+    ["postsFacets"],
+    ["postsValueHistogram"],
+    ["postsWindowHistogram"],
+    ["discoverCandidates"],
+  ] as const,
   /**
    * The scheduler's job table. Gated on `JOBS_MANAGE`, which is what lets it
    * double as this client's reading of that permission (`useCanManageJobs`).
