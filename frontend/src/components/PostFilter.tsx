@@ -128,7 +128,7 @@ export interface PostFilterBarProps extends PostFilterProps {
 }
 
 /** The floor's default in `services/reach.py`, until the server's arrives. */
-const DEFAULT_ESTIMATION_FLOOR_HOURS = 3
+const DEFAULT_ESTIMATION_FLOOR_HOURS = 1
 
 /**
  * One search box for both kinds of search. Keyword filters as you type;

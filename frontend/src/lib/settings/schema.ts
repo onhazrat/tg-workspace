@@ -352,7 +352,7 @@ export const appSettingsSpec = {
   // so only an Admin's save is honoured. The server validates the three
   // together and refuses a contradiction with a 422 whose message is shown.
   settlingAgeHours: intSetting("settlingAgeHours", 24, { section: "reach" }),
-  estimationFloorHours: intSetting("estimationFloorHours", 3, {
+  estimationFloorHours: intSetting("estimationFloorHours", 1, {
     section: "reach",
   }),
   reachSampleSize: intSetting("reachSampleSize", 100, { section: "reach" }),

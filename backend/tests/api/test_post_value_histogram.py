@@ -51,13 +51,13 @@ HOUR = 3_600_000
 BASE = (int(time.time() * 1000) // HOUR - 300) * HOUR
 
 #: (channel, views, age at observation in hours). Settled at 48h, so the
-#: Estimated View count is the View count; under the 3h floor it has none.
+#: Estimated View count is the View count; under the 1h floor it has none.
 CORPUS: list[tuple[str, int | None, float]] = [
     *(("vh_lin", v, 48) for v in range(100, 1001, 100)),
     *(("vh_log", v, 48) for v in (1, 5, 50, 500, 5000)),
     *(("vh_zero", v, 48) for v in (0, 9, 99, 999)),
     ("vh_est", 1000, 48),
-    ("vh_est", 500, 1),
+    ("vh_est", 500, 0.5),
     ("vh_est", None, 48),
     ("vh_x", 1_000_000, 48),
 ]
