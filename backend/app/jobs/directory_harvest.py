@@ -12,7 +12,7 @@ Directory queue. Every Reference target with no Directory entry is new work.
 ## It reads References, not Posts (DDS-02)
 
 Until DDS-02 the sweep walked the stored Posts itself, with its own progress
-flag (`Post.harvested`), and pulled handles out of them with
+flag (`Post.harvested`, dropped by DDS-03), and pulled handles out of them with
 `discover.post_references`. The reference-extraction walk (CRG-01) reads the
 same Posts with a sibling extractor that `test_post_references.py` holds to the
 same handles, and writes them to `tg_post_references`. So the graph already

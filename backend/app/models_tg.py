@@ -266,20 +266,10 @@ class Post(SQLModel, table=True):
         # here anyway: autogenerate reads metadata, not intent, and an index it
         # cannot see is one it emits a `drop_index` for on the next revision.
         # `ix_tg_posts_timestamp` (ticket 04) serves retention's global
-        # `timestamp < cutoff` sweep; `ix_tg_posts_unharvested` (ticket 05)
-        # serves the harvest walk and covers only the rows still to do.
+        # `timestamp < cutoff` sweep.
         Index("ix_tg_posts_timestamp", "timestamp"),
-        Index(
-            "ix_tg_posts_unharvested",
-            text("timestamp DESC"),
-            postgresql_where=text("NOT harvested"),
-        ),
-        # CRG-01's twin of the line above, and separate from it on purpose:
-        # `harvested` is one-way and its first pass is already finished, so
-        # sharing it would have meant resetting the whole corpus, and the
-        # deferral in `post_references` works by leaving a flag unset, which on
-        # a newest-first walk would stall the Directory enqueue behind one
-        # chat-id-less channel for the whole grace window.
+        # CRG-01's queue: the Posts reference extraction has still to read,
+        # newest first.
         Index(
             "ix_tg_posts_references_pending",
             text("timestamp DESC"),
@@ -330,17 +320,10 @@ class Post(SQLModel, table=True):
     # Shape: {"channel": str, "authorName": str, "text": str, "url": str}
     reply_to_post_id: int | None = Field(default=None, index=True)
     reply_to: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
-    # Whether the harvest sweep has extracted this Post's references into the
-    # Directory (ticket 05). The server default is declared so autogenerate does
-    # not read the migration's as drift and emit an `alter_column` dropping it.
-    harvested: bool = Field(
-        default=False,
-        sa_column=Column(Boolean, nullable=False, server_default=false()),
-    )
     # Whether this Post's References have been extracted into
-    # `tg_post_references` (CRG-01). Deliberately not `harvested`: see the
-    # index comment above. The server default is declared for the reason
-    # `harvested`'s is — autogenerate reads the migration's as drift otherwise.
+    # `tg_post_references` (CRG-01). The server default is declared so
+    # autogenerate does not read the migration's as drift and emit an
+    # `alter_column` dropping it.
     references_extracted: bool = Field(
         default=False,
         sa_column=Column(Boolean, nullable=False, server_default=false()),
