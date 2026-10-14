@@ -139,7 +139,14 @@ export const SummaryView: React.FC = () => {
               promptText={currentSummaryDetail?.promptText}
               onPaste={() => setPasteModalOpen(true)}
             />
-            <ArtifactScopeLine artifact={currentSummary} className="mt-3" />
+            <ArtifactScopeLine
+              artifact={currentSummary}
+              className={
+                variant === "A"
+                  ? "mt-3"
+                  : "mt-12 pt-6 border-t border-app-ink/10"
+              }
+            />
           </>
         ) : (
           <SummaryBody

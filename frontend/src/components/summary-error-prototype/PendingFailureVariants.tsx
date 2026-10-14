@@ -2,27 +2,32 @@
  * PROTOTYPE, throw away. Three ways the pending Summary panel can show a failed
  * generation, its error history, and a Retry with a model of your choice.
  * Retry is stubbed (`failure-store.ts`).
+ *
+ * B and C borrow the finished report's layout: the same header (title, icon
+ * actions, Scope line, provenance line), chevron folds like the report's
+ * sections, and bordered cards like Publish to Telegram.
  */
 import {
   AlertTriangle,
+  Check,
+  ChevronDown,
   ClipboardPaste,
   Copy,
   Loader2,
   RotateCcw,
 } from "lucide-react"
-import { useState } from "react"
+import { type ReactNode, useState } from "react"
 import { toast } from "sonner"
 import { ModelCombo } from "@/components/ai/ModelCombo"
 import { TgButton } from "@/components/ui/tg-button"
+import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { tgFieldClassName } from "@/components/ui/tg-input"
 import { formatSummaryModelLabel } from "@/constants"
+import { useSettings } from "@/contexts/SettingsContext"
 import type { Summary } from "@/types"
 import { RelativeTime } from "../RelativeTime"
-import {
-  PendingSummaryPanel,
-  SummaryCounts,
-  SummaryMetaChips,
-} from "../summary-view/SummaryParts"
+import { summaryScopeLine } from "../summary-view/SummaryHeader"
+import { PendingSummaryPanel } from "../summary-view/SummaryParts"
 import {
   type Attempt,
   attemptsFor,
@@ -75,13 +80,70 @@ type VariantProps = Props & {
   retry: () => void
 }
 
+export const LABEL =
+  "text-[11px] font-bold uppercase tracking-widest text-app-ink/60"
+
+/** A bordered section with an icon title, like Publish to Telegram. */
+export function Card({
+  icon,
+  title,
+  children,
+  className = "",
+}: {
+  icon: ReactNode
+  title: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <section
+      className={`rounded-2xl border border-app-ink/10 p-4 md:p-6 ${className}`}
+    >
+      <div className="mb-4 flex items-center gap-2">
+        {icon}
+        <h4 className="text-sm font-bold">{title}</h4>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** A chevron fold, like the report's sections. Closed by default. */
+export function Fold({
+  title,
+  children,
+}: {
+  title: ReactNode
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <section>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 text-sm font-bold text-app-ink/80 hover:text-app-ink"
+      >
+        <span className="rounded p-0.5 text-app-ink/40">
+          <ChevronDown size={16} className={open ? "" : "-rotate-90"} />
+        </span>
+        {title}
+      </button>
+      {open && <div className="mt-2 ms-6">{children}</div>}
+    </section>
+  )
+}
+
 export function RetryControls({
   model,
   setModel,
   retrying,
   retry,
   label = "Retry",
+  primary = true,
 }: {
+  primary?: boolean
   model: string
   setModel: (m: string) => void
   retrying: boolean
@@ -89,17 +151,20 @@ export function RetryControls({
   label?: string
 }) {
   return (
-    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-      <ModelCombo
-        ariaLabel="Model for the retry"
-        value={model}
-        onChange={setModel}
-        remember={false}
-        className={`${tgFieldClassName} sm:w-60 h-11`}
-      />
+    <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+      <label className="flex flex-col gap-1.5">
+        <span className={LABEL}>Model</span>
+        <ModelCombo
+          ariaLabel="Model for the retry"
+          value={model}
+          onChange={setModel}
+          remember={false}
+          className={`${tgFieldClassName} sm:w-64 h-11`}
+        />
+      </label>
       <TgButton
         type="button"
-        variant="primary"
+        variant={primary ? "primary" : "secondary"}
         size="lg"
         onClick={retry}
         disabled={retrying}
@@ -116,7 +181,7 @@ export function RetryControls({
   )
 }
 
-/** The latest error up front, then every earlier one, newest first. */
+/** The latest error up front, every earlier one in a fold, newest first. */
 export function ErrorHistory({
   attempts,
   retrying,
@@ -137,7 +202,10 @@ export function ErrorHistory({
         </p>
       )}
       {latest && (
-        <div className="rounded-lg border-l-4 border-red-500 bg-red-500/5 px-4 py-3 text-red-900 dark:text-red-100 flex gap-3">
+        <div
+          role="alert"
+          className="rounded-lg border-l-4 border-red-500 bg-red-500/5 px-4 py-3 text-red-900 dark:text-red-100 flex gap-3"
+        >
           <AlertTriangle size={18} className="shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-sm font-mono break-words">{latest.error}</p>
@@ -146,16 +214,10 @@ export function ErrorHistory({
         </div>
       )}
       {earlier.length > 0 && (
-        <div className="rounded-lg border border-app-ink/10 px-4 py-3">
-          <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/60 mb-2">
-            Earlier attempts ({earlier.length})
-          </h4>
-          <ol className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+        <Fold title={`Earlier attempts (${earlier.length})`}>
+          <ol className="space-y-3 border-s border-app-ink/10 ps-4">
             {earlier.map((a, i) => (
-              <li
-                key={a.at}
-                className="border-t border-app-ink/5 first:border-0 pt-2 first:pt-0"
-              >
+              <li key={a.at}>
                 <p className="text-xs font-mono break-words text-app-ink/70">
                   {a.error}
                 </p>
@@ -163,7 +225,7 @@ export function ErrorHistory({
               </li>
             ))}
           </ol>
-        </div>
+        </Fold>
       )}
     </div>
   )
@@ -178,58 +240,86 @@ function AttemptMeta({ n, attempt }: { n: number; attempt: Attempt }) {
   )
 }
 
-function PromptFold({ promptText }: { promptText: string | undefined }) {
+function copyPrompt(promptText: string | undefined) {
+  if (!promptText) return false
+  void navigator.clipboard.writeText(promptText)
+  toast.success("Prompt copied.")
+  return true
+}
+
+/**
+ * The finished report's header, with the run's state where the report's title
+ * stands alone: icon actions, the Scope line, then model · language · time.
+ */
+function FailedHeader(p: VariantProps & { pasteAction?: boolean }) {
+  const settings = useSettings()
+  const [copied, setCopied] = useState(false)
+  const zone = {
+    timeZone:
+      settings.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }
   return (
-    <details className="rounded-xl border border-app-ink/10 bg-app-muted/10 p-4 md:p-6 group">
-      <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-widest text-app-ink/70 flex items-center justify-between">
-        Saved prompt
-        <TgButton
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={!promptText}
-          onClick={(e) => {
-            e.preventDefault()
-            if (!promptText) return
-            void navigator.clipboard.writeText(promptText)
-            toast.success("Prompt copied.")
-          }}
-        >
-          <Copy size={12} />
-          Copy
-        </TgButton>
-      </summary>
-      <pre className="mt-3 text-xs font-mono whitespace-pre-wrap leading-relaxed text-app-ink/80 max-h-[480px] overflow-y-auto custom-scrollbar">
+    <header className="mb-6 border-b border-app-ink/10 pb-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h3 className="text-xl font-bold tracking-tight">Analysis Report</h3>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider ${
+              p.retrying
+                ? "bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                : "bg-red-500/15 text-red-800 dark:text-red-200"
+            }`}
+          >
+            {p.retrying
+              ? "Retrying"
+              : p.attempts.length > 1
+                ? `Failed ${p.attempts.length}×`
+                : "Failed"}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <TgIconButton
+            aria-label={copied ? "Copied" : "Copy prompt"}
+            tooltip="Copies the saved prompt, to run in another AI tool."
+            disabled={!p.promptText}
+            onClick={() => {
+              if (!copyPrompt(p.promptText)) return
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            }}
+          >
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+          </TgIconButton>
+          {p.pasteAction && (
+            <TgIconButton
+              aria-label="Paste response"
+              tooltip="Paste an answer from another AI tool."
+              disabled={p.retrying}
+              onClick={p.onPaste}
+            >
+              <ClipboardPaste size={16} />
+            </TgIconButton>
+          )}
+        </div>
+      </div>
+      <p className="mt-1 break-words text-sm text-app-ink/80">
+        {summaryScopeLine(p.summary, zone)}
+      </p>
+      <p className="mt-0.5 break-words text-xs text-app-ink/50">
+        {formatSummaryModelLabel(p.summary.model)} · {p.summary.language} ·
+        started <RelativeTime timestamp={p.summary.timestamp} />
+      </p>
+    </header>
+  )
+}
+
+function SavedPrompt({ promptText }: { promptText: string | undefined }) {
+  return (
+    <Fold title="Saved prompt">
+      <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-app-ink/80 max-h-[480px] overflow-y-auto custom-scrollbar rounded-xl border border-app-ink/10 bg-app-muted/10 p-4">
         {promptText ?? "Loading prompt…"}
       </pre>
-    </details>
-  )
-}
-
-function Counts({ summary }: { summary: Summary }) {
-  return (
-    <div className="mt-8 pt-6 border-t border-app-ink/10 flex flex-wrap gap-2">
-      <SummaryCounts
-        postsLabel={`${summary.postCount ?? 0} Posts`}
-        summary={summary}
-      />
-    </div>
-  )
-}
-
-function PasteButton(p: VariantProps) {
-  return (
-    <TgButton
-      type="button"
-      variant="secondary"
-      size="lg"
-      onClick={p.onPaste}
-      disabled={p.retrying}
-      className="h-11 px-5"
-    >
-      <ClipboardPaste size={14} />
-      Paste response
-    </TgButton>
+    </Fold>
   )
 }
 
@@ -237,10 +327,7 @@ function PasteButton(p: VariantProps) {
 function VariantA(p: VariantProps) {
   return (
     <>
-      <div
-        role="alert"
-        className="mb-6 rounded-xl border border-red-500/30 bg-red-500/5 p-4 space-y-4"
-      >
+      <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/5 p-4 space-y-4">
         <p className="font-bold text-sm text-red-900 dark:text-red-100">
           Generation failed
         </p>
@@ -257,107 +344,77 @@ function VariantA(p: VariantProps) {
 }
 
 /**
- * B: the item says it failed, not that it waits. Retry and its model lead,
- * Paste is the fallback, and the prompt folds away.
+ * B: the report's header says it failed; one card retries, with the model
+ * beside it. Copy and Paste are the header's icon actions, as Copy and Export
+ * are on a finished report.
  */
 function VariantB(p: VariantProps) {
   return (
     <>
-      <div className="mb-6 border-b border-app-ink/10 pb-6">
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <h3 className="text-2xl font-bold tracking-tight">
-            {p.retrying ? "Retrying…" : "Generation failed"}
-          </h3>
-          <span className="bg-red-500/15 text-red-800 dark:text-red-200 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider">
-            {p.retrying ? "Running" : `Failed ${p.attempts.length}×`}
-          </span>
-        </div>
-        <SummaryMetaChips
-          timestamp={p.summary.timestamp}
-          model={p.summary.model}
-          language={p.summary.language}
-        />
-      </div>
-
-      <div className="mb-6">
+      <FailedHeader {...p} pasteAction />
+      <div className="space-y-6">
         <ErrorHistory {...p} />
+        <Card icon={<RotateCcw size={14} />} title="Try again">
+          <RetryControls {...p} />
+          <p className="mt-3 text-xs text-app-ink/60">
+            Sends the saved prompt again: the same window and posts, nothing
+            re-collected. Or copy it to another AI tool and paste the answer
+            with the icons above.
+          </p>
+        </Card>
+        <SavedPrompt promptText={p.promptText} />
       </div>
-
-      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <RetryControls {...p} />
-        <PasteButton {...p} />
-      </div>
-
-      <p className="text-sm text-app-ink/80 mb-4">
-        The prompt is saved. Retry sends it again with the model you pick, or
-        run it in another AI tool and paste the answer.
-      </p>
-      <PromptFold promptText={p.promptText} />
-      <Counts summary={p.summary} />
     </>
   )
 }
 
-/** C: the error history, then the two ways out given equal room. */
+/** C: the same header, then the two ways out as cards side by side. */
 function VariantC(p: VariantProps) {
   return (
     <>
-      <div className="mb-6 border-b border-app-ink/10 pb-6">
-        <h3 className="text-2xl font-bold tracking-tight mb-3">
-          This summary did not finish
-        </h3>
-        <SummaryMetaChips
-          timestamp={p.summary.timestamp}
-          model={p.summary.model}
-          language={p.summary.language}
-        />
-      </div>
-
-      <div className="mb-6">
+      <FailedHeader {...p} />
+      <div className="space-y-6">
         <ErrorHistory {...p} />
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
-        <div className="rounded-xl border border-app-ink/10 p-5 flex flex-col gap-3">
-          <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
-            Try again here
-          </h4>
-          <p className="text-sm text-app-ink/80 flex-1">
-            Send the saved prompt again, to the same model or another one. The
-            same window and posts, nothing re-collected.
-          </p>
-          <RetryControls {...p} />
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card icon={<RotateCcw size={14} />} title="Try again">
+            <RetryControls {...p} />
+            <p className="mt-3 text-xs text-app-ink/60">
+              The same window and posts, nothing re-collected.
+            </p>
+          </Card>
+          <Card icon={<ClipboardPaste size={14} />} title="Use another AI">
+            <p className="text-sm text-app-ink/80 mb-4">
+              Copy the saved prompt into any AI tool, then paste its answer
+              here.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <TgButton
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="h-11 px-5"
+                disabled={!p.promptText}
+                onClick={() => copyPrompt(p.promptText)}
+              >
+                <Copy size={14} />
+                Copy prompt
+              </TgButton>
+              <TgButton
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="h-11 px-5"
+                onClick={p.onPaste}
+                disabled={p.retrying}
+              >
+                <ClipboardPaste size={14} />
+                Paste response
+              </TgButton>
+            </div>
+          </Card>
         </div>
-        <div className="rounded-xl border border-app-ink/10 p-5 flex flex-col gap-3">
-          <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
-            Use another AI
-          </h4>
-          <p className="text-sm text-app-ink/80 flex-1">
-            Copy the prompt into any AI tool, then paste its answer here.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <TgButton
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="h-11 px-5"
-              disabled={!p.promptText}
-              onClick={() => {
-                if (!p.promptText) return
-                void navigator.clipboard.writeText(p.promptText)
-                toast.success("Prompt copied.")
-              }}
-            >
-              <Copy size={14} />
-              Copy prompt
-            </TgButton>
-            <PasteButton {...p} />
-          </div>
-        </div>
+        <SavedPrompt promptText={p.promptText} />
       </div>
-
-      <PromptFold promptText={p.promptText} />
-      <Counts summary={p.summary} />
     </>
   )
 }

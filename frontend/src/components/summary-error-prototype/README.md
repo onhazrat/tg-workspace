@@ -9,8 +9,14 @@ and the left/right keys cycle variants.
 
 - `0` today's panel, unchanged (the reference).
 - `A` today's panel with a red error banner and Retry above it.
-- `B` the header says "Generation failed", Retry is primary, Paste secondary, prompt folded.
-- `C` the error, then "Try again here" and "Use another AI" side by side.
+- `B` the finished report's layout: "Analysis Report" header with a Failed chip, Copy
+  prompt and Paste as header icons, the Scope and provenance lines, the error, a
+  "Try again" card (model + Retry), the saved prompt folded.
+- `C` the same header and error, then "Try again" and "Use another AI" cards side by side.
+
+B and C reuse the report's patterns on purpose: `summaryScopeLine`, the icon-action
+header, chevron folds like its sections, cards like Publish to Telegram, and the
+Scope line with "Use this Scope" at the bottom.
 
 Every Retry has a model picker beside it (the app's ModelCombo over the selected
 Key's live catalogue, typed ids allowed). It starts at the last attempt's model and
