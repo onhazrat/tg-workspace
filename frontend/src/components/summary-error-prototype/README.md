@@ -15,6 +15,10 @@ and the left/right keys cycle variants.
 
 - `D` C's layout over attempts kept in their own storage, plus a `failed` state,
   kept drafts and one automatic retry. See below.
+- `E` D with the paste in the page: "Use another AI" becomes a full-width card with
+  Copy prompt, Paste from clipboard, the answer box, the model that answered, and
+  Save as this Summary. No dialog, so the error and drafts stay in view. Save is
+  real, as the dialog's is: it completes the Summary through `completePendingSummary`.
 
 A (banner over today's panel) and B (one Try again card, Paste as a header icon) were
 dropped after review; they are in this branch's history.

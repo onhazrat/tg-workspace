@@ -133,10 +133,14 @@ export const SummaryView: React.FC = () => {
         {/* PROTOTYPE: variants C and D replace the pending panel. */}
         {isPending && currentSummary && variant !== "0" ? (
           <>
-            {variant === "D" ? (
+            {variant === "D" || variant === "E" ? (
               <VariantD
                 key={currentSummary.id}
                 variant={variant}
+                inlinePaste={variant === "E"}
+                onSavePaste={(text, modelName) =>
+                  completePendingSummary(currentSummary.id, text, modelName)
+                }
                 summary={currentSummary}
                 promptText={currentSummaryDetail?.promptText}
                 onPaste={() => setPasteModalOpen(true)}

@@ -24,6 +24,7 @@ export const VARIANTS = {
   "0": "Current (reference)",
   C: "Two recovery paths",
   D: "Stored attempts, drafts, auto-retry",
+  E: "D with paste in the page",
 } as const
 export type Variant = keyof typeof VARIANTS
 const KEYS = Object.keys(VARIANTS) as Variant[]
@@ -93,7 +94,7 @@ export function PrototypeSwitcher() {
           />
           Simulate failure
         </label>
-        {variant === "D" && (
+        {(variant === "D" || variant === "E") && (
           <button
             type="button"
             className="underline disabled:opacity-50"
