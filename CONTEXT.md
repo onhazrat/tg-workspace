@@ -422,8 +422,37 @@ _Avoid_: discover report, discovery run, candidates list
 
 **Pending**:
 The state of an Artifact whose prompt was copied for an external AI but whose
-response has not been pasted back. Applies to Summary and Tag run only.
+response has not been pasted back. Applies to Summary and Tag run only. A
+Generate that broke is not Pending: it is Failed.
 _Avoid_: draft, incomplete, awaiting
+
+**Failed**:
+The state of a Summary whose latest Attempt did not finish. Every Generate
+creates its Summary first, so a failure always belongs to one, even a refusal
+before any prompt was built. A Failed Summary can be retried, finished by
+pasting an external AI's response, or finished from one of its Partial
+responses. Distinct from Pending, which is waiting by design.
+_Avoid_: errored, broken, pending (for this)
+
+**Attempt**:
+One request for a Summary's prose, whoever made it: a person's Generate or
+Retry, or the scheduler. It records its outcome, the model and AI Key it ran on,
+when, whether it was automatic, and any Partial response. It ends succeeded,
+failed, or stopped (a person ended it). A Summary keeps every Attempt for its
+whole life; they are not Logs and are never pruned with them.
+_Avoid_: run (a Tag run is an Artifact), try, generation, retry (a Retry is one
+way to start an Attempt)
+
+**Partial response**:
+The text a model produced before its Attempt was cut off or stopped. It can be kept as the
+Summary's text, which makes the Summary Incomplete, or dismissed and later
+restored.
+_Avoid_: draft, fragment, partial summary
+
+**Incomplete**:
+A Summary whose text is a kept Partial response rather than a finished one. It
+is finished, readable and retryable, and says where its text stops.
+_Avoid_: partial, truncated, draft
 
 **Output language**:
 The Language an Artifact is written in, chosen by the Account that asks for it.
