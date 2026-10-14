@@ -76,7 +76,9 @@ class _Attributable(Protocol):
 def bind(session: Session, owner: ActingOwner | None) -> None:
     """Declare who is acting for the rest of this `Session`'s life.
 
-    Called from `api/deps.get_current_user` and nowhere else. `None` clears,
+    Called from `api/deps.get_current_user`, and by the generation worker with
+    the Owner its Attempt's start request carried (SFR-03): the worker writes
+    the answer long after that request ended. `None` clears,
     which is not decoration: `SessionDep` is per-request, but a test or a script
     may reuse one, and a binding that could only be set would make the *absence*
     of an acting Owner unrepresentable after the first elevated request.

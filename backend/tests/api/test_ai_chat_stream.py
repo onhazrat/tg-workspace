@@ -153,14 +153,10 @@ def test_a_provider_failure_mid_stream_never_sends_done(
     assert "error" in json.loads(_frames(r.text)[-1])
 
 
-SUMMARY_URL = f"{settings.API_V1_STR}/ai/summary/stream"
-
-
 @pytest.mark.parametrize(
     ("url", "body"),
     [
         (URL, {"message": "q", "postsText": "p"}),
-        (SUMMARY_URL, {"channels": ["chan_a"], "postsText": "p"}),
     ],
 )
 @pytest.mark.parametrize(

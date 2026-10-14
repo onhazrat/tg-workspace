@@ -156,9 +156,6 @@ VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
     f"{settings.API_V1_STR}/ai/summary": SpendableOperation(
         "ai_key", "generates a Summary on the target's AI Key (ADR-016)"
     ),
-    f"{settings.API_V1_STR}/ai/summary/stream": SpendableOperation(
-        "ai_key", "the streaming half of the same call, kept for Regenerate"
-    ),
     f"{settings.API_V1_STR}/data/summaries/{{summary_id}}/attempts/start": (
         SpendableOperation(
             "ai_key",

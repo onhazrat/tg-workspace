@@ -112,33 +112,3 @@ export function autoPublishTarget(
   const dest = destinations.find((d) => d.id === previous.publishChatId)
   return bot && dest ? { bot, dest } : null
 }
-
-const QUOTA_MARKERS = ["429", "RESOURCE_EXHAUSTED", "quota", "rate limit"]
-
-/**
- * A readable message for a failed generation, and whether it was a quota
- * refusal, which is what stops auto-regeneration from retrying into the same
- * wall. A JSON body is the provider's own error; only its `code` decides quota
- * then, because its message can mention "quota" for other reasons.
- */
-export function classifyAiError(err: unknown): {
-  message: string
-  quotaExceeded: boolean
-} {
-  const message = err instanceof Error ? err.message : "Unknown error"
-  if (message.startsWith("{") && message.endsWith("}")) {
-    try {
-      const inner = JSON.parse(message).error
-      if (inner?.message)
-        return { message: inner.message, quotaExceeded: inner.code === 429 }
-    } catch {
-      // Not JSON after all; fall through and report it as it is.
-    }
-    return { message, quotaExceeded: false }
-  }
-  const lower = message.toLowerCase()
-  return {
-    message,
-    quotaExceeded: QUOTA_MARKERS.some((m) => lower.includes(m.toLowerCase())),
-  }
-}

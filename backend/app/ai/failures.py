@@ -29,6 +29,16 @@ def provider_code(exc: BaseException) -> int | None:
     return code if isinstance(code, int) else None
 
 
+def retry_after_seconds(exc: BaseException) -> float | None:
+    """How long the Provider asked to be left alone, when it said.
+
+    Duck-typed like `provider_code`: an error carrying a numeric `retry_after`
+    (the Retry-After header, in seconds) is the Provider's own answer.
+    """
+    value = getattr(exc, "retry_after", None)
+    return float(value) if isinstance(value, int | float) and value >= 0 else None
+
+
 def provider_message(exc: BaseException, key: ResolvedKey) -> str:
     """The Provider's own words, safe to show.
 

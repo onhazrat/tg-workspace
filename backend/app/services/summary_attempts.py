@@ -10,6 +10,7 @@ mark it Failed, and both writes land in one commit.
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -24,10 +25,12 @@ from app.schemas.summaries import (
     AttemptOutcome,
     SummaryAttemptResponse,
 )
+from app.services.posts import lookup_posts
 from app.services.summaries import (
     SUMMARY_NOT_FOUND,
     finish_summary,
     mark_summary_failed,
+    note_write,
     own_summary,
 )
 
@@ -78,6 +81,7 @@ def record_attempt(
     kind: AttemptKind | None = None,
     error: str | None = None,
     partial_text: str | None = None,
+    scheduled: bool = False,
 ) -> SummaryAttempt:
     """Record one finished Attempt; a failed one marks its Summary Failed.
 
@@ -96,6 +100,7 @@ def record_attempt(
         model=model,
         key_id=key_id,
         partial_text=partial_text or None,
+        scheduled=scheduled,
         started_at=started_at,
         ended_at=now_ms(),
     )
@@ -132,13 +137,21 @@ def last_attempt(session: Session, summary_id: str) -> SummaryAttempt | None:
 
 
 def begin_attempt(
-    session: Session, summary: Summary, *, model: str, key_id: str | None
+    session: Session,
+    summary: Summary,
+    *,
+    model: str,
+    key_id: str | None,
+    automatic: bool = False,
+    scheduled: bool = False,
+    starts_at: int | None = None,
 ) -> SummaryAttempt:
     """Record a `running` Attempt; the caller commits it with its queue message.
 
     One running Attempt per Summary: the read below answers the ordinary case
     with a clear 409, and the partial unique index answers the race two
-    requests would otherwise both win.
+    requests would otherwise both win. `starts_at` is when a delayed message
+    becomes due, which is what the page counts down to.
     """
     if running_attempt(session, summary.id) is not None:
         raise HTTPException(status_code=409, detail=ATTEMPT_RUNNING_DETAIL)
@@ -150,7 +163,9 @@ def begin_attempt(
         outcome="running",
         model=model,
         key_id=key_id,
-        started_at=now_ms(),
+        automatic=automatic,
+        scheduled=scheduled,
+        started_at=starts_at if starts_at is not None else now_ms(),
     )
     session.add(attempt)
     try:
@@ -159,6 +174,38 @@ def begin_attempt(
         session.rollback()
         raise HTTPException(status_code=409, detail=ATTEMPT_RUNNING_DETAIL) from exc
     return attempt
+
+
+def claim_attempt(session: Session, attempt_id: str) -> SummaryAttempt | None:
+    """The running Attempt a worker is about to run, started now. Commits.
+
+    `None` when a Stop or a Cancel came first. The start time moves to now
+    because a delayed retry's was when it became due, not when it began.
+    """
+    session.execute(
+        update(SummaryAttempt)
+        .where(
+            col(SummaryAttempt.id) == attempt_id,
+            col(SummaryAttempt.outcome) == "running",
+        )
+        .values(started_at=now_ms())
+    )
+    session.commit()
+    attempt = session.get(SummaryAttempt, attempt_id)
+    return attempt if attempt is not None and attempt.outcome == "running" else None
+
+
+def withdraw_attempt(session: Session, summary: Summary, attempt_id: str) -> None:
+    """Delete an Attempt that never started; the caller took its message. Commits.
+
+    A withdrawn retry asked nobody for anything, so it leaves no record: the
+    Attempts a Summary keeps are the requests that were made.
+    """
+    attempt = session.get(SummaryAttempt, attempt_id)
+    if attempt is not None:
+        session.delete(attempt)
+    note_write(session, summary)
+    session.commit()
 
 
 def save_progress(session: Session, attempt_id: str, text: str) -> bool:
@@ -290,6 +337,124 @@ def fail_interrupted(session: Session, *, still_queued: set[str]) -> int:
         failed += 1
     session.commit()
     return failed
+
+
+#: `[channel #id]`, as the prompt asks the model to cite and the page parses.
+_CITATION_RE = re.compile(r"\[([^\]]+?)\s*#(\d+)\]")
+
+
+def cited_posts(session: Session, text: str, *, user_id: uuid.UUID) -> dict[str, Any]:
+    """`[channel #id]` citations resolved to Posts, keyed `channel-id`.
+
+    What the browser's `resolveCitedPosts` stored, read through the same
+    lookup its hover used; a citation with no Post is left out.
+    """
+    refs = [(m.group(1).strip(), int(m.group(2))) for m in _CITATION_RE.finditer(text)]
+    pairs = list(dict.fromkeys(refs))
+    if not pairs:
+        return {}
+    found = {
+        (row["channelName"], row["id"]): row
+        for row in lookup_posts(session, pairs, user_id=user_id)
+    }
+    return {f"{c}-{p}": found[(c, p)] for c, p in pairs if (c, p) in found}
+
+
+# --- Partial responses (SFR-03) ---------------------------------------------
+
+#: What Keep, Dismiss or Restore on an Attempt with no text to act on is told.
+NO_PARTIAL_DETAIL = "This Attempt has no Partial response."
+
+
+def _partial(
+    session: Session, summary_id: str, attempt_id: str, *, user_id: uuid.UUID
+) -> tuple[Summary, SummaryAttempt]:
+    """The caller's Summary and one of its Attempts that holds a Partial response."""
+    summary = own_summary(session, summary_id, user_id=user_id, writing=True)
+    attempt = session.get(SummaryAttempt, attempt_id)
+    if attempt is None or attempt.summary_id != summary.id:
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    if attempt.outcome == "running" or not attempt.partial_text:
+        raise HTTPException(status_code=409, detail=NO_PARTIAL_DETAIL)
+    return summary, attempt
+
+
+def keep_partial(
+    session: Session, summary_id: str, attempt_id: str, *, user_id: uuid.UUID
+) -> SummaryAttempt:
+    """Finish the Summary Incomplete with one Attempt's Partial response. Commits.
+
+    Recorded as a `kept_partial` Attempt carrying the source's model and Key,
+    which the Summary takes too, so a scheduled run after it pays as the text
+    was paid for. The source keeps its text: keeping uses it, nothing deletes
+    it. Refused while an Attempt runs, which would overwrite it on finishing.
+    """
+    summary, source = _partial(session, summary_id, attempt_id, user_id=user_id)
+    if running_attempt(session, summary.id) is not None:
+        raise HTTPException(status_code=409, detail=ATTEMPT_RUNNING_DETAIL)
+    text = source.partial_text or ""
+    now = now_ms()
+    kept = SummaryAttempt(
+        id=str(uuid.uuid4()),
+        summary_id=summary.id,
+        user_id=summary.user_id,
+        attempt=_next_number(session, summary.id),
+        outcome="kept_partial",
+        model=source.model,
+        key_id=source.key_id,
+        started_at=now,
+        ended_at=now,
+    )
+    session.add(kept)
+    finish_summary(
+        session,
+        summary,
+        text=text,
+        model=source.model,
+        key_id=source.key_id,
+        cited_posts=cited_posts(session, text, user_id=summary.user_id),
+        incomplete=True,
+    )
+    session.commit()
+    session.refresh(kept)
+    return kept
+
+
+def set_partial_dismissed(
+    session: Session,
+    summary_id: str,
+    attempt_id: str,
+    *,
+    user_id: uuid.UUID,
+    dismissed: bool,
+) -> SummaryAttempt:
+    """Dismiss or restore a Partial response; the text stays either way. Commits."""
+    summary, attempt = _partial(session, summary_id, attempt_id, user_id=user_id)
+    attempt.partial_dismissed_at = now_ms() if dismissed else None
+    session.add(attempt)
+    note_write(session, summary)
+    session.commit()
+    session.refresh(attempt)
+    return attempt
+
+
+def trim_dismissed_partials(session: Session, *, cutoff_ms: int) -> int:
+    """Clear the text of Partial responses dismissed before `cutoff_ms`. Commits.
+
+    The one retention write on this table, and it deletes no row: an Attempt
+    and why it failed are kept for the life of their Summary (ADR-030). Only
+    text somebody said they did not need goes, because it is the bulky part.
+    """
+    result = session.execute(
+        update(SummaryAttempt)
+        .where(
+            col(SummaryAttempt.partial_dismissed_at) < cutoff_ms,
+            col(SummaryAttempt.partial_text).is_not(None),
+        )
+        .values(partial_text=None)
+    )
+    session.commit()
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 def restore_attempt(

@@ -8855,29 +8855,6 @@ export type AiApiSummaryPromptResponses = {
 
 export type AiApiSummaryPromptResponse = AiApiSummaryPromptResponses[keyof AiApiSummaryPromptResponses];
 
-export type AiApiSummaryStreamData = {
-    body: SummaryRequest;
-    path?: never;
-    query?: never;
-    url: '/api/v1/ai/summary/stream';
-};
-
-export type AiApiSummaryStreamErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AiApiSummaryStreamError = AiApiSummaryStreamErrors[keyof AiApiSummaryStreamErrors];
-
-export type AiApiSummaryStreamResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
 export type AiApiChatStreamData = {
     body: ChatRequest;
     path?: never;
@@ -10712,6 +10689,142 @@ export type DataStopSummaryAttemptResponses = {
 };
 
 export type DataStopSummaryAttemptResponse = DataStopSummaryAttemptResponses[keyof DataStopSummaryAttemptResponses];
+
+export type DataCancelSummaryAttemptData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/cancel';
+};
+
+export type DataCancelSummaryAttemptErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataCancelSummaryAttemptError = DataCancelSummaryAttemptErrors[keyof DataCancelSummaryAttemptErrors];
+
+export type DataCancelSummaryAttemptResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type DataCancelSummaryAttemptResponse = DataCancelSummaryAttemptResponses[keyof DataCancelSummaryAttemptResponses];
+
+export type DataKeepSummaryPartialData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/keep';
+};
+
+export type DataKeepSummaryPartialErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataKeepSummaryPartialError = DataKeepSummaryPartialErrors[keyof DataKeepSummaryPartialErrors];
+
+export type DataKeepSummaryPartialResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataKeepSummaryPartialResponse = DataKeepSummaryPartialResponses[keyof DataKeepSummaryPartialResponses];
+
+export type DataDismissSummaryPartialData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/dismiss';
+};
+
+export type DataDismissSummaryPartialErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataDismissSummaryPartialError = DataDismissSummaryPartialErrors[keyof DataDismissSummaryPartialErrors];
+
+export type DataDismissSummaryPartialResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataDismissSummaryPartialResponse = DataDismissSummaryPartialResponses[keyof DataDismissSummaryPartialResponses];
+
+export type DataRestoreSummaryPartialData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/restore';
+};
+
+export type DataRestoreSummaryPartialErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRestoreSummaryPartialError = DataRestoreSummaryPartialErrors[keyof DataRestoreSummaryPartialErrors];
+
+export type DataRestoreSummaryPartialResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataRestoreSummaryPartialResponse = DataRestoreSummaryPartialResponses[keyof DataRestoreSummaryPartialResponses];
 
 export type DataSummaryAttemptEventsData = {
     body?: never;

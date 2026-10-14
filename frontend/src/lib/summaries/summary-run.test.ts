@@ -4,6 +4,7 @@ import type { PostScopeQuery } from "@/api/data"
 import { PASTED_SUMMARY_MODEL } from "@/constants"
 import type { Post, Summary } from "@/types"
 import {
+  attemptOutcome,
   checkPastedSummary,
   countRegeneratedPosts,
   failureReport,
@@ -53,6 +54,29 @@ describe("resolveCitedPosts", () => {
       { channelName: "gone", postId: 9 },
     ])
     expect(cited).toEqual({ "chan-1": post })
+  })
+})
+
+describe("attemptOutcome", () => {
+  async function* frames(...items: unknown[]) {
+    for (const item of items) {
+      if (item instanceof Error) throw item
+      yield item as { text: string }
+    }
+  }
+
+  it("is how the watched Attempt ended", async () => {
+    const outcome = await attemptOutcome(
+      frames({ text: "a" }, { outcome: "failed", error: "busy" }),
+    )
+    expect(outcome).toBe("failed")
+  })
+
+  it("is null when the watch broke before the end", async () => {
+    const outcome = await attemptOutcome(
+      frames({ text: "a" }, new Error("network gone")),
+    )
+    expect(outcome).toBeNull()
   })
 })
 

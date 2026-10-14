@@ -9,7 +9,6 @@ import type {
 import {
   autoPublishTarget,
   channelsNeedingSync,
-  classifyAiError,
   extractCitedPosts,
   parseCitationRefs,
   successorSummary,
@@ -17,9 +16,7 @@ import {
 
 /**
  * The rules `generateBackgroundSummary` used to hold inline, where no test
- * could reach them. The one worth guarding hardest is `classifyAiError`: a
- * quota refusal it misses keeps auto-regeneration retrying into the same wall
- * on every tick, and one it invents switches a healthy schedule off.
+ * could reach them.
  */
 
 const summary: Summary = {
@@ -132,50 +129,5 @@ describe("regeneration", () => {
     expect(
       autoPublishTarget({ ...s, publishChatId: "gone" }, 5, bots, dests),
     ).toBeNull()
-  })
-})
-
-describe("classifyAiError", () => {
-  const err = (message: string) => new Error(message)
-
-  it("unwraps a provider's JSON error and trusts only its code for quota", () => {
-    expect(
-      classifyAiError(err('{"error":{"code":429,"message":"Slow down"}}')),
-    ).toEqual({ message: "Slow down", quotaExceeded: true })
-    expect(
-      classifyAiError(
-        err('{"error":{"code":400,"message":"quota field is invalid"}}'),
-      ),
-    ).toEqual({ message: "quota field is invalid", quotaExceeded: false })
-  })
-
-  it("keeps a JSON-shaped message it cannot use as it is", () => {
-    expect(classifyAiError(err("{not json}"))).toEqual({
-      message: "{not json}",
-      quotaExceeded: false,
-    })
-    // JSON-shaped, so the plain-text markers do not apply even though it says "quota".
-    expect(classifyAiError(err('{"detail":"quota"}'))).toEqual({
-      message: '{"detail":"quota"}',
-      quotaExceeded: false,
-    })
-  })
-
-  it("spots a quota refusal in plain text", () => {
-    for (const m of [
-      "HTTP 429",
-      "RESOURCE_EXHAUSTED",
-      "Quota exceeded",
-      "Rate limit hit",
-    ])
-      expect(classifyAiError(err(m)).quotaExceeded).toBe(true)
-    expect(classifyAiError(err("Network down")).quotaExceeded).toBe(false)
-  })
-
-  it("names an error that is not an Error", () => {
-    expect(classifyAiError("boom")).toEqual({
-      message: "Unknown error",
-      quotaExceeded: false,
-    })
   })
 })

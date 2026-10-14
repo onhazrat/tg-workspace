@@ -625,6 +625,13 @@
       "sensitive": false
     },
     {
+      "default": 30,
+      "name": "SUMMARY_PARTIAL_DISMISSED_RETENTION_DAYS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
       "default": 3,
       "name": "SYNC_CONCURRENCY_DEFAULT",
       "required": false,

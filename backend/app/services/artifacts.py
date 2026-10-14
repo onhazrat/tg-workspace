@@ -31,11 +31,14 @@ import uuid
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Integer,
     String,
     Text,
+    case,
     cast,
+    exists,
     func,
     literal,
     null,
@@ -148,6 +151,29 @@ def _failed_attempts() -> Any:
     )
 
 
+def _summary_status() -> Any:
+    """A Summary's status as History shows it: `running` while an Attempt runs.
+
+    Generate stores its Summary Failed before Attempt 1 starts, so a network
+    that drops in between leaves it Failed rather than nowhere (SFR-02). That
+    stored status must not paint the card red while the Attempt is running, so
+    a running Attempt that has started outranks it. One counting down to an
+    automatic retry has not started, and its Summary is still Failed.
+    """
+    started = exists().where(
+        col(SummaryAttempt.summary_id) == col(Summary.id),
+        col(SummaryAttempt.outcome) == "running",
+        col(SummaryAttempt.started_at)
+        <= cast(func.extract("epoch", func.now()) * 1000, BigInteger),
+    )
+    return case(
+        (started, literal("running")),
+        else_=func.coalesce(
+            cast(col(Summary.extra).op("->>")("status"), String), literal("complete")
+        ),
+    )
+
+
 def _scoped(leg: Any, model: type[SQLModel], user_id: uuid.UUID) -> Any:
     """One leg, narrowed to the rows this account may see.
 
@@ -178,10 +204,7 @@ def _summary_leg(user_id: uuid.UUID) -> Any:
             col(Summary.timestamp).label("timestamp"),
             col(Summary.model).label("model"),
             col(Summary.post_count).label("post_count"),
-            func.coalesce(
-                cast(col(Summary.extra).op("->>")("status"), String),
-                literal("complete"),
-            ).label("status"),
+            _summary_status().label("status"),
             _null(String).label("mode"),
             _null(Integer).label("message_count"),
             _null(Integer).label("candidate_count"),
@@ -408,7 +431,7 @@ _STATUS_KINDS: dict[str, tuple[str, ...]] = {
 }
 
 _STATUS_COLUMNS = {
-    "summary": cast(col(Summary.extra).op("->>")("status"), String),
+    "summary": _summary_status(),
     "tag": col(TagRun.status),
 }
 

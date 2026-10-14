@@ -191,7 +191,8 @@ def test_a_provider_failure_ends_the_attempt_failed_with_its_kind(
     _start(client, headers, summary_id)
     _drain()
 
-    [attempt] = _attempts(client, headers, summary_id)
+    # A transient one is followed by its automatic retry (SFR-03).
+    attempt = _attempts(client, headers, summary_id)[0]
     assert attempt["outcome"] == "failed"
     assert attempt["kind"] == kind
     assert attempt["error"]
@@ -213,7 +214,7 @@ def test_a_stream_cut_part_way_keeps_what_it_had(
     _start(client, headers, summary_id)
     _drain()
 
-    [attempt] = _attempts(client, headers, summary_id)
+    attempt = _attempts(client, headers, summary_id)[0]
     assert attempt["outcome"] == "failed"
     assert attempt["kind"] == "transient"
     assert attempt["partialText"] == "First half, "
@@ -249,7 +250,8 @@ def test_a_retry_defaults_to_the_last_attempts_model_and_key(
     client: TestClient, headers: dict[str, str], provider: _FakeProvider
 ) -> None:
     summary_id = _open(client, headers)
-    provider.error = _ProviderError(503, "overloaded")
+    # Not a transient code, so no automatic retry takes the next number.
+    provider.error = _ProviderError(429, "quota")
     _start(client, headers, summary_id, model="m-first")
     _drain()
 

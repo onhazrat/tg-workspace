@@ -1076,36 +1076,6 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
-    "/api/v1/ai/summary/stream": {
-      "post": {
-        "tags": ["ai"],
-        "summary": "Api Summary Stream",
-        "operationId": "ai-api_summary_stream",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/SummaryRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": { "application/json": { "schema": {} } }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
     "/api/v1/ai/chat/stream": {
       "post": {
         "tags": ["ai"],
@@ -3584,6 +3554,176 @@
         "summary": "Stop Summary Attempt",
         "description": "Stop a running attempt; the text it produced is kept on the attempt.",
         "operationId": "data-stop_summary_attempt",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Attempt Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/cancel": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Cancel Summary Attempt",
+        "description": "Withdraw an attempt that is still waiting to start, such as an automatic retry.",
+        "operationId": "data-cancel_summary_attempt",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Attempt Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/keep": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Keep Summary Partial",
+        "description": "Finish the summary with this attempt's partial response; it becomes incomplete.",
+        "operationId": "data-keep_summary_partial",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Attempt Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/dismiss": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Dismiss Summary Partial",
+        "description": "Set this attempt's partial response aside; its text is kept.",
+        "operationId": "data-dismiss_summary_partial",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Attempt Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/restore": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Restore Summary Partial",
+        "description": "Bring back a dismissed partial response.",
+        "operationId": "data-restore_summary_partial",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
           {

@@ -33,10 +33,9 @@ import asyncio
 import contextlib
 import json
 import logging
-import re
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -44,9 +43,14 @@ from fastapi import HTTPException
 from sqlmodel import Session
 
 from app.ai.base import LLMProvider
-from app.ai.failures import EMPTY_ANSWER_DETAIL, failure_detail, provider_code
+from app.ai.failures import (
+    EMPTY_ANSWER_DETAIL,
+    failure_detail,
+    provider_code,
+    retry_after_seconds,
+)
 from app.ai.registry import default_model, get_provider, is_credential_rejection
-from app.core import pg_notify
+from app.core import acting_owner, pg_notify
 from app.core.db import engine
 from app.models_tg import Summary, SummaryAttempt, SummaryPayload
 from app.prompts.summary import format_summary_prompt
@@ -59,19 +63,23 @@ from app.services.ai_keys import (
     resolve_ai_key,
 )
 from app.services.logs import upsert_llm_log
-from app.services.posts import lookup_posts
 from app.services.prompt_assembly import PromptScope, assemble_posts_text
 from app.services.summaries import frozen_scope_of, own_summary, store_prompt
 from app.services.summary_attempts import (
+    ATTEMPT_NOT_RUNNING_DETAIL,
     ATTEMPT_RUNNING_DETAIL,
     begin_attempt,
+    cited_posts,
+    claim_attempt,
     end_attempt,
     fail_interrupted,
     failure_kind,
+    get_attempt,
     last_attempt,
     record_attempt,
     running_attempt,
     save_progress,
+    withdraw_attempt,
 )
 from app.services.sync_meta import touch_sync
 
@@ -97,6 +105,10 @@ SWEEP_SECONDS = 30.0
 _CLAIM_VT_SECONDS = 60
 #: The temperature Generate always used when nobody chose one.
 DEFAULT_TEMPERATURE = 0.7
+#: How long the automatic retry of a transient failure waits when the Provider
+#: named no Retry-After (SFR-03), and the most it waits when it did.
+RETRY_DELAY_SECONDS = 10.0
+MAX_RETRY_DELAY_SECONDS = 600.0
 #: Why an Attempt was refused before a Provider was reached.
 _LEGACY_SCOPE_DETAIL = "This Summary records no Scope, so no prompt can be built."
 _NO_PROMPT_DETAIL = "This Summary has no prompt to run."
@@ -116,6 +128,34 @@ def _provider_for(
 
 
 # --- Starting -------------------------------------------------------------
+
+
+def _acted_by(session: Session) -> dict[str, str] | None:
+    """The acting Owner of a View-as spend, as the queue message carries it.
+
+    The worker has no request to read it off, and a Generate an Owner started
+    must still be credited to them when the worker writes the answer and its
+    AI log row (CLAUDE.md: `acted_by_*` on every write, `LLMLog` included).
+    """
+    owner = acting_owner.current(session)
+    return {"userId": str(owner.user_id), "email": owner.email} if owner else None
+
+
+def _owner_from(message: dict[str, Any]) -> acting_owner.ActingOwner | None:
+    acted = message.get("actedBy")
+    if not isinstance(acted, dict):
+        return None
+    return acting_owner.ActingOwner(
+        user_id=uuid.UUID(str(acted["userId"])), email=str(acted["email"])
+    )
+
+
+@contextlib.contextmanager
+def _session_as(owner: acting_owner.ActingOwner | None) -> Iterator[Session]:
+    """A worker `Session` whose writes are credited as the start request's were."""
+    with Session(engine) as session:
+        acting_owner.bind(session, owner)
+        yield session
 
 
 def _prompt_from_scope(session: Session, summary: Summary) -> str:
@@ -153,6 +193,7 @@ def start_attempt(
     model: str | None,
     key_id: str | None,
     temperature: float | None,
+    scheduled: bool = False,
 ) -> SummaryAttempt:
     """Start an Attempt and hand it to the worker; nothing is generated here.
 
@@ -160,7 +201,9 @@ def start_attempt(
     Provider is reached (no prompt can be built, the Key cannot be used) is
     recorded as a failed Attempt and returned, so it lands on the Summary's page
     rather than in a toast. The token limit is decided before a Key is looked
-    at, so it charges and names none.
+    at, so it charges and names none. A Key that cannot be used also files a
+    failed AI log row, as every refused spend does. `scheduled` is the
+    scheduler's own regeneration (SFR-03).
     """
     summary = own_summary(session, summary_id, user_id=user_id, writing=True)
     if running_attempt(session, summary.id) is not None:
@@ -171,17 +214,18 @@ def start_attempt(
     if key_id is None:
         key_id = previous.key_id if previous else (summary.extra or {}).get("aiKeyId")
 
-    def refused(exc: HTTPException, kind: Any, key: str | None) -> SummaryAttempt:
+    def refused(detail: str, kind: Any, key: str | None) -> SummaryAttempt:
         return record_attempt(
             session,
             summary.id,
             user_id=user_id,
             outcome="failed",
             kind=kind,
-            error=str(exc.detail),
+            error=detail,
             model=model,
             key_id=key,
             started_at=now,
+            scheduled=scheduled,
         )
 
     now = int(time.time() * 1000)
@@ -192,16 +236,31 @@ def start_attempt(
             # Kept even if the Key below is refused: "Use another AI" needs it.
             session.commit()
         except HTTPException as exc:
-            return refused(exc, failure_kind(exc.status_code), None)
+            return refused(str(exc.detail), failure_kind(exc.status_code), None)
     try:
         _, key = _provider_for(session, user_id=summary.user_id, key_id=key_id)
-    except HTTPException as exc:
-        return refused(exc, "auth", key_id)
-    attempt = begin_attempt(session, summary, model=model, key_id=key.credential_id)
+    except Exception as exc:
+        # `Exception`, not `HTTPException`: `decrypt_token` raises a bare
+        # `ValueError` for a row that is not encrypted, and that refusal must
+        # land on the page and in the log like any other.
+        detail = _refusal_detail(exc)
+        _log_refusal(session, summary, model=model, error=detail)
+        return refused(detail, "auth", key_id)
+    attempt = begin_attempt(
+        session,
+        summary,
+        model=model,
+        key_id=key.credential_id,
+        scheduled=scheduled,
+    )
     pgmq.send(
         session,
         GENERATION_LANE,
-        {"attemptId": attempt.id, "temperature": temperature},
+        {
+            "attemptId": attempt.id,
+            "temperature": temperature,
+            "actedBy": _acted_by(session),
+        },
     )
     session.commit()
     session.refresh(attempt)
@@ -212,6 +271,39 @@ def start_attempt(
     except Exception:  # noqa: BLE001
         logger.warning("failed to ring the worker for attempt %s", attempt.id)
     return attempt
+
+
+def _refusal_detail(exc: BaseException) -> str:
+    return str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+
+
+def _log_refusal(session: Session, summary: Summary, *, model: str, error: str) -> None:
+    """File the failed AI log row of a spend refused before a Provider. Commits.
+
+    Nothing reached an endpoint, so it names no provider. Composed from the
+    stored prompt, never from a request, so no credential can reach it.
+    """
+    payload = session.get(SummaryPayload, summary.id)
+    prompt = (payload.prompt_text if payload is not None else None) or ""
+    upsert_llm_log(
+        session,
+        {
+            "id": str(uuid.uuid4()),
+            "model": model,
+            "prompt": prompt,
+            "model_config_json": {},
+            "full_request": {"prompt": prompt},
+            "type": "summary",
+            "response": "",
+            "status": "failed",
+            "error": error,
+            "timestamp": int(time.time() * 1000),
+            "duration": 0,
+        },
+        summary.user_id,
+    )
+    session.commit()
+    touch_sync(session, "llm_logs")
 
 
 def announce_stop(attempt_id: str) -> None:
@@ -259,22 +351,26 @@ def reconcile_interrupted_attempts() -> int:
 @dataclass(frozen=True)
 class _Run:
     attempt_id: str
+    summary_id: str
     owner_id: uuid.UUID
     model: str
     prompt: str
     key: ResolvedKey
     provider: LLMProvider
+    automatic: bool
+    scheduled: bool
+    acted_by: acting_owner.ActingOwner | None
 
 
-def _prepare(attempt_id: str) -> _Run | None:
+def _prepare(attempt_id: str, acted_by: acting_owner.ActingOwner | None) -> _Run | None:
     """Everything the stream needs, read and closed before it starts.
 
-    `None` when there is nothing to run: a Stop that came first, or a refusal
-    this records as the Attempt's failure.
+    `None` when there is nothing to run: a Stop or a Cancel that came first, or
+    a refusal this records as the Attempt's failure.
     """
-    with Session(engine) as session:
-        attempt = session.get(SummaryAttempt, attempt_id)
-        if attempt is None or attempt.outcome != "running":
+    with _session_as(acted_by) as session:
+        attempt = claim_attempt(session, attempt_id)
+        if attempt is None:
             return None
         summary = session.get(Summary, attempt.summary_id)
         payload = session.get(SummaryPayload, attempt.summary_id)
@@ -293,46 +389,35 @@ def _prepare(attempt_id: str) -> _Run | None:
             provider, key = _provider_for(
                 session, user_id=summary.user_id, key_id=attempt.key_id
             )
-        except HTTPException as exc:
+        except Exception as exc:
+            detail = _refusal_detail(exc)
+            _log_refusal(session, summary, model=attempt.model, error=detail)
             end_attempt(
                 session,
                 attempt_id,
                 outcome="failed",
                 text="",
                 kind="auth",
-                error=str(exc.detail),
+                error=detail,
             )
             return None
-        return _Run(attempt_id, summary.user_id, attempt.model, prompt, key, provider)
-
-
-def _cited_posts(session: Session, text: str, *, user_id: uuid.UUID) -> dict[str, Any]:
-    """`[channel #id]` citations resolved to Posts, keyed `channel-id`.
-
-    What the browser's `resolveCitedPosts` stored, read through the same
-    lookup its hover used; a citation with no Post is left out.
-    """
-    pairs = list(dict.fromkeys(_citation_refs(text)))
-    if not pairs:
-        return {}
-    found = {
-        (row["channelName"], row["id"]): row
-        for row in lookup_posts(session, pairs, user_id=user_id)
-    }
-    return {f"{c}-{p}": found[(c, p)] for c, p in pairs if (c, p) in found}
-
-
-#: `[channel #id]`, as the prompt asks the model to cite and the page parses.
-_CITATION_RE = re.compile(r"\[([^\]]+?)\s*#(\d+)\]")
-
-
-def _citation_refs(text: str) -> list[tuple[str, int]]:
-    return [(m.group(1).strip(), int(m.group(2))) for m in _CITATION_RE.finditer(text)]
+        return _Run(
+            attempt_id,
+            summary.id,
+            summary.user_id,
+            attempt.model,
+            prompt,
+            key,
+            provider,
+            automatic=attempt.automatic,
+            scheduled=attempt.scheduled,
+            acted_by=acted_by,
+        )
 
 
 def _log(run: _Run, *, text: str, error: str | None, started: float) -> None:
     """The AI log row the browser used to file, composed without the Key."""
-    with Session(engine) as session:
+    with _session_as(run.acted_by) as session:
         upsert_llm_log(
             session,
             {
@@ -364,9 +449,9 @@ def _finish(
     kind: Any = None,
     error: str | None = None,
 ) -> None:
-    with Session(engine) as session:
+    with _session_as(run.acted_by) as session:
         cited = (
-            _cited_posts(session, text, user_id=run.owner_id)
+            cited_posts(session, text, user_id=run.owner_id)
             if outcome == "succeeded"
             else None
         )
@@ -420,7 +505,7 @@ async def run_attempt(message: dict[str, Any]) -> None:
     """Run one claimed Attempt to its end, whatever that end is."""
     _stop_consumer.start()
     attempt_id = str(message["attemptId"])
-    run = await asyncio.to_thread(_prepare, attempt_id)
+    run = await asyncio.to_thread(_prepare, attempt_id, _owner_from(message))
     if run is None:
         return
     temperature = message.get("temperature")
@@ -432,6 +517,7 @@ async def run_attempt(message: dict[str, Any]) -> None:
     outcome: Any = "succeeded"
     kind: Any = None
     error: str | None = None
+    asked: float | None = None
     try:
         await stream
     except asyncio.CancelledError:
@@ -446,6 +532,7 @@ async def run_attempt(message: dict[str, Any]) -> None:
             logger.warning("attempt %s stream failed", attempt_id, exc_info=exc)
         outcome, kind = "failed", failure_kind(provider_code(exc))
         error = failure_detail(exc, run.key)
+        asked = retry_after_seconds(exc)
     finally:
         _streams.pop(attempt_id, None)
     text = "".join(parts)
@@ -454,10 +541,110 @@ async def run_attempt(message: dict[str, Any]) -> None:
     await asyncio.to_thread(
         _finish, run, outcome=outcome, text=text, kind=kind, error=error
     )
-    # After the row is written, so a watcher reading it on this sees the end.
+    retry_in: float | None = None
+    if kind == "transient" and not run.automatic:
+        retry_in = min(
+            RETRY_DELAY_SECONDS if asked is None else asked, MAX_RETRY_DELAY_SECONDS
+        )
+        if not await asyncio.to_thread(_queue_retry, run, message, retry_in):
+            retry_in = None
+    # After the rows are written, so a watcher reading them on this sees the
+    # end and any retry it queued.
     await asyncio.to_thread(_publish, {"attemptId": attempt_id, "outcome": outcome})
     log_error = "Stopped." if outcome == "stopped" else error
     await asyncio.to_thread(_log, run, text=text, error=log_error, started=started)
+    if retry_in is not None:
+        _ring_after(retry_in)
+    elif run.scheduled and outcome != "stopped":
+        await _after_scheduled(run.summary_id, outcome=outcome, kind=kind)
+
+
+async def _after_scheduled(summary_id: str, *, outcome: Any, kind: Any) -> None:
+    """Hand a scheduled Attempt's end to the scheduler that started it.
+
+    Imported here because the scheduler imports this module to start them.
+    """
+    from app.jobs import auto_summary
+
+    await auto_summary.after_scheduled_attempt(summary_id, outcome=outcome, kind=kind)
+
+
+def _queue_retry(run: _Run, message: dict[str, Any], delay: float) -> bool:
+    """Queue the one automatic retry of a transient failure (SFR-03).
+
+    The worker's, so a scheduled Summary or a closed tab recovers too. On the
+    same model and Key, flagged `automatic`, and due after `delay`: the page
+    counts down to its start and can withdraw it. Not when an Attempt was
+    started by hand in the meantime.
+    """
+    seconds = max(0, round(delay))
+    with _session_as(run.acted_by) as session:
+        summary = session.get(Summary, run.summary_id)
+        if summary is None or running_attempt(session, summary.id) is not None:
+            return False
+        try:
+            retry = begin_attempt(
+                session,
+                summary,
+                model=run.model,
+                key_id=run.key.credential_id,
+                automatic=True,
+                scheduled=run.scheduled,
+                starts_at=int(time.time() * 1000) + seconds * 1000,
+            )
+        except HTTPException:
+            return False  # a start by hand won the race
+        pgmq.send(
+            session,
+            GENERATION_LANE,
+            {**message, "attemptId": retry.id},
+            delay_seconds=seconds,
+        )
+        session.commit()
+        touch_sync(session, "summaries")
+        return True
+
+
+#: Rings waiting to fire, held so nothing collects them first.
+_rings: set[asyncio.TimerHandle] = set()
+
+
+def _ring_after(delay: float) -> None:
+    """Wake the consumer when a delayed retry falls due; the sweep backstops it."""
+
+    def ring() -> None:
+        _rings.discard(handle)
+        with contextlib.suppress(Exception):
+            pg_notify.publish(GENERATION_WAKE_CHANNEL, {})
+
+    handle = asyncio.get_running_loop().call_later(delay, ring)
+    _rings.add(handle)
+
+
+def cancel_attempt(
+    session: Session, summary_id: str, attempt_id: str, *, user_id: uuid.UUID
+) -> None:
+    """Withdraw an Attempt still waiting on the Lane: the countdown's Cancel.
+
+    Taking its message off the queue is the test of "not started": a worker
+    archives the message as it claims it, so once that has happened there is
+    nothing left to delete and the Attempt is refused as running.
+    """
+    attempt = get_attempt(session, summary_id, attempt_id, user_id=user_id)
+    summary = own_summary(session, summary_id, user_id=user_id, writing=True)
+    waiting = [
+        m.msg_id
+        for m in pgmq.queued_messages(session, GENERATION_LANE)
+        if str(m.message.get("attemptId")) == attempt.id
+    ]
+    if (
+        attempt.outcome != "running"
+        or not waiting
+        or not pgmq.delete(session, GENERATION_LANE, waiting[0])
+    ):
+        raise HTTPException(status_code=409, detail=ATTEMPT_NOT_RUNNING_DETAIL)
+    withdraw_attempt(session, summary, attempt.id)
+    touch_sync(session, "summaries")
 
 
 def _reject_key(credential_id: str) -> None:

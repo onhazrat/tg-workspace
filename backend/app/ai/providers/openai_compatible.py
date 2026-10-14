@@ -46,10 +46,14 @@ class OpenAICompatibleError(Exception):
     gateways answer an auth failure with a whole HTML login page.
     """
 
-    def __init__(self, code: int, message: str) -> None:
+    def __init__(
+        self, code: int, message: str, retry_after: float | None = None
+    ) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        #: The Retry-After header in seconds, which the automatic retry honours.
+        self.retry_after = retry_after
 
 
 class OpenAICompatibleProvider:
@@ -232,7 +236,12 @@ class OpenAICompatibleProvider:
 def _raise_for_status(response: httpx.Response) -> None:
     if response.status_code < 400:
         return
-    raise OpenAICompatibleError(response.status_code, response.text[:500])
+    retry_after = response.headers.get("retry-after", "")
+    raise OpenAICompatibleError(
+        response.status_code,
+        response.text[:500],
+        float(retry_after) if retry_after.isdigit() else None,
+    )
 
 
 def _messages(

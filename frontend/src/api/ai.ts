@@ -70,13 +70,6 @@ export const aiApi = {
       body: JSON.stringify(withPromptScope(body)),
     }),
 
-  summaryStream: (body: Record<string, unknown>) =>
-    sseTextStream(
-      "/api/v1/ai/summary/stream",
-      withAiKey(withPromptScope(body)),
-      "text",
-    ),
-
   tagPrompt: (body: {
     channels: string[]
     channelsText: string

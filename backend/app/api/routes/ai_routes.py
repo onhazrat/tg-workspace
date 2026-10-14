@@ -286,41 +286,6 @@ def api_summary_prompt(
     return PromptResponse(prompt=prompt)
 
 
-# Only the browser's Regenerate streams here now (SFR-02): Generate starts an
-# Attempt the worker runs. Remove this once regeneration does too.
-@router.post("/summary/stream")
-async def api_summary_stream(
-    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
-) -> StreamingResponse:
-    model = body.model or default_model()
-    provider, ai_key = _provider_for(
-        session,
-        user_id=current_user.id,
-        purpose=Purpose.SUMMARY,
-        key_id=body.ai_key_id,
-    )
-    prompt = format_summary_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        language=body.language,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-        ),
-    )
-    return StreamingResponse(
-        _sse_text(
-            provider.stream(prompt, model=model, temperature=body.temperature),
-            session,
-            ai_key,
-        ),
-        media_type="text/event-stream",
-    )
-
-
 @router.post("/chat/stream")
 async def api_chat_stream(
     body: ChatRequest, session: SessionDep, current_user: CurrentUser

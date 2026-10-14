@@ -618,6 +618,26 @@ def own_summary(
     return row
 
 
+#: The flag a kept Partial response leaves (SFR-03): the text stops short.
+INCOMPLETE_KEY = "incomplete"
+_UNFINISHED_KEYS = frozenset({"status", INCOMPLETE_KEY})
+
+
+def is_incomplete(summary: Summary) -> bool:
+    return (summary.extra or {}).get(INCOMPLETE_KEY) is True
+
+
+def note_write(session: Session, summary: Summary) -> None:
+    """Record a write that changed only what hangs off the Summary; caller commits.
+
+    Dismissing or restoring a Partial response writes the Attempt, which has no
+    stamp of its own, so the Summary says who did it.
+    """
+    summary.updated_at = utc_now()
+    acting_owner.stamp(session, summary)
+    session.add(summary)
+
+
 def mark_summary_failed(session: Session, summary: Summary) -> None:
     """Set the Failed status; the caller commits it with the Attempt."""
     summary.extra = {**(summary.extra or {}), "status": FAILED_STATUS}
@@ -649,6 +669,7 @@ def finish_summary(
     model: str,
     key_id: str | None,
     cited_posts: dict[str, Any],
+    incomplete: bool = False,
 ) -> None:
     """Write a succeeded Attempt's answer onto its Summary; the caller commits.
 
@@ -656,10 +677,18 @@ def finish_summary(
     its Citations, no status, and no prompt (a corpus-sized copy a finished
     Summary keeps only when it came from Copy). It also takes the model and the
     AI Key that wrote it, so the next scheduled run pays with the same Key.
+
+    `incomplete` is a kept Partial response (SFR-03): finished and readable,
+    but its text stops short, so the prompt stays for the retry that may
+    replace it. A full answer clears the mark.
     """
-    extra = {k: v for k, v in (summary.extra or {}).items() if k != "status"}
+    extra = {
+        k: v for k, v in (summary.extra or {}).items() if k not in _UNFINISHED_KEYS
+    }
     if key_id is not None:
         extra["aiKeyId"] = key_id
+    if incomplete:
+        extra[INCOMPLETE_KEY] = True
     summary.extra = extra
     summary.text = text
     summary.model = model
@@ -669,7 +698,7 @@ def finish_summary(
         summary.id,
         user_id=summary.user_id,
         updates={"cited_posts": cited_posts},
-        removals={"prompt_text"},
+        removals=set() if incomplete else {"prompt_text"},
     )
     refresh_summary_derived_columns(summary, payload)
     summary.updated_at = utc_now()

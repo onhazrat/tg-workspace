@@ -58,6 +58,24 @@ export async function followAttempt(
 }
 
 /**
+ * How a watched Attempt ended, or null when the watch broke first; the
+ * Attempt itself keeps running on the worker either way (SFR-03).
+ */
+export async function attemptOutcome(
+  frames: AsyncIterable<AttemptFrame>,
+): Promise<string | null> {
+  let outcome: string | null = null
+  try {
+    for await (const frame of frames)
+      if ("outcome" in frame) outcome = frame.outcome
+  } catch (err: unknown) {
+    console.error(err)
+    return null
+  }
+  return outcome
+}
+
+/**
  * What the browser reports when a Generate broke before an Attempt started
  * (SFR-01): the reason, and the HTTP status if anything answered. The server
  * decides the kind from that status, so the status is all that is sent.

@@ -11,7 +11,12 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, SessionDep
-from app.jobs.summary_generation import announce_stop, start_attempt, watch_attempt
+from app.jobs.summary_generation import (
+    announce_stop,
+    cancel_attempt,
+    start_attempt,
+    watch_attempt,
+)
 from app.schemas.common import StatusResponse
 from app.schemas.summaries import (
     SummaryAttemptResponse,
@@ -50,9 +55,11 @@ from app.services.summary_attempts import (
     attempt_to_camel,
     failure_kind,
     get_attempt,
+    keep_partial,
     list_attempts,
     now_ms,
     record_attempt,
+    set_partial_dismissed,
     stop_attempt,
 )
 from app.services.sync_meta import touch_sync
@@ -240,6 +247,65 @@ def stop_summary_attempt(
     """Stop a running attempt; the text it produced is kept on the attempt."""
     attempt = stop_attempt(session, summary_id, attempt_id, user_id=current_user.id)
     announce_stop(attempt.id)
+    touch_sync(session, "summaries")
+    return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
+
+
+# SFR-03: the countdown's Cancel. The Attempt never started, so it is withdrawn
+# rather than ended: it leaves no record.
+@router.post("/summaries/{summary_id}/attempts/{attempt_id}/cancel")
+def cancel_summary_attempt(
+    summary_id: str,
+    attempt_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> StatusResponse:
+    """Withdraw an attempt that is still waiting to start, such as an automatic retry."""
+    cancel_attempt(session, summary_id, attempt_id, user_id=current_user.id)
+    return StatusResponse(status="cancelled")
+
+
+# SFR-03: a Partial response kept as the Summary's text, set aside, or brought
+# back. Writes needing an elevation in View-as, like every other.
+@router.post("/summaries/{summary_id}/attempts/{attempt_id}/keep")
+def keep_summary_partial(
+    summary_id: str,
+    attempt_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SummaryAttemptResponse:
+    """Finish the summary with this attempt's partial response; it becomes incomplete."""
+    attempt = keep_partial(session, summary_id, attempt_id, user_id=current_user.id)
+    touch_sync(session, "summaries")
+    return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
+
+
+@router.post("/summaries/{summary_id}/attempts/{attempt_id}/dismiss")
+def dismiss_summary_partial(
+    summary_id: str,
+    attempt_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SummaryAttemptResponse:
+    """Set this attempt's partial response aside; its text is kept."""
+    attempt = set_partial_dismissed(
+        session, summary_id, attempt_id, user_id=current_user.id, dismissed=True
+    )
+    touch_sync(session, "summaries")
+    return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
+
+
+@router.post("/summaries/{summary_id}/attempts/{attempt_id}/restore")
+def restore_summary_partial(
+    summary_id: str,
+    attempt_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SummaryAttemptResponse:
+    """Bring back a dismissed partial response."""
+    attempt = set_partial_dismissed(
+        session, summary_id, attempt_id, user_id=current_user.id, dismissed=False
+    )
     touch_sync(session, "summaries")
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 

@@ -140,12 +140,9 @@ AI_KEY_CALLERS: dict[str, str] = {
     "app/jobs/summary_generation.py": (
         "a Summary Attempt is the Account's Artifact, run on the worker; the "
         "Key is resolved for the Summary's owner when the Attempt starts and "
-        "again when the worker runs it (ADR-030)"
-    ),
-    "app/jobs/auto_summary.py": (
-        "an unattended regeneration is still the owner's Artifact; BYOK-03 "
-        "makes it read the Key id the Summary stored, and until then it "
-        "resolves the owner's Key the way an attended run does"
+        "again when the worker runs it (ADR-030); the scheduler's "
+        "regeneration is an Attempt too, on the Key id the Summary stored "
+        "(BYOK-03, SFR-03)"
     ),
 }
 

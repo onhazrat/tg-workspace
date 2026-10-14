@@ -164,11 +164,12 @@ def test_the_split_did_not_change_the_route_count() -> None:
     `GET /summaries/{id}/attempts` and `POST /summaries/{id}/failures`, a
     Summary's Attempts and the browser's report of a Generate that broke
     before anything streamed; and **106** with SFR-02's start, stop and watch
-    routes for an Attempt on the worker.
+    routes for an Attempt on the worker; and **110** with SFR-03's cancel of a
+    waiting Attempt and keep, dismiss and restore of a Partial response.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 106, (
-        f"expected 106 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 110, (
+        f"expected 110 /data endpoints, found {len(data_routes)}"
     )
