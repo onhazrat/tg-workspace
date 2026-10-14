@@ -6,7 +6,7 @@ Spec: `.scratch/summary-failure-retry/spec.md`; ADR-030 decides that Attempts ru
 
 **Blocked by:** SFR-01.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] A generation Lane, created by a migration, drained by the Sync worker with its own concurrency, separate from the scraping Lanes; scraping throughput is unaffected by a long Attempt.
 - [ ] Starting an Attempt records it as `running`, enqueues it and rings the worker as sync enqueues do; the worker claims it, resolves the AI Key through the existing payment rule (the Summary's caller pays), calls the Provider and streams the answer.

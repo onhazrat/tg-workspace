@@ -4,7 +4,7 @@
  * the lookup and count calls are passed in.
  */
 import { ApiError } from "@/api/base"
-import type { PostScopeQuery } from "@/api/data"
+import type { AttemptFrame, PostScopeQuery } from "@/api/data"
 import {
   isFailedSummary,
   isPendingSummary,
@@ -12,7 +12,7 @@ import {
 } from "@/constants"
 import { floorToMinute } from "@/lib/analysis-window"
 import { scopeRange } from "@/lib/scope/artifact-scope"
-import type { LLMLog, Post, Summary } from "@/types"
+import type { Post, Summary } from "@/types"
 import { extractCitedPosts, parseCitationRefs } from "./summary-model"
 
 export const NO_POSTS_MESSAGE =
@@ -34,55 +34,31 @@ export async function resolveCitedPosts(
   return extractCitedPosts(text, pool)
 }
 
-/** The LLM log for a streamed summary; `failed` when the model said nothing. */
-export function summaryLLMLog(run: {
-  id: string
-  model: string
-  prompt: string
-  config: unknown
-  text: string
-  lastChunk: unknown
-  now: number
-  durationMs: number
-}): LLMLog {
-  const usage = (
-    run.lastChunk as { usageMetadata?: { totalTokenCount?: number } } | null
-  )?.usageMetadata
-  return {
-    id: run.id,
-    model: run.model,
-    prompt: run.prompt,
-    response: run.text,
-    modelConfig: run.config,
-    fullRequest: {
-      contents: [{ parts: [{ text: run.prompt }] }],
-      config: run.config,
-    },
-    fullResponse: run.lastChunk,
-    tokens: usage?.totalTokenCount,
-    status: run.text ? "success" : "failed",
-    timestamp: run.now,
-    duration: run.durationMs,
-    type: "summary",
-  }
-}
-
 /** A pasted response the pending Summary can take, or why it cannot. */
-/** A Generate failure the stream route already recorded as an Attempt. */
+/** A Generate failure the server already recorded as an Attempt. */
 export class RecordedFailure extends Error {}
 
 /**
- * What a broken summary stream becomes. An HTTP refusal came before the stream
- * opened, so nothing recorded it and the browser reports it. Anything else
- * ended a stream the server recorded: an `error` frame, or a connection that
- * dropped under it.
+ * Feed an Attempt's watch to `onText`, piece by piece (SFR-02). True when the
+ * watch ended by itself, which is the cue to read the Summary again; false
+ * when the page stopped watching. A broken connection ends it too: the
+ * Summary's rows say how the Attempt really stands.
  */
-export function streamFailure(err: unknown, reason: string): Error {
-  return err instanceof ApiError ? err : new RecordedFailure(reason)
+export async function followAttempt(
+  frames: AsyncIterable<AttemptFrame>,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+): Promise<boolean> {
+  try {
+    for await (const frame of frames) if ("text" in frame) onText(frame.text)
+  } catch (err: unknown) {
+    if (!signal.aborted) console.error(err)
+  }
+  return !signal.aborted
 }
 
 /**
- * What the browser reports when a Generate broke before the server streamed
+ * What the browser reports when a Generate broke before an Attempt started
  * (SFR-01): the reason, and the HTTP status if anything answered. The server
  * decides the kind from that status, so the status is all that is sent.
  */

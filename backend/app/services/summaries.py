@@ -626,6 +626,57 @@ def mark_summary_failed(session: Session, summary: Summary) -> None:
     session.add(summary)
 
 
+def store_prompt(session: Session, summary: Summary, prompt: str) -> None:
+    """Keep the prompt an Attempt is about to run; the caller commits.
+
+    Stored before the Provider is asked, so a Failed Summary always has the
+    prompt "Use another AI" copies (SFR-02).
+    """
+    payload = apply_summary_payload(
+        session, summary.id, user_id=summary.user_id, updates={"prompt_text": prompt}
+    )
+    refresh_summary_derived_columns(summary, payload)
+    summary.updated_at = utc_now()
+    acting_owner.stamp(session, summary)
+    session.add(summary)
+
+
+def finish_summary(
+    session: Session,
+    summary: Summary,
+    *,
+    text: str,
+    model: str,
+    key_id: str | None,
+    cited_posts: dict[str, Any],
+) -> None:
+    """Write a succeeded Attempt's answer onto its Summary; the caller commits.
+
+    What the browser's save did when it streamed the answer itself: the text,
+    its Citations, no status, and no prompt (a corpus-sized copy a finished
+    Summary keeps only when it came from Copy). It also takes the model and the
+    AI Key that wrote it, so the next scheduled run pays with the same Key.
+    """
+    extra = {k: v for k, v in (summary.extra or {}).items() if k != "status"}
+    if key_id is not None:
+        extra["aiKeyId"] = key_id
+    summary.extra = extra
+    summary.text = text
+    summary.model = model
+    summary.timestamp = int(utc_now().timestamp() * 1000)
+    payload = apply_summary_payload(
+        session,
+        summary.id,
+        user_id=summary.user_id,
+        updates={"cited_posts": cited_posts},
+        removals={"prompt_text"},
+    )
+    refresh_summary_derived_columns(summary, payload)
+    summary.updated_at = utc_now()
+    acting_owner.stamp(session, summary)
+    session.add(summary)
+
+
 def delete_summary(session: Session, summary_id: str, *, user_id: uuid.UUID) -> None:
     summary = session.get(Summary, summary_id)
     if not summary:

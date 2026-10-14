@@ -3,6 +3,8 @@ import { expect, test } from "./fixtures.ts"
 
 /**
  * SFR-01: a Generate that broke leaves a Failed Summary that says why.
+ * SFR-02: it can be retried on the worker, the text streams into the page, a
+ * page opened mid-Attempt attaches to it, and a running Attempt can be stopped.
  *
  * Over a mocked API, because the journey is about what the tab and History
  * show for rows in a given state, and making a real Generate fail would drag
@@ -99,7 +101,23 @@ const ROWS = [
   row(PENDING_ID, "pending", 0),
 ]
 
+/** What a test changed; read before the fixed rows above. */
+let state: {
+  details: Record<string, unknown>
+  attempts: Record<string, unknown[]>
+  events: Record<string, string>
+  posted: string[]
+  onStart?: () => unknown
+  onStop?: () => unknown
+  /** The worker finishing, once the page has watched the Attempt. */
+  afterWatch?: () => void
+}
+
+const sse = (...frames: object[]) =>
+  frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join("")
+
 async function mockSummaries(page: Page): Promise<void> {
+  state = { details: {}, attempts: {}, events: {}, posted: [] }
   await page.route("**/api/v1/data/**", async (route) => {
     const url = new URL(route.request().url())
     const path = url.pathname.replace("/api/v1/data", "")
@@ -111,13 +129,33 @@ async function mockSummaries(page: Page): Promise<void> {
     }
     if (path === "/summaries") {
       if (route.request().method() !== "GET") return route.fallback()
-      return route.fulfill({ json: ROWS.map((r) => DETAILS[r.id]) })
+      return route.fulfill({
+        json: ROWS.map((r) => state.details[r.id] ?? DETAILS[r.id]),
+      })
+    }
+    if (route.request().method() === "POST") {
+      state.posted.push(path)
+      const start = path.match(/^\/summaries\/([^/]+)\/attempts\/start$/)
+      if (start && state.onStart)
+        return route.fulfill({ json: state.onStart() })
+      const stop = path.match(/\/attempts\/([^/]+)\/stop$/)
+      if (stop && state.onStop) return route.fulfill({ json: state.onStop() })
+    }
+    const events = path.match(/\/attempts\/([^/]+)\/events$/)
+    if (events) {
+      const body = state.events[events[1]] ?? ""
+      state.afterWatch?.()
+      return route.fulfill({ contentType: "text/event-stream", body })
     }
     const attempts = path.match(/^\/summaries\/([^/]+)\/attempts$/)
-    if (attempts) return route.fulfill({ json: ATTEMPTS[attempts[1]] ?? [] })
+    if (attempts)
+      return route.fulfill({
+        json: state.attempts[attempts[1]] ?? ATTEMPTS[attempts[1]] ?? [],
+      })
     const detail = path.match(/^\/summaries\/([^/]+)$/)
-    if (detail && DETAILS[detail[1]] && route.request().method() === "GET")
-      return route.fulfill({ json: DETAILS[detail[1]] })
+    const found = detail && (state.details[detail[1]] ?? DETAILS[detail[1]])
+    if (found && route.request().method() === "GET")
+      return route.fulfill({ json: found })
     return route.fallback()
   })
 }
@@ -161,6 +199,96 @@ test("a Generate refused before its prompt existed offers nothing to copy", asyn
   await expect(page.getByRole("alert")).toContainText("no AI Key charged")
   await expect(page.getByText("Use another AI")).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Copy prompt" })).toHaveCount(0)
+})
+
+test("Retry runs on the worker, streams into the page, then shows the report", async ({
+  page,
+}) => {
+  const running = attempt(FAILED_ID, 3, {
+    outcome: "running",
+    kind: null,
+    error: null,
+    endedAt: null,
+  })
+  state.onStart = () => {
+    state.attempts[FAILED_ID] = [...ATTEMPTS[FAILED_ID], running]
+    state.events[running.id] = sse(
+      { text: "The fresh " },
+      { text: "report." },
+      { outcome: "succeeded", error: null },
+    )
+    state.afterWatch = () => {
+      // What the worker wrote by the time the watch ends.
+      state.details[FAILED_ID] = summary(FAILED_ID, {
+        text: "The fresh report.",
+        status: null,
+      })
+      state.attempts[FAILED_ID] = [
+        ...ATTEMPTS[FAILED_ID],
+        { ...running, outcome: "succeeded", endedAt: NOW },
+      ]
+    }
+    return running
+  }
+  await page.goto(`/workspace?tab=summary&summary=${FAILED_ID}`)
+  await expect(page.getByTestId("try-again")).toContainText("Attempt 3", {
+    timeout: 20_000,
+  })
+
+  await page.getByRole("button", { name: "Retry" }).click()
+
+  // The finished report, not the running card that streamed it.
+  await expect(page.getByTestId("running-attempt")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+  await expect(page.getByText("The fresh report.")).toBeVisible()
+  expect(state.posted).toContain(`/summaries/${FAILED_ID}/attempts/start`)
+  await expect(page.getByText("Failed ×2")).toHaveCount(0)
+  // It took three Attempts, so the finished report keeps them folded.
+  await expect(page.getByRole("button", { name: "Attempts (3)" })).toBeVisible()
+})
+
+test("a Summary reopened mid-Attempt shows the text so far, and Stop ends it", async ({
+  page,
+}) => {
+  const running = attempt(FAILED_ID, 3, {
+    outcome: "running",
+    kind: null,
+    error: null,
+    endedAt: null,
+  })
+  state.attempts[FAILED_ID] = [...ATTEMPTS[FAILED_ID], running]
+  // The worker is still writing: the watch has sent this much and no end.
+  state.events[running.id] = sse({ text: "Half of the brief" })
+  state.onStop = () => {
+    const stopped = { ...running, outcome: "stopped", partialText: "Half" }
+    state.attempts[FAILED_ID] = [...ATTEMPTS[FAILED_ID], stopped]
+    return stopped
+  }
+
+  await page.goto(`/workspace?tab=summary&summary=${FAILED_ID}`)
+  const card = page.getByTestId("running-attempt")
+  await expect(card).toContainText("Half of the brief", { timeout: 20_000 })
+  await expect(card).toContainText("Attempt 3 is running")
+  await expect(page.getByTestId("try-again")).toHaveCount(0)
+
+  await card.getByRole("button", { name: "Stop" }).click()
+
+  await expect(page.getByTestId("running-attempt")).toHaveCount(0)
+  await expect(page.getByTestId("try-again")).toBeVisible()
+  expect(state.posted).toContain(
+    `/summaries/${FAILED_ID}/attempts/${running.id}/stop`,
+  )
+})
+
+test("a token-limit refusal leads with Change selection", async ({ page }) => {
+  await page.goto(`/workspace?tab=summary&summary=${NO_PROMPT_ID}`)
+
+  const card = page.getByTestId("change-selection-card")
+  await expect(card).toContainText("No AI Key was charged", { timeout: 20_000 })
+  await expect(page.getByTestId("try-again")).toHaveCount(0)
+  await card.getByRole("button", { name: "Change selection" }).click()
+  await expect(page).toHaveURL(/tab=action/)
 })
 
 test("a Pending Summary keeps the Copy Prompt panel", async ({ page }) => {

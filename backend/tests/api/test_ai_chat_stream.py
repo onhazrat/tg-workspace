@@ -254,23 +254,6 @@ def test_a_failure_nothing_answered_keeps_its_traceback(
     assert failed and failed[0].exc_info is not None
 
 
-def test_the_summary_stream_sends_the_prompt_it_was_given(
-    provider: _FakeProvider,
-) -> None:
-    """Generate stores its prompt on the pending Summary first, then sends it
-    back so the model answers exactly that prompt, built once.
-
-    **Mutation:** ignore `prompt` and rebuild it, and the call carries the
-    template instead.
-    """
-    client_post(
-        SUMMARY_URL,
-        {"channels": ["chan_a"], "postsText": "p", "prompt": "stored prompt"},
-    )
-
-    assert provider.calls[0]["prompt"] == "stored prompt"
-
-
 def client_post(url: str, body: dict[str, Any]) -> Any:
     lenient = TestClient(app, raise_server_exceptions=False)
     return lenient.post(url, headers=get_superuser_token_headers(lenient), json=body)

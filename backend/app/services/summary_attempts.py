@@ -13,16 +13,23 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import func
+from fastapi import HTTPException
+from sqlalchemy import func, update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
-from app.models_tg import SummaryAttempt, utc_now
+from app.models_tg import Summary, SummaryAttempt, utc_now
 from app.schemas.summaries import (
     AttemptKind,
     AttemptOutcome,
     SummaryAttemptResponse,
 )
-from app.services.summaries import mark_summary_failed, own_summary
+from app.services.summaries import (
+    SUMMARY_NOT_FOUND,
+    finish_summary,
+    mark_summary_failed,
+    own_summary,
+)
 
 
 def now_ms() -> int:
@@ -98,6 +105,191 @@ def record_attempt(
     session.commit()
     session.refresh(attempt)
     return attempt
+
+
+#: Why an Attempt a dead worker held ends Failed.
+INTERRUPTED_DETAIL = "The worker stopped before the answer finished."
+#: What a second start or a Stop of a finished Attempt is told.
+ATTEMPT_RUNNING_DETAIL = "An Attempt is already running for this Summary."
+ATTEMPT_NOT_RUNNING_DETAIL = "This Attempt is not running."
+
+
+def running_attempt(session: Session, summary_id: str) -> SummaryAttempt | None:
+    return session.exec(
+        select(SummaryAttempt).where(
+            SummaryAttempt.summary_id == summary_id,
+            SummaryAttempt.outcome == "running",
+        )
+    ).first()
+
+
+def last_attempt(session: Session, summary_id: str) -> SummaryAttempt | None:
+    return session.exec(
+        select(SummaryAttempt)
+        .where(SummaryAttempt.summary_id == summary_id)
+        .order_by(col(SummaryAttempt.attempt).desc())
+    ).first()
+
+
+def begin_attempt(
+    session: Session, summary: Summary, *, model: str, key_id: str | None
+) -> SummaryAttempt:
+    """Record a `running` Attempt; the caller commits it with its queue message.
+
+    One running Attempt per Summary: the read below answers the ordinary case
+    with a clear 409, and the partial unique index answers the race two
+    requests would otherwise both win.
+    """
+    if running_attempt(session, summary.id) is not None:
+        raise HTTPException(status_code=409, detail=ATTEMPT_RUNNING_DETAIL)
+    attempt = SummaryAttempt(
+        id=str(uuid.uuid4()),
+        summary_id=summary.id,
+        user_id=summary.user_id,
+        attempt=_next_number(session, summary.id),
+        outcome="running",
+        model=model,
+        key_id=key_id,
+        started_at=now_ms(),
+    )
+    session.add(attempt)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail=ATTEMPT_RUNNING_DETAIL) from exc
+    return attempt
+
+
+def save_progress(session: Session, attempt_id: str, text: str) -> bool:
+    """Write a running Attempt's text so far. False once it is not running.
+
+    The worker reads the answer as its cue to stop, which is the backstop for a
+    Stop whose `NOTIFY` was lost.
+    """
+    result = session.execute(
+        update(SummaryAttempt)
+        .where(
+            col(SummaryAttempt.id) == attempt_id,
+            col(SummaryAttempt.outcome) == "running",
+        )
+        .values(partial_text=text or None)
+    )
+    session.commit()
+    return bool(getattr(result, "rowcount", 0))
+
+
+def end_attempt(
+    session: Session,
+    attempt_id: str,
+    *,
+    outcome: AttemptOutcome,
+    text: str,
+    kind: AttemptKind | None = None,
+    error: str | None = None,
+    cited_posts: dict[str, Any] | None = None,
+) -> SummaryAttempt | None:
+    """End a running Attempt and write its Summary to match. Commits.
+
+    `succeeded` hands the text to the Summary; anything else keeps it as the
+    Attempt's own and leaves the Summary Failed. An Attempt a Stop already
+    ended only takes the text the worker had when it heard, which can be more
+    than the last write. Anything else that is no longer running is left alone.
+    """
+    attempt = session.get(SummaryAttempt, attempt_id)
+    if attempt is None:
+        return None
+    if attempt.outcome == "stopped" and outcome == "stopped":
+        if len(text) > len(attempt.partial_text or ""):
+            attempt.partial_text = text
+            session.add(attempt)
+            session.commit()
+        return attempt
+    if attempt.outcome != "running":
+        return None
+    summary = session.get(Summary, attempt.summary_id)
+    attempt.outcome = outcome
+    attempt.kind = kind
+    attempt.error = error
+    attempt.partial_text = None if outcome == "succeeded" else (text or None)
+    attempt.ended_at = now_ms()
+    session.add(attempt)
+    if summary is not None:
+        if outcome == "succeeded":
+            finish_summary(
+                session,
+                summary,
+                text=text,
+                model=attempt.model,
+                key_id=attempt.key_id,
+                cited_posts=cited_posts or {},
+            )
+        else:
+            mark_summary_failed(session, summary)
+    session.commit()
+    session.refresh(attempt)
+    return attempt
+
+
+def stop_attempt(
+    session: Session, summary_id: str, attempt_id: str, *, user_id: uuid.UUID
+) -> SummaryAttempt:
+    """End a running Attempt `stopped`, keeping the text it had. Commits.
+
+    Written here rather than left to the worker, so a Stop works whether or not
+    a worker ever picked the Attempt up; the worker adds what it had on top.
+    """
+    summary = own_summary(session, summary_id, user_id=user_id, writing=True)
+    attempt = session.get(SummaryAttempt, attempt_id)
+    if attempt is None or attempt.summary_id != summary.id:
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    if attempt.outcome != "running":
+        raise HTTPException(status_code=409, detail=ATTEMPT_NOT_RUNNING_DETAIL)
+    attempt.outcome = "stopped"
+    attempt.ended_at = now_ms()
+    session.add(attempt)
+    mark_summary_failed(session, summary)
+    session.commit()
+    session.refresh(attempt)
+    return attempt
+
+
+def get_attempt(
+    session: Session, summary_id: str, attempt_id: str, *, user_id: uuid.UUID
+) -> SummaryAttempt:
+    """One of the caller's Attempts, or the Summary family's 404."""
+    own_summary(session, summary_id, user_id=user_id, writing=False)
+    attempt = session.get(SummaryAttempt, attempt_id)
+    if attempt is None or attempt.summary_id != summary_id:
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    return attempt
+
+
+def fail_interrupted(session: Session, *, still_queued: set[str]) -> int:
+    """Fail every running Attempt no queue message is waiting to start. Commits.
+
+    The worker takes an Attempt's message off the Lane as it claims it, so a
+    running Attempt with no message left belonged to a worker that is gone. One
+    still on the Lane is waiting, which is the point of the queue.
+    """
+    rows = session.exec(
+        select(SummaryAttempt).where(SummaryAttempt.outcome == "running")
+    ).all()
+    failed = 0
+    for attempt in rows:
+        if attempt.id in still_queued:
+            continue
+        attempt.outcome = "failed"
+        attempt.kind = "transient"
+        attempt.error = INTERRUPTED_DETAIL
+        attempt.ended_at = now_ms()
+        session.add(attempt)
+        summary = session.get(Summary, attempt.summary_id)
+        if summary is not None:
+            mark_summary_failed(session, summary)
+        failed += 1
+    session.commit()
+    return failed
 
 
 def restore_attempt(

@@ -8,11 +8,14 @@ path and operation id is unchanged.
 from typing import Any
 
 from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, SessionDep
+from app.jobs.summary_generation import announce_stop, start_attempt, watch_attempt
 from app.schemas.common import StatusResponse
 from app.schemas.summaries import (
     SummaryAttemptResponse,
+    SummaryAttemptStartRequest,
     SummaryFailureRequest,
     SummaryListItemResponse,
     SummaryResponse,
@@ -46,9 +49,11 @@ from app.services.summaries import (
 from app.services.summary_attempts import (
     attempt_to_camel,
     failure_kind,
+    get_attempt,
     list_attempts,
     now_ms,
     record_attempt,
+    stop_attempt,
 )
 from app.services.sync_meta import touch_sync
 from app.services.tag_runs import (
@@ -176,8 +181,8 @@ def list_summary_attempts(
     ]
 
 
-# SFR-01. The browser reports a Generate that broke before the server streamed
-# anything; the stream route records its own failures. In a comment rather than
+# SFR-01. The browser reports a Generate that broke before it could start an
+# Attempt (a failed sync); the worker records every failure after that. In a comment rather than
 # a docstring, which would ship in the generated client.
 @router.post("/summaries/{summary_id}/failures")
 def record_summary_failure(
@@ -201,6 +206,54 @@ def record_summary_failure(
     )
     touch_sync(session, "summaries")
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
+
+
+# SFR-02, ADR-030. Not `POST .../attempts`: that path is the list's, and a spend
+# path is classified before the safe-method shortcut, so the list would become a
+# spend too. In comments rather than docstrings, which ship in the client.
+@router.post("/summaries/{summary_id}/attempts/start")
+def start_summary_attempt(
+    summary_id: str,
+    body: SummaryAttemptStartRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SummaryAttemptResponse:
+    """Start generating this summary on the worker; watch it with the events stream."""
+    attempt = start_attempt(
+        session,
+        summary_id,
+        user_id=current_user.id,
+        model=body.model,
+        key_id=body.ai_key_id,
+        temperature=body.temperature,
+    )
+    return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
+
+
+@router.post("/summaries/{summary_id}/attempts/{attempt_id}/stop")
+def stop_summary_attempt(
+    summary_id: str,
+    attempt_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SummaryAttemptResponse:
+    """Stop a running attempt; the text it produced is kept on the attempt."""
+    attempt = stop_attempt(session, summary_id, attempt_id, user_id=current_user.id)
+    announce_stop(attempt.id)
+    touch_sync(session, "summaries")
+    return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
+
+
+@router.get("/summaries/{summary_id}/attempts/{attempt_id}/events")
+def summary_attempt_events(
+    summary_id: str,
+    attempt_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> StreamingResponse:
+    """Server-sent events: the attempt's text as it arrives, then how it ended."""
+    get_attempt(session, summary_id, attempt_id, user_id=current_user.id)
+    return StreamingResponse(watch_attempt(attempt_id), media_type="text/event-stream")
 
 
 @router.get("/tag-runs")

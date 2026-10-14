@@ -199,10 +199,11 @@ test.describe("TG Workspace shell", () => {
    * Generate files its prompt before the model is asked, so a failed run
    * leaves a Failed Summary that keeps it and says why (SFR-01).
    *
-   * The model is the only thing mocked, refusing before any stream opens, so
-   * the browser reports the failure to the real backend and the server
-   * decides its kind. **Mutation:** keep the old flow (delete on failure) and
-   * the URL never names a Summary; drop the report and it stays pending.
+   * Starting the Attempt is the only thing mocked, refusing before the
+   * worker gets it (SFR-02), so the browser reports the failure to the real
+   * backend and the server decides its kind. **Mutation:** keep the old flow
+   * (delete on failure) and the URL never names a Summary; drop the report
+   * and it has no Attempt.
    */
   test("a failed Generate leaves a Failed summary with its prompt and reason", async ({
     page,
@@ -229,7 +230,7 @@ test.describe("TG Workspace shell", () => {
     await page.route("**/api/v1/ai/summary/prompt", (route) =>
       route.fulfill({ json: { prompt: "summary prompt for e2e" } }),
     )
-    await page.route("**/api/v1/ai/summary/stream", (route) =>
+    await page.route("**/api/v1/data/summaries/*/attempts/start", (route) =>
       route.fulfill({ status: 503, json: { detail: overloaded } }),
     )
 

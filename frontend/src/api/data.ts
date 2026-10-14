@@ -1198,3 +1198,24 @@ export async function* streamFollowJobEvents(
     { signal },
   )
 }
+
+/** One frame of an Attempt's watch: new text, or how it ended (SFR-02). */
+export type AttemptFrame =
+  | { text: string }
+  | { outcome: "succeeded" | "failed" | "stopped"; error: string | null }
+
+/**
+ * Watch an Attempt the worker runs: the text written so far, then each new
+ * piece, then how it ended. Hand-written because codegen cannot express a
+ * long-lived `text/event-stream`.
+ */
+export async function* watchSummaryAttempt(
+  summaryId: string,
+  attemptId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<AttemptFrame> {
+  yield* sseJsonStream<AttemptFrame>(
+    `/api/v1/data/summaries/${summaryId}/attempts/${attemptId}/events`,
+    { signal },
+  )
+}

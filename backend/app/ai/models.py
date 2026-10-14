@@ -108,18 +108,6 @@ class SummaryRequest(BaseModel):
     #: **Client-supplied and untrusted.** It is checked against the caller
     #: before the secret is decrypted; a foreign id answers as an absent one.
     ai_key_id: str | None = Field(default=None, alias="aiKeyId")
-    #: The exact prompt to send, when the client already holds it. Generate
-    #: fetches it from `/ai/summary/prompt` to file the pending Summary before
-    #: the model is asked; sending it back means the model answers the prompt
-    #: that was stored, and the posts are read once. Honoured by
-    #: `/ai/summary/stream` only. No more trusted than `postsText`, which
-    #: already lets a client choose what the model reads.
-    prompt: str | None = None
-    #: The Summary this run writes, when there is one. `/ai/summary/stream`
-    #: then records an Attempt on it however the stream ends, and a failure
-    #: marks it Failed. Checked against the caller before anything streams.
-    summary_id: str | None = Field(default=None, alias="summaryId")
-
     model_config = {"populate_by_name": True}
 
 

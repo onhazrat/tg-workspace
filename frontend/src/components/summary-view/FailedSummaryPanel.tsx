@@ -4,7 +4,11 @@ import {
   ChevronDown,
   ClipboardPaste,
   Copy,
+  Crosshair,
+  Loader2,
+  RotateCcw,
   Server,
+  Square,
 } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { toast } from "sonner"
@@ -26,6 +30,13 @@ export interface FailedSummaryPanelProps {
   /** An AI Key's label by id, for the Attempt lines. */
   keyLabel: (keyId: string | null) => string | undefined
   onPaste: () => void
+  /** The running Attempt's text so far, as the watch delivers it (SFR-02). */
+  runningText: string
+  /** Start an Attempt on the last Attempt's model and Key. */
+  onRetry: () => void
+  onStop: (attemptId: string) => void
+  /** Put this Summary's Scope in the workspace, to narrow it. */
+  onChangeSelection: () => void
 }
 
 function copyPrompt(promptText: string) {
@@ -36,13 +47,17 @@ function copyPrompt(promptText: string) {
 /**
  * A Summary whose latest Attempt did not finish (SFR-01): the finished
  * report's header with a Failed chip, the latest error with its attempt, the
- * earlier ones folded, and the copy-and-paste way out.
+ * earlier ones folded, and the ways out. SFR-02 adds Retry on the worker, the
+ * running Attempt streaming in with Stop, and "Change selection" leading when
+ * the selection was too large to send at all.
  */
 export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
   const { summary, promptText, zone } = props
   const failed = props.attempts.filter((a) => a.outcome === "failed")
+  const running = props.attempts.find((a) => a.outcome === "running")
   const latest = failed.at(-1)
   const earlier = failed.slice(0, -1).reverse()
+  const tooLarge = latest?.kind === "limit"
   return (
     <>
       <FailedHeader
@@ -50,6 +65,7 @@ export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
         promptText={promptText}
         zone={zone}
         failures={failed.length}
+        running={!!running}
       />
       <div className="space-y-6">
         {latest && (
@@ -80,7 +96,25 @@ export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
             </ol>
           </Fold>
         )}
-        {promptText && (
+        {running ? (
+          <RunningAttemptCard
+            attempt={running}
+            text={props.runningText}
+            keyLabel={props.keyLabel}
+            onStop={() => props.onStop(running.id)}
+          />
+        ) : tooLarge ? (
+          <ChangeSelectionCard onChangeSelection={props.onChangeSelection} />
+        ) : (
+          <TryAgainCard
+            next={(props.attempts.at(-1)?.attempt ?? 0) + 1}
+            last={props.attempts.at(-1)}
+            model={summary.model}
+            keyLabel={props.keyLabel}
+            onRetry={props.onRetry}
+          />
+        )}
+        {promptText && !tooLarge && (
           <section className="rounded-2xl border border-app-ink/10 p-4 md:p-6">
             <div className="mb-3 flex items-center gap-2">
               <Server size={14} />
@@ -116,11 +150,13 @@ function FailedHeader({
   promptText,
   zone,
   failures,
+  running,
 }: {
   summary: Summary
   promptText: string | undefined
   zone: ReaderZone
   failures: number
+  running: boolean
 }) {
   const [copied, setCopied] = useState(false)
   return (
@@ -128,9 +164,15 @@ function FailedHeader({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h3 className="text-xl font-bold tracking-tight">Analysis Report</h3>
-          <span className="rounded-md bg-red-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-red-800 dark:text-red-200">
-            {failures > 1 ? `Failed ×${failures}` : "Failed"}
-          </span>
+          {running && failures === 0 ? (
+            <span className="rounded-md bg-app-ink/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider">
+              Generating
+            </span>
+          ) : (
+            <span className="rounded-md bg-red-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-red-800 dark:text-red-200">
+              {failures > 1 ? `Failed ×${failures}` : "Failed"}
+            </span>
+          )}
         </div>
         {promptText && (
           <TgIconButton
@@ -173,6 +215,123 @@ function AttemptMeta({
       {attempt.automatic && " · automatic retry"} ·{" "}
       <RelativeTime timestamp={attempt.endedAt ?? attempt.startedAt} />
     </p>
+  )
+}
+
+const CARD = "rounded-2xl border border-app-ink/10 p-4 md:p-6"
+
+/** The Attempt the worker is running, its text arriving as it is written. */
+function RunningAttemptCard({
+  attempt,
+  text,
+  keyLabel,
+  onStop,
+}: {
+  attempt: SummaryAttemptResponse
+  text: string
+  keyLabel: (keyId: string | null) => string | undefined
+  onStop: () => void
+}) {
+  const key = keyLabel(attempt.keyId)
+  return (
+    <section data-testid="running-attempt" className={CARD}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Loader2 size={14} className="shrink-0 animate-spin" />
+          <h4 className="text-sm font-bold">
+            Attempt {attempt.attempt} is running
+          </h4>
+        </div>
+        <TgButton type="button" variant="secondary" onClick={onStop}>
+          <Square size={12} />
+          Stop
+        </TgButton>
+      </div>
+      <p className="mb-3 text-[11px] opacity-70">
+        {formatSummaryModelLabel(attempt.model)}
+        {key && ` · ${key}`} · keeps going if you close this tab
+      </p>
+      <p className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words text-sm text-app-ink/80">
+        {text || "Waiting for the first words…"}
+      </p>
+    </section>
+  )
+}
+
+function TryAgainCard({
+  next,
+  last,
+  model,
+  keyLabel,
+  onRetry,
+}: {
+  next: number
+  last: SummaryAttemptResponse | undefined
+  model: string | undefined
+  keyLabel: (keyId: string | null) => string | undefined
+  onRetry: () => void
+}) {
+  const key = last ? keyLabel(last.keyId) : undefined
+  return (
+    <section data-testid="try-again" className={CARD}>
+      <h4 className="mb-2 text-sm font-bold">Try again</h4>
+      <p className="mb-4 text-sm text-app-ink/80">
+        Runs Attempt {next} on {formatSummaryModelLabel(last?.model ?? model)}
+        {key && ` · ${key}`}. It keeps going if you close this tab.
+      </p>
+      <TgButton type="button" variant="primary" onClick={onRetry}>
+        <RotateCcw size={14} />
+        Retry
+      </TgButton>
+    </section>
+  )
+}
+
+function ChangeSelectionCard({
+  onChangeSelection,
+}: {
+  onChangeSelection: () => void
+}) {
+  return (
+    <section data-testid="change-selection-card" className={CARD}>
+      <h4 className="mb-2 text-sm font-bold">The selection is too large</h4>
+      <p className="mb-4 text-sm text-app-ink/80">
+        Narrow the channels, the Analysis window or the selected Posts, then
+        generate again. No AI Key was charged.
+      </p>
+      <TgButton type="button" variant="primary" onClick={onChangeSelection}>
+        <Crosshair size={14} />
+        Change selection
+      </TgButton>
+    </section>
+  )
+}
+
+/**
+ * A finished Summary's Attempts, when it took more than one (SFR-02), newest
+ * first. One that worked first time shows nothing, as it always did.
+ */
+export function AttemptsFold({
+  attempts,
+  keyLabel,
+}: {
+  attempts: SummaryAttemptResponse[]
+  keyLabel: (keyId: string | null) => string | undefined
+}) {
+  if (attempts.length < 2) return null
+  return (
+    <Fold title={`Attempts (${attempts.length})`}>
+      <ol className="space-y-3 border-s border-app-ink/10 ps-4">
+        {[...attempts].reverse().map((a) => (
+          <li key={a.id}>
+            <p className="break-words font-mono text-xs text-app-ink/70">
+              {a.error ?? a.outcome}
+            </p>
+            <AttemptMeta attempt={a} keyLabel={keyLabel} />
+          </li>
+        ))}
+      </ol>
+    </Fold>
   )
 }
 

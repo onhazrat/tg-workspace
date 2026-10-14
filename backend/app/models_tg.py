@@ -549,6 +549,14 @@ class SummaryAttempt(SQLModel, table=True):
     __tablename__ = "tg_summary_attempts"
     __table_args__ = (
         Index("ux_tg_summary_attempts_number", "summary_id", "attempt", unique=True),
+        # One running Attempt per Summary (SFR-02): a second start is refused
+        # here, where two racing requests cannot both pass.
+        Index(
+            "ux_tg_summary_attempts_running",
+            "summary_id",
+            unique=True,
+            postgresql_where=text("outcome = 'running'"),
+        ),
     )
 
     id: str = Field(primary_key=True)

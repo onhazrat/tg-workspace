@@ -131,8 +131,14 @@ PROBED: dict[tuple[str, str], str] = {
     ("POST", f"{V1}/data/summaries/{{summary_id}}/failures"): (
         "a failed Attempt written onto a Summary by id (SFR-01)"
     ),
-    ("POST", f"{V1}/ai/summary/stream"): (
-        "a provider call that records an Attempt on a Summary named by id (SFR-01)"
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/start"): (
+        "an Attempt started on a Summary by id, on its owner's Key (SFR-02)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/stop"): (
+        "a running Attempt of a Summary stopped by id (SFR-02)"
+    ),
+    ("GET", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/events"): (
+        "a Summary's Attempt watched by id (SFR-02)"
     ),
     ("GET", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact by id",
     ("PUT", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact write by id",
@@ -550,6 +556,7 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "assembles from the caller's scope; test_prompt_assembly.py",
     ),
+    ("POST", f"{V1}/ai/summary/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/tag/prompt"): (Reason.COVERED_ELSEWHERE, "test_prompt_assembly"),
     ("POST", f"{V1}/ai/tag/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/translate"): (Reason.EXTERNAL, "provider call"),
@@ -887,7 +894,9 @@ def test_a_foreign_summary_cannot_be_planned_or_published(
             f"{DATA}/summaries/{{id}}/failures",
             {"error": "x", "status": 413, "model": "m"},
         ),
-        ("POST", f"{V1}/ai/summary/stream", {"channels": [], "prompt": "p"}),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/start", {"model": "m"}),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/nope/stop", None),
+        ("GET", f"{DATA}/summaries/{{id}}/attempts/nope/events", None),
     ],
 )
 def test_a_foreign_summarys_attempts_are_not_found(
@@ -898,12 +907,10 @@ def test_a_foreign_summarys_attempts_are_not_found(
     url: str,
     body: dict[str, Any] | None,
 ) -> None:
-    """SFR-01: a Summary's Attempts answer as the Summary family does, and
-    nothing is written onto a foreign one."""
+    """SFR-01, SFR-02: a Summary's Attempts answer as the Summary family does,
+    and nothing is written onto a foreign one."""
     row_id = f"iso-att-{uuid.uuid4()}"
     _seed(FAMILIES[0][1](row_id, alice[0].id))
-    if body is not None and "prompt" in body:
-        body = {**body, "summaryId": row_id}
 
     response = client.request(method, url.format(id=row_id), json=body, headers=bob[1])
 

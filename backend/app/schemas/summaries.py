@@ -229,3 +229,19 @@ class SummaryFailureRequest(BaseModel):
     status: int | None = None
     #: The model the Generate was going to run on.
     model: str = Field(max_length=255)
+
+
+class SummaryAttemptStartRequest(BaseModel):
+    """Start an Attempt on a Summary; it runs on the worker (SFR-02).
+
+    Every field is optional: left out, the model and AI Key are the last
+    Attempt's, and the temperature is the default Generate always used.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    model: str | None = Field(default=None, max_length=255)
+    #: **Client-supplied and untrusted.** Checked against the Summary's owner
+    #: before the secret is decrypted; a foreign id answers as an absent one.
+    ai_key_id: str | None = Field(default=None, alias="aiKeyId")
+    temperature: float | None = Field(default=None, ge=0, le=2)

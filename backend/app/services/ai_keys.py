@@ -137,6 +137,11 @@ AI_KEY_CALLERS: dict[str, str] = {
         "`run_translation_batch` has no Account at all and writes shared rows, "
         "so `TRANSLATE` on the Operator Key"
     ),
+    "app/jobs/summary_generation.py": (
+        "a Summary Attempt is the Account's Artifact, run on the worker; the "
+        "Key is resolved for the Summary's owner when the Attempt starts and "
+        "again when the worker runs it (ADR-030)"
+    ),
     "app/jobs/auto_summary.py": (
         "an unattended regeneration is still the owner's Artifact; BYOK-03 "
         "makes it read the Key id the Summary stored, and until then it "

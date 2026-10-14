@@ -1,15 +1,14 @@
-import asyncio
 import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app.ai.base import LLMProvider
+from app.ai.failures import failure_detail, provider_code
 from app.ai.models import (
     ChatRequest,
     CompletionResult,
@@ -39,7 +38,6 @@ from app.schemas.ai import (
     TranslateResponse,
 )
 from app.schemas.post_filter import to_steps
-from app.schemas.summaries import AttemptKind
 from app.services.ai_keys import (
     AI_KEY_REJECTED_DETAIL,
     Purpose,
@@ -53,20 +51,9 @@ from app.services.prompt_assembly import (
     assemble_posts_text,
     assemble_tag_posts_text,
 )
-from app.services.summaries import own_summary
-from app.services.summary_attempts import (
-    failure_kind,
-    now_ms,
-    record_attempt,
-)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
-
-#: Status codes that mean "busy, try again": an overloaded model or a gateway
-#: that timed out. 529 is Anthropic-compatible gateways' "overloaded". Not 500,
-#: which is as often a request the endpoint cannot handle as a passing fault.
-_BUSY_CODES = frozenset({502, 503, 504, 529})
 
 
 def _provider_for(
@@ -113,104 +100,8 @@ def _note_rejection(session: Session, key: ResolvedKey, exc: BaseException) -> b
     return True
 
 
-def _provider_code(exc: BaseException) -> int | None:
-    """The HTTP status a Provider answered with, or `None` if it never did.
-
-    Both Providers' errors carry an int `code` (the same duck typing
-    `is_credential_rejection` relies on). Anything without one is not the
-    Provider saying no: a dropped connection, or a bug in this process.
-    """
-    code = getattr(exc, "code", None)
-    return code if isinstance(code, int) else None
-
-
-def _provider_message(exc: BaseException, key: ResolvedKey) -> str:
-    """The Provider's own words, safe to show.
-
-    The Key is scrubbed **before** truncating: a Key straddling the cut would
-    otherwise survive as a prefix the replace no longer matches. A gateway that
-    answers with a whole HTML page is named rather than pasted into a toast.
-    """
-    message = str(getattr(exc, "message", "") or exc)
-    if key.api_key:
-        message = message.replace(key.api_key, "***")
-    message = " ".join(message.split())
-    if message.startswith("<"):
-        return "an HTML error page"
-    return message[:300] or "no details"
-
-
-def _failure_detail(exc: BaseException, key: ResolvedKey) -> str:
-    """One sentence for the Account about a Provider call that failed.
-
-    Only a busy model gets a fixed answer, because its fix is "wait" and the
-    Provider's words rarely say so. Everything else carries the Provider's own
-    message, since a 429 may be a per-minute limit or a spent daily quota and
-    only the Provider knows which.
-    """
-    if is_credential_rejection(exc):
-        return AI_KEY_REJECTED_DETAIL
-    code = _provider_code(exc)
-    if code is None:
-        return (
-            "The AI request failed unexpectedly. "
-            "Try again, and report it if it keeps happening."
-        )
-    if code in _BUSY_CODES:
-        return (
-            "The AI model is overloaded right now. "
-            "Try again in a minute, or pick another model."
-        )
-    message = _provider_message(exc, key)
-    if code == 429:
-        return f"The AI provider is limiting this key: {message}"
-    if code >= 500:
-        return f"The AI provider had an internal error ({code}): {message}"
-    return f"The AI provider refused the request ({code}): {message}"
-
-
-#: What an Attempt records when the model answered nothing.
-EMPTY_ANSWER_DETAIL = "The model returned an empty response."
-#: What an Attempt records when the browser went away mid-stream.
-DROPPED_DETAIL = "The connection dropped before the answer finished."
-
-
-@dataclass(frozen=True)
-class _Attempt:
-    """The Summary a stream writes, recorded as an Attempt when it ends."""
-
-    summary_id: str
-    user_id: uuid.UUID
-    model: str
-    key_id: str | None
-    started_at: int
-
-    def record(
-        self,
-        session: Session,
-        text: str,
-        kind: AttemptKind | None = None,
-        error: str | None = None,
-    ) -> None:
-        record_attempt(
-            session,
-            self.summary_id,
-            user_id=self.user_id,
-            outcome="succeeded" if kind is None else "failed",
-            kind=kind,
-            error=error,
-            model=self.model,
-            key_id=self.key_id,
-            started_at=self.started_at,
-            partial_text=None if kind is None else text,
-        )
-
-
 async def _sse_text(
-    chunks: AsyncIterator[str],
-    session: Session,
-    key: ResolvedKey,
-    attempt: _Attempt | None = None,
+    chunks: AsyncIterator[str], session: Session, key: ResolvedKey
 ) -> AsyncIterator[str]:
     """Frame a Provider's text stream as SSE for `sseTextStream`.
 
@@ -220,25 +111,14 @@ async def _sse_text(
     instead kept that rule but cut the connection, so the browser could only
     say "an unexpected error occurred" about a model that was merely busy. The
     `error` frame keeps the rule and says why.
-
-    With an `attempt`, however the stream ends is recorded on its Summary, and
-    an empty answer is a failure too: it ends on an `error` frame.
     """
-    parts: list[str] = []
     try:
         async for chunk in chunks:
-            parts.append(chunk)
             yield f"data: {json.dumps({'text': chunk})}\n\n"
-    except GeneratorExit, asyncio.CancelledError:
-        # The browser went away. Nothing can be sent, but the Summary keeps
-        # the reason and what had arrived.
-        if attempt is not None:
-            attempt.record(session, "".join(parts), "transient", DROPPED_DETAIL)
-        raise
     except Exception as exc:
         _note_rejection(session, key, exc)
-        detail = _failure_detail(exc, key)
-        if _provider_code(exc) is not None:
+        detail = failure_detail(exc, key)
+        if provider_code(exc) is not None:
             # The Provider said no. Log the scrubbed sentence, not `exc`: the
             # raw message is what may echo the Key.
             logger.warning("AI provider stream failed: %s", detail)
@@ -247,22 +127,8 @@ async def _sse_text(
             # the traceback is what finds it. Keys travel in headers, never in
             # URLs or messages this process builds.
             logger.error("AI stream failed unexpectedly", exc_info=exc)
-        if attempt is not None:
-            attempt.record(
-                session,
-                "".join(parts),
-                failure_kind(_provider_code(exc)),
-                detail,
-            )
         yield f"data: {json.dumps({'error': detail})}\n\n"
         return
-    if attempt is not None:
-        text = "".join(parts)
-        if not text.strip():
-            attempt.record(session, text, "empty", EMPTY_ANSWER_DETAIL)
-            yield f"data: {json.dumps({'error': EMPTY_ANSWER_DETAIL})}\n\n"
-            return
-        attempt.record(session, text)
     yield "data: [DONE]\n\n"
 
 
@@ -420,24 +286,20 @@ def api_summary_prompt(
     return PromptResponse(prompt=prompt)
 
 
+# Only the browser's Regenerate streams here now (SFR-02): Generate starts an
+# Attempt the worker runs. Remove this once regeneration does too.
 @router.post("/summary/stream")
 async def api_summary_stream(
     body: SummaryRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
     model = body.model or default_model()
-    if body.summary_id is not None:
-        # Before anything is resolved or spent: a foreign Summary is a 404.
-        own_summary(session, body.summary_id, user_id=current_user.id, writing=True)
     provider, ai_key = _provider_for(
         session,
         user_id=current_user.id,
         purpose=Purpose.SUMMARY,
         key_id=body.ai_key_id,
     )
-    # The client's copy wins when it sent one: it is the prompt already stored
-    # on the pending Summary, so rebuilding it here would read the posts again
-    # and could answer a prompt that differs from the one saved.
-    prompt = body.prompt or format_summary_prompt(
+    prompt = format_summary_prompt(
         channels=body.channels,
         channels_text=body.channels_text,
         language=body.language,
@@ -449,22 +311,11 @@ async def api_summary_stream(
             scope=body.scope,
         ),
     )
-    attempt = None
-    if body.summary_id is not None:
-        attempt = _Attempt(
-            summary_id=body.summary_id,
-            user_id=current_user.id,
-            model=model,
-            key_id=ai_key.credential_id,
-            started_at=now_ms(),
-        )
-
     return StreamingResponse(
         _sse_text(
             provider.stream(prompt, model=model, temperature=body.temperature),
             session,
             ai_key,
-            attempt,
         ),
         media_type="text/event-stream",
     )

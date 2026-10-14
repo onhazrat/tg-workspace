@@ -3531,6 +3531,133 @@
         }
       }
     },
+    "/api/v1/data/summaries/{summary_id}/attempts/start": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Start Summary Attempt",
+        "description": "Start generating this summary on the worker; watch it with the events stream.",
+        "operationId": "data-start_summary_attempt",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryAttemptStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/stop": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Stop Summary Attempt",
+        "description": "Stop a running attempt; the text it produced is kept on the attempt.",
+        "operationId": "data-stop_summary_attempt",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Attempt Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/events": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Summary Attempt Events",
+        "description": "Server-sent events: the attempt's text as it arrives, then how it ended.",
+        "operationId": "data-summary_attempt_events",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Attempt Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/tag-runs": {
       "get": {
         "tags": ["data"],
@@ -12527,6 +12654,32 @@
         "title": "SummaryAttemptResponse",
         "description": "One request for a Summary's prose and how it ended (ADR-030).\n\nClosed and fully declared: every key is always present, so a ``null`` here\nis the column's own value rather than an invented one. Times are epoch\nmilliseconds, like every artifact timestamp."
       },
+      "SummaryAttemptStartRequest": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              { "type": "string", "maxLength": 255 },
+              { "type": "null" }
+            ],
+            "title": "Model"
+          },
+          "aiKeyId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Aikeyid"
+          },
+          "temperature": {
+            "anyOf": [
+              { "type": "number", "maximum": 2.0, "minimum": 0.0 },
+              { "type": "null" }
+            ],
+            "title": "Temperature"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SummaryAttemptStartRequest",
+        "description": "Start an Attempt on a Summary; it runs on the worker (SFR-02).\n\nEvery field is optional: left out, the model and AI Key are the last\nAttempt's, and the temperature is the default Generate always used."
+      },
       "SummaryDerivation": {
         "properties": {
           "summaryId": { "type": "string", "title": "Summaryid" },
@@ -12642,14 +12795,6 @@
           "aiKeyId": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Aikeyid"
-          },
-          "prompt": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Prompt"
-          },
-          "summaryId": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Summaryid"
           }
         },
         "type": "object",

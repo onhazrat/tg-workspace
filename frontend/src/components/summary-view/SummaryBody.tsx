@@ -34,6 +34,8 @@ export interface SummaryBodyProps {
   onDeleteNote: () => Promise<void>
   /** `FailedSummaryPanel`; a slot because it reads the Attempts and AI Keys. */
   failurePanel: (summary: Summary) => React.ReactNode
+  /** A finished report's earlier Attempts, beside its Scope line (SFR-02). */
+  attemptsFold?: React.ReactNode
   /** The publish panel (SUMTAB-09); a slot because it reads the server's plan. */
   publishPanel: (summary: Summary) => React.ReactNode
   /** Renders report Markdown; a slot because its paragraphs read the workspace. */
@@ -145,6 +147,9 @@ export function SummaryBody(props: SummaryBodyProps) {
              * header now.
              */}
             {scopeLine(summary, "mt-12 pt-6 border-t border-app-ink/10")}
+            {props.attemptsFold && (
+              <div className="mt-3">{props.attemptsFold}</div>
+            )}
             {props.publishPanel(summary)}
           </>
         )}

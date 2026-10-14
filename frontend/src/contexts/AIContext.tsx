@@ -4,10 +4,15 @@ import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
-import { dataRecordSummaryFailure, dataSendSummaryPublication } from "@/client"
+import {
+  dataRecordSummaryFailure,
+  dataSendSummaryPublication,
+  dataStartSummaryAttempt,
+} from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
+  invalidateSummaryState,
   useInvalidateSummaries,
   useSummariesHistory,
 } from "@/hooks/useSummaries"
@@ -19,7 +24,6 @@ import {
   type PromptPosts,
   type ProvisionalRow,
   promptPosts,
-  readStream,
   searchFilterExtra,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
@@ -49,16 +53,10 @@ import {
   RecordedFailure,
   regeneratedRange,
   resolveCitedPosts,
-  streamFailure,
-  summaryLLMLog,
 } from "@/lib/summaries/summary-run"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
-import {
-  generateSummary,
-  generateSummaryStream,
-  getSummaryPrompt,
-} from "../services/ai"
+import { generateSummary, getSummaryPrompt } from "../services/ai"
 import type { BotCredential, ChatDestination, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
 import { useData } from "./DataContext"
@@ -167,7 +165,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     names: string[],
     posts: PromptPosts,
     row: ProvisionalRow,
-    extra: { status?: "pending" },
+    extra: { status?: "pending" | "failed" },
   ) => {
     const opened = await submitSummary({
       id,
@@ -232,12 +230,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   /**
-   * Generate: open the Summary, then build its prompt and stream the answer.
+   * Generate: open the Summary, build and store its prompt, start Attempt 1.
    *
-   * Once the Summary exists it is never deleted (SFR-01). Anything that breaks
-   * after that leaves it Failed with an Attempt saying why: the stream route
-   * records its own failures, and a failure before the stream opened is
-   * reported here, with the HTTP status it carried, for the server to classify.
+   * The worker runs the Attempt (SFR-02, ADR-030); this tab only watches it,
+   * so a closed tab or a sleeping laptop does not end it. The Summary opens
+   * Failed and only a finished Attempt clears that, so a Generate that breaks
+   * anywhere after the submission, a dropped network included, is a Failed
+   * Summary in History and never a Pending one. A failure before the Attempt
+   * starts is reported here, with the HTTP status it carried, for the server
+   * to classify (SFR-01); the server records every failure after that.
    */
   const streamSummary = async (
     names: string[],
@@ -247,16 +248,14 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     const newId = crypto.randomUUID()
     // The submission opens the row; failing here leaves nothing to keep.
     const scope = await openSummary(newId, names, posts, KEEP_ROW, {
-      status: "pending",
+      status: "failed",
     })
-    // Generating, not waiting: while the run is live the item shows as
-    // running and refuses a paste, which the finished run would overwrite.
-    setRegeneratingSummaries((prev) => new Set(prev).add(newId))
+    setChatMessages([]) // Clear chat when new summary starts
     try {
       await loadHistory()
       if (syncError) throw syncError
-      // File exactly what Copy files, before the model is asked: a row
-      // holding its prompt, so a failed run can still be finished by paste.
+      // Built here rather than on the server when the selection came from a
+      // meaning search, whose Posts only this tab holds.
       const pendingPrompt = await getSummaryPrompt(
         names,
         channelsText(),
@@ -267,7 +266,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         scope,
       )
       await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
-      await fillPendingSummary(newId, posts, scope, pendingPrompt, names)
+      await startFirstAttempt(newId)
+      workspaceTabs.createTab("summary", newId)
+      setSummary(null)
+      await invalidateSummaryState(queryClient, newId)
     } catch (err: unknown) {
       if (!(err instanceof RecordedFailure))
         await dataRecordSummaryFailure({
@@ -278,119 +280,28 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       throw new Error(
         `${errorText(err, "The summary failed.")} The Summary is saved as Failed in History.`,
       )
-    } finally {
-      setRegeneratingSummaries((prev) => {
-        const next = new Set(prev)
-        next.delete(newId)
-        return next
-      })
     }
+  }
+
+  /** Attempt 1, on the worker; a refusal it records is already recorded. */
+  const startFirstAttempt = async (id: string) => {
+    const started = await dataStartSummaryAttempt({
+      path: { summary_id: id },
+      body: {
+        model: selectedModel,
+        aiKeyId: selectedAiKeyId(),
+        temperature: aiTemperature,
+      },
+    })
+    if (started.error) throw new RecordedFailure(started.error)
   }
 
   /** Show the Failed Summary's page, not the half-streamed buffer. */
   const showFailed = async (id: string) => {
     setSummary(null)
     workspaceTabs.createTab("summary", id)
-    // Its tab may hold the pending row already; this also refetches Attempts.
-    await queryClient.invalidateQueries({ queryKey: queryKeys.summary(id) })
-    await loadHistory()
-  }
-
-  /** Ask the model the stored prompt and fill the pending Summary with it. */
-  const fillPendingSummary = async (
-    id: string,
-    posts: PromptPosts,
-    scope: PromptScope | undefined,
-    pendingPrompt: string,
-    names: string[],
-  ) => {
-    const startTime = Date.now()
-    /**
-     * Never fatal: losing the log must not cost the Summary. It keeps the
-     * `channels=…` placeholder as its prompt, as it always has, rather than a
-     * second corpus-sized copy of the prompt per run.
-     */
-    const log = (
-      prompt: string,
-      config: unknown,
-      text: string,
-      lastChunk: unknown,
-    ) =>
-      saveLLMLog(
-        summaryLLMLog({
-          id:
-            Date.now().toString() + Math.random().toString(36).substring(2, 7),
-          model: selectedModel,
-          prompt,
-          config,
-          text,
-          lastChunk,
-          now: Date.now(),
-          durationMs: Date.now() - startTime,
-        }),
-      ).then(
-        () => true,
-        (err: unknown) => {
-          console.error(err)
-          return false
-        },
-      )
-
-    setChatMessages([]) // Clear chat when new summary starts
-    const { stream, prompt, config } = await generateSummaryStream(
-      names,
-      channelsText(),
-      posts.postsText,
-      aiLanguage,
-      selectedModel,
-      aiTemperature,
-      scope,
-      pendingPrompt,
-      id,
-    )
-    let run: Awaited<ReturnType<typeof readStream>>
-    try {
-      run = await readStream(stream, setSummary)
-    } catch (err: unknown) {
-      const reason = errorText(err, "The AI provider failed.")
-      // A failed log row with the reason, like the scheduled path files.
-      await log(prompt, config, "", { error: reason })
-      throw streamFailure(err, reason)
-    }
-    const { text, lastChunk } = run
-    const logged = await log(prompt, config, text, lastChunk)
-    // The server records an empty answer and ends on an `error` frame, so
-    // this is only the guard it always was.
-    if (!text)
-      throw new RecordedFailure("The model returned an empty response.")
-
-    try {
-      // Only what the run produced. The Scope is already on the row and the
-      // server refuses to take it again. `promptText: null` drops the prompt
-      // once it is answered: it is a whole post corpus, and a finished
-      // Summary kept one only when it came from Copy.
-      await saveSummary({
-        id,
-        text,
-        model: selectedModel,
-        postCount: posts.postCount,
-        timestamp: Date.now(),
-        status: null,
-        promptText: null,
-        citedPosts: await resolveCitedPosts(text, undefined, lookupPosts),
-      } as unknown as Summary)
-    } catch (err: unknown) {
-      throw new Error(
-        `Saving the summary failed: ${errorText(err, "unknown error")}.${
-          logged ? " The model's answer is in the AI logs." : ""
-        }`,
-      )
-    }
-    workspaceTabs.createTab("summary", id)
-    // The stream buffer belongs to no tab: left set, it would stand in for the
-    // body of whichever Summary tab opened next. The new tab reads the row.
-    setSummary(null)
-    await loadHistory()
+    // Its tab may hold the row already; this also refetches its Attempts.
+    await invalidateSummaryState(queryClient, id)
   }
 
   const copySummaryPrompt = async () => {

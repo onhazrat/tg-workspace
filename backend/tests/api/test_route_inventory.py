@@ -163,11 +163,12 @@ def test_the_split_did_not_change_the_route_count() -> None:
     which tags handles rather than Channel ids; and **103** with SFR-01's
     `GET /summaries/{id}/attempts` and `POST /summaries/{id}/failures`, a
     Summary's Attempts and the browser's report of a Generate that broke
-    before anything streamed.
+    before anything streamed; and **106** with SFR-02's start, stop and watch
+    routes for an Attempt on the worker.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 103, (
-        f"expected 103 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 106, (
+        f"expected 106 /data endpoints, found {len(data_routes)}"
     )

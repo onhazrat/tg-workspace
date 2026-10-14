@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 
 import type { SummaryAttemptResponse } from "@/client"
 import type { Summary } from "@/types"
-import { FailedSummaryPanel } from "./FailedSummaryPanel"
+import { AttemptsFold, FailedSummaryPanel } from "./FailedSummaryPanel"
 
 afterEach(cleanup)
 
@@ -47,8 +47,12 @@ const attempt = (
 function renderPanel(
   attempts: SummaryAttemptResponse[],
   prompt: string | null = "the prompt",
+  runningText = "",
 ) {
   const onPaste = mock()
+  const onRetry = mock()
+  const onStop = mock()
+  const onChangeSelection = mock()
   render(
     <FailedSummaryPanel
       summary={summary}
@@ -57,9 +61,13 @@ function renderPanel(
       zone={{ timeZone: "UTC", locale: "en-US" }}
       keyLabel={(id) => (id === "k1" ? "Work key" : undefined)}
       onPaste={onPaste}
+      runningText={runningText}
+      onRetry={onRetry}
+      onStop={onStop}
+      onChangeSelection={onChangeSelection}
     />,
   )
-  return { onPaste }
+  return { onPaste, onRetry, onStop, onChangeSelection }
 }
 
 describe("FailedSummaryPanel", () => {
@@ -98,15 +106,88 @@ describe("FailedSummaryPanel", () => {
   })
 
   test("no prompt yet: nothing to copy, no Use another AI", () => {
-    renderPanel([attempt(1, { kind: "limit", keyId: null })], null)
+    renderPanel([attempt(1, { kind: "transient", keyId: null })], null)
     expect(screen.queryByText("Use another AI")).toBeNull()
     expect(screen.queryByLabelText("Copy prompt")).toBeNull()
-    expect(screen.getByRole("alert").textContent).toContain("no AI Key charged")
   })
 
   test("before the Attempts load it still says it failed", () => {
     renderPanel([])
     expect(screen.getByText("Failed")).toBeTruthy()
     expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  test("Try again retries on the last Attempt's model and Key", () => {
+    const { onRetry } = renderPanel([attempt(1)])
+    const card = screen.getByTestId("try-again")
+    expect(card.textContent).toContain("Attempt 2")
+    expect(card.textContent).toContain("Work key")
+    fireEvent.click(screen.getByRole("button", { name: /Retry/ }))
+    expect(onRetry).toHaveBeenCalled()
+  })
+
+  test("a token-limit refusal leads with Change selection and charged no Key", () => {
+    const { onChangeSelection } = renderPanel(
+      [attempt(1, { kind: "limit", keyId: null })],
+      null,
+    )
+    expect(screen.queryByTestId("try-again")).toBeNull()
+    expect(screen.queryByText("Use another AI")).toBeNull()
+    expect(screen.getByTestId("change-selection-card").textContent).toContain(
+      "No AI Key was charged",
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Change selection" }))
+    expect(onChangeSelection).toHaveBeenCalled()
+  })
+
+  test("a running Attempt streams its text with Stop, and no Retry", () => {
+    const { onStop } = renderPanel(
+      [attempt(1), attempt(2, { outcome: "running", kind: null, error: null })],
+      "the prompt",
+      "Half of the answer",
+    )
+    const card = screen.getByTestId("running-attempt")
+    expect(card.textContent).toContain("Half of the answer")
+    expect(card.textContent).toContain("Attempt 2")
+    expect(screen.queryByTestId("try-again")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }))
+    expect(onStop).toHaveBeenCalledWith("a2")
+  })
+
+  test("a first Attempt still running says Generating, not Failed", () => {
+    renderPanel([attempt(1, { outcome: "running", kind: null, error: null })])
+    expect(screen.getByText("Generating")).toBeTruthy()
+    expect(screen.queryByText("Failed")).toBeNull()
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+})
+
+describe("AttemptsFold", () => {
+  test("hidden for a Summary that worked first time", () => {
+    const { container } = render(
+      <AttemptsFold
+        attempts={[attempt(1, { outcome: "succeeded", kind: null })]}
+        keyLabel={() => undefined}
+      />,
+    )
+    expect(container.textContent).toBe("")
+  })
+
+  test("closed until opened, newest first", () => {
+    render(
+      <AttemptsFold
+        attempts={[
+          attempt(1),
+          attempt(2, { outcome: "succeeded", kind: null, error: null }),
+        ]}
+        keyLabel={() => undefined}
+      />,
+    )
+    expect(screen.queryByText("error 1")).toBeNull()
+    fireEvent.click(screen.getByText("Attempts (2)"))
+    const items = screen.getAllByRole("listitem")
+    expect(items[0].textContent).toContain("Attempt 2")
+    expect(items[0].textContent).toContain("succeeded")
+    expect(items[1].textContent).toContain("error 1")
   })
 })

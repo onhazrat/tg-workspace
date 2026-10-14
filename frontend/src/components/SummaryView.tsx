@@ -6,9 +6,11 @@ import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { useAiKeys } from "@/hooks/useAiKeys"
+import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
 import {
   useInvalidateSummaries,
   useSummariesHistory,
+  useSummaryAttempts,
 } from "@/hooks/useSummaries"
 import { saveSummary } from "@/lib/summaries/store"
 import { useAI } from "../contexts/AIContext"
@@ -16,14 +18,14 @@ import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useCitedPosts } from "../hooks/useCitedPosts"
-import {
-  useSummaryAttemptsQuery,
-  useSummaryDetailQuery,
-} from "../hooks/useSummaries"
+import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
-import { FailedSummaryPanel } from "./summary-view/FailedSummaryPanel"
+import {
+  AttemptsFold,
+  FailedSummaryPanel,
+} from "./summary-view/FailedSummaryPanel"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -45,7 +47,7 @@ export const SummaryView: React.FC = () => {
   const { isOffline } = useApiStatus()
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
-  const { currentSummaryId, summarizing: runInFlight } = useUI()
+  const { currentSummaryId, summarizing: runInFlight, setActiveTab } = useUI()
   // The run fills the new-Summary tab; another Summary's tab is not generating.
   const summarizing = generatesOnTab({
     summarizing: runInFlight,
@@ -88,8 +90,13 @@ export const SummaryView: React.FC = () => {
       regenerating: regeneratingSummaries,
       summarizing,
     })
-  const { data: attempts } = useSummaryAttemptsQuery(currentSummaryId, isFailed)
+  const { attempts, runningText, retry, stop } = useSummaryAttempts(
+    currentSummaryId,
+    settings.aiTemperature,
+  )
   const aiKeys = useAiKeys()
+  const keyLabel = (id: string | null) => aiKeys.find((k) => k.id === id)?.label
+  const applyScope = useApplyArtifactScope()
 
   const workspace = useCitationWorkspace()
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
@@ -144,12 +151,22 @@ export const SummaryView: React.FC = () => {
             <FailedSummaryPanel
               summary={s}
               promptText={currentSummaryDetail?.promptText}
-              attempts={attempts ?? []}
+              attempts={attempts}
               zone={zone}
-              keyLabel={(id) => aiKeys.find((k) => k.id === id)?.label}
+              keyLabel={keyLabel}
               onPaste={() => setPasteModalOpen(true)}
+              runningText={runningText}
+              onRetry={() => void retry(s.id)}
+              onStop={(attemptId) => void stop(s.id, attemptId)}
+              onChangeSelection={() => {
+                if (s.scope) applyScope(s.scope)
+                setActiveTab("action")
+              }}
             />
           )}
+          attemptsFold={
+            <AttemptsFold attempts={attempts} keyLabel={keyLabel} />
+          }
           summarizing={summarizing}
           running={running}
           direction={bodyDirection}
