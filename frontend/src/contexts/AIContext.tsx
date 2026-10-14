@@ -5,7 +5,10 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { dataSendSummaryPublication } from "@/client"
-import { recordFailure } from "@/components/summary-error-prototype/failure-store"
+import {
+  recordFailure,
+  recordStartFailure,
+} from "@/components/summary-error-prototype/failure-store"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
@@ -203,6 +206,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     setSummarizing(true)
+    recordStartFailure(null) // PROTOTYPE
     setSummary(null)
     // The empty Summary tab (or a new one), which the finished run fills.
     workspaceTabs.openTab("summary")
@@ -212,9 +216,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       )
     } catch (err: unknown) {
       console.error(err)
-      toast.error(
-        errorText(err, "An unexpected error occurred during summarization"),
+      const reason = errorText(
+        err,
+        "An unexpected error occurred during summarization",
       )
+      // PROTOTYPE: a pending-row failure already has its panel; anything else
+      // failed before a Summary existed and lands on the empty tab.
+      if (!/waiting for a response you can paste/.test(reason))
+        recordStartFailure(reason)
+      toast.error(reason)
     } finally {
       setSummarizing(false)
     }

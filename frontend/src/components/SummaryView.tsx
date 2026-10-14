@@ -19,11 +19,13 @@ import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
+import { useFailureStore } from "./summary-error-prototype/failure-store"
 import { PendingFailurePrototype } from "./summary-error-prototype/PendingFailureVariants"
 import {
   PrototypeSwitcher,
   useVariant,
 } from "./summary-error-prototype/PrototypeSwitcher"
+import { StartFailurePanel } from "./summary-error-prototype/StartFailurePanel"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -84,6 +86,7 @@ export const SummaryView: React.FC = () => {
 
   const workspace = useCitationWorkspace()
   const variant = useVariant() // PROTOTYPE
+  const { startFailure } = useFailureStore() // PROTOTYPE
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [isEditingNote, setIsEditingNote] = useState(false)
   // Read from the loaded record, so a saved report renders in its own language
@@ -193,10 +196,14 @@ export const SummaryView: React.FC = () => {
                 Intl.DateTimeFormat().resolvedOptions().timeZone,
             }}
             emptyState={
-              <GoToActionEmptyState
-                what="summary"
-                description="Summaries are made on the Action tab, from the channels and Analysis window in scope there. Open a past one from History, or generate a new one."
-              />
+              variant !== "0" && startFailure ? (
+                <StartFailurePanel failure={startFailure} />
+              ) : (
+                <GoToActionEmptyState
+                  what="summary"
+                  description="Summaries are made on the Action tab, from the channels and Analysis window in scope there. Open a past one from History, or generate a new one."
+                />
+              )
             }
           />
         )}

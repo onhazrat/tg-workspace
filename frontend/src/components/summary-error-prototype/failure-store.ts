@@ -23,6 +23,8 @@ type State = {
   retrying: Record<string, boolean>
   simulate: boolean
   nextRetry: "fail" | "succeed"
+  /** A run that failed before its pending Summary was kept (no id to hang it on). */
+  startFailure: { error: string; at: number } | null
 }
 
 let state: State = {
@@ -30,6 +32,7 @@ let state: State = {
   retrying: {},
   simulate: true,
   nextRetry: "fail",
+  startFailure: null,
 }
 const listeners = new Set<() => void>()
 
@@ -97,3 +100,10 @@ export async function stubRetry(id: string): Promise<boolean> {
   })
   return ok
 }
+
+export function recordStartFailure(error: string | null) {
+  set({ startFailure: error ? { error, at: Date.now() } : null })
+}
+
+export const FAKE_START_ERROR =
+  "The selected posts are ~365,307 tokens, over the 200,000-token limit for a single prompt. Narrow the channel selection or date range, or deselect some Posts."

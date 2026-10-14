@@ -2,7 +2,13 @@
 import { getRouteApi } from "@tanstack/react-router"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useEffect } from "react"
-import { setNextRetry, setSimulate, useFailureStore } from "./failure-store"
+import {
+  FAKE_START_ERROR,
+  recordStartFailure,
+  setNextRetry,
+  setSimulate,
+  useFailureStore,
+} from "./failure-store"
 
 const workspaceRoute = getRouteApi("/_tg/workspace")
 
@@ -64,6 +70,13 @@ export function PrototypeSwitcher() {
           />
           Simulate failure
         </label>
+        <button
+          type="button"
+          className="underline"
+          onClick={() => recordStartFailure(FAKE_START_ERROR)}
+        >
+          Fake start failure
+        </button>
         <label className="flex items-center gap-1">
           Next retry
           <select
