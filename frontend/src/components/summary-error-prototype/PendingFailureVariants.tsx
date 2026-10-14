@@ -191,7 +191,7 @@ function VariantB(p: VariantProps) {
             language={p.summary.language}
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col-reverse md:flex-row gap-2">
           <TgButton
             type="button"
             variant="secondary"

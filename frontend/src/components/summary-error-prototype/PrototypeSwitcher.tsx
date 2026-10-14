@@ -43,36 +43,39 @@ export function PrototypeSwitcher() {
 
   if (!import.meta.env.DEV) return null
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex flex-wrap items-center justify-center gap-3 rounded-full bg-fuchsia-700 text-white px-4 py-2 shadow-2xl text-xs font-medium max-w-[calc(100vw-32px)]">
-      <button type="button" onClick={() => go(-1)} aria-label="Previous">
-        <ChevronLeft size={16} />
-      </button>
-      <span className="min-w-40 text-center">
-        {variant} ({VARIANTS[variant]})
-      </span>
-      <button type="button" onClick={() => go(1)} aria-label="Next">
-        <ChevronRight size={16} />
-      </button>
-      <span className="opacity-50">|</span>
-      <label className="flex items-center gap-1">
-        <input
-          type="checkbox"
-          checked={store.simulate}
-          onChange={(e) => setSimulate(e.target.checked)}
-        />
-        Simulate failure
-      </label>
-      <label className="flex items-center gap-1">
-        Next retry
-        <select
-          className="bg-fuchsia-800 rounded px-1"
-          value={store.nextRetry}
-          onChange={(e) => setNextRetry(e.target.value as "fail" | "succeed")}
-        >
-          <option value="fail">fails</option>
-          <option value="succeed">succeeds</option>
-        </select>
-      </label>
+    <div className="fixed bottom-2 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-1 rounded-2xl bg-fuchsia-700/95 text-white px-3 py-1.5 shadow-2xl text-xs font-medium w-max max-w-[calc(100vw-32px)]">
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => go(-1)} aria-label="Previous">
+          <ChevronLeft size={16} />
+        </button>
+        <span className="text-center whitespace-nowrap">
+          {variant} ({VARIANTS[variant]})
+        </span>
+        <button type="button" onClick={() => go(1)} aria-label="Next">
+          <ChevronRight size={16} />
+        </button>
+      </div>
+      <div className="flex items-center gap-3 whitespace-nowrap opacity-90">
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={store.simulate}
+            onChange={(e) => setSimulate(e.target.checked)}
+          />
+          Simulate failure
+        </label>
+        <label className="flex items-center gap-1">
+          Next retry
+          <select
+            className="bg-fuchsia-800 rounded px-1"
+            value={store.nextRetry}
+            onChange={(e) => setNextRetry(e.target.value as "fail" | "succeed")}
+          >
+            <option value="fail">fails</option>
+            <option value="succeed">succeeds</option>
+          </select>
+        </label>
+      </div>
     </div>
   )
 }
