@@ -39,11 +39,36 @@ import {
 } from "./failure-store"
 import type { Variant } from "./PrototypeSwitcher"
 
-type Props = {
+export type Props = {
   variant: Exclude<Variant, "0">
   summary: Summary
   promptText: string | undefined
   onPaste: () => void
+}
+
+/**
+ * The Key and model a retry runs on: local, so the Action tab's selection and
+ * each Key's remembered model stay put. Switching Key restores the model last
+ * run on it, as the Action tab's bar does.
+ */
+export function useKeyModel(
+  initialModel: string,
+  initialKeyId: string | null | undefined,
+) {
+  const aiKeys = useAiKeys()
+  const selectedKeyId = useSelectedAiKeyId()
+  const [model, setModel] = useState(initialModel)
+  const [chosenKey, setChosenKey] = useState(initialKeyId)
+  // A Key since deleted, or none chosen yet, falls back to the selected one.
+  const keyId =
+    (aiKeys.some((k) => k.id === chosenKey) ? chosenKey : null) ?? selectedKeyId
+  const setKeyId = (next: string) => {
+    setChosenKey(next)
+    const remembered = modelForKey(next)
+    if (remembered) setModel(remembered)
+  }
+  const keyLabel = aiKeys.find((k) => k.id === keyId)?.label ?? "no key"
+  return { model, setModel, keyId, setKeyId, keyLabel }
 }
 
 /**
@@ -58,7 +83,6 @@ export function useRetry(
   initialKeyId?: string | null,
 ) {
   const store = useFailureStore()
-  const aiKeys = useAiKeys()
   const selectedKeyId = useSelectedAiKeyId()
   const attempts = attemptsFor(
     store,
@@ -68,17 +92,10 @@ export function useRetry(
   )
   const retrying = !!store.retrying[id]
   const last = attempts?.at(-1)
-  const [model, setModel] = useState(last?.model || initialModel)
-  const [chosenKey, setChosenKey] = useState(last?.keyId ?? initialKeyId)
-  // A Key since deleted, or none chosen yet, falls back to the selected one.
-  const keyId =
-    (aiKeys.some((k) => k.id === chosenKey) ? chosenKey : null) ?? selectedKeyId
-  const setKeyId = (next: string) => {
-    setChosenKey(next)
-    const remembered = modelForKey(next)
-    if (remembered) setModel(remembered)
-  }
-  const keyLabel = aiKeys.find((k) => k.id === keyId)?.label ?? "no key"
+  const { model, setModel, keyId, setKeyId, keyLabel } = useKeyModel(
+    last?.model || initialModel,
+    last?.keyId ?? initialKeyId,
+  )
   const retry = async () => {
     const ok = await stubRetry(id, model, keyId ?? null, attempts ?? [])
     if (ok)
@@ -102,7 +119,7 @@ export function PendingFailurePrototype(props: Props) {
   return <VariantC {...shared} />
 }
 
-type VariantProps = Props & {
+export type VariantProps = Props & {
   attempts: Attempt[]
   retrying: boolean
   model: string
@@ -306,12 +323,14 @@ function AttemptMeta({ n, attempt }: { n: number; attempt: Attempt }) {
   return (
     <p className="text-[11px] opacity-70 mt-1">
       Attempt {n} · {formatSummaryModelLabel(attempt.model)}
-      {key && ` · ${key.label}`} · <RelativeTime timestamp={attempt.at} />
+      {key && ` · ${key.label}`}
+      {attempt.auto && " · automatic retry"} ·{" "}
+      <RelativeTime timestamp={attempt.at} />
     </p>
   )
 }
 
-function copyPrompt(promptText: string | undefined) {
+export function copyPrompt(promptText: string | undefined) {
   if (!promptText) return false
   void navigator.clipboard.writeText(promptText)
   toast.success("Prompt copied.")
@@ -322,7 +341,7 @@ function copyPrompt(promptText: string | undefined) {
  * The finished report's header, with the run's state where the report's title
  * stands alone: icon actions, the Scope line, then model · language · time.
  */
-function FailedHeader(p: VariantProps) {
+export function FailedHeader(p: VariantProps) {
   const settings = useSettings()
   const [copied, setCopied] = useState(false)
   const zone = {
@@ -374,7 +393,11 @@ function FailedHeader(p: VariantProps) {
   )
 }
 
-function SavedPrompt({ promptText }: { promptText: string | undefined }) {
+export function SavedPrompt({
+  promptText,
+}: {
+  promptText: string | undefined
+}) {
   return (
     <Fold title="Saved prompt">
       <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-app-ink/80 max-h-[480px] overflow-y-auto custom-scrollbar rounded-xl border border-app-ink/10 bg-app-muted/10 p-4">

@@ -55,6 +55,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       allowedHosts: [".ts.net"], // PROTOTYPE: Tailscale sharing
       proxy: {
+        // PROTOTYPE: summary attempts API (backend/scripts/proto_summary_attempts_api.py)
+        "/proto": {
+          target: `http://127.0.0.1:${process.env.PROTO_API_PORT ?? "8021"}`,
+          rewrite: (p: string) => p.replace(/^\/proto/, ""),
+        },
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

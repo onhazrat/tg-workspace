@@ -6,6 +6,10 @@ import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { dataSendSummaryPublication } from "@/client"
 import {
+  classifyError,
+  postAttempt,
+} from "@/components/summary-error-prototype/attempts-api"
+import {
   clearFailures,
   recordFailure,
   START,
@@ -279,8 +283,25 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     names: string[],
   ) => {
     /** Show the item that is waiting, not the half-streamed buffer. */
-    const leftPending = (reason: string) => {
+    const leftPending = (reason: string, partialText?: string) => {
       recordFailure(id, reason, selectedModel, selectedAiKeyId()) // PROTOTYPE
+      // PROTOTYPE: the attempt, with any text the stream produced, in its own
+      // storage (variant D). Never fatal.
+      void postAttempt(id, {
+        outcome: "failed",
+        kind: classifyError(reason),
+        error: reason,
+        model: selectedModel,
+        keyId: selectedAiKeyId(),
+        partialText: partialText || null,
+        auto: false,
+      })
+        .then(() =>
+          queryClient.invalidateQueries({
+            predicate: (q) => String(q.queryKey[0]).startsWith("proto-"),
+          }),
+        )
+        .catch(() => {})
       setSummary(null)
       workspaceTabs.createTab("summary", id)
       return new Error(
@@ -331,13 +352,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       pendingPrompt,
     )
     let run: Awaited<ReturnType<typeof readStream>>
+    let partial = "" // PROTOTYPE: what the stream produced before it died
     try {
-      run = await readStream(stream, setSummary)
+      run = await readStream(stream, (t) => {
+        partial = t
+        setSummary(t)
+      })
     } catch (err: unknown) {
       const reason = errorText(err, "The AI provider failed.")
       // A failed log row with the reason, like the scheduled path files.
       await log(prompt, config, "", { error: reason })
-      throw leftPending(reason)
+      throw leftPending(reason, partial)
     }
     const { text, lastChunk } = run
     const logged = await log(prompt, config, text, lastChunk)
@@ -363,6 +388,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         `Saving the summary failed: ${errorText(err, "unknown error")}.${
           logged ? " The model's answer is in the AI logs." : ""
         }`,
+        text,
       )
     }
     workspaceTabs.createTab("summary", id)

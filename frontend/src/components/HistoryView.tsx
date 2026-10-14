@@ -18,6 +18,7 @@ import {
   type SummaryFlag,
   summaryFlagChange,
 } from "@/components/history/history-view-model"
+import { useFailedSummaries } from "@/components/summary-error-prototype/attempts-api"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { useArtifacts, useInvalidateArtifacts } from "@/hooks/useArtifacts"
@@ -72,6 +73,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     starredOnly,
   )
   const invalidate = useInvalidateArtifacts()
+  // PROTOTYPE (variant D): Summaries whose latest attempt failed.
+  const failed = useFailedSummaries(
+    new URLSearchParams(window.location.search).get("variant") === "D",
+  ).data
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -189,6 +194,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
               >
                 <ArtifactCard
                   artifact={artifact}
+                  failedAttempts={
+                    failed?.find((f) => f.summaryId === artifact.id)?.attempts
+                  }
                   onOpen={openArtifact}
                   onToggleStar={handleToggleStar}
                   onEditNote={(item) => {

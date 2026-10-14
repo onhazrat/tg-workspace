@@ -1,10 +1,16 @@
 /** PROTOTYPE, throw away. Floating variant switcher plus the stub's controls. */
+
+import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useEffect } from "react"
 import { useSettings } from "@/contexts/SettingsContext"
+import { useUI } from "@/contexts/UIContext"
+import { useSelectedAiKeyId } from "@/hooks/useAiKeys"
+import { postAttempt, stubAttempt } from "./attempts-api"
 import {
   FAKE_START_ERROR,
+  type NextOutcome,
   recordFailure,
   START,
   setNextRetry,
@@ -17,6 +23,7 @@ const workspaceRoute = getRouteApi("/_tg/workspace")
 export const VARIANTS = {
   "0": "Current (reference)",
   C: "Two recovery paths",
+  D: "Stored attempts, drafts, auto-retry",
 } as const
 export type Variant = keyof typeof VARIANTS
 const KEYS = Object.keys(VARIANTS) as Variant[]
@@ -31,6 +38,21 @@ export function PrototypeSwitcher() {
   const navigate = workspaceRoute.useNavigate()
   const store = useFailureStore()
   const { selectedModel } = useSettings()
+  const { currentSummaryId } = useUI()
+  const keyId = useSelectedAiKeyId()
+  const qc = useQueryClient()
+  // Variant D: record a stubbed attempt (the outcome chosen below) as if a
+  // Generate had just ended that way, so the stored history has a start.
+  const logAttempt = async () => {
+    if (!currentSummaryId) return
+    await postAttempt(
+      currentSummaryId,
+      stubAttempt(store.nextRetry, selectedModel, keyId, false),
+    )
+    await qc.invalidateQueries({
+      predicate: (q) => String(q.queryKey[0]).startsWith("proto-"),
+    })
+  }
   const go = (step: number) => {
     const next =
       KEYS[(KEYS.indexOf(variant) + step + KEYS.length) % KEYS.length]
@@ -62,7 +84,7 @@ export function PrototypeSwitcher() {
           <ChevronRight size={16} />
         </button>
       </div>
-      <div className="flex items-center gap-3 whitespace-nowrap opacity-90">
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 opacity-90">
         <label className="flex items-center gap-1">
           <input
             type="checkbox"
@@ -71,6 +93,16 @@ export function PrototypeSwitcher() {
           />
           Simulate failure
         </label>
+        {variant === "D" && (
+          <button
+            type="button"
+            className="underline disabled:opacity-50"
+            disabled={!currentSummaryId}
+            onClick={() => void logAttempt()}
+          >
+            Log attempt
+          </button>
+        )}
         <button
           type="button"
           className="underline"
@@ -85,9 +117,11 @@ export function PrototypeSwitcher() {
           <select
             className="bg-fuchsia-800 rounded px-1"
             value={store.nextRetry}
-            onChange={(e) => setNextRetry(e.target.value as "fail" | "succeed")}
+            onChange={(e) => setNextRetry(e.target.value as NextOutcome)}
           >
-            <option value="fail">fails</option>
+            <option value="quota">fails: quota</option>
+            <option value="timeout">fails: overloaded</option>
+            <option value="cut">stream cut</option>
             <option value="succeed">succeeds</option>
           </select>
         </label>

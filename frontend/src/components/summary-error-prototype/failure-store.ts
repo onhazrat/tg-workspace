@@ -15,6 +15,7 @@ export type Attempt = {
   model: string
   keyId: string | null
   at: number
+  auto?: boolean
 }
 
 /** The key for a Generate that failed before its Summary was kept. */
@@ -29,18 +30,21 @@ const SAMPLE_ERRORS = [
 export const FAKE_START_ERROR =
   "The selected posts are ~365,307 tokens, over the 200,000-token limit for a single prompt. Narrow the channel selection or date range, or deselect some Posts."
 
+/** What the next stubbed attempt does. */
+export type NextOutcome = "quota" | "timeout" | "cut" | "succeed"
+
 type State = {
   failures: Record<string, Attempt[]>
   retrying: Record<string, boolean>
   simulate: boolean
-  nextRetry: "fail" | "succeed"
+  nextRetry: NextOutcome
 }
 
 let state: State = {
   failures: {},
   retrying: {},
   simulate: true,
-  nextRetry: "fail",
+  nextRetry: "quota",
 }
 const listeners = new Set<() => void>()
 const SIMULATED_AT = Date.now() - 90_000

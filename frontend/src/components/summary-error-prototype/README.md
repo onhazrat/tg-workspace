@@ -13,6 +13,9 @@ and the left/right keys cycle variants.
   attempts folded, then "Try again" (model + Retry) and "Use another AI" (Copy prompt,
   Paste response) cards, side by side on desktop and stacked full-width on phones.
 
+- `D` C's layout over attempts kept in their own storage, plus a `failed` state,
+  kept drafts and one automatic retry. See below.
+
 A (banner over today's panel) and B (one Try again card, Paste as a header icon) were
 dropped after review; they are in this branch's history.
 
@@ -45,3 +48,33 @@ says why. Variant C shows it on the empty Summary tab instead ("Summary not
 started"), with Change selection as the primary way out. "Fake start failure" in
 the bar triggers it; a real one from Generate in this tab is recorded too. Its
 "Generate again" is stubbed.
+
+## Variant D: stored attempts, failed state, drafts, auto-retry
+
+Needs the prototype attempts API as well as the dev server:
+
+    cd backend && PROTO_API_BASE=<api-base> PROTO_DB=<scratch path>.sqlite3 \
+      PROTO_PORT=8021 uv run python scripts/proto_summary_attempts_api.py
+
+Vite proxies `/proto` to it (`PROTO_API_PORT`, default 8021).
+
+- **Attempts are their own entity**, not LLM logs: logs are pruned for space and that
+  must not erase a Summary's history. One row per Generate or Retry: outcome
+  (failed, succeeded, kept_draft), error kind, error, model, Key, partial text, auto
+  flag, time. Here a local SQLite file, so nothing is written to the deployment; the
+  real build is a user-owned Postgres table cascading from `tg_summaries` and on
+  neither retention inventory. Real failed Generates are recorded too (AIContext).
+- **Failed is its own state.** A pending Summary with no attempts is a Copy Prompt item
+  and keeps today's panel. One whose latest attempt failed gets the failure page, and
+  History shows a red "Failed ×n" card instead of "Awaiting response". The real build
+  should make this a `status` value rather than derive it.
+- **Drafts.** Text a dying stream produced is stored on the attempt (AIContext now
+  captures it) and offered as "Draft from attempt n" with Keep this draft.
+- **One automatic retry** for a transient failure (overloaded, 5xx, timeout, dropped
+  stream): a countdown honouring the provider's Retry-After, else 10 s, with Cancel.
+  Never for an automatic attempt, never for a failure older than two minutes found on
+  reload, never for quota, auth, model or limit errors.
+
+The bar's "Next retry" picks what the stub does (quota, overloaded, stream cut,
+succeeds) and "Log attempt" records one as if a Generate had just ended that way.
+Retry and Keep draft only record attempts; nothing is sent to a provider.

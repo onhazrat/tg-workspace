@@ -26,6 +26,7 @@ import {
   useVariant,
 } from "./summary-error-prototype/PrototypeSwitcher"
 import { StartFailurePanel } from "./summary-error-prototype/StartFailurePanel"
+import { VariantD } from "./summary-error-prototype/VariantD"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -129,16 +130,26 @@ export const SummaryView: React.FC = () => {
           body below — when it lived here, English chrome inherited RTL from a
           Persian report and rendered its trailing period on the wrong side. */}
       <div className="relative border border-app-ink/10 bg-app-card rounded-xl p-8 md:p-12 shadow-sm">
-        {/* PROTOTYPE: variant C replaces the pending panel. */}
+        {/* PROTOTYPE: variants C and D replace the pending panel. */}
         {isPending && currentSummary && variant !== "0" ? (
           <>
-            <PendingFailurePrototype
-              key={currentSummary.id}
-              variant={variant}
-              summary={currentSummary}
-              promptText={currentSummaryDetail?.promptText}
-              onPaste={() => setPasteModalOpen(true)}
-            />
+            {variant === "D" ? (
+              <VariantD
+                key={currentSummary.id}
+                variant={variant}
+                summary={currentSummary}
+                promptText={currentSummaryDetail?.promptText}
+                onPaste={() => setPasteModalOpen(true)}
+              />
+            ) : (
+              <PendingFailurePrototype
+                key={currentSummary.id}
+                variant={variant}
+                summary={currentSummary}
+                promptText={currentSummaryDetail?.promptText}
+                onPaste={() => setPasteModalOpen(true)}
+              />
+            )}
             <ArtifactScopeLine
               artifact={currentSummary}
               className="mt-12 pt-6 border-t border-app-ink/10"
