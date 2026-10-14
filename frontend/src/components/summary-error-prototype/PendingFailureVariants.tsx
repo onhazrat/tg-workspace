@@ -1,18 +1,14 @@
 /**
- * PROTOTYPE, throw away. The pending Summary panel showing a failed
- * generation, its error history, and a Retry with a model of your choice.
- * Retry is stubbed (`failure-store.ts`).
- *
- * C borrows the finished report's layout: the same header (title, icon
- * actions, Scope line, provenance line), chevron folds like the report's
- * sections, and bordered cards like Publish to Telegram.
+ * PROTOTYPE, throw away. The pieces variant D and the not-started page share:
+ * the report-style header, the error history, Key and model chips with Retry,
+ * folds and cards. Variants A, B, C and E were dropped; they are in this
+ * branch's history.
  */
 import {
   AlertTriangle,
   Brain,
   Check,
   ChevronDown,
-  ClipboardPaste,
   Copy,
   KeyRound,
   Loader2,
@@ -30,7 +26,6 @@ import { modelForKey } from "@/lib/aiKeys/modelMemory"
 import type { Summary } from "@/types"
 import { RelativeTime } from "../RelativeTime"
 import { summaryScopeLine } from "../summary-view/SummaryHeader"
-import { PendingSummaryPanel } from "../summary-view/SummaryParts"
 import {
   type Attempt,
   attemptsFor,
@@ -83,13 +78,8 @@ export function useRetry(
   initialKeyId?: string | null,
 ) {
   const store = useFailureStore()
-  const selectedKeyId = useSelectedAiKeyId()
-  const attempts = attemptsFor(
-    store,
-    id,
-    initialModel,
-    initialKeyId ?? selectedKeyId,
-  )
+  const _selectedKeyId = useSelectedAiKeyId()
+  const attempts = attemptsFor(store, id)
   const retrying = !!store.retrying[id]
   const last = attempts?.at(-1)
   const { model, setModel, keyId, setKeyId, keyLabel } = useKeyModel(
@@ -105,18 +95,6 @@ export function useRetry(
     else toast.error(`Retry with ${model} on ${keyLabel} failed.`)
   }
   return { attempts, retrying, model, setModel, keyId, setKeyId, retry }
-}
-
-export function PendingFailurePrototype(props: Props) {
-  const r = useRetry(
-    props.summary.id,
-    props.summary.model ?? "",
-    props.summary.aiKeyId,
-  )
-  // No failure: the pending panel as it is today (a Copy Prompt item).
-  if (!r.attempts && !r.retrying) return <PendingSummaryPanel {...props} />
-  const shared = { ...props, ...r, attempts: r.attempts ?? [] }
-  return <VariantC {...shared} />
 }
 
 export type VariantProps = Props & {
@@ -404,56 +382,5 @@ export function SavedPrompt({
         {promptText ?? "Loading prompt…"}
       </pre>
     </Fold>
-  )
-}
-
-/** C: the same header, then the two ways out as cards side by side. */
-function VariantC(p: VariantProps) {
-  return (
-    <>
-      <FailedHeader {...p} />
-      <div className="space-y-6">
-        <ErrorHistory {...p} />
-        <div className="grid md:grid-cols-2 gap-4">
-          <Card icon={<RotateCcw size={14} />} title="Try again">
-            <RetryControls {...p} />
-            <p className="mt-3 text-xs text-app-ink/60">
-              The same window and posts, nothing re-collected.
-            </p>
-          </Card>
-          <Card icon={<ClipboardPaste size={14} />} title="Use another AI">
-            <p className="text-sm text-app-ink/80 mb-4">
-              Copy the saved prompt into any AI tool, then paste its answer
-              here.
-            </p>
-            <div className="grid gap-2 sm:flex sm:flex-wrap">
-              <TgButton
-                type="button"
-                variant="secondary"
-                size="lg"
-                className="h-11 px-5"
-                disabled={!p.promptText}
-                onClick={() => copyPrompt(p.promptText)}
-              >
-                <Copy size={14} />
-                Copy prompt
-              </TgButton>
-              <TgButton
-                type="button"
-                variant="secondary"
-                size="lg"
-                className="h-11 px-5"
-                onClick={p.onPaste}
-                disabled={p.retrying}
-              >
-                <ClipboardPaste size={14} />
-                Paste response
-              </TgButton>
-            </div>
-          </Card>
-        </div>
-        <SavedPrompt promptText={p.promptText} />
-      </div>
-    </>
   )
 }

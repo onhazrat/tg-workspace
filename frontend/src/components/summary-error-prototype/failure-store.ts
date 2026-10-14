@@ -3,8 +3,7 @@
  *
  * Each pending Summary keeps every failed attempt (error, model, time), oldest
  * first. A Generate that failed before any Summary was saved has no id, so its
- * attempts live under `START`. `AIContext` records real failures; `simulate`
- * gives every pending Summary a fake first failure so the state is reachable.
+ * attempts live under `START`. `AIContext` records real failures.
  * Retry is a stub: it waits, then fails again or "succeeds" as `nextRetry`
  * says. A reload forgets everything.
  */
@@ -36,18 +35,15 @@ export type NextOutcome = "quota" | "timeout" | "cut" | "succeed"
 type State = {
   failures: Record<string, Attempt[]>
   retrying: Record<string, boolean>
-  simulate: boolean
   nextRetry: NextOutcome
 }
 
 let state: State = {
   failures: {},
   retrying: {},
-  simulate: true,
   nextRetry: "quota",
 }
 const listeners = new Set<() => void>()
-const SIMULATED_AT = Date.now() - 90_000
 
 function set(patch: Partial<State>) {
   state = { ...state, ...patch }
@@ -86,20 +82,9 @@ export function clearFailures(id: string) {
   set({ failures })
 }
 
-/** The attempts to show, real first, then the simulated first failure. */
-export function attemptsFor(
-  s: State,
-  id: string,
-  model: string,
-  keyId: string | null,
-): Attempt[] | undefined {
-  if (s.failures[id]) return s.failures[id]
-  if (s.simulate && id !== START)
-    return [{ error: SAMPLE_ERRORS[0], model, keyId, at: SIMULATED_AT }]
-}
-
-export function setSimulate(simulate: boolean) {
-  set({ simulate })
+/** The attempts recorded under `id`. */
+export function attemptsFor(s: State, id: string): Attempt[] | undefined {
+  return s.failures[id]
 }
 
 export function setNextRetry(nextRetry: State["nextRetry"]) {
@@ -108,7 +93,7 @@ export function setNextRetry(nextRetry: State["nextRetry"]) {
 
 /**
  * Stubbed retry with `model` on `keyId`: no request, no provider spend, no write. `shown`
- * is what the page displays, so a simulated first failure joins the history.
+ * is what the page displays.
  */
 export async function stubRetry(
   id: string,
@@ -134,11 +119,9 @@ export async function stubRetry(
         at: Date.now(),
       },
     ]
-  // A success clears the simulated failure too, or it would reappear.
   set({
     failures,
     retrying: { ...state.retrying, [id]: false },
-    simulate: ok && id !== START ? false : state.simulate,
   })
   return ok
 }

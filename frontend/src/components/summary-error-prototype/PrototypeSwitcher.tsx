@@ -14,7 +14,6 @@ import {
   recordFailure,
   START,
   setNextRetry,
-  setSimulate,
   useFailureStore,
 } from "./failure-store"
 
@@ -22,9 +21,7 @@ const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export const VARIANTS = {
   "0": "Current (reference)",
-  C: "Two recovery paths",
   D: "Stored attempts, drafts, auto-retry",
-  E: "D with paste in the page",
 } as const
 export type Variant = keyof typeof VARIANTS
 const KEYS = Object.keys(VARIANTS) as Variant[]
@@ -63,7 +60,7 @@ export function PrototypeSwitcher() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
-      if (t.closest("input, textarea, [contenteditable]")) return
+      if (t.closest?.("input, textarea, [contenteditable]")) return
       if (e.key === "ArrowLeft") go(-1)
       if (e.key === "ArrowRight") go(1)
     }
@@ -86,15 +83,7 @@ export function PrototypeSwitcher() {
         </button>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 opacity-90">
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={store.simulate}
-            onChange={(e) => setSimulate(e.target.checked)}
-          />
-          Simulate failure
-        </label>
-        {(variant === "D" || variant === "E") && (
+        {variant === "D" && (
           <button
             type="button"
             className="underline disabled:opacity-50"

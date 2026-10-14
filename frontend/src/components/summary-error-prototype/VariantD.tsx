@@ -54,18 +54,7 @@ import {
 const AUTO_WINDOW_MS = 120_000
 const AUTO_DEFAULT_S = 10
 
-/**
- * E: D with the paste in the page. The answer goes into a box in the "Use
- * another AI" card instead of a dialog, so the error and the drafts stay in
- * view while pasting.
- */
-type DProps = Props & {
-  inlinePaste?: boolean
-  /** `completePendingSummary`: real, as the dialog's save is. */
-  onSavePaste?: (text: string, modelName?: string) => Promise<boolean>
-}
-
-export function VariantD(props: DProps) {
+export function VariantD(props: Props) {
   const { data, isLoading, isError } = useAttempts(props.summary.id)
   if (isLoading) return null
   if (isError)
@@ -87,7 +76,7 @@ const toAttempt = (r: ServerAttempt): Attempt => ({
   auto: r.auto,
 })
 
-function Body(props: DProps & { rows: ServerAttempt[] }) {
+function Body(props: Props & { rows: ServerAttempt[] }) {
   const { rows, summary } = props
   const add = useAddAttempt(summary.id)
   const dismiss = useDismissDraft(summary.id)
@@ -184,53 +173,43 @@ function Body(props: DProps & { rows: ServerAttempt[] }) {
             }}
           />
         )}
-        <div
-          className={`grid gap-4 ${props.inlinePaste ? "" : "md:grid-cols-2"}`}
-        >
+        <div className="grid md:grid-cols-2 gap-4">
           <Card icon={<RotateCcw size={14} />} title="Try again">
             <RetryControls {...p} />
             <p className="mt-3 text-xs text-app-ink/60">
               The same window and posts, nothing re-collected.
             </p>
           </Card>
-          {props.inlinePaste && props.onSavePaste ? (
-            <InlinePaste
-              promptText={p.promptText}
-              retrying={p.retrying}
-              onSave={props.onSavePaste}
-            />
-          ) : (
-            <Card icon={<ClipboardPaste size={14} />} title="Use another AI">
-              <p className="text-sm text-app-ink/80 mb-4">
-                Copy the saved prompt into any AI tool, then paste its answer
-                here.
-              </p>
-              <div className="grid gap-2 sm:flex sm:flex-wrap">
-                <TgButton
-                  type="button"
-                  variant="secondary"
-                  size="lg"
-                  className="h-11 px-5"
-                  disabled={!p.promptText}
-                  onClick={() => copyPrompt(p.promptText)}
-                >
-                  <Copy size={14} />
-                  Copy prompt
-                </TgButton>
-                <TgButton
-                  type="button"
-                  variant="secondary"
-                  size="lg"
-                  className="h-11 px-5"
-                  onClick={p.onPaste}
-                  disabled={p.retrying}
-                >
-                  <ClipboardPaste size={14} />
-                  Paste response
-                </TgButton>
-              </div>
-            </Card>
-          )}
+          <Card icon={<ClipboardPaste size={14} />} title="Use another AI">
+            <p className="text-sm text-app-ink/80 mb-4">
+              Copy the saved prompt into any AI tool, then paste its answer
+              here.
+            </p>
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
+              <TgButton
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="h-11 px-5"
+                disabled={!p.promptText}
+                onClick={() => copyPrompt(p.promptText)}
+              >
+                <Copy size={14} />
+                Copy prompt
+              </TgButton>
+              <TgButton
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="h-11 px-5"
+                onClick={p.onPaste}
+                disabled={p.retrying}
+              >
+                <ClipboardPaste size={14} />
+                Paste response
+              </TgButton>
+            </div>
+          </Card>
         </div>
         <SavedPrompt promptText={p.promptText} />
       </div>
@@ -418,122 +397,5 @@ function Resolved({
         </Fold>
       )}
     </div>
-  )
-}
-
-/** The paste dialog's fields, in the page: copy, paste, model, save. */
-function InlinePaste({
-  promptText,
-  retrying,
-  onSave,
-}: {
-  promptText: string | undefined
-  retrying: boolean
-  onSave: (text: string, modelName?: string) => Promise<boolean>
-}) {
-  const [text, setText] = useState("")
-  const [modelName, setModelName] = useState("")
-  const [saving, setSaving] = useState(false)
-  const pasteFromClipboard = async () => {
-    try {
-      const clip = await navigator.clipboard.readText()
-      if (!clip.trim()) return void toast.warning("Clipboard is empty.")
-      setText(clip)
-    } catch {
-      toast.error(
-        "Could not read the clipboard. Paste into the box with Cmd/Ctrl+V.",
-      )
-    }
-  }
-  const save = async () => {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    setSaving(true)
-    try {
-      if (await onSave(trimmed, modelName.trim() || undefined)) setText("")
-    } finally {
-      setSaving(false)
-    }
-  }
-  return (
-    <Card icon={<ClipboardPaste size={14} />} title="Use another AI">
-      <ol className="space-y-4 text-sm text-app-ink/80">
-        <li className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
-          <span>
-            <b>1.</b> Copy the saved prompt into any AI tool.
-          </span>
-          <TgButton
-            type="button"
-            variant="secondary"
-            size="lg"
-            className="h-11 px-5"
-            disabled={!promptText}
-            onClick={() => copyPrompt(promptText)}
-          >
-            <Copy size={14} />
-            Copy prompt
-          </TgButton>
-        </li>
-        <li className="space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
-            <span>
-              <b>2.</b> Paste its answer here.
-            </span>
-            <TgButton
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="h-11 px-5"
-              onClick={() => void pasteFromClipboard()}
-            >
-              <ClipboardPaste size={14} />
-              Paste from clipboard
-            </TgButton>
-          </div>
-          <textarea
-            aria-label="Pasted response"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="The AI's answer, in Markdown…"
-            rows={text ? 12 : 5}
-            dir="auto"
-            className="w-full resize-y rounded-lg border border-app-ink/10 bg-app-muted/10 px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-app-ink/20"
-          />
-          <input
-            type="text"
-            aria-label="Model that answered"
-            value={modelName}
-            onChange={(e) => setModelName(e.target.value)}
-            placeholder="Model that answered (optional), e.g. Claude, GPT-5"
-            className="w-full rounded-lg border border-app-ink/10 bg-app-muted/10 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-app-ink/20"
-          />
-        </li>
-      </ol>
-      <div className="mt-4 grid sm:flex sm:justify-end gap-2">
-        {text.trim() && (
-          <TgButton
-            type="button"
-            variant="ghost"
-            size="lg"
-            className="h-11 px-5"
-            onClick={() => setText("")}
-          >
-            Clear
-          </TgButton>
-        )}
-        <TgButton
-          type="button"
-          variant="primary"
-          size="lg"
-          className="h-11 px-5"
-          disabled={!text.trim() || retrying}
-          loading={saving}
-          onClick={() => void save()}
-        >
-          <CheckCircle2 size={14} />
-          Save as this Summary
-        </TgButton>
-      </div>
-    </Card>
   )
 }
