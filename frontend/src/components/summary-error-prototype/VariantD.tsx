@@ -6,7 +6,7 @@
  * - a `failed` state of its own: a pending Summary with no attempts is a Copy
  *   Prompt item and keeps today's panel; one whose latest attempt failed gets
  *   this page, and History says "Failed" instead of "Awaiting response";
- * - the draft a dying stream produced, kept and offered;
+ * - every draft a dying stream produced, kept and offered, each dismissable;
  * - one automatic retry for a transient failure, with a countdown and Cancel.
  *
  * Retry and Keep draft are stubbed: they record an attempt, nothing else.
@@ -18,6 +18,7 @@ import {
   FileText,
   Loader2,
   RotateCcw,
+  X,
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
@@ -25,6 +26,7 @@ import { toast } from "sonner"
 import { TgButton } from "@/components/ui/tg-button"
 import { formatSummaryModelLabel } from "@/constants"
 import { useAiKeys } from "@/hooks/useAiKeys"
+import { RelativeTime } from "../RelativeTime"
 import { PendingSummaryPanel } from "../summary-view/SummaryParts"
 import {
   retryAfterSeconds,
@@ -32,6 +34,7 @@ import {
   stubAttempt,
   useAddAttempt,
   useAttempts,
+  useDismissDraft,
 } from "./attempts-api"
 import type { Attempt } from "./failure-store"
 import { useFailureStore } from "./failure-store"
@@ -76,6 +79,7 @@ const toAttempt = (r: ServerAttempt): Attempt => ({
 function Body(props: Props & { rows: ServerAttempt[] }) {
   const { rows, summary } = props
   const add = useAddAttempt(summary.id)
+  const dismiss = useDismissDraft(summary.id)
   const { nextRetry } = useFailureStore()
   const aiKeys = useAiKeys()
   const latest = rows[rows.length - 1]
@@ -107,7 +111,10 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
   if (latest.outcome !== "failed")
     return <Resolved latest={latest} failed={failed} />
 
-  const draft = [...rows].reverse().find((r) => r.partialText)
+  // Every draft a dying stream left, newest first, until it is dismissed.
+  const drafts = rows
+    .filter((r) => r.outcome === "failed" && r.partialText && !r.draftDismissed)
+    .reverse()
   const p = {
     ...props,
     attempts: failed,
@@ -144,11 +151,12 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
             </TgButton>
           </div>
         )}
-        {draft?.partialText && (
-          <DraftCard
-            draft={draft}
+        {drafts.length > 0 && (
+          <Drafts
+            drafts={drafts}
             retrying={p.retrying}
-            onKeep={async () => {
+            onDismiss={dismiss}
+            onKeep={async (draft) => {
               auto.cancel()
               await add({
                 outcome: "kept_draft",
@@ -156,11 +164,11 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
                 error: null,
                 model: draft.model,
                 keyId: draft.keyId,
-                partialText: null,
+                partialText: draft.partialText,
                 auto: false,
               })
               toast.success(
-                "Stub: draft kept. The real build saves it as this Summary's text, marked incomplete.",
+                `Stub: draft from attempt ${draft.attempt} kept. The real build saves it as this Summary's text, marked incomplete.`,
               )
             }}
           />
@@ -248,47 +256,87 @@ function useAutoRetry(latest: ServerAttempt, busy: boolean, fire: () => void) {
   return { secondsLeft, cancel: () => setCancelled(latest.id) }
 }
 
-function DraftCard({
-  draft,
+/** Every undismissed draft, newest first, each with Keep and Dismiss. */
+function Drafts({
+  drafts,
   retrying,
   onKeep,
+  onDismiss,
+}: {
+  drafts: ServerAttempt[]
+  retrying: boolean
+  onKeep: (draft: ServerAttempt) => void
+  onDismiss: (attemptId: string) => Promise<void>
+}) {
+  return (
+    <Card
+      icon={<FileText size={14} />}
+      title={`Drafts from failed attempts (${drafts.length})`}
+    >
+      <p className="text-xs text-app-ink/60 mb-4">
+        Text the model wrote before its stream stopped. Keep one as this
+        Summary's text, or dismiss the ones you don't need.
+      </p>
+      <ol className="space-y-6">
+        {drafts.map((d, i) => (
+          <DraftItem
+            key={d.id}
+            draft={d}
+            newest={i === 0}
+            retrying={retrying}
+            onKeep={() => onKeep(d)}
+            onDismiss={async () => {
+              await onDismiss(d.id)
+              toast(`Draft from attempt ${d.attempt} dismissed.`)
+            }}
+          />
+        ))}
+      </ol>
+    </Card>
+  )
+}
+
+function DraftItem({
+  draft,
+  newest,
+  retrying,
+  onKeep,
+  onDismiss,
 }: {
   draft: ServerAttempt
+  newest: boolean
   retrying: boolean
   onKeep: () => void
+  onDismiss: () => void
 }) {
   const [open, setOpen] = useState(false)
   const text = draft.partialText ?? ""
   const words = text.split(/\s+/).filter(Boolean).length
   return (
-    <Card
-      icon={<FileText size={14} />}
-      title={`Draft from attempt ${draft.attempt}`}
-    >
-      <p className="text-xs text-app-ink/60 mb-3">
-        The stream stopped after about {words} words on{" "}
-        {formatSummaryModelLabel(draft.model)}. Keep it as this Summary's text,
-        or retry for a complete one.
+    <li className="border-t border-app-ink/10 pt-4 first:border-0 first:pt-0">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-app-ink/60 mb-2">
+        Attempt {draft.attempt} · {formatSummaryModelLabel(draft.model)} · about{" "}
+        {words} words · <RelativeTime timestamp={draft.at} />
       </p>
       <div className="relative">
         <div
           dir="auto"
           className={`prose prose-sm max-w-none dark:prose-invert prose-p:text-app-ink/80 prose-li:text-app-ink/80 ${
-            open ? "" : "max-h-48 overflow-hidden"
+            open ? "" : "max-h-32 overflow-hidden"
           }`}
         >
           <ReactMarkdown>{`${text} …`}</ReactMarkdown>
         </div>
         {!open && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-app-card to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-app-card to-transparent" />
         )}
       </div>
-      <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         <TgButton
           type="button"
-          variant="primary"
+          variant={newest ? "primary" : "secondary"}
           size="lg"
-          className="h-11 px-5"
+          className="col-span-2 h-11 px-5"
           disabled={retrying}
           onClick={onKeep}
         >
@@ -304,8 +352,18 @@ function DraftCard({
         >
           {open ? "Show less" : "Show all"}
         </TgButton>
+        <TgButton
+          type="button"
+          variant="ghost"
+          size="lg"
+          className="h-11 px-5"
+          onClick={onDismiss}
+        >
+          <X size={14} />
+          Dismiss
+        </TgButton>
       </div>
-    </Card>
+    </li>
   )
 }
 

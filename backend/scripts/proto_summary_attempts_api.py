@@ -55,6 +55,12 @@ db.executescript(
       ON summary_attempts (user_id, summary_id);
     """
 )
+# A dismissed draft stays stored; it is only no longer offered.
+if "draft_dismissed_at" not in {
+    r["name"] for r in db.execute("PRAGMA table_info(summary_attempts)")
+}:
+    db.execute("ALTER TABLE summary_attempts ADD COLUMN draft_dismissed_at REAL")
+    db.commit()
 
 app = FastAPI(title="PROTOTYPE summary attempts")
 _identity: dict[str, str] = {}
@@ -97,6 +103,7 @@ def out(row: sqlite3.Row) -> dict[str, object]:
         "keyId": row["key_id"],
         "partialText": row["partial_text"],
         "auto": bool(row["auto"]),
+        "draftDismissed": row["draft_dismissed_at"] is not None,
         "at": int(row["created_at"] * 1000),
     }
 
@@ -127,7 +134,9 @@ def add_attempt(
         ).fetchone()[0]
         row_id = str(uuid.uuid4())
         db.execute(
-            "INSERT INTO summary_attempts VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO summary_attempts (id, user_id, summary_id, attempt,"
+            " outcome, kind, error, model, key_id, partial_text, auto, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 row_id,
                 uid,
@@ -146,6 +155,26 @@ def add_attempt(
     row = db.execute(
         "SELECT * FROM summary_attempts WHERE id = ?", (row_id,)
     ).fetchone()
+    return out(row)
+
+
+@app.post("/summaries/{summary_id}/attempts/{attempt_id}/dismiss-draft")
+def dismiss_draft(
+    summary_id: str, attempt_id: str, authorization: str | None = Header(None)
+) -> dict[str, object]:
+    uid = user_id(authorization)
+    with db:
+        db.execute(
+            "UPDATE summary_attempts SET draft_dismissed_at = ?"
+            " WHERE id = ? AND summary_id = ? AND user_id = ?",
+            (time.time(), attempt_id, summary_id, uid),
+        )
+    row = db.execute(
+        "SELECT * FROM summary_attempts WHERE id = ? AND user_id = ?",
+        (attempt_id, uid),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Attempt not found")
     return out(row)
 
 

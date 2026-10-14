@@ -69,7 +69,10 @@ Vite proxies `/proto` to it (`PROTO_API_PORT`, default 8021).
   History shows a red "Failed ×n" card instead of "Awaiting response". The real build
   should make this a `status` value rather than derive it.
 - **Drafts.** Text a dying stream produced is stored on the attempt (AIContext now
-  captures it) and offered as "Draft from attempt n" with Keep this draft.
+  captures it). Every failed attempt's draft is listed, newest first, each with Keep
+  this draft, Show all and Dismiss. Dismiss sets `draft_dismissed_at` on the attempt:
+  the text stays stored, it is only no longer offered. Keeping one records a
+  `kept_draft` attempt carrying that text.
 - **One automatic retry** for a transient failure (overloaded, 5xx, timeout, dropped
   stream): a countdown honouring the provider's Retry-After, else 10 s, with Cancel.
   Never for an automatic attempt, never for a failure older than two minutes found on

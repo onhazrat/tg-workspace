@@ -28,12 +28,13 @@ export type ServerAttempt = {
   keyId: string | null
   partialText: string | null
   auto: boolean
+  draftDismissed: boolean
   at: number
 }
 
 export type NewAttempt = Omit<
   ServerAttempt,
-  "id" | "summaryId" | "attempt" | "at"
+  "id" | "summaryId" | "attempt" | "at" | "draftDismissed"
 >
 
 /** What kind of failure an error message is; decides whether to auto-retry. */
@@ -96,6 +97,17 @@ export async function postAttempt(summaryId: string, a: NewAttempt) {
   })
 }
 
+export function useDismissDraft(summaryId: string) {
+  const qc = useQueryClient()
+  return async (attemptId: string) => {
+    await protoFetch<ServerAttempt>(
+      `/summaries/${summaryId}/attempts/${attemptId}/dismiss-draft`,
+      { method: "POST" },
+    )
+    await qc.invalidateQueries({ queryKey: attemptsKey(summaryId) })
+  }
+}
+
 export function useAddAttempt(summaryId: string) {
   const qc = useQueryClient()
   return async (a: NewAttempt) => {
@@ -149,6 +161,10 @@ export function stubAttempt(
     outcome: "failed",
     kind: "transient",
     error: "The stream ended early: connection reset by peer.",
-    partialText: SAMPLE_DRAFT,
+    // A different cut each time, so several drafts are told apart.
+    partialText: SAMPLE_DRAFT.slice(
+      0,
+      Math.floor(SAMPLE_DRAFT.length * (0.35 + Math.random() * 0.65)),
+    ),
   }
 }
