@@ -61,7 +61,17 @@ export const ModelCombo: React.FC<{
   placeholder?: string
   /** This model runs on the Operator Key, not the Account's (ADR-016). */
   operatorKey?: boolean
-}> = ({ value, onChange, className, ariaLabel, placeholder, operatorKey }) => {
+  /** PROTOTYPE: false leaves the Key's remembered model alone. */
+  remember?: boolean
+}> = ({
+  value,
+  onChange,
+  className,
+  ariaLabel,
+  placeholder,
+  operatorKey,
+  remember,
+}) => {
   const { models: accountModels } = useAiModels()
   const selectedKeyId = useSelectedAiKeyId()
   const hasKey = operatorKey === true || selectedKeyId !== null
@@ -90,7 +100,8 @@ export const ModelCombo: React.FC<{
       // one funnel every deliberate model choice passes through. The Operator
       // Key's picker is excluded for the same reason it shows no catalogue: the
       // model it names is not the Account Key's business.
-      if (!operatorKey) rememberModelForKey(selectedKeyId, chosen)
+      if (!operatorKey && remember !== false)
+        rememberModelForKey(selectedKeyId, chosen)
     }
     setSearch("")
     setOpen(false)

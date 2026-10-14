@@ -2,9 +2,11 @@
 import { getRouteApi } from "@tanstack/react-router"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useEffect } from "react"
+import { useSettings } from "@/contexts/SettingsContext"
 import {
   FAKE_START_ERROR,
-  recordStartFailure,
+  recordFailure,
+  START,
   setNextRetry,
   setSimulate,
   useFailureStore,
@@ -30,6 +32,7 @@ export function PrototypeSwitcher() {
   const variant = useVariant()
   const navigate = workspaceRoute.useNavigate()
   const store = useFailureStore()
+  const { selectedModel } = useSettings()
   const go = (step: number) => {
     const next =
       KEYS[(KEYS.indexOf(variant) + step + KEYS.length) % KEYS.length]
@@ -73,7 +76,7 @@ export function PrototypeSwitcher() {
         <button
           type="button"
           className="underline"
-          onClick={() => recordStartFailure(FAKE_START_ERROR)}
+          onClick={() => recordFailure(START, FAKE_START_ERROR, selectedModel)}
         >
           Fake start failure
         </button>

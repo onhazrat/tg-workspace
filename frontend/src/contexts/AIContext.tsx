@@ -6,8 +6,9 @@ import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { dataSendSummaryPublication } from "@/client"
 import {
+  clearFailures,
   recordFailure,
-  recordStartFailure,
+  START,
 } from "@/components/summary-error-prototype/failure-store"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
@@ -206,7 +207,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     setSummarizing(true)
-    recordStartFailure(null) // PROTOTYPE
     setSummary(null)
     // The empty Summary tab (or a new one), which the finished run fills.
     workspaceTabs.openTab("summary")
@@ -214,6 +214,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       await withProvisionalRow(deleteSummary, (row) =>
         streamSummary(names, posts, row),
       )
+      clearFailures(START) // PROTOTYPE: a run that starts ends the start failures
     } catch (err: unknown) {
       console.error(err)
       const reason = errorText(
@@ -222,8 +223,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       )
       // PROTOTYPE: a pending-row failure already has its panel; anything else
       // failed before a Summary existed and lands on the empty tab.
-      if (!/waiting for a response you can paste/.test(reason))
-        recordStartFailure(reason)
+      if (/waiting for a response you can paste/.test(reason))
+        clearFailures(START)
+      else recordFailure(START, reason, selectedModel)
       toast.error(reason)
     } finally {
       setSummarizing(false)
@@ -278,7 +280,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     /** Show the item that is waiting, not the half-streamed buffer. */
     const leftPending = (reason: string) => {
-      recordFailure(id, reason) // PROTOTYPE
+      recordFailure(id, reason, selectedModel) // PROTOTYPE
       setSummary(null)
       workspaceTabs.createTab("summary", id)
       return new Error(

@@ -19,7 +19,7 @@ import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
-import { useFailureStore } from "./summary-error-prototype/failure-store"
+import { START, useFailureStore } from "./summary-error-prototype/failure-store"
 import { PendingFailurePrototype } from "./summary-error-prototype/PendingFailureVariants"
 import {
   PrototypeSwitcher,
@@ -86,7 +86,7 @@ export const SummaryView: React.FC = () => {
 
   const workspace = useCitationWorkspace()
   const variant = useVariant() // PROTOTYPE
-  const { startFailure } = useFailureStore() // PROTOTYPE
+  const startFailed = !!useFailureStore().failures[START] // PROTOTYPE
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [isEditingNote, setIsEditingNote] = useState(false)
   // Read from the loaded record, so a saved report renders in its own language
@@ -133,6 +133,7 @@ export const SummaryView: React.FC = () => {
         {isPending && currentSummary && variant !== "0" ? (
           <>
             <PendingFailurePrototype
+              key={currentSummary.id}
               variant={variant}
               summary={currentSummary}
               promptText={currentSummaryDetail?.promptText}
@@ -196,8 +197,8 @@ export const SummaryView: React.FC = () => {
                 Intl.DateTimeFormat().resolvedOptions().timeZone,
             }}
             emptyState={
-              variant !== "0" && startFailure ? (
-                <StartFailurePanel failure={startFailure} />
+              variant !== "0" && startFailed ? (
+                <StartFailurePanel />
               ) : (
                 <GoToActionEmptyState
                   what="summary"

@@ -12,6 +12,12 @@ and the left/right keys cycle variants.
 - `B` the header says "Generation failed", Retry is primary, Paste secondary, prompt folded.
 - `C` the error, then "Try again here" and "Use another AI" side by side.
 
+Every Retry has a model picker beside it (the app's ModelCombo over the selected
+Key's live catalogue, typed ids allowed). It starts at the last attempt's model and
+never changes the account's remembered model. Each failure is kept with its attempt
+number, model and time: the latest is shown in red, every earlier one listed below
+it, newest first.
+
 Retry is stubbed: no request, no spend, no write. "Simulate failure" in the bar shows
 a fake error on every pending Summary; "Next retry" picks the stub's outcome. A real
 failed Generate in this session records its real reason and shows that instead.

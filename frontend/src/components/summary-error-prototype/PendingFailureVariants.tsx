@@ -1,6 +1,7 @@
 /**
  * PROTOTYPE, throw away. Three ways the pending Summary panel can show a failed
- * generation with a Retry. Retry is stubbed (`failure-store.ts`).
+ * generation, its error history, and a Retry with a model of your choice.
+ * Retry is stubbed (`failure-store.ts`).
  */
 import {
   AlertTriangle,
@@ -9,8 +10,11 @@ import {
   Loader2,
   RotateCcw,
 } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
+import { ModelCombo } from "@/components/ai/ModelCombo"
 import { TgButton } from "@/components/ui/tg-button"
+import { tgFieldClassName } from "@/components/ui/tg-input"
 import { formatSummaryModelLabel } from "@/constants"
 import type { Summary } from "@/types"
 import { RelativeTime } from "../RelativeTime"
@@ -20,8 +24,8 @@ import {
   SummaryMetaChips,
 } from "../summary-view/SummaryParts"
 import {
-  type Failure,
-  failureFor,
+  type Attempt,
+  attemptsFor,
   stubRetry,
   useFailureStore,
 } from "./failure-store"
@@ -34,70 +38,143 @@ type Props = {
   onPaste: () => void
 }
 
-export function PendingFailurePrototype(props: Props) {
+/** The retry state every surface shares: the history, the model, the stub. */
+export function useRetry(id: string, initialModel: string) {
   const store = useFailureStore()
-  const failure = failureFor(store, props.summary.id)
-  const retrying = !!store.retrying[props.summary.id]
-  // No failure: the pending panel as it is today (a Copy Prompt item).
-  if (!failure && !retrying) return <PendingSummaryPanel {...props} />
+  const attempts = attemptsFor(store, id, initialModel)
+  const retrying = !!store.retrying[id]
+  // Starts at the model the last attempt used; local, so the account's
+  // default stays put.
+  const [model, setModel] = useState(attempts?.at(-1)?.model || initialModel)
   const retry = async () => {
-    const ok = await stubRetry(props.summary.id)
+    const ok = await stubRetry(id, model, attempts ?? [])
     if (ok)
       toast.success(
-        "Stub: retry succeeded. The real build would stream the saved prompt into this Summary.",
+        `Stub: retry with ${model} succeeded. The real build would stream the saved prompt into this Summary.`,
       )
-    else toast.error("Retry failed again.")
+    else toast.error(`Retry with ${model} failed.`)
   }
-  const shared = { ...props, failure, retrying, retry }
+  return { attempts, retrying, model, setModel, retry }
+}
+
+export function PendingFailurePrototype(props: Props) {
+  const r = useRetry(props.summary.id, props.summary.model ?? "")
+  // No failure: the pending panel as it is today (a Copy Prompt item).
+  if (!r.attempts && !r.retrying) return <PendingSummaryPanel {...props} />
+  const shared = { ...props, ...r, attempts: r.attempts ?? [] }
   if (props.variant === "A") return <VariantA {...shared} />
   if (props.variant === "B") return <VariantB {...shared} />
   return <VariantC {...shared} />
 }
 
 type VariantProps = Props & {
-  failure: Failure | undefined
+  attempts: Attempt[]
   retrying: boolean
+  model: string
+  setModel: (m: string) => void
   retry: () => void
 }
 
-function RetryButton({
+export function RetryControls({
+  model,
+  setModel,
   retrying,
   retry,
-  variant = "primary",
+  label = "Retry",
 }: {
+  model: string
+  setModel: (m: string) => void
   retrying: boolean
   retry: () => void
-  variant?: "primary" | "secondary"
+  label?: string
 }) {
   return (
-    <TgButton
-      type="button"
-      variant={variant}
-      size="lg"
-      onClick={retry}
-      disabled={retrying}
-      className="h-11 px-5"
-    >
-      {retrying ? (
-        <Loader2 size={14} className="animate-spin" />
-      ) : (
-        <RotateCcw size={14} />
-      )}
-      {retrying ? "Retrying…" : "Retry"}
-    </TgButton>
+    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+      <ModelCombo
+        ariaLabel="Model for the retry"
+        value={model}
+        onChange={setModel}
+        remember={false}
+        className={`${tgFieldClassName} sm:w-60 h-11`}
+      />
+      <TgButton
+        type="button"
+        variant="primary"
+        size="lg"
+        onClick={retry}
+        disabled={retrying}
+        className="h-11 px-5"
+      >
+        {retrying ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <RotateCcw size={14} />
+        )}
+        {retrying ? "Retrying…" : label}
+      </TgButton>
+    </div>
   )
 }
 
-function ErrorText({ failure }: { failure: Failure | undefined }) {
-  if (!failure) return null
+/** The latest error up front, then every earlier one, newest first. */
+export function ErrorHistory({
+  attempts,
+  retrying,
+  model,
+}: {
+  attempts: Attempt[]
+  retrying: boolean
+  model: string
+}) {
+  const latest = attempts.at(-1)
+  const earlier = attempts.slice(0, -1).reverse()
   return (
-    <>
-      <p className="text-sm font-mono break-words">{failure.error}</p>
-      <p className="text-[11px] opacity-70 mt-1">
-        Attempt {failure.attempts} failed{" "}
-        <RelativeTime timestamp={failure.at} />
-      </p>
-    </>
+    <div className="space-y-3">
+      {retrying && (
+        <p className="text-sm flex items-center gap-2 text-app-ink/80">
+          <Loader2 size={14} className="animate-spin" />
+          Attempt {attempts.length + 1} with {formatSummaryModelLabel(model)}…
+        </p>
+      )}
+      {latest && (
+        <div className="rounded-lg border-l-4 border-red-500 bg-red-500/5 px-4 py-3 text-red-900 dark:text-red-100 flex gap-3">
+          <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-mono break-words">{latest.error}</p>
+            <AttemptMeta n={attempts.length} attempt={latest} />
+          </div>
+        </div>
+      )}
+      {earlier.length > 0 && (
+        <div className="rounded-lg border border-app-ink/10 px-4 py-3">
+          <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/60 mb-2">
+            Earlier attempts ({earlier.length})
+          </h4>
+          <ol className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+            {earlier.map((a, i) => (
+              <li
+                key={a.at}
+                className="border-t border-app-ink/5 first:border-0 pt-2 first:pt-0"
+              >
+                <p className="text-xs font-mono break-words text-app-ink/70">
+                  {a.error}
+                </p>
+                <AttemptMeta n={attempts.length - 1 - i} attempt={a} />
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AttemptMeta({ n, attempt }: { n: number; attempt: Attempt }) {
+  return (
+    <p className="text-[11px] opacity-70 mt-1">
+      Attempt {n} · {formatSummaryModelLabel(attempt.model)} ·{" "}
+      <RelativeTime timestamp={attempt.at} />
+    </p>
   )
 }
 
@@ -140,24 +217,35 @@ function Counts({ summary }: { summary: Summary }) {
   )
 }
 
-/** A: today's panel untouched, with a red banner above it. */
+function PasteButton(p: VariantProps) {
+  return (
+    <TgButton
+      type="button"
+      variant="secondary"
+      size="lg"
+      onClick={p.onPaste}
+      disabled={p.retrying}
+      className="h-11 px-5"
+    >
+      <ClipboardPaste size={14} />
+      Paste response
+    </TgButton>
+  )
+}
+
+/** A: today's panel untouched, with a failure block above it. */
 function VariantA(p: VariantProps) {
   return (
     <>
       <div
         role="alert"
-        className="mb-6 flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-900 dark:text-red-100 p-4"
+        className="mb-6 rounded-xl border border-red-500/30 bg-red-500/5 p-4 space-y-4"
       >
-        <AlertTriangle size={20} className="shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm mb-1">Generation failed</p>
-          {p.retrying ? (
-            <p className="text-sm">Retrying with the saved prompt…</p>
-          ) : (
-            <ErrorText failure={p.failure} />
-          )}
-        </div>
-        <RetryButton retrying={p.retrying} retry={p.retry} />
+        <p className="font-bold text-sm text-red-900 dark:text-red-100">
+          Generation failed
+        </p>
+        <ErrorHistory {...p} />
+        <RetryControls {...p} />
       </div>
       <PendingSummaryPanel
         summary={p.summary}
@@ -169,58 +257,40 @@ function VariantA(p: VariantProps) {
 }
 
 /**
- * B: the item says it failed, not that it waits. Retry is the primary action,
+ * B: the item says it failed, not that it waits. Retry and its model lead,
  * Paste is the fallback, and the prompt folds away.
  */
 function VariantB(p: VariantProps) {
   return (
     <>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-app-ink/10 pb-6">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <h3 className="text-2xl font-bold tracking-tight">
-              {p.retrying ? "Retrying…" : "Generation failed"}
-            </h3>
-            <span className="bg-red-500/15 text-red-800 dark:text-red-200 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider">
-              {p.retrying ? "Running" : "Failed"}
-            </span>
-          </div>
-          <SummaryMetaChips
-            timestamp={p.summary.timestamp}
-            model={p.summary.model}
-            language={p.summary.language}
-          />
+      <div className="mb-6 border-b border-app-ink/10 pb-6">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <h3 className="text-2xl font-bold tracking-tight">
+            {p.retrying ? "Retrying…" : "Generation failed"}
+          </h3>
+          <span className="bg-red-500/15 text-red-800 dark:text-red-200 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider">
+            {p.retrying ? "Running" : `Failed ${p.attempts.length}×`}
+          </span>
         </div>
-        <div className="flex flex-col-reverse md:flex-row gap-2">
-          <TgButton
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={p.onPaste}
-            disabled={p.retrying}
-            className="h-11 px-5"
-          >
-            <ClipboardPaste size={14} />
-            Paste response
-          </TgButton>
-          <RetryButton retrying={p.retrying} retry={p.retry} />
-        </div>
+        <SummaryMetaChips
+          timestamp={p.summary.timestamp}
+          model={p.summary.model}
+          language={p.summary.language}
+        />
       </div>
 
-      <div className="mb-6 rounded-lg border-l-4 border-red-500 bg-red-500/5 px-4 py-3 text-red-900 dark:text-red-100">
-        {p.retrying ? (
-          <p className="text-sm">
-            Sending the saved prompt to{" "}
-            {formatSummaryModelLabel(p.summary.model)} again…
-          </p>
-        ) : (
-          <ErrorText failure={p.failure} />
-        )}
+      <div className="mb-6">
+        <ErrorHistory {...p} />
+      </div>
+
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <RetryControls {...p} />
+        <PasteButton {...p} />
       </div>
 
       <p className="text-sm text-app-ink/80 mb-4">
-        The prompt is saved. Retry sends it again, or run it in another AI tool
-        and paste the answer.
+        The prompt is saved. Retry sends it again with the model you pick, or
+        run it in another AI tool and paste the answer.
       </p>
       <PromptFold promptText={p.promptText} />
       <Counts summary={p.summary} />
@@ -228,7 +298,7 @@ function VariantB(p: VariantProps) {
   )
 }
 
-/** C: the error, then the two ways out given equal room. */
+/** C: the error history, then the two ways out given equal room. */
 function VariantC(p: VariantProps) {
   return (
     <>
@@ -243,15 +313,8 @@ function VariantC(p: VariantProps) {
         />
       </div>
 
-      <div className="mb-6 flex gap-3 text-red-900 dark:text-red-100">
-        <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-        <div className="min-w-0">
-          {p.retrying ? (
-            <p className="text-sm">Retrying…</p>
-          ) : (
-            <ErrorText failure={p.failure} />
-          )}
-        </div>
+      <div className="mb-6">
+        <ErrorHistory {...p} />
       </div>
 
       <div className="grid md:grid-cols-2 gap-4 mb-6">
@@ -260,11 +323,10 @@ function VariantC(p: VariantProps) {
             Try again here
           </h4>
           <p className="text-sm text-app-ink/80 flex-1">
-            Send the saved prompt to{" "}
-            <b>{formatSummaryModelLabel(p.summary.model)}</b> again. The same
-            window and posts, nothing re-collected.
+            Send the saved prompt again, to the same model or another one. The
+            same window and posts, nothing re-collected.
           </p>
-          <RetryButton retrying={p.retrying} retry={p.retry} />
+          <RetryControls {...p} />
         </div>
         <div className="rounded-xl border border-app-ink/10 p-5 flex flex-col gap-3">
           <h4 className="text-[11px] font-bold uppercase tracking-widest text-app-ink/70">
@@ -289,17 +351,7 @@ function VariantC(p: VariantProps) {
               <Copy size={14} />
               Copy prompt
             </TgButton>
-            <TgButton
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="h-11 px-5"
-              onClick={p.onPaste}
-              disabled={p.retrying}
-            >
-              <ClipboardPaste size={14} />
-              Paste response
-            </TgButton>
+            <PasteButton {...p} />
           </div>
         </div>
       </div>
