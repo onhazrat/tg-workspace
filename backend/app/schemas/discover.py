@@ -383,11 +383,9 @@ class DiscoverProbeQueueResponse(BaseModel):
 
     #: The harvest sweep's switch and whether a tick is in flight (ticket 04).
     #:
-    #: Its two cursor marks went with ticket 05: the sweep tracks its progress
-    #: on `Post.harvested` rather than in the settings row, so there is no
-    #: position to report. "How much is left" is a count over the unharvested
-    #: set, which is a question nothing asks yet and which would cost a scan of
-    #: that index on every read of this dashboard.
+    #: There is no position to report: since DDS-02 the sweep is an anti-join
+    #: of the reference graph against the Directory, with no marks and no
+    #: cursor.
     harvestEnabled: bool = False
     harvestRunning: bool = False
 

@@ -1,6 +1,6 @@
 # DDS-03: Drop `Post.harvested`
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## What to build
 
@@ -11,8 +11,11 @@ Nothing reads the flag once DDS-02 lands.
 
 - [x] Staging shows the Directory kept growing after DDS-02 shipped (entry count and probe usage
       over at least a week). See "Staging evidence" below.
-- [ ] Column, index and every reference to the flag removed; autogenerate shows no drift.
-- [ ] Backend suite passes.
+- [x] Column, index and every reference to the flag removed; autogenerate shows no drift.
+      Revision `e4c7a2b9d1f0`. `alembic check` reports the same 14 pre-existing operations
+      before and after, none of them on `harvested`. The upsert's reset had already gone with
+      DDS-02.
+- [x] Backend suite passes.
 
 ## Blocked by
 
