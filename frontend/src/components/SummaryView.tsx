@@ -19,6 +19,11 @@ import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
+import { PendingFailurePrototype } from "./summary-error-prototype/PendingFailureVariants"
+import {
+  PrototypeSwitcher,
+  useVariant,
+} from "./summary-error-prototype/PrototypeSwitcher"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -78,6 +83,7 @@ export const SummaryView: React.FC = () => {
   })
 
   const workspace = useCitationWorkspace()
+  const variant = useVariant() // PROTOTYPE
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [isEditingNote, setIsEditingNote] = useState(false)
   // Read from the loaded record, so a saved report renders in its own language
@@ -120,64 +126,82 @@ export const SummaryView: React.FC = () => {
           body below — when it lived here, English chrome inherited RTL from a
           Persian report and rendered its trailing period on the wrong side. */}
       <div className="relative border border-app-ink/10 bg-app-card rounded-xl p-8 md:p-12 shadow-sm">
-        <SummaryBody
-          summary={currentSummary}
-          promptText={currentSummaryDetail?.promptText}
-          body={summaryBody}
-          isPending={isPending}
-          summarizing={summarizing}
-          running={running}
-          direction={bodyDirection}
-          onRerun={handleRerun}
-          onPaste={() => setPasteModalOpen(true)}
-          editingNote={isEditingNote}
-          onEditingNoteChange={setIsEditingNote}
-          onSaveNote={async (note) => {
-            await saveCurrent({ note })
-            setIsEditingNote(false)
-            toast.success("Note saved.")
-          }}
-          onDeleteNote={async () => {
-            await saveCurrent({ note: undefined })
-            setIsEditingNote(false)
-            toast.success("Note deleted.")
-          }}
-          publishPanel={(s) => (
-            <SummaryPublishPanel key={s.id} summary={s} onSave={saveCurrent} />
-          )}
-          renderMarkdown={(markdown) => (
-            <CitationRendererProvider
-              resolve={resolve}
-              loading={citedLoading}
-              workspace={workspace}
-            >
-              <ReactMarkdown components={summaryMarkdownComponents}>
-                {markdown}
-              </ReactMarkdown>
-            </CitationRendererProvider>
-          )}
-          scopeLine={(artifact, className) => (
-            <ArtifactScopeLine artifact={artifact} className={className} />
-          )}
-          cited={cited}
-          workspace={workspace}
-          textSize={settings.summaryTextSize}
-          onTextSizeChange={settings.setSummaryTextSize}
-          // The Account's zone, as the published metadata uses; the browser's
-          // only until the Account has one.
-          zone={{
-            timeZone:
-              settings.timeZone ||
-              Intl.DateTimeFormat().resolvedOptions().timeZone,
-          }}
-          emptyState={
-            <GoToActionEmptyState
-              what="summary"
-              description="Summaries are made on the Action tab, from the channels and Analysis window in scope there. Open a past one from History, or generate a new one."
+        {/* PROTOTYPE: variants A-C replace the pending panel. */}
+        {isPending && currentSummary && variant !== "0" ? (
+          <>
+            <PendingFailurePrototype
+              variant={variant}
+              summary={currentSummary}
+              promptText={currentSummaryDetail?.promptText}
+              onPaste={() => setPasteModalOpen(true)}
             />
-          }
-        />
+            <ArtifactScopeLine artifact={currentSummary} className="mt-3" />
+          </>
+        ) : (
+          <SummaryBody
+            summary={currentSummary}
+            promptText={currentSummaryDetail?.promptText}
+            body={summaryBody}
+            isPending={isPending}
+            summarizing={summarizing}
+            running={running}
+            direction={bodyDirection}
+            onRerun={handleRerun}
+            onPaste={() => setPasteModalOpen(true)}
+            editingNote={isEditingNote}
+            onEditingNoteChange={setIsEditingNote}
+            onSaveNote={async (note) => {
+              await saveCurrent({ note })
+              setIsEditingNote(false)
+              toast.success("Note saved.")
+            }}
+            onDeleteNote={async () => {
+              await saveCurrent({ note: undefined })
+              setIsEditingNote(false)
+              toast.success("Note deleted.")
+            }}
+            publishPanel={(s) => (
+              <SummaryPublishPanel
+                key={s.id}
+                summary={s}
+                onSave={saveCurrent}
+              />
+            )}
+            renderMarkdown={(markdown) => (
+              <CitationRendererProvider
+                resolve={resolve}
+                loading={citedLoading}
+                workspace={workspace}
+              >
+                <ReactMarkdown components={summaryMarkdownComponents}>
+                  {markdown}
+                </ReactMarkdown>
+              </CitationRendererProvider>
+            )}
+            scopeLine={(artifact, className) => (
+              <ArtifactScopeLine artifact={artifact} className={className} />
+            )}
+            cited={cited}
+            workspace={workspace}
+            textSize={settings.summaryTextSize}
+            onTextSizeChange={settings.setSummaryTextSize}
+            // The Account's zone, as the published metadata uses; the browser's
+            // only until the Account has one.
+            zone={{
+              timeZone:
+                settings.timeZone ||
+                Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }}
+            emptyState={
+              <GoToActionEmptyState
+                what="summary"
+                description="Summaries are made on the Action tab, from the channels and Analysis window in scope there. Open a past one from History, or generate a new one."
+              />
+            }
+          />
+        )}
       </div>
+      <PrototypeSwitcher />
 
       {currentSummary && isPending && (
         <PasteSummaryModal

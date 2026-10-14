@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
 import { dataSendSummaryPublication } from "@/client"
+import { recordFailure } from "@/components/summary-error-prototype/failure-store"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
@@ -267,6 +268,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     /** Show the item that is waiting, not the half-streamed buffer. */
     const leftPending = (reason: string) => {
+      recordFailure(id, reason) // PROTOTYPE
       setSummary(null)
       workspaceTabs.createTab("summary", id)
       return new Error(
