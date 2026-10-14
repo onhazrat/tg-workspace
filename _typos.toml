@@ -35,3 +35,7 @@ AIMD = "AIMD"
 # to prove the match is a *prefix* rather than a whole word. Spelling it
 # "alpha" would delete the thing the test is for.
 alph = "alph"
+# Proper nouns cited in docs/directory-crawl/research/notes/: an author
+# (Nguyen Thi, CIKM 2005) and a Russian analytics vendor.
+Thi = "Thi"
+Callibri = "Callibri"
