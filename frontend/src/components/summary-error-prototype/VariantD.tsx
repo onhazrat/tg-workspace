@@ -11,13 +11,18 @@
  *
  * Retry and Keep draft are stubbed: they record an attempt, nothing else.
  */
+import { useQueryClient } from "@tanstack/react-query"
 import {
+  AlertTriangle,
+  Check,
   CheckCircle2,
   ClipboardPaste,
   Copy,
   FileText,
   Loader2,
   RotateCcw,
+  Server,
+  Undo2,
   X,
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
@@ -29,12 +34,21 @@ import { useAiKeys } from "@/hooks/useAiKeys"
 import { RelativeTime } from "../RelativeTime"
 import { PendingSummaryPanel } from "../summary-view/SummaryParts"
 import {
+  activeRunKey,
+  contextFor,
+  estimateTokens,
   retryAfterSeconds,
   type ServerAttempt,
+  type ServerRun,
+  startRun,
   stubAttempt,
+  useActiveRun,
   useAddAttempt,
   useAttempts,
+  useContextLengths,
   useDismissDraft,
+  useRestoreDraft,
+  watchRun,
 } from "./attempts-api"
 import type { Attempt } from "./failure-store"
 import { useFailureStore } from "./failure-store"
@@ -54,7 +68,18 @@ import {
 const AUTO_WINDOW_MS = 120_000
 const AUTO_DEFAULT_S = 10
 
-export function VariantD(props: Props) {
+/**
+ * F turns on three things over D: the retry runs on the server and the page
+ * watches it, the prompt's size is checked against the chosen model, and
+ * dismissed drafts can be brought back.
+ */
+type DProps = Props & {
+  serverRuns?: boolean
+  sizeCheck?: boolean
+  showDismissed?: boolean
+}
+
+export function VariantD(props: DProps) {
   const { data, isLoading, isError } = useAttempts(props.summary.id)
   if (isLoading) return null
   if (isError)
@@ -76,7 +101,7 @@ const toAttempt = (r: ServerAttempt): Attempt => ({
   auto: r.auto,
 })
 
-function Body(props: Props & { rows: ServerAttempt[] }) {
+function Body(props: DProps & { rows: ServerAttempt[] }) {
   const { rows, summary } = props
   const add = useAddAttempt(summary.id)
   const dismiss = useDismissDraft(summary.id)
@@ -92,10 +117,16 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
     auto: boolean
   }>(null)
   const failed = rows.filter((r) => r.outcome === "failed").map(toAttempt)
+  const server = useServerRun(summary.id, !!props.serverRuns)
+  const restore = useRestoreDraft(summary.id)
 
   const run = async (auto: boolean) => {
     const model = auto ? latest.model : km.model
     const keyId = auto ? latest.keyId : km.keyId
+    if (props.serverRuns) {
+      await server.start({ outcome: nextRetry, model, keyId, auto })
+      return
+    }
     setRetrying({ model, auto })
     await new Promise((r) => setTimeout(r, 1500))
     const row = await add(stubAttempt(nextRetry, model, keyId ?? null, auto))
@@ -106,7 +137,8 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
     else toast.error(`Attempt ${row.attempt} with ${model} on ${key} failed.`)
   }
 
-  const auto = useAutoRetry(latest, retrying !== null, () => void run(true))
+  const busy = props.serverRuns ? server.live !== null : retrying !== null
+  const auto = useAutoRetry(latest, busy, () => void run(true))
 
   if (latest.outcome !== "failed")
     return <Resolved latest={latest} failed={failed} />
@@ -115,11 +147,18 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
   const drafts = rows
     .filter((r) => r.outcome === "failed" && r.partialText && !r.draftDismissed)
     .reverse()
+  const dismissed = props.showDismissed
+    ? rows
+        .filter(
+          (r) => r.outcome === "failed" && r.partialText && r.draftDismissed,
+        )
+        .reverse()
+    : []
   const p = {
     ...props,
     attempts: failed,
-    retrying: retrying !== null,
-    model: retrying?.model ?? km.model,
+    retrying: busy,
+    model: server.live?.model ?? retrying?.model ?? km.model,
     setModel: km.setModel,
     keyId: km.keyId,
     setKeyId: km.setKeyId,
@@ -151,9 +190,15 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
             </TgButton>
           </div>
         )}
-        {drafts.length > 0 && (
+        {server.live && <LiveRun run={server.live} attempt={rows.length + 1} />}
+        {(drafts.length > 0 || dismissed.length > 0) && (
           <Drafts
             drafts={drafts}
+            dismissed={dismissed}
+            onRestore={async (id) => {
+              await restore(id)
+              toast("Draft restored.")
+            }}
             retrying={p.retrying}
             onDismiss={dismiss}
             onKeep={async (draft) => {
@@ -175,7 +220,14 @@ function Body(props: Props & { rows: ServerAttempt[] }) {
         )}
         <div className="grid md:grid-cols-2 gap-4">
           <Card icon={<RotateCcw size={14} />} title="Try again">
-            <RetryControls {...p} />
+            <RetryControls
+              {...p}
+              note={
+                props.sizeCheck && (
+                  <SizeCheck promptText={p.promptText} model={km.model} />
+                )
+              }
+            />
             <p className="mt-3 text-xs text-app-ink/60">
               The same window and posts, nothing re-collected.
             </p>
@@ -259,14 +311,18 @@ function useAutoRetry(latest: ServerAttempt, busy: boolean, fire: () => void) {
 /** Every undismissed draft, newest first, each with Keep and Dismiss. */
 function Drafts({
   drafts,
+  dismissed,
   retrying,
   onKeep,
   onDismiss,
+  onRestore,
 }: {
   drafts: ServerAttempt[]
+  dismissed: ServerAttempt[]
   retrying: boolean
   onKeep: (draft: ServerAttempt) => void
   onDismiss: (attemptId: string) => Promise<void>
+  onRestore: (attemptId: string) => Promise<void>
 }) {
   return (
     <Card
@@ -292,6 +348,27 @@ function Drafts({
           />
         ))}
       </ol>
+      {dismissed.length > 0 && (
+        <div
+          className={
+            drafts.length ? "mt-6 border-t border-app-ink/10 pt-4" : ""
+          }
+        >
+          <Fold title={`Dismissed drafts (${dismissed.length})`}>
+            <ol className="space-y-6">
+              {dismissed.map((d) => (
+                <DraftItem
+                  key={d.id}
+                  draft={d}
+                  newest={false}
+                  retrying={retrying}
+                  onRestore={() => void onRestore(d.id)}
+                />
+              ))}
+            </ol>
+          </Fold>
+        </div>
+      )}
     </Card>
   )
 }
@@ -302,12 +379,15 @@ function DraftItem({
   retrying,
   onKeep,
   onDismiss,
+  onRestore,
 }: {
   draft: ServerAttempt
   newest: boolean
   retrying: boolean
-  onKeep: () => void
-  onDismiss: () => void
+  onKeep?: () => void
+  onDismiss?: () => void
+  /** A dismissed draft offers Restore instead of Keep and Dismiss. */
+  onRestore?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const text = draft.partialText ?? ""
@@ -332,17 +412,30 @@ function DraftItem({
         )}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        <TgButton
-          type="button"
-          variant={newest ? "primary" : "secondary"}
-          size="lg"
-          className="col-span-2 h-11 px-5"
-          disabled={retrying}
-          onClick={onKeep}
-        >
-          <CheckCircle2 size={14} />
-          Keep this draft
-        </TgButton>
+        {onRestore ? (
+          <TgButton
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="h-11 px-5"
+            onClick={onRestore}
+          >
+            <Undo2 size={14} />
+            Restore
+          </TgButton>
+        ) : (
+          <TgButton
+            type="button"
+            variant={newest ? "primary" : "secondary"}
+            size="lg"
+            className="col-span-2 h-11 px-5"
+            disabled={retrying}
+            onClick={onKeep}
+          >
+            <CheckCircle2 size={14} />
+            Keep this draft
+          </TgButton>
+        )}
         <TgButton
           type="button"
           variant="secondary"
@@ -352,16 +445,18 @@ function DraftItem({
         >
           {open ? "Show less" : "Show all"}
         </TgButton>
-        <TgButton
-          type="button"
-          variant="ghost"
-          size="lg"
-          className="h-11 px-5"
-          onClick={onDismiss}
-        >
-          <X size={14} />
-          Dismiss
-        </TgButton>
+        {onDismiss && (
+          <TgButton
+            type="button"
+            variant="ghost"
+            size="lg"
+            className="h-11 px-5"
+            onClick={onDismiss}
+          >
+            <X size={14} />
+            Dismiss
+          </TgButton>
+        )}
       </div>
     </li>
   )
@@ -397,5 +492,133 @@ function Resolved({
         </Fold>
       )}
     </div>
+  )
+}
+
+/**
+ * F: the retry runs on the server. Start it, then watch it over SSE; a page
+ * opened while it runs finds it and attaches, so closing the tab costs nothing.
+ */
+function useServerRun(summaryId: string, enabled: boolean) {
+  const qc = useQueryClient()
+  const active = useActiveRun(summaryId, enabled)
+  const [live, setLive] = useState<ServerRun | null>(null)
+  const running = active.data?.status === "running" ? active.data : null
+  useEffect(() => {
+    if (!running) return
+    const ctrl = new AbortController()
+    void (async () => {
+      try {
+        for await (const ev of watchRun(running.id, ctrl.signal)) {
+          setLive(ev)
+          if (ev.status !== "done") continue
+          const a = ev.attempt
+          if (a?.outcome === "succeeded")
+            toast.success(`Attempt ${a.attempt} succeeded on the server.`)
+          else if (a) toast.error(`Attempt ${a.attempt} failed on the server.`)
+          await qc.invalidateQueries({
+            predicate: (q) => String(q.queryKey[0]).startsWith("proto-"),
+          })
+          setLive(null)
+        }
+      } catch {
+        // Aborted: the page left; the run goes on without it.
+      }
+    })()
+    return () => ctrl.abort()
+  }, [running?.id, qc, running])
+  return {
+    live: live ?? running,
+    start: async (body: Parameters<typeof startRun>[1]) => {
+      try {
+        const run = await startRun(summaryId, body)
+        qc.setQueryData(activeRunKey(summaryId), run)
+      } catch {
+        toast.error("A run is already going for this Summary.")
+      }
+    },
+  }
+}
+
+function LiveRun({ run, attempt }: { run: ServerRun; attempt: number }) {
+  const words = run.text.split(/\s+/).filter(Boolean).length
+  return (
+    <Card
+      icon={<Server size={14} />}
+      title={`Attempt ${attempt} is running on the server`}
+    >
+      <p className="text-xs text-app-ink/60 mb-3">
+        {formatSummaryModelLabel(run.model)}
+        {run.auto && " · automatic retry"} · started{" "}
+        <RelativeTime timestamp={run.startedAt} />
+        {words > 0 && ` · ${words} words so far`}. Closing this tab does not
+        stop it; open the Summary again and it picks up here.
+      </p>
+      {run.text ? (
+        <div
+          dir="auto"
+          className="prose prose-sm max-w-none dark:prose-invert prose-p:text-app-ink/80 prose-li:text-app-ink/80 max-h-80 overflow-y-auto custom-scrollbar"
+        >
+          <ReactMarkdown>{`${run.text} ▍`}</ReactMarkdown>
+        </div>
+      ) : (
+        <p className="text-sm flex items-center gap-2 text-app-ink/70">
+          <Loader2 size={14} className="animate-spin" />
+          Waiting for the provider…
+        </p>
+      )}
+    </Card>
+  )
+}
+
+/**
+ * F: the saved prompt's size against the chosen model's context window, so a
+ * retry that cannot fit is flagged before it is sent. ~4 characters a token,
+ * the backend's own estimate.
+ */
+function SizeCheck({
+  promptText,
+  model,
+}: {
+  promptText: string | undefined
+  model: string
+}) {
+  const lengths = useContextLengths(true).data
+  if (!promptText) return null
+  const est = estimateTokens(promptText)
+  const ctx = contextFor(model, lengths)
+  const n = (x: number) => x.toLocaleString()
+  if (ctx === null)
+    return (
+      <p className="text-xs text-app-ink/60">
+        The saved prompt is ~{n(est)} tokens. This model's context size is
+        unknown.
+      </p>
+    )
+  if (est > ctx)
+    return (
+      <p className="flex gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-900 dark:text-red-100">
+        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+        <span>
+          Won't fit: the saved prompt is ~{n(est)} tokens and this model takes{" "}
+          {n(ctx)}. Pick a model with a larger context window.
+        </span>
+      </p>
+    )
+  if (est > ctx * 0.8)
+    return (
+      <p className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+        <span>
+          Tight: ~{n(est)} of {n(ctx)} tokens, leaving little room for the
+          answer.
+        </span>
+      </p>
+    )
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-app-ink/60">
+      <Check size={12} />
+      The saved prompt is ~{n(est)} tokens; this model takes {n(ctx)}.
+    </p>
   )
 }

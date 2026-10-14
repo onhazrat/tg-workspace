@@ -6,7 +6,7 @@
  * pruning must not erase a Summary's history.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { headers } from "@/api/base"
+import { headers, sseDataPayloads } from "@/api/base"
 
 export type ErrorKind =
   | "quota"
@@ -168,3 +168,94 @@ export function stubAttempt(
     ),
   }
 }
+
+// --- Variant F: runs on the server, draft restore, context windows ----------
+
+export type ServerRun = {
+  id: string
+  summaryId: string
+  status: "running" | "done"
+  text: string
+  model: string
+  keyId: string | null
+  auto: boolean
+  startedAt: number
+  attempt: ServerAttempt | null
+}
+
+export const activeRunKey = (id: string) => ["proto-run", id] as const
+
+/** The run still going for this Summary, if any; a reopened page attaches. */
+export function useActiveRun(summaryId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: activeRunKey(summaryId),
+    queryFn: () =>
+      protoFetch<ServerRun | null>(`/summaries/${summaryId}/runs/active`),
+    enabled,
+  })
+}
+
+export function startRun(
+  summaryId: string,
+  body: {
+    outcome: "quota" | "timeout" | "cut" | "succeed"
+    model: string
+    keyId: string | null
+    auto: boolean
+  },
+) {
+  return protoFetch<ServerRun>(`/summaries/${summaryId}/runs`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+/** Every state the run passes through, until it is done. */
+export async function* watchRun(
+  runId: string,
+  signal: AbortSignal,
+): AsyncGenerator<ServerRun> {
+  const r = await fetch(`/proto/runs/${runId}/events`, {
+    headers: headers(false),
+    signal,
+  })
+  for await (const payload of sseDataPayloads(r.body))
+    yield JSON.parse(payload) as ServerRun
+}
+
+export function useRestoreDraft(summaryId: string) {
+  const qc = useQueryClient()
+  return async (attemptId: string) => {
+    await protoFetch<ServerAttempt>(
+      `/summaries/${summaryId}/attempts/${attemptId}/restore-draft`,
+      { method: "POST" },
+    )
+    await qc.invalidateQueries({ queryKey: attemptsKey(summaryId) })
+  }
+}
+
+export function useContextLengths(enabled: boolean) {
+  return useQuery({
+    queryKey: ["proto-context-lengths"],
+    queryFn: () => protoFetch<Record<string, number>>("/context-lengths"),
+    enabled,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  })
+}
+
+/** A model's context window: OpenRouter's catalogue, else Gemini's by rule. */
+export function contextFor(
+  model: string,
+  lengths: Record<string, number> | undefined,
+): number | null {
+  if (!lengths) return null
+  return (
+    lengths[model] ??
+    lengths[`google/${model}`] ??
+    (model.startsWith("gemini") ? 1_048_576 : null)
+  )
+}
+
+/** The backend's own estimate: ~4 characters a token. */
+export const estimateTokens = (text: string) => Math.floor(text.length / 4)

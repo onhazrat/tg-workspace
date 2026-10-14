@@ -22,6 +22,7 @@ const workspaceRoute = getRouteApi("/_tg/workspace")
 export const VARIANTS = {
   "0": "Current (reference)",
   D: "Stored attempts, drafts, auto-retry",
+  F: "D, run on the server, size check, restore drafts",
 } as const
 export type Variant = keyof typeof VARIANTS
 const KEYS = Object.keys(VARIANTS) as Variant[]
@@ -83,7 +84,7 @@ export function PrototypeSwitcher() {
         </button>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 opacity-90">
-        {variant === "D" && (
+        {(variant === "D" || variant === "F") && (
           <button
             type="button"
             className="underline disabled:opacity-50"

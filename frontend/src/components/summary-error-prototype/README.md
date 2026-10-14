@@ -13,6 +13,9 @@ and the left/right keys cycle variants.
   Use another AI cards) over attempts kept in their own storage, plus a `failed` state,
   kept drafts and one automatic retry. See below.
 
+- `F` D plus three things: the retry runs on the server, the prompt's size is checked
+  against the chosen model, and dismissed drafts can be restored. See below.
+
 A (banner over today's panel), B (one Try again card, Paste as a header icon), C (D's
 layout with in-memory attempts) and E (D with the paste in the page instead of a
 dialog) were dropped after review; they are in this branch's history.
@@ -77,3 +80,22 @@ Vite proxies `/proto` to it (`PROTO_API_PORT`, default 8021).
 The bar's "Next retry" picks what the stub does (quota, overloaded, stream cut,
 succeeds) and "Log attempt" records one as if a Generate had just ended that way.
 Retry and Keep draft only record attempts; nothing is sent to a provider.
+
+## Variant F: run on the server, size check, restore drafts
+
+- **The retry runs on the server.** Retry starts a run in the attempts API and the
+  page watches it over SSE (`/runs/{id}/events`), showing the text as it arrives. A
+  page opened while a run is going finds it (`/runs/active`) and attaches, so a
+  reload or a closed tab costs nothing; a second run for the same Summary is refused.
+  The run ends by writing its attempt row, with its partial text, like a real one. It
+  is stubbed: it streams made-up report text and ends as "Next retry" says. The real
+  build is a worker job, watched over SSE as sync jobs are; the automatic retry
+  should then be the worker's decision too, not the page's.
+- **Size check.** Under the Key and model chips: the saved prompt's estimate (~4
+  characters a token, the backend's own rule) against the model's context window,
+  with "Won't fit" past it and "Tight" past 80%. Windows come from OpenRouter's
+  public catalogue, Gemini ids by rule; the real build should carry
+  `context_length` on `POST /ai/models`. It warns and does not block, since the
+  estimate is rough.
+- **Restore dismissed drafts.** A "Dismissed drafts (n)" fold at the bottom of the
+  drafts card, each with Restore, which clears `draft_dismissed_at`.

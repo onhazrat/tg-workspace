@@ -175,7 +175,10 @@ export function RetryControls({
   retry,
   label = "Retry",
   primary = true,
+  note,
 }: {
+  /** Shown between the chips and the button (F's size check). */
+  note?: ReactNode
   primary?: boolean
   model: string
   setModel: (m: string) => void
@@ -225,6 +228,7 @@ export function RetryControls({
           />
         </div>
       </div>
+      {note}
       <TgButton
         type="button"
         variant={primary ? "primary" : "secondary"}

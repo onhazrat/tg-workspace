@@ -133,6 +133,9 @@ export const SummaryView: React.FC = () => {
         {isPending && currentSummary && variant !== "0" ? (
           <>
             <VariantD
+              serverRuns={variant === "F"}
+              sizeCheck={variant === "F"}
+              showDismissed={variant === "F"}
               key={currentSummary.id}
               variant={variant}
               summary={currentSummary}
