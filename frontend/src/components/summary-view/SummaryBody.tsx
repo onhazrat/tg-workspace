@@ -21,6 +21,8 @@ export interface SummaryBodyProps {
   promptText: string | undefined
   body: string | null
   isPending: boolean
+  /** Its latest Attempt broke (SFR-01); shows `failurePanel`. */
+  isFailed: boolean
   summarizing: boolean
   running: boolean
   direction: { dir: string; className: string }
@@ -30,6 +32,8 @@ export interface SummaryBodyProps {
   onEditingNoteChange: (editing: boolean) => void
   onSaveNote: (note: string) => Promise<void>
   onDeleteNote: () => Promise<void>
+  /** `FailedSummaryPanel`; a slot because it reads the Attempts and AI Keys. */
+  failurePanel: (summary: Summary) => React.ReactNode
   /** The publish panel (SUMTAB-09); a slot because it reads the server's plan. */
   publishPanel: (summary: Summary) => React.ReactNode
   /** Renders report Markdown; a slot because its paragraphs read the workspace. */
@@ -56,9 +60,16 @@ export interface SummaryBodyProps {
   workspace: CitationWorkspace
 }
 
-/** The Summary card's contents: pending, report, generating or empty. */
+/** The Summary card's contents: failed, pending, report, generating or empty. */
 export function SummaryBody(props: SummaryBodyProps) {
   const { summary, body, scopeLine } = props
+  if (props.isFailed && summary)
+    return (
+      <>
+        {props.failurePanel(summary)}
+        {scopeLine(summary, "mt-8 pt-6 border-t border-app-ink/10")}
+      </>
+    )
   if (props.isPending && summary)
     return (
       <>

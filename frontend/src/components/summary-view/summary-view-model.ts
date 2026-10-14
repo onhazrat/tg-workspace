@@ -2,7 +2,7 @@
  * `SummaryView`'s decisions, so they can be tested without its providers.
  * `SummaryView` renders them.
  */
-import { isPendingSummary } from "@/constants"
+import { isFailedSummary, isPendingSummary } from "@/constants"
 import type { Summary, SummaryListItem } from "@/types"
 
 /** Which Summary is open, what its body is, and whether it is being made. */
@@ -43,6 +43,11 @@ export function summaryViewState(input: {
     // would invite a response the run then overwrites.
     isPending: currentSummary
       ? isPendingSummary(currentSummary) &&
+        !input.regenerating.has(currentSummary.id)
+      : false,
+    // Its latest Attempt broke (SFR-01): the failure page, not the paste panel.
+    isFailed: currentSummary
+      ? isFailedSummary(currentSummary) &&
         !input.regenerating.has(currentSummary.id)
       : false,
     running:

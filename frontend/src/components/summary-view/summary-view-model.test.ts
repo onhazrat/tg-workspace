@@ -34,8 +34,21 @@ describe("summaryViewState", () => {
       currentSummary: undefined,
       summaryBody: null,
       isPending: false,
+      isFailed: false,
       running: false,
     })
+  })
+
+  test("a Failed Summary is failed and never pending", () => {
+    const detail = saved({ status: "failed", text: "" })
+    expect(state({ detail })).toMatchObject({
+      isFailed: true,
+      isPending: false,
+    })
+    // While it is being made again it is neither.
+    expect(state({ detail, regenerating: new Set(["s1"]) }).isFailed).toBe(
+      false,
+    )
   })
 
   test("the list row wins, the detail supplies the text", () => {

@@ -5,6 +5,7 @@ import type { ArtifactListItem } from "@/types"
 import {
   ARTIFACT_KIND_LABELS,
   artifactDetail,
+  failedAttempts,
   isPendingArtifact,
 } from "./artifact-presentation"
 
@@ -23,6 +24,18 @@ describe("artifactDetail", () => {
       status: "pending",
     } as ArtifactListItem
     expect(artifactDetail(pending)).toBe("Awaiting response")
+  })
+
+  it("counts a Failed summary's failed attempts", () => {
+    const failed = (n: number) =>
+      ({
+        ...base,
+        kind: "summary",
+        status: "failed",
+        failedAttempts: n,
+      }) as ArtifactListItem
+    expect(artifactDetail(failed(1))).toBe("1 failed attempt")
+    expect(artifactDetail(failed(3))).toBe("3 failed attempts")
   })
 
   it("names the chat mode, not the stored value", () => {
@@ -56,5 +69,24 @@ describe("isPendingArtifact", () => {
     } as ArtifactListItem
     expect(isPendingArtifact(chat)).toBe(false)
     expect(isPendingArtifact(discovery)).toBe(false)
+  })
+})
+
+describe("failedAttempts", () => {
+  it("is the count for a Failed summary, and null for anything else", () => {
+    const summary = { ...base, kind: "summary", failedAttempts: 2 }
+    expect(
+      failedAttempts({ ...summary, status: "failed" } as ArtifactListItem),
+    ).toBe(2)
+    expect(
+      failedAttempts({ ...summary, status: "pending" } as ArtifactListItem),
+    ).toBeNull()
+    expect(
+      failedAttempts({
+        ...base,
+        kind: "tag",
+        status: "failed",
+      } as ArtifactListItem),
+    ).toBeNull()
   })
 })

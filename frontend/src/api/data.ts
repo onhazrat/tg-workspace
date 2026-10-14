@@ -23,6 +23,7 @@ import type {
 import type {
   ArtifactKind,
   ArtifactListItem,
+  ArtifactStatusFilter,
   BotCredential,
   Channel,
   ChannelSettingGroup,
@@ -769,6 +770,8 @@ export const dataApi = {
     kind?: ArtifactKind
     search?: string
     starred?: boolean
+    /** Only Failed or only Pending artifacts (SFR-01). */
+    status?: ArtifactStatusFilter
     limit?: number
     offset?: number
   }) => {
@@ -776,6 +779,7 @@ export const dataApi = {
     if (params?.kind) qs.set("kind", params.kind)
     if (params?.search) qs.set("search", params.search)
     if (params?.starred) qs.set("starred", "true")
+    if (params?.status) qs.set("status", params.status)
     if (params?.limit != null) qs.set("limit", String(params.limit))
     if (params?.offset != null) qs.set("offset", String(params.offset))
     const q = qs.toString()

@@ -596,6 +596,36 @@ def submit_summary(
     return summary_to_camel(summary, session.get(SummaryPayload, summary_id))
 
 
+#: The Summary's `status` when its latest Attempt did not finish (SFR-01).
+#: Beside `pending`, which keeps its one meaning: a copied prompt waiting for a
+#: pasted response. A broken Generate is never Pending.
+FAILED_STATUS = "failed"
+
+
+def own_summary(
+    session: Session, summary_id: str, *, user_id: uuid.UUID, writing: bool
+) -> Summary:
+    """The caller's Summary, or this family's 404.
+
+    `writing` picks the guard: a read is flag-gated like every by-id read, a
+    write is not, because a flag may gate visibility and never identity.
+    """
+    row = session.get(Summary, summary_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    guard = assert_owner_on_write if writing else assert_owner
+    guard(row.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+    return row
+
+
+def mark_summary_failed(session: Session, summary: Summary) -> None:
+    """Set the Failed status; the caller commits it with the Attempt."""
+    summary.extra = {**(summary.extra or {}), "status": FAILED_STATUS}
+    summary.updated_at = utc_now()
+    acting_owner.stamp(session, summary)
+    session.add(summary)
+
+
 def delete_summary(session: Session, summary_id: str, *, user_id: uuid.UUID) -> None:
     summary = session.get(Summary, summary_id)
     if not summary:

@@ -12,6 +12,8 @@ from fastapi import APIRouter, Query
 from app.api.deps import CurrentUser, SessionDep
 from app.schemas.common import StatusResponse
 from app.schemas.summaries import (
+    SummaryAttemptResponse,
+    SummaryFailureRequest,
     SummaryListItemResponse,
     SummaryResponse,
     SummarySubmitRequest,
@@ -40,6 +42,13 @@ from app.services.summaries import (
 )
 from app.services.summaries import (
     upsert_summary as upsert_summary_impl,
+)
+from app.services.summary_attempts import (
+    attempt_to_camel,
+    failure_kind,
+    list_attempts,
+    now_ms,
+    record_attempt,
 )
 from app.services.sync_meta import touch_sync
 from app.services.tag_runs import (
@@ -152,6 +161,46 @@ def delete_summary(
     delete_summary_impl(session, summary_id, user_id=current_user.id)
     touch_sync(session, "summaries")
     return StatusResponse(status="deleted")
+
+
+@router.get("/summaries/{summary_id}/attempts")
+def list_summary_attempts(
+    summary_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[SummaryAttemptResponse]:
+    """Every attempt to generate this summary, oldest first."""
+    return [
+        SummaryAttemptResponse.model_validate(attempt_to_camel(a))
+        for a in list_attempts(session, summary_id, user_id=current_user.id)
+    ]
+
+
+# SFR-01. The browser reports a Generate that broke before the server streamed
+# anything; the stream route records its own failures. In a comment rather than
+# a docstring, which would ship in the generated client.
+@router.post("/summaries/{summary_id}/failures")
+def record_summary_failure(
+    summary_id: str,
+    body: SummaryFailureRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SummaryAttemptResponse:
+    """Record a generation that failed before it started; the summary becomes failed."""
+    attempt = record_attempt(
+        session,
+        summary_id,
+        user_id=current_user.id,
+        outcome="failed",
+        kind=failure_kind(body.status),
+        error=body.error,
+        model=body.model,
+        # Nothing ran, so no AI Key was charged.
+        key_id=None,
+        started_at=now_ms(),
+    )
+    touch_sync(session, "summaries")
+    return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 
 
 @router.get("/tag-runs")

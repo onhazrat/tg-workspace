@@ -63,6 +63,8 @@ export const generateSummaryStream = async (
   scope?: PromptScope,
   /** The prompt already stored on the pending Summary; the server sends it as-is. */
   storedPrompt?: string,
+  /** The Summary this run writes; the server records an Attempt on it. */
+  summaryId?: string,
 ): Promise<LLMStreamResult> => {
   const prompt = `channels=${channels.join(",")}`
   try {
@@ -75,6 +77,7 @@ export const generateSummaryStream = async (
       temperature,
       scope,
       prompt: storedPrompt,
+      summaryId,
     })
     return { stream: wrapStream(stream), prompt, config: { temperature } }
   } catch (error: unknown) {

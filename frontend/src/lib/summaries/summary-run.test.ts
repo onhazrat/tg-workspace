@@ -1,13 +1,17 @@
 import { describe, expect, it } from "bun:test"
+import { ApiError } from "@/api/base"
 import type { PostScopeQuery } from "@/api/data"
 import { PASTED_SUMMARY_MODEL } from "@/constants"
 import type { Post, Summary } from "@/types"
 import {
   checkPastedSummary,
   countRegeneratedPosts,
+  failureReport,
   pastedSummaryRecord,
+  RecordedFailure,
   regeneratedRange,
   resolveCitedPosts,
+  streamFailure,
   summaryLLMLog,
 } from "./summary-run"
 
@@ -83,6 +87,36 @@ describe("summaryLLMLog", () => {
   })
 })
 
+describe("streamFailure", () => {
+  it("leaves an HTTP refusal for the browser to report", () => {
+    const refused = new ApiError(404, "AI key not found")
+    expect(streamFailure(refused, "x")).toBe(refused)
+  })
+
+  it("marks anything else as already recorded by the server", () => {
+    const failure = streamFailure(new Error("overloaded"), "overloaded")
+    expect(failure).toBeInstanceOf(RecordedFailure)
+    expect(failure.message).toBe("overloaded")
+  })
+})
+
+describe("failureReport", () => {
+  it("carries the status an API refusal answered with", () => {
+    expect(
+      failureReport(new ApiError(413, "Too many tokens"), "gemini-x"),
+    ).toEqual({ error: "Too many tokens", status: 413, model: "gemini-x" })
+  })
+
+  it("has no status when nothing answered", () => {
+    expect(failureReport(new TypeError("Failed to fetch"), "m")).toEqual({
+      error: "Failed to fetch",
+      status: null,
+      model: "m",
+    })
+    expect(failureReport("odd", "m").error).toBe("The summary failed.")
+  })
+})
+
 describe("checkPastedSummary", () => {
   it("refuses a row that is not awaiting a response", () => {
     const error = "This history item is not awaiting an external AI response."
@@ -90,6 +124,15 @@ describe("checkPastedSummary", () => {
     expect(checkPastedSummary({ ...pending, status: undefined }, "x")).toEqual({
       ok: false,
       error,
+    })
+  })
+
+  it("takes a paste on a Failed Summary as on a Pending one", () => {
+    const failed = { ...pending, status: "failed" as const }
+    expect(checkPastedSummary(failed, " body ")).toEqual({
+      ok: true,
+      pending: failed,
+      text: "body",
     })
   })
 

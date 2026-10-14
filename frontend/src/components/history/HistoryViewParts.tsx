@@ -6,7 +6,11 @@
 import { Search, Star } from "lucide-react"
 import type React from "react"
 import { TgButton } from "@/components/ui/tg-button"
-import type { ArtifactKind, ArtifactListItem } from "@/types"
+import type {
+  ArtifactKind,
+  ArtifactListItem,
+  ArtifactStatusFilter,
+} from "@/types"
 import { ARTIFACT_KIND_LABELS } from "./artifact-presentation"
 import { kindFilterChip } from "./history-view-model"
 
@@ -44,6 +48,38 @@ export const HistoryKindFilters: React.FC<{
         </button>
       )
     })}
+  </nav>
+)
+
+const STATUS_FILTERS: { status: ArtifactStatusFilter | null; label: string }[] =
+  [
+    { status: null, label: "All" },
+    { status: "failed", label: "Failed" },
+    { status: "pending", label: "Pending" },
+  ]
+
+/** All, Failed or Pending (SFR-01); the active one is pressed. */
+export const HistoryStatusFilters: React.FC<{
+  status: ArtifactStatusFilter | null
+  onSelect: (status: ArtifactStatusFilter | null) => void
+}> = ({ status, onSelect }) => (
+  <nav aria-label="Artifact status" className="flex flex-wrap gap-2">
+    {STATUS_FILTERS.map((candidate) => (
+      <button
+        key={candidate.label}
+        type="button"
+        aria-pressed={status === candidate.status}
+        data-testid={`history-status-${candidate.status ?? "all"}`}
+        onClick={() => onSelect(candidate.status)}
+        className={`rounded-md border px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest transition-all ${
+          status === candidate.status
+            ? "border-app-ink bg-app-ink text-app-bg"
+            : "border-app-ink/10 text-app-ink/60 hover:border-app-ink/40"
+        }`}
+      >
+        {candidate.label}
+      </button>
+    ))}
   </nav>
 )
 

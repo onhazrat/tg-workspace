@@ -6421,7 +6421,8 @@ export type StatusResponse = {
 /**
  * SummaryArtifactResponse
  *
- * `status` is `"pending"` until an externally-run prompt is pasted back.
+ * `status` is `"pending"` until an externally-run prompt is pasted back,
+ * and `"failed"` while its latest Attempt did not finish (SFR-01).
  *
  * `autoRegenerate` and `autoPublish` are here rather than left to the Summary
  * tab because History is where they are toggled, and reading them out of
@@ -6481,6 +6482,78 @@ export type SummaryArtifactResponse = {
      * Autopublish
      */
     autoPublish?: boolean;
+    /**
+     * Failedattempts
+     */
+    failedAttempts?: number;
+};
+
+/**
+ * SummaryAttemptResponse
+ *
+ * One request for a Summary's prose and how it ended (ADR-030).
+ *
+ * Closed and fully declared: every key is always present, so a ``null`` here
+ * is the column's own value rather than an invented one. Times are epoch
+ * milliseconds, like every artifact timestamp.
+ */
+export type SummaryAttemptResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Summaryid
+     */
+    summaryId: string;
+    /**
+     * Attempt
+     */
+    attempt: number;
+    /**
+     * Outcome
+     */
+    outcome: 'running' | 'succeeded' | 'failed' | 'stopped' | 'kept_partial';
+    /**
+     * Kind
+     */
+    kind: 'quota' | 'auth' | 'transient' | 'model' | 'limit' | 'empty' | 'other' | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Keyid
+     */
+    keyId: string | null;
+    /**
+     * Partialtext
+     */
+    partialText: string | null;
+    /**
+     * Partialdismissedat
+     */
+    partialDismissedAt: number | null;
+    /**
+     * Automatic
+     */
+    automatic: boolean;
+    /**
+     * Scheduled
+     */
+    scheduled: boolean;
+    /**
+     * Startedat
+     */
+    startedAt: number;
+    /**
+     * Endedat
+     */
+    endedAt: number | null;
 };
 
 /**
@@ -6497,6 +6570,30 @@ export type SummaryDerivation = {
      * Mode
      */
     mode: 'successor' | 'repeat';
+};
+
+/**
+ * SummaryFailureRequest
+ *
+ * A Generate that broke before the server streamed anything.
+ *
+ * The browser reports what it met (a token-limit refusal, a failed sync, a
+ * dropped connection) and the HTTP status it carried, if any. The server
+ * decides the kind from that status.
+ */
+export type SummaryFailureRequest = {
+    /**
+     * Error
+     */
+    error: string;
+    /**
+     * Status
+     */
+    status?: number | null;
+    /**
+     * Model
+     */
+    model: string;
 };
 
 /**
@@ -6581,6 +6678,10 @@ export type SummaryRequest = {
      * Prompt
      */
     prompt?: string | null;
+    /**
+     * Summaryid
+     */
+    summaryId?: string | null;
 };
 
 /**
@@ -10471,6 +10572,68 @@ export type DataUpsertSummaryResponses = {
 
 export type DataUpsertSummaryResponse = DataUpsertSummaryResponses[keyof DataUpsertSummaryResponses];
 
+export type DataListSummaryAttemptsData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts';
+};
+
+export type DataListSummaryAttemptsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataListSummaryAttemptsError = DataListSummaryAttemptsErrors[keyof DataListSummaryAttemptsErrors];
+
+export type DataListSummaryAttemptsResponses = {
+    /**
+     * Response Data-List Summary Attempts
+     *
+     * Successful Response
+     */
+    200: Array<SummaryAttemptResponse>;
+};
+
+export type DataListSummaryAttemptsResponse = DataListSummaryAttemptsResponses[keyof DataListSummaryAttemptsResponses];
+
+export type DataRecordSummaryFailureData = {
+    body: SummaryFailureRequest;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/failures';
+};
+
+export type DataRecordSummaryFailureErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRecordSummaryFailureError = DataRecordSummaryFailureErrors[keyof DataRecordSummaryFailureErrors];
+
+export type DataRecordSummaryFailureResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataRecordSummaryFailureResponse = DataRecordSummaryFailureResponses[keyof DataRecordSummaryFailureResponses];
+
 export type DataListTagRunsData = {
     body?: never;
     path?: never;
@@ -10858,6 +11021,10 @@ export type DataListArtifactsData = {
          * Starred
          */
         starred?: boolean;
+        /**
+         * Status
+         */
+        status?: 'failed' | 'pending' | null;
         /**
          * Limit
          */

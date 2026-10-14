@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -37,6 +39,7 @@ from app.schemas.ai import (
     TranslateResponse,
 )
 from app.schemas.post_filter import to_steps
+from app.schemas.summaries import AttemptKind
 from app.services.ai_keys import (
     AI_KEY_REJECTED_DETAIL,
     Purpose,
@@ -49,6 +52,12 @@ from app.services.prompt_assembly import (
     PromptScope,
     assemble_posts_text,
     assemble_tag_posts_text,
+)
+from app.services.summaries import own_summary
+from app.services.summary_attempts import (
+    failure_kind,
+    now_ms,
+    record_attempt,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -160,8 +169,48 @@ def _failure_detail(exc: BaseException, key: ResolvedKey) -> str:
     return f"The AI provider refused the request ({code}): {message}"
 
 
+#: What an Attempt records when the model answered nothing.
+EMPTY_ANSWER_DETAIL = "The model returned an empty response."
+#: What an Attempt records when the browser went away mid-stream.
+DROPPED_DETAIL = "The connection dropped before the answer finished."
+
+
+@dataclass(frozen=True)
+class _Attempt:
+    """The Summary a stream writes, recorded as an Attempt when it ends."""
+
+    summary_id: str
+    user_id: uuid.UUID
+    model: str
+    key_id: str | None
+    started_at: int
+
+    def record(
+        self,
+        session: Session,
+        text: str,
+        kind: AttemptKind | None = None,
+        error: str | None = None,
+    ) -> None:
+        record_attempt(
+            session,
+            self.summary_id,
+            user_id=self.user_id,
+            outcome="succeeded" if kind is None else "failed",
+            kind=kind,
+            error=error,
+            model=self.model,
+            key_id=self.key_id,
+            started_at=self.started_at,
+            partial_text=None if kind is None else text,
+        )
+
+
 async def _sse_text(
-    chunks: AsyncIterator[str], session: Session, key: ResolvedKey
+    chunks: AsyncIterator[str],
+    session: Session,
+    key: ResolvedKey,
+    attempt: _Attempt | None = None,
 ) -> AsyncIterator[str]:
     """Frame a Provider's text stream as SSE for `sseTextStream`.
 
@@ -171,10 +220,21 @@ async def _sse_text(
     instead kept that rule but cut the connection, so the browser could only
     say "an unexpected error occurred" about a model that was merely busy. The
     `error` frame keeps the rule and says why.
+
+    With an `attempt`, however the stream ends is recorded on its Summary, and
+    an empty answer is a failure too: it ends on an `error` frame.
     """
+    parts: list[str] = []
     try:
         async for chunk in chunks:
+            parts.append(chunk)
             yield f"data: {json.dumps({'text': chunk})}\n\n"
+    except GeneratorExit, asyncio.CancelledError:
+        # The browser went away. Nothing can be sent, but the Summary keeps
+        # the reason and what had arrived.
+        if attempt is not None:
+            attempt.record(session, "".join(parts), "transient", DROPPED_DETAIL)
+        raise
     except Exception as exc:
         _note_rejection(session, key, exc)
         detail = _failure_detail(exc, key)
@@ -187,8 +247,22 @@ async def _sse_text(
             # the traceback is what finds it. Keys travel in headers, never in
             # URLs or messages this process builds.
             logger.error("AI stream failed unexpectedly", exc_info=exc)
+        if attempt is not None:
+            attempt.record(
+                session,
+                "".join(parts),
+                failure_kind(_provider_code(exc)),
+                detail,
+            )
         yield f"data: {json.dumps({'error': detail})}\n\n"
         return
+    if attempt is not None:
+        text = "".join(parts)
+        if not text.strip():
+            attempt.record(session, text, "empty", EMPTY_ANSWER_DETAIL)
+            yield f"data: {json.dumps({'error': EMPTY_ANSWER_DETAIL})}\n\n"
+            return
+        attempt.record(session, text)
     yield "data: [DONE]\n\n"
 
 
@@ -351,6 +425,9 @@ async def api_summary_stream(
     body: SummaryRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
     model = body.model or default_model()
+    if body.summary_id is not None:
+        # Before anything is resolved or spent: a foreign Summary is a 404.
+        own_summary(session, body.summary_id, user_id=current_user.id, writing=True)
     provider, ai_key = _provider_for(
         session,
         user_id=current_user.id,
@@ -372,12 +449,22 @@ async def api_summary_stream(
             scope=body.scope,
         ),
     )
+    attempt = None
+    if body.summary_id is not None:
+        attempt = _Attempt(
+            summary_id=body.summary_id,
+            user_id=current_user.id,
+            model=model,
+            key_id=ai_key.credential_id,
+            started_at=now_ms(),
+        )
 
     return StreamingResponse(
         _sse_text(
             provider.stream(prompt, model=model, temperature=body.temperature),
             session,
             ai_key,
+            attempt,
         ),
         media_type="text/event-stream",
     )

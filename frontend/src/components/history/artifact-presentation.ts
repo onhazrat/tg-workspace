@@ -31,10 +31,14 @@ export const ARTIFACT_KIND_ICONS: Record<ArtifactKind, string> = {
  */
 export function artifactDetail(artifact: ArtifactListItem): string {
   switch (artifact.kind) {
-    case "summary":
+    case "summary": {
+      const failed = failedAttempts(artifact)
+      if (failed !== null)
+        return `${failed} failed attempt${failed === 1 ? "" : "s"}`
       return artifact.status === "pending"
         ? "Awaiting response"
         : `${artifact.postCount ?? 0} posts`
+    }
     case "chat":
       return `${artifact.messageCount ?? 0} messages · ${
         artifact.mode === "semantic" ? "Semantic" : "Selected posts"
@@ -52,6 +56,16 @@ export function artifactDetail(artifact: ArtifactListItem): string {
 export function artifactChannelsLine(artifact: ArtifactListItem): string {
   const channels = artifact.scope?.channels
   return channels?.length ? channels.join(", ") : "No channels"
+}
+
+/**
+ * A Failed Summary's count of failed Attempts (SFR-01), or `null` for any
+ * other row. Failed is a Summary's state only; Tag runs join later.
+ */
+export function failedAttempts(artifact: ArtifactListItem): number | null {
+  return artifact.kind === "summary" && artifact.status === "failed"
+    ? (artifact.failedAttempts ?? 0)
+    : null
 }
 
 /** A pending artifact is one whose externally-run prompt has not come back. */

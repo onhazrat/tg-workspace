@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
+import { useAiKeys } from "@/hooks/useAiKeys"
 import {
   useInvalidateSummaries,
   useSummariesHistory,
@@ -15,10 +16,14 @@ import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { useCitedPosts } from "../hooks/useCitedPosts"
-import { useSummaryDetailQuery } from "../hooks/useSummaries"
+import {
+  useSummaryAttemptsQuery,
+  useSummaryDetailQuery,
+} from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
+import { FailedSummaryPanel } from "./summary-view/FailedSummaryPanel"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -48,6 +53,12 @@ export const SummaryView: React.FC = () => {
     summaryId: currentSummaryId,
   })
   const settings = useSettings()
+  // The Account's zone, as the published metadata uses; the browser's only
+  // until the Account has one.
+  const zone = {
+    timeZone:
+      settings.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }
 
   // The prompt panel below needs the full promptText, which the list
   // projection omits (it was ~94% of that payload).
@@ -68,14 +79,17 @@ export const SummaryView: React.FC = () => {
     [refs, resolve, citedLoading, currentSummaryId, currentSummaryDetail],
   )
 
-  const { currentSummary, summaryBody, isPending, running } = summaryViewState({
-    history: summariesHistory,
-    currentSummaryId,
-    detail: currentSummaryDetail,
-    streamed: summary,
-    regenerating: regeneratingSummaries,
-    summarizing,
-  })
+  const { currentSummary, summaryBody, isPending, isFailed, running } =
+    summaryViewState({
+      history: summariesHistory,
+      currentSummaryId,
+      detail: currentSummaryDetail,
+      streamed: summary,
+      regenerating: regeneratingSummaries,
+      summarizing,
+    })
+  const { data: attempts } = useSummaryAttemptsQuery(currentSummaryId, isFailed)
+  const aiKeys = useAiKeys()
 
   const workspace = useCitationWorkspace()
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
@@ -125,6 +139,17 @@ export const SummaryView: React.FC = () => {
           promptText={currentSummaryDetail?.promptText}
           body={summaryBody}
           isPending={isPending}
+          isFailed={isFailed}
+          failurePanel={(s) => (
+            <FailedSummaryPanel
+              summary={s}
+              promptText={currentSummaryDetail?.promptText}
+              attempts={attempts ?? []}
+              zone={zone}
+              keyLabel={(id) => aiKeys.find((k) => k.id === id)?.label}
+              onPaste={() => setPasteModalOpen(true)}
+            />
+          )}
           summarizing={summarizing}
           running={running}
           direction={bodyDirection}
@@ -163,13 +188,7 @@ export const SummaryView: React.FC = () => {
           workspace={workspace}
           textSize={settings.summaryTextSize}
           onTextSizeChange={settings.setSummaryTextSize}
-          // The Account's zone, as the published metadata uses; the browser's
-          // only until the Account has one.
-          zone={{
-            timeZone:
-              settings.timeZone ||
-              Intl.DateTimeFormat().resolvedOptions().timeZone,
-          }}
+          zone={zone}
           emptyState={
             <GoToActionEmptyState
               what="summary"
@@ -179,7 +198,7 @@ export const SummaryView: React.FC = () => {
         />
       </div>
 
-      {currentSummary && isPending && (
+      {currentSummary && (isPending || isFailed) && (
         <PasteSummaryModal
           isOpen={pasteModalOpen}
           onClose={() => setPasteModalOpen(false)}

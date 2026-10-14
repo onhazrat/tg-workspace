@@ -7,7 +7,11 @@ import { useCallback } from "react"
 
 import { api } from "@/api"
 import { findTabArtifacts } from "@/lib/workspace-tabs"
-import type { ArtifactKind, ArtifactListItem } from "@/types"
+import type {
+  ArtifactKind,
+  ArtifactListItem,
+  ArtifactStatusFilter,
+} from "@/types"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
 
@@ -28,16 +32,18 @@ export function useArtifactsQuery(
   kind: ArtifactKind | null,
   search: string,
   starred = false,
+  status: ArtifactStatusFilter | null = null,
 ) {
   const trimmed = search.trim()
   return useInfiniteQuery({
-    queryKey: queryKeys.artifacts(kind, trimmed, starred),
+    queryKey: queryKeys.artifacts(kind, trimmed, starred, status),
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       api.listArtifacts({
         kind: kind ?? undefined,
         search: trimmed || undefined,
         starred: starred || undefined,
+        status: status ?? undefined,
         limit: ARTIFACT_PAGE_SIZE,
         offset: pageParam as number,
       }),
@@ -55,8 +61,9 @@ export function useArtifacts(
   kind: ArtifactKind | null,
   search: string,
   starred = false,
+  status: ArtifactStatusFilter | null = null,
 ): { rows: ArtifactListItem[]; query: ReturnType<typeof useArtifactsQuery> } {
-  const query = useArtifactsQuery(kind, search, starred)
+  const query = useArtifactsQuery(kind, search, starred, status)
   return { rows: query.data?.pages.flat() ?? [], query }
 }
 

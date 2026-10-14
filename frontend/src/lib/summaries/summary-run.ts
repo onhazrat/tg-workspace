@@ -3,8 +3,13 @@
  * tested directly. The context keeps the streaming, the saving and the state;
  * the lookup and count calls are passed in.
  */
+import { ApiError } from "@/api/base"
 import type { PostScopeQuery } from "@/api/data"
-import { isPendingSummary, resolvePastedSummaryModel } from "@/constants"
+import {
+  isFailedSummary,
+  isPendingSummary,
+  resolvePastedSummaryModel,
+} from "@/constants"
 import { floorToMinute } from "@/lib/analysis-window"
 import { scopeRange } from "@/lib/scope/artifact-scope"
 import type { LLMLog, Post, Summary } from "@/types"
@@ -63,11 +68,42 @@ export function summaryLLMLog(run: {
 }
 
 /** A pasted response the pending Summary can take, or why it cannot. */
+/** A Generate failure the stream route already recorded as an Attempt. */
+export class RecordedFailure extends Error {}
+
+/**
+ * What a broken summary stream becomes. An HTTP refusal came before the stream
+ * opened, so nothing recorded it and the browser reports it. Anything else
+ * ended a stream the server recorded: an `error` frame, or a connection that
+ * dropped under it.
+ */
+export function streamFailure(err: unknown, reason: string): Error {
+  return err instanceof ApiError ? err : new RecordedFailure(reason)
+}
+
+/**
+ * What the browser reports when a Generate broke before the server streamed
+ * (SFR-01): the reason, and the HTTP status if anything answered. The server
+ * decides the kind from that status, so the status is all that is sent.
+ */
+export function failureReport(
+  err: unknown,
+  model: string,
+): { error: string; status: number | null; model: string } {
+  const message = (err instanceof Error && err.message) || "The summary failed."
+  return {
+    // The server takes at most 2,000 characters.
+    error: message.slice(0, 2000),
+    status: err instanceof ApiError ? err.status : null,
+    model,
+  }
+}
+
 export function checkPastedSummary(
   pending: Summary | undefined,
   text: string,
 ): { ok: true; pending: Summary; text: string } | { ok: false; error: string } {
-  if (!pending || !isPendingSummary(pending))
+  if (!pending || !(isPendingSummary(pending) || isFailedSummary(pending)))
     return {
       ok: false,
       error: "This history item is not awaiting an external AI response.",

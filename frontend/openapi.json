@@ -3445,6 +3445,92 @@
         }
       }
     },
+    "/api/v1/data/summaries/{summary_id}/attempts": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Summary Attempts",
+        "description": "Every attempt to generate this summary, oldest first.",
+        "operationId": "data-list_summary_attempts",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SummaryAttemptResponse"
+                  },
+                  "title": "Response Data-List Summary Attempts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/summaries/{summary_id}/failures": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Record Summary Failure",
+        "description": "Record a generation that failed before it started; the summary becomes failed.",
+        "operationId": "data-record_summary_failure",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "summary_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Summary Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SummaryFailureRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/data/tag-runs": {
       "get": {
         "tags": ["data"],
@@ -3990,6 +4076,18 @@
               "type": "boolean",
               "default": false,
               "title": "Starred"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "enum": ["failed", "pending"], "type": "string" },
+                { "type": "null" }
+              ],
+              "title": "Status"
             }
           },
           {
@@ -12338,12 +12436,96 @@
             "type": "boolean",
             "title": "Autopublish",
             "default": false
+          },
+          "failedAttempts": {
+            "type": "integer",
+            "title": "Failedattempts",
+            "default": 0
           }
         },
         "type": "object",
         "required": ["id", "kind"],
         "title": "SummaryArtifactResponse",
-        "description": "`status` is `\"pending\"` until an externally-run prompt is pasted back.\n\n`autoRegenerate` and `autoPublish` are here rather than left to the Summary\ntab because History is where they are toggled, and reading them out of\n`extra` costs nothing once `isStarred` is already being read."
+        "description": "`status` is `\"pending\"` until an externally-run prompt is pasted back,\nand `\"failed\"` while its latest Attempt did not finish (SFR-01).\n\n`autoRegenerate` and `autoPublish` are here rather than left to the Summary\ntab because History is where they are toggled, and reading them out of\n`extra` costs nothing once `isStarred` is already being read."
+      },
+      "SummaryAttemptResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "summaryId": { "type": "string", "title": "Summaryid" },
+          "attempt": { "type": "integer", "title": "Attempt" },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "stopped",
+              "kept_partial"
+            ],
+            "title": "Outcome"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "quota",
+                  "auth",
+                  "transient",
+                  "model",
+                  "limit",
+                  "empty",
+                  "other"
+                ]
+              },
+              { "type": "null" }
+            ],
+            "title": "Kind"
+          },
+          "error": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Error"
+          },
+          "model": { "type": "string", "title": "Model" },
+          "keyId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Keyid"
+          },
+          "partialText": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Partialtext"
+          },
+          "partialDismissedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Partialdismissedat"
+          },
+          "automatic": { "type": "boolean", "title": "Automatic" },
+          "scheduled": { "type": "boolean", "title": "Scheduled" },
+          "startedAt": { "type": "integer", "title": "Startedat" },
+          "endedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Endedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "summaryId",
+          "attempt",
+          "outcome",
+          "kind",
+          "error",
+          "model",
+          "keyId",
+          "partialText",
+          "partialDismissedAt",
+          "automatic",
+          "scheduled",
+          "startedAt",
+          "endedAt"
+        ],
+        "title": "SummaryAttemptResponse",
+        "description": "One request for a Summary's prose and how it ended (ADR-030).\n\nClosed and fully declared: every key is always present, so a ``null`` here\nis the column's own value rather than an invented one. Times are epoch\nmilliseconds, like every artifact timestamp."
       },
       "SummaryDerivation": {
         "properties": {
@@ -12359,6 +12541,26 @@
         "required": ["summaryId", "mode"],
         "title": "SummaryDerivation",
         "description": "The Artifact a submission reads its Scope off, and how."
+      },
+      "SummaryFailureRequest": {
+        "properties": {
+          "error": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Error"
+          },
+          "status": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Status"
+          },
+          "model": { "type": "string", "maxLength": 255, "title": "Model" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["error", "model"],
+        "title": "SummaryFailureRequest",
+        "description": "A Generate that broke before the server streamed anything.\n\nThe browser reports what it met (a token-limit refusal, a failed sync, a\ndropped connection) and the HTTP status it carried, if any. The server\ndecides the kind from that status."
       },
       "SummaryListItemResponse": {
         "properties": {
@@ -12444,6 +12646,10 @@
           "prompt": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Prompt"
+          },
+          "summaryId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Summaryid"
           }
         },
         "type": "object",

@@ -122,6 +122,11 @@ INVENTORY: dict[str, str] = {
     "settings_store.py": AGGREGATE,
     "user_settings.py": AGGREGATE,
     "summaries.py": AGGREGATE,
+    # Owns `tg_summary_attempts` (SFR-01, ADR-030) and is its only writer. Not
+    # more of `summaries.py`: an Attempt is a record of its own with its own
+    # lifetime rules (a dismissed Partial response is trimmed, the Summary is
+    # not). Marking the Summary Failed goes through `summaries.py`.
+    "summary_attempts.py": AGGREGATE,
     "sync_meta.py": AGGREGATE,
     # Owns `view_as_sessions` (ticket 26) and is its only writer. Small on
     # purpose: a View-as session *is* its token, so nothing here is consulted

@@ -4,7 +4,7 @@ import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { PromptScope } from "@/api/data"
-import { dataSendSummaryPublication } from "@/client"
+import { dataRecordSummaryFailure, dataSendSummaryPublication } from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
@@ -43,10 +43,13 @@ import {
 import {
   checkPastedSummary,
   countRegeneratedPosts,
+  failureReport,
   NO_POSTS_MESSAGE,
   pastedSummaryRecord,
+  RecordedFailure,
   regeneratedRange,
   resolveCitedPosts,
+  streamFailure,
   summaryLLMLog,
 } from "@/lib/summaries/summary-run"
 import { useApiStatus } from "../hooks/useApiStatus"
@@ -81,6 +84,9 @@ interface AIContextType {
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
+
+/** A Generate's row is never taken back once opened (SFR-01). */
+const KEEP_ROW: ProvisionalRow = { opened: () => {}, keep: () => {} }
 
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -189,7 +195,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.warning("Server offline — summary generation disabled.")
       return
     }
-    await syncStaleSelection()
+    // A failed sync is not the end of a Generate: with Posts in range it
+    // leaves a Failed Summary that says why (SFR-01). Without any, there was
+    // nothing to ask for, and the toast says so.
+    const syncError = await syncStaleSelection().then(
+      () => null,
+      (err: unknown) => err,
+    )
     const names = selectedChannelNames()
     const posts = await promptPosts(
       await getPromptPostsInput(),
@@ -197,7 +209,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       api.getPostsCounts,
     )
     if (posts.postCount === 0) {
-      toast.error(NO_POSTS_MESSAGE)
+      toast.error(
+        syncError ? errorText(syncError, NO_POSTS_MESSAGE) : NO_POSTS_MESSAGE,
+      )
       return
     }
 
@@ -206,9 +220,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // The empty Summary tab (or a new one), which the finished run fills.
     workspaceTabs.openTab("summary")
     try {
-      await withProvisionalRow(deleteSummary, (row) =>
-        streamSummary(names, posts, row),
-      )
+      await streamSummary(names, posts, syncError)
     } catch (err: unknown) {
       console.error(err)
       toast.error(
@@ -219,35 +231,53 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
+  /**
+   * Generate: open the Summary, then build its prompt and stream the answer.
+   *
+   * Once the Summary exists it is never deleted (SFR-01). Anything that breaks
+   * after that leaves it Failed with an Attempt saying why: the stream route
+   * records its own failures, and a failure before the stream opened is
+   * reported here, with the HTTP status it carried, for the server to classify.
+   */
   const streamSummary = async (
     names: string[],
     posts: PromptPosts,
-    row: ProvisionalRow,
+    syncError: unknown,
   ) => {
     const newId = crypto.randomUUID()
-    // File exactly what Copy files, before the model is asked: a `pending`
-    // row holding its prompt. From here a failed run leaves an item that can
-    // still be finished by pasting any model's answer, rather than nothing.
-    const scope = await openSummary(newId, names, posts, row, {
+    // The submission opens the row; failing here leaves nothing to keep.
+    const scope = await openSummary(newId, names, posts, KEEP_ROW, {
       status: "pending",
     })
-    const pendingPrompt = await getSummaryPrompt(
-      names,
-      channelsText(),
-      posts.postsText,
-      aiLanguage,
-      selectedModel,
-      aiTemperature,
-      scope,
-    )
-    await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
-    row.keep()
     // Generating, not waiting: while the run is live the item shows as
     // running and refuses a paste, which the finished run would overwrite.
     setRegeneratingSummaries((prev) => new Set(prev).add(newId))
     try {
       await loadHistory()
+      if (syncError) throw syncError
+      // File exactly what Copy files, before the model is asked: a row
+      // holding its prompt, so a failed run can still be finished by paste.
+      const pendingPrompt = await getSummaryPrompt(
+        names,
+        channelsText(),
+        posts.postsText,
+        aiLanguage,
+        selectedModel,
+        aiTemperature,
+        scope,
+      )
+      await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
       await fillPendingSummary(newId, posts, scope, pendingPrompt, names)
+    } catch (err: unknown) {
+      if (!(err instanceof RecordedFailure))
+        await dataRecordSummaryFailure({
+          path: { summary_id: newId },
+          body: failureReport(err, selectedModel),
+        }).catch(console.error)
+      await showFailed(newId)
+      throw new Error(
+        `${errorText(err, "The summary failed.")} The Summary is saved as Failed in History.`,
+      )
     } finally {
       setRegeneratingSummaries((prev) => {
         const next = new Set(prev)
@@ -255,6 +285,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         return next
       })
     }
+  }
+
+  /** Show the Failed Summary's page, not the half-streamed buffer. */
+  const showFailed = async (id: string) => {
+    setSummary(null)
+    workspaceTabs.createTab("summary", id)
+    // Its tab may hold the pending row already; this also refetches Attempts.
+    await queryClient.invalidateQueries({ queryKey: queryKeys.summary(id) })
+    await loadHistory()
   }
 
   /** Ask the model the stored prompt and fill the pending Summary with it. */
@@ -265,14 +304,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     pendingPrompt: string,
     names: string[],
   ) => {
-    /** Show the item that is waiting, not the half-streamed buffer. */
-    const leftPending = (reason: string) => {
-      setSummary(null)
-      workspaceTabs.createTab("summary", id)
-      return new Error(
-        `${reason} The prompt is saved in History, waiting for a response you can paste.`,
-      )
-    }
     const startTime = Date.now()
     /**
      * Never fatal: losing the log must not cost the Summary. It keeps the
@@ -315,6 +346,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       aiTemperature,
       scope,
       pendingPrompt,
+      id,
     )
     let run: Awaited<ReturnType<typeof readStream>>
     try {
@@ -323,11 +355,14 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       const reason = errorText(err, "The AI provider failed.")
       // A failed log row with the reason, like the scheduled path files.
       await log(prompt, config, "", { error: reason })
-      throw leftPending(reason)
+      throw streamFailure(err, reason)
     }
     const { text, lastChunk } = run
     const logged = await log(prompt, config, text, lastChunk)
-    if (!text) throw leftPending("The model returned an empty response.")
+    // The server records an empty answer and ends on an `error` frame, so
+    // this is only the guard it always was.
+    if (!text)
+      throw new RecordedFailure("The model returned an empty response.")
 
     try {
       // Only what the run produced. The Scope is already on the row and the
@@ -345,7 +380,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         citedPosts: await resolveCitedPosts(text, undefined, lookupPosts),
       } as unknown as Summary)
     } catch (err: unknown) {
-      throw leftPending(
+      throw new Error(
         `Saving the summary failed: ${errorText(err, "unknown error")}.${
           logged ? " The model's answer is in the AI logs." : ""
         }`,

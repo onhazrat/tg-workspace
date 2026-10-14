@@ -82,6 +82,8 @@ function renderSummary(
       promptText={undefined}
       body={prose}
       isPending={false}
+      isFailed={false}
+      failurePanel={() => null}
       summarizing={false}
       running={false}
       direction={{ dir: options.dir ?? "ltr", className: "" }}

@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
+import { dataListSummaryAttempts } from "@/client"
+
 import { getSummary, listSummaries } from "@/lib/summaries/store"
 
 import type { SummaryListItem } from "@/types"
@@ -44,6 +46,19 @@ export function useSummarySearchQuery(query: string) {
  * list payload; anything that needs them fetches the row it is actually
  * looking at.
  */
+/**
+ * A Summary's Attempts, oldest first (SFR-01). Only fetched for a Summary that
+ * needs them: a finished one that worked first time looks as it always did.
+ */
+export function useSummaryAttemptsQuery(id: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.summaryAttempts(id ?? ""),
+    queryFn: () =>
+      dataListSummaryAttempts({ path: { summary_id: id as string } }),
+    enabled: !!id && enabled,
+  })
+}
+
 export function useSummaryDetailQuery(id: string | null) {
   return useQuery({
     queryKey: queryKeys.summary(id ?? ""),

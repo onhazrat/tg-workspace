@@ -536,6 +536,51 @@ class SummaryPayload(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class SummaryAttempt(SQLModel, table=True):
+    """One request for a Summary's prose, and how it ended (ADR-030).
+
+    Kept for the life of its Summary and deleted with it: the foreign key
+    cascades, unlike `SummaryPayload`'s missing one, because an Attempt means
+    nothing without the Summary it tried to write. Never pruned with the AI
+    logs, which is the reason it is a table and not a log row.
+    `services/summary_attempts.py` is its only writer.
+    """
+
+    __tablename__ = "tg_summary_attempts"
+    __table_args__ = (
+        Index("ux_tg_summary_attempts_number", "summary_id", "attempt", unique=True),
+    )
+
+    id: str = Field(primary_key=True)
+    summary_id: str = Field(foreign_key="tg_summaries.id", ondelete="CASCADE")
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    #: 1, 2, 3... per Summary.
+    attempt: int
+    #: `running` | `succeeded` | `failed` | `stopped` | `kept_partial`.
+    outcome: str
+    #: `quota` | `auth` | `transient` | `model` | `limit` | `empty` | `other`,
+    #: decided on the server from a status code, never from message text.
+    kind: str | None = None
+    error: str | None = Field(default=None, sa_column=Column(Text))
+    model: str
+    #: The AI Key it ran on; no foreign key, because a deleted Key must not
+    #: take the record of what it was used for with it.
+    key_id: str | None = None
+    #: Text produced before the stream broke or was stopped.
+    partial_text: str | None = Field(default=None, sa_column=Column(Text))
+    partial_dismissed_at: int | None = Field(
+        default=None, sa_column=_ms_ts(nullable=True)
+    )
+    automatic: bool = False
+    scheduled: bool = False
+    started_at: int = Field(default=0, sa_column=_ms_ts())
+    ended_at: int | None = Field(default=None, sa_column=_ms_ts(nullable=True))
+
+
 class ChatSession(SQLModel, table=True):
     """A saved conversation — a first-class artifact, not a summary in disguise.
 

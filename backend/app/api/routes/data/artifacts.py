@@ -38,6 +38,7 @@ def list_artifacts(
     kind: Literal["summary", "chat", "tag", "discovery"] | None = Query(default=None),
     search: str | None = Query(default=None),
     starred: bool = Query(default=False),
+    status: Literal["failed", "pending"] | None = Query(default=None),
     limit: int = Query(
         default=DEFAULT_ARTIFACT_PAGE_SIZE, ge=1, le=MAX_ARTIFACT_PAGE_SIZE
     ),
@@ -60,6 +61,7 @@ def list_artifacts(
             kind=kind,
             search=search,
             starred=starred,
+            status=status,
             limit=limit,
             offset=offset,
             user_id=current_user.id,

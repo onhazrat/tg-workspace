@@ -108,6 +108,7 @@ from app.models_tg import (
     QuotaUsage,
     SettlingCurveFit,
     Summary,
+    SummaryAttempt,
     SummaryPayload,
     SyncJob,
     SyncLog,
@@ -158,6 +159,9 @@ SCOPES: dict[type[SQLModel], Scope] = {
     ChannelFollow: Scope.USER_OWNED,
     Summary: Scope.USER_OWNED,
     SummaryPayload: Scope.USER_OWNED,
+    # A Summary's Attempts (ADR-030): its own record of why it failed, so
+    # its owner's, and stamped with the Summary's owner when written.
+    SummaryAttempt: Scope.USER_OWNED,
     ChatSession: Scope.USER_OWNED,
     ChatSessionPayload: Scope.USER_OWNED,
     DiscoverReport: Scope.USER_OWNED,
@@ -392,6 +396,10 @@ CREATED_AFTER_THE_BACKFILL: dict[type[SQLModel], str] = {
     ),
     FollowJob: (
         "a2b3c4d5e6f7 (ticket 36) creates `tg_follow_jobs` with a NOT NULL "
+        "`user_id`, so it has never held a row nobody owns"
+    ),
+    SummaryAttempt: (
+        "a3f0c8e1b5d7 (SFR-01) creates `tg_summary_attempts` with a NOT NULL "
         "`user_id`, so it has never held a row nobody owns"
     ),
 }
