@@ -20,6 +20,7 @@
 | [discover-probe-queue-plan.md](discover-probe-queue-plan.md) | Moving Discover handle-probing out of a React effect into a server-owned queue (2026-07-30, PR #51) — decisions with the alternatives rejected, plus §5, a prioritised survey of architectural work still outstanding (`bulk_follow` durability, `useSyncQueue`, client/server drift) |
 | [architecture-entropy-audit.md](architecture-entropy-audit.md) | Measured audit of code and architecture entropy (2026-07-31) — the two coexisting data architectures, 11 ranked entropy sources, what is load-bearing and must not be "simplified", and §6: whether to adopt the template's generated-client pattern codebase-wide |
 | [architecture-simplification-plan.md](architecture-simplification-plan.md) | The refactor backlog derived from that audit (2026-07-31) — target architecture, ~30 independently shippable units across 9 workstreams, sequencing, and re-runnable success metrics |
+| [directory-crawl/](directory-crawl/) | The Channel Directory crawler (2026-10-15): how it works, staging measurements, a research report on crawl prioritisation, and the proposed priority design |
 
 ## Also at repo root
 
