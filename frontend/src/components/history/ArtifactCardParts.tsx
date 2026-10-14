@@ -48,7 +48,7 @@ export const ArtifactCardHeading: React.FC<{
         <TgMetaChip>{ARTIFACT_KIND_LABELS[artifact.kind]}</TgMetaChip>
         {pending &&
           (failedAttempts !== undefined ? (
-            // PROTOTYPE (variant D): failed, not waiting.
+            // PROTOTYPE (variant F): failed, not waiting.
             <span className="rounded-md bg-red-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-red-800 dark:text-red-200">
               Failed{failedAttempts > 1 ? ` ×${failedAttempts}` : ""}
             </span>

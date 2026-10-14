@@ -25,7 +25,7 @@ import {
   useVariant,
 } from "./summary-error-prototype/PrototypeSwitcher"
 import { StartFailurePanel } from "./summary-error-prototype/StartFailurePanel"
-import { VariantD } from "./summary-error-prototype/VariantD"
+import { VariantF } from "./summary-error-prototype/VariantF"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -129,13 +129,10 @@ export const SummaryView: React.FC = () => {
           body below — when it lived here, English chrome inherited RTL from a
           Persian report and rendered its trailing period on the wrong side. */}
       <div className="relative border border-app-ink/10 bg-app-card rounded-xl p-8 md:p-12 shadow-sm">
-        {/* PROTOTYPE: variant D replaces the pending panel. */}
+        {/* PROTOTYPE: variant F replaces the pending panel. */}
         {isPending && currentSummary && variant !== "0" ? (
           <>
-            <VariantD
-              serverRuns={variant === "F"}
-              sizeCheck={variant === "F"}
-              showDismissed={variant === "F"}
+            <VariantF
               key={currentSummary.id}
               variant={variant}
               summary={currentSummary}

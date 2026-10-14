@@ -3,99 +3,51 @@
 Question: when Generate fails and the Summary tab stays on the pending "Paste AI
 Response" panel, how should it show the error and offer Retry?
 
-Run: `cd frontend && PLAYWRIGHT_API_URL=<api-base> bun run dev --port 5193`, log in,
-open a pending Summary, and add `&variant=D` to the URL. The floating bar
-and the left/right keys cycle variants.
+## Verdict (2026-10-14): variant F
 
-- `0` today's panel, unchanged (the reference).
-- `D` the finished report's layout (header with Failed chip and Copy prompt icon,
-  Scope and provenance lines, the error with earlier attempts folded, Try again and
-  Use another AI cards) over attempts kept in their own storage, plus a `failed` state,
-  kept drafts and one automatic retry. See below.
+Chosen by the user over A, B, C, D and E (all in this branch's history). F is:
 
-- `F` D plus three things: the retry runs on the server, the prompt's size is checked
-  against the chosen model, and dismissed drafts can be restored. See below.
+- the finished report's layout: "Analysis Report" header with a Failed chip and a
+  Copy prompt icon, the Scope and provenance lines, the latest error in red with
+  earlier attempts folded, then "Try again" and "Use another AI" cards (side by side
+  on desktop, stacked full-width on phones), the saved prompt folded;
+- Key and Model chips on the retry, like the Action tab's "Run with" bar, the model
+  list coming from the chosen Key; neither changes the account's selection;
+- attempts stored in their own table, not the LLM logs, so pruning logs never erases
+  a Summary's history; each attempt keeps outcome, error kind, error, model, Key,
+  partial text, automatic flag and time;
+- `failed` as a state of its own, shown in History as a red "Failed ×n" card;
+- the retry running on the server, watched over SSE, surviving a reload or closed tab;
+- one automatic retry for transient failures (overloaded, 5xx, timeout, dropped
+  stream), with a countdown honouring Retry-After and a Cancel;
+- every draft from a cut stream listed, each with Keep, Dismiss and, once dismissed,
+  Restore;
+- the saved prompt's size checked against the chosen model's context window;
+- a "Summary not started" page for a Generate that fails before any Summary is
+  saved (the 413 token-limit refusal), with Change selection leading when no model
+  can fit.
 
-A (banner over today's panel), B (one Try again card, Paste as a header icon), C (D's
-layout with in-memory attempts) and E (D with the paste in the page instead of a
-dialog) were dropped after review; they are in this branch's history.
+What the real build must decide or build, none of it answered here:
 
-D reuses the report's patterns on purpose: `summaryScopeLine`, the icon-action header,
-chevron folds like its sections, cards like Publish to Telegram, and the Scope line
-with "Use this Scope" at the bottom.
+1. `failed` as a real `status` value on `tg_summaries`, not derived from attempts.
+2. `tg_summary_attempts`: user-owned, cascading from `tg_summaries`, on neither
+   retention inventory, with a migration and the tenancy seam's classification.
+3. The retry as a worker job (lane, quota ladder, `LISTEN`/`NOTIFY` progress, SSE),
+   streaming the stored prompt into the same pending Summary; the worker, not the
+   page, owns the automatic retry.
+4. `context_length` on `POST /ai/models` instead of OpenRouter's public list.
+5. Start failures have no Summary id; whether they persist at all.
 
-Every Retry has Key and Model chips like the Action tab's "Run with" bar. The model
-list is the chosen Key's own catalogue (`useAiModels(keyId)` and a `keyId` prop on
-`ModelCombo`, both prototype additions), so another Key's models are reachable.
-Switching Key restores the model last run on it. Both start at the last attempt's
-Key and model and never change the Action tab's selection or a Key's remembered model.
-Each failure is kept with its attempt number, model, Key and time.
-
-Retry is stubbed: no request, no spend, no write. "Next retry" in the bar picks the
-stub's outcome and "Log attempt" records one. A real failed Generate records its real
-reason, model, Key and any partial text.
-
-Not answered here, and the real build has to: making `failed` a real status value,
-and streaming the stored prompt back into the same pending Summary on Retry.
-
-## Start failures (no pending Summary)
-
-A Generate can fail before its pending Summary is kept: the server refuses to build
-the prompt (413, too many posts or tokens), a sync fails, the network drops. The
-provisional row is deleted, so the pending panel never exists and today only a toast
-says why. Variant D shows it on the empty Summary tab instead ("Summary not
-started"), with Change selection as the primary way out. "Fake start failure" in
-the bar triggers it; a real one from Generate in this tab is recorded too. Its
-"Generate again" is stubbed.
-
-## Variant D: stored attempts, failed state, drafts, auto-retry
-
-Needs the prototype attempts API as well as the dev server:
+## Run it
 
     cd backend && PROTO_API_BASE=<api-base> PROTO_DB=<scratch path>.sqlite3 \
       PROTO_PORT=8021 uv run python scripts/proto_summary_attempts_api.py
+    cd frontend && PLAYWRIGHT_API_URL=<api-base> bun run dev --port 5193
 
-Vite proxies `/proto` to it (`PROTO_API_PORT`, default 8021).
-
-- **Attempts are their own entity**, not LLM logs: logs are pruned for space and that
-  must not erase a Summary's history. One row per Generate or Retry: outcome
-  (failed, succeeded, kept_draft), error kind, error, model, Key, partial text, auto
-  flag, time. Here a local SQLite file, so nothing is written to the deployment; the
-  real build is a user-owned Postgres table cascading from `tg_summaries` and on
-  neither retention inventory. Real failed Generates are recorded too (AIContext).
-- **Failed is its own state.** A pending Summary with no attempts is a Copy Prompt item
-  and keeps today's panel. One whose latest attempt failed gets the failure page, and
-  History shows a red "Failed ×n" card instead of "Awaiting response". The real build
-  should make this a `status` value rather than derive it.
-- **Drafts.** Text a dying stream produced is stored on the attempt (AIContext now
-  captures it). Every failed attempt's draft is listed, newest first, each with Keep
-  this draft, Show all and Dismiss. Dismiss sets `draft_dismissed_at` on the attempt:
-  the text stays stored, it is only no longer offered. Keeping one records a
-  `kept_draft` attempt carrying that text.
-- **One automatic retry** for a transient failure (overloaded, 5xx, timeout, dropped
-  stream): a countdown honouring the provider's Retry-After, else 10 s, with Cancel.
-  Never for an automatic attempt, never for a failure older than two minutes found on
-  reload, never for quota, auth, model or limit errors.
-
-The bar's "Next retry" picks what the stub does (quota, overloaded, stream cut,
-succeeds) and "Log attempt" records one as if a Generate had just ended that way.
-Retry and Keep draft only record attempts; nothing is sent to a provider.
-
-## Variant F: run on the server, size check, restore drafts
-
-- **The retry runs on the server.** Retry starts a run in the attempts API and the
-  page watches it over SSE (`/runs/{id}/events`), showing the text as it arrives. A
-  page opened while a run is going finds it (`/runs/active`) and attaches, so a
-  reload or a closed tab costs nothing; a second run for the same Summary is refused.
-  The run ends by writing its attempt row, with its partial text, like a real one. It
-  is stubbed: it streams made-up report text and ends as "Next retry" says. The real
-  build is a worker job, watched over SSE as sync jobs are; the automatic retry
-  should then be the worker's decision too, not the page's.
-- **Size check.** Under the Key and model chips: the saved prompt's estimate (~4
-  characters a token, the backend's own rule) against the model's context window,
-  with "Won't fit" past it and "Tight" past 80%. Windows come from OpenRouter's
-  public catalogue, Gemini ids by rule; the real build should carry
-  `context_length` on `POST /ai/models`. It warns and does not block, since the
-  estimate is rough.
-- **Restore dismissed drafts.** A "Dismissed drafts (n)" fold at the bottom of the
-  drafts card, each with Restore, which clears `draft_dismissed_at`.
+Vite proxies `/proto` to the attempts API (`PROTO_API_PORT`, default 8021). Log in,
+open a pending Summary and add `&variant=F`; `0` is today's panel, unchanged. The
+floating bar cycles them. "Next retry" picks how a stubbed run ends (quota,
+overloaded, stream cut, succeeds), "Log attempt" records one as if a Generate had
+just ended that way, and "Fake start failure" shows the not-started page. Runs and
+Keep draft are stubbed: they stream made-up text and record attempts; nothing is
+sent to a provider. Paste response is real, as in the app today.

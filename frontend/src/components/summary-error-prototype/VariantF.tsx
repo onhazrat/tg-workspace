@@ -1,15 +1,18 @@
 /**
- * PROTOTYPE, throw away. Variant D: C's layout over attempts kept in their own
- * storage (`attempts-api.ts`), so the history survives a reload and reaches
- * other devices, plus:
+ * PROTOTYPE, throw away. Variant F, the chosen design: the finished report's
+ * layout over attempts kept in their own storage (`attempts-api.ts`), so the
+ * history survives a reload and reaches other devices, plus:
  *
  * - a `failed` state of its own: a pending Summary with no attempts is a Copy
  *   Prompt item and keeps today's panel; one whose latest attempt failed gets
  *   this page, and History says "Failed" instead of "Awaiting response";
- * - every draft a dying stream produced, kept and offered, each dismissable;
- * - one automatic retry for a transient failure, with a countdown and Cancel.
+ * - the retry runs on the server and the page watches it over SSE, so a reload
+ *   or a closed tab does not cut it;
+ * - one automatic retry for a transient failure, with a countdown and Cancel;
+ * - every draft a dying stream produced, each with Keep, Dismiss and Restore;
+ * - the saved prompt's size checked against the chosen model's context window.
  *
- * Retry and Keep draft are stubbed: they record an attempt, nothing else.
+ * Runs and Keep draft are stubbed: they stream made-up text and record attempts.
  */
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -41,7 +44,6 @@ import {
   type ServerAttempt,
   type ServerRun,
   startRun,
-  stubAttempt,
   useActiveRun,
   useAddAttempt,
   useAttempts,
@@ -68,18 +70,7 @@ import {
 const AUTO_WINDOW_MS = 120_000
 const AUTO_DEFAULT_S = 10
 
-/**
- * F turns on three things over D: the retry runs on the server and the page
- * watches it, the prompt's size is checked against the chosen model, and
- * dismissed drafts can be brought back.
- */
-type DProps = Props & {
-  serverRuns?: boolean
-  sizeCheck?: boolean
-  showDismissed?: boolean
-}
-
-export function VariantD(props: DProps) {
+export function VariantF(props: Props) {
   const { data, isLoading, isError } = useAttempts(props.summary.id)
   if (isLoading) return null
   if (isError)
@@ -101,43 +92,28 @@ const toAttempt = (r: ServerAttempt): Attempt => ({
   auto: r.auto,
 })
 
-function Body(props: DProps & { rows: ServerAttempt[] }) {
+function Body(props: Props & { rows: ServerAttempt[] }) {
   const { rows, summary } = props
   const add = useAddAttempt(summary.id)
   const dismiss = useDismissDraft(summary.id)
   const { nextRetry } = useFailureStore()
-  const aiKeys = useAiKeys()
+  const _aiKeys = useAiKeys()
   const latest = rows[rows.length - 1]
   const km = useKeyModel(
     latest.model || summary.model || "",
     latest.keyId ?? summary.aiKeyId,
   )
-  const [retrying, setRetrying] = useState<null | {
-    model: string
-    auto: boolean
-  }>(null)
   const failed = rows.filter((r) => r.outcome === "failed").map(toAttempt)
-  const server = useServerRun(summary.id, !!props.serverRuns)
+  const server = useServerRun(summary.id, true)
   const restore = useRestoreDraft(summary.id)
 
   const run = async (auto: boolean) => {
     const model = auto ? latest.model : km.model
     const keyId = auto ? latest.keyId : km.keyId
-    if (props.serverRuns) {
-      await server.start({ outcome: nextRetry, model, keyId, auto })
-      return
-    }
-    setRetrying({ model, auto })
-    await new Promise((r) => setTimeout(r, 1500))
-    const row = await add(stubAttempt(nextRetry, model, keyId ?? null, auto))
-    setRetrying(null)
-    const key = aiKeys.find((k) => k.id === keyId)?.label ?? "no key"
-    if (row.outcome === "succeeded")
-      toast.success(`Stub: attempt ${row.attempt} on ${model} succeeded.`)
-    else toast.error(`Attempt ${row.attempt} with ${model} on ${key} failed.`)
+    await server.start({ outcome: nextRetry, model, keyId, auto })
   }
 
-  const busy = props.serverRuns ? server.live !== null : retrying !== null
+  const busy = server.live !== null
   const auto = useAutoRetry(latest, busy, () => void run(true))
 
   if (latest.outcome !== "failed")
@@ -147,18 +123,14 @@ function Body(props: DProps & { rows: ServerAttempt[] }) {
   const drafts = rows
     .filter((r) => r.outcome === "failed" && r.partialText && !r.draftDismissed)
     .reverse()
-  const dismissed = props.showDismissed
-    ? rows
-        .filter(
-          (r) => r.outcome === "failed" && r.partialText && r.draftDismissed,
-        )
-        .reverse()
-    : []
+  const dismissed = rows
+    .filter((r) => r.outcome === "failed" && r.partialText && r.draftDismissed)
+    .reverse()
   const p = {
     ...props,
     attempts: failed,
     retrying: busy,
-    model: server.live?.model ?? retrying?.model ?? km.model,
+    model: server.live?.model ?? km.model,
     setModel: km.setModel,
     keyId: km.keyId,
     setKeyId: km.setKeyId,
@@ -222,11 +194,7 @@ function Body(props: DProps & { rows: ServerAttempt[] }) {
           <Card icon={<RotateCcw size={14} />} title="Try again">
             <RetryControls
               {...p}
-              note={
-                props.sizeCheck && (
-                  <SizeCheck promptText={p.promptText} model={km.model} />
-                )
-              }
+              note={<SizeCheck promptText={p.promptText} model={km.model} />}
             />
             <p className="mt-3 text-xs text-app-ink/60">
               The same window and posts, nothing re-collected.

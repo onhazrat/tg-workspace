@@ -73,11 +73,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     starredOnly,
   )
   const invalidate = useInvalidateArtifacts()
-  // PROTOTYPE (variant D): Summaries whose latest attempt failed.
+  // PROTOTYPE (variant F): Summaries whose latest attempt failed.
   const failed = useFailedSummaries(
-    ["D", "F"].includes(
-      new URLSearchParams(window.location.search).get("variant") ?? "",
-    ),
+    new URLSearchParams(window.location.search).get("variant") === "F",
   ).data
   const loadMoreRef = useRef<HTMLDivElement>(null)
 

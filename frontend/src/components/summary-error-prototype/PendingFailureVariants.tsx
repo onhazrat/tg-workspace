@@ -1,7 +1,7 @@
 /**
- * PROTOTYPE, throw away. The pieces variant D and the not-started page share:
+ * PROTOTYPE, throw away. The pieces variant F and the not-started page share:
  * the report-style header, the error history, Key and model chips with Retry,
- * folds and cards. Variants A, B, C and E were dropped; they are in this
+ * folds and cards. Variants A to E were dropped; they are in this
  * branch's history.
  */
 import {

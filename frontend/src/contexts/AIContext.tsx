@@ -286,7 +286,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     const leftPending = (reason: string, partialText?: string) => {
       recordFailure(id, reason, selectedModel, selectedAiKeyId()) // PROTOTYPE
       // PROTOTYPE: the attempt, with any text the stream produced, in its own
-      // storage (variant D). Never fatal.
+      // storage (variant F). Never fatal.
       void postAttempt(id, {
         outcome: "failed",
         kind: classifyError(reason),

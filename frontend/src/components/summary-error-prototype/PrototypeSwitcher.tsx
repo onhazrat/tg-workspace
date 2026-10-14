@@ -21,8 +21,7 @@ const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export const VARIANTS = {
   "0": "Current (reference)",
-  D: "Stored attempts, drafts, auto-retry",
-  F: "D, run on the server, size check, restore drafts",
+  F: "Chosen design",
 } as const
 export type Variant = keyof typeof VARIANTS
 const KEYS = Object.keys(VARIANTS) as Variant[]
@@ -40,7 +39,7 @@ export function PrototypeSwitcher() {
   const { currentSummaryId } = useUI()
   const keyId = useSelectedAiKeyId()
   const qc = useQueryClient()
-  // Variant D: record a stubbed attempt (the outcome chosen below) as if a
+  // Variant F: record a stubbed attempt (the outcome chosen below) as if a
   // Generate had just ended that way, so the stored history has a start.
   const logAttempt = async () => {
     if (!currentSummaryId) return
@@ -84,7 +83,7 @@ export function PrototypeSwitcher() {
         </button>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 opacity-90">
-        {(variant === "D" || variant === "F") && (
+        {variant === "F" && (
           <button
             type="button"
             className="underline disabled:opacity-50"

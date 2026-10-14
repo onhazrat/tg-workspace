@@ -33,7 +33,7 @@ export const ArtifactCard: React.FC<
   ArtifactCardProps & { failedAttempts?: number }
 > = ({ artifact, onOpen, failedAttempts, ...actions }) => {
   const pending = isPendingArtifact(artifact)
-  // PROTOTYPE (variant D): a pending Summary whose latest attempt failed.
+  // PROTOTYPE (variant F): a pending Summary whose latest attempt failed.
   const failed = pending && failedAttempts !== undefined
 
   /*
