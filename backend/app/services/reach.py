@@ -13,9 +13,15 @@ first page. When fewer than `MIN_SAMPLES` counts are Settled, each count between
 the estimation floor and the settling age is divided by the Settling curve's
 share at its age, and Reach is the median of the Settled and corrected counts,
 marked as an estimate. Below the floor a count is too young to correct: the seed
-curve puts a 30-minute count at a tenth of its Settled value and a 2-hour one at
-about two fifths, so a small error in its age becomes a large one in the
-estimate.
+curve puts a 30-minute count at a tenth of its Settled value, so a small error
+in its age becomes a large one in the estimate.
+
+**The floor defaults to 1 hour, not 3.** Sync re-reads a stored Post's counters
+only on the page where an incremental walk stops, so a busy Channel's Posts are
+last observed at 1 to 3 hours old. On staging (2026-10-14) a 3-hour floor left
+seven Channels posting ~10 an hour with no Reach and a third of a week's Posts
+with no Estimated View count. Backtested against Settled counts, a Reach from
+1 to 2 hour counts reads about 15% low; from 3 to 6 hours, about 5%.
 
 **Not measured is `None`, never zero.** Zero reach and no measurement are
 different claims, the rule `directory_statistics` already follows.
@@ -114,7 +120,7 @@ class ReachSettings:
     """The deployment settings Reach reads, stored under `reach`."""
 
     settling_age_hours: int = 24
-    estimation_floor_hours: int = 3
+    estimation_floor_hours: int = 1
     sample_size: int = 100
     # How often the worker refits the Settling curve (REACH-07).
     refit_interval_hours: int = 24

@@ -50,8 +50,10 @@ count, at the Account's choice. Channel Reach is not a feed filter or order.**
 - A Post's place in a views order can move from one day to the next without its View count changing,
   because the curve it is read through was refitted. Accepted: the estimate is a reading, and the
   raw View count stays one tab away.
-- The newest Posts in any window (under 3 hours by default) drop out of an Estimated views filter.
-  The footer count and the raw Views tab are the answer.
+- The newest Posts in any window (under the estimation floor) drop out of an Estimated views filter.
+  The footer count and the raw Views tab are the answer. The floor's default moved from 3 hours to
+  1 on 2026-10-14: sync last observes a busy Channel's Posts at 1 to 3 hours old, so a 3-hour floor
+  judged a third of a week's Posts too new to judge for good (`services/reach.py` has the numbers).
 - Three implementations of one formula can drift. The shared fixture is the guard; a fourth caller
   adds a fourth assertion rather than a fourth copy.
 - A views-ordered page sorts every row in scope. If a measurement on staging's largest account shows
