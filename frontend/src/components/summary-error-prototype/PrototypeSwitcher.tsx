@@ -74,7 +74,9 @@ export function PrototypeSwitcher() {
         <button
           type="button"
           className="underline"
-          onClick={() => recordFailure(START, FAKE_START_ERROR, selectedModel)}
+          onClick={() =>
+            recordFailure(START, FAKE_START_ERROR, selectedModel, null)
+          }
         >
           Fake start failure
         </button>

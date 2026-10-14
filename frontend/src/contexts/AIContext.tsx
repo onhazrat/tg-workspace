@@ -225,7 +225,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       // failed before a Summary existed and lands on the empty tab.
       if (/waiting for a response you can paste/.test(reason))
         clearFailures(START)
-      else recordFailure(START, reason, selectedModel)
+      else recordFailure(START, reason, selectedModel, selectedAiKeyId())
       toast.error(reason)
     } finally {
       setSummarizing(false)
@@ -280,7 +280,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     /** Show the item that is waiting, not the half-streamed buffer. */
     const leftPending = (reason: string) => {
-      recordFailure(id, reason, selectedModel) // PROTOTYPE
+      recordFailure(id, reason, selectedModel, selectedAiKeyId()) // PROTOTYPE
       setSummary(null)
       workspaceTabs.createTab("summary", id)
       return new Error(

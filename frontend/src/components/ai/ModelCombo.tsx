@@ -63,6 +63,8 @@ export const ModelCombo: React.FC<{
   operatorKey?: boolean
   /** PROTOTYPE: false leaves the Key's remembered model alone. */
   remember?: boolean
+  /** PROTOTYPE: list this Key's models instead of the selected Key's. */
+  keyId?: string | null
 }> = ({
   value,
   onChange,
@@ -71,10 +73,13 @@ export const ModelCombo: React.FC<{
   placeholder,
   operatorKey,
   remember,
+  keyId,
 }) => {
-  const { models: accountModels } = useAiModels()
+  const { models: accountModels } = useAiModels(keyId)
   const selectedKeyId = useSelectedAiKeyId()
-  const hasKey = operatorKey === true || selectedKeyId !== null
+  const hasKey =
+    operatorKey === true ||
+    (keyId === undefined ? selectedKeyId : keyId) !== null
   // An Operator-Key picker gets no catalogue rather than the wrong one. The
   // models on offer come from the Account's own Key, and nothing here can ask
   // the Operator Key what it serves — there is no endpoint for it — so listing

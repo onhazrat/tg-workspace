@@ -9,10 +9,12 @@
  */
 import {
   AlertTriangle,
+  Brain,
   Check,
   ChevronDown,
   ClipboardPaste,
   Copy,
+  KeyRound,
   Loader2,
   RotateCcw,
 } from "lucide-react"
@@ -21,9 +23,10 @@ import { toast } from "sonner"
 import { ModelCombo } from "@/components/ai/ModelCombo"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
-import { tgFieldClassName } from "@/components/ui/tg-input"
 import { formatSummaryModelLabel } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
+import { useAiKeys, useSelectedAiKeyId } from "@/hooks/useAiKeys"
+import { modelForKey } from "@/lib/aiKeys/modelMemory"
 import type { Summary } from "@/types"
 import { RelativeTime } from "../RelativeTime"
 import { summaryScopeLine } from "../summary-view/SummaryHeader"
@@ -43,27 +46,56 @@ type Props = {
   onPaste: () => void
 }
 
-/** The retry state every surface shares: the history, the model, the stub. */
-export function useRetry(id: string, initialModel: string) {
+/**
+ * The retry state every surface shares: the history, the Key and model, the
+ * stub. Key and model are local to the retry, so the Action tab's selection and
+ * each Key's remembered model stay put; switching Key here restores the model
+ * last run on it, as the Action tab's bar does.
+ */
+export function useRetry(
+  id: string,
+  initialModel: string,
+  initialKeyId?: string | null,
+) {
   const store = useFailureStore()
-  const attempts = attemptsFor(store, id, initialModel)
+  const aiKeys = useAiKeys()
+  const selectedKeyId = useSelectedAiKeyId()
+  const attempts = attemptsFor(
+    store,
+    id,
+    initialModel,
+    initialKeyId ?? selectedKeyId,
+  )
   const retrying = !!store.retrying[id]
-  // Starts at the model the last attempt used; local, so the account's
-  // default stays put.
-  const [model, setModel] = useState(attempts?.at(-1)?.model || initialModel)
+  const last = attempts?.at(-1)
+  const [model, setModel] = useState(last?.model || initialModel)
+  const [chosenKey, setChosenKey] = useState(last?.keyId ?? initialKeyId)
+  // A Key since deleted, or none chosen yet, falls back to the selected one.
+  const keyId =
+    (aiKeys.some((k) => k.id === chosenKey) ? chosenKey : null) ?? selectedKeyId
+  const setKeyId = (next: string) => {
+    setChosenKey(next)
+    const remembered = modelForKey(next)
+    if (remembered) setModel(remembered)
+  }
+  const keyLabel = aiKeys.find((k) => k.id === keyId)?.label ?? "no key"
   const retry = async () => {
-    const ok = await stubRetry(id, model, attempts ?? [])
+    const ok = await stubRetry(id, model, keyId ?? null, attempts ?? [])
     if (ok)
       toast.success(
-        `Stub: retry with ${model} succeeded. The real build would stream the saved prompt into this Summary.`,
+        `Stub: retry with ${model} on ${keyLabel} succeeded. The real build would stream the saved prompt into this Summary.`,
       )
-    else toast.error(`Retry with ${model} failed.`)
+    else toast.error(`Retry with ${model} on ${keyLabel} failed.`)
   }
-  return { attempts, retrying, model, setModel, retry }
+  return { attempts, retrying, model, setModel, keyId, setKeyId, retry }
 }
 
 export function PendingFailurePrototype(props: Props) {
-  const r = useRetry(props.summary.id, props.summary.model ?? "")
+  const r = useRetry(
+    props.summary.id,
+    props.summary.model ?? "",
+    props.summary.aiKeyId,
+  )
   // No failure: the pending panel as it is today (a Copy Prompt item).
   if (!r.attempts && !r.retrying) return <PendingSummaryPanel {...props} />
   const shared = { ...props, ...r, attempts: r.attempts ?? [] }
@@ -75,6 +107,8 @@ type VariantProps = Props & {
   retrying: boolean
   model: string
   setModel: (m: string) => void
+  keyId: string | null
+  setKeyId: (k: string) => void
   retry: () => void
 }
 
@@ -133,9 +167,15 @@ export function Fold({
   )
 }
 
+const CHIP =
+  "flex h-10 min-w-0 items-center gap-2 rounded-lg border border-app-ink/10 bg-app-muted/20 px-3 transition-colors hover:bg-app-muted/30"
+
+/** Key and model chips like the Action tab's "Run with" bar, then the button. */
 export function RetryControls({
   model,
   setModel,
+  keyId,
+  setKeyId,
   retrying,
   retry,
   label = "Retry",
@@ -144,29 +184,59 @@ export function RetryControls({
   primary?: boolean
   model: string
   setModel: (m: string) => void
+  keyId: string | null
+  setKeyId: (k: string) => void
   retrying: boolean
   retry: () => void
   label?: string
 }) {
+  const aiKeys = useAiKeys()
   return (
-    <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-      <label className="flex flex-col gap-1.5">
-        <span className={LABEL}>Model</span>
-        <ModelCombo
-          ariaLabel="Model for the retry"
-          value={model}
-          onChange={setModel}
-          remember={false}
-          className={`${tgFieldClassName} sm:w-64 h-11`}
-        />
-      </label>
+    <div className="flex flex-col gap-2">
+      <div className="grid gap-2">
+        {aiKeys.length > 0 && (
+          <div className={CHIP}>
+            <KeyRound size={14} className="shrink-0 text-app-ink/50" />
+            <select
+              aria-label="AI key for the retry"
+              value={keyId ?? ""}
+              onChange={(e) => setKeyId(e.target.value)}
+              disabled={retrying}
+              className="min-w-0 flex-1 cursor-pointer appearance-none truncate bg-transparent font-mono text-xs focus:outline-none"
+              title="Which key pays for this retry"
+            >
+              {aiKeys.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={12}
+              aria-hidden="true"
+              className="pointer-events-none shrink-0 text-app-ink/40"
+            />
+          </div>
+        )}
+        <div className={CHIP}>
+          <Brain size={14} className="shrink-0 text-app-ink/50" />
+          <ModelCombo
+            ariaLabel="Model for the retry"
+            value={model}
+            onChange={setModel}
+            remember={false}
+            keyId={keyId}
+            className="min-w-0 flex-1 bg-transparent font-mono text-xs focus:outline-none"
+          />
+        </div>
+      </div>
       <TgButton
         type="button"
         variant={primary ? "primary" : "secondary"}
         size="lg"
         onClick={retry}
         disabled={retrying}
-        className="h-11 px-5"
+        className="h-11 px-5 sm:self-start"
       >
         {retrying ? (
           <Loader2 size={14} className="animate-spin" />
@@ -232,10 +302,11 @@ export function ErrorHistory({
 }
 
 function AttemptMeta({ n, attempt }: { n: number; attempt: Attempt }) {
+  const key = useAiKeys().find((k) => k.id === attempt.keyId)
   return (
     <p className="text-[11px] opacity-70 mt-1">
-      Attempt {n} · {formatSummaryModelLabel(attempt.model)} ·{" "}
-      <RelativeTime timestamp={attempt.at} />
+      Attempt {n} · {formatSummaryModelLabel(attempt.model)}
+      {key && ` · ${key.label}`} · <RelativeTime timestamp={attempt.at} />
     </p>
   )
 }

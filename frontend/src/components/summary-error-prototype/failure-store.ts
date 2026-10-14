@@ -10,7 +10,12 @@
  */
 import { useSyncExternalStore } from "react"
 
-export type Attempt = { error: string; model: string; at: number }
+export type Attempt = {
+  error: string
+  model: string
+  keyId: string | null
+  at: number
+}
 
 /** The key for a Generate that failed before its Summary was kept. */
 export const START = "__start__"
@@ -55,12 +60,17 @@ export function useFailureStore() {
   )
 }
 
-export function recordFailure(id: string, error: string, model: string) {
+export function recordFailure(
+  id: string,
+  error: string,
+  model: string,
+  keyId: string | null,
+) {
   const prev = state.failures[id] ?? []
   set({
     failures: {
       ...state.failures,
-      [id]: [...prev, { error, model, at: Date.now() }],
+      [id]: [...prev, { error, model, keyId, at: Date.now() }],
     },
   })
 }
@@ -77,10 +87,11 @@ export function attemptsFor(
   s: State,
   id: string,
   model: string,
+  keyId: string | null,
 ): Attempt[] | undefined {
   if (s.failures[id]) return s.failures[id]
   if (s.simulate && id !== START)
-    return [{ error: SAMPLE_ERRORS[0], model, at: SIMULATED_AT }]
+    return [{ error: SAMPLE_ERRORS[0], model, keyId, at: SIMULATED_AT }]
 }
 
 export function setSimulate(simulate: boolean) {
@@ -92,12 +103,13 @@ export function setNextRetry(nextRetry: State["nextRetry"]) {
 }
 
 /**
- * Stubbed retry with `model`: no request, no provider spend, no write. `shown`
+ * Stubbed retry with `model` on `keyId`: no request, no provider spend, no write. `shown`
  * is what the page displays, so a simulated first failure joins the history.
  */
 export async function stubRetry(
   id: string,
   model: string,
+  keyId: string | null,
   shown: Attempt[],
 ): Promise<boolean> {
   set({ retrying: { ...state.retrying, [id]: true } })
@@ -114,6 +126,7 @@ export async function stubRetry(
             ? (shown.at(-1)?.error ?? FAKE_START_ERROR)
             : SAMPLE_ERRORS[shown.length % SAMPLE_ERRORS.length],
         model,
+        keyId,
         at: Date.now(),
       },
     ]

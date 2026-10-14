@@ -29,11 +29,15 @@ import { useSelectedAiKeyId } from "./useAiKeys"
 
 const empty: { id: string; label: string }[] = []
 
-export function useAiModels(): {
+export function useAiModels(
+  /** PROTOTYPE: a Key other than the selected one; omit for the selected one. */
+  keyId?: string | null,
+): {
   models: { id: string; label: string }[]
   isLoading: boolean
 } {
-  const aiKeyId = useSelectedAiKeyId()
+  const selectedKeyId = useSelectedAiKeyId()
+  const aiKeyId = keyId === undefined ? selectedKeyId : keyId
   const query = useQuery({
     queryKey: queryKeys.aiModels(aiKeyId),
     queryFn: () => aiApi.listModels(aiKeyId),

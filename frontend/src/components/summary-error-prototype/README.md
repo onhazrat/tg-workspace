@@ -20,10 +20,12 @@ C reuses the report's patterns on purpose: `summaryScopeLine`, the icon-action h
 chevron folds like its sections, cards like Publish to Telegram, and the Scope line
 with "Use this Scope" at the bottom.
 
-Every Retry has a model picker beside it (the app's ModelCombo over the selected
-Key's live catalogue, typed ids allowed). It starts at the last attempt's model and
-never changes the account's remembered model. Each failure is kept with its attempt
-number, model and time.
+Every Retry has Key and Model chips like the Action tab's "Run with" bar. The model
+list is the chosen Key's own catalogue (`useAiModels(keyId)` and a `keyId` prop on
+`ModelCombo`, both prototype additions), so another Key's models are reachable.
+Switching Key restores the model last run on it. Both start at the last attempt's
+Key and model and never change the Action tab's selection or a Key's remembered model.
+Each failure is kept with its attempt number, model, Key and time.
 
 Retry is stubbed: no request, no spend, no write. "Simulate failure" in the bar shows
 a fake error on every pending Summary; "Next retry" picks the stub's outcome. A real
