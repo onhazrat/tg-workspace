@@ -16,8 +16,6 @@ const workspaceRoute = getRouteApi("/_tg/workspace")
 
 export const VARIANTS = {
   "0": "Current (reference)",
-  A: "Banner on top",
-  B: "Failure replaces waiting",
   C: "Two recovery paths",
 } as const
 export type Variant = keyof typeof VARIANTS

@@ -129,7 +129,7 @@ export const SummaryView: React.FC = () => {
           body below — when it lived here, English chrome inherited RTL from a
           Persian report and rendered its trailing period on the wrong side. */}
       <div className="relative border border-app-ink/10 bg-app-card rounded-xl p-8 md:p-12 shadow-sm">
-        {/* PROTOTYPE: variants A-C replace the pending panel. */}
+        {/* PROTOTYPE: variant C replaces the pending panel. */}
         {isPending && currentSummary && variant !== "0" ? (
           <>
             <PendingFailurePrototype
@@ -141,11 +141,7 @@ export const SummaryView: React.FC = () => {
             />
             <ArtifactScopeLine
               artifact={currentSummary}
-              className={
-                variant === "A"
-                  ? "mt-3"
-                  : "mt-12 pt-6 border-t border-app-ink/10"
-              }
+              className="mt-12 pt-6 border-t border-app-ink/10"
             />
           </>
         ) : (

@@ -1,9 +1,9 @@
 /**
- * PROTOTYPE, throw away. Three ways the pending Summary panel can show a failed
+ * PROTOTYPE, throw away. The pending Summary panel showing a failed
  * generation, its error history, and a Retry with a model of your choice.
  * Retry is stubbed (`failure-store.ts`).
  *
- * B and C borrow the finished report's layout: the same header (title, icon
+ * C borrows the finished report's layout: the same header (title, icon
  * actions, Scope line, provenance line), chevron folds like the report's
  * sections, and bordered cards like Publish to Telegram.
  */
@@ -67,8 +67,6 @@ export function PendingFailurePrototype(props: Props) {
   // No failure: the pending panel as it is today (a Copy Prompt item).
   if (!r.attempts && !r.retrying) return <PendingSummaryPanel {...props} />
   const shared = { ...props, ...r, attempts: r.attempts ?? [] }
-  if (props.variant === "A") return <VariantA {...shared} />
-  if (props.variant === "B") return <VariantB {...shared} />
   return <VariantC {...shared} />
 }
 
@@ -208,7 +206,9 @@ export function ErrorHistory({
         >
           <AlertTriangle size={18} className="shrink-0 mt-0.5" />
           <div className="min-w-0">
-            <p className="text-sm font-mono break-words">{latest.error}</p>
+            <p className="text-xs sm:text-sm font-mono break-words">
+              {latest.error}
+            </p>
             <AttemptMeta n={attempts.length} attempt={latest} />
           </div>
         </div>
@@ -251,7 +251,7 @@ function copyPrompt(promptText: string | undefined) {
  * The finished report's header, with the run's state where the report's title
  * stands alone: icon actions, the Scope line, then model · language · time.
  */
-function FailedHeader(p: VariantProps & { pasteAction?: boolean }) {
+function FailedHeader(p: VariantProps) {
   const settings = useSettings()
   const [copied, setCopied] = useState(false)
   const zone = {
@@ -290,16 +290,6 @@ function FailedHeader(p: VariantProps & { pasteAction?: boolean }) {
           >
             {copied ? <Check size={16} /> : <Copy size={16} />}
           </TgIconButton>
-          {p.pasteAction && (
-            <TgIconButton
-              aria-label="Paste response"
-              tooltip="Paste an answer from another AI tool."
-              disabled={p.retrying}
-              onClick={p.onPaste}
-            >
-              <ClipboardPaste size={16} />
-            </TgIconButton>
-          )}
         </div>
       </div>
       <p className="mt-1 break-words text-sm text-app-ink/80">
@@ -323,51 +313,6 @@ function SavedPrompt({ promptText }: { promptText: string | undefined }) {
   )
 }
 
-/** A: today's panel untouched, with a failure block above it. */
-function VariantA(p: VariantProps) {
-  return (
-    <>
-      <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/5 p-4 space-y-4">
-        <p className="font-bold text-sm text-red-900 dark:text-red-100">
-          Generation failed
-        </p>
-        <ErrorHistory {...p} />
-        <RetryControls {...p} />
-      </div>
-      <PendingSummaryPanel
-        summary={p.summary}
-        promptText={p.promptText}
-        onPaste={p.onPaste}
-      />
-    </>
-  )
-}
-
-/**
- * B: the report's header says it failed; one card retries, with the model
- * beside it. Copy and Paste are the header's icon actions, as Copy and Export
- * are on a finished report.
- */
-function VariantB(p: VariantProps) {
-  return (
-    <>
-      <FailedHeader {...p} pasteAction />
-      <div className="space-y-6">
-        <ErrorHistory {...p} />
-        <Card icon={<RotateCcw size={14} />} title="Try again">
-          <RetryControls {...p} />
-          <p className="mt-3 text-xs text-app-ink/60">
-            Sends the saved prompt again: the same window and posts, nothing
-            re-collected. Or copy it to another AI tool and paste the answer
-            with the icons above.
-          </p>
-        </Card>
-        <SavedPrompt promptText={p.promptText} />
-      </div>
-    </>
-  )
-}
-
 /** C: the same header, then the two ways out as cards side by side. */
 function VariantC(p: VariantProps) {
   return (
@@ -387,7 +332,7 @@ function VariantC(p: VariantProps) {
               Copy the saved prompt into any AI tool, then paste its answer
               here.
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
               <TgButton
                 type="button"
                 variant="secondary"

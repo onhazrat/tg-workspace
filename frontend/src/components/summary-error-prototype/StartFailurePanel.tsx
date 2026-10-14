@@ -43,7 +43,11 @@ export function StartFailurePanel() {
       <div className="space-y-6">
         <ErrorHistory {...r} attempts={r.attempts} />
         <Card icon={<RotateCcw size={14} />} title="Try again">
-          <div className="flex flex-col md:flex-row md:items-end gap-2">
+          <div
+            className={`flex md:flex-row md:items-end gap-2 ${
+              overLimit ? "flex-col-reverse" : "flex-col"
+            }`}
+          >
             <RetryControls {...r} label="Generate again" primary={!overLimit} />
             <TgButton
               type="button"
