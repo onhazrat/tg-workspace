@@ -288,6 +288,6 @@ has just ticked in the list.
 - Under "Cited by your channels" most rows tie at 1 or 2, and the prototype breaks ties by handle, which reads as alphabetical. Breaking ties by the most recent citation from the chosen channels was proposed and not decided.
 - Only Channels somebody follows have their own Posts read, so only they have outbound References. Ticking a Channel nobody follows, such as @durov, adds nothing to "Cited by channels ticked here" or to Shared children.
 - The prototype called Reach "average views per post"; the glossary defines it as the median Settled View count of recent Posts, and the tab must say so.
-- A plain @mention is stored as both a mention and a link Reference. Every count here is in distinct Citing Channels or distinct Posts, never in Reference rows.
+- A plain @mention was stored as both a mention and a link Reference until 2026-10-14 (ADR-019's amendment). Every count here is in distinct Citing Channels or distinct Posts, never in Reference rows.
 - The Directory keeps growing while it is being read; totals that move by one or two between two reads are expected.
 - Tickets, as vertical slices (`issues/`): DIR-01 shared memory is done; DIR-02 browse the Directory starts at once; DIR-03 read a Channel and DIR-04 search follow DIR-02; DIR-05 who cites whom and DIR-06 Dismissal follow DIR-03; DIR-07 Shared parents and Shared children follows DIR-05. This replaces the layered order agreed during grilling, which put every table before the endpoint.

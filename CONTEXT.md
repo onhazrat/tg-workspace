@@ -118,7 +118,11 @@ _Avoid_: ignore, not interested, hide, block, reject
 **Reference**:
 One Post naming one Channel, once, in one way: a forward, a mention, a link or a
 reply that crosses channels. A Post naming two Channels makes two References, and
-a Post that both forwards from and mentions the same Channel makes two more. The
+a Post that both forwards from and mentions the same Channel makes two more. A
+mention is a mention Reference and never also a link one, though Telegram marks
+it as a Link; a Post that mentions a Channel and also links to the Channel as a
+whole names it once, as a mention. A link to one exact Post of that Channel is a
+second Reference, because it names something the mention does not. The
 naming Post need not be in a followed Channel, because a Directory entry's
 samples are read for References too. The arrow points the opposite way to a
 Directory entry's sample, which is a Post by the Channel itself, so the two never

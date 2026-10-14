@@ -10,13 +10,16 @@ three decisions that are hard to reverse.
 `discover.post_references` answers "which handles does this Post name", folding
 a cross-channel reply into `link` and returning no Post ids at all. The graph
 needs the ids and keeps the reply apart, so `references_for` is a second
-implementation over the same primitives rather than a wrapper.
+implementation over the same primitives rather than a wrapper. Both read links
+through `discover.link_targets` and apply the one rule that a link which is
+only an @mention's anchor is that mention (`discover.is_the_mention`).
 
 Two implementations of "what counts as a reference" can drift apart with
 nothing to notice, which would make the graph quietly disagree with every
-Discovery report. `test_post_references.py` asserts they find the same set of
-target handles for the same Post. The kinds differ by design; the handles must
-not.
+Discovery report. `test_post_references.py` asserts they find the same handles
+**and kinds** for the same Post, once `reply` is folded into `link` the way
+Discover folds it. A plain @mention stored as both a mention and a link was
+exactly such a drift, and a handle-only assertion could not see it.
 
 ## Deferral is "not selected yet", not "selected and left"
 
@@ -48,12 +51,11 @@ from sqlmodel.sql.expression import SelectOfScalar
 
 from app.core.config import settings
 from app.models_tg import Channel, DirectoryEntry, DirectorySample, Post, PostReference
-from app.services.discover import _text_link_re, extract_mentions
+from app.services.discover import extract_mentions, is_the_mention, link_targets
 from app.services.follows import followed_channel_names
 from app.services.settings_registry import REFERENCE_GRAPH_KEY
 from app.services.settings_store import get_global_setting
 from app.services.telegram_web import (
-    extract_channel_post_from_href,
     is_channel_handle,
     normalize_handle,
 )
@@ -123,50 +125,6 @@ def _source_text(source: ReferenceSource) -> str:
     return source.text or ""
 
 
-def _link_references(source: ReferenceSource) -> list[Reference]:
-    """Telegram links in the body, from the stored hrefs and the plain text.
-
-    Mirrors `discover.extract_post_link_channels`, which unions the masked
-    hrefs captured at scrape time with the URLs left in the text, and dedups
-    because once the links backfill has run a plain `https://t.me/foo` appears
-    in both. The regex is imported from there rather than copied: two spellings
-    of which domains count is how the two extractors start disagreeing.
-
-    Where that function keeps only the channel, this keeps the Post id too, so
-    the stored `url` is preferred over the stored `channel` — they are built
-    from the same href, so they never name different Channels, but only the url
-    carries the id.
-    """
-    found: dict[tuple[str, int | None], None] = {}
-
-    def add(parsed: tuple[str, int | None] | None) -> None:
-        if parsed is None:
-            return
-        handle, post_id = parsed
-        found.setdefault((normalize_handle(handle), post_id), None)
-
-    for match in _text_link_re().finditer(_source_text(source)):
-        add(extract_channel_post_from_href(f"https://t.me/{match.group(1)}"))
-
-    for link in source.links or []:
-        if not isinstance(link, dict):
-            continue
-        url = link.get("url")
-        if isinstance(url, str):
-            parsed = extract_channel_post_from_href(url)
-            if parsed is not None:
-                add(parsed)
-                continue
-        channel = link.get("channel")
-        if isinstance(channel, str) and is_channel_handle(channel):
-            add((channel, None))
-
-    return [
-        Reference(target_handle=handle, kind="link", target_post_id=post_id)
-        for handle, post_id in found
-    ]
-
-
 def references_for(
     source: ReferenceSource,
     *,
@@ -202,11 +160,13 @@ def references_for(
         # names the Channel, as it did before.
         add(source.forwarded_from, "forward", source.forwarded_from_post_id)
 
-    for handle in extract_mentions(_source_text(source)):
+    mentions = extract_mentions(_source_text(source))
+    for handle in mentions:
         add(handle, "mention")
 
-    for ref in _link_references(source):
-        add(ref.target_handle, ref.kind, ref.target_post_id)
+    for handle, post_id in link_targets(_source_text(source), source.links):
+        if not is_the_mention(handle, post_id, mentions):
+            add(handle, "link", post_id)
 
     reply_channel = (source.reply_to or {}).get("channel")
     if isinstance(reply_channel, str) and is_channel_handle(reply_channel):
