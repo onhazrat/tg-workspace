@@ -180,8 +180,9 @@ handoff that it exists.
 
 ## Pitfalls met here
 
-- A plain @mention is stored as both a mention and a link Reference: count distinct Channels or
-  Posts, never Reference rows.
+- Count distinct Channels or Posts, never Reference rows: one Channel citing another in twenty
+  Posts is twenty rows. (Until 2026-10-14 a plain @mention was also stored twice; ADR-019's
+  amendment removed that.)
 - A Follow's channel id keeps its case while the Directory and References store handles lowercase:
   lower both sides of every join.
 - `timeout(1)` does not exist on macOS; use ssh's own `-o ConnectTimeout`.

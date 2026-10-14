@@ -8,6 +8,8 @@ of counts. The aggregation now happens next to the data.
 Counting rules preserved verbatim from the frontend implementation:
   - per post, a handle contributes at most one occurrence of each kind;
   - self-references (a channel naming itself) are excluded;
+  - a link that is only the anchor around an @mention counts as the mention
+    and not as a link (`is_the_mention`);
   - handle comparison is case-insensitive;
   - invite / private / reserved `t.me` paths are not handles.
 
@@ -29,10 +31,10 @@ from app.models_tg import Post
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
 from app.services.post_filters import ViewReading, apply_analysis_window
-from app.services.post_links_parser import channel_from_telegram_url
 from app.services.posts import channel_order
 from app.services.telegram_web import (
     _all_web_domains,
+    extract_channel_post_from_href,
     is_channel_handle,
     normalize_handle,
 )
@@ -66,35 +68,52 @@ def extract_mentions(text: str) -> set[str]:
     }
 
 
-def extract_text_links(text: str) -> set[str]:
-    if not text:
-        return set()
-    found: set[str] = set()
-    for match in _text_link_re().finditer(text):
-        handle = channel_from_telegram_url(f"https://t.me/{match.group(1)}")
-        if handle:
-            found.add(normalize_handle(handle))
-    return found
+def link_targets(
+    text: str | None, links: list[Any] | None
+) -> list[tuple[str, int | None]]:
+    """Telegram links in a body as (handle, Post id), from its plain text and
+    its stored hrefs (`links`), deduplicated.
 
-
-def extract_post_link_channels(post: Post) -> set[str]:
-    """Masked hrefs captured at scrape time, unioned with plain-text URLs.
-
-    Deduped: once the links backfill has run a plain `https://t.me/foo`
-    appears in both sources and must still count once.
+    The stored hrefs are the masked anchors captured at scrape time; once the
+    links backfill has run a plain `https://t.me/foo` appears in both sources
+    and must still count once. The stored `url` is preferred over the stored
+    `channel`: they are built from the same href, so they never name different
+    Channels, but only the url carries the Post id. `post_references` below and
+    the graph's extractor both read links through here.
     """
-    found = extract_text_links(post.text)
-    for link in post.links or []:
+    found: dict[tuple[str, int | None], None] = {}
+
+    def add(parsed: tuple[str, int | None] | None) -> None:
+        if parsed is not None:
+            found.setdefault((normalize_handle(parsed[0]), parsed[1]), None)
+
+    for match in _text_link_re().finditer(text or ""):
+        add(extract_channel_post_from_href(f"https://t.me/{match.group(1)}"))
+    for link in links or []:
         if not isinstance(link, dict):
+            continue
+        url = link.get("url")
+        if isinstance(url, str) and (parsed := extract_channel_post_from_href(url)):
+            add(parsed)
             continue
         channel = link.get("channel")
         if isinstance(channel, str) and is_channel_handle(channel):
-            found.add(normalize_handle(channel))
-            continue
-        url = link.get("url")
-        if isinstance(url, str):
-            found |= extract_text_links(url)
-    return found
+            add((channel, None))
+    return list(found)
+
+
+def is_the_mention(handle: str, post_id: int | None, mentions: set[str]) -> bool:
+    """Whether a link is only the anchor Telegram wraps around an @mention.
+
+    Telegram renders every plain `@foo` as `<a href="https://t.me/foo">`, so
+    the links blob holds a second copy of each mention. A link naming no Post
+    to a Channel the same Post @mentions names it the same way the mention
+    does, so it is the mention and makes no `link` of its own: a masked "read
+    here" or a bare `t.me/foo` beside `@foo` collapses too, which is the same
+    Post naming the same Channel. A link to one exact Post names something the
+    mention does not, and stays. See the **Reference** entry in `CONTEXT.md`.
+    """
+    return post_id is None and handle in mentions
 
 
 def post_references(post: Post) -> dict[str, set[SignalKind]]:
@@ -109,10 +128,12 @@ def post_references(post: Post) -> dict[str, set[SignalKind]]:
 
     if post.forwarded_from:
         add(normalize_handle(post.forwarded_from), "forward")
-    for handle in extract_mentions(post.text):
+    mentions = extract_mentions(post.text)
+    for handle in mentions:
         add(handle, "mention")
-    for handle in extract_post_link_channels(post):
-        add(handle, "link")
+    for handle, post_id in link_targets(post.text, post.links):
+        if not is_the_mention(handle, post_id, mentions):
+            add(handle, "link")
     # A reply to a post in another channel is a t.me link like any other, so it
     # counts as a "link" signal rather than needing a new SignalKind. Replies
     # within the same channel — the common case — drop out via `add`'s
