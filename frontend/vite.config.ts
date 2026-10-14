@@ -53,6 +53,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      allowedHosts: [".ts.net"], // PROTOTYPE: Tailscale sharing
       proxy: {
         "/api": {
           target:
