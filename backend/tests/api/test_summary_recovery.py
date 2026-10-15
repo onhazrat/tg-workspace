@@ -126,6 +126,62 @@ def test_an_incomplete_summary_can_still_be_retried(
     assert "incomplete" not in summary
 
 
+def _incomplete(client: TestClient, headers: dict[str, str]) -> str:
+    summary_id = _open(client, headers)
+    _act(client, headers, summary_id, _cut(client, headers, summary_id), "keep")
+    return summary_id
+
+
+def test_a_failed_retry_of_an_incomplete_summary_keeps_its_report(
+    client: TestClient,
+    headers: dict[str, str],
+    cutting: _FakeProvider,
+) -> None:
+    """Story 30: the kept text is still the report; the retry's failure is
+    the Attempt's to show, not a reason to hide the text behind Failed."""
+    summary_id = _incomplete(client, headers)
+
+    _start(client, headers, summary_id)
+    _drain()
+
+    summary = _summary(client, headers, summary_id)
+    assert summary["text"] == "First half, "
+    assert summary["incomplete"] is True
+    assert summary.get("status") is None
+    assert _attempts(client, headers, summary_id)[-1]["outcome"] == "failed"
+
+
+def test_a_stopped_retry_of_an_incomplete_summary_keeps_its_report(
+    client: TestClient,
+    headers: dict[str, str],
+    cutting: _FakeProvider,
+) -> None:
+    summary_id = _incomplete(client, headers)
+    attempt_id = _start(client, headers, summary_id).json()["id"]
+
+    assert _act(client, headers, summary_id, attempt_id, "stop").status_code == 200
+
+    summary = _summary(client, headers, summary_id)
+    assert summary["text"] == "First half, "
+    assert summary.get("status") is None
+
+
+def test_a_finished_summary_is_not_retried_in_place(
+    client: TestClient,
+    headers: dict[str, str],
+    provider: _FakeProvider,
+) -> None:
+    """A full report is regenerated as a successor; an Attempt on it would
+    overwrite the text a reader already has."""
+    summary_id = _open(client, headers)
+    _cut(client, headers, summary_id)  # succeeds
+
+    r = _start(client, headers, summary_id)
+
+    assert r.status_code == 409, r.text
+    assert len(_attempts(client, headers, summary_id)) == 1
+
+
 def test_keep_refuses_an_attempt_with_no_partial_response(
     client: TestClient,
     headers: dict[str, str],

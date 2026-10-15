@@ -638,12 +638,21 @@ def note_write(session: Session, summary: Summary) -> None:
     session.add(summary)
 
 
+def has_report(summary: Summary) -> bool:
+    """Finished with text a reader has, full or Incomplete."""
+    return bool(summary.text) and "status" not in (summary.extra or {})
+
+
 def mark_summary_failed(session: Session, summary: Summary) -> None:
-    """Set the Failed status; the caller commits it with the Attempt."""
-    summary.extra = {**(summary.extra or {}), "status": FAILED_STATUS}
-    summary.updated_at = utc_now()
-    acting_owner.stamp(session, summary)
-    session.add(summary)
+    """Set the Failed status; the caller commits it with the Attempt.
+
+    A Summary that already has a report keeps it: a failed retry of an
+    Incomplete one (story 30) is the Attempt's failure, and Failed would hide
+    the kept text behind the failure page.
+    """
+    if not has_report(summary):
+        summary.extra = {**(summary.extra or {}), "status": FAILED_STATUS}
+    note_write(session, summary)
 
 
 def store_prompt(session: Session, summary: Summary, prompt: str) -> None:

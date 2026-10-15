@@ -64,7 +64,13 @@ from app.services.ai_keys import (
 )
 from app.services.logs import upsert_llm_log
 from app.services.prompt_assembly import PromptScope, assemble_posts_text
-from app.services.summaries import frozen_scope_of, own_summary, store_prompt
+from app.services.summaries import (
+    frozen_scope_of,
+    has_report,
+    is_incomplete,
+    own_summary,
+    store_prompt,
+)
 from app.services.summary_attempts import (
     ATTEMPT_NOT_RUNNING_DETAIL,
     ATTEMPT_RUNNING_DETAIL,
@@ -112,6 +118,7 @@ MAX_RETRY_DELAY_SECONDS = 600.0
 #: Why an Attempt was refused before a Provider was reached.
 _LEGACY_SCOPE_DETAIL = "This Summary records no Scope, so no prompt can be built."
 _NO_PROMPT_DETAIL = "This Summary has no prompt to run."
+SUMMARY_FINISHED_DETAIL = "This Summary is finished; regenerate it instead."
 
 
 def _provider_for(
@@ -208,6 +215,10 @@ def start_attempt(
     summary = own_summary(session, summary_id, user_id=user_id, writing=True)
     if running_attempt(session, summary.id) is not None:
         raise HTTPException(status_code=409, detail=ATTEMPT_RUNNING_DETAIL)
+    # An Incomplete report may be replaced (story 30); a full one is
+    # regenerated as a successor, never overwritten in place.
+    if has_report(summary) and not is_incomplete(summary):
+        raise HTTPException(status_code=409, detail=SUMMARY_FINISHED_DETAIL)
     previous = last_attempt(session, summary.id)
     model = model or (previous.model if previous else None) or summary.model
     model = model or default_model()
