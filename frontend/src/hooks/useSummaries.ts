@@ -159,11 +159,18 @@ export function useSummaryAttempts(
   const running = attempts.find((a) => a.outcome === "running")
   const runningText = useRunningAttemptText(summaryId, running?.id ?? null)
 
-  const retry = async (id: string) => {
+  /** Without a choice the server reruns the last Attempt's Key and model. */
+  const retry = async (
+    id: string,
+    choice?: { keyId: string | null; model: string },
+  ) => {
     try {
       const started = await dataStartSummaryAttempt({
         path: { summary_id: id },
-        body: { temperature },
+        body: {
+          temperature,
+          ...(choice && { model: choice.model, aiKeyId: choice.keyId }),
+        },
       })
       if (started.error) toast.error(started.error)
     } catch (err: unknown) {

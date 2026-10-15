@@ -10235,7 +10235,11 @@
         "properties": {
           "id": { "type": "string", "title": "Id" },
           "label": { "type": "string", "title": "Label" },
-          "provider": { "type": "string", "title": "Provider" }
+          "provider": { "type": "string", "title": "Provider" },
+          "contextLength": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Contextlength"
+          }
         },
         "type": "object",
         "required": ["id", "label", "provider"],

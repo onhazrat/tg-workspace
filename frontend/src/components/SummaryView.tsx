@@ -28,6 +28,7 @@ import {
   RunningAttemptCard,
 } from "./summary-view/FailedSummaryPanel"
 import { IncompleteMark } from "./summary-view/IncompleteMark"
+import { RetryRunWith, useRetryChoice } from "./summary-view/RetryRunWith"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -97,6 +98,11 @@ export const SummaryView: React.FC = () => {
   const runningAttempt = attempts.find((a) => a.outcome === "running")
   const aiKeys = useAiKeys()
   const keyLabel = (id: string | null) => aiKeys.find((k) => k.id === id)?.label
+  const [retryChoice, setRetryChoice] = useRetryChoice(
+    currentSummaryId,
+    attempts,
+    currentSummary?.model ?? "",
+  )
   const applyScope = useApplyArtifactScope()
 
   const workspace = useCitationWorkspace()
@@ -157,7 +163,15 @@ export const SummaryView: React.FC = () => {
               keyLabel={keyLabel}
               onPaste={() => setPasteModalOpen(true)}
               runningText={runningText}
-              onRetry={() => void retry(s.id)}
+              onRetry={() => void retry(s.id, retryChoice)}
+              runWith={
+                <RetryRunWith
+                  value={retryChoice}
+                  onChange={setRetryChoice}
+                  attempts={attempts}
+                  promptText={currentSummaryDetail?.promptText}
+                />
+              }
               onStop={(attemptId) => void stop(s.id, attemptId)}
               onCancel={(attemptId) => void cancel(s.id, attemptId)}
               onKeep={(attemptId) => void keep(s.id, attemptId)}

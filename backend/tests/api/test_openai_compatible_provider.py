@@ -25,7 +25,8 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -36,7 +37,7 @@ from sqlmodel import Session, col, delete
 from app import crud
 from app.ai import registry
 from app.ai.models import ChatMessage, ModelInfo
-from app.ai.providers.gemini import rtl_instruction
+from app.ai.providers.gemini import GeminiProvider, rtl_instruction
 from app.ai.providers.openai_compatible import (
     OpenAICompatibleError,
     OpenAICompatibleProvider,
@@ -467,7 +468,7 @@ def test_the_listing_is_the_providers_answer_and_keeps_its_key_set(
     assert set(body) == {"models", "default"}
     assert [m["id"] for m in body["models"]] == ["m-1"]
     for entry in body["models"]:
-        assert set(entry) == {"id", "label", "provider"}
+        assert set(entry) == {"id", "label", "provider", "contextLength"}
 
 
 def test_the_default_is_a_model_this_provider_actually_offers(
@@ -647,3 +648,110 @@ def test_a_foreign_key_id_is_refused(
         assert response.json()["detail"] == AI_CREDENTIAL_NOT_FOUND
     finally:
         _drop_account(stranger.id)
+
+
+# --------------------------------------------------------------------------
+# Context windows, for the retry's "won't fit" warning
+# --------------------------------------------------------------------------
+
+
+def test_the_listing_carries_a_context_length_where_the_endpoint_gives_one(
+    client: TestClient,
+    account: tuple[User, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OpenRouter's `/models` names each model's `context_length`; a bare
+    endpoint names none, and that model stays free of a number rather than
+    gaining an invented one.
+
+    **Mutation:** stop reading `context_length` in
+    `OpenAICompatibleProvider.list_models` and this goes red.
+    """
+    user, headers = account
+    _seed_key(user.id, "models-windows")
+    original = httpx.AsyncClient.__init__
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "big", "context_length": 200000},
+                    {"id": "bare"},
+                    {"id": "odd", "context_length": "lots"},
+                ]
+            },
+        )
+
+    def patched(self: httpx.AsyncClient, **kwargs: Any) -> None:
+        kwargs["transport"] = httpx.MockTransport(handler)
+        original(self, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", patched)
+
+    body = client.post(
+        f"{V1}/ai/models", json={"aiKeyId": "models-windows"}, headers=headers
+    ).json()
+
+    assert {m["id"]: m["contextLength"] for m in body["models"]} == {
+        "bare": None,
+        "big": 200000,
+        "odd": None,
+    }
+
+
+def test_a_gemini_listing_knows_its_windows_by_rule_where_google_is_silent(
+    client: TestClient,
+    account: tuple[User, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Google's own `input_token_limit` wins; a Gemini id it leaves blank gets
+    the family's one-million-token window; anything else gets nothing.
+
+    **Mutation:** drop the rule in `gemini_context_length` and the silent
+    Gemini id loses its window.
+    """
+    user, headers = account
+    with Session(engine) as session:
+        session.add(
+            AICredential(
+                id="models-gemini",
+                user_id=user.id,
+                label="g",
+                provider="gemini",
+                key_encrypted=encrypt_token(SECRET),
+            )
+        )
+        session.commit()
+
+    def entry(name: str, limit: int | None) -> SimpleNamespace:
+        return SimpleNamespace(
+            name=f"models/{name}",
+            display_name=name,
+            supported_actions=["generateContent"],
+            input_token_limit=limit,
+        )
+
+    async def entries() -> AsyncIterator[SimpleNamespace]:
+        for e in (
+            entry("gemini-reported", 32768),
+            entry("gemini-silent", None),
+            entry("gemma-silent", None),
+        ):
+            yield e
+
+    async def _list() -> AsyncIterator[SimpleNamespace]:
+        return entries()
+
+    fake = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(list=_list)))
+    monkeypatch.setattr(GeminiProvider, "_get_client", lambda _self: fake)
+
+    body = client.post(
+        f"{V1}/ai/models", json={"aiKeyId": "models-gemini"}, headers=headers
+    ).json()
+
+    assert {m["id"]: m["contextLength"] for m in body["models"]} == {
+        "gemini-reported": 32768,
+        "gemini-silent": 1_048_576,
+        "gemma-silent": None,
+    }

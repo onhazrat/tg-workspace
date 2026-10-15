@@ -51,6 +51,11 @@ class ModelInfo(BaseModel):
     id: str
     label: str
     provider: str
+    #: Tokens the model accepts, when the Provider says (OpenRouter does, Gemini
+    #: by rule). `null` means unknown, and the page then warns about nothing.
+    context_length: int | None = Field(
+        default=None, serialization_alias="contextLength"
+    )
 
 
 # A body rather than a query parameter, and a POST rather than a GET, because

@@ -34,8 +34,10 @@ export interface FailedSummaryPanelProps {
   onPaste: () => void
   /** The running Attempt's text so far, as the watch delivers it (SFR-02). */
   runningText: string
-  /** Start an Attempt on the last Attempt's model and Key. */
+  /** Start an Attempt on the Key and model the chips name. */
   onRetry: () => void
+  /** The retry's Key and Model chips and size warning (SFR-04). */
+  runWith?: ReactNode
   onStop: (attemptId: string) => void
   /** Withdraw the automatic retry while it counts down (SFR-03). */
   onCancel: (attemptId: string) => void
@@ -134,6 +136,7 @@ export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
             model={summary.model}
             keyLabel={props.keyLabel}
             onRetry={props.onRetry}
+            runWith={props.runWith}
           />
         )}
         {promptText && !tooLarge && (
@@ -286,21 +289,31 @@ function TryAgainCard({
   model,
   keyLabel,
   onRetry,
+  runWith,
 }: {
   next: number
   last: SummaryAttemptResponse | undefined
   model: string | undefined
   keyLabel: (keyId: string | null) => string | undefined
   onRetry: () => void
+  runWith: ReactNode
 }) {
   const key = last ? keyLabel(last.keyId) : undefined
   return (
     <section data-testid="try-again" className={CARD}>
       <h4 className="mb-2 text-sm font-bold">Try again</h4>
       <p className="mb-4 text-sm text-app-ink/80">
-        Runs Attempt {next} on {formatSummaryModelLabel(last?.model ?? model)}
-        {key && ` · ${key}`}. It keeps going if you close this tab.
+        Runs Attempt {next}
+        {!runWith && (
+          <>
+            {" "}
+            on {formatSummaryModelLabel(last?.model ?? model)}
+            {key && ` · ${key}`}
+          </>
+        )}
+        . It keeps going if you close this tab.
       </p>
+      {runWith}
       <TgButton type="button" variant="primary" onClick={onRetry}>
         <RotateCcw size={14} />
         Retry

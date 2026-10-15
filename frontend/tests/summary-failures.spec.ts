@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "./fixtures.ts"
+import { readScopedStorage, seedScopedStorage } from "./utils/scoped-storage.ts"
 
 /**
  * SFR-01: a Generate that broke leaves a Failed Summary that says why.
@@ -7,6 +8,8 @@ import { expect, test } from "./fixtures.ts"
  * page opened mid-Attempt attaches to it, and a running Attempt can be stopped.
  * SFR-03: a Partial response can be kept, dismissed and restored, and the
  * automatic retry's countdown can be cancelled.
+ * SFR-04: a retry can run on another Key and model, warns when the saved prompt
+ * won't fit, and leaves the Action tab's selection alone.
  *
  * Over a mocked API, because the journey is about what the tab and History
  * show for rows in a given state, and making a real Generate fail would drag
@@ -133,6 +136,8 @@ let state: {
   events: Record<string, string>
   posted: string[]
   onStart?: () => unknown
+  /** The body of the last Attempt start. */
+  startBody?: unknown
   onStop?: () => unknown
   /** Keep, dismiss, restore or cancel on one Attempt (SFR-03). */
   onAct?: (action: string, attemptId: string) => unknown
@@ -163,8 +168,10 @@ async function mockSummaries(page: Page): Promise<void> {
     if (route.request().method() === "POST") {
       state.posted.push(path)
       const start = path.match(/^\/summaries\/([^/]+)\/attempts\/start$/)
-      if (start && state.onStart)
+      if (start && state.onStart) {
+        state.startBody = route.request().postDataJSON()
         return route.fulfill({ json: state.onStart() })
+      }
       const stop = path.match(/\/attempts\/([^/]+)\/stop$/)
       if (stop && state.onStop) return route.fulfill({ json: state.onStop() })
       const act = path.match(
@@ -278,6 +285,107 @@ test("Retry runs on the worker, streams into the page, then shows the report", a
   await expect(page.getByText("Failed ×2")).toHaveCount(0)
   // It took three Attempts, so the finished report keeps them folded.
   await expect(page.getByRole("button", { name: "Attempts (3)" })).toBeVisible()
+})
+
+test("a retry runs on another Key and model, warns it won't fit, and leaves the Action tab alone", async ({
+  page,
+}) => {
+  const keys = [
+    { id: "k-work", label: "Work key", provider: "gemini", baseUrl: null },
+    { id: "k-spare", label: "Spare key", provider: "gemini", baseUrl: null },
+  ].map((k) => ({ ...k, lastValidated: null, createdAt: NOW }))
+  await page.route("**/api/v1/data/ai-keys", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: keys })
+      : route.fallback(),
+  )
+  const CATALOGUES: Record<string, unknown[]> = {
+    "k-work": [{ id: "gemini-x", label: "gemini-x", contextLength: 1_000_000 }],
+    // "THE SAVED PROMPT" is four tokens: past `tiny`'s two.
+    "k-spare": [
+      { id: "roomy", label: "roomy", contextLength: 1_000_000 },
+      { id: "tiny", label: "tiny", contextLength: 2 },
+    ],
+  }
+  await page.route("**/api/v1/ai/models", (route) => {
+    const { aiKeyId } = route.request().postDataJSON() as { aiKeyId?: string }
+    const models = CATALOGUES[aiKeyId ?? "k-work"] ?? []
+    return route.fulfill({
+      json: {
+        models: models.map((m) => ({ ...(m as object), provider: "gemini" })),
+        default: "",
+      },
+    })
+  })
+  state.attempts[FAILED_ID] = ATTEMPTS[FAILED_ID].map((a) => ({
+    ...(a as object),
+    keyId: "k-work",
+  }))
+  const running = attempt(FAILED_ID, 3, {
+    outcome: "running",
+    kind: null,
+    error: null,
+    endedAt: null,
+    keyId: "k-spare",
+    model: "tiny",
+  })
+  state.onStart = () => {
+    state.attempts[FAILED_ID] = [...(state.attempts[FAILED_ID] ?? []), running]
+    state.events[running.id] = sse(
+      { text: "A tiny report." },
+      { outcome: "succeeded", error: null },
+    )
+    state.afterWatch = () => {
+      state.details[FAILED_ID] = summary(FAILED_ID, {
+        text: "A tiny report.",
+        status: null,
+        model: "tiny",
+      })
+    }
+    return running
+  }
+
+  await page.goto(`/workspace?tab=summary&summary=${FAILED_ID}`)
+  await expect(page.getByTestId("try-again")).toBeVisible({ timeout: 20_000 })
+  await seedScopedStorage(page, {
+    selected_ai_key: "k-work",
+    ai_key_models: JSON.stringify({ "k-work": "gemini-x" }),
+  })
+  await page.reload()
+
+  const card = page.getByTestId("try-again")
+  const keyChip = card.getByLabel("Retry AI key")
+  await expect(keyChip).toHaveValue("k-work", { timeout: 20_000 })
+  await expect(
+    card.getByRole("combobox", { name: "Retry model" }),
+  ).toContainText("gemini-x")
+  await expect(card.getByTestId("prompt-fit")).toHaveCount(0)
+
+  await keyChip.selectOption("k-spare")
+  await card.getByRole("combobox", { name: "Retry model" }).click()
+  await page.getByRole("option", { name: "tiny" }).click()
+  await expect(card.getByTestId("prompt-fit")).toContainText("won't fit")
+
+  // It advises and never blocks.
+  await card.getByRole("button", { name: "Retry" }).click()
+  await expect(page.getByText("A tiny report.")).toBeVisible({
+    timeout: 20_000,
+  })
+  expect(state.startBody).toMatchObject({ aiKeyId: "k-spare", model: "tiny" })
+
+  // The Action tab's Key and that Key's model are what they were.
+  expect(await readScopedStorage(page, "selected_ai_key")).toBe("k-work")
+  expect(
+    JSON.parse((await readScopedStorage(page, "ai_key_models")) ?? "{}"),
+  ).toEqual({ "k-work": "gemini-x" })
+  await page.goto("/workspace?tab=action")
+  await expect(page.getByLabel("AI key", { exact: true })).toHaveValue(
+    "k-work",
+    { timeout: 20_000 },
+  )
+  await expect(
+    page.getByRole("combobox", { name: "Inference model" }),
+  ).toContainText("gemini-x")
 })
 
 test("a Summary reopened mid-Attempt shows the text so far, and Stop ends it", async ({

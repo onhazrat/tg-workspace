@@ -3981,6 +3981,10 @@ export type ModelInfo = {
      * Provider
      */
     provider: string;
+    /**
+     * Contextlength
+     */
+    contextLength?: number | null;
 };
 
 /**

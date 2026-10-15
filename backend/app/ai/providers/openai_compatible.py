@@ -116,7 +116,15 @@ class OpenAICompatibleProvider:
         if not isinstance(entries, list):
             return []
         models = [
-            ModelInfo(id=str(entry["id"]), label=str(entry["id"]), provider=self.name)
+            ModelInfo(
+                id=str(entry["id"]),
+                label=str(entry["id"]),
+                provider=self.name,
+                # OpenRouter's field; an endpoint without it leaves it unknown.
+                context_length=entry.get("context_length")
+                if type(entry.get("context_length")) is int
+                else None,
+            )
             for entry in entries
             if isinstance(entry, dict) and entry.get("id")
         ]

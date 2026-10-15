@@ -7,6 +7,8 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 
+import type { ReactNode } from "react"
+
 import type { SummaryAttemptResponse } from "@/client"
 import type { Summary } from "@/types"
 import { AttemptsFold, FailedSummaryPanel } from "./FailedSummaryPanel"
@@ -48,6 +50,7 @@ function renderPanel(
   attempts: SummaryAttemptResponse[],
   prompt: string | null = "the prompt",
   runningText = "",
+  runWith?: ReactNode,
 ) {
   const onPaste = mock()
   const onRetry = mock()
@@ -71,6 +74,7 @@ function renderPanel(
       onDismiss={mock()}
       onRestore={mock()}
       onChangeSelection={onChangeSelection}
+      runWith={runWith}
     />,
   )
   return { onPaste, onRetry, onStop, onChangeSelection, onCancel, onKeep }
@@ -121,6 +125,16 @@ describe("FailedSummaryPanel", () => {
     expect(screen.queryByText("error 1")).toBeNull()
     fireEvent.click(screen.getByText("Earlier attempts (1)"))
     expect(screen.getByText("error 1")).toBeTruthy()
+  })
+
+  test("Try again names the last Attempt's run, or hands it to the chips", () => {
+    renderPanel([attempt(1)])
+    expect(screen.getByTestId("try-again").textContent).toContain("Work key")
+    cleanup()
+    renderPanel([attempt(1)], "p", "", <span>THE CHIPS</span>)
+    const card = screen.getByTestId("try-again").textContent ?? ""
+    expect(card).toContain("THE CHIPS")
+    expect(card).not.toContain("Work key")
   })
 
   test("Use another AI copies the prompt and opens the paste", () => {
