@@ -6,6 +6,10 @@
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import type {
+  ColumnCatalogue,
+  ColumnChoices,
+} from "@/lib/directory/directory-columns"
 import {
   type DirectoryFilter,
   OPENING_FILTER,
@@ -13,10 +17,106 @@ import {
   printDirectoryFilter,
 } from "@/lib/directory/directory-filter"
 import type { SearchField } from "@/lib/directory/directory-view"
-import { DirectoryBar, type DirectoryBarProps } from "./DirectoryBar"
+import {
+  type ColumnsMenu,
+  ColumnsPill,
+  DirectoryBar,
+  type DirectoryBarProps,
+} from "./DirectoryBar"
 import { directoryVocabulary } from "./directory-vocabulary"
 
 afterEach(cleanup)
+
+const CATALOGUE: ColumnCatalogue = [
+  { key: "language", default: true },
+  { key: "subscribers", default: true },
+  { key: "reach", default: true },
+  { key: "photos", default: false },
+  { key: "bio", default: false },
+]
+
+describe("the Columns menu (DCOL)", () => {
+  function open(menu: Partial<ColumnsMenu> = {}) {
+    const choices: ColumnChoices[] = []
+    render(
+      <ColumnsPill
+        menu={{
+          catalogue: CATALOGUE,
+          choices: {},
+          onChoices: (c) => choices.push(c),
+          ...menu,
+        }}
+      />,
+    )
+    fireEvent.click(screen.getByTestId("directory-columns"))
+    return choices
+  }
+  const headings = () =>
+    ["Default columns", "More columns"].filter((h) => screen.queryByText(h))
+
+  test("the defaults first, then the rest, each on or off as its default", () => {
+    open()
+    expect(headings()).toEqual(["Default columns", "More columns"])
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[]
+    expect(boxes.map((b) => b.checked)).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+    ])
+    expect(screen.queryByText("Reset to default columns")).toBeNull()
+  })
+
+  test("a click sets a choice, even one the default already gives", () => {
+    const choices = open({ choices: { reach: "off" } })
+    const boxes = screen.getAllByRole("checkbox")
+    fireEvent.click(boxes[0])
+    fireEvent.click(boxes[4])
+    expect(choices).toEqual([
+      { reach: "off", language: "off" },
+      { reach: "off", bio: "on" },
+    ])
+  })
+
+  test("a choice is marked, counted, and undone alone or with the rest", () => {
+    const choices = open({ choices: { reach: "off", bio: "on" } })
+    expect(screen.getByTestId("directory-columns").textContent).toContain(
+      "2 set",
+    )
+    expect(document.querySelectorAll("[data-chosen]")).toHaveLength(2)
+    fireEvent.click(
+      screen.getByRole("button", { name: "Put Reach back to its default" }),
+    )
+    fireEvent.click(screen.getByText("Reset to default columns"))
+    expect(choices).toEqual([{ bio: "on" }, {}])
+  })
+
+  test("Make these the defaults shows only to an Account that may, and asks twice", () => {
+    open()
+    expect(
+      screen.queryByText("Make these the defaults for everyone"),
+    ).toBeNull()
+    cleanup()
+    let made = 0
+    open({ onMakeDefaults: () => (made += 1) })
+    fireEvent.click(screen.getByText("Make these the defaults for everyone"))
+    expect(made).toBe(0)
+    fireEvent.click(
+      screen.getByText("Click again to change everyone's defaults"),
+    )
+    expect(made).toBe(1)
+  })
+
+  test("search reaches a column outside the defaults", () => {
+    open()
+    fireEvent.change(screen.getByPlaceholderText("Search columns..."), {
+      target: { value: "itself" },
+    })
+    expect(headings()).toEqual(["More columns"])
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1)
+  })
+})
 
 const parse = (text: string) => parseDirectoryFilter(text) as DirectoryFilter
 
@@ -24,7 +124,7 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
   const calls = {
     filters: [] as string[],
     kinds: [] as string[][],
-    hidden: [] as string[][],
+    choices: [] as ColumnChoices[],
     sorts: [] as string[],
     searches: [] as string[],
     fields: [] as string[][],
@@ -52,8 +152,11 @@ function mount(over: Partial<DirectoryBarProps> & { text?: string } = {}) {
       onSort={(v) => calls.sorts.push(v)}
       descending
       onToggleDirection={() => {}}
-      hidden={[]}
-      onHidden={(h) => calls.hidden.push(h)}
+      columns={{
+        catalogue: CATALOGUE,
+        choices: {},
+        onChoices: (c) => calls.choices.push(c),
+      }}
       total={1234}
       size={297_345}
       ms={360}
@@ -161,7 +264,7 @@ describe("the dropdowns", () => {
     ).toBeTruthy()
   })
 
-  test("Columns searches names and descriptions and hides one", () => {
+  test("Columns searches names and descriptions and turns one off", () => {
     const calls = mount()
     fireEvent.click(screen.getByTestId("directory-columns"))
     fireEvent.change(screen.getByPlaceholderText("Search columns..."), {
@@ -169,7 +272,7 @@ describe("the dropdowns", () => {
     })
     expect(screen.getAllByRole("checkbox")).toHaveLength(1)
     fireEvent.click(screen.getByRole("checkbox"))
-    expect(calls.hidden).toEqual([["reach"]])
+    expect(calls.choices).toEqual([{ reach: "off" }])
   })
 
   test("Sort searches its options, the three Cited by choices among them", () => {

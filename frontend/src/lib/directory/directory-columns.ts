@@ -1,0 +1,108 @@
+/**
+ * The Directory's columns (DCOL). The deployment decides which are on by
+ * default; an Account sets any of them On or Off in this browser, and a column
+ * it never touched follows the default as the default changes. A list read
+ * carries only the columns it asks for, so this is also where "does showing
+ * this column need a new read?" is answered.
+ */
+import type { DirectoryColumnResponse } from "@/client"
+
+export type ColumnKey = DirectoryColumnResponse["key"]
+/** The columns this caller may show, in table order, with their defaults. */
+export type ColumnCatalogue = DirectoryColumnResponse[]
+/** An Account's explicit choices; a column with none is at its default. */
+export type ColumnChoices = Partial<Record<ColumnKey, "on" | "off">>
+
+/**
+ * Every column key, keyed by the generated union so a key the server adds or
+ * drops is a compile error here.
+ */
+const KEYS: Record<ColumnKey, true> = {
+  language: true,
+  subscribers: true,
+  reach: true,
+  posts_per_week: true,
+  forward_pct: true,
+  last_post_days: true,
+  mine: true,
+  cited_by: true,
+  cites: true,
+  found_days: true,
+  photos: true,
+  videos: true,
+  files: true,
+  links: true,
+  status: true,
+  followable: true,
+  bio: true,
+  sample_count: true,
+  checked_at: true,
+  refresh_due_at: true,
+  attempts: true,
+  last_error: true,
+  attempted_at: true,
+  retry_after: true,
+  priority: true,
+  telegram_chat_id: true,
+  latest_id: true,
+}
+export const isColumnKey = (key: string): key is ColumnKey => key in KEYS
+
+export const isOn = (
+  column: DirectoryColumnResponse,
+  choices: ColumnChoices,
+): boolean => {
+  const choice = choices[column.key]
+  return choice === undefined ? column.default : choice === "on"
+}
+
+/** The columns the table shows, in table order. */
+export const shownColumns = (
+  catalogue: ColumnCatalogue,
+  choices: ColumnChoices,
+): ColumnKey[] => catalogue.filter((c) => isOn(c, choices)).map((c) => c.key)
+
+/** One column set On or Off, or back to Default with `undefined`. */
+export function setChoice(
+  choices: ColumnChoices,
+  key: ColumnKey,
+  choice: "on" | "off" | undefined,
+): ColumnChoices {
+  const { [key]: _, ...rest } = choices
+  return choice === undefined ? rest : { ...rest, [key]: choice }
+}
+
+/** The choices the catalogue lists: what "N set" counts and Reset clears. */
+export const choiceCount = (
+  catalogue: ColumnCatalogue,
+  choices: ColumnChoices,
+): number => catalogue.filter((c) => choices[c.key] !== undefined).length
+
+/**
+ * Whether this caller may set the deployment's defaults. The server lists the
+ * probe queue's columns only to `DATA_ADMIN`, the Permission the `PUT` needs,
+ * so the catalogue already is the reading of it.
+ */
+// ponytail: one Permission read through the catalogue. If the PUT ever moves
+// to its own Permission, publish it on the catalogue response instead.
+export const mayMakeDefaults = (catalogue: ColumnCatalogue): boolean =>
+  catalogue.some((c) => c.key === "attempts")
+
+/** The hidden list stored before DCOL, as explicit Offs. */
+export const choicesFromHidden = (hidden: string[]): ColumnChoices =>
+  Object.fromEntries(
+    hidden.filter(isColumnKey).map((key) => [key, "off"]),
+  ) as ColumnChoices
+
+/**
+ * What a list read asks for. The last request stands while it carries every
+ * shown column, so hiding one reads nothing; showing one it lacks asks for
+ * exactly the shown ones, sorted so the query key is stable.
+ */
+export function columnsToSend(
+  shown: ColumnKey[],
+  previous: ColumnKey[] | undefined,
+): ColumnKey[] {
+  if (previous && shown.every((key) => previous.includes(key))) return previous
+  return [...shown].sort()
+}

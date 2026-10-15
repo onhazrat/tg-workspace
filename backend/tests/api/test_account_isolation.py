@@ -320,6 +320,15 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "same file",
     ),
+    ("GET", f"{DATA}/directory/columns"): (
+        Reason.DEPLOYMENT_WIDE,
+        "the column catalogue and the deployment's defaults, one row for every "
+        "Account; who may see the Internals is test_directory_columns.py's",
+    ),
+    ("PUT", f"{DATA}/directory/columns"): (
+        Reason.DEPLOYMENT_WIDE,
+        "the deployment's column defaults; the write is DATA_ADMIN-gated",
+    ),
     ("GET", f"{DATA}/directory/size"): (
         Reason.CORPUS,
         "one count over DirectoryEntry, the same for every caller",

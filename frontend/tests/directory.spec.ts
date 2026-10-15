@@ -9,8 +9,9 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
  * pins what the tab sends and shows.
  *
  * Watched to fail on: Follow sent without its `directory` source; the
- * switches reading off whatever the filter holds; the ticks and hidden
- * columns not read back from storage; the remembered view not adopted; the
+ * switches reading off whatever the filter holds; the ticks and column
+ * choices not read back from storage, or a reload asking for a column the
+ * Account turned off (DCOL); the remembered view not adopted; the
  * "+" menu returning focus after a tab is chosen (closes the Language
  * dropdown); the Channels list left unmocked (a Channels tab selection on
  * the shared backend turns "your channels" into it); the open panel kept in
@@ -63,7 +64,24 @@ type ListBody = {
   showMatches?: boolean
   selectedFirst?: boolean
   ticked?: string[]
+  columns?: string[]
 }
+
+/** The catalogue a caller without DATA_ADMIN gets, with the opening defaults. */
+const CATALOGUE = [
+  ["language", true],
+  ["subscribers", true],
+  ["reach", true],
+  ["posts_per_week", true],
+  ["forward_pct", true],
+  ["last_post_days", true],
+  ["mine", true],
+  ["cited_by", true],
+  ["cites", true],
+  ["found_days", true],
+  ["photos", false],
+  ["bio", false],
+].map(([key, on]) => ({ key, default: on }))
 
 /** What a search quotes for a1 (DIR-04): a bio and a Post, one word a hit. */
 const MATCH = {
@@ -129,6 +147,9 @@ async function mockDirectory(page: Page, shown: typeof ROWS = ROWS) {
   )
   await page.route("**/api/v1/data/directory/size", (route) =>
     route.fulfill({ json: { size: 297_345 } }),
+  )
+  await page.route("**/api/v1/data/directory/columns", (route) =>
+    route.fulfill({ json: CATALOGUE }),
   )
   await page.route("**/api/v1/data/tags", (route) =>
     route.fulfill({ json: [] }),
@@ -203,6 +224,7 @@ test.describe("TG Workspace directory", () => {
       "directory.view",
       "directory.ticks",
       "directory.hiddenColumns",
+      "directory.columns",
       "directory.open",
     ])
 
@@ -330,7 +352,8 @@ test.describe("TG Workspace directory", () => {
       0,
     )
 
-    // The view survives a reload, and so does the hidden column.
+    // The view survives a reload, and so does the hidden column, which the
+    // read no longer asks for.
     const before = page.url()
     await page.reload()
     await expect(chip(page, "measure-subscribers")).toBeVisible()
@@ -338,6 +361,8 @@ test.describe("TG Workspace directory", () => {
     await expect(page.getByRole("columnheader", { name: "Reach" })).toHaveCount(
       0,
     )
+    await expect.poll(() => api.lastList().columns).not.toContain("reach")
+    expect(api.lastList().columns).toContain("subscribers")
 
     // Ticking reaches "your channels" as the ticks change.
     await page.getByRole("checkbox", { name: "Tick @a1" }).check()

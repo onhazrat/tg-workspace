@@ -2907,6 +2907,72 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/directory/columns": {
+      "get": {
+        "tags": ["data"],
+        "summary": "List Directory Columns",
+        "description": "The Directory columns this caller may show, in table order, each with\nwhether it is on by default.",
+        "operationId": "data-list_directory_columns",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DirectoryColumnResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Data-List Directory Columns"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      },
+      "put": {
+        "tags": ["data"],
+        "summary": "Put Directory Columns",
+        "description": "Set which Directory columns are on by default for every Account; a\ncolumn not named is off.",
+        "operationId": "data-put_directory_columns",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryColumnDefaultsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DirectoryColumnResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Data-Put Directory Columns"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/directory/{handle}/entry": {
       "get": {
         "tags": ["data"],
@@ -7812,6 +7878,94 @@
         "title": "DirectoryCitingPostResponse",
         "description": "One Post of \"your channels\" that cites the Channel."
       },
+      "DirectoryColumnDefaultsRequest": {
+        "properties": {
+          "on": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "language",
+                "subscribers",
+                "reach",
+                "posts_per_week",
+                "forward_pct",
+                "last_post_days",
+                "mine",
+                "cited_by",
+                "cites",
+                "found_days",
+                "photos",
+                "videos",
+                "files",
+                "links",
+                "status",
+                "followable",
+                "bio",
+                "sample_count",
+                "checked_at",
+                "refresh_due_at",
+                "attempts",
+                "last_error",
+                "attempted_at",
+                "retry_after",
+                "priority",
+                "telegram_chat_id",
+                "latest_id"
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "On"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["on"],
+        "title": "DirectoryColumnDefaultsRequest",
+        "description": "The columns on by default for the whole deployment; the rest are off."
+      },
+      "DirectoryColumnResponse": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "language",
+              "subscribers",
+              "reach",
+              "posts_per_week",
+              "forward_pct",
+              "last_post_days",
+              "mine",
+              "cited_by",
+              "cites",
+              "found_days",
+              "photos",
+              "videos",
+              "files",
+              "links",
+              "status",
+              "followable",
+              "bio",
+              "sample_count",
+              "checked_at",
+              "refresh_due_at",
+              "attempts",
+              "last_error",
+              "attempted_at",
+              "retry_after",
+              "priority",
+              "telegram_chat_id",
+              "latest_id"
+            ],
+            "title": "Key"
+          },
+          "default": { "type": "boolean", "title": "Default" }
+        },
+        "type": "object",
+        "required": ["key", "default"],
+        "title": "DirectoryColumnResponse",
+        "description": "One column a caller may show, and whether it is on by default."
+      },
       "DirectoryCountRequest": {
         "properties": {
           "yours": { "$ref": "#/components/schemas/YourChannels" },
@@ -8253,10 +8407,48 @@
             "type": "array",
             "maxItems": 10000,
             "title": "Ticked"
+          },
+          "columns": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "language",
+                "subscribers",
+                "reach",
+                "posts_per_week",
+                "forward_pct",
+                "last_post_days",
+                "mine",
+                "cited_by",
+                "cites",
+                "found_days",
+                "photos",
+                "videos",
+                "files",
+                "links",
+                "status",
+                "followable",
+                "bio",
+                "sample_count",
+                "checked_at",
+                "refresh_due_at",
+                "attempts",
+                "last_error",
+                "attempted_at",
+                "retry_after",
+                "priority",
+                "telegram_chat_id",
+                "latest_id"
+              ]
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Columns"
           }
         },
         "additionalProperties": false,
         "type": "object",
+        "required": ["columns"],
         "title": "DirectoryListRequest",
         "description": "One page of a Directory view, sorted."
       },
@@ -8450,6 +8642,28 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Photourl"
           },
+          "followable": { "type": "boolean", "title": "Followable" },
+          "followed": { "type": "boolean", "title": "Followed" },
+          "dismissed": { "type": "boolean", "title": "Dismissed" },
+          "tags": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Tags"
+          },
+          "match": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryMatchResponse" },
+              { "type": "null" }
+            ]
+          },
+          "sharedParents": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Sharedparents"
+          },
+          "sharedChildren": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Sharedchildren"
+          },
           "language": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Language"
@@ -8462,7 +8676,10 @@
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Reach"
           },
-          "reachEstimated": { "type": "boolean", "title": "Reachestimated" },
+          "reachEstimated": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Reachestimated"
+          },
           "postsPerWeek": {
             "anyOf": [{ "type": "number" }, { "type": "null" }],
             "title": "Postsperweek"
@@ -8475,7 +8692,26 @@
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Lastpostat"
           },
-          "foundAt": { "type": "integer", "title": "Foundat" },
+          "mine": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Mine"
+          },
+          "mineLastAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Minelastat"
+          },
+          "citedBy": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Citedby"
+          },
+          "cites": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Cites"
+          },
+          "foundAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Foundat"
+          },
           "photos": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Photos"
@@ -8492,34 +8728,53 @@
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Links"
           },
-          "followable": { "type": "boolean", "title": "Followable" },
-          "followed": { "type": "boolean", "title": "Followed" },
-          "dismissed": { "type": "boolean", "title": "Dismissed" },
-          "citedBy": { "type": "integer", "title": "Citedby" },
-          "tags": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Tags"
+          "status": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Status"
           },
-          "cites": { "type": "integer", "title": "Cites" },
-          "mine": { "type": "integer", "title": "Mine" },
-          "mineLastAt": {
+          "bio": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio"
+          },
+          "sampleCount": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Minelastat"
+            "title": "Samplecount"
           },
-          "match": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/DirectoryMatchResponse" },
-              { "type": "null" }
-            ]
-          },
-          "sharedParents": {
+          "checkedAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Sharedparents"
+            "title": "Checkedat"
           },
-          "sharedChildren": {
+          "refreshDueAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Sharedchildren"
+            "title": "Refreshdueat"
+          },
+          "attempts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Attempts"
+          },
+          "lastError": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Lasterror"
+          },
+          "attemptedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Attemptedat"
+          },
+          "retryAfter": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Retryafter"
+          },
+          "priority": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Priority"
+          },
+          "telegramChatId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Telegramchatid"
+          },
+          "latestId": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Latestid"
           }
         },
         "type": "object",
@@ -8527,32 +8782,16 @@
           "handle",
           "displayName",
           "photoUrl",
-          "language",
-          "subscribers",
-          "reach",
-          "reachEstimated",
-          "postsPerWeek",
-          "forwardShare",
-          "lastPostAt",
-          "foundAt",
-          "photos",
-          "videos",
-          "files",
-          "links",
           "followable",
           "followed",
           "dismissed",
-          "citedBy",
           "tags",
-          "cites",
-          "mine",
-          "mineLastAt",
           "match",
           "sharedParents",
           "sharedChildren"
         ],
         "title": "DirectoryRowResponse",
-        "description": "One Directory entry in the list: its measures, never its bio or samples."
+        "description": "One Directory entry in the list: what every row needs, and the columns\nthe request asked for (DCOL).\n\nA column field is **absent** when the request did not ask for it, never\n`null`, because `null` already means \"not measured\". The route serialises\nwith `exclude_unset` for that reason, which is why every column field\ncarries a default here and the always-present ones carry none."
       },
       "DirectorySampleLinkResponse": {
         "properties": {

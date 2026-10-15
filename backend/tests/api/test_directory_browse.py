@@ -343,6 +343,9 @@ OPENING = root(
 
 
 def _list(client: TestClient, headers: dict[str, str], **body: Any) -> dict[str, Any]:
+    # Every column, so a row carries all it has; DCOL's narrowing is
+    # `test_directory_columns.py`'s.
+    body.setdefault("columns", list(directory_reads.DIRECTORY_COLUMNS))
     response = client.post(f"{DIRECTORY}/list", json=body, headers=headers)
     assert response.status_code == 200, response.text
     return dict(response.json())
@@ -925,7 +928,9 @@ def test_an_unknown_or_oversized_filter_is_refused(
     client: TestClient, accounts: tuple[dict[str, str], dict[str, str]], tree: Any
 ) -> None:
     operator, _ = accounts
-    response = client.post(f"{DIRECTORY}/list", json={"filter": tree}, headers=operator)
+    response = client.post(
+        f"{DIRECTORY}/list", json={"filter": tree, "columns": []}, headers=operator
+    )
     assert response.status_code == 422
 
 
@@ -1616,7 +1621,9 @@ def test_cited_by_and_cites_take_500_handles_or_a_tag(
 
     def status(cond: dict[str, Any]) -> int:
         return client.post(
-            f"{DIRECTORY}/list", json={"filter": root(atom(cond))}, headers=operator
+            f"{DIRECTORY}/list",
+            json={"filter": root(atom(cond)), "columns": []},
+            headers=operator,
         ).status_code
 
     many = [f"h{i}" for i in range(501)]

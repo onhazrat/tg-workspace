@@ -12,7 +12,12 @@ import type { DirectoryRowResponse } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
-import { type MeasureKey, measureOf } from "@/lib/directory/directory-filter"
+import type { ColumnKey } from "@/lib/directory/directory-columns"
+import {
+  MEASURES,
+  type MeasureKey,
+  measureOf,
+} from "@/lib/directory/directory-filter"
 import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
 import { formatCount } from "@/lib/format-count"
@@ -67,41 +72,116 @@ export function RowTagButton({
 type SharedKey = "shared_parents" | "shared_children"
 
 export type DirectoryColumn = {
-  key: "language" | "mine" | MeasureKey | SharedKey
+  key: ColumnKey | SharedKey
   label: string
   description: string
 }
 
-const measureColumn = (key: MeasureKey): DirectoryColumn => ({
-  key,
+const measureText = (key: MeasureKey) => ({
   label: measureOf(key).short,
   description: measureOf(key).description,
 })
 
 /**
- * The columns a Columns menu can hide, in table order; the Channel and the
- * actions always show.
+ * What the Columns menu and the header call each column (DCOL). Keyed by the
+ * generated union, so a column the server adds or drops is a compile error;
+ * which columns a caller may show, and in what order, is the server's
+ * catalogue.
  */
-export const COLUMNS: DirectoryColumn[] = [
-  {
-    key: "language",
+const COLUMN_TEXT: Record<ColumnKey, Omit<DirectoryColumn, "key">> = {
+  language: {
     label: "Lang",
     description: "The Language the Directory read from its Posts",
   },
-  measureColumn("subscribers"),
-  measureColumn("reach"),
-  measureColumn("posts_per_week"),
-  measureColumn("forward_pct"),
-  measureColumn("last_post_days"),
-  {
-    key: "mine",
+  subscribers: measureText("subscribers"),
+  reach: measureText("reach"),
+  posts_per_week: measureText("posts_per_week"),
+  forward_pct: measureText("forward_pct"),
+  last_post_days: measureText("last_post_days"),
+  mine: {
     label: "Yours",
     description: "How many of your channels cite it, and when one last did",
   },
-  measureColumn("cited_by"),
-  measureColumn("cites"),
-  measureColumn("found_days"),
-]
+  cited_by: measureText("cited_by"),
+  cites: measureText("cites"),
+  found_days: measureText("found_days"),
+  photos: measureText("photos"),
+  videos: measureText("videos"),
+  files: measureText("files"),
+  links: measureText("links"),
+  status: {
+    label: "Status",
+    description:
+      "The Directory's verdict: ok, unavailable, or unknown while no fetch has answered",
+  },
+  followable: {
+    label: "Followable",
+    description: "Whether it is a public Channel the app can follow",
+  },
+  bio: { label: "Bio", description: "What the Channel says about itself" },
+  sample_count: {
+    label: "Sample",
+    description:
+      "How many recent Posts the Directory sampled; Posts per week and Reach come from them",
+  },
+  checked_at: {
+    label: "Checked",
+    description: "When the Directory last got an answer about it",
+  },
+  refresh_due_at: {
+    label: "Refresh due",
+    description: "When the Directory will fetch it again",
+  },
+  attempts: {
+    label: "Attempts",
+    description: "Fetches in a row that got no answer; reset by one that does",
+  },
+  last_error: {
+    label: "Last error",
+    description: "Why the last fetch got no answer",
+  },
+  attempted_at: {
+    label: "Last attempt",
+    description: "When the Directory last tried to fetch it, answered or not",
+  },
+  retry_after: {
+    label: "Retry after",
+    description: "When a fetch that got no answer may be tried again",
+  },
+  priority: {
+    label: "Priority",
+    description: "Its place in the probe queue; lower goes first",
+  },
+  telegram_chat_id: {
+    label: "Chat id",
+    description: "Telegram's id for it, which survives a handle rename",
+  },
+  latest_id: {
+    label: "Latest id",
+    description: "The newest Post id the Directory saw",
+  },
+}
+
+export const columnOf = (key: ColumnKey): DirectoryColumn => ({
+  key,
+  ...COLUMN_TEXT[key],
+})
+
+/** The columns a header can sort by: the measures, Yours and the Shared counts. */
+const SORTABLE = new Set<string>([
+  ...MEASURES.map((m) => m.key),
+  "mine",
+  "shared_parents",
+  "shared_children",
+])
+/** Columns of words, left-aligned; the rest are numbers and times. */
+const WORDS = new Set<string>([
+  "language",
+  "status",
+  "followable",
+  "bio",
+  "last_error",
+])
 
 /**
  * Shared parents and Shared children (DIR-07): shown only while their
@@ -126,59 +206,82 @@ const SHARED_COLUMNS: DirectoryColumn[] = [
 const sharedCount = (key: SharedKey, r: Row) =>
   key === "shared_parents" ? r.sharedParents : r.sharedChildren
 
-const count = (n: number | null) => (n === null ? "" : formatCount(n))
+const count = (n: number | null | undefined) =>
+  n == null ? "" : formatCount(n)
+const when = (ms: number | null | undefined) =>
+  ms == null ? "" : <RelativeTime timestamp={ms} />
+const words = (text: string | null | undefined) =>
+  text ? (
+    <span title={text} dir="auto" className="block max-w-56 truncate">
+      {text}
+    </span>
+  ) : (
+    ""
+  )
 
-/** What one column shows for a row. */
-export function cell(key: DirectoryColumn["key"], r: Row): React.ReactNode {
-  switch (key) {
-    case "language":
-      return r.language ?? ""
-    case "reach":
-      return (
-        <>
-          {count(r.reach)}
-          {r.reachEstimated && <span title="Estimated Reach">~</span>}
-        </>
-      )
-    case "posts_per_week":
-      return r.postsPerWeek === null
-        ? ""
-        : r.postsPerWeek.toFixed(r.postsPerWeek < 10 ? 1 : 0)
-    case "forward_pct":
-      return r.forwardShare === null
-        ? ""
-        : `${Math.round(r.forwardShare * 100)}%`
-    case "last_post_days":
-      return r.lastPostAt === null ? (
-        ""
-      ) : (
-        <RelativeTime timestamp={r.lastPostAt} />
-      )
-    case "found_days":
-      return <RelativeTime timestamp={r.foundAt} />
-    case "cited_by":
-      return count(r.citedBy)
-    case "shared_parents":
-    case "shared_children":
-      return count(sharedCount(key, r))
-    case "mine":
-      return r.mine ? (
-        <>
-          <b>{r.mine}</b>
-          {r.mineLastAt !== null && (
-            <span className="text-app-ink/40">
-              {" · "}
-              <RelativeTime timestamp={r.mineLastAt} />
-            </span>
-          )}
-        </>
-      ) : (
-        ""
-      )
-    default:
-      return count(r[key])
-  }
+const mine = (r: Row) =>
+  r.mine ? (
+    <>
+      <b>{r.mine}</b>
+      {r.mineLastAt != null && (
+        <span className="text-app-ink/40">
+          {" · "}
+          <RelativeTime timestamp={r.mineLastAt} />
+        </span>
+      )}
+    </>
+  ) : (
+    ""
+  )
+
+/**
+ * What each column shows for a row; a column the row lacks shows nothing.
+ * Keyed by every column, so one the server adds is a compile error here.
+ */
+const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
+  language: (r) => r.language ?? "",
+  subscribers: (r) => count(r.subscribers),
+  reach: (r) => (
+    <>
+      {count(r.reach)}
+      {r.reachEstimated && <span title="Estimated Reach">~</span>}
+    </>
+  ),
+  posts_per_week: (r) =>
+    r.postsPerWeek == null
+      ? ""
+      : r.postsPerWeek.toFixed(r.postsPerWeek < 10 ? 1 : 0),
+  forward_pct: (r) =>
+    r.forwardShare == null ? "" : `${Math.round(r.forwardShare * 100)}%`,
+  last_post_days: (r) => when(r.lastPostAt),
+  mine,
+  cited_by: (r) => count(r.citedBy),
+  cites: (r) => count(r.cites),
+  found_days: (r) => when(r.foundAt),
+  photos: (r) => count(r.photos),
+  videos: (r) => count(r.videos),
+  files: (r) => count(r.files),
+  links: (r) => count(r.links),
+  status: (r) => r.status ?? "",
+  followable: (r) => (r.followable ? "Yes" : "No"),
+  bio: (r) => words(r.bio),
+  sample_count: (r) => r.sampleCount ?? "",
+  checked_at: (r) => when(r.checkedAt),
+  refresh_due_at: (r) => when(r.refreshDueAt),
+  attempts: (r) => r.attempts ?? "",
+  last_error: (r) => words(r.lastError),
+  attempted_at: (r) => when(r.attemptedAt),
+  retry_after: (r) => when(r.retryAfter),
+  // Ids and a queue position, so never rounded to "1.2M".
+  priority: (r) => r.priority ?? "",
+  telegram_chat_id: (r) => r.telegramChatId ?? "",
+  latest_id: (r) => r.latestId ?? "",
+  shared_parents: (r) => count(r.sharedParents),
+  shared_children: (r) => count(r.sharedChildren),
 }
+
+export const cell = (key: DirectoryColumn["key"], r: Row): React.ReactNode =>
+  CELLS[key](r)
 
 function HeaderTick({
   rows,
@@ -323,7 +426,7 @@ function ChannelCell({ row }: { row: Row }) {
   )
 }
 
-/** A column's header: a button that sorts by it, except Language. */
+/** A column's header: a button that sorts by it, when the server can sort by it. */
 function ColumnHeader({
   column,
   sorted,
@@ -342,14 +445,14 @@ function ColumnHeader({
     <th
       title={column.description}
       aria-sort={sorted ? (descending ? "descending" : "ascending") : undefined}
-      className={`px-2 py-2 ${key === "language" ? "" : "text-right"} ${className}`}
+      className={`px-2 py-2 ${WORDS.has(key) ? "" : "text-right"} ${className}`}
     >
-      {key === "language" ? (
-        column.label
+      {!SORTABLE.has(key) ? (
+        <span className="whitespace-nowrap">{column.label}</span>
       ) : (
         <button
           type="button"
-          onClick={() => onSort(key)}
+          onClick={() => onSort(key as DirectorySort)}
           className={`inline-flex items-center gap-0.5 whitespace-nowrap hover:text-app-ink ${sorted ? "text-app-ink" : ""}`}
         >
           {column.label}
@@ -403,8 +506,8 @@ function Pages({
 }
 
 /**
- * The Directory list (DIR-02): one page of 100 rows, a column per measure the
- * Columns menu has not hidden, ticks for a bulk Follow with the followed rows
+ * The Directory list (DIR-02): one page of 100 rows, a column per column the
+ * Columns menu shows, ticks for a bulk Follow with the followed rows
  * locked as in Discover, a header that sorts, and the pages. On a narrow
  * screen only the Channel, the sorted measure (Subscribers when the sort
  * shows no column) and Follow stay.
@@ -415,7 +518,7 @@ export function DirectoryTable({
   page,
   sort,
   descending,
-  hidden,
+  shown,
   ticks,
   onTicks,
   following,
@@ -433,7 +536,8 @@ export function DirectoryTable({
   page: number
   sort: DirectorySort
   descending: boolean
-  hidden: readonly string[]
+  /** The columns the Columns menu shows, in table order (DCOL). */
+  shown: readonly ColumnKey[]
   ticks: ReadonlySet<string>
   onTicks: (next: Set<string>) => void
   /** Handles whose follow job is running. */
@@ -454,7 +558,7 @@ export function DirectoryTable({
 }) {
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
-    ...COLUMNS.filter((c) => !hidden.includes(c.key)),
+    ...shown.map(columnOf),
     ...SHARED_COLUMNS.filter((c) =>
       rows.some((r) => sharedCount(c.key as SharedKey, r) != null),
     ),
@@ -536,7 +640,7 @@ export function DirectoryTable({
               {columns.map((c) => (
                 <td
                   key={c.key}
-                  className={`whitespace-nowrap px-2 font-mono text-app-ink/70 ${c.key === "language" ? "" : "text-right tabular-nums"} ${narrow(c.key)}`}
+                  className={`whitespace-nowrap px-2 font-mono text-app-ink/70 ${WORDS.has(c.key) ? "" : "text-right tabular-nums"} ${narrow(c.key)}`}
                 >
                   {cell(c.key, r)}
                 </td>

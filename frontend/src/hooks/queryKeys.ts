@@ -80,6 +80,8 @@ export const queryKeys = {
       | "neighbours",
     body: unknown,
   ) => ["directory", read, body] as const,
+  /** The Directory columns this caller may show, with their defaults (DCOL). */
+  directoryColumns: ["directoryColumns"] as const,
   discoverIgnored: ["discoverIgnored"] as const,
   /** Server-side probe queue counts. Polled while work is outstanding. */
   discoverProbeQueue: ["discoverProbeQueue"] as const,

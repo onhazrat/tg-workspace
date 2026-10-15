@@ -119,6 +119,9 @@ def operator(client: TestClient) -> Iterator[dict[str, str]]:
 
 
 def _list(client: TestClient, headers: dict[str, str], **body: Any) -> dict[str, Any]:
+    # Every column, so a row carries all it has; DCOL's narrowing is
+    # `test_directory_columns.py`'s.
+    body.setdefault("columns", list(directory_reads.DIRECTORY_COLUMNS))
     response = client.post(f"{DIRECTORY}/list", json=body, headers=headers)
     assert response.status_code == 200, response.text
     return dict(response.json())
