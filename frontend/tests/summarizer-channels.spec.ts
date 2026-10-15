@@ -7,6 +7,7 @@ import {
 import { seedBulkChannels, seedTestChannel } from "./utils/seed-channel"
 import {
   clearChannelSelection,
+  fetchThrough,
   gotoWorkspace,
   mockBulkFollowJob,
   selectChannelsKeyboard,
@@ -233,7 +234,7 @@ test.describe("TG Workspace channels and posts", () => {
     )
 
     await page.route("**/api/v1/data/channels**", async (route) => {
-      const response = await route.fetch()
+      const response = await fetchThrough(route)
       const body = await response.json()
 
       const augmentChannel = (channel: {
@@ -707,7 +708,7 @@ test.describe("TG Workspace channels and posts", () => {
 
     await page.route("**/api/v1/data/setting-groups", async (route) => {
       if (route.request().method() !== "GET") return route.fallback()
-      const groups = await (await route.fetch()).json()
+      const groups = await (await fetchThrough(route)).json()
       await route.fulfill({
         json: [
           ...groups,
@@ -802,7 +803,7 @@ test.describe("TG Workspace channels and posts", () => {
     // Stats arrive keyed by Channel name, apart from the channel list.
     const reach: Record<string, number> = {}
     await page.route("**/api/v1/data/channels/stats", async (route) => {
-      const response = await route.fetch()
+      const response = await fetchThrough(route)
       const stats = await response.json()
       for (const [name, value] of Object.entries(reach)) {
         stats[name] = { count: 10, ...stats[name], reach: value }
