@@ -25,7 +25,9 @@ import { PasteSummaryModal } from "./PasteSummaryModal"
 import {
   AttemptsFold,
   FailedSummaryPanel,
+  RunningAttemptCard,
 } from "./summary-view/FailedSummaryPanel"
+import { IncompleteMark } from "./summary-view/IncompleteMark"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -90,10 +92,9 @@ export const SummaryView: React.FC = () => {
       regenerating: regeneratingSummaries,
       summarizing,
     })
-  const { attempts, runningText, retry, stop } = useSummaryAttempts(
-    currentSummaryId,
-    settings.aiTemperature,
-  )
+  const { attempts, runningText, retry, stop, cancel, keep, dismiss, restore } =
+    useSummaryAttempts(currentSummaryId, settings.aiTemperature)
+  const runningAttempt = attempts.find((a) => a.outcome === "running")
   const aiKeys = useAiKeys()
   const keyLabel = (id: string | null) => aiKeys.find((k) => k.id === id)?.label
   const applyScope = useApplyArtifactScope()
@@ -158,6 +159,10 @@ export const SummaryView: React.FC = () => {
               runningText={runningText}
               onRetry={() => void retry(s.id)}
               onStop={(attemptId) => void stop(s.id, attemptId)}
+              onCancel={(attemptId) => void cancel(s.id, attemptId)}
+              onKeep={(attemptId) => void keep(s.id, attemptId)}
+              onDismiss={(attemptId) => void dismiss(s.id, attemptId)}
+              onRestore={(attemptId) => void restore(s.id, attemptId)}
               onChangeSelection={() => {
                 if (s.scope) applyScope(s.scope)
                 setActiveTab("action")
@@ -166,6 +171,25 @@ export const SummaryView: React.FC = () => {
           )}
           attemptsFold={
             <AttemptsFold attempts={attempts} keyLabel={keyLabel} />
+          }
+          incompleteMark={
+            currentSummary && (
+              <IncompleteMark
+                onRetry={() => void retry(currentSummary.id)}
+                running={
+                  runningAttempt && (
+                    <RunningAttemptCard
+                      attempt={runningAttempt}
+                      text={runningText}
+                      keyLabel={keyLabel}
+                      onStop={() =>
+                        void stop(currentSummary.id, runningAttempt.id)
+                      }
+                    />
+                  )
+                }
+              />
+            )
           }
           summarizing={summarizing}
           running={running}

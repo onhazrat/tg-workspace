@@ -8,7 +8,11 @@ import { toast } from "sonner"
 
 import { watchSummaryAttempt } from "@/api/data"
 import {
+  dataCancelSummaryAttempt,
+  dataDismissSummaryPartial,
+  dataKeepSummaryPartial,
   dataListSummaryAttempts,
+  dataRestoreSummaryPartial,
   dataStartSummaryAttempt,
   dataStopSummaryAttempt,
 } from "@/client"
@@ -168,16 +172,32 @@ export function useSummaryAttempts(
     await invalidateSummaryState(queryClient, id)
   }
 
-  const stop = async (id: string, attemptId: string) => {
-    try {
-      await dataStopSummaryAttempt({
-        path: { summary_id: id, attempt_id: attemptId },
-      })
-    } catch (err: unknown) {
-      toast.error(errorText(err, "Could not stop the Attempt."))
+  /** One call on one Attempt, then everything that shows it is read again. */
+  const act =
+    (
+      call: (options: {
+        path: { summary_id: string; attempt_id: string }
+      }) => Promise<unknown>,
+      failure: string,
+    ) =>
+    async (id: string, attemptId: string) => {
+      try {
+        await call({ path: { summary_id: id, attempt_id: attemptId } })
+      } catch (err: unknown) {
+        toast.error(errorText(err, failure))
+      }
+      await invalidateSummaryState(queryClient, id)
     }
-    await invalidateSummaryState(queryClient, id)
-  }
 
-  return { attempts, runningText, retry, stop }
+  return {
+    attempts,
+    runningText,
+    retry,
+    stop: act(dataStopSummaryAttempt, "Could not stop the Attempt."),
+    // SFR-03: the automatic retry's Cancel, and the Partial responses.
+    cancel: act(dataCancelSummaryAttempt, "Could not cancel the retry."),
+    keep: act(dataKeepSummaryPartial, "Could not keep that draft."),
+    dismiss: act(dataDismissSummaryPartial, "Could not dismiss that draft."),
+    restore: act(dataRestoreSummaryPartial, "Could not restore that draft."),
+  }
 }

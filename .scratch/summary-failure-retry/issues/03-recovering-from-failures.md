@@ -6,7 +6,7 @@ Spec: `.scratch/summary-failure-retry/spec.md`. Terms: **Partial response**, **I
 
 **Blocked by:** SFR-02.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The failure page lists every Partial response, newest first, each with its attempt number, model, length and time, a short preview with Show all, Keep this draft (primary on the newest only) and Dismiss; dismissed ones sit in a "Dismissed (n)" fold with Restore.
 - [ ] Keep finishes the Summary with that text, marks it **Incomplete** with a visible mark where the text stops, records a `kept_partial` Attempt and gives the Summary that Attempt's model and AI Key. An Incomplete Summary can still be retried.

@@ -519,7 +519,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     )
 
     # A dismissed Partial response's text, on a deployment constant (SFR-03).
-    # Its Attempt is never deleted: `tg_summary_attempts` is on neither log
+    # Its Attempt is never deleted: the Attempts table is on neither log
     # inventory, and this clears the one bulky column somebody set aside.
     partial_days = app_settings.SUMMARY_PARTIAL_DISMISSED_RETENTION_DAYS
     trimmed_partials = 0

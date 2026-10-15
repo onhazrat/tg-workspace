@@ -5,6 +5,8 @@ import { expect, test } from "./fixtures.ts"
  * SFR-01: a Generate that broke leaves a Failed Summary that says why.
  * SFR-02: it can be retried on the worker, the text streams into the page, a
  * page opened mid-Attempt attaches to it, and a running Attempt can be stopped.
+ * SFR-03: a Partial response can be kept, dismissed and restored, and the
+ * automatic retry's countdown can be cancelled.
  *
  * Over a mocked API, because the journey is about what the tab and History
  * show for rows in a given state, and making a real Generate fail would drag
@@ -16,6 +18,8 @@ const NOW = Date.now()
 const FAILED_ID = "e2e-sfr-failed"
 const NO_PROMPT_ID = "e2e-sfr-no-prompt"
 const PENDING_ID = "e2e-sfr-pending"
+const CUT_ID = "e2e-sfr-cut"
+const COUNTDOWN_ID = "e2e-sfr-countdown"
 
 const scope = {
   channels: ["alpha", "beta"],
@@ -42,6 +46,8 @@ const DETAILS: Record<string, unknown> = {
     promptText: "THE SAVED PROMPT",
   }),
   [NO_PROMPT_ID]: summary(NO_PROMPT_ID, { status: "failed" }),
+  [CUT_ID]: summary(CUT_ID, { status: "failed", promptText: "P" }),
+  [COUNTDOWN_ID]: summary(COUNTDOWN_ID, { status: "failed", promptText: "P" }),
   [PENDING_ID]: summary(PENDING_ID, {
     status: "pending",
     promptText: "A COPIED PROMPT",
@@ -75,6 +81,23 @@ const ATTEMPTS: Record<string, unknown[]> = {
     attempt(NO_PROMPT_ID, 1, { kind: "limit", error: "Too many tokens" }),
   ],
   [PENDING_ID]: [],
+  [CUT_ID]: [
+    attempt(CUT_ID, 1, {
+      partialText: "An older draft",
+      partialDismissedAt: NOW - 30_000,
+    }),
+    attempt(CUT_ID, 2, {
+      outcome: "stopped",
+      kind: null,
+      error: null,
+      partialText: "The newest draft of the brief",
+    }),
+  ],
+  [COUNTDOWN_ID]: [
+    attempt(COUNTDOWN_ID, 1, {
+      error: "The AI model is overloaded right now.",
+    }),
+  ],
 }
 
 const row = (id: string, status: string, failedAttempts: number) => ({
@@ -99,6 +122,8 @@ const ROWS = [
   row(FAILED_ID, "failed", 2),
   row(NO_PROMPT_ID, "failed", 1),
   row(PENDING_ID, "pending", 0),
+  row(CUT_ID, "failed", 1),
+  row(COUNTDOWN_ID, "failed", 1),
 ]
 
 /** What a test changed; read before the fixed rows above. */
@@ -109,6 +134,8 @@ let state: {
   posted: string[]
   onStart?: () => unknown
   onStop?: () => unknown
+  /** Keep, dismiss, restore or cancel on one Attempt (SFR-03). */
+  onAct?: (action: string, attemptId: string) => unknown
   /** The worker finishing, once the page has watched the Attempt. */
   afterWatch?: () => void
 }
@@ -140,6 +167,11 @@ async function mockSummaries(page: Page): Promise<void> {
         return route.fulfill({ json: state.onStart() })
       const stop = path.match(/\/attempts\/([^/]+)\/stop$/)
       if (stop && state.onStop) return route.fulfill({ json: state.onStop() })
+      const act = path.match(
+        /\/attempts\/([^/]+)\/(keep|dismiss|restore|cancel)$/,
+      )
+      if (act && state.onAct)
+        return route.fulfill({ json: state.onAct(act[2], act[1]) })
     }
     const events = path.match(/\/attempts\/([^/]+)\/events$/)
     if (events) {
@@ -306,14 +338,14 @@ test("History's Failed filter shows only the red cards, and keeps it in the URL"
 }) => {
   await page.goto("/workspace?tab=history")
   const cards = page.getByTestId("artifact-card")
-  await expect(cards).toHaveCount(3, { timeout: 20_000 })
+  await expect(cards).toHaveCount(5, { timeout: 20_000 })
   await expect(
     page.locator(`[data-artifact-id="${PENDING_ID}"]`),
   ).toContainText("Awaiting response")
 
   await page.getByTestId("history-status-failed").click()
   await expect(page).toHaveURL(/historyStatus=failed/)
-  await expect(cards).toHaveCount(2)
+  await expect(cards).toHaveCount(4)
   const failed = page.locator(`[data-artifact-id="${FAILED_ID}"]`)
   await expect(failed).toContainText("Failed ×2")
   await expect(failed).toContainText("2 failed attempts")
@@ -321,12 +353,132 @@ test("History's Failed filter shows only the red cards, and keeps it in the URL"
 
   // A reload keeps the filter.
   await page.reload()
-  await expect(cards).toHaveCount(2, { timeout: 20_000 })
+  await expect(cards).toHaveCount(4, { timeout: 20_000 })
   await expect(page.getByTestId("history-status-failed")).toHaveAttribute(
     "aria-pressed",
     "true",
   )
 })
+
+type Row = { id: string; partialDismissedAt: number | null }
+
+/** The two journeys SFR-03 adds, at a desktop and at a phone's width. */
+for (const [width, viewport] of [
+  ["desktop", { width: 1280, height: 800 }],
+  ["phone", { width: 375, height: 812 }],
+] as const) {
+  test.describe(`at ${width} width`, () => {
+    test.use({ viewport })
+
+    test("a Partial response can be dismissed, restored and kept", async ({
+      page,
+    }) => {
+      let rows = [...ATTEMPTS[CUT_ID]] as Row[]
+      const newest = rows[1] as Row
+      state.attempts[CUT_ID] = rows
+      const set = (id: string, dismissedAt: number | null) => {
+        rows = rows.map((a) =>
+          a.id === id ? { ...a, partialDismissedAt: dismissedAt } : a,
+        )
+        state.attempts[CUT_ID] = rows
+        return rows.find((a) => a.id === id)
+      }
+      state.onAct = (action, id) => {
+        if (action === "dismiss") return set(id, NOW)
+        if (action === "restore") return set(id, null)
+        // Keep: the server finishes the Summary with the draft, Incomplete.
+        state.details[CUT_ID] = summary(CUT_ID, {
+          text: "The newest draft of the brief",
+          status: null,
+          incomplete: true,
+        })
+        const kept = attempt(CUT_ID, 3, { outcome: "kept_partial", kind: null })
+        state.attempts[CUT_ID] = [...rows, kept]
+        return kept
+      }
+
+      await page.goto(`/workspace?tab=summary&summary=${CUT_ID}`)
+      const drafts = page.getByTestId("partial-responses")
+      await expect(drafts).toContainText("The newest draft of the brief", {
+        timeout: 20_000,
+      })
+      await expect(drafts).not.toContainText("An older draft")
+      await noSidewaysScroll(page)
+
+      await drafts.getByRole("button", { name: "Dismiss", exact: true }).click()
+      await expect(
+        drafts.getByRole("button", { name: "Dismissed (2)" }),
+      ).toBeVisible()
+      expect(state.posted).toContain(
+        `/summaries/${CUT_ID}/attempts/${newest.id}/dismiss`,
+      )
+
+      await drafts.getByRole("button", { name: "Dismissed (2)" }).click()
+      await drafts.getByRole("button", { name: "Restore" }).first().click()
+      await expect(
+        drafts.getByRole("button", { name: "Dismissed (1)" }),
+      ).toBeVisible()
+      expect(state.posted).toContain(
+        `/summaries/${CUT_ID}/attempts/${newest.id}/restore`,
+      )
+
+      await drafts.getByRole("button", { name: "Keep this draft" }).click()
+      await expect(page.getByTestId("incomplete-mark")).toContainText(
+        "The text stops here",
+        { timeout: 20_000 },
+      )
+      await expect(
+        page.getByText("The newest draft of the brief"),
+      ).toBeVisible()
+      expect(state.posted).toContain(
+        `/summaries/${CUT_ID}/attempts/${newest.id}/keep`,
+      )
+      await noSidewaysScroll(page)
+    })
+
+    test("the automatic retry's countdown can be cancelled", async ({
+      page,
+    }) => {
+      const queued = attempt(COUNTDOWN_ID, 2, {
+        outcome: "running",
+        kind: null,
+        error: null,
+        automatic: true,
+        startedAt: Date.now() + 120_000,
+        endedAt: null,
+      })
+      state.attempts[COUNTDOWN_ID] = [...ATTEMPTS[COUNTDOWN_ID], queued]
+      state.onAct = () => {
+        state.attempts[COUNTDOWN_ID] = [...ATTEMPTS[COUNTDOWN_ID]]
+        return { status: "cancelled" }
+      }
+
+      await page.goto(`/workspace?tab=summary&summary=${COUNTDOWN_ID}`)
+      const countdown = page.getByTestId("retry-countdown")
+      await expect(countdown).toContainText("Retrying automatically in", {
+        timeout: 20_000,
+      })
+      await expect(page.getByTestId("try-again")).toHaveCount(0)
+      await noSidewaysScroll(page)
+
+      await countdown.getByRole("button", { name: "Cancel" }).click()
+
+      await expect(page.getByTestId("retry-countdown")).toHaveCount(0)
+      await expect(page.getByTestId("try-again")).toBeVisible()
+      expect(state.posted).toContain(
+        `/summaries/${COUNTDOWN_ID}/attempts/${queued.id}/cancel`,
+      )
+    })
+  })
+}
+
+async function noSidewaysScroll(page: Page): Promise<void> {
+  const sizes = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }))
+  expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.clientWidth + 1)
+}
 
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 375, height: 812 } })

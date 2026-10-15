@@ -85,6 +85,20 @@ describe("ArtifactCardHeading", () => {
   })
 })
 
+describe("ArtifactCardHeading for a summary whose Attempt is running", () => {
+  test("says Generating, not Failed, while its first Attempt runs", () => {
+    render(
+      <ArtifactCardHeading
+        artifact={{ ...summary, status: "running" } as ArtifactListItem}
+        pending={false}
+        onOpen={() => {}}
+      />,
+    )
+    expect(screen.getByText("Generating")).toBeTruthy()
+    expect(screen.queryByText("Failed")).toBeNull()
+  })
+})
+
 describe("ArtifactCardHeading for a Failed summary", () => {
   const failed = (n: number) =>
     ({

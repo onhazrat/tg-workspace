@@ -53,6 +53,8 @@ function renderPanel(
   const onRetry = mock()
   const onStop = mock()
   const onChangeSelection = mock()
+  const onCancel = mock()
+  const onKeep = mock()
   render(
     <FailedSummaryPanel
       summary={summary}
@@ -64,13 +66,37 @@ function renderPanel(
       runningText={runningText}
       onRetry={onRetry}
       onStop={onStop}
+      onCancel={onCancel}
+      onKeep={onKeep}
+      onDismiss={mock()}
+      onRestore={mock()}
       onChangeSelection={onChangeSelection}
     />,
   )
-  return { onPaste, onRetry, onStop, onChangeSelection }
+  return { onPaste, onRetry, onStop, onChangeSelection, onCancel, onKeep }
 }
 
 describe("FailedSummaryPanel", () => {
+  test("a queued automatic retry counts down with Cancel instead of Retry", () => {
+    const { onCancel } = renderPanel([
+      attempt(1, { kind: "transient", partialText: "Half of it" }),
+      attempt(2, {
+        outcome: "running",
+        kind: null,
+        error: null,
+        automatic: true,
+        startedAt: Date.now() + 10_000,
+        endedAt: null,
+      }),
+    ])
+    expect(screen.getByTestId("retry-countdown")).toBeTruthy()
+    expect(screen.queryByTestId("try-again")).toBeNull()
+    expect(screen.queryByTestId("running-attempt")).toBeNull()
+    expect(screen.getByTestId("partial-responses")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
+    expect(onCancel).toHaveBeenCalledWith("a2")
+  })
+
   test("one failure: the report header, a Failed chip, the error and its Key", () => {
     renderPanel([attempt(1)])
     expect(screen.getByText("Analysis Report")).toBeTruthy()

@@ -52,6 +52,11 @@ export const ArtifactCardHeading: React.FC<{
             {failed > 1 ? `Failed ×${failed}` : "Failed"}
           </span>
         )}
+        {artifact.kind === "summary" && artifact.status === "running" && (
+          <span className="rounded-md bg-app-ink/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider">
+            Generating
+          </span>
+        )}
         {pending && (
           <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
             Awaiting response
@@ -63,7 +68,7 @@ export const ArtifactCardHeading: React.FC<{
       </h4>
       <p className="line-clamp-2 text-[12px] leading-relaxed text-app-ink/80">
         {failed !== null
-          ? "Generation failed. Open it to see why, or finish it by pasting a response."
+          ? "Generation failed. Open it to retry, keep a Partial response or paste a response."
           : artifact.title || artifactDetail(artifact)}
       </p>
     </button>

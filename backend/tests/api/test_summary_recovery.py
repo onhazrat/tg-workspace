@@ -370,3 +370,20 @@ def test_a_summary_counting_down_to_its_retry_is_still_failed(
     _drain()
 
     assert _history(client, headers, status="failed")[summary_id]["status"] == "failed"
+
+
+def test_retention_reaches_attempts_only_through_the_trim() -> None:
+    """Attempts are on neither log inventory (ADR-030); the trim is declared.
+
+    The retention job may clear a dismissed Partial response's text through
+    the aggregate and nothing else: naming the table or model there is the
+    first step to pruning a Summary's history with the logs.
+    """
+    import pathlib
+
+    from app.jobs import retention
+
+    source = pathlib.Path(retention.__file__).read_text()
+    assert "trim_dismissed_partials" in source
+    assert "SummaryAttempt" not in source
+    assert "tg_summary_attempts" not in source

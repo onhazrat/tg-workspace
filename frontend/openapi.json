@@ -12713,7 +12713,7 @@
         "type": "object",
         "required": ["id", "kind"],
         "title": "SummaryArtifactResponse",
-        "description": "`status` is `\"pending\"` until an externally-run prompt is pasted back,\nand `\"failed\"` while its latest Attempt did not finish (SFR-01).\n\n`autoRegenerate` and `autoPublish` are here rather than left to the Summary\ntab because History is where they are toggled, and reading them out of\n`extra` costs nothing once `isStarred` is already being read."
+        "description": "`status` is `\"pending\"` until an externally-run prompt is pasted back,\n`\"failed\"` while its latest Attempt did not finish, and `\"running\"` while\nan Attempt is running, whatever the stored status says.\n\n`autoRegenerate` and `autoPublish` are here rather than left to the Summary\ntab because History is where they are toggled, and reading them out of\n`extra` costs nothing once `isStarred` is already being read."
       },
       "SummaryAttemptResponse": {
         "properties": {

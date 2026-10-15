@@ -327,6 +327,11 @@ export interface Summary {
    * its latest Attempt did not finish (SFR-01). Persisted in server `extra`.
    */
   status?: "pending" | "failed"
+  /**
+   * Its text is a kept Partial response that stops short (SFR-03). Finished
+   * and readable, and a full Attempt clears it. Persisted in server `extra`.
+   */
+  incomplete?: boolean
   /** Full prompt text saved when user copies for external AI (persisted in server `extra`). */
   promptText?: string
   /**

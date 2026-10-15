@@ -18,6 +18,8 @@ import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { formatSummaryModelLabel } from "@/constants"
 import type { Summary } from "@/types"
 import { RelativeTime } from "../RelativeTime"
+import { PartialResponses } from "./PartialResponses"
+import { RetryCountdown } from "./RetryCountdown"
 import { type ReaderZone, summaryScopeLine } from "./SummaryHeader"
 
 export interface FailedSummaryPanelProps {
@@ -35,6 +37,12 @@ export interface FailedSummaryPanelProps {
   /** Start an Attempt on the last Attempt's model and Key. */
   onRetry: () => void
   onStop: (attemptId: string) => void
+  /** Withdraw the automatic retry while it counts down (SFR-03). */
+  onCancel: (attemptId: string) => void
+  /** Keep, dismiss or restore an Attempt's Partial response (SFR-03). */
+  onKeep: (attemptId: string) => void
+  onDismiss: (attemptId: string) => void
+  onRestore: (attemptId: string) => void
   /** Put this Summary's Scope in the workspace, to narrow it. */
   onChangeSelection: () => void
 }
@@ -49,7 +57,8 @@ function copyPrompt(promptText: string) {
  * report's header with a Failed chip, the latest error with its attempt, the
  * earlier ones folded, and the ways out. SFR-02 adds Retry on the worker, the
  * running Attempt streaming in with Stop, and "Change selection" leading when
- * the selection was too large to send at all.
+ * the selection was too large to send at all. SFR-03 adds the automatic
+ * retry's countdown and the Partial responses.
  */
 export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
   const { summary, promptText, zone } = props
@@ -96,14 +105,27 @@ export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
             </ol>
           </Fold>
         )}
-        {running ? (
-          <RunningAttemptCard
-            attempt={running}
-            text={props.runningText}
-            keyLabel={props.keyLabel}
-            onStop={() => props.onStop(running.id)}
-          />
-        ) : tooLarge ? (
+        {running && (
+          <RetryCountdown
+            startsAt={running.startedAt}
+            onCancel={() => props.onCancel(running.id)}
+          >
+            <RunningAttemptCard
+              attempt={running}
+              text={props.runningText}
+              keyLabel={props.keyLabel}
+              onStop={() => props.onStop(running.id)}
+            />
+          </RetryCountdown>
+        )}
+        <PartialResponses
+          attempts={props.attempts}
+          keyLabel={props.keyLabel}
+          onKeep={props.onKeep}
+          onDismiss={props.onDismiss}
+          onRestore={props.onRestore}
+        />
+        {running ? null : tooLarge ? (
           <ChangeSelectionCard onChangeSelection={props.onChangeSelection} />
         ) : (
           <TryAgainCard
@@ -221,7 +243,7 @@ function AttemptMeta({
 const CARD = "rounded-2xl border border-app-ink/10 p-4 md:p-6"
 
 /** The Attempt the worker is running, its text arriving as it is written. */
-function RunningAttemptCard({
+export function RunningAttemptCard({
   attempt,
   text,
   keyLabel,

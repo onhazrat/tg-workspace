@@ -66,7 +66,8 @@ class ArtifactBase(BaseModel):
 
 class SummaryArtifactResponse(ArtifactBase):
     """`status` is `"pending"` until an externally-run prompt is pasted back,
-    and `"failed"` while its latest Attempt did not finish (SFR-01).
+    `"failed"` while its latest Attempt did not finish, and `"running"` while
+    an Attempt is running, whatever the stored status says.
 
     `autoRegenerate` and `autoPublish` are here rather than left to the Summary
     tab because History is where they are toggled, and reading them out of
