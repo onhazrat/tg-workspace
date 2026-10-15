@@ -1,6 +1,6 @@
 # Summary failures: see why, retry with any Key, keep what was written
 
-Status: ready-for-agent
+Status: resolved
 
 Ticket prefix: `SFR`.
 
