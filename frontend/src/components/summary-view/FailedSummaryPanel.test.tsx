@@ -127,6 +127,21 @@ describe("FailedSummaryPanel", () => {
     expect(screen.getByText("error 1")).toBeTruthy()
   })
 
+  test("a stopped Attempt did not finish either: it leads or is folded", () => {
+    renderPanel([
+      attempt(1, { outcome: "stopped", kind: null, error: null }),
+      attempt(2),
+      attempt(3, { outcome: "stopped", kind: null, error: null }),
+    ])
+    expect(screen.getByText("Failed ×3")).toBeTruthy()
+    const alert = screen.getByRole("alert").textContent ?? ""
+    expect(alert).toContain("Stopped")
+    expect(alert).toContain("Attempt 3")
+    fireEvent.click(screen.getByText("Earlier attempts (2)"))
+    expect(screen.getByText("error 2")).toBeTruthy()
+    expect(screen.getAllByText("Stopped")).toHaveLength(2)
+  })
+
   test("Try again names the last Attempt's run, or hands it to the chips", () => {
     renderPanel([attempt(1)])
     expect(screen.getByTestId("try-again").textContent).toContain("Work key")

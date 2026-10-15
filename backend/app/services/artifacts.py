@@ -136,16 +136,17 @@ def _scope_text(model: Any, key: str) -> Any:
 
 
 def _failed_attempts() -> Any:
-    """How many of a Summary's Attempts failed, for History's red card.
+    """How many of a Summary's Attempts did not finish, for History's red card.
 
-    Reads `outcome` alone: `partial_text` and `error` are stored out of line
-    and a count never detoasts them.
+    Stopped counts with failed: either one leaves the Summary Failed. Reads
+    `outcome` alone: `partial_text` and `error` are stored out of line and a
+    count never detoasts them.
     """
     return (
         sa_select(func.count())
         .where(
             col(SummaryAttempt.summary_id) == col(Summary.id),
-            col(SummaryAttempt.outcome) == "failed",
+            col(SummaryAttempt.outcome).in_(("failed", "stopped")),
         )
         .scalar_subquery()
     )

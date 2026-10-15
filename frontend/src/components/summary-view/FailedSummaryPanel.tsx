@@ -64,7 +64,10 @@ function copyPrompt(promptText: string) {
  */
 export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
   const { summary, promptText, zone } = props
-  const failed = props.attempts.filter((a) => a.outcome === "failed")
+  // A stopped Attempt did not finish either, and leaves the Summary Failed.
+  const failed = props.attempts.filter(
+    (a) => a.outcome === "failed" || a.outcome === "stopped",
+  )
   const running = props.attempts.find((a) => a.outcome === "running")
   const latest = failed.at(-1)
   const earlier = failed.slice(0, -1).reverse()
@@ -87,7 +90,7 @@ export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
             <AlertTriangle size={18} className="mt-0.5 shrink-0" />
             <div className="min-w-0">
               <p className="break-words font-mono text-xs sm:text-sm">
-                {latest.error}
+                {attemptError(latest)}
               </p>
               <AttemptMeta attempt={latest} keyLabel={props.keyLabel} />
             </div>
@@ -99,7 +102,7 @@ export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
               {earlier.map((a) => (
                 <li key={a.id}>
                   <p className="break-words font-mono text-xs text-app-ink/70">
-                    {a.error}
+                    {attemptError(a)}
                   </p>
                   <AttemptMeta attempt={a} keyLabel={props.keyLabel} />
                 </li>
@@ -222,6 +225,11 @@ function FailedHeader({
       </p>
     </header>
   )
+}
+
+/** What ended an Attempt: its error, or that somebody stopped it. */
+function attemptError(attempt: SummaryAttemptResponse): string {
+  return attempt.error ?? (attempt.outcome === "stopped" ? "Stopped" : "")
 }
 
 function AttemptMeta({

@@ -166,6 +166,23 @@ def test_a_stopped_retry_of_an_incomplete_summary_keeps_its_report(
     assert summary.get("status") is None
 
 
+def test_history_counts_a_stopped_attempt_as_one_that_did_not_finish(
+    client: TestClient,
+    headers: dict[str, str],
+    provider: _FakeProvider,
+) -> None:
+    """A Summary whose only Attempt was stopped is Failed; "0 failed attempts"
+    on its red card would contradict the chip."""
+    summary_id = _open(client, headers)
+    attempt_id = _start(client, headers, summary_id).json()["id"]
+    _act(client, headers, summary_id, attempt_id, "stop")
+
+    r = client.get(f"{V1}/data/artifacts", headers=headers)
+
+    [row] = [a for a in r.json() if a["id"] == summary_id]
+    assert (row["status"], row["failedAttempts"]) == ("failed", 1)
+
+
 def test_a_failed_retry_of_a_finished_summary_keeps_its_report(
     client: TestClient,
     headers: dict[str, str],
