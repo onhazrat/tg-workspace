@@ -17,16 +17,16 @@ and the vocabulary in `CONTEXT.md` under **Language**.
 3. **One shared module** for how a Language is shown, `lib/language-name.ts`: `languageValue`
    turns a stored Language into the value a Condition names (the code, or `null`),
    `languageLabel` names it, and the value itself is the hint, for every facet row and picker
-   option in all three tabs; `components/LanguageName.tsx`
-   `<LanguageName code />` renders the same thing (label, dimmed value) for the Channel card badge
-   and the Directory Lang cell. `FacetMenu` and `ConditionPicker` stay string-based.
+   option in all three tabs. The Channel card badge and the Directory Lang cell show the name
+   alone ("Persian"), without the code (revised after review: the code belongs in the menus,
+   where it is what the filter text says). `FacetMenu` and `ConditionPicker` stay string-based.
 4. **Not read yet is filterable in all three tabs**, written `lang:null`. Each backend's single
    `LanguageCond` branch and the Channels client filter map it to `IS NULL`. Its hint is `null`.
 5. **One sort order** in all three menus, from one `sortLanguages`: real Languages by count
    descending, ties and the uncounted case by name; then Undetermined, No words, Not read yet,
    fixed, at the bottom. The server's order is ignored.
 6. **No special case for null in display.** The Channel card badge and the Directory cell show
-   "Not read yet `null`" like any other state.
+   "Not read yet" like any other state.
 7. **Backfill by script**: `backend/scripts/relabel_languages.py --dry-run` re-derives every
    Channel from its Posts and every Directory entry from its stored samples, no Telegram
    Requests. Run on staging and production after deploy, each run approved by the operator.
@@ -39,9 +39,9 @@ and the vocabulary in `CONTEXT.md` under **Language**.
       facet counts include the `null` bucket (`posts.py`, today `IS NOT NULL`).
 - [x] Backend: `relabel_languages.py` with `--dry-run`; indexed in `development.md`.
 - [x] Frontend: shared language module (`languageValue`, `languageLabel`, `sortLanguages`,
-      `NOT_READ`, `<LanguageName>`); rename "No text" to "No words".
+      `NOT_READ`); rename "No text" to "No words".
 - [x] Frontend: Posts, Channels and Directory facets and pickers use it, including the `null`
       row; Channels client filter handles `lang:null`.
-- [x] Frontend: Channel card badge and Directory Lang cell use `<LanguageName>`.
+- [x] Frontend: Channel card badge and Directory Lang cell show the name through `languageLabel`.
 - [x] Unit tests for the shared module; mutation-test the sort and the `null` mapping.
 - [ ] After deploy: dry-run then run the script on staging, then production (approval each).

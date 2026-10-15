@@ -8,9 +8,9 @@ import {
   Trash2,
 } from "lucide-react"
 import { motion } from "motion/react"
-import { LanguageName } from "@/components/LanguageName"
 import { shortcut } from "@/lib/channels/card-zoom"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
+import { languageLabel, languageValue } from "@/lib/language-name"
 import type { Channel } from "@/types"
 import { TgIconButton } from "../ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
@@ -214,9 +214,7 @@ export function ChannelCardBadges({
 
       {showDetails && (
         <div className="bg-app-ink/5 text-app-ink/70 border border-app-ink/10 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-          <span>
-            <LanguageName code={channel.language} />
-          </span>
+          <span>{languageLabel(languageValue(channel.language))}</span>
         </div>
       )}
 
