@@ -35,6 +35,7 @@ describe("summaryViewState", () => {
       summaryBody: null,
       isPending: false,
       isFailed: false,
+      pasteTarget: undefined,
       running: false,
     })
   })
