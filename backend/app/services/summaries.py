@@ -613,8 +613,10 @@ def own_summary(
     row = session.get(Summary, summary_id)
     if row is None:
         raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
-    guard = assert_owner_on_write if writing else assert_owner
-    guard(row.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+    if writing:
+        assert_owner_on_write(row.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+    else:
+        assert_owner(row.user_id, user_id, detail=SUMMARY_NOT_FOUND)
     return row
 
 

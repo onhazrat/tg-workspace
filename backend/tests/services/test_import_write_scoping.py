@@ -942,6 +942,12 @@ def test_credential_crud_still_writes_your_own(
 #: to write a sentence for.
 GATED_READS: dict[str, str] = {
     "summaries.get_summary": "Reads one summary; hiding it is a visibility change.",
+    "summaries.own_summary": (
+        "The Summary family's by-id lookup for its Attempts. Only the "
+        "`writing=False` branch takes the gated guard (listing or watching "
+        "Attempts); every caller that writes passes `writing=True`, which "
+        "takes `assert_owner_on_write`."
+    ),
     "publications.plan_summary_publication": (
         "Plans one Summary's Publication and writes nothing (SUMTAB-09); its "
         "send sibling takes `assert_owner_on_write`, because sending is a write."
@@ -981,6 +987,12 @@ def test_only_reads_use_the_gated_ownership_guard() -> None:
     by-id writes on the gated one, including three behind routes with no
     permission gate at all. Mutation-tested: re-gating `upsert_summary` passed
     every guard in the repo before this existed.
+
+    Any *reference* counts, not only a call: `guard = assert_owner_on_write if
+    writing else assert_owner; guard(...)` took the gated guard through an
+    alias this used to miss (SFR review). Async functions are walked too.
+    Mutation-tested: that alias failed this before `own_summary` was declared,
+    and so does an undeclared async `tenancy.assert_owner(...)`.
     """
     found: dict[str, str] = {}
     root = pathlib.Path(data_import_export.__file__).parents[1]
@@ -994,13 +1006,11 @@ def test_only_reads_use_the_gated_ownership_guard() -> None:
             continue
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             for inner in ast.walk(node):
-                if (
-                    isinstance(inner, ast.Call)
-                    and isinstance(inner.func, ast.Name)
-                    and inner.func.id == "assert_owner"
+                if (isinstance(inner, ast.Name) and inner.id == "assert_owner") or (
+                    isinstance(inner, ast.Attribute) and inner.attr == "assert_owner"
                 ):
                     found[f"{path.stem}.{node.name}"] = str(path)
 
