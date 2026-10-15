@@ -1,7 +1,7 @@
 # PTI-05: Compact cards fill the row, and the photo viewer pages the feed
 
-**What to build:** Two frontend changes to browsing the Posts feed. **Compact cards:** a text-only
-compact card's text grows to the height the tallest card in its grid row sets, in whole lines, never
+**What to build:** Two frontend changes to browsing the Posts feed. **Compact cards:** a compact
+card's text, with a photo or without, grows to the height the tallest card in its grid row sets, in whole lines, never
 fewer than three, and "More" appears only when the text still does not fit; "More" expands that card
 in place and "Less" returns it; the text never makes its row taller on its own. **Photo viewer:**
 opened from the Posts feed, it asks the feed for its next page within three photos of the end and
@@ -33,7 +33,23 @@ compact card" under Implementation Decisions.
 
 ### Tests
 
-- [x] A Playwright spec with a mocked API (layout needs a real browser): a row with a photo card and a long text-only card shows more than three lines and "More"; a short text-only card shows no "More"; "More" grows the card and "Less" returns it
+- [x] A Playwright spec with a mocked API (layout needs a real browser): a row with a photo card and a long text-only card shows more than three lines and "More"; a short text-only card shows no "More"; "More" grows the card and "Less" returns it; while the long card is expanded, the photo card beside it shows its whole caption and no "More"
 - [x] The photo viewer's DOM test: paging asked for near the end; a key or button press at the end stays on the last photo; a refreshed thumbnail keeps the place and new photos join the end; a lost photo moves nothing
 - [x] The frontend CRAP ratchet passes (new branching components carry unit tests)
 - [x] Each new test watched failing against a mutation first
+
+## Comments
+
+**2026-10-15, after #169 shipped.** Expanding one compact card did not help its neighbours as
+intended, for two reasons:
+
+- A card with a photo never grew. The PR's review commit had restricted the fill to text-only
+  cards (`fill={!thumb}`), which this ticket allowed. The rule is now every card, and the `fill`
+  prop is gone.
+- A neighbour that grew kept its "More" even when its whole text then fit. `PostCardClampedBody`
+  measured the text against the layer's height from the previous render, and nothing measured it
+  again, because the box the ResizeObserver watches had not changed size. It now compares the
+  text against the line count it has just chosen.
+
+The Playwright spec now expands the long card and checks the photo card beside it; it fails on
+the old measurement.

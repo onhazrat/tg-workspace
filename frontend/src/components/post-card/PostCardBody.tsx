@@ -51,9 +51,9 @@ export function PostCardBody({
 }
 
 /**
- * A compact card's text (PTI-05): three lines, or with `fill` (a text-only
- * card) as many whole lines as the height its grid row gives the card, then
- * "More" when it still runs past them. The text sits in a layer positioned inside a box that grows to fill
+ * A compact card's text (PTI-05): as many whole lines as the height its grid
+ * row gives the card, never under three, then "More" when it still runs past
+ * them. The text sits in a layer positioned inside a box that grows to fill
  * the card, so it never makes its row taller on its own; expanded, it is laid
  * out normally and the card grows.
  */
@@ -61,13 +61,10 @@ export function PostCardClampedBody({
   text,
   linkSpans,
   postSearch,
-  fill = false,
 }: {
   text: string
   linkSpans: Post["linkSpans"] | null
   postSearch: string
-  /** Grow into the row's height, as a card with no photo does. */
-  fill?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [lines, setLines] = useState<number>()
@@ -78,18 +75,25 @@ export function PostCardClampedBody({
     const el = box.current
     if (!el || open) return
     const fit = () => {
+      const shown = layer.current
+      if (!shown) return
       const line = Number.parseFloat(getComputedStyle(el).lineHeight)
       // Unmeasurable (no layout): the layer keeps its three-line minimum.
-      if (line > 0)
-        setLines(fill ? Math.max(3, Math.floor(el.clientHeight / line)) : 3)
-      const shown = layer.current
-      setOver(!!shown && shown.scrollHeight > shown.clientHeight + 2)
+      const fits =
+        line > 0 ? Math.max(3, Math.floor(el.clientHeight / line)) : undefined
+      if (fits) setLines(fits)
+      // Against the lines just chosen, never the layer's own height: that is
+      // still the last render's, and nothing re-measures once React commits
+      // `fits`, because the box this observes has not changed size.
+      const room = fits ? fits * line : shown.clientHeight
+      const textHeight = shown.firstElementChild?.scrollHeight ?? 0
+      setOver(textHeight > room + 2)
     }
     fit()
     const observer = new ResizeObserver(fit)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [text, open, fill])
+  }, [text, open])
   const content = (
     <p dir="auto" className="whitespace-pre-wrap text-app-ink/80">
       {renderPostText(text, postSearch, linkSpans)}

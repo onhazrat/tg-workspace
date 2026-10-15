@@ -41,10 +41,11 @@ channels, so a Post that starts a thread looks like any other.
 
 ## Solution
 
-Compact cards use the height their grid row already has. A text-only card's text grows to the
-height the tallest card in its row sets (usually one with a photo), in whole lines, never fewer
-than three, and a "More" link appears only when the text still does not fit. "More" expands that
-card in place; "Less" puts it back.
+Compact cards use the height their grid row already has. Every card's text, with a photo or
+without, grows to the height the tallest card in its row sets, in whole lines, never fewer than
+three, and a "More" link appears only when the text still does not fit. "More" expands that card
+in place; "Less" puts it back. An expanded card makes its row taller, so its neighbours show more
+of their text, and a neighbour whose text now fits drops its "More".
 
 The photo viewer pages the feed. As the Account nears the last loaded photo, the feed loads its
 next page and the viewer takes in the new photos as they arrive, so browsing continues through the
@@ -72,9 +73,9 @@ answers it, including a Channel answering a Post it forwarded.
 
 ### Compact grid
 
-1. As an Account browsing the compact grid, I want a text-only card's text to fill the height its row already has, so that I read more of each Post without expanding it.
+1. As an Account browsing the compact grid, I want a card's text, with a photo or without, to fill the height its row already has, so that I read more of each Post without expanding it.
 2. As an Account, I want the extra text to come in whole lines, so that no line is cut in half at the bottom of a card.
-3. As an Account, I want a text-only card to show at least three lines even when no card in its row is taller, so that a row of short cards still shows something of each Post.
+3. As an Account, I want a card to show at least three lines even when no card in its row is taller, so that a row of short cards still shows something of each Post.
 4. As an Account, I want "More" to appear only when the text does not fit, so that a short Post shows no needless link.
 5. As an Account, I want "More" to expand the card in place, so that I keep my position in the grid.
 6. As an Account, I want "Less" on an expanded card, so that I can put the row back.
@@ -348,7 +349,8 @@ POST, and both read through the tenancy seam exactly as the feed does.
 - **One new check: a Playwright spec with a mocked API** for the compact grid, because whole lines
   filling a row height need a real layout engine and the unit tests' DOM has none: a row with one
   photo card and one long text-only card shows more than three lines and a "More"; a short one
-  shows no "More"; "More" grows the card. Prior art: `frontend/tests/summarizer-posts-*.spec.ts`.
+  shows no "More"; "More" grows the card, and the photo card beside it then shows its whole
+  caption with no "More". Prior art: `frontend/tests/summarizer-posts-*.spec.ts`.
 - The frontend CRAP ratchet fails a new branching component with no unit test: the bar component
   and the editors get theirs through the seams above.
 

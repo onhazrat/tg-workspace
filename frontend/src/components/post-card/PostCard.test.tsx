@@ -383,7 +383,7 @@ describe("PostCardClampedBody", () => {
   })
 
   // The real row heights are pinned in summarizer-posts-compact.spec.ts.
-  test("a text-only card shows the lines its row has room for, never under three", () => {
+  test("a card shows the lines its row has room for, never under three", () => {
     const { getComputedStyle: real } = globalThis
     const proto = HTMLElement.prototype
     const clientHeight = Object.getOwnPropertyDescriptor(proto, "clientHeight")
@@ -420,14 +420,46 @@ describe("PostCardClampedBody", () => {
     try {
       expect(roomFor(139)).toBe("9em") // 6 lines of 1.5em
       expect(roomFor(20)).toBe("4.5em")
-      // A photo card's text keeps its three lines: only text-only cards grow.
-      expect(roomFor(139, "/api/v1/thumb")).toBe("4.5em")
+      // A photo card's text grows into its row as well.
+      expect(roomFor(139, "/api/v1/thumb")).toBe("9em")
     } finally {
       globalThis.getComputedStyle = real
       // happy-dom's own getter, which a bare `delete` would lose for good.
       if (clientHeight)
         Object.defineProperty(proto, "clientHeight", clientHeight)
       else delete (proto as { clientHeight?: number }).clientHeight
+    }
+  })
+  // A neighbour expanding makes the row taller: the box grows, and the layer
+  // is still the last render's three lines when the text is measured.
+  test("More is judged against the lines the row now has room for", () => {
+    const { getComputedStyle: real } = globalThis
+    const proto = HTMLElement.prototype
+    const clientHeight = Object.getOwnPropertyDescriptor(proto, "clientHeight")
+    globalThis.getComputedStyle = ((el: Element) => ({
+      ...real(el),
+      lineHeight: "20px",
+    })) as typeof getComputedStyle
+    // The box has room for six lines; the layer still shows three.
+    Object.defineProperty(proto, "clientHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.dataset.testid === "compact-text" ? 60 : 139
+      },
+    })
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get: () => 100, // five lines of text
+    })
+    try {
+      render(<PostCardClampedBody text="t" linkSpans={null} postSearch="" />)
+      expect(screen.queryByText("More")).toBeNull()
+    } finally {
+      globalThis.getComputedStyle = real
+      if (clientHeight)
+        Object.defineProperty(proto, "clientHeight", clientHeight)
+      else delete (proto as { clientHeight?: number }).clientHeight
+      delete (proto as { scrollHeight?: number }).scrollHeight
     }
   })
 })

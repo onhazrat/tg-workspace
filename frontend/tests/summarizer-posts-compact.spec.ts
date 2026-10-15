@@ -1,8 +1,8 @@
 /**
- * The Compact grid's text-only cards use the height their row already has
- * (PTI-05). Whole lines filling a row height need a real layout engine, which
- * the unit tests' DOM does not have, so this runs the real app with the posts
- * reads mocked.
+ * The Compact grid's cards use the height their row already has (PTI-05).
+ * Whole lines filling a row height need a real layout engine, which the unit
+ * tests' DOM does not have, so this runs the real app with the posts reads
+ * mocked.
  */
 import type { Locator, Page } from "@playwright/test"
 import { expect, test } from "./fixtures.ts"
@@ -16,6 +16,11 @@ import {
 const LONG = Array.from(
   { length: 40 },
   (_, i) => `Line ${i + 1} of a long post that runs well past its row.`,
+).join("\n")
+// Past three lines, so the photo card shows "More" until its row grows.
+const CAPTION = Array.from(
+  { length: 12 },
+  (_, i) => `Line ${i + 1} of the photo's caption.`,
 ).join("\n")
 // 300x400, so the photo card's 10rem photo sets the row's height.
 const PHOTO = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400" fill="#888"/></svg>`
@@ -33,11 +38,7 @@ async function mockPosts(page: Page, channel: string) {
       : {}),
   })
   // Photo and long text share the first row; the short one may wrap.
-  const posts = [
-    post(1, "A photo.", true),
-    post(2, LONG),
-    post(3, "Short post."),
-  ]
+  const posts = [post(1, CAPTION, true), post(2, LONG), post(3, "Short post.")]
   await page.route("**/api/v1/pti05-photo", (route) =>
     route.fulfill({ contentType: "image/svg+xml", body: PHOTO }),
   )
@@ -77,7 +78,7 @@ const settlesWith = (a: () => Promise<number>, b: () => Promise<number>) =>
     .poll(async () => Math.abs((await a()) - (await b())))
     .toBeLessThanOrEqual(1)
 
-test("a text-only compact card fills its row in whole lines, then More", async ({
+test("a compact card fills its row in whole lines, then More", async ({
   page,
 }) => {
   await gotoWorkspace(page, "channels")
@@ -111,12 +112,21 @@ test("a text-only compact card fills its row in whole lines, then More", async (
   await expect(long.getByRole("button", { name: "More" })).toBeVisible()
   await expect(short.getByRole("button", { name: "More" })).toHaveCount(0)
 
+  // The photo sets the row, so its own caption keeps three lines.
+  expect(await linesShown(photo)).toBe(3)
+  await expect(photo.getByRole("button", { name: "More" })).toBeVisible()
+
   const before = await height(long)
   await long.getByRole("button", { name: "More" }).click()
   await expect(long.getByRole("button", { name: "Less" })).toBeVisible()
   expect(await height(long)).toBeGreaterThan(before)
+  // The expanded card made the row taller: its neighbour shows the whole
+  // caption in that room, so it no longer needs "More".
+  await expect.poll(() => linesShown(photo)).toBeGreaterThanOrEqual(12)
+  await expect(photo.getByRole("button", { name: "More" })).toHaveCount(0)
   await long.getByRole("button", { name: "Less" }).click()
   await expect(long.getByRole("button", { name: "More" })).toBeVisible()
+  await expect(photo.getByRole("button", { name: "More" })).toBeVisible()
   await settlesWith(
     () => height(long),
     async () => before,
