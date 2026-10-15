@@ -674,7 +674,7 @@ def test_translation_batch_skips_when_disabled(mock_provider) -> None:
     mock_provider.assert_not_called()
 
 
-@patch("app.jobs.auto_summary.get_provider")
+@patch("app.jobs.summary_generation.get_provider")
 def test_auto_summary_regenerates_due_summary(mock_get_provider) -> None:
     now = int(time.time() * 1000)
     duration = 60 * 60 * 1000

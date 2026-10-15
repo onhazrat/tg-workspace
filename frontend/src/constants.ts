@@ -103,6 +103,11 @@ export function isPendingSummary(summary: {
   return summary.status === "pending"
 }
 
+/** Its latest Attempt did not finish (SFR-01); never a Copy Prompt item. */
+export function isFailedSummary(summary: { status?: string }): boolean {
+  return summary.status === "failed"
+}
+
 // The languages a setting may name, and the code a Post's Language carries for
 // each. The backend's `TRANSLATION_LANGUAGE_CODES` must equal this map, and
 // `backend/tests/jobs/test_translation_skips.py` parses this block to hold it so.

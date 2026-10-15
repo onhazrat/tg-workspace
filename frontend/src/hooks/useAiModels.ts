@@ -27,13 +27,21 @@ import { useSelectedAiKeyId } from "./useAiKeys"
  * span, so opening the Action tab repeatedly costs one outbound call at most.
  */
 
-const empty: { id: string; label: string }[] = []
+export type AiModel = {
+  id: string
+  label: string
+  contextLength?: number | null
+}
 
-export function useAiModels(): {
-  models: { id: string; label: string }[]
+const empty: AiModel[] = []
+
+/** `keyId` names a Key other than the selected one (a retry's own, SFR-04). */
+export function useAiModels(keyId?: string | null): {
+  models: AiModel[]
   isLoading: boolean
 } {
-  const aiKeyId = useSelectedAiKeyId()
+  const selectedKeyId = useSelectedAiKeyId()
+  const aiKeyId = keyId === undefined ? selectedKeyId : keyId
   const query = useQuery({
     queryKey: queryKeys.aiModels(aiKeyId),
     queryFn: () => aiApi.listModels(aiKeyId),

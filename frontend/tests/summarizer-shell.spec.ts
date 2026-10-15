@@ -196,15 +196,16 @@ test.describe("TG Workspace shell", () => {
   })
 
   /**
-   * Generate files the same pending, prompt-carrying item Copy does, before
-   * the model is asked, so a failed run leaves something to paste into.
+   * Generate files its prompt before the model is asked, so a failed run
+   * leaves a Failed Summary that keeps it and says why (SFR-01).
    *
-   * The model is the only thing mocked: the Summary row is written to the real
-   * backend, which is where "it survived the failure" has to be true.
-   * **Mutation:** keep the old flow (no pending row, delete on failure) and the
-   * URL never names a Summary.
+   * Starting the Attempt is the only thing mocked, refusing before the
+   * worker gets it (SFR-02), so the browser reports the failure to the real
+   * backend and the server decides its kind. **Mutation:** keep the old flow
+   * (delete on failure) and the URL never names a Summary; drop the report
+   * and it has no Attempt.
    */
-  test("a failed Generate keeps the prompt as a pending summary", async ({
+  test("a failed Generate leaves a Failed summary with its prompt and reason", async ({
     page,
   }) => {
     test.setTimeout(90_000)
@@ -229,11 +230,8 @@ test.describe("TG Workspace shell", () => {
     await page.route("**/api/v1/ai/summary/prompt", (route) =>
       route.fulfill({ json: { prompt: "summary prompt for e2e" } }),
     )
-    await page.route("**/api/v1/ai/summary/stream", (route) =>
-      route.fulfill({
-        contentType: "text/event-stream",
-        body: `data: ${JSON.stringify({ error: overloaded })}\n\n`,
-      }),
+    await page.route("**/api/v1/data/summaries/*/attempts/start", (route) =>
+      route.fulfill({ status: 503, json: { detail: overloaded } }),
     )
 
     await page.getByPlaceholder("Search channels...").fill("")
@@ -244,23 +242,34 @@ test.describe("TG Workspace shell", () => {
     await page.locator("#tour-tab-action").click()
     await page.getByRole("button", { name: "Generate summary" }).click()
 
-    // The provider's reason, and where the prompt went.
-    await expect(page.getByText(/overloaded right now/)).toBeVisible({
+    // Where it went, and the provider's reason on the Summary's own page.
+    await expect(page.getByText(/saved as Failed in History/)).toBeVisible({
       timeout: 15_000,
     })
-    await expect(page.getByText(/prompt is saved in History/)).toBeVisible()
     await expect(page).toHaveURL(/[?&]summary=[^&]+/, { timeout: 15_000 })
+    await expect(page.getByRole("alert")).toContainText(/overloaded right now/)
 
     const id = new URL(page.url()).searchParams.get("summary")
     const stored = await page.evaluate(async (summaryId) => {
       const token = localStorage.getItem("access_token")
-      const r = await fetch(`/api/v1/data/summaries/${summaryId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      return r.ok ? await r.json() : null
+      const get = async (path: string) => {
+        const r = await fetch(path, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        return r.ok ? await r.json() : null
+      }
+      return {
+        summary: await get(`/api/v1/data/summaries/${summaryId}`),
+        attempts: await get(`/api/v1/data/summaries/${summaryId}/attempts`),
+      }
     }, id)
-    expect(stored?.status).toBe("pending")
-    expect(stored?.promptText).toBe("summary prompt for e2e")
+    expect(stored.summary?.status).toBe("failed")
+    expect(stored.summary?.promptText).toBe("summary prompt for e2e")
+    expect(stored.attempts).toHaveLength(1)
+    expect(stored.attempts[0]).toMatchObject({
+      outcome: "failed",
+      kind: "transient",
+    })
 
     // The suite appends to a shared database; take back the row this made.
     await page.evaluate(async (summaryId) => {

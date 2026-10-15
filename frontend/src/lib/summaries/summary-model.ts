@@ -100,6 +100,33 @@ export function successorSummary(
   }
 }
 
+/**
+ * A regeneration's successor as it is first saved: Failed until its Attempt
+ * finishes it, as Generate opens its Summary, unless the window held no Posts
+ * and the "no new posts" text already finished it.
+ */
+export function openedSuccessor(
+  previous: Summary,
+  run: {
+    id: string
+    postCount: number
+    range: { start: number; end: number }
+    selectedAiKeyId: string | null
+    now: number
+  },
+): Summary {
+  const empty = run.postCount === 0
+  const successor = successorSummary(previous, {
+    id: run.id,
+    text: empty ? noPostsText(run.range.start, run.range.end) : "",
+    postCount: run.postCount,
+    citedPosts: {},
+    selectedAiKeyId: run.selectedAiKeyId,
+    now: run.now,
+  })
+  return empty ? successor : { ...successor, status: "failed" }
+}
+
 /** Where a regenerated summary auto-publishes, or null when it should not. */
 export function autoPublishTarget(
   previous: Summary,
@@ -111,34 +138,4 @@ export function autoPublishTarget(
   const bot = bots.find((b) => b.id === previous.publishBotId)
   const dest = destinations.find((d) => d.id === previous.publishChatId)
   return bot && dest ? { bot, dest } : null
-}
-
-const QUOTA_MARKERS = ["429", "RESOURCE_EXHAUSTED", "quota", "rate limit"]
-
-/**
- * A readable message for a failed generation, and whether it was a quota
- * refusal, which is what stops auto-regeneration from retrying into the same
- * wall. A JSON body is the provider's own error; only its `code` decides quota
- * then, because its message can mention "quota" for other reasons.
- */
-export function classifyAiError(err: unknown): {
-  message: string
-  quotaExceeded: boolean
-} {
-  const message = err instanceof Error ? err.message : "Unknown error"
-  if (message.startsWith("{") && message.endsWith("}")) {
-    try {
-      const inner = JSON.parse(message).error
-      if (inner?.message)
-        return { message: inner.message, quotaExceeded: inner.code === 429 }
-    } catch {
-      // Not JSON after all; fall through and report it as it is.
-    }
-    return { message, quotaExceeded: false }
-  }
-  const lower = message.toLowerCase()
-  return {
-    message,
-    quotaExceeded: QUOTA_MARKERS.some((m) => lower.includes(m.toLowerCase())),
-  }
 }

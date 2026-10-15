@@ -28,6 +28,8 @@ export const queryKeys = {
   aiModels: (aiKeyId: string | null) => ["aiModels", aiKeyId] as const,
   summaries: ["summaries"] as const,
   summary: (id: string) => ["summary", id] as const,
+  /** Under `summary`, so refetching a Summary refetches its Attempts. */
+  summaryAttempts: (id: string) => ["summary", id, "attempts"] as const,
   /** Every plan of one Summary, whatever the options: a send changes `partial`. */
   publicationPlans: (id: string) => ["publicationPlan", id] as const,
   /** The server's plan for one Summary's Publication, per option set (SUMTAB-09). */
@@ -48,8 +50,12 @@ export const queryKeys = {
    * The unified History list. Keyed on kind + search because the server does
    * both — filtering client-side would defeat the paging.
    */
-  artifacts: (kind: string | null, search: string, starred: boolean) =>
-    ["artifacts", kind ?? "all", search, starred] as const,
+  artifacts: (
+    kind: string | null,
+    search: string,
+    starred: boolean,
+    status: string | null = null,
+  ) => ["artifacts", kind ?? "all", search, starred, status ?? "all"] as const,
   /** Under `artifacts`, so a History delete re-runs tab reconcile too. */
   artifactTabs: (keys: readonly string[]) =>
     ["artifacts", "tabs", ...keys] as const,

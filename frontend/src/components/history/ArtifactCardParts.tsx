@@ -18,6 +18,7 @@ import {
   ARTIFACT_KIND_LABELS,
   artifactChannelsLine,
   artifactDetail,
+  failedAttempts,
 } from "./artifact-presentation"
 
 const ICONS = {
@@ -36,6 +37,7 @@ export const ArtifactCardHeading: React.FC<{
   onOpen: Handler
 }> = ({ artifact, pending, onOpen }) => {
   const Icon = ICONS[artifact.kind]
+  const failed = failedAttempts(artifact)
   return (
     <button
       type="button"
@@ -45,6 +47,16 @@ export const ArtifactCardHeading: React.FC<{
       <div className="flex items-center gap-2">
         <Icon size={13} className="shrink-0 opacity-50" />
         <TgMetaChip>{ARTIFACT_KIND_LABELS[artifact.kind]}</TgMetaChip>
+        {failed !== null && (
+          <span className="rounded-md bg-red-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-red-800 dark:text-red-200">
+            {failed > 1 ? `Failed ×${failed}` : "Failed"}
+          </span>
+        )}
+        {artifact.kind === "summary" && artifact.status === "running" && (
+          <span className="rounded-md bg-app-ink/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider">
+            Generating
+          </span>
+        )}
         {pending && (
           <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
             Awaiting response
@@ -55,7 +67,9 @@ export const ArtifactCardHeading: React.FC<{
         {artifactChannelsLine(artifact)}
       </h4>
       <p className="line-clamp-2 text-[12px] leading-relaxed text-app-ink/80">
-        {artifact.title || artifactDetail(artifact)}
+        {failed !== null
+          ? "Generation failed. Open it to retry, keep a Partial response or paste a response."
+          : artifact.title || artifactDetail(artifact)}
       </p>
     </button>
   )

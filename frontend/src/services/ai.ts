@@ -17,13 +17,6 @@ export interface LLMStreamResult {
   systemInstruction?: string
 }
 
-export interface LLMResult {
-  text: string
-  prompt: string
-  config: { temperature: number }
-  fullResponse?: { usageMetadata?: { totalTokenCount?: number }; text?: string }
-}
-
 async function* wrapStream(
   gen: AsyncGenerator<string, void, unknown>,
 ): AsyncGenerator<{ text: string }, void, unknown> {
@@ -51,72 +44,6 @@ export const getSummaryPrompt = async (
     scope,
   })
   return result.prompt
-}
-
-export const generateSummaryStream = async (
-  channels: string[],
-  channelsText: string,
-  postsText: string,
-  language: string,
-  model: string,
-  temperature: number = 0.7,
-  scope?: PromptScope,
-  /** The prompt already stored on the pending Summary; the server sends it as-is. */
-  storedPrompt?: string,
-): Promise<LLMStreamResult> => {
-  const prompt = `channels=${channels.join(",")}`
-  try {
-    const stream = api.summaryStream({
-      channels,
-      channelsText,
-      postsText,
-      language,
-      model,
-      temperature,
-      scope,
-      prompt: storedPrompt,
-    })
-    return { stream: wrapStream(stream), prompt, config: { temperature } }
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to generate summary stream"
-    throw new AIServiceError(message)
-  }
-}
-
-/**
- * Non-streaming wrapper over {@link generateSummaryStream}.
- *
- * Takes `scope` for the same reason the streaming form does: when a scope is
- * supplied the backend assembles the posts block itself and `postsText` is
- * empty, so no posts cross the wire. Auto-regenerate is the only caller and it
- * always uses that path (A1b).
- */
-export const generateSummary = async (
-  channels: string[],
-  channelsText: string,
-  postsText: string,
-  language: string,
-  model: string,
-  temperature: number = 0.7,
-  scope?: PromptScope,
-): Promise<LLMResult> => {
-  let text = ""
-  const { stream, prompt, config } = await generateSummaryStream(
-    channels,
-    channelsText,
-    postsText,
-    language,
-    model,
-    temperature,
-    scope,
-  )
-  for await (const chunk of stream) {
-    text += chunk.text
-  }
-  return { text, prompt, config, fullResponse: { text } }
 }
 
 export const translateText = async (

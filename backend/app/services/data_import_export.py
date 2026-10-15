@@ -77,6 +77,7 @@ from app.models_tg import (
     PostTranslation,
     PublishLog,
     Summary,
+    SummaryAttempt,
     SummaryPayload,
     SyncLog,
     SyncLogPayload,
@@ -150,6 +151,7 @@ from app.services.summaries import (
     refresh_summary_derived_columns,
     summary_to_camel,
 )
+from app.services.summary_attempts import attempt_to_camel, restore_attempt
 from app.services.sync_meta import touch_sync
 from app.services.tag_runs import TAG_RUN_NOT_FOUND, tag_run_to_camel
 from app.services.tags import (
@@ -191,6 +193,13 @@ IMPORT_WRITES: dict[type[Any], str] = {
     PublishLog: "Checked: personal log, refused with `publish log not found`.",
     LLMLog: "Checked: personal log, refused with `llm log not found`.",
     EmbeddingLog: "Checked: personal log, refused with `embedding log not found`.",
+    SummaryAttempt: (
+        "Excused from the battery, not from the check: an Attempt cannot be "
+        "seeded without the Summary its foreign key names, so it has no row of "
+        "its own to attack. `_import_summary_attempts` refuses one whose Summary "
+        "or existing id is another account's, with the Summary family's 404 "
+        "(`test_summary_attempts.py`), and `restore_attempt` stamps the subject."
+    ),
     SummaryPayload: (
         "Excused: written only through `apply_summary_payload` for a summary "
         "this module has already checked. Guarding the child as well would ask "
@@ -544,6 +553,37 @@ def _frozen_scope_columns(
             detail=f"{section}: the frozen scope is not a valid Scope.",
         ) from exc
     return frozen.stored(), frozen.stored_posts()
+
+
+def _import_summary_attempts(
+    session: Session, items: list[Any], *, user_id: uuid.UUID
+) -> int:
+    """Restore Attempts onto Summaries the subject owns (SFR-01).
+
+    Runs after `summaries`, so a document's own Summaries are already back.
+    Both the Summary an Attempt names and any Attempt already at its id must
+    be the subject's, answered with the Summary family's 404; an Attempt whose
+    Summary is not on this install has nothing to hang on and is skipped.
+    """
+    restored = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        summary = session.get(Summary, item.get("summaryId"))
+        if summary is None:
+            continue
+        section = "summary_attempts"
+        _assert_importable(summary, user_id, detail=SUMMARY_NOT_FOUND, section=section)
+        existing = session.get(SummaryAttempt, item.get("id"))
+        _assert_importable(existing, user_id, detail=SUMMARY_NOT_FOUND, section=section)
+        try:
+            restore_attempt(session, item, user_id=user_id)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"{section}: a row is not a valid Attempt."
+            ) from exc
+        restored += 1
+    return restored
 
 
 def _import_summaries(session: Session, items: list[Any], *, user_id: uuid.UUID) -> int:
@@ -1233,6 +1273,11 @@ def import_data(
             session, payload["summaries"], user_id=user_id
         )
 
+    if payload.get("summary_attempts"):
+        counts["summary_attempts"] = _import_summary_attempts(
+            session, payload["summary_attempts"], user_id=user_id
+        )
+
     if payload.get("chat_sessions"):
         counts["chat_sessions"] = _import_chat_sessions(
             session, payload["chat_sessions"], user_id=user_id
@@ -1541,6 +1586,8 @@ def export_sections(
             lambda row: summary_to_camel(row[0], row[1]),
             _summaries_statement,
         ),
+        # SFR-01: a Summary's Attempts travel with it, Partial responses too.
+        ExportSection("summary_attempts", SummaryAttempt, attempt_to_camel),
         ExportSection("bot_credentials", BotCredential, bot_to_camel),
         ExportSection("chat_destinations", ChatDestination, chat_dest_to_camel),
         ExportSection("publish_logs", PublishLog, publish_log_to_camel),

@@ -5,9 +5,12 @@ import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
+import { useAiKeys } from "@/hooks/useAiKeys"
+import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
 import {
   useInvalidateSummaries,
   useSummariesHistory,
+  useSummaryAttempts,
 } from "@/hooks/useSummaries"
 import { saveSummary } from "@/lib/summaries/store"
 import { useAI } from "../contexts/AIContext"
@@ -19,6 +22,12 @@ import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
+import {
+  AttemptsFold,
+  FailedSummaryPanel,
+} from "./summary-view/FailedSummaryPanel"
+import { IncompleteRetry } from "./summary-view/IncompleteMark"
+import { RetryRunWith, useRetryChoice } from "./summary-view/RetryRunWith"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
@@ -26,7 +35,7 @@ import {
   useCitationWorkspace,
 } from "./summary-view/SummaryMarkdown"
 import { SummaryPublishPanel } from "./summary-view/SummaryPublishPanel"
-import { summaryViewState } from "./summary-view/summary-view-model"
+import { readerZone, summaryViewState } from "./summary-view/summary-view-model"
 import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
 
 export const SummaryView: React.FC = () => {
@@ -40,7 +49,7 @@ export const SummaryView: React.FC = () => {
   const { isOffline } = useApiStatus()
   const summariesHistory = useSummariesHistory()
   const loadHistory = useInvalidateSummaries()
-  const { currentSummaryId, summarizing: runInFlight } = useUI()
+  const { currentSummaryId, summarizing: runInFlight, setActiveTab } = useUI()
   // The run fills the new-Summary tab; another Summary's tab is not generating.
   const summarizing = generatesOnTab({
     summarizing: runInFlight,
@@ -48,6 +57,7 @@ export const SummaryView: React.FC = () => {
     summaryId: currentSummaryId,
   })
   const settings = useSettings()
+  const zone = readerZone(settings.timeZone)
 
   // The prompt panel below needs the full promptText, which the list
   // projection omits (it was ~94% of that payload).
@@ -68,7 +78,14 @@ export const SummaryView: React.FC = () => {
     [refs, resolve, citedLoading, currentSummaryId, currentSummaryDetail],
   )
 
-  const { currentSummary, summaryBody, isPending, running } = summaryViewState({
+  const {
+    currentSummary,
+    summaryBody,
+    isPending,
+    isFailed,
+    pasteTarget,
+    running,
+  } = summaryViewState({
     history: summariesHistory,
     currentSummaryId,
     detail: currentSummaryDetail,
@@ -76,6 +93,17 @@ export const SummaryView: React.FC = () => {
     regenerating: regeneratingSummaries,
     summarizing,
   })
+  const { attempts, runningText, retry, stop, cancel, keep, dismiss, restore } =
+    useSummaryAttempts(currentSummaryId, settings.aiTemperature)
+  const runningAttempt = attempts.find((a) => a.outcome === "running")
+  const aiKeys = useAiKeys()
+  const keyLabel = (id: string | null) => aiKeys.find((k) => k.id === id)?.label
+  const [retryChoice, setRetryChoice] = useRetryChoice(
+    currentSummaryId,
+    attempts,
+    currentSummary?.model ?? "",
+  )
+  const applyScope = useApplyArtifactScope()
 
   const workspace = useCitationWorkspace()
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
@@ -125,6 +153,51 @@ export const SummaryView: React.FC = () => {
           promptText={currentSummaryDetail?.promptText}
           body={summaryBody}
           isPending={isPending}
+          isFailed={isFailed}
+          failurePanel={(s) => (
+            <FailedSummaryPanel
+              summary={s}
+              promptText={currentSummaryDetail?.promptText}
+              attempts={attempts}
+              zone={zone}
+              keyLabel={keyLabel}
+              onPaste={() => setPasteModalOpen(true)}
+              runningText={runningText}
+              onRetry={() => void retry(s.id, retryChoice)}
+              runWith={
+                <RetryRunWith
+                  value={retryChoice}
+                  onChange={setRetryChoice}
+                  attempts={attempts}
+                  promptText={currentSummaryDetail?.promptText}
+                />
+              }
+              onStop={(attemptId) => void stop(s.id, attemptId)}
+              onCancel={(attemptId) => void cancel(s.id, attemptId)}
+              onKeep={(attemptId) => void keep(s.id, attemptId)}
+              onDismiss={(attemptId) => void dismiss(s.id, attemptId)}
+              onRestore={(attemptId) => void restore(s.id, attemptId)}
+              onChangeSelection={() => {
+                if (s.scope) applyScope(s.scope)
+                setActiveTab("action")
+              }}
+            />
+          )}
+          attemptsFold={
+            <AttemptsFold attempts={attempts} keyLabel={keyLabel} />
+          }
+          incompleteMark={
+            // Rendered by `SummaryBody` only for an open Incomplete Summary.
+            <IncompleteRetry
+              attempt={runningAttempt}
+              text={runningText}
+              keyLabel={keyLabel}
+              onRetry={() => currentSummaryId && void retry(currentSummaryId)}
+              onStop={(attemptId) =>
+                currentSummaryId && void stop(currentSummaryId, attemptId)
+              }
+            />
+          }
           summarizing={summarizing}
           running={running}
           direction={bodyDirection}
@@ -163,13 +236,7 @@ export const SummaryView: React.FC = () => {
           workspace={workspace}
           textSize={settings.summaryTextSize}
           onTextSizeChange={settings.setSummaryTextSize}
-          // The Account's zone, as the published metadata uses; the browser's
-          // only until the Account has one.
-          zone={{
-            timeZone:
-              settings.timeZone ||
-              Intl.DateTimeFormat().resolvedOptions().timeZone,
-          }}
+          zone={zone}
           emptyState={
             <GoToActionEmptyState
               what="summary"
@@ -179,12 +246,12 @@ export const SummaryView: React.FC = () => {
         />
       </div>
 
-      {currentSummary && isPending && (
+      {pasteTarget && (
         <PasteSummaryModal
           isOpen={pasteModalOpen}
           onClose={() => setPasteModalOpen(false)}
           onSave={(text, modelName) =>
-            completePendingSummary(currentSummary.id, text, modelName)
+            completePendingSummary(pasteTarget.id, text, modelName)
           }
         />
       )}

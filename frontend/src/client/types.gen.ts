@@ -3981,6 +3981,10 @@ export type ModelInfo = {
      * Provider
      */
     provider: string;
+    /**
+     * Contextlength
+     */
+    contextLength?: number | null;
 };
 
 /**
@@ -6421,7 +6425,9 @@ export type StatusResponse = {
 /**
  * SummaryArtifactResponse
  *
- * `status` is `"pending"` until an externally-run prompt is pasted back.
+ * `status` is `"pending"` until an externally-run prompt is pasted back,
+ * `"failed"` while its latest Attempt did not finish, and `"running"` while
+ * an Attempt is running, whatever the stored status says.
  *
  * `autoRegenerate` and `autoPublish` are here rather than left to the Summary
  * tab because History is where they are toggled, and reading them out of
@@ -6481,6 +6487,101 @@ export type SummaryArtifactResponse = {
      * Autopublish
      */
     autoPublish?: boolean;
+    /**
+     * Failedattempts
+     */
+    failedAttempts?: number;
+};
+
+/**
+ * SummaryAttemptResponse
+ *
+ * One request for a Summary's prose and how it ended (ADR-030).
+ *
+ * Closed and fully declared: every key is always present, so a ``null`` here
+ * is the column's own value rather than an invented one. Times are epoch
+ * milliseconds, like every artifact timestamp.
+ */
+export type SummaryAttemptResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Summaryid
+     */
+    summaryId: string;
+    /**
+     * Attempt
+     */
+    attempt: number;
+    /**
+     * Outcome
+     */
+    outcome: 'running' | 'succeeded' | 'failed' | 'stopped' | 'kept_partial';
+    /**
+     * Kind
+     */
+    kind: 'quota' | 'auth' | 'transient' | 'model' | 'limit' | 'empty' | 'other' | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Keyid
+     */
+    keyId: string | null;
+    /**
+     * Partialtext
+     */
+    partialText: string | null;
+    /**
+     * Partialdismissedat
+     */
+    partialDismissedAt: number | null;
+    /**
+     * Automatic
+     */
+    automatic: boolean;
+    /**
+     * Scheduled
+     */
+    scheduled: boolean;
+    /**
+     * Startedat
+     */
+    startedAt: number;
+    /**
+     * Endedat
+     */
+    endedAt: number | null;
+};
+
+/**
+ * SummaryAttemptStartRequest
+ *
+ * Start an Attempt on a Summary; it runs on the worker (SFR-02).
+ *
+ * Every field is optional: left out, the model and AI Key are the last
+ * Attempt's, and the temperature is the default Generate always used.
+ */
+export type SummaryAttemptStartRequest = {
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Aikeyid
+     */
+    aiKeyId?: string | null;
+    /**
+     * Temperature
+     */
+    temperature?: number | null;
 };
 
 /**
@@ -6497,6 +6598,30 @@ export type SummaryDerivation = {
      * Mode
      */
     mode: 'successor' | 'repeat';
+};
+
+/**
+ * SummaryFailureRequest
+ *
+ * A Generate that broke before the server streamed anything.
+ *
+ * The browser reports what it met (a token-limit refusal, a failed sync, a
+ * dropped connection) and the HTTP status it carried, if any. The server
+ * decides the kind from that status.
+ */
+export type SummaryFailureRequest = {
+    /**
+     * Error
+     */
+    error: string;
+    /**
+     * Status
+     */
+    status?: number | null;
+    /**
+     * Model
+     */
+    model: string;
 };
 
 /**
@@ -6577,10 +6702,6 @@ export type SummaryRequest = {
      * Aikeyid
      */
     aiKeyId?: string | null;
-    /**
-     * Prompt
-     */
-    prompt?: string | null;
 };
 
 /**
@@ -8739,29 +8860,6 @@ export type AiApiSummaryPromptResponses = {
 
 export type AiApiSummaryPromptResponse = AiApiSummaryPromptResponses[keyof AiApiSummaryPromptResponses];
 
-export type AiApiSummaryStreamData = {
-    body: SummaryRequest;
-    path?: never;
-    query?: never;
-    url: '/api/v1/ai/summary/stream';
-};
-
-export type AiApiSummaryStreamErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AiApiSummaryStreamError = AiApiSummaryStreamErrors[keyof AiApiSummaryStreamErrors];
-
-export type AiApiSummaryStreamResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
 export type AiApiChatStreamData = {
     body: ChatRequest;
     path?: never;
@@ -10471,6 +10569,300 @@ export type DataUpsertSummaryResponses = {
 
 export type DataUpsertSummaryResponse = DataUpsertSummaryResponses[keyof DataUpsertSummaryResponses];
 
+export type DataListSummaryAttemptsData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts';
+};
+
+export type DataListSummaryAttemptsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataListSummaryAttemptsError = DataListSummaryAttemptsErrors[keyof DataListSummaryAttemptsErrors];
+
+export type DataListSummaryAttemptsResponses = {
+    /**
+     * Response Data-List Summary Attempts
+     *
+     * Successful Response
+     */
+    200: Array<SummaryAttemptResponse>;
+};
+
+export type DataListSummaryAttemptsResponse = DataListSummaryAttemptsResponses[keyof DataListSummaryAttemptsResponses];
+
+export type DataRecordSummaryFailureData = {
+    body: SummaryFailureRequest;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/failures';
+};
+
+export type DataRecordSummaryFailureErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRecordSummaryFailureError = DataRecordSummaryFailureErrors[keyof DataRecordSummaryFailureErrors];
+
+export type DataRecordSummaryFailureResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataRecordSummaryFailureResponse = DataRecordSummaryFailureResponses[keyof DataRecordSummaryFailureResponses];
+
+export type DataStartSummaryAttemptData = {
+    body: SummaryAttemptStartRequest;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/start';
+};
+
+export type DataStartSummaryAttemptErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataStartSummaryAttemptError = DataStartSummaryAttemptErrors[keyof DataStartSummaryAttemptErrors];
+
+export type DataStartSummaryAttemptResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataStartSummaryAttemptResponse = DataStartSummaryAttemptResponses[keyof DataStartSummaryAttemptResponses];
+
+export type DataStopSummaryAttemptData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/stop';
+};
+
+export type DataStopSummaryAttemptErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataStopSummaryAttemptError = DataStopSummaryAttemptErrors[keyof DataStopSummaryAttemptErrors];
+
+export type DataStopSummaryAttemptResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataStopSummaryAttemptResponse = DataStopSummaryAttemptResponses[keyof DataStopSummaryAttemptResponses];
+
+export type DataCancelSummaryAttemptData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/cancel';
+};
+
+export type DataCancelSummaryAttemptErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataCancelSummaryAttemptError = DataCancelSummaryAttemptErrors[keyof DataCancelSummaryAttemptErrors];
+
+export type DataCancelSummaryAttemptResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type DataCancelSummaryAttemptResponse = DataCancelSummaryAttemptResponses[keyof DataCancelSummaryAttemptResponses];
+
+export type DataKeepSummaryPartialData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/keep';
+};
+
+export type DataKeepSummaryPartialErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataKeepSummaryPartialError = DataKeepSummaryPartialErrors[keyof DataKeepSummaryPartialErrors];
+
+export type DataKeepSummaryPartialResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataKeepSummaryPartialResponse = DataKeepSummaryPartialResponses[keyof DataKeepSummaryPartialResponses];
+
+export type DataDismissSummaryPartialData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/dismiss';
+};
+
+export type DataDismissSummaryPartialErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataDismissSummaryPartialError = DataDismissSummaryPartialErrors[keyof DataDismissSummaryPartialErrors];
+
+export type DataDismissSummaryPartialResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataDismissSummaryPartialResponse = DataDismissSummaryPartialResponses[keyof DataDismissSummaryPartialResponses];
+
+export type DataRestoreSummaryPartialData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/restore';
+};
+
+export type DataRestoreSummaryPartialErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRestoreSummaryPartialError = DataRestoreSummaryPartialErrors[keyof DataRestoreSummaryPartialErrors];
+
+export type DataRestoreSummaryPartialResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryAttemptResponse;
+};
+
+export type DataRestoreSummaryPartialResponse = DataRestoreSummaryPartialResponses[keyof DataRestoreSummaryPartialResponses];
+
+export type DataSummaryAttemptEventsData = {
+    body?: never;
+    path: {
+        /**
+         * Summary Id
+         */
+        summary_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/api/v1/data/summaries/{summary_id}/attempts/{attempt_id}/events';
+};
+
+export type DataSummaryAttemptEventsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataSummaryAttemptEventsError = DataSummaryAttemptEventsErrors[keyof DataSummaryAttemptEventsErrors];
+
+export type DataSummaryAttemptEventsResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type DataListTagRunsData = {
     body?: never;
     path?: never;
@@ -10858,6 +11250,10 @@ export type DataListArtifactsData = {
          * Starred
          */
         starred?: boolean;
+        /**
+         * Status
+         */
+        status?: 'failed' | 'pending' | null;
         /**
          * Limit
          */

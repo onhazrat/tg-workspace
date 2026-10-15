@@ -51,6 +51,11 @@ class ModelInfo(BaseModel):
     id: str
     label: str
     provider: str
+    #: Tokens the model accepts, when the Provider says (OpenRouter does, Gemini
+    #: by rule). `null` means unknown, and the page then warns about nothing.
+    context_length: int | None = Field(
+        default=None, serialization_alias="contextLength"
+    )
 
 
 # A body rather than a query parameter, and a POST rather than a GET, because
@@ -108,14 +113,6 @@ class SummaryRequest(BaseModel):
     #: **Client-supplied and untrusted.** It is checked against the caller
     #: before the secret is decrypted; a foreign id answers as an absent one.
     ai_key_id: str | None = Field(default=None, alias="aiKeyId")
-    #: The exact prompt to send, when the client already holds it. Generate
-    #: fetches it from `/ai/summary/prompt` to file the pending Summary before
-    #: the model is asked; sending it back means the model answers the prompt
-    #: that was stored, and the posts are read once. Honoured by
-    #: `/ai/summary/stream` only. No more trusted than `postsText`, which
-    #: already lets a client choose what the model reads.
-    prompt: str | None = None
-
     model_config = {"populate_by_name": True}
 
 

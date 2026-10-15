@@ -12,7 +12,7 @@ import {
 import type { SettingsSection } from "@/lib/settingsSection"
 import { normalizeSettingsSection } from "@/lib/settingsSection"
 import { tabFromSearch, tabSearch } from "@/lib/workspace-tabs"
-import type { TabType } from "@/types"
+import type { ArtifactStatusFilter, TabType } from "@/types"
 
 export type WorkspaceSearch = {
   tab?: TabType
@@ -52,7 +52,11 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** History's All / Failed / Pending filter (SFR-01); absent is All. */
+  historyStatus?: ArtifactStatusFilter
 } & DirectoryParams
+
+const HISTORY_STATUSES: readonly ArtifactStatusFilter[] = ["failed", "pending"]
 
 /** The string params: kept trimmed when non-blank, dropped otherwise. */
 const ID_PARAMS = [
@@ -96,6 +100,12 @@ export function validateWorkspaceSearch(
     // A blank `?dirFilter=` is the empty filter, which absence is not.
     if (text) result[key] = text
     else if (key === "dirFilter" && raw === "") result[key] = ""
+  }
+  if (
+    result.tab === "history" &&
+    HISTORY_STATUSES.includes(search.historyStatus as ArtifactStatusFilter)
+  ) {
+    result.historyStatus = search.historyStatus as ArtifactStatusFilter
   }
   const legacyGroup = trimmedString(search.channelGroup)
   if (legacyGroup && !result.channelFilter) {

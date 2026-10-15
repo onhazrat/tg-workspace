@@ -3,11 +3,16 @@ import type React from "react"
 import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
-import type { PromptScope } from "@/api/data"
-import { dataSendSummaryPublication } from "@/client"
+import { watchSummaryAttempt } from "@/api/data"
+import {
+  dataRecordSummaryFailure,
+  dataSendSummaryPublication,
+  dataStartSummaryAttempt,
+} from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useBotCredentials, useChatDestinations } from "@/hooks/useBots"
 import {
+  invalidateSummaryState,
   useInvalidateSummaries,
   useSummariesHistory,
 } from "@/hooks/useSummaries"
@@ -19,13 +24,10 @@ import {
   type PromptPosts,
   type ProvisionalRow,
   promptPosts,
-  readStream,
   searchFilterExtra,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
 import { staleSelectedChannels } from "@/lib/chat-sessions/chat-turn"
-import { saveLLMLog } from "@/lib/logs/write"
-import { DEFAULT_SELECTION } from "@/lib/posts/post-selection"
 import { lookupPosts } from "@/lib/posts/store"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import {
@@ -36,26 +38,22 @@ import {
 import {
   autoPublishTarget,
   channelsNeedingSync,
-  classifyAiError,
-  noPostsText,
-  successorSummary,
+  openedSuccessor,
 } from "@/lib/summaries/summary-model"
 import {
+  attemptOutcome,
   checkPastedSummary,
   countRegeneratedPosts,
+  failureReport,
   NO_POSTS_MESSAGE,
   pastedSummaryRecord,
+  RecordedFailure,
   regeneratedRange,
   resolveCitedPosts,
-  summaryLLMLog,
 } from "@/lib/summaries/summary-run"
 import { useApiStatus } from "../hooks/useApiStatus"
 import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
-import {
-  generateSummary,
-  generateSummaryStream,
-  getSummaryPrompt,
-} from "../services/ai"
+import { getSummaryPrompt } from "../services/ai"
 import type { BotCredential, ChatDestination, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
 import { useData } from "./DataContext"
@@ -81,6 +79,9 @@ interface AIContextType {
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
+
+/** A Generate's row is never taken back once opened (SFR-01). */
+const KEEP_ROW: ProvisionalRow = { opened: () => {}, keep: () => {} }
 
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -161,7 +162,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     names: string[],
     posts: PromptPosts,
     row: ProvisionalRow,
-    extra: { status?: "pending" },
+    extra: { status?: "pending" | "failed" },
   ) => {
     const opened = await submitSummary({
       id,
@@ -189,7 +190,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.warning("Server offline — summary generation disabled.")
       return
     }
-    await syncStaleSelection()
+    // A failed sync is not the end of a Generate: with Posts in range it
+    // leaves a Failed Summary that says why (SFR-01). Without any, there was
+    // nothing to ask for, and the toast says so.
+    const syncError = await syncStaleSelection().then(
+      () => null,
+      (err: unknown) => err,
+    )
     const names = selectedChannelNames()
     const posts = await promptPosts(
       await getPromptPostsInput(),
@@ -197,7 +204,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       api.getPostsCounts,
     )
     if (posts.postCount === 0) {
-      toast.error(NO_POSTS_MESSAGE)
+      toast.error(
+        syncError ? errorText(syncError, NO_POSTS_MESSAGE) : NO_POSTS_MESSAGE,
+      )
       return
     }
 
@@ -206,9 +215,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // The empty Summary tab (or a new one), which the finished run fills.
     workspaceTabs.openTab("summary")
     try {
-      await withProvisionalRow(deleteSummary, (row) =>
-        streamSummary(names, posts, row),
-      )
+      await streamSummary(names, posts, syncError)
     } catch (err: unknown) {
       console.error(err)
       toast.error(
@@ -219,143 +226,79 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
+  /**
+   * Generate: open the Summary, build and store its prompt, start Attempt 1.
+   *
+   * The worker runs the Attempt (SFR-02, ADR-030); this tab only watches it,
+   * so a closed tab or a sleeping laptop does not end it. The Summary opens
+   * Failed and only a finished Attempt clears that, so a Generate that breaks
+   * anywhere after the submission, a dropped network included, is a Failed
+   * Summary in History and never a Pending one. A failure before the Attempt
+   * starts is reported here, with the HTTP status it carried, for the server
+   * to classify (SFR-01); the server records every failure after that.
+   */
   const streamSummary = async (
     names: string[],
     posts: PromptPosts,
-    row: ProvisionalRow,
+    syncError: unknown,
   ) => {
     const newId = crypto.randomUUID()
-    // File exactly what Copy files, before the model is asked: a `pending`
-    // row holding its prompt. From here a failed run leaves an item that can
-    // still be finished by pasting any model's answer, rather than nothing.
-    const scope = await openSummary(newId, names, posts, row, {
-      status: "pending",
+    // The submission opens the row; failing here leaves nothing to keep.
+    const scope = await openSummary(newId, names, posts, KEEP_ROW, {
+      status: "failed",
     })
-    const pendingPrompt = await getSummaryPrompt(
-      names,
-      channelsText(),
-      posts.postsText,
-      aiLanguage,
-      selectedModel,
-      aiTemperature,
-      scope,
-    )
-    await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
-    row.keep()
-    // Generating, not waiting: while the run is live the item shows as
-    // running and refuses a paste, which the finished run would overwrite.
-    setRegeneratingSummaries((prev) => new Set(prev).add(newId))
+    setChatMessages([]) // Clear chat when new summary starts
     try {
       await loadHistory()
-      await fillPendingSummary(newId, posts, scope, pendingPrompt, names)
-    } finally {
-      setRegeneratingSummaries((prev) => {
-        const next = new Set(prev)
-        next.delete(newId)
-        return next
-      })
+      if (syncError) throw syncError
+      // Built here rather than on the server when the selection came from a
+      // meaning search, whose Posts only this tab holds.
+      const pendingPrompt = await getSummaryPrompt(
+        names,
+        channelsText(),
+        posts.postsText,
+        aiLanguage,
+        selectedModel,
+        aiTemperature,
+        scope,
+      )
+      await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
+      await startFirstAttempt(newId)
+      workspaceTabs.createTab("summary", newId)
+      setSummary(null)
+      await invalidateSummaryState(queryClient, newId)
+    } catch (err: unknown) {
+      if (!(err instanceof RecordedFailure))
+        await dataRecordSummaryFailure({
+          path: { summary_id: newId },
+          body: failureReport(err, selectedModel),
+        }).catch(console.error)
+      await showFailed(newId)
+      throw new Error(
+        `${errorText(err, "The summary failed.")} The Summary is saved as Failed in History.`,
+      )
     }
   }
 
-  /** Ask the model the stored prompt and fill the pending Summary with it. */
-  const fillPendingSummary = async (
-    id: string,
-    posts: PromptPosts,
-    scope: PromptScope | undefined,
-    pendingPrompt: string,
-    names: string[],
-  ) => {
-    /** Show the item that is waiting, not the half-streamed buffer. */
-    const leftPending = (reason: string) => {
-      setSummary(null)
-      workspaceTabs.createTab("summary", id)
-      return new Error(
-        `${reason} The prompt is saved in History, waiting for a response you can paste.`,
-      )
-    }
-    const startTime = Date.now()
-    /**
-     * Never fatal: losing the log must not cost the Summary. It keeps the
-     * `channels=…` placeholder as its prompt, as it always has, rather than a
-     * second corpus-sized copy of the prompt per run.
-     */
-    const log = (
-      prompt: string,
-      config: unknown,
-      text: string,
-      lastChunk: unknown,
-    ) =>
-      saveLLMLog(
-        summaryLLMLog({
-          id:
-            Date.now().toString() + Math.random().toString(36).substring(2, 7),
-          model: selectedModel,
-          prompt,
-          config,
-          text,
-          lastChunk,
-          now: Date.now(),
-          durationMs: Date.now() - startTime,
-        }),
-      ).then(
-        () => true,
-        (err: unknown) => {
-          console.error(err)
-          return false
-        },
-      )
-
-    setChatMessages([]) // Clear chat when new summary starts
-    const { stream, prompt, config } = await generateSummaryStream(
-      names,
-      channelsText(),
-      posts.postsText,
-      aiLanguage,
-      selectedModel,
-      aiTemperature,
-      scope,
-      pendingPrompt,
-    )
-    let run: Awaited<ReturnType<typeof readStream>>
-    try {
-      run = await readStream(stream, setSummary)
-    } catch (err: unknown) {
-      const reason = errorText(err, "The AI provider failed.")
-      // A failed log row with the reason, like the scheduled path files.
-      await log(prompt, config, "", { error: reason })
-      throw leftPending(reason)
-    }
-    const { text, lastChunk } = run
-    const logged = await log(prompt, config, text, lastChunk)
-    if (!text) throw leftPending("The model returned an empty response.")
-
-    try {
-      // Only what the run produced. The Scope is already on the row and the
-      // server refuses to take it again. `promptText: null` drops the prompt
-      // once it is answered: it is a whole post corpus, and a finished
-      // Summary kept one only when it came from Copy.
-      await saveSummary({
-        id,
-        text,
+  /** Attempt 1, on the worker; a refusal it records is already recorded. */
+  const startFirstAttempt = async (id: string) => {
+    const started = await dataStartSummaryAttempt({
+      path: { summary_id: id },
+      body: {
         model: selectedModel,
-        postCount: posts.postCount,
-        timestamp: Date.now(),
-        status: null,
-        promptText: null,
-        citedPosts: await resolveCitedPosts(text, undefined, lookupPosts),
-      } as unknown as Summary)
-    } catch (err: unknown) {
-      throw leftPending(
-        `Saving the summary failed: ${errorText(err, "unknown error")}.${
-          logged ? " The model's answer is in the AI logs." : ""
-        }`,
-      )
-    }
-    workspaceTabs.createTab("summary", id)
-    // The stream buffer belongs to no tab: left set, it would stand in for the
-    // body of whichever Summary tab opened next. The new tab reads the row.
+        aiKeyId: selectedAiKeyId(),
+        temperature: aiTemperature,
+      },
+    })
+    if (started.error) throw new RecordedFailure(started.error)
+  }
+
+  /** Show the Failed Summary's page, not the half-streamed buffer. */
+  const showFailed = async (id: string) => {
     setSummary(null)
-    await loadHistory()
+    workspaceTabs.createTab("summary", id)
+    // Its tab may hold the row already; this also refetches its Attempts.
+    await invalidateSummaryState(queryClient, id)
   }
 
   const copySummaryPrompt = async () => {
@@ -470,7 +413,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         regenerate(s, shiftTime, row),
       )
     } catch (err: unknown) {
-      await reportRegenerationFailure(s, err)
+      console.error("Failed to regenerate summary:", err)
+      toast.error(errorText(err, "Failed to regenerate the summary."))
     } finally {
       setRegeneratingSummaries((prev) => {
         const next = new Set(prev)
@@ -480,35 +424,22 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
+  /**
+   * Regenerate: open the successor, then run it as an Attempt on the worker
+   * (SFR-03, ADR-030), exactly as Generate does. The successor is kept from
+   * the moment it opens: anything that breaks after that is a Failed Summary
+   * with its reason, never a row deleted behind the toast.
+   */
   const regenerate = async (
     s: Summary,
     shiftTime: boolean,
     row: ProvisionalRow,
   ) => {
-    // **The server derives the successor window** (AW-06). This used to be
-    // three lines here and three identical lines in
-    // `jobs/auto_summary.py::_regenerate_one`, and the copies had drifted in
-    // a way nothing could catch: a successor runs a full Duration past where
-    // its predecessor closed, so its end is in the future, and
-    // `POST /data/summaries` refuses a stated window that ends in the future
-    // — rightly, for a window somebody is choosing right now. So this path
-    // fell back to `PUT`, which by AW-05's design writes no Scope at all, and
-    // the same chain recorded a complete Scope on the ticks the worker ran
-    // and nothing on the ticks a tab was open.
-    //
-    // Naming the predecessor instead sidesteps that entirely: no caller
-    // states the window, so the refusal never applies, and the arithmetic has
-    // one home.
-    //
-    // A UUID for the reason the interactive path uses one.
+    // **The server derives the successor window** (AW-06): a successor's end
+    // is in the future by design, which a stated window may not be, so the
+    // predecessor is named instead and the arithmetic has one home. A re-run
+    // (`shiftTime: false`) derives too, for the same reason.
     const newId = crypto.randomUUID()
-    //
-    // A re-run (`shiftTime: false`) derives too, and that is not a detail.
-    // Stating its window instead was the first cut and it was wrong: every
-    // Summary the successor chain produces has an end in the future by
-    // design, so the ordinary door refused a re-run of exactly the rows the
-    // chain had just written. A window read off an Artifact is derived
-    // whichever offset it takes.
     const opened = await submitSummary({
       id: newId,
       derivedFrom: {
@@ -517,70 +448,80 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       },
     })
     row.opened(newId)
+    row.keep()
+    try {
+      await runRegeneration(s, newId, opened)
+    } catch (err: unknown) {
+      if (!(err instanceof RecordedFailure))
+        await dataRecordSummaryFailure({
+          path: { summary_id: newId },
+          body: failureReport(err, s.model || selectedModel),
+        }).catch(console.error)
+      await loadHistory()
+      throw new Error(
+        `${errorText(err, "The summary failed.")} The Summary is saved as Failed in History.`,
+      )
+    }
+  }
+
+  const runRegeneration = async (
+    s: Summary,
+    newId: string,
+    opened: Summary,
+  ) => {
     const range = regeneratedRange(opened)
     const summaryChannels = scopeChannels(opened)
-
     await syncSummaryChannels(summaryChannels, range.end, s.id)
-
-    // Auto-regenerate always takes the server-assembly path (A1b): it applies
-    // no filters beyond the channels and the shifted window, so the scope is
-    // fully expressible and there is no semantic branch to fall back to.
-    //
-    // Note it deliberately ignores the saved `postSearch` /
-    // `semanticSearchQuery` — those are carried onto the new summary as
-    // metadata but have never been *applied* when regenerating. That
-    // asymmetry predates this change and is preserved, not fixed.
+    // A regeneration applies no selection beyond the channels and the window,
+    // so the server builds its prompt from the derived Scope it froze.
     const postCount = await countRegeneratedPosts(
       summaryChannels,
       range,
       serverMinuteStart(),
       api.getPostsCounts,
     )
-    const text =
-      postCount === 0
-        ? noPostsText(range.start, range.end)
-        : await generateAndLog(s, summaryChannels, {
-            startDate: range.start,
-            endDate: range.end,
-            // Every Post in the window: a regeneration applies no selection,
-            // as the derived Scope it froze says (PTR-05).
-            selection: DEFAULT_SELECTION,
-          })
-
-    // **The Key that actually paid is the live selection** — not the one the
-    // old Summary stored (BYOK-03).
-    //
-    // Written the other way round first, and it was wrong: this path
-    // regenerates through `generateSummary`, whose `withAiKey` sends
-    // `selectedAiKeyId()` and never consults `s.aiKeyId`. So a Summary
-    // stamped key A, re-run after switching the chooser to B, billed B,
-    // logged B's provider — and then wrote A onto the successor, so tonight
-    // the scheduler charges A again. One chain, two Keys, depending on which
-    // path regenerated it: exactly the ambiguity this ticket set out to close.
-    const newSummary = successorSummary(s, {
+    // **The Key that pays is the live selection** — not the one the old
+    // Summary stored (BYOK-03), so the successor records the Key it ran on.
+    const successor = openedSuccessor(s, {
       id: newId,
-      text,
       postCount,
-      // The scope path never holds the posts, so citations are resolved by
-      // lookup — the same two-step the interactive path uses.
-      citedPosts: await resolveCitedPosts(text, undefined, lookupPosts),
+      range,
       selectedAiKeyId: selectedAiKeyId(),
       now: Date.now(),
     })
-    await saveSummary(newSummary)
-    row.keep()
-
+    await saveSummary(successor)
+    // The chain moves to the successor, whatever its Attempt does.
+    await saveSummary({ ...s, autoRegenerate: false })
+    await loadHistory()
+    if (postCount > 0 && !(await runAttempt(s, newId))) return
     const target = autoPublishTarget(
       s,
       postCount,
       botCredentials,
       chatDestinations,
     )
-    if (target) await autoPublish(newSummary, target.bot, target.dest)
+    if (target) await autoPublish(successor, target.bot, target.dest)
+  }
 
-    // Update the old summary to not auto-regenerate anymore
-    await saveSummary({ ...s, autoRegenerate: false })
+  /** Start the successor's Attempt and watch it; true when it succeeded. */
+  const runAttempt = async (s: Summary, id: string) => {
+    const attempt = await dataStartSummaryAttempt({
+      path: { summary_id: id },
+      body: {
+        model: s.model || selectedModel,
+        aiKeyId: selectedAiKeyId(),
+        temperature: aiTemperature,
+      },
+    })
+    // Refused before the worker took it: already recorded on the Summary.
+    if (attempt.error) throw new RecordedFailure(attempt.error)
+    const outcome =
+      attempt.outcome === "running"
+        ? await attemptOutcome(watchSummaryAttempt(id, attempt.id))
+        : attempt.outcome
+    await invalidateSummaryState(queryClient, id)
     await loadHistory()
+    return outcome === "succeeded"
   }
 
   /** Sync first, but only channels not already synced past the new end. */
@@ -595,53 +536,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       stale,
       `Auto-Regenerate Summary (${summaryId})`,
     )
-  }
-
-  const reportRegenerationFailure = async (s: Summary, err: unknown) => {
-    const { message, quotaExceeded } = classifyAiError(err)
-    console.error("Failed to generate background summary:", err)
-    toast.error(`Failed to generate background summary: ${message}`)
-    if (!quotaExceeded) return
-    // Disable auto-regenerate to prevent spamming the API
-    await saveSummary({ ...s, autoRegenerate: false })
-    await loadHistory()
-  }
-
-  /** Run the model over `scope` and file the LLM log; returns the text. */
-  const generateAndLog = async (
-    s: Summary,
-    summaryChannels: string[],
-    scope: PromptScope,
-  ) => {
-    const model = s.model || "gemini-3-flash-preview"
-    const startTime = Date.now()
-    const { text, prompt, config, fullResponse } = await generateSummary(
-      summaryChannels,
-      formatChannelsForPrompt(channels, summaryChannels, {
-        includeBio: includeChannelBioInPrompt,
-        includeTags: includeChannelTagsInPrompt,
-      }),
-      "",
-      s.language,
-      model,
-      aiTemperature,
-      scope,
-    )
-    await saveLLMLog({
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-      model,
-      prompt,
-      response: text,
-      modelConfig: config,
-      fullRequest: { contents: [{ parts: [{ text: prompt }] }], config },
-      fullResponse,
-      tokens: fullResponse?.usageMetadata?.totalTokenCount,
-      status: "success",
-      timestamp: Date.now(),
-      duration: Date.now() - startTime,
-      type: "summary",
-    })
-    return text
   }
 
   /** The server plans and sends it, and files the publish log (SUMTAB-09). */

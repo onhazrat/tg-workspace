@@ -85,6 +85,53 @@ describe("ArtifactCardHeading", () => {
   })
 })
 
+describe("ArtifactCardHeading for a summary whose Attempt is running", () => {
+  test("says Generating, not Failed, while its first Attempt runs", () => {
+    render(
+      <ArtifactCardHeading
+        artifact={{ ...summary, status: "running" } as ArtifactListItem}
+        pending={false}
+        onOpen={() => {}}
+      />,
+    )
+    expect(screen.getByText("Generating")).toBeTruthy()
+    expect(screen.queryByText("Failed")).toBeNull()
+  })
+})
+
+describe("ArtifactCardHeading for a Failed summary", () => {
+  const failed = (n: number) =>
+    ({
+      ...summary,
+      status: "failed",
+      failedAttempts: n,
+    }) as unknown as ArtifactListItem
+
+  test("one failure: a red Failed badge and a line saying what can be done", () => {
+    render(
+      <ArtifactCardHeading
+        artifact={failed(1)}
+        pending={false}
+        onOpen={() => {}}
+      />,
+    )
+    expect(screen.getByText("Failed")).toBeTruthy()
+    expect(screen.getByText(/Generation failed/)).toBeTruthy()
+    expect(screen.queryByText("Awaiting response")).toBeNull()
+  })
+
+  test("several failures: Failed ×n", () => {
+    render(
+      <ArtifactCardHeading
+        artifact={failed(3)}
+        pending={false}
+        onOpen={() => {}}
+      />,
+    )
+    expect(screen.getByText("Failed ×3")).toBeTruthy()
+  })
+})
+
 describe("ArtifactCardNotes", () => {
   test("shows who acted and the note only when there is one", () => {
     render(

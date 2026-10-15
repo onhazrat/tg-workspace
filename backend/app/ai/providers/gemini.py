@@ -12,6 +12,16 @@ from app.ai.models import ChatMessage, CompletionResult, EmbeddingResult, ModelI
 RTL_LANGUAGES = {"Persian", "Arabic", "فارسی", "العربية"}
 
 
+def gemini_context_length(model_id: str) -> int | None:
+    """The input window of a Gemini id Google listed without one.
+
+    Every Gemini model since 1.5 takes at least 1,048,576 tokens (1.5 Pro takes
+    more), so the floor is a safe estimate for the retry's size warning: it can
+    only warn early, never late. Gemma and anything else is left unknown.
+    """
+    return 1_048_576 if model_id.startswith("gemini-") else None
+
+
 def rtl_instruction(language: str) -> str:
     """The RTL directive for a *translation*, shared by both Providers.
 
@@ -76,7 +86,13 @@ class GeminiProvider:
             if not name or (actions is not None and "generateContent" not in actions):
                 continue
             models.append(
-                ModelInfo(id=name, label=entry.display_name or name, provider=self.name)
+                ModelInfo(
+                    id=name,
+                    label=entry.display_name or name,
+                    provider=self.name,
+                    context_length=entry.input_token_limit
+                    or gemini_context_length(name),
+                )
             )
         models.sort(key=lambda m: m.id)
         return models

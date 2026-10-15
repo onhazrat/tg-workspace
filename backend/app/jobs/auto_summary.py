@@ -1,27 +1,33 @@
-"""Auto-regenerate and auto-publish summaries (DECISION #6)."""
+"""Auto-regenerate and auto-publish summaries (DECISION #6).
+
+A tick no longer calls a Provider itself (SFR-03, ADR-030). It opens the
+successor Summary first, as Generate does, hands it the chain, and starts an
+Attempt flagged `scheduled` on the generation Lane. The worker runs it like
+any other, retries a transient failure once, and reports the end back here
+(`after_scheduled_attempt`): a success is auto-published, a quota failure
+switches the chain off. Any other failure leaves the successor Failed with its
+Attempt, visible in History, and the chain moves on from it.
+"""
 
 from __future__ import annotations
 
 import logging
-import re
 import time
 import uuid
-from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from fastapi import HTTPException
 from sqlmodel import Session, col, select
 
-from app.ai.registry import default_model, get_provider, is_credential_rejection
+from app.core import acting_owner
 from app.core.db import engine
+from app.jobs.summary_generation import start_attempt
 from app.models_tg import Post, Summary, utc_now
 from app.prompts.summary import format_summary_prompt
 from app.schemas.scope import FrozenScope
-from app.services.ai_keys import Purpose, record_validation, resolve_ai_key
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.follows import followed_channels_for
-from app.services.logs import upsert_llm_log, upsert_publish_log
+from app.services.logs import upsert_publish_log
 from app.services.post_filters import apply_analysis_window
 from app.services.publications import (
     DestinationNotFound,
@@ -29,16 +35,19 @@ from app.services.publications import (
     send_publication,
 )
 from app.services.scraper_jobs import create_job, has_active_sync_job
-from app.services.summaries import apply_summary_payload, derived_scope
+from app.services.summaries import (
+    FAILED_STATUS,
+    apply_summary_payload,
+    derived_scope,
+    is_incomplete,
+    refresh_summary_derived_columns,
+)
 from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
 
 logger = logging.getLogger(__name__)
 
 _regenerating: set[str] = set()
-
-
-_CITATION_RE = re.compile(r"\[([^\]]+?)\s*#(\d+)\]")
 
 
 def _log_publish_failure(
@@ -51,11 +60,13 @@ def _log_publish_failure(
     chat_name: str,
     error: str,
     text_sent: str,
+    status: str = "failed",
 ) -> None:
     """Record an auto-publish that produced no message, and commit it.
 
     The scheduler has no response to fail; the publish log is the only place a
-    person sees that a configured auto-publish did nothing.
+    person sees that a configured auto-publish did nothing. `skipped` is one
+    it chose not to send.
     """
     upsert_publish_log(
         session,
@@ -66,7 +77,7 @@ def _log_publish_failure(
             "bot_name": bot_id,
             "chat_id": chat_id,
             "chat_name": chat_name,
-            "status": "failed",
+            "status": status,
             "error": error,
             "timestamp": int(time.time() * 1000),
             "text_sent": text_sent,
@@ -75,175 +86,6 @@ def _log_publish_failure(
     )
     session.commit()
     touch_sync(session, "publish_logs")
-
-
-def _detail(exc: BaseException) -> str:
-    """The sentence a person should read, for either kind of failure.
-
-    `str(HTTPException)` is `"404: AI key not found"` — the status code is noise
-    in a log row that already has a status column, and the log's own search
-    covers `error`, so the prefix would be something people match on by
-    accident. Everything else stringifies as itself.
-    """
-    return str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
-
-
-async def _run_summary_call(
-    session: Session,
-    *,
-    owner_id: uuid.UUID,
-    user_id: uuid.UUID | None,
-    key_id: str | None,
-    model: str,
-    prompt: str,
-) -> str:
-    """Spend the Summary's own Key on one completion, and leave a row either way.
-
-    **Every failure files a failed `LLMLog` before it propagates.** The
-    scheduler is unattended, so a refusal that only raises makes "my Key stopped
-    working" and "auto-regeneration is off" the same observation — the argument
-    `_auto_publish` already makes for its side, and BYOK-03 applies it here. The
-    two failures it has to cover are a `key_id` naming somebody else's row,
-    which `resolve_ai_key` refuses **before** `decrypt_token` (multi-user-tenancy
-    ticket 33), and a Provider that has started rejecting a Key that used to
-    work.
-
-    A rejection also clears the Key's validation stamp, which is the signal the
-    settings panel reads — the same `_note_rejection` the interactive routes
-    call, for the same reason: nothing re-validates on a schedule, so the only
-    thing that ever finds out is a call somebody was making anyway.
-
-    **It does not touch `autoRegenerate`.** The schedule survives its own bad
-    night; one failed run turning the feature off is work lost quietly, which is
-    the failure mode this is a correction to.
-
-    `full_request` is composed here from the prompt rather than taken from the
-    outgoing HTTP request. That is what keeps a credential out of the log:
-    Gemini carries its key as a URL query parameter, so a request object dumped
-    verbatim would write it into a row the Account can read back and export.
-    `tests/services/test_llm_log_provenance.py` asserts it.
-    """
-    # Composed **before** the Key is resolved, because the refusal this has to
-    # record happens inside `resolve_ai_key` — a foreign `aiKeyId` never reaches
-    # a Provider, and a log built after the resolution would be exactly the
-    # silent return this function exists to remove. Such a row names no
-    # provider, which is the honest answer: no endpoint was reached.
-    log: dict[str, Any] = {
-        "id": str(uuid.uuid4()),
-        "model": model,
-        "prompt": prompt,
-        "model_config_json": {"temperature": 0.7},
-        # Provider-neutral, and composed rather than dumped. The shape this
-        # replaces was Gemini's wire format, written for every Provider — which
-        # since BYOK-02 is confidently false, and sits directly beside the
-        # `provider` and `base_url` columns saying so. What a person opens this
-        # row to read is the prompt; what they must never find in it is the
-        # credential, which is why it is built here rather than taken from the
-        # request that went out (a Gemini key travels as a query parameter).
-        "full_request": {"prompt": prompt},
-        "type": "summary",
-    }
-    start = time.perf_counter()
-    try:
-        key = resolve_ai_key(
-            session, user_id=user_id, purpose=Purpose.SUMMARY, key_id=key_id
-        )
-    except Exception as exc:
-        # **`Exception`, not `HTTPException`**, and the difference is the whole
-        # promise this function makes. `resolve_ai_key` answers a missing or
-        # foreign Key with an `HTTPException`, which is the case anybody thinks
-        # of — but it also reaches `decrypt_token`, which raises a bare
-        # `ValueError` outside `local` for a row that is not encrypted (a
-        # `SECRET_KEY` rotation, a restore carrying plaintext). And `aiKeyId`
-        # comes out of an open JSON bag, so a non-string value makes
-        # `session.get` raise out of the driver rather than answering 404.
-        #
-        # Catching only the tidy one puts both of those back in the silent
-        # column — no log row, nothing in the History, "my Key broke"
-        # indistinguishable from "auto-regeneration is off". That is the exact
-        # failure this function exists to remove, so the net is as wide as the
-        # claim.
-        _log_ai_failure(
-            session, log, owner_id=owner_id, error=_detail(exc), start=start
-        )
-        raise
-    log["provider"] = key.provider
-    log["base_url"] = key.base_url
-    provider = get_provider(
-        provider=key.provider, api_key=key.api_key, base_url=key.base_url
-    )
-    try:
-        result = await provider.complete(prompt, model=model, temperature=0.7)
-    except Exception as exc:
-        if key.credential_id and is_credential_rejection(exc):
-            record_validation(session, key.credential_id, valid=False)
-        _log_ai_failure(session, log, owner_id=owner_id, error=str(exc), start=start)
-        raise
-    duration = time.perf_counter() - start
-    upsert_llm_log(
-        session,
-        {
-            **log,
-            "response": result.text,
-            "full_response": result.model_dump(),
-            "status": "success",
-            "timestamp": int(time.time() * 1000),
-            "duration": duration,
-        },
-        owner_id,
-    )
-    return result.text
-
-
-def _log_ai_failure(
-    session: Session,
-    log: dict[str, Any],
-    *,
-    owner_id: uuid.UUID,
-    error: str,
-    start: float,
-) -> None:
-    """Record an AI call that produced no text.
-
-    Committed on its own, because the caller is about to raise and roll the rest
-    of the regeneration back. A log row that vanished with the failure it
-    documents would be worse than none: the History would show a gap and no
-    reason for it.
-    """
-    upsert_llm_log(
-        session,
-        {
-            **log,
-            "response": "",
-            "status": "failed",
-            "error": error,
-            "timestamp": int(time.time() * 1000),
-            "duration": time.perf_counter() - start,
-        },
-        owner_id,
-    )
-    session.commit()
-    touch_sync(session, "llm_logs")
-
-
-def _extract_cited_posts(text: str, posts: Sequence[Post]) -> dict[str, dict[str, Any]]:
-    cited: dict[str, dict[str, Any]] = {}
-    for match in _CITATION_RE.finditer(text):
-        channel_name = match.group(1).strip()
-        post_id = int(match.group(2))
-        key = f"{channel_name}-{post_id}"
-        if key not in cited:
-            for p in posts:
-                if p.channel_name == channel_name and p.post_id == post_id:
-                    cited[key] = {
-                        "id": p.post_id,
-                        "channelName": p.channel_name,
-                        "text": p.text,
-                        "date": p.date,
-                        "timestamp": p.timestamp,
-                    }
-                    break
-    return cited
 
 
 def _scope_of(summary: Summary) -> FrozenScope | None:
@@ -405,49 +247,6 @@ async def _regenerate_one(
         ).order_by(col(Post.timestamp).desc())
     ).all()
 
-    if not posts:
-        full_text = (
-            f"No new posts found in the selected channels between "
-            f"{datetime.utcfromtimestamp(new_start / 1000).isoformat()} and "
-            f"{datetime.utcfromtimestamp(new_end / 1000).isoformat()}."
-        )
-    else:
-        posts_text = "\n\n---\n\n".join(
-            f"[{p.channel_name}] ID: {p.post_id}\nDate: {p.date}\nContent: {p.text}"
-            for p in posts
-        )
-        model = summary.model or default_model()
-        prompt = format_summary_prompt(
-            channels=channel_names,
-            language=summary.language,
-            posts_text=posts_text,
-        )
-        # An unattended regeneration is still the owner's Artifact, so it is
-        # charged to the owner's Key and never to the Operator's, and it uses
-        # the Key the Account chose when it turned auto-regeneration on rather
-        # than whichever one happens to be newest at 4am (BYOK-03).
-        #
-        # `aiKeyId` rides `Summary.extra`, which `upsert_summary` fills from
-        # unrecognised keys in the request body — so it is **client-supplied and
-        # untrusted**, exactly like `publishBotId` two fields along.
-        # `resolve_ai_key` checks it against `summary.user_id` before
-        # `decrypt_token` for the reason multi-user-tenancy ticket 33 gives, and
-        # `_run_summary_call` turns its refusal into a failed log row.
-        #
-        # `summary.user_id` may be NULL on a deployment old enough to predate
-        # the stamp. `resolve_ai_key` refuses that rather than falling back:
-        # nobody's Key can pay, and the fallback that would "fix" it is the
-        # Operator paying, which is what BYOK exists to stop.
-        full_text = await _run_summary_call(
-            session,
-            owner_id=owner_id,
-            user_id=summary.user_id,
-            key_id=extra.get("aiKeyId"),
-            model=model,
-            prompt=prompt,
-        )
-
-    cited = _extract_cited_posts(full_text, posts)
     new_id = str(int(time.time() * 1000))
     new_extra = {
         # The spread is what carries `aiKeyId` (BYOK-03) onto the Summary that
@@ -459,6 +258,11 @@ async def _regenerate_one(
         # `test_llm_log_provenance.py::test_the_regenerated_summary_carries_
         # the_key_forward` is, and it fails if this spread ever narrows.
         **{k: v for k, v in extra.items() if k not in _NOT_INHERITED},
+        # The successor takes the chain **now**, before its Attempt runs (SFR-03).
+        # A failed tick leaves it Failed and still carrying the chain, so the
+        # next tick derives the following window from it rather than retrying
+        # this one every minute; each missed window stays behind as one Failed
+        # Summary somebody can retry by hand.
         "autoRegenerate": True,
         "autoPublish": extra.get("autoPublish"),
         "publishBotId": extra.get("publishBotId"),
@@ -471,11 +275,32 @@ async def _regenerate_one(
         "semanticSearchRespectsChannels": extra.get("semanticSearchRespectsChannels"),
         "postCount": len(posts),
     }
+    prompt: str | None = None
+    if posts:
+        posts_text = "\n\n---\n\n".join(
+            f"[{p.channel_name}] ID: {p.post_id}\nDate: {p.date}\nContent: {p.text}"
+            for p in posts
+        )
+        prompt = format_summary_prompt(
+            channels=channel_names,
+            language=summary.language,
+            posts_text=posts_text,
+        )
+        # Failed until an Attempt finishes it, as Generate opens its Summary:
+        # a worker that never gets to it leaves it Failed, not blank.
+        new_extra["status"] = FAILED_STATUS
+        text = ""
+    else:
+        text = (
+            f"No new posts found in the selected channels between "
+            f"{datetime.utcfromtimestamp(new_start / 1000).isoformat()} and "
+            f"{datetime.utcfromtimestamp(new_end / 1000).isoformat()}."
+        )
 
     new_summary = Summary(
         id=new_id,
         user_id=owner_id,
-        text=full_text,
+        text=text,
         scope=scope.stored(),
         language=summary.language,
         model=summary.model,
@@ -484,15 +309,16 @@ async def _regenerate_one(
         extra=new_extra,
     )
     session.add(new_summary)
-    # citedPosts is corpus-sized and lives in tg_summary_payloads, not `extra`
+    # The prompt is corpus-sized and lives in tg_summary_payloads, not `extra`
     # — see SummaryPayload. Routed through the aggregate so the derived
     # columns on tg_summaries stay in step with it.
-    apply_summary_payload(
+    payload = apply_summary_payload(
         session,
         new_id,
         user_id=owner_id,
-        updates={"cited_posts": cited},
+        updates={"prompt_text": prompt} if prompt is not None else {"cited_posts": {}},
     )
+    refresh_summary_derived_columns(new_summary, payload)
 
     summary.extra = {**extra, "autoRegenerate": False}
     summary.updated_at = utc_now()
@@ -500,15 +326,61 @@ async def _regenerate_one(
     session.commit()
     touch_sync(session, "summaries")
 
-    if (
-        extra.get("autoPublish")
-        and extra.get("publishBotId")
-        and extra.get("publishChatId")
-        and posts
-    ):
-        await _auto_publish(session, new_summary, owner_id=owner_id)
+    if prompt is not None:
+        # An unattended regeneration is still the owner's Artifact, so it is
+        # charged to the owner's Key and never to the Operator's, and it uses
+        # the Key the Account chose when it turned auto-regeneration on rather
+        # than whichever one happens to be newest at 4am (BYOK-03).
+        #
+        # `aiKeyId` rides `Summary.extra`, which `upsert_summary` fills from
+        # unrecognised keys in the request body — so it is **client-supplied and
+        # untrusted**, exactly like `publishBotId` two fields along.
+        # `start_attempt` checks it against the owner before `decrypt_token`
+        # for the reason multi-user-tenancy ticket 33 gives, and records a
+        # refusal as the successor's failed Attempt and a failed log row.
+        start_attempt(
+            session,
+            new_id,
+            user_id=owner_id,
+            model=None,
+            key_id=extra.get("aiKeyId"),
+            temperature=None,
+            scheduled=True,
+        )
 
     return new_id
+
+
+async def after_scheduled_attempt(
+    summary_id: str, *, outcome: str, kind: str | None
+) -> None:
+    """What the worker hands back when a scheduled Attempt ends.
+
+    A success is auto-published when the Summary asks for it. A quota failure
+    switches the chain off, so it does not go on spending against an empty Key
+    every window; any other failure leaves it on (BYOK-03's correction).
+    """
+    with Session(engine) as session:
+        summary = session.get(Summary, summary_id)
+        if summary is None:
+            return
+        extra = _summary_extra(summary)
+        if outcome == "succeeded":
+            if (
+                extra.get("autoPublish")
+                and extra.get("publishBotId")
+                and extra.get("publishChatId")
+            ):
+                await _auto_publish(session, summary, owner_id=summary.user_id)
+            return
+        if kind == "quota" and extra.get("autoRegenerate"):
+            summary.extra = {**extra, "autoRegenerate": False}
+            summary.updated_at = utc_now()
+            # Unattended: clears any `acted_by_*` an Owner's earlier write left.
+            acting_owner.stamp(session, summary)
+            session.add(summary)
+            touch_sync(session, "summaries", commit=False)
+            session.commit()
 
 
 async def _auto_publish(
@@ -542,6 +414,21 @@ async def _auto_publish(
     extra = _summary_extra(summary)
     bot_id = str(extra.get("publishBotId"))
     chat_dest_id = str(extra.get("publishChatId"))
+    if is_incomplete(summary):
+        # A kept Partial response stops short. A person may publish one by
+        # hand, with a line saying so; nobody unattended should (SFR-03).
+        _log_publish_failure(
+            session,
+            summary,
+            owner_id=owner_id,
+            bot_id=bot_id,
+            chat_id="",
+            chat_name="",
+            error="Not published: this Summary is Incomplete.",
+            text_sent="",
+            status="skipped",
+        )
+        return
     # Named in any failure after the destination resolved, as the searchable
     # chat columns; empty only when the destination itself is the failure.
     chat_id = chat_name = ""

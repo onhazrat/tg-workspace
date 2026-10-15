@@ -212,6 +212,28 @@ def test_the_api_asks_the_worker_to_run_a_job_rather_than_running_it() -> None:
     )
 
 
+def test_summary_attempts_run_on_the_worker_and_never_in_the_api() -> None:
+    """SFR-02, ADR-030: an Attempt outlives the browser only if no request runs it.
+
+    Starting one writes a row, sends a message and rings; it must never call
+    the Provider or drain the generation Lane in the process that answered the
+    request, or a deploy of the API kills it again. The worker consumes the Lane
+    and is the only process that reconciles interrupted Attempts, for the reason
+    sync jobs are: the API restarting says nothing about whether one runs.
+    """
+    from app.jobs import summary_generation
+
+    source = inspect.getsource(summary_generation.start_attempt)
+    for forbidden in ("run_attempt", "run_next_attempt", "drain_generation_lane"):
+        assert forbidden not in source, (
+            f"`start_attempt` calls {forbidden}: the API would run the Attempt"
+        )
+    assert "publish" in source, "`start_attempt` no longer rings the worker"
+    for name in ("start_generation_consumer", "reconcile_interrupted_attempts"):
+        assert name not in _called_names(_MAIN), f"the API process calls {name}"
+        assert name in _called_names(_WORKER), f"app/worker.py no longer calls {name}"
+
+
 def test_the_sync_tier_is_a_single_replica() -> None:
     """The invariant that replaced "one API worker runs the scheduler".
 

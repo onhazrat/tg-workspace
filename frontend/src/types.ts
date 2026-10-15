@@ -322,8 +322,16 @@ export interface Summary {
   citedPosts?: Record<string, Post>
   /** Provenance when summary was not generated in-app (persisted in server `extra`). */
   source?: "pasted"
-  /** Awaiting external AI response after Copy Prompt (persisted in server `extra`). */
-  status?: "pending"
+  /**
+   * `pending`: awaiting an external AI response after Copy Prompt. `failed`:
+   * its latest Attempt did not finish (SFR-01). Persisted in server `extra`.
+   */
+  status?: "pending" | "failed"
+  /**
+   * Its text is a kept Partial response that stops short (SFR-03). Finished
+   * and readable, and a full Attempt clears it. Persisted in server `extra`.
+   */
+  incomplete?: boolean
   /** Full prompt text saved when user copies for external AI (persisted in server `extra`). */
   promptText?: string
   /**
@@ -592,6 +600,9 @@ export type ChatSessionListItem = Omit<ChatSession, "messages"> & {
 
 /** One row of the unified History list — see `/api/v1/data/artifacts`. */
 export type ArtifactKind = "summary" | "chat" | "tag" | "discovery"
+
+/** History's status filter (SFR-01): only Failed, or only Pending, artifacts. */
+export type ArtifactStatusFilter = "failed" | "pending"
 
 /**
  * A row of the unified History list.

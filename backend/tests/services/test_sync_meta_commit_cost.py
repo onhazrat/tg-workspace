@@ -23,6 +23,8 @@ Following `client-split.conform.ts`:
 
 from __future__ import annotations
 
+import ast
+import pathlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -155,3 +157,66 @@ def test_the_default_still_commits_on_its_own() -> None:
 
     with Session(engine) as verify:
         assert _etag(verify, "commit-cost-d") is not None
+
+
+#: Modules whose every etag bump rides the commit of the write it announces.
+#: The Summary Attempt code was written after this rule and broke it at twelve
+#: sites, half of them a `commit()` in a service then `touch_sync` in its
+#: route, so the bump lives beside the commit and the routes say nothing.
+#: Older callers elsewhere still commit twice; extend this as they move.
+_SAME_COMMIT_MODULES = (
+    "app/services/summary_attempts.py",
+    "app/jobs/summary_generation.py",
+)
+_ATTEMPT_ROUTES = "app/api/routes/data/summaries.py"
+
+
+def _touch_calls(tree: ast.AST) -> list[ast.Call]:
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "touch_sync"
+    ]
+
+
+def _defers(call: ast.Call) -> bool:
+    return any(
+        kw.arg == "commit"
+        and isinstance(kw.value, ast.Constant)
+        and kw.value.value is False
+        for kw in call.keywords
+    )
+
+
+def _is_attempt_route(fn: ast.FunctionDef) -> bool:
+    paths = [
+        str(d.args[0].value)
+        for d in fn.decorator_list
+        if isinstance(d, ast.Call) and d.args and isinstance(d.args[0], ast.Constant)
+    ]
+    return any("/attempts" in p or "/failures" in p for p in paths)
+
+
+def test_summary_attempt_writes_move_the_etag_in_their_own_commit() -> None:
+    """Every bump in the Attempt modules is `commit=False`, and the Attempt
+    routes leave it to them. Mutation-tested: dropping `commit=False` from
+    `record_attempt`, or putting a bump back in the stop route, fails this."""
+    root = pathlib.Path(__file__).parents[2]
+    committing = [
+        f"{path}:{call.lineno}"
+        for path in _SAME_COMMIT_MODULES
+        for call in _touch_calls(ast.parse((root / path).read_text()))
+        if not _defers(call)
+    ]
+    assert not committing, f"{committing} commit the etag on its own"
+    routes = ast.parse((root / _ATTEMPT_ROUTES).read_text())
+    in_routes = [
+        fn.name
+        for fn in ast.walk(routes)
+        if isinstance(fn, ast.FunctionDef)
+        and _is_attempt_route(fn)
+        and _touch_calls(fn)
+    ]
+    assert not in_routes, f"{in_routes} bump the etag after the service committed"

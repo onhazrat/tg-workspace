@@ -61,10 +61,25 @@ export const ModelCombo: React.FC<{
   placeholder?: string
   /** This model runs on the Operator Key, not the Account's (ADR-016). */
   operatorKey?: boolean
-}> = ({ value, onChange, className, ariaLabel, placeholder, operatorKey }) => {
-  const { models: accountModels } = useAiModels()
+  /**
+   * A Key other than the selected one (a Failed Summary's retry, SFR-04): its
+   * catalogue is listed, and the choice is *not* remembered against it, so a
+   * rescue never moves the Action tab's defaults.
+   */
+  forKey?: string | null
+}> = ({
+  value,
+  onChange,
+  className,
+  ariaLabel,
+  placeholder,
+  operatorKey,
+  forKey,
+}) => {
+  const { models: accountModels } = useAiModels(forKey)
   const selectedKeyId = useSelectedAiKeyId()
-  const hasKey = operatorKey === true || selectedKeyId !== null
+  const keyId = forKey === undefined ? selectedKeyId : forKey
+  const hasKey = operatorKey === true || keyId !== null
   // An Operator-Key picker gets no catalogue rather than the wrong one. The
   // models on offer come from the Account's own Key, and nothing here can ask
   // the Operator Key what it serves — there is no endpoint for it — so listing
@@ -90,7 +105,8 @@ export const ModelCombo: React.FC<{
       // one funnel every deliberate model choice passes through. The Operator
       // Key's picker is excluded for the same reason it shows no catalogue: the
       // model it names is not the Account Key's business.
-      if (!operatorKey) rememberModelForKey(selectedKeyId, chosen)
+      if (!operatorKey && forKey === undefined)
+        rememberModelForKey(selectedKeyId, chosen)
     }
     setSearch("")
     setOpen(false)

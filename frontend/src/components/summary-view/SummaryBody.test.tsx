@@ -39,6 +39,8 @@ function renderBody(props: Partial<SummaryBodyProps>) {
       promptText={undefined}
       body={null}
       isPending={false}
+      isFailed={false}
+      failurePanel={(s) => <p>failure page of {s.id}</p>}
       summarizing={false}
       running={false}
       direction={{ dir: "rtl", className: "font-fa" }}
@@ -65,6 +67,17 @@ function renderBody(props: Partial<SummaryBodyProps>) {
 }
 
 describe("SummaryBody", () => {
+  test("failed beats a body: the failure page and its scope line", () => {
+    renderBody({
+      summary: { ...summary, status: "failed" },
+      body: "streamed",
+      isFailed: true,
+    })
+    expect(screen.getByText("failure page of s1")).toBeTruthy()
+    expect(screen.queryByText("Analysis Report")).toBeNull()
+    expect(screen.getByTestId("scope")).toBeTruthy()
+  })
+
   test("pending beats a body: the paste panel and its scope line", () => {
     const { onPaste } = renderBody({
       summary: { ...summary, status: "pending" },

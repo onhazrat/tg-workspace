@@ -64,6 +64,8 @@ EXPECTED_SECTIONS = {
     "channels",
     "posts",
     "summaries",
+    # SFR-01: a Summary's Attempts travel with it.
+    "summary_attempts",
     "bot_credentials",
     "chat_destinations",
     "publish_logs",

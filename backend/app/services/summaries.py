@@ -596,6 +596,127 @@ def submit_summary(
     return summary_to_camel(summary, session.get(SummaryPayload, summary_id))
 
 
+#: The Summary's `status` when its latest Attempt did not finish (SFR-01).
+#: Beside `pending`, which keeps its one meaning: a copied prompt waiting for a
+#: pasted response. A broken Generate is never Pending.
+FAILED_STATUS = "failed"
+
+
+def own_summary(
+    session: Session, summary_id: str, *, user_id: uuid.UUID, writing: bool
+) -> Summary:
+    """The caller's Summary, or this family's 404.
+
+    `writing` picks the guard: a read is flag-gated like every by-id read, a
+    write is not, because a flag may gate visibility and never identity.
+    """
+    row = session.get(Summary, summary_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=SUMMARY_NOT_FOUND)
+    if writing:
+        assert_owner_on_write(row.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+    else:
+        assert_owner(row.user_id, user_id, detail=SUMMARY_NOT_FOUND)
+    return row
+
+
+#: The flag a kept Partial response leaves (SFR-03): the text stops short.
+INCOMPLETE_KEY = "incomplete"
+_UNFINISHED_KEYS = frozenset({"status", INCOMPLETE_KEY})
+
+
+def is_incomplete(summary: Summary) -> bool:
+    return (summary.extra or {}).get(INCOMPLETE_KEY) is True
+
+
+def note_write(session: Session, summary: Summary) -> None:
+    """Record a write that changed only what hangs off the Summary; caller commits.
+
+    Dismissing or restoring a Partial response writes the Attempt, which has no
+    stamp of its own, so the Summary says who did it.
+    """
+    summary.updated_at = utc_now()
+    acting_owner.stamp(session, summary)
+    session.add(summary)
+
+
+def has_report(summary: Summary) -> bool:
+    """Finished with text a reader has, full or Incomplete."""
+    return bool(summary.text) and "status" not in (summary.extra or {})
+
+
+def mark_summary_failed(session: Session, summary: Summary) -> None:
+    """Set the Failed status; the caller commits it with the Attempt.
+
+    A Summary that already has a report keeps it: a failed retry of an
+    Incomplete one (story 30) is the Attempt's failure, and Failed would hide
+    the kept text behind the failure page.
+    """
+    if not has_report(summary):
+        summary.extra = {**(summary.extra or {}), "status": FAILED_STATUS}
+    note_write(session, summary)
+
+
+def store_prompt(session: Session, summary: Summary, prompt: str) -> None:
+    """Keep the prompt an Attempt is about to run; the caller commits.
+
+    Stored before the Provider is asked, so a Failed Summary always has the
+    prompt "Use another AI" copies (SFR-02).
+    """
+    payload = apply_summary_payload(
+        session, summary.id, user_id=summary.user_id, updates={"prompt_text": prompt}
+    )
+    refresh_summary_derived_columns(summary, payload)
+    summary.updated_at = utc_now()
+    acting_owner.stamp(session, summary)
+    session.add(summary)
+
+
+def finish_summary(
+    session: Session,
+    summary: Summary,
+    *,
+    text: str,
+    model: str,
+    key_id: str | None,
+    cited_posts: dict[str, Any],
+    incomplete: bool = False,
+) -> None:
+    """Write a succeeded Attempt's answer onto its Summary; the caller commits.
+
+    What the browser's save did when it streamed the answer itself: the text,
+    its Citations, no status, and no prompt (a corpus-sized copy a finished
+    Summary keeps only when it came from Copy). It also takes the model and the
+    AI Key that wrote it, so the next scheduled run pays with the same Key.
+
+    `incomplete` is a kept Partial response (SFR-03): finished and readable,
+    but its text stops short, so the prompt stays for the retry that may
+    replace it. A full answer clears the mark.
+    """
+    extra = {
+        k: v for k, v in (summary.extra or {}).items() if k not in _UNFINISHED_KEYS
+    }
+    if key_id is not None:
+        extra["aiKeyId"] = key_id
+    if incomplete:
+        extra[INCOMPLETE_KEY] = True
+    summary.extra = extra
+    summary.text = text
+    summary.model = model
+    summary.timestamp = int(utc_now().timestamp() * 1000)
+    payload = apply_summary_payload(
+        session,
+        summary.id,
+        user_id=summary.user_id,
+        updates={"cited_posts": cited_posts},
+        removals=set() if incomplete else {"prompt_text"},
+    )
+    refresh_summary_derived_columns(summary, payload)
+    summary.updated_at = utc_now()
+    acting_owner.stamp(session, summary)
+    session.add(summary)
+
+
 def delete_summary(session: Session, summary_id: str, *, user_id: uuid.UUID) -> None:
     summary = session.get(Summary, summary_id)
     if not summary:

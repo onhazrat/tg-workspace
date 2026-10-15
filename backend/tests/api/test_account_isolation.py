@@ -125,6 +125,33 @@ PROBED: dict[tuple[str, str], str] = {
     ("POST", f"{V1}/data/summaries/{{summary_id}}/publication"): (
         "a Summary's Publication sent by id (SUMTAB-09)"
     ),
+    ("GET", f"{V1}/data/summaries/{{summary_id}}/attempts"): (
+        "a Summary's Attempts read by id (SFR-01)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/failures"): (
+        "a failed Attempt written onto a Summary by id (SFR-01)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/start"): (
+        "an Attempt started on a Summary by id, on its owner's Key (SFR-02)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/stop"): (
+        "a running Attempt of a Summary stopped by id (SFR-02)"
+    ),
+    ("GET", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/events"): (
+        "a Summary's Attempt watched by id (SFR-02)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/cancel"): (
+        "a waiting Attempt of a Summary withdrawn by id (SFR-03)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/keep"): (
+        "a Partial response kept as a Summary's text by id (SFR-03)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/dismiss"): (
+        "a Partial response of a Summary set aside by id (SFR-03)"
+    ),
+    ("POST", f"{V1}/data/summaries/{{summary_id}}/attempts/{{attempt_id}}/restore"): (
+        "a dismissed Partial response of a Summary brought back by id (SFR-03)"
+    ),
     ("GET", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact by id",
     ("PUT", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact write by id",
     ("DELETE", f"{V1}/data/chat-sessions/{{chat_session_id}}"): "artifact delete",
@@ -541,7 +568,6 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "assembles from the caller's scope; test_prompt_assembly.py",
     ),
-    ("POST", f"{V1}/ai/summary/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/tag/prompt"): (Reason.COVERED_ELSEWHERE, "test_prompt_assembly"),
     ("POST", f"{V1}/ai/tag/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/translate"): (Reason.EXTERNAL, "provider call"),
@@ -867,6 +893,48 @@ def test_a_foreign_summary_cannot_be_planned_or_published(
 
     assert response.status_code == 404, response.text[:200]
     assert response.json()["detail"] == "Summary not found"
+
+
+@pytest.mark.security
+@pytest.mark.parametrize(
+    ("method", "url", "body"),
+    [
+        ("GET", f"{DATA}/summaries/{{id}}/attempts", None),
+        (
+            "POST",
+            f"{DATA}/summaries/{{id}}/failures",
+            {"error": "x", "status": 413, "model": "m"},
+        ),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/start", {"model": "m"}),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/nope/stop", None),
+        ("GET", f"{DATA}/summaries/{{id}}/attempts/nope/events", None),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/nope/cancel", None),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/nope/keep", None),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/nope/dismiss", None),
+        ("POST", f"{DATA}/summaries/{{id}}/attempts/nope/restore", None),
+    ],
+)
+def test_a_foreign_summarys_attempts_are_not_found(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+    method: str,
+    url: str,
+    body: dict[str, Any] | None,
+) -> None:
+    """SFR-01 to SFR-03: a Summary's Attempts answer as the Summary family does,
+    and nothing is written onto a foreign one."""
+    row_id = f"iso-att-{uuid.uuid4()}"
+    _seed(FAMILIES[0][1](row_id, alice[0].id))
+
+    response = client.request(method, url.format(id=row_id), json=body, headers=bob[1])
+
+    assert response.status_code == 404, response.text[:200]
+    assert response.json()["detail"] == "Summary not found"
+    with Session(engine) as session:
+        summary = session.get(Summary, row_id)
+        assert summary is not None
+        assert (summary.extra or {}).get("status") != "failed"
 
 
 @pytest.mark.security

@@ -32,15 +32,21 @@ class PgmqMessage:
     message: dict[str, Any]
 
 
-def send(session: Session, queue_name: str, message: dict[str, Any]) -> int:
-    """Enqueue one message, visible immediately. Returns its `msg_id`.
+def send(
+    session: Session,
+    queue_name: str,
+    message: dict[str, Any],
+    *,
+    delay_seconds: int = 0,
+) -> int:
+    """Enqueue one message, visible after `delay_seconds`. Returns its `msg_id`.
 
     Caller commits — this does one write in whatever transaction the caller
     already holds, same convention as the rest of `app/services/`.
     """
     row = session.execute(
-        text("SELECT * FROM pgmq.send(:queue, CAST(:msg AS jsonb))"),
-        {"queue": queue_name, "msg": json.dumps(message)},
+        text("SELECT * FROM pgmq.send(:queue, CAST(:msg AS jsonb), :delay)"),
+        {"queue": queue_name, "msg": json.dumps(message), "delay": delay_seconds},
     ).one()
     return int(row[0])
 

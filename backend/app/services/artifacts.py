@@ -31,11 +31,14 @@ import uuid
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Integer,
     String,
     Text,
+    case,
     cast,
+    exists,
     func,
     literal,
     null,
@@ -45,7 +48,7 @@ from sqlalchemy import (
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, SQLModel, col
 
-from app.models_tg import ChatSession, DiscoverReport, Summary, TagRun
+from app.models_tg import ChatSession, DiscoverReport, Summary, SummaryAttempt, TagRun
 from app.services.tenancy import scoped_select
 
 DEFAULT_ARTIFACT_PAGE_SIZE = 100
@@ -132,6 +135,46 @@ def _scope_text(model: Any, key: str) -> Any:
     return cast(col(model.scope).op("->>")(key), Text)
 
 
+def _failed_attempts() -> Any:
+    """How many of a Summary's Attempts did not finish, for History's red card.
+
+    Stopped counts with failed: either one leaves the Summary Failed. Reads
+    `outcome` alone: `partial_text` and `error` are stored out of line and a
+    count never detoasts them.
+    """
+    return (
+        sa_select(func.count())
+        .where(
+            col(SummaryAttempt.summary_id) == col(Summary.id),
+            col(SummaryAttempt.outcome).in_(("failed", "stopped")),
+        )
+        .scalar_subquery()
+    )
+
+
+def _summary_status() -> Any:
+    """A Summary's status as History shows it: `running` while an Attempt runs.
+
+    Generate stores its Summary Failed before Attempt 1 starts, so a network
+    that drops in between leaves it Failed rather than nowhere (SFR-02). That
+    stored status must not paint the card red while the Attempt is running, so
+    a running Attempt that has started outranks it. One counting down to an
+    automatic retry has not started, and its Summary is still Failed.
+    """
+    started = exists().where(
+        col(SummaryAttempt.summary_id) == col(Summary.id),
+        col(SummaryAttempt.outcome) == "running",
+        col(SummaryAttempt.started_at)
+        <= cast(func.extract("epoch", func.now()) * 1000, BigInteger),
+    )
+    return case(
+        (started, literal("running")),
+        else_=func.coalesce(
+            cast(col(Summary.extra).op("->>")("status"), String), literal("complete")
+        ),
+    )
+
+
 def _scoped(leg: Any, model: type[SQLModel], user_id: uuid.UUID) -> Any:
     """One leg, narrowed to the rows this account may see.
 
@@ -162,10 +205,7 @@ def _summary_leg(user_id: uuid.UUID) -> Any:
             col(Summary.timestamp).label("timestamp"),
             col(Summary.model).label("model"),
             col(Summary.post_count).label("post_count"),
-            func.coalesce(
-                cast(col(Summary.extra).op("->>")("status"), String),
-                literal("complete"),
-            ).label("status"),
+            _summary_status().label("status"),
             _null(String).label("mode"),
             _null(Integer).label("message_count"),
             _null(Integer).label("candidate_count"),
@@ -176,6 +216,7 @@ def _summary_leg(user_id: uuid.UUID) -> Any:
             col(Summary.scope).label("scope"),
             _flag(Summary, "autoRegenerate").label("auto_regenerate"),
             _flag(Summary, "autoPublish").label("auto_publish"),
+            _failed_attempts().label("failed_attempts"),
         ),
         Summary,
         user_id,
@@ -202,6 +243,7 @@ def _chat_leg(user_id: uuid.UUID) -> Any:
             col(ChatSession.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
+            _null(Integer).label("failed_attempts"),
         ),
         ChatSession,
         user_id,
@@ -232,6 +274,7 @@ def _tag_leg(user_id: uuid.UUID) -> Any:
             col(TagRun.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
+            _null(Integer).label("failed_attempts"),
         ),
         TagRun,
         user_id,
@@ -261,6 +304,7 @@ def _discovery_leg(user_id: uuid.UUID) -> Any:
             col(DiscoverReport.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
+            _null(Integer).label("failed_attempts"),
         ),
         DiscoverReport,
         user_id,
@@ -366,6 +410,7 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         out["language"] = row["language"]
         out["autoRegenerate"] = bool(row["auto_regenerate"])
         out["autoPublish"] = bool(row["auto_publish"])
+        out["failedAttempts"] = row["failed_attempts"]
     elif kind == "chat":
         out["messageCount"] = row["message_count"]
         out["mode"] = row["mode"]
@@ -377,6 +422,19 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         out["candidateCount"] = row["candidate_count"]
     return out
 
+
+#: Which kinds a status filter reaches, and the column it compares (SFR-01).
+#: Failed is a Summary's state only: a Tag run's own `failed` is not the red
+#: card, and Tag runs join when their Attempts do.
+_STATUS_KINDS: dict[str, tuple[str, ...]] = {
+    "pending": ("summary", "tag"),
+    "failed": ("summary",),
+}
+
+_STATUS_COLUMNS = {
+    "summary": _summary_status(),
+    "tag": col(TagRun.status),
+}
 
 _MODELS = {
     "summary": Summary,
@@ -392,6 +450,7 @@ def list_artifacts(
     kind: str | None = None,
     search: str | None = None,
     starred: bool = False,
+    status: str | None = None,
     limit: int = DEFAULT_ARTIFACT_PAGE_SIZE,
     offset: int = 0,
     user_id: uuid.UUID,
@@ -408,7 +467,13 @@ def list_artifacts(
     sentinel stays in view, and each fetch immediately triggers the next, so the
     browser walks the entire history back to back while showing "no matches".
     """
-    kinds = (kind,) if kind else ARTIFACT_KINDS
+    kinds: tuple[str, ...] = (kind,) if kind else ARTIFACT_KINDS
+    if status:
+        # Not building a leg, as for `kind`: a kind with no such state is not
+        # in the plan at all.
+        kinds = tuple(one for one in kinds if one in _STATUS_KINDS[status])
+        if not kinds:
+            return []
     term = (search or "").strip()
 
     legs = []
@@ -418,6 +483,8 @@ def list_artifacts(
             leg = leg.where(_search(one, term))
         if starred:
             leg = leg.where(_starred(_MODELS[one]))
+        if status:
+            leg = leg.where(_STATUS_COLUMNS[one] == status)
         timestamp_col, id_col = _SORT[one]
         # Each leg can contribute at most `offset + limit` rows to the final
         # page, so bounding it here is exact rather than approximate. With the

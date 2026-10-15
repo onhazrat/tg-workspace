@@ -1,14 +1,17 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it, mock } from "bun:test"
+import { ApiError } from "@/api/base"
 import type { PostScopeQuery } from "@/api/data"
 import { PASTED_SUMMARY_MODEL } from "@/constants"
 import type { Post, Summary } from "@/types"
 import {
+  attemptOutcome,
   checkPastedSummary,
   countRegeneratedPosts,
+  failureReport,
+  followAttempt,
   pastedSummaryRecord,
   regeneratedRange,
   resolveCitedPosts,
-  summaryLLMLog,
 } from "./summary-run"
 
 /**
@@ -54,32 +57,89 @@ describe("resolveCitedPosts", () => {
   })
 })
 
-describe("summaryLLMLog", () => {
-  const run = {
-    id: "log1",
-    model: "m",
-    prompt: "p",
-    config: { temperature: 0.7 },
-    text: "out",
-    lastChunk: { usageMetadata: { totalTokenCount: 12 } },
-    now: 5,
-    durationMs: 3,
+describe("attemptOutcome", () => {
+  async function* frames(...items: unknown[]) {
+    for (const item of items) {
+      if (item instanceof Error) throw item
+      yield item as { text: string }
+    }
   }
 
-  it("records the exchange and the provider's token count", () => {
-    expect(summaryLLMLog(run)).toMatchObject({
-      status: "success",
-      tokens: 12,
-      response: "out",
-      fullRequest: { contents: [{ parts: [{ text: "p" }] }] },
-      type: "summary",
-    })
+  it("is how the watched Attempt ended", async () => {
+    const outcome = await attemptOutcome(
+      frames({ text: "a" }, { outcome: "failed", error: "busy" }),
+    )
+    expect(outcome).toBe("failed")
   })
 
-  it("files an empty answer as failed, with no chunk to count", () => {
-    const log = summaryLLMLog({ ...run, text: "", lastChunk: null })
-    expect(log.status).toBe("failed")
-    expect(log.tokens).toBeUndefined()
+  it("is null when the watch broke before the end", async () => {
+    const outcome = await attemptOutcome(
+      frames({ text: "a" }, new Error("network gone")),
+    )
+    expect(outcome).toBeNull()
+  })
+})
+
+describe("followAttempt", () => {
+  async function* frames(...items: unknown[]) {
+    for (const item of items) {
+      if (item instanceof Error) throw item
+      yield item as { text: string }
+    }
+  }
+
+  it("hands over each piece of text and ignores the end frame", async () => {
+    const seen: string[] = []
+    const ended = await followAttempt(
+      frames(
+        { text: "a" },
+        { text: "b" },
+        { outcome: "succeeded", error: null },
+      ),
+      (t) => seen.push(t),
+      new AbortController().signal,
+    )
+    expect(seen).toEqual(["a", "b"])
+    expect(ended).toBe(true)
+  })
+
+  it("a dropped connection still ends the watch", async () => {
+    const quiet = mock()
+    const original = console.error
+    console.error = quiet
+    const ended = await followAttempt(
+      frames({ text: "a" }, new Error("network")),
+      () => {},
+      new AbortController().signal,
+    )
+    console.error = original
+    expect(ended).toBe(true)
+    expect(quiet).toHaveBeenCalled()
+  })
+
+  it("a page that stopped watching does not read the Summary again", async () => {
+    const controller = new AbortController()
+    controller.abort()
+    expect(
+      await followAttempt(frames({ text: "a" }), () => {}, controller.signal),
+    ).toBe(false)
+  })
+})
+
+describe("failureReport", () => {
+  it("carries the status an API refusal answered with", () => {
+    expect(
+      failureReport(new ApiError(413, "Too many tokens"), "gemini-x"),
+    ).toEqual({ error: "Too many tokens", status: 413, model: "gemini-x" })
+  })
+
+  it("has no status when nothing answered", () => {
+    expect(failureReport(new TypeError("Failed to fetch"), "m")).toEqual({
+      error: "Failed to fetch",
+      status: null,
+      model: "m",
+    })
+    expect(failureReport("odd", "m").error).toBe("The summary failed.")
   })
 })
 
@@ -90,6 +150,15 @@ describe("checkPastedSummary", () => {
     expect(checkPastedSummary({ ...pending, status: undefined }, "x")).toEqual({
       ok: false,
       error,
+    })
+  })
+
+  it("takes a paste on a Failed Summary as on a Pending one", () => {
+    const failed = { ...pending, status: "failed" as const }
+    expect(checkPastedSummary(failed, " body ")).toEqual({
+      ok: true,
+      pending: failed,
+      text: "body",
     })
   })
 

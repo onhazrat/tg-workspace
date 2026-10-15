@@ -46,10 +46,26 @@ class OpenAICompatibleError(Exception):
     gateways answer an auth failure with a whole HTML login page.
     """
 
-    def __init__(self, code: int, message: str) -> None:
+    def __init__(
+        self, code: int, message: str, retry_after: float | None = None
+    ) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+        #: The Retry-After header in seconds, which the automatic retry honours.
+        self.retry_after = retry_after
+        #: The body's machine-readable `error.code` (`model_not_found`), when a
+        #: string; classifying reads this, never the message text.
+        self.error_code = _error_code(message)
+
+
+def _error_code(body: str) -> str | None:
+    try:
+        error = json.loads(body).get("error")
+    except ValueError, AttributeError:
+        return None
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if isinstance(code, str) else None
 
 
 class OpenAICompatibleProvider:
@@ -112,7 +128,15 @@ class OpenAICompatibleProvider:
         if not isinstance(entries, list):
             return []
         models = [
-            ModelInfo(id=str(entry["id"]), label=str(entry["id"]), provider=self.name)
+            ModelInfo(
+                id=str(entry["id"]),
+                label=str(entry["id"]),
+                provider=self.name,
+                # OpenRouter's field; an endpoint without it leaves it unknown.
+                context_length=entry.get("context_length")
+                if type(entry.get("context_length")) is int
+                else None,
+            )
             for entry in entries
             if isinstance(entry, dict) and entry.get("id")
         ]
@@ -232,7 +256,12 @@ class OpenAICompatibleProvider:
 def _raise_for_status(response: httpx.Response) -> None:
     if response.status_code < 400:
         return
-    raise OpenAICompatibleError(response.status_code, response.text[:500])
+    retry_after = response.headers.get("retry-after", "")
+    raise OpenAICompatibleError(
+        response.status_code,
+        response.text[:500],
+        float(retry_after) if retry_after.isdigit() else None,
+    )
 
 
 def _messages(

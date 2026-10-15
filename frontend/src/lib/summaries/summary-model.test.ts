@@ -9,17 +9,16 @@ import type {
 import {
   autoPublishTarget,
   channelsNeedingSync,
-  classifyAiError,
   extractCitedPosts,
+  noPostsText,
+  openedSuccessor,
   parseCitationRefs,
   successorSummary,
 } from "./summary-model"
 
 /**
  * The rules `generateBackgroundSummary` used to hold inline, where no test
- * could reach them. The one worth guarding hardest is `classifyAiError`: a
- * quota refusal it misses keeps auto-regeneration retrying into the same wall
- * on every tick, and one it invents switches a healthy schedule off.
+ * could reach them.
  */
 
 const summary: Summary = {
@@ -111,6 +110,22 @@ describe("regeneration", () => {
     ).toBe(true)
   })
 
+  it("opens a successor Failed until its Attempt ends, unless no Posts finished it", () => {
+    const run = {
+      id: "s2",
+      postCount: 4,
+      range: { start: 0, end: 60_000 },
+      selectedAiKeyId: null,
+      now: 5,
+    }
+    const working = openedSuccessor(summary, run)
+    expect(working).toMatchObject({ id: "s2", text: "", status: "failed" })
+    expect(working.citedPosts).toEqual({})
+    const empty = openedSuccessor(summary, { ...run, postCount: 0 })
+    expect(empty.status).toBeUndefined()
+    expect(empty.text).toBe(noPostsText(0, 60_000))
+  })
+
   it("auto-publishes only when enabled, non-empty, and both ends still exist", () => {
     const bots = [{ id: "b", name: "Bot" }] as BotCredential[]
     const dests = [{ id: "d", name: "Dest", chatId: "-1" }] as ChatDestination[]
@@ -132,50 +147,5 @@ describe("regeneration", () => {
     expect(
       autoPublishTarget({ ...s, publishChatId: "gone" }, 5, bots, dests),
     ).toBeNull()
-  })
-})
-
-describe("classifyAiError", () => {
-  const err = (message: string) => new Error(message)
-
-  it("unwraps a provider's JSON error and trusts only its code for quota", () => {
-    expect(
-      classifyAiError(err('{"error":{"code":429,"message":"Slow down"}}')),
-    ).toEqual({ message: "Slow down", quotaExceeded: true })
-    expect(
-      classifyAiError(
-        err('{"error":{"code":400,"message":"quota field is invalid"}}'),
-      ),
-    ).toEqual({ message: "quota field is invalid", quotaExceeded: false })
-  })
-
-  it("keeps a JSON-shaped message it cannot use as it is", () => {
-    expect(classifyAiError(err("{not json}"))).toEqual({
-      message: "{not json}",
-      quotaExceeded: false,
-    })
-    // JSON-shaped, so the plain-text markers do not apply even though it says "quota".
-    expect(classifyAiError(err('{"detail":"quota"}'))).toEqual({
-      message: '{"detail":"quota"}',
-      quotaExceeded: false,
-    })
-  })
-
-  it("spots a quota refusal in plain text", () => {
-    for (const m of [
-      "HTTP 429",
-      "RESOURCE_EXHAUSTED",
-      "Quota exceeded",
-      "Rate limit hit",
-    ])
-      expect(classifyAiError(err(m)).quotaExceeded).toBe(true)
-    expect(classifyAiError(err("Network down")).quotaExceeded).toBe(false)
-  })
-
-  it("names an error that is not an Error", () => {
-    expect(classifyAiError("boom")).toEqual({
-      message: "Unknown error",
-      quotaExceeded: false,
-    })
   })
 })

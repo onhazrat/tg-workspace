@@ -10,6 +10,7 @@ import {
   ArtifactNoteEditor,
   HistoryKindFilters,
   HistorySearchControls,
+  HistoryStatusFilters,
 } from "./HistoryViewParts"
 import {
   deleteDialogCopy,
@@ -97,6 +98,7 @@ describe("historyEmptyDescription", () => {
     expect(historyEmptyDescription("alpha", false, null)).toBe(filtered)
     expect(historyEmptyDescription("", true, null)).toBe(filtered)
     expect(historyEmptyDescription("", false, "tag")).toBe(filtered)
+    expect(historyEmptyDescription("", false, null, "failed")).toBe(filtered)
   })
 })
 
@@ -154,6 +156,23 @@ describe("HistoryKindFilters", () => {
     fireEvent.click(screen.getByText("Discovery"))
     expect(onSelect).toHaveBeenCalledWith("discovery")
     fireEvent.click(screen.getByText("All"))
+    expect(onSelect).toHaveBeenCalledWith(null)
+  })
+})
+
+describe("HistoryStatusFilters", () => {
+  test("All, Failed and Pending; the active one is pressed", () => {
+    const onSelect = mock()
+    render(<HistoryStatusFilters status="failed" onSelect={onSelect} />)
+    expect(
+      screen.getByTestId("history-status-failed").getAttribute("aria-pressed"),
+    ).toBe("true")
+    expect(
+      screen.getByTestId("history-status-all").getAttribute("aria-pressed"),
+    ).toBe("false")
+    fireEvent.click(screen.getByTestId("history-status-pending"))
+    expect(onSelect).toHaveBeenCalledWith("pending")
+    fireEvent.click(screen.getByTestId("history-status-all"))
     expect(onSelect).toHaveBeenCalledWith(null)
   })
 })

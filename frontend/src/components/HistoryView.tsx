@@ -10,6 +10,7 @@ import {
   ArtifactNoteEditor,
   HistoryKindFilters,
   HistorySearchControls,
+  HistoryStatusFilters,
 } from "@/components/history/HistoryViewParts"
 import {
   deleteDialogCopy,
@@ -21,6 +22,7 @@ import {
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { useArtifacts, useInvalidateArtifacts } from "@/hooks/useArtifacts"
+import { useHistoryStatusParam } from "@/hooks/useHistoryStatusParam"
 import {
   deleteArtifact,
   setArtifactNote,
@@ -58,6 +60,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
   } = useUI()
 
   const [kind, setKind] = useState<ArtifactKind | null>(null)
+  // In the URL rather than state, so a link to "my Failed Summaries" works.
+  const { status, setStatus } = useHistoryStatusParam()
   const [pendingDelete, setPendingDelete] = useState<ArtifactListItem | null>(
     null,
   )
@@ -70,6 +74,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     kind,
     historySearchQuery,
     starredOnly,
+    status,
   )
   const invalidate = useInvalidateArtifacts()
   const loadMoreRef = useRef<HTMLDivElement>(null)
@@ -148,7 +153,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
       className="space-y-6"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <HistoryKindFilters kind={kind} onSelect={setKind} />
+        <div className="flex flex-col gap-2">
+          <HistoryKindFilters kind={kind} onSelect={setKind} />
+          <HistoryStatusFilters status={status} onSelect={setStatus} />
+        </div>
         <HistorySearchControls
           searchQuery={historySearchQuery}
           onSearchChange={setHistorySearchQuery}
@@ -165,6 +173,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
             historySearchQuery,
             starredOnly,
             kind,
+            status,
           )}
         />
       ) : (

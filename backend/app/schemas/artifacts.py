@@ -65,7 +65,9 @@ class ArtifactBase(BaseModel):
 
 
 class SummaryArtifactResponse(ArtifactBase):
-    """`status` is `"pending"` until an externally-run prompt is pasted back.
+    """`status` is `"pending"` until an externally-run prompt is pasted back,
+    `"failed"` while its latest Attempt did not finish, and `"running"` while
+    an Attempt is running, whatever the stored status says.
 
     `autoRegenerate` and `autoPublish` are here rather than left to the Summary
     tab because History is where they are toggled, and reading them out of
@@ -77,6 +79,8 @@ class SummaryArtifactResponse(ArtifactBase):
     language: str = "English"
     auto_regenerate: bool = Field(default=False, alias="autoRegenerate")
     auto_publish: bool = Field(default=False, alias="autoPublish")
+    #: How many of its Attempts failed (SFR-01); History's "Failed ×n".
+    failed_attempts: int = Field(default=0, alias="failedAttempts")
 
 
 class ChatArtifactResponse(ArtifactBase):

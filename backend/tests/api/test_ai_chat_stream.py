@@ -153,14 +153,10 @@ def test_a_provider_failure_mid_stream_never_sends_done(
     assert "error" in json.loads(_frames(r.text)[-1])
 
 
-SUMMARY_URL = f"{settings.API_V1_STR}/ai/summary/stream"
-
-
 @pytest.mark.parametrize(
     ("url", "body"),
     [
         (URL, {"message": "q", "postsText": "p"}),
-        (SUMMARY_URL, {"channels": ["chan_a"], "postsText": "p"}),
     ],
 )
 @pytest.mark.parametrize(
@@ -252,23 +248,6 @@ def test_a_failure_nothing_answered_keeps_its_traceback(
 
     failed = [r for r in caplog.records if r.getMessage().startswith("AI stream")]
     assert failed and failed[0].exc_info is not None
-
-
-def test_the_summary_stream_sends_the_prompt_it_was_given(
-    provider: _FakeProvider,
-) -> None:
-    """Generate stores its prompt on the pending Summary first, then sends it
-    back so the model answers exactly that prompt, built once.
-
-    **Mutation:** ignore `prompt` and rebuild it, and the call carries the
-    template instead.
-    """
-    client_post(
-        SUMMARY_URL,
-        {"channels": ["chan_a"], "postsText": "p", "prompt": "stored prompt"},
-    )
-
-    assert provider.calls[0]["prompt"] == "stored prompt"
 
 
 def client_post(url: str, body: dict[str, Any]) -> Any:

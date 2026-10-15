@@ -23,6 +23,7 @@ import type {
 import type {
   ArtifactKind,
   ArtifactListItem,
+  ArtifactStatusFilter,
   BotCredential,
   Channel,
   ChannelSettingGroup,
@@ -769,6 +770,8 @@ export const dataApi = {
     kind?: ArtifactKind
     search?: string
     starred?: boolean
+    /** Only Failed or only Pending artifacts (SFR-01). */
+    status?: ArtifactStatusFilter
     limit?: number
     offset?: number
   }) => {
@@ -776,6 +779,7 @@ export const dataApi = {
     if (params?.kind) qs.set("kind", params.kind)
     if (params?.search) qs.set("search", params.search)
     if (params?.starred) qs.set("starred", "true")
+    if (params?.status) qs.set("status", params.status)
     if (params?.limit != null) qs.set("limit", String(params.limit))
     if (params?.offset != null) qs.set("offset", String(params.offset))
     const q = qs.toString()
@@ -1191,6 +1195,27 @@ export async function* streamFollowJobEvents(
 ): AsyncGenerator<FollowJobStatus> {
   yield* sseJsonStream<FollowJobStatus>(
     `/api/v1/data/channels/bulk-follow/${followJobId}/events`,
+    { signal },
+  )
+}
+
+/** One frame of an Attempt's watch: new text, or how it ended (SFR-02). */
+export type AttemptFrame =
+  | { text: string }
+  | { outcome: "succeeded" | "failed" | "stopped"; error: string | null }
+
+/**
+ * Watch an Attempt the worker runs: the text written so far, then each new
+ * piece, then how it ended. Hand-written because codegen cannot express a
+ * long-lived `text/event-stream`.
+ */
+export async function* watchSummaryAttempt(
+  summaryId: string,
+  attemptId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<AttemptFrame> {
+  yield* sseJsonStream<AttemptFrame>(
+    `/api/v1/data/summaries/${summaryId}/attempts/${attemptId}/events`,
     { signal },
   )
 }

@@ -803,3 +803,84 @@ def test_an_ai_call_during_a_spend_session_names_the_owner(
         assert cleared is not None
         assert cleared.acted_by_user_id is None
         assert cleared.acted_by_email is None
+
+
+def test_a_generate_started_in_a_spend_session_is_credited_to_the_owner(
+    client: TestClient,
+    owner: tuple[User, dict[str, str]],
+    subject: tuple[User, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SFR-03: the worker writes the answer, and the Owner who asked is named.
+
+    The start request is the only one that knows who is acting; the worker opens
+    its own sessions long after it has answered. So the acting Owner rides the
+    Attempt's queue message, and both writes the worker makes, the Summary's
+    text and its AI log row, carry it. An ordinary start afterwards clears it.
+    """
+    import asyncio
+
+    from app.jobs import summary_generation
+    from app.models_tg import Summary
+    from app.services.ai_keys import ResolvedKey
+
+    class _Provider:
+        async def stream(self, prompt: str, **_: Any) -> Any:
+            yield "The report."
+
+    key = ResolvedKey(provider="gemini", api_key="sk", credential_id="key-1")
+    monkeypatch.setattr(
+        summary_generation, "_provider_for", lambda *_a, **_k: (_Provider(), key)
+    )
+    owner_row, owner_headers = owner
+    subject_row, subject_headers = subject
+    summary_id = str(uuid.uuid4())
+    opened = client.post(
+        f"{V1}/data/summaries",
+        headers=subject_headers,
+        json={
+            "id": summary_id,
+            "scope": {
+                "channels": ["chan_a"],
+                "window": {"mode": "live", "durationMinutes": 60, "endGapMinutes": 0},
+            },
+            "extra": {"status": "failed"},
+        },
+    )
+    assert opened.status_code == 200, opened.text
+    client.put(
+        f"{V1}/data/summaries/{summary_id}",
+        headers=subject_headers,
+        json={"promptText": "Go."},
+    )
+    spending = _headers(_spend(client, owner_headers, subject_row))
+
+    started = client.post(
+        f"{V1}/data/summaries/{summary_id}/attempts/start",
+        headers=spending,
+        json={"model": "m"},
+    )
+    assert started.status_code == 200, started.text
+    asyncio.run(summary_generation.run_next_attempt())
+
+    with Session(engine) as session:
+        summary = session.get(Summary, summary_id)
+        assert summary is not None and summary.text == "The report."
+        assert summary.acted_by_user_id == owner_row.id
+        assert summary.acted_by_email == owner_row.email
+        [log] = session.exec(
+            select(LLMLog).where(col(LLMLog.user_id) == subject_row.id)
+        ).all()
+        assert log.acted_by_user_id == owner_row.id
+        assert log.acted_by_email == owner_row.email
+
+    again = client.post(
+        f"{V1}/data/summaries/{summary_id}/attempts/start",
+        headers=subject_headers,
+        json={},
+    )
+    assert again.status_code == 200, again.text
+    asyncio.run(summary_generation.run_next_attempt())
+    with Session(engine) as session:
+        summary = session.get(Summary, summary_id)
+        assert summary is not None and summary.acted_by_user_id is None

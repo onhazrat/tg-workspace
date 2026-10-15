@@ -45,7 +45,7 @@ from app.ai.models import EmbeddingResult
 from app.core.config import settings
 from app.core.db import engine
 from app.core.secrets import encrypt_token
-from app.jobs import auto_summary
+from app.jobs import auto_summary, summary_generation
 from app.models import User
 from app.models_tg import AICredential, Post, PostEmbedding, Summary, utc_now
 from app.services.discover import compute_discover_candidates
@@ -441,7 +441,9 @@ def test_a_regenerated_summary_does_not_reclaim_its_predecessors_last_post(
     )
     session.commit()
 
-    with patch.object(auto_summary, "get_provider", return_value=_stub_provider()):
+    with patch.object(
+        summary_generation, "get_provider", return_value=_stub_provider()
+    ):
         asyncio.run(auto_summary.run_auto_summary())
 
     with Session(engine) as check:
@@ -489,7 +491,9 @@ def test_the_regenerated_summary_carries_no_ignore_window_flag(
     )
     session.commit()
 
-    with patch.object(auto_summary, "get_provider", return_value=_stub_provider()):
+    with patch.object(
+        summary_generation, "get_provider", return_value=_stub_provider()
+    ):
         asyncio.run(auto_summary.run_auto_summary())
 
     with Session(engine) as check:

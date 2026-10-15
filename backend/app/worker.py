@@ -16,7 +16,8 @@ Doubling users does not double that budget. So this file must never learn to
 serve a request, and the API must never learn to scrape.
 
 **What lives here.** The APScheduler instance (every job in `JOB_IDS`, including
-auto-sync), and the lane consumer that drains `DRAIN_ORDER`. Both used to run in
+auto-sync), the lane consumer that drains `DRAIN_ORDER`, and the generation
+consumer that runs Summary Attempts on a Lane of their own (SFR-02). Both used to run in
 the API process; `app/main.py` now starts neither.
 
 **What still runs in the API process.** `reconcile_interrupted_jobs` does *not*
@@ -50,6 +51,11 @@ from app.jobs.scheduler import (
     start_scheduler,
     stop_job_trigger_consumer,
     stop_scheduler,
+)
+from app.jobs.summary_generation import (
+    reconcile_interrupted_attempts,
+    start_generation_consumer,
+    stop_generation_consumer,
 )
 from app.jobs.sync_queue import (
     queued_job_ids,
@@ -134,12 +140,19 @@ async def main() -> None:
 
     # No `still_queued` counterpart: a follow job has no queue behind it, so a
     # non-terminal row is always a dead process's. See the function's docstring.
+    # Same reasoning for Attempts (SFR-02): one whose message is gone was
+    # claimed by a worker that is no longer running it.
+    interrupted_attempts = reconcile_interrupted_attempts()
+    if interrupted_attempts:
+        logger.info("failed %d interrupted summary attempts", interrupted_attempts)
+
     interrupted_follows = reconcile_interrupted_follow_jobs()
     if interrupted_follows:
         logger.info("failed %d interrupted follow jobs", interrupted_follows)
 
     start_progress_subscriber()
     start_lane_consumer()
+    start_generation_consumer()
     start_follow_job_consumer()
     start_job_trigger_consumer()
     start_scheduler()
@@ -163,6 +176,7 @@ async def main() -> None:
     stop_scheduler()
     stop_job_trigger_consumer()
     stop_follow_job_consumer()
+    stop_generation_consumer()
     stop_lane_consumer()
     stop_progress_subscriber()
 

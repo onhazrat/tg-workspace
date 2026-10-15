@@ -68,6 +68,9 @@ TG_TABLES: tuple[str, ...] = (
     "tg_sync_log_payloads",
     "tg_sync_logs",
     "tg_summary_payloads",
+    # SFR-01's Attempts, child of `tg_summaries`. The cascade would clear them
+    # anyway; listed so the inventory says so rather than relying on it.
+    "tg_summary_attempts",
     "tg_summaries",
     "tg_chat_session_payloads",
     "tg_chat_sessions",

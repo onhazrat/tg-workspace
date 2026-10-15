@@ -39,9 +39,11 @@ def purge_all_sync_lanes() -> None:
     Uses `pgmq.purge_queue`, one statement per lane, rather than a read/delete
     loop — this runs after every test in the suite.
     """
+    from app.jobs.summary_generation import GENERATION_LANE
     from app.services.sync_lanes import DRAIN_ORDER
 
     with Session(engine) as session:
-        for lane in DRAIN_ORDER:
+        # The generation Lane too (SFR-02): its consumer is not the sync one.
+        for lane in (*DRAIN_ORDER, GENERATION_LANE):
             session.execute(text("SELECT pgmq.purge_queue(:lane)"), {"lane": lane})
         session.commit()

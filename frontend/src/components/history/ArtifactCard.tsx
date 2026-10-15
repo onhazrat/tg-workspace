@@ -8,7 +8,11 @@ import {
   ArtifactCardHeading,
   ArtifactCardNotes,
 } from "./ArtifactCardParts"
-import { artifactDetail, isPendingArtifact } from "./artifact-presentation"
+import {
+  artifactDetail,
+  failedAttempts,
+  isPendingArtifact,
+} from "./artifact-presentation"
 
 interface ArtifactCardProps {
   artifact: ArtifactListItem
@@ -35,6 +39,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
   ...actions
 }) => {
   const pending = isPendingArtifact(artifact)
+  const failed = failedAttempts(artifact) !== null
 
   /*
    * The `min-w-0`s below make the card safe to drop into any flex or grid
@@ -48,9 +53,11 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
       data-artifact-kind={artifact.kind}
       data-artifact-id={artifact.id}
       className={`group relative flex min-w-0 flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md ${
-        pending
-          ? "border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50"
-          : "border-app-ink/10 hover:border-app-ink/20"
+        failed
+          ? "border-red-500/30 bg-red-500/[0.03] hover:border-red-500/50"
+          : pending
+            ? "border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50"
+            : "border-app-ink/10 hover:border-app-ink/20"
       }`}
     >
       <ArtifactCardHeading

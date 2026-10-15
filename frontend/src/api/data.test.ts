@@ -153,11 +153,12 @@ describe("listArtifacts", () => {
       kind: "chat",
       search: "iran",
       starred: true,
+      status: "failed",
       limit: 20,
       offset: 0,
     })
     expect(sent[0].url).toBe(
-      "/api/v1/data/artifacts?kind=chat&search=iran&starred=true&limit=20&offset=0",
+      "/api/v1/data/artifacts?kind=chat&search=iran&starred=true&status=failed&limit=20&offset=0",
     )
   })
 })

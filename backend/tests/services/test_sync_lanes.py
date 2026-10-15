@@ -81,6 +81,19 @@ def test_every_lane_the_worker_drains_was_created_by_a_migration() -> None:
     )
 
 
+def test_the_generation_lane_was_created_and_is_not_a_scraping_lane() -> None:
+    """SFR-02: Attempts wait on a Lane of their own, created by a migration.
+
+    Not in `DRAIN_ORDER`: the sync consumer would run an Attempt on a proxy
+    Slot, holding it for as long as a model takes to answer, and scraping
+    throughput would pay for every long Summary.
+    """
+    from app.jobs.summary_generation import GENERATION_LANE
+
+    assert GENERATION_LANE in _lanes_created_by_migrations()
+    assert GENERATION_LANE not in DRAIN_ORDER
+
+
 def test_the_guard_can_actually_see_the_migrations() -> None:
     """Without this, a moved `versions/` directory turns the assertion above
     into `set() - set()` and the guard passes by finding nothing at all."""

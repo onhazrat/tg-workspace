@@ -28,6 +28,21 @@ describe("validateWorkspaceSearch", () => {
     })
   })
 
+  test("History's status filter is kept on History only, and only if known", () => {
+    expect(
+      validateWorkspaceSearch({ tab: "history", historyStatus: "failed" }),
+    ).toEqual({ tab: "history", historyStatus: "failed" })
+    expect(
+      validateWorkspaceSearch({ tab: "history", historyStatus: "pending" }),
+    ).toEqual({ tab: "history", historyStatus: "pending" })
+    expect(
+      validateWorkspaceSearch({ tab: "history", historyStatus: "broken" }),
+    ).toEqual({ tab: "history" })
+    expect(
+      validateWorkspaceSearch({ tab: "posts", historyStatus: "failed" }),
+    ).toEqual({ tab: "posts" })
+  })
+
   test("a real tab is kept", () => {
     expect(validateWorkspaceSearch({ tab: "history" })).toEqual({
       tab: "history",

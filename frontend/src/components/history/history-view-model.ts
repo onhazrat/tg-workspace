@@ -2,7 +2,11 @@
  * The History tab's rules, with no React, so they can be tested directly.
  * `HistoryView` keeps the queries, the writes and the toasts.
  */
-import type { ArtifactKind, ArtifactListItem } from "@/types"
+import type {
+  ArtifactKind,
+  ArtifactListItem,
+  ArtifactStatusFilter,
+} from "@/types"
 import { ARTIFACT_KIND_LABELS } from "./artifact-presentation"
 
 export type SummaryFlag = "autoRegenerate" | "autoPublish"
@@ -39,8 +43,9 @@ export function historyEmptyDescription(
   searchQuery: string,
   starredOnly: boolean,
   kind: ArtifactKind | null,
+  status: ArtifactStatusFilter | null = null,
 ): string {
-  return searchQuery || starredOnly || kind
+  return searchQuery || starredOnly || kind || status
     ? "No artifacts match these filters."
     : "Summaries, chats, tag runs and discovery reports you create will appear here."
 }

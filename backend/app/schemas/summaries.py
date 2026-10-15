@@ -181,3 +181,67 @@ class SummaryUpsertRequest(BaseModel):
         materialising defaults.
         """
         return self.model_dump(by_alias=True, exclude_unset=True)
+
+
+AttemptOutcome = Literal["running", "succeeded", "failed", "stopped", "kept_partial"]
+AttemptKind = Literal["quota", "auth", "transient", "model", "limit", "empty", "other"]
+
+
+class SummaryAttemptResponse(BaseModel):
+    """One request for a Summary's prose and how it ended (ADR-030).
+
+    Closed and fully declared: every key is always present, so a ``null`` here
+    is the column's own value rather than an invented one. Times are epoch
+    milliseconds, like every artifact timestamp.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    summary_id: str = Field(alias="summaryId")
+    attempt: int
+    outcome: AttemptOutcome
+    kind: AttemptKind | None
+    error: str | None
+    model: str
+    key_id: str | None = Field(alias="keyId")
+    partial_text: str | None = Field(alias="partialText")
+    partial_dismissed_at: int | None = Field(alias="partialDismissedAt")
+    automatic: bool
+    scheduled: bool
+    started_at: int = Field(alias="startedAt")
+    ended_at: int | None = Field(alias="endedAt")
+
+
+class SummaryFailureRequest(BaseModel):
+    """A Generate that broke before the server streamed anything.
+
+    The browser reports what it met (a token-limit refusal, a failed sync, a
+    dropped connection) and the HTTP status it carried, if any. The server
+    decides the kind from that status.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    error: str = Field(min_length=1, max_length=2000)
+    #: The HTTP status the failed request answered with; `null` when nothing
+    #: answered at all.
+    status: int | None = None
+    #: The model the Generate was going to run on.
+    model: str = Field(max_length=255)
+
+
+class SummaryAttemptStartRequest(BaseModel):
+    """Start an Attempt on a Summary; it runs on the worker (SFR-02).
+
+    Every field is optional: left out, the model and AI Key are the last
+    Attempt's, and the temperature is the default Generate always used.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    model: str | None = Field(default=None, max_length=255)
+    #: **Client-supplied and untrusted.** Checked against the Summary's owner
+    #: before the secret is decrypted; a foreign id answers as an absent one.
+    ai_key_id: str | None = Field(default=None, alias="aiKeyId")
+    temperature: float | None = Field(default=None, ge=0, le=2)

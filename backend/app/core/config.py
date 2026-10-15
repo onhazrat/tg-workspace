@@ -202,6 +202,10 @@ class Settings(BaseSettings):
     #: no one browses the history and no one can be surprised by its length. The
     #: table had no policy at all and reached 196,047 rows / 153 MB.
     SYNC_JOB_RETENTION_DAYS: int = 14
+    #: How long a dismissed Partial response keeps its text (SFR-03). The
+    #: Attempt itself is never pruned; only the text somebody said they do not
+    #: need is cleared. 0 keeps it forever.
+    SUMMARY_PARTIAL_DISMISSED_RETENTION_DAYS: int = 30
     #: How often the worker sweeps the sync lanes for anything the
     #: post-enqueue kick missed (tickets 09, 10) — a crashed kick, or a message
     #: redelivered after its visibility timeout lapsed. The kick handles the

@@ -98,6 +98,7 @@ from app.services.post_thumbnails import (
     enforce_thumb_cache_size_limit,
 )
 from app.services.scraper_jobs import prune_finished_jobs
+from app.services.summary_attempts import trim_dismissed_partials
 from app.services.sync_meta import touch_sync
 from app.services.view_observations import prune_view_observations
 
@@ -516,6 +517,18 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     deleted_sync_jobs += prune_finished_follow_jobs(
         session, max_age_days=app_settings.SYNC_JOB_RETENTION_DAYS
     )
+
+    # A dismissed Partial response's text, on a deployment constant (SFR-03).
+    # Its Attempt is never deleted: the Attempts table is on neither log
+    # inventory, and this clears the one bulky column somebody set aside.
+    partial_days = app_settings.SUMMARY_PARTIAL_DISMISSED_RETENTION_DAYS
+    trimmed_partials = 0
+    if partial_days > 0:
+        trimmed_partials = trim_dismissed_partials(
+            session, cutoff_ms=_cutoff_ms(partial_days)
+        )
+        if trimmed_partials:
+            touch_sync(session, "summaries")
 
     media_settings = load_media_settings(session)
     max_mb = int(media_settings.get("thumbCacheMaxSizeMb") or 0)

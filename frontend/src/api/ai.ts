@@ -49,7 +49,13 @@ export const aiApi = {
    */
   listModels: (aiKeyId?: string | null) =>
     request<{
-      models: { id: string; label: string; provider: string }[]
+      models: {
+        id: string
+        label: string
+        provider: string
+        /** Tokens the model accepts; `null` when the Provider does not say. */
+        contextLength: number | null
+      }[]
       default: string
     }>("/api/v1/ai/models", {
       method: "POST",
@@ -69,13 +75,6 @@ export const aiApi = {
       method: "POST",
       body: JSON.stringify(withPromptScope(body)),
     }),
-
-  summaryStream: (body: Record<string, unknown>) =>
-    sseTextStream(
-      "/api/v1/ai/summary/stream",
-      withAiKey(withPromptScope(body)),
-      "text",
-    ),
 
   tagPrompt: (body: {
     channels: string[]

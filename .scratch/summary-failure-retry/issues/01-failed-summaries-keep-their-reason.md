@@ -6,7 +6,7 @@ Spec: `.scratch/summary-failure-retry/spec.md`. Terms: **Pending**, **Failed**, 
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 The Attempt record, as the spec fixes it (shape from the prototype):
 

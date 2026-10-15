@@ -156,8 +156,12 @@ VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
     f"{settings.API_V1_STR}/ai/summary": SpendableOperation(
         "ai_key", "generates a Summary on the target's AI Key (ADR-016)"
     ),
-    f"{settings.API_V1_STR}/ai/summary/stream": SpendableOperation(
-        "ai_key", "the streaming half of the same call"
+    f"{settings.API_V1_STR}/data/summaries/{{summary_id}}/attempts/start": (
+        SpendableOperation(
+            "ai_key",
+            "starts an Attempt the worker runs on the Summary's owner's AI Key "
+            "(ADR-016, ADR-030); Generate and Retry both start one",
+        )
     ),
     f"{settings.API_V1_STR}/ai/chat/stream": SpendableOperation(
         "ai_key", "a Chat is an Artifact, so it runs on the target's Key"
