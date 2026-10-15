@@ -37,7 +37,7 @@ from app.services.reach import (
     seed_curve,
 )
 
-SETTINGS = DEFAULT_REACH_SETTINGS  # settling 24h, floor 3h, 100 Posts
+SETTINGS = DEFAULT_REACH_SETTINGS  # settling 24h, floor 1h, 100 Posts
 
 
 def test_five_settled_counts_are_measured() -> None:
@@ -55,7 +55,7 @@ def test_a_young_count_does_not_join_a_measured_median() -> None:
 
 
 def test_four_settled_counts_are_not_enough_to_measure() -> None:
-    pairs = [(100, 30.0)] * 4 + [(1, 1.0)] * 10
+    pairs = [(100, 30.0)] * 4 + [(1, 0.5)] * 10
 
     assert compute_reach(pairs, SETTINGS) == Reach()
 
@@ -82,14 +82,14 @@ def test_an_estimate_mixes_settled_and_corrected_counts() -> None:
 
 
 def test_the_floor_keeps_counts_too_young_to_correct_out() -> None:
-    """Five counts, but one is under the 3h floor: not measured, not estimated."""
-    pairs = [(100, 4.0)] * 4 + [(100, 2.9)]
+    """Five counts, but one is under the 1h floor: not measured, not estimated."""
+    pairs = [(100, 4.0)] * 4 + [(100, 0.9)]
 
     assert compute_reach(pairs, SETTINGS) == Reach()
 
 
 def test_the_floor_is_inclusive_and_the_settling_age_starts_settled() -> None:
-    at_floor = [(100, 3.0)] * 5
+    at_floor = [(100, 1.0)] * 5
     at_settling = [(100, 24.0)] * 5
 
     assert compute_reach(at_floor, SETTINGS).estimated
@@ -139,7 +139,7 @@ def test_settings_default_when_nothing_is_stored() -> None:
         ({"settlingAgeHours": REFRESH_HORIZON_HOURS}, "below 168"),
         ({"settlingAgeHours": 0}, "more than 0"),
         ({"estimationFloorHours": 24}, "below the settling age"),
-        ({"settlingAgeHours": 3}, "below the settling age"),
+        ({"settlingAgeHours": 1}, "below the settling age"),
         ({"estimationFloorHours": -1}, "at least 0"),
         ({"reachSampleSize": 4}, "at least 5"),
         ({"reachSampleSize": "100"}, "whole number"),

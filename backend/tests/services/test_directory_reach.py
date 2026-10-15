@@ -69,14 +69,14 @@ def test_five_settled_samples_store_a_measured_reach() -> None:
 def test_fewer_settled_samples_store_an_estimate() -> None:
     """Two Settled, three between the floor and the settling age, two below the
     floor. A 13-hour count holds 0.816 of its Settled value on the seed
-    curve, so 860 corrects to 1054; the one-hour counts are left out."""
-    after = _probe([(1000, 48), (1000, 30)] + [(860, 13)] * 3 + [(1, 1)] * 2)
+    curve, so 860 corrects to 1054; the half-hour counts are left out."""
+    after = _probe([(1000, 48), (1000, 30)] + [(860, 13)] * 3 + [(1, 0.5)] * 2)
 
     assert (after["reach"], after["reachEstimated"]) == (1054, True)
 
 
 def test_too_few_samples_past_the_floor_store_nothing() -> None:
-    after = _probe([(1000, 48), (1000, 30), (860, 13), (860, 13)] + [(1, 1)] * 10)
+    after = _probe([(1000, 48), (1000, 30), (860, 13), (860, 13)] + [(1, 0.5)] * 10)
 
     assert (after["reach"], after["reachEstimated"]) == (None, False)
 

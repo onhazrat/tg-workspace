@@ -361,8 +361,7 @@ def bulk_upsert_posts_impl(
             #
             # `references_extracted` since DDS-02: the harvest queues what the
             # graph holds, so an edit that adds a link reaches the Directory
-            # only if extraction reads the Post again. Nothing reads
-            # `harvested` any more, and DDS-03 drops it.
+            # only if extraction reads the Post again.
             if was_referencing != (
                 existing.text,
                 existing.forwarded_from,

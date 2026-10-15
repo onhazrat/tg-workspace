@@ -6,18 +6,18 @@ count or its Estimated View count (ADR-025). The Operator follows `pv_a` and
 threshold, an order and a cap are all asserted to read only the rows each
 account can see.
 
-The corpus, at the default settings (settling 24h, floor 3h) and the seed
+The corpus, at the default settings (settling 24h, floor 1h) and the seed
 curve, is laid out so the two measures disagree:
 
 | Post  | views | age observed | estimated          |
 |-------|-------|--------------|--------------------|
 | a1    | 5000  | 48h          | 5000               |
-| a2    | 1000  | 1h           | too new to judge   |
+| a2    | 1000  | 0.5h         | too new to judge   |
 | a3    | none  |              | none               |
 | a4    | 2000  | 9h           | 2000 / .719 = 2782 |
 | b5    | 3000  | 30h          | 3000               |
 | b6    | 800   | 20h          | 800 / .940 = 851   |
-| c7    | 10000 | 2h           | too new to judge   |
+| c7    | 10000 | 0.5h         | too new to judge   |
 | c8    | 400   | 100h         | 400                |
 
 ## Watched to fail
@@ -57,12 +57,12 @@ ALL = ["pv_a", "pv_b", "pv_c"]
 #: (channel, post id, views, age at observation in hours)
 CORPUS: list[tuple[str, int, int | None, float | None]] = [
     ("pv_a", 1, 5000, 48),
-    ("pv_a", 2, 1000, 1),
+    ("pv_a", 2, 1000, 0.5),
     ("pv_a", 3, None, None),
     ("pv_a", 4, 2000, 9),
     ("pv_b", 5, 3000, 30),
     ("pv_b", 6, 800, 20),
-    ("pv_c", 7, 10000, 2),
+    ("pv_c", 7, 10000, 0.5),
     ("pv_c", 8, 400, 100),
 ]
 
@@ -387,7 +387,7 @@ def test_the_browser_is_handed_the_curve_the_feed_reads(
     assert before == {
         "curve": SEED_CURVE.wire(),
         "settlingAgeHours": 24,
-        "estimationFloorHours": 3,
+        "estimationFloorHours": 1,
     }
     with Session(engine) as session:
         session.add(

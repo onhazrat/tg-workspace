@@ -19,8 +19,8 @@ One set of handles per request, chosen by the view: every Channel the Account
 follows (resolved here, through the Follow seam), or handles the browser sends
 (its Channels tab selection, or the Channels ticked in the list). The "Yours"
 count, its sort and the "Cited by your channels" Condition all read that set,
-counted in **distinct** Citing Channels, never in Reference rows: a plain
-mention is stored as both a mention and a link.
+counted in **distinct** Citing Channels, never in Reference rows: twenty
+Posts from one Channel cite once.
 
 ## Picking the page first
 

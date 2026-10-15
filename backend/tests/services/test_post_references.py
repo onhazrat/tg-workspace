@@ -329,13 +329,61 @@ def test_a_mention_has_no_target_post() -> None:
     assert [(r.kind, r.target_post_id) for r in refs] == [("mention", None)]
 
 
+def test_a_plain_mention_is_not_also_a_link() -> None:
+    """Telegram wraps every plain @mention in a `t.me` anchor, which the
+    scraper stores in the links blob. That anchor is the mention, not a link.
+
+    Mutation: drop `is_the_mention` from `references_for` and a mention comes
+    back as two References, which is what inflated `reference_count`.
+    """
+    post = _post(
+        1,
+        text="read @alphachan",
+        links=[{"url": "https://t.me/alphachan", "channel": "alphachan"}],
+    )
+
+    refs = references_for(post, source_handle=SOURCE)
+
+    assert [(r.kind, r.target_post_id) for r in refs] == [("mention", None)]
+
+
+def test_a_bare_link_beside_a_mention_of_the_same_channel_is_the_mention() -> None:
+    """The same Post naming the same Channel twice names it once."""
+    post = _post(1, text="@alphachan, also at https://t.me/alphachan")
+
+    refs = references_for(post, source_handle=SOURCE)
+
+    assert [(r.kind, r.target_post_id) for r in refs] == [("mention", None)]
+
+
+def test_a_link_to_one_post_of_a_mentioned_channel_stays() -> None:
+    """Mutation: drop the `post_id is None` leg from `is_the_mention`."""
+    post = _post(
+        1,
+        text="read @alphachan",
+        links=[
+            {"url": "https://t.me/alphachan", "channel": "alphachan"},
+            {"url": "https://t.me/alphachan/42", "channel": "alphachan"},
+        ],
+    )
+
+    refs = references_for(post, source_handle=SOURCE)
+
+    assert {(r.kind, r.target_post_id) for r in refs} == {
+        ("mention", None),
+        ("link", 42),
+    }
+
+
 def test_the_two_extractors_agree_on_which_handles_a_post_names() -> None:
-    """Mutation: drop the reply leg, or the links blob, from `references_for`.
+    """Mutation: drop the reply leg, or the links blob, or `is_the_mention`,
+    from either extractor.
 
     The graph and every Discovery report must mean the same thing by "this Post
     references @foo". They are two implementations over shared primitives, so
-    nothing but this stops them drifting. The *kinds* differ on purpose, which
-    is why the assertion is on the handle sets alone.
+    nothing but this stops them drifting. The kinds are compared too, once the
+    graph's `reply` is folded into `link` the way Discover folds it: a
+    handle-only comparison let a plain mention mean two kinds in one of them.
     """
     posts = [
         _post(
@@ -351,11 +399,28 @@ def test_the_two_extractors_agree_on_which_handles_a_post_names() -> None:
         ),
         _post(4, text="nothing here at all"),
         _post(5, text=f"self @{SOURCE}", forwarded_from=SOURCE),
+        _post(
+            6,
+            text="read @zetachan",
+            links=[{"url": "https://t.me/zetachan", "channel": "zetachan"}],
+        ),
+        _post(
+            7,
+            text="read @etachan",
+            links=[{"url": "https://t.me/etachan/5", "channel": "etachan"}],
+        ),
     ]
 
     for post in posts:
-        graph = {r.target_handle for r in references_for(post, source_handle=SOURCE)}
-        discover = set(post_references(post))
+        graph = {
+            (r.target_handle, "link" if r.kind == "reply" else r.kind)
+            for r in references_for(post, source_handle=SOURCE)
+        }
+        discover = {
+            (handle, kind)
+            for handle, kinds in post_references(post).items()
+            for kind in kinds
+        }
         assert graph == discover, f"post {post.post_id}"
 
 

@@ -486,10 +486,9 @@ def test_the_queue_read_keeps_its_key_set(client: TestClient) -> None:
         # means handles now arrive without anybody asking for them.
         "requestsToday",
         "requestsWeek",
-        # Ticket 05 removed the two cursor marks that sat here. The sweep tracks
-        # its progress on `Post.harvested`, so there is no position to report,
-        # and "how much is left" would be a count over the unharvested index on
-        # every read of this dashboard.
+        # Ticket 05 removed the two cursor marks that sat here. The sweep is an
+        # anti-join against the Directory (DDS-02), so there is no position to
+        # report.
         "harvestEnabled",
         "harvestRunning",
     }

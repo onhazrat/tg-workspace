@@ -18,6 +18,7 @@
 | IDEA-009 | pgvector for RAG search | backend | medium | 2026-07-21 | [detail](./ideas/IDEA-009-pgvector-for-rag.md) | Search still scores a capped window in Python; recall degrades silently as the corpus grows |
 | IDEA-010 | Shared paginated-list helper | backend | medium | 2026-07-21 | [detail](./ideas/IDEA-010-shared-paginated-list-helper.md) | The pattern is now copy-pasted 4×; this duplication is why the `stats.py` bulk-delete fix never reached `logs.py` |
 | IDEA-011 | Discover tab refinement | full-stack | medium | 2026-07-29 | [detail](./ideas/IDEA-011-discover-tab-refinement.md) | Survey doc — 14 proposals (D1–D14) in 8 workstreams; pick a workstream, not the whole doc. **W1 is designed and agreed**: Discover reports become saved artifacts modelled on summaries |
+| IDEA-012 | Directory crawl priority (what to probe and refresh first) | backend | high | 2026-10-15 | [detail](../directory-crawl/README.md) | Crawl drifted to 973k mostly off-language rows, 123k refreshes overdue, staging disk 91%. Design and research in `docs/directory-crawl/`; build step 1 (refresh share + free verdicts) first |
 
 ## In progress
 

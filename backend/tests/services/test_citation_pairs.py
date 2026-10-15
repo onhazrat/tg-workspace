@@ -14,13 +14,18 @@ Each mutation was applied alone and this module went red:
 
 * skip the count update in `write_references` -> the first writer case
 * raise the counts by a new pair's References rather than by one -> the
-  two-ways case (a plain mention would count its target twice)
+  two-ways case (a forward and a mention would count their target twice)
 * raise the counts for every pair written, existing ones too -> the re-cited
   case
 * drop the Reference count increment for an existing pair -> the re-cited case
 * make the first fill add rather than overwrite -> the fill re-run case
 * an `UPDATE tg_citation_counts` string in `directory_reads.py` -> the
   sole-writer case
+* let the mention-shadow migration's `EXISTS` match any kind -> the shadow
+  case (a link with no mention beside it goes too)
+* drop `target_post_id IS NULL` from it -> the shadow case (the link to one
+  exact Post goes too)
+* drop the pair `UPDATE` from it -> the shadow case (pairs out of step)
 """
 
 from __future__ import annotations
@@ -108,8 +113,8 @@ def test_a_new_pair_raises_both_counts_by_one() -> None:
 
 
 def test_one_post_citing_a_channel_two_ways_is_one_pair() -> None:
-    """A plain @mention is stored as a mention and a link: two References."""
-    _write(("aa", 1, "bb", "mention"), ("aa", 1, "bb", "link"))
+    """A Post that forwards from and mentions one Channel: two References."""
+    _write(("aa", 1, "bb", "mention"), ("aa", 1, "bb", "forward"))
     _assert_in_step()
     with Session(engine) as session:
         pairs, counts = _stored(session)
@@ -206,7 +211,13 @@ def test_the_references_aggregate_is_the_only_writer() -> None:
         for path in app.rglob("*.py")
         if _WRITES.search(path.read_text())
     )
-    assert writers == ["services/post_references.py"]
+    # The one migration that corrects stored pairs, once, under a table lock:
+    # it deletes the mention shadows the old extractor wrote and takes them
+    # back out of `reference_count` in the same statement.
+    assert writers == [
+        "alembic/versions/a7d3e9f1c2b4_a_mention_is_not_a_link.py",
+        "services/post_references.py",
+    ]
 
 
 def test_the_first_fill_builds_both_and_can_run_again() -> None:
@@ -226,4 +237,63 @@ def test_the_first_fill_builds_both_and_can_run_again() -> None:
     _assert_in_step()
     with Session(engine) as session:
         fill_citations(session, batch=2)
+    _assert_in_step()
+
+
+def test_the_migration_drops_only_the_links_that_are_a_mention() -> None:
+    """The cleanup for References written before `discover.is_the_mention`.
+
+    Seeded the way the old extractor wrote them: post 1 has a plain @bb, so a
+    mention and its anchor as a link. Post 2 mentions @bb and links one exact
+    Post of it, which is two References under the new rule as well. Post 3
+    links @cc with no mention, and must survive.
+    """
+    from app.alembic.versions import a7d3e9f1c2b4_a_mention_is_not_a_link as mig
+
+    chat_id = 4242
+
+    def sourced(post_id: int, *refs: Reference) -> SourcedReferences:
+        return SourcedReferences(
+            source_chat_id=chat_id,
+            source_channel="aa",
+            source_post_id=post_id,
+            timestamp=1_700_000_000_000 + post_id,
+            references=list(refs),
+        )
+
+    with Session(engine) as session:
+        write_references(
+            session,
+            [
+                sourced(1, Reference("bb", "mention"), Reference("bb", "link")),
+                sourced(2, Reference("bb", "mention"), Reference("bb", "link", 7)),
+                sourced(3, Reference("cc", "link")),
+            ],
+            target_chat_ids={},
+        )
+        session.commit()
+        before_counts = _stored(session)[1]
+
+    with engine.begin() as bind:
+        mig.drop_mention_shadows(bind)
+
+    with Session(engine) as session:
+        left = {
+            (int(post_id), str(target), str(kind), target_post)
+            for post_id, target, kind, target_post in session.execute(
+                text(
+                    "SELECT source_post_id, target_handle, kind, target_post_id "
+                    "FROM tg_post_references"
+                )
+            ).all()
+        }
+        pairs, counts = _stored(session)
+    assert left == {
+        (1, "bb", "mention", None),
+        (2, "bb", "mention", None),
+        (2, "bb", "link", 7),
+        (3, "cc", "link", None),
+    }
+    assert pairs == {("aa", "bb"): 3, ("aa", "cc"): 1}
+    assert counts == before_counts, "no pair vanished, so no count may move"
     _assert_in_step()

@@ -97,6 +97,14 @@ There is no foreign key to the Post, which costs nothing: retention already dele
 by `(channel_name, post_id)` rather than through the surrogate id, so a key would have forced a
 retention change to buy integrity that permanence rejects anyway.
 
+**Amended 2026-10-14: permanent means retention never deletes a Reference, not that no row is
+ever corrected.** Telegram renders every plain `@foo` as a `t.me/foo` anchor, so the extractor
+stored each mention twice, as a `mention` and as a `link` with no Post id: 2,077,201 of staging's
+7,319,550 References, which inflated each citation pair's `reference_count`. Those rows never
+described a relationship; they described the extractor reading one twice. Revision `a7d3e9f1c2b4`
+deletes them and takes them out of `reference_count`, and `discover.is_the_mention` stops the
+extractor writing them. Retention still deletes nothing here.
+
 ## Consequences
 
 The table is `CORPUS` in the tenancy seam, by `DirectorySample`'s argument: the graph exists
@@ -107,7 +115,8 @@ on this deployment scrapes a given channel, which is the fact a Directory entry 
 The graph recognises four kinds where `SignalKind` recognises three: a cross-channel reply is
 `reply` here and `link` there. The existing vocabulary and every Discovery counter are left
 untouched, so the graph's extractor is a *sibling* of `post_references` rather than a caller. A
-test asserts the two produce the same set of handles for the same Post. Without it the two
+test asserts the two produce the same handles and kinds for the same Post, once `reply` is folded
+into `link` *(kinds since the 2026-10-14 amendment; handles alone missed the double mention)*. Without it the two
 definitions of "a reference" drift apart with nothing to notice, which would make the graph
 worthless in the least visible way available.
 

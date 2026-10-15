@@ -109,7 +109,9 @@ def test_counts_forwards_mentions_and_links_separately() -> None:
     assert candidates[0]["displayName"] == "Alpha News"
 
 
-def test_mention_and_link_in_same_post_each_count_once() -> None:
+def test_a_link_to_a_channel_the_post_mentions_counts_as_the_mention() -> None:
+    """`discover.is_the_mention`: the same Post naming the same Channel twice,
+    once as `@` and once as a bare `t.me` address, names it once."""
     result = _run(
         [
             _post(
@@ -117,6 +119,24 @@ def test_mention_and_link_in_same_post_each_count_once() -> None:
                 "carrier",
                 1000,
                 text="@alpha_news is great, join https://t.me/alpha_news now",
+            )
+        ]
+    )
+    assert result["candidates"][0]["counts"] == {
+        "forward": 0,
+        "mention": 1,
+        "link": 0,
+    }
+
+
+def test_a_link_to_one_post_of_a_mentioned_channel_counts_as_a_link() -> None:
+    result = _run(
+        [
+            _post(
+                1,
+                "carrier",
+                1000,
+                text="@alpha_news is great, read https://t.me/alpha_news/42",
             )
         ]
     )

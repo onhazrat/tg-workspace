@@ -62,7 +62,7 @@ export const VIEW_MEASURE_OPTIONS: { label: string; value: ViewMeasure }[] = [
 
 /**
  * The one line each measure is explained by. The floor is the deployment's
- * estimation floor, which an Operator can move from its default of 3 hours.
+ * estimation floor, which an Operator can move from its default of 1 hour.
  */
 export function viewMeasureDescription(
   measure: ViewMeasure,

@@ -5,12 +5,12 @@ Post filter as a tree of Conditions (AND, OR, NOT, parentheses), the Channels
 tab's filter over Posts, and the server evaluates it. `/data/posts/facets`
 counts every value in the window, filters aside. The Operator follows `pt_a`
 and `pt_b`, the second account `pt_b` and `pt_c`, over one shared corpus, at
-the default settings (settling 24h, floor 3h) and the seed curve:
+the default settings (settling 24h, floor 1h) and the seed curve:
 
 | Post | channel | language | media | forwarded from | views | observed | estimated |
 |------|---------|----------|-------|----------------|-------|----------|-----------|
 | 1    | pt_a    | fa       | photo |                | 5000  | 48h      | 5000      |
-| 2    | pt_a    | en       | video | pt_b           | 1000  | 1h       | too new   |
+| 2    | pt_a    | en       | video | pt_b           | 1000  | 0.5h     | too new   |
 | 3    | pt_a    | (unread) |       |                | none  |          | none      |
 | 4    | pt_b    | fa       | video | elsewhere      | 2000  | 9h       | 2782      |
 | 5    | pt_b    | en       | photo |                | 300   | 48h      | 300       |
@@ -55,7 +55,7 @@ CORPUS: list[
     tuple[str, int, str | None, list[str], str | None, int | None, float | None]
 ] = [
     ("pt_a", 1, "fa", ["photo"], None, 5000, 48),
-    ("pt_a", 2, "en", ["video"], "pt_b", 1000, 1),
+    ("pt_a", 2, "en", ["video"], "pt_b", 1000, 0.5),
     ("pt_a", 3, None, [], None, None, None),
     ("pt_b", 4, "fa", ["video"], "elsewhere", 2000, 9),
     ("pt_b", 5, "en", ["photo"], None, 300, 48),
