@@ -55,6 +55,7 @@ from app.core.db import engine
 from app.models_tg import Summary, SummaryAttempt, SummaryPayload
 from app.prompts.summary import format_summary_prompt
 from app.schemas.post_filter import to_steps
+from app.schemas.summaries import AttemptKind, AttemptOutcome
 from app.services import pgmq
 from app.services.ai_keys import (
     Purpose,
@@ -217,7 +218,7 @@ def start_attempt(
     if key_id is None:
         key_id = previous.key_id if previous else (summary.extra or {}).get("aiKeyId")
 
-    def refused(detail: str, kind: Any, key: str | None) -> SummaryAttempt:
+    def refused(detail: str, kind: AttemptKind, key: str | None) -> SummaryAttempt:
         return record_attempt(
             session,
             summary.id,
@@ -447,9 +448,9 @@ def _log(run: _Run, *, text: str, error: str | None, started: float) -> None:
 def _finish(
     run: _Run,
     *,
-    outcome: Any,
+    outcome: AttemptOutcome,
     text: str,
-    kind: Any = None,
+    kind: AttemptKind | None = None,
     error: str | None = None,
 ) -> None:
     with _session_as(run.acted_by) as session:
@@ -516,8 +517,8 @@ async def run_attempt(message: dict[str, Any]) -> None:
     started = time.perf_counter()
     stream = asyncio.create_task(_stream_into(run, parts, temperature))
     _streams[attempt_id] = stream
-    outcome: Any = "succeeded"
-    kind: Any = None
+    outcome: AttemptOutcome = "succeeded"
+    kind: AttemptKind | None = None
     error: str | None = None
     asked: float | None = None
     try:
@@ -563,7 +564,9 @@ async def run_attempt(message: dict[str, Any]) -> None:
         await _after_scheduled(run.summary_id, outcome=outcome, kind=kind)
 
 
-async def _after_scheduled(summary_id: str, *, outcome: Any, kind: Any) -> None:
+async def _after_scheduled(
+    summary_id: str, *, outcome: AttemptOutcome, kind: AttemptKind | None
+) -> None:
     """Hand a scheduled Attempt's end to the scheduler that started it.
 
     Imported here because the scheduler imports this module to start them.
