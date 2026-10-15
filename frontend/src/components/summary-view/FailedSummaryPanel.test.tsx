@@ -164,6 +164,14 @@ describe("FailedSummaryPanel", () => {
     renderPanel([attempt(1, { kind: "transient", keyId: null })], null)
     expect(screen.queryByText("Use another AI")).toBeNull()
     expect(screen.queryByLabelText("Copy prompt")).toBeNull()
+    expect(screen.queryByText("Saved prompt")).toBeNull()
+  })
+
+  test("the saved prompt waits in a closed fold", () => {
+    renderPanel([attempt(1)], "Summarise these posts.")
+    expect(screen.queryByText("Summarise these posts.")).toBeNull()
+    fireEvent.click(screen.getByText("Saved prompt"))
+    expect(screen.getByText("Summarise these posts.")).toBeTruthy()
   })
 
   test("before the Attempts load it still says it failed", () => {

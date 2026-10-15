@@ -168,6 +168,13 @@ export function FailedSummaryPanel(props: FailedSummaryPanelProps) {
             </div>
           </section>
         )}
+        {promptText && (
+          <Fold title="Saved prompt">
+            <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-app-muted/20 p-3 text-xs text-app-ink/80">
+              {promptText}
+            </pre>
+          </Fold>
+        )}
       </div>
     </>
   )
