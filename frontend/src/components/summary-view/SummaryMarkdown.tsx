@@ -9,11 +9,8 @@ import {
   splitCitations,
 } from "@/lib/citations/replace-citations"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
-import {
-  type CitationWorkspace,
-  SummaryCitation,
-  useCitationSheet,
-} from "./SummaryCitation"
+import { usePreviewSheet } from "../PostPreview"
+import { type CitationWorkspace, SummaryCitation } from "./SummaryCitation"
 import { extractText, relatedPostsQuery } from "./summary-text"
 
 /** The workspace's Channels, which a post card and an avatar read. */
@@ -55,7 +52,7 @@ export function CitationRendererProvider({
   workspace: CitationWorkspace
   children: React.ReactNode
 }) {
-  const sheet = useCitationSheet()
+  const sheet = usePreviewSheet()
   const render = React.useCallback<CitationRenderer>(
     (channelName, postId, key) => (
       <SummaryCitation

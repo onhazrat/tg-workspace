@@ -1,10 +1,13 @@
 import type React from "react"
+import { useMemo } from "react"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
 import type { Post } from "../types"
+import { usePreviewSheet } from "./PostPreview"
 import { useSpotlight } from "./post-card/ChannelSpotlight"
 import { PostCardView } from "./post-card/PostCardView"
+import { ReplyPreviewContext } from "./post-card/ReplyParent"
 import { usePostTranslation } from "./post-card/usePostTranslation"
 
 interface PostCardProps {
@@ -31,39 +34,51 @@ export const PostCard: React.FC<PostCardProps> = ({
   const { spotlight, enter } = useSpotlight()
   const followed = (name: string | null | undefined) =>
     channels.find((c) => c.name.toLowerCase() === name?.toLowerCase())
+  const sheet = usePreviewSheet()
+  const replyPreview = useMemo(
+    () => ({
+      sheet,
+      channel: (name: string) =>
+        channels.find((c) => c.name.toLowerCase() === name.toLowerCase()),
+      onAddChannel: addNewChannel,
+    }),
+    [sheet, channels, addNewChannel],
+  )
 
   return (
-    <PostCardView
-      post={post}
-      postSearch={postSearch}
-      compact={compact}
-      keyboard={keyboard}
-      channel={followed(post.channelName)}
-      followsForwardSource={!!followed(post.forwardedFrom)}
-      onAddChannel={addNewChannel}
-      onShowChannel={enter && ((name) => enter(post, name))}
-      spotlit={
-        spotlight?.channel.toLowerCase() === post.channelName.toLowerCase()
-      }
-      onToggleSelected={(shift) => onToggleSelected(post, shift)}
-      text={translation.text}
-      translation={
-        translation.translatable
-          ? {
-              showing: translation.showing,
-              busy: translation.busy,
-              onToggle: translation.toggle,
-            }
-          : undefined
-      }
-      onFindRelated={
-        embeddingsEnabled
-          ? () => {
-              setRelatedPostSearch(post)
-              window.scrollTo({ top: 0, behavior: "smooth" })
-            }
-          : undefined
-      }
-    />
+    <ReplyPreviewContext.Provider value={replyPreview}>
+      <PostCardView
+        post={post}
+        postSearch={postSearch}
+        compact={compact}
+        keyboard={keyboard}
+        channel={followed(post.channelName)}
+        followsForwardSource={!!followed(post.forwardedFrom)}
+        onAddChannel={addNewChannel}
+        onShowChannel={enter && ((name) => enter(post, name))}
+        spotlit={
+          spotlight?.channel.toLowerCase() === post.channelName.toLowerCase()
+        }
+        onToggleSelected={(shift) => onToggleSelected(post, shift)}
+        text={translation.text}
+        translation={
+          translation.translatable
+            ? {
+                showing: translation.showing,
+                busy: translation.busy,
+                onToggle: translation.toggle,
+              }
+            : undefined
+        }
+        onFindRelated={
+          embeddingsEnabled
+            ? () => {
+                setRelatedPostSearch(post)
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              }
+            : undefined
+        }
+      />
+    </ReplyPreviewContext.Provider>
   )
 }

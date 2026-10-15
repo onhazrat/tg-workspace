@@ -7,8 +7,14 @@ import {
 import { cn, highlightText } from "@/lib/utils"
 import type { Channel, Post } from "@/types"
 import { ChannelAvatar } from "../ChannelAvatar"
+import { PostPreview } from "../PostPreview"
 import { RelativeTime } from "../RelativeTime"
 import { postTime } from "./post-card-model"
+import {
+  ReplyParentLookup,
+  replyParentUrl,
+  useReplyPreview,
+} from "./ReplyParent"
 
 /** What the header needs to know beyond the Post itself. */
 export interface PostCardHeaderProps {
@@ -156,21 +162,18 @@ export function PostIdLink({ post }: { post: Post }) {
   )
 }
 
-/** "Reply to #7 · the start of what it answers", linking to that Post. */
+/**
+ * "Reply to #7 · the start of what it answers", linking to that Post; where a
+ * `ReplyPreviewContext` is provided, hovering or tapping it previews the Post.
+ */
 function ReplyRef({ post }: { post: Post }) {
+  const preview = useReplyPreview()
   if (post.replyToPostId == null) return null
-  return (
-    <a
-      data-testid={`post-reply-badge-${post.channelName}-${post.id}`}
-      href={
-        post.replyTo?.url ??
-        telegramWebViewPostUrl(post.channelName, post.replyToPostId)
-      }
-      target="_blank"
-      rel="noopener noreferrer"
-      title={post.replyTo?.text ?? undefined}
-      className="inline-flex min-w-0 items-center gap-1 hover:text-app-ink/80 hover:underline"
-    >
+  const testId = `post-reply-badge-${post.channelName}-${post.id}`
+  const className =
+    "inline-flex min-w-0 items-center gap-1 hover:text-app-ink/80 hover:underline"
+  const label = (
+    <>
       <CornerUpLeft size={11} className="shrink-0" />
       <span className="truncate">
         Reply to #{post.replyToPostId}
@@ -178,7 +181,34 @@ function ReplyRef({ post }: { post: Post }) {
           <span className="text-app-ink/40"> · {post.replyTo.text}</span>
         )}
       </span>
-    </a>
+    </>
+  )
+  if (!preview) {
+    return (
+      <a
+        data-testid={testId}
+        href={replyParentUrl(post)}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={post.replyTo?.text ?? undefined}
+        className={className}
+      >
+        {label}
+      </a>
+    )
+  }
+  return (
+    <PostPreview
+      sheet={preview.sheet}
+      href={replyParentUrl(post)}
+      title={`Reply to #${post.replyToPostId}`}
+      description="The post this reply answers"
+      triggerProps={{ "data-testid": testId }}
+      triggerClassName={className}
+      card={<ReplyParentLookup reply={post} workspace={preview} />}
+    >
+      {label}
+    </PostPreview>
   )
 }
 
