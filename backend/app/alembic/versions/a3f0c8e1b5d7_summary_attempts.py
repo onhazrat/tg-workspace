@@ -5,7 +5,7 @@ and logs are pruned. Each request now leaves an Attempt, kept as long as its
 Summary and deleted with it.
 
 Revision ID: a3f0c8e1b5d7
-Revises: db2bb3daf99f
+Revises: a7d3e9f1c2b4
 Create Date: 2026-10-14
 """
 
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a3f0c8e1b5d7"
-down_revision: str | None = "db2bb3daf99f"
+down_revision: str | None = "a7d3e9f1c2b4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
