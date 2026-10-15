@@ -78,6 +78,7 @@ from app.services.summary_attempts import (
     cited_posts,
     claim_attempt,
     end_attempt,
+    exception_kind,
     fail_interrupted,
     failure_kind,
     get_attempt,
@@ -541,7 +542,7 @@ async def run_attempt(message: dict[str, Any]) -> None:
             await asyncio.to_thread(_reject_key, run.key.credential_id)
         if provider_code(exc) is None:
             logger.warning("attempt %s stream failed", attempt_id, exc_info=exc)
-        outcome, kind = "failed", failure_kind(provider_code(exc))
+        outcome, kind = "failed", exception_kind(exc)
         error = failure_detail(exc, run.key)
         asked = retry_after_seconds(exc)
     finally:

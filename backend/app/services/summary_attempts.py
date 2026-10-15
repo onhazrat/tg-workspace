@@ -14,11 +14,13 @@ import re
 import uuid
 from typing import Any
 
+import httpx
 from fastapi import HTTPException
 from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
+from app.ai.failures import provider_code
 from app.models_tg import Summary, SummaryAttempt, utc_now
 from app.schemas.summaries import (
     AttemptKind,
@@ -58,6 +60,28 @@ def failure_kind(status: int | None) -> AttemptKind:
     if status == 413:
         return "limit"
     return "other"
+
+
+#: What a dropped connection or a timeout raises, with no status to read.
+_TRANSPORT_ERRORS = (TimeoutError, ConnectionError, httpx.TransportError)
+#: Provider error codes that name a model the endpoint does not serve, which
+#: some gateways answer with a 400 rather than a 404.
+MODEL_ERROR_CODES = frozenset({"model_not_found"})
+
+
+def exception_kind(exc: BaseException) -> AttemptKind:
+    """What kind of failure a Provider call raised, for the worker.
+
+    Without a status the Provider never answered. Only a real network fault or
+    timeout is `transient` (and retried automatically); anything else is a bug
+    in this process, which another try would only repeat.
+    """
+    code = provider_code(exc)
+    if code is None:
+        return "transient" if isinstance(exc, _TRANSPORT_ERRORS) else "other"
+    if getattr(exc, "error_code", None) in MODEL_ERROR_CODES:
+        return "model"
+    return failure_kind(code)
 
 
 def _next_number(session: Session, summary_id: str) -> int:

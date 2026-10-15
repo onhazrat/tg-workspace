@@ -54,6 +54,18 @@ class OpenAICompatibleError(Exception):
         self.message = message
         #: The Retry-After header in seconds, which the automatic retry honours.
         self.retry_after = retry_after
+        #: The body's machine-readable `error.code` (`model_not_found`), when a
+        #: string; classifying reads this, never the message text.
+        self.error_code = _error_code(message)
+
+
+def _error_code(body: str) -> str | None:
+    try:
+        error = json.loads(body).get("error")
+    except ValueError, AttributeError:
+        return None
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if isinstance(code, str) else None
 
 
 class OpenAICompatibleProvider:

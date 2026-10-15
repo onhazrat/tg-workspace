@@ -20,10 +20,12 @@ import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from app.ai.providers.openai_compatible import OpenAICompatibleError
 from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
@@ -202,6 +204,46 @@ def test_a_provider_failure_ends_the_attempt_failed_with_its_kind(
     assert summary["status"] == "failed"
     # Still Failed, so the prompt stays for "Use another AI".
     assert summary["promptText"] == "Go."
+
+
+@pytest.mark.parametrize(
+    ("error", "kind"),
+    [
+        (TimeoutError(), "transient"),
+        (httpx.ReadError("dropped"), "transient"),
+        # A bug in this process is not worth an automatic retry.
+        (ValueError("a bug of ours"), "other"),
+        (KeyError("choices"), "other"),
+        # The Provider's own error code, never its message text.
+        (
+            OpenAICompatibleError(
+                400,
+                '{"error": {"message": "No such model", "code": "model_not_found"}}',
+            ),
+            "model",
+        ),
+        (OpenAICompatibleError(400, "model_not_found, said in prose"), "other"),
+    ],
+)
+def test_a_failure_is_classified_by_what_raised_it(
+    client: TestClient,
+    headers: dict[str, str],
+    provider: _FakeProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    error: BaseException,
+    kind: str,
+) -> None:
+    monkeypatch.setattr(summary_generation, "RETRY_DELAY_SECONDS", 0)
+    summary_id = _open(client, headers)
+    provider.error = error
+
+    _start(client, headers, summary_id)
+    _drain()
+
+    attempts = _attempts(client, headers, summary_id)
+    assert attempts[0]["kind"] == kind
+    # Only a transient failure queues the one automatic retry.
+    assert (len(attempts) == 2) is (kind == "transient")
 
 
 def test_a_stream_cut_part_way_keeps_what_it_had(
