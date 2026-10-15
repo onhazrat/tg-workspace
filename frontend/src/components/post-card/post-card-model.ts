@@ -1,3 +1,4 @@
+import { telegramWebViewPostUrl } from "@/lib/telegram-web"
 import type { Post, PostMediaKind } from "@/types"
 
 /** A post this long collapses behind "Show More". */
@@ -43,4 +44,11 @@ export function replyParentRef(
     channelName: channel || post.channelName,
     postId: post.replyToPostId,
   }
+}
+
+/** The parent on Telegram: the link Telegram gave, else the reply's Channel. */
+export function replyParentUrl(reply: Post, parentId: number): string {
+  return (
+    reply.replyTo?.url ?? telegramWebViewPostUrl(reply.channelName, parentId)
+  )
 }

@@ -27,6 +27,7 @@ import {
   nextTranslateStep,
   postTime,
   replyParentRef,
+  replyParentUrl,
 } from "./post-card-model"
 
 afterEach(cleanup)
@@ -88,6 +89,14 @@ describe("post-card-model", () => {
       replyParentRef({ ...reply, replyTo: { url: "https://t.me/c/123/7" } }),
     ).toBeNull()
     expect(replyParentRef(post)).toBeNull()
+  })
+
+  test("a reply's parent opens at Telegram's link, else in the reply's Channel", () => {
+    const reply = { ...post, replyToPostId: 7 }
+    expect(
+      replyParentUrl({ ...reply, replyTo: { url: "https://t.me/c/123/7" } }, 7),
+    ).toBe("https://t.me/c/123/7")
+    expect(replyParentUrl(reply, 7)).toContain("/durov/7")
   })
 
   test("quota and 429 failures belong to TranslationContext", () => {

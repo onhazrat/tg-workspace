@@ -9,12 +9,8 @@ import type { Channel, Post } from "@/types"
 import { ChannelAvatar } from "../ChannelAvatar"
 import { PostPreview } from "../PostPreview"
 import { RelativeTime } from "../RelativeTime"
-import { postTime } from "./post-card-model"
-import {
-  ReplyParentLookup,
-  replyParentUrl,
-  useReplyPreview,
-} from "./ReplyParent"
+import { postTime, replyParentUrl } from "./post-card-model"
+import { ReplyParentLookup, useReplyPreview } from "./ReplyParent"
 
 /** What the header needs to know beyond the Post itself. */
 export interface PostCardHeaderProps {
@@ -169,6 +165,7 @@ export function PostIdLink({ post }: { post: Post }) {
 function ReplyRef({ post }: { post: Post }) {
   const preview = useReplyPreview()
   if (post.replyToPostId == null) return null
+  const href = replyParentUrl(post, post.replyToPostId)
   const testId = `post-reply-badge-${post.channelName}-${post.id}`
   const className =
     "inline-flex min-w-0 items-center gap-1 hover:text-app-ink/80 hover:underline"
@@ -187,7 +184,7 @@ function ReplyRef({ post }: { post: Post }) {
     return (
       <a
         data-testid={testId}
-        href={replyParentUrl(post)}
+        href={href}
         target="_blank"
         rel="noopener noreferrer"
         title={post.replyTo?.text ?? undefined}
@@ -200,12 +197,12 @@ function ReplyRef({ post }: { post: Post }) {
   return (
     <PostPreview
       sheet={preview.sheet}
-      href={replyParentUrl(post)}
+      href={href}
       title={`Reply to #${post.replyToPostId}`}
       description="The post this reply answers"
       triggerProps={{ "data-testid": testId }}
       triggerClassName={className}
-      card={<ReplyParentLookup reply={post} workspace={preview} />}
+      card={<ReplyParentLookup reply={post} href={href} workspace={preview} />}
     >
       {label}
     </PostPreview>

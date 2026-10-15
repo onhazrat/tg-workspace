@@ -40,6 +40,7 @@ const card = (parent: Post | null, loading = false, post = reply) => {
       reply={post}
       parent={parent}
       loading={loading}
+      href="https://t.me/durov/7"
       workspace={workspace}
     />,
   )

@@ -4,6 +4,7 @@ import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { SummaryTextSize } from "@/lib/settings/schema"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import type { Summary } from "@/types"
+import type { PreviewWorkspace } from "../PostPreview"
 import { CoverageWall } from "./CoverageWall"
 import { PhotoStrip } from "./PhotoStrip"
 import {
@@ -11,7 +12,6 @@ import {
   PROSE_SIZE,
   ReadingControls,
 } from "./ReadingControls"
-import type { CitationWorkspace } from "./SummaryCitation"
 import { type ReaderZone, SummaryHeader } from "./SummaryHeader"
 import { SummaryNote } from "./SummaryNote"
 import { GeneratingSkeleton, PendingSummaryPanel } from "./SummaryParts"
@@ -61,7 +61,7 @@ export interface SummaryBodyProps {
     covered?: ScopedPostRef[] | null
   }
   /** The workspace's Channels, for the coverage wall's avatars and cards. */
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
 }
 
 /** The Summary card's contents: failed, pending, report, generating or empty. */

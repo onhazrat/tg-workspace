@@ -1,6 +1,5 @@
 import React from "react"
 import type { Components } from "react-markdown"
-import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
@@ -9,23 +8,9 @@ import {
   splitCitations,
 } from "@/lib/citations/replace-citations"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
-import { usePreviewSheet } from "../PostPreview"
-import { type CitationWorkspace, SummaryCitation } from "./SummaryCitation"
+import { type PreviewWorkspace, usePreviewSheet } from "../PostPreview"
+import { SummaryCitation } from "./SummaryCitation"
 import { extractText, relatedPostsQuery } from "./summary-text"
-
-/** The workspace's Channels, which a post card and an avatar read. */
-export function useCitationWorkspace(): CitationWorkspace {
-  const { channels } = useData()
-  const { addNewChannel } = useScraper()
-  return React.useMemo(
-    () => ({
-      channel: (name: string) =>
-        channels.find((c) => c.name.toLowerCase() === name.toLowerCase()),
-      onAddChannel: addNewChannel,
-    }),
-    [channels, addNewChannel],
-  )
-}
 
 const CitationRendererContext = React.createContext<CitationRenderer | null>(
   null,
@@ -49,7 +34,7 @@ export function CitationRendererProvider({
 }: {
   resolve: (channelName: string, postId: number) => CitedPost
   loading: boolean
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
   children: React.ReactNode
 }) {
   const sheet = usePreviewSheet()

@@ -5,19 +5,16 @@
  * How it opens, hover card or bottom sheet, is `PostPreview`'s. The Chat tab
  * keeps its own text hover (`CitationHover`).
  */
-import { ExternalLink, Loader2 } from "lucide-react"
 import { CITATION_ATTR, citationKey } from "@/lib/citations/find-citation"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import { telegramWebViewPostUrl } from "@/lib/telegram-web"
-import type { Channel } from "@/types"
-import { PostPreview } from "../PostPreview"
-import { PostCardView } from "../post-card/PostCardView"
-
-/** What the card needs from the workspace; `SummaryMarkdown` passes it in. */
-export interface CitationWorkspace {
-  channel: (name: string) => Channel | undefined
-  onAddChannel: (name: string) => void
-}
+import {
+  OpenInTelegram,
+  PostPreview,
+  PreviewedPost,
+  PreviewLoading,
+  type PreviewWorkspace,
+} from "../PostPreview"
 
 export interface SummaryCitationProps {
   cited: CitedPost
@@ -25,7 +22,7 @@ export interface SummaryCitationProps {
   loading: boolean
   /** No hover or a narrow screen: a tap opens a bottom sheet. */
   sheet: boolean
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
 }
 
 const CHIP =
@@ -82,37 +79,19 @@ export function CitedPostCard({
               As saved with this Summary; the Post is no longer stored.
             </p>
           )}
-          <PostCardView
-            post={post}
-            text={post.text}
-            postSearch=""
-            channel={workspace.channel(post.channelName)}
-            followsForwardSource={!!workspace.channel(post.forwardedFrom ?? "")}
-            onAddChannel={workspace.onAddChannel}
-            wholeText
-          />
+          <PreviewedPost post={post} workspace={workspace} />
         </>
       ) : loading ? (
-        <div className="flex justify-center py-6">
-          <Loader2
-            className="size-4 animate-spin opacity-50"
-            aria-label="Loading post"
-          />
-        </div>
+        <PreviewLoading />
       ) : (
         <div className="flex flex-col items-center gap-2 px-3 py-6 text-center text-sm text-app-ink/60">
           <p>
             Post not found: it is no longer stored and this Summary kept no
             copy.
           </p>
-          <a
+          <OpenInTelegram
             href={telegramWebViewPostUrl(cited.channelName, cited.postId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-blue-500 hover:underline"
-          >
-            Open in Telegram <ExternalLink size={12} />
-          </a>
+          />
         </div>
       )}
     </div>

@@ -9,9 +9,14 @@
  * sheet. The body mounts only while open, so a lookup inside it runs on open.
  */
 import { PreviewCard } from "@base-ui/react/preview-card"
-import { type ReactNode, useState, useSyncExternalStore } from "react"
+import { ExternalLink, Loader2 } from "lucide-react"
+import { type ReactNode, useMemo, useState, useSyncExternalStore } from "react"
 import { MOBILE_BREAKPOINT } from "@/constants"
+import { useData } from "@/contexts/DataContext"
+import { useScraper } from "@/contexts/ScraperContext"
 import { cn } from "@/lib/utils"
+import type { Channel, Post } from "@/types"
+import { PostCardView } from "./post-card/PostCardView"
 import {
   Sheet,
   SheetContent,
@@ -134,5 +139,70 @@ export function usePreviewSheet(): boolean {
   return useSyncExternalStore(
     subscribeHoverWide,
     () => !(window.matchMedia?.(HOVER_WIDE).matches ?? true),
+  )
+}
+
+/** What a previewed post card needs from the workspace. */
+export interface PreviewWorkspace {
+  channel: (name: string) => Channel | undefined
+  onAddChannel: (name: string) => void
+}
+
+/** The workspace's Channels, which a post card and an avatar read. */
+export function usePreviewWorkspace(): PreviewWorkspace {
+  const { channels } = useData()
+  const { addNewChannel } = useScraper()
+  return useMemo(
+    () => ({
+      channel: (name: string) =>
+        channels.find((c) => c.name.toLowerCase() === name.toLowerCase()),
+      onAddChannel: addNewChannel,
+    }),
+    [channels, addNewChannel],
+  )
+}
+
+/** A previewed Post as a full post card, its text whole. */
+export function PreviewedPost({
+  post,
+  workspace,
+}: {
+  post: Post
+  workspace: PreviewWorkspace
+}) {
+  return (
+    <PostCardView
+      post={post}
+      text={post.text}
+      postSearch=""
+      channel={workspace.channel(post.channelName)}
+      followsForwardSource={!!workspace.channel(post.forwardedFrom ?? "")}
+      onAddChannel={workspace.onAddChannel}
+      wholeText
+    />
+  )
+}
+
+export function PreviewLoading() {
+  return (
+    <div className="flex justify-center py-6">
+      <Loader2
+        className="size-4 animate-spin opacity-50"
+        aria-label="Loading post"
+      />
+    </div>
+  )
+}
+
+export function OpenInTelegram({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 self-center text-blue-500 hover:underline"
+    >
+      Open in Telegram <ExternalLink size={12} />
+    </a>
   )
 }

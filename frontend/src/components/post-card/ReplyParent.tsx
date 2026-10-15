@@ -3,21 +3,24 @@
  * its Cited Post: the whole Post when stored, Telegram's excerpt when not.
  */
 import { useQuery } from "@tanstack/react-query"
-import { ExternalLink, Loader2 } from "lucide-react"
-import { createContext, useContext } from "react"
+import { createContext, type ReactNode, useContext, useMemo } from "react"
 import { queryKeys } from "@/hooks/queryKeys"
 import { getPost } from "@/lib/posts/store"
-import { telegramWebViewPostUrl } from "@/lib/telegram-web"
-import type { Channel, Post } from "@/types"
-import { PostCardView } from "./PostCardView"
+import type { Post } from "@/types"
+import {
+  OpenInTelegram,
+  PreviewedPost,
+  PreviewLoading,
+  type PreviewWorkspace,
+  usePreviewSheet,
+  usePreviewWorkspace,
+} from "../PostPreview"
 import { replyParentRef } from "./post-card-model"
 
-/** What a parent's card needs from the workspace, and how it opens. */
-export interface ReplyPreview {
+/** The workspace a parent's card reads, and how the preview opens. */
+export interface ReplyPreview extends PreviewWorkspace {
   /** No hover or a narrow screen: a tap opens a bottom sheet. */
   sheet: boolean
-  channel: (name: string) => Channel | undefined
-  onAddChannel: (name: string) => void
 }
 
 /**
@@ -29,21 +32,24 @@ export const ReplyPreviewContext = createContext<ReplyPreview | null>(null)
 
 export const useReplyPreview = () => useContext(ReplyPreviewContext)
 
-/** The parent on Telegram: the link Telegram gave, else the reply's Channel. */
-export function replyParentUrl(reply: Post): string {
-  return (
-    reply.replyTo?.url ??
-    telegramWebViewPostUrl(reply.channelName, reply.replyToPostId ?? 0)
-  )
+/** Turns reply previews on for every card below it, with one media query. */
+export function ReplyPreviewProvider({ children }: { children: ReactNode }) {
+  const workspace = usePreviewWorkspace()
+  const sheet = usePreviewSheet()
+  const value = useMemo(() => ({ ...workspace, sheet }), [workspace, sheet])
+  return <ReplyPreviewContext value={value}>{children}</ReplyPreviewContext>
 }
 
 /** Looks the parent up; mounted only while the preview is open. */
 export function ReplyParentLookup({
   reply,
+  href,
   workspace,
 }: {
   reply: Post
-  workspace: ReplyPreview
+  /** The parent on Telegram. */
+  href: string
+  workspace: PreviewWorkspace
 }) {
   const ref = replyParentRef(reply)
   const { data, isPending } = useQuery({
@@ -51,6 +57,8 @@ export function ReplyParentLookup({
     queryFn: async () =>
       ref ? ((await getPost(ref.channelName, ref.postId)) ?? null) : null,
     enabled: ref != null,
+    // A failed lookup shows the excerpt now rather than after the retries.
+    retry: false,
     staleTime: 60_000,
   })
   return (
@@ -58,6 +66,7 @@ export function ReplyParentLookup({
       reply={reply}
       parent={data ?? null}
       loading={ref != null && isPending}
+      href={href}
       workspace={workspace}
     />
   )
@@ -68,33 +77,22 @@ export function ReplyParentCard({
   reply,
   parent,
   loading,
+  href,
   workspace,
 }: {
   reply: Post
   parent: Post | null
   loading: boolean
-  workspace: ReplyPreview
+  href: string
+  workspace: PreviewWorkspace
 }) {
   const excerpt = reply.replyTo?.text
   return (
     <div data-testid="reply-parent-card" className="flex flex-col gap-2">
       {parent ? (
-        <PostCardView
-          post={parent}
-          text={parent.text}
-          postSearch=""
-          channel={workspace.channel(parent.channelName)}
-          followsForwardSource={!!workspace.channel(parent.forwardedFrom ?? "")}
-          onAddChannel={workspace.onAddChannel}
-          wholeText
-        />
+        <PreviewedPost post={parent} workspace={workspace} />
       ) : loading ? (
-        <div className="flex justify-center py-6">
-          <Loader2
-            className="size-4 animate-spin opacity-50"
-            aria-label="Loading post"
-          />
-        </div>
+        <PreviewLoading />
       ) : (
         <div className="flex flex-col gap-2 px-3 py-4 text-sm text-app-ink/60">
           {excerpt ? (
@@ -109,14 +107,7 @@ export function ReplyParentCard({
           ) : (
             <p className="text-center">Post not found: it is not stored.</p>
           )}
-          <a
-            href={replyParentUrl(reply)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 self-center text-blue-500 hover:underline"
-          >
-            Open in Telegram <ExternalLink size={12} />
-          </a>
+          <OpenInTelegram href={href} />
         </div>
       )}
     </div>
