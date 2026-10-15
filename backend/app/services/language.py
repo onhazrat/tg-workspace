@@ -29,6 +29,10 @@ NO_WORDS = "zxx"
 #: Words the detector cannot place: too few of them, or no confident answer.
 #: Finglish lands here or, worse, on a confident wrong code (ADR-021).
 UNDETERMINED = "und"
+#: What a Language Condition names for a Post, Channel or Directory entry not
+#: read yet, whose stored Language is `NULL`. Four letters, so it cannot collide
+#: with an ISO 639 code, and spelled as the hint the filter menus show beside it.
+NOT_READ = "null"
 
 #: Below this many letters a Post is `UNDETERMINED` without asking the model.
 #: One global value rather than one per language (ADR-021): the corpus is a
@@ -138,13 +142,21 @@ def derive_language(posts: Iterable[tuple[str | None, bool]]) -> str | None:
     common code wins, and a tie goes to the code of the newest Post among the
     tied. Forwards count only when there is no own Post to go on, so a Persian
     Channel forwarding English news stays Persian and a pure re-poster still
-    gets a Language. `None` when nothing qualifies.
+    gets a Language. With no code to go on, the same Posts decide between
+    `UNDETERMINED`, if any of them is, and `NO_WORDS`. `None` only when no Post
+    is read yet.
     """
-    coded = [
-        (language, forwarded) for language, forwarded in posts if is_code(language)
-    ]
+    read = [(language, forwarded) for language, forwarded in posts if language]
+    coded = [(language, forwarded) for language, forwarded in read if is_code(language)]
     own = [language for language, forwarded in coded if not forwarded]
     window = (own or [language for language, _ in coded])[:LANGUAGE_WINDOW]
-    # `most_common` orders equal counts by first insertion, which in a
-    # newest-first list is the tied code whose newest Post is newest.
-    return Counter(window).most_common(1)[0][0] if window else None
+    if window:
+        # `most_common` orders equal counts by first insertion, which in a
+        # newest-first list is the tied code whose newest Post is newest.
+        return Counter(window).most_common(1)[0][0]
+    deciding = [language for language, forwarded in read if not forwarded] or [
+        language for language, _ in read
+    ]
+    if not deciding:
+        return None
+    return UNDETERMINED if UNDETERMINED in deciding else NO_WORDS

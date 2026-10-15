@@ -414,6 +414,9 @@ def _but(*left_out: str) -> list[str]:
         (root(atom(lang("fa"))), ["dt_fa_big", "dt_fa_small"]),
         # dt_none and dt_dead have no Language: they fail "fa" and pass NOT "fa".
         (root(atom(lang("fa"), negated=True)), _but("dt_fa_big", "dt_fa_small")),
+        # `null` is the reserved value for "not read yet" (ADR-021, revised).
+        (root(atom(lang("null"))), ["dt_dead", "dt_none"]),
+        (root(atom(lang("null"), negated=True)), _but("dt_dead", "dt_none")),
         (
             root(atom(lang("en")), atom(lang("ru")), op="or"),
             ["dt_en_news", "dt_followed_a", "dt_ru"],

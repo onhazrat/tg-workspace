@@ -49,7 +49,7 @@ import {
   type GroupNode as TreeGroup,
   type FilterNode as TreeNode,
 } from "@/lib/filter-tree"
-import { languageName } from "@/lib/language-name"
+import { languageLabel, languageValue } from "@/lib/language-name"
 import type { Channel } from "@/types"
 
 export type CondType = "tag" | "group" | "language"
@@ -102,7 +102,7 @@ function testCond(cond: Cond, channel: Channel, inputs: MetricInputs): boolean {
     case "group":
       return channel.settingGroupId === cond.value
     case "language":
-      return channel.language === cond.value
+      return languageValue(channel.language) === cond.value
     case "metric":
       return inBound(metricValue(cond.metric, channel, inputs), cond)
   }
@@ -166,7 +166,7 @@ export function conditionLabel(cond: Cond, names: FilterNames): string {
     case "group":
       return names.groupName(cond.value)
     case "language":
-      return languageName(cond.value)
+      return languageLabel(cond.value)
     case "metric":
       return `${metric(cond.metric).label}${cond.none ? ":" : ""} ${boundText(cond)}`
   }

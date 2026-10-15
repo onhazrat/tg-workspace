@@ -35,7 +35,7 @@ import {
   type TextVocabulary,
 } from "@/lib/filter-text"
 import { atoms, type FilterNode, type FilterTree } from "@/lib/filter-tree"
-import { languageLabel } from "@/lib/posts/post-filter-bar"
+import { languageLabel } from "@/lib/language-name"
 
 export type MeasureKey = DirectoryMeasureCondition["measure"]
 export type DirectoryFlag = DirectoryFlagCondition["value"]

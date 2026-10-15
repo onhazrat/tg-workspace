@@ -33,7 +33,7 @@ from app.models_tg import Post, utc_now
 from app.schemas.post_media import MEDIA_COUNTER_KEYS
 from app.services.channels import relabel_channels
 from app.services.follows import visible_channel_names
-from app.services.language import own_words, read_language
+from app.services.language import NOT_READ, own_words, read_language
 from app.services.post_filters import (
     MEDIA_KIND_ORDER,
     POST_TYPE_ORDER,
@@ -1011,8 +1011,8 @@ def count_facets_in_scope(
     the filter shows. Each value also says how many of its Posts `selected`
     selects, which is what its tick reads (PTR-06). No keyword, no tree, no cap.
 
-    Languages are the ones present, most frequent first, an unread Post left
-    out because it has no Language to funnel. The Types are all five and the
+    Languages are the ones present, most frequent first, an unread Post
+    counted under `NOT_READ`, the value a Language Condition funnels it by. The Types are all five and the
     media kinds all six, in the dropdowns' order, zero included; both overlap,
     so they are filtered aggregates over one scan rather than a `GROUP BY`.
     `total` is every Post in the window, in the same scan. Each value is
@@ -1037,9 +1037,9 @@ def count_facets_in_scope(
     followed = frozenset(visible_channel_names(session, user_id=user_id))
     scope = PostScope(user_id, channel_names, start_date, end_date)
     language_rows = session.exec(
-        scoped(select(col(Post.language), func.count(), func.count().filter(chosen)))
-        .where(col(Post.language).is_not(None))
-        .group_by(col(Post.language))
+        scoped(
+            select(col(Post.language), func.count(), func.count().filter(chosen))
+        ).group_by(col(Post.language))
     ).all()
     counts = session.exec(
         scoped(
@@ -1068,7 +1068,7 @@ def count_facets_in_scope(
             (value, n, m) for value, (n, m) in zip(POST_TYPE_ORDER, types, strict=True)
         ],
         languages=sorted(
-            ((language, n, m) for language, n, m in language_rows),
+            ((language or NOT_READ, n, m) for language, n, m in language_rows),
             key=lambda row: (-row[1], row[0]),
         ),
         media=[

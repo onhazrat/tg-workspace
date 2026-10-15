@@ -142,6 +142,8 @@ describe("evaluation", () => {
   test("Setting group, Language and the derived tags are Conditions", () => {
     expect(shown(root("and", [atom(group("g1"))]))).toEqual(["bare"])
     expect(shown(root("and", [atom(lang("fa"))]))).toEqual(["news"])
+    // `null` names the Channels not read yet (ADR-021, revised).
+    expect(shown(root("and", [atom(lang("null"))]))).toEqual(["bare"])
     expect(shown(root("and", [atom(tag(UNTAGGED_TAG_ID))]))).toEqual(["bare"])
   })
 })

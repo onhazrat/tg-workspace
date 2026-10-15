@@ -62,3 +62,19 @@ public Channels, parsed by our own scraper:
 - Existing Posts are read by a scheduled walk, newest first, because staging is not ours to run
   scripts on. Directory entries fill in on their next conclusive probe, inside
   `directoryRefreshDays`.
+
+## Revised (2026-10-15): a Channel can be Undetermined or have No words
+
+The Channel rule above answered `null` whenever no Post carried a code, so a Channel or Directory
+entry made of photos and two-word captions looked exactly like one nobody had read yet, and no
+filter could ask for either. The rule now falls back: with nothing to place, the same Posts that
+would have decided the code (own Posts, forwards only when there are none) decide between
+Undetermined (`und`, if any of them is) and No words (`zxx`). `null` now means only "not read
+yet", for Posts, Channels and Directory entries alike, and every Language filter can ask for it as
+`lang:null`. A meme Channel of 90 captionless photos and 10 two-word captions is Undetermined: a
+few words that could not be placed beat no words.
+
+Existing rows are relabelled by `backend/scripts/relabel_languages.py`, run after deploy with the
+operator's approval, not by a scheduled walk. The walk above exists because staging was not ours
+to run scripts on; backfills there are now approved case by case, and a job that lives forever is
+the wrong price for a one-time correction.

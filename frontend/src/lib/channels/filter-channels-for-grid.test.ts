@@ -147,11 +147,12 @@ describe("collectChannelLanguages", () => {
     followedAt: 0,
   })
 
-  it("lists each code once, named, sorted by name, skipping channels without one", () => {
+  it("lists each value once, named, the unread Channel included", () => {
     const channels = [...sampleChannels, withLanguage("dup", "en")]
     expect(collectChannelLanguages(channels, "en")).toEqual([
       { code: "en", name: "English" },
       { code: "fa", name: "Persian" },
+      { code: "null", name: "Not read yet" },
     ])
   })
 
@@ -170,7 +171,26 @@ describe("collectChannelLanguages", () => {
     ])
   })
 
-  it("returns empty for channels without languages", () => {
-    expect(collectChannelLanguages([sampleChannels[2]])).toEqual([])
+  it("lists a Channel not read yet under Not read yet", () => {
+    expect(collectChannelLanguages([sampleChannels[2]], "en")).toEqual([
+      { code: "null", name: "Not read yet" },
+    ])
+  })
+
+  it("puts the most used first and the non-Languages last", () => {
+    const channels = [
+      withLanguage("a", "zxx"),
+      withLanguage("b", "zxx"),
+      withLanguage("c", "en"),
+      withLanguage("d", "und"),
+      withLanguage("e", "fa"),
+      withLanguage("f", "fa"),
+    ]
+    expect(collectChannelLanguages(channels, "en").map((l) => l.code)).toEqual([
+      "fa",
+      "en",
+      "und",
+      "zxx",
+    ])
   })
 })

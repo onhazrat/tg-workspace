@@ -61,7 +61,11 @@ import {
   setSwitch,
   switchOn,
 } from "@/lib/filter-tree"
-import { languageLabel } from "@/lib/posts/post-filter-bar"
+import {
+  languageLabel,
+  languageValue,
+  sortLanguages,
+} from "@/lib/language-name"
 import { columnOf } from "./DirectoryTable"
 
 const matches = (query: string, ...texts: string[]) =>
@@ -502,20 +506,19 @@ export function DirectoryBar(p: DirectoryBarProps) {
         noun="language"
         testId="directory-language"
         countLabel="channels"
-        rows={p.languages.flatMap(({ language, count }) =>
-          language
-            ? [
-                {
-                  id: language,
-                  label: languageLabel(language),
-                  hint: language,
-                  selected: 0,
-                  total: count,
-                  tick: "false" as const,
-                },
-              ]
-            : [],
-        )}
+        rows={sortLanguages(
+          p.languages.map(({ language, count }) => ({
+            value: languageValue(language),
+            count,
+          })),
+        ).map(({ value, count }) => ({
+          id: value,
+          label: languageLabel(value),
+          hint: value,
+          selected: 0,
+          total: count,
+          tick: "false" as const,
+        }))}
         funnelled={funnelled}
         labelOf={(id) => languageLabel(id)}
         onFunnel={(value, on) =>

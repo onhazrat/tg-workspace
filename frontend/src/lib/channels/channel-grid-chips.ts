@@ -1,5 +1,6 @@
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import { sortTagsForChannelGrid } from "@/lib/channels/channel-tags"
+import { languageValue } from "@/lib/language-name"
 import type { Channel } from "@/types"
 
 export type ChipSelectionState = {
@@ -97,7 +98,9 @@ export function getChannelNamesInLanguage(
   channels: Channel[],
   code: string,
 ): string[] {
-  return channels.filter((c) => c.language === code).map((c) => c.name)
+  return channels
+    .filter((c) => languageValue(c.language) === code)
+    .map((c) => c.name)
 }
 
 /** Unique tags across all channels, ordered for the Channels tab chip bar. */

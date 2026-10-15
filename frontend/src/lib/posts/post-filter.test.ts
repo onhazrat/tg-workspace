@@ -58,7 +58,7 @@ describe("the Post filter's labels", () => {
     ],
     [{ type: "type", value: "original" }, "Original"],
     [{ type: "media", value: "link_preview" }, "Links"],
-    [{ type: "language", value: "zxx" }, "No text"],
+    [{ type: "language", value: "zxx" }, "No words"],
     [{ type: "channel", value: "durov" }, "@durov"],
     [{ type: "views", measure: "views", min: 10_000 }, "Views ≥ 10K"],
     [

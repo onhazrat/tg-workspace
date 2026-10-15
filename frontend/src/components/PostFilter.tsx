@@ -21,6 +21,7 @@ import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { funnelledValues } from "@/lib/filter-tree"
+import { languageLabel, languageValue } from "@/lib/language-name"
 import {
   emptyPostFilter,
   POST_TYPE_VALUES,
@@ -44,7 +45,6 @@ import {
   activeFilters,
   capPhrase,
   clearChip,
-  languageLabel,
   languageOptions,
   meaningQueryOnKey,
   POST_SORT_OPTIONS,
@@ -282,6 +282,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
   ).map(({ code }) => ({
     id: code,
     label: languageLabel(code),
+    hint: code,
     ...languageCount(code),
   }))
   const values: Record<PostFacet, PostFacetValue[]> = {
@@ -301,7 +302,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
   const onFacetTick = facets ? props.onFacetTick : undefined
   const vocabulary = postVocabulary(
     {
-      languages: languages.map(({ id, label }) => ({ id, label })),
+      languages: languages.map(({ id, label, hint }) => ({ id, label, hint })),
       channels: props.channelNames.map((name) => ({
         id: name,
         label: `@${name}`,
@@ -478,7 +479,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const facets = usePostFacets(openPillCount > 0 || rowShowing, spot.spotlight)
   const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
-    () => channels.map((c) => c.language).filter((code) => !!code) as string[],
+    () => channels.map((c) => languageValue(c.language)),
     [channels],
   )
   const channelNames = React.useMemo(

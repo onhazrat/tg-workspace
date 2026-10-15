@@ -976,9 +976,8 @@ class DirectoryEntry(SQLModel, table=True):
     reach: int | None = None
     reach_estimated: bool = False
     forward_share: float | None = None
-    #: The sample's Language by the Channel rule (LANG-05, ADR-021): a code, or
-    #: `None` where no sample carried readable words. Entries older than it
-    #: gain one on their next conclusive probe.
+    #: The sample's Language by the Channel rule (LANG-05, ADR-021): a code,
+    #: `und` or `zxx`, or `None` where no sample is read yet.
     language: str | None = None
 
     #: When a *conclusive* answer was last recorded. `None` while only failures

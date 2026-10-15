@@ -6,7 +6,6 @@ import {
   capPhrase,
   clearChip,
   feedSubtitle,
-  languageLabel,
   languageOptions,
   meaningQueryOnKey,
   parseCount,
@@ -76,14 +75,6 @@ describe("the views measures", () => {
   })
 })
 
-describe("languageLabel", () => {
-  test("names the two codes that are not Languages", () => {
-    expect(languageLabel("zxx")).toBe("No text")
-    expect(languageLabel("und")).toBe("Undetermined")
-    expect(languageLabel("fa", "en")).toBe("Persian")
-  })
-})
-
 describe("activeFilters", () => {
   const defaults = {
     meaning: "",
@@ -136,7 +127,22 @@ describe("clearChip", () => {
 })
 
 describe("languageOptions", () => {
-  test("counted: the server's order, a funnelled absent Language at zero", () => {
+  test("counted: every menu's order, the non-Languages last", () => {
+    expect(
+      languageOptions(
+        [
+          { value: "und", count: 9 },
+          { value: "null", count: 5 },
+          { value: "en", count: 2 },
+          { value: "fa", count: 3 },
+        ],
+        [],
+        [],
+      ).map((option) => option.code),
+    ).toEqual(["fa", "en", "und", "null"])
+  })
+
+  test("counted: a funnelled absent Language at zero", () => {
     expect(
       languageOptions(
         [

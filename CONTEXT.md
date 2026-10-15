@@ -203,11 +203,15 @@ _Avoid_: hyperlink, URL, entity, anchor, text link
 
 **Language**:
 The human language a Post is written in, read from the Post's own words by the
-deployment rather than chosen by anybody. A Post with no words has no Language;
-a Post whose words cannot be placed has an undetermined one, which is a
-different claim. A Channel's Language is the most common among its own recent
-Posts, counting forwards only when it has nothing of its own, and a Directory
-entry's is derived the same way from its sample. Neither is ever set directly.
+deployment rather than chosen by anybody. A Post with no words has the Language
+**No words**; a Post whose words cannot be placed is **Undetermined**, which is a
+different claim. A Post **not read yet** has no Language at all, which is a
+third claim and still one a filter can ask for. A Channel's Language is the most
+common among its own recent Posts, counting forwards only when it has nothing of
+its own; with nothing to place, the same Posts decide between Undetermined (if
+any of them is) and No words. A Channel none of whose Posts is read yet is not
+read yet. A Directory entry's is derived the same way from its sample. Neither
+is ever set directly.
 _Avoid_: locale, lang, script, channel language (as something set)
 
 **Translation language**:

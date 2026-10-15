@@ -27,10 +27,10 @@ import {
   type FilterNode,
   type FilterTree,
 } from "@/lib/filter-tree"
+import { languageLabel } from "@/lib/language-name"
 import type { ViewMeasure } from "@/lib/posts/estimated-views"
 import {
   labelOf,
-  languageLabel,
   VIEW_MEASURE_OPTIONS,
   viewMeasureDescription,
 } from "@/lib/posts/post-filter-bar"
