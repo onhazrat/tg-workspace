@@ -26,6 +26,8 @@ import {
   mediaBadgeSuffix,
   nextTranslateStep,
   postTime,
+  replyParentRef,
+  replyParentUrl,
 } from "./post-card-model"
 
 afterEach(cleanup)
@@ -69,6 +71,32 @@ describe("post-card-model", () => {
     expect(s(false, false, false)).toBe("fetch")
     expect(s(false, true, false)).toBe("show")
     expect(s(false, true, true)).toBe("hide")
+  })
+
+  test("a reply's parent is looked up in the Channel Telegram named, else its own; a private parent not at all", () => {
+    const reply = { ...post, replyToPostId: 7 }
+    expect(
+      replyParentRef({
+        ...reply,
+        replyTo: { channel: "other", url: "https://t.me/other/7" },
+      }),
+    ).toEqual({ channelName: "other", postId: 7 })
+    expect(replyParentRef(reply)).toEqual({ channelName: "durov", postId: 7 })
+    expect(
+      replyParentRef({ ...reply, replyTo: { text: "the question" } }),
+    ).toEqual({ channelName: "durov", postId: 7 })
+    expect(
+      replyParentRef({ ...reply, replyTo: { url: "https://t.me/c/123/7" } }),
+    ).toBeNull()
+    expect(replyParentRef(post)).toBeNull()
+  })
+
+  test("a reply's parent opens at Telegram's link, else in the reply's Channel", () => {
+    const reply = { ...post, replyToPostId: 7 }
+    expect(
+      replyParentUrl({ ...reply, replyTo: { url: "https://t.me/c/123/7" } }, 7),
+    ).toBe("https://t.me/c/123/7")
+    expect(replyParentUrl(reply, 7)).toContain("/durov/7")
   })
 
   test("quota and 429 failures belong to TranslationContext", () => {

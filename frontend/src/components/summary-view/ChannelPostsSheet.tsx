@@ -15,6 +15,7 @@ import { useIsMobile } from "@/hooks/useMobile"
 import { citationKey, findCitation } from "@/lib/citations/find-citation"
 import { lookupPosts } from "@/lib/posts/store"
 import type { CoverageRow } from "@/lib/summaries/coverage"
+import type { PreviewWorkspace } from "../PostPreview"
 import {
   Sheet,
   SheetContent,
@@ -22,7 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "../ui/sheet"
-import { type CitationWorkspace, CitedPostCard } from "./SummaryCitation"
+import { CitedPostCard } from "./SummaryCitation"
 
 const PAGE = 20
 
@@ -37,7 +38,7 @@ export function ChannelPostsSheet({
   row: CoverageRow | undefined
   open: boolean
   onClose: () => void
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
   /** The wall, whose presses are not "outside" the sheet. */
   wall: React.RefObject<HTMLElement | null>
 }) {
@@ -108,7 +109,7 @@ function AlsoCovered({
   workspace,
 }: {
   row: CoverageRow
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
 }) {
   const rest = useMemo(() => {
     const cited = new Set(

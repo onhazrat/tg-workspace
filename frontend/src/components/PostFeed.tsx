@@ -45,6 +45,7 @@ import {
 } from "./post-card/ChannelSpotlight"
 import { FeedKeyboard } from "./post-card/FeedKeyboard"
 import { FeedPagingContext } from "./post-card/PhotoViewer"
+import { ReplyPreviewProvider } from "./post-card/ReplyParent"
 
 interface PostFeedProps {
   postSearch: string
@@ -292,16 +293,18 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             />
           )}
 
-          <PostFeedResults
-            isInitialLoading={isInitialLoading}
-            posts={posts}
-            showLoadMore={hasMore || isLoadingMore}
-            loadMoreRef={loadMoreRef}
-            postSearch={postSearch}
-            compact={compact}
-            keyboard={keyboard}
-            onToggleSelected={onToggleSelected}
-          />
+          <ReplyPreviewProvider>
+            <PostFeedResults
+              isInitialLoading={isInitialLoading}
+              posts={posts}
+              showLoadMore={hasMore || isLoadingMore}
+              loadMoreRef={loadMoreRef}
+              postSearch={postSearch}
+              compact={compact}
+              keyboard={keyboard}
+              onToggleSelected={onToggleSelected}
+            />
+          </ReplyPreviewProvider>
           <FeedKeyboard on={keyboard} />
         </motion.div>
       </FeedPagingContext.Provider>

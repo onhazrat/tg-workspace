@@ -22,6 +22,7 @@ import { useSummaryDetailQuery } from "../hooks/useSummaries"
 import { reportDirection } from "../lib/report-direction"
 import type { Summary } from "../types"
 import { PasteSummaryModal } from "./PasteSummaryModal"
+import { usePreviewWorkspace } from "./PostPreview"
 import {
   AttemptsFold,
   FailedSummaryPanel,
@@ -32,7 +33,6 @@ import { SummaryBody } from "./summary-view/SummaryBody"
 import {
   CitationRendererProvider,
   summaryMarkdownComponents,
-  useCitationWorkspace,
 } from "./summary-view/SummaryMarkdown"
 import { SummaryPublishPanel } from "./summary-view/SummaryPublishPanel"
 import { readerZone, summaryViewState } from "./summary-view/summary-view-model"
@@ -105,7 +105,7 @@ export const SummaryView: React.FC = () => {
   )
   const applyScope = useApplyArtifactScope()
 
-  const workspace = useCitationWorkspace()
+  const workspace = usePreviewWorkspace()
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [isEditingNote, setIsEditingNote] = useState(false)
   // Read from the loaded record, so a saved report renders in its own language
