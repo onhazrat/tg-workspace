@@ -1,6 +1,6 @@
 // Specs import `test` from here so scripts/crap/run.sh --with-e2e can count
-// what Playwright exercises. With E2E_COVERAGE unset, `test` is Playwright's
-// own, untouched. Set, every test records Chromium's V8 coverage of the app's
+// what Playwright exercises, and so every test drops its route handlers when
+// it ends. With E2E_COVERAGE set, every test also records Chromium's V8 coverage of the app's
 // modules and writes it as lcov line hits on frontend/src, mapped back through
 // Vite's inline source maps.
 import { mkdirSync, writeFileSync } from "node:fs"
@@ -21,11 +21,24 @@ function loadConverters() {
   return { v8toIstanbul, TraceMap, eachMapping }
 }
 
+/**
+ * A mocked route still fetching when its test ends rejects with "Test ended",
+ * outside any test, and `--fail-on-flaky-tests` fails the shard over it with
+ * every test green (PR #179, shard 2, a Discover `artifacts` handler). Unrouting
+ * with `ignoreErrors` is Playwright's answer: nothing reads that response.
+ */
+const unrouted = base.extend({
+  page: async ({ page }, use) => {
+    await use(page)
+    await page.unrouteAll({ behavior: "ignoreErrors" })
+  },
+})
+
 const OUT_DIR = new URL("../coverage-e2e/", import.meta.url)
 const INLINE_MAP = /sourceMappingURL=data:application\/json;base64,(\S+)\s*$/
 
 export const test = process.env.E2E_COVERAGE
-  ? base.extend({
+  ? unrouted.extend({
       page: [
         async ({ page }, use, testInfo) => {
           await page.coverage.startJSCoverage({ resetOnNavigation: false })
@@ -92,4 +105,4 @@ export const test = process.env.E2E_COVERAGE
         { scope: "test", timeout: 120_000 },
       ],
     })
-  : base
+  : unrouted
