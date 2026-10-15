@@ -9,6 +9,7 @@
 import {
   ChevronDown,
   Columns3,
+  Languages,
   Link2,
   ListFilter,
   RotateCcw,
@@ -502,6 +503,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
   const controls = (
     <>
       <FacetMenu
+        icon={<Languages size={12} />}
         label="Language"
         noun="language"
         testId="directory-language"
