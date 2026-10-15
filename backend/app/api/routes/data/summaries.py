@@ -211,7 +211,6 @@ def record_summary_failure(
         key_id=None,
         started_at=now_ms(),
     )
-    touch_sync(session, "summaries")
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 
 
@@ -247,7 +246,6 @@ def stop_summary_attempt(
     """Stop a running attempt; the text it produced is kept on the attempt."""
     attempt = stop_attempt(session, summary_id, attempt_id, user_id=current_user.id)
     announce_stop(attempt.id)
-    touch_sync(session, "summaries")
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 
 
@@ -276,7 +274,6 @@ def keep_summary_partial(
 ) -> SummaryAttemptResponse:
     """Finish the summary with this attempt's partial response; it becomes incomplete."""
     attempt = keep_partial(session, summary_id, attempt_id, user_id=current_user.id)
-    touch_sync(session, "summaries")
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 
 
@@ -291,7 +288,6 @@ def dismiss_summary_partial(
     attempt = set_partial_dismissed(
         session, summary_id, attempt_id, user_id=current_user.id, dismissed=True
     )
-    touch_sync(session, "summaries")
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 
 
@@ -306,7 +302,6 @@ def restore_summary_partial(
     attempt = set_partial_dismissed(
         session, summary_id, attempt_id, user_id=current_user.id, dismissed=False
     )
-    touch_sync(session, "summaries")
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 
 

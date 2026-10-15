@@ -35,6 +35,7 @@ from app.services.summaries import (
     note_write,
     own_summary,
 )
+from app.services.sync_meta import touch_sync
 
 
 def now_ms() -> int:
@@ -131,6 +132,7 @@ def record_attempt(
     session.add(attempt)
     if outcome == "failed":
         mark_summary_failed(session, summary)
+    touch_sync(session, "summaries", commit=False)
     session.commit()
     session.refresh(attempt)
     return attempt
@@ -229,6 +231,7 @@ def withdraw_attempt(session: Session, summary: Summary, attempt_id: str) -> Non
     if attempt is not None:
         session.delete(attempt)
     note_write(session, summary)
+    touch_sync(session, "summaries", commit=False)
     session.commit()
 
 
@@ -274,6 +277,7 @@ def end_attempt(
         if len(text) > len(attempt.partial_text or ""):
             attempt.partial_text = text
             session.add(attempt)
+            touch_sync(session, "summaries", commit=False)
             session.commit()
         return attempt
     if attempt.outcome != "running":
@@ -297,6 +301,7 @@ def end_attempt(
             )
         else:
             mark_summary_failed(session, summary)
+    touch_sync(session, "summaries", commit=False)
     session.commit()
     session.refresh(attempt)
     return attempt
@@ -320,6 +325,7 @@ def stop_attempt(
     attempt.ended_at = now_ms()
     session.add(attempt)
     mark_summary_failed(session, summary)
+    touch_sync(session, "summaries", commit=False)
     session.commit()
     session.refresh(attempt)
     return attempt
@@ -359,6 +365,8 @@ def fail_interrupted(session: Session, *, still_queued: set[str]) -> int:
         if summary is not None:
             mark_summary_failed(session, summary)
         failed += 1
+    if failed:
+        touch_sync(session, "summaries", commit=False)
     session.commit()
     return failed
 
@@ -439,6 +447,7 @@ def keep_partial(
         cited_posts=cited_posts(session, text, user_id=summary.user_id),
         incomplete=True,
     )
+    touch_sync(session, "summaries", commit=False)
     session.commit()
     session.refresh(kept)
     return kept
@@ -457,6 +466,7 @@ def set_partial_dismissed(
     attempt.partial_dismissed_at = now_ms() if dismissed else None
     session.add(attempt)
     note_write(session, summary)
+    touch_sync(session, "summaries", commit=False)
     session.commit()
     session.refresh(attempt)
     return attempt

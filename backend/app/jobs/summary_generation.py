@@ -265,9 +265,9 @@ def start_attempt(
             "actedBy": _acted_by(session),
         },
     )
+    touch_sync(session, "summaries", commit=False)
     session.commit()
     session.refresh(attempt)
-    touch_sync(session, "summaries")
     # Best-effort, like every ring: a lost one waits for the sweep.
     try:
         pg_notify.publish(GENERATION_WAKE_CHANNEL, {"attemptId": attempt.id})
@@ -305,8 +305,8 @@ def _log_refusal(session: Session, summary: Summary, *, model: str, error: str) 
         },
         summary.user_id,
     )
+    touch_sync(session, "llm_logs", commit=False)
     session.commit()
-    touch_sync(session, "llm_logs")
 
 
 def announce_stop(attempt_id: str) -> None:
@@ -440,8 +440,8 @@ def _log(run: _Run, *, text: str, error: str | None, started: float) -> None:
             },
             run.owner_id,
         )
+        touch_sync(session, "llm_logs", commit=False)
         session.commit()
-        touch_sync(session, "llm_logs")
 
 
 def _finish(
@@ -467,7 +467,6 @@ def _finish(
             error=error,
             cited_posts=cited,
         )
-        touch_sync(session, "summaries")
 
 
 def _publish(payload: dict[str, Any]) -> None:
@@ -605,8 +604,8 @@ def _queue_retry(run: _Run, message: dict[str, Any], delay: float) -> bool:
             {**message, "attemptId": retry.id},
             delay_seconds=seconds,
         )
+        touch_sync(session, "summaries", commit=False)
         session.commit()
-        touch_sync(session, "summaries")
         return True
 
 
@@ -649,7 +648,6 @@ def cancel_attempt(
     ):
         raise HTTPException(status_code=409, detail=ATTEMPT_NOT_RUNNING_DETAIL)
     withdraw_attempt(session, summary, attempt.id)
-    touch_sync(session, "summaries")
 
 
 def _reject_key(credential_id: str) -> None:

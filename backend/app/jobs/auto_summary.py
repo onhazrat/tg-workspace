@@ -19,6 +19,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
+from app.core import acting_owner
 from app.core.db import engine
 from app.jobs.summary_generation import start_attempt
 from app.models_tg import Post, Summary, utc_now
@@ -375,9 +376,11 @@ async def after_scheduled_attempt(
         if kind == "quota" and extra.get("autoRegenerate"):
             summary.extra = {**extra, "autoRegenerate": False}
             summary.updated_at = utc_now()
+            # Unattended: clears any `acted_by_*` an Owner's earlier write left.
+            acting_owner.stamp(session, summary)
             session.add(summary)
+            touch_sync(session, "summaries", commit=False)
             session.commit()
-            touch_sync(session, "summaries")
 
 
 async def _auto_publish(
