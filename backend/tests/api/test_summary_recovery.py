@@ -166,20 +166,21 @@ def test_a_stopped_retry_of_an_incomplete_summary_keeps_its_report(
     assert summary.get("status") is None
 
 
-def test_a_finished_summary_is_not_retried_in_place(
+def test_a_failed_retry_of_a_finished_summary_keeps_its_report(
     client: TestClient,
     headers: dict[str, str],
     provider: _FakeProvider,
 ) -> None:
-    """A full report is regenerated as a successor; an Attempt on it would
-    overwrite the text a reader already has."""
     summary_id = _open(client, headers)
     _cut(client, headers, summary_id)  # succeeds
+    provider.error = _ProviderError(400, "bad request")
 
-    r = _start(client, headers, summary_id)
+    assert _start(client, headers, summary_id).status_code == 200
+    _drain()
 
-    assert r.status_code == 409, r.text
-    assert len(_attempts(client, headers, summary_id)) == 1
+    summary = _summary(client, headers, summary_id)
+    assert summary["text"] == "The report."
+    assert summary.get("status") is None
 
 
 def test_keep_refuses_an_attempt_with_no_partial_response(

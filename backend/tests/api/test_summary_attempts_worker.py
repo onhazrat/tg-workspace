@@ -30,6 +30,7 @@ from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
 from app.jobs import summary_generation
+from app.models import User
 from app.models_tg import Post
 from app.services import prompt_assembly
 from app.services.ai_keys import ResolvedKey
@@ -244,6 +245,32 @@ def test_a_failure_is_classified_by_what_raised_it(
     assert attempts[0]["kind"] == kind
     # Only a transient failure queues the one automatic retry.
     assert (len(attempts) == 2) is (kind == "transient")
+
+
+def test_a_view_as_attempt_is_not_retried_automatically(
+    client: TestClient,
+    headers: dict[str, str],
+    provider: _FakeProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retry would spend the target's Key after the Owner's Spend session may
+    have ended, with nobody's say-so; the Owner can retry by hand inside one."""
+    monkeypatch.setattr(summary_generation, "RETRY_DELAY_SECONDS", 0)
+    summary_id = _open(client, headers)
+    provider.error = TimeoutError()
+    _start(client, headers, summary_id)
+    with Session(engine) as session:
+        owner = session.exec(
+            select(User).where(User.email == settings.FIRST_SUPERUSER)
+        ).one()
+    message = summary_generation.claim_next_attempt()
+    assert message is not None
+    message["actedBy"] = {"userId": str(owner.id), "email": owner.email}
+
+    asyncio.run(summary_generation.run_attempt(message))
+
+    [attempt] = _attempts(client, headers, summary_id)
+    assert attempt["kind"] == "transient"
 
 
 def test_a_stream_cut_part_way_keeps_what_it_had(
@@ -531,7 +558,6 @@ def test_the_watch_route_holds_no_transaction_while_it_streams(
     over before the stream starts, so the handler ends it.
     """
     from app.api.routes.data.summaries import summary_attempt_events
-    from app.models import User
 
     summary_id = _open(client, headers)
     attempt_id = _start(client, headers, summary_id).json()["id"]
