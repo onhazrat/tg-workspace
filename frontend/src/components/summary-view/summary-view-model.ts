@@ -4,6 +4,15 @@
  */
 import { isFailedSummary, isPendingSummary } from "@/constants"
 import type { Summary, SummaryListItem } from "@/types"
+import type { ReaderZone } from "./SummaryHeader"
+
+/** The Account's zone, as the published metadata uses; the browser's until
+ * the Account has one. */
+export function readerZone(timeZone: string | undefined): ReaderZone {
+  return {
+    timeZone: timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }
+}
 
 /** Which Summary is open, what its body is, and whether it is being made. */
 export function summaryViewState(input: {
@@ -25,6 +34,17 @@ export function summaryViewState(input: {
    */
   const currentSummary =
     input.history.find((s) => s.id === input.currentSummaryId) ?? input.detail
+  // A pending item its own Generate is still filling is neither: a paste
+  // accepted now would be overwritten when the run finishes.
+  const isPending = currentSummary
+    ? isPendingSummary(currentSummary) &&
+      !input.regenerating.has(currentSummary.id)
+    : false
+  // Its latest Attempt broke (SFR-01): the failure page, not the paste panel.
+  const isFailed = currentSummary
+    ? isFailedSummary(currentSummary) &&
+      !input.regenerating.has(currentSummary.id)
+    : false
   return {
     currentSummary,
     /*
@@ -38,18 +58,10 @@ export function summaryViewState(input: {
      * the URL alone.
      */
     summaryBody: input.streamed ?? input.detail?.text ?? null,
-    // A Generate files its item as `pending` before asking the model; while
-    // that run is live the item is generating, and offering a paste box
-    // would invite a response the run then overwrites.
-    isPending: currentSummary
-      ? isPendingSummary(currentSummary) &&
-        !input.regenerating.has(currentSummary.id)
-      : false,
-    // Its latest Attempt broke (SFR-01): the failure page, not the paste panel.
-    isFailed: currentSummary
-      ? isFailedSummary(currentSummary) &&
-        !input.regenerating.has(currentSummary.id)
-      : false,
+    isPending,
+    isFailed,
+    /** The Summary a pasted response would finish, when one can take it. */
+    pasteTarget: isPending || isFailed ? currentSummary : undefined,
     running:
       input.summarizing ||
       (currentSummary ? input.regenerating.has(currentSummary.id) : false),

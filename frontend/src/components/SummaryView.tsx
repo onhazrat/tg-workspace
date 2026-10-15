@@ -25,9 +25,8 @@ import { PasteSummaryModal } from "./PasteSummaryModal"
 import {
   AttemptsFold,
   FailedSummaryPanel,
-  RunningAttemptCard,
 } from "./summary-view/FailedSummaryPanel"
-import { IncompleteMark } from "./summary-view/IncompleteMark"
+import { IncompleteRetry } from "./summary-view/IncompleteMark"
 import { RetryRunWith, useRetryChoice } from "./summary-view/RetryRunWith"
 import { SummaryBody } from "./summary-view/SummaryBody"
 import {
@@ -36,7 +35,7 @@ import {
   useCitationWorkspace,
 } from "./summary-view/SummaryMarkdown"
 import { SummaryPublishPanel } from "./summary-view/SummaryPublishPanel"
-import { summaryViewState } from "./summary-view/summary-view-model"
+import { readerZone, summaryViewState } from "./summary-view/summary-view-model"
 import { generatesOnTab } from "./workspace-shell/workspace-shell-model"
 
 export const SummaryView: React.FC = () => {
@@ -58,12 +57,7 @@ export const SummaryView: React.FC = () => {
     summaryId: currentSummaryId,
   })
   const settings = useSettings()
-  // The Account's zone, as the published metadata uses; the browser's only
-  // until the Account has one.
-  const zone = {
-    timeZone:
-      settings.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-  }
+  const zone = readerZone(settings.timeZone)
 
   // The prompt panel below needs the full promptText, which the list
   // projection omits (it was ~94% of that payload).
@@ -84,15 +78,21 @@ export const SummaryView: React.FC = () => {
     [refs, resolve, citedLoading, currentSummaryId, currentSummaryDetail],
   )
 
-  const { currentSummary, summaryBody, isPending, isFailed, running } =
-    summaryViewState({
-      history: summariesHistory,
-      currentSummaryId,
-      detail: currentSummaryDetail,
-      streamed: summary,
-      regenerating: regeneratingSummaries,
-      summarizing,
-    })
+  const {
+    currentSummary,
+    summaryBody,
+    isPending,
+    isFailed,
+    pasteTarget,
+    running,
+  } = summaryViewState({
+    history: summariesHistory,
+    currentSummaryId,
+    detail: currentSummaryDetail,
+    streamed: summary,
+    regenerating: regeneratingSummaries,
+    summarizing,
+  })
   const { attempts, runningText, retry, stop, cancel, keep, dismiss, restore } =
     useSummaryAttempts(currentSummaryId, settings.aiTemperature)
   const runningAttempt = attempts.find((a) => a.outcome === "running")
@@ -187,23 +187,16 @@ export const SummaryView: React.FC = () => {
             <AttemptsFold attempts={attempts} keyLabel={keyLabel} />
           }
           incompleteMark={
-            currentSummary && (
-              <IncompleteMark
-                onRetry={() => void retry(currentSummary.id)}
-                running={
-                  runningAttempt && (
-                    <RunningAttemptCard
-                      attempt={runningAttempt}
-                      text={runningText}
-                      keyLabel={keyLabel}
-                      onStop={() =>
-                        void stop(currentSummary.id, runningAttempt.id)
-                      }
-                    />
-                  )
-                }
-              />
-            )
+            // Rendered by `SummaryBody` only for an open Incomplete Summary.
+            <IncompleteRetry
+              attempt={runningAttempt}
+              text={runningText}
+              keyLabel={keyLabel}
+              onRetry={() => currentSummaryId && void retry(currentSummaryId)}
+              onStop={(attemptId) =>
+                currentSummaryId && void stop(currentSummaryId, attemptId)
+              }
+            />
           }
           summarizing={summarizing}
           running={running}
@@ -253,12 +246,12 @@ export const SummaryView: React.FC = () => {
         />
       </div>
 
-      {currentSummary && (isPending || isFailed) && (
+      {pasteTarget && (
         <PasteSummaryModal
           isOpen={pasteModalOpen}
           onClose={() => setPasteModalOpen(false)}
           onSave={(text, modelName) =>
-            completePendingSummary(currentSummary.id, text, modelName)
+            completePendingSummary(pasteTarget.id, text, modelName)
           }
         />
       )}

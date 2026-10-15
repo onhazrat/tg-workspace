@@ -10,6 +10,8 @@ import {
   autoPublishTarget,
   channelsNeedingSync,
   extractCitedPosts,
+  noPostsText,
+  openedSuccessor,
   parseCitationRefs,
   successorSummary,
 } from "./summary-model"
@@ -106,6 +108,22 @@ describe("regeneration", () => {
     expect(
       successorSummary({ ...previous, sendMetadata: true }, run).sendMetadata,
     ).toBe(true)
+  })
+
+  it("opens a successor Failed until its Attempt ends, unless no Posts finished it", () => {
+    const run = {
+      id: "s2",
+      postCount: 4,
+      range: { start: 0, end: 60_000 },
+      selectedAiKeyId: null,
+      now: 5,
+    }
+    const working = openedSuccessor(summary, run)
+    expect(working).toMatchObject({ id: "s2", text: "", status: "failed" })
+    expect(working.citedPosts).toEqual({})
+    const empty = openedSuccessor(summary, { ...run, postCount: 0 })
+    expect(empty.status).toBeUndefined()
+    expect(empty.text).toBe(noPostsText(0, 60_000))
   })
 
   it("auto-publishes only when enabled, non-empty, and both ends still exist", () => {

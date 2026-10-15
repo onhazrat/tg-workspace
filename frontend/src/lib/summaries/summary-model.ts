@@ -100,6 +100,33 @@ export function successorSummary(
   }
 }
 
+/**
+ * A regeneration's successor as it is first saved: Failed until its Attempt
+ * finishes it, as Generate opens its Summary, unless the window held no Posts
+ * and the "no new posts" text already finished it.
+ */
+export function openedSuccessor(
+  previous: Summary,
+  run: {
+    id: string
+    postCount: number
+    range: { start: number; end: number }
+    selectedAiKeyId: string | null
+    now: number
+  },
+): Summary {
+  const empty = run.postCount === 0
+  const successor = successorSummary(previous, {
+    id: run.id,
+    text: empty ? noPostsText(run.range.start, run.range.end) : "",
+    postCount: run.postCount,
+    citedPosts: {},
+    selectedAiKeyId: run.selectedAiKeyId,
+    now: run.now,
+  })
+  return empty ? successor : { ...successor, status: "failed" }
+}
+
 /** Where a regenerated summary auto-publishes, or null when it should not. */
 export function autoPublishTarget(
   previous: Summary,

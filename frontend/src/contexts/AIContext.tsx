@@ -38,8 +38,7 @@ import {
 import {
   autoPublishTarget,
   channelsNeedingSync,
-  noPostsText,
-  successorSummary,
+  openedSuccessor,
 } from "@/lib/summaries/summary-model"
 import {
   attemptOutcome,
@@ -483,18 +482,14 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     )
     // **The Key that pays is the live selection** — not the one the old
     // Summary stored (BYOK-03), so the successor records the Key it ran on.
-    const successor = successorSummary(s, {
+    const successor = openedSuccessor(s, {
       id: newId,
-      text: postCount === 0 ? noPostsText(range.start, range.end) : "",
       postCount,
-      citedPosts: {},
+      range,
       selectedAiKeyId: selectedAiKeyId(),
       now: Date.now(),
     })
-    // Failed until an Attempt finishes it, as Generate opens its Summary.
-    await saveSummary(
-      postCount === 0 ? successor : { ...successor, status: "failed" },
-    )
+    await saveSummary(successor)
     // The chain moves to the successor, whatever its Attempt does.
     await saveSummary({ ...s, autoRegenerate: false })
     await loadHistory()

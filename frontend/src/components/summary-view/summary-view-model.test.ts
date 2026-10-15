@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test"
 
 import type { Summary } from "@/types"
-import { summaryViewState } from "./summary-view-model"
+import { readerZone, summaryViewState } from "./summary-view-model"
 
 const saved = (over: Partial<Summary>): Summary => ({
   id: "s1",
@@ -84,5 +84,26 @@ describe("summaryViewState", () => {
     expect(live.isPending).toBe(false)
     expect(live.running).toBe(true)
     expect(state({ detail }).isPending).toBe(true)
+  })
+
+  test("a paste goes into a pending or Failed Summary, and nothing else", () => {
+    const pending = saved({ status: "pending" })
+    const failed = saved({ status: "failed", text: "" })
+    expect(state({ detail: pending }).pasteTarget).toBe(pending)
+    expect(state({ detail: failed }).pasteTarget).toBe(failed)
+    expect(state({ detail: saved({}) }).pasteTarget).toBeUndefined()
+    expect(state({ currentSummaryId: null }).pasteTarget).toBeUndefined()
+  })
+})
+
+describe("readerZone", () => {
+  test("the Account's zone, else the browser's", () => {
+    expect(readerZone("Asia/Tehran")).toEqual({ timeZone: "Asia/Tehran" })
+    expect(readerZone(undefined).timeZone).toBe(
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    )
+    expect(readerZone("").timeZone).toBe(
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    )
   })
 })

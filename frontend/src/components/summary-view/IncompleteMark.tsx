@@ -1,6 +1,39 @@
 import { RotateCcw, Scissors } from "lucide-react"
 import type { ReactNode } from "react"
+import type { SummaryAttemptResponse } from "@/client"
 import { TgButton } from "@/components/ui/tg-button"
+import { RunningAttemptCard } from "./FailedSummaryPanel"
+
+/** The mark with its retry: `attempt` is the one running, if any. */
+export function IncompleteRetry({
+  attempt,
+  text,
+  keyLabel,
+  onRetry,
+  onStop,
+}: {
+  attempt: SummaryAttemptResponse | undefined
+  text: string
+  keyLabel: (keyId: string | null) => string | undefined
+  onRetry: () => void
+  onStop: (attemptId: string) => void
+}) {
+  return (
+    <IncompleteMark
+      onRetry={onRetry}
+      running={
+        attempt && (
+          <RunningAttemptCard
+            attempt={attempt}
+            text={text}
+            keyLabel={keyLabel}
+            onStop={() => onStop(attempt.id)}
+          />
+        )
+      }
+    />
+  )
+}
 
 /**
  * The end of an Incomplete Summary's text (SFR-03): it is a kept Partial
