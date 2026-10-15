@@ -319,6 +319,9 @@ def summary_attempt_events(
 ) -> StreamingResponse:
     """Server-sent events: the attempt's text as it arrives, then how it ended."""
     get_attempt(session, summary_id, attempt_id, user_id=current_user.id)
+    # The Session outlives this handler for the whole stream; end its
+    # transaction now so it does not sit idle in one.
+    session.close()
     return StreamingResponse(watch_attempt(attempt_id), media_type="text/event-stream")
 
 

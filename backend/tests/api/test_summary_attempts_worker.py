@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core import pg_notify
 from app.core.config import settings
@@ -477,3 +477,28 @@ def test_the_watch_route_replays_a_finished_attempt(
     assert frames[-1] == "[DONE]"
     assert json.loads(frames[0]) == {"text": "The report."}
     assert json.loads(frames[-2]) == {"outcome": "succeeded", "error": None}
+
+
+def test_the_watch_route_holds_no_transaction_while_it_streams(
+    client: TestClient, headers: dict[str, str], provider: _FakeProvider
+) -> None:
+    """The SSE body outlives the handler, and so does the request's Session.
+
+    A transaction left open there sits `idle in transaction` for as long as a
+    page watches, pinning the xmin horizon (CLAUDE.md). The ownership read is
+    over before the stream starts, so the handler ends it.
+    """
+    from app.api.routes.data.summaries import summary_attempt_events
+    from app.models import User
+
+    summary_id = _open(client, headers)
+    attempt_id = _start(client, headers, summary_id).json()["id"]
+    _drain()
+    with Session(engine) as session:
+        user = session.exec(
+            select(User).where(User.email == settings.FIRST_SUPERUSER)
+        ).one()
+        response = summary_attempt_events(summary_id, attempt_id, session, user)
+
+        assert not session.in_transaction()
+        asyncio.run(response.body_iterator.aclose())  # type: ignore[attr-defined]
