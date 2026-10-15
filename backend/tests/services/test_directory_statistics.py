@@ -176,11 +176,11 @@ class TestLanguage:
         assert compute_sample_statistics(persian).language == "fa"
         assert compute_sample_statistics(arabic).language == "ar"
 
-    def test_placeholders_yield_no_language_rather_than_english(self) -> None:
+    def test_placeholders_yield_no_words_rather_than_english(self) -> None:
         """A caption-less photo is stored as `[photo]`; reading the stored text
         would label a Persian photo Channel by its placeholders."""
         rows = [photo(i) for i in range(5)]
-        assert compute_sample_statistics(rows).language is None
+        assert compute_sample_statistics(rows).language == "zxx"
 
     def test_a_post_with_no_media_block_is_read_as_its_own_words(self) -> None:
         rows = [sample(i, media=None, text=PERSIAN) for i in range(5)]

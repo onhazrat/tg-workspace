@@ -313,6 +313,8 @@ export function postVocabulary(
 export type PostFacetValue = {
   id: string
   label: string
+  /** Dimmed beside the label: a Language's code (ADR-021). */
+  hint?: string
   count?: number
   selected?: number
 }
@@ -352,6 +354,7 @@ export function PostFacetMenu({
     return {
       id: v.id,
       label: v.label,
+      hint: v.hint,
       selected,
       total,
       tick: tickOf(selected, total),

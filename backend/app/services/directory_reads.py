@@ -90,6 +90,7 @@ from app.services.channel_directory_samples import samples_by_handle
 from app.services.channel_tags import tag_key
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
+from app.services.language import NOT_READ
 from app.services.post_filters import (
     TreeAtom,
     TreeGroup,
@@ -714,6 +715,8 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
             _shared(cond).with_only_columns(candidate).having(func.count() >= cond.min)
         )
     if isinstance(cond, LanguageCond):
+        if cond.value == NOT_READ:
+            return col(DirectoryEntry.language).is_(None)
         return col(DirectoryEntry.language) == cond.value
     if isinstance(cond, TagCond):
         tagged = view.tags.get(tag_key(cond.name), frozenset())

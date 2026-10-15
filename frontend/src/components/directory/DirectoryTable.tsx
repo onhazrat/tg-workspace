@@ -21,6 +21,7 @@ import {
 import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
 import { formatCount } from "@/lib/format-count"
+import { languageLabel, languageValue } from "@/lib/language-name"
 import {
   headerCheckboxState,
   toggleSelectAllUnfollowed,
@@ -239,7 +240,7 @@ const mine = (r: Row) =>
  * Keyed by every column, so one the server adds is a compile error here.
  */
 const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
-  language: (r) => r.language ?? "",
+  language: (r) => languageLabel(languageValue(r.language)),
   subscribers: (r) => count(r.subscribers),
   reach: (r) => (
     <>

@@ -47,6 +47,7 @@ from sqlalchemy.orm import aliased
 from sqlmodel import col, select
 
 from app.models_tg import Post
+from app.services.language import NOT_READ
 from app.services.post_media_parser import LEGACY_MEDIA_PLACEHOLDER
 from app.services.reach import MS_PER_HOUR, CurvePoints, ReachSettings
 from app.services.tenancy import scoped_select, unscoped_select
@@ -536,6 +537,8 @@ def _atom_clause(
     if isinstance(cond, MediaCond):
         return media_kind_clause(cond.value)
     if isinstance(cond, LanguageCond):
+        if cond.value == NOT_READ:
+            return col(Post.language).is_(None)
         return col(Post.language) == cond.value
     if isinstance(cond, ChannelCond):
         # The read is already narrowed to the caller's Follows, so a Channel

@@ -500,7 +500,8 @@ def test_facets_count_every_value_in_the_window_filters_aside(
         "total": 5,
         "types": {"forwarded": 2, "original": 3, "unfollowed_forwarded": 1},
         "media": {"photo": 2, "video": 2, "text_only": 1},
-        "languages": {"fa": 2, "en": 2},
+        # The unread Post counts under `null`, the value that funnels it.
+        "languages": {"fa": 2, "en": 2, "null": 1},
     }
     assert facets(other) == {
         "total": 3,

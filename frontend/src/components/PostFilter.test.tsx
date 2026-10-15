@@ -176,7 +176,7 @@ describe("the dropdowns", () => {
       "2 media",
     )
     expect(screen.getByTestId("post-filter-language").textContent).toContain(
-      "No text",
+      "No words",
     )
     expect(screen.getByTestId("post-sort").textContent).toContain("Post date")
     expect(screen.getByLabelText("Sort ascending")).toBeTruthy()
@@ -199,7 +199,7 @@ describe("the dropdowns", () => {
   test("a second funnel in one dropdown joins with OR, and a funnel comes off again", () => {
     const { calls } = mount({ postFilter: funnels(["language", "fa"]) })
     fireEvent.click(screen.getByTestId("post-filter-language"))
-    expect(screen.getByText("No text")).toBeTruthy()
+    expect(screen.getByText("No words")).toBeTruthy()
     expect(
       screen.getByTestId("post-filter-language-count-fa").textContent,
     ).toBe("30/120")
@@ -662,7 +662,7 @@ describe("the filter row", () => {
     fireEvent.click(screen.getByLabelText("Negate Persian"))
     const chip = screen.getByTestId("post-filter-chip-language-fa")
     fireEvent.click(within(chip).getByText("Persian"))
-    fireEvent.click(screen.getByText("No text"))
+    fireEvent.click(screen.getByText("No words"))
     expect(calls).toEqual([
       ["filter", "not lang:fa"],
       ["filter", "lang:zxx"],

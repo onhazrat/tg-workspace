@@ -5,7 +5,7 @@
  * are `post-filter.ts` (PTR-03).
  */
 
-import { languageName } from "@/lib/language-name"
+import { sortLanguages } from "@/lib/language-name"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
@@ -156,13 +156,6 @@ export function capCard(
   return { title: "Newest", body: `The ${cap} most recent` }
 }
 
-/** `zxx` and `und` are codes the detector writes, not Languages to name. */
-export function languageLabel(code: string, locale?: string): string {
-  if (code === "zxx") return "No text"
-  if (code === "und") return "Undetermined"
-  return languageName(code, locale)
-}
-
 /**
  * What removing one footer chip clears. The keyword and the Post filter's
  * Conditions are the filter row's chips now (PTR-03).
@@ -239,21 +232,23 @@ export function clearChip(what: ChipClears, set: ChipSetters): void {
 }
 
 /**
- * The Language dropdown's list. With counts, the Languages present, most
- * frequent first, as the server ordered them. Without (a meaning search, or
- * counts not loaded), the followed Channels' Languages in code order,
- * uncounted. A funnelled Language is always listed, so it can be unfunnelled.
+ * The Language dropdown's list, in every Language menu's order. With counts,
+ * the values present; without (a meaning search, or counts not loaded), the
+ * followed Channels' values, uncounted. A funnelled Language is always listed,
+ * so it can be unfunnelled.
  */
 export function languageOptions(
   counted: { value: string; count: number }[] | undefined,
   channelLanguages: string[],
   ticked: string[],
 ): { code: string; count?: number }[] {
-  const options: { code: string; count?: number }[] = counted
-    ? counted.map((facet) => ({ code: facet.value, count: facet.count }))
-    : [...new Set(channelLanguages)].sort().map((code) => ({ code }))
-  for (const code of ticked)
-    if (!options.some((option) => option.code === code))
-      options.push(counted ? { code, count: 0 } : { code })
-  return options
+  const options: { value: string; count?: number }[] = counted
+    ? counted.map((facet) => ({ value: facet.value, count: facet.count }))
+    : [...new Set(channelLanguages)].map((value) => ({ value }))
+  for (const value of ticked)
+    if (!options.some((option) => option.value === value))
+      options.push(counted ? { value, count: 0 } : { value })
+  return sortLanguages(options).map(({ value, count }) =>
+    count === undefined ? { code: value } : { code: value, count },
+  )
 }

@@ -4,7 +4,11 @@ import {
 } from "@/lib/channels/channel-filter"
 import type { MetricInputs } from "@/lib/channels/channel-metrics"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
-import { languageName } from "@/lib/language-name"
+import {
+  languageLabel,
+  languageValue,
+  sortLanguages,
+} from "@/lib/language-name"
 import type { Channel } from "@/types"
 
 export type ChannelGridFilters = {
@@ -47,20 +51,21 @@ export function filterChannelsForGrid(
 export type ChannelLanguageOption = { code: string; name: string }
 
 /**
- * Each Language code across all channels once, for the Languages dropdown.
- * The option's value is the code, which is what `filterChannelsForGrid`
- * matches; the options are sorted by the name the reader sees.
+ * Each Language value across all channels once, for the Languages dropdown,
+ * `null` for a Channel not read yet. The option's value is what
+ * `filterChannelsForGrid` matches; the order is every Language menu's.
  */
 export function collectChannelLanguages(
   channels: Channel[],
   locale?: string,
 ): ChannelLanguageOption[] {
-  const codes = new Set<string>()
+  const counts = new Map<string, number>()
   for (const c of channels) {
-    if (c.language) codes.add(c.language)
+    const value = languageValue(c.language)
+    counts.set(value, (counts.get(value) ?? 0) + 1)
   }
-  return Array.from(codes, (code) => ({
-    code,
-    name: languageName(code, locale),
-  })).sort((a, b) => a.name.localeCompare(b.name, locale))
+  return sortLanguages(
+    Array.from(counts, ([value, count]) => ({ value, count })),
+    locale,
+  ).map(({ value }) => ({ code: value, name: languageLabel(value, locale) }))
 }

@@ -136,7 +136,7 @@ def test_a_language_set_keeps_posts_whose_own_language_is_ticked(
     operator: dict[str, str],
     other: tuple[uuid.UUID, dict[str, str]],
 ) -> None:
-    """Several Languages widen; a Post with no Language read never matches."""
+    """Several Languages widen; `null` is the Posts not read yet (ADR-021)."""
     other_id, other_headers = other
     _seed(
         client,
@@ -171,6 +171,12 @@ def test_a_language_set_keeps_posts_whose_own_language_is_ticked(
     ]
     # Unfiltered, the unread Post is there; no Language set ever claims it.
     assert ("pfb_a", 3) in _feed(client, operator, channelNames=ALL)
+    assert _feed(
+        client, operator, channelNames=ALL, filter=_any("language", "null", "zxx")
+    ) == [
+        ("pfb_b", 5),
+        ("pfb_a", 3),
+    ]
 
 
 def test_the_counts_honour_the_language_set(
@@ -345,7 +351,7 @@ def test_the_facets_count_each_value_in_the_window(
 ) -> None:
     """How many Posts in the window have each value, filters aside (PTR-03).
 
-    Languages present, most frequent first, the unread left out; all six media
+    Languages present, most frequent first, the unread as `null`; all six media
     kinds, in their own order. No filter reaches it: the request has none.
     """
     other_id, other_headers = other
@@ -368,6 +374,7 @@ def test_the_facets_count_each_value_in_the_window(
     assert facets["languages"] == [
         {"value": "fa", "count": 3, "selected": 3},
         {"value": "en", "count": 1, "selected": 1},
+        {"value": "null", "count": 1, "selected": 1},
     ]
     media = {row["value"]: row["count"] for row in facets["media"]}
     assert [row["value"] for row in facets["media"]] == [

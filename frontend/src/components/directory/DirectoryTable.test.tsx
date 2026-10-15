@@ -419,7 +419,7 @@ describe("as cards on a phone (DFP-02)", () => {
       "Subs 12.3K",
       "Reach 450",
       "Posts/wk 3.3",
-      "Lang fa",
+      "Lang Persian",
     ])
   })
 
@@ -433,7 +433,7 @@ describe("as cards on a phone (DFP-02)", () => {
       "Subs 12.3K",
       "Reach 450",
       "Posts/wk 3.3",
-      "Lang fa",
+      "Lang Persian",
       "Parents 4",
     ])
   })

@@ -42,7 +42,11 @@ import {
   type TagChoices,
   tagNames,
 } from "@/lib/directory/directory-tags"
-import { languageLabel } from "@/lib/posts/post-filter-bar"
+import {
+  languageLabel,
+  languageValue,
+  sortLanguages,
+} from "@/lib/language-name"
 import {
   HandlesEditor,
   MineEditor,
@@ -89,15 +93,20 @@ const measureEntries = (
       }),
   }))
 
-/** The Languages a count read named, as picker options; "no Language" has none. */
+/** The values a count read named, as picker options, in every menu's order. */
 const languageOptions = (
   counts: DirectoryLanguageCountResponse[],
 ): ConditionOption[] =>
-  counts.flatMap(({ language, count }) =>
-    language
-      ? [{ id: language, label: languageLabel(language), hint: String(count) }]
-      : [],
-  )
+  sortLanguages(
+    counts.map(({ language, count }) => ({
+      value: languageValue(language),
+      count,
+    })),
+  ).map(({ value }) => ({
+    id: value,
+    label: languageLabel(value),
+    hint: value,
+  }))
 
 export function directoryVocabulary(
   languageCounts: DirectoryLanguageCountResponse[],

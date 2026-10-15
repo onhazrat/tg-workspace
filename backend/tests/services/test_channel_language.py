@@ -14,7 +14,10 @@ The real bundled model reads the Posts, on the same clear-cut sentences as
 * break a tie on the newest Post overall → the tie test picks `ru`
 * break a tie on the oldest → the tie test picks `fa`
 * drop the 100-Post window → the old majority outvotes the new one
-* count `zxx`/`und` as codes → the photo Channel is `zxx`
+* count `zxx`/`und` as codes → the window test picks `zxx`
+* answer `None` with nothing to place → every fallback test
+* let `zxx` win the fallback → the meme Channel is `zxx`
+* read forwards alongside own Posts in the fallback → the own-before-forwards test
 * read every sampled Post as own → the forwarding Channel is `en`
 * drop the sample's depth limit → the bounded-depth test
 * follow the imported handles after writing the Posts → the import test
@@ -77,9 +80,25 @@ def test_forwards_count_only_when_there_are_no_own_posts() -> None:
     assert derive_language([("en", True), ("zxx", False)]) == "en"
 
 
-def test_nothing_readable_is_no_language() -> None:
+def test_nothing_read_yet_has_no_language() -> None:
     assert derive_language([]) is None
-    assert derive_language([("zxx", False), ("und", True), (None, False)]) is None
+    assert derive_language([(None, False), (None, True)]) is None
+
+
+def test_a_few_words_that_cannot_be_placed_beat_no_words() -> None:
+    """The meme Channel: 90 captionless photos and 10 two-word captions."""
+    posts = [("zxx", False)] * 90 + [("und", False)] * 10
+    assert derive_language([*posts, (None, False)]) == "und"
+
+
+def test_a_channel_of_photos_alone_has_no_words() -> None:
+    assert derive_language([("zxx", False), ("zxx", False), (None, False)]) == "zxx"
+
+
+def test_the_fallback_reads_own_posts_before_forwards() -> None:
+    """Own photos decide even when every forward is undetermined, as a code would."""
+    assert derive_language([("und", True), ("zxx", False)]) == "zxx"
+    assert derive_language([("und", True), ("zxx", True), (None, False)]) == "und"
 
 
 # -- through the write path -------------------------------------------------
@@ -145,12 +164,19 @@ def test_a_channel_that_only_forwards_takes_the_forwards_language() -> None:
         assert _write(session, items) == "ru"
 
 
-def test_a_channel_with_nothing_readable_has_no_language() -> None:
+def test_a_channel_with_nothing_to_place_is_undetermined() -> None:
     """A label left by the retired detectors does not survive the derivation."""
     with Session(engine) as session:
         _channel(session, language="Persian")
         items = [_item(1, "[photo]", media=PHOTO), _item(2, "Good morning")]
-        assert _write(session, items) is None
+        assert _write(session, items) == "und"
+
+
+def test_a_channel_of_photos_alone_has_no_words_through_the_write_path() -> None:
+    with Session(engine) as session:
+        _channel(session)
+        items = [_item(1, "[photo]", media=PHOTO), _item(2, "[photo]", media=PHOTO)]
+        assert _write(session, items) == "zxx"
 
 
 def test_a_channel_is_relabelled_when_it_changes_language() -> None:
@@ -192,13 +218,13 @@ def test_the_sample_reads_a_bounded_depth_of_newest_posts() -> None:
     """The cost cap, pinned: without it a sparse Channel scans its whole history.
 
     A Persian Post under a thousand newer captionless photos is past the depth,
-    so the Channel has nothing readable in view.
+    so the Channel has nothing but photos in view.
     """
     photos = [_item(i, "[photo]", media=PHOTO) for i in range(2, 1002)]
     with Session(engine) as session:
         _channel(session)
         assert _write(session, [_item(1, PERSIAN)]) == "fa"
-        assert _write(session, photos) is None
+        assert _write(session, photos) == "zxx"
 
 
 def test_a_posts_only_import_labels_the_channels_it_creates() -> None:

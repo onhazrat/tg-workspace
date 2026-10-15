@@ -28,7 +28,7 @@
  * differently.
  */
 
-import { languageName } from "@/lib/language-name"
+import { languageLabel } from "@/lib/language-name"
 import type { DiscoveryProbe } from "./discover-candidates"
 
 /** Compact, because a Candidate row is scanned rather than read. */
@@ -163,7 +163,7 @@ export function panelStatistics(
     // twenty is 5%, and there is no 5.3% to report.
     forwardShare:
       forwardShare === null ? null : `${Math.round(forwardShare * 100)}%`,
-    language: language === null ? null : languageName(language, locale),
+    language: language === null ? null : languageLabel(language, locale),
     mediaDensity: mediaDensity === null ? null : mediaDensity.toFixed(1),
   }
 }

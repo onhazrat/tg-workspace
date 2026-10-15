@@ -100,7 +100,7 @@ def _language_sample(session: Session, name: str) -> list[tuple[str | None, bool
 
 def relabel_channels(
     session: Session, names: Iterable[str], *, announce: bool = True
-) -> None:
+) -> int:
     """Re-derive the Language of each named Channel; its only writer (LANG-02).
 
     The Post write path calls this after every batch, so a Channel's label
@@ -112,17 +112,19 @@ def relabel_channels(
     `announce=False` is for a caller whose commit does *not* come straight
     after: `POST /data/import` writes more sections first, and would hold the
     etag's row lock through all of them. It moves the etag after its commit.
+    Answers how many Channels changed.
     """
-    changed = False
+    changed = 0
     for channel in session.exec(select(Channel).where(col(Channel.name).in_(names))):
         language = derive_language(_language_sample(session, channel.name))
         if language != channel.language:
             channel.language = language
             channel.updated_at = utc_now()
             session.add(channel)
-            changed = True
+            changed += 1
     if changed and announce:
         touch_sync(session, "channels", commit=False)
+    return changed
 
 
 def update_channel_coverage(
