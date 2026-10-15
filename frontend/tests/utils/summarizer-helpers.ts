@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test"
+import type { Page, Route } from "@playwright/test"
 import { expect } from "@playwright/test"
 
 import {
@@ -6,6 +6,23 @@ import {
   readScopedStorage,
   seedScopedStorage,
 } from "./scoped-storage.ts"
+
+/**
+ * `route.fetch`, with a GET retried once when the backend closed the socket
+ * under it. Uvicorn drops an idle keep-alive connection after 5s, and a fetch
+ * that reuses it at that instant fails with "socket hang up" before the
+ * server ever sees the request, which turned one Discover spec flaky on CI
+ * (PR #177, shard 2). A read is safe to send twice; anything else is not.
+ */
+export async function fetchThrough(route: Route) {
+  try {
+    return await route.fetch()
+  } catch (error) {
+    const hungUp = String(error).includes("socket hang up")
+    if (!hungUp || route.request().method() !== "GET") throw error
+    return route.fetch()
+  }
+}
 
 export function paletteModifier() {
   return process.platform === "darwin" ? "Meta" : "Control"
@@ -357,7 +374,7 @@ export async function mockDiscoverForwardPosts(
   // any Artifact tab whose Artifact is missing from the History list
   // (TABS-01). So once one is generated, the list carries it too.
   await page.route("**/api/v1/data/artifacts**", async (route) => {
-    const response = await route.fetch()
+    const response = await fetchThrough(route)
     const rows = (await response.json()) as unknown[]
     const generated = storedReport !== discoverReport
     const listed = {

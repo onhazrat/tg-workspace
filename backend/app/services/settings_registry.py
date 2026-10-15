@@ -161,6 +161,10 @@ QUOTA_KEY = "quota"
 #: default, the loader and the write path all have to agree on the spelling.
 DIRECTORY_KEY = "directory"
 
+#: DCOL's Directory column defaults, `{"on": [column, ...]}`. Named here for
+#: the same reason: the read model, the route and the guard have to agree.
+DIRECTORY_COLUMNS_KEY = "directory_columns"
+
 #: The Reach settings: REACH-03's settling age, estimation floor and sample
 #: size, and REACH-07's curve refit interval, one row because two of them are
 #: validated against each other. Named here for the same reason as the two
@@ -235,6 +239,12 @@ GLOBAL_KEYS: dict[str, str] = {
         "which is one deployment's proxies and one deployment's standing with "
         "Telegram. A per-account copy would let the shortest window chosen by "
         "anyone set the load everybody pays for."
+    ),
+    DIRECTORY_COLUMNS_KEY: (
+        "Which Directory columns are on for an Account that has not chosen "
+        "(DCOL). Deployment policy because it is the table every Account "
+        "starts from, set by whoever holds `DATA_ADMIN`; an Account's own "
+        "choices are per browser and never reach this row."
     ),
     REACH_KEY: (
         "How old a View count must be to count as Settled, how young one may "

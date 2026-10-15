@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import type { DirectoryRowResponse } from "@/client"
+import type { ColumnKey } from "@/lib/directory/directory-columns"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
@@ -47,6 +48,22 @@ const row = (handle: string, over: Partial<DirectoryRowResponse> = {}) =>
     ...over,
   }) satisfies DirectoryRowResponse
 
+/** The ten columns on by default before an Operator changes them (DCOL). */
+const OPENING: ColumnKey[] = [
+  "language",
+  "subscribers",
+  "reach",
+  "posts_per_week",
+  "forward_pct",
+  "last_post_days",
+  "mine",
+  "cited_by",
+  "cites",
+  "found_days",
+]
+const without = (...keys: ColumnKey[]) =>
+  OPENING.filter((k) => !keys.includes(k))
+
 function mount(over: Partial<ComponentProps<typeof DirectoryTable>> = {}) {
   const calls: {
     ticks: string[][]
@@ -63,7 +80,7 @@ function mount(over: Partial<ComponentProps<typeof DirectoryTable>> = {}) {
       page={0}
       sort="mine"
       descending
-      hidden={[]}
+      shown={OPENING}
       ticks={new Set()}
       onTicks={(next) => calls.ticks.push([...next].sort())}
       following={new Set()}
@@ -210,7 +227,7 @@ describe("keyboard mode (DFP-01)", () => {
 
 describe("columns and sorting", () => {
   test("a hidden column is gone; the Channel and the actions stay", () => {
-    mount({ hidden: ["reach", "language"] })
+    mount({ shown: without("reach", "language") })
     const headers = screen
       .getAllByRole("columnheader")
       .map((h) => h.textContent)
@@ -220,10 +237,34 @@ describe("columns and sorting", () => {
     expect(headers).toContain("Subs")
   })
 
+  test("a probe column shows as written and its header does not sort", () => {
+    const bio = "A very long bio about what this Channel publishes every day"
+    const calls = mount({
+      rows: [
+        row("alpha", {
+          bio,
+          telegramChatId: 1234567890,
+          status: "ok",
+        }),
+      ],
+      shown: ["bio", "telegram_chat_id", "status", "photos"],
+    })
+    const cells = [
+      ...screen.getByTestId("directory-row-alpha").querySelectorAll("td"),
+    ].map((c) => c.textContent)
+    // An id is never rounded to "1.23B"; a column the row lacks is blank.
+    expect(cells).toContain("1234567890")
+    expect(cells).toContain(bio)
+    expect(screen.getByTitle(bio)).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Bio" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Photos" }))
+    expect(calls.sort).toEqual(["photos"])
+  })
+
   test("Cited by and Cites show their counts and sort by them", () => {
     const calls = mount({
       rows: [row("alpha", { citedBy: 1234, cites: 7 })],
-      hidden: ["mine"],
+      shown: without("mine"),
     })
     const cells = screen
       .getByTestId("directory-row-alpha")
@@ -288,7 +329,7 @@ describe("a narrow screen", () => {
     mount({ sort: "relevance" })
     expect(narrowHeaders()).toEqual(["Channel", "Subs"])
     cleanup()
-    mount({ sort: "reach", hidden: ["reach"] })
+    mount({ sort: "reach", shown: without("reach") })
     expect(narrowHeaders()).toEqual(["Channel", "Subs"])
   })
 })

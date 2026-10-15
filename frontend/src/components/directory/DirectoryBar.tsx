@@ -6,9 +6,19 @@
  * Columns), then the shared filter row, then a footer. Props only, so it
  * renders without a server; `DirectoryView` wires it.
  */
-import { ChevronDown, Columns3, Link2, ListFilter, Search } from "lucide-react"
+import {
+  ChevronDown,
+  Columns3,
+  Link2,
+  ListFilter,
+  RotateCcw,
+  Search,
+} from "lucide-react"
 import { useState } from "react"
-import type { DirectoryLanguageCountResponse } from "@/client"
+import type {
+  DirectoryColumnResponse,
+  DirectoryLanguageCountResponse,
+} from "@/client"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { ConditionPicker } from "@/components/filter-tree/ConditionPicker"
@@ -19,6 +29,13 @@ import {
 } from "@/components/filter-tree/FilterRow"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { pillClass } from "@/components/PostFilterParts"
+import {
+  type ColumnCatalogue,
+  type ColumnChoices,
+  choiceCount,
+  isOn,
+  setChoice,
+} from "@/lib/directory/directory-columns"
 import {
   type DirectoryCond,
   type DirectoryFilter,
@@ -45,7 +62,7 @@ import {
   switchOn,
 } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/posts/post-filter-bar"
-import { COLUMNS } from "./DirectoryTable"
+import { columnOf } from "./DirectoryTable"
 
 const matches = (query: string, ...texts: string[]) =>
   texts.join(" ").toLowerCase().includes(query.trim().toLowerCase())
@@ -267,30 +284,98 @@ export function ReferenceKindsPill({
   )
 }
 
-export function ColumnsPill({
-  hidden,
-  onHidden,
+/** The Columns menu's state and actions (DCOL). */
+export type ColumnsMenu = {
+  /** The columns this caller may show, with their defaults; none while loading. */
+  catalogue: ColumnCatalogue
+  choices: ColumnChoices
+  onChoices: (next: ColumnChoices) => void
+  /** Present only for an Account that may set the deployment's defaults. */
+  onMakeDefaults?: () => void
+}
+
+function ColumnRow({
+  column,
+  menu,
 }: {
-  hidden: string[]
-  onHidden: (next: string[]) => void
+  column: DirectoryColumnResponse
+  menu: ColumnsMenu
 }) {
+  const { label, description } = columnOf(column.key)
+  const on = isOn(column, menu.choices)
+  const chosen = menu.choices[column.key] !== undefined
+  return (
+    <div className="flex items-center gap-1 rounded-md hover:bg-app-ink/5">
+      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2 py-1.5">
+        <input
+          type="checkbox"
+          className="accent-app-ink"
+          checked={on}
+          onChange={() =>
+            menu.onChoices(
+              setChoice(menu.choices, column.key, on ? "off" : "on"),
+            )
+          }
+        />
+        <span
+          data-chosen={chosen || undefined}
+          className={`shrink-0 whitespace-nowrap font-semibold ${chosen ? "text-blue-600 dark:text-blue-400" : ""}`}
+        >
+          {label}
+          {chosen && <span title="Your choice"> •</span>}
+        </span>
+        <span className="truncate text-[11px] text-app-ink/50">
+          {description}
+        </span>
+      </label>
+      {chosen && (
+        <button
+          type="button"
+          aria-label={`Put ${label} back to its default`}
+          title="Back to the default"
+          onClick={() =>
+            menu.onChoices(setChoice(menu.choices, column.key, undefined))
+          }
+          className="shrink-0 rounded-md p-1 text-app-ink/50 hover:text-app-ink"
+        >
+          <RotateCcw size={11} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function ColumnsPill({ menu }: { menu: ColumnsMenu }) {
   const [query, setQuery] = useState("")
-  const shown = COLUMNS.filter((c) => matches(query, c.label, c.description))
+  const [armed, setArmed] = useState(false)
+  const set = choiceCount(menu.catalogue, menu.choices)
+  const found = menu.catalogue.filter((c) => {
+    const { label, description } = columnOf(c.key)
+    return matches(query, label, description)
+  })
+  const sections = [
+    { heading: "Default columns", columns: found.filter((c) => c.default) },
+    { heading: "More columns", columns: found.filter((c) => !c.default) },
+  ].filter((s) => s.columns.length > 0)
   return (
     <BarPopover
       align="end"
-      width="w-80"
-      onOpenChange={(open) => open || setQuery("")}
+      width="w-96"
+      onOpenChange={(open) => {
+        if (open) return
+        setQuery("")
+        setArmed(false)
+      }}
       trigger={
         <button
           type="button"
           data-testid="directory-columns"
-          className={pillClass(hidden.length > 0)}
+          className={pillClass(set > 0)}
         >
           <Columns3 size={12} /> Columns
-          {hidden.length > 0 && (
+          {set > 0 && (
             <span className="rounded-full bg-app-bg/20 px-1.5 text-[10px] tabular-nums">
-              {hidden.length} hidden
+              {set} set
             </span>
           )}
         </button>
@@ -301,34 +386,49 @@ export function ColumnsPill({
         onChange={setQuery}
         placeholder="Search columns..."
       />
-      <BarHeading>The Channel and Follow always show</BarHeading>
-      {shown.length === 0 && (
+      <div className="flex flex-wrap items-center gap-x-3 px-2 pt-1 text-[11px]">
+        <span className="text-app-ink/50">
+          The Channel (handle, name, photo) and Follow always show; every entry
+          here is a Channel, so there is no Kind
+        </span>
+        {set > 0 && (
+          <button
+            type="button"
+            onClick={() => menu.onChoices({})}
+            className="font-semibold text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Reset to default columns
+          </button>
+        )}
+        {menu.onMakeDefaults && (
+          // Two clicks, because it changes every Account's table.
+          <button
+            type="button"
+            onClick={() => {
+              if (!armed) return setArmed(true)
+              setArmed(false)
+              menu.onMakeDefaults?.()
+            }}
+            className="font-semibold text-blue-600 hover:underline dark:text-blue-400"
+          >
+            {armed
+              ? "Click again to change everyone's defaults"
+              : "Make these the defaults for everyone"}
+          </button>
+        )}
+      </div>
+      {found.length === 0 && (
         <p className="px-2 py-3 text-app-ink/50">
           No column matches {query.trim()}
         </p>
       )}
-      {shown.map((c) => (
-        <label
-          key={c.key}
-          className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-app-ink/5"
-        >
-          <input
-            type="checkbox"
-            className="accent-app-ink"
-            checked={!hidden.includes(c.key)}
-            onChange={() =>
-              onHidden(
-                hidden.includes(c.key)
-                  ? hidden.filter((k) => k !== c.key)
-                  : [...hidden, c.key],
-              )
-            }
-          />
-          <span className="font-semibold">{c.label}</span>
-          <span className="truncate text-[11px] text-app-ink/50">
-            {c.description}
-          </span>
-        </label>
+      {sections.map((section) => (
+        <div key={section.heading}>
+          <BarHeading>{section.heading}</BarHeading>
+          {section.columns.map((c) => (
+            <ColumnRow key={c.key} column={c} menu={menu} />
+          ))}
+        </div>
       ))}
     </BarPopover>
   )
@@ -353,8 +453,7 @@ export type DirectoryBarProps = {
   onSort: (value: string) => void
   descending: boolean
   onToggleDirection: () => void
-  hidden: string[]
-  onHidden: (next: string[]) => void
+  columns: ColumnsMenu
   /** The view's total, while known. */
   total?: number
   /** The whole Directory, for "N of M". */
@@ -473,7 +572,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
         onClick={() => p.onSelectedFirst(!p.selectedFirst)}
       />
       <span className="ml-auto" />
-      <ColumnsPill hidden={p.hidden} onHidden={p.onHidden} />
+      <ColumnsPill menu={p.columns} />
     </>
   )
   return (

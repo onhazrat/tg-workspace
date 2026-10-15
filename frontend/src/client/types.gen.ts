@@ -1647,6 +1647,34 @@ export type DirectoryCitingPostResponse = {
 };
 
 /**
+ * DirectoryColumnDefaultsRequest
+ *
+ * The columns on by default for the whole deployment; the rest are off.
+ */
+export type DirectoryColumnDefaultsRequest = {
+    /**
+     * On
+     */
+    on: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'mine' | 'cited_by' | 'cites' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'telegram_chat_id' | 'latest_id'>;
+};
+
+/**
+ * DirectoryColumnResponse
+ *
+ * One column a caller may show, and whether it is on by default.
+ */
+export type DirectoryColumnResponse = {
+    /**
+     * Key
+     */
+    key: 'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'mine' | 'cited_by' | 'cites' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'telegram_chat_id' | 'latest_id';
+    /**
+     * Default
+     */
+    default: boolean;
+};
+
+/**
  * DirectoryCountRequest
  *
  * How many entries a view leaves, with a candidate Condition added with AND.
@@ -1997,6 +2025,10 @@ export type DirectoryListRequest = {
      * Ticked
      */
     ticked?: Array<string>;
+    /**
+     * Columns
+     */
+    columns: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'mine' | 'cited_by' | 'cites' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'telegram_chat_id' | 'latest_id'>;
 };
 
 /**
@@ -2159,7 +2191,13 @@ export type DirectoryNeighboursResponse = {
 /**
  * DirectoryRowResponse
  *
- * One Directory entry in the list: its measures, never its bio or samples.
+ * One Directory entry in the list: what every row needs, and the columns
+ * the request asked for (DCOL).
+ *
+ * A column field is **absent** when the request did not ask for it, never
+ * `null`, because `null` already means "not measured". The route serialises
+ * with `exclude_unset` for that reason, which is why every column field
+ * carries a default here and the always-present ones carry none.
  */
 export type DirectoryRowResponse = {
     /**
@@ -2175,54 +2213,6 @@ export type DirectoryRowResponse = {
      */
     photoUrl: string | null;
     /**
-     * Language
-     */
-    language: string | null;
-    /**
-     * Subscribers
-     */
-    subscribers: number | null;
-    /**
-     * Reach
-     */
-    reach: number | null;
-    /**
-     * Reachestimated
-     */
-    reachEstimated: boolean;
-    /**
-     * Postsperweek
-     */
-    postsPerWeek: number | null;
-    /**
-     * Forwardshare
-     */
-    forwardShare: number | null;
-    /**
-     * Lastpostat
-     */
-    lastPostAt: number | null;
-    /**
-     * Foundat
-     */
-    foundAt: number;
-    /**
-     * Photos
-     */
-    photos: number | null;
-    /**
-     * Videos
-     */
-    videos: number | null;
-    /**
-     * Files
-     */
-    files: number | null;
-    /**
-     * Links
-     */
-    links: number | null;
-    /**
      * Followable
      */
     followable: boolean;
@@ -2235,25 +2225,9 @@ export type DirectoryRowResponse = {
      */
     dismissed: boolean;
     /**
-     * Citedby
-     */
-    citedBy: number;
-    /**
      * Tags
      */
     tags: Array<string>;
-    /**
-     * Cites
-     */
-    cites: number;
-    /**
-     * Mine
-     */
-    mine: number;
-    /**
-     * Minelastat
-     */
-    mineLastAt: number | null;
     match: DirectoryMatchResponse | null;
     /**
      * Sharedparents
@@ -2263,6 +2237,118 @@ export type DirectoryRowResponse = {
      * Sharedchildren
      */
     sharedChildren: number | null;
+    /**
+     * Language
+     */
+    language?: string | null;
+    /**
+     * Subscribers
+     */
+    subscribers?: number | null;
+    /**
+     * Reach
+     */
+    reach?: number | null;
+    /**
+     * Reachestimated
+     */
+    reachEstimated?: boolean | null;
+    /**
+     * Postsperweek
+     */
+    postsPerWeek?: number | null;
+    /**
+     * Forwardshare
+     */
+    forwardShare?: number | null;
+    /**
+     * Lastpostat
+     */
+    lastPostAt?: number | null;
+    /**
+     * Mine
+     */
+    mine?: number | null;
+    /**
+     * Minelastat
+     */
+    mineLastAt?: number | null;
+    /**
+     * Citedby
+     */
+    citedBy?: number | null;
+    /**
+     * Cites
+     */
+    cites?: number | null;
+    /**
+     * Foundat
+     */
+    foundAt?: number | null;
+    /**
+     * Photos
+     */
+    photos?: number | null;
+    /**
+     * Videos
+     */
+    videos?: number | null;
+    /**
+     * Files
+     */
+    files?: number | null;
+    /**
+     * Links
+     */
+    links?: number | null;
+    /**
+     * Status
+     */
+    status?: string | null;
+    /**
+     * Bio
+     */
+    bio?: string | null;
+    /**
+     * Samplecount
+     */
+    sampleCount?: number | null;
+    /**
+     * Checkedat
+     */
+    checkedAt?: number | null;
+    /**
+     * Refreshdueat
+     */
+    refreshDueAt?: number | null;
+    /**
+     * Attempts
+     */
+    attempts?: number | null;
+    /**
+     * Lasterror
+     */
+    lastError?: string | null;
+    /**
+     * Attemptedat
+     */
+    attemptedAt?: number | null;
+    /**
+     * Retryafter
+     */
+    retryAfter?: number | null;
+    /**
+     * Priority
+     */
+    priority?: number | null;
+    /**
+     * Telegramchatid
+     */
+    telegramChatId?: number | null;
+    /**
+     * Latestid
+     */
+    latestId?: number | null;
 };
 
 /**
@@ -10180,6 +10266,51 @@ export type DataGetDirectorySizeResponses = {
 };
 
 export type DataGetDirectorySizeResponse = DataGetDirectorySizeResponses[keyof DataGetDirectorySizeResponses];
+
+export type DataListDirectoryColumnsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/columns';
+};
+
+export type DataListDirectoryColumnsResponses = {
+    /**
+     * Response Data-List Directory Columns
+     *
+     * Successful Response
+     */
+    200: Array<DirectoryColumnResponse>;
+};
+
+export type DataListDirectoryColumnsResponse = DataListDirectoryColumnsResponses[keyof DataListDirectoryColumnsResponses];
+
+export type DataPutDirectoryColumnsData = {
+    body: DirectoryColumnDefaultsRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/columns';
+};
+
+export type DataPutDirectoryColumnsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataPutDirectoryColumnsError = DataPutDirectoryColumnsErrors[keyof DataPutDirectoryColumnsErrors];
+
+export type DataPutDirectoryColumnsResponses = {
+    /**
+     * Response Data-Put Directory Columns
+     *
+     * Successful Response
+     */
+    200: Array<DirectoryColumnResponse>;
+};
+
+export type DataPutDirectoryColumnsResponse = DataPutDirectoryColumnsResponses[keyof DataPutDirectoryColumnsResponses];
 
 export type DataGetDirectoryEntryData = {
     body?: never;

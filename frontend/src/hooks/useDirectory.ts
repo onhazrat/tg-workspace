@@ -3,8 +3,8 @@
  *
  * The view lives in the URL (`lib/directory/directory-view.ts`) and the last
  * one is remembered per Account through the scoped storage: a tab opened with
- * no `dir*` parameter adopts it. The ticks and the hidden columns are per
- * browser and Account and never in the URL; "Channels ticked here" and
+ * no `dir*` parameter adopts it. The ticks and the column choices (DCOL) are
+ * per browser and Account and never in the URL; "Channels ticked here" and
  * DIR-07's Seeds read the ticks from here.
  */
 import {
@@ -13,13 +13,28 @@ import {
   useQueryClient,
 } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { dataGetDirectorySize, dataListDirectory } from "@/client"
+import {
+  dataGetDirectorySize,
+  dataListDirectory,
+  dataListDirectoryColumns,
+  dataPutDirectoryColumns,
+} from "@/client"
+import type { ColumnsMenu } from "@/components/directory/DirectoryBar"
 import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { errorText } from "@/lib/artifacts/artifact-run"
+import {
+  type ColumnChoices,
+  type ColumnKey,
+  choicesFromHidden,
+  columnsToSend,
+  isColumnKey,
+  mayMakeDefaults,
+  shownColumns,
+} from "@/lib/directory/directory-columns"
 import {
   DIRECTORY_FILTER_BOUNDS,
   type DirectoryFilter,
@@ -53,6 +68,9 @@ const workspaceRoute = getRouteApi("/_tg/workspace")
 
 const VIEW_KEY = "directory.view"
 const TICKS_KEY = "directory.ticks"
+/** Each column's explicit On or Off; a column with none follows the default. */
+const CHOICES_KEY = "directory.columns"
+/** What the Columns menu stored before DCOL: the hidden columns, read once. */
 const HIDDEN_KEY = "directory.hiddenColumns"
 /** The handle whose detail panel is open, per browser (DIR-03). */
 const OPEN_KEY = "directory.open"
@@ -84,6 +102,68 @@ function useStoredList(key: string) {
     [key],
   )
   return [list, set] as const
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v)
+
+/** The stored choices, adopting the pre-DCOL hidden list once. */
+function readChoices(): ColumnChoices {
+  const stored = readStored(CHOICES_KEY, isObject)
+  if (stored) {
+    // A column the server no longer has is dropped rather than failing the rest.
+    return Object.fromEntries(
+      Object.entries(stored).filter(
+        ([key, c]) => isColumnKey(key) && (c === "on" || c === "off"),
+      ),
+    ) as ColumnChoices
+  }
+  const hidden = readStored(HIDDEN_KEY, isStrings)
+  if (!hidden) return {}
+  const choices = choicesFromHidden(hidden)
+  scopedStorage.setItem(CHOICES_KEY, JSON.stringify(choices))
+  scopedStorage.removeItem(HIDDEN_KEY)
+  return choices
+}
+
+/** The column catalogue, this browser's choices over it, and setting defaults. */
+function useColumns() {
+  const queryClient = useQueryClient()
+  const [choices, setStored] = useState(readChoices)
+  const setChoices = useCallback((next: ColumnChoices) => {
+    setStored(next)
+    scopedStorage.setItem(CHOICES_KEY, JSON.stringify(next))
+  }, [])
+  const catalogue = useQuery({
+    queryKey: queryKeys.directoryColumns,
+    queryFn: () => dataListDirectoryColumns(),
+    staleTime: SIZE_STALE_TIME,
+  })
+  const columns = catalogue.data ?? []
+  const shown = shownColumns(columns, choices)
+  const makeDefaults = async () => {
+    try {
+      const saved = await dataPutDirectoryColumns({ body: { on: shown } })
+      queryClient.setQueryData(queryKeys.directoryColumns, saved)
+      // The holder's own choices are the defaults now; keeping them would
+      // leave their table no longer following the defaults.
+      setChoices({})
+      toast.success("These columns are now everyone's defaults")
+    } catch (e) {
+      toast.error(errorText(e, "The defaults did not save."))
+    }
+  }
+  const menu: ColumnsMenu = {
+    catalogue: columns,
+    choices,
+    onChoices: setChoices,
+    onMakeDefaults: mayMakeDefaults(columns)
+      ? () => void makeDefaults()
+      : undefined,
+  }
+  // A failed catalogue still lets the list load, with no columns but the
+  // Channel and Follow, rather than leaving the tab blank.
+  return { ready: !catalogue.isPending, shown, menu }
 }
 
 /** The view from the URL, adopting the remembered one when the URL has none. */
@@ -142,7 +222,10 @@ export function useDirectory() {
   const { directorySelectedFirst, setDirectorySelectedFirst } = useSettings()
   const queryClient = useQueryClient()
   const [ticked, setTicked] = useStoredList(TICKS_KEY)
-  const [hidden, setHidden] = useStoredList(HIDDEN_KEY)
+  const columns = useColumns()
+  // The last list read's columns and the view they were for (DCOL): hiding a
+  // column keeps them, so nothing is read; any other change starts afresh.
+  const sent = useRef<{ view: string; columns: ColumnKey[] }>(undefined)
   // A list of at most one handle, so the panel reuses the stored-list plumbing.
   const [opened, setOpened] = useStoredList(OPEN_KEY)
   const [following, setFollowing] = useState<ReadonlySet<string>>(new Set())
@@ -202,13 +285,21 @@ export function useDirectory() {
     ...(search && { showMatches: view.matches }),
     ...selectedFirstRequest(directorySelectedFirst, yours, sets.ticked),
   }
+  const viewKey = JSON.stringify(body)
+  const sending = columnsToSend(
+    columns.shown,
+    sent.current?.view === viewKey ? sent.current.columns : undefined,
+  )
+  sent.current = { view: viewKey, columns: sending }
+  const listBody = { ...body, columns: sending }
   const list = useQuery({
-    queryKey: queryKeys.directoryRead("list", body),
+    queryKey: queryKeys.directoryRead("list", listBody),
+    enabled: columns.ready,
     // `signal` is consumed, so a read nobody waits for any more (a cleared or
     // retyped search) is aborted rather than left to finish.
     queryFn: async ({ signal }) => {
       const started = performance.now()
-      const data = await dataListDirectory({ body, signal })
+      const data = await dataListDirectory({ body: listBody, signal })
       return { ...data, ms: Math.round(performance.now() - started) }
     },
     placeholderData: keepPreviousData,
@@ -270,8 +361,8 @@ export function useDirectory() {
     setTicks: setTicked,
     selectedFirst: directorySelectedFirst,
     setSelectedFirst: setDirectorySelectedFirst,
-    hidden,
-    setHidden,
+    shownColumns: columns.shown,
+    columnsMenu: columns.menu,
     open: opened[0] ?? null,
     setOpen: (handle: string | null) => setOpened(handle ? [handle] : []),
     following,

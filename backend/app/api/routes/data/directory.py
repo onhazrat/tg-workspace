@@ -13,12 +13,15 @@ client.
 import uuid
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, require_permission
+from app.core.permissions import Permission
 from app.schemas.directory import (
     DirectoryBinResponse,
+    DirectoryColumnDefaultsRequest,
+    DirectoryColumnResponse,
     DirectoryCountRequest,
     DirectoryCountResponse,
     DirectoryDistributionRequest,
@@ -35,9 +38,11 @@ from app.schemas.directory import (
     DirectoryWhyRequest,
     DirectoryWhyResponse,
 )
-from app.services import directory_reads
+from app.services import directory_reads, rbac
 from app.services.channel_directory import probe_map
 from app.services.channel_directory_samples import sample_to_camel, samples_for
+from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
+from app.services.settings_store import replace_global_setting
 from app.services.telegram_web import normalize_handle
 
 router = APIRouter()
@@ -116,7 +121,13 @@ def _view(
     )
 
 
-@router.post("/directory/list")
+def _sees_internals(session: Session, user_id: uuid.UUID) -> bool:
+    return rbac.has_permission(session, user_id, Permission.DATA_ADMIN)
+
+
+# `exclude_unset` is what leaves a column nobody asked for out of each row
+# rather than sending it as `null`, which means "not measured" (DCOL).
+@router.post("/directory/list", response_model_exclude_unset=True)
 def list_directory(
     body: DirectoryListRequest,
     session: SessionDep,
@@ -127,17 +138,21 @@ def list_directory(
     With the view's total and its Language counts, both counted without the
     view's Language Conditions where the menu needs them.
     """
+    visible = directory_reads.visible_columns(
+        internals=_sees_internals(session, current_user.id)
+    )
     page = directory_reads.list_page(
         session,
         _view(session, current_user.id, body),
         sort=body.sort,
         descending=body.descending,
         page=body.page,
+        columns=frozenset(body.columns).intersection(visible),
         show_matches=body.show_matches,
         first=body.first(),
     )
     return DirectoryListResponse(
-        rows=[DirectoryRowResponse.model_validate(asdict(row)) for row in page.rows],
+        rows=[DirectoryRowResponse.model_validate(row.fields()) for row in page.rows],
         total=page.total,
         languages=[
             DirectoryLanguageCountResponse.model_validate(asdict(entry))
@@ -192,6 +207,45 @@ def get_directory_size(
     return DirectorySizeResponse(size=directory_reads.directory_size(session))
 
 
+# ---- The columns (DCOL) -------------------------------------------------------------
+#
+# The catalogue a caller may show and the deployment's defaults. The defaults
+# are a `tg_app_settings` row; an Account's own choices never reach the server.
+# The PUT is a write, so a View-as session is refused it with no entry here.
+
+
+@router.get("/directory/columns")
+def list_directory_columns(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[DirectoryColumnResponse]:
+    """The Directory columns this caller may show, in table order, each with
+    whether it is on by default."""
+    defaults = directory_reads.column_defaults(session)
+    return [
+        DirectoryColumnResponse(key=key, default=key in defaults)
+        for key in directory_reads.visible_columns(
+            internals=_sees_internals(session, current_user.id)
+        )
+    ]
+
+
+@router.put(
+    "/directory/columns",
+    dependencies=[Depends(require_permission(Permission.DATA_ADMIN))],
+)
+def put_directory_columns(
+    body: DirectoryColumnDefaultsRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> list[DirectoryColumnResponse]:
+    """Set which Directory columns are on by default for every Account; a
+    column not named is off."""
+    on = [key for key in directory_reads.DIRECTORY_COLUMNS if key in body.on]
+    replace_global_setting(session, DIRECTORY_COLUMNS_KEY, {"on": on})
+    return list_directory_columns(session, current_user)
+
+
 # ---- The detail panel (DIR-03) -----------------------------------------------------
 
 
@@ -206,7 +260,7 @@ def get_directory_entry(
     if found is None:
         raise HTTPException(status_code=404, detail=DIRECTORY_ENTRY_NOT_FOUND)
     row, bio = found
-    return DirectoryEntryResponse.model_validate(asdict(row) | {"bio": bio})
+    return DirectoryEntryResponse.model_validate(row.fields() | {"bio": bio})
 
 
 # DIR-05. A GET, so View-as needs no entry for it; corpus, so both Accounts in

@@ -47,7 +47,7 @@ import math
 import time
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Literal, get_args
 
@@ -100,6 +100,8 @@ from app.services.post_filters import (
     tree_conds,
 )
 from app.services.posts import lookup_posts
+from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
+from app.services.settings_store import get_global_setting
 from app.services.telegram_web import normalize_handle
 from app.services.tenancy import scoped_select, unscoped_select
 
@@ -158,6 +160,74 @@ SearchField = Literal["name", "bio", "posts"]
 SEARCH_FIELDS: tuple[SearchField, ...] = get_args(SearchField)
 _WEIGHTS: dict[SearchField, str] = {"name": "A", "bio": "B", "posts": "C"}
 Scale = Literal["log", "linear"]
+
+#: A column of the Directory table (DCOL), in table order: the ten the table
+#: always had, then the rest of the Channel counters, then what the probe
+#: recorded, then the probe queue's own bookkeeping. Every column of
+#: `tg_channel_directory` but the four the Channel cell already shows or that
+#: never vary in this list (handle, display name, photo, kind).
+DirectoryColumn = Literal[
+    "language",
+    "subscribers",
+    "reach",
+    "posts_per_week",
+    "forward_pct",
+    "last_post_days",
+    "mine",
+    "cited_by",
+    "cites",
+    "found_days",
+    "photos",
+    "videos",
+    "files",
+    "links",
+    "status",
+    "followable",
+    "bio",
+    "sample_count",
+    "checked_at",
+    "refresh_due_at",
+    "attempts",
+    "last_error",
+    "attempted_at",
+    "retry_after",
+    "priority",
+    "telegram_chat_id",
+    "latest_id",
+]
+DIRECTORY_COLUMNS: tuple[DirectoryColumn, ...] = get_args(DirectoryColumn)
+#: The probe queue's bookkeeping, for `DATA_ADMIN` only: `last_error` is the
+#: text of whatever exception a probe raised, which can name a proxy, and the
+#: proxies themselves are behind that Permission.
+INTERNAL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
+    {
+        "attempts",
+        "last_error",
+        "attempted_at",
+        "retry_after",
+        "priority",
+        "telegram_chat_id",
+        "latest_id",
+    }
+)
+#: On by default until an Operator stores defaults of their own: the ten the
+#: table showed before the catalogue existed. Once stored, a column the stored
+#: defaults do not name is off.
+OPENING_COLUMNS: tuple[DirectoryColumn, ...] = DIRECTORY_COLUMNS[:10]
+
+
+def column_defaults(session: Session) -> frozenset[DirectoryColumn]:
+    """The columns on by default for this deployment."""
+    stored = get_global_setting(session, DIRECTORY_COLUMNS_KEY).get("on")
+    if not isinstance(stored, list):
+        return frozenset(OPENING_COLUMNS)
+    return frozenset(c for c in DIRECTORY_COLUMNS if c in stored)
+
+
+def visible_columns(*, internals: bool) -> tuple[DirectoryColumn, ...]:
+    """The catalogue one caller may see, in table order."""
+    return tuple(c for c in DIRECTORY_COLUMNS if internals or c not in INTERNAL_COLUMNS)
+
 
 #: Measures whose spread is drawn on a log scale; the rest are linear.
 _LINEAR: frozenset[str] = frozenset({"forward_pct", "found_days"})
@@ -748,25 +818,13 @@ class DirectoryRow:
     handle: str
     display_name: str | None
     photo_url: str | None
-    language: str | None
-    subscribers: int | None
-    reach: int | None
-    reach_estimated: bool
-    posts_per_week: float | None
-    forward_share: float | None
-    last_post_at: int | None
-    found_at: int
-    photos: int | None
-    videos: int | None
-    files: int | None
-    links: int | None
     followable: bool
     followed: bool
     dismissed: bool
-    cited_by: int
-    cites: int
-    mine: int
-    mine_last_at: int | None
+    #: The asked-for columns' fields, by response field name (DCOL). A column
+    #: nobody asked for is absent, which is not the same as a `None` value:
+    #: `None` is "not measured".
+    columns: dict[str, Any] = field(default_factory=dict)
     #: The reader's Tags on it, as first written (DFP-04).
     tags: list[str] = field(default_factory=list)
     #: Shared parents / children with the first such Condition's Seeds;
@@ -775,6 +833,11 @@ class DirectoryRow:
     shared_children: int | None = None
     #: `None` unless a search asked for its matches.
     match: DirectoryMatch | None = None
+
+    def fields(self) -> dict[str, Any]:
+        """The row as one flat mapping, its columns beside the rest."""
+        out = asdict(self)
+        return {**{k: v for k, v in out.items() if k != "columns"}, **self.columns}
 
 
 @dataclass(frozen=True)
@@ -903,62 +966,103 @@ def _matches(
     return out
 
 
+#: Which `tg_channel_directory` columns each Directory column reads. A
+#: timestamp travels as epoch ms, and `created_at` as `found_at`. The three
+#: counts, `mine`, `cited_by` and `cites`, are not here: they are read off
+#: other tables, and only for a page that shows them.
+_ENTRY_COLUMNS: dict[DirectoryColumn, tuple[str, ...]] = {
+    "language": ("language",),
+    "subscribers": ("subscribers",),
+    # The entry's Reach, the one the bound, the sort and the distribution
+    # read. Not the Post-based one Discover shows for a followed Channel: a
+    # row must never show a Reach outside the bound that let it through, or
+    # out of the sort's order.
+    "reach": ("reach", "reach_estimated"),
+    "posts_per_week": ("posts_per_week",),
+    "forward_pct": ("forward_share",),
+    "last_post_days": ("last_post_at",),
+    "found_days": ("created_at",),
+    "photos": ("photos",),
+    "videos": ("videos",),
+    "files": ("files",),
+    "links": ("links",),
+    "status": ("status",),
+    # Every row carries `followable`, shown or not: Follow reads it.
+    "followable": (),
+    "bio": ("bio",),
+    "sample_count": ("sample_count",),
+    "checked_at": ("checked_at",),
+    "refresh_due_at": ("refresh_due_at",),
+    "attempts": ("attempts",),
+    "last_error": ("last_error",),
+    "attempted_at": ("attempted_at",),
+    "retry_after": ("retry_after",),
+    "priority": ("priority",),
+    "telegram_chat_id": ("telegram_chat_id",),
+    "latest_id": ("latest_id",),
+}
+#: What every row reads off the entry, whatever it shows.
+_ROW_CORE = ("handle", "display_name", "photo_url", "status")
+
+
+def _wire(name: str, value: Any) -> tuple[str, Any]:
+    key = "found_at" if name == "created_at" else name
+    return key, _ms(value) if isinstance(value, datetime) else value
+
+
 def _rows(
     session: Session,
     view: DirectoryView,
     handles: list[str],
+    columns: frozenset[DirectoryColumn],
     *,
     show_matches: bool = False,
 ) -> list[DirectoryRow]:
+    """The page's rows, carrying `columns` and nothing more (DCOL).
+
+    A count no column shows is not counted: the page is already chosen and
+    ordered by `_page_handles`, which reads whatever the sort and the filter
+    need on its own, so skipping one here never changes which rows come back.
+    """
     if not handles:
         return []
-    d = DirectoryEntry
+    read = sorted(
+        {name for c in columns for name in _ENTRY_COLUMNS.get(c, ())} - set(_ROW_CORE)
+    )
     entries = {
-        row.handle: row
-        for row in session.execute(
+        e.handle: e
+        for e in session.execute(
             unscoped_select(
                 sa_select(
-                    col(d.handle),
-                    col(d.display_name),
-                    col(d.photo_url),
-                    col(d.language),
-                    col(d.subscribers),
-                    col(d.reach),
-                    col(d.reach_estimated),
-                    col(d.posts_per_week),
-                    col(d.forward_share),
-                    col(d.last_post_at),
-                    col(d.created_at),
-                    col(d.photos),
-                    col(d.videos),
-                    col(d.files),
-                    col(d.links),
-                    col(d.status),
-                ).where(col(d.handle) == any_(_handles(handles))),
+                    *(col(getattr(DirectoryEntry, n)) for n in (*_ROW_CORE, *read))
+                ).where(col(DirectoryEntry.handle) == any_(_handles(handles))),
                 reason=_SCOPE_REASON,
             )
         ).all()
     }
+    shown = [n for c in columns for n in _ENTRY_COLUMNS.get(c, ())]
     mine: dict[str, tuple[int, int | None]] = {}
-    if view.sources:
+    if "mine" in columns and view.sources:
         aggregate = _mine_aggregate(view, among=handles)
         mine = {
             str(h): (int(n), last_at)
             for h, n, last_at in session.execute(sa_select(aggregate)).all()
         }
-    counted = {
-        str(h): (int(by), int(out))
-        for h, by, out in session.execute(
-            unscoped_select(
-                sa_select(
-                    col(CitationCount.handle),
-                    col(CitationCount.cited_by),
-                    col(CitationCount.cites),
-                ).where(col(CitationCount.handle) == any_(_handles(handles))),
-                reason=_SCOPE_REASON,
-            )
-        ).all()
-    }
+    counted: dict[str, tuple[int, int]] = {}
+    if "cited_by" in columns or "cites" in columns:
+        counted = {
+            str(h): (int(by), int(out))
+            for h, by, out in session.execute(
+                unscoped_select(
+                    sa_select(
+                        col(CitationCount.handle),
+                        col(CitationCount.cited_by),
+                        col(CitationCount.cites),
+                    ).where(col(CitationCount.handle) == any_(_handles(handles))),
+                    reason=_SCOPE_REASON,
+                )
+            ).all()
+        }
     shared: dict[SharedRelation, dict[str, int] | None] = {}
     for relation in get_args(SharedRelation):
         cond = _first_shared(view.tree, relation)
@@ -979,35 +1083,23 @@ def _rows(
     rows = []
     for handle in handles:
         e = entries[handle]
-        n, last_at = mine.get(handle, (0, None))
+        values = dict(_wire(n, getattr(e, n)) for n in shown)
+        if "mine" in columns:
+            n, last_at = mine.get(handle, (0, None))
+            values |= {"mine": n, "mine_last_at": last_at}
+        if "cited_by" in columns:
+            values["cited_by"] = counted.get(handle, (0, 0))[0]
+        if "cites" in columns:
+            values["cites"] = counted.get(handle, (0, 0))[1]
         rows.append(
             DirectoryRow(
                 handle=handle,
                 display_name=e.display_name,
                 photo_url=e.photo_url,
-                language=e.language,
-                subscribers=e.subscribers,
-                # The entry's Reach, the one the bound, the sort and the
-                # distribution read. Not the Post-based one Discover shows for
-                # a followed Channel: a row must never show a Reach outside the
-                # bound that let it through, or out of the sort's order.
-                reach=e.reach,
-                reach_estimated=e.reach_estimated,
-                posts_per_week=e.posts_per_week,
-                forward_share=e.forward_share,
-                last_post_at=_ms(e.last_post_at),
-                found_at=_epoch_ms(e.created_at),
-                photos=e.photos,
-                videos=e.videos,
-                files=e.files,
-                links=e.links,
                 followable=e.status == "ok",
                 followed=handle in view.followed,
                 dismissed=handle in view.dismissed,
-                cited_by=counted.get(handle, (0, 0))[0],
-                cites=counted.get(handle, (0, 0))[1],
-                mine=n,
-                mine_last_at=last_at,
+                columns=values,
                 tags=tagged.get(handle, []),
                 shared_parents=_count_of(shared["parents"], handle),
                 shared_children=_count_of(shared["children"], handle),
@@ -1115,11 +1207,13 @@ def list_page(
     sort: DirectorySort,
     descending: bool,
     page: int,
+    columns: frozenset[DirectoryColumn],
     show_matches: bool = False,
     first: Sequence[str] = (),
 ) -> DirectoryPage:
     """One page of the view, its total and its Language counts.
 
+    Each row carries `columns` and nothing else of the entry (DCOL).
     `show_matches` adds each row's snippets while a search is on; without it
     the samples are not read at all. `first` (the ticked handles) leads the
     order, each part in the view's sort; it narrows nothing.
@@ -1129,7 +1223,7 @@ def list_page(
     )
     total, languages = _totals(session, view)
     return DirectoryPage(
-        rows=_rows(session, view, handles, show_matches=show_matches),
+        rows=_rows(session, view, handles, columns, show_matches=show_matches),
         total=total,
         languages=languages,
         yours_size=len(view.sources),
@@ -1223,6 +1317,11 @@ def newest_references(
 
 # ---- The detail panel (DIR-03) --------------------------------------------------------
 
+#: What the panel shows of an entry: its measures, its Language and its bio.
+_PANEL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
+    {*DIRECTORY_MEASURES, "language", "bio"}
+)
+
 
 def entry(
     session: Session, user_id: uuid.UUID, handle: str
@@ -1233,20 +1332,21 @@ def entry(
     The panel reads this rather than the list's row, so it opens on a Channel
     that is not on the current page, and the bio stays out of the list.
     """
-    found = session.execute(
+    listed = session.execute(
         unscoped_select(
-            sa_select(col(DirectoryEntry.bio)).where(
+            sa_select(col(DirectoryEntry.handle)).where(
                 col(DirectoryEntry.handle) == handle, _listed()
             ),
             reason=_SCOPE_REASON,
         )
     ).first()
-    if found is None:
+    if listed is None:
         return None
     view = resolve_view(
         session, user_id, tree=None, source="selection", handles=(), kinds=()
     )
-    return _rows(session, view, [handle])[0], found[0]
+    row = _rows(session, view, [handle], _PANEL_COLUMNS)[0]
+    return row, row.columns.pop("bio")
 
 
 #: How many citing Posts "Why it's here" quotes; the rest are counted.

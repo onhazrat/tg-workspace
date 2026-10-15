@@ -16,6 +16,7 @@ from app.services.directory_reads import (
     SEARCH_FIELDS,
     CitedByCond,
     CitesCond,
+    DirectoryColumn,
     DirectoryCond,
     DirectoryFlag,
     DirectoryMeasure,
@@ -362,6 +363,9 @@ class DirectoryListRequest(DirectoryViewRequest):
     selected_first: bool = Field(False, alias="selectedFirst")
     #: The ticked handles; left out when `yours` is the ticks, which carries them.
     ticked: list[Handle] = Field(default_factory=list, max_length=MAX_YOUR_CHANNELS)
+    #: The columns the rows carry (DCOL); a row leaves out every other one. An
+    #: Internal is dropped for an Account without `DATA_ADMIN`.
+    columns: list[DirectoryColumn] = Field(max_length=64)
 
     def first(self) -> list[str]:
         """The handles `selectedFirst` leads with; none while it is off."""
@@ -446,19 +450,94 @@ class _DirectoryEntryFields(BaseModel):
     cites: int
 
 
-class DirectoryRowResponse(_DirectoryEntryFields):
-    """One Directory entry in the list: its measures, never its bio or samples."""
+class DirectoryRowResponse(BaseModel):
+    """One Directory entry in the list: what every row needs, and the columns
+    the request asked for (DCOL).
 
-    #: Distinct Channels of "your channels" that cite it.
-    mine: int
-    #: The newest of those citations, epoch ms.
-    mine_last_at: int | None = Field(alias="mineLastAt")
+    A column field is **absent** when the request did not ask for it, never
+    `null`, because `null` already means "not measured". The route serialises
+    with `exclude_unset` for that reason, which is why every column field
+    carries a default here and the always-present ones carry none.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    handle: str
+    display_name: str | None = Field(alias="displayName")
+    photo_url: str | None = Field(alias="photoUrl")
+    followable: bool
+    followed: bool
+    #: This Account dismissed it (DIR-06); Follow is withheld until taken back.
+    dismissed: bool
+    #: The reader's Tags on it, as first written (DFP-04).
+    tags: list[str]
     #: Set only while a search is on and `showMatches` asked for it.
     match: DirectoryMatchResponse | None
     #: Shared parents with the first such Condition's Seeds; `null` while off.
     shared_parents: int | None = Field(alias="sharedParents")
     #: Shared children with the first such Condition's Seeds; `null` while off.
     shared_children: int | None = Field(alias="sharedChildren")
+
+    language: str | None = None
+    subscribers: int | None = None
+    #: Reach: the median Settled View count of recent Posts.
+    reach: int | None = None
+    #: Reach came through the Settling curve, so it is an estimate.
+    reach_estimated: bool | None = Field(None, alias="reachEstimated")
+    posts_per_week: float | None = Field(None, alias="postsPerWeek")
+    #: Share of sampled Posts that are forwards, 0 to 1.
+    forward_share: float | None = Field(None, alias="forwardShare")
+    #: Epoch ms.
+    last_post_at: int | None = Field(None, alias="lastPostAt")
+    #: Distinct Channels of "your channels" that cite it.
+    mine: int | None = None
+    #: The newest of those citations, epoch ms.
+    mine_last_at: int | None = Field(None, alias="mineLastAt")
+    #: Distinct Channels citing it, every Reference kind.
+    cited_by: int | None = Field(None, alias="citedBy")
+    #: Distinct Channels it cites, every Reference kind.
+    cites: int | None = None
+    #: When the Directory found it, epoch ms.
+    found_at: int | None = Field(None, alias="foundAt")
+    photos: int | None = None
+    videos: int | None = None
+    files: int | None = None
+    links: int | None = None
+    #: `ok`, `unavailable` or `unknown`: the verdict of the last conclusive probe.
+    status: str | None = None
+    bio: str | None = None
+    #: How many sample Posts the statistics were computed from.
+    sample_count: int | None = Field(None, alias="sampleCount")
+    #: When a conclusive answer was last recorded, epoch ms.
+    checked_at: int | None = Field(None, alias="checkedAt")
+    #: When the answer goes stale and the handle is due again, epoch ms.
+    refresh_due_at: int | None = Field(None, alias="refreshDueAt")
+    #: Consecutive inconclusive fetches. `DATA_ADMIN` only, as are the rest.
+    attempts: int | None = None
+    last_error: str | None = Field(None, alias="lastError")
+    #: Every attempt, conclusive or not, epoch ms.
+    attempted_at: int | None = Field(None, alias="attemptedAt")
+    #: When an inconclusive handle may be tried again, epoch ms.
+    retry_after: int | None = Field(None, alias="retryAfter")
+    #: Drain order, lower first.
+    priority: int | None = None
+    telegram_chat_id: int | None = Field(None, alias="telegramChatId")
+    latest_id: int | None = Field(None, alias="latestId")
+
+
+class DirectoryColumnResponse(BaseModel):
+    """One column a caller may show, and whether it is on by default."""
+
+    key: DirectoryColumn
+    default: bool
+
+
+class DirectoryColumnDefaultsRequest(BaseModel):
+    """The columns on by default for the whole deployment; the rest are off."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    on: list[DirectoryColumn] = Field(max_length=64)
 
 
 class DirectoryEntryResponse(_DirectoryEntryFields):

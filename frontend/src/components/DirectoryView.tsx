@@ -278,8 +278,7 @@ export function DirectoryView() {
         onSort={(value) => patch(chooseSort(value))}
         descending={view.descending}
         onToggleDirection={() => patch({ descending: !view.descending })}
-        hidden={d.hidden}
-        onHidden={d.setHidden}
+        columns={d.columnsMenu}
         total={shown.total}
         size={d.size}
         ms={shown.ms}
@@ -339,7 +338,7 @@ export function DirectoryView() {
         page={view.page}
         sort={view.sort}
         descending={view.descending}
-        hidden={d.hidden}
+        shown={d.shownColumns}
         ticks={d.ticks}
         onTicks={d.setTicks}
         following={d.following}

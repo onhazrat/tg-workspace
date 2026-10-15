@@ -266,8 +266,9 @@ export type DirectorySamplePostIsNotAllOptional = Assert<
     : false
 >
 
-// The Directory tab's reads (DIR-02): closed, with every field the table and
-// the bar read required, so the tab never narrows a count that is always there.
+// The Directory tab's reads (DIR-02): closed, with every field every row
+// carries required. A column's fields are optional because a row carries only
+// the columns the read asked for (DCOL); the core never is.
 export type DirectoryListIsClosed = Assert<IsClosed<DirectoryListResponse>>
 export type DirectoryRowIsClosed = Assert<IsClosed<DirectoryRowResponse>>
 export type DirectoryDistributionIsClosed = Assert<
@@ -281,9 +282,9 @@ export type DirectoryListIsNotAllOptional = Assert<
   }
     ? DirectoryRowResponse extends {
         handle: string
-        mine: number
         followed: boolean
-        reachEstimated: boolean
+        followable: boolean
+        tags: string[]
       }
       ? true
       : false

@@ -157,6 +157,9 @@ PICKS = ("p1", "@P2")
 
 
 def _list(client: TestClient, headers: dict[str, str], **body: Any) -> dict[str, Any]:
+    # Every column, so a row carries all it has; DCOL's narrowing is
+    # `test_directory_columns.py`'s.
+    body.setdefault("columns", list(directory_reads.DIRECTORY_COLUMNS))
     response = client.post(f"{DIRECTORY}/list", json=body, headers=headers)
     assert response.status_code == 200, response.text
     return dict(response.json())
@@ -278,7 +281,9 @@ def test_a_zero_minimum_or_an_unknown_relation_is_refused(
 ) -> None:
     for bad in (shared("parents", "p1", min=0), shared("cousins", "p1")):
         response = client.post(
-            f"{DIRECTORY}/list", json={"filter": root(bad)}, headers=operator
+            f"{DIRECTORY}/list",
+            json={"filter": root(bad), "columns": []},
+            headers=operator,
         )
         assert response.status_code == 422
 
@@ -377,7 +382,7 @@ def test_a_shared_condition_takes_handles_or_a_tag_never_both(
     cond = {"type": "parents", "handles": ["p1"], "tag": "seeds"}
     response = client.post(
         f"{DIRECTORY}/list",
-        json={"filter": root({"kind": "atom", "cond": cond})},
+        json={"filter": root({"kind": "atom", "cond": cond}), "columns": []},
         headers=operator,
     )
     assert response.status_code == 422
