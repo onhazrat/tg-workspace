@@ -11,7 +11,9 @@ export function LanguageName({ code }: { code: string | null | undefined }) {
   return (
     <>
       {languageLabel(value)}{" "}
-      <span className="font-normal text-app-ink/40">{value}</span>
+      {/* Relative, not a fixed ink: the cells and badges this sits in are
+          already dimmed, and a fixed color reads the same as their text. */}
+      <span className="font-normal opacity-60">{value}</span>
     </>
   )
 }
