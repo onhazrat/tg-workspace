@@ -1,3 +1,4 @@
+import { telegramWebViewPostUrl } from "@/lib/telegram-web"
 import type { Post, PostMediaKind } from "@/types"
 
 /** A post this long collapses behind "Show More". */
@@ -26,4 +27,28 @@ export function nextTranslateStep(state: {
   if (state.translating) return "ignore"
   if (!state.translated) return "fetch"
   return state.showing ? "hide" : "show"
+}
+
+/**
+ * Where a reply's parent is stored, if it can be: the Channel Telegram linked
+ * to, else the reply's own. A link that names no public Channel is a private
+ * parent (`/c/…`), which no lookup can find.
+ */
+export function replyParentRef(
+  post: Post,
+): { channelName: string; postId: number } | null {
+  if (post.replyToPostId == null) return null
+  const { channel, url } = post.replyTo ?? {}
+  if (url && !channel) return null
+  return {
+    channelName: channel || post.channelName,
+    postId: post.replyToPostId,
+  }
+}
+
+/** The parent on Telegram: the link Telegram gave, else the reply's Channel. */
+export function replyParentUrl(reply: Post, parentId: number): string {
+  return (
+    reply.replyTo?.url ?? telegramWebViewPostUrl(reply.channelName, parentId)
+  )
 }

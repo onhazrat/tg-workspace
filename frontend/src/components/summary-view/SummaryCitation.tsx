@@ -2,34 +2,19 @@
  * A Citation in a Summary's report (SUMTAB-04): the `[channel #id]` chip and
  * the Cited Post behind it as a full post card.
  *
- * With hover, the card opens in a hover card whose height is capped to the
- * room the positioner reports (`--available-height`) and scrolls inside, so a
- * long Post is readable rather than cut off. With no hover, or on a narrow
- * screen, a tap opens the same card in a bottom sheet. The Chat tab keeps its
- * own text hover (`CitationHover`).
+ * How it opens, hover card or bottom sheet, is `PostPreview`'s. The Chat tab
+ * keeps its own text hover (`CitationHover`).
  */
-import { PreviewCard } from "@base-ui/react/preview-card"
-import { ExternalLink, Loader2 } from "lucide-react"
-import { useState, useSyncExternalStore } from "react"
-import { MOBILE_BREAKPOINT } from "@/constants"
 import { CITATION_ATTR, citationKey } from "@/lib/citations/find-citation"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import { telegramWebViewPostUrl } from "@/lib/telegram-web"
-import type { Channel } from "@/types"
-import { PostCardView } from "../post-card/PostCardView"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "../ui/sheet"
-
-/** What the card needs from the workspace; `SummaryMarkdown` passes it in. */
-export interface CitationWorkspace {
-  channel: (name: string) => Channel | undefined
-  onAddChannel: (name: string) => void
-}
+  OpenInTelegram,
+  PostPreview,
+  PreviewedPost,
+  PreviewLoading,
+  type PreviewWorkspace,
+} from "../PostPreview"
 
 export interface SummaryCitationProps {
   cited: CitedPost
@@ -37,7 +22,7 @@ export interface SummaryCitationProps {
   loading: boolean
   /** No hover or a narrow screen: a tap opens a bottom sheet. */
   sheet: boolean
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
 }
 
 const CHIP =
@@ -49,77 +34,24 @@ export function SummaryCitation({
   sheet,
   workspace,
 }: SummaryCitationProps) {
-  const [open, setOpen] = useState(false)
   const label = `${cited.channelName} #${cited.postId}`
-  const target = {
-    [CITATION_ATTR]: citationKey(cited.channelName, cited.postId),
-  }
-  const card = (
-    <CitedPostCard cited={cited} loading={loading} workspace={workspace} />
-  )
-
-  const inner = sheet ? (
-    <>
-      <button
-        type="button"
-        {...target}
-        aria-label={`Show cited post ${label}`}
-        className={`${CHIP} cursor-pointer`}
-        onClick={() => setOpen(true)}
-      >
-        {label}
-      </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[85dvh] gap-0 rounded-t-2xl"
-        >
-          <SheetHeader className="pb-2">
-            <SheetTitle className="font-mono text-sm">{label}</SheetTitle>
-            <SheetDescription className="sr-only">
-              The post this Citation names
-            </SheetDescription>
-          </SheetHeader>
-          <div className="overflow-y-auto overscroll-contain px-4 pb-6">
-            {card}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </>
-  ) : (
-    <PreviewCard.Root>
-      <PreviewCard.Trigger
-        {...target}
-        href={telegramWebViewPostUrl(cited.channelName, cited.postId)}
-        target="_blank"
-        rel="noopener noreferrer"
-        delay={150}
-        className={`${CHIP} cursor-help`}
-      >
-        {label}
-      </PreviewCard.Trigger>
-      <PreviewCard.Portal>
-        <PreviewCard.Positioner
-          side="top"
-          sideOffset={8}
-          collisionPadding={8}
-          className="z-50"
-        >
-          <PreviewCard.Popup className="max-h-(--available-height) w-[min(28rem,calc(100vw-1rem))] overflow-y-auto overscroll-contain rounded-2xl border border-app-ink/10 bg-app-bg p-2 shadow-xl">
-            {card}
-          </PreviewCard.Popup>
-        </PreviewCard.Positioner>
-      </PreviewCard.Portal>
-    </PreviewCard.Root>
-  )
-
-  // React bubbles a portal's events through the tree, so a click in the hover
-  // card or the sheet would reach a bullet, which searches for related posts
-  // on click. One stop here covers the chip, the card, the overlay and Close.
   return (
-    <span className="contents" onClick={(e) => e.stopPropagation()}>
-      {inner}
-    </span>
+    <PostPreview
+      sheet={sheet}
+      href={telegramWebViewPostUrl(cited.channelName, cited.postId)}
+      title={label}
+      description="The post this Citation names"
+      triggerProps={{
+        [CITATION_ATTR]: citationKey(cited.channelName, cited.postId),
+      }}
+      triggerClassName={CHIP}
+      sheetLabel={`Show cited post ${label}`}
+      card={
+        <CitedPostCard cited={cited} loading={loading} workspace={workspace} />
+      }
+    >
+      {label}
+    </PostPreview>
   )
 }
 
@@ -147,57 +79,21 @@ export function CitedPostCard({
               As saved with this Summary; the Post is no longer stored.
             </p>
           )}
-          <PostCardView
-            post={post}
-            text={post.text}
-            postSearch=""
-            channel={workspace.channel(post.channelName)}
-            followsForwardSource={!!workspace.channel(post.forwardedFrom ?? "")}
-            onAddChannel={workspace.onAddChannel}
-            wholeText
-          />
+          <PreviewedPost post={post} workspace={workspace} />
         </>
       ) : loading ? (
-        <div className="flex justify-center py-6">
-          <Loader2
-            className="size-4 animate-spin opacity-50"
-            aria-label="Loading post"
-          />
-        </div>
+        <PreviewLoading />
       ) : (
         <div className="flex flex-col items-center gap-2 px-3 py-6 text-center text-sm text-app-ink/60">
           <p>
             Post not found: it is no longer stored and this Summary kept no
             copy.
           </p>
-          <a
+          <OpenInTelegram
             href={telegramWebViewPostUrl(cited.channelName, cited.postId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-blue-500 hover:underline"
-          >
-            Open in Telegram <ExternalLink size={12} />
-          </a>
+          />
         </div>
       )}
     </div>
-  )
-}
-
-const HOVER_WIDE = `(hover: hover) and (min-width: ${MOBILE_BREAKPOINT}px)`
-
-// Module-level so `useSyncExternalStore` keeps one subscription rather than
-// resubscribing on every render.
-function subscribeHoverWide(onChange: () => void): () => void {
-  const mql = window.matchMedia?.(HOVER_WIDE)
-  mql?.addEventListener("change", onChange)
-  return () => mql?.removeEventListener("change", onChange)
-}
-
-/** True where a Citation opens a bottom sheet: no hover, or a narrow screen. */
-export function useCitationSheet(): boolean {
-  return useSyncExternalStore(
-    subscribeHoverWide,
-    () => !(window.matchMedia?.(HOVER_WIDE).matches ?? true),
   )
 }

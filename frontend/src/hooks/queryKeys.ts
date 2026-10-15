@@ -38,6 +38,9 @@ export const queryKeys = {
   /** A Summary's Cited Posts as they are now, keyed by the refs (SUMTAB-04). */
   citedPosts: (refs: readonly { channelName: string; postId: number }[]) =>
     ["citedPosts", refs] as const,
+  /** A reply's parent, looked up when its preview opens. */
+  replyParent: (channelName: string, postId: number) =>
+    ["replyParent", channelName, postId] as const,
   /** One Channel's uncited Covered Posts, paged (SUMTAB-06). */
   coveredPosts: (refs: readonly { channelName: string; postId: number }[]) =>
     ["coveredPosts", refs] as const,

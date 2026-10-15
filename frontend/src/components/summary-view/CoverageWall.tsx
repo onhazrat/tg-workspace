@@ -11,8 +11,8 @@ import { ChannelAvatar } from "@/components/ChannelAvatar"
 import { CITATION_ATTR } from "@/lib/citations/find-citation"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import { type CoverageRow, coverageRows } from "@/lib/summaries/coverage"
+import type { PreviewWorkspace } from "../PostPreview"
 import { ChannelPostsSheet } from "./ChannelPostsSheet"
-import type { CitationWorkspace } from "./SummaryCitation"
 
 /** Set on a highlighted Channel's Citations and strip tiles. */
 export const HIGHLIGHT_ATTR = "data-channel-highlight"
@@ -53,7 +53,7 @@ export function CoverageWall({
   cited: CitedPost[]
   /** The frozen Scope's Post refs; null when none were recorded. */
   covered: ScopedPostRef[] | null | undefined
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
 }) {
   const rows = useMemo(
     () => coverageRows(scopeChannels, cited, covered),
@@ -139,7 +139,7 @@ function CoverageAvatar({
   onPress,
 }: {
   row: CoverageRow
-  workspace: CitationWorkspace
+  workspace: PreviewWorkspace
   pressed: boolean
   onPress: () => void
 }) {
