@@ -167,11 +167,12 @@ def test_the_split_did_not_change_the_route_count() -> None:
     routes for an Attempt on the worker; and **110** with SFR-03's cancel of a
     waiting Attempt and keep, dismiss and restore of a Partial response; and
     **112** with DCOL's `GET` and `PUT /directory/columns`, the Directory
-    columns a caller may show and the deployment's defaults.
+    columns a caller may show and the deployment's defaults; and **113** with
+    DPF's `POST /directory/boost`, the Operator's Priority boost.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 112, (
-        f"expected 112 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 113, (
+        f"expected 113 /data endpoints, found {len(data_routes)}"
     )

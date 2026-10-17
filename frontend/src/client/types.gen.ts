@@ -1575,6 +1575,38 @@ export type DirectoryBinResponse = {
 };
 
 /**
+ * DirectoryBoostRequest
+ *
+ * Set the Priority boost of the named entries, or add to it (DPF).
+ */
+export type DirectoryBoostRequest = {
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+    /**
+     * Mode
+     */
+    mode: 'set' | 'add';
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * DirectoryBoostResponse
+ *
+ * How many of the named entries the Directory holds, and so changed.
+ */
+export type DirectoryBoostResponse = {
+    /**
+     * Changed
+     */
+    changed: number;
+};
+
+/**
  * DirectoryCitedByCondition
  *
  * Cited by any of the Seeds, in the view's Reference kinds.
@@ -1655,7 +1687,7 @@ export type DirectoryColumnDefaultsRequest = {
     /**
      * On
      */
-    on: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'mine' | 'cited_by' | 'cites' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'telegram_chat_id' | 'latest_id'>;
+    on: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id'>;
 };
 
 /**
@@ -1667,11 +1699,31 @@ export type DirectoryColumnResponse = {
     /**
      * Key
      */
-    key: 'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'mine' | 'cited_by' | 'cites' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'telegram_chat_id' | 'latest_id';
+    key: 'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id';
     /**
      * Default
      */
     default: boolean;
+};
+
+/**
+ * DirectoryContainsCondition
+ *
+ * Any part of the text, case-insensitive.
+ */
+export type DirectoryContainsCondition = {
+    /**
+     * Type
+     */
+    type: 'contains';
+    /**
+     * Field
+     */
+    field: 'last_error';
+    /**
+     * Value
+     */
+    value: string;
 };
 
 /**
@@ -1705,7 +1757,7 @@ export type DirectoryCountResponse = {
 /**
  * DirectoryDistributionRequest
  *
- * A measure's spread under every other Condition of the view.
+ * A measure's spread under every other Condition of the view; a moment's in epoch ms.
  */
 export type DirectoryDistributionRequest = {
     yours?: YourChannels;
@@ -1718,7 +1770,7 @@ export type DirectoryDistributionRequest = {
     /**
      * Measure
      */
-    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites';
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
 };
 
 /**
@@ -1852,6 +1904,18 @@ export type DirectoryEntryResponse = {
      * Bio
      */
     bio: string | null;
+    /**
+     * Kind
+     */
+    kind?: string | null;
+    /**
+     * Priorityboost
+     */
+    priorityBoost?: number | null;
+    /**
+     * Effectivepriority
+     */
+    effectivePriority?: number | null;
 };
 
 /**
@@ -1884,6 +1948,12 @@ export type DirectoryFilterAtom = {
     } & DirectoryMeasureCondition) | ({
         type: 'flag';
     } & DirectoryFlagCondition) | ({
+        type: 'is';
+    } & DirectoryIsCondition) | ({
+        type: 'contains';
+    } & DirectoryContainsCondition) | ({
+        type: 'time';
+    } & DirectoryTimeCondition) | ({
         type: 'mine';
     } & DirectoryMineCondition) | ({
         type: 'citedby';
@@ -1959,6 +2029,26 @@ export type DirectoryFollowSource = {
 };
 
 /**
+ * DirectoryIsCondition
+ *
+ * The verdict or the kind is exactly `value`.
+ */
+export type DirectoryIsCondition = {
+    /**
+     * Type
+     */
+    type: 'is';
+    /**
+     * Field
+     */
+    field: 'status' | 'kind';
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
  * DirectoryLanguageCondition
  */
 export type DirectoryLanguageCondition = {
@@ -2004,7 +2094,7 @@ export type DirectoryListRequest = {
     /**
      * Sort
      */
-    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at' | 'language' | 'status' | 'kind' | 'followable' | 'bio' | 'last_error' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
     /**
      * Descending
      */
@@ -2028,7 +2118,7 @@ export type DirectoryListRequest = {
     /**
      * Columns
      */
-    columns: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'mine' | 'cited_by' | 'cites' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'telegram_chat_id' | 'latest_id'>;
+    columns: Array<'language' | 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_at' | 'mine' | 'cited_by' | 'cites' | 'created_at' | 'photos' | 'videos' | 'files' | 'links' | 'status' | 'followable' | 'kind' | 'bio' | 'sample_count' | 'checked_at' | 'refresh_due_at' | 'attempts' | 'last_error' | 'attempted_at' | 'retry_after' | 'priority' | 'priority_boost' | 'effective_priority' | 'telegram_chat_id' | 'latest_id'>;
 };
 
 /**
@@ -2101,7 +2191,7 @@ export type DirectoryMeasureCondition = {
     /**
      * Measure
      */
-    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'last_post_days' | 'found_days' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites';
+    measure: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority';
     /**
      * Min
      */
@@ -2306,6 +2396,10 @@ export type DirectoryRowResponse = {
      */
     status?: string | null;
     /**
+     * Kind
+     */
+    kind?: string | null;
+    /**
      * Bio
      */
     bio?: string | null;
@@ -2341,6 +2435,14 @@ export type DirectoryRowResponse = {
      * Priority
      */
     priority?: number | null;
+    /**
+     * Priorityboost
+     */
+    priorityBoost?: number | null;
+    /**
+     * Effectivepriority
+     */
+    effectivePriority?: number | null;
     /**
      * Telegramchatid
      */
@@ -2531,6 +2633,39 @@ export type DirectoryTagSeeds = {
      * Tag
      */
     tag: string;
+};
+
+/**
+ * DirectoryTimeCondition
+ *
+ * A Time bound, start included and end excluded, either end open: Fixed
+ * ends are epoch ms, Live ends signed ms from now.
+ */
+export type DirectoryTimeCondition = {
+    /**
+     * Type
+     */
+    type: 'time';
+    /**
+     * Moment
+     */
+    moment: 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
+    /**
+     * Mode
+     */
+    mode: 'live' | 'fixed';
+    /**
+     * Start
+     */
+    start?: number | null;
+    /**
+     * End
+     */
+    end?: number | null;
+    /**
+     * None
+     */
+    none?: boolean;
 };
 
 /**
@@ -10311,6 +10446,31 @@ export type DataPutDirectoryColumnsResponses = {
 };
 
 export type DataPutDirectoryColumnsResponse = DataPutDirectoryColumnsResponses[keyof DataPutDirectoryColumnsResponses];
+
+export type DataBoostDirectoryData = {
+    body: DirectoryBoostRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/boost';
+};
+
+export type DataBoostDirectoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataBoostDirectoryError = DataBoostDirectoryErrors[keyof DataBoostDirectoryErrors];
+
+export type DataBoostDirectoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryBoostResponse;
+};
+
+export type DataBoostDirectoryResponse = DataBoostDirectoryResponses[keyof DataBoostDirectoryResponses];
 
 export type DataGetDirectoryEntryData = {
     body?: never;

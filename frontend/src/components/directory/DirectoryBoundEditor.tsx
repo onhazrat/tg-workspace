@@ -11,12 +11,10 @@ import {
 import type { Measure } from "@/lib/directory/directory-filter"
 import { formatCount } from "@/lib/format-count"
 
-const DAY_PRESETS = [1, 7, 30, 90, 365]
-
 /** Two significant figures, so a bar's edge reads 1,200 and not 1,187.43. */
 const nice = (v: number) => Number(v.toPrecision(2))
 
-type Bin = DirectoryDistributionResponse["bins"][number]
+export type Bin = DirectoryDistributionResponse["bins"][number]
 
 /** Whether a bar overlaps the bound, so the bars show what it keeps. */
 const inside = (bin: Bin, bound: MetricBound | null) =>
@@ -25,14 +23,20 @@ const inside = (bin: Bin, bound: MetricBound | null) =>
   (bound.min === undefined || bin.hi > bound.min) &&
   (bound.max === undefined || bin.lo <= bound.max)
 
-function Spread({
+/**
+ * A measure's spread as bars, a click on one choosing it. `format` writes a
+ * value: a count by default, a moment's epoch ms as a date (DPF).
+ */
+export function Spread({
   spread,
   bound,
   onBar,
+  format = formatCount,
 }: {
   spread: DirectoryDistributionResponse
   bound: MetricBound | null
   onBar: (bin: Bin) => void
+  format?: (value: number) => string
 }) {
   const peak = Math.max(1, ...spread.bins.map((bin) => bin.count))
   return (
@@ -43,7 +47,7 @@ function Spread({
             key={bin.lo}
             type="button"
             data-testid={`directory-bound-bar-${i}`}
-            title={`${formatCount(bin.lo)}–${formatCount(bin.hi)}: ${bin.count} channels`}
+            title={`${format(bin.lo)}–${format(bin.hi)}: ${bin.count} channels`}
             onClick={() => onBar(bin)}
             className={`flex-1 rounded-t-[2px] ${inside(bin, bound) ? "bg-app-ink/70" : "bg-app-ink/15 hover:bg-app-ink/40"}`}
             style={{
@@ -53,12 +57,12 @@ function Spread({
         ))}
       </div>
       <div className="flex justify-between gap-2 text-[10px] tabular-nums text-app-ink/50">
-        <span>{formatCount(spread.min ?? 0)}</span>
+        <span>{format(spread.min ?? 0)}</span>
         <span>
-          median {formatCount(spread.median ?? 0)}
+          median {format(spread.median ?? 0)}
           {spread.scale === "log" ? ", log scale" : ""}
         </span>
-        <span>{formatCount(spread.max ?? 0)}</span>
+        <span>{format(spread.max ?? 0)}</span>
       </div>
     </div>
   )
@@ -67,8 +71,7 @@ function Spread({
 /**
  * One measure's bound in the Directory filter (DIR-02): its spread under
  * every other Condition, drawn by the server, a click on a bar setting the
- * bound, the four modes, day presets on a measure counted in days, and how
- * many Channels the bound leaves on Add. NOT is the chip's, not the editor's.
+ * bound, the four modes, and how many Channels the bound leaves on Add. NOT is the chip's, not the editor's.
  *
  * `countFor` renders how many a candidate bound leaves; the container passes
  * an element that reads it, so this stays renderable without a server.
@@ -89,9 +92,7 @@ export function DirectoryBoundEditor({
   onSubmit: (bound: MetricBound) => void
   onBack?: () => void
 }) {
-  const [op, setOp] = useState<BoundKind>(
-    initial ? boundKind(initial) : measure.days ? "lte" : "gte",
-  )
+  const [op, setOp] = useState<BoundKind>(initial ? boundKind(initial) : "gte")
   const [a, setA] = useState(
     String((op === "lte" ? initial?.max : initial?.min) ?? ""),
   )
@@ -103,10 +104,6 @@ export function DirectoryBoundEditor({
     setOp(next)
     setA(String(nice(next === "lte" ? bin.hi : bin.lo)))
     setB(String(nice(bin.hi)))
-  }
-  const onPreset = (days: number) => {
-    if (op !== "gte") setOp("lte")
-    setA(String(days))
   }
 
   return (
@@ -137,21 +134,6 @@ export function DirectoryBoundEditor({
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
       )}
       <BoundFields op={op} setOp={setOp} a={a} setA={setA} b={b} setB={setB} />
-      {measure.days && op !== "none" && (
-        <div className="flex gap-1">
-          {DAY_PRESETS.map((days) => (
-            <button
-              key={days}
-              type="button"
-              aria-label={`${days} days`}
-              onClick={() => onPreset(days)}
-              className="rounded-full bg-app-ink/5 px-2 py-0.5 font-mono text-[11px] hover:bg-app-ink/10"
-            >
-              {days}d
-            </button>
-          ))}
-        </div>
-      )}
       {!!distribution?.noValue && (
         <p className="text-[11px] text-app-ink/50">
           {distribution.noValue.toLocaleString()} have no value and fail every

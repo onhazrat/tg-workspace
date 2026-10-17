@@ -13,7 +13,6 @@ import {
   type DirectoryCond,
   type DirectoryHandlesCond,
   directoryConditionLabel,
-  MEASURES,
   SHARED_LABEL,
 } from "@/lib/directory/directory-filter"
 import type { Tagging } from "@/lib/directory/directory-tags"
@@ -21,8 +20,9 @@ import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
+import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
 import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
-import { cell, FollowCell } from "./DirectoryTable"
+import { cell, columnOf, FollowCell } from "./DirectoryTable"
 import { TagBadges, TagPicker } from "./DirectoryTags"
 
 const HEADING =
@@ -37,6 +37,22 @@ const KIND_VERB: Record<string, string> = {
   reply: "replied to",
 }
 
+const PANEL_COLUMNS = [
+  "language",
+  "subscribers",
+  "reach",
+  "posts_per_week",
+  "forward_pct",
+  "last_post_at",
+  "created_at",
+  "photos",
+  "videos",
+  "files",
+  "links",
+  "cited_by",
+  "cites",
+] as const
+
 /** Every measure of the entry, as the table formats it; a dash for none. */
 function Counters({ entry }: { entry: DirectoryEntryResponse }) {
   const row = {
@@ -47,10 +63,12 @@ function Counters({ entry }: { entry: DirectoryEntryResponse }) {
     sharedParents: null,
     sharedChildren: null,
   }
+  // What the entry read carries (`directory_reads._PANEL_COLUMNS`), the kind
+  // only for a DATA_ADMIN reader, whose entry has one (DPF).
   const stats = [
-    { key: "language" as const, label: "Lang" },
-    ...MEASURES.map((m) => ({ key: m.key, label: m.short })),
-  ]
+    ...PANEL_COLUMNS,
+    ...(entry.kind == null ? [] : (["kind"] as const)),
+  ].map((key) => ({ key, label: columnOf(key).label }))
   return (
     <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 text-xs sm:grid-cols-4">
       {stats.map(({ key, label }) => (
@@ -333,6 +351,7 @@ export function DirectoryPanel({
   neighbours,
   onFilter,
   tagging,
+  onBoost,
 }: {
   handle: string
   entry: DirectoryEntryResponse | null | undefined
@@ -351,6 +370,9 @@ export function DirectoryPanel({
   onFilter: (cond: DirectoryCond) => void
   /** The open Channel's Tags, added and removed here (DFP-04). */
   tagging?: Tagging
+  /** Sets or adds to its Priority boost (DPF); shown only where the entry
+   * carries one, which is for a `DATA_ADMIN` reader. */
+  onBoost?: (mode: BoostMode, value: number) => void
 }) {
   return (
     <>
@@ -410,6 +432,15 @@ export function DirectoryPanel({
                       <Plus size={9} /> Tag
                     </button>
                   }
+                />
+              </div>
+            )}
+            {onBoost && entry.priorityBoost != null && (
+              <div className="mb-3">
+                <DirectoryBoost
+                  onBoost={onBoost}
+                  current={entry.priorityBoost}
+                  effective={entry.effectivePriority ?? undefined}
                 />
               </div>
             )}

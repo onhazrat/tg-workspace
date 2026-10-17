@@ -14,9 +14,10 @@ import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import type { ColumnKey } from "@/lib/directory/directory-columns"
 import {
-  MEASURES,
   type MeasureKey,
+  type MomentKey,
   measureOf,
+  momentOf,
 } from "@/lib/directory/directory-filter"
 import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
@@ -82,6 +83,10 @@ const measureText = (key: MeasureKey) => ({
   label: measureOf(key).short,
   description: measureOf(key).description,
 })
+const momentText = (key: MomentKey) => ({
+  label: momentOf(key).label,
+  description: momentOf(key).description,
+})
 
 /**
  * What the Columns menu and the header call each column (DCOL). Keyed by the
@@ -98,14 +103,14 @@ const COLUMN_TEXT: Record<ColumnKey, Omit<DirectoryColumn, "key">> = {
   reach: measureText("reach"),
   posts_per_week: measureText("posts_per_week"),
   forward_pct: measureText("forward_pct"),
-  last_post_days: measureText("last_post_days"),
+  last_post_at: momentText("last_post_at"),
   mine: {
     label: "Yours",
     description: "How many of your channels cite it, and when one last did",
   },
   cited_by: measureText("cited_by"),
   cites: measureText("cites"),
-  found_days: measureText("found_days"),
+  created_at: momentText("created_at"),
   photos: measureText("photos"),
   videos: measureText("videos"),
   files: measureText("files"),
@@ -119,48 +124,27 @@ const COLUMN_TEXT: Record<ColumnKey, Omit<DirectoryColumn, "key">> = {
     label: "Followable",
     description: "Whether it is a public Channel the app can follow",
   },
-  bio: { label: "Bio", description: "What the Channel says about itself" },
-  sample_count: {
-    label: "Sample",
+  kind: {
+    label: "Kind",
     description:
-      "How many recent Posts the Directory sampled; Posts per week and Reach come from them",
+      "What its page turned out to be: channel, group, bot, user, or unknown while unfetched",
   },
-  checked_at: {
-    label: "Checked",
-    description: "When the Directory last got an answer about it",
-  },
-  refresh_due_at: {
-    label: "Refresh due",
-    description: "When the Directory will fetch it again",
-  },
-  attempts: {
-    label: "Attempts",
-    description: "Fetches in a row that got no answer; reset by one that does",
-  },
+  bio: { label: "Bio", description: "What the Channel says about itself" },
+  sample_count: measureText("sample_count"),
+  checked_at: momentText("checked_at"),
+  refresh_due_at: momentText("refresh_due_at"),
+  attempts: measureText("attempts"),
   last_error: {
     label: "Last error",
     description: "Why the last fetch got no answer",
   },
-  attempted_at: {
-    label: "Last attempt",
-    description: "When the Directory last tried to fetch it, answered or not",
-  },
-  retry_after: {
-    label: "Retry after",
-    description: "When a fetch that got no answer may be tried again",
-  },
-  priority: {
-    label: "Priority",
-    description: "Its place in the probe queue; lower goes first",
-  },
-  telegram_chat_id: {
-    label: "Chat id",
-    description: "Telegram's id for it, which survives a handle rename",
-  },
-  latest_id: {
-    label: "Latest id",
-    description: "The newest Post id the Directory saw",
-  },
+  attempted_at: momentText("attempted_at"),
+  retry_after: momentText("retry_after"),
+  priority: measureText("priority"),
+  priority_boost: measureText("priority_boost"),
+  effective_priority: measureText("effective_priority"),
+  telegram_chat_id: measureText("telegram_chat_id"),
+  latest_id: measureText("latest_id"),
 }
 
 export const columnOf = (key: ColumnKey): DirectoryColumn => ({
@@ -168,17 +152,12 @@ export const columnOf = (key: ColumnKey): DirectoryColumn => ({
   ...COLUMN_TEXT[key],
 })
 
-/** The columns a header can sort by: the measures, Yours and the Shared counts. */
-const SORTABLE = new Set<string>([
-  ...MEASURES.map((m) => m.key),
-  "mine",
-  "shared_parents",
-  "shared_children",
-])
-/** Columns of words, left-aligned; the rest are numbers and times. */
+/** Columns of words, left-aligned; the rest are numbers and times. Every
+ * column's header sorts by it (DPF). */
 const WORDS = new Set<string>([
   "language",
   "status",
+  "kind",
   "followable",
   "bio",
   "last_error",
@@ -254,16 +233,17 @@ const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
       : r.postsPerWeek.toFixed(r.postsPerWeek < 10 ? 1 : 0),
   forward_pct: (r) =>
     r.forwardShare == null ? "" : `${Math.round(r.forwardShare * 100)}%`,
-  last_post_days: (r) => when(r.lastPostAt),
+  last_post_at: (r) => when(r.lastPostAt),
   mine,
   cited_by: (r) => count(r.citedBy),
   cites: (r) => count(r.cites),
-  found_days: (r) => when(r.foundAt),
+  created_at: (r) => when(r.foundAt),
   photos: (r) => count(r.photos),
   videos: (r) => count(r.videos),
   files: (r) => count(r.files),
   links: (r) => count(r.links),
   status: (r) => r.status ?? "",
+  kind: (r) => r.kind ?? "",
   followable: (r) => (r.followable ? "Yes" : "No"),
   bio: (r) => words(r.bio),
   sample_count: (r) => r.sampleCount ?? "",
@@ -275,6 +255,8 @@ const CELLS: Record<DirectoryColumn["key"], (r: Row) => React.ReactNode> = {
   retry_after: (r) => when(r.retryAfter),
   // Ids and a queue position, so never rounded to "1.2M".
   priority: (r) => r.priority ?? "",
+  priority_boost: (r) => r.priorityBoost ?? "",
+  effective_priority: (r) => r.effectivePriority ?? "",
   telegram_chat_id: (r) => r.telegramChatId ?? "",
   latest_id: (r) => r.latestId ?? "",
   shared_parents: (r) => count(r.sharedParents),
@@ -448,19 +430,15 @@ function ColumnHeader({
       aria-sort={sorted ? (descending ? "descending" : "ascending") : undefined}
       className={`px-2 py-2 ${WORDS.has(key) ? "" : "text-right"} ${className}`}
     >
-      {!SORTABLE.has(key) ? (
-        <span className="whitespace-nowrap">{column.label}</span>
-      ) : (
-        <button
-          type="button"
-          onClick={() => onSort(key as DirectorySort)}
-          className={`inline-flex items-center gap-0.5 whitespace-nowrap hover:text-app-ink ${sorted ? "text-app-ink" : ""}`}
-        >
-          {column.label}
-          {sorted &&
-            (descending ? <ArrowDown size={10} /> : <ArrowUp size={10} />)}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => onSort(key)}
+        className={`inline-flex items-center gap-0.5 whitespace-nowrap hover:text-app-ink ${sorted ? "text-app-ink" : ""}`}
+      >
+        {column.label}
+        {sorted &&
+          (descending ? <ArrowDown size={10} /> : <ArrowUp size={10} />)}
+      </button>
     </th>
   )
 }

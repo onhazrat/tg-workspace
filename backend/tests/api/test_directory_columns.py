@@ -62,13 +62,16 @@ OPENING_DEFAULTS = {
     "reach",
     "posts_per_week",
     "forward_pct",
-    "last_post_days",
+    "last_post_at",
     "mine",
     "cited_by",
     "cites",
-    "found_days",
+    "created_at",
 }
 INTERNALS = {
+    "kind",
+    "priority_boost",
+    "effective_priority",
     "attempts",
     "last_error",
     "attempted_at",
@@ -221,6 +224,9 @@ def test_every_column_maps_to_its_fields(
         "attemptedAt",
         "retryAfter",
         "priority",
+        "priorityBoost",
+        "effectivePriority",
+        "kind",
         "telegramChatId",
         "latestId",
     }
@@ -239,7 +245,7 @@ def test_an_unknown_column_is_refused(
     client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
 ) -> None:
     operator, _ = accounts
-    for body in ({"columns": ["kind"]}, {}):
+    for body in ({"columns": ["found_days"]}, {}):
         response = client.post(f"{DIRECTORY}/list", json=body, headers=operator)
         assert response.status_code == 422, body
 
@@ -348,7 +354,7 @@ def test_an_unknown_default_is_refused(
 ) -> None:
     operator, _ = accounts
     response = client.put(
-        f"{DIRECTORY}/columns", json={"on": ["kind"]}, headers=operator
+        f"{DIRECTORY}/columns", json={"on": ["found_days"]}, headers=operator
     )
     assert response.status_code == 422
 

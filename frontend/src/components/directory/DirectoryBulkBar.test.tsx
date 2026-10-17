@@ -140,3 +140,30 @@ describe("tagging the Ticks (DFP-04)", () => {
     expect(screen.queryByTestId("directory-bulk-untag")).toBeNull()
   })
 })
+
+describe("the Priority boost (DPF)", () => {
+  test("is offered to a DATA_ADMIN reader only, and boosts every Tick", () => {
+    const sent: [string[], string, number][] = []
+    const bar = (boostable: boolean) => (
+      <DirectoryBulkBar
+        ticks={new Set(["a", "b"])}
+        busy={false}
+        followed={new Set(["a"])}
+        onFollow={() => {}}
+        onDismiss={() => {}}
+        onClear={() => {}}
+        boostable={boostable}
+        onBoost={(h, m, v) => sent.push([h, m, v])}
+      />
+    )
+    const view = render(bar(false))
+    expect(screen.queryByTestId("directory-boost")).toBeNull()
+    view.rerender(bar(true))
+    fireEvent.change(screen.getByLabelText("Priority boost"), {
+      target: { value: "1" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Set" }))
+    // A followed Tick is boosted too: the queue is not about who follows.
+    expect(sent).toEqual([[["a", "b"], "set", 1]])
+  })
+})

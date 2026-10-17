@@ -16,6 +16,7 @@ import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
+  dataBoostDirectory,
   dataGetDirectorySize,
   dataListDirectory,
   dataListDirectoryColumns,
@@ -231,12 +232,24 @@ export function useDirectory() {
   const [following, setFollowing] = useState<ReadonlySet<string>>(new Set())
   const dismissal = useDiscoverIgnoreMutation()
 
-  const filter = useMemo(
-    () =>
-      parseDirectoryFilter(view.filter) ??
-      (parseDirectoryFilter(OPENING_FILTER) as DirectoryFilter),
-    [view.filter],
-  )
+  const parsed = useMemo(() => parseDirectoryFilter(view.filter), [view.filter])
+  const filter =
+    parsed ?? (parseDirectoryFilter(OPENING_FILTER) as DirectoryFilter)
+  // A link whose filter no longer reads (DPF renamed the day measures) opens
+  // on the opening filter, and says so rather than resetting silently.
+  useEffect(() => {
+    if (parsed) return
+    // A tick later: on a page's first render this runs before the toaster,
+    // a later sibling of the page, has subscribed, and a toast then is lost.
+    setTimeout(() =>
+      toast("This link's filter could not be read and was reset", {
+        // One notice however often this runs (StrictMode runs it twice).
+        id: "directory-filter-reset",
+        description: "The Directory opened on its usual view instead.",
+      }),
+    )
+    patch({ filter: OPENING_FILTER })
+  }, [parsed, patch])
   const setFilter = useCallback(
     (next: DirectoryFilter) => {
       if (!withinDirectoryFilterBounds(next)) {
@@ -327,6 +340,23 @@ export function useDirectory() {
     }
   }
 
+  /** Sets or adds to the Priority boost of `handles` (DPF), a `DATA_ADMIN` write. */
+  const boost = async (
+    handles: string[],
+    mode: "set" | "add",
+    value: number,
+  ) => {
+    try {
+      const { changed } = await dataBoostDirectory({
+        body: { handles, mode, value },
+      })
+      toast.success(`Boosted ${changed} ${changed === 1 ? "entry" : "entries"}`)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.directory })
+    } catch (error) {
+      toast.error(errorText(error, "The boost did not save."))
+    }
+  }
+
   /**
    * Dismisses Channels, or takes the Dismissal back, through Discover's own
    * routes, so one Dismissal hides the Channel in both tabs (DIR-06). The
@@ -367,6 +397,7 @@ export function useDirectory() {
     setOpen: (handle: string | null) => setOpened(handle ? [handle] : []),
     following,
     follow,
+    boost,
     list,
     size: size.data?.size,
   }

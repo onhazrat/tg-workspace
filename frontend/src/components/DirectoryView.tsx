@@ -27,9 +27,11 @@ import {
   PAGE_SIZE,
 } from "@/components/directory/DirectoryTable"
 import { TagsMenu } from "@/components/directory/DirectoryTags"
+import { DirectoryTimeEditor } from "@/components/directory/DirectoryTimeEditor"
 import {
   directoryVocabulary,
   type MeasureEditorRender,
+  type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -39,13 +41,16 @@ import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { useDirectoryTags } from "@/hooks/useTags"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
+import { seesInternals } from "@/lib/directory/directory-columns"
 import {
   type DirectoryCond,
   type DirectoryFilter,
+  type DirectoryTimeCond,
   directoryFilterBody,
   firstShared,
   type Measure,
   type MeasureKey,
+  type Moment,
   type SeedSets,
   seedForms,
 } from "@/lib/directory/directory-filter"
@@ -68,8 +73,10 @@ const withoutMeasure = (filter: DirectoryFilter, measure: string) =>
     children: group.children.filter(
       (c) =>
         c.kind === "group" ||
-        c.cond.type !== "measure" ||
-        c.cond.measure !== measure,
+        !(
+          (c.cond.type === "measure" && c.cond.measure === measure) ||
+          (c.cond.type === "time" && c.cond.moment === measure)
+        ),
     ),
   }))
 
@@ -124,6 +131,51 @@ function MeasureEditor({
   )
 }
 
+/**
+ * A Time bound's editor (DPF): the moment's spread under every other
+ * Condition, in epoch ms, and how many a candidate leaves, as for a measure.
+ */
+function MomentEditor({
+  request,
+  filter,
+  sets,
+  moment,
+  ...rest
+}: {
+  request: DirectoryViewRequest
+  filter: DirectoryFilter
+  sets: SeedSets
+  moment: Moment
+  initial?: DirectoryTimeCond
+  onSubmit: Parameters<MomentEditorRender>[0]["onSubmit"]
+  onBack: () => void
+}) {
+  const others = {
+    ...request,
+    filter: directoryFilterBody(withoutMeasure(filter, moment.key), sets),
+  }
+  const distribution = useQuery({
+    queryKey: queryKeys.directoryRead("distribution", {
+      others,
+      measure: moment.key,
+    }),
+    queryFn: () =>
+      dataGetDirectoryDistribution({
+        body: { ...others, measure: moment.key },
+      }),
+  })
+  return (
+    <DirectoryTimeEditor
+      moment={moment}
+      distribution={distribution.data}
+      countFor={(cond) => <CandidateCount others={others} cond={cond} />}
+      onSubmit={rest.onSubmit}
+      initial={rest.initial}
+      onBack={rest.onBack}
+    />
+  )
+}
+
 /** How many Channels a candidate bound leaves, read a beat after typing stops. */
 function BoundCount({
   others,
@@ -134,17 +186,30 @@ function BoundCount({
   measure: MeasureKey
   bound: MetricBound
 }) {
-  const candidate = useDebouncedValue(JSON.stringify(bound), 250)
+  return (
+    <CandidateCount
+      others={others}
+      cond={{ type: "measure", measure, ...bound }}
+    />
+  )
+}
+
+/** How many Channels a candidate Condition leaves, read a beat after typing stops. */
+function CandidateCount({
+  others,
+  cond,
+}: {
+  others: DirectoryViewRequest
+  cond: DirectoryCond
+}) {
+  const candidate = useDebouncedValue(JSON.stringify(cond), 250)
   const count = useQuery({
     queryKey: queryKeys.directoryRead("count", { others, candidate }),
     queryFn: () =>
       dataCountDirectory({
         body: {
           ...others,
-          candidate: {
-            kind: "atom",
-            cond: { type: "measure", measure, ...JSON.parse(candidate) },
-          },
+          candidate: { kind: "atom", cond: JSON.parse(candidate) },
         },
       }),
   })
@@ -168,6 +233,7 @@ function DirectoryPanelReads({
   onClose,
   onFilter,
   tagging,
+  onBoost,
 }: {
   handle: string
   request: DirectoryViewRequest
@@ -180,6 +246,7 @@ function DirectoryPanelReads({
   onClose: () => void
   onFilter: (cond: DirectoryCond) => void
   tagging: Tagging
+  onBoost?: (mode: "set" | "add", value: number) => void
 }) {
   const path = { handle }
   const entry = useQuery({
@@ -221,6 +288,7 @@ function DirectoryPanelReads({
       neighbours={neighbours.data}
       onFilter={onFilter}
       tagging={tagging}
+      onBoost={onBoost}
     />
   )
 }
@@ -230,6 +298,7 @@ export function DirectoryView() {
   const { view, patch, list } = d
   const shown = listSummary(list.data, list.isFetching, d.yours.source)
   const { tags, tagging, choices } = useDirectoryTags()
+  const internals = seesInternals(d.columnsMenu.catalogue)
   const vocabulary = directoryVocabulary(
     shown.languages,
     (props) => (
@@ -242,6 +311,15 @@ export function DirectoryView() {
     ),
     d.sets,
     choices,
+    (props) => (
+      <MomentEditor
+        request={d.request}
+        filter={d.filter}
+        sets={d.sets}
+        {...props}
+      />
+    ),
+    internals,
   )
   const total = shown.total ?? 0
   // Below md (DFP-02): the controls in a sheet, the rows as cards.
@@ -331,6 +409,8 @@ export function DirectoryView() {
         onDismiss={(handles) => void d.dismiss(handles)}
         onClear={() => d.setTicks([])}
         tagging={tagging}
+        boostable={internals}
+        onBoost={(handles, mode, value) => void d.boost(handles, mode, value)}
       />
       <DirectoryTable
         rows={shown.rows}
@@ -372,6 +452,11 @@ export function DirectoryView() {
             d.setOpen(null)
           }}
           tagging={tagging}
+          // The entry carries a boost only for a DATA_ADMIN reader, which is
+          // when the panel shows the control.
+          onBoost={(mode, value) =>
+            d.open && void d.boost([d.open], mode, value)
+          }
         />
       )}
       <DirectoryKeyHelp on={keyboard} />

@@ -290,3 +290,25 @@ describe("who cites it and whom it cites (DIR-05)", () => {
     ])
   })
 })
+
+describe("the Priority boost (DPF)", () => {
+  const sent: [string, number][] = []
+  const onBoost = (mode: string, value: number) => sent.push([mode, value])
+
+  test("a DATA_ADMIN reader's entry carries a boost, and the panel sets it", () => {
+    mount({ entry: entry({ priorityBoost: 3, effectivePriority: 7 }), onBoost })
+    expect(screen.getByTestId("directory-boost").textContent).toContain(
+      "Boost3(effective 7)",
+    )
+    fireEvent.change(screen.getByLabelText("Priority boost"), {
+      target: { value: "5" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Add" }))
+    expect(sent).toEqual([["add", 5]])
+  })
+
+  test("anybody else's entry carries none, and the panel offers nothing", () => {
+    mount({ onBoost })
+    expect(screen.queryByTestId("directory-boost")).toBeNull()
+  })
+})

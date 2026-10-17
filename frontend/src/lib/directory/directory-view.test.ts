@@ -44,7 +44,7 @@ describe("the view and its URL parameters", () => {
     const view = {
       ...DEFAULT_VIEW,
       filter: "lang:fa and subscribers >= 1000",
-      sort: "last_post_days" as const,
+      sort: "last_post_at" as const,
       descending: false,
       yours: "ticked" as const,
       kinds: ["forward" as const, "link" as const],
@@ -65,10 +65,10 @@ describe("the view and its URL parameters", () => {
     expect(
       paramsFromView({
         ...DEFAULT_VIEW,
-        sort: "found_days",
+        sort: "bio",
         descending: false,
       }),
-    ).toEqual({ dirFilter: OPENING_FILTER, dirSort: "found_days" })
+    ).toEqual({ dirFilter: OPENING_FILTER, dirSort: "bio" })
     expect(
       paramsFromView({ ...DEFAULT_VIEW, descending: false }).dirOrder,
     ).toBe("asc")
@@ -192,20 +192,22 @@ describe("the sort picker", () => {
       descending: true,
       page: 0,
     })
-    expect(chooseSort("last_post_days")).toEqual({
-      sort: "last_post_days",
-      descending: false,
+    // A moment reads newest first, a word A to Z (DPF).
+    expect(chooseSort("last_post_at")).toEqual({
+      sort: "last_post_at",
+      descending: true,
       page: 0,
     })
+    expect(chooseSort("language").descending).toBe(false)
     expect(chooseSort("mine_last_days").descending).toBe(false)
   })
 
-  test("a header flips its own column and sorts by another, days newest first", () => {
+  test("a header flips its own column and sorts by another, newest first", () => {
     const view = { ...DEFAULT_VIEW, sort: "reach" as const }
     expect(headerSort(view, "reach", "follows")).toEqual({ descending: false })
-    expect(headerSort(view, "found_days", "follows")).toEqual({
-      sort: "found_days",
-      descending: false,
+    expect(headerSort(view, "created_at", "follows")).toEqual({
+      sort: "created_at",
+      descending: true,
       page: 0,
     })
     expect(headerSort(view, "mine", "selection")).toEqual({
@@ -317,12 +319,30 @@ describe("the search (DIR-04)", () => {
   })
 
   test("the picker offers Relevance only while searching, first", () => {
-    expect(sortOptions(false)).toBe(SORT_OPTIONS)
+    const shown = SORT_OPTIONS.filter((o) => !o.internal)
+    expect(sortOptions(false)).toEqual(shown)
     expect(sortOptions(true)[0]).toEqual({
       value: "relevance",
       label: "Relevance",
     })
-    expect(sortOptions(true).slice(1)).toEqual(SORT_OPTIONS)
+    expect(sortOptions(true).slice(1)).toEqual(shown)
+  })
+
+  test("the internal sorts are offered to a DATA_ADMIN reader only (DPF)", () => {
+    const values = (internals: boolean) =>
+      sortOptions(false, [], internals).map((o) => o.value)
+    for (const internal of ["effective_priority", "attempts", "kind"])
+      expect(values(false)).not.toContain(internal)
+    expect(values(true)).toEqual(SORT_OPTIONS.map((o) => o.value))
+    expect(values(false)).toContain("checked_at")
+    expect(values(false)).toContain("status")
+  })
+
+  test("a link sorting by an old day measure falls back to the default sort", () => {
+    expect(viewFromParams({ dirSort: "found_days" }).sort).toBe(
+      DEFAULT_VIEW.sort,
+    )
+    expect(viewFromParams({ dirSort: "retry_after" }).sort).toBe("retry_after")
   })
 
   test("a Shared relation's weighted sort is offered only while it is on (DIR-07)", () => {

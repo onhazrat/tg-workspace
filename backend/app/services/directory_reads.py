@@ -11,7 +11,9 @@ Directory and the Post filter cannot disagree about what AND, OR and NOT mean.
 
 Every entry whose page said it is a Channel (`kind = 'channel'`), followable or
 not: "Followable" is a Condition, so the opening view's rule is one the Account
-can see and change. Bots, groups and personal accounts are never listed.
+can see and change. Bots, groups, personal accounts and handles not fetched yet
+are listed only to a `DATA_ADMIN` reader (DPF), whose opening view is still
+the followable Channels.
 
 ## "Your channels"
 
@@ -127,8 +129,6 @@ DirectoryMeasure = Literal[
     "reach",
     "posts_per_week",
     "forward_pct",
-    "last_post_days",
-    "found_days",
     "photos",
     "videos",
     "files",
@@ -136,12 +136,42 @@ DirectoryMeasure = Literal[
     # Distinct Channels citing it and it cites, every kind (DIR-05, ADR-028).
     "cited_by",
     "cites",
+    "sample_count",
+    # The probe queue's numbers (DPF), `DATA_ADMIN` only as their columns are.
+    "attempts",
+    "latest_id",
+    "telegram_chat_id",
+    "priority",
+    "priority_boost",
+    "effective_priority",
 ]
 DIRECTORY_MEASURES: tuple[DirectoryMeasure, ...] = get_args(DirectoryMeasure)
-#: The measures plus the two "your channels" reads: how many cite it, and how
-#: many days since the newest of them did.
+#: An entry's moments, each named by its column (DPF). A Time bound and the sort
+#: read them; the distribution reads them as epoch ms.
+DirectoryMoment = Literal[
+    "last_post_at",
+    "created_at",
+    "checked_at",
+    "attempted_at",
+    "retry_after",
+    "refresh_due_at",
+]
+DIRECTORY_MOMENTS: tuple[DirectoryMoment, ...] = get_args(DirectoryMoment)
+#: What the "is" Condition tests, and what the "contains" Condition searches.
+IsField = Literal["status", "kind"]
+ContainsField = Literal["last_error"]
+TimeMode = Literal["live", "fixed"]
+#: Every column of the catalogue, plus the "your channels" reads: how many cite
+#: it, and how many days since the newest of them did.
 DirectorySort = Literal[
     DirectoryMeasure,
+    DirectoryMoment,
+    "language",
+    "status",
+    "kind",
+    "followable",
+    "bio",
+    "last_error",
     "mine",
     "mine_last_days",
     "relevance",
@@ -173,17 +203,18 @@ DirectoryColumn = Literal[
     "reach",
     "posts_per_week",
     "forward_pct",
-    "last_post_days",
+    "last_post_at",
     "mine",
     "cited_by",
     "cites",
-    "found_days",
+    "created_at",
     "photos",
     "videos",
     "files",
     "links",
     "status",
     "followable",
+    "kind",
     "bio",
     "sample_count",
     "checked_at",
@@ -193,20 +224,29 @@ DirectoryColumn = Literal[
     "attempted_at",
     "retry_after",
     "priority",
+    "priority_boost",
+    "effective_priority",
     "telegram_chat_id",
     "latest_id",
 ]
 DIRECTORY_COLUMNS: tuple[DirectoryColumn, ...] = get_args(DirectoryColumn)
 #: The probe queue's bookkeeping, for `DATA_ADMIN` only: `last_error` is the
 #: text of whatever exception a probe raised, which can name a proxy, and the
-#: proxies themselves are behind that Permission.
+#: proxies themselves are behind that Permission. `kind` too, since only a
+#: holder is shown an entry that is not a Channel (DPF).
+#:
+#: A sort or a Condition naming one of these is refused to anybody else
+#: (`internal_reads`): ordering or narrowing by a value leaks it a row at a time.
 INTERNAL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
     {
+        "kind",
         "attempts",
         "last_error",
         "attempted_at",
         "retry_after",
         "priority",
+        "priority_boost",
+        "effective_priority",
         "telegram_chat_id",
         "latest_id",
     }
@@ -230,8 +270,18 @@ def visible_columns(*, internals: bool) -> tuple[DirectoryColumn, ...]:
     return tuple(c for c in DIRECTORY_COLUMNS if internals or c not in INTERNAL_COLUMNS)
 
 
-#: Measures whose spread is drawn on a log scale; the rest are linear.
-_LINEAR: frozenset[str] = frozenset({"forward_pct", "found_days"})
+#: Measures whose spread is drawn on a linear scale; the rest are log. The
+#: queue's numbers go negative, which a log axis folds onto zero.
+_LINEAR: frozenset[str] = frozenset(
+    {
+        "forward_pct",
+        "priority",
+        "priority_boost",
+        "effective_priority",
+        "telegram_chat_id",
+        *DIRECTORY_MOMENTS,
+    }
+)
 _HISTOGRAM_BINS = 32
 
 
@@ -260,6 +310,38 @@ class MeasureCond:
 @dataclass(frozen=True)
 class FlagCond:
     value: DirectoryFlag
+
+
+@dataclass(frozen=True)
+class IsCond:
+    """The verdict or the kind is exactly `value`."""
+
+    field: IsField
+    value: str
+
+
+@dataclass(frozen=True)
+class ContainsCond:
+    """Any part of the text, case-insensitive."""
+
+    field: ContainsField
+    value: str
+
+
+@dataclass(frozen=True)
+class TimeCond:
+    """A Time bound: `[start, end)` on one moment, either end open (DPF).
+
+    Fixed ends are epoch ms; Live ends are signed ms from the view's `now`,
+    negative for the past, resolved on the server's clock so a shared link
+    means one thing to every reader. `none` keeps only entries with no value.
+    """
+
+    moment: DirectoryMoment
+    mode: TimeMode
+    start: int | None = None
+    end: int | None = None
+    none: bool = False
 
 
 @dataclass(frozen=True)
@@ -312,6 +394,9 @@ DirectoryCond = (
     | NameCond
     | MeasureCond
     | FlagCond
+    | IsCond
+    | ContainsCond
+    | TimeCond
     | MineCond
     | CitedByCond
     | CitesCond
@@ -355,6 +440,8 @@ class DirectoryView:
     search: SearchQuery | None = None
     #: Each Tag the tree names, by its key, resolved to the reader's handles.
     tags: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    #: List every kind of entry, not only Channels: a `DATA_ADMIN` reader (DPF).
+    every_kind: bool = False
 
 
 def resolve_view(
@@ -366,12 +453,14 @@ def resolve_view(
     handles: Sequence[str],
     kinds: Sequence[ReferenceKind],
     search: tuple[str, Sequence[SearchField]] | None = None,
+    every_kind: bool = False,
 ) -> DirectoryView:
     """The view, with "every follow" resolved from the Account's own Follows.
 
     Handles the browser sends are taken as they are: a selection or a tick list
     that is empty counts 0 for every row, and is never swapped for anything.
-    `search` is what was typed and the fields it looks in.
+    `search` is what was typed and the fields it looks in. `every_kind` lists
+    entries that are not Channels too, for a reader who may see them.
     """
     followed = frozenset(visible_channel_names(session, user_id=user_id))
     found = _resolve_tags(session, user_id, tree)
@@ -390,6 +479,7 @@ def resolve_view(
         now=utc_now(),
         search=None if search is None else resolve_search(session, *search),
         tags=found,
+        every_kind=every_kind,
     )
 
 
@@ -547,24 +637,19 @@ def _handles(values: frozenset[str] | Sequence[str]) -> Any:
     return literal(sorted(values), ARRAY(String))
 
 
-def _listed() -> ColumnElement[bool]:
-    return col(DirectoryEntry.kind) == LISTED_KIND
+def _listed(every_kind: bool = False) -> ColumnElement[bool]:
+    """Channels only, unless the reader may see every kind (DPF). The search
+    document holds Channels only either way, so a search never reaches the rest."""
+    return true() if every_kind else col(DirectoryEntry.kind) == LISTED_KIND
 
 
-def _days_since(column: Any, now: datetime) -> ColumnElement[Any]:
-    # A bound parameter for `now` rather than SQL's `now()`: the columns are
-    # naive UTC, and `now()` would bring the session's time zone into it.
-    return func.extract("epoch", literal(now, DateTime) - column) / 86400.0
-
-
-def measure_sql(measure: DirectoryMeasure, now: datetime) -> ColumnElement[Any]:
-    """`measure` for each entry; NULL where the entry has no value."""
+def measure_sql(measure: DirectoryMeasure | DirectoryMoment) -> ColumnElement[Any]:
+    """`measure` for each entry, a moment as epoch ms; NULL where it has no value."""
     if measure == "forward_pct":
         return col(DirectoryEntry.forward_share) * 100.0
-    if measure == "last_post_days":
-        return _days_since(col(DirectoryEntry.last_post_at), now)
-    if measure == "found_days":
-        return _days_since(col(DirectoryEntry.created_at), now)
+    if measure in DIRECTORY_MOMENTS:
+        # Naive UTC columns, whose epoch Postgres reads without a time zone.
+        return func.extract("epoch", getattr(DirectoryEntry, measure)) * 1000.0
     if measure in _COUNTED:
         # Read off `_entries`' join; a handle with no row cites, and is cited
         # by, nobody.
@@ -726,6 +811,14 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
             handle.icontains(cond.value, autoescape=True),
             col(DirectoryEntry.display_name).icontains(cond.value, autoescape=True),
         )
+    if isinstance(cond, IsCond):
+        return col(getattr(DirectoryEntry, cond.field)) == cond.value
+    if isinstance(cond, ContainsCond):
+        return col(getattr(DirectoryEntry, cond.field)).icontains(
+            cond.value, autoescape=True
+        )
+    if isinstance(cond, TimeCond):
+        return _time_bound(cond, view.now)
     if isinstance(cond, FlagCond):
         if cond.value == "followable":
             return col(DirectoryEntry.status) == "ok"
@@ -752,7 +845,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
                 col(named_end) == any_(_handles(cond.seeds)), *_of_kinds(view)
             )
         )
-    value = measure_sql(cond.measure, view.now)
+    value = measure_sql(cond.measure)
     if cond.none:
         return value.is_(None)
     bounds: list[ColumnElement[bool]] = [value.is_not(None)]
@@ -763,15 +856,54 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     return and_(*bounds)
 
 
+def _time_bound(cond: TimeCond, now: datetime) -> ColumnElement[bool]:
+    """`[start, end)` against the column itself, so a moment index could serve it."""
+    column = col(getattr(DirectoryEntry, cond.moment))
+    if cond.none:
+        return column.is_(None)
+    base = _epoch_ms(now) if cond.mode == "live" else 0
+    bounds: list[ColumnElement[bool]] = [column.is_not(None)]
+    if cond.start is not None:
+        bounds.append(column >= literal(_naive(base + cond.start), DateTime))
+    if cond.end is not None:
+        bounds.append(column < literal(_naive(base + cond.end), DateTime))
+    return and_(*bounds)
+
+
+def _naive(ms: int) -> datetime:
+    """Epoch ms as the naive UTC the columns hold."""
+    return datetime.fromtimestamp(ms / 1000, UTC).replace(tzinfo=None)
+
+
 def _where(view: DirectoryView, tree: TreeNode[DirectoryCond] | None) -> Any:
     clause = true() if tree is None else compile_tree(tree, lambda c: _atom(c, view))
     if view.search is None:
-        return and_(_listed(), clause)
+        return and_(_listed(view.every_kind), clause)
     doc = DirectorySearchDocument
     found = col(DirectoryEntry.handle).in_(
         sa_select(col(doc.handle)).where(_search_match(view.search))
     )
-    return and_(_listed(), clause, found)
+    return and_(_listed(view.every_kind), clause, found)
+
+
+def internal_reads(
+    tree: DirectoryTree | None, *reads: str
+) -> frozenset[DirectoryColumn]:
+    """The internal columns a sort, a measure or the tree's Conditions read (DPF).
+
+    The route refuses a request naming any of them from a reader without
+    `DATA_ADMIN`, because a sort or a filter on a hidden column reads it out a
+    row at a time.
+    """
+    named = set(reads)
+    for cond in () if tree is None else tree_conds(tree):
+        if isinstance(cond, MeasureCond):
+            named.add(cond.measure)
+        elif isinstance(cond, TimeCond):
+            named.add(cond.moment)
+        elif isinstance(cond, IsCond | ContainsCond):
+            named.add(cond.field)
+    return frozenset(c for c in INTERNAL_COLUMNS if c in named)
 
 
 def _without(tree: DirectoryTree | None, drop: Any) -> TreeGroup[DirectoryCond] | None:
@@ -900,6 +1032,17 @@ def _page_handles(
     elif sort == "relevance":
         # Relevance with nothing searched has nothing to rank by.
         key = literal(0)
+    elif sort == "followable":
+        key = col(DirectoryEntry.status) == "ok"
+    elif (
+        sort == "language"
+        or sort == "status"
+        or sort == "kind"
+        or sort == "bio"
+        or sort == "last_error"
+    ):
+        # Straight off a text column, in its collation's order.
+        key = col(getattr(DirectoryEntry, sort))
     elif sort == "shared_parents" or sort == "shared_children":
         cond = _first_shared(
             view.tree, "parents" if sort == "shared_parents" else "children"
@@ -912,7 +1055,7 @@ def _page_handles(
             statement = statement.outerjoin(scored, scored.c.handle == handle)
             key = scored.c.score
     else:
-        key = measure_sql(sort, view.now)
+        key = measure_sql(sort)
     ordered = key.desc() if descending else key.asc()
     leading = [(handle == any_(_handles(ticked))).desc()] if ticked else []
     statement = (
@@ -983,13 +1126,14 @@ _ENTRY_COLUMNS: dict[DirectoryColumn, tuple[str, ...]] = {
     "reach": ("reach", "reach_estimated"),
     "posts_per_week": ("posts_per_week",),
     "forward_pct": ("forward_share",),
-    "last_post_days": ("last_post_at",),
-    "found_days": ("created_at",),
+    "last_post_at": ("last_post_at",),
+    "created_at": ("created_at",),
     "photos": ("photos",),
     "videos": ("videos",),
     "files": ("files",),
     "links": ("links",),
     "status": ("status",),
+    "kind": ("kind",),
     # Every row carries `followable`, shown or not: Follow reads it.
     "followable": (),
     "bio": ("bio",),
@@ -1001,6 +1145,8 @@ _ENTRY_COLUMNS: dict[DirectoryColumn, tuple[str, ...]] = {
     "attempted_at": ("attempted_at",),
     "retry_after": ("retry_after",),
     "priority": ("priority",),
+    "priority_boost": ("priority_boost",),
+    "effective_priority": ("effective_priority",),
     "telegram_chat_id": ("telegram_chat_id",),
     "latest_id": ("latest_id",),
 }
@@ -1119,7 +1265,8 @@ def _count_of(counts: dict[str, int] | None, handle: str) -> int | None:
 # ---- Totals, cached ---------------------------------------------------------------
 
 _counts: dict[str, tuple[float, int, list[LanguageCount]]] = {}
-_size: list[tuple[float, int]] = []
+#: The Directory's size per `every_kind`, with when it goes stale.
+_size: dict[bool, tuple[float, int]] = {}
 
 
 def forget_cached_counts() -> None:
@@ -1144,6 +1291,7 @@ def _view_key(view: DirectoryView, tree: DirectoryTree | None) -> str:
             hash(view.dismissed) if _reads_dismissed(tree) else None,
             # Tagging a Channel moves the total at once, like a Dismissal.
             sorted((k, hash(v)) for k, v in view.tags.items()),
+            view.every_kind,
         )
     )
 
@@ -1322,23 +1470,45 @@ def newest_references(
 
 #: What the panel shows of an entry: its measures, its Language and its bio.
 _PANEL_COLUMNS: frozenset[DirectoryColumn] = frozenset(
-    {*DIRECTORY_MEASURES, "language", "bio"}
+    {
+        "subscribers",
+        "reach",
+        "posts_per_week",
+        "forward_pct",
+        "last_post_at",
+        "created_at",
+        "photos",
+        "videos",
+        "files",
+        "links",
+        "cited_by",
+        "cites",
+        "language",
+        "bio",
+    }
+)
+#: And what it adds for a `DATA_ADMIN` reader: the kind, which only such a
+#: reader is shown anything but a Channel of, and the Priority boost it sets
+#: there (DPF).
+_PANEL_INTERNALS: frozenset[DirectoryColumn] = frozenset(
+    {"kind", "priority_boost", "effective_priority"}
 )
 
 
 def entry(
-    session: Session, user_id: uuid.UUID, handle: str
+    session: Session, user_id: uuid.UUID, handle: str, *, internals: bool = False
 ) -> tuple[DirectoryRow, str | None] | None:
     """One listed entry by handle, as a row (with no "your channels" count)
-    and its bio; `None` when the Directory does not list it.
+    and its bio; `None` when the Directory does not list it to this reader.
 
     The panel reads this rather than the list's row, so it opens on a Channel
     that is not on the current page, and the bio stays out of the list.
+    `internals` is a `DATA_ADMIN` reader, who is listed every kind.
     """
     listed = session.execute(
         unscoped_select(
             sa_select(col(DirectoryEntry.handle)).where(
-                col(DirectoryEntry.handle) == handle, _listed()
+                col(DirectoryEntry.handle) == handle, _listed(internals)
             ),
             reason=_SCOPE_REASON,
         )
@@ -1348,7 +1518,8 @@ def entry(
     view = resolve_view(
         session, user_id, tree=None, source="selection", handles=(), kinds=()
     )
-    row = _rows(session, view, [handle], _PANEL_COLUMNS)[0]
+    columns = _PANEL_COLUMNS | (_PANEL_INTERNALS if internals else frozenset())
+    row = _rows(session, view, [handle], columns)[0]
     return row, row.columns.pop("bio")
 
 
@@ -1617,16 +1788,20 @@ def neighbours(session: Session, handle: str) -> Neighbours:
     )
 
 
-def directory_size(session: Session) -> int:
-    """How many Channels the Directory lists at all: the filter row's "of M"."""
-    if _size and _size[0][0] > time.monotonic():
-        return _size[0][1]
+def directory_size(session: Session, *, every_kind: bool = False) -> int:
+    """How many entries the Directory lists at all: the filter row's "of M".
+
+    Channels, or every entry for a reader listed every kind (DPF).
+    """
+    hit = _size.get(every_kind)
+    if hit is not None and hit[0] > time.monotonic():
+        return hit[1]
     statement = unscoped_select(
-        sa_select(func.count()).select_from(DirectoryEntry).where(_listed()),
+        sa_select(func.count()).select_from(DirectoryEntry).where(_listed(every_kind)),
         reason=_SCOPE_REASON,
     )
     size = int(session.execute(statement).scalar_one())
-    _size[:] = [(time.monotonic() + COUNTS_TTL_SECONDS, size)]
+    _size[every_kind] = (time.monotonic() + COUNTS_TTL_SECONDS, size)
     return size
 
 
@@ -1654,14 +1829,21 @@ class Distribution:
 
 
 def distribution(
-    session: Session, view: DirectoryView, measure: DirectoryMeasure
+    session: Session, view: DirectoryView, measure: DirectoryMeasure | DirectoryMoment
 ) -> Distribution:
-    """`measure` across the view with its own bounds left out, for the bound editor."""
+    """`measure` across the view with its own bounds left out, for the bound editor.
+
+    A moment's spread is in epoch ms, on a linear scale (DPF).
+    """
     tree = _without(
-        view.tree, lambda c: isinstance(c, MeasureCond) and c.measure == measure
+        view.tree,
+        lambda c: (
+            (isinstance(c, MeasureCond) and c.measure == measure)
+            or (isinstance(c, TimeCond) and c.moment == measure)
+        ),
     )
     where = _where(view, tree)
-    value = measure_sql(measure, view.now)
+    value = measure_sql(measure)
     total, measured, lo, hi, median = session.execute(
         unscoped_select(
             sa_select(

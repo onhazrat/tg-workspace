@@ -35,6 +35,7 @@ import {
   type ColumnChoices,
   choiceCount,
   isOn,
+  seesInternals,
   setChoice,
 } from "@/lib/directory/directory-columns"
 import {
@@ -555,7 +556,11 @@ export function DirectoryBar(p: DirectoryBarProps) {
       <ReferenceKindsPill kinds={p.kinds} onKinds={p.onKinds} />
       <span className="mx-1 h-5 w-px bg-app-ink/10" />
       <SortPicker
-        options={sortOptions(p.search.trim() !== "", sharedOn(p.filter))}
+        options={sortOptions(
+          p.search.trim() !== "",
+          sharedOn(p.filter),
+          seesInternals(p.columns.catalogue),
+        )}
         value={p.sortValue}
         onChange={p.onSort}
         direction={p.descending ? "desc" : "asc"}

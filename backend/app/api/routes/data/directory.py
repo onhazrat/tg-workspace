@@ -20,6 +20,8 @@ from app.api.deps import CurrentUser, SessionDep, require_permission
 from app.core.permissions import Permission
 from app.schemas.directory import (
     DirectoryBinResponse,
+    DirectoryBoostRequest,
+    DirectoryBoostResponse,
     DirectoryColumnDefaultsRequest,
     DirectoryColumnResponse,
     DirectoryCountRequest,
@@ -39,8 +41,9 @@ from app.schemas.directory import (
     DirectoryWhyResponse,
 )
 from app.services import directory_reads, rbac
-from app.services.channel_directory import probe_map
+from app.services.channel_directory import BoostOutOfRange, boost_entries, probe_map
 from app.services.channel_directory_samples import sample_to_camel, samples_for
+from app.services.post_filters import TreeAtom, TreeGroup
 from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
 from app.services.settings_store import replace_global_setting
 from app.services.telegram_web import normalize_handle
@@ -108,16 +111,39 @@ def get_directory_posts(
 
 
 def _view(
-    session: Session, user_id: uuid.UUID, body: DirectoryViewRequest
+    session: Session,
+    user_id: uuid.UUID,
+    body: DirectoryViewRequest,
+    *reads: str,
+    candidate: TreeAtom[directory_reads.DirectoryCond] | None = None,
 ) -> directory_reads.DirectoryView:
+    """The view for `body`, refusing what this reader may not sort or filter by.
+
+    `reads` are what the request sorts or measures by besides its filter. A
+    `DATA_ADMIN` reader is listed every kind of entry; anyone else is answered
+    422 for naming an internal column, as an unknown one would be (DPF).
+    """
+    tree = None if body.filter is None else body.filter.to_tree()
+    internals = _sees_internals(session, user_id)
+    if not internals:
+        named = directory_reads.internal_reads(tree, *reads)
+        if candidate is not None:
+            alone = TreeGroup(op="and", children=(candidate,))
+            named |= directory_reads.internal_reads(alone)
+        if named:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Not a column this account may read: {', '.join(sorted(named))}",
+            )
     return directory_reads.resolve_view(
         session,
         user_id,
-        tree=None if body.filter is None else body.filter.to_tree(),
+        tree=tree,
         source=body.yours.source,
         handles=body.yours.handles,
         kinds=body.reference_kinds,
         search=None if body.search is None else (body.search.text, body.search.fields),
+        every_kind=internals,
     )
 
 
@@ -143,7 +169,7 @@ def list_directory(
     )
     page = directory_reads.list_page(
         session,
-        _view(session, current_user.id, body),
+        _view(session, current_user.id, body, body.sort),
         sort=body.sort,
         descending=body.descending,
         page=body.page,
@@ -170,10 +196,9 @@ def count_directory(
 ) -> DirectoryCountResponse:
     """How many entries a view leaves, with a candidate Condition added with AND."""
     candidate = None if body.candidate is None else body.candidate.to_atom()
+    view = _view(session, current_user.id, body, candidate=candidate)
     return DirectoryCountResponse(
-        total=directory_reads.count_view(
-            session, _view(session, current_user.id, body), candidate
-        )
+        total=directory_reads.count_view(session, view, candidate)
     )
 
 
@@ -185,7 +210,7 @@ def get_directory_distribution(
 ) -> DirectoryDistributionResponse:
     """A measure's spread across the view with its own bounds left out."""
     spread = directory_reads.distribution(
-        session, _view(session, current_user.id, body), body.measure
+        session, _view(session, current_user.id, body, body.measure), body.measure
     )
     return DirectoryDistributionResponse(
         scale=spread.scale,
@@ -201,10 +226,14 @@ def get_directory_distribution(
 @router.get("/directory/size")
 def get_directory_size(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> DirectorySizeResponse:
-    """How many Channels the Directory lists at all."""
-    return DirectorySizeResponse(size=directory_reads.directory_size(session))
+    """How many entries the Directory lists to this reader at all."""
+    return DirectorySizeResponse(
+        size=directory_reads.directory_size(
+            session, every_kind=_sees_internals(session, current_user.id)
+        )
+    )
 
 
 # ---- The columns (DCOL) -------------------------------------------------------------
@@ -246,17 +275,51 @@ def put_directory_columns(
     return list_directory_columns(session, current_user)
 
 
+# ---- The Priority boost (DPF) -------------------------------------------------------
+#
+# A write, so a View-as session is refused it with no entry here, as the
+# column defaults' PUT is.
+
+
+@router.post(
+    "/directory/boost",
+    dependencies=[Depends(require_permission(Permission.DATA_ADMIN))],
+)
+def boost_directory(
+    body: DirectoryBoostRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> DirectoryBoostResponse:
+    """Set the Priority boost of the named Directory entries, or add to it.
+
+    A positive boost fetches an entry sooner. A handle the Directory holds
+    nothing about is skipped; an add that carries any entry out of range
+    changes none.
+    """
+    try:
+        changed = boost_entries(session, body.handles, mode=body.mode, value=body.value)
+    except BoostOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DirectoryBoostResponse(changed=changed)
+
+
 # ---- The detail panel (DIR-03) -----------------------------------------------------
 
 
-@router.get("/directory/{handle}/entry")
+# `exclude_unset` leaves the three `DATA_ADMIN` fields out for anybody else.
+@router.get("/directory/{handle}/entry", response_model_exclude_unset=True)
 def get_directory_entry(
     handle: str,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> DirectoryEntryResponse:
     """One listed Directory entry by handle, with its bio, for the detail panel."""
-    found = directory_reads.entry(session, current_user.id, normalize_handle(handle))
+    found = directory_reads.entry(
+        session,
+        current_user.id,
+        normalize_handle(handle),
+        internals=_sees_internals(session, current_user.id),
+    )
     if found is None:
         raise HTTPException(status_code=404, detail=DIRECTORY_ENTRY_NOT_FOUND)
     row, bio = found

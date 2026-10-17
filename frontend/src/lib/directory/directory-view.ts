@@ -15,6 +15,7 @@ import type {
 import {
   type DirectorySharedCond,
   MEASURES,
+  MOMENTS,
   OPENING_FILTER,
 } from "./directory-filter"
 
@@ -96,9 +97,17 @@ export const DEFAULT_VIEW: DirectoryView = {
   matches: true,
 }
 
-/** Measures counted in days sort newest first, which is ascending. */
+/** Sorts of words, which read A to Z first (DPF). */
+const WORD_SORTS = every<
+  Extract<DirectorySort, "language" | "status" | "kind" | "bio" | "last_error">
+>({ language: true, status: true, kind: true, bio: true, last_error: true })
+
+/**
+ * Days since your channels cited it and the words read smallest first; every
+ * other sort, a moment included, reads largest or newest first.
+ */
 export const defaultDescending = (sort: DirectorySort): boolean =>
-  sort !== "mine_last_days" && !MEASURES.some((m) => m.key === sort && m.days)
+  sort !== "mine_last_days" && !(WORD_SORTS as string[]).includes(sort)
 
 const SORT_LABELS: Record<YoursSource, string> = {
   follows: "Cited by channels you follow",
@@ -106,11 +115,40 @@ const SORT_LABELS: Record<YoursSource, string> = {
   ticked: "Cited by channels ticked here",
 }
 
-/** What the sort picker offers: "mine:<source>" for each source, then the rest. */
-export const SORT_OPTIONS: { value: string; label: string }[] = [
+type SortOption = { value: string; label: string; internal?: true }
+
+const WORD_LABELS: Record<(typeof WORD_SORTS)[number], string> = {
+  language: "Language",
+  status: "Status",
+  kind: "Kind",
+  bio: "Bio",
+  last_error: "Last error",
+}
+
+/**
+ * What the sort picker offers: "mine:<source>" for each source, then every
+ * column of the catalogue (DPF). An internal one is offered to a `DATA_ADMIN`
+ * reader only, since the server refuses it to anybody else.
+ */
+export const SORT_OPTIONS: SortOption[] = [
   ...YOURS.map((y) => ({ value: `mine:${y}`, label: SORT_LABELS[y] })),
   { value: "mine_last_days", label: "Days since your channels last cited it" },
-  ...MEASURES.map((m) => ({ value: m.key, label: m.label })),
+  ...MEASURES.map((m) => ({
+    value: m.key,
+    label: m.label,
+    internal: m.internal,
+  })),
+  ...MOMENTS.map((m) => ({
+    value: m.key,
+    label: m.label,
+    internal: m.internal,
+  })),
+  { value: "followable", label: "Followable" },
+  ...WORD_SORTS.map((w) => ({
+    value: w,
+    label: WORD_LABELS[w],
+    ...((w === "kind" || w === "last_error") && { internal: true as const }),
+  })),
 ]
 
 export type SharedRelation = DirectorySharedCond["type"]
@@ -124,7 +162,7 @@ const SHARED_SORTS: Record<SharedRelation, { value: string; label: string }> = {
 const SORTS = new Set<string>([
   "mine",
   "mine_last_days",
-  ...MEASURES.map((m) => m.key),
+  ...SORT_OPTIONS.map((o) => o.value),
   "shared_parents",
   "shared_children",
 ])
@@ -149,8 +187,13 @@ const RELEVANCE = { value: "relevance", label: "Relevance" }
  * The picker's options: Relevance first, only while a search is on, and each
  * Shared relation's weighted sort last, only while its Condition is on.
  */
-export function sortOptions(searching: boolean, shared: SharedRelation[] = []) {
-  const base = searching ? [RELEVANCE, ...SORT_OPTIONS] : SORT_OPTIONS
+export function sortOptions(
+  searching: boolean,
+  shared: SharedRelation[] = [],
+  internals = false,
+) {
+  const offered = SORT_OPTIONS.filter((o) => internals || !o.internal)
+  const base = searching ? [RELEVANCE, ...offered] : offered
   return shared.length ? [...base, ...shared.map((r) => SHARED_SORTS[r])] : base
 }
 

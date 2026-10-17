@@ -47,8 +47,9 @@ describe("every Condition prints and parses back unchanged", () => {
     "reach = none",
     "posts_per_week >= 2.5",
     "forward_pct <= 30",
-    "last_post_days <= 7",
-    "found_days 1..30",
+    "sample_count >= 5",
+    "priority_boost <= -3",
+    "effective_priority -10..10",
     "photos >= 1",
     "videos = none",
     "files <= 3",
@@ -116,6 +117,119 @@ describe("what each piece of text means", () => {
       { cond: { type: "mine" }, not: false },
       { cond: { type: "mine", days: 30 }, not: false },
     ])
+  })
+})
+
+const DAY = 86_400_000
+
+describe("Time bounds (DPF)", () => {
+  test.each([
+    "status:unavailable",
+    "kind:bot",
+    "error:timeout",
+    'error:"proxy timeout"',
+    "checked_at 2026-10-01T00:00Z..",
+    "checked_at ..2026-10-15T12:30Z",
+    "checked_at 2026-10-01T00:00Z..2026-10-15T00:00Z",
+    "refresh_due_at now..+2d",
+    "last_post_at -3d..",
+    "created_at ..-50d",
+    "attempted_at -90m..-1h",
+    "retry_after = none",
+    "not last_post_at -1w..",
+  ])("%s prints and parses back unchanged", (text) => {
+    expect(roundTrip(text)).toBe(text)
+  })
+
+  test("a Live end is signed ms from now, a Fixed end a UTC instant", () => {
+    expect(
+      conds("refresh_due_at now..+2d checked_at 2026-10-01T00:00Z.."),
+    ).toEqual([
+      {
+        cond: {
+          type: "time",
+          moment: "refresh_due_at",
+          mode: "live",
+          start: 0,
+          end: 2 * DAY,
+        },
+        not: false,
+      },
+      {
+        cond: {
+          type: "time",
+          moment: "checked_at",
+          mode: "fixed",
+          start: Date.UTC(2026, 9, 1),
+        },
+        not: false,
+      },
+    ])
+  })
+
+  test("a Fixed end prints in UTC whatever the reader's zone", () => {
+    const cond: DirectoryCond = {
+      type: "time",
+      moment: "checked_at",
+      mode: "fixed",
+      start: Date.UTC(2026, 9, 1, 20, 30, 15),
+    }
+    expect(
+      printDirectoryFilter({
+        kind: "group",
+        id: "root",
+        op: "and",
+        children: [{ kind: "atom", id: "a", cond }],
+      }),
+    ).toBe("checked_at 2026-10-01T20:30:15Z..")
+  })
+
+  test.each([
+    ["the old day measure", "last_post_days <= 7"],
+    ["the other old day measure", "found_days 1..30"],
+    ["no end at all", "checked_at .."],
+    ["a Live and a Fixed end", "checked_at now..2026-10-01T00:00Z"],
+    ["an end before the start", "checked_at -1d..-2d"],
+    ["an unknown kind", "kind:robot"],
+    ["an unknown status", "status:fine"],
+  ])("%s does not parse", (_, text) => {
+    expect(parseDirectoryFilter(text)).toBeNull()
+  })
+
+  test.each<[DirectoryCond, string]>([
+    [
+      { type: "time", moment: "last_post_at", mode: "live", start: -3 * DAY },
+      "Last post from 3 days ago",
+    ],
+    [
+      { type: "time", moment: "created_at", mode: "live", end: -50 * DAY },
+      "Found before 50 days ago",
+    ],
+    [
+      {
+        type: "time",
+        moment: "refresh_due_at",
+        mode: "live",
+        start: 0,
+        end: 2 * DAY,
+      },
+      "Refresh due from now to in 2 days",
+    ],
+    [
+      {
+        type: "time",
+        moment: "checked_at",
+        mode: "fixed",
+        start: Date.UTC(2026, 9, 1, 9, 5),
+      },
+      "Checked from Oct 1, 2026 at 9:05 AM",
+    ],
+    [
+      { type: "time", moment: "retry_after", mode: "fixed", none: true },
+      "Retry after: no value",
+    ],
+  ])("%j", (cond, label) => {
+    expect(directoryConditionLabel(cond, "en", "UTC")).toBe(label)
   })
 })
 
@@ -211,9 +325,15 @@ describe("chip labels", () => {
       "Subscribers ≥ 1.2K",
     ],
     [{ type: "measure", measure: "reach", none: true }, "Reach: no value"],
+    [{ type: "measure", measure: "sample_count", min: 5 }, "Sample size ≥ 5"],
     [
-      { type: "measure", measure: "last_post_days", max: 7 },
-      "Days since last post ≤ 7",
+      { type: "is", field: "status", value: "unavailable" },
+      "Status is unavailable",
+    ],
+    [{ type: "is", field: "kind", value: "bot" }, "Kind is bot"],
+    [
+      { type: "contains", field: "last_error", value: "timeout" },
+      'Last error contains "timeout"',
     ],
     [{ type: "mine" }, "Cited by your channels"],
     [{ type: "mine", days: 14 }, "Cited by your channels, last 14 days"],

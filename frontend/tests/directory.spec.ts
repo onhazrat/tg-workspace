@@ -74,11 +74,11 @@ const CATALOGUE = [
   ["reach", true],
   ["posts_per_week", true],
   ["forward_pct", true],
-  ["last_post_days", true],
+  ["last_post_at", true],
   ["mine", true],
   ["cited_by", true],
   ["cites", true],
-  ["found_days", true],
+  ["created_at", true],
   ["photos", false],
   ["bio", false],
 ].map(([key, on]) => ({ key, default: on }))
@@ -437,6 +437,24 @@ test.describe("TG Workspace directory", () => {
     await expect(aside).toHaveCount(0)
     await expect(chip(page, "citedby-src_one")).toBeVisible()
     expect(param(page, "dirFilter")).toContain("citedby:src_one")
+  })
+
+  test("a link with a filter that no longer reads is reset, and says so", async ({
+    page,
+  }) => {
+    // DPF renamed the day measures; their old text is not a filter any more.
+    await mockDirectory(page)
+    await gotoWorkspace(page, "channels")
+    await page.goto(
+      "/workspace?tab=directory&dirFilter=last_post_days%20%3C%3D%207",
+    )
+    await expect(
+      page.getByText("This link's filter could not be read and was reset"),
+    ).toBeVisible()
+    await expect(chip(page, "flag-followable")).toBeVisible()
+    await expect
+      .poll(() => param(page, "dirFilter"))
+      .toBe("not is:followed and not is:dismissed and is:followable")
   })
 
   // Its own short test, for the journey's time budget (DIR-06).
