@@ -51,6 +51,28 @@ const KEYS: Record<ColumnKey, true> = {
 }
 export const isColumnKey = (key: string): key is ColumnKey => key in KEYS
 
+/**
+ * The columns only a `DATA_ADMIN` reader may see, sort or filter by: the
+ * server's `INTERNAL_COLUMNS`, which answers anybody else's sort or Condition
+ * on one with a 422 (DPF). Every internal gate in the browser reads this set,
+ * and none names a key of its own. `test_directory_every_column.py` parses
+ * this block and holds it equal to the server's, in both directions.
+ */
+export const INTERNAL_COLUMNS: ReadonlySet<ColumnKey> = new Set<ColumnKey>([
+  "kind",
+  "attempts",
+  "last_error",
+  "attempted_at",
+  "retry_after",
+  "priority",
+  "priority_boost",
+  "effective_priority",
+  "telegram_chat_id",
+  "latest_id",
+])
+export const isInternal = (key: string): boolean =>
+  (INTERNAL_COLUMNS as ReadonlySet<string>).has(key)
+
 export const isOn = (
   column: DirectoryColumnResponse,
   choices: ColumnChoices,
@@ -89,7 +111,7 @@ export const choiceCount = (
 // ponytail: one Permission read through the catalogue. If the PUT ever moves
 // to its own Permission, publish it on the catalogue response instead.
 export const mayMakeDefaults = (catalogue: ColumnCatalogue): boolean =>
-  catalogue.some((c) => c.key === "attempts")
+  catalogue.some((c) => INTERNAL_COLUMNS.has(c.key))
 
 /**
  * Whether this caller holds `DATA_ADMIN`, read the same way: the internal

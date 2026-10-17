@@ -12,6 +12,7 @@ import type {
   DirectorySearchRequest,
   YourChannels,
 } from "@/client"
+import { isInternal } from "./directory-columns"
 import {
   type DirectorySharedCond,
   MEASURES,
@@ -115,7 +116,7 @@ const SORT_LABELS: Record<YoursSource, string> = {
   ticked: "Cited by channels ticked here",
 }
 
-type SortOption = { value: string; label: string; internal?: true }
+type SortOption = { value: string; label: string; internal: boolean }
 
 const WORD_LABELS: Record<(typeof WORD_SORTS)[number], string> = {
   language: "Language",
@@ -133,23 +134,11 @@ const WORD_LABELS: Record<(typeof WORD_SORTS)[number], string> = {
 export const SORT_OPTIONS: SortOption[] = [
   ...YOURS.map((y) => ({ value: `mine:${y}`, label: SORT_LABELS[y] })),
   { value: "mine_last_days", label: "Days since your channels last cited it" },
-  ...MEASURES.map((m) => ({
-    value: m.key,
-    label: m.label,
-    internal: m.internal,
-  })),
-  ...MOMENTS.map((m) => ({
-    value: m.key,
-    label: m.label,
-    internal: m.internal,
-  })),
+  ...MEASURES.map((m) => ({ value: m.key, label: m.label })),
+  ...MOMENTS.map((m) => ({ value: m.key, label: m.label })),
   { value: "followable", label: "Followable" },
-  ...WORD_SORTS.map((w) => ({
-    value: w,
-    label: WORD_LABELS[w],
-    ...((w === "kind" || w === "last_error") && { internal: true as const }),
-  })),
-]
+  ...WORD_SORTS.map((w) => ({ value: w, label: WORD_LABELS[w] })),
+].map((o) => ({ ...o, internal: isInternal(o.value) }))
 
 export type SharedRelation = DirectorySharedCond["type"]
 

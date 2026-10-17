@@ -132,8 +132,6 @@ export type Measure = {
   short: string
   description: string
   section: MeasureSection
-  /** Read by `DATA_ADMIN` only: the server refuses it to anybody else (DPF). */
-  internal?: true
 }
 
 export type Moment = {
@@ -141,7 +139,6 @@ export type Moment = {
   label: string
   description: string
   section: MeasureSection
-  internal?: true
 }
 
 /** An entry's moments, each a Time bound and a sort (DPF). */
@@ -175,14 +172,12 @@ export const MOMENTS: Moment[] = [
     label: "Last attempt",
     description: "When the Directory last tried to fetch it, answered or not",
     section: "Probe queue",
-    internal: true,
   },
   {
     key: "retry_after",
     label: "Retry after",
     description: "When a fetch that got no answer may be tried again",
     section: "Probe queue",
-    internal: true,
   },
 ]
 const MOMENT_BY_KEY = new Map(MOMENTS.map((m) => [m.key, m]))
@@ -288,7 +283,6 @@ export const MEASURES: Measure[] = [
     short: "Attempts",
     description: "Fetches in a row that got no answer; reset by one that does",
     section: "Probe queue",
-    internal: true,
   },
   {
     key: "priority",
@@ -297,7 +291,6 @@ export const MEASURES: Measure[] = [
     description:
       "Its place in the probe queue as the Directory set it; lower goes first",
     section: "Probe queue",
-    internal: true,
   },
   {
     key: "priority_boost",
@@ -306,7 +299,6 @@ export const MEASURES: Measure[] = [
     description:
       "The Operator's adjustment to its place in the queue; positive fetches sooner",
     section: "Probe queue",
-    internal: true,
   },
   {
     key: "effective_priority",
@@ -315,7 +307,6 @@ export const MEASURES: Measure[] = [
     description:
       "Priority minus the boost, which is the order the Directory fetches in, lower first",
     section: "Probe queue",
-    internal: true,
   },
   {
     key: "telegram_chat_id",
@@ -323,7 +314,6 @@ export const MEASURES: Measure[] = [
     short: "Chat id",
     description: "Telegram's id for it, which survives a handle rename",
     section: "Probe queue",
-    internal: true,
   },
   {
     key: "latest_id",
@@ -331,7 +321,6 @@ export const MEASURES: Measure[] = [
     short: "Latest id",
     description: "The newest Post id the Directory saw",
     section: "Probe queue",
-    internal: true,
   },
 ]
 
