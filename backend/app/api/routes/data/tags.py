@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
-from app.api.routes.data.directory import targets
+from app.api.directory_views import targets
 from app.schemas.tags import (
     TagChangeResponse,
     TagDeleteRequest,

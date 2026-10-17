@@ -1009,7 +1009,11 @@ def _page_handles(
     descending: bool,
     page: int,
     first: Sequence[str] = (),
+    size: int | None = None,
 ) -> list[str]:
+    # Read at call time, not bound as a default: `size` is the page unless the
+    # caller wants more (Tick all).
+    size = PAGE_SIZE if size is None else size
     handle = col(DirectoryEntry.handle)
     ticked = sorted({normalize_handle(h) for h in first if h.strip()})
     statement = unscoped_select(
@@ -1067,8 +1071,8 @@ def _page_handles(
     leading = [(handle == any_(_handles(ticked))).desc()] if ticked else []
     statement = (
         statement.order_by(*leading, ordered.nulls_last(), handle)
-        .offset(page * PAGE_SIZE)
-        .limit(PAGE_SIZE)
+        .offset(page * size)
+        .limit(size)
     )
     return [str(h) for h in session.execute(statement).scalars().all()]
 
@@ -1428,12 +1432,13 @@ def matching(view: DirectoryView, *, unfollowed: bool = False) -> Select[tuple[s
     return unscoped_select(statement, reason=_SCOPE_REASON)
 
 
-def view_handles(session: Session, view: DirectoryView) -> list[str] | None:
-    """Every handle `view` matches, by handle; `None` above `MAX_TICK_ALL`."""
-    found = session.execute(
-        matching(view).order_by(DirectoryEntry.handle).limit(MAX_TICK_ALL + 1)
+def view_handles(
+    session: Session, view: DirectoryView, *, sort: DirectorySort, descending: bool
+) -> list[str] | None:
+    """Every handle `view` matches, in the list's sort; `None` above `MAX_TICK_ALL`."""
+    handles = _page_handles(
+        session, view, sort=sort, descending=descending, page=0, size=MAX_TICK_ALL + 1
     )
-    handles = [str(h) for h in found.scalars().all()]
     return None if len(handles) > MAX_TICK_ALL else handles
 
 

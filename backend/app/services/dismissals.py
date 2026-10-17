@@ -42,7 +42,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import DateTime, Select, String, Uuid, literal
+from sqlalchemy import DateTime, Select, String, Uuid, func, literal
 from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
@@ -77,7 +77,7 @@ def list_dismissals(session: Session, *, user_id: uuid.UUID) -> list[dict[str, A
 
 def dismiss_channels(
     session: Session,
-    handles: list[str] | Select[tuple[str]],
+    handles: list[str],
     *,
     reason: str | None = None,
     user_id: uuid.UUID,
@@ -87,28 +87,7 @@ def dismiss_channels(
     The `existing` set is the caller's own rows, which is the whole ticket: read
     globally, a handle another account had already dismissed would be skipped
     here and this would return `[]` having written nothing.
-
-    `handles` may be a statement of handles (a Directory view's matches,
-    ADR-031), written in one `INSERT … SELECT` whose conflict key is the same
-    composite one.
     """
-    if isinstance(handles, Select):
-        found = handles.subquery()
-        rows = sa_select(
-            found.c.handle,
-            literal(user_id, Uuid()),
-            literal(reason, String()),
-            literal(utc_now(), DateTime()),
-        )
-        inserted = session.execute(
-            pg_insert(Dismissal)
-            .from_select(["handle", "user_id", "reason", "created_at"], rows)
-            .on_conflict_do_nothing()
-            .returning(col(Dismissal.handle))
-        )
-        new = [str(h) for h in inserted.scalars().all()]
-        session.commit()
-        return new
     added: list[str] = []
     existing = dismissed_handles(session, user_id=user_id)
     for raw in handles:
@@ -127,6 +106,39 @@ def dismiss_channels(
         added.append(handle)
     session.commit()
     return added
+
+
+def dismiss_matching(
+    session: Session,
+    handles: Select[tuple[str]],
+    *,
+    reason: str | None = None,
+    user_id: uuid.UUID,
+) -> int:
+    """Dismiss every handle a statement names (a Directory view's matches,
+    ADR-031) for one account; returns how many were new.
+
+    One `INSERT … SELECT` on the same composite conflict key as
+    `dismiss_channels`, counted in SQL: a view can match the whole Directory,
+    so the handles never come back to Python.
+    """
+    found = handles.subquery()
+    rows = sa_select(
+        found.c.handle,
+        literal(user_id, Uuid()),
+        literal(reason, String()),
+        literal(utc_now(), DateTime()),
+    )
+    added = (
+        pg_insert(Dismissal)
+        .from_select(["handle", "user_id", "reason", "created_at"], rows)
+        .on_conflict_do_nothing()
+        .returning(col(Dismissal.handle))
+        .cte("added")
+    )
+    count = session.execute(sa_select(func.count()).select_from(added)).scalar_one()
+    session.commit()
+    return int(count)
 
 
 def take_back_dismissals(

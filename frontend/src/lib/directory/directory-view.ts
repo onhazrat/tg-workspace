@@ -360,6 +360,15 @@ export const MAX_TICK_ALL = 10_000
  */
 export type Whole = { total: number; state: "offer" | "ticked" | "held" }
 
+/**
+ * The view Tick all is taken on, from the URL's view rather than the resolved
+ * request: the request carries the Ticks when Yours or a Seed reads them, so
+ * ticking all would otherwise end itself. The page and the quotes are not the
+ * view.
+ */
+export const tickAllKey = (view: DirectoryView): string =>
+  JSON.stringify({ ...view, page: 0, matches: false })
+
 /** Tick all as it was taken, if it was taken on the view `key` names. */
 export const takenOn = <T extends { key: string }>(
   taken: T | null,

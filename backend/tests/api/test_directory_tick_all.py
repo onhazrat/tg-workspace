@@ -24,6 +24,7 @@ Each mutation was applied alone and this module went red:
 * let Dismiss with a view reach followed entries -> the Dismiss case
 * resolve a view to one handle -> the Tag, Untag, Dismiss and Boost cases
 * accept handles and a view together -> the both-or-neither cases
+* order the handles by handle, not the list's sort -> the sort case
 """
 
 from __future__ import annotations
@@ -157,6 +158,22 @@ def test_the_handles_are_every_entry_the_view_matches(
     assert set(r.json()["handles"]) == PERSIAN
 
 
+def test_the_handles_come_in_the_lists_sort(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    view = {"yours": {"source": "follows", "handles": []}}
+    body = {**view, "sort": "language", "descending": True}
+    r = client.post(HANDLES, headers=operator, json=body)
+    assert r.status_code == 200, r.text
+    assert r.json()["handles"] == [
+        "ta_fa_followed",
+        "ta_fa_one",
+        "ta_fa_two",
+        "ta_en",
+    ]
+
+
 def test_a_view_too_large_to_tick_is_refused_not_truncated(
     client: TestClient,
     accounts: tuple[dict[str, str], dict[str, str]],
@@ -248,7 +265,8 @@ def test_dismiss_reaches_every_unfollowed_entry_the_view_matches(
     operator, other = accounts
     r = client.post(IGNORED, headers=operator, json={"view": persian()})
     assert r.status_code == 200, r.text
-    assert set(r.json()["ignored"]) == {"ta_fa_one", "ta_fa_two"}
+    # A count, never the handles: a view can match the whole Directory.
+    assert r.json() == {"ignored": [], "changed": 2}
     listed = client.get(IGNORED, headers=operator).json()
     assert {row["handle"] for row in listed} == {"ta_fa_one", "ta_fa_two"}
     # The other Account's own Dismissal is untouched, and nothing was added to it.

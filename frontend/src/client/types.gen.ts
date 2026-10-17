@@ -2030,6 +2030,29 @@ export type DirectoryFollowSource = {
 };
 
 /**
+ * DirectoryHandlesRequest
+ *
+ * Every handle a view matches, in the list's sort, for Tick all (ADR-031).
+ */
+export type DirectoryHandlesRequest = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
+    /**
+     * Sort
+     */
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at' | 'language' | 'status' | 'kind' | 'followable' | 'bio' | 'last_error' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
+    /**
+     * Descending
+     */
+    descending?: boolean;
+};
+
+/**
  * DirectoryHandlesResponse
  *
  * Every handle a view matches, for Tick all (ADR-031).
@@ -2902,6 +2925,10 @@ export type DiscoverIgnoredAddedResponse = {
      * Ignored
      */
     ignored?: Array<string>;
+    /**
+     * Changed
+     */
+    changed: number;
 };
 
 /**
@@ -10411,7 +10438,7 @@ export type DataCountDirectoryResponses = {
 export type DataCountDirectoryResponse = DataCountDirectoryResponses[keyof DataCountDirectoryResponses];
 
 export type DataListDirectoryHandlesData = {
-    body: DirectoryViewRequest;
+    body: DirectoryHandlesRequest;
     path?: never;
     query?: never;
     url: '/api/v1/data/directory/handles';

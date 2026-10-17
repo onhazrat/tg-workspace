@@ -467,6 +467,13 @@ class DirectoryListRequest(DirectoryViewRequest):
         return self.yours.handles if self.yours.source == "ticked" else self.ticked
 
 
+class DirectoryHandlesRequest(DirectoryViewRequest):
+    """Every handle a view matches, in the list's sort, for Tick all (ADR-031)."""
+
+    sort: DirectorySort = "mine"
+    descending: bool = True
+
+
 class DirectoryCountRequest(DirectoryViewRequest):
     """How many entries a view leaves, with a candidate Condition added with AND."""
 

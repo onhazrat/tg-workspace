@@ -24,6 +24,7 @@ import {
   sortOptions,
   sortValue,
   takenOn,
+  tickAllKey,
   tickAllState,
   toggleField,
   viewFromParams,
@@ -415,5 +416,16 @@ describe("All matching's state (ADR-031)", () => {
     const ticks = new Set(["z"])
     expect(shownTicks(false, ticks, rows)).toBe(ticks)
     expect([...shownTicks(true, ticks, rows)].sort()).toEqual(["a", "b", "z"])
+  })
+})
+
+describe("tickAllKey (ADR-031)", () => {
+  const view = viewFromParams({})
+
+  test("the page and the quotes are not the view; the filter and sort are", () => {
+    const key = tickAllKey(view)
+    expect(tickAllKey({ ...view, page: 3, matches: true })).toBe(key)
+    expect(tickAllKey({ ...view, filter: 'lang:"fa"' })).not.toBe(key)
+    expect(tickAllKey({ ...view, descending: !view.descending })).not.toBe(key)
   })
 })

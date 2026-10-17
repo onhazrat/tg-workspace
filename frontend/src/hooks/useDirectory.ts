@@ -62,6 +62,7 @@ import {
   searchRequest,
   selectedFirstRequest,
   takenOn,
+  tickAllKey,
   viewFromParams,
 } from "@/lib/directory/directory-view"
 import { scopedStorage } from "@/lib/storage/scoped"
@@ -308,7 +309,7 @@ export function useDirectory() {
     ...selectedFirstRequest(directorySelectedFirst, yours, sets.ticked),
   }
   const viewKey = JSON.stringify(body)
-  const wholeKey = JSON.stringify([request, view.sort, view.descending])
+  const wholeKey = tickAllKey(view)
   useEffect(() => {
     if (whole && whole.key !== wholeKey) setWhole(null)
   }, [whole, wholeKey])
@@ -364,7 +365,9 @@ export function useDirectory() {
       return
     }
     try {
-      const { handles } = await dataListDirectoryHandles({ body: request })
+      const { handles } = await dataListDirectoryHandles({
+        body: { ...request, sort: view.sort, descending: view.descending },
+      })
       // Added to the Ticks, unless that would pass the cap every read of them
       // has; then the view's matches replace them.
       const added = new Set([...ticked, ...handles])
@@ -378,12 +381,12 @@ export function useDirectory() {
   /** Dismisses every unfollowed entry the view matches; All matching has no Undo. */
   const dismissAll = async () => {
     try {
-      const ignored = await dismissal.mutateAsync({
+      const changed = await dismissal.mutateAsync({
         handles: [],
         ignored: true,
         view: request,
       })
-      toast(dismissalNotice(ignored))
+      toast(`Dismissed ${changed.toLocaleString("en-US")} channels`)
     } catch (error) {
       toast.error(errorText(error, "The Dismissal did not save."))
     }

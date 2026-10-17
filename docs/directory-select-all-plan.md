@@ -48,7 +48,13 @@ defined in `CONTEXT.md`.
 
 - Tick all adds the view's handles to the Ticks. If that would pass 10,000,
   they replace the Ticks instead.
-- The handles read orders by handle, not by the list's sort.
+- The handles read takes the list's sort and answers in it.
+- A Dismiss by view answers a count (`changed`) and no handles, since it can
+  reach the whole Directory.
+- Tick all is keyed on the URL's view, not the resolved request, so ticking
+  all does not end itself when Yours or a Seed reads the Ticks.
+- The view resolver lives in `app/api/directory_views.py`, so no route module
+  imports another.
 - The All matching Dismiss confirm says "Dismiss up to N channels? Followed
   ones are skipped.", because the server skips Follows.
 - The four services take either a handle list or a SQL select of handles, so a
@@ -57,9 +63,6 @@ defined in `CONTEXT.md`.
   '60s'`.
 - The Playwright test asserts what the tab sends (handles after a snapshot, a
   `view` in All matching), since the Directory API is mocked there.
-- Known and left: a Dismiss by view answers every dismissed handle, and with
-  Yours = "Channels ticked here" the snapshot notice clears as soon as the
-  Ticks change.
 
 ## Open after implementation
 

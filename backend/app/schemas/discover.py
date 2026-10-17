@@ -345,6 +345,10 @@ class DiscoverIgnoredAddedResponse(BaseModel):
     idempotent, so a re-dismissal is a no-op rather than an error."""
 
     ignored: list[str] = Field(default_factory=list)
+    #: How many were newly dismissed. A Dismissal by Directory view answers
+    #: this alone and leaves `ignored` empty, since it can reach the whole
+    #: Directory (ADR-031).
+    changed: int
 
 
 class DiscoverIgnoredRemovedResponse(BaseModel):

@@ -1266,7 +1266,7 @@ export const dataCountDirectory = <ThrowOnError extends boolean = true>(options:
 /**
  * List Directory Handles
  *
- * Every handle a view matches, to tick them all.
+ * Every handle a view matches, in the list's sort, to tick them all.
  */
 export const dataListDirectoryHandles = <ThrowOnError extends boolean = true>(options: Options<DataListDirectoryHandlesData, ThrowOnError>) => (options.client ?? client).post<DataListDirectoryHandlesResponses, DataListDirectoryHandlesErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

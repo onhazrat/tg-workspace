@@ -13,8 +13,8 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
+from app.api.directory_views import directory_matching
 from app.api.routes.data._shared import selected_in
-from app.api.routes.data.directory import targets
 from app.jobs.directory_harvest import (
     DIRECTORY_HARVEST_JOB_ID,
     is_harvest_running,
@@ -71,6 +71,7 @@ from app.services.discover_reports import (
 )
 from app.services.dismissals import (
     dismiss_channels,
+    dismiss_matching,
     list_dismissals,
     take_back_dismissals,
 )
@@ -177,13 +178,18 @@ def add_discover_ignored(
     Idempotent: re-dismissing an entry is a no-op rather than an error, since
     the UI treats this as a toggle.
     """
+    if body.view is not None:
+        changed = dismiss_matching(
+            session,
+            directory_matching(session, _current_user.id, body.view, unfollowed=True),
+            reason=body.reason,
+            user_id=_current_user.id,
+        )
+        return DiscoverIgnoredAddedResponse(ignored=[], changed=changed)
     added = dismiss_channels(
-        session,
-        targets(session, _current_user.id, body, unfollowed=True),
-        reason=body.reason,
-        user_id=_current_user.id,
+        session, body.handles, reason=body.reason, user_id=_current_user.id
     )
-    return DiscoverIgnoredAddedResponse(ignored=added)
+    return DiscoverIgnoredAddedResponse(ignored=added, changed=len(added))
 
 
 @router.delete("/discover/ignored")

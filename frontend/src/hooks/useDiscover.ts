@@ -89,16 +89,16 @@ export function useDiscoverIgnoreMutation() {
       ignored: boolean
       /** A Directory view instead of handles: All matching (ADR-031). */
       view?: DirectoryViewRequest
-    }): Promise<string[]> => {
-      // The two endpoints report their effect under different keys; the caller
-      // only cares which handles actually changed.
+    }): Promise<number> => {
+      // How many actually changed; a view answers only the count, since it
+      // can reach the whole Directory.
       if (ignored && view) {
-        return (await api.dismissDirectoryView(view)).ignored
+        return (await api.dismissDirectoryView(view)).changed
       }
       if (ignored) {
-        return (await api.ignoreDiscoverChannels(handles)).ignored
+        return (await api.ignoreDiscoverChannels(handles)).ignored.length
       }
-      return (await api.unignoreDiscoverChannels(handles)).removed
+      return (await api.unignoreDiscoverChannels(handles)).removed.length
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["discoverReport"] })
