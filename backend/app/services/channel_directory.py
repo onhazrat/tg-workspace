@@ -90,10 +90,11 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import Select, and_, func, literal, or_
 from sqlalchemy import text as sa_text
+from sqlalchemy import update as sa_update
 from sqlmodel import Session, col, delete, select
 
 from app.jobs.settings import load_directory_settings, load_reach_settings
@@ -846,7 +847,11 @@ BoostMode = Literal["set", "add"]
 
 
 def boost_entries(
-    session: Session, handles: Sequence[str], *, mode: BoostMode, value: int
+    session: Session,
+    handles: Sequence[str] | Select[tuple[str]],
+    *,
+    mode: BoostMode,
+    value: int,
 ) -> int:
     """Set each entry's Priority boost to `value`, or add `value` to it (DPF).
 
@@ -857,23 +862,31 @@ def boost_entries(
     the range leaves every entry as it was.
 
     Writes `priority_boost` only. The search document reads nothing it changes,
-    so nothing is re-indexed.
+    so nothing is re-indexed. `handles` may be a statement of handles (a
+    Directory view's matches, ADR-031); both shapes are one check and one
+    `UPDATE`, so a view of a million entries never reaches Python.
     """
-    keys = sorted({normalize_handle(h) for h in handles if h.strip()})
-    rows = session.exec(
-        select(DirectoryEntry).where(col(DirectoryEntry.handle).in_(keys))
-    ).all()
-    boosts = {
-        row.handle: value if mode == "set" else row.priority_boost + value
-        for row in rows
-    }
-    if any(abs(b) > MAX_PRIORITY_BOOST for b in boosts.values()):
+    keys = (
+        handles
+        if isinstance(handles, Select)
+        else sorted({normalize_handle(h) for h in handles if h.strip()})
+    )
+    reached = col(DirectoryEntry.handle).in_(keys)
+    boosted = (
+        literal(value) if mode == "set" else col(DirectoryEntry.priority_boost) + value
+    )
+    past = session.exec(
+        select(func.count())
+        .select_from(DirectoryEntry)
+        .where(reached, func.abs(boosted) > MAX_PRIORITY_BOOST)
+    ).one()
+    if past:
         raise BoostOutOfRange(f"A Priority boost stays within ±{MAX_PRIORITY_BOOST:,}")
-    for row in rows:
-        row.priority_boost = boosts[row.handle]
-        session.add(row)
+    changed = session.execute(
+        sa_update(DirectoryEntry).where(reached).values(priority_boost=boosted)
+    )
     session.commit()
-    return len(rows)
+    return int(cast(Any, changed).rowcount)
 
 
 def record_probe_result(

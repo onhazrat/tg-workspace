@@ -14,6 +14,8 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import Select
+from sqlalchemy import text as sa_text
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep, require_permission
@@ -29,6 +31,7 @@ from app.schemas.directory import (
     DirectoryDistributionRequest,
     DirectoryDistributionResponse,
     DirectoryEntryResponse,
+    DirectoryHandlesResponse,
     DirectoryLanguageCountResponse,
     DirectoryListRequest,
     DirectoryListResponse,
@@ -36,6 +39,7 @@ from app.schemas.directory import (
     DirectoryRowResponse,
     DirectorySamplePostResponse,
     DirectorySizeResponse,
+    DirectoryTargets,
     DirectoryViewRequest,
     DirectoryWhyRequest,
     DirectoryWhyResponse,
@@ -147,6 +151,25 @@ def _view(
     )
 
 
+def targets(
+    session: Session,
+    user_id: uuid.UUID,
+    body: DirectoryTargets,
+    *,
+    unfollowed: bool = False,
+) -> list[str] | Select[tuple[str]]:
+    """What a bulk write reaches: `body`'s handles, or every entry its view
+    matches, as a statement the write reads from (All matching, ADR-031).
+    `unfollowed` leaves the reader's Follows out of a view."""
+    if body.view is None:
+        return body.handles
+    # A view can match the whole Directory; past this the write fails rather
+    # than holding the request open. Staging measures before a job replaces it.
+    session.execute(sa_text("SET LOCAL statement_timeout = '60s'"))
+    view = _view(session, user_id, body.view)
+    return directory_reads.matching(view, unfollowed=unfollowed)
+
+
 def _sees_internals(session: Session, user_id: uuid.UUID) -> bool:
     return rbac.has_permission(session, user_id, Permission.DATA_ADMIN)
 
@@ -200,6 +223,26 @@ def count_directory(
     return DirectoryCountResponse(
         total=directory_reads.count_view(session, view, candidate)
     )
+
+
+#: 422 for Tick all on a view too large to tick; the browser holds it as All
+#: matching instead and never asks (ADR-031).
+TOO_MANY_TO_TICK = f"More than {directory_reads.MAX_TICK_ALL:,} entries match; act on them as All matching"
+
+
+@router.post("/directory/handles")
+def list_directory_handles(
+    body: DirectoryViewRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DirectoryHandlesResponse:
+    """Every handle a view matches, to tick them all."""
+    handles = directory_reads.view_handles(
+        session, _view(session, current_user.id, body)
+    )
+    if handles is None:
+        raise HTTPException(status_code=422, detail=TOO_MANY_TO_TICK)
+    return DirectoryHandlesResponse(handles=handles)
 
 
 @router.post("/directory/distribution")
@@ -297,7 +340,12 @@ def boost_directory(
     changes none.
     """
     try:
-        changed = boost_entries(session, body.handles, mode=body.mode, value=body.value)
+        changed = boost_entries(
+            session,
+            targets(session, _current_user.id, body),
+            mode=body.mode,
+            value=body.value,
+        )
     except BoostOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return DirectoryBoostResponse(changed=changed)

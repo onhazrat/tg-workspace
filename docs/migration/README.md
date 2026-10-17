@@ -58,6 +58,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [ADR-025](./ADR-025-posts-are-judged-by-estimated-views.md) | Posts are filtered and ordered by their Estimated View count, never by Channel Reach — extends ADR-024 |
 | [ADR-029](./ADR-029-tags-belong-to-the-account.md) | Tags belong to the Account, not the Follow |
 | [ADR-030](./ADR-030-generation-is-an-attempt-on-the-worker.md) | Generating a Summary is an Attempt, run on the worker |
+| [ADR-031](./ADR-031-tick-all-matching.md) | Tick all is a snapshot up to 10,000 and All matching above it |
 
 ## Code references
 

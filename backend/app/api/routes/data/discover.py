@@ -14,6 +14,7 @@ from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.routes.data._shared import selected_in
+from app.api.routes.data.directory import targets
 from app.jobs.directory_harvest import (
     DIRECTORY_HARVEST_JOB_ID,
     is_harvest_running,
@@ -24,6 +25,7 @@ from app.schemas.common import StatusResponse
 from app.schemas.discover import (
     DiscoverCandidatesRequest,
     DiscoverCandidatesResponse,
+    DiscoverDismissRequest,
     DiscoverIgnoredAddedResponse,
     DiscoverIgnoredRemovedResponse,
     DiscoverIgnoreRequest,
@@ -166,7 +168,7 @@ def list_discover_ignored(
 
 @router.post("/discover/ignored")
 def add_discover_ignored(
-    body: DiscoverIgnoreRequest,
+    body: DiscoverDismissRequest,
     session: SessionDep,
     _current_user: CurrentUser,
 ) -> DiscoverIgnoredAddedResponse:
@@ -176,7 +178,10 @@ def add_discover_ignored(
     the UI treats this as a toggle.
     """
     added = dismiss_channels(
-        session, body.handles, reason=body.reason, user_id=_current_user.id
+        session,
+        targets(session, _current_user.id, body, unfollowed=True),
+        reason=body.reason,
+        user_id=_current_user.id,
     )
     return DiscoverIgnoredAddedResponse(ignored=added)
 

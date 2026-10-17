@@ -10,11 +10,9 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-#: As many handles as a Directory view's Ticks can be.
-MAX_TAG_HANDLES = 10_000
+from app.schemas.directory import DirectoryTargets
 
 TagName = Annotated[str, Field(min_length=1)]
-Handle = Annotated[str, Field(min_length=1, max_length=256)]
 
 
 def _not_blank(value: str) -> str:
@@ -43,13 +41,13 @@ class TagChangeResponse(BaseModel):
     changed: int
 
 
-class TagHandlesRequest(BaseModel):
-    """One Tag and the handles, followed or not, to put it on or take it off."""
+class TagHandlesRequest(DirectoryTargets):
+    """One Tag and the handles, followed or not, to put it on or take it off;
+    or a view, for every entry it matches (ADR-031)."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: TagName
-    handles: list[Handle] = Field(min_length=1, max_length=MAX_TAG_HANDLES)
 
     _name = field_validator("name")(_not_blank)
 

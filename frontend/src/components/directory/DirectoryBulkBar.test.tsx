@@ -5,20 +5,29 @@
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import type { Whole } from "@/lib/directory/directory-view"
 import { DirectoryBulkBar } from "./DirectoryBulkBar"
 
 afterEach(cleanup)
 
-function mount(handles: string[], busy = false, followed: string[] = []) {
+function mount(
+  handles: string[],
+  busy = false,
+  followed: string[] = [],
+  whole?: Whole,
+) {
   const calls = {
     follow: [] as string[][],
     dismiss: [] as string[][],
     clear: 0,
+    tickAll: 0,
     tag: [] as [string, string[]][],
     untag: [] as [string, string[]][],
   }
   render(
     <DirectoryBulkBar
+      whole={whole}
+      onTickAll={() => calls.tickAll++}
       ticks={new Set(handles)}
       busy={busy}
       followed={new Set(followed)}
@@ -165,5 +174,59 @@ describe("the Priority boost (DPF)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Set" }))
     // A followed Tick is boosted too: the queue is not about who follows.
     expect(sent).toEqual([[["a", "b"], "set", 1]])
+  })
+})
+
+describe("tick all that match (ADR-031)", () => {
+  const page = Array.from({ length: 100 }, (_, i) => `h${i}`)
+
+  test("offers the whole view once the page is ticked", () => {
+    const calls = mount(page, false, [], { total: 4213, state: "offer" })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Tick all 4,213 that match" }),
+    )
+    expect(calls.tickAll).toBe(1)
+  })
+
+  test("offers All matching for a view over 10,000", () => {
+    mount(page, false, [], { total: 48210, state: "offer" })
+    expect(
+      screen.getByRole("button", { name: "Act on all 48,210 matching" }),
+    ).toBeTruthy()
+  })
+
+  test("says when every match became a Tick", () => {
+    mount(page, false, [], { total: 4213, state: "ticked" })
+    expect(screen.getByText("All 4,213 matching are ticked.")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /Tick all/ })).toBeNull()
+  })
+
+  test("All matching says why, and turns Follow off", () => {
+    mount(page, false, [], { total: 48210, state: "held" })
+    const bar = screen.getByTestId("directory-bulk-bar")
+    expect(bar.textContent).toContain("All 48,210 matching.")
+    expect(bar.textContent).toContain(
+      "Over 10,000, so they are held as this view, not ticked",
+    )
+    const follow = screen.getByRole("button", {
+      name: "Follow",
+    }) as HTMLButtonElement
+    expect(follow.disabled).toBe(true)
+    expect(follow.closest("[title]")?.getAttribute("title")).toBe(
+      "Follow acts on 10,000 or fewer",
+    )
+  })
+
+  test("All matching asks before Dismiss, and offers no Undo", () => {
+    const calls = mount(page, false, [], { total: 48210, state: "held" })
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss all" }))
+    expect(calls.dismiss).toEqual([])
+    expect(
+      screen.getByText(
+        "Dismiss up to 48,210 channels? Followed ones are skipped. This hides them in Discover and the Directory. There is no Undo for more than 10,000.",
+      ),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByTestId("directory-bulk-dismiss-confirm"))
+    expect(calls.dismiss.length).toBe(1)
   })
 })

@@ -19,9 +19,11 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 
+from sqlalchemy import Select, Uuid, literal
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import select as sa_select
 from sqlalchemy import update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
@@ -229,14 +231,37 @@ def _group_tags(session: Session, *, user_id: uuid.UUID) -> list[tuple[str, str]
 
 
 def assign_tag(
-    session: Session, *, user_id: uuid.UUID, name: str, handles: Iterable[str]
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    name: str,
+    handles: Iterable[str] | Select[tuple[str]],
 ) -> int:
     """Put `name` on every handle, followed or not; returns how many it was new on.
 
     A handle already carrying the Tag keeps its row, spelling and time; a new
-    row is stamped now.
+    row is stamped now. `handles` may be a statement of handles (a Directory
+    view's matches, ADR-031), written in one `INSERT … SELECT`.
     """
     assigned_at = int(time.time() * 1000)
+    if isinstance(handles, Select):
+        found = handles.subquery()
+        rows = sa_select(
+            literal(user_id, Uuid()),
+            found.c.handle,
+            literal(tag_key(name)),
+            literal(name),
+            literal("manual"),
+            literal(assigned_at),
+        )
+        columns = ["user_id", "handle", "tag_key", "name", "source", "assigned_at"]
+        inserted = session.execute(
+            pg_insert(Tag)
+            .from_select(columns, rows)
+            .on_conflict_do_nothing()
+            .returning(col(Tag.handle))
+        )
+        return len(inserted.all())
     keys = {normalize_handle(h) for h in handles} - {""}
     before = _carrying(session, user_id=user_id, key=tag_key(name), handles=keys)
     add_tags(
@@ -251,21 +276,29 @@ def assign_tag(
 
 
 def unassign_tag(
-    session: Session, *, user_id: uuid.UUID, name: str, handles: Iterable[str]
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    name: str,
+    handles: Iterable[str] | Select[tuple[str]],
 ) -> int:
-    """Take `name` off every handle; returns how many carried it."""
-    keys = {normalize_handle(h) for h in handles} - {""}
-    if not keys:
+    """Take `name` off every handle; returns how many carried it. `handles` may
+    be a statement of handles, as `assign_tag` takes."""
+    keys = (
+        handles
+        if isinstance(handles, Select)
+        else {normalize_handle(h) for h in handles} - {""}
+    )
+    if not isinstance(keys, Select) and not keys:
         return 0
-    removed = _carrying(session, user_id=user_id, key=tag_key(name), handles=keys)
-    session.execute(
+    removed = session.execute(
         sa_delete(Tag).where(
             col(Tag.user_id) == user_id,
             col(Tag.tag_key) == tag_key(name),
             col(Tag.handle).in_(keys),
         )
     )
-    return removed
+    return int(cast(Any, removed).rowcount)
 
 
 def rename_tag(

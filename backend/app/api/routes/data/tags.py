@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
+from app.api.routes.data.directory import targets
 from app.schemas.tags import (
     TagChangeResponse,
     TagDeleteRequest,
@@ -67,7 +68,10 @@ def add_tag_channels(
     """Put a Tag on handles, followed or not; a new name makes a new Tag."""
     reject_reserved_virtual_group_tags([body.name])
     changed = tags.assign_tag(
-        session, user_id=current_user.id, name=body.name, handles=body.handles
+        session,
+        user_id=current_user.id,
+        name=body.name,
+        handles=targets(session, current_user.id, body),
     )
     _commit(session)
     return TagChangeResponse(changed=changed)
@@ -79,7 +83,10 @@ def remove_tag_channels(
 ) -> TagChangeResponse:
     """Take a Tag off handles. A body rather than a path, matching the POST."""
     changed = tags.unassign_tag(
-        session, user_id=current_user.id, name=body.name, handles=body.handles
+        session,
+        user_id=current_user.id,
+        name=body.name,
+        handles=targets(session, current_user.id, body),
     )
     _commit(session)
     return TagChangeResponse(changed=changed)

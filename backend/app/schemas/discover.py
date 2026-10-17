@@ -41,6 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
+from app.schemas.directory import DirectoryTargets
 from app.schemas.post_filter import PostSelection, select_all
 from app.schemas.posts import PostWindowRequest
 from app.schemas.scope import (
@@ -328,6 +329,14 @@ class DiscoverIgnoreRequest(BaseModel):
     """
 
     handles: list[str]
+    reason: str | None = None
+
+
+class DiscoverDismissRequest(DirectoryTargets):
+    """Handles to dismiss, or a Directory view for every unfollowed entry it
+    matches (All matching, ADR-031). The undo stays handles-only: All matching
+    offers no Undo."""
+
     reason: str | None = None
 
 

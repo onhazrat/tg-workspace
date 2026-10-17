@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@/api"
 import type { DiscoverScopeQuery } from "@/api/data"
+import type { DirectoryViewRequest } from "@/client"
 import type { DiscoverySignalKind } from "@/lib/posts/discover-candidates"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
@@ -82,12 +83,18 @@ export function useDiscoverIgnoreMutation() {
     mutationFn: async ({
       handles,
       ignored,
+      view,
     }: {
       handles: string[]
       ignored: boolean
+      /** A Directory view instead of handles: All matching (ADR-031). */
+      view?: DirectoryViewRequest
     }): Promise<string[]> => {
       // The two endpoints report their effect under different keys; the caller
       // only cares which handles actually changed.
+      if (ignored && view) {
+        return (await api.dismissDirectoryView(view)).ignored
+      }
       if (ignored) {
         return (await api.ignoreDiscoverChannels(handles)).ignored
       }

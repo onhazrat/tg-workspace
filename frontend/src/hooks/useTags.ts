@@ -8,6 +8,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  type DirectoryViewRequest,
   dataAddTagChannels,
   dataDeleteTag,
   dataListTagChannels,
@@ -24,8 +25,8 @@ import { useSettingGroupsQuery } from "./useSettingGroups"
 const NO_TAGS: TagResponse[] = []
 
 /**
- * The most handles one Tag request carries: the server's `MAX_TAG_HANDLES`,
- * a trust boundary it keeps. A Tag is not capped, so a longer list goes in
+ * The most handles one Tag request carries: the server's cap on a bulk
+ * write's handles, a trust boundary it keeps. A Tag is not capped, so a longer list goes in
  * batches of this size.
  */
 export const TAG_BATCH = 10_000
@@ -72,6 +73,19 @@ export function useTags() {
           ),
         "The Tag did not save.",
       ),
+    /** Tag every entry a Directory view matches: All matching (ADR-031). */
+    tagView: (name: string, view: DirectoryViewRequest) =>
+      write(async () => {
+        const { changed } = await dataAddTagChannels({ body: { name, view } })
+        toast.success(`Tagged ${changed} with ${name}`)
+      }, "The Tag did not save."),
+    untagView: (name: string, view: DirectoryViewRequest) =>
+      write(async () => {
+        const { changed } = await dataRemoveTagChannels({
+          body: { name, view },
+        })
+        toast.success(`Took ${name} off ${changed}`)
+      }, "The Tag was not removed."),
     untag: (name: string, handles: string[]) =>
       write(
         () =>

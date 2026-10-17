@@ -20,6 +20,7 @@ import {
   dataGetDirectorySize,
   dataListDirectory,
   dataListDirectoryColumns,
+  dataListDirectoryHandles,
   dataPutDirectoryColumns,
 } from "@/client"
 import type { ColumnsMenu } from "@/components/directory/DirectoryBar"
@@ -55,10 +56,12 @@ import {
   type DirectoryViewRequest,
   dismissalNotice,
   hasViewParams,
+  MAX_TICK_ALL,
   paramsFromView,
   resolveYours,
   searchRequest,
   selectedFirstRequest,
+  takenOn,
   viewFromParams,
 } from "@/lib/directory/directory-view"
 import { scopedStorage } from "@/lib/storage/scoped"
@@ -232,6 +235,11 @@ export function useDirectory() {
   const [opened, setOpened] = useStoredList(OPEN_KEY)
   const [following, setFollowing] = useState<ReadonlySet<string>>(new Set())
   const dismissal = useDiscoverIgnoreMutation()
+  // Tick all (ADR-031), for the view it was taken on: `held` is All matching,
+  // in memory only. Any change of view, and any hand-made tick, ends it.
+  const [whole, setWhole] = useState<{ key: string; held: boolean } | null>(
+    null,
+  )
 
   const parsed = useMemo(() => parseDirectoryFilter(view.filter), [view.filter])
   const filter =
@@ -300,6 +308,11 @@ export function useDirectory() {
     ...selectedFirstRequest(directorySelectedFirst, yours, sets.ticked),
   }
   const viewKey = JSON.stringify(body)
+  const wholeKey = JSON.stringify([request, view.sort, view.descending])
+  useEffect(() => {
+    if (whole && whole.key !== wholeKey) setWhole(null)
+  }, [whole, wholeKey])
+  const tickedAll = takenOn(whole, wholeKey)
   const sending = columnsToSend(
     columns.shown,
     sent.current?.view === viewKey ? sent.current.columns : undefined,
@@ -341,11 +354,56 @@ export function useDirectory() {
     }
   }
 
-  /** Sets or adds to the Priority boost of `handles` (DPF), a `DATA_ADMIN` write. */
-  const boost = async (handles: string[], mode: BoostMode, value: number) => {
+  /**
+   * Ticks every entry the view matches, added to the Ticks; or, above
+   * `MAX_TICK_ALL`, holds the view as All matching (ADR-031).
+   */
+  const tickAll = async (total: number) => {
+    if (total > MAX_TICK_ALL) {
+      setWhole({ key: wholeKey, held: true })
+      return
+    }
+    try {
+      const { handles } = await dataListDirectoryHandles({ body: request })
+      // Added to the Ticks, unless that would pass the cap every read of them
+      // has; then the view's matches replace them.
+      const added = new Set([...ticked, ...handles])
+      setTicked(added.size > MAX_TICK_ALL ? handles : added)
+      setWhole({ key: wholeKey, held: false })
+    } catch (error) {
+      toast.error(errorText(error, "The matching channels did not load."))
+    }
+  }
+
+  /** Dismisses every unfollowed entry the view matches; All matching has no Undo. */
+  const dismissAll = async () => {
+    try {
+      const ignored = await dismissal.mutateAsync({
+        handles: [],
+        ignored: true,
+        view: request,
+      })
+      toast(dismissalNotice(ignored))
+    } catch (error) {
+      toast.error(errorText(error, "The Dismissal did not save."))
+    }
+  }
+
+  /**
+   * Sets or adds to the Priority boost of `handles` (DPF), a `DATA_ADMIN`
+   * write; `"all"` is every entry the view matches (All matching).
+   */
+  const boost = async (
+    handles: string[] | "all",
+    mode: BoostMode,
+    value: number,
+  ) => {
     try {
       const { changed } = await dataBoostDirectory({
-        body: { handles, mode, value },
+        body:
+          handles === "all"
+            ? { view: request, mode, value }
+            : { handles, mode, value },
       })
       toast.success(`Boosted ${changed} ${changed === 1 ? "entry" : "entries"}`)
       await queryClient.invalidateQueries({ queryKey: queryKeys.directory })
@@ -385,7 +443,14 @@ export function useDirectory() {
     sets,
     yours,
     ticks,
-    setTicks: setTicked,
+    setTicks: (next: Iterable<string>) => {
+      setWhole(null)
+      setTicked(next)
+    },
+    /** Tick all's state on this view, if it was taken here (ADR-031). */
+    whole: tickedAll,
+    tickAll,
+    dismissAll,
     selectedFirst: directorySelectedFirst,
     setSelectedFirst: setDirectorySelectedFirst,
     shownColumns: columns.shown,

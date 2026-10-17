@@ -61,8 +61,11 @@ import {
   chooseSort,
   type DirectoryViewRequest,
   headerSort,
+  isHeld,
   listSummary,
+  shownTicks,
   sortValue,
+  tickAllState,
 } from "@/lib/directory/directory-view"
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
 import { pillClass } from "./PostFilterParts"
@@ -324,6 +327,18 @@ export function DirectoryView() {
     internals,
   )
   const total = shown.total ?? 0
+  const whole = tickAllState(d.whole, shown.rows, d.ticks, total)
+  const held = isHeld(whole)
+  // In All matching a bulk Tag means the view, not the page's Ticks (ADR-031).
+  const bulkTagging: Tagging = {
+    ...tagging,
+    onTag: (name, handles) =>
+      held ? void tags.tagView(name, d.request) : tagging.onTag(name, handles),
+    onUntag: (name, handles) =>
+      held
+        ? void tags.untagView(name, d.request)
+        : tagging.onUntag(name, handles),
+  }
   // Below md (DFP-02): the controls in a sheet, the rows as cards.
   const phone = useIsMobile()
   const [keyboardFlag, setKeyboard] = useSessionFlag("directory_keyboard")
@@ -397,6 +412,8 @@ export function DirectoryView() {
         </button>
       </div>
       <DirectoryBulkBar
+        whole={whole}
+        onTickAll={() => void d.tickAll(total)}
         ticks={d.ticks}
         busy={[...d.ticks].some((h) => d.following.has(h))}
         followed={
@@ -408,11 +425,15 @@ export function DirectoryView() {
           )
         }
         onFollow={(handles) => void d.follow(handles)}
-        onDismiss={(handles) => void d.dismiss(handles)}
+        onDismiss={(handles) =>
+          void (held ? d.dismissAll() : d.dismiss(handles))
+        }
         onClear={() => d.setTicks([])}
-        tagging={tagging}
+        tagging={bulkTagging}
         boostable={internals}
-        onBoost={(handles, mode, value) => void d.boost(handles, mode, value)}
+        onBoost={(handles, mode, value) =>
+          void d.boost(held ? "all" : handles, mode, value)
+        }
       />
       <DirectoryTable
         rows={shown.rows}
@@ -421,7 +442,8 @@ export function DirectoryView() {
         sort={view.sort}
         descending={view.descending}
         shown={d.shownColumns}
-        ticks={d.ticks}
+        // All matching shows every row ticked; a hand-made tick ends it.
+        ticks={shownTicks(held, d.ticks, shown.rows)}
         onTicks={d.setTicks}
         following={d.following}
         onFollow={(handle) => void d.follow([handle])}

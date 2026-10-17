@@ -58,6 +58,7 @@ from sqlalchemy import (
     ColumnElement,
     DateTime,
     Float,
+    Select,
     String,
     all_,
     and_,
@@ -1402,6 +1403,38 @@ def count_view(
     added = _seeded(alone, view.tags)
     parts = (added,) if view.tree is None else (view.tree, added)
     return _count(session, view, TreeGroup(op="and", children=parts))
+
+
+#: The most entries Tick all turns into Ticks; above it a view is All matching
+#: (ADR-031). The same number as the ticked Seeds a Condition takes.
+MAX_TICK_ALL = 10_000
+
+
+def matching(view: DirectoryView, *, unfollowed: bool = False) -> Select[tuple[str]]:
+    """The handles `view` matches, as a statement a write reads from (ADR-031).
+
+    The list's own query with no order and no page, so an All matching write
+    reaches exactly the entries the list pages through. `unfollowed` leaves out
+    the Account's Follows, as Follow and Dismiss do.
+    """
+    handle = col(DirectoryEntry.handle)
+    statement = (
+        sa_select(handle)
+        .select_from(_entries(view.tree))
+        .where(_where(view, view.tree))
+    )
+    if unfollowed and view.followed:
+        statement = statement.where(handle != all_(_handles(view.followed)))
+    return unscoped_select(statement, reason=_SCOPE_REASON)
+
+
+def view_handles(session: Session, view: DirectoryView) -> list[str] | None:
+    """Every handle `view` matches, by handle; `None` above `MAX_TICK_ALL`."""
+    found = session.execute(
+        matching(view).order_by(DirectoryEntry.handle).limit(MAX_TICK_ALL + 1)
+    )
+    handles = [str(h) for h in found.scalars().all()]
+    return None if len(handles) > MAX_TICK_ALL else handles
 
 
 def directory_follows(

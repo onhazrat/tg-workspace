@@ -347,6 +347,50 @@ export function selectedFirstRequest(
 export const DISMISSAL_NOTICE_MS = 10_000
 
 /** A Dismissal's confirmation: one Channel by handle, several by count. */
+/**
+ * The most entries Tick all turns into Ticks; above it a view is All matching,
+ * held as the view (ADR-031). The server's `MAX_TICK_ALL`.
+ */
+export const MAX_TICK_ALL = 10_000
+
+/**
+ * Tick all (ADR-031): the view's total, and how far it went. `offer` once the
+ * page is ticked and the view has more; `ticked` once every match became a
+ * Tick; `held` for All matching, a view too large to tick, held as the view.
+ */
+export type Whole = { total: number; state: "offer" | "ticked" | "held" }
+
+/** Tick all as it was taken, if it was taken on the view `key` names. */
+export const takenOn = <T extends { key: string }>(
+  taken: T | null,
+  key: string,
+): T | null => (taken?.key === key ? taken : null)
+
+/** Whether Tick all became All matching. */
+export const isHeld = (whole: Whole | undefined): boolean =>
+  whole?.state === "held"
+
+/** The Ticks the table shows: in All matching, every row on the page too. */
+export const shownTicks = (
+  held: boolean,
+  ticks: ReadonlySet<string>,
+  rows: readonly { handle: string }[],
+): ReadonlySet<string> =>
+  held ? new Set([...ticks, ...rows.map((r) => r.handle)]) : ticks
+
+/** What the bulk bar says about Tick all: what it became on this view, if it
+ * was taken here, or the offer once every row on the page is ticked. */
+export function tickAllState(
+  taken: { held: boolean } | null,
+  rows: readonly { handle: string }[],
+  ticks: ReadonlySet<string>,
+  total: number,
+): Whole | undefined {
+  if (taken) return { total, state: taken.held ? "held" : "ticked" }
+  const page = rows.length > 0 && rows.every((r) => ticks.has(r.handle))
+  return page && total > rows.length ? { total, state: "offer" } : undefined
+}
+
 export const dismissalNotice = (handles: string[]): string =>
   handles.length === 1
     ? `Dismissed @${handles[0]}`

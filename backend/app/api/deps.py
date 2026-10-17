@@ -88,6 +88,9 @@ VIEW_AS_READ_ONLY_PATHS: dict[str, str] = {
     f"{settings.API_V1_STR}/data/directory/count": (
         "a count over the same view, for the bound editor's preview"
     ),
+    f"{settings.API_V1_STR}/data/directory/handles": (
+        "every handle the same view matches, for Tick all (ADR-031)"
+    ),
     f"{settings.API_V1_STR}/data/directory/distribution": (
         "a measure's spread over the same view, for the bound editor"
     ),
