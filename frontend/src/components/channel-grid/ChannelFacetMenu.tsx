@@ -43,6 +43,7 @@ export function ChannelFacetMenu({
   onFunnel: (id: string, on: boolean) => void
   onClearFunnels: () => void
   search?: { value: string; onChange: (value: string) => void }
+  onCreate?: (name: string) => Promise<boolean>
 }) {
   const byId = new Map(rows.map((row) => [row.id, row]))
   const counted: FacetMenuRow[] = rows.map((row) => {

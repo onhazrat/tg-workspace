@@ -25,7 +25,10 @@ import { useChannelGridSortState } from "@/components/channel-grid/useChannelGri
 import { TgInput } from "@/components/ui/tg-input"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
 import { useSessionFlag } from "@/hooks/useSessionFlag"
-import { useSettingGroupsQuery } from "@/hooks/useSettingGroups"
+import {
+  useCreateSettingGroup,
+  useSettingGroupsQuery,
+} from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import { bulkTagSuggestions } from "@/lib/channels/bulk-tag-suggestions"
 import { cardFace } from "@/lib/channels/card-zoom"
@@ -147,6 +150,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const { channelFilterText, setChannelFilterText } = useWorkspaceGroupParams()
 
   const { data: settingGroups = [] } = useSettingGroupsQuery()
+  const createSettingGroup = useCreateSettingGroup()
   const sortedSettingGroups = useMemo(
     () => sortSettingGroupsForDisplay(settingGroups),
     [settingGroups],
@@ -484,6 +488,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             noun="group"
             testId="channel-groups"
             rows={groupRows}
+            onCreate={createSettingGroup}
             {...facet("group")}
           />
           <ChannelFacetMenu

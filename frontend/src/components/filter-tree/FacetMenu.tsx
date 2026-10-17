@@ -1,4 +1,4 @@
-import { ChevronDown, Filter, Loader2, X } from "lucide-react"
+import { ChevronDown, Filter, Loader2, Plus, X } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
@@ -51,6 +51,11 @@ type FacetMenuProps = {
   onOpenChange?: (open: boolean) => void
   /** What a row's count is out of, without ticks: "in the window". */
   countLabel?: string
+  /**
+   * Offer to create the searched name when no row has it, as the Groups
+   * dropdown does. Resolves true once created, which clears the search.
+   */
+  onCreate?: (name: string) => Promise<boolean>
 }
 
 function Tick({ row }: { row: FacetMenuRow }) {
@@ -117,6 +122,7 @@ export function FacetMenu({
   tickHint = "Tick selects, the funnel shows only",
   countLabel = "in the window",
   onOpenChange,
+  onCreate,
 }: FacetMenuProps) {
   const ticks = onToggleSelect !== undefined
   const [ownQuery, setOwnQuery] = useState("")
@@ -137,6 +143,24 @@ export function FacetMenu({
         ? labelOf(funnelled[0])
         : label
   const active = funnelled.length > 0
+  const name = query.trim()
+  const canCreate =
+    onCreate !== undefined &&
+    name !== "" &&
+    !rows.some((row) => row.label.toLowerCase() === name.toLowerCase())
+  const [creating, setCreating] = useState(false)
+  const create = async () => {
+    if (!onCreate) return
+    setCreating(true)
+    try {
+      if (await onCreate(name)) {
+        if (search) search.onChange("")
+        else setOwnQuery("")
+      }
+    } finally {
+      setCreating(false)
+    }
+  }
 
   return (
     <BarPopover
@@ -242,6 +266,29 @@ export function FacetMenu({
           </div>
         )
       })}
+      {canCreate && (
+        <button
+          type="button"
+          disabled={creating}
+          data-testid={`${testId}-create`}
+          onClick={() => void create()}
+          className="mt-1 flex w-full items-center gap-1.5 rounded-md border-t border-app-ink/10 px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5 disabled:opacity-50"
+        >
+          {creating ? (
+            <Loader2 size={11} className="animate-spin" />
+          ) : (
+            <Plus size={11} />
+          )}
+          <span className="truncate">
+            Create {noun} "{name}"
+          </span>
+        </button>
+      )}
+      {onCreate && name === "" && (
+        <p className="mt-1 border-t border-app-ink/10 px-2 pt-1.5 text-[11px] text-app-ink/50">
+          Type a name to create a {noun}
+        </p>
+      )}
     </BarPopover>
   )
 }
