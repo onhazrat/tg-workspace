@@ -216,20 +216,36 @@ describe("Time bounds (DPF)", () => {
       "Refresh due from now to in 2 days",
     ],
     [
-      {
-        type: "time",
-        moment: "checked_at",
-        mode: "fixed",
-        start: Date.UTC(2026, 9, 1, 9, 5),
-      },
-      "Checked from Oct 1, 2026 at 9:05 AM",
-    ],
-    [
       { type: "time", moment: "retry_after", mode: "fixed", none: true },
       "Retry after: no value",
     ],
   ])("%j", (cond, label) => {
     expect(directoryConditionLabel(cond, "en", "UTC")).toBe(label)
+  })
+
+  test("a Fixed end reads as a date and time in the zone it is shown in", () => {
+    // Pinned to the formatter, not to its text: ICU versions disagree on the
+    // joiner ("Oct 1, 2026, 9:05 AM" on CI, "Oct 1, 2026 at 9:05 AM" on macOS).
+    const start = Date.UTC(2026, 9, 1, 9, 5)
+    const cond: DirectoryCond = {
+      type: "time",
+      moment: "checked_at",
+      mode: "fixed",
+      start,
+    }
+    const at = (timeZone: string) =>
+      new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone,
+      }).format(start)
+    expect(directoryConditionLabel(cond, "en", "UTC")).toBe(
+      `Checked from ${at("UTC")}`,
+    )
+    expect(at("UTC")).toContain("9:05")
+    expect(directoryConditionLabel(cond, "en", "Asia/Tehran")).toContain(
+      "12:35",
+    )
   })
 })
 
