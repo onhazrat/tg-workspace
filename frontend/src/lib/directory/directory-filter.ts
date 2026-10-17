@@ -14,13 +14,20 @@
  * the Tag, which the server resolves against the reader's own Tags. DFP-05
  * lets a Tag be the Seeds of all four: `parents:"tag:news 3"`,
  * `citedby:"tag:news"`; the old word `picked` still reads as `ticked`.
+ * DPF adds `status:unavailable`, `kind:bot`, `error:"timeout"` and Time
+ * bounds: `last_post_at -7d..` (Live, signed from now), `refresh_due_at
+ * now..+2d`, `checked_at 2026-10-01T00:00Z..` (Fixed, a UTC instant), either
+ * end open, `retry_after = none`. The day measures `last_post_days` and
+ * `found_days` are gone and no longer parse.
  */
 
 import type {
   DirectoryFilterAtom,
   DirectoryFilterGroup,
   DirectoryFlagCondition,
+  DirectoryIsCondition,
   DirectoryMeasureCondition,
+  DirectoryTimeCondition,
 } from "@/client"
 import {
   boundKind,
@@ -38,7 +45,24 @@ import { atoms, type FilterNode, type FilterTree } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/language-name"
 
 export type MeasureKey = DirectoryMeasureCondition["measure"]
+export type MomentKey = DirectoryTimeCondition["moment"]
+export type TimeMode = DirectoryTimeCondition["mode"]
+export type IsField = DirectoryIsCondition["field"]
 export type DirectoryFlag = DirectoryFlagCondition["value"]
+
+/**
+ * A Time bound (DPF), `[start, end)` on one moment, either end open. A Live
+ * end is signed ms from now, negative for the past; a Fixed end is epoch ms.
+ * `none` keeps only the entries with no value.
+ */
+export type DirectoryTimeCond = {
+  type: "time"
+  moment: MomentKey
+  mode: TimeMode
+  start?: number
+  end?: number
+  none?: true
+}
 
 export type DirectoryMeasureCond = {
   type: "measure"
@@ -59,6 +83,11 @@ export type DirectoryCond =
   | DirectoryMeasureCond
   /** In the reader's Tag of this name; one they do not have matches nothing. */
   | { type: "tag"; name: string }
+  /** The verdict or the kind is exactly `value` (DPF). */
+  | { type: "is"; field: IsField; value: string }
+  /** The last error contains `value`, case-insensitive (DPF). */
+  | { type: "contains"; field: "last_error"; value: string }
+  | DirectoryTimeCond
 
 /**
  * Where a Condition's Seeds come from (DIR-07, DFP-05): the Channels ticked in
@@ -90,7 +119,11 @@ export type DirectoryHandlesCond = Extract<
 
 export type DirectoryFilter = FilterTree<DirectoryCond>
 
-export type MeasureSection = "Size and activity" | "Content" | "References"
+export type MeasureSection =
+  | "Size and activity"
+  | "Content"
+  | "References"
+  | "Probe queue"
 
 export type Measure = {
   key: MeasureKey
@@ -99,8 +132,71 @@ export type Measure = {
   short: string
   description: string
   section: MeasureSection
-  /** Counted in days: sorts newest first, and the editor offers day presets. */
-  days?: true
+  /** Read by `DATA_ADMIN` only: the server refuses it to anybody else (DPF). */
+  internal?: true
+}
+
+export type Moment = {
+  key: MomentKey
+  label: string
+  description: string
+  section: MeasureSection
+  internal?: true
+}
+
+/** An entry's moments, each a Time bound and a sort (DPF). */
+export const MOMENTS: Moment[] = [
+  {
+    key: "last_post_at",
+    label: "Last post",
+    description: "When it last posted",
+    section: "Size and activity",
+  },
+  {
+    key: "created_at",
+    label: "Found",
+    description: "When the Directory first saw it",
+    section: "Size and activity",
+  },
+  {
+    key: "checked_at",
+    label: "Checked",
+    description: "When the Directory last got an answer about it",
+    section: "Probe queue",
+  },
+  {
+    key: "refresh_due_at",
+    label: "Refresh due",
+    description: "When the Directory will fetch it again",
+    section: "Probe queue",
+  },
+  {
+    key: "attempted_at",
+    label: "Last attempt",
+    description: "When the Directory last tried to fetch it, answered or not",
+    section: "Probe queue",
+    internal: true,
+  },
+  {
+    key: "retry_after",
+    label: "Retry after",
+    description: "When a fetch that got no answer may be tried again",
+    section: "Probe queue",
+    internal: true,
+  },
+]
+const MOMENT_BY_KEY = new Map(MOMENTS.map((m) => [m.key, m]))
+export const momentOf = (key: MomentKey): Moment =>
+  MOMENT_BY_KEY.get(key) as Moment
+
+/** The values an "is" Condition offers, which are all the server writes. */
+export const IS_VALUES: Record<IsField, readonly string[]> = {
+  status: ["ok", "unavailable", "unknown"],
+  kind: ["channel", "group", "bot", "user", "unknown"],
+}
+export const IS_LABEL: Record<IsField, string> = {
+  status: "Status",
+  kind: "Kind",
 }
 
 /** In the Filters picker's order. The key is the text form's word. */
@@ -135,20 +231,12 @@ export const MEASURES: Measure[] = [
     section: "Size and activity",
   },
   {
-    key: "last_post_days",
-    label: "Days since last post",
-    short: "Last post",
-    description: "How long ago it last posted",
+    key: "sample_count",
+    label: "Sample size",
+    short: "Sample",
+    description:
+      "How many recent Posts the Directory sampled; Posts per week and Reach come from them",
     section: "Size and activity",
-    days: true,
-  },
-  {
-    key: "found_days",
-    label: "Days since the Directory found it",
-    short: "Found",
-    description: "How long ago the Directory first saw it",
-    section: "Size and activity",
-    days: true,
   },
   {
     key: "photos",
@@ -193,6 +281,57 @@ export const MEASURES: Measure[] = [
     description:
       "How many channels it cites, any Reference kind; only Channels somebody follows or the Directory sampled have theirs recorded",
     section: "References",
+  },
+  {
+    key: "attempts",
+    label: "Attempts",
+    short: "Attempts",
+    description: "Fetches in a row that got no answer; reset by one that does",
+    section: "Probe queue",
+    internal: true,
+  },
+  {
+    key: "priority",
+    label: "Priority",
+    short: "Priority",
+    description:
+      "Its place in the probe queue as the Directory set it; lower goes first",
+    section: "Probe queue",
+    internal: true,
+  },
+  {
+    key: "priority_boost",
+    label: "Priority boost",
+    short: "Boost",
+    description:
+      "The Operator's adjustment to its place in the queue; positive fetches sooner",
+    section: "Probe queue",
+    internal: true,
+  },
+  {
+    key: "effective_priority",
+    label: "Effective priority",
+    short: "Effective",
+    description:
+      "Priority minus the boost, which is the order the Directory fetches in, lower first",
+    section: "Probe queue",
+    internal: true,
+  },
+  {
+    key: "telegram_chat_id",
+    label: "Chat id",
+    short: "Chat id",
+    description: "Telegram's id for it, which survives a handle rename",
+    section: "Probe queue",
+    internal: true,
+  },
+  {
+    key: "latest_id",
+    label: "Latest Post id",
+    short: "Latest id",
+    description: "The newest Post id the Directory saw",
+    section: "Probe queue",
+    internal: true,
   },
 ]
 
@@ -306,12 +445,68 @@ export const OPENING_FILTER =
 
 // ---- Labels ----------------------------------------------------------------
 
+const UNITS = [
+  ["w", 7 * 86_400_000, "week"],
+  ["d", 86_400_000, "day"],
+  ["h", 3_600_000, "hour"],
+  ["m", 60_000, "minute"],
+  ["s", 1000, "second"],
+] as const
+
+/** The largest unit `ms` is a whole number of: [count, unit]. */
+function inUnits(ms: number): [number, (typeof UNITS)[number]] {
+  const unit =
+    UNITS.find(([, size]) => ms % size === 0) ?? UNITS[UNITS.length - 1]
+  return [Math.round(ms / unit[1]), unit]
+}
+
+/** One Time bound end in words: "7 days ago", "in 2 days", "now", a local time. */
+function endLabel(
+  cond: DirectoryTimeCond,
+  ms: number,
+  locale?: string,
+  timeZone?: string,
+): string {
+  if (cond.mode === "fixed")
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone,
+    }).format(ms)
+  if (ms === 0) return "now"
+  const [n, [, , name]] = inUnits(Math.abs(ms))
+  const span = `${n} ${name}${n === 1 ? "" : "s"}`
+  return ms < 0 ? `${span} ago` : `in ${span}`
+}
+
+function timeLabel(
+  cond: DirectoryTimeCond,
+  locale?: string,
+  timeZone?: string,
+): string {
+  const name = momentOf(cond.moment).label
+  if (cond.none) return `${name}: no value`
+  const end = (ms: number) => endLabel(cond, ms, locale, timeZone)
+  if (cond.start !== undefined && cond.end !== undefined)
+    return `${name} from ${end(cond.start)} to ${end(cond.end)}`
+  if (cond.start !== undefined) return `${name} from ${end(cond.start)}`
+  return `${name} before ${end(cond.end ?? 0)}`
+}
+
 /** A chip's label: "Persian", "Followed", "Subscribers ≥ 1K". */
 export function directoryConditionLabel(
   cond: DirectoryCond,
   locale?: string,
+  /** Fixed Time bounds read in the viewer's zone unless one is named. */
+  timeZone?: string,
 ): string {
   switch (cond.type) {
+    case "is":
+      return `${IS_LABEL[cond.field]} is ${cond.value}`
+    case "contains":
+      return `Last error contains "${cond.value}"`
+    case "time":
+      return timeLabel(cond, locale, timeZone)
     case "language":
       return languageLabel(cond.value, locale)
     case "name":
@@ -337,8 +532,35 @@ export function directoryConditionLabel(
 
 // ---- The text form ---------------------------------------------------------
 
+/** A Fixed end as UTC, to the minute when the seconds are zero. */
+function instantText(ms: number): string {
+  const iso = new Date(ms).toISOString()
+  return iso.endsWith(":00.000Z")
+    ? `${iso.slice(0, 16)}Z`
+    : iso.replace(".000Z", "Z")
+}
+
+function offsetText(ms: number): string {
+  if (ms === 0) return "now"
+  const [n, [unit]] = inUnits(Math.abs(ms))
+  return `${ms < 0 ? "-" : "+"}${n}${unit}`
+}
+
+function timeText(cond: DirectoryTimeCond): string {
+  if (cond.none) return `${cond.moment} = none`
+  const end = cond.mode === "fixed" ? instantText : offsetText
+  const at = (ms: number | undefined) => (ms === undefined ? "" : end(ms))
+  return `${cond.moment} ${at(cond.start)}..${at(cond.end)}`
+}
+
 function condText(cond: DirectoryCond): string {
   switch (cond.type) {
+    case "is":
+      return `${cond.field}:${quote(cond.value)}`
+    case "contains":
+      return `error:${quote(cond.value)}`
+    case "time":
+      return timeText(cond)
     case "language":
       return `lang:${quote(cond.value)}`
     case "name":
@@ -377,15 +599,18 @@ const TRAILING_MIN = /(?:^|\s)(\d+)$/
 export const printDirectoryFilter = (filter: DirectoryFilter): string =>
   printTree(filter, condText)
 
-const NUM = String.raw`(\d+(?:\.\d+)?(?:e[+-]?\d+)?)`
+// Signed, since the probe queue's numbers go negative (DPF).
+const NUM = String.raw`(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)`
 const BOUND = new RegExp(
   String.raw`^([a-z_]+)(?:\s*(>=|<=|>|<)\s*${NUM}|\s*=\s*none(?![\p{L}\p{N}_])|\s+${NUM}\s*\.\.\s*${NUM})`,
   "iu",
 )
 
-function boundCond(m: RegExpExecArray): DirectoryMeasureCond | null {
+function boundCond(m: RegExpExecArray): DirectoryMeasureCond {
   const measure = m[1].toLowerCase() as MeasureKey
-  if (!BY_KEY.has(measure)) return null
+  // A bound on something that is not a measure, such as the day measures
+  // DPF removed, would otherwise read on as Name contains words.
+  if (!BY_KEY.has(measure)) throw new ParseError(`Unknown measure ${measure}`)
   if (m[4] !== undefined) {
     const [min, max] = [Number(m[4]), Number(m[5])]
     if (max < min) throw new ParseError(`${measure} ${min}..${max}`)
@@ -396,6 +621,52 @@ function boundCond(m: RegExpExecArray): DirectoryMeasureCond | null {
   return m[2].startsWith(">")
     ? { type: "measure", measure, min: Number(m[3]) }
     : { type: "measure", measure, max: Number(m[3]) }
+}
+
+const INSTANT = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z`
+const OFFSET = String.raw`now|[+-]\d+[wdhms]`
+const END = `(${INSTANT}|${OFFSET})`
+const TIME = new RegExp(
+  String.raw`^(${MOMENTS.map((m) => m.key).join("|")})(?:\s*=\s*none(?![\p{L}\p{N}_])|\s+${END}?\.\.${END}?(?![\p{L}\p{N}_.]))`,
+  "iu",
+)
+const UNIT_MS: Record<string, number> = Object.fromEntries(
+  UNITS.map(([unit, size]) => [unit, size]),
+)
+
+/** A Time bound end: an offset (Live) or an instant (Fixed). */
+function endValue(text: string): { mode: TimeMode; ms: number } {
+  if (text === "now") return { mode: "live", ms: 0 }
+  const offset = /^([+-])(\d+)([wdhms])$/.exec(text)
+  if (offset)
+    return {
+      mode: "live",
+      ms: (offset[1] === "-" ? -1 : 1) * Number(offset[2]) * UNIT_MS[offset[3]],
+    }
+  return { mode: "fixed", ms: Date.parse(text) }
+}
+
+function timeCond(m: RegExpExecArray): DirectoryTimeCond {
+  const moment = m[1].toLowerCase() as MomentKey
+  if (m[2] === undefined && m[3] === undefined) {
+    if (m[0].includes("..")) throw new ParseError(`${moment} has no end`)
+    return { type: "time", moment, mode: "fixed", none: true }
+  }
+  const ends = [m[2], m[3]].map((e) =>
+    e === undefined ? undefined : endValue(e),
+  )
+  const modes = [...new Set(ends.flatMap((e) => (e ? [e.mode] : [])))]
+  if (modes.length > 1) throw new ParseError(`${moment} mixes Live and Fixed`)
+  const [start, end] = ends.map((e) => e?.ms)
+  if (start !== undefined && end !== undefined && end <= start)
+    throw new ParseError(`${moment} ends before it starts`)
+  return {
+    type: "time",
+    moment,
+    mode: modes[0],
+    ...(start !== undefined && { start }),
+    ...(end !== undefined && { end }),
+  }
 }
 
 const FLAGS = new Set<string>(Object.keys(FLAG_LABEL))
@@ -441,6 +712,8 @@ const WINDOW = /^(\d+)d$/
 
 const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
   bound: (rest) => {
+    const t = TIME.exec(rest)
+    if (t) return { cond: timeCond(t), length: t[0].length }
     const m = BOUND.exec(rest)
     const cond = m && boundCond(m)
     return m && cond ? { cond, length: m[0].length } : null
@@ -453,6 +726,13 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
     if (prefix === "tag" && text.trim()) return { type: "tag", name: text }
     if (prefix === "is" && FLAGS.has(text))
       return { type: "flag", value: text as DirectoryFlag }
+    if (
+      (prefix === "status" || prefix === "kind") &&
+      IS_VALUES[prefix].includes(text)
+    )
+      return { type: "is", field: prefix, value: text }
+    if (prefix === "error" && text.trim())
+      return { type: "contains", field: "last_error", value: text }
     if (prefix === "mine") {
       if (text === "all") return { type: "mine" }
       const days = Number(WINDOW.exec(text)?.[1])
@@ -510,7 +790,8 @@ export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
       return node.children.every((child) => fits(child, depth + 1))
     const { cond } = node
     if (cond.type === "language") return cond.value.length <= b.languageLength
-    if (cond.type === "name") return cond.value.length <= b.nameLength
+    if (cond.type === "name" || cond.type === "contains")
+      return cond.value.length <= b.nameLength
     if (cond.type === "mine") return (cond.days ?? 0) <= b.maxDays
     if (cond.type === "citedby" || cond.type === "cites")
       return seedsFit(cond.seeds, b.handles)

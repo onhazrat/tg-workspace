@@ -5,6 +5,7 @@
  */
 import {
   CircleDot,
+  Clock,
   CornerDownLeft,
   CornerUpRight,
   GitFork,
@@ -12,6 +13,8 @@ import {
   Inbox,
   Languages,
   type LucideIcon,
+  Shapes,
+  ShieldAlert,
   Tag,
   Type,
   Users,
@@ -27,12 +30,18 @@ import type { MetricBound } from "@/lib/channels/channel-metrics"
 import {
   type DirectoryCond,
   type DirectoryFlag,
+  type DirectoryTimeCond,
   directoryConditionLabel,
   FLAG_LABEL,
   HANDLES_LABEL,
+  IS_LABEL,
+  IS_VALUES,
+  type IsField,
   MEASURES,
   type Measure,
   type MeasureSection,
+  MOMENTS,
+  type Moment,
   type SeedSets,
   SHARED_LABEL,
   seedForms,
@@ -48,6 +57,7 @@ import {
   sortLanguages,
 } from "@/lib/language-name"
 import {
+  ErrorEditor,
   HandlesEditor,
   MineEditor,
   NameEditor,
@@ -65,6 +75,9 @@ const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   parents: Users,
   children: GitFork,
   measure: Hash,
+  is: Shapes,
+  contains: ShieldAlert,
+  time: Clock,
 }
 
 /** Renders one measure's bound editor, wired to the server by the container. */
@@ -75,11 +88,22 @@ export type MeasureEditorRender = (props: {
   onBack: () => void
 }) => React.ReactNode
 
+/** Renders one moment's Time bound editor, wired to the server by the container. */
+export type MomentEditorRender = (props: {
+  moment: Moment
+  initial?: DirectoryTimeCond
+  onSubmit: (cond: DirectoryCond) => void
+  onBack: () => void
+}) => React.ReactNode
+
 const measureEntries = (
   section: MeasureSection,
   render: MeasureEditorRender,
+  internals: boolean,
 ): PickerEntry<DirectoryCond>[] =>
-  MEASURES.filter((m) => m.section === section).map((measure) => ({
+  MEASURES.filter(
+    (m) => m.section === section && (internals || !m.internal),
+  ).map((measure) => ({
     kind: "editor",
     id: `measure:${measure.key}`,
     label: measure.label,
@@ -92,6 +116,41 @@ const measureEntries = (
         onSubmit,
       }),
   }))
+
+const momentEntries = (
+  section: MeasureSection,
+  render: MomentEditorRender,
+  internals: boolean,
+): PickerEntry<DirectoryCond>[] =>
+  MOMENTS.filter(
+    (m) => m.section === section && (internals || !m.internal),
+  ).map((moment) => ({
+    kind: "editor",
+    id: `time:${moment.key}`,
+    label: moment.label,
+    icon: Clock,
+    render: ({ start, onSubmit, onBack }) =>
+      render({
+        moment,
+        initial:
+          start?.type === "time" && start.moment === moment.key
+            ? start
+            : undefined,
+        onBack,
+        onSubmit,
+      }),
+  }))
+
+/** The verdict or the kind is exactly a value (DPF). */
+const isEntry = (field: IsField): PickerEntry<DirectoryCond> => ({
+  kind: "list",
+  id: field,
+  label: `${IS_LABEL[field]} is`,
+  icon: Shapes,
+  options: IS_VALUES[field].map((id) => ({ id, label: id })),
+  make: (value) => ({ type: "is", field, value }),
+  current: (c) => (c.type === "is" && c.field === field ? c.value : undefined),
+})
 
 /** The values a count read named, as picker options, in every menu's order. */
 const languageOptions = (
@@ -114,6 +173,9 @@ export function directoryVocabulary(
   /** What Shared parents / children can compare with, as it is now (DIR-07). */
   sets: SeedSets,
   tags: TagChoices = { tags: [], groups: [], loaded: false },
+  renderMoment: MomentEditorRender = () => null,
+  /** A `DATA_ADMIN` reader, offered the probe queue's internals too (DPF). */
+  internals = false,
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
   return {
@@ -142,6 +204,7 @@ export function directoryVocabulary(
             make: (value) => ({ type: "flag", value: value as DirectoryFlag }),
             current: (c) => (c.type === "flag" ? c.value : undefined),
           },
+          isEntry("status"),
           {
             kind: "list",
             id: "tag",
@@ -174,9 +237,15 @@ export function directoryVocabulary(
       },
       {
         heading: "Size and activity",
-        entries: measureEntries("Size and activity", renderMeasure),
+        entries: [
+          ...measureEntries("Size and activity", renderMeasure, internals),
+          ...momentEntries("Size and activity", renderMoment, internals),
+        ],
       },
-      { heading: "Content", entries: measureEntries("Content", renderMeasure) },
+      {
+        heading: "Content",
+        entries: measureEntries("Content", renderMeasure, internals),
+      },
       {
         heading: "References",
         entries: [
@@ -192,7 +261,7 @@ export function directoryVocabulary(
               />
             ),
           },
-          ...measureEntries("References", renderMeasure),
+          ...measureEntries("References", renderMeasure, internals),
           ...(["citedby", "cites"] as const).map(
             (type): PickerEntry<DirectoryCond> => ({
               kind: "editor",
@@ -229,20 +298,53 @@ export function directoryVocabulary(
           ),
         ],
       },
+      {
+        heading: "Probe queue",
+        entries: [
+          ...(internals
+            ? [
+                isEntry("kind"),
+                {
+                  kind: "editor" as const,
+                  id: "contains",
+                  label: "Last error contains",
+                  icon: ShieldAlert,
+                  render: ({ start, ...rest }) => (
+                    <ErrorEditor
+                      start={start?.type === "contains" ? start : undefined}
+                      {...rest}
+                    />
+                  ),
+                } satisfies PickerEntry<DirectoryCond>,
+              ]
+            : []),
+          ...momentEntries("Probe queue", renderMoment, internals),
+          ...measureEntries("Probe queue", renderMeasure, internals),
+        ],
+      },
     ],
-    entryOf: (c) => (c.type === "measure" ? `measure:${c.measure}` : c.type),
+    entryOf: (c) =>
+      c.type === "measure"
+        ? `measure:${c.measure}`
+        : c.type === "time"
+          ? `time:${c.moment}`
+          : c.type === "is"
+            ? c.field
+            : c.type,
     label: (c) => directoryConditionLabel(c),
     icon: (c) => ICON[c.type],
     stale: (c) => staleTag(c, tags),
     chipId: (c) =>
       c.type === "measure"
         ? `measure-${c.measure}`
-        : c.type === "tag"
-          ? `tag-${c.name}`
-          : "value" in c
-            ? `${c.type}-${c.value}`
-            : "seeds" in c
-              ? `${c.type}-${seedForms(c.seeds).id}`
-              : c.type,
+        : c.type === "time"
+          ? `time-${c.moment}`
+          : c.type === "tag"
+            ? `tag-${c.name}`
+            : "value" in c
+              ? `${c.type}-${c.value}`
+              : "seeds" in c
+                ? `${c.type}-${seedForms(c.seeds).id}`
+                : c.type,
   }
 }

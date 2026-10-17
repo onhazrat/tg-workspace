@@ -88,9 +88,9 @@ the last one.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import and_, func, or_
 from sqlalchemy import text as sa_text
@@ -169,7 +169,17 @@ DEFAULT_PROBE_PRIORITY = 1_000_000
 #: was alphabetically first. `test_recheck_jumps_the_queue` passed on exactly
 #: that accident. Ticket 03 gave the constant a second caller — `refresh_entries`
 #: — and the property has to hold by construction for both.
+#:
+#: **A Priority boost can still beat it** (DPF). The drain order is
+#: `priority - priority_boost` and nothing else: an Operator who boosts a batch
+#: by more than the gap has said that batch matters more, and an exception here
+#: would be one more rule to remember about a number they set themselves.
 RECHECK_PRIORITY = -1
+
+#: The largest Priority boost either way. `priority` is int4 and the bands sit
+#: within a few million of zero, so the difference cannot overflow. With bands
+#: 500,000 apart, that leaves two thousand bands of headroom.
+MAX_PRIORITY_BOOST = 1_000_000_000
 
 #: Priority for a handle the harvest sweep found in a stored Post (ticket 04).
 #:
@@ -543,7 +553,7 @@ def dequeue_handles(
                 col(DirectoryEntry.refresh_due_at) <= moment,
             ),
         )
-        .order_by(col(DirectoryEntry.priority), col(DirectoryEntry.handle))
+        .order_by(col(DirectoryEntry.effective_priority), col(DirectoryEntry.handle))
         .limit(limit)
     )
     return [row.handle for row in session.exec(statement).all()]
@@ -826,6 +836,44 @@ def refresh_entries(
         refreshed.append(handle)
     session.commit()
     return refreshed
+
+
+class BoostOutOfRange(ValueError):
+    """A Priority boost past `MAX_PRIORITY_BOOST` either way."""
+
+
+BoostMode = Literal["set", "add"]
+
+
+def boost_entries(
+    session: Session, handles: Sequence[str], *, mode: BoostMode, value: int
+) -> int:
+    """Set each entry's Priority boost to `value`, or add `value` to it (DPF).
+
+    Returns how many entries changed; a handle the Directory holds nothing
+    about is skipped, as a refresh skips nothing it can create but a boost has
+    no reason to create a row. **All or nothing**: every resulting boost is
+    checked before any is written, so an `add` that would carry one entry past
+    the range leaves every entry as it was.
+
+    Writes `priority_boost` only. The search document reads nothing it changes,
+    so nothing is re-indexed.
+    """
+    keys = sorted({normalize_handle(h) for h in handles if h.strip()})
+    rows = session.exec(
+        select(DirectoryEntry).where(col(DirectoryEntry.handle).in_(keys))
+    ).all()
+    boosts = {
+        row.handle: value if mode == "set" else row.priority_boost + value
+        for row in rows
+    }
+    if any(abs(b) > MAX_PRIORITY_BOOST for b in boosts.values()):
+        raise BoostOutOfRange(f"A Priority boost stays within ±{MAX_PRIORITY_BOOST:,}")
+    for row in rows:
+        row.priority_boost = boosts[row.handle]
+        session.add(row)
+    session.commit()
+    return len(rows)
 
 
 def record_probe_result(

@@ -1,7 +1,7 @@
 /**
  * The Directory's bound editor (DIR-02), props-only: the measure's spread
  * under every other Condition as bars, its median and log scale, the four
- * modes, the day presets on a measure counted in days, the no-value note,
+ * modes, the no-value note,
  * a click on a bar setting the bound, and the count preview on Add. NOT is
  * the chip's, so the editor has no box for it.
  */
@@ -103,16 +103,6 @@ describe("the bound", () => {
     expect(submit().textContent).toBe("Update · 77 channels")
     fireEvent.click(submit())
     expect(submitted).toEqual([{ none: true }])
-  })
-
-  test("offers day presets only on a measure counted in days", () => {
-    mount()
-    expect(screen.queryByRole("button", { name: "7 days" })).toBeNull()
-    cleanup()
-    const { submitted } = mount({ measure: "last_post_days" })
-    fireEvent.click(screen.getByRole("button", { name: "7 days" }))
-    fireEvent.click(submit())
-    expect(submitted).toEqual([{ max: 7 }])
   })
 
   test("has no NOT of its own; the chip negates", () => {

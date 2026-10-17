@@ -329,6 +329,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.DEPLOYMENT_WIDE,
         "the deployment's column defaults; the write is DATA_ADMIN-gated",
     ),
+    ("POST", f"{DATA}/directory/boost"): (
+        Reason.CORPUS,
+        "the Priority boost is on DirectoryEntry, one value for every Account; "
+        "the write is DATA_ADMIN-gated (test_directory_boost.py)",
+    ),
     ("GET", f"{DATA}/directory/size"): (
         Reason.CORPUS,
         "one count over DirectoryEntry, the same for every caller",

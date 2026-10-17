@@ -9,7 +9,9 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    Computed,
     Index,
+    Integer,
     SmallInteger,
     Text,
     UniqueConstraint,
@@ -919,11 +921,27 @@ class DirectoryEntry(SQLModel, table=True):
     #: is a large sentinel rather than 0 so anything enqueued with a real rank
     #: sorts ahead of rows that predate this column.
     #:
-    #: Not indexed on its own — nothing queries priority alone. The composite
-    #: `ix_tg_channel_directory_queue` on `(status, priority)` is what serves the
-    #: dequeue, and it lives in the migration, as the other composite indexes in
-    #: this schema do.
+    #: Not indexed on its own — nothing queries priority alone. The dequeue
+    #: reads `effective_priority`, below.
     priority: int = Field(default=1_000_000)
+
+    #: An Operator's standing adjustment to the drain order (DPF): positive is
+    #: sooner. Its own column because every fetch rewrites `priority`, and a
+    #: boost folded into it would be gone after the next probe. No writer of
+    #: `priority` touches it; `channel_directory.boost_entries` is its writer.
+    priority_boost: int = Field(
+        default=0, sa_column_kwargs={"server_default": text("0")}
+    )
+    #: `priority - priority_boost`, generated and stored, so the dequeue's ORDER
+    #: BY is served by the composite `ix_tg_channel_directory_effective_queue`
+    #: on `(status, effective_priority)`. That index lives in the migration, as
+    #: the other composite indexes in this schema do.
+    effective_priority: int | None = Field(
+        default=None,
+        sa_column=Column(
+            Integer, Computed("priority - priority_boost", persisted=True)
+        ),
+    )
 
     #: When an inconclusive handle becomes eligible for another attempt.
     #: Materialized from `attempts` at write time rather than recomputed per row

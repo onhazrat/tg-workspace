@@ -35,6 +35,7 @@ import {
   type ColumnChoices,
   choiceCount,
   isOn,
+  seesInternals,
   setChoice,
 } from "@/lib/directory/directory-columns"
 import {
@@ -145,6 +146,10 @@ const FIELD_NOUN: Record<SearchField, string> = {
   posts: "posts",
 }
 
+/** What a search reaches, said to a reader listed every kind of entry. */
+export const CHANNELS_ONLY =
+  "Finds Channels only. Name contains, under Filters, also finds bots, groups, user accounts and handles not fetched yet."
+
 /** "Search names", "Search names and bios", "Search names, bios and posts". */
 function searchPlaceholder(fields: SearchField[]): string {
   const words = SEARCH_FIELDS.filter((f) => fields.includes(f)).map(
@@ -157,7 +162,8 @@ function searchPlaceholder(fields: SearchField[]): string {
 /**
  * The Posts tab's search box, with Name, Bio and Posts as a segment inside
  * it; any mix of the three, never none. On a phone the segment leaves the box
- * for the controls sheet, so the box keeps the width (DFP-02).
+ * for the controls sheet, so the box keeps the width (DFP-02). A reader
+ * listed every kind of entry is told the search reaches Channels only (DPF).
  */
 export function DirectorySearch({
   search,
@@ -165,12 +171,14 @@ export function DirectorySearch({
   fields,
   onFields,
   phone = false,
+  everyKind = false,
 }: {
   search: string
   onSearch: (text: string) => void
   fields: SearchField[]
   onFields: (next: SearchField[]) => void
   phone?: boolean
+  everyKind?: boolean
 }) {
   return (
     <div className="flex items-center gap-2 rounded-xl border border-app-ink/10 bg-app-muted pl-3 pr-1.5 transition-colors focus-within:border-app-ink/30">
@@ -183,6 +191,7 @@ export function DirectorySearch({
         value={search}
         maxLength={SEARCH_MAX}
         placeholder={searchPlaceholder(fields)}
+        title={everyKind ? CHANNELS_ONLY : undefined}
         onChange={(e) => onSearch(e.target.value)}
         className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
       />
@@ -498,6 +507,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
       fields={p.fields}
       onFields={p.onFields}
       phone={p.phone}
+      everyKind={seesInternals(p.columns.catalogue)}
     />
   )
   const controls = (
@@ -555,7 +565,11 @@ export function DirectoryBar(p: DirectoryBarProps) {
       <ReferenceKindsPill kinds={p.kinds} onKinds={p.onKinds} />
       <span className="mx-1 h-5 w-px bg-app-ink/10" />
       <SortPicker
-        options={sortOptions(p.search.trim() !== "", sharedOn(p.filter))}
+        options={sortOptions(
+          p.search.trim() !== "",
+          sharedOn(p.filter),
+          seesInternals(p.columns.catalogue),
+        )}
         value={p.sortValue}
         onChange={p.onSort}
         direction={p.descending ? "desc" : "asc"}

@@ -4,6 +4,7 @@ import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { ownTags, type Tagging } from "@/lib/directory/directory-tags"
 import { needsBulkFollowConfirm } from "@/lib/posts/discover-selection"
+import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
 import { TagPicker } from "./DirectoryTags"
 
 const SHOWN = 3
@@ -16,7 +17,8 @@ const SHOWN = 3
  *
  * A followed row ticks like any other, as a Seed (DFP-01), so Follow and
  * Dismiss act on the unfollowed Ticks only and say "of M" when that is fewer.
- * Tag and Untag act on every Tick, followed or not (DFP-04).
+ * Tag and Untag act on every Tick, followed or not (DFP-04), as the Priority
+ * boost does for a `DATA_ADMIN` reader (DPF).
  */
 export function DirectoryBulkBar({
   ticks,
@@ -26,6 +28,8 @@ export function DirectoryBulkBar({
   onDismiss,
   onClear,
   tagging,
+  boostable = false,
+  onBoost,
 }: {
   ticks: ReadonlySet<string>
   /** Lowercase handles the Account follows: every Follow, not only this page's. */
@@ -37,6 +41,10 @@ export function DirectoryBulkBar({
   onClear: () => void
   /** The Account's Tags, to put one on every Tick or take it off. */
   tagging?: Tagging
+  /** Whether the reader holds `DATA_ADMIN`, so may set the Priority boost. */
+  boostable?: boolean
+  /** Sets or adds to every Tick's Priority boost. */
+  onBoost?: (handles: string[], mode: BoostMode, value: number) => void
 }) {
   const [confirming, setConfirming] = useState(false)
   if (ticks.size === 0) return null
@@ -59,6 +67,11 @@ export function DirectoryBulkBar({
         {more > 0 ? ` +${more}` : ""}
       </span>
       <div className="ml-auto flex items-center gap-1.5">
+        {boostable && onBoost && (
+          <DirectoryBoost
+            onBoost={(mode, value) => onBoost(ticked, mode, value)}
+          />
+        )}
         {tagging && (
           <>
             <TagPicker

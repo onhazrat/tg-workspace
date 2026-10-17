@@ -23,17 +23,18 @@ const KEYS: Record<ColumnKey, true> = {
   reach: true,
   posts_per_week: true,
   forward_pct: true,
-  last_post_days: true,
+  last_post_at: true,
   mine: true,
   cited_by: true,
   cites: true,
-  found_days: true,
+  created_at: true,
   photos: true,
   videos: true,
   files: true,
   links: true,
   status: true,
   followable: true,
+  kind: true,
   bio: true,
   sample_count: true,
   checked_at: true,
@@ -43,6 +44,8 @@ const KEYS: Record<ColumnKey, true> = {
   attempted_at: true,
   retry_after: true,
   priority: true,
+  priority_boost: true,
+  effective_priority: true,
   telegram_chat_id: true,
   latest_id: true,
 }
@@ -87,6 +90,13 @@ export const choiceCount = (
 // to its own Permission, publish it on the catalogue response instead.
 export const mayMakeDefaults = (catalogue: ColumnCatalogue): boolean =>
   catalogue.some((c) => c.key === "attempts")
+
+/**
+ * Whether this caller holds `DATA_ADMIN`, read the same way: the internal
+ * sorts and Conditions, every kind of entry and the Priority boost are its
+ * (DPF).
+ */
+export const seesInternals = mayMakeDefaults
 
 /** The hidden list stored before DCOL, as explicit Offs. */
 export const choicesFromHidden = (hidden: string[]): ColumnChoices =>

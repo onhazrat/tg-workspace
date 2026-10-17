@@ -104,6 +104,38 @@ export function NameEditor({
   )
 }
 
+/** Last error contains (DPF): any part of the text, in any case. */
+export function ErrorEditor({
+  start,
+  onSubmit,
+  onBack,
+}: EditorProps<Extract<DirectoryCond, { type: "contains" }>>) {
+  const [text, setText] = useState(start?.value ?? "")
+  const value = text.trim()
+  return (
+    <Shell
+      title="Last error contains"
+      explain="Any part of why the last fetch got no answer, in any case."
+      onBack={onBack}
+      submit={start ? "Update" : "Add"}
+      onSubmit={
+        value
+          ? () => onSubmit({ type: "contains", field: "last_error", value })
+          : null
+      }
+    >
+      <input
+        // biome-ignore lint/a11y/noAutofocus: the editor is this one field
+        autoFocus
+        aria-label="Last error contains"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        className={fieldClass}
+      />
+    </Shell>
+  )
+}
+
 const HANDLES_EXPLAIN: Record<DirectoryHandlesCond["type"], string> = {
   citedby:
     "Channels any of these forwarded, mentioned, linked or replied to. The Reference kinds narrow it.",

@@ -2890,7 +2890,7 @@
       "get": {
         "tags": ["data"],
         "summary": "Get Directory Size",
-        "description": "How many Channels the Directory lists at all.",
+        "description": "How many entries the Directory lists to this reader at all.",
         "operationId": "data-get_directory_size",
         "responses": {
           "200": {
@@ -2957,6 +2957,43 @@
                   },
                   "type": "array",
                   "title": "Response Data-Put Directory Columns"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/directory/boost": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Boost Directory",
+        "description": "Set the Priority boost of the named Directory entries, or add to it.\n\nA positive boost fetches an entry sooner. A handle the Directory holds\nnothing about is skipped; an add that carries any entry out of range\nchanges none.",
+        "operationId": "data-boost_directory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DirectoryBoostRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryBoostResponse"
                 }
               }
             }
@@ -7804,6 +7841,36 @@
         "title": "DirectoryBinResponse",
         "description": "One histogram bar: entries with a value from `lo` to `hi`."
       },
+      "DirectoryBoostRequest": {
+        "properties": {
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Handles"
+          },
+          "mode": { "type": "string", "enum": ["set", "add"], "title": "Mode" },
+          "value": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": -1000000000.0,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["handles", "mode", "value"],
+        "title": "DirectoryBoostRequest",
+        "description": "Set the Priority boost of the named entries, or add to it (DPF)."
+      },
+      "DirectoryBoostResponse": {
+        "properties": { "changed": { "type": "integer", "title": "Changed" } },
+        "type": "object",
+        "required": ["changed"],
+        "title": "DirectoryBoostResponse",
+        "description": "How many of the named entries the Directory holds, and so changed."
+      },
       "DirectoryCitedByCondition": {
         "properties": {
           "type": { "type": "string", "const": "citedby", "title": "Type" },
@@ -7889,17 +7956,18 @@
                 "reach",
                 "posts_per_week",
                 "forward_pct",
-                "last_post_days",
+                "last_post_at",
                 "mine",
                 "cited_by",
                 "cites",
-                "found_days",
+                "created_at",
                 "photos",
                 "videos",
                 "files",
                 "links",
                 "status",
                 "followable",
+                "kind",
                 "bio",
                 "sample_count",
                 "checked_at",
@@ -7909,6 +7977,8 @@
                 "attempted_at",
                 "retry_after",
                 "priority",
+                "priority_boost",
+                "effective_priority",
                 "telegram_chat_id",
                 "latest_id"
               ]
@@ -7934,17 +8004,18 @@
               "reach",
               "posts_per_week",
               "forward_pct",
-              "last_post_days",
+              "last_post_at",
               "mine",
               "cited_by",
               "cites",
-              "found_days",
+              "created_at",
               "photos",
               "videos",
               "files",
               "links",
               "status",
               "followable",
+              "kind",
               "bio",
               "sample_count",
               "checked_at",
@@ -7954,6 +8025,8 @@
               "attempted_at",
               "retry_after",
               "priority",
+              "priority_boost",
+              "effective_priority",
               "telegram_chat_id",
               "latest_id"
             ],
@@ -7965,6 +8038,27 @@
         "required": ["key", "default"],
         "title": "DirectoryColumnResponse",
         "description": "One column a caller may show, and whether it is on by default."
+      },
+      "DirectoryContainsCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "contains", "title": "Type" },
+          "field": {
+            "type": "string",
+            "const": "last_error",
+            "title": "Field"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "field", "value"],
+        "title": "DirectoryContainsCondition",
+        "description": "Any part of the text, case-insensitive."
       },
       "DirectoryCountRequest": {
         "properties": {
@@ -8034,20 +8128,40 @@
             ]
           },
           "measure": {
-            "type": "string",
-            "enum": [
-              "subscribers",
-              "reach",
-              "posts_per_week",
-              "forward_pct",
-              "last_post_days",
-              "found_days",
-              "photos",
-              "videos",
-              "files",
-              "links",
-              "cited_by",
-              "cites"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "subscribers",
+                  "reach",
+                  "posts_per_week",
+                  "forward_pct",
+                  "photos",
+                  "videos",
+                  "files",
+                  "links",
+                  "cited_by",
+                  "cites",
+                  "sample_count",
+                  "attempts",
+                  "latest_id",
+                  "telegram_chat_id",
+                  "priority",
+                  "priority_boost",
+                  "effective_priority"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "last_post_at",
+                  "created_at",
+                  "checked_at",
+                  "attempted_at",
+                  "retry_after",
+                  "refresh_due_at"
+                ]
+              }
             ],
             "title": "Measure"
           }
@@ -8056,7 +8170,7 @@
         "type": "object",
         "required": ["measure"],
         "title": "DirectoryDistributionRequest",
-        "description": "A measure's spread under every other Condition of the view."
+        "description": "A measure's spread under every other Condition of the view; a moment's in epoch ms."
       },
       "DirectoryDistributionResponse": {
         "properties": {
@@ -8164,6 +8278,18 @@
           "bio": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Bio"
+          },
+          "kind": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Kind"
+          },
+          "priorityBoost": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Priorityboost"
+          },
+          "effectivePriority": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Effectivepriority"
           }
         },
         "type": "object",
@@ -8208,6 +8334,9 @@
               { "$ref": "#/components/schemas/DirectoryNameCondition" },
               { "$ref": "#/components/schemas/DirectoryMeasureCondition" },
               { "$ref": "#/components/schemas/DirectoryFlagCondition" },
+              { "$ref": "#/components/schemas/DirectoryIsCondition" },
+              { "$ref": "#/components/schemas/DirectoryContainsCondition" },
+              { "$ref": "#/components/schemas/DirectoryTimeCondition" },
               { "$ref": "#/components/schemas/DirectoryMineCondition" },
               { "$ref": "#/components/schemas/DirectoryCitedByCondition" },
               { "$ref": "#/components/schemas/DirectoryCitesCondition" },
@@ -8221,13 +8350,16 @@
                 "children": "#/components/schemas/DirectorySharedCondition",
                 "citedby": "#/components/schemas/DirectoryCitedByCondition",
                 "cites": "#/components/schemas/DirectoryCitesCondition",
+                "contains": "#/components/schemas/DirectoryContainsCondition",
                 "flag": "#/components/schemas/DirectoryFlagCondition",
+                "is": "#/components/schemas/DirectoryIsCondition",
                 "language": "#/components/schemas/DirectoryLanguageCondition",
                 "measure": "#/components/schemas/DirectoryMeasureCondition",
                 "mine": "#/components/schemas/DirectoryMineCondition",
                 "name": "#/components/schemas/DirectoryNameCondition",
                 "parents": "#/components/schemas/DirectorySharedCondition",
-                "tag": "#/components/schemas/DirectoryTagCondition"
+                "tag": "#/components/schemas/DirectoryTagCondition",
+                "time": "#/components/schemas/DirectoryTimeCondition"
               }
             }
           }
@@ -8304,6 +8436,27 @@
         "title": "DirectoryFollowSource",
         "description": "The Directory view's \"your channels\" and Reference kinds, for discovered-via."
       },
+      "DirectoryIsCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "is", "title": "Type" },
+          "field": {
+            "type": "string",
+            "enum": ["status", "kind"],
+            "title": "Field"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "field", "value"],
+        "title": "DirectoryIsCondition",
+        "description": "The verdict or the kind is exactly `value`."
+      },
       "DirectoryLanguageCondition": {
         "properties": {
           "type": { "type": "string", "const": "language", "title": "Type" },
@@ -8363,14 +8516,31 @@
               "reach",
               "posts_per_week",
               "forward_pct",
-              "last_post_days",
-              "found_days",
               "photos",
               "videos",
               "files",
               "links",
               "cited_by",
               "cites",
+              "sample_count",
+              "attempts",
+              "latest_id",
+              "telegram_chat_id",
+              "priority",
+              "priority_boost",
+              "effective_priority",
+              "last_post_at",
+              "created_at",
+              "checked_at",
+              "attempted_at",
+              "retry_after",
+              "refresh_due_at",
+              "language",
+              "status",
+              "kind",
+              "followable",
+              "bio",
+              "last_error",
               "mine",
               "mine_last_days",
               "relevance",
@@ -8417,17 +8587,18 @@
                 "reach",
                 "posts_per_week",
                 "forward_pct",
-                "last_post_days",
+                "last_post_at",
                 "mine",
                 "cited_by",
                 "cites",
-                "found_days",
+                "created_at",
                 "photos",
                 "videos",
                 "files",
                 "links",
                 "status",
                 "followable",
+                "kind",
                 "bio",
                 "sample_count",
                 "checked_at",
@@ -8437,6 +8608,8 @@
                 "attempted_at",
                 "retry_after",
                 "priority",
+                "priority_boost",
+                "effective_priority",
                 "telegram_chat_id",
                 "latest_id"
               ]
@@ -8527,14 +8700,19 @@
               "reach",
               "posts_per_week",
               "forward_pct",
-              "last_post_days",
-              "found_days",
               "photos",
               "videos",
               "files",
               "links",
               "cited_by",
-              "cites"
+              "cites",
+              "sample_count",
+              "attempts",
+              "latest_id",
+              "telegram_chat_id",
+              "priority",
+              "priority_boost",
+              "effective_priority"
             ],
             "title": "Measure"
           },
@@ -8732,6 +8910,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Status"
           },
+          "kind": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Kind"
+          },
           "bio": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Bio"
@@ -8767,6 +8949,14 @@
           "priority": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Priority"
+          },
+          "priorityBoost": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Priorityboost"
+          },
+          "effectivePriority": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Effectivepriority"
           },
           "telegramChatId": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -8953,6 +9143,56 @@
         "required": ["tag"],
         "title": "DirectoryTagSeeds",
         "description": "Seeds from one of the reader's Tags, resolved by the server."
+      },
+      "DirectoryTimeCondition": {
+        "properties": {
+          "type": { "type": "string", "const": "time", "title": "Type" },
+          "moment": {
+            "type": "string",
+            "enum": [
+              "last_post_at",
+              "created_at",
+              "checked_at",
+              "attempted_at",
+              "retry_after",
+              "refresh_due_at"
+            ],
+            "title": "Moment"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["live", "fixed"],
+            "title": "Mode"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
+              { "type": "null" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
+              { "type": "null" }
+            ],
+            "title": "End"
+          },
+          "none": { "type": "boolean", "title": "None", "default": false }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "moment", "mode"],
+        "title": "DirectoryTimeCondition",
+        "description": "A Time bound, start included and end excluded, either end open: Fixed\nends are epoch ms, Live ends signed ms from now."
       },
       "DirectoryWhyRequest": {
         "properties": {

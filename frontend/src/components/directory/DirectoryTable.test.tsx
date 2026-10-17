@@ -55,11 +55,11 @@ const OPENING: ColumnKey[] = [
   "reach",
   "posts_per_week",
   "forward_pct",
-  "last_post_days",
+  "last_post_at",
   "mine",
   "cited_by",
   "cites",
-  "found_days",
+  "created_at",
 ]
 const without = (...keys: ColumnKey[]) =>
   OPENING.filter((k) => !keys.includes(k))
@@ -237,7 +237,7 @@ describe("columns and sorting", () => {
     expect(headers).toContain("Subs")
   })
 
-  test("a probe column shows as written and its header does not sort", () => {
+  test("a probe column shows as written, and every header sorts (DPF)", () => {
     const bio = "A very long bio about what this Channel publishes every day"
     const calls = mount({
       rows: [
@@ -256,9 +256,9 @@ describe("columns and sorting", () => {
     expect(cells).toContain("1234567890")
     expect(cells).toContain(bio)
     expect(screen.getByTitle(bio)).toBeTruthy()
-    expect(screen.queryByRole("button", { name: "Bio" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Bio" }))
     fireEvent.click(screen.getByRole("button", { name: "Photos" }))
-    expect(calls.sort).toEqual(["photos"])
+    expect(calls.sort).toEqual(["bio", "photos"])
   })
 
   test("Cited by and Cites show their counts and sort by them", () => {
@@ -302,7 +302,7 @@ describe("columns and sorting", () => {
   test("a header sorts by its column, and the sorted one shows its arrow", () => {
     const calls = mount({ sort: "subscribers" })
     fireEvent.click(screen.getByRole("button", { name: /Last post/ }))
-    expect(calls.sort).toEqual(["last_post_days"])
+    expect(calls.sort).toEqual(["last_post_at"])
     expect(
       screen
         .getByRole("columnheader", { name: /Subs/ })

@@ -53,6 +53,14 @@ into the corpus; the statistics are kept once computed, so an entry that stops
 being probed still describes the Channel after its sample is collected.
 _Avoid_: probe, probe row, map row
 
+**Priority boost**:
+An Operator's standing adjustment to how soon a Directory entry is fetched
+again, relative to the entries waiting beside it. Positive means sooner and
+negative means later; zero, the default, leaves the order the Directory chose.
+It changes nothing about how the entry is shown, and it stays until an Operator
+changes it, whatever the fetches in between find.
+_Avoid_: pin, promotion, rank
+
 **Channel counters**:
 The five counts Telegram shows on a Channel's page: subscribers, photos,
 videos, files and links. Each is a number, exact below 1,000 and rounded to
@@ -290,11 +298,20 @@ subscribers. In a Post filter: a Type (Is a reply and Has a reply among them), a
 kind, a Language, a Channel, or a bound on a View count, an Estimated View
 count, Channel posts in window or Channel posts in filtered window. In a Directory filter: a
 Tag, a Language, part of the handle or name, the followability verdict, being followed
-or dismissed, a citation, or a bound on a number such as Reach or subscribers. Anything with no value for
-that number fails a bound on it, and a separate Condition asks whether it has
-one.
+or dismissed, a citation, a bound on a number such as Reach or subscribers, or
+a Time bound. Anything with no value for that number or moment fails a bound on
+it, and a separate Condition asks whether it has one.
 _Avoid_: rule (a Selection rule is something else), clause, criterion, filter
 chip
+
+**Time bound**:
+A Condition in a Directory filter on one of a Directory entry's moments, such
+as its last Post or when the Directory found it. Like an Analysis window it is
+either Live, its ends fixed offsets from the current time that may point back
+or ahead, or Fixed, its ends exact instants; unlike one, either end may be left
+open, and it decides only which Directory entries are shown. Its ends include
+the start and exclude the end.
+_Avoid_: date range, time range, date filter
 
 **Shown Channels**:
 The followed Channels that pass the Channel filter and the search box.

@@ -16,7 +16,6 @@ recorded probe result, each Reference a `write_references` call.
 | dt_fa_small    | ok          | channel | fa       | 800         | 100        | 1          | 40%       | 20 days   |        |
 | dt_none        | ok          | channel |          |             |            |            |           |           |        |
 | dt_dead        | unavailable | channel |          |             |            |            |           |           |        |
-| dt_bot         | ok          | bot     | (never listed: the Directory lists Channels)                               |
 
 `dt_fa_small` was found 100 days ago, every other entry today. Its display
 name is "Kucheh News"; `dt_en_news`'s is "Daily News".
@@ -55,7 +54,6 @@ Each mutation was applied alone and this module (or the named guard) went red:
 * sort without the handle tiebreak -> the opening view's zero-count tail
 * keep the measure's own bound in the distribution -> its total
 * keep Language Conditions in the Language counts -> the counts case
-* list every kind, not only Channels -> dt_bot in the opening view
 * drop `autoescape` from Name contains -> "%" matches everything
 * never reuse a cached total -> the reuse case
 * key the cached total on the Follow count, not the set -> the follow-swap case
@@ -75,7 +73,7 @@ DIR-03 (the detail panel: `GET /directory/{handle}/entry`, `POST
 * drop the window from "Why it's here" -> the window case
 * list it oldest first -> the newest-first case
 * no sample fallback -> the ticked-Channel case
-* let the entry read any kind -> dt_bot is not a 404
+* let the entry read any kind -> dt_bot is not a 404 for the other Account
 * ignore the Reference kinds in "Why it's here" -> the kinds case
 * read `hasMedia` as "a media block is there" -> the samples case
 * stamp `capturedAt` off the naive column's `.timestamp()` -> the samples case
@@ -236,7 +234,6 @@ def _seed(other_id: uuid.UUID) -> None:
             "dt_dead",
             {"isTelegramPage": True, "isUnavailableOnWebView": True, "kind": "channel"},
         )
-        record_probe_result(session, "dt_bot", {"isTelegramPage": True, "kind": "bot"})
         entry = session.get(DirectoryEntry, "dt_fa_small")
         assert entry is not None
         entry.created_at = utc_now() - timedelta(days=100)
@@ -321,6 +318,10 @@ def name(value: str) -> dict[str, Any]:
 
 def measure(which: str, **bound: Any) -> dict[str, Any]:
     return {"type": "measure", "measure": which, **bound}
+
+
+def moment(which: str, mode: str, **ends: Any) -> dict[str, Any]:
+    return {"type": "time", "moment": which, "mode": mode, **ends}
 
 
 def mine(days: int | None = None) -> dict[str, Any]:
@@ -450,10 +451,13 @@ def _but(*left_out: str) -> list[str]:
         ),
         (root(atom(measure("forward_pct", min=30))), ["dt_fa_small"]),
         (
-            root(atom(measure("last_post_days", max=7))),
+            root(atom(moment("last_post_at", "live", start=-7 * 86_400_000))),
             ["dt_fa_big", "dt_en_news", "dt_followed_a", "dt_ru"],
         ),
-        (root(atom(measure("found_days", min=50))), ["dt_fa_small"]),
+        (
+            root(atom(moment("created_at", "live", end=-50 * 86_400_000))),
+            ["dt_fa_small"],
+        ),
         (root(atom(measure("photos", min=100))), ["dt_fa_big"]),
         (root(atom(measure("videos", min=0))), []),
         (root(atom(measure("files", none=True))), EVERYONE),
@@ -676,9 +680,9 @@ BY_HANDLE = "dead en_news fa_big fa_small followed_a none ru"
         ("subscribers", False, "fa_small ru followed_a en_news fa_big dead none"),
         ("posts_per_week", True, "en_news fa_big followed_a ru fa_small dead none"),
         ("forward_pct", True, "fa_small ru en_news fa_big followed_a dead none"),
-        ("last_post_days", False, "en_news followed_a fa_big ru fa_small dead none"),
+        ("last_post_at", True, "en_news followed_a fa_big ru fa_small dead none"),
         # Found the order they were probed in; dt_fa_small 100 days ago.
-        ("found_days", True, "fa_small fa_big en_news followed_a ru none dead"),
+        ("created_at", False, "fa_small fa_big en_news followed_a ru none dead"),
         ("photos", True, "fa_big en_news dead fa_small followed_a none ru"),
         ("reach", True, "fa_big followed_a ru fa_small en_news dead none"),
         ("videos", True, BY_HANDLE),
@@ -1079,9 +1083,13 @@ def test_the_panel_reads_the_entry_by_handle_with_its_bio(
 def test_the_entry_is_a_404_for_what_the_directory_does_not_list(
     client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
 ) -> None:
-    operator, _ = accounts
+    """A bot is listed to a `DATA_ADMIN` reader only (DPF), so the other
+    Account asks; `test_directory_every_column.py` has the Operator's half."""
+    _, other = accounts
+    with Session(engine) as session:
+        record_probe_result(session, "dt_bot", {"isTelegramPage": True, "kind": "bot"})
     for handle in ("nobody_here", "dt_bot"):
-        response = _entry(client, operator, handle)
+        response = _entry(client, other, handle)
         assert response.status_code == 404
         assert response.json()["detail"] == "No Directory entry for this handle"
 

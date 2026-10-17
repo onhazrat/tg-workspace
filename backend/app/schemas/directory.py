@@ -12,17 +12,23 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.post_filter import check_tree_bounds
+from app.services.channel_directory import MAX_PRIORITY_BOOST, BoostMode
 from app.services.directory_reads import (
     SEARCH_FIELDS,
     CitedByCond,
     CitesCond,
+    ContainsCond,
+    ContainsField,
     DirectoryColumn,
     DirectoryCond,
     DirectoryFlag,
     DirectoryMeasure,
+    DirectoryMoment,
     DirectorySort,
     DirectoryTree,
     FlagCond,
+    IsCond,
+    IsField,
     LanguageCond,
     MeasureCond,
     MineCond,
@@ -33,6 +39,8 @@ from app.services.directory_reads import (
     SharedCond,
     SharedRelation,
     TagCond,
+    TimeCond,
+    TimeMode,
     YoursSource,
 )
 from app.services.post_filters import TreeAtom, TreeGroup
@@ -136,6 +144,74 @@ class DirectoryFlagCondition(_Cond):
 
     def to_cond(self) -> DirectoryCond:
         return FlagCond(self.value)
+
+
+#: Every value the Directory writes to each field, so a typo is a 422 rather
+#: than a Condition that quietly matches nothing.
+IS_VALUES: dict[IsField, frozenset[str]] = {
+    "status": frozenset({"ok", "unavailable", "unknown"}),
+    "kind": frozenset({"channel", "group", "bot", "user", "unknown"}),
+}
+
+
+class DirectoryIsCondition(_Cond):
+    """The verdict or the kind is exactly `value`."""
+
+    type: Literal["is"]
+    field: IsField
+    value: str = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def _known(self) -> DirectoryIsCondition:
+        if self.value not in IS_VALUES[self.field]:
+            raise ValueError(f"Not a {self.field} the Directory writes")
+        return self
+
+    def to_cond(self) -> DirectoryCond:
+        return IsCond(self.field, self.value)
+
+
+class DirectoryContainsCondition(_Cond):
+    """Any part of the text, case-insensitive."""
+
+    type: Literal["contains"]
+    field: ContainsField
+    value: str = Field(min_length=1, max_length=256)
+
+    def to_cond(self) -> DirectoryCond:
+        return ContainsCond(self.field, self.value)
+
+
+#: A Live end's reach either way: a century, in ms.
+_MAX_OFFSET_MS = 100 * 366 * 86_400_000
+#: A Fixed end's reach either way, inside what a `datetime` holds (years 1 to
+#: 9999), so an absurd instant is a 422 and never an overflow.
+_MAX_INSTANT_MS = 62_000_000_000_000
+
+
+class DirectoryTimeCondition(_Cond):
+    """A Time bound, start included and end excluded, either end open: Fixed
+    ends are epoch ms, Live ends signed ms from now."""
+
+    type: Literal["time"]
+    moment: DirectoryMoment
+    mode: TimeMode
+    start: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
+    end: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
+    none: bool = False
+
+    @model_validator(mode="after")
+    def _ordered(self) -> DirectoryTimeCondition:
+        if self.mode == "live":
+            for end in (self.start, self.end):
+                if end is not None and abs(end) > _MAX_OFFSET_MS:
+                    raise ValueError("A Live end is within a century of now")
+        if self.start is not None and self.end is not None and self.end <= self.start:
+            raise ValueError("A Time bound ends after it starts")
+        return self
+
+    def to_cond(self) -> DirectoryCond:
+        return TimeCond(self.moment, self.mode, self.start, self.end, self.none)
 
 
 class DirectoryMineCondition(_Cond):
@@ -244,6 +320,9 @@ DirectoryCondition = Annotated[
     | DirectoryNameCondition
     | DirectoryMeasureCondition
     | DirectoryFlagCondition
+    | DirectoryIsCondition
+    | DirectoryContainsCondition
+    | DirectoryTimeCondition
     | DirectoryMineCondition
     | DirectoryCitedByCondition
     | DirectoryCitesCondition
@@ -381,9 +460,9 @@ class DirectoryCountRequest(DirectoryViewRequest):
 
 
 class DirectoryDistributionRequest(DirectoryViewRequest):
-    """A measure's spread under every other Condition of the view."""
+    """A measure's spread under every other Condition of the view; a moment's in epoch ms."""
 
-    measure: DirectoryMeasure
+    measure: DirectoryMeasure | DirectoryMoment
 
 
 # Closed, and no field carries a server-side default, so every one is required
@@ -505,6 +584,8 @@ class DirectoryRowResponse(BaseModel):
     links: int | None = None
     #: `ok`, `unavailable` or `unknown`: the verdict of the last conclusive probe.
     status: str | None = None
+    #: `channel`, `group`, `bot`, `user` or `unknown`. `DATA_ADMIN` only.
+    kind: str | None = None
     bio: str | None = None
     #: How many sample Posts the statistics were computed from.
     sample_count: int | None = Field(None, alias="sampleCount")
@@ -521,6 +602,10 @@ class DirectoryRowResponse(BaseModel):
     retry_after: int | None = Field(None, alias="retryAfter")
     #: Drain order, lower first.
     priority: int | None = None
+    #: The Operator's Priority boost; positive fetches sooner.
+    priority_boost: int | None = Field(None, alias="priorityBoost")
+    #: `priority - priorityBoost`, the order the Directory fetches in.
+    effective_priority: int | None = Field(None, alias="effectivePriority")
     telegram_chat_id: int | None = Field(None, alias="telegramChatId")
     latest_id: int | None = Field(None, alias="latestId")
 
@@ -540,11 +625,33 @@ class DirectoryColumnDefaultsRequest(BaseModel):
     on: list[DirectoryColumn] = Field(max_length=64)
 
 
+class DirectoryBoostRequest(BaseModel):
+    """Set the Priority boost of the named entries, or add to it (DPF)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    handles: list[Handle] = Field(min_length=1, max_length=MAX_YOUR_CHANNELS)
+    mode: BoostMode
+    #: Positive fetches sooner. An `add` that carries any entry past the range
+    #: is refused for the whole batch.
+    value: int = Field(ge=-MAX_PRIORITY_BOOST, le=MAX_PRIORITY_BOOST)
+
+
+class DirectoryBoostResponse(BaseModel):
+    """How many of the named entries the Directory holds, and so changed."""
+
+    changed: int
+
+
 class DirectoryEntryResponse(_DirectoryEntryFields):
     """One entry for the detail panel, read by handle: the row's measures and
     the bio, which the list never carries (DIR-03)."""
 
     bio: str | None
+    #: These three for a `DATA_ADMIN` reader only, absent otherwise (DPF).
+    kind: str | None = None
+    priority_boost: int | None = Field(None, alias="priorityBoost")
+    effective_priority: int | None = Field(None, alias="effectivePriority")
 
 
 class DirectoryTagSeeds(BaseModel):
