@@ -146,12 +146,26 @@ class DirectoryFlagCondition(_Cond):
         return FlagCond(self.value)
 
 
+#: Every value the Directory writes to each field, so a typo is a 422 rather
+#: than a Condition that quietly matches nothing.
+IS_VALUES: dict[IsField, frozenset[str]] = {
+    "status": frozenset({"ok", "unavailable", "unknown"}),
+    "kind": frozenset({"channel", "group", "bot", "user", "unknown"}),
+}
+
+
 class DirectoryIsCondition(_Cond):
     """The verdict or the kind is exactly `value`."""
 
     type: Literal["is"]
     field: IsField
     value: str = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def _known(self) -> DirectoryIsCondition:
+        if self.value not in IS_VALUES[self.field]:
+            raise ValueError(f"Not a {self.field} the Directory writes")
+        return self
 
     def to_cond(self) -> DirectoryCond:
         return IsCond(self.field, self.value)
@@ -170,6 +184,9 @@ class DirectoryContainsCondition(_Cond):
 
 #: A Live end's reach either way: a century, in ms.
 _MAX_OFFSET_MS = 100 * 366 * 86_400_000
+#: A Fixed end's reach either way, inside what a `datetime` holds (years 1 to
+#: 9999), so an absurd instant is a 422 and never an overflow.
+_MAX_INSTANT_MS = 62_000_000_000_000
 
 
 class DirectoryTimeCondition(_Cond):
@@ -179,8 +196,8 @@ class DirectoryTimeCondition(_Cond):
     type: Literal["time"]
     moment: DirectoryMoment
     mode: TimeMode
-    start: int | None = Field(None, ge=-_MAX_OFFSET_MS)
-    end: int | None = Field(None, ge=-_MAX_OFFSET_MS)
+    start: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
+    end: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
     none: bool = False
 
     @model_validator(mode="after")

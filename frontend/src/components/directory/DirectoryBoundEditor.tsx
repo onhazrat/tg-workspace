@@ -71,7 +71,8 @@ export function Spread({
 /**
  * One measure's bound in the Directory filter (DIR-02): its spread under
  * every other Condition, drawn by the server, a click on a bar setting the
- * bound, the four modes, and how many Channels the bound leaves on Add. NOT is the chip's, not the editor's.
+ * bound, the four modes, and how many Channels the bound leaves on Add. NOT
+ * is the chip's, not the editor's.
  *
  * `countFor` renders how many a candidate bound leaves; the container passes
  * an element that reads it, so this stays renderable without a server.

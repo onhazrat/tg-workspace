@@ -1,8 +1,9 @@
 import { ArrowUpDown } from "lucide-react"
 import { useState } from "react"
+import type { DirectoryBoostRequest } from "@/client"
 import { TgButton } from "@/components/ui/tg-button"
 
-export type BoostMode = "set" | "add"
+export type BoostMode = DirectoryBoostRequest["mode"]
 
 /** The server's range either way (`MAX_PRIORITY_BOOST`). */
 export const MAX_BOOST = 1_000_000_000

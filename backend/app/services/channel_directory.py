@@ -177,8 +177,8 @@ DEFAULT_PROBE_PRIORITY = 1_000_000
 RECHECK_PRIORITY = -1
 
 #: The largest Priority boost either way. `priority` is int4 and the bands sit
-#: within a few million of zero, so the difference cannot overflow; at 500,000
-#: a band this is two thousand bands of headroom.
+#: within a few million of zero, so the difference cannot overflow. With bands
+#: 500,000 apart, that leaves two thousand bands of headroom.
 MAX_PRIORITY_BOOST = 1_000_000_000
 
 #: Priority for a handle the harvest sweep found in a stored Post (ticket 04).

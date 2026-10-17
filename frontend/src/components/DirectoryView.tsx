@@ -15,6 +15,7 @@ import {
   dataGetDirectoryWhy,
 } from "@/client"
 import { DirectoryBar } from "@/components/directory/DirectoryBar"
+import type { BoostMode } from "@/components/directory/DirectoryBoost"
 import { DirectoryBoundEditor } from "@/components/directory/DirectoryBoundEditor"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
 import {
@@ -66,8 +67,9 @@ import {
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
 import { pillClass } from "./PostFilterParts"
 
-/** The filter without `measure`'s bounds: what its spread is drawn under. */
-const withoutMeasure = (filter: DirectoryFilter, measure: string) =>
+/** The filter without its bounds on `measure`, a measure or a moment, which
+ * is what that one's spread is drawn under. */
+const withoutBoundsOn = (filter: DirectoryFilter, measure: string) =>
   mapGroups(filter, (group) => ({
     ...group,
     children: group.children.filter(
@@ -103,7 +105,7 @@ function MeasureEditor({
 }) {
   const others = {
     ...request,
-    filter: directoryFilterBody(withoutMeasure(filter, measure.key), sets),
+    filter: directoryFilterBody(withoutBoundsOn(filter, measure.key), sets),
   }
   const distribution = useQuery({
     queryKey: queryKeys.directoryRead("distribution", {
@@ -152,7 +154,7 @@ function MomentEditor({
 }) {
   const others = {
     ...request,
-    filter: directoryFilterBody(withoutMeasure(filter, moment.key), sets),
+    filter: directoryFilterBody(withoutBoundsOn(filter, moment.key), sets),
   }
   const distribution = useQuery({
     queryKey: queryKeys.directoryRead("distribution", {
@@ -246,7 +248,7 @@ function DirectoryPanelReads({
   onClose: () => void
   onFilter: (cond: DirectoryCond) => void
   tagging: Tagging
-  onBoost?: (mode: "set" | "add", value: number) => void
+  onBoost?: (mode: BoostMode, value: number) => void
 }) {
   const path = { handle }
   const entry = useQuery({

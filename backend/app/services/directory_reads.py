@@ -330,7 +330,7 @@ class ContainsCond:
 
 @dataclass(frozen=True)
 class TimeCond:
-    """A Time bound: `[start, end)` on one moment, either end open (DPF).
+    """A Time bound, `[start, end)` on one moment, either end open (DPF).
 
     Fixed ends are epoch ms; Live ends are signed ms from the view's `now`,
     negative for the past, resolved on the server's clock so a shared link
@@ -440,7 +440,8 @@ class DirectoryView:
     search: SearchQuery | None = None
     #: Each Tag the tree names, by its key, resolved to the reader's handles.
     tags: Mapping[str, frozenset[str]] = field(default_factory=dict)
-    #: List every kind of entry, not only Channels: a `DATA_ADMIN` reader (DPF).
+    #: Whether every kind of entry is listed, not only Channels. True for a
+    #: `DATA_ADMIN` reader (DPF).
     every_kind: bool = False
 
 

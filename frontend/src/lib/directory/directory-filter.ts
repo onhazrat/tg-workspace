@@ -51,7 +51,7 @@ export type IsField = DirectoryIsCondition["field"]
 export type DirectoryFlag = DirectoryFlagCondition["value"]
 
 /**
- * A Time bound (DPF): `[start, end)` on one moment, either end open. A Live
+ * A Time bound (DPF), `[start, end)` on one moment, either end open. A Live
  * end is signed ms from now, negative for the past; a Fixed end is epoch ms.
  * `none` keeps only the entries with no value.
  */
@@ -313,7 +313,7 @@ export const MEASURES: Measure[] = [
     label: "Effective priority",
     short: "Effective",
     description:
-      "Priority minus the boost: the order the Directory fetches in, lower first",
+      "Priority minus the boost, which is the order the Directory fetches in, lower first",
     section: "Probe queue",
     internal: true,
   },

@@ -351,6 +351,21 @@ def test_a_moment_has_a_linear_distribution_in_epoch_ms(
     assert sum(b["count"] for b in spread["bins"]) == 4
 
 
+def test_a_condition_the_server_cannot_answer_is_422_not_500(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    for cond in (
+        # Past what a datetime holds, so it would overflow rather than match.
+        {"type": "time", "moment": "checked_at", "mode": "fixed", "start": 10**16},
+        {"type": "time", "moment": "checked_at", "mode": "fixed", "end": -(10**16)},
+        # A value the Directory never writes would match nothing, silently.
+        {"type": "is", "field": "kind", "value": "robot"},
+        {"type": "is", "field": "status", "value": "fine"},
+    ):
+        assert _list(client, operator, filter=_where(cond)) == 422, cond
+
+
 # ---- The renamed keys ----------------------------------------------------------
 
 

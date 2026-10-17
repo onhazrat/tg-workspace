@@ -18,10 +18,12 @@ import {
 } from "@/lib/directory/directory-filter"
 import type { SearchField } from "@/lib/directory/directory-view"
 import {
+  CHANNELS_ONLY,
   type ColumnsMenu,
   ColumnsPill,
   DirectoryBar,
   type DirectoryBarProps,
+  DirectorySearch,
 } from "./DirectoryBar"
 import { directoryVocabulary } from "./directory-vocabulary"
 
@@ -499,5 +501,25 @@ describe("a Tag Condition (DFP-04)", () => {
     expect(screen.getByText("group:Slow Feed")).toBeTruthy()
     fireEvent.click(screen.getByText("News"))
     expect(calls.filters).toEqual(["tag:News"])
+  })
+})
+
+describe("the search box's reach (DPF)", () => {
+  test("a reader listed every kind is told the search finds Channels only", () => {
+    const box = (everyKind: boolean) => (
+      <DirectorySearch
+        search=""
+        onSearch={() => {}}
+        fields={["name"]}
+        onFields={() => {}}
+        everyKind={everyKind}
+      />
+    )
+    const view = render(box(false))
+    expect(screen.getByLabelText("Search the Directory").title).toBe("")
+    view.rerender(box(true))
+    expect(screen.getByLabelText("Search the Directory").title).toBe(
+      CHANNELS_ONLY,
+    )
   })
 })

@@ -1,9 +1,9 @@
 """The Priority boost, and the queue ordered by effective priority (DPF)
 
 `priority_boost` is an Operator's standing adjustment to how soon an entry is
-fetched. It is its own column because every fetch rewrites `priority`: a boost
-folded into it would be erased by the next probe. Zero for every existing row,
-so the upgrade changes no fetch order.
+fetched. It is its own column because every fetch rewrites `priority`, so a
+boost folded into it would be erased by the next probe. Zero for every
+existing row, so the upgrade changes no fetch order.
 
 `effective_priority` is `priority - priority_boost`, stored and generated, so
 the dequeue's ORDER BY has an index to read. The `(status, priority)` index it

@@ -23,6 +23,7 @@ import {
   dataPutDirectoryColumns,
 } from "@/client"
 import type { ColumnsMenu } from "@/components/directory/DirectoryBar"
+import type { BoostMode } from "@/components/directory/DirectoryBoost"
 import { useData } from "@/contexts/DataContext"
 import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
@@ -341,11 +342,7 @@ export function useDirectory() {
   }
 
   /** Sets or adds to the Priority boost of `handles` (DPF), a `DATA_ADMIN` write. */
-  const boost = async (
-    handles: string[],
-    mode: "set" | "add",
-    value: number,
-  ) => {
+  const boost = async (handles: string[], mode: BoostMode, value: number) => {
     try {
       const { changed } = await dataBoostDirectory({
         body: { handles, mode, value },

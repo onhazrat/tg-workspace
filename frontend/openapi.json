@@ -9166,14 +9166,22 @@
           },
           "start": {
             "anyOf": [
-              { "type": "integer", "minimum": -3162240000000.0 },
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
               { "type": "null" }
             ],
             "title": "Start"
           },
           "end": {
             "anyOf": [
-              { "type": "integer", "minimum": -3162240000000.0 },
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
               { "type": "null" }
             ],
             "title": "End"
