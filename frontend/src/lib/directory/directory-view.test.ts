@@ -5,6 +5,7 @@
  * failing every read.
  */
 import { describe, expect, test } from "bun:test"
+import { INTERNAL_COLUMNS } from "./directory-columns"
 import { OPENING_FILTER } from "./directory-filter"
 import {
   chooseSort,
@@ -331,8 +332,10 @@ describe("the search (DIR-04)", () => {
   test("the internal sorts are offered to a DATA_ADMIN reader only (DPF)", () => {
     const values = (internals: boolean) =>
       sortOptions(false, [], internals).map((o) => o.value)
-    for (const internal of ["effective_priority", "attempts", "kind"])
+    for (const internal of INTERNAL_COLUMNS) {
       expect(values(false)).not.toContain(internal)
+      expect(values(true)).toContain(internal)
+    }
     expect(values(true)).toEqual(SORT_OPTIONS.map((o) => o.value))
     expect(values(false)).toContain("checked_at")
     expect(values(false)).toContain("status")

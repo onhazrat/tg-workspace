@@ -27,6 +27,7 @@ import type {
 } from "@/components/filter-tree/ConditionPicker"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
+import { type ColumnKey, isInternal } from "@/lib/directory/directory-columns"
 import {
   type DirectoryCond,
   type DirectoryFlag,
@@ -102,7 +103,7 @@ const measureEntries = (
   internals: boolean,
 ): PickerEntry<DirectoryCond>[] =>
   MEASURES.filter(
-    (m) => m.section === section && (internals || !m.internal),
+    (m) => m.section === section && (internals || !isInternal(m.key)),
   ).map((measure) => ({
     kind: "editor",
     id: `measure:${measure.key}`,
@@ -123,7 +124,7 @@ const momentEntries = (
   internals: boolean,
 ): PickerEntry<DirectoryCond>[] =>
   MOMENTS.filter(
-    (m) => m.section === section && (internals || !m.internal),
+    (m) => m.section === section && (internals || !isInternal(m.key)),
   ).map((moment) => ({
     kind: "editor",
     id: `time:${moment.key}`,
@@ -178,6 +179,7 @@ export function directoryVocabulary(
   internals = false,
 ): FilterVocabulary<DirectoryCond> {
   const languages = languageOptions(languageCounts)
+  const offered = (column: ColumnKey) => internals || !isInternal(column)
   return {
     sections: [
       {
@@ -301,9 +303,9 @@ export function directoryVocabulary(
       {
         heading: "Probe queue",
         entries: [
-          ...(internals
+          ...(offered("kind") ? [isEntry("kind")] : []),
+          ...(offered("last_error")
             ? [
-                isEntry("kind"),
                 {
                   kind: "editor" as const,
                   id: "contains",

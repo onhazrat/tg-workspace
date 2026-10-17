@@ -21,13 +21,16 @@ Each mutation was applied alone and this module went red:
 * make a Time bound's end inclusive -> the half-open case
 * resolve a Live end against zero rather than now -> the Live case
 * sort a moment by its epoch-ms expression -> the raw-column case
+* add or drop a key in either `INTERNAL_COLUMNS` -> the browser-set case
 """
 
 from __future__ import annotations
 
 import importlib
+import re
 from collections.abc import Iterator
 from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -52,6 +55,11 @@ DIRECTORY = f"{settings.API_V1_STR}/data/directory"
 DAY_MS = 86_400_000
 CHANNELS = ["ec_alpha", "ec_beta", "ec_gone"]
 EVERY_KIND = sorted([*CHANNELS, "ec_bot", "ec_pending"])
+
+FRONTEND_COLUMNS = (
+    Path(__file__).resolve().parents[3]
+    / "frontend/src/lib/directory/directory-columns.ts"
+)
 
 # Whole seconds, so a bound at exactly a seeded moment lands on it.
 _NOW = utc_now().replace(microsecond=0)
@@ -367,6 +375,27 @@ def test_an_internal_sort_or_condition_is_refused_to_a_non_holder(
         assert refused.status_code == 422, (path, body)
         allowed = client.post(f"{DIRECTORY}/{path}", json=body, headers=operator)
         assert allowed.status_code == 200, (path, body)
+
+
+def _browser_internal_columns() -> set[str]:
+    source = FRONTEND_COLUMNS.read_text()
+    block = re.search(
+        r"export const INTERNAL_COLUMNS\b.*?\(\[(.*?)\]\)", source, re.DOTALL
+    )
+    assert block, f"INTERNAL_COLUMNS not found in {FRONTEND_COLUMNS}"
+    return set(re.findall(r'"(\w+)"', block.group(1)))
+
+
+def test_the_browser_hides_exactly_the_columns_the_server_refuses() -> None:
+    """Both directions, because each drift fails differently. A key only the
+    server holds is a sort and a Condition the browser offers every reader and
+    the server answers with a 422. A key only the browser holds hides a column
+    a reader is entitled to, so nothing fails at all and nobody notices.
+
+    The browser's set is one constant every gate reads (the sort picker, the
+    condition picker, `seesInternals`), so this one comparison covers all of
+    them."""
+    assert _browser_internal_columns() == directory_reads.INTERNAL_COLUMNS
 
 
 def test_a_moment_has_a_linear_distribution_in_epoch_ms(
