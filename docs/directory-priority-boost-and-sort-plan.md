@@ -85,7 +85,32 @@ Condition to a caller without `DATA_ADMIN`, and the UI never offers them.
   shows a dismissible notice** ("This link's filter could not be read and was
   reset") instead of resetting silently as `useDirectory.ts` does today.
 
-## Open measurement
+## Measured on staging, 2026-10-18
 
-- No indexes beyond `effective_priority`'s. Measure the new sorts on the staging
-  copy and index only what proves slow (staging disk is at 91%).
+No indexes beyond `effective_priority`'s, and the measurement says none is
+needed. I captured the exact page statement `_page_handles` sends for every new
+sort, in both directions, under the opening filter (Channels only) and with no
+filter for an Operator (every kind). Then I ran `EXPLAIN ANALYZE` on staging,
+read-only and with parallel workers off, over 1,058,208 entries (372 MB).
+
+Every sort is a sequential scan plus a top-N heapsort over the filtered set,
+the same plan the existing `subscribers` sort has always used.
+
+| Sort | Page time |
+|---|---|
+| `subscribers` (existing, for comparison) | 241 to 268 ms |
+| queue numbers, `sample_count`, `language`, `status`, `kind`, `followable`, `last_error` | 250 to 350 ms |
+| the six moments, by their epoch-ms expression | 290 to 440 ms |
+| `bio` descending | 315 to 366 ms |
+| `bio` ascending | about 1,300 ms |
+
+- **Moments now sort by the raw column.** Ordering by `EXTRACT(epoch ...) * 1000`
+  computed the expression for every row the sort read, about 100 ms of the
+  moment rows above. The order is identical, so the sort uses the column now,
+  and `test_a_moment_sorts_by_its_column_not_its_epoch` pins it.
+- **`bio` ascending stays at about 1.3 s.** Collation comparisons over long text
+  cost the time, not I/O. An index is the wrong answer: a btree refuses a key
+  past about 2.7 kB, and a bio can be longer. It is one sort that few people
+  use, and 1.3 s is acceptable there.
+- A cold cache adds I/O. The first `status` query read 76k buffers from disk and
+  took 558 ms. Warm runs match the table.

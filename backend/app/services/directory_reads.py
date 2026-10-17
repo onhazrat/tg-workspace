@@ -1044,6 +1044,11 @@ def _page_handles(
     ):
         # Straight off a text column, in its collation's order.
         key = col(getattr(DirectoryEntry, sort))
+    elif sort in DIRECTORY_MOMENTS:
+        # The column itself rather than `measure_sql`'s epoch ms. The order is
+        # the same, and no expression is computed for every row the sort reads,
+        # which cost ~100 ms a page on staging's 1.06M entries (2026-10-18).
+        key = col(getattr(DirectoryEntry, sort))
     elif sort == "shared_parents" or sort == "shared_children":
         cond = _first_shared(
             view.tree, "parents" if sort == "shared_parents" else "children"

@@ -1,6 +1,6 @@
 # Directory: Priority boost, and sort and filter on every column
 
-Status: ready-for-agent
+Status: done (PR #180, merged 2026-10-17)
 
 Ticket prefix: `DPF`.
 
