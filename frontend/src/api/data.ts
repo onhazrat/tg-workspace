@@ -1,6 +1,7 @@
 import type {
   ChatSessionSubmitRequest,
   DirectoryFollowSource,
+  DirectoryViewRequest,
   PostCountsResponse,
   SummarySubmitRequest,
   TagRunSubmitRequest,
@@ -638,6 +639,13 @@ export const dataApi = {
     request<{ ignored: string[] }>("/api/v1/data/discover/ignored", {
       method: "POST",
       body: JSON.stringify(reason ? { handles, reason } : { handles }),
+    }),
+
+  /** Dismiss every unfollowed entry a Directory view matches (ADR-031). */
+  dismissDirectoryView: (view: DirectoryViewRequest) =>
+    request<{ changed: number }>("/api/v1/data/discover/ignored", {
+      method: "POST",
+      body: JSON.stringify({ view }),
     }),
 
   /** Undo a dismissal. */

@@ -161,6 +161,12 @@ Dismiss, Tag) or as Seeds. Any entry can be ticked, followed or not. Ticks are
 kept per browser and never travel in a link.
 _Avoid_: selection (the Channels tab's), check, mark
 
+**All matching**:
+Every Directory entry the current view shows, held as the view rather than as
+entries. It stands in for Ticks in a bulk action when a view shows too many to
+tick, but it cannot be Seeds or Follow, and it ends when the view changes.
+_Avoid_: select all, bulk selection, all ticked
+
 **Seed**:
 A Channel that a Shared parent or Shared child Condition compares the Directory
 with. The Seeds come from one place, chosen with the Condition: the Channels

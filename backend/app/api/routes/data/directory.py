@@ -10,13 +10,12 @@ derives from the function name, so a rename moves a symbol in the generated
 client.
 """
 
-import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep, require_permission
+from app.api.directory_views import sees_internals, targets, view_of
 from app.core.permissions import Permission
 from app.schemas.directory import (
     DirectoryBinResponse,
@@ -29,6 +28,8 @@ from app.schemas.directory import (
     DirectoryDistributionRequest,
     DirectoryDistributionResponse,
     DirectoryEntryResponse,
+    DirectoryHandlesRequest,
+    DirectoryHandlesResponse,
     DirectoryLanguageCountResponse,
     DirectoryListRequest,
     DirectoryListResponse,
@@ -36,14 +37,12 @@ from app.schemas.directory import (
     DirectoryRowResponse,
     DirectorySamplePostResponse,
     DirectorySizeResponse,
-    DirectoryViewRequest,
     DirectoryWhyRequest,
     DirectoryWhyResponse,
 )
-from app.services import directory_reads, rbac
+from app.services import directory_reads
 from app.services.channel_directory import BoostOutOfRange, boost_entries, probe_map
 from app.services.channel_directory_samples import sample_to_camel, samples_for
-from app.services.post_filters import TreeAtom, TreeGroup
 from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
 from app.services.settings_store import replace_global_setting
 from app.services.telegram_web import normalize_handle
@@ -110,47 +109,6 @@ def get_directory_posts(
 # `deps.VIEW_AS_READ_ONLY_PATHS`, so a View-as session can browse.
 
 
-def _view(
-    session: Session,
-    user_id: uuid.UUID,
-    body: DirectoryViewRequest,
-    *reads: str,
-    candidate: TreeAtom[directory_reads.DirectoryCond] | None = None,
-) -> directory_reads.DirectoryView:
-    """The view for `body`, refusing what this reader may not sort or filter by.
-
-    `reads` are what the request sorts or measures by besides its filter. A
-    `DATA_ADMIN` reader is listed every kind of entry; anyone else is answered
-    422 for naming an internal column, as an unknown one would be (DPF).
-    """
-    tree = None if body.filter is None else body.filter.to_tree()
-    internals = _sees_internals(session, user_id)
-    if not internals:
-        named = directory_reads.internal_reads(tree, *reads)
-        if candidate is not None:
-            alone = TreeGroup(op="and", children=(candidate,))
-            named |= directory_reads.internal_reads(alone)
-        if named:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Not a column this account may read: {', '.join(sorted(named))}",
-            )
-    return directory_reads.resolve_view(
-        session,
-        user_id,
-        tree=tree,
-        source=body.yours.source,
-        handles=body.yours.handles,
-        kinds=body.reference_kinds,
-        search=None if body.search is None else (body.search.text, body.search.fields),
-        every_kind=internals,
-    )
-
-
-def _sees_internals(session: Session, user_id: uuid.UUID) -> bool:
-    return rbac.has_permission(session, user_id, Permission.DATA_ADMIN)
-
-
 # `exclude_unset` is what leaves a column nobody asked for out of each row
 # rather than sending it as `null`, which means "not measured" (DCOL).
 @router.post("/directory/list", response_model_exclude_unset=True)
@@ -165,11 +123,11 @@ def list_directory(
     view's Language Conditions where the menu needs them.
     """
     visible = directory_reads.visible_columns(
-        internals=_sees_internals(session, current_user.id)
+        internals=sees_internals(session, current_user.id)
     )
     page = directory_reads.list_page(
         session,
-        _view(session, current_user.id, body, body.sort),
+        view_of(session, current_user.id, body, body.sort),
         sort=body.sort,
         descending=body.descending,
         page=body.page,
@@ -196,10 +154,33 @@ def count_directory(
 ) -> DirectoryCountResponse:
     """How many entries a view leaves, with a candidate Condition added with AND."""
     candidate = None if body.candidate is None else body.candidate.to_atom()
-    view = _view(session, current_user.id, body, candidate=candidate)
+    view = view_of(session, current_user.id, body, candidate=candidate)
     return DirectoryCountResponse(
         total=directory_reads.count_view(session, view, candidate)
     )
+
+
+#: 422 for Tick all on a view too large to tick; the browser holds it as All
+#: matching instead and never asks (ADR-031).
+TOO_MANY_TO_TICK = f"More than {directory_reads.MAX_TICK_ALL:,} entries match; act on them as All matching"
+
+
+@router.post("/directory/handles")
+def list_directory_handles(
+    body: DirectoryHandlesRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> DirectoryHandlesResponse:
+    """Every handle a view matches, in the list's sort, to tick them all."""
+    handles = directory_reads.view_handles(
+        session,
+        view_of(session, current_user.id, body, body.sort),
+        sort=body.sort,
+        descending=body.descending,
+    )
+    if handles is None:
+        raise HTTPException(status_code=422, detail=TOO_MANY_TO_TICK)
+    return DirectoryHandlesResponse(handles=handles)
 
 
 @router.post("/directory/distribution")
@@ -210,7 +191,7 @@ def get_directory_distribution(
 ) -> DirectoryDistributionResponse:
     """A measure's spread across the view with its own bounds left out."""
     spread = directory_reads.distribution(
-        session, _view(session, current_user.id, body, body.measure), body.measure
+        session, view_of(session, current_user.id, body, body.measure), body.measure
     )
     return DirectoryDistributionResponse(
         scale=spread.scale,
@@ -231,7 +212,7 @@ def get_directory_size(
     """How many entries the Directory lists to this reader at all."""
     return DirectorySizeResponse(
         size=directory_reads.directory_size(
-            session, every_kind=_sees_internals(session, current_user.id)
+            session, every_kind=sees_internals(session, current_user.id)
         )
     )
 
@@ -254,7 +235,7 @@ def list_directory_columns(
     return [
         DirectoryColumnResponse(key=key, default=key in defaults)
         for key in directory_reads.visible_columns(
-            internals=_sees_internals(session, current_user.id)
+            internals=sees_internals(session, current_user.id)
         )
     ]
 
@@ -297,7 +278,12 @@ def boost_directory(
     changes none.
     """
     try:
-        changed = boost_entries(session, body.handles, mode=body.mode, value=body.value)
+        changed = boost_entries(
+            session,
+            targets(session, _current_user.id, body),
+            mode=body.mode,
+            value=body.value,
+        )
     except BoostOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return DirectoryBoostResponse(changed=changed)
@@ -318,7 +304,7 @@ def get_directory_entry(
         session,
         current_user.id,
         normalize_handle(handle),
-        internals=_sees_internals(session, current_user.id),
+        internals=sees_internals(session, current_user.id),
     )
     if found is None:
         raise HTTPException(status_code=404, detail=DIRECTORY_ENTRY_NOT_FOUND)

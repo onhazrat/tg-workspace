@@ -41,6 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
+from app.schemas.directory import DirectoryTargets
 from app.schemas.post_filter import PostSelection, select_all
 from app.schemas.posts import PostWindowRequest
 from app.schemas.scope import (
@@ -331,11 +332,23 @@ class DiscoverIgnoreRequest(BaseModel):
     reason: str | None = None
 
 
+class DiscoverDismissRequest(DirectoryTargets):
+    """Handles to dismiss, or a Directory view for every unfollowed entry it
+    matches (All matching, ADR-031). The undo stays handles-only: All matching
+    offers no Undo."""
+
+    reason: str | None = None
+
+
 class DiscoverIgnoredAddedResponse(BaseModel):
     """Handles newly dismissed. Excludes ones already dismissed: the call is
     idempotent, so a re-dismissal is a no-op rather than an error."""
 
     ignored: list[str] = Field(default_factory=list)
+    #: How many were newly dismissed. A Dismissal by Directory view answers
+    #: this alone and leaves `ignored` empty, since it can reach the whole
+    #: Directory (ADR-031).
+    changed: int
 
 
 class DiscoverIgnoredRemovedResponse(BaseModel):

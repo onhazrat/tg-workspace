@@ -7,7 +7,7 @@ filing its read as report machinery misfiles it.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -428,6 +428,20 @@ class DirectoryViewRequest(DirectoryYoursRequest):
     search: DirectorySearchRequest | None = None
 
 
+class DirectoryTargets(BaseModel):
+    """What a bulk write reaches: the Ticks' handles, or a view meaning every
+    entry it matches (All matching, ADR-031). Exactly one of the two."""
+
+    handles: list[Handle] = Field(default_factory=list, max_length=MAX_YOUR_CHANNELS)
+    view: DirectoryViewRequest | None = None
+
+    @model_validator(mode="after")
+    def _one_of(self) -> Self:
+        if bool(self.handles) == (self.view is not None):
+            raise ValueError("Name handles or a view, exactly one")
+        return self
+
+
 class DirectoryListRequest(DirectoryViewRequest):
     """One page of a Directory view, sorted."""
 
@@ -451,6 +465,13 @@ class DirectoryListRequest(DirectoryViewRequest):
         if not self.selected_first:
             return []
         return self.yours.handles if self.yours.source == "ticked" else self.ticked
+
+
+class DirectoryHandlesRequest(DirectoryViewRequest):
+    """Every handle a view matches, in the list's sort, for Tick all (ADR-031)."""
+
+    sort: DirectorySort = "mine"
+    descending: bool = True
 
 
 class DirectoryCountRequest(DirectoryViewRequest):
@@ -625,12 +646,17 @@ class DirectoryColumnDefaultsRequest(BaseModel):
     on: list[DirectoryColumn] = Field(max_length=64)
 
 
-class DirectoryBoostRequest(BaseModel):
+class DirectoryHandlesResponse(BaseModel):
+    """Every handle a view matches, for Tick all (ADR-031)."""
+
+    handles: list[str]
+
+
+class DirectoryBoostRequest(DirectoryTargets):
     """Set the Priority boost of the named entries, or add to it (DPF)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    handles: list[Handle] = Field(min_length=1, max_length=MAX_YOUR_CHANNELS)
     mode: BoostMode
     #: Positive fetches sooner. An `add` that carries any entry past the range
     #: is refused for the whole batch.

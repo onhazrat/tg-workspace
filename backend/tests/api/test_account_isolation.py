@@ -316,6 +316,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "channels') answers for each Account alone",
     ),
     ("POST", f"{DATA}/directory/count"): (Reason.COVERED_ELSEWHERE, "same file"),
+    ("POST", f"{DATA}/directory/handles"): (
+        Reason.COVERED_ELSEWHERE,
+        "test_directory_tick_all.py, with two live Accounts: the same view "
+        "answers each Account's own Dismissals",
+    ),
     ("POST", f"{DATA}/directory/distribution"): (
         Reason.COVERED_ELSEWHERE,
         "same file",

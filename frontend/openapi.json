@@ -2287,7 +2287,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DiscoverIgnoreRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverDismissRequest"
+              }
             }
           },
           "required": true
@@ -2831,6 +2833,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DirectoryCountResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/directory/handles": {
+      "post": {
+        "tags": ["data"],
+        "summary": "List Directory Handles",
+        "description": "Every handle a view matches, in the list's sort, to tick them all.",
+        "operationId": "data-list_directory_handles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryHandlesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryHandlesResponse"
                 }
               }
             }
@@ -7847,8 +7888,13 @@
             "items": { "type": "string", "maxLength": 256, "minLength": 1 },
             "type": "array",
             "maxItems": 10000,
-            "minItems": 1,
             "title": "Handles"
+          },
+          "view": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryViewRequest" },
+              { "type": "null" }
+            ]
           },
           "mode": { "type": "string", "enum": ["set", "add"], "title": "Mode" },
           "value": {
@@ -7860,7 +7906,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["handles", "mode", "value"],
+        "required": ["mode", "value"],
         "title": "DirectoryBoostRequest",
         "description": "Set the Priority boost of the named entries, or add to it (DPF)."
       },
@@ -8435,6 +8481,95 @@
         "type": "object",
         "title": "DirectoryFollowSource",
         "description": "The Directory view's \"your channels\" and Reference kinds, for discovered-via."
+      },
+      "DirectoryHandlesRequest": {
+        "properties": {
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryFilterGroup" },
+              { "type": "null" }
+            ]
+          },
+          "search": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectorySearchRequest" },
+              { "type": "null" }
+            ]
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "subscribers",
+              "reach",
+              "posts_per_week",
+              "forward_pct",
+              "photos",
+              "videos",
+              "files",
+              "links",
+              "cited_by",
+              "cites",
+              "sample_count",
+              "attempts",
+              "latest_id",
+              "telegram_chat_id",
+              "priority",
+              "priority_boost",
+              "effective_priority",
+              "last_post_at",
+              "created_at",
+              "checked_at",
+              "attempted_at",
+              "retry_after",
+              "refresh_due_at",
+              "language",
+              "status",
+              "kind",
+              "followable",
+              "bio",
+              "last_error",
+              "mine",
+              "mine_last_days",
+              "relevance",
+              "shared_parents",
+              "shared_children"
+            ],
+            "title": "Sort",
+            "default": "mine"
+          },
+          "descending": {
+            "type": "boolean",
+            "title": "Descending",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DirectoryHandlesRequest",
+        "description": "Every handle a view matches, in the list's sort, for Tick all (ADR-031)."
+      },
+      "DirectoryHandlesResponse": {
+        "properties": {
+          "handles": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Handles"
+          }
+        },
+        "type": "object",
+        "required": ["handles"],
+        "title": "DirectoryHandlesResponse",
+        "description": "Every handle a view matches, for Tick all (ADR-031)."
       },
       "DirectoryIsCondition": {
         "properties": {
@@ -9194,6 +9329,36 @@
         "title": "DirectoryTimeCondition",
         "description": "A Time bound, start included and end excluded, either end open: Fixed\nends are epoch ms, Live ends signed ms from now."
       },
+      "DirectoryViewRequest": {
+        "properties": {
+          "yours": { "$ref": "#/components/schemas/YourChannels" },
+          "referenceKinds": {
+            "items": {
+              "type": "string",
+              "enum": ["forward", "mention", "link", "reply"]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Referencekinds"
+          },
+          "filter": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryFilterGroup" },
+              { "type": "null" }
+            ]
+          },
+          "search": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectorySearchRequest" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DirectoryViewRequest",
+        "description": "A Directory view: the filter, the search, \"your channels\" and the Reference kinds."
+      },
       "DirectoryWhyRequest": {
         "properties": {
           "yours": { "$ref": "#/components/schemas/YourChannels" },
@@ -9412,6 +9577,29 @@
         "title": "DiscoverCandidatesResponse",
         "description": "Result of the stateless aggregation, `POST /discover/candidates`."
       },
+      "DiscoverDismissRequest": {
+        "properties": {
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Handles"
+          },
+          "view": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryViewRequest" },
+              { "type": "null" }
+            ]
+          },
+          "reason": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "DiscoverDismissRequest",
+        "description": "Handles to dismiss, or a Directory view for every unfollowed entry it\nmatches (All matching, ADR-031). The undo stays handles-only: All matching\noffers no Undo."
+      },
       "DiscoverIgnoreRequest": {
         "properties": {
           "handles": {
@@ -9435,9 +9623,11 @@
             "items": { "type": "string" },
             "type": "array",
             "title": "Ignored"
-          }
+          },
+          "changed": { "type": "integer", "title": "Changed" }
         },
         "type": "object",
+        "required": ["changed"],
         "title": "DiscoverIgnoredAddedResponse",
         "description": "Handles newly dismissed. Excludes ones already dismissed: the call is\nidempotent, so a re-dismissal is a no-op rather than an error."
       },
@@ -13777,20 +13967,25 @@
       },
       "TagHandlesRequest": {
         "properties": {
-          "name": { "type": "string", "minLength": 1, "title": "Name" },
           "handles": {
             "items": { "type": "string", "maxLength": 256, "minLength": 1 },
             "type": "array",
             "maxItems": 10000,
-            "minItems": 1,
             "title": "Handles"
-          }
+          },
+          "view": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/DirectoryViewRequest" },
+              { "type": "null" }
+            ]
+          },
+          "name": { "type": "string", "minLength": 1, "title": "Name" }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["name", "handles"],
+        "required": ["name"],
         "title": "TagHandlesRequest",
-        "description": "One Tag and the handles, followed or not, to put it on or take it off."
+        "description": "One Tag and the handles, followed or not, to put it on or take it off;\nor a view, for every entry it matches (ADR-031)."
       },
       "TagHandlesResponse": {
         "properties": {

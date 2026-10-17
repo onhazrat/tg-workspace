@@ -775,6 +775,80 @@ test.describe("TG Workspace directory", () => {
     expect(param(page, "dirFilter")).toContain('parents:"tag:World news"')
   })
 
+  test("tick all that match, then act on all matching (ADR-031)", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await page.route("**/api/v1/data/tags", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    let total = 250
+    await page.route("**/api/v1/data/directory/list", (route) =>
+      route.fulfill({
+        json: { rows: ROWS, total, languages: [], yoursSize: 0 },
+      }),
+    )
+    const matching = Array.from({ length: 250 }, (_, i) => `m${i}`)
+    await page.route("**/api/v1/data/directory/handles", (route) =>
+      route.fulfill({ json: { handles: matching } }),
+    )
+    const sent: Record<string, unknown>[] = []
+    await page.route("**/api/v1/data/tags/channels", async (route) => {
+      sent.push(route.request().postDataJSON() as Record<string, unknown>)
+      await route.fulfill({ json: { changed: 3 } })
+    })
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, [
+      "directory.view",
+      "directory.ticks",
+      "directory.open",
+    ])
+    await page.goto("/workspace?tab=directory")
+
+    // At most 10,000: every match becomes a Tick, and a Tag carries them all.
+    await page
+      .getByRole("checkbox", { name: "Tick every channel on this page" })
+      .check()
+    await page.getByRole("button", { name: "Tick all 250 that match" }).click()
+    const bar = page.getByTestId("directory-bulk-bar")
+    await expect(bar).toContainText("All 250 matching are ticked.")
+    await expect(bar).toContainText("256 ticked")
+    await page.getByTestId("directory-bulk-tag").click()
+    await page.getByTestId("directory-tag-search").fill("Wide")
+    await page.getByText('Create the Tag "Wide"').click()
+    await expect
+      .poll(() => (sent.at(-1)?.handles as string[] | undefined)?.length)
+      .toBe(256)
+
+    // Over 10,000: All matching sends the view, and Follow is off.
+    await bar.getByRole("button", { name: "Clear" }).click()
+    total = 48_210
+    await page.getByRole("button", { name: "Next page" }).click()
+    await page.getByRole("button", { name: "Previous page" }).click()
+    await page
+      .getByRole("checkbox", { name: "Tick every channel on this page" })
+      .check()
+    await page
+      .getByRole("button", { name: "Act on all 48,210 matching" })
+      .click()
+    await expect(bar).toContainText("All 48,210 matching.")
+    await expect(bar.getByRole("button", { name: "Follow" })).toBeDisabled()
+    await page.getByTestId("directory-bulk-tag").click()
+    await page.getByTestId("directory-tag-search").fill("Huge")
+    await page.getByText('Create the Tag "Huge"').click()
+    await expect.poll(() => sent.at(-1)?.name).toBe("Huge")
+    expect(sent.at(-1)).toHaveProperty("view")
+    expect(sent.at(-1)).not.toHaveProperty("handles")
+
+    // A hand-made tick ends it, and leaves the page ticked minus that row.
+    await page.getByRole("checkbox", { name: "Tick @a1" }).uncheck()
+    await expect(bar).toContainText("5 ticked")
+    await expect(bar).not.toContainText("matching.")
+  })
+
   test("on a phone: the controls sheet, cards, and a bottom-sheet panel", async ({
     page,
   }) => {

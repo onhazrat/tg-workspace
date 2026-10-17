@@ -332,7 +332,7 @@ def test_dismissals_round_trip_with_their_declared_shape(client: TestClient) -> 
         headers=headers,
     )
     assert added.status_code == 200
-    assert added.json() == {"ignored": [TARGET]}
+    assert added.json() == {"ignored": [TARGET], "changed": 1}
 
     rows = client.get(f"{DATA}/discover/ignored", headers=headers).json()
     assert len(rows) == 1
@@ -360,7 +360,7 @@ def test_re_dismissing_stays_idempotent_through_the_response_model(
 
     again = client.post(f"{DATA}/discover/ignored", json=body, headers=headers)
     assert again.status_code == 200
-    assert again.json() == {"ignored": []}
+    assert again.json() == {"ignored": [], "changed": 0}
 
 
 def test_a_report_saved_before_the_rename_still_opens(client: TestClient) -> None:

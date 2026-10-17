@@ -58,6 +58,7 @@ from sqlalchemy import (
     ColumnElement,
     DateTime,
     Float,
+    Select,
     String,
     all_,
     and_,
@@ -1008,7 +1009,11 @@ def _page_handles(
     descending: bool,
     page: int,
     first: Sequence[str] = (),
+    size: int | None = None,
 ) -> list[str]:
+    # Read at call time, not bound as a default: `size` is the page unless the
+    # caller wants more (Tick all).
+    size = PAGE_SIZE if size is None else size
     handle = col(DirectoryEntry.handle)
     ticked = sorted({normalize_handle(h) for h in first if h.strip()})
     statement = unscoped_select(
@@ -1066,8 +1071,8 @@ def _page_handles(
     leading = [(handle == any_(_handles(ticked))).desc()] if ticked else []
     statement = (
         statement.order_by(*leading, ordered.nulls_last(), handle)
-        .offset(page * PAGE_SIZE)
-        .limit(PAGE_SIZE)
+        .offset(page * size)
+        .limit(size)
     )
     return [str(h) for h in session.execute(statement).scalars().all()]
 
@@ -1402,6 +1407,39 @@ def count_view(
     added = _seeded(alone, view.tags)
     parts = (added,) if view.tree is None else (view.tree, added)
     return _count(session, view, TreeGroup(op="and", children=parts))
+
+
+#: The most entries Tick all turns into Ticks; above it a view is All matching
+#: (ADR-031). The same number as the ticked Seeds a Condition takes.
+MAX_TICK_ALL = 10_000
+
+
+def matching(view: DirectoryView, *, unfollowed: bool = False) -> Select[tuple[str]]:
+    """The handles `view` matches, as a statement a write reads from (ADR-031).
+
+    The list's own query with no order and no page, so an All matching write
+    reaches exactly the entries the list pages through. `unfollowed` leaves out
+    the Account's Follows, as Follow and Dismiss do.
+    """
+    handle = col(DirectoryEntry.handle)
+    statement = (
+        sa_select(handle)
+        .select_from(_entries(view.tree))
+        .where(_where(view, view.tree))
+    )
+    if unfollowed and view.followed:
+        statement = statement.where(handle != all_(_handles(view.followed)))
+    return unscoped_select(statement, reason=_SCOPE_REASON)
+
+
+def view_handles(
+    session: Session, view: DirectoryView, *, sort: DirectorySort, descending: bool
+) -> list[str] | None:
+    """Every handle `view` matches, in the list's sort; `None` above `MAX_TICK_ALL`."""
+    handles = _page_handles(
+        session, view, sort=sort, descending=descending, page=0, size=MAX_TICK_ALL + 1
+    )
+    return None if len(handles) > MAX_TICK_ALL else handles
 
 
 def directory_follows(

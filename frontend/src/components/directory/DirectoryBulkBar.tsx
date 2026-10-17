@@ -3,11 +3,14 @@ import { useState } from "react"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { ownTags, type Tagging } from "@/lib/directory/directory-tags"
+import { MAX_TICK_ALL, type Whole } from "@/lib/directory/directory-view"
 import { needsBulkFollowConfirm } from "@/lib/posts/discover-selection"
 import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
 import { TagPicker } from "./DirectoryTags"
 
 const SHOWN = 3
+
+const count = (n: number) => n.toLocaleString("en-US")
 
 /**
  * What a bulk action on the Directory's Ticks will touch (DIR-02): the count,
@@ -19,6 +22,10 @@ const SHOWN = 3
  * Dismiss act on the unfollowed Ticks only and say "of M" when that is fewer.
  * Tag and Untag act on every Tick, followed or not (DFP-04), as the Priority
  * boost does for a `DATA_ADMIN` reader (DPF).
+ *
+ * In All matching (`whole.state === "held"`) every action means the whole
+ * view, so the handles the callbacks get are only the page's; the caller
+ * sends the view instead. Follow is off and Dismiss asks first (ADR-031).
  */
 export function DirectoryBulkBar({
   ticks,
@@ -30,6 +37,8 @@ export function DirectoryBulkBar({
   tagging,
   boostable = false,
   onBoost,
+  whole,
+  onTickAll,
 }: {
   ticks: ReadonlySet<string>
   /** Lowercase handles the Account follows: every Follow, not only this page's. */
@@ -45,27 +54,57 @@ export function DirectoryBulkBar({
   boostable?: boolean
   /** Sets or adds to every Tick's Priority boost. */
   onBoost?: (handles: string[], mode: BoostMode, value: number) => void
+  whole?: Whole
+  /** Ticks every match, or holds the view as All matching. */
+  onTickAll?: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
+  const [dismissing, setDismissing] = useState(false)
   if (ticks.size === 0) return null
+  const held = whole?.state === "held"
   const ticked = [...ticks]
   const handles = ticked.filter((h) => !followed.has(h.toLowerCase()))
   const of = handles.length === ticked.length ? "" : ` of ${ticked.length}`
   const more = ticked.length - SHOWN
+  const total = whole ? count(whole.total) : ""
   return (
     <div
       data-testid="directory-bulk-bar"
       // One line on a phone, scrolled sideways (DFP-02).
       className="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs max-md:flex-nowrap max-md:overflow-x-auto max-md:*:shrink-0"
     >
-      <b>{ticks.size} ticked</b>
-      <span className="truncate text-app-ink/50" title={ticked.join(", ")}>
-        {ticked
-          .slice(0, SHOWN)
-          .map((h) => `@${h}`)
-          .join(", ")}
-        {more > 0 ? ` +${more}` : ""}
-      </span>
+      {held ? (
+        <span>
+          <b>All {total} matching.</b> Over {count(MAX_TICK_ALL)}, so they are
+          held as this view, not ticked: Follow and Seeds are off, and changing
+          the view clears it.
+        </span>
+      ) : (
+        <>
+          <b>{ticks.size} ticked</b>
+          <span className="truncate text-app-ink/50" title={ticked.join(", ")}>
+            {ticked
+              .slice(0, SHOWN)
+              .map((h) => `@${h}`)
+              .join(", ")}
+            {more > 0 ? ` +${more}` : ""}
+          </span>
+        </>
+      )}
+      {whole?.state === "ticked" && (
+        <span>All {total} matching are ticked.</span>
+      )}
+      {whole?.state === "offer" && onTickAll && (
+        <button
+          type="button"
+          onClick={onTickAll}
+          className="text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+        >
+          {whole.total > MAX_TICK_ALL
+            ? `Act on all ${total} matching`
+            : `Tick all ${total} that match`}
+        </button>
+      )}
       <div className="ml-auto flex items-center gap-1.5">
         {boostable && onBoost && (
           <DirectoryBoost
@@ -87,7 +126,7 @@ export function DirectoryBulkBar({
                   className="rounded-full"
                 >
                   <Tag size={12} />
-                  Tag {ticked.length}
+                  Tag {held ? "all" : ticked.length}
                 </TgButton>
               }
             />
@@ -113,7 +152,33 @@ export function DirectoryBulkBar({
             )}
           </>
         )}
-        {handles.length === 0 ? (
+        {held ? (
+          <>
+            <span title={`Follow acts on ${count(MAX_TICK_ALL)} or fewer`}>
+              <TgButton
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled
+                className="rounded-full"
+              >
+                <Plus size={12} />
+                Follow
+              </TgButton>
+            </span>
+            <TgButton
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => setDismissing(true)}
+              className="rounded-full"
+            >
+              <EyeOff size={12} />
+              Dismiss all
+            </TgButton>
+          </>
+        ) : handles.length === 0 ? (
           <span className="text-app-ink/50">All followed</span>
         ) : (
           <>
@@ -170,6 +235,19 @@ export function DirectoryBulkBar({
           onFollow(handles)
         }}
         onCancel={() => setConfirming(false)}
+      />
+      <TgConfirmDialog
+        open={dismissing}
+        onOpenChange={setDismissing}
+        title="Dismiss channels?"
+        description={`Dismiss up to ${total} channels? Followed ones are skipped. This hides them in Discover and the Directory. There is no Undo for more than ${count(MAX_TICK_ALL)}.`}
+        confirmLabel="Dismiss"
+        confirmTestId="directory-bulk-dismiss-confirm"
+        onConfirm={() => {
+          setDismissing(false)
+          onDismiss(handles)
+        }}
+        onCancel={() => setDismissing(false)}
       />
     </div>
   )

@@ -1583,7 +1583,8 @@ export type DirectoryBoostRequest = {
     /**
      * Handles
      */
-    handles: Array<string>;
+    handles?: Array<string>;
+    view?: DirectoryViewRequest | null;
     /**
      * Mode
      */
@@ -2026,6 +2027,41 @@ export type DirectoryFollowSource = {
      * Referencekinds
      */
     referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+};
+
+/**
+ * DirectoryHandlesRequest
+ *
+ * Every handle a view matches, in the list's sort, for Tick all (ADR-031).
+ */
+export type DirectoryHandlesRequest = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
+    /**
+     * Sort
+     */
+    sort?: 'subscribers' | 'reach' | 'posts_per_week' | 'forward_pct' | 'photos' | 'videos' | 'files' | 'links' | 'cited_by' | 'cites' | 'sample_count' | 'attempts' | 'latest_id' | 'telegram_chat_id' | 'priority' | 'priority_boost' | 'effective_priority' | 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at' | 'language' | 'status' | 'kind' | 'followable' | 'bio' | 'last_error' | 'mine' | 'mine_last_days' | 'relevance' | 'shared_parents' | 'shared_children';
+    /**
+     * Descending
+     */
+    descending?: boolean;
+};
+
+/**
+ * DirectoryHandlesResponse
+ *
+ * Every handle a view matches, for Tick all (ADR-031).
+ */
+export type DirectoryHandlesResponse = {
+    /**
+     * Handles
+     */
+    handles: Array<string>;
 };
 
 /**
@@ -2669,6 +2705,21 @@ export type DirectoryTimeCondition = {
 };
 
 /**
+ * DirectoryViewRequest
+ *
+ * A Directory view: the filter, the search, "your channels" and the Reference kinds.
+ */
+export type DirectoryViewRequest = {
+    yours?: YourChannels;
+    /**
+     * Referencekinds
+     */
+    referenceKinds?: Array<'forward' | 'mention' | 'link' | 'reply'>;
+    filter?: DirectoryFilterGroup | null;
+    search?: DirectorySearchRequest | null;
+};
+
+/**
  * DirectoryWhyRequest
  *
  * Whose Posts citing `handle` "Why it's here" lists.
@@ -2826,6 +2877,25 @@ export type DiscoverCandidatesResponse = {
 };
 
 /**
+ * DiscoverDismissRequest
+ *
+ * Handles to dismiss, or a Directory view for every unfollowed entry it
+ * matches (All matching, ADR-031). The undo stays handles-only: All matching
+ * offers no Undo.
+ */
+export type DiscoverDismissRequest = {
+    /**
+     * Handles
+     */
+    handles?: Array<string>;
+    view?: DirectoryViewRequest | null;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
  * DiscoverIgnoreRequest
  *
  * Handles to dismiss, or to un-dismiss.
@@ -2855,6 +2925,10 @@ export type DiscoverIgnoredAddedResponse = {
      * Ignored
      */
     ignored?: Array<string>;
+    /**
+     * Changed
+     */
+    changed: number;
 };
 
 /**
@@ -7351,17 +7425,19 @@ export type TagDeleteRequest = {
 /**
  * TagHandlesRequest
  *
- * One Tag and the handles, followed or not, to put it on or take it off.
+ * One Tag and the handles, followed or not, to put it on or take it off;
+ * or a view, for every entry it matches (ADR-031).
  */
 export type TagHandlesRequest = {
+    /**
+     * Handles
+     */
+    handles?: Array<string>;
+    view?: DirectoryViewRequest | null;
     /**
      * Name
      */
     name: string;
-    /**
-     * Handles
-     */
-    handles: Array<string>;
 };
 
 /**
@@ -9994,7 +10070,7 @@ export type DataListDiscoverIgnoredResponses = {
 export type DataListDiscoverIgnoredResponse = DataListDiscoverIgnoredResponses[keyof DataListDiscoverIgnoredResponses];
 
 export type DataAddDiscoverIgnoredData = {
-    body: DiscoverIgnoreRequest;
+    body: DiscoverDismissRequest;
     path?: never;
     query?: never;
     url: '/api/v1/data/discover/ignored';
@@ -10360,6 +10436,31 @@ export type DataCountDirectoryResponses = {
 };
 
 export type DataCountDirectoryResponse = DataCountDirectoryResponses[keyof DataCountDirectoryResponses];
+
+export type DataListDirectoryHandlesData = {
+    body: DirectoryHandlesRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/handles';
+};
+
+export type DataListDirectoryHandlesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataListDirectoryHandlesError = DataListDirectoryHandlesErrors[keyof DataListDirectoryHandlesErrors];
+
+export type DataListDirectoryHandlesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryHandlesResponse;
+};
+
+export type DataListDirectoryHandlesResponse = DataListDirectoryHandlesResponses[keyof DataListDirectoryHandlesResponses];
 
 export type DataGetDirectoryDistributionData = {
     body: DirectoryDistributionRequest;

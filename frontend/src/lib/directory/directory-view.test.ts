@@ -13,6 +13,7 @@ import {
   dismissalNotice,
   hasViewParams,
   headerSort,
+  isHeld,
   listSummary,
   paramsFromView,
   resolveYours,
@@ -20,8 +21,12 @@ import {
   searchPatch,
   searchRequest,
   selectedFirstRequest,
+  shownTicks,
   sortOptions,
   sortValue,
+  takenOn,
+  tickAllKey,
+  tickAllState,
   toggleField,
   viewFromParams,
 } from "./directory-view"
@@ -367,5 +372,63 @@ describe("the Dismissal's confirmation (DIR-06)", () => {
   test("names one Channel, counts several", () => {
     expect(dismissalNotice(["alpha"])).toBe("Dismissed @alpha")
     expect(dismissalNotice(["a", "b", "c"])).toBe("Dismissed 3 channels")
+  })
+})
+
+describe("tickAllState (ADR-031)", () => {
+  const rows = [{ handle: "a" }, { handle: "b" }]
+
+  test("offers the view only once the whole page is ticked and it has more", () => {
+    expect(tickAllState(null, rows, new Set(["a"]), 500)).toBeUndefined()
+    expect(tickAllState(null, rows, new Set(["a", "b"]), 2)).toBeUndefined()
+    expect(tickAllState(null, [], new Set(["a"]), 500)).toBeUndefined()
+    expect(tickAllState(null, rows, new Set(["a", "b"]), 500)).toEqual({
+      total: 500,
+      state: "offer",
+    })
+  })
+
+  test("names what Tick all became on this view", () => {
+    expect(tickAllState({ held: false }, rows, new Set(), 500)).toEqual({
+      total: 500,
+      state: "ticked",
+    })
+    expect(tickAllState({ held: true }, rows, new Set(), 50_000)).toEqual({
+      total: 50_000,
+      state: "held",
+    })
+  })
+})
+
+describe("All matching's state (ADR-031)", () => {
+  test("Tick all holds only for the view it was taken on", () => {
+    const taken = { key: "v1", held: true }
+    expect(takenOn(taken, "v1")).toBe(taken)
+    expect(takenOn(taken, "v2")).toBeNull()
+    expect(takenOn(null, "v1")).toBeNull()
+  })
+
+  test("only a held view is All matching", () => {
+    expect(isHeld({ total: 9, state: "held" })).toBe(true)
+    expect(isHeld({ total: 9, state: "ticked" })).toBe(false)
+    expect(isHeld(undefined)).toBe(false)
+  })
+
+  test("All matching shows the page ticked, on top of the Ticks", () => {
+    const rows = [{ handle: "a" }, { handle: "b" }]
+    const ticks = new Set(["z"])
+    expect(shownTicks(false, ticks, rows)).toBe(ticks)
+    expect([...shownTicks(true, ticks, rows)].sort()).toEqual(["a", "b", "z"])
+  })
+})
+
+describe("tickAllKey (ADR-031)", () => {
+  const view = viewFromParams({})
+
+  test("the page and the quotes are not the view; the filter and sort are", () => {
+    const key = tickAllKey(view)
+    expect(tickAllKey({ ...view, page: 3, matches: true })).toBe(key)
+    expect(tickAllKey({ ...view, filter: 'lang:"fa"' })).not.toBe(key)
+    expect(tickAllKey({ ...view, descending: !view.descending })).not.toBe(key)
   })
 })
