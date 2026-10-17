@@ -64,6 +64,30 @@ defined in `CONTEXT.md`.
 - The Playwright test asserts what the tab sends (handles after a snapshot, a
   `view` in All matching), since the Directory API is mocked there.
 
-## Open after implementation
+## Staging timings (2026-10-18)
 
-- Staging timing of a view-based Tag and Dismiss on the largest realistic view.
+I measured these as role `proto`, read-only against the live tables, with the
+writes going into temp copies of `tg_tags` and `tg_dismissals` inside a
+transaction that was rolled back. Parallel workers were off. The SQL is what
+`directory_reads.matching` compiles, with the largest Follow set on staging
+(553) and every Dismissal. The two views are every listed Channel (555,318
+after Hide dismissed) and Russian only (347,118).
+
+| Write                         | Every Channel | Russian |
+|-------------------------------|---------------|---------|
+| Resolve the view (scan)       | 0.8 s         | 0.4 s   |
+| Tag (`INSERT … SELECT`)       | 10.0 s        | 10.4 s  |
+| Untag (`DELETE … IN`)         | 28.8 s *      | 9.5 s * |
+| Dismiss (count in a CTE)      | 8.6 s         | 5.3 s   |
+| Boost's range check           | 2.0 s         | 3.3 s   |
+
+\* Untag was planned against an empty, unanalyzed table, so Postgres picked a
+nested loop with one index probe per row. After `ANALYZE` the same Untag is a
+hash join and takes 3.7 s. The real `tg_tags` stays analyzed, but an Untag
+that runs straight after a large Tag can still meet stale statistics, which
+puts it near the 29 s figure.
+
+Every write stays inside the 60 s statement timeout, about twice over on the
+worst one, so nothing moves to a worker job. Two things go unmeasured. The
+Boost `UPDATE` itself needs a write on `tg_channel_directory`, which the role
+cannot do. And nothing here loads the database while a sync runs.
