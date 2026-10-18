@@ -339,6 +339,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "the Priority boost is on DirectoryEntry, one value for every Account; "
         "the write is DATA_ADMIN-gated (test_directory_boost.py)",
     ),
+    ("POST", f"{DATA}/directory/add"): (
+        Reason.CORPUS,
+        "queues DirectoryEntry rows, one Directory for every Account; the write "
+        "is DATA_ADMIN-gated (test_directory_add.py)",
+    ),
     ("GET", f"{DATA}/directory/size"): (
         Reason.CORPUS,
         "one count over DirectoryEntry, the same for every caller",

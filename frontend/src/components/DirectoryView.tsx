@@ -388,6 +388,7 @@ export function DirectoryView() {
         onSelectedFirst={d.setSelectedFirst}
         onClearAll={d.clearAll}
         phone={phone}
+        onAdd={d.addHandles}
       />
       {list.error && (
         <p className="mb-2 text-xs text-red-500">

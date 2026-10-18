@@ -18,6 +18,8 @@ from app.api.deps import CurrentUser, SessionDep, require_permission
 from app.api.directory_views import sees_internals, targets, view_of
 from app.core.permissions import Permission
 from app.schemas.directory import (
+    DirectoryAddRequest,
+    DirectoryAddResponse,
     DirectoryBinResponse,
     DirectoryBoostRequest,
     DirectoryBoostResponse,
@@ -41,7 +43,12 @@ from app.schemas.directory import (
     DirectoryWhyResponse,
 )
 from app.services import directory_reads
-from app.services.channel_directory import BoostOutOfRange, boost_entries, probe_map
+from app.services.channel_directory import (
+    BoostOutOfRange,
+    add_named_handles,
+    boost_entries,
+    probe_map,
+)
 from app.services.channel_directory_samples import sample_to_camel, samples_for
 from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
 from app.services.settings_store import replace_global_setting
@@ -287,6 +294,27 @@ def boost_directory(
     except BoostOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return DirectoryBoostResponse(changed=changed)
+
+
+# ---- Adding pasted handles (DADD) ---------------------------------------------------
+#
+# `DATA_ADMIN`, because every fetch spends the deployment's proxies and no
+# Account's Budget. A write, so View-as refuses it as it refuses the boost.
+
+
+@router.post(
+    "/directory/add",
+    dependencies=[Depends(require_permission(Permission.DATA_ADMIN))],
+)
+def add_directory_handles(
+    body: DirectoryAddRequest,
+    session: SessionDep,
+    _current_user: CurrentUser,
+) -> DirectoryAddResponse:
+    """Queue pasted handles for a fetch, without following any of them."""
+    return DirectoryAddResponse.model_validate(
+        add_named_handles(session, body.handles)._asdict()
+    )
 
 
 # ---- The detail panel (DIR-03) -----------------------------------------------------

@@ -3051,6 +3051,43 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
+    "/api/v1/data/directory/add": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Add Directory Handles",
+        "description": "Queue pasted handles for a fetch, without following any of them.",
+        "operationId": "data-add_directory_handles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DirectoryAddRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryAddResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/directory/{handle}/entry": {
       "get": {
         "tags": ["data"],
@@ -7870,6 +7907,36 @@
         "type": "object",
         "title": "DbStatsResponse",
         "description": "Row counts across the corpus, scoped to the operator.\n\n`embeddedPostCount` is deliberately **not** operator-scoped: embeddings are a\ncorpus-level artefact shared across users (see the multi-user seam note in\nthe plan), so it counts the whole table while the rest count the operator's\nrows."
+      },
+      "DirectoryAddRequest": {
+        "properties": {
+          "handles": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 100000,
+            "minItems": 1,
+            "title": "Handles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["handles"],
+        "title": "DirectoryAddRequest",
+        "description": "Handles an Operator pasted, to queue for a fetch without a Follow (DADD)."
+      },
+      "DirectoryAddResponse": {
+        "properties": {
+          "added": { "type": "integer", "title": "Added" },
+          "alreadyInDirectory": {
+            "type": "integer",
+            "title": "Alreadyindirectory"
+          },
+          "invalid": { "type": "integer", "title": "Invalid" }
+        },
+        "type": "object",
+        "required": ["added", "alreadyInDirectory", "invalid"],
+        "title": "DirectoryAddResponse",
+        "description": "What became of a paste: queued, already in the Directory, or not a handle."
       },
       "DirectoryBinResponse": {
         "properties": {

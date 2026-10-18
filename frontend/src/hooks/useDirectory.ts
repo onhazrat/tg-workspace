@@ -16,6 +16,8 @@ import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
+  type DirectoryAddResponse,
+  dataAddDirectoryHandles,
   dataBoostDirectory,
   dataGetDirectorySize,
   dataListDirectory,
@@ -416,6 +418,23 @@ export function useDirectory() {
   }
 
   /**
+   * Queues pasted handles for a fetch without following them (DADD), a
+   * `DATA_ADMIN` write; null when it did not save, so the paste is kept.
+   */
+  const addHandles = async (
+    handles: string[],
+  ): Promise<DirectoryAddResponse | null> => {
+    try {
+      const counts = await dataAddDirectoryHandles({ body: { handles } })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.directory })
+      return counts
+    } catch (error) {
+      toast.error(errorText(error, "The handles were not added."))
+      return null
+    }
+  }
+
+  /**
    * Dismisses Channels, or takes the Dismissal back, through Discover's own
    * routes, so one Dismissal hides the Channel in both tabs (DIR-06). The
    * confirmation offers Undo for ten seconds.
@@ -463,6 +482,7 @@ export function useDirectory() {
     following,
     follow,
     boost,
+    addHandles,
     list,
     size: size.data?.size,
   }

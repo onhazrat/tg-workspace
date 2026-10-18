@@ -2,22 +2,24 @@ import { normalizeChannelHandle } from "./add-channel"
 
 export type PastedHandle = {
   handle: string
-  status: "new" | "following" | "invalid"
+  status: "new" | "known" | "invalid"
 }
 
-// ponytail: the shape of a public username, not a lookup; the follow still asks Telegram.
-const HANDLE = /^[A-Za-z0-9_]{4,32}$/
+// ponytail: the server's shape rule (`is_channel_handle`) without its reserved
+// paths, which come back in the server's own count; the fetch still asks Telegram.
+const HANDLE = /^[A-Za-z][A-Za-z0-9_]{4,31}$/
 
 /**
- * Every handle in a paste for the Follow box (CTB-05): `@handle`, `t.me/handle`
- * and `t.me/s/handle`, split on lines, spaces and commas, first spelling kept
- * when one repeats, each marked against the Channels already followed.
+ * Every handle in a paste for a handle box (CTB-05, DADD): `@handle`,
+ * `t.me/handle` and `t.me/s/handle`, split on lines, spaces and commas, first
+ * spelling kept when one repeats, each marked against the handles the caller
+ * already knows (the Channels followed, for the Follow box).
  */
 export function parsePastedHandles(
   text: string,
-  followed: Iterable<string>,
+  known: Iterable<string>,
 ): PastedHandle[] {
-  const following = new Set([...followed].map((name) => name.toLowerCase()))
+  const knownKeys = new Set([...known].map((name) => name.toLowerCase()))
   const seen = new Set<string>()
   const out: PastedHandle[] = []
   for (const raw of text.split(/[\s,]+/)) {
@@ -29,8 +31,8 @@ export function parsePastedHandles(
       handle,
       status: !HANDLE.test(handle)
         ? "invalid"
-        : following.has(key)
-          ? "following"
+        : knownKeys.has(key)
+          ? "known"
           : "new",
     })
   }

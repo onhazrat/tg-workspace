@@ -1555,6 +1555,38 @@ export type DbStatsResponse = {
 };
 
 /**
+ * DirectoryAddRequest
+ *
+ * Handles an Operator pasted, to queue for a fetch without a Follow (DADD).
+ */
+export type DirectoryAddRequest = {
+    /**
+     * Handles
+     */
+    handles: Array<string>;
+};
+
+/**
+ * DirectoryAddResponse
+ *
+ * What became of a paste: queued, already in the Directory, or not a handle.
+ */
+export type DirectoryAddResponse = {
+    /**
+     * Added
+     */
+    added: number;
+    /**
+     * Alreadyindirectory
+     */
+    alreadyInDirectory: number;
+    /**
+     * Invalid
+     */
+    invalid: number;
+};
+
+/**
  * DirectoryBinResponse
  *
  * One histogram bar: entries with a value from `lo` to `hi`.
@@ -10572,6 +10604,31 @@ export type DataBoostDirectoryResponses = {
 };
 
 export type DataBoostDirectoryResponse = DataBoostDirectoryResponses[keyof DataBoostDirectoryResponses];
+
+export type DataAddDirectoryHandlesData = {
+    body: DirectoryAddRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/directory/add';
+};
+
+export type DataAddDirectoryHandlesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataAddDirectoryHandlesError = DataAddDirectoryHandlesErrors[keyof DataAddDirectoryHandlesErrors];
+
+export type DataAddDirectoryHandlesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DirectoryAddResponse;
+};
+
+export type DataAddDirectoryHandlesResponse = DataAddDirectoryHandlesResponses[keyof DataAddDirectoryHandlesResponses];
 
 export type DataGetDirectoryEntryData = {
     body?: never;

@@ -669,6 +669,28 @@ class DirectoryBoostResponse(BaseModel):
     changed: int
 
 
+#: The most handles one paste may add (DADD).
+MAX_ADDED_HANDLES = 100_000
+
+
+class DirectoryAddRequest(BaseModel):
+    """Handles an Operator pasted, to queue for a fetch without a Follow (DADD)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    handles: list[Handle] = Field(min_length=1, max_length=MAX_ADDED_HANDLES)
+
+
+class DirectoryAddResponse(BaseModel):
+    """What became of a paste: queued, already in the Directory, or not a handle."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    added: int
+    already_in_directory: int = Field(alias="alreadyInDirectory")
+    invalid: int
+
+
 class DirectoryEntryResponse(_DirectoryEntryFields):
     """One entry for the detail panel, read by handle: the row's measures and
     the bio, which the list never carries (DIR-03)."""

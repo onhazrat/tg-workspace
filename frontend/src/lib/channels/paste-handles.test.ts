@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test"
 
 import { parsePastedHandles } from "./paste-handles"
 
-const statuses = (text: string, followed: string[] = []) =>
-  parsePastedHandles(text, followed).map((p) => `${p.handle}:${p.status}`)
+const statuses = (text: string, known: string[] = []) =>
+  parsePastedHandles(text, known).map((p) => `${p.handle}:${p.status}`)
 
 describe("parsePastedHandles", () => {
   it("reads @handle, t.me/handle and t.me/s/handle alike", () => {
@@ -26,23 +26,25 @@ describe("parsePastedHandles", () => {
     expect(statuses("@Durov t.me/durov durov")).toEqual(["Durov:new"])
   })
 
-  it("marks a handle already followed, case-insensitively", () => {
+  it("marks a handle already known, case-insensitively", () => {
     expect(statuses("DUROV telegram", ["Durov"])).toEqual([
-      "DUROV:following",
+      "DUROV:known",
       "telegram:new",
     ])
   })
 
-  it("marks anything outside 4 to 32 letters, digits or underscores", () => {
+  it("applies the server's rule: a leading letter, then 5 to 32 in all", () => {
     expect(
       statuses(
-        `abc abcd ${"a".repeat(32)} ${"a".repeat(33)} bad-name ok_name_1`,
+        `abcd abcde ${"a".repeat(32)} ${"a".repeat(33)} 1digit _under bad-name ok_name_1`,
       ),
     ).toEqual([
-      "abc:invalid",
-      "abcd:new",
+      "abcd:invalid",
+      "abcde:new",
       `${"a".repeat(32)}:new`,
       `${"a".repeat(33)}:invalid`,
+      "1digit:invalid",
+      "_under:invalid",
       "bad-name:invalid",
       "ok_name_1:new",
     ])

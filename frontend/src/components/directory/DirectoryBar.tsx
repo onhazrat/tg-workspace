@@ -68,6 +68,7 @@ import {
   languageValue,
   sortLanguages,
 } from "@/lib/language-name"
+import { DirectoryAddBox, type DirectoryAddBoxProps } from "./DirectoryAddBox"
 import { columnOf } from "./DirectoryTable"
 
 const matches = (query: string, ...texts: string[]) =>
@@ -494,6 +495,8 @@ export type DirectoryBarProps = {
    * one button beside the search box.
    */
   phone?: boolean
+  /** Add to Directory (DADD), shown to a reader who sees the internals. */
+  onAdd?: DirectoryAddBoxProps["onAdd"]
 }
 
 export function DirectoryBar(p: DirectoryBarProps) {
@@ -512,6 +515,9 @@ export function DirectoryBar(p: DirectoryBarProps) {
   )
   const controls = (
     <>
+      {p.onAdd && seesInternals(p.columns.catalogue) && (
+        <DirectoryAddBox onAdd={p.onAdd} />
+      )}
       <FacetMenu
         icon={<Languages size={12} />}
         label="Language"
