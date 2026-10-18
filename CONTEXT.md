@@ -40,8 +40,8 @@ Follow's business, not the Channel's.
 _Avoid_: feed, source, subscription
 
 **Directory**:
-The corpus-wide map of every Channel anyone has seen referenced, followed or
-not. It outlives Follows and Posts deliberately, because it records what exists
+The corpus-wide map of every Channel anyone has seen referenced or an
+Operator has named, followed or not. It outlives Follows and Posts deliberately, because it records what exists
 on Telegram rather than what anybody reads.
 _Avoid_: probe table, channel map, index, registry
 

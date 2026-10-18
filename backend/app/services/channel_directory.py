@@ -122,7 +122,7 @@ from app.services.follows import followed_channel_names
 from app.services.post_references import extract_sample_references
 from app.services.reach import Reach, reach_settings_from, sample_reach
 from app.services.settling_curve import current_curve
-from app.services.telegram_web import normalize_handle
+from app.services.telegram_web import is_channel_handle, normalize_handle
 from app.services.tenancy import unscoped_select
 
 #: Why the probe reads below do not go through `scoped_select` (ticket 16).
@@ -198,6 +198,15 @@ MAX_PRIORITY_BOOST = 1_000_000_000
 #: them by discovery order would hand the queue to whichever account's Channels
 #: the cursor happened to be walking.
 HARVEST_PRIORITY = 1_500_000
+
+#: Priority for a handle an Operator pasted into the Directory (DADD).
+#:
+#: Behind `HARVEST_PRIORITY` and ahead of `REFRESH_PRIORITY`. A pasted handle
+#: is one we have never had an answer for, which beats re-fetching one we hold;
+#: but the Directory's own discoveries go first, and an Operator who wants a
+#: paste sooner has the Priority boost. One value for the whole paste, like a
+#: harvest, so the drain order within it falls through to `handle`.
+NAMED_PRIORITY = 1_750_000
 
 #: Priority for an entry that already has an answer and is only going stale.
 #:
@@ -444,6 +453,34 @@ def queue_counts(session: Session) -> dict[str, int]:
     }
 
 
+#: `enqueue_handles` as two statements over two arrays (DADD), because an `IN`
+#: list or a multi-row VALUES spends a bind parameter per handle and Postgres
+#: stops at 65,535; a pasted list can be 100,000. Each array is one parameter.
+_PASTED = "unnest(CAST(:handles AS text[]), CAST(:ranks AS int[])) AS p(handle, rank)"
+
+#: A pending row keeps the better of its rank and the new one; a verdict is
+#: left alone.
+_RERANK_PENDING = sa_text(
+    f"""
+    UPDATE tg_channel_directory AS d SET priority = p.rank
+    FROM {_PASTED}
+    WHERE d.handle = p.handle
+      AND d.status <> ALL(CAST(:conclusive AS text[]))
+      AND p.rank < d.priority
+    """
+)
+
+_INSERT_NEW = sa_text(
+    f"""
+    INSERT INTO tg_channel_directory
+        (handle, status, kind, latest_id, attempts, priority, reach_estimated, created_at)
+    SELECT p.handle, 'unknown', 'unknown', 0, 0, p.rank, false, :now
+    FROM {_PASTED}
+    ON CONFLICT (handle) DO NOTHING
+    """
+)
+
+
 def enqueue_handles(
     session: Session, handles: list[str], *, priority: int | None = None
 ) -> int:
@@ -475,34 +512,39 @@ def enqueue_handles(
     if not ranked:
         return 0
 
-    existing = {
-        row.handle: row
-        for row in session.exec(
-            select(DirectoryEntry).where(col(DirectoryEntry.handle).in_(set(ranked)))
-        ).all()
+    params = {
+        "handles": list(ranked),
+        "ranks": list(ranked.values()),
+        "conclusive": sorted(CONCLUSIVE_STATUSES),
+        "now": utc_now(),
     }
-
-    queued = 0
-    for handle, rank in ranked.items():
-        row = existing.get(handle)
-        if row is None:
-            session.add(
-                DirectoryEntry(
-                    handle=handle,
-                    status="unknown",
-                    priority=rank,
-                    created_at=utc_now(),
-                )
-            )
-            queued += 1
-            continue
-        if row.status in CONCLUSIVE_STATUSES:
-            continue
-        if rank < row.priority:
-            row.priority = rank
-            session.add(row)
+    session.execute(_RERANK_PENDING, params)
+    queued = cast(Any, session.execute(_INSERT_NEW, params)).rowcount
     session.commit()
-    return queued
+    return int(queued)
+
+
+def add_named_handles(session: Session, handles: list[str]) -> tuple[int, int, int]:
+    """Queue the handles an Operator pasted (DADD): `(added, held, invalid)`.
+
+    The shape check is `is_channel_handle`, the server's authority; the paste
+    box's own check is only a hint. `held` is every valid handle the Directory
+    already had, verdict or not, since `enqueue_handles` skips the first and
+    only re-ranks the second.
+    """
+    valid: list[str] = []
+    invalid: set[str] = set()
+    for raw in handles:
+        handle = normalize_handle(raw)
+        if not handle:
+            continue
+        if is_channel_handle(handle):
+            valid.append(handle)
+        else:
+            invalid.add(handle)
+    unique = list(dict.fromkeys(valid))
+    added = enqueue_handles(session, unique, priority=NAMED_PRIORITY)
+    return added, len(unique) - added, len(invalid)
 
 
 def dequeue_handles(

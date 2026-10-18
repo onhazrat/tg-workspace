@@ -169,11 +169,12 @@ def test_the_split_did_not_change_the_route_count() -> None:
     **112** with DCOL's `GET` and `PUT /directory/columns`, the Directory
     columns a caller may show and the deployment's defaults; and **113** with
     DPF's `POST /directory/boost`, the Operator's Priority boost; and **114**
-    with DTA's `POST /directory/handles`, every handle a view matches.
+    with DTA's `POST /directory/handles`, every handle a view matches; and
+    **115** with DADD's `POST /directory/add`, the Operator's pasted handles.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 114, (
-        f"expected 114 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 115, (
+        f"expected 115 /data endpoints, found {len(data_routes)}"
     )
