@@ -3,6 +3,10 @@ import { useState } from "react"
 import type { DirectoryAddResponse } from "@/client"
 import { HandlePasteBox } from "@/components/HandlePasteBox"
 import { pillClass } from "@/components/PostFilterParts"
+import type { PastedHandle } from "@/lib/channels/paste-handles"
+
+/** The server's cap on one paste (`MAX_ADDED_HANDLES`). */
+export const MAX_ADDED_HANDLES = 100_000
 
 const n = (count: number) => count.toLocaleString("en-US")
 
@@ -32,8 +36,10 @@ export type DirectoryAddBoxProps = {
  */
 export function DirectoryAddBox({ onAdd }: DirectoryAddBoxProps) {
   const [result, setResult] = useState<DirectoryAddResponse | null>(null)
-  const add = async (handles: string[]) => {
-    const answer = await onAdd(handles)
+  // Every row, the ones the box marked invalid too, so the server's count of
+  // "not handles" is the whole paste's and not only its reserved paths.
+  const add = async (rows: PastedHandle[]) => {
+    const answer = await onAdd(rows.map((r) => r.handle))
     setResult(answer)
     return answer !== null
   }
@@ -52,6 +58,7 @@ export function DirectoryAddBox({ onAdd }: DirectoryAddBoxProps) {
       label="Handles to add to the Directory"
       verb="Add"
       testId="directory-add"
+      max={MAX_ADDED_HANDLES}
       onSubmit={add}
       status={
         result && (

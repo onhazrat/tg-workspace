@@ -1,6 +1,6 @@
 # Directory: add pasted handles for a fetch
 
-Status: ready-for-agent
+Status: done on branch `claude/directory-channel-handles-67585c`, not merged
 
 Ticket prefix: `DADD`.
 

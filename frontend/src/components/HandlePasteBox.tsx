@@ -6,6 +6,9 @@ import {
   parsePastedHandles,
 } from "@/lib/channels/paste-handles"
 
+/** Rows drawn under the paste; a 100,000-line paste would freeze the popover. */
+const SHOWN_ROWS = 200
+
 const STATUS_CLASS: Record<PastedHandle["status"], string> = {
   new: "text-green-600",
   known: "text-app-ink/50",
@@ -28,8 +31,12 @@ export type HandlePasteBoxProps = {
   extra?: ReactNode
   /** A line under the rows: progress, or what the last submit did. */
   status?: ReactNode
-  /** Sends the new handles; resolves true when the paste can be cleared. */
-  onSubmit: (handles: string[]) => Promise<boolean>
+  /** The most rows one paste may hold, matching a server's cap on what it is
+   * sent (every row the box parsed, invalid ones included). */
+  max?: number
+  /** Sends the parsed rows (the caller picks which); resolves true when the
+   * paste can be cleared. Called only when some row is new. */
+  onSubmit: (rows: PastedHandle[]) => Promise<boolean>
 }
 
 /**
@@ -46,17 +53,19 @@ export function HandlePasteBox({
   testId,
   extra,
   status,
+  max = Number.POSITIVE_INFINITY,
   onSubmit,
 }: HandlePasteBoxProps) {
   const [text, setText] = useState("")
   const [running, setRunning] = useState(false)
   const parsed = parsePastedHandles(text, known)
-  const fresh = parsed.filter((p) => p.status === "new").map((p) => p.handle)
+  const fresh = parsed.filter((p) => p.status === "new").length
+  const over = parsed.length > max
 
   const submit = async () => {
     setRunning(true)
     try {
-      if (await onSubmit(fresh)) setText("")
+      if (await onSubmit(parsed)) setText("")
     } finally {
       setRunning(false)
     }
@@ -79,7 +88,7 @@ export function HandlePasteBox({
       />
       {parsed.length > 0 && (
         <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto px-1">
-          {parsed.map((p) => (
+          {parsed.slice(0, SHOWN_ROWS).map((p) => (
             <li
               key={p.handle.toLowerCase()}
               data-testid={`${testId}-row`}
@@ -88,18 +97,31 @@ export function HandlePasteBox({
               @{p.handle} · {labels[p.status]}
             </li>
           ))}
+          {parsed.length > SHOWN_ROWS && (
+            <li className="text-[11px] text-app-ink/50">
+              and {(parsed.length - SHOWN_ROWS).toLocaleString("en-US")} more
+            </li>
+          )}
         </ul>
       )}
+      {over && (
+        <p
+          data-testid={`${testId}-over`}
+          className="mt-1 px-1 text-[11px] text-red-500"
+        >
+          At most {max.toLocaleString("en-US")} at once; split the paste
+        </p>
+      )}
       {status}
-      <div className="mt-2 flex items-center justify-end gap-2 px-1 text-[11px] font-semibold">
+      <div className="mt-2 flex items-center gap-2 px-1 text-[11px] font-semibold">
         {extra}
         <TgButton
           size="sm"
           data-testid={`${testId}-submit`}
-          disabled={fresh.length === 0 || running}
+          disabled={fresh === 0 || over || running}
           onClick={() => void submit()}
         >
-          {verb} {fresh.length.toLocaleString("en-US")}
+          {verb} {fresh.toLocaleString("en-US")}
         </TgButton>
       </div>
     </BarPopover>

@@ -312,8 +312,9 @@ def add_directory_handles(
     _current_user: CurrentUser,
 ) -> DirectoryAddResponse:
     """Queue pasted handles for a fetch, without following any of them."""
-    added, held, invalid = add_named_handles(session, body.handles)
-    return DirectoryAddResponse(added=added, alreadyInDirectory=held, invalid=invalid)
+    return DirectoryAddResponse.model_validate(
+        add_named_handles(session, body.handles)._asdict()
+    )
 
 
 # ---- The detail panel (DIR-03) -----------------------------------------------------

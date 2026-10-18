@@ -36,7 +36,7 @@ describe("DirectoryAddBox", () => {
     const { calls, box, paste, submit } = mount({
       added: 1,
       alreadyInDirectory: 1,
-      invalid: 1,
+      invalid: 2,
     })
     paste("@durov t.me/s/telegram 1digit joinchat")
     expect(
@@ -49,9 +49,10 @@ describe("DirectoryAddBox", () => {
     ])
     expect(submit().textContent).toBe("Add 3")
     await act(async () => fireEvent.click(submit()))
-    expect(calls).toEqual([["durov", "telegram", "joinchat"]])
+    // The invalid row goes too, so the server counts every non-handle.
+    expect(calls).toEqual([["durov", "telegram", "1digit", "joinchat"]])
     expect(screen.getByTestId("directory-add-result").textContent).toBe(
-      "Added 1 · 1 already in the Directory · 1 not a handle",
+      "Added 1 · 1 already in the Directory · 2 not handles",
     )
     expect(box().value).toBe("")
   })
@@ -61,6 +62,24 @@ describe("DirectoryAddBox", () => {
     expect(submit().hasAttribute("disabled")).toBe(true)
     paste("1digit abc")
     expect(submit().hasAttribute("disabled")).toBe(true)
+  })
+
+  test("refuses a paste over the server's cap before sending it", () => {
+    const { paste, submit } = mount(null)
+    const handles = Array.from(
+      { length: 100_001 },
+      (_, i) => `bulk_${String(i).padStart(6, "0")}`,
+    )
+    paste(handles.join("\n"))
+    expect(submit().hasAttribute("disabled")).toBe(true)
+    expect(screen.getByTestId("directory-add-over").textContent).toBe(
+      "At most 100,000 at once; split the paste",
+    )
+    // Only the first rows are drawn.
+    expect(screen.getAllByTestId("directory-add-row").length).toBe(200)
+    paste(handles.slice(1).join("\n"))
+    expect(submit().hasAttribute("disabled")).toBe(false)
+    expect(screen.queryByTestId("directory-add-over")).toBeNull()
   })
 
   test("keeps the paste when the add failed", async () => {

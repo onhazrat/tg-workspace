@@ -90,7 +90,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, cast
+from typing import Any, Literal, NamedTuple, cast
 
 from sqlalchemy import Select, and_, func, literal, or_
 from sqlalchemy import text as sa_text
@@ -524,13 +524,21 @@ def enqueue_handles(
     return int(queued)
 
 
-def add_named_handles(session: Session, handles: list[str]) -> tuple[int, int, int]:
-    """Queue the handles an Operator pasted (DADD): `(added, held, invalid)`.
+class NamedHandles(NamedTuple):
+    """What became of one paste (DADD), counted over its distinct handles."""
+
+    added: int
+    #: Every valid handle the Directory already had, verdict or not, since
+    #: `enqueue_handles` skips the first and only re-ranks the second.
+    already_in_directory: int
+    invalid: int
+
+
+def add_named_handles(session: Session, handles: list[str]) -> NamedHandles:
+    """Queue the handles an Operator pasted (DADD).
 
     The shape check is `is_channel_handle`, the server's authority; the paste
-    box's own check is only a hint. `held` is every valid handle the Directory
-    already had, verdict or not, since `enqueue_handles` skips the first and
-    only re-ranks the second.
+    box's own check is only a hint.
     """
     valid: list[str] = []
     invalid: set[str] = set()
@@ -544,7 +552,7 @@ def add_named_handles(session: Session, handles: list[str]) -> tuple[int, int, i
             invalid.add(handle)
     unique = list(dict.fromkeys(valid))
     added = enqueue_handles(session, unique, priority=NAMED_PRIORITY)
-    return added, len(unique) - added, len(invalid)
+    return NamedHandles(added, len(unique) - added, len(invalid))
 
 
 def dequeue_handles(

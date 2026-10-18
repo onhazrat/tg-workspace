@@ -3,6 +3,7 @@ import { useState } from "react"
 import type { FollowJobStatus } from "@/api"
 import { HandlePasteBox } from "@/components/HandlePasteBox"
 import { pillClass } from "@/components/PostFilterParts"
+import type { PastedHandle } from "@/lib/channels/paste-handles"
 import type { ChannelSettingGroup } from "@/types"
 
 export type FollowPasteBoxProps = {
@@ -33,7 +34,8 @@ export function FollowPasteBox({
     pickedGroupId ??
     (settingGroups.find((group) => group.isDefault) ?? settingGroups[0])?.id
 
-  const follow = async (handles: string[]) => {
+  const follow = async (rows: PastedHandle[]) => {
+    const handles = rows.filter((r) => r.status === "new").map((r) => r.handle)
     try {
       // A follow that never ran (offline, a refused request) keeps the paste.
       return (await onFollow(handles, groupId, setProgress)) !== null
