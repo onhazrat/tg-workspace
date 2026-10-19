@@ -35,7 +35,7 @@ this ticket.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] The workspace route is `/`; `/workspace` and `/summarizer` redirect with the query string kept; `/settings` and `/admin` redirect into the Settings tab.
 - [ ] The template shell is deleted: its layout route, sidebar, dashboard and the template's own `/settings` and `/admin` pages. Profile, Password, Usage, Delete account, Users and Quotas stay reachable from the Settings tab as they are today until SET-03, mounted there if they were only on the deleted pages.
@@ -47,3 +47,8 @@ this ticket.
 - [ ] The View-as ribbon still subtracts its height from the full-viewport root (its architecture guard updated, not removed).
 - [ ] Playwright specs that navigate to the old paths are updated; a spec covers the four redirects and the Tools tab.
 - [ ] Unit suite, both typechecks, lint, the backend suite and the CRAP ratchet pass; the new primitives have their small render tests.
+
+## Comments
+
+- 2026-10-19: implemented on `set-01-workspace-root` and merged into the integration branch `settings-one-page` in c79e4670.
+  Open: gated tools appear when their first read succeeds (one 403 per gated read for a plain Account), because `/users/me` carries no permission set; old `?section=<tool>` links fall back to Commonly Used instead of opening Tools.
