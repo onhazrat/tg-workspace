@@ -14,6 +14,12 @@ defaults) keeps working.
 Spec: `.scratch/settings-one-page/spec.md` (stories 68–70; the AI preferences
 decision). Plan decisions 13, 18.
 
+**Context pointers:**
+
+- Today the three values are browser-only entries in the frontend settings schema, read through `SettingsContext` by the Action run bar, Chat, Tag and Summary.
+- A per-Account settings key is classified in the backend settings registry and written through the per-Account settings store; the publishing preferences key is the closest precedent.
+- Prior-art tests: the settings-table-split guard; the scoped-storage invariants.
+
 **Blocked by:** SET-02
 
 **Status:** ready-for-agent

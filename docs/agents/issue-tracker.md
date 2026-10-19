@@ -32,6 +32,19 @@ context. The rule applies to new efforts, so the ambiguity stops growing.
 When citing another effort's ticket from new prose, spell the effort out — "multi-user-tenancy
 ticket 33" — rather than inventing a retroactive prefix for an effort that never had one.
 
+## Closing an implementation ticket
+
+An implementation ticket is closed by setting its `**Status:**` line to `done` and appending,
+under `## Comments`, a dated line naming the branch it was implemented on and the commit that
+merged it into the integration branch, plus anything left open and where it went:
+
+```
+- 2026-10-09: implemented on `<branch>` and merged into the integration branch in <sha>.
+  Open: <gap>, handed to <TICKET-NN>.
+```
+
+The integration branch's PR lists every ticket it closes. Nothing is deleted.
+
 ## When a skill says "publish to the issue tracker"
 
 Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).

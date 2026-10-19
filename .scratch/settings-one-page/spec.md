@@ -8,6 +8,23 @@ branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg
 Vocabulary (Account, Operator, Owner, Permission, Setting, Setting scope,
 Setting id, Configuration, Tools, Budget) is `CONTEXT.md`'s.
 
+## Tickets
+
+Five tickets in `issues/` beside this file. They form a task graph, not a
+list: after SET-02 the other three run in parallel.
+
+| Id | Ticket | Blocked by |
+|---|---|---|
+| SET-01 | Workspace at `/`, a Tools tab, one segmented control (`issues/01-workspace-at-root-tools-tab.md`) | None |
+| SET-02 | The Settings registry and the one-page Settings tab (`issues/02-settings-registry-and-page.md`) | SET-01 |
+| SET-03 | Panels in the page's style, at parity (`issues/03-panels-at-parity.md`) | SET-02 |
+| SET-04 | Configuration rows (`issues/04-configuration-rows.md`) | SET-02 |
+| SET-05 | AI preferences follow the Account (`issues/05-ai-preferences-on-account.md`) | SET-02 |
+
+Each ticket has a **Context pointers** block naming the prototype files to
+port, pinned to commit 2b81adbd, and the tests it should copy. A ticket closes
+as the issue tracker says (`docs/agents/issue-tracker.md`).
+
 ## Problem Statement
 
 An Account looking for a Setting today has to know where it is kept before it
@@ -273,6 +290,38 @@ addressed by a dotted Setting id (`retention.yours.discoverReportDays`).
 - Former ids or redirects for renamed Setting ids.
 - A "Commonly used" section.
 - Moving any other browser Setting to the Account besides AI model, language and temperature.
+
+## For implementers
+
+Practical rules for implementing tickets in parallel worktrees. Each one has
+cost a session before.
+
+- **Branch from the integration branch**, never from a stale local `main`:
+  fetch first. Each ticket gets its own worktree and branch.
+- **A worktree has no `.env`.** Symlink the repo root's `.env` into it before
+  anything reads settings; the missing file fails exactly like Postgres being
+  down. Run `bun install` in the worktree, and run Playwright from its
+  `frontend/`, or it runs with no config and reports bogus errors.
+- **One test database per worktree.** All worktrees share one Postgres.
+  Create `app_test_<ticket>`, migrate it with `POSTGRES_DB` set to it (Alembic
+  reads `POSTGRES_DB`, not `TEST_POSTGRES_DB`), then run pytest with
+  `TEST_POSTGRES_DB` set to it. Two pytest runs on one database truncate each
+  other's rows and fail with hundreds of misleading foreign-key errors.
+- **Never restart the shared database** (`docker compose up --build db`)
+  while another worktree is testing.
+- **Playwright runs serially** (one worker). A backend route change needs the
+  backend container rebuilt before e2e; a stale API fails in ways that look
+  like frontend bugs. Port 5173 may be another checkout's dev server.
+- **After a route or response-model change**, regenerate the client and grep
+  the Playwright specs for that route's `page.route` mocks; only CI's
+  Playwright catches a stale mock.
+- **Typecheck twice**: the build config and the tests config. A new branching
+  component with no render test fails CI's CRAP ratchet.
+- **Commits on a ticket branch need no signature**; the integration branch
+  lands on `main` by squash merge. The typos hook rejects plural SQL keywords;
+  check a commit actually landed.
+- **Staging is read-only.** The prototype's API and its scratch database role
+  are not part of this work.
 
 ## Further Notes
 

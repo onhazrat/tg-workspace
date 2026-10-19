@@ -25,6 +25,14 @@ branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg
 primitives are production-ready; its `settings-prototype` folder is not part of
 this ticket.
 
+**Context pointers:**
+
+- Prototype routing, port as is: [_tg.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/routes/_tg.tsx) (clock sync and approval redirect), the redirect routes [workspace.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/routes/_tg/workspace.tsx), [settings.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/routes/_tg/settings.tsx), [admin.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/routes/_tg/admin.tsx), [summarizer.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/routes/_tg/summarizer.tsx), and [__root.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/routes/__root.tsx). Every `/_tg/workspace` route id and `to: "/workspace"` became `/`.
+- Prototype Tools tab: [ToolsTab.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/ToolsTab.tsx), and the tab entry it needs in the workspace tab list.
+- Shared primitives, port as is with their test: [tg-inline-segments.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/ui/tg-inline-segments.tsx), [tg-inline-segments.test.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/ui/tg-inline-segments.test.tsx), [tg-table-card.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/ui/tg-table-card.tsx); their use in the Directory bar and table, the Action tab's Chat and Tag rows, the Posts filter and the Analysis window control on the same commit. Discover's filter bar and Summary's reading controls are not done there.
+- The guards this ticket trips: the View-as ribbon test in the architecture invariants (it read the deleted layout route) and the CSS and focus-reveal invariants.
+- Prior art for the e2e: the workspace-tabs and settings-sections specs.
+
 **Blocked by:** None (can start immediately)
 
 **Status:** ready-for-agent

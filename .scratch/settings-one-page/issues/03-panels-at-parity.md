@@ -25,6 +25,12 @@ decision 11. Reference implementation: the B panel bodies and their kit on
 branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). Those are not at parity: they lack the
 lookup, Check, test message, Tor actions and the restyled user dialogs.
 
+**Context pointers:**
+
+- Prototype panel bodies, port and complete to parity: [b-panels.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/b-panels.tsx) (Account, AI keys, bots, destinations, proxies, Setting groups, users, quota limits and usage) on [b-kit.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/b-kit.tsx).
+- What parity is measured against: today's bot management component (lookup, Check, test message), the Tor panel sections (Test, Rotate), the admin user actions menu and its edit / delete / View as / export dialogs.
+- Prior-art tests: the admin and user-settings Playwright specs, rewritten rather than kept.
+
 **Blocked by:** SET-02
 
 **Status:** ready-for-agent
