@@ -9,7 +9,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router"
 export const Route = createFileRoute("/_tg/summarizer")({
   beforeLoad: ({ location }) => {
     throw redirect({
-      href: `/workspace${location.searchStr}`,
+      href: `/${location.searchStr}`,
       replace: true,
     })
   },

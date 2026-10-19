@@ -2,7 +2,7 @@ import { getRouteApi } from "@tanstack/react-router"
 import { useCallback } from "react"
 import type { ArtifactStatusFilter } from "@/types"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 /** History's status filter, read from and written to `?historyStatus=`. */
 export function useHistoryStatusParam(): {

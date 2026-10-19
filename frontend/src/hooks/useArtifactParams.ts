@@ -1,6 +1,6 @@
 import { getRouteApi } from "@tanstack/react-router"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 /**
  * Which Summary, Chat session, Tag run or Discover report the active tab holds.

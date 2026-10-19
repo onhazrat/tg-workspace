@@ -53,7 +53,12 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE: reachable over the tailnet, and /proto to the local registry API.
+      allowedHosts: [".ts.net"],
       proxy: {
+        "/proto": {
+          target: `http://127.0.0.1:${process.env.PROTO_API_PORT || 8031}`,
+        },
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

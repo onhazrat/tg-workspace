@@ -1,21 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
-import App from "@/App"
-import { TgProviders } from "@/components/TgProviders"
-import { validateWorkspaceSearch } from "@/lib/workspace-search"
-
+/** The app moved from /workspace to /. Old links keep their query string. */
 export const Route = createFileRoute("/_tg/workspace")({
-  validateSearch: validateWorkspaceSearch,
-  component: WorkspacePage,
-  head: () => ({
-    meta: [{ title: "Workspace - TG Workspace" }],
-  }),
+  beforeLoad: ({ location }) => {
+    throw redirect({ href: `/${location.searchStr}`, replace: true })
+  },
 })
-
-function WorkspacePage() {
-  return (
-    <TgProviders>
-      <App />
-    </TgProviders>
-  )
-}

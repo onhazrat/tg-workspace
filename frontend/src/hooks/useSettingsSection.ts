@@ -5,7 +5,7 @@ import {
   type SettingsSection,
 } from "@/lib/settingsSection"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 export function useSettingsSection() {
   const { section } = workspaceRoute.useSearch()

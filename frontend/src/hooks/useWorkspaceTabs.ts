@@ -27,7 +27,7 @@ import {
 } from "@/lib/workspace-tabs"
 import type { TabType } from "@/types"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 /**
  * Per account (through `scopedStorage`) and per device, like every preference.

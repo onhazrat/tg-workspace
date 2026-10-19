@@ -9,23 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as TgRouteImport } from './routes/_tg'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as RecoverPasswordRouteImport } from './routes/recover-password'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
-import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
-import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
-import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
+import { Route as TgIndexRouteImport } from './routes/_tg/index'
+import { Route as TgAdminRouteImport } from './routes/_tg/admin'
+import { Route as TgSettingsRouteImport } from './routes/_tg/settings'
 import { Route as TgSummarizerRouteImport } from './routes/_tg/summarizer'
 import { Route as TgWorkspaceRouteImport } from './routes/_tg/workspace'
 
-const LayoutRoute = LayoutRouteImport.update({
-  id: '/_layout',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TgRoute = TgRouteImport.update({
   id: '/_tg',
   getParentRoute: () => rootRouteImport,
@@ -55,20 +50,20 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LayoutIndexRoute = LayoutIndexRouteImport.update({
+const TgIndexRoute = TgIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => TgRoute,
 } as any)
-const LayoutAdminRoute = LayoutAdminRouteImport.update({
+const TgAdminRoute = TgAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => TgRoute,
 } as any)
-const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
+const TgSettingsRoute = TgSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => TgRoute,
 } as any)
 const TgSummarizerRoute = TgSummarizerRouteImport.update({
   id: '/summarizer',
@@ -82,43 +77,42 @@ const TgWorkspaceRoute = TgWorkspaceRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof LayoutIndexRoute
+  '/': typeof TgIndexRoute
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
-  '/admin': typeof LayoutAdminRoute
-  '/settings': typeof LayoutSettingsRoute
+  '/admin': typeof TgAdminRoute
+  '/settings': typeof TgSettingsRoute
   '/summarizer': typeof TgSummarizerRoute
   '/workspace': typeof TgWorkspaceRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof LayoutIndexRoute
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
-  '/admin': typeof LayoutAdminRoute
-  '/settings': typeof LayoutSettingsRoute
+  '/admin': typeof TgAdminRoute
+  '/settings': typeof TgSettingsRoute
   '/summarizer': typeof TgSummarizerRoute
   '/workspace': typeof TgWorkspaceRoute
+  '/': typeof TgIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_layout': typeof LayoutRouteWithChildren
   '/_tg': typeof TgRouteWithChildren
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
-  '/_layout/admin': typeof LayoutAdminRoute
-  '/_layout/settings': typeof LayoutSettingsRoute
+  '/_tg/admin': typeof TgAdminRoute
+  '/_tg/settings': typeof TgSettingsRoute
   '/_tg/summarizer': typeof TgSummarizerRoute
   '/_tg/workspace': typeof TgWorkspaceRoute
-  '/_layout/': typeof LayoutIndexRoute
+  '/_tg/': typeof TgIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -135,7 +129,6 @@ export interface FileRouteTypes {
     | '/workspace'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/login'
     | '/pending-approval'
     | '/recover-password'
@@ -145,24 +138,23 @@ export interface FileRouteTypes {
     | '/settings'
     | '/summarizer'
     | '/workspace'
+    | '/'
   id:
     | '__root__'
-    | '/_layout'
     | '/_tg'
     | '/login'
     | '/pending-approval'
     | '/recover-password'
     | '/reset-password'
     | '/signup'
-    | '/_layout/admin'
-    | '/_layout/settings'
+    | '/_tg/admin'
+    | '/_tg/settings'
     | '/_tg/summarizer'
     | '/_tg/workspace'
-    | '/_layout/'
+    | '/_tg/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  LayoutRoute: typeof LayoutRouteWithChildren
   TgRoute: typeof TgRouteWithChildren
   LoginRoute: typeof LoginRoute
   PendingApprovalRoute: typeof PendingApprovalRoute
@@ -173,13 +165,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_layout': {
-      id: '/_layout'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof LayoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_tg': {
       id: '/_tg'
       path: ''
@@ -222,26 +207,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_layout/': {
-      id: '/_layout/'
+    '/_tg/': {
+      id: '/_tg/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof LayoutIndexRouteImport
-      parentRoute: typeof LayoutRoute
+      preLoaderRoute: typeof TgIndexRouteImport
+      parentRoute: typeof TgRoute
     }
-    '/_layout/admin': {
-      id: '/_layout/admin'
+    '/_tg/admin': {
+      id: '/_tg/admin'
       path: '/admin'
       fullPath: '/admin'
-      preLoaderRoute: typeof LayoutAdminRouteImport
-      parentRoute: typeof LayoutRoute
+      preLoaderRoute: typeof TgAdminRouteImport
+      parentRoute: typeof TgRoute
     }
-    '/_layout/settings': {
-      id: '/_layout/settings'
+    '/_tg/settings': {
+      id: '/_tg/settings'
       path: '/settings'
       fullPath: '/settings'
-      preLoaderRoute: typeof LayoutSettingsRouteImport
-      parentRoute: typeof LayoutRoute
+      preLoaderRoute: typeof TgSettingsRouteImport
+      parentRoute: typeof TgRoute
     }
     '/_tg/summarizer': {
       id: '/_tg/summarizer'
@@ -260,35 +245,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface LayoutRouteChildren {
-  LayoutAdminRoute: typeof LayoutAdminRoute
-  LayoutSettingsRoute: typeof LayoutSettingsRoute
-  LayoutIndexRoute: typeof LayoutIndexRoute
-}
-
-const LayoutRouteChildren: LayoutRouteChildren = {
-  LayoutAdminRoute: LayoutAdminRoute,
-  LayoutSettingsRoute: LayoutSettingsRoute,
-  LayoutIndexRoute: LayoutIndexRoute,
-}
-
-const LayoutRouteWithChildren =
-  LayoutRoute._addFileChildren(LayoutRouteChildren)
-
 interface TgRouteChildren {
+  TgAdminRoute: typeof TgAdminRoute
+  TgSettingsRoute: typeof TgSettingsRoute
   TgSummarizerRoute: typeof TgSummarizerRoute
   TgWorkspaceRoute: typeof TgWorkspaceRoute
+  TgIndexRoute: typeof TgIndexRoute
 }
 
 const TgRouteChildren: TgRouteChildren = {
+  TgAdminRoute: TgAdminRoute,
+  TgSettingsRoute: TgSettingsRoute,
   TgSummarizerRoute: TgSummarizerRoute,
   TgWorkspaceRoute: TgWorkspaceRoute,
+  TgIndexRoute: TgIndexRoute,
 }
 
 const TgRouteWithChildren = TgRoute._addFileChildren(TgRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  LayoutRoute: LayoutRouteWithChildren,
   TgRoute: TgRouteWithChildren,
   LoginRoute: LoginRoute,
   PendingApprovalRoute: PendingApprovalRoute,

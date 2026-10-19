@@ -13,7 +13,7 @@ import ViewAsRibbon from "@/components/ViewAsRibbon"
 
 function AppToaster() {
   const isWorkspaceRoute = useRouterState({
-    select: (state) => state.location.pathname.startsWith("/workspace"),
+    select: (state) => state.location.pathname === "/",
   })
 
   if (isWorkspaceRoute) {

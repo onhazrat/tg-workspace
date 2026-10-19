@@ -72,7 +72,7 @@ import { queryKeys } from "./queryKeys"
 import { useDirectorySearchBox } from "./useDirectorySearchBox"
 import { useDiscoverIgnoreMutation } from "./useDiscover"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 const VIEW_KEY = "directory.view"
 const TICKS_KEY = "directory.ticks"

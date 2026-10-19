@@ -31,7 +31,7 @@ function PendingApproval() {
   // refetched. Send them into the app rather than leaving them on a page whose
   // whole premise has expired.
   if (user?.is_approved) {
-    throw redirect({ to: "/workspace", search: { tab: "channels" } })
+    throw redirect({ to: "/", search: { tab: "channels" } })
   }
 
   return (
