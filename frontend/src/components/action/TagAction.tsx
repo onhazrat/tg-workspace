@@ -2,14 +2,10 @@ import { ClipboardPaste, Copy, Sparkles, Tag } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 
-import {
-  ACTION_SWITCH_OPTION_CLASS,
-  ActionIconButton,
-  ActionRow,
-} from "@/components/action/ActionRow"
+import { ActionIconButton, ActionRow } from "@/components/action/ActionRow"
 import { PasteTagsModal } from "@/components/PasteTagsModal"
 import { TgButton } from "@/components/ui/tg-button"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { useTagContext } from "@/contexts/TagContext"
 import { useSelectedAiKeyId } from "@/hooks/useAiKeys"
 
@@ -43,12 +39,10 @@ export const TagAction: React.FC = () => {
         title="Tag channels"
         description="Propose tags for the selected channels, then review before applying."
         controls={
-          <TgSegmentedControl<TagMode>
-            size="sm"
+          <TgInlineChoice<TagMode>
             aria-label="Tag mode"
             value={mode}
             onChange={setMode}
-            optionClassName={ACTION_SWITCH_OPTION_CLASS}
             options={[
               { value: "add", label: "Add tags" },
               { value: "remove", label: "Remove tags" },

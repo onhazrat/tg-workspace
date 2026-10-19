@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils"
  * so the same pieces make a single choice (the caller presses one) or a
  * multi-select (the caller presses several).
  *
- * Not `TgSegmentedControl`, which is the older uppercase look.
+ * `TgInlineChoice` below is the single-choice form. `TgSegmentedControl` is
+ * the older uppercase look, still used outside the Action tab.
  */
 function TgInlineSegments({
   className,
@@ -48,4 +49,45 @@ function TgInlineSegment({
   )
 }
 
-export { TgInlineSegment, TgInlineSegments }
+type TgInlineChoiceOption<T extends string> = {
+  value: T
+  label: React.ReactNode
+  disabled?: boolean
+}
+
+/** The segments as one choice among a few: a mode switch, an enum setting. */
+function TgInlineChoice<T extends string>({
+  options,
+  value,
+  onChange,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  options: TgInlineChoiceOption<T>[]
+  value: T
+  onChange: (value: T) => void
+  className?: string
+  "aria-label": string
+}) {
+  return (
+    <TgInlineSegments
+      aria-label={ariaLabel}
+      className={cn("inline-flex", className)}
+    >
+      {options.map((option) => (
+        <TgInlineSegment
+          key={option.value}
+          pressed={option.value === value}
+          disabled={option.disabled}
+          onClick={() => onChange(option.value)}
+          className="disabled:opacity-30"
+        >
+          {option.label}
+        </TgInlineSegment>
+      ))}
+    </TgInlineSegments>
+  )
+}
+
+export { TgInlineChoice, TgInlineSegment, TgInlineSegments }
+export type { TgInlineChoiceOption }

@@ -3,7 +3,7 @@
  * an existing workspace primitive or a copy of one that is private today:
  *
  * - on/off: `BarToggle` (Channels / Directory bar)
- * - a few choices: `TgInlineSegments` (the Directory search's Name / Bio / Posts)
+ * - a few choices: `TgInlineChoice` (the Directory search's Name / Bio / Posts look)
  * - many choices: `Pill` + `Options` (Posts filter bar)
  * - text and numbers: the `BarSearch` input class (Channels / Directory popovers)
  * - a list: `TgTableCard` (the Directory table)
@@ -20,10 +20,6 @@ import { BarHeading, BarPopover } from "@/components/BarPopover"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { Options, Pill, pillClass } from "@/components/PostFilterParts"
 import {
-  TgInlineSegment,
-  TgInlineSegments,
-} from "@/components/ui/tg-inline-segments"
-import {
   TgTableCard,
   tgTableHeadClass,
   tgTableRowClass,
@@ -34,33 +30,6 @@ export { BarHeading, BarPopover, BarToggle, Options, Pill, pillClass }
 /** The `BarSearch` input, without the autofocus. */
 export const fieldClass =
   "h-8 rounded-lg border border-app-ink/15 bg-app-muted px-2.5 text-xs outline-none focus:border-app-ink/40 disabled:opacity-50"
-
-/** `TgInlineSegments` as a single choice. */
-export function Segments<T extends string>({
-  options,
-  value,
-  onChange,
-  label,
-}: {
-  options: { value: T; label: string }[]
-  value: T
-  onChange: (value: T) => void
-  label: string
-}) {
-  return (
-    <TgInlineSegments aria-label={label} className="inline-flex">
-      {options.map((o) => (
-        <TgInlineSegment
-          key={o.value}
-          pressed={o.value === value}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </TgInlineSegment>
-      ))}
-    </TgInlineSegments>
-  )
-}
 
 /** A text or number field that commits on Enter or blur, Escape undoes. */
 export function DraftField({

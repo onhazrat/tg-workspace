@@ -76,7 +76,3 @@ export const ActionIconButton: React.FC<{
     </TooltipContent>
   </Tooltip>
 )
-
-/** Sentence-case segments for a row's mode switch. */
-export const ACTION_SWITCH_OPTION_CLASS =
-  "normal-case tracking-normal text-[11px]"

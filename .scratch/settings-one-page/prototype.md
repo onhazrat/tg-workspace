@@ -150,3 +150,19 @@ would change how those tabs look, so it was left alone.
 The full unit suite also caught three things from rounds 1 and 2, fixed: a
 `truncate` on a flex chip in A and B, B's row gear revealed on hover only, and
 the View-as ribbon guard still reading the deleted `routes/_layout.tsx`.
+
+## Round 4: one segmented control in the Action tab, a foldable contents tree
+
+- The Action tab's Chat and Tag mode switches moved from `TgSegmentedControl`
+  to `TgInlineChoice` (new, the single-choice form of `TgInlineSegments`,
+  with disabled options), and `ACTION_SWITCH_OPTION_CLASS` is gone. That is
+  production code, not prototype code. `TgSegmentedControl` remains in
+  ReadingControls, DiscoverFilterBar, PostFilter, AnalysisWindowControl and
+  the old Settings sections.
+- B's contents rail is a tree, as in VS Code: a chevron folds each topic, its
+  children are its panels and scope groups (with counts), a child jumps there
+  and unfolds a hidden `.env` / code group. The topic being read opens on its
+  own and closes once scrolled past, unless the user folded or unfolded it.
+  Expand all / Collapse all on top. The current topic is the last one whose
+  heading has passed the sticky bar (scroll listener, not an
+  IntersectionObserver, which picked the topic hidden under the bar).

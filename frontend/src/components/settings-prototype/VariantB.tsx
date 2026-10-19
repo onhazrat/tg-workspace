@@ -9,9 +9,19 @@
  * at its default (blue is the workspace's selection colour). Controls and
  * panels come from `b-kit`, which is only existing primitives.
  */
-import { AtSign, Lock, Search, Settings2, X } from "lucide-react"
+import {
+  AtSign,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Lock,
+  Search,
+  Settings2,
+  X,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 import { TgMetaChip } from "@/components/ui/tg-chips"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import {
   BarHeading,
   BarPopover,
@@ -20,40 +30,39 @@ import {
   Options,
   Pill,
   pillClass,
-  Segments,
 } from "./b-kit"
 import { B_PANEL_BODIES } from "./b-panels"
 import { Highlight, Provenance, RowMenu } from "./controls"
 import { formatValue, OPERATORS, type Row, SCOPES } from "./model"
 import { elementId, type SettingsPage, useSettingsPage } from "./sections"
 
-function useActiveTopic(ids: string[]) {
+/**
+ * The topic being read: the last one whose heading has scrolled up to the
+ * bottom of the sticky bar, as VS Code's contents follow its editor.
+ */
+function useActiveTopic(idList: string[]) {
   const [active, setActive] = useState<string | null>(null)
+  const key = idList.join(",")
   useEffect(() => {
-    const seen = new Map<string, number>()
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          seen.set(
-            e.target.id.replace("b-topic-", ""),
-            e.isIntersecting
-              ? e.boundingClientRect.top
-              : Number.POSITIVE_INFINITY,
-          )
-        }
-        const top = [...seen.entries()]
-          .filter(([, y]) => Number.isFinite(y))
-          .sort((a, b) => a[1] - b[1])[0]
-        if (top) setActive(top[0])
-      },
-      { rootMargin: "-180px 0px -55% 0px" },
-    )
-    for (const id of ids) {
-      const el = document.getElementById(`b-topic-${id}`)
-      if (el) observer.observe(el)
+    const ids = key ? key.split(",") : []
+    const update = () => {
+      const line =
+        (document.querySelector("[data-settings-bar]")?.getBoundingClientRect()
+          .bottom ?? 0) + 32 // the bar's margin plus a little
+      let current = ids[0] ?? null
+      for (const id of ids) {
+        const top = document
+          .getElementById(`b-topic-${id}`)
+          ?.getBoundingClientRect().top
+        if (top !== undefined && top <= line) current = id
+      }
+      setActive(current)
     }
-    return () => observer.disconnect()
-  }, [ids])
+    update()
+    // Capture: the tab scrolls an inner container, not the window.
+    window.addEventListener("scroll", update, { capture: true, passive: true })
+    return () => window.removeEventListener("scroll", update, { capture: true })
+  }, [key])
   return active
 }
 
@@ -62,7 +71,10 @@ function SearchBar({ page }: { page: SettingsPage }) {
   const { query, setQuery, filters, setFilters, totals } = page
   const scope = SCOPES.find((s) => s.id === filters.scope)
   return (
-    <section className="sticky top-0 z-20 mb-4 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
+    <section
+      data-settings-bar
+      className="sticky top-0 z-20 mb-4 rounded-xl border border-app-ink/10 bg-app-card shadow-md"
+    >
       <div className="px-4 pt-4">
         <div className="flex items-center gap-2 rounded-xl border border-app-ink/10 bg-app-muted pl-3 pr-1.5 transition-colors focus-within:border-app-ink/30">
           <Search size={16} className="text-app-ink/50" />
@@ -152,42 +164,125 @@ function SearchBar({ page }: { page: SettingsPage }) {
   )
 }
 
+const jumpTo = (id: string, block: ScrollLogicalPosition = "start") =>
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block })
+
+/**
+ * The contents as a tree, the way VS Code's settings editor has it: a chevron
+ * folds each topic, its children are its panels and scope groups, and the
+ * topic you scroll into opens on its own and closes once you scroll past,
+ * unless you folded or unfolded it yourself. Folding only changes the tree,
+ * never the page.
+ */
 function Toc({ page, active }: { page: SettingsPage; active: string | null }) {
+  // What the user chose per topic; a topic they never touched follows the
+  // scroll, open while it is the current one and closed again after.
+  const [chosen, setChosen] = useState<Map<string, boolean>>(new Map())
+  const isOpen = (id: string) => chosen.get(id) ?? id === active
+  const toggle = (id: string) =>
+    setChosen((prev) => new Map(prev).set(id, !isOpen(id)))
+  const allOpen = page.sections.every((s) => isOpen(s.id))
   return (
     <nav
       aria-label="Settings contents"
       className="sticky top-44 hidden max-h-[calc(100svh-16rem)] self-start overflow-y-auto md:block"
     >
+      <button
+        type="button"
+        onClick={() =>
+          setChosen(new Map(page.sections.map((s) => [s.id, !allOpen])))
+        }
+        className="mb-1 flex items-center gap-1 px-1 text-[11px] text-app-ink/50 hover:text-app-ink"
+      >
+        {allOpen ? <ChevronsDownUp size={12} /> : <ChevronsUpDown size={12} />}
+        {allOpen ? "Collapse all" : "Expand all"}
+      </button>
       <ul className="space-y-0.5 text-xs">
         {page.sections.map((s) => {
           const on = s.id === active
+          const expanded = isOpen(s.id)
+          const children = [
+            ...s.panels
+              .filter((panel) => B_PANEL_BODIES[panel.id])
+              .map((panel) => ({
+                key: panel.id,
+                label: panel.title,
+                count: null as number | null,
+                go: () => jumpTo(elementId(panel.id)),
+              })),
+            ...s.groups.map((g) => ({
+              key: g.scope,
+              label: SCOPES.find((x) => x.id === g.scope)?.label ?? g.scope,
+              count: g.rows.length,
+              go: () => {
+                if (g.folded) page.unfold(`${s.id}.${g.scope}`)
+                requestAnimationFrame(() =>
+                  jumpTo(`b-group-${s.id}-${g.scope}`),
+                )
+              },
+            })),
+          ]
           return (
             <li key={s.id}>
-              <a
-                href={`#b-topic-${s.id}`}
-                onClick={(e) => {
-                  e.preventDefault()
-                  document
-                    .getElementById(`b-topic-${s.id}`)
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }}
-                className={`flex items-center justify-between rounded-md px-2 py-1 ${
+              <div
+                className={`flex items-center rounded-md ${
                   on
                     ? "bg-app-ink/5 font-semibold text-app-ink"
                     : "text-app-ink/60 hover:text-app-ink"
                 }`}
               >
-                <span className="truncate">{s.title}</span>
-                <span className="flex items-center gap-1 text-[10px] tabular-nums text-app-ink/40">
-                  {s.modifiedCount > 0 && (
-                    <span
-                      title={`${s.modifiedCount} changed`}
-                      className="h-1.5 w-1.5 rounded-full bg-blue-500"
-                    />
-                  )}
-                  {s.rowCount + s.panels.length}
-                </span>
-              </a>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-label={`${expanded ? "Collapse" : "Expand"} ${s.title}`}
+                  onClick={() => toggle(s.id)}
+                  className="rounded p-1 text-app-ink/40 hover:text-app-ink"
+                >
+                  <ChevronRight
+                    size={12}
+                    className={`transition-transform ${expanded ? "rotate-90" : ""}`}
+                  />
+                </button>
+                <a
+                  href={`#b-topic-${s.id}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    jumpTo(`b-topic-${s.id}`)
+                  }}
+                  className="flex min-w-0 flex-1 items-center justify-between py-1 pr-2"
+                >
+                  <span className="truncate">{s.title}</span>
+                  <span className="flex items-center gap-1 text-[10px] font-normal tabular-nums text-app-ink/40">
+                    {s.modifiedCount > 0 && (
+                      <span
+                        title={`${s.modifiedCount} changed`}
+                        className="h-1.5 w-1.5 rounded-full bg-blue-500"
+                      />
+                    )}
+                    {s.rowCount + s.panels.length}
+                  </span>
+                </a>
+              </div>
+              {expanded && (
+                <ul className="mb-1 ml-3.5 border-l border-app-ink/10 pl-2">
+                  {children.map((c) => (
+                    <li key={c.key}>
+                      <button
+                        type="button"
+                        onClick={c.go}
+                        className="flex w-full items-center justify-between rounded-md px-1.5 py-0.5 text-left text-[11px] text-app-ink/55 hover:bg-app-ink/5 hover:text-app-ink"
+                      >
+                        <span className="truncate">{c.label}</span>
+                        {c.count !== null && (
+                          <span className="text-[10px] tabular-nums text-app-ink/35">
+                            {c.count}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           )
         })}
@@ -224,8 +319,8 @@ function Control({ row, page }: { row: Row; page: SettingsPage }) {
   if (row.type === "enum" && row.options) {
     if (row.options.length <= 4) {
       return (
-        <Segments
-          label={row.title}
+        <TgInlineChoice
+          aria-label={row.title}
           options={row.options}
           value={String(row.value)}
           onChange={save}
@@ -408,32 +503,39 @@ export function VariantB() {
                     </p>
                   </div>
                 ))}
-              {section.groups.map((group) =>
-                group.folded ? (
-                  <button
-                    key={group.scope}
-                    type="button"
-                    onClick={() => page.unfold(`${section.id}.${group.scope}`)}
-                    className={`${pillClass(false)} ml-8 mt-2`}
-                  >
-                    Show {group.rows.length}{" "}
-                    {group.scope === "env" ? ".env values" : "code constants"}
-                    <span className="font-mono text-app-ink/50">
-                      {section.id}.
-                      {SCOPES.find((s) => s.id === group.scope)?.segment}.*
-                    </span>
-                  </button>
-                ) : (
-                  group.rows.map((row) => (
-                    <Item
-                      key={row.id}
-                      row={row}
-                      page={page}
-                      topicTitle={section.title}
-                    />
-                  ))
-                ),
-              )}
+              {section.groups.map((group) => (
+                <div
+                  key={group.scope}
+                  id={`b-group-${section.id}-${group.scope}`}
+                  className="scroll-mt-44"
+                >
+                  {group.folded ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        page.unfold(`${section.id}.${group.scope}`)
+                      }
+                      className={`${pillClass(false)} ml-8 mt-2`}
+                    >
+                      Show {group.rows.length}{" "}
+                      {group.scope === "env" ? ".env values" : "code constants"}
+                      <span className="font-mono text-app-ink/50">
+                        {section.id}.
+                        {SCOPES.find((s) => s.id === group.scope)?.segment}.*
+                      </span>
+                    </button>
+                  ) : (
+                    group.rows.map((row) => (
+                      <Item
+                        key={row.id}
+                        row={row}
+                        page={page}
+                        topicTitle={section.title}
+                      />
+                    ))
+                  )}
+                </div>
+              ))}
             </section>
           ))}
           {!page.isLoading && page.sections.length === 0 && (

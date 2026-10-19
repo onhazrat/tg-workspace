@@ -1,6 +1,6 @@
 /**
  * PROTOTYPE, throw away. The one control per row type, drawn with the
- * workspace's existing primitives (TgToggle, TgSegmentedControl, the Posts
+ * workspace's existing primitives (TgToggle, TgInlineChoice, the Posts
  * filter's compact input), and the row menu. Both variants use these; they
  * differ in layout, not in controls.
  */
@@ -29,7 +29,6 @@ import {
 } from "lucide-react"
 import type React from "react"
 import { useEffect, useState } from "react"
-import { ACTION_SWITCH_OPTION_CLASS } from "@/components/action/ActionRow"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,7 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { TgToggle } from "@/components/ui/tg-toggle"
 import {
   Tooltip,
@@ -127,10 +126,8 @@ export function SettingControl({
   if (row.type === "enum" && row.options) {
     if (row.options.length <= 4) {
       return (
-        <TgSegmentedControl
+        <TgInlineChoice
           aria-label={row.title}
-          size="sm"
-          optionClassName={ACTION_SWITCH_OPTION_CLASS}
           options={row.options}
           value={String(row.value)}
           onChange={onChange}

@@ -48,6 +48,7 @@ import {
 import { useProxyTesting } from "@/components/settings/network/useProxyTesting"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { useSettings } from "@/contexts/SettingsContext"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useAiKeys, useRefreshAiKeys } from "@/hooks/useAiKeys"
@@ -85,7 +86,6 @@ import {
   ListTable,
   pillClass,
   rowClass,
-  Segments,
   Status,
 } from "./b-kit"
 
@@ -391,8 +391,8 @@ function AiKeys() {
         open={open}
         onOpenChange={setOpen}
       >
-        <Segments<"gemini" | "openai_compatible">
-          label="Provider"
+        <TgInlineChoice<"gemini" | "openai_compatible">
+          aria-label="Provider"
           value={provider}
           onChange={setProvider}
           options={[
@@ -1280,8 +1280,8 @@ function QuotaLimits() {
               </option>
             ))}
           </select>
-          <Segments
-            label="Budget"
+          <TgInlineChoice
+            aria-label="Budget"
             value={budget}
             onChange={setBudget}
             options={BUDGETS.map((b) => ({ value: b, label: budgetLabel(b) }))}
