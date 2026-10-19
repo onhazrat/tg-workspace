@@ -560,8 +560,8 @@ _Avoid_: pinned tab, permanent tab, core tab
 
 **Closable tab**:
 A workspace tab the Account can close and reopen, like a browser tab: History,
-Settings, Directory, and every Artifact tab. History, Settings and Directory are
-open at most once.
+Tools, Settings, Directory, and every Artifact tab. History, Tools, Settings and
+Directory are open at most once.
 _Avoid_: hidden tab, optional tab, compact tabs
 
 **Artifact tab**:
@@ -575,6 +575,36 @@ The workspace with its chrome collapsed — no title block, no stats strip, no
 width cap. Independent of native browser fullscreen, which is requested at the
 same time but cannot be restored on reload.
 _Avoid_: zen mode, fullscreen, distraction-free
+
+**Tools**:
+The workspace tab for doing rather than tuning: Logs, Quick message, and the
+Operator's diagnostics and data tools. Nothing on it is a Setting.
+_Avoid_: system, admin, utilities
+
+### Settings
+
+**Setting**:
+One value that tunes how the workspace behaves, with a default it returns to
+and exactly one Setting scope. Changing it takes effect without a restart.
+_Avoid_: option, preference (for the general case), config key
+
+**Setting scope**:
+Where a Setting's value lives and whom it affects: this browser, the Account,
+or the deployment. A deployment Setting applies to every Account and is changed
+by an Operator.
+_Avoid_: level, layer, tier
+
+**Setting id**:
+The dotted address of a Setting or of Configuration: topic, then scope, then
+name (`retention.yours.discoverReportDays`). It names the thing, not where its
+value is stored, and is what links and search use.
+_Avoid_: key, path, storage key
+
+**Configuration**:
+A value the deployment reads at startup from its environment, or has built into
+its code. Shown beside Settings, but changed only by editing and restarting or
+by a deploy. A secret is only ever shown as set or not set.
+_Avoid_: setting (for these), env setting, constant (for the general case)
 
 ### AI access
 
