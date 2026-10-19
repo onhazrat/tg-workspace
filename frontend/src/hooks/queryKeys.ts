@@ -122,6 +122,8 @@ export const queryKeys = {
    */
   jobsStatus: ["jobsStatus"] as const,
   configurationCatalog: ["configurationCatalog"] as const,
+  /** The Settings page (SET-02); a registry write replaces its row in place. */
+  settingsRegistry: ["settingsRegistry"] as const,
   logs: {
     publish: ["logs", "publish"] as const,
     sync: ["logs", "sync"] as const,

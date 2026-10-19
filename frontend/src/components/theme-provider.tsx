@@ -10,6 +10,9 @@ import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
 
 export type Theme = "dark" | "light" | "system"
 
+/** The theme an Account starts on, and the Settings page's reset target. */
+export const APP_DEFAULT_THEME: Theme = "dark"
+
 const THEME_CYCLE: Theme[] = ["light", "dark", "system"]
 
 export function getNextTheme(current: Theme): Theme {
