@@ -19,7 +19,7 @@ never does. Accounts without the Permission see none of it.
 Spec: `.scratch/settings-one-page/spec.md` (stories 8, 31, 47–51; the
 Configuration rows and secrets decisions). Plan decisions 3, 5, 6, 19, 21, 27.
 Reference implementation: the prototype API's `.env` and constants scanning on
-branch `prototype/settings-one-page`. It scanned the frontend live, which
+branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). It scanned the frontend live, which
 cannot work in the backend image; here a generated catalog replaces that.
 
 **Blocked by:** SET-02

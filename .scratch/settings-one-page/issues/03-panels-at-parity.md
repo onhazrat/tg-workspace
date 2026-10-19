@@ -22,7 +22,7 @@ is lost.
 
 Spec: `.scratch/settings-one-page/spec.md` (stories 54–64, 66–67). Plan
 decision 11. Reference implementation: the B panel bodies and their kit on
-branch `prototype/settings-one-page`. Those are not at parity: they lack the
+branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). Those are not at parity: they lack the
 lookup, Check, test message, Tor actions and the restyled user dialogs.
 
 **Blocked by:** SET-02

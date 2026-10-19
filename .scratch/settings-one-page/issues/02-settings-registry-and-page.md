@@ -21,7 +21,7 @@ the Registry, API and Page implementation decisions (the row shape there came
 from the prototype), and the Testing decisions. Architecture:
 `docs/migration/ADR-032-one-settings-registry.md`. Plan decisions 2, 4, 7, 10,
 12, 14–17, 20, 22–24, 26, 28, 29. Reference implementation: variant B on
-branch `prototype/settings-one-page`. Its page code ports over, but its
+branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). Its page code ports over, but its
 prototype API does not: that one read staging and derived ids by heuristics.
 
 **Blocked by:** SET-01

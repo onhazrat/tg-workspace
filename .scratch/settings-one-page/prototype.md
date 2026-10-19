@@ -1,5 +1,9 @@
 # One-page Settings prototype
 
+Code: [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). The page is `frontend/src/components/settings-prototype/`
+(variant B is `VariantB.tsx`, `b-kit.tsx`, `b-panels.tsx`), the prototype API is
+`backend/scripts/proto_settings_registry_api.py`.
+
 Status: needs-triage
 
 Started 2026-10-19 from scratch (not from `prototype/settings-redesign`'s

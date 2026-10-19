@@ -2,7 +2,7 @@
 
 Status: decisions settled (grilling, 2026-10-19); spec in `.scratch/settings-one-page/spec.md`; tickets SET-01 … SET-05 in `.scratch/settings-one-page/issues/`.
 
-Turns prototype variant B (`prototype/settings-one-page`,
+Turns prototype variant B ([`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af),
 `.scratch/settings-one-page/prototype.md`) into the real Settings tab.
 Architecture decision: `docs/migration/ADR-032-one-settings-registry.md`.
 Vocabulary: Setting, Setting scope, Setting id, Configuration, Tools in
