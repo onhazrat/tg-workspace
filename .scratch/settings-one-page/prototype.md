@@ -122,9 +122,31 @@ the row), Users (table; the row menu is still the old `UserActionsMenu`),
 Quota limits (defaults table with inherited values as placeholders, overrides
 table) and Quota usage (table, lift today).
 
-Fold-in work this exposes: export Directory's segments and table shell as
-shared components instead of copying them; restyle `UserActionsMenu`'s
+Fold-in work this exposes: restyle `UserActionsMenu`'s
 dialogs; the Tor panel is gone from B because its fields are rows, so its
 Test / Rotate actions need a home.
 
 Not in B yet: bot and chat auto-lookup and the Check buttons, test message.
+
+## Round 3: the Directory's private pieces are shared (2026-10-19)
+
+The two looks B had copied from the Directory now live in `components/ui/`,
+and the Directory itself uses them (same class strings, 168 Directory tests
+green):
+
+- `tg-inline-segments.tsx`: `TgInlineSegments` + `TgInlineSegment`, a
+  pressed / unpressed button on a tinted track. Single choice or multi-select
+  is the caller's; the Directory's Name / Bio / Posts is multi-select, B's
+  `Segments` single.
+- `tg-table-card.tsx`: `TgTableCard` (with an `after` slot for a pager),
+  `tgTableHeadClass`, `tgTableRowClass`.
+
+Both are fold-in ready (they are not prototype code). Still two segmented
+controls in the app: `TgSegmentedControl` is the older uppercase look used by
+the old Settings and Action's mode switches. Retiring it onto the inline one,
+and moving the Discover, Tag and Network telemetry tables onto `TgTableCard`,
+would change how those tabs look, so it was left alone.
+
+The full unit suite also caught three things from rounds 1 and 2, fixed: a
+`truncate` on a flex chip in A and B, B's row gear revealed on hover only, and
+the View-as ribbon guard still reading the deleted `routes/_layout.tsx`.

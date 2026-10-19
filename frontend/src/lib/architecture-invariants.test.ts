@@ -396,13 +396,14 @@ describe("Ticket 26 — the View-as ribbon reaches every screen", () => {
 
   /**
    * The ribbon takes a row of its own at the top of the document, and two roots
-   * underneath declare a full-viewport height. Without subtracting the offset,
+   * underneath declare a full-viewport height (one since the template shell
+   * left, with the app moving to /). Without subtracting the offset,
    * the workspace's bottom 40px goes off the screen for the whole session —
    * a layout regression visible only while somebody is viewing as another
    * account, which is the hardest kind to notice.
    */
   it("has its height subtracted by every full-viewport root", () => {
-    const consumers = [join(SRC, "App.tsx"), join(SRC, "routes", "_layout.tsx")]
+    const consumers = [join(SRC, "App.tsx")]
     for (const file of consumers) {
       expect(
         readFileSync(file, "utf8"),

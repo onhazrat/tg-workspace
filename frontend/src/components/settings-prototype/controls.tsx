@@ -104,7 +104,7 @@ export function SettingControl({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex max-w-full items-center gap-1.5 truncate rounded-lg bg-app-ink/5 px-2 py-1 font-mono text-xs text-app-ink/70">
+          <span className="inline-flex max-w-full items-center gap-1.5 overflow-hidden rounded-lg bg-app-ink/5 px-2 py-1 font-mono text-xs text-app-ink/70">
             <Lock size={11} className="shrink-0 opacity-60" />
             <span className="truncate">{formatValue(row.value)}</span>
           </span>

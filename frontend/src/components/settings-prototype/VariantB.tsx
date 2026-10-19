@@ -203,7 +203,7 @@ function Control({ row, page }: { row: Row; page: SettingsPage }) {
     return (
       <span
         title={row.lockReason ?? undefined}
-        className="inline-flex max-w-full items-center gap-1.5 truncate rounded-lg bg-app-ink/5 px-2.5 py-1.5 font-mono text-[11px] text-app-ink/70"
+        className="inline-flex max-w-full items-center gap-1.5 overflow-hidden rounded-lg bg-app-ink/5 px-2.5 py-1.5 font-mono text-[11px] text-app-ink/70"
       >
         <Lock size={11} className="shrink-0 opacity-60" />
         <span className="truncate">{formatValue(row.value)}</span>
@@ -295,7 +295,7 @@ function Item({
         row.modified ? "border-blue-500" : "border-transparent"
       } ${flashing ? "bg-blue-500/10" : ""}`}
     >
-      <div className="absolute left-1.5 top-3 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="absolute left-1.5 top-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         <RowMenu
           row={row}
           onReset={() => void page.reset(row)}

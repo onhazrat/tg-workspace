@@ -3,15 +3,15 @@
  * an existing workspace primitive or a copy of one that is private today:
  *
  * - on/off: `BarToggle` (Channels / Directory bar)
- * - a few choices: the inline segments of the Directory search (private there)
+ * - a few choices: `TgInlineSegments` (the Directory search's Name / Bio / Posts)
  * - many choices: `Pill` + `Options` (Posts filter bar)
  * - text and numbers: the `BarSearch` input class (Channels / Directory popovers)
- * - a list: the Directory table shell
+ * - a list: `TgTableCard` (the Directory table)
  * - add / edit: a `pillClass` trigger opening a `BarPopover` form
  * - submit: `TgButton size="sm"`; destructive: `TgConfirmDialog`
  *
- * Nothing here is new styling. Folding B in means exporting Segments and the
- * table shell from where they live, not adding them.
+ * Nothing here is new styling; the two the Directory kept private now live in
+ * `components/ui/` and the Directory uses them too.
  */
 import { Plus } from "lucide-react"
 import type React from "react"
@@ -19,6 +19,15 @@ import { useEffect, useState } from "react"
 import { BarHeading, BarPopover } from "@/components/BarPopover"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { Options, Pill, pillClass } from "@/components/PostFilterParts"
+import {
+  TgInlineSegment,
+  TgInlineSegments,
+} from "@/components/ui/tg-inline-segments"
+import {
+  TgTableCard,
+  tgTableHeadClass,
+  tgTableRowClass,
+} from "@/components/ui/tg-table-card"
 
 export { BarHeading, BarPopover, BarToggle, Options, Pill, pillClass }
 
@@ -26,7 +35,7 @@ export { BarHeading, BarPopover, BarToggle, Options, Pill, pillClass }
 export const fieldClass =
   "h-8 rounded-lg border border-app-ink/15 bg-app-muted px-2.5 text-xs outline-none focus:border-app-ink/40 disabled:opacity-50"
 
-/** Directory's Name / Bio / Posts switch, for any short list of choices. */
+/** `TgInlineSegments` as a single choice. */
 export function Segments<T extends string>({
   options,
   value,
@@ -39,22 +48,17 @@ export function Segments<T extends string>({
   label: string
 }) {
   return (
-    <fieldset
-      aria-label={label}
-      className="m-0 inline-flex items-center gap-0.5 rounded-lg bg-app-ink/5 p-0.5 text-[11px]"
-    >
+    <TgInlineSegments aria-label={label} className="inline-flex">
       {options.map((o) => (
-        <button
+        <TgInlineSegment
           key={o.value}
-          type="button"
-          aria-pressed={o.value === value}
+          pressed={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`rounded-md px-2 py-1 ${o.value === value ? "bg-app-card font-semibold shadow-sm" : "text-app-ink/50 hover:text-app-ink"}`}
         >
           {o.label}
-        </button>
+        </TgInlineSegment>
       ))}
-    </fieldset>
+    </TgInlineSegments>
   )
 }
 
@@ -104,7 +108,7 @@ export function DraftField({
   )
 }
 
-/** The Directory's table: a rounded card, quiet headers, hover rows. */
+/** `TgTableCard` with a header row and an empty state. */
 export function ListTable({
   columns,
   children,
@@ -117,40 +121,38 @@ export function ListTable({
   isEmpty: boolean
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-app-ink/10 bg-app-card">
-      <table className="w-full text-xs">
-        <thead className="text-left text-[11px] text-app-ink/60">
-          <tr>
-            {columns.map((c) => (
-              <th
-                key={c.label}
-                className={`px-3 py-2 font-normal ${c.className ?? ""}`}
-              >
-                {c.label}
-              </th>
-            ))}
+    <TgTableCard>
+      <thead className={tgTableHeadClass}>
+        <tr>
+          {columns.map((c) => (
+            <th
+              key={c.label}
+              className={`px-3 py-2 font-normal ${c.className ?? ""}`}
+            >
+              {c.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {isEmpty ? (
+          <tr className={tgTableRowClass}>
+            <td
+              colSpan={columns.length}
+              className="px-3 py-6 text-center text-app-ink/50"
+            >
+              {empty}
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {isEmpty ? (
-            <tr className="border-t border-app-ink/5">
-              <td
-                colSpan={columns.length}
-                className="px-3 py-6 text-center text-app-ink/50"
-              >
-                {empty}
-              </td>
-            </tr>
-          ) : (
-            children
-          )}
-        </tbody>
-      </table>
-    </div>
+        ) : (
+          children
+        )}
+      </tbody>
+    </TgTableCard>
   )
 }
 
-export const rowClass = "border-t border-app-ink/5 hover:bg-app-ink/5"
+export const rowClass = `${tgTableRowClass} hover:bg-app-ink/5`
 export const cellClass = "px-3 py-2"
 
 /** The `+ Follow` / `+ Add to Directory` pill and the form it opens. */
