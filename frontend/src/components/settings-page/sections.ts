@@ -88,14 +88,17 @@ export function buildSections(
   return out
 }
 
-function scrollToId(id: string, block: ScrollLogicalPosition) {
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() =>
-      document
-        .getElementById(id)
-        ?.scrollIntoView({ behavior: "smooth", block }),
-    ),
-  )
+/**
+ * Scrolls to `id` now and again while the panels above it load, so a link
+ * still lands once their content has pushed the row down. Returns a cancel.
+ */
+function scrollToId(id: string, block: ScrollLogicalPosition): () => void {
+  const go = () =>
+    document.getElementById(id)?.scrollIntoView({ behavior: "auto", block })
+  const timers = [0, 300, 900].map((ms) => setTimeout(go, ms))
+  return () => {
+    for (const timer of timers) clearTimeout(timer)
+  }
 }
 
 export function useSettingsPage() {
@@ -136,12 +139,15 @@ export function useSettingsPage() {
     }
     const isTopic = registry.topics.some((t) => t.id === target)
     setFlash(target)
-    scrollToId(
+    const cancelScroll = scrollToId(
       isTopic ? `settings-topic-${target}` : elementId(target),
       isTopic ? "start" : "center",
     )
     const timer = setTimeout(() => setFlash(null), FLASH_MS)
-    return () => clearTimeout(timer)
+    return () => {
+      cancelScroll()
+      clearTimeout(timer)
+    }
     // Only a new link or the first load re-runs this, never a write.
   }, [target, loaded])
 

@@ -5,6 +5,9 @@ import { createUser } from "./utils/privateApi.ts"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser, logOutUser } from "./utils/user"
 
+/** The Account panel; the Settings page draws every topic at once (SET-02). */
+const profile = (page: Page) => page.locator("#setting-account-yours-profile")
+
 // The stored session is `firstSuperuser`, and a superuser gets no Danger zone
 // (it cannot delete its own account). Asserting the *whole* tab set rather than
 // a subset is the point: this test read `["My profile", "Password", "Danger
@@ -59,10 +62,10 @@ test("Usage shows this account's three Budgets as GET /quota/me reports them", a
   }
 
   expect(budgets.map((b) => b.budget).sort()).toEqual(Object.keys(labels))
-  await expect(page.getByText("Request usage")).toBeVisible()
+  await expect(profile(page).getByText("Request usage")).toBeVisible()
   for (const b of budgets) {
     await expect(
-      page
+      profile(page)
         .getByRole("row", { name: new RegExp(labels[b.budget]) })
         .getByRole("cell"),
     ).toHaveText([
@@ -109,9 +112,9 @@ test.describe("Edit user profile", () => {
   test("Edit user name with a valid name", async ({ page }) => {
     const updatedName = "Test User 2"
 
-    await page.getByRole("button", { name: "Edit" }).click()
+    await profile(page).getByRole("button", { name: "Edit" }).click()
     await page.getByLabel("Full name").fill(updatedName)
-    await page.getByRole("button", { name: "Save" }).click()
+    await profile(page).getByRole("button", { name: "Save" }).click()
 
     await expect(page.getByText("User updated successfully")).toBeVisible()
     await expect(
@@ -122,7 +125,7 @@ test.describe("Edit user profile", () => {
   test("Edit user email with an invalid email shows error", async ({
     page,
   }) => {
-    await page.getByRole("button", { name: "Edit" }).click()
+    await profile(page).getByRole("button", { name: "Edit" }).click()
     await page.getByLabel("Email").fill("")
     await page.locator("body").click()
 
@@ -143,9 +146,9 @@ test.describe("Edit user email", () => {
     await page.goto("/settings")
     await page.getByRole("tab", { name: "My profile" }).click()
 
-    await page.getByRole("button", { name: "Edit" }).click()
+    await profile(page).getByRole("button", { name: "Edit" }).click()
     await page.getByLabel("Email").fill(updatedEmail)
-    await page.getByRole("button", { name: "Save" }).click()
+    await profile(page).getByRole("button", { name: "Save" }).click()
 
     await expect(page.getByText("User updated successfully")).toBeVisible()
     await expect(
@@ -165,9 +168,9 @@ test.describe("Cancel edit actions", () => {
     await logInUser(page, email, password)
     await page.goto("/settings")
     await page.getByRole("tab", { name: "My profile" }).click()
-    await page.getByRole("button", { name: "Edit" }).click()
+    await profile(page).getByRole("button", { name: "Edit" }).click()
     await page.getByLabel("Full name").fill("Test User")
-    await page.getByRole("button", { name: "Cancel" }).first().click()
+    await profile(page).getByRole("button", { name: "Cancel" }).first().click()
 
     await expect(
       page.locator("form").getByText(user.full_name as string, { exact: true }),
@@ -182,9 +185,9 @@ test.describe("Cancel edit actions", () => {
     await logInUser(page, email, password)
     await page.goto("/settings")
     await page.getByRole("tab", { name: "My profile" }).click()
-    await page.getByRole("button", { name: "Edit" }).click()
+    await profile(page).getByRole("button", { name: "Edit" }).click()
     await page.getByLabel("Email").fill(randomEmail())
-    await page.getByRole("button", { name: "Cancel" }).first().click()
+    await profile(page).getByRole("button", { name: "Cancel" }).first().click()
 
     await expect(
       page.locator("form").getByText(email, { exact: true }),
@@ -208,7 +211,7 @@ test.describe("Change password", () => {
     await page.getByTestId("current-password-input").fill(password)
     await page.getByTestId("new-password-input").fill(newPassword)
     await page.getByTestId("confirm-password-input").fill(newPassword)
-    await page.getByRole("button", { name: "Update Password" }).click()
+    await profile(page).getByRole("button", { name: "Update Password" }).click()
 
     await expect(page.getByText("Password updated successfully")).toBeVisible()
 
@@ -240,7 +243,7 @@ test.describe("Change password validation", () => {
     await page.getByTestId("current-password-input").fill(password)
     await page.getByTestId("new-password-input").fill(weakPassword)
     await page.getByTestId("confirm-password-input").fill(weakPassword)
-    await page.getByRole("button", { name: "Update Password" }).click()
+    await profile(page).getByRole("button", { name: "Update Password" }).click()
 
     await expect(
       page.getByText("Password must be at least 8 characters"),
@@ -253,7 +256,7 @@ test.describe("Change password validation", () => {
     await page.getByTestId("current-password-input").fill(password)
     await page.getByTestId("new-password-input").fill(randomPassword())
     await page.getByTestId("confirm-password-input").fill(randomPassword())
-    await page.getByRole("button", { name: "Update Password" }).click()
+    await profile(page).getByRole("button", { name: "Update Password" }).click()
 
     await expect(page.getByText("The passwords don't match")).toBeVisible()
   })
@@ -262,7 +265,7 @@ test.describe("Change password validation", () => {
     await page.getByTestId("current-password-input").fill(password)
     await page.getByTestId("new-password-input").fill(password)
     await page.getByTestId("confirm-password-input").fill(password)
-    await page.getByRole("button", { name: "Update Password" }).click()
+    await profile(page).getByRole("button", { name: "Update Password" }).click()
 
     await expect(
       page.getByText("New password cannot be the same as the current one"),

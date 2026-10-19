@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
 import { expect, test } from "./fixtures.ts"
 import { replaceFieldValue } from "./utils/form"
@@ -5,9 +6,14 @@ import { createUser } from "./utils/privateApi"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser } from "./utils/user"
 
+/** The Users panel under Operator; every topic is on one page (SET-02). */
+const users = (page: Page) => page.locator("#setting-operator-deployment-users")
+
 test("Admin page is accessible and shows correct title", async ({ page }) => {
   await page.goto("/admin")
-  await expect(page.getByRole("heading", { name: "Users" })).toBeVisible()
+  await expect(
+    users(page).getByRole("heading", { name: "Users", exact: true }),
+  ).toBeVisible()
   await expect(
     page.getByText("Manage user accounts and permissions"),
   ).toBeVisible()
@@ -136,7 +142,9 @@ test.describe("Admin user management", () => {
       .filter({ hasText: email })
     await userRow.getByRole("button").click()
 
-    await page.getByRole("menuitem", { name: "Delete User" }).click()
+    // At the foot of the page the dev server's router devtools button sits
+    // over the menu, so the item is chosen from the keyboard.
+    await page.getByRole("menuitem", { name: "Delete User" }).press("Enter")
 
     await page.getByRole("button", { name: "Delete" }).click()
 
@@ -215,11 +223,12 @@ test.describe("Admin page access control", () => {
 
     await page.goto("/admin")
 
-    // /admin lands on Settings, Users (SET-01); the server refuses the list.
+    // /admin lands on the Settings page (SET-01), which shows the Users
+    // panel only to an Account holding users:read (SET-02).
     await expect(page).not.toHaveURL(/\/admin/)
-    await expect(
-      page.getByText("Your account cannot manage users."),
-    ).toBeVisible()
+    await expect(page.getByTestId("settings-search")).toBeVisible()
+    await expect(page.locator("#setting-account-yours-profile")).toBeVisible()
+    await expect(users(page)).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Add User" })).toHaveCount(0)
   })
 
@@ -228,6 +237,8 @@ test.describe("Admin page access control", () => {
 
     await page.goto("/admin")
 
-    await expect(page.getByRole("heading", { name: "Users" })).toBeVisible()
+    await expect(
+      users(page).getByRole("heading", { name: "Users", exact: true }),
+    ).toBeVisible()
   })
 })

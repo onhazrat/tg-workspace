@@ -44,7 +44,9 @@ test.describe("Settings, Publishing", () => {
     })
 
     await gotoSection(page, "publishing")
-    await expect(page.getByText("Bot & Destination Management")).toBeVisible()
+    await expect(
+      page.getByText("Bot & Destination Management").first(),
+    ).toBeVisible()
 
     await page.getByPlaceholder("Bot token (from @BotFather)").fill(FAKE_TOKEN)
 
@@ -210,6 +212,7 @@ test.describe("Settings, Sync", () => {
 
     await gotoSection(page, "channels-sync")
     await page
+      .locator("#setting-sync-yours-resyncAll")
       .getByRole("button", { name: "Reset and sync all channels" })
       .click()
     // The first click only asks.

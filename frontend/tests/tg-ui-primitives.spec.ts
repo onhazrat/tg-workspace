@@ -188,6 +188,7 @@ test.describe("TG UI primitives", () => {
     })
 
     await page
+      .locator("#setting-sync-yours-resyncAll")
       .getByRole("button", { name: "Reset and sync all channels" })
       .click()
     const dialog = page.getByRole("dialog")
