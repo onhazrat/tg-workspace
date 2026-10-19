@@ -232,6 +232,49 @@ def save_settings_section(
     replace_global_setting(session, key, value)
 
 
+def write_setting_field(
+    session: Session,
+    key: str,
+    path: str,
+    value: Any = None,
+    *,
+    reset: bool = False,
+    user_id: uuid.UUID | None = None,
+) -> None:
+    """Set one field of one settings key, or clear it so its default applies.
+
+    The Settings page's write door (SET-02): `path` is a field of the key's
+    value, dotted one level deep for `jobs` (`retention.enabled`). The row is
+    read, changed in that one place and stored whole, in the table the registry
+    says owns the key, so a page write never touches a neighbouring field. A
+    reset removes the field rather than storing the default, so the row follows
+    the default if a deploy changes it.
+    """
+    personal = home_for(key) is Home.USER
+    if personal and user_id is None:
+        raise ValueError(f"Settings key {key!r} is per-User and needs an owner.")
+    stored = (
+        get_user_setting(session, key, user_id=cast(uuid.UUID, user_id))
+        if personal
+        else get_global_setting(session, key)
+    )
+    head, _, leaf = path.rpartition(".")
+    target = dict(stored.get(head) or {}) if head else stored
+    if reset:
+        target.pop(leaf, None)
+    else:
+        target[leaf] = value
+    if head:
+        if target:
+            stored[head] = target
+        else:
+            stored.pop(head, None)
+    if personal:
+        replace_user_setting(session, key, stored, user_id=cast(uuid.UUID, user_id))
+    else:
+        replace_global_setting(session, key, stored)
+
+
 def save_sync_settings(
     session: Session,
     payload: dict[str, Any],

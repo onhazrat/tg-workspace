@@ -6550,6 +6550,68 @@
           }
         }
       }
+    },
+    "/api/v1/settings/registry": {
+      "get": {
+        "tags": ["settings"],
+        "summary": "Read Settings Registry",
+        "operationId": "settings-read_settings_registry",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsRegistryResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/settings/{setting_id}": {
+      "put": {
+        "tags": ["settings"],
+        "summary": "Update Setting",
+        "operationId": "settings-update_setting",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "setting_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Setting Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SettingWriteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SettingRow" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10706,6 +10768,7 @@
         "required": ["enabled", "intervals"],
         "title": "JobsRuntimeSettings"
       },
+      "JsonValue": {},
       "LLMLogListItemResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -13335,6 +13398,135 @@
         },
         "type": "object",
         "title": "SettingGroupWriteRequest"
+      },
+      "SettingOption": {
+        "properties": {
+          "value": { "type": "string", "title": "Value" },
+          "label": { "type": "string", "title": "Label" }
+        },
+        "type": "object",
+        "required": ["value", "label"],
+        "title": "SettingOption"
+      },
+      "SettingRow": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title" },
+          "description": { "type": "string", "title": "Description" },
+          "topic": { "type": "string", "title": "Topic" },
+          "scope": {
+            "type": "string",
+            "enum": ["browser", "account", "deployment", "env", "code"],
+            "title": "Scope"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["boolean", "integer", "number", "string", "enum", "json"],
+            "title": "Type"
+          },
+          "options": {
+            "items": { "$ref": "#/components/schemas/SettingOption" },
+            "type": "array",
+            "title": "Options"
+          },
+          "min": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Max"
+          },
+          "value": { "$ref": "#/components/schemas/JsonValue" },
+          "default": { "$ref": "#/components/schemas/JsonValue" },
+          "defaultSource": {
+            "type": "string",
+            "enum": ["code", "env", "deployment"],
+            "title": "Defaultsource"
+          },
+          "modified": { "type": "boolean", "title": "Modified" },
+          "canEdit": { "type": "boolean", "title": "Canedit" },
+          "lockReason": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Lockreason"
+          },
+          "applies": {
+            "type": "string",
+            "enum": ["now", "restart", "rebuild", "deploy"],
+            "title": "Applies",
+            "default": "now"
+          },
+          "storage": { "type": "string", "title": "Storage" },
+          "sensitive": {
+            "type": "boolean",
+            "title": "Sensitive",
+            "default": false
+          },
+          "envName": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Envname"
+          },
+          "sourceRef": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Sourceref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "topic",
+          "scope",
+          "type",
+          "defaultSource",
+          "modified",
+          "canEdit",
+          "lockReason",
+          "storage"
+        ],
+        "title": "SettingRow",
+        "description": "One Setting as the calling Account sees it."
+      },
+      "SettingTopic": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "title": { "type": "string", "title": "Title" }
+        },
+        "type": "object",
+        "required": ["id", "title"],
+        "title": "SettingTopic"
+      },
+      "SettingWriteRequest": {
+        "properties": {
+          "value": { "$ref": "#/components/schemas/JsonValue" },
+          "reset": { "type": "boolean", "title": "Reset", "default": false }
+        },
+        "type": "object",
+        "title": "SettingWriteRequest",
+        "description": "`{\"value\": \u2026}` to change a Setting, `{\"reset\": true}` to reset it."
+      },
+      "SettingsRegistryResponse": {
+        "properties": {
+          "topics": {
+            "items": { "$ref": "#/components/schemas/SettingTopic" },
+            "type": "array",
+            "title": "Topics"
+          },
+          "rows": {
+            "items": { "$ref": "#/components/schemas/SettingRow" },
+            "type": "array",
+            "title": "Rows"
+          },
+          "permissions": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Permissions"
+          }
+        },
+        "type": "object",
+        "required": ["topics", "rows", "permissions"],
+        "title": "SettingsRegistryResponse"
       },
       "SignalCountsResponse": {
         "properties": {

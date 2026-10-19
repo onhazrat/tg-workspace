@@ -237,6 +237,16 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "DATA_ADMIN inventory: the user layer is the caller's own settings, while "
         "global settings and per-account quota overrides deliberately cross accounts",
     ),
+    ("GET", f"{V1}/settings/registry"): (
+        Reason.COVERED_ELSEWHERE,
+        "the caller's own Settings and the deployment's, with two live accounts; "
+        "test_settings_registry.py",
+    ),
+    ("PUT", f"{V1}/settings/{{setting_id}}"): (
+        Reason.COVERED_ELSEWHERE,
+        "an account Setting lands on that account alone, a deployment one needs "
+        "settings:manage; test_settings_registry.py",
+    ),
     # --- the shared corpus --------------------------------------------------
     ("POST", f"{DATA}/posts"): (
         Reason.COVERED_ELSEWHERE,

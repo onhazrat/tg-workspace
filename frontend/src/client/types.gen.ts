@@ -3968,6 +3968,8 @@ export type JobsRuntimeSettings = {
     intervals: JobIntervals;
 };
 
+export type JsonValue = unknown;
+
 /**
  * LLMLogListItemResponse
  *
@@ -6684,6 +6686,147 @@ export type SettingGroupWriteRequest = {
      * Resetsyncenabled
      */
     resetSyncEnabled?: boolean | null;
+};
+
+/**
+ * SettingOption
+ */
+export type SettingOption = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * SettingRow
+ *
+ * One Setting as the calling Account sees it.
+ */
+export type SettingRow = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Topic
+     */
+    topic: string;
+    /**
+     * Scope
+     */
+    scope: 'browser' | 'account' | 'deployment' | 'env' | 'code';
+    /**
+     * Type
+     */
+    type: 'boolean' | 'integer' | 'number' | 'string' | 'enum' | 'json';
+    /**
+     * Options
+     */
+    options?: Array<SettingOption>;
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    value?: JsonValue;
+    default?: JsonValue;
+    /**
+     * Defaultsource
+     */
+    defaultSource: 'code' | 'env' | 'deployment';
+    /**
+     * Modified
+     */
+    modified: boolean;
+    /**
+     * Canedit
+     */
+    canEdit: boolean;
+    /**
+     * Lockreason
+     */
+    lockReason: string | null;
+    /**
+     * Applies
+     */
+    applies?: 'now' | 'restart' | 'rebuild' | 'deploy';
+    /**
+     * Storage
+     */
+    storage: string;
+    /**
+     * Sensitive
+     */
+    sensitive?: boolean;
+    /**
+     * Envname
+     */
+    envName?: string | null;
+    /**
+     * Sourceref
+     */
+    sourceRef?: string | null;
+};
+
+/**
+ * SettingTopic
+ */
+export type SettingTopic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * SettingWriteRequest
+ *
+ * `{"value": …}` to change a Setting, `{"reset": true}` to reset it.
+ */
+export type SettingWriteRequest = {
+    value?: JsonValue;
+    /**
+     * Reset
+     */
+    reset?: boolean;
+};
+
+/**
+ * SettingsRegistryResponse
+ */
+export type SettingsRegistryResponse = {
+    /**
+     * Topics
+     */
+    topics: Array<SettingTopic>;
+    /**
+     * Rows
+     */
+    rows: Array<SettingRow>;
+    /**
+     * Permissions
+     */
+    permissions: Array<string>;
 };
 
 /**
@@ -13239,3 +13382,49 @@ export type ViewAsReadViewAsSessionsResponses = {
 };
 
 export type ViewAsReadViewAsSessionsResponse = ViewAsReadViewAsSessionsResponses[keyof ViewAsReadViewAsSessionsResponses];
+
+export type SettingsReadSettingsRegistryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/settings/registry';
+};
+
+export type SettingsReadSettingsRegistryResponses = {
+    /**
+     * Successful Response
+     */
+    200: SettingsRegistryResponse;
+};
+
+export type SettingsReadSettingsRegistryResponse = SettingsReadSettingsRegistryResponses[keyof SettingsReadSettingsRegistryResponses];
+
+export type SettingsUpdateSettingData = {
+    body: SettingWriteRequest;
+    path: {
+        /**
+         * Setting Id
+         */
+        setting_id: string;
+    };
+    query?: never;
+    url: '/api/v1/settings/{setting_id}';
+};
+
+export type SettingsUpdateSettingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SettingsUpdateSettingError = SettingsUpdateSettingErrors[keyof SettingsUpdateSettingErrors];
+
+export type SettingsUpdateSettingResponses = {
+    /**
+     * Successful Response
+     */
+    200: SettingRow;
+};
+
+export type SettingsUpdateSettingResponse = SettingsUpdateSettingResponses[keyof SettingsUpdateSettingResponses];

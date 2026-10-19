@@ -156,6 +156,10 @@ INVENTORY: dict[str, str] = {
     # rbac_user_roles joined to rbac_roles and never commits; seeding is done by
     # the migration and init_db, so this module has no reason to write.
     "rbac.py": READ_MODEL,
+    # The Settings page for one Account (SET-02): every declared Setting the
+    # caller may see, its value and resolved default. Writes go through
+    # `jobs/settings.write_setting_field` to the two settings aggregates.
+    "settings_page.py": READ_MODEL,
     "runtime_config.py": READ_MODEL,
     # 3. Integration — owns one external boundary.
     "channel_photos.py": INTEGRATION,
@@ -213,6 +217,9 @@ INVENTORY: dict[str, str] = {
     # free of a `Session` or the refusal would depend on the thing being
     # refused.
     "settings_registry.py": PURE_TRANSFORM,
+    # One declaration per Setting (SET-02, ADR-032): data and a lookup, so the
+    # guards over it need no database.
+    "setting_declarations.py": PURE_TRANSFORM,
     "tenancy.py": PURE_TRANSFORM,
     "telegram_html.py": PURE_TRANSFORM,
     "telegram_web.py": PURE_TRANSFORM,
