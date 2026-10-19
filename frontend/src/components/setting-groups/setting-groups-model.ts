@@ -1,7 +1,6 @@
 /**
- * What the Channel Setting Groups panel decides, with no React in it: the
- * draft a group edits into, which groups can be deleted, and what the panel
- * says about each one.
+ * What the Setting groups panel decides, with no React in it: the draft a
+ * group edits into, and which groups can be deleted.
  */
 import type { SettingGroupWriteBody } from "@/api"
 import { isReservedSettingGroup } from "@/lib/channels/setting-groups"
@@ -74,31 +73,11 @@ export function isDeletable(
   return group !== undefined && !isReservedSettingGroup(group)
 }
 
-export function channelCount(group: ChannelSettingGroup): number {
+function channelCount(group: ChannelSettingGroup): number {
   return group.channelCount ?? 0
 }
 
 /** A group that still holds channels cannot go; the panel says so up front. */
 export function mustEmptyBeforeDelete(group: ChannelSettingGroup): boolean {
   return isDeletable(group) && channelCount(group) > 0
-}
-
-export function groupLabel(group: ChannelSettingGroup): string {
-  return group.isDefault ? `${group.name} (default)` : group.name
-}
-
-export function channelCountLabel(group: ChannelSettingGroup): string {
-  const count = channelCount(group)
-  return `${count} channel${count === 1 ? "" : "s"}`
-}
-
-export function hasName(draft: SettingGroupWriteBody): boolean {
-  return Boolean(draft.name?.trim())
-}
-
-export function savedMessage(
-  draft: SettingGroupWriteBody,
-  group: ChannelSettingGroup,
-): string {
-  return `Updated group "${draft.name ?? group.name}"`
 }

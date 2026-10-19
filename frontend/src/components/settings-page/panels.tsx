@@ -3,8 +3,8 @@
  * value, embedded in its topic. Each has an id like a Setting's, so search,
  * `?setting=` links and the contents treat it as one.
  *
- * The bodies are the production components, unchanged; SET-03 redraws them in
- * the page's style. A panel names the Permission that shows it, read from the
+ * SET-03 redrew every body with the page's own pieces (`kit.tsx`); the old
+ * panels are gone. A panel names the Permission that shows it, read from the
  * registry's own answer rather than from a 403.
  */
 import { getRouteApi } from "@tanstack/react-router"
@@ -13,17 +13,23 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { JobStatusEntry } from "@/api/jobs"
-import { BotManagement } from "@/components/BotManagement"
 import { ConfigurationCatalogView } from "@/components/ConfigurationCatalogView"
-import { SettingGroupsPanel } from "@/components/SettingGroupsPanel"
-import { AccountSection } from "@/components/settings/account/AccountSection"
-import { UsersSection } from "@/components/settings/account/UsersSection"
-import { AIKeysPanel } from "@/components/settings/ai/AIKeysPanel"
-import { NetworkSection } from "@/components/settings/NetworkSection"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
 import { APP_VERSION } from "@/lib/app-version"
+import {
+  DeleteAccount,
+  Usage as MyUsage,
+  Password,
+  Profile,
+  SignIn,
+} from "./account-panels"
+import { AiKeys } from "./ai-keys-panel"
+import { Proxies, TorActions } from "./network-panels"
+import { Overrides, Usage, Users } from "./operator-panels"
+import { Bots, Destinations } from "./publishing-panels"
+import { SettingGroups } from "./setting-groups-panel"
 
 export interface Panel {
   id: string
@@ -197,13 +203,45 @@ function JobRuns() {
 
 export const PANELS: Panel[] = [
   {
+    id: "account.yours.signIn",
+    topic: "account",
+    title: "Signed in",
+    description: "Who this browser is signed in as.",
+    keywords: "sign out logout session",
+    render: () => <SignIn />,
+  },
+  {
     id: "account.yours.profile",
     topic: "account",
     title: "Profile",
+    description: "Your name and email. Each saves on Enter.",
+    keywords: "name email profile",
+    render: () => <Profile />,
+  },
+  {
+    id: "account.yours.password",
+    topic: "account",
+    title: "Password",
+    description: "Change the password you sign in with.",
+    keywords: "password change",
+    render: () => <Password />,
+  },
+  {
+    id: "account.yours.usage",
+    topic: "account",
+    title: "Today's usage",
     description:
-      "Who you are signed in as, your name, email and password, today's usage, and deleting your Account.",
-    keywords: "sign out logout name email password usage quota delete",
-    render: () => <AccountSection />,
+      "Requests your syncs made to Telegram today, per Budget. Past the allowance syncs slow down; past the ceiling they stop until UTC midnight.",
+    keywords: "usage quota budget requests allowance ceiling",
+    render: () => <MyUsage />,
+  },
+  {
+    id: "account.yours.delete",
+    topic: "account",
+    title: "Delete account",
+    description: "Delete your Account and everything it owns.",
+    keywords: "delete remove account danger",
+    render: () => <DeleteAccount />,
   },
   {
     id: "appearance.browser.version",
@@ -217,9 +255,10 @@ export const PANELS: Panel[] = [
     id: "sync.yours.settingGroups",
     topic: "sync",
     title: "Setting groups",
-    description: "Sync and summary rules shared by a set of channels.",
+    description:
+      "Sync rules shared by a set of channels. Open a group to edit it; move channels between groups on the Channels tab.",
     keywords: "group groups channel rules",
-    render: () => <SettingGroupsPanel />,
+    render: () => <SettingGroups />,
   },
   {
     id: "sync.yours.resyncAll",
@@ -234,43 +273,45 @@ export const PANELS: Panel[] = [
     id: "ai.yours.keys",
     topic: "ai",
     title: "AI keys",
-    description: "The Keys your Summaries, Chats and Tags are paid with.",
+    description:
+      "The keys your Summaries, Chats and Tags are paid with. Embeddings and translations use the deployment's key, because every follower shares them.",
     keywords: "api key gemini openai openrouter provider byok",
-    render: () => <AIKeysPanel />,
+    render: () => <AiKeys />,
   },
   {
     id: "publishing.yours.bots",
     topic: "publishing",
     title: "Bots",
     description: "Telegram bots that publish your Summaries.",
-    keywords: "bot token telegram publish credentials",
-    render: () => <BotManagement focus="bot-credentials" />,
+    keywords: "bot token telegram publish credentials check",
+    render: () => <Bots />,
   },
   {
     id: "publishing.yours.destinations",
     topic: "publishing",
     title: "Destinations",
-    description: "Chats and channels your bots publish to.",
-    keywords: "destination chat channel publish",
-    render: () => <BotManagement focus="destinations" />,
+    description:
+      "Chats and channels your bots publish to. Check and Test use your first bot.",
+    keywords: "destination chat channel publish test message",
+    render: () => <Destinations />,
   },
   {
     id: "network.deployment.proxies",
     topic: "network",
-    title: "Proxies",
-    description: "The proxy pool every sync goes through.",
-    keywords: "proxy proxies socks http pool",
+    title: "Proxy pool",
+    description: "The proxies every sync goes through, their slots and health.",
+    keywords: "proxy proxies socks http pool slots test health",
     permission: "data:admin",
-    render: () => <NetworkSection focus="proxy" />,
+    render: () => <Proxies />,
   },
   {
-    id: "network.deployment.torPanel",
+    id: "network.deployment.torActions",
     topic: "network",
-    title: "Tor",
-    description: "Test Tor and ask it for a new circuit.",
-    keywords: "tor onion rotate test",
+    title: "Tor actions",
+    description: "Test Tor's exit IP, or ask it for a new circuit.",
+    keywords: "tor onion rotate test restart circuit ip",
     permission: "data:admin",
-    render: () => <NetworkSection focus="tor" />,
+    render: () => <TorActions />,
   },
   {
     id: "jobs.deployment.runs",
@@ -296,10 +337,29 @@ export const PANELS: Panel[] = [
     topic: "operator",
     title: "Users",
     description:
-      "Every Account, its role and approval, its quota overrides and today's usage.",
-    keywords: "users accounts approve role view as quota limits usage",
+      "Every Account, its role and approval. Edit, approve, View as, export or delete one from its row.",
+    keywords: "users accounts approve role view as export delete add",
     permission: "users:read",
-    render: () => <UsersSection />,
+    render: () => <Users />,
+  },
+  {
+    id: "operator.deployment.quotaOverrides",
+    topic: "operator",
+    title: "Quota overrides",
+    description:
+      "Accounts with their own allowance or ceiling, over the deployment's.",
+    keywords: "quota limits override allowance ceiling budget",
+    permission: "quota:manage",
+    render: () => <Overrides />,
+  },
+  {
+    id: "operator.deployment.usage",
+    topic: "operator",
+    title: "Usage",
+    description: "Each Account's Requests for one UTC day, and Lift today.",
+    keywords: "quota usage requests lift ceiling",
+    permission: "quota:read_any",
+    render: () => <Usage />,
   },
 ]
 

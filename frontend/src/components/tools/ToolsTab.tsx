@@ -2,18 +2,18 @@ import { useQuery } from "@tanstack/react-query"
 import type React from "react"
 
 import { api } from "@/api"
-import { BotManagement } from "@/components/BotManagement"
 import { DatabaseManagement } from "@/components/DatabaseManagement"
 import { DiagnosticsView } from "@/components/DiagnosticsView"
 import { NetworkTelemetry } from "@/components/NetworkTelemetry"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useNetworkLogsQuery } from "@/hooks/useLogs"
 import type { DBStats } from "@/types"
+import { QuickMessageTool } from "./QuickMessageTool"
 import { type ToolId, visibleTools } from "./tools-model"
 
 const TOOL_BODIES: Record<ToolId, () => React.ReactNode> = {
   logs: () => <DiagnosticsView />,
-  "quick-message": () => <BotManagement focus="quick-message" />,
+  "quick-message": () => <QuickMessageTool />,
   "network-telemetry": () => <NetworkTelemetry />,
   database: () => <DatabaseManagement focus="table-sizes" />,
 }

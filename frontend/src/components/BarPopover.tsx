@@ -48,6 +48,10 @@ export const BarHeading = ({ children }: { children: React.ReactNode }) => (
   </div>
 )
 
+/** The popover input: the search box below, and every field in a bar or panel form. */
+export const barInputClass =
+  "h-8 rounded-lg border border-app-ink/15 bg-app-muted px-2.5 text-xs outline-none focus:border-app-ink/40 disabled:opacity-50"
+
 /** The search box at the top of a dropdown. */
 export function BarSearch({
   value,
@@ -70,7 +74,7 @@ export function BarSearch({
       placeholder={placeholder}
       aria-label={placeholder}
       data-testid={testId}
-      className="mb-1 h-8 w-full rounded-lg border border-app-ink/15 bg-app-muted px-2.5 text-xs outline-none focus:border-app-ink/40"
+      className={`mb-1 w-full ${barInputClass}`}
     />
   )
 }

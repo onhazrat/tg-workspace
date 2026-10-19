@@ -89,6 +89,32 @@ export function buildSections(
 }
 
 /**
+ * Where a link to `target` lands: a topic or panel at the top, a row
+ * in the middle, and a `.env` or code row's folded group opened first.
+ */
+export function landingFor(
+  target: string,
+  registry: Pick<SettingsRegistry, "rows" | "topics">,
+): { elementId: string; block: ScrollLogicalPosition; unfold: string | null } {
+  if (registry.topics.some((t) => t.id === target))
+    return {
+      elementId: `settings-topic-${target}`,
+      block: "start",
+      unfold: null,
+    }
+  const row = registry.rows.find((r) => r.id === target)
+  return {
+    elementId: elementId(target),
+    // A panel can be a long table, and centring it puts its forms off screen.
+    block: row ? "center" : "start",
+    unfold:
+      row && HIDDEN_SCOPES.includes(row.scope)
+        ? `${row.topic}.${row.scope}`
+        : null,
+  }
+}
+
+/**
  * Scrolls to `id` now and again while the panels above it load, so a link
  * still lands once their content has pushed the row down. Returns a cancel.
  */
@@ -133,16 +159,11 @@ export function useSettingsPage() {
   const loaded = !registry.isLoading
   useEffect(() => {
     if (!target || !loaded) return
-    const row = registry.rows.find((r) => r.id === target)
-    if (row && HIDDEN_SCOPES.includes(row.scope)) {
-      setUnfolded((prev) => new Set(prev).add(`${row.topic}.${row.scope}`))
-    }
-    const isTopic = registry.topics.some((t) => t.id === target)
+    const land = landingFor(target, registry)
+    const unfold = land.unfold
+    if (unfold) setUnfolded((prev) => new Set(prev).add(unfold))
     setFlash(target)
-    const cancelScroll = scrollToId(
-      isTopic ? `settings-topic-${target}` : elementId(target),
-      isTopic ? "start" : "center",
-    )
+    const cancelScroll = scrollToId(land.elementId, land.block)
     const timer = setTimeout(() => setFlash(null), FLASH_MS)
     return () => {
       cancelScroll()

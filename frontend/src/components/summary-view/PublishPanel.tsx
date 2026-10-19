@@ -7,13 +7,13 @@ import type {
   PublicationPlanResponse,
   PublicationSendRequest,
 } from "@/client"
-import { TimeZoneInput } from "@/components/settings/publishing/PublicationOptionsPanel"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgToggle } from "@/components/ui/tg-toggle"
 import { CITATION_STYLES, type CitationStyle } from "@/lib/settings/schema"
 import { cn } from "@/lib/utils"
 import type { BotCredential, ChatDestination, PublishingOptions } from "@/types"
 import { omittedAfterToggle, partsLabel } from "./publish-panel-model"
+import { TimeZoneInput } from "./TimeZoneInput"
 
 export interface PublishPanelProps {
   bots: BotCredential[]

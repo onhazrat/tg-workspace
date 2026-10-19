@@ -39,6 +39,20 @@ import { type SettingsPageState, useSettingsPage } from "./sections"
 /** Where the contents remember which topics the Account folded or opened. */
 const FOLDS_KEY = "settingsContentsFolds"
 
+/** The last topic whose heading top is at or above `line`; the first if none. */
+export function lastPassed(
+  ids: string[],
+  topOf: (id: string) => number | undefined,
+  line: number,
+): string | null {
+  let current = ids[0] ?? null
+  for (const id of ids) {
+    const top = topOf(id)
+    if (top !== undefined && top <= line) current = id
+  }
+  return current
+}
+
 /**
  * The topic being read: the last one whose heading has passed the bottom of
  * the sticky bar. A scroll listener rather than an IntersectionObserver,
@@ -49,18 +63,13 @@ function useActiveTopic(idList: string[]) {
   const key = idList.join(",")
   useEffect(() => {
     const ids = key ? key.split(",") : []
+    const topOf = (id: string) =>
+      document.getElementById(`settings-topic-${id}`)?.getBoundingClientRect()
+        .top
     const update = () => {
-      const line =
-        (document.querySelector("[data-settings-bar]")?.getBoundingClientRect()
-          .bottom ?? 0) + 32
-      let current = ids[0] ?? null
-      for (const id of ids) {
-        const top = document
-          .getElementById(`settings-topic-${id}`)
-          ?.getBoundingClientRect().top
-        if (top !== undefined && top <= line) current = id
-      }
-      setActive(current)
+      const bar = document.querySelector("[data-settings-bar]")
+      const line = (bar?.getBoundingClientRect().bottom ?? 0) + 32
+      setActive(lastPassed(ids, topOf, line))
     }
     update()
     // Capture: the tab scrolls an inner container, not the window.
@@ -360,7 +369,7 @@ type SaveState =
 const SAVED_MS = 1500
 
 /** One Setting: its heading, description, control and where it is kept. */
-function Item({
+export function Item({
   row,
   page,
   topicTitle,

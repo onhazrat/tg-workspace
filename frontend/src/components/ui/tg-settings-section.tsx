@@ -15,7 +15,7 @@ type TgSettingsSectionProps = {
   titleClassName?: string
 }
 
-/** Card shell + icon header used by Settings hub sections and BotManagement. */
+/** Card shell + icon header the Tools tab panels use. */
 function TgSettingsSection({
   icon: Icon,
   title,

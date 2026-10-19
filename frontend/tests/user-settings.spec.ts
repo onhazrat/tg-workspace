@@ -5,28 +5,23 @@ import { createUser } from "./utils/privateApi.ts"
 import { randomEmail, randomPassword } from "./utils/random"
 import { logInUser, logOutUser } from "./utils/user"
 
-/** The Account panel; the Settings page draws every topic at once (SET-02). */
-const profile = (page: Page) => page.locator("#setting-account-yours-profile")
+/**
+ * The Account topic of the Settings page (SET-03): who is signed in, name and
+ * email saved inline like a row, the password form behind a pill, today's
+ * usage, and deleting the Account behind a confirmation.
+ */
+const panel = (page: Page, id: string) =>
+  page.locator(`#setting-account-yours-${id}`)
 
-// The stored session is `firstSuperuser`, and a superuser gets no Danger zone
-// (it cannot delete its own account). Asserting the *whole* tab set rather than
-// a subset is the point: this test read `["My profile", "Password", "Danger
-// zone"]` while `settings.tsx` hid the last one by index, so ticket 24's Usage
-// tab silently pushed Danger zone out of the slice for every superuser.
-const superuserTabs = ["My profile", "Password", "Usage"]
-const ordinaryUserTabs = [...superuserTabs, "Danger zone"]
-
-test("My profile tab is active by default", async ({ page }) => {
+test("/settings lands on Account › Profile and names who is signed in", async ({
+  page,
+}) => {
   await page.goto("/settings")
-  await expect(page.getByRole("tab", { name: "My profile" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  )
-})
-
-test("a superuser sees every tab but the Danger zone", async ({ page }) => {
-  await page.goto("/settings")
-  await expect(page.getByRole("tab")).toHaveText(superuserTabs)
+  await expect(panel(page, "profile")).toBeVisible()
+  await expect(panel(page, "signIn")).toContainText(firstSuperuser)
+  await expect(
+    panel(page, "signIn").getByRole("button", { name: "Sign out" }),
+  ).toBeVisible()
 })
 
 test("Usage shows this account's three Budgets as GET /quota/me reports them", async ({
@@ -45,11 +40,10 @@ test("Usage shows this account's three Budgets as GET /quota/me reports them", a
   const limit = (value: number | null) =>
     value === null ? "no limit" : String(value)
 
-  await page.goto("/settings")
   const quota = page.waitForResponse(
     (r) => r.url().includes("/api/v1/quota/me") && r.ok(),
   )
-  await page.getByRole("tab", { name: "Usage" }).click()
+  await page.goto("/settings")
   const { budgets } = (await (await quota).json()) as {
     budgets: {
       budget: string
@@ -62,10 +56,9 @@ test("Usage shows this account's three Budgets as GET /quota/me reports them", a
   }
 
   expect(budgets.map((b) => b.budget).sort()).toEqual(Object.keys(labels))
-  await expect(profile(page).getByText("Request usage")).toBeVisible()
   for (const b of budgets) {
     await expect(
-      profile(page)
+      panel(page, "usage")
         .getByRole("row", { name: new RegExp(labels[b.budget]) })
         .getByRole("cell"),
     ).toHaveText([
@@ -78,197 +71,148 @@ test("Usage shows this account's three Budgets as GET /quota/me reports them", a
   }
 })
 
+test("a superuser is told it cannot delete its own account", async ({
+  page,
+}) => {
+  await page.goto("/settings")
+  await expect(panel(page, "delete")).toContainText(
+    "cannot delete its own account",
+  )
+  await expect(
+    panel(page, "delete").getByRole("button", { name: "Delete my account" }),
+  ).toHaveCount(0)
+})
+
 test.describe("an ordinary account", () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
-  test("also sees the Danger zone", async ({ page }) => {
-    const email = randomEmail()
-    const password = randomPassword()
-    await createUser({ email, password })
-    await logInUser(page, email, password)
-
-    await page.goto("/settings")
-    await expect(page.getByRole("tab")).toHaveText(ordinaryUserTabs)
-  })
-})
-
-test.describe("Edit user profile", () => {
-  test.use({ storageState: { cookies: [], origins: [] } })
-  let email: string
-  let password: string
-
-  test.beforeAll(async () => {
-    email = randomEmail()
-    password = randomPassword()
-    await createUser({ email, password })
-  })
-
-  test.beforeEach(async ({ page }) => {
-    await logInUser(page, email, password)
-    await page.goto("/settings")
-    await page.getByRole("tab", { name: "My profile" }).click()
-  })
-
-  test("Edit user name with a valid name", async ({ page }) => {
-    const updatedName = "Test User 2"
-
-    await profile(page).getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Full name").fill(updatedName)
-    await profile(page).getByRole("button", { name: "Save" }).click()
-
-    await expect(page.getByText("User updated successfully")).toBeVisible()
-    await expect(
-      page.locator("form").getByText(updatedName, { exact: true }),
-    ).toBeVisible()
-  })
-
-  test("Edit user email with an invalid email shows error", async ({
+  test("deletes itself after confirming, and is signed out", async ({
     page,
   }) => {
-    await profile(page).getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Email").fill("")
-    await page.locator("body").click()
-
-    await expect(page.getByText("Invalid email address")).toBeVisible()
-  })
-})
-
-test.describe("Edit user email", () => {
-  test.use({ storageState: { cookies: [], origins: [] } })
-
-  test("Edit user email with a valid email", async ({ page }) => {
-    const email = randomEmail()
-    const password = randomPassword()
-    const updatedEmail = randomEmail()
-
-    await createUser({ email, password })
-    await logInUser(page, email, password)
-    await page.goto("/settings")
-    await page.getByRole("tab", { name: "My profile" }).click()
-
-    await profile(page).getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Email").fill(updatedEmail)
-    await profile(page).getByRole("button", { name: "Save" }).click()
-
-    await expect(page.getByText("User updated successfully")).toBeVisible()
-    await expect(
-      page.locator("form").getByText(updatedEmail, { exact: true }),
-    ).toBeVisible()
-  })
-})
-
-test.describe("Cancel edit actions", () => {
-  test.use({ storageState: { cookies: [], origins: [] } })
-
-  test("Cancel edit action restores original name", async ({ page }) => {
-    const email = randomEmail()
-    const password = randomPassword()
-    const user = await createUser({ email, password })
-
-    await logInUser(page, email, password)
-    await page.goto("/settings")
-    await page.getByRole("tab", { name: "My profile" }).click()
-    await profile(page).getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Full name").fill("Test User")
-    await profile(page).getByRole("button", { name: "Cancel" }).first().click()
-
-    await expect(
-      page.locator("form").getByText(user.full_name as string, { exact: true }),
-    ).toBeVisible()
-  })
-
-  test("Cancel edit action restores original email", async ({ page }) => {
     const email = randomEmail()
     const password = randomPassword()
     await createUser({ email, password })
+    await logInUser(page, email, password)
 
+    await page.goto("/settings")
+    await panel(page, "delete")
+      .getByRole("button", { name: "Delete my account" })
+      .click()
+    const confirm = page.getByRole("dialog", { name: "Delete your account?" })
+    await expect(confirm).toContainText("cannot be undone")
+    await confirm.getByRole("button", { name: "Delete account" }).click()
+    await page.waitForURL("/login")
+  })
+})
+
+test.describe("Edit the profile inline", () => {
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test.beforeEach(async ({ page }) => {
+    const email = randomEmail()
+    const password = randomPassword()
+    await createUser({ email, password })
     await logInUser(page, email, password)
     await page.goto("/settings")
-    await page.getByRole("tab", { name: "My profile" }).click()
-    await profile(page).getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Email").fill(randomEmail())
-    await profile(page).getByRole("button", { name: "Cancel" }).first().click()
+  })
 
+  test("a name saves on Enter and survives a reload", async ({ page }) => {
+    const name = panel(page, "profile").getByLabel("Full name")
+    await name.fill("Test User 2")
+    await name.press("Enter")
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+    await page.reload()
+    await expect(panel(page, "profile").getByLabel("Full name")).toHaveValue(
+      "Test User 2",
+    )
+  })
+
+  test("Escape puts the name back", async ({ page }) => {
+    const name = panel(page, "profile").getByLabel("Full name")
+    const original = await name.inputValue()
+    await name.fill("Never saved")
+    await name.press("Escape")
+    await expect(name).toHaveValue(original)
+  })
+
+  test("an invalid email is refused on the row", async ({ page }) => {
+    const field = panel(page, "profile").getByLabel("Email")
+    await field.fill("not-an-email")
+    await field.press("Enter")
     await expect(
-      page.locator("form").getByText(email, { exact: true }),
+      panel(page, "profile").getByText("Invalid email address"),
     ).toBeVisible()
+  })
+
+  test("a valid email saves", async ({ page }) => {
+    const updated = randomEmail()
+    const field = panel(page, "profile").getByLabel("Email")
+    await field.fill(updated)
+    await field.press("Enter")
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+    await expect(panel(page, "signIn")).toContainText(updated)
   })
 })
 
 test.describe("Change password", () => {
   test.use({ storageState: { cookies: [], origins: [] } })
-
-  test("Update password successfully", async ({ page }) => {
-    const email = randomEmail()
-    const password = randomPassword()
-    const newPassword = randomPassword()
-
-    await createUser({ email, password })
-    await logInUser(page, email, password)
-
-    await page.goto("/settings")
-    await page.getByRole("tab", { name: "Password" }).click()
-    await page.getByTestId("current-password-input").fill(password)
-    await page.getByTestId("new-password-input").fill(newPassword)
-    await page.getByTestId("confirm-password-input").fill(newPassword)
-    await profile(page).getByRole("button", { name: "Update Password" }).click()
-
-    await expect(page.getByText("Password updated successfully")).toBeVisible()
-
-    await logOutUser(page)
-    await logInUser(page, email, newPassword)
-  })
-})
-
-test.describe("Change password validation", () => {
-  test.use({ storageState: { cookies: [], origins: [] } })
   let email: string
   let password: string
 
-  test.beforeAll(async () => {
+  const form = (page: Page) => page.getByRole("dialog")
+  async function change(
+    page: Page,
+    current: string,
+    next: string,
+    again = next,
+  ) {
+    await panel(page, "password")
+      .getByRole("button", { name: "Change password" })
+      .click()
+    await form(page).getByLabel("Current password").fill(current)
+    await form(page).getByLabel("New password", { exact: true }).fill(next)
+    await form(page).getByLabel("New password again").fill(again)
+    await form(page).getByRole("button", { name: "Change" }).click()
+  }
+
+  test.beforeEach(async ({ page }) => {
     email = randomEmail()
     password = randomPassword()
     await createUser({ email, password })
-  })
-
-  test.beforeEach(async ({ page }) => {
     await logInUser(page, email, password)
     await page.goto("/settings")
-    await page.getByRole("tab", { name: "Password" }).click()
   })
 
-  test("Update password with weak passwords", async ({ page }) => {
-    const weakPassword = "weak"
+  test("a new password works at the next sign-in", async ({ page }) => {
+    const newPassword = randomPassword()
+    await change(page, password, newPassword)
+    await expect(page.getByText("Password updated successfully")).toBeVisible()
+    await logOutUser(page)
+    await logInUser(page, email, newPassword)
+  })
 
-    await page.getByTestId("current-password-input").fill(password)
-    await page.getByTestId("new-password-input").fill(weakPassword)
-    await page.getByTestId("confirm-password-input").fill(weakPassword)
-    await profile(page).getByRole("button", { name: "Update Password" }).click()
-
+  test("a weak password is refused", async ({ page }) => {
+    await change(page, password, "weak")
     await expect(
-      page.getByText("Password must be at least 8 characters"),
+      form(page).getByText("Password must be at least 8 characters"),
     ).toBeVisible()
   })
 
-  test("New password and confirmation password do not match", async ({
-    page,
-  }) => {
-    await page.getByTestId("current-password-input").fill(password)
-    await page.getByTestId("new-password-input").fill(randomPassword())
-    await page.getByTestId("confirm-password-input").fill(randomPassword())
-    await profile(page).getByRole("button", { name: "Update Password" }).click()
-
-    await expect(page.getByText("The passwords don't match")).toBeVisible()
+  test("two different new passwords are refused", async ({ page }) => {
+    await change(page, password, randomPassword(), randomPassword())
+    await expect(
+      form(page).getByText("The passwords don't match"),
+    ).toBeVisible()
   })
 
-  test("Current password and new password are the same", async ({ page }) => {
-    await page.getByTestId("current-password-input").fill(password)
-    await page.getByTestId("new-password-input").fill(password)
-    await page.getByTestId("confirm-password-input").fill(password)
-    await profile(page).getByRole("button", { name: "Update Password" }).click()
-
+  test("the current password again is refused by the server", async ({
+    page,
+  }) => {
+    await change(page, password, password)
     await expect(
-      page.getByText("New password cannot be the same as the current one"),
+      form(page).getByText(
+        "New password cannot be the same as the current one",
+      ),
     ).toBeVisible()
   })
 })

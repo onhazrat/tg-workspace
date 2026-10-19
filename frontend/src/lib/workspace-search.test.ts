@@ -2,6 +2,25 @@ import { describe, expect, test } from "bun:test"
 import { validateWorkspaceSearch } from "./workspace-search"
 
 describe("validateWorkspaceSearch", () => {
+  test("an old Settings link to a tool opens the Tools tab", () => {
+    for (const section of [
+      "quick-message",
+      "diagnostics",
+      "network-telemetry",
+      "table-sizes",
+      "transfer",
+      "query",
+      "tools",
+    ]) {
+      expect(validateWorkspaceSearch({ tab: "settings", section })).toEqual({
+        tab: "tools",
+      })
+    }
+    expect(
+      validateWorkspaceSearch({ tab: "settings", section: "proxy" }),
+    ).toEqual({ tab: "settings", section: "proxy" })
+  })
+
   test("no tab, or one that does not exist, is Channels", () => {
     expect(validateWorkspaceSearch({})).toEqual({ tab: "channels" })
     expect(validateWorkspaceSearch({ tab: "nope" })).toEqual({

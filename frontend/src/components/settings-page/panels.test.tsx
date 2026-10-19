@@ -81,8 +81,8 @@ describe("visiblePanels", () => {
   })
 
   test("search matches a panel's words", () => {
-    const [profile] = visiblePanels([])
-    expect(profile && panelMatches(profile, ["password"])).toBe(true)
-    expect(profile && panelMatches(profile, ["zebra"])).toBe(false)
+    const [signIn] = visiblePanels([])
+    expect(signIn && panelMatches(signIn, ["logout"])).toBe(true)
+    expect(signIn && panelMatches(signIn, ["zebra"])).toBe(false)
   })
 })

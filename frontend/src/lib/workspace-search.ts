@@ -77,6 +77,17 @@ function workspaceTab(raw: unknown): TabType {
   return VALID_TABS.includes(raw as TabType) ? (raw as TabType) : "channels"
 }
 
+/** Old Settings sections that held a tool; they live on the Tools tab now. */
+const TOOL_SECTIONS = [
+  "quick-message",
+  "diagnostics",
+  "network-telemetry",
+  "table-sizes",
+  "transfer",
+  "query",
+  "tools",
+]
+
 /**
  * `validateSearch` for `/workspace`. The legacy `?tab=network` became the
  * Network section of Settings, and nothing else survives that redirect.
@@ -87,6 +98,8 @@ export function validateWorkspaceSearch(
   if (search.tab === "network") return { tab: "settings", section: "network" }
   const result: WorkspaceSearch = { tab: workspaceTab(search.tab) }
   const section = trimmedString(search.section)
+  if (result.tab === "settings" && section && TOOL_SECTIONS.includes(section))
+    return { tab: "tools" }
   if (section) result.section = section
   for (const key of ID_PARAMS) {
     const value = trimmedString(search[key])
