@@ -1,6 +1,6 @@
 # Settings as one page on one registry: plan
 
-Status: decisions settled (grilling, 2026-10-19); tickets not yet written.
+Status: decisions settled (grilling, 2026-10-19); spec in `.scratch/settings-one-page/spec.md`; tickets not yet written.
 
 Turns prototype variant B (`prototype/settings-one-page`,
 `.scratch/settings-one-page/prototype.md`) into the real Settings tab.
