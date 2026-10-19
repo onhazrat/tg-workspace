@@ -22,6 +22,12 @@ Reference implementation: the prototype API's `.env` and constants scanning on
 branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). It scanned the frontend live, which
 cannot work in the backend image; here a generated catalog replaces that.
 
+**Context pointers:**
+
+- Prototype scanning, to replace with generated catalogs: [proto_settings_registry_api.py](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/backend/scripts/proto_settings_registry_api.py) (`env_fields` reads the settings class with its comments; `code_constants` scans backend and frontend source; `PATH_TOPIC` and `ENV_PREFIX_TOPIC` are the topic maps to make explicit).
+- The env catalog and its pre-commit hook are the precedent for the generated constants catalog and its staleness guard.
+- Prior-art tests: the env-example-matches-defaults guard, the configuration-catalog API test (secrets redaction).
+
 **Blocked by:** SET-02
 
 **Status:** ready-for-agent

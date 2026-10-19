@@ -24,6 +24,14 @@ from the prototype), and the Testing decisions. Architecture:
 branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). Its page code ports over, but its
 prototype API does not: that one read staging and derived ids by heuristics.
 
+**Context pointers:**
+
+- Prototype page, port and replace its data source: [VariantB.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/VariantB.tsx) (bar, contents tree, rows, controls), [b-kit.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/b-kit.tsx) (primitive wrappers), [sections.ts](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/sections.ts) (grouping, folding, `?setting=`), [model.ts](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/model.ts) (row type, search parsing, enum options, browser rows), [controls.tsx](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/frontend/src/components/settings-prototype/controls.tsx) (highlight, row menu, provenance).
+- Prototype registry, for the flattening and the default trick, not to ship: [proto_settings_registry_api.py](https://github.com/onhazrat/tg-workspace/blob/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af/backend/scripts/proto_settings_registry_api.py) (`build_rows`, `layer_defaults`). It derived ids by heuristics; this ticket declares them.
+- Today's sources the declarations replace: the backend settings registry (which table holds each key), the `_default_*` loaders in the jobs settings module, the admin configuration catalog service, and on the frontend the settings schema and catalog. The palette's settings commands are built in the commands' settings schema and navigate modules.
+- Prior-art tests: the configuration-catalog, permission-check, account-isolation, approval-gate and route-inventory API tests; the settings-table-split guard; the settings-sections Playwright spec for `page.route` mocking.
+- Regenerate the generated client after adding the routes.
+
 **Blocked by:** SET-01
 
 **Status:** ready-for-agent
@@ -40,5 +48,6 @@ prototype API does not: that one read staging and derived ids by heuristics.
 - [ ] Rows save on Enter or blur, Escape undoes, out-of-bounds input is refused before sending, a server refusal keeps the draft and shows the reason on the row, success shows "Saved" briefly; "Changed · default X" resets; the row menu copies the id and a link. The affected `SettingsContext` section refetches after a write so every tab sees it.
 - [ ] `?setting=<id>` scrolls to and highlights the row; old `?section=` links land on the matching topic; `/settings` lands on Account › Profile and `/admin` on Operator › Users.
 - [ ] The command palette offers a toggle or set command per editable Setting, "Go to Settings → topic" per topic, and a jump to any Setting by title or id.
+- [ ] The generated client is regenerated and the client-split conformance holds; the registry and write calls use the generated client.
 - [ ] Deleted: the Settings hub, `SettingsView`, the section components, the settings catalog, the settings tree, "Commonly used", and the old settings Playwright specs.
 - [ ] Tests on the spec's seams: the two routes with two live Accounts (visibility, writes per scope, refusals, reset, View-as, quota fallback, a write visible to the existing section route); Playwright specs with the registry mocked covering search, the tree, saving and refusals, links, the palette and the phone pill; the declaration guards mutation-tested. Route inventory, account isolation, approval gate and route hygiene pass with the new routes registered.
