@@ -27,7 +27,6 @@ export function PrototypeSwitcher({
       replace: true,
     })
   }
-  // biome-ignore lint/correctness/useExhaustiveDependencies: go reads index
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null

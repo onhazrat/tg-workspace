@@ -16,6 +16,7 @@ import { useTheme } from "@/components/theme-provider"
 import { useSettings } from "@/contexts/SettingsContext"
 import { SETTINGS_CATALOG } from "@/lib/settings/catalog"
 import type { SettingCatalogEntry } from "@/lib/settings/catalog-types"
+import { NETWORK_SETTINGS_DEFAULTS } from "@/lib/settings/network"
 import { appSettingsSpec } from "@/lib/settings/schema"
 
 export type Scope = "browser" | "account" | "deployment" | "env" | "code"
@@ -267,13 +268,55 @@ export function useRegistry() {
       )
       if (!response.ok) throw new Error((await response.json()).detail)
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: key }),
+    // The registry takes seconds to rebuild over the tunnel; show the change now.
+    onMutate: ({ row, value, reset }) => {
+      if (row.scope === "browser") return
+      const next = reset ? row.default : value
+      client.setQueryData<Registry>(
+        key,
+        (old) =>
+          old && {
+            ...old,
+            rows: old.rows.map((r) =>
+              r.id === row.id
+                ? {
+                    ...r,
+                    value: next,
+                    overridden: !reset,
+                    modified:
+                      JSON.stringify(next) !== JSON.stringify(r.default),
+                  }
+                : r,
+            ),
+          },
+      )
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: key }),
   })
 
   const rows = useMemo(() => {
-    const server = (query.data?.rows ?? []).map((row) =>
-      enrich(row, row.storage.split(".").pop() ?? ""),
-    )
+    const server = (query.data?.rows ?? []).map((raw) => {
+      let row = raw
+      const field = row.storage.split(".").pop() ?? ""
+      // The server has no default for some fields (Tor, publishing): the
+      // browser's copy is the only one. The drift a single registry removes.
+      if (row.default == null && row.scope !== "env" && row.scope !== "code") {
+        const fallback =
+          (appSettingsSpec as Record<string, { defaultValue: unknown }>)[field]
+            ?.defaultValue ??
+          (NETWORK_SETTINGS_DEFAULTS as unknown as Record<string, unknown>)[
+            field
+          ]
+        if (fallback !== undefined) {
+          row = {
+            ...row,
+            default: fallback,
+            modified: JSON.stringify(row.value) !== JSON.stringify(fallback),
+          }
+        }
+      }
+      return enrich(row, field)
+    })
     return [...browserRows(settings, theme), ...server]
   }, [query.data, settings, theme])
 

@@ -235,7 +235,7 @@ export function Highlight({ text, query }: { text: string; query: string }) {
 /** Where a value comes from and when a change takes effect. */
 export function Provenance({ row }: { row: Row }) {
   return (
-    <span className="font-mono text-[10px] text-app-ink/40">
+    <span className="break-all font-mono text-[10px] text-app-ink/40">
       {row.storage}
       {row.applies !== "now" && ` · applies: ${row.applies}`}
       {row.overridden && " · prototype override"}

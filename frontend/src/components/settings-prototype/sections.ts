@@ -138,7 +138,7 @@ export function useSettingsPage() {
     )
     const t = setTimeout(() => setFlash(null), 2500)
     return () => clearTimeout(t)
-  }, [setting, registry.isLoading, registry.rows])
+  }, [setting, registry.isLoading])
 
   return {
     ...registry,

@@ -29,6 +29,7 @@ import ast
 import json
 import os
 import re
+import time
 import uuid
 from contextlib import ExitStack
 from functools import lru_cache
@@ -399,12 +400,27 @@ def _flatten(prefix: str, value: Any) -> list[tuple[str, Any]]:
 
 
 # --- The registry -----------------------------------------------------------
+_live_cache: dict[uuid.UUID, tuple[float, set[str], list[Any]]] = {}
+
+
+def _live(user_id: uuid.UUID) -> tuple[set[str], list[Any]]:
+    """Permissions and the real catalog, cached: ~12 s of round trips over the
+    tunnel, and the prototype's own writes never change them.
+    ponytail: 5-minute TTL, so a change made in the real app shows up late."""
+    hit = _live_cache.get(user_id)
+    if hit and time.monotonic() - hit[0] < 300:
+        return hit[1], hit[2]
+    with Session(engine) as session:
+        perms = {p.value for p in permissions_for(session, user_id)}
+        live = catalog._global_entries(session) + catalog._user_entries(session, user_id)
+    _live_cache[user_id] = (time.monotonic(), perms, live)
+    return perms, live
+
 def build_rows(authorization: str, as_member: bool) -> dict[str, Any]:
     me = whoami(authorization)
     user_id = uuid.UUID(me["id"])
-    with Session(engine) as session:
-        perms = set() if as_member else {p.value for p in permissions_for(session, user_id)}
-        live = catalog._global_entries(session) + catalog._user_entries(session, user_id)
+    all_perms, live = _live(user_id)
+    perms = set() if as_member else all_perms
     admin = Permission.DATA_ADMIN.value in perms
     defaults = layer_defaults()
     stored = overrides(user_id)
@@ -440,7 +456,7 @@ def build_rows(authorization: str, as_member: bool) -> dict[str, Any]:
                 {
                     "id": f"{topic}.{'yours' if account else 'deployment'}.{name}",
                     "title": _humanize(name),
-                    "description": entry.description if not account else "",
+                    "description": "",
                     "topic": topic,
                     "scope": scope,
                     "type": _type_of(value if value is not None else default_map.get(field)),

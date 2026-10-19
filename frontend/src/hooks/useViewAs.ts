@@ -118,7 +118,7 @@ export function useViewAs() {
   const stop = useCallback((): void => {
     exitViewAs()
     queryClient.clear()
-    window.location.href = "/?tab=settings&setting=admin"
+    window.location.href = "/?tab=settings&setting=admin.users.list"
   }, [queryClient])
 
   return {

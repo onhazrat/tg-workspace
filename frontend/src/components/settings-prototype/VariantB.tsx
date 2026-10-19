@@ -252,7 +252,9 @@ function Item({
         </>
       )}
       <p className="mt-1.5 flex flex-wrap gap-x-2 font-mono text-[10px] text-app-ink/40">
-        <Highlight text={row.id} query={page.query} />
+        <span>
+          <Highlight text={row.id} query={page.query} />
+        </span>
         <Provenance row={row} />
       </p>
     </div>
