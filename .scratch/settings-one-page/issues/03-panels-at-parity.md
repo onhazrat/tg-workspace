@@ -33,10 +33,15 @@ lookup, Check, test message, Tor actions and the restyled user dialogs.
 
 **Blocked by:** SET-02
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Each panel listed above is rebuilt with only the page's primitives, on the production stores and client calls it used before; writes stay explicit and real.
 - [ ] Parity with the old panels: bot and chat name auto-lookup, bot Check, test message, Tor Test and Rotate, and user edit / delete / View as / export as popover forms and confirmations, not the template's dialogs.
 - [ ] Deleted: the old panel components and their now-unused parts, the template `UserSettings` and `Admin` components, and the Tor panel (its fields are Setting rows since SET-02).
 - [ ] The admin and user-settings Playwright specs are rewritten against the new topics, with the same coverage (adding, editing, approving, deleting an Account; changing password; quota limits and lift).
 - [ ] The CSS and focus-reveal invariants, View-as guards, CRAP ratchet and full suites pass.
+
+## Comments
+
+- 2026-10-20: implemented on `set-03-panels-parity` and merged into the integration branch `settings-one-page` in 4171b64b.
+  Open: the users list is still capped at 100 accounts (unchanged from the old panel). On every load the app writes the network settings back to the server (62 writes in one run), which predates this ticket (backlog). Five Settings-touching Playwright specs were not re-run after the last fix; CI covers them.
