@@ -1,23 +1,29 @@
 /**
  * PROTOTYPE, throw away. Variant B, "Sticky TOC rail": VS Code's settings
- * editor inside the tab's padding. A sticky search line on top, a thin
- * table of contents that follows the scroll, and one column of settings drawn
- * the VS Code way: "Category › Scope: **Title**", description, control under
- * it, a blue bar on the left of anything changed from its default, the gear on
- * the left on hover.
+ * editor inside the tab's padding, drawn with the workspace's own pieces.
+ *
+ * The bar on top is the Directory's (a rounded card holding a big search box
+ * and a row of pills), sticky so search is always one click away. The rail
+ * follows the scroll. Each setting reads "Topic › Scope: **Title**" with its
+ * description and control under it and a blue bar on the left when it is not
+ * at its default (blue is the workspace's selection colour). Controls and
+ * panels come from `b-kit`, which is only existing primitives.
  */
-import { ListFilter, Search, Settings2, X } from "lucide-react"
+import { AtSign, Lock, Search, Settings2, X } from "lucide-react"
 import { useEffect, useState } from "react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { TgMetaChip } from "@/components/ui/tg-chips"
-import { TgInput } from "@/components/ui/tg-input"
-import { TgToggle } from "@/components/ui/tg-toggle"
-import { Highlight, Provenance, RowMenu, SettingControl } from "./controls"
+import {
+  BarHeading,
+  BarPopover,
+  BarToggle,
+  DraftField,
+  Options,
+  Pill,
+  pillClass,
+  Segments,
+} from "./b-kit"
+import { B_PANEL_BODIES } from "./b-panels"
+import { Highlight, Provenance, RowMenu } from "./controls"
 import { formatValue, OPERATORS, type Row, SCOPES } from "./model"
 import { elementId, type SettingsPage, useSettingsPage } from "./sections"
 
@@ -40,7 +46,7 @@ function useActiveTopic(ids: string[]) {
           .sort((a, b) => a[1] - b[1])[0]
         if (top) setActive(top[0])
       },
-      { rootMargin: "0px 0px -60% 0px" },
+      { rootMargin: "-180px 0px -55% 0px" },
     )
     for (const id of ids) {
       const el = document.getElementById(`b-topic-${id}`)
@@ -51,68 +57,98 @@ function useActiveTopic(ids: string[]) {
   return active
 }
 
-function SearchLine({ page }: { page: SettingsPage }) {
-  const { query, setQuery, totals } = page
+/** The Directory's bar: search box, then a row of pills, then the count. */
+function SearchBar({ page }: { page: SettingsPage }) {
+  const { query, setQuery, filters, setFilters, totals } = page
+  const scope = SCOPES.find((s) => s.id === filters.scope)
   return (
-    <div className="sticky top-0 z-20 -mx-1 bg-app-bg/95 px-1 pb-3 pt-1 backdrop-blur-sm">
-      <div className="relative">
-        <Search
-          size={14}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-40"
-        />
-        <TgInput
-          variant="muted"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search settings"
-          aria-label="Search settings"
-          className="h-9 pl-9 pr-20"
-        />
-        <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+    <section className="sticky top-0 z-20 mb-4 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
+      <div className="px-4 pt-4">
+        <div className="flex items-center gap-2 rounded-xl border border-app-ink/10 bg-app-muted pl-3 pr-1.5 transition-colors focus-within:border-app-ink/30">
+          <Search size={16} className="text-app-ink/50" />
+          <input
+            type="search"
+            aria-label="Search settings"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search names, ids, .env names, descriptions and values"
+            className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
+          />
           {query && (
             <button
               type="button"
               aria-label="Clear search"
               onClick={() => setQuery("")}
-              className="flex size-7 items-center justify-center rounded-md opacity-50 hover:opacity-100"
+              className="rounded-md p-1 text-app-ink/50 hover:text-app-ink"
             >
               <X size={14} />
             </button>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Filter settings"
-                className="flex size-7 items-center justify-center rounded-md opacity-60 hover:bg-app-ink/5 hover:opacity-100"
-              >
-                <ListFilter size={14} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="font-mono text-xs">
-              {OPERATORS.map((op) => (
-                <DropdownMenuItem
-                  key={op}
-                  onSelect={() =>
-                    setQuery(
-                      `${query.trim()} ${op}`.trim() +
-                        (op.endsWith(":") ? "" : " "),
-                    )
-                  }
-                >
-                  {op}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
-      <p className="mt-1.5 text-[11px] text-app-ink/50">
-        {page.searching
-          ? `${totals.shown} settings found`
-          : `${totals.all} settings · ${totals.modified} modified`}
-      </p>
-    </div>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+        <Pill
+          label="Scope"
+          value={scope?.label ?? "Everything"}
+          active={filters.scope !== "all"}
+        >
+          <Options
+            options={[
+              { value: "all", label: "Everything" },
+              ...SCOPES.map((s) => ({ value: s.id, label: s.label })),
+            ]}
+            value={filters.scope}
+            onChange={(next) => setFilters({ ...filters, scope: next })}
+          />
+        </Pill>
+        <BarToggle
+          on={filters.modifiedOnly}
+          onClick={() =>
+            setFilters({ ...filters, modifiedOnly: !filters.modifiedOnly })
+          }
+          label="Changed only"
+          title="Only settings not at their default"
+        />
+        <BarToggle
+          on={filters.editableOnly}
+          onClick={() =>
+            setFilters({ ...filters, editableOnly: !filters.editableOnly })
+          }
+          label="I can change"
+          title="Hide what you can only read"
+        />
+        <BarPopover
+          align="end"
+          width="w-64"
+          trigger={
+            <button type="button" className={`${pillClass(false)} ml-auto`}>
+              <AtSign size={12} /> Search syntax
+            </button>
+          }
+        >
+          <BarHeading>Add to the search</BarHeading>
+          {OPERATORS.map((op) => (
+            <button
+              key={op}
+              type="button"
+              onClick={() =>
+                setQuery(
+                  `${query.trim()} ${op}`.trim() +
+                    (op.endsWith(":") ? "" : " "),
+                )
+              }
+              className="block w-full rounded-md px-2 py-1.5 text-left font-mono hover:bg-app-ink/5"
+            >
+              {op}
+            </button>
+          ))}
+        </BarPopover>
+      </div>
+      <div className="border-t border-app-ink/5 px-4 py-2 text-[11px] text-app-ink/60">
+        <b className="text-app-ink">{totals.shown}</b> of {totals.all} settings
+        · {totals.modified} changed from default
+      </div>
+    </section>
   )
 }
 
@@ -120,7 +156,7 @@ function Toc({ page, active }: { page: SettingsPage; active: string | null }) {
   return (
     <nav
       aria-label="Settings contents"
-      className="sticky top-16 hidden max-h-[calc(100svh-12rem)] self-start overflow-y-auto md:block"
+      className="sticky top-44 hidden max-h-[calc(100svh-16rem)] self-start overflow-y-auto md:block"
     >
       <ul className="space-y-0.5 text-xs">
         {page.sections.map((s) => {
@@ -137,33 +173,108 @@ function Toc({ page, active }: { page: SettingsPage; active: string | null }) {
                 }}
                 className={`flex items-center justify-between rounded-md px-2 py-1 ${
                   on
-                    ? "bg-app-ink/5 font-bold text-app-ink"
+                    ? "bg-app-ink/5 font-semibold text-app-ink"
                     : "text-app-ink/60 hover:text-app-ink"
                 }`}
               >
                 <span className="truncate">{s.title}</span>
-                <span className="text-[10px] text-app-ink/40">
+                <span className="flex items-center gap-1 text-[10px] tabular-nums text-app-ink/40">
+                  {s.modifiedCount > 0 && (
+                    <span
+                      title={`${s.modifiedCount} changed`}
+                      className="h-1.5 w-1.5 rounded-full bg-blue-500"
+                    />
+                  )}
                   {s.rowCount + s.panels.length}
                 </span>
               </a>
-              {on && s.groups.length > 1 && (
-                <ul className="mb-1 ml-3 border-l border-app-ink/10 pl-2">
-                  {s.groups.map((g) => (
-                    <li
-                      key={g.scope}
-                      className="py-0.5 text-[11px] text-app-ink/50"
-                    >
-                      {SCOPES.find((x) => x.id === g.scope)?.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </li>
           )
         })}
       </ul>
     </nav>
   )
+}
+
+/** One control per row type, from `b-kit` only. */
+function Control({ row, page }: { row: Row; page: SettingsPage }) {
+  const save = (value: unknown) => void page.save(row, value)
+  if (!row.canEdit) {
+    return (
+      <span
+        title={row.lockReason ?? undefined}
+        className="inline-flex max-w-full items-center gap-1.5 truncate rounded-lg bg-app-ink/5 px-2.5 py-1.5 font-mono text-[11px] text-app-ink/70"
+      >
+        <Lock size={11} className="shrink-0 opacity-60" />
+        <span className="truncate">{formatValue(row.value)}</span>
+        <span className="font-sans text-app-ink/40">· {row.lockReason}</span>
+      </span>
+    )
+  }
+  if (row.type === "boolean") {
+    return (
+      <BarToggle
+        on={Boolean(row.value)}
+        onClick={() => save(!row.value)}
+        label={row.value ? "On" : "Off"}
+        title={row.title}
+      />
+    )
+  }
+  if (row.type === "enum" && row.options) {
+    if (row.options.length <= 4) {
+      return (
+        <Segments
+          label={row.title}
+          options={row.options}
+          value={String(row.value)}
+          onChange={save}
+        />
+      )
+    }
+    return (
+      <Pill
+        label={row.title}
+        value={
+          row.options.find((o) => o.value === row.value)?.label ??
+          String(row.value)
+        }
+        active={row.modified}
+      >
+        <Options
+          options={row.options}
+          value={String(row.value)}
+          onChange={save}
+        />
+      </Pill>
+    )
+  }
+  const numeric = row.type === "integer" || row.type === "number"
+  return (
+    <DraftField
+      label={row.title}
+      numeric={numeric}
+      value={String(row.value ?? "")}
+      invalid={(draft) => {
+        if (!numeric) return false
+        const n = Number(draft)
+        return (
+          draft.trim() === "" ||
+          Number.isNaN(n) ||
+          (row.type === "integer" && !Number.isInteger(n)) ||
+          (row.min != null && n < row.min) ||
+          (row.max != null && n > row.max)
+        )
+      }}
+      onCommit={(draft) => save(numeric ? Number(draft) : draft)}
+    />
+  )
+}
+
+const APPLIES: Record<string, string> = {
+  restart: "Restart to apply",
+  deploy: "Needs a deploy",
+  "now (proposed)": "Proposed: live",
 }
 
 function Item({
@@ -177,13 +288,12 @@ function Item({
 }) {
   const scope = SCOPES.find((s) => s.id === row.scope)
   const flashing = page.flash === row.id
-  const bool = row.type === "boolean" && row.canEdit
   return (
     <div
       id={elementId(row.id)}
-      className={`group relative border-l-2 py-3 pl-8 pr-3 hover:bg-app-ink/[0.03] ${
-        row.modified ? "border-sky-500" : "border-transparent"
-      } ${flashing ? "bg-amber-300/20" : ""}`}
+      className={`group relative scroll-mt-44 rounded-r-lg border-l-2 py-3 pl-8 pr-3 hover:bg-app-ink/[0.03] ${
+        row.modified ? "border-blue-500" : "border-transparent"
+      } ${flashing ? "bg-blue-500/10" : ""}`}
     >
       <div className="absolute left-1.5 top-3 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <RowMenu
@@ -205,52 +315,35 @@ function Item({
           <span className="text-app-ink/50">
             {topicTitle} › {scope?.label}:{" "}
           </span>
-          <span className="font-bold">
+          <span className="font-semibold">
             <Highlight text={row.title} query={page.query} />
           </span>
         </h4>
         {row.modified && (
-          <span className="text-[11px] italic text-sky-600 dark:text-sky-400">
-            Modified · default {formatValue(row.default)}
-          </span>
+          <button
+            type="button"
+            disabled={!row.canEdit}
+            onClick={() => void page.reset(row)}
+            title={row.canEdit ? "Reset to default" : undefined}
+            className="text-[11px] text-blue-600 enabled:hover:underline dark:text-blue-400"
+          >
+            Changed · default {formatValue(row.default)}
+          </button>
         )}
-        {row.applies !== "now" && (
+        {APPLIES[row.applies] && (
           <TgMetaChip className="font-normal">
-            {row.applies === "restart"
-              ? "Restart to apply"
-              : row.applies === "deploy"
-                ? "Needs a deploy"
-                : "Proposed: live"}
+            {APPLIES[row.applies]}
           </TgMetaChip>
         )}
       </div>
-      {bool ? (
-        <label className="mt-1.5 flex max-w-2xl items-start gap-3">
-          <TgToggle
-            aria-label={row.title}
-            checked={Boolean(row.value)}
-            onClick={() => void page.save(row, !row.value)}
-            className="mt-0.5 shrink-0"
-          />
-          <span className="text-xs text-app-ink/70">
-            <Highlight text={row.description || row.title} query={page.query} />
-          </span>
-        </label>
-      ) : (
-        <>
-          {row.description && (
-            <p className="mt-1 max-w-2xl text-xs text-app-ink/70">
-              <Highlight text={row.description} query={page.query} />
-            </p>
-          )}
-          <div className="mt-2">
-            <SettingControl
-              row={row}
-              onChange={(value) => void page.save(row, value)}
-            />
-          </div>
-        </>
+      {row.description && (
+        <p className="mt-1 max-w-2xl text-xs text-app-ink/70">
+          <Highlight text={row.description} query={page.query} />
+        </p>
       )}
+      <div className="mt-2">
+        <Control row={row} page={page} />
+      </div>
       <p className="mt-1.5 flex flex-wrap gap-x-2 font-mono text-[10px] text-app-ink/40">
         <span>
           <Highlight text={row.id} query={page.query} />
@@ -266,63 +359,69 @@ export function VariantB() {
   const active = useActiveTopic(page.sections.map((s) => s.id))
   return (
     <div>
-      <SearchLine page={page} />
+      <SearchBar page={page} />
       {page.isLoading && (
-        <p className="text-xs opacity-50">Loading settings…</p>
+        <p className="px-1 text-xs text-app-ink/50">Loading settings…</p>
       )}
       {page.error && (
-        <p className="text-xs text-red-500">
+        <p className="px-1 text-xs text-red-500">
           Prototype API unreachable: {String(page.error)}
         </p>
       )}
       <div className="grid gap-8 md:grid-cols-[11rem_minmax(0,1fr)]">
         <Toc page={page} active={active} />
-        <div className="min-w-0 space-y-10">
+        <div className="min-w-0 space-y-8">
           {page.sections.map((section) => (
             <section
               key={section.id}
               id={`b-topic-${section.id}`}
-              className="scroll-mt-20"
+              className="scroll-mt-48"
             >
-              <h3 className="mb-2 border-b border-app-ink/10 pb-1 text-lg font-bold tracking-tight">
+              <h3 className="mb-1 border-b border-app-ink/10 pb-1.5 text-sm font-bold">
                 {section.title}
+                <span className="ml-2 font-mono text-[10px] font-normal text-app-ink/40">
+                  {section.id}.*
+                </span>
               </h3>
-              {section.panels.map((panel) => (
-                <div
-                  key={panel.id}
-                  id={elementId(panel.id)}
-                  className={`border-l-2 border-transparent py-3 pl-8 pr-3 ${
-                    page.flash === panel.id ? "bg-amber-300/20" : ""
-                  }`}
-                >
-                  <h4 className="text-[13px]">
-                    <span className="text-app-ink/50">{section.title}: </span>
-                    <span className="font-bold">
-                      <Highlight text={panel.title} query={page.query} />
-                    </span>
-                  </h4>
-                  <p className="mb-3 mt-1 text-xs text-app-ink/70">
-                    {panel.description}
-                  </p>
-                  {panel.render()}
-                  <p className="mt-1.5 font-mono text-[10px] text-app-ink/40">
-                    {panel.id}
-                  </p>
-                </div>
-              ))}
+              {section.panels
+                .filter((panel) => B_PANEL_BODIES[panel.id])
+                .map((panel) => (
+                  <div
+                    key={panel.id}
+                    id={elementId(panel.id)}
+                    className={`scroll-mt-44 rounded-r-lg border-l-2 border-transparent py-3 pl-8 pr-3 ${
+                      page.flash === panel.id ? "bg-blue-500/10" : ""
+                    }`}
+                  >
+                    <h4 className="text-[13px]">
+                      <span className="text-app-ink/50">{section.title}: </span>
+                      <span className="font-semibold">
+                        <Highlight text={panel.title} query={page.query} />
+                      </span>
+                    </h4>
+                    <p className="mb-2 mt-1 text-xs text-app-ink/70">
+                      {panel.description}
+                    </p>
+                    {B_PANEL_BODIES[panel.id]()}
+                    <p className="mt-1.5 font-mono text-[10px] text-app-ink/40">
+                      {panel.id}
+                    </p>
+                  </div>
+                ))}
               {section.groups.map((group) =>
                 group.folded ? (
                   <button
                     key={group.scope}
                     type="button"
                     onClick={() => page.unfold(`${section.id}.${group.scope}`)}
-                    className="ml-8 mt-2 block text-xs text-app-ink/50 hover:text-app-ink hover:underline"
+                    className={`${pillClass(false)} ml-8 mt-2`}
                   >
-                    {group.rows.length}{" "}
-                    {group.scope === "env" ? ".env values" : "code constants"} (
-                    {section.id}.
-                    {SCOPES.find((s) => s.id === group.scope)?.segment}.*)
-                    hidden. Show
+                    Show {group.rows.length}{" "}
+                    {group.scope === "env" ? ".env values" : "code constants"}
+                    <span className="font-mono text-app-ink/50">
+                      {section.id}.
+                      {SCOPES.find((s) => s.id === group.scope)?.segment}.*
+                    </span>
                   </button>
                 ) : (
                   group.rows.map((row) => (

@@ -92,3 +92,39 @@ tailscale serve --bg --https=5195 http://127.0.0.1:5195
 ```
 
 Open `/?tab=settings&variant=A` and log in.
+
+## Round 2: B chosen, drawn with the workspace's primitives (2026-10-19)
+
+Verdict: **B (sticky TOC rail)** is the direction. A stays on the switcher
+for comparison only.
+
+B now uses only pieces the Channels, Posts and Directory tabs already have,
+gathered in `b-kit.tsx`:
+
+| Need | Primitive | From |
+|---|---|---|
+| search bar | rounded card, big muted search box, row of pills, count line | Directory bar |
+| scope filter, long enums | `Pill` + `Options` | Posts filter bar |
+| on / off, filter toggles | `BarToggle` | Channels / Directory bar |
+| short enums | inline segments | Directory "Name / Bio / Posts" (private there) |
+| text and numbers | the `BarSearch` input class | Channels / Directory popovers |
+| lists | table in a rounded card, quiet headers, hover rows | Directory table (private there) |
+| add / edit | `pillClass` trigger opening a `BarPopover` form | `+ Follow`, `+ Add to Directory` |
+| submit, destructive | `TgButton size="sm"`, `TgConfirmDialog` | everywhere |
+| changed from default | blue left bar and "Changed · default X" (click resets) | blue is the selection colour |
+
+Every hand-written panel has a B body in `b-panels.tsx` on that kit, with the
+production stores and client calls (writes are real): Account (sign out,
+profile fields that save on Enter, password in a popover, usage table, delete
+with confirm), AI keys, bots, destinations, proxies (table with per-proxy
+slots, test results, live health), setting groups (table, editor expands under
+the row), Users (table; the row menu is still the old `UserActionsMenu`),
+Quota limits (defaults table with inherited values as placeholders, overrides
+table) and Quota usage (table, lift today).
+
+Fold-in work this exposes: export Directory's segments and table shell as
+shared components instead of copying them; restyle `UserActionsMenu`'s
+dialogs; the Tor panel is gone from B because its fields are rows, so its
+Test / Rotate actions need a home.
+
+Not in B yet: bot and chat auto-lookup and the Check buttons, test message.

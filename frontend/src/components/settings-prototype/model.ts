@@ -13,6 +13,7 @@ import { getRouteApi } from "@tanstack/react-router"
 import { useMemo } from "react"
 import { headers } from "@/api/base"
 import { useTheme } from "@/components/theme-provider"
+import { LANGUAGES } from "@/constants"
 import { useSettings } from "@/contexts/SettingsContext"
 import { SETTINGS_CATALOG } from "@/lib/settings/catalog"
 import type { SettingCatalogEntry } from "@/lib/settings/catalog-types"
@@ -136,9 +137,44 @@ function catalogFor(field: string): SettingCatalogEntry | undefined {
   return SETTINGS_CATALOG.find((entry) => entry.id === field)
 }
 
+const opts = (pairs: [string, string][]) =>
+  pairs.map(([value, label]) => ({ value, label }))
+
+/** Enums the catalog does not describe; their types say what they allow. */
+const ENUMS: Record<string, { value: string; label: string }[]> = {
+  citationStyle: opts([
+    ["asWritten", "As written"],
+    ["channelName", "Channel name"],
+    ["numbered", "Numbered"],
+  ]),
+  summaryTextSize: opts([
+    ["S", "Small"],
+    ["M", "Medium"],
+    ["L", "Large"],
+  ]),
+  torMode: opts([
+    ["auto", "Automatic"],
+    ["custom", "Custom pool"],
+  ]),
+  torRotationStrategy: opts([
+    ["sequential", "In order"],
+    ["random", "Random"],
+  ]),
+  globalStartTimeMode: opts([
+    ["retention", "Retention window"],
+    ["relative", "Relative"],
+    ["absolute", "Absolute date"],
+  ]),
+  translationTargetLanguage: LANGUAGES.map((l) => ({ value: l, label: l })),
+}
+
 function enrich(row: Row, field: string): Row {
   const entry = catalogFor(field)
-  if (!entry) return row
+  if (!entry) {
+    return ENUMS[field] && row.canEdit
+      ? { ...row, type: "enum", options: ENUMS[field] }
+      : row
+  }
   const control = entry.control
   return {
     ...row,
@@ -315,6 +351,8 @@ export function useRegistry() {
           }
         }
       }
+      if (row.default == null && row.scope !== "env" && row.scope !== "code")
+        row = { ...row, modified: false }
       return enrich(row, field)
     })
     return [...browserRows(settings, theme), ...server]
