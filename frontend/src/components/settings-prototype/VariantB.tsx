@@ -164,6 +164,19 @@ function SearchBar({ page }: { page: SettingsPage }) {
   )
 }
 
+/** How many settings under a contents entry differ from their default. */
+function Changed({ count }: { count: number }) {
+  if (!count) return null
+  return (
+    <span
+      title={`${count} changed from default`}
+      className="rounded-full bg-blue-500/15 px-1.5 text-[10px] font-semibold tabular-nums text-blue-600 dark:text-blue-400"
+    >
+      {count}
+    </span>
+  )
+}
+
 const jumpTo = (id: string, block: ScrollLogicalPosition = "start") =>
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block })
 
@@ -208,12 +221,14 @@ function Toc({ page, active }: { page: SettingsPage; active: string | null }) {
                 key: panel.id,
                 label: panel.title,
                 count: null as number | null,
+                changed: 0,
                 go: () => jumpTo(elementId(panel.id)),
               })),
             ...s.groups.map((g) => ({
               key: g.scope,
               label: SCOPES.find((x) => x.id === g.scope)?.label ?? g.scope,
               count: g.rows.length,
+              changed: g.rows.filter((r) => r.modified).length,
               go: () => {
                 if (g.folded) page.unfold(`${s.id}.${g.scope}`)
                 requestAnimationFrame(() =>
@@ -253,12 +268,7 @@ function Toc({ page, active }: { page: SettingsPage; active: string | null }) {
                 >
                   <span className="truncate">{s.title}</span>
                   <span className="flex items-center gap-1 text-[10px] font-normal tabular-nums text-app-ink/40">
-                    {s.modifiedCount > 0 && (
-                      <span
-                        title={`${s.modifiedCount} changed`}
-                        className="h-1.5 w-1.5 rounded-full bg-blue-500"
-                      />
-                    )}
+                    <Changed count={s.modifiedCount} />
                     {s.rowCount + s.panels.length}
                   </span>
                 </a>
@@ -273,11 +283,14 @@ function Toc({ page, active }: { page: SettingsPage; active: string | null }) {
                         className="flex w-full items-center justify-between rounded-md px-1.5 py-0.5 text-left text-[11px] text-app-ink/55 hover:bg-app-ink/5 hover:text-app-ink"
                       >
                         <span className="truncate">{c.label}</span>
-                        {c.count !== null && (
-                          <span className="text-[10px] tabular-nums text-app-ink/35">
-                            {c.count}
-                          </span>
-                        )}
+                        <span className="flex items-center gap-1">
+                          <Changed count={c.changed} />
+                          {c.count !== null && (
+                            <span className="text-[10px] tabular-nums text-app-ink/35">
+                              {c.count}
+                            </span>
+                          )}
+                        </span>
                       </button>
                     </li>
                   ))}

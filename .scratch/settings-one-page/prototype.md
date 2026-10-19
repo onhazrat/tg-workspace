@@ -166,3 +166,5 @@ the View-as ribbon guard still reading the deleted `routes/_layout.tsx`.
   Expand all / Collapse all on top. The current topic is the last one whose
   heading has passed the sticky bar (scroll listener, not an
   IntersectionObserver, which picked the topic hidden under the bar).
+- The contents show how many settings differ from their default, as a blue
+  count beside each topic and each scope group under it, in place of the dot.
