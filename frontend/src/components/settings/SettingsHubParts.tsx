@@ -3,10 +3,10 @@ import type React from "react"
 import { BotManagement } from "@/components/BotManagement"
 import { ConfigurationCatalogView } from "@/components/ConfigurationCatalogView"
 import { DatabaseManagement } from "@/components/DatabaseManagement"
-import { DiagnosticsView } from "@/components/DiagnosticsView"
-import { NetworkTelemetry } from "@/components/NetworkTelemetry"
 import { SettingGroupsPanel } from "@/components/SettingGroupsPanel"
 import { SettingsView } from "@/components/SettingsView"
+import { AccountSection } from "@/components/settings/account/AccountSection"
+import { UsersSection } from "@/components/settings/account/UsersSection"
 import { AIKeysPanel } from "@/components/settings/ai/AIKeysPanel"
 import { CommonlyUsedSection } from "@/components/settings/CommonlyUsedSection"
 import { SettingAnchor } from "@/components/settings/SettingAnchor"
@@ -37,36 +37,10 @@ const network =
   )
 
 const publishing =
-  (
-    focus: "publishing" | "bot-credentials" | "destinations" | "quick-message",
-  ) =>
+  (focus: "publishing" | "bot-credentials" | "destinations") =>
   ({ highlightId }: SectionProps) => (
     <BotManagement focus={focus} highlightId={highlightId} />
   )
-
-const data =
-  (focus: "data" | "retention" | "table-sizes" | "transfer" | "query") =>
-  ({ highlightId }: SectionProps) => (
-    <DatabaseManagement focus={focus} highlightId={highlightId} />
-  )
-
-const diagnostics = ({ highlightId }: SectionProps) => (
-  <SettingAnchor
-    settingId="panel-diagnostics"
-    highlighted={highlightId === "panel-diagnostics"}
-  >
-    <DiagnosticsView />
-  </SettingAnchor>
-)
-
-const networkTelemetry = ({ highlightId }: SectionProps) => (
-  <SettingAnchor
-    settingId="panel-network-telemetry"
-    highlighted={highlightId === "panel-network-telemetry"}
-  >
-    <NetworkTelemetry />
-  </SettingAnchor>
-)
 
 /**
  * What each `?section=` renders. A total record rather than a `switch`, so a
@@ -79,6 +53,7 @@ export const SETTINGS_SECTION_CONTENT: Record<
   "commonly-used": ({ highlightId }) => (
     <CommonlyUsedSection highlightId={highlightId} />
   ),
+  account: () => <AccountSection />,
   appearance: catalog("appearance"),
   "channels-sync": catalog("channels-sync"),
   ai: catalog("ai"),
@@ -109,20 +84,10 @@ export const SETTINGS_SECTION_CONTENT: Record<
   publishing: publishing("publishing"),
   "bot-credentials": publishing("bot-credentials"),
   destinations: publishing("destinations"),
-  "quick-message": publishing("quick-message"),
-  data: data("data"),
-  retention: data("retention"),
-  "table-sizes": data("table-sizes"),
-  transfer: data("transfer"),
-  query: data("query"),
-  tools: (props) => (
-    <div className="space-y-10">
-      {diagnostics(props)}
-      {networkTelemetry(props)}
-    </div>
+  retention: ({ highlightId }) => (
+    <DatabaseManagement focus="retention" highlightId={highlightId} />
   ),
-  diagnostics,
-  "network-telemetry": networkTelemetry,
+  users: () => <UsersSection />,
   configuration: ({ deepLinkSetting }) => (
     <ConfigurationCatalogView focusId={deepLinkSetting} />
   ),

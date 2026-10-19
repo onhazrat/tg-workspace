@@ -26,6 +26,6 @@ describe("buildNavigateCommands settings TOC", () => {
     expect(ids.has("navigate-settings-proxy")).toBe(true)
     expect(ids.has("navigate-settings-tor")).toBe(true)
     expect(ids.has("navigate-settings-retention")).toBe(true)
-    expect(ids.has("navigate-settings-network-telemetry")).toBe(true)
+    expect(ids.has("navigate-settings-users")).toBe(true)
   })
 })

@@ -3,7 +3,7 @@ import { expect, test } from "./fixtures.ts"
 
 async function gotoSettings(page: Page, search = "") {
   const qs = search.startsWith("?") ? search.slice(1) : search
-  const url = qs ? `/workspace?tab=settings&${qs}` : "/workspace?tab=settings"
+  const url = qs ? `/?tab=settings&${qs}` : "/?tab=settings"
   await page.goto(url)
   await expect(page.getByTestId("settings-search")).toBeVisible()
 }
@@ -13,18 +13,12 @@ async function openTocSection(page: Page, sectionLabel: string) {
     "Setting Groups": "Channels & Sync",
     Proxy: "Network",
     Tor: "Network",
-    Retention: "Data",
-    Diagnostics: "Tools",
-    "Network Telemetry": "Tools",
-    "Runtime Config": "Tools",
   }
   const parent = nestedParents[sectionLabel]
   if (parent) {
     const parentId = {
       "Channels & Sync": "channels-sync",
       Network: "network",
-      Data: "data",
-      Tools: "tools",
     }[parent]
     if (parentId) {
       const twistie = page.getByTestId(`toc-twistie-${parentId}`)
@@ -137,35 +131,18 @@ test.describe("Settings Hub (VS Code-style)", () => {
     await expect(page).toHaveURL(/section=proxy/)
   })
 
-  test("Diagnostics and Network Telemetry are separate searchable panels", async ({
+  // SET-01: logs and telemetry are tools, so the Tools tab holds them.
+  test("Diagnostics and Network Telemetry are not Settings", async ({
     page,
   }) => {
     await gotoSettings(page)
-    await page.getByTestId("settings-search").fill("LLM logs")
-    const results = page.getByTestId("settings-search-results")
-    await expect(results).toBeVisible({ timeout: 5_000 })
-    await results.getByText("Diagnostics", { exact: true }).first().click()
-    await expect(page).toHaveURL(/section=diagnostics/)
-    // The panel is titled "Diagnostics", matching the nav entry that leads
-    // here — see the comment in `LogsHeader.tsx`. It read "System Logs" when
-    // this assertion was written, and there is no System log tab any more.
-    await expect(
-      page.locator('[data-setting-id="panel-diagnostics"]'),
-    ).toBeVisible()
-    await expect(
-      page.locator('[data-setting-id="panel-network-telemetry"]'),
-    ).toHaveCount(0)
-
+    await expect(page.getByTestId("toc-section-tools")).toHaveCount(0)
     await page.getByTestId("settings-search").fill("network telemetry")
-    await expect(results).toBeVisible({ timeout: 5_000 })
-    await results
-      .getByText("Network Telemetry", { exact: true })
-      .first()
-      .click()
-    await expect(page).toHaveURL(/section=network-telemetry/)
+    const search = page.getByTestId("settings-section-search")
+    await expect(search).toBeVisible({ timeout: 5_000 })
     await expect(
-      page.locator('[data-setting-id="panel-network-telemetry"]'),
-    ).toBeVisible()
+      search.getByText("Network Telemetry", { exact: true }),
+    ).toHaveCount(0)
   })
 
   test("Advanced Mode toggle is gone", async ({ page }) => {

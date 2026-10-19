@@ -1,0 +1,46 @@
+import { describe, expect, test } from "bun:test"
+import { isRedirect } from "@tanstack/react-router"
+
+import { Route as Admin } from "./admin"
+import { Route as Settings } from "./settings"
+import { Route as Summarizer } from "./summarizer"
+import { Route as Workspace } from "./workspace"
+
+/**
+ * The old addresses, called through their gates with no router: each one
+ * throws a redirect, and the href it names is where a bookmark lands.
+ */
+function landing(route: { options: unknown }, searchStr: string): string {
+  const beforeLoad = (
+    route.options as {
+      beforeLoad: (ctx: { location: { searchStr: string } }) => void
+    }
+  ).beforeLoad
+  try {
+    beforeLoad({ location: { searchStr } })
+  } catch (err) {
+    if (isRedirect(err)) return String(err.options.href)
+    throw err
+  }
+  return "no redirect"
+}
+
+describe("old addresses land in the workspace at /", () => {
+  test("/workspace keeps its query string", () => {
+    expect(landing(Workspace, "?tab=posts&summary=s1")).toBe(
+      "/?tab=posts&summary=s1",
+    )
+  })
+
+  test("/summarizer keeps its query string", () => {
+    expect(landing(Summarizer, "?tab=chat")).toBe("/?tab=chat")
+  })
+
+  test("/settings opens the Settings tab on the Account section", () => {
+    expect(landing(Settings, "")).toBe("/?tab=settings&section=account")
+  })
+
+  test("/admin opens the Settings tab on the Users section", () => {
+    expect(landing(Admin, "")).toBe("/?tab=settings&section=users")
+  })
+})

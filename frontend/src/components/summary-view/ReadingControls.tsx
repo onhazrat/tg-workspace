@@ -1,7 +1,7 @@
 import { ChevronDown } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { SUMMARY_TEXT_SIZES, type SummaryTextSize } from "@/lib/settings/schema"
 
 /** Tailwind Typography sizes for each text size choice. */
@@ -21,9 +21,8 @@ export function ReadingControls({
 }) {
   return (
     <div className="mb-4 flex justify-end">
-      <TgSegmentedControl
+      <TgInlineChoice
         aria-label="Text size"
-        size="sm"
         value={textSize}
         onChange={onTextSizeChange}
         options={SUMMARY_TEXT_SIZES.map((size) => ({

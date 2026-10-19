@@ -206,7 +206,7 @@ test.beforeEach(async ({ page }) => {
 test("a Failed Summary shows its latest error and folds the earlier ones", async ({
   page,
 }) => {
-  await page.goto(`/workspace?tab=summary&summary=${FAILED_ID}`)
+  await page.goto(`/?tab=summary&summary=${FAILED_ID}`)
 
   await expect(page.getByText("Analysis Report")).toBeVisible({
     timeout: 20_000,
@@ -230,7 +230,7 @@ test("a Failed Summary shows its latest error and folds the earlier ones", async
 test("a Generate refused before its prompt existed offers nothing to copy", async ({
   page,
 }) => {
-  await page.goto(`/workspace?tab=summary&summary=${NO_PROMPT_ID}`)
+  await page.goto(`/?tab=summary&summary=${NO_PROMPT_ID}`)
 
   await expect(page.getByRole("alert")).toContainText("Too many tokens", {
     timeout: 20_000,
@@ -269,7 +269,7 @@ test("Retry runs on the worker, streams into the page, then shows the report", a
     }
     return running
   }
-  await page.goto(`/workspace?tab=summary&summary=${FAILED_ID}`)
+  await page.goto(`/?tab=summary&summary=${FAILED_ID}`)
   await expect(page.getByTestId("try-again")).toContainText("Attempt 3", {
     timeout: 20_000,
   })
@@ -345,7 +345,7 @@ test("a retry runs on another Key and model, warns it won't fit, and leaves the 
     return running
   }
 
-  await page.goto(`/workspace?tab=summary&summary=${FAILED_ID}`)
+  await page.goto(`/?tab=summary&summary=${FAILED_ID}`)
   await expect(page.getByTestId("try-again")).toBeVisible({ timeout: 20_000 })
   await seedScopedStorage(page, {
     selected_ai_key: "k-work",
@@ -378,7 +378,7 @@ test("a retry runs on another Key and model, warns it won't fit, and leaves the 
   expect(
     JSON.parse((await readScopedStorage(page, "ai_key_models")) ?? "{}"),
   ).toEqual({ "k-work": "gemini-x" })
-  await page.goto("/workspace?tab=action")
+  await page.goto("/?tab=action")
   await expect(page.getByLabel("AI key", { exact: true })).toHaveValue(
     "k-work",
     { timeout: 20_000 },
@@ -406,7 +406,7 @@ test("a Summary reopened mid-Attempt shows the text so far, and Stop ends it", a
     return stopped
   }
 
-  await page.goto(`/workspace?tab=summary&summary=${FAILED_ID}`)
+  await page.goto(`/?tab=summary&summary=${FAILED_ID}`)
   const card = page.getByTestId("running-attempt")
   await expect(card).toContainText("Half of the brief", { timeout: 20_000 })
   await expect(card).toContainText("Attempt 3 is running")
@@ -422,7 +422,7 @@ test("a Summary reopened mid-Attempt shows the text so far, and Stop ends it", a
 })
 
 test("a token-limit refusal leads with Change selection", async ({ page }) => {
-  await page.goto(`/workspace?tab=summary&summary=${NO_PROMPT_ID}`)
+  await page.goto(`/?tab=summary&summary=${NO_PROMPT_ID}`)
 
   const card = page.getByTestId("change-selection-card")
   await expect(card).toContainText("No AI Key was charged", { timeout: 20_000 })
@@ -432,7 +432,7 @@ test("a token-limit refusal leads with Change selection", async ({ page }) => {
 })
 
 test("a Pending Summary keeps the Copy Prompt panel", async ({ page }) => {
-  await page.goto(`/workspace?tab=summary&summary=${PENDING_ID}`)
+  await page.goto(`/?tab=summary&summary=${PENDING_ID}`)
 
   await expect(page.getByText("Awaiting External Response")).toBeVisible({
     timeout: 20_000,
@@ -444,7 +444,7 @@ test("a Pending Summary keeps the Copy Prompt panel", async ({ page }) => {
 test("History's Failed filter shows only the red cards, and keeps it in the URL", async ({
   page,
 }) => {
-  await page.goto("/workspace?tab=history")
+  await page.goto("/?tab=history")
   const cards = page.getByTestId("artifact-card")
   await expect(cards).toHaveCount(5, { timeout: 20_000 })
   await expect(
@@ -505,7 +505,7 @@ for (const [width, viewport] of [
         return kept
       }
 
-      await page.goto(`/workspace?tab=summary&summary=${CUT_ID}`)
+      await page.goto(`/?tab=summary&summary=${CUT_ID}`)
       const drafts = page.getByTestId("partial-responses")
       await expect(drafts).toContainText("The newest draft of the brief", {
         timeout: 20_000,
@@ -561,7 +561,7 @@ for (const [width, viewport] of [
         return { status: "cancelled" }
       }
 
-      await page.goto(`/workspace?tab=summary&summary=${COUNTDOWN_ID}`)
+      await page.goto(`/?tab=summary&summary=${COUNTDOWN_ID}`)
       const countdown = page.getByTestId("retry-countdown")
       await expect(countdown).toContainText("Retrying automatically in", {
         timeout: 20_000,
@@ -592,11 +592,8 @@ test.describe("on a phone", () => {
   test.use({ viewport: { width: 375, height: 812 } })
 
   for (const [name, url] of [
-    ["the failure page", `/workspace?tab=summary&summary=${FAILED_ID}`],
-    [
-      "History filtered to Failed",
-      "/workspace?tab=history&historyStatus=failed",
-    ],
+    ["the failure page", `/?tab=summary&summary=${FAILED_ID}`],
+    ["History filtered to Failed", "/?tab=history&historyStatus=failed"],
   ]) {
     test(`${name} has no sideways scroll`, async ({ page }) => {
       await page.goto(url)

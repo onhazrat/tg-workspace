@@ -754,36 +754,6 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     defaultValue: null,
     control: { kind: "panel", sectionId: "retention" },
   },
-  {
-    id: "panel-table-sizes",
-    label: "Table Sizes",
-    description: "Inspect Postgres table sizes.",
-    keywords: ["table", "sizes", "database", "data"],
-    group: "data",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "table-sizes" },
-  },
-  {
-    id: "panel-transfer",
-    label: "Data Transfer",
-    description: "Export, import, and migrate data.",
-    keywords: ["export", "import", "migrate", "transfer", "data"],
-    group: "data",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "transfer" },
-  },
-  {
-    id: "panel-query",
-    label: "Query",
-    description: "Run ad-hoc data queries.",
-    keywords: ["query", "sql", "data"],
-    group: "data",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "query" },
-  },
   // --- Publishing panels ---
   {
     id: "panel-bot-credentials",
@@ -824,56 +794,6 @@ export const SETTINGS_CATALOG: SettingCatalogEntry[] = [
     source: "app",
     defaultValue: null,
     control: { kind: "panel", sectionId: "publishing" },
-  },
-  {
-    id: "panel-quick-message",
-    label: "Quick Message",
-    description: "Send a quick test message via the bot.",
-    keywords: ["quick", "message", "send", "publishing"],
-    group: "publishing",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "quick-message" },
-  },
-
-  // --- Tools panels ---
-  {
-    id: "panel-diagnostics",
-    label: "Diagnostics",
-    description:
-      "System logs, LLM logs, sync logs, embedding logs, publish logs, and network request logs.",
-    keywords: [
-      "diagnostics",
-      "logs",
-      "system logs",
-      "llm logs",
-      "sync logs",
-      "embedding logs",
-      "publish logs",
-      "tools",
-    ],
-    group: "tools",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "diagnostics" },
-  },
-  {
-    id: "panel-network-telemetry",
-    label: "Network Telemetry",
-    description:
-      "Live network connection telemetry, Tor status, and request health.",
-    keywords: [
-      "network telemetry",
-      "telemetry",
-      "network",
-      "connections",
-      "tor status",
-      "tools",
-    ],
-    group: "tools",
-    source: "app",
-    defaultValue: null,
-    control: { kind: "panel", sectionId: "network-telemetry" },
   },
 ]
 

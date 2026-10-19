@@ -31,6 +31,10 @@ import {
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { pillClass } from "@/components/PostFilterParts"
 import {
+  TgInlineSegment,
+  TgInlineSegments,
+} from "@/components/ui/tg-inline-segments"
+import {
   type ColumnCatalogue,
   type ColumnChoices,
   choiceCount,
@@ -210,26 +214,19 @@ function SearchFields({
   onFields: (next: SearchField[]) => void
 }) {
   return (
-    <fieldset
-      aria-label="Search in"
-      className="flex items-center gap-0.5 rounded-lg bg-app-ink/5 p-0.5 text-[11px]"
-    >
-      {SEARCH_FIELDS.map((f) => {
-        const on = fields.includes(f)
-        return (
-          <button
-            key={f}
-            type="button"
-            aria-pressed={on}
-            data-testid={`directory-search-field-${f}`}
-            onClick={() => onFields(toggleField(fields, f))}
-            className={`rounded-md px-2 py-1 capitalize ${on ? "bg-app-card font-semibold shadow-sm" : "text-app-ink/50 hover:text-app-ink"}`}
-          >
-            {f}
-          </button>
-        )
-      })}
-    </fieldset>
+    <TgInlineSegments aria-label="Search in">
+      {SEARCH_FIELDS.map((f) => (
+        <TgInlineSegment
+          key={f}
+          pressed={fields.includes(f)}
+          data-testid={`directory-search-field-${f}`}
+          onClick={() => onFields(toggleField(fields, f))}
+          className="capitalize"
+        >
+          {f}
+        </TgInlineSegment>
+      ))}
+    </TgInlineSegments>
   )
 }
 

@@ -1,7 +1,7 @@
 import type React from "react"
 import { TgFilterChip } from "@/components/ui/tg-chips"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { TgInput } from "@/components/ui/tg-input"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import {
   DISCOVER_FOLLOW_STATE_OPTIONS,
   DISCOVER_MIN_TOTAL_MIN,
@@ -70,8 +70,7 @@ export const DiscoverFilterBar: React.FC<DiscoverFilterBarProps> = ({
           <span className="text-[11px] font-bold uppercase tracking-widest text-app-ink/50">
             Show
           </span>
-          <TgSegmentedControl
-            size="sm"
+          <TgInlineChoice
             aria-label="Filter candidates by follow state"
             value={followState}
             onChange={onFollowStateChange}

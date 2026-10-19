@@ -13,11 +13,12 @@ const TAB_LABELS: Record<string, string> = {
   discover: "Discover",
   chat: "Chat",
   history: "History",
+  tools: "Tools",
   settings: "Settings",
 }
 
 async function gotoWorkspace(page: Page, tab = "channels") {
-  await page.goto(`/workspace?tab=${tab}`)
+  await page.goto(`/?tab=${tab}`)
   const label = TAB_LABELS[tab] ?? tab
   // Role locators are more reliable than `#nav-tab-*` under Playwright Chrome.
   // `link`, not `button`: the workspace tabs navigate to `?tab=`, so they are
@@ -32,12 +33,8 @@ async function openSettingsSection(page: Page, sectionLabel: string) {
   await expect(page.getByTestId("settings-search")).toBeVisible()
   // Nested TOC leaves: expand parent via twistie when children are collapsed.
   const nestedParents: Record<string, string> = {
-    Diagnostics: "tools",
-    "Network Telemetry": "tools",
-    "Runtime Config": "tools",
     Proxy: "network",
     Tor: "network",
-    Retention: "data",
     "Setting Groups": "channels-sync",
   }
   const parentId = nestedParents[sectionLabel]
@@ -110,35 +107,27 @@ test.describe("TG UI primitives", () => {
     await expect(settingsField).toHaveValue("42")
   })
 
-  test("diagnostics panel opens without telemetry tabs", async ({ page }) => {
-    await openSettingsSection(page, "Diagnostics")
-    // The panel heading matches the nav entry that leads here — it used to read
-    // "System Logs", which made navigating to "Diagnostics" look like it had
-    // landed somewhere else (D5).
-    await expect(page.getByText("Diagnostics").first()).toBeVisible()
+  test("the Tools tab's logs open without telemetry tabs", async ({ page }) => {
+    await gotoWorkspace(page, "tools")
+    // The panel heading matches the nav entry that used to lead here — it read
+    // "System Logs", which made "Diagnostics" look like it had landed
+    // somewhere else (D5).
+    const logs = page.getByTestId("tool-logs")
+    await expect(logs.getByText("Diagnostics").first()).toBeVisible()
     await expect(
-      page.locator('[data-slot="tg-segmented-control"]'),
-    ).toHaveCount(0)
-    await expect(
-      page.locator('[data-setting-id="panel-diagnostics"]'),
-    ).toBeVisible()
-    await expect(
-      page.locator('[data-setting-id="panel-network-telemetry"]'),
+      logs.locator('[data-slot="tg-segmented-control"]'),
     ).toHaveCount(0)
   })
 
-  test("network telemetry TOC leaf renders telemetry panel", async ({
+  test("the Tools tab shows network telemetry to an Operator", async ({
     page,
   }) => {
-    await openSettingsSection(page, "Network Telemetry")
-    await expect(page).toHaveURL(/section=network-telemetry/)
-    await expect(
-      page.locator('[data-setting-id="panel-network-telemetry"]'),
-    ).toBeVisible()
+    await gotoWorkspace(page, "tools")
+    await expect(page.getByTestId("tool-network-telemetry")).toBeVisible()
   })
 
   test("logs clear-all uses TgConfirmDialog", async ({ page }) => {
-    await openSettingsSection(page, "Diagnostics")
+    await gotoWorkspace(page, "tools")
 
     let nativeConfirmOpened = false
     page.on("dialog", async (dialog) => {

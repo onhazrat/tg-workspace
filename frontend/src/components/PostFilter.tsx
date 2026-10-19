@@ -18,7 +18,7 @@ import {
 } from "@/components/AnalysisWindowControl"
 import { FilterRow } from "@/components/filter-tree/FilterRow"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { funnelledValues } from "@/lib/filter-tree"
 import { languageLabel, languageValue } from "@/lib/language-name"
@@ -188,8 +188,7 @@ function SearchBox({
           className="min-w-0 flex-1 bg-transparent py-3 text-sm focus:outline-none"
         />
         {embeddingsEnabled && (
-          <TgSegmentedControl
-            size="sm"
+          <TgInlineChoice
             aria-label="Search mode"
             value={mode}
             onChange={(next) => {

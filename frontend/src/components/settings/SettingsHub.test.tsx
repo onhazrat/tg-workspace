@@ -17,6 +17,8 @@ import {
 } from "@/components/SettingsView"
 import { VALID_SETTINGS_SECTIONS } from "@/lib/settings/toc"
 import { AppearanceSection } from "./AppearanceSection"
+import { AccountSection } from "./account/AccountSection"
+import { UsersSection } from "./account/UsersSection"
 import { CommonlyUsedSection } from "./CommonlyUsedSection"
 import { NetworkSection } from "./NetworkSection"
 import { SETTINGS_SECTION_CONTENT, SettingsSearchBar } from "./SettingsHubParts"
@@ -55,10 +57,12 @@ describe("settings-hub-model", () => {
     expect(deepLinkTarget("no-such-setting")).toBeNull()
   })
 
-  test("only the data sections load table stats, only diagnostics go dark", () => {
-    expect(loadsDbStats("query")).toBe(true)
+  test("only retention loads table stats, only the catalog goes dark", () => {
+    expect(loadsDbStats("retention")).toBe(true)
     expect(loadsDbStats("ai")).toBe(false)
-    expect(sectionThemeClass("tools")).toBe("terminal-theme text-app-ink")
+    expect(sectionThemeClass("configuration")).toBe(
+      "terminal-theme text-app-ink",
+    )
     expect(sectionThemeClass("appearance")).toBe("")
   })
 
@@ -90,13 +94,19 @@ describe("SETTINGS_SECTION_CONTENT", () => {
     expect(draw("proxy").props.focus).toBe("proxy")
     expect(draw("destinations").type).toBe(BotManagement)
     expect(draw("destinations").props.focus).toBe("destinations")
-    expect(draw("table-sizes").type).toBe(DatabaseManagement)
-    expect(draw("table-sizes").props.focus).toBe("table-sizes")
+    expect(draw("retention").type).toBe(DatabaseManagement)
+    expect(draw("retention").props.focus).toBe("retention")
     expect(draw("channels-sync").type).toBe(SettingsView)
     expect(draw("channels-sync").props.activeSection).toBe("channels-sync")
     expect(draw("commonly-used").type).toBe(CommonlyUsedSection)
     expect(draw("configuration").type).toBe(ConfigurationCatalogView)
     expect(draw("configuration").props.focusId).toBe("user:x")
+  })
+
+  // SET-01: what the template's /settings and /admin pages showed.
+  test("the account and users sections draw what the template pages held", () => {
+    expect(draw("account").type).toBe(AccountSection)
+    expect(draw("users").type).toBe(UsersSection)
   })
 
   test("a panel section is highlighted only for its own id", () => {

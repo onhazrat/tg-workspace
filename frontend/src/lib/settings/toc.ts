@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react"
 import {
-  Activity,
   Braces,
   Cpu,
   Database,
@@ -8,16 +7,17 @@ import {
   KeyRound,
   Layers,
   Layout,
-  MessageSquare,
   RefreshCw,
   Send,
   Shield,
   Star,
-  Upload,
+  UserRound,
+  Users,
 } from "lucide-react"
 
 export type SettingsTocId =
   | "commonly-used"
+  | "account"
   | "appearance"
   | "channels-sync"
   | "setting-groups"
@@ -29,15 +29,8 @@ export type SettingsTocId =
   | "publishing"
   | "bot-credentials"
   | "destinations"
-  | "quick-message"
-  | "data"
   | "retention"
-  | "table-sizes"
-  | "transfer"
-  | "query"
-  | "tools"
-  | "diagnostics"
-  | "network-telemetry"
+  | "users"
   | "configuration"
 
 export interface SettingsTocNode {
@@ -47,9 +40,16 @@ export interface SettingsTocNode {
   children?: SettingsTocNode[]
 }
 
-/** Hierarchical Settings TOC — IDs are stable for `?section=` URLs. */
+/**
+ * Hierarchical Settings TOC — IDs are stable for `?section=` URLs.
+ *
+ * Account and Users hold what the template's /settings and /admin pages held
+ * (SET-01). The tools (logs, quick message, telemetry, table sizes, import /
+ * export, query) are not settings and live in the Tools tab.
+ */
 export const SETTINGS_TOC: SettingsTocNode[] = [
   { id: "commonly-used", label: "Commonly Used", icon: Star },
+  { id: "account", label: "Account", icon: UserRound },
   { id: "appearance", label: "Appearance", icon: Layout },
   {
     id: "channels-sync",
@@ -79,41 +79,22 @@ export const SETTINGS_TOC: SettingsTocNode[] = [
     children: [
       { id: "bot-credentials", label: "Bot Credentials", icon: Shield },
       { id: "destinations", label: "Destinations", icon: Send },
-      { id: "quick-message", label: "Quick Message", icon: MessageSquare },
     ],
   },
-  {
-    id: "data",
-    label: "Data",
-    icon: Database,
-    children: [
-      { id: "retention", label: "Retention", icon: Database },
-      { id: "table-sizes", label: "Table Sizes", icon: Layers },
-      { id: "transfer", label: "Transfer", icon: Upload },
-      { id: "query", label: "Query", icon: Braces },
-    ],
-  },
-  {
-    id: "tools",
-    label: "Tools",
-    icon: Activity,
-    children: [
-      { id: "diagnostics", label: "Diagnostics", icon: Activity },
-      { id: "network-telemetry", label: "Network Telemetry", icon: Globe },
-      { id: "configuration", label: "Configuration Catalog", icon: Layers },
-    ],
-  },
+  { id: "retention", label: "Retention", icon: Database },
+  { id: "users", label: "Users", icon: Users },
+  { id: "configuration", label: "Configuration Catalog", icon: Braces },
 ]
 
 /** Legacy flat section ids → current TOC ids. */
 const SECTION_ALIASES: Record<string, SettingsTocId> = {
   sync: "channels-sync",
-  db: "data",
+  db: "retention",
+  data: "retention",
   "scraping-sync": "channels-sync",
   "network-security": "network",
-  "data-management": "data",
+  "data-management": "retention",
   "ai-models": "ai",
-  telemetry: "network-telemetry",
 }
 
 const ALL_TOC_IDS: SettingsTocId[] = (() => {

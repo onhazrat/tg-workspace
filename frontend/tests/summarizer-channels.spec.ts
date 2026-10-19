@@ -22,7 +22,7 @@ test.describe("TG Workspace channels and posts", () => {
     await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 25, prefix)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await expect(page.getByTestId("command-palette-button")).toBeVisible()
     await page.getByPlaceholder("Search channels...").fill(prefix)
 
@@ -63,7 +63,7 @@ test.describe("TG Workspace channels and posts", () => {
     await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 70, prefix)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await expect(page.getByTestId("command-palette-button")).toBeVisible()
     await page.getByPlaceholder("Search channels...").fill(prefix)
 
@@ -330,7 +330,7 @@ test.describe("TG Workspace channels and posts", () => {
     // A Sync click must not reach Telegram; refusing the enqueue is enough.
     await page.route("**/api/v1/jobs/sync", (route) => route.abort())
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(cards).toHaveCount(4, { timeout: 30_000 })
@@ -460,7 +460,7 @@ test.describe("TG Workspace channels and posts", () => {
     await seedScopedStorage(page, { channelCardZoom: "-1" })
     await seedBulkChannels(page, 3, prefix, photoBase)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(cards).toHaveCount(3, { timeout: 30_000 })
@@ -491,7 +491,7 @@ test.describe("TG Workspace channels and posts", () => {
     const prefix = `kbd${Date.now()}`
     await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 4, prefix)
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await showCards(page)
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
@@ -551,7 +551,7 @@ test.describe("TG Workspace channels and posts", () => {
     await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 16, prefix)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(cards).toHaveCount(16, { timeout: 30_000 })
@@ -603,7 +603,7 @@ test.describe("TG Workspace channels and posts", () => {
       { bio: long },
     )
     await showCards(page)
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(cards).toHaveCount(3, { timeout: 30_000 })
@@ -658,7 +658,7 @@ test.describe("TG Workspace channels and posts", () => {
     await seedTestChannel(page, `${prefix}a`, [])
     await seedTestChannel(page, `${prefix}b`, [])
     await showCards(page)
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(cards).toHaveCount(2, { timeout: 30_000 })
@@ -718,7 +718,7 @@ test.describe("TG Workspace channels and posts", () => {
     })
     const follow = await mockBulkFollowJob(page)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.locator("#tour-add-channel").click()
     await page
       .getByLabel("Handles to follow")
@@ -754,7 +754,7 @@ test.describe("TG Workspace channels and posts", () => {
     await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 2, prefix)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByRole("button", { name: "Cards", exact: true }).click()
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
@@ -811,7 +811,7 @@ test.describe("TG Workspace channels and posts", () => {
       await route.fulfill({ response, json: stats })
     })
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(cards).toHaveCount(2, { timeout: 30_000 })
@@ -859,7 +859,7 @@ test.describe("TG Workspace channels and posts", () => {
     await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 2, prefix)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
     await expect(cards).toHaveCount(2, { timeout: 30_000 })
@@ -924,7 +924,7 @@ test.describe("TG Workspace channels and posts", () => {
     await gotoWorkspace(page, "summary")
     await seedBulkChannels(page, 3, prefix)
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByRole("button", { name: "Cards", exact: true }).click()
     await page.getByPlaceholder("Search channels...").fill(prefix)
     const cards = page.locator(`[data-channel-name^="${prefix}"]`)
@@ -1040,7 +1040,7 @@ test.describe("TG Workspace channels and posts", () => {
       })
     })
 
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     const syncAll = page.getByRole("button", { name: "Sync all" })
     await syncAll.click()
     await expect(page.getByRole("dialog")).toContainText(

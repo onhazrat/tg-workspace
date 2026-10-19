@@ -215,8 +215,12 @@ test.describe("Admin page access control", () => {
 
     await page.goto("/admin")
 
-    await expect(page.getByRole("heading", { name: "Users" })).not.toBeVisible()
+    // /admin lands on Settings, Users (SET-01); the server refuses the list.
     await expect(page).not.toHaveURL(/\/admin/)
+    await expect(
+      page.getByText("Your account cannot manage users."),
+    ).toBeVisible()
+    await expect(page.getByRole("button", { name: "Add User" })).toHaveCount(0)
   })
 
   test("Superuser can access admin page", async ({ page }) => {

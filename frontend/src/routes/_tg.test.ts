@@ -5,10 +5,10 @@ import { client } from "@/client/client.gen"
 import { queryClient } from "@/lib/queryClient"
 import { TOKEN_STORAGE_KEY } from "@/lib/storage/scoped"
 
-import { Route } from "./_layout"
+import { Route } from "./_tg"
 
 /**
- * The authenticated shell's gate, called directly: no router, no render.
+ * The workspace's gate, called directly: no router, no render.
  *
  * Every request is refused, so the server-clock sync fails quietly (as it
  * is written to) and the only user the gate can see is the one seeded into the
@@ -47,7 +47,7 @@ afterEach(() => {
 
 const signIn = () => window.localStorage.setItem(TOKEN_STORAGE_KEY, "tok")
 
-describe("_layout beforeLoad", () => {
+describe("_tg beforeLoad", () => {
   test("sends a visitor with no session to the login page", async () => {
     expect(await outcome()).toBe("redirect /login")
   })

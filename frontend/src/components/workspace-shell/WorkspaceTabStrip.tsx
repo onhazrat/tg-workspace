@@ -272,7 +272,7 @@ function StripTab({
         aria-describedby={view.closable ? describedBy : undefined}
         draggable={false}
         id={view.anchorId}
-        to="/workspace"
+        to="/"
         search={(prev) => tabSearch(prev, tab)}
         replace
         title={view.label}

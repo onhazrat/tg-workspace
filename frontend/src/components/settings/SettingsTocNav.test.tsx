@@ -23,24 +23,24 @@ describe("SettingsTocNav", () => {
     ).toContain("bg-app-ink")
     // Its sibling shows with it; another branch stays folded.
     expect(screen.queryByTestId("toc-section-tor")).toBeTruthy()
-    expect(screen.queryByTestId("toc-section-retention")).toBeNull()
+    expect(screen.queryByTestId("toc-section-ai-keys")).toBeNull()
   })
 
   test("a twistie folds without selecting; a branch click selects and opens", () => {
     const onSelect = mock()
     render(<SettingsTocNav activeSection="appearance" onSelect={onSelect} />)
-    fireEvent.click(screen.getByTestId("toc-twistie-data"))
-    expect(screen.getByTestId("toc-section-retention")).toBeTruthy()
+    fireEvent.click(screen.getByTestId("toc-twistie-ai"))
+    expect(screen.getByTestId("toc-section-ai-keys")).toBeTruthy()
     expect(onSelect).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByTestId("toc-twistie-data"))
-    expect(screen.queryByTestId("toc-section-retention")).toBeNull()
+    fireEvent.click(screen.getByTestId("toc-twistie-ai"))
+    expect(screen.queryByTestId("toc-section-ai-keys")).toBeNull()
 
-    fireEvent.click(screen.getByTestId("toc-section-tools"))
-    expect(onSelect).toHaveBeenCalledWith("tools")
-    expect(screen.getByTestId("toc-section-diagnostics")).toBeTruthy()
+    fireEvent.click(screen.getByTestId("toc-section-publishing"))
+    expect(onSelect).toHaveBeenCalledWith("publishing")
+    expect(screen.getByTestId("toc-section-destinations")).toBeTruthy()
     // The open set survives a remount.
     cleanup()
     render(<SettingsTocNav activeSection="appearance" onSelect={onSelect} />)
-    expect(screen.getByTestId("toc-section-diagnostics")).toBeTruthy()
+    expect(screen.getByTestId("toc-section-destinations")).toBeTruthy()
   })
 })

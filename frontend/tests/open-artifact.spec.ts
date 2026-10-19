@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test("opening a summary from History renders its body", async ({ page }) => {
-  await page.goto("/workspace?tab=history")
+  await page.goto("/?tab=history")
   const card = page.locator('[data-artifact-id="e2e-open-summary"]')
   await expect(card).toBeVisible({ timeout: 20_000 })
   await card.getByRole("button").first().click()
@@ -35,7 +35,7 @@ test("opening a summary from History renders its body", async ({ page }) => {
 })
 
 test("a summary opens from its URL alone", async ({ page }) => {
-  await page.goto("/workspace?tab=summary&summary=e2e-open-summary")
+  await page.goto("/?tab=summary&summary=e2e-open-summary")
   await expect(
     page.getByText("Three things happened this week.", { exact: true }),
   ).toBeVisible({
@@ -44,7 +44,7 @@ test("a summary opens from its URL alone", async ({ page }) => {
 })
 
 test("opening a chat from History renders its transcript", async ({ page }) => {
-  await page.goto("/workspace?tab=history")
+  await page.goto("/?tab=history")
   const card = page.locator('[data-artifact-id="e2e-open-chat"]')
   await expect(card).toBeVisible({ timeout: 20_000 })
   await card.getByRole("button").first().click()
@@ -65,7 +65,7 @@ test("opening a chat from History renders its transcript", async ({ page }) => {
 test("a card with hundreds of channels does not widen the page", async ({
   page,
 }) => {
-  await page.goto("/workspace?tab=history")
+  await page.goto("/?tab=history")
   const card = page.locator(`[data-artifact-id="${WIDE_SUMMARY_ID}"]`)
   await expect(card).toBeVisible({ timeout: 20_000 })
 
@@ -98,25 +98,25 @@ test("a card with hundreds of channels does not widen the page", async ({
 test("opening an artifact leaves the workspace window alone", async ({
   page,
 }) => {
-  await page.goto("/workspace?tab=posts")
+  await page.goto("/?tab=posts")
   const windowTrigger = page.getByRole("button", { name: "Analysis window" })
   await expect(windowTrigger).toBeVisible({ timeout: 20_000 })
   const before = await windowTrigger.textContent()
 
-  await page.goto("/workspace?tab=history")
+  await page.goto("/?tab=history")
   const card = page.locator('[data-artifact-id="e2e-open-summary"]')
   await expect(card).toBeVisible({ timeout: 20_000 })
   await card.getByRole("button").first().click()
   await expect(page).toHaveURL(/tab=summary/)
 
-  await page.goto("/workspace?tab=posts")
+  await page.goto("/?tab=posts")
   await expect(windowTrigger).toHaveText(before ?? "")
 })
 
 test("Use this Scope restores the artifact's window as Fixed", async ({
   page,
 }) => {
-  await page.goto("/workspace?tab=history")
+  await page.goto("/?tab=history")
   const card = page.locator('[data-artifact-id="e2e-open-summary"]')
   await expect(card).toBeVisible({ timeout: 20_000 })
 
@@ -128,7 +128,7 @@ test("Use this Scope restores the artifact's window as Fixed", async ({
 
   await card.getByTestId("use-this-scope").click()
 
-  await page.goto("/workspace?tab=posts")
+  await page.goto("/?tab=posts")
   const windowTrigger = page.getByRole("button", { name: "Analysis window" })
   await expect(windowTrigger).toContainText("Fixed ·", { timeout: 20_000 })
   await expect(windowTrigger).toContainText("(1d)")

@@ -20,7 +20,7 @@ import type { SettingCatalogEntry } from "@/lib/settings/catalog-types"
 import { searchSettings, suggestSettingsOperators } from "@/lib/settings/search"
 import type { SettingsSection } from "@/lib/settings/toc"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 function useDebouncedValue<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value)

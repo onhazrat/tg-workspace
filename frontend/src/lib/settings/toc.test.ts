@@ -14,9 +14,28 @@ describe("settings TOC", () => {
     expect(VALID_SETTINGS_SECTIONS).toContain("proxy")
     expect(VALID_SETTINGS_SECTIONS).toContain("tor")
     expect(VALID_SETTINGS_SECTIONS).toContain("retention")
-    expect(VALID_SETTINGS_SECTIONS).toContain("diagnostics")
-    expect(VALID_SETTINGS_SECTIONS).toContain("network-telemetry")
     expect(VALID_SETTINGS_SECTIONS).toContain("configuration")
+  })
+
+  // SET-01: the template's /settings and /admin pages land here.
+  test("holds the account and users sections the template pages left", () => {
+    expect(normalizeSettingsSection("account")).toBe("account")
+    expect(normalizeSettingsSection("users")).toBe("users")
+  })
+
+  // SET-01: tools are not settings; they moved to the Tools tab.
+  test("no longer lists the tools", () => {
+    for (const tool of [
+      "tools",
+      "diagnostics",
+      "network-telemetry",
+      "quick-message",
+      "table-sizes",
+      "transfer",
+      "query",
+    ]) {
+      expect(VALID_SETTINGS_SECTIONS).not.toContain(tool)
+    }
   })
 
   // The TOC used to advertise a "danger" section that had no panel behind it —
@@ -30,21 +49,19 @@ describe("settings TOC", () => {
   test("maps all legacy aliases", () => {
     expect(normalizeSettingsSection("sync")).toBe("channels-sync")
     expect(normalizeSettingsSection("scraping-sync")).toBe("channels-sync")
-    expect(normalizeSettingsSection("db")).toBe("data")
-    expect(normalizeSettingsSection("data-management")).toBe("data")
+    expect(normalizeSettingsSection("db")).toBe("retention")
+    expect(normalizeSettingsSection("data")).toBe("retention")
+    expect(normalizeSettingsSection("data-management")).toBe("retention")
     expect(normalizeSettingsSection("network-security")).toBe("network")
     expect(normalizeSettingsSection("ai-models")).toBe("ai")
-    expect(normalizeSettingsSection("telemetry")).toBe("network-telemetry")
   })
 
   test("parentTocId links leaves to parents", () => {
     expect(parentTocId("setting-groups")).toBe("channels-sync")
     expect(parentTocId("proxy")).toBe("network")
     expect(parentTocId("tor")).toBe("network")
-    expect(parentTocId("retention")).toBe("data")
-    expect(parentTocId("diagnostics")).toBe("tools")
-    expect(parentTocId("network-telemetry")).toBe("tools")
-    expect(parentTocId("configuration")).toBe("tools")
+    expect(parentTocId("retention")).toBeNull()
+    expect(parentTocId("configuration")).toBeNull()
     expect(parentTocId("network")).toBeNull()
     expect(parentTocId("commonly-used")).toBeNull()
   })
@@ -52,17 +69,8 @@ describe("settings TOC", () => {
   test("findTocNode resolves nested labels", () => {
     expect(findTocNode("setting-groups")?.label).toBe("Setting Groups")
     expect(findTocNode("proxy")?.label).toBe("Proxy")
-    expect(findTocNode("network-telemetry")?.label).toBe("Network Telemetry")
+    expect(findTocNode("users")?.label).toBe("Users")
     expect(findTocNode("missing" as never)).toBeUndefined()
-  })
-
-  test("tools children include diagnostics and network telemetry as siblings", () => {
-    const tools = findTocNode("tools")
-    expect(tools?.children?.map((c) => c.id)).toEqual([
-      "diagnostics",
-      "network-telemetry",
-      "configuration",
-    ])
   })
 
   test("isCatalogBrowseSection covers curated + schema sections", () => {
@@ -77,13 +85,15 @@ describe("settings TOC", () => {
   test("SETTINGS_TOC top-level order matches IA", () => {
     expect(SETTINGS_TOC.map((n) => n.id)).toEqual([
       "commonly-used",
+      "account",
       "appearance",
       "channels-sync",
       "ai",
       "network",
       "publishing",
-      "data",
-      "tools",
+      "retention",
+      "users",
+      "configuration",
     ])
   })
 })

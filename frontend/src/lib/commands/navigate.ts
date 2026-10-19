@@ -62,12 +62,12 @@ export function buildNavigateCommands(): CommandDef[] {
     {
       id: "navigate-settings-db",
       kind: "action",
-      label: "Open Settings → Data",
+      label: "Open Settings → Retention",
       keywords: ["db", "data", "settings", "navigate", "legacy"],
       group: "Navigate",
       run: (ctx) => {
         ctx.setActiveTab("settings")
-        ctx.setActiveSection("data")
+        ctx.setActiveSection("retention")
       },
     },
   ]

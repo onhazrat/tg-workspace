@@ -43,7 +43,7 @@ import { SERVER_TABLE_NAMES } from "@/lib/data-transfer/tables"
 import { useLoadDBStats } from "./useDBStats"
 import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 export function useCommandRegistry(): {
   commands: CommandDef[]

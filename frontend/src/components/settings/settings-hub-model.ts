@@ -3,23 +3,14 @@ import type { SettingsFeatureGroup } from "@/lib/settings/catalog-types"
 import type { SettingsSection } from "@/lib/settings/toc"
 
 /** Sections whose panels read the table-size stats, so opening one loads them. */
-const DB_STATS_SECTIONS: ReadonlySet<SettingsSection> = new Set([
-  "data",
-  "retention",
-  "table-sizes",
-  "transfer",
-  "query",
-])
+const DB_STATS_SECTIONS: ReadonlySet<SettingsSection> = new Set(["retention"])
 
 export const loadsDbStats = (section: SettingsSection): boolean =>
   DB_STATS_SECTIONS.has(section)
 
-/** The diagnostic sections draw in the terminal theme rather than the card's. */
+/** The Configuration Catalog draws in the terminal theme rather than the card's. */
 const TERMINAL_SECTIONS: ReadonlySet<SettingsSection> = new Set([
-  "diagnostics",
-  "network-telemetry",
   "configuration",
-  "tools",
 ])
 
 export const sectionThemeClass = (section: SettingsSection): string =>
@@ -33,7 +24,7 @@ const GROUP_SECTIONS: Record<SettingsFeatureGroup, SettingsSection> = {
   network: "network",
   data: "retention",
   publishing: "publishing",
-  tools: "diagnostics",
+  tools: "configuration",
   jobs: "channels-sync",
 }
 

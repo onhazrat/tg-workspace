@@ -12,6 +12,11 @@ import type { DirectoryRowResponse } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
+import {
+  TgTableCard,
+  tgTableHeadClass,
+  tgTableRowClass,
+} from "@/components/ui/tg-table-card"
 import type { ColumnKey } from "@/lib/directory/directory-columns"
 import {
   type MeasureKey,
@@ -570,84 +575,81 @@ export function DirectoryTable({
     )
   }
   return (
-    <div className="overflow-x-auto rounded-xl border border-app-ink/10 bg-app-card">
-      <table className="w-full text-xs">
-        <thead className="text-left text-[11px] text-app-ink/60">
-          <tr>
-            <th className="w-8 pl-3">
-              <HeaderTick rows={rows} ticks={ticks} onTicks={onTicks} />
-            </th>
-            <th className="px-2 py-2">Channel</th>
+    <TgTableCard after={pages}>
+      <thead className={tgTableHeadClass}>
+        <tr>
+          <th className="w-8 pl-3">
+            <HeaderTick rows={rows} ticks={ticks} onTicks={onTicks} />
+          </th>
+          <th className="px-2 py-2">Channel</th>
+          {columns.map((c) => (
+            <ColumnHeader
+              key={c.key}
+              column={c}
+              sorted={sortedColumn === c.key}
+              descending={descending}
+              onSort={onSort}
+              className={narrow(c.key)}
+            />
+          ))}
+          <th className="px-2 py-2" />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => [
+          <tr
+            key={r.handle}
+            data-testid={`directory-row-${r.handle}`}
+            data-directory-handle={r.handle}
+            data-kbd-selected={ring === r.handle || undefined}
+            onClick={() => onOpen(r.handle)}
+            className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
+          >
+            <td className="pl-3" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                aria-label={`Tick @${r.handle}`}
+                data-shortcut={DIRECTORY_SHORTCUTS.tick}
+                checked={ticks.has(r.handle)}
+                onChange={() =>
+                  onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
+                }
+                className="accent-blue-600"
+              />
+            </td>
+            <td className="max-w-72 px-2 py-1.5">
+              <ChannelCell row={r} />
+            </td>
             {columns.map((c) => (
-              <ColumnHeader
+              <td
                 key={c.key}
-                column={c}
-                sorted={sortedColumn === c.key}
-                descending={descending}
-                onSort={onSort}
-                className={narrow(c.key)}
-              />
+                className={`whitespace-nowrap px-2 font-mono text-app-ink/70 ${WORDS.has(c.key) ? "" : "text-right tabular-nums"} ${narrow(c.key)}`}
+              >
+                {cell(c.key, r)}
+              </td>
             ))}
-            <th className="px-2 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => [
-            <tr
-              key={r.handle}
-              data-testid={`directory-row-${r.handle}`}
-              data-directory-handle={r.handle}
-              data-kbd-selected={ring === r.handle || undefined}
-              onClick={() => onOpen(r.handle)}
-              className={`cursor-pointer border-t border-app-ink/5 ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
-            >
-              <td className="pl-3" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  aria-label={`Tick @${r.handle}`}
-                  data-shortcut={DIRECTORY_SHORTCUTS.tick}
-                  checked={ticks.has(r.handle)}
-                  onChange={() =>
-                    onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
-                  }
-                  className="accent-blue-600"
-                />
-              </td>
-              <td className="max-w-72 px-2 py-1.5">
-                <ChannelCell row={r} />
-              </td>
-              {columns.map((c) => (
-                <td
-                  key={c.key}
-                  className={`whitespace-nowrap px-2 font-mono text-app-ink/70 ${WORDS.has(c.key) ? "" : "text-right tabular-nums"} ${narrow(c.key)}`}
-                >
-                  {cell(c.key, r)}
-                </td>
-              ))}
-              <td className="whitespace-nowrap px-2 text-right">
-                {tagging && <RowTagButton row={r} tagging={tagging} />}
-                <FollowCell
-                  row={r}
-                  busy={following.has(r.handle)}
-                  onFollow={onFollow}
-                  onDismiss={onDismiss}
-                />
-              </td>
-            </tr>,
-            r.match && (
-              <DirectoryMatchRow
-                key={`${r.handle}-match`}
-                handle={r.handle}
-                match={r.match}
-                colSpan={columns.length + 3}
-                onOpen={onOpen}
+            <td className="whitespace-nowrap px-2 text-right">
+              {tagging && <RowTagButton row={r} tagging={tagging} />}
+              <FollowCell
+                row={r}
+                busy={following.has(r.handle)}
+                onFollow={onFollow}
+                onDismiss={onDismiss}
               />
-            ),
-          ])}
-        </tbody>
-      </table>
-      {pages}
-    </div>
+            </td>
+          </tr>,
+          r.match && (
+            <DirectoryMatchRow
+              key={`${r.handle}-match`}
+              handle={r.handle}
+              match={r.match}
+              colSpan={columns.length + 3}
+              onOpen={onOpen}
+            />
+          ),
+        ])}
+      </tbody>
+    </TgTableCard>
   )
 }
 

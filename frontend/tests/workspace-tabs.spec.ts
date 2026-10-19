@@ -68,7 +68,7 @@ test.beforeEach(async ({ page }) => {
 test("each Summary opened from History gets its own tab, once", async ({
   page,
 }) => {
-  await page.goto("/workspace?tab=history")
+  await page.goto("/?tab=history")
   await openFromHistory(page, OPEN_SUMMARY_ID)
   await openFromHistory(page, WIDE_SUMMARY_ID)
   await expect.poll(() => tabs(page)).toEqual([...FIXED, "history", OPEN, WIDE])
@@ -91,10 +91,10 @@ test("× and middle-click close a tab; a Fixed tab has no ×", async ({
   page,
   context,
 }) => {
-  await page.goto(`/workspace?tab=summary&summary=${OPEN_SUMMARY_ID}`)
+  await page.goto(`/?tab=summary&summary=${OPEN_SUMMARY_ID}`)
   // Stored once the strip renders it; a reload before then starts without it.
   await expect.poll(() => tabs(page)).toContain(OPEN)
-  await page.goto(`/workspace?tab=summary&summary=${WIDE_SUMMARY_ID}`)
+  await page.goto(`/?tab=summary&summary=${WIDE_SUMMARY_ID}`)
   await expect.poll(() => tabs(page)).toContain(WIDE)
   await expect.poll(() => tabs(page)).toContain(OPEN)
 
@@ -119,7 +119,7 @@ test("× and middle-click close a tab; a Fixed tab has no ×", async ({
 test('"+" opens an empty tab, so a closed Summary stays put away', async ({
   page,
 }) => {
-  await page.goto(`/workspace?tab=summary&summary=${OPEN_SUMMARY_ID}`)
+  await page.goto(`/?tab=summary&summary=${OPEN_SUMMARY_ID}`)
   await expect(page.getByText(OPEN_SUMMARY_BODY, { exact: true })).toBeVisible({
     timeout: 20_000,
   })
@@ -144,7 +144,7 @@ test('"+" opens an empty tab, so a closed Summary stays put away', async ({
 })
 
 test("a deep link opens its Artifact in a tab", async ({ page }) => {
-  await page.goto(`/workspace?tab=chat&chatSession=${OPEN_CHAT_ID}`)
+  await page.goto(`/?tab=chat&chatSession=${OPEN_CHAT_ID}`)
   await expect(page.getByText("three things")).toBeVisible({ timeout: 20_000 })
   await expect.poll(() => tabs(page)).toContain(`chat:${OPEN_CHAT_ID}`)
   await expect(tabLink(page, OPEN_CHAT_ID)).toHaveAttribute(
@@ -155,9 +155,9 @@ test("a deep link opens its Artifact in a tab", async ({ page }) => {
 
 /** Two Summary tabs, OPEN then WIDE; returns a reader for their order. */
 async function openTwoSummaries(page: Page) {
-  await page.goto(`/workspace?tab=summary&summary=${OPEN_SUMMARY_ID}`)
+  await page.goto(`/?tab=summary&summary=${OPEN_SUMMARY_ID}`)
   await expect.poll(() => tabs(page)).toContain(OPEN)
-  await page.goto(`/workspace?tab=summary&summary=${WIDE_SUMMARY_ID}`)
+  await page.goto(`/?tab=summary&summary=${WIDE_SUMMARY_ID}`)
   const summaries = async () =>
     (await tabs(page)).filter((tab) => tab.startsWith("summary:"))
   await expect.poll(summaries).toEqual([OPEN, WIDE])

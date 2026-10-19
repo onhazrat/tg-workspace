@@ -12,15 +12,15 @@ import {
 } from "./utils/summarizer-helpers.ts"
 
 test.describe("TG Workspace shell", () => {
-  test("legacy /summarizer redirects to /workspace", async ({ page }) => {
+  test("legacy /summarizer redirects to /", async ({ page }) => {
     await page.goto("/summarizer?tab=posts")
-    await expect(page).toHaveURL(/\/workspace\?.*tab=posts/)
+    await expect(page).toHaveURL(/\/\?.*tab=posts/)
   })
 
   test("workspace shell renders the Fixed tabs and the + menu", async ({
     page,
   }) => {
-    await page.goto("/workspace")
+    await page.goto("/")
 
     for (const tab of FIXED_TABS) {
       await expect(page.locator(`#tour-tab-${tab}`)).toBeVisible()
@@ -38,11 +38,11 @@ test.describe("TG Workspace shell", () => {
    * whatever conversation was last open.
    */
   test("the Action tab starts a chat from its own input", async ({ page }) => {
-    await page.goto("/workspace?tab=action")
+    await page.goto("/?tab=action")
     // Starting a chat spends the account's own Key, so the button is disabled
     // without one. That gate is the feature, not an obstacle to route around.
     await seedAiKey(page)
-    await page.goto("/workspace?tab=action")
+    await page.goto("/?tab=action")
 
     const input = page.getByTestId("action-chat-input")
     await expect(input).toBeVisible({ timeout: 15_000 })
@@ -58,7 +58,7 @@ test.describe("TG Workspace shell", () => {
   test("the model and language selectors live above every action", async ({
     page,
   }) => {
-    await page.goto("/workspace?tab=action")
+    await page.goto("/?tab=action")
 
     const bar = page.getByTestId("action-run-settings")
     await expect(bar.getByLabel("Inference model")).toBeVisible({
@@ -73,7 +73,7 @@ test.describe("TG Workspace shell", () => {
   })
 
   test("tag tab opens Tag view", async ({ page }) => {
-    await page.goto("/workspace?tab=summary")
+    await page.goto("/?tab=summary")
     await page.getByTestId("workspace-tab-add").click()
     await page.getByRole("menuitem", { name: "Tag" }).click()
 
@@ -83,7 +83,7 @@ test.describe("TG Workspace shell", () => {
   })
 
   test("tag tab loads from ?tab=tag URL", async ({ page }) => {
-    await page.goto("/workspace?tab=tag")
+    await page.goto("/?tab=tag")
 
     await expect(page).toHaveURL(/tab=tag/)
     await expect(page.locator("#tour-tab-tag")).toHaveClass(/border-app-ink/)
@@ -175,7 +175,7 @@ test.describe("TG Workspace shell", () => {
   test("settings tab opens Settings hub with network section", async ({
     page,
   }) => {
-    await page.goto("/workspace?tab=summary")
+    await page.goto("/?tab=summary")
     // Prefer role locators: `#nav-tab-*` CSS ids are flaky under Playwright
     // Chrome (document ID map sometimes misses React-assigned ids).
     //
@@ -284,7 +284,7 @@ test.describe("TG Workspace shell", () => {
   test("action tab shows the summary create controls", async ({ page }) => {
     // They were on the Summary tab until Action became the one place work
     // starts; the feature tabs render results only now.
-    await page.goto("/workspace?tab=action")
+    await page.goto("/?tab=action")
 
     // Copy is an icon button, so it is found by its accessible name.
     await expect(

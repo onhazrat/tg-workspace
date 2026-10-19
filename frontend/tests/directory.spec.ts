@@ -369,9 +369,7 @@ test.describe("TG Workspace directory", () => {
     await expect.poll(() => api.lastList().yours?.handles).toEqual(["a1"])
 
     // A shared link opens exactly its view.
-    await page.goto(
-      "/workspace?tab=directory&dirFilter=lang%3Aen&dirSort=reach",
-    )
+    await page.goto("/?tab=directory&dirFilter=lang%3Aen&dirSort=reach")
     await expect(chip(page, "language-en")).toBeVisible()
     await expect(chip(page, "language-fa")).toHaveCount(0)
     await expect
@@ -396,7 +394,7 @@ test.describe("TG Workspace directory", () => {
     })
 
     // A tab opened with no view adopts the last one.
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
     await expect(chip(page, "language-en")).toBeVisible()
     await expect.poll(() => param(page, "dirSort")).toBe("reach")
   })
@@ -412,7 +410,7 @@ test.describe("TG Workspace directory", () => {
     )
     await gotoWorkspace(page, "channels")
     await clearScopedStorage(page, ["directory.view", "directory.open"])
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
 
     // A row opens its panel; a reload keeps it open; Close closes it.
     await page.getByText("Channel a2").click()
@@ -445,9 +443,7 @@ test.describe("TG Workspace directory", () => {
     // DPF renamed the day measures; their old text is not a filter any more.
     await mockDirectory(page)
     await gotoWorkspace(page, "channels")
-    await page.goto(
-      "/workspace?tab=directory&dirFilter=last_post_days%20%3C%3D%207",
-    )
+    await page.goto("/?tab=directory&dirFilter=last_post_days%20%3C%3D%207")
     await expect(
       page.getByText("This link's filter could not be read and was reset"),
     ).toBeVisible()
@@ -495,7 +491,7 @@ test.describe("TG Workspace directory", () => {
     })
     await gotoWorkspace(page, "channels")
     await clearScopedStorage(page, ["directory.view", "directory.open"])
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
 
     const row = page.getByTestId("directory-row-a3")
     await expect(row).toBeVisible()
@@ -550,7 +546,7 @@ test.describe("TG Workspace directory", () => {
       "directory.open",
       "directorySelectedFirst",
     ])
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
 
     // With a tick, the editor starts on the live ticked choice.
     await page.getByRole("checkbox", { name: "Tick @a1" }).check()
@@ -629,7 +625,7 @@ test.describe("TG Workspace directory", () => {
       "directory.ticks",
       "directory.open",
     ])
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
 
     // A followed row ticks; Follow and Dismiss count only the unfollowed.
     await page.getByRole("checkbox", { name: "Tick @a1" }).check()
@@ -726,7 +722,7 @@ test.describe("TG Workspace directory", () => {
       "directory.ticks",
       "directory.open",
     ])
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
 
     // A followed Tick is tagged too: a Tag sits on any Channel.
     await page.getByRole("checkbox", { name: "Tick @a1" }).check()
@@ -806,7 +802,7 @@ test.describe("TG Workspace directory", () => {
       "directory.ticks",
       "directory.open",
     ])
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
 
     // At most 10,000: every match becomes a Tick, and a Tag carries them all.
     await page
@@ -879,7 +875,7 @@ test.describe("TG Workspace directory", () => {
       "directory.ticks",
       "directory.open",
     ])
-    await page.goto("/workspace?tab=directory")
+    await page.goto("/?tab=directory")
 
     // The controls fold behind one button that counts the Conditions; no
     // Keyboard switch.

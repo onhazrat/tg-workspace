@@ -7,7 +7,7 @@ import { expect, test } from "./fixtures.ts"
 // removes again.
 
 async function gotoSection(page: Page, section: string) {
-  await page.goto(`/workspace?tab=settings&section=${section}`)
+  await page.goto(`/?tab=settings&section=${section}`)
   await expect(page.getByTestId("settings-search")).toBeVisible()
 }
 

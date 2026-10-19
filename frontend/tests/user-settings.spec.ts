@@ -270,62 +270,42 @@ test.describe("Change password validation", () => {
   })
 })
 
-test("Appearance button is visible in sidebar", async ({ page }) => {
-  await page.goto("/settings")
-  await expect(page.getByTestId("theme-button")).toBeVisible()
-})
-
 /**
- * Open the sidebar appearance menu, choose one mode, and wait for it to close.
- *
- * Locators stay scoped to the open `role=menu` so they cannot collide with
- * `AppearanceSection`'s segmented control on `/settings`. The section's System
- * option uses `appearance-section-system-mode` (not `system-mode`) for the same
- * reason. Wait on the menu hiding — not on the item — so a permanently visible
- * twin cannot burn the timeout.
- *
- * CI runs with `--fail-on-flaky-tests`, so passing on retry is still red.
+ * The theme lives in Settings, Appearance since the template sidebar and its
+ * appearance menu left (SET-01).
  */
-async function chooseTheme(
-  page: Page,
-  mode: "light-mode" | "dark-mode" | "system-mode",
-) {
-  const trigger = page.getByTestId("theme-button")
-  await expect(trigger).toBeVisible()
-  await trigger.click()
-  const menu = page.getByRole("menu")
-  await expect(menu).toBeVisible()
-  await menu.getByTestId(mode).click()
-  await expect(menu).toBeHidden()
+const APPEARANCE = "/?tab=settings&section=appearance"
+
+async function chooseTheme(page: Page, mode: "Light" | "Dark" | "System") {
+  await page
+    .getByRole("group", { name: "Color theme" })
+    .getByRole("button", { name: mode, exact: true })
+    .click()
 }
 
 test("User can switch between theme modes", async ({ page }) => {
-  await page.goto("/settings")
+  await page.goto(APPEARANCE)
 
-  await chooseTheme(page, "dark-mode")
+  await chooseTheme(page, "Dark")
   await expect(page.locator("html")).toHaveClass(/dark/)
 
-  await chooseTheme(page, "light-mode")
+  await chooseTheme(page, "Light")
   await expect(page.locator("html")).toHaveClass(/light/)
 
-  await chooseTheme(page, "system-mode")
+  await chooseTheme(page, "System")
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("vite-ui-theme")))
     .toBe("system")
 })
 
 test("Selected mode is preserved across sessions", async ({ page }) => {
-  await page.goto("/settings")
+  await page.goto(APPEARANCE)
 
-  // Pick light, then dark, in the same open-menu-then-choose shape as the test
-  // above. This used to branch on the current theme and re-open the menu only
-  // inside that branch, which left it *already open* on the other path -- so
-  // the next `theme-button` click closed it and `dark-mode` was never there to
-  // click. It survived on timing and finally flaked the job.
-  await chooseTheme(page, "light-mode")
+  // Pick light, then dark, so the stored value changes whatever it was.
+  await chooseTheme(page, "Light")
   await expect(page.locator("html")).toHaveClass(/light/)
 
-  await chooseTheme(page, "dark-mode")
+  await chooseTheme(page, "Dark")
   await expect(page.locator("html")).toHaveClass(/dark/)
 
   await logOutUser(page)
