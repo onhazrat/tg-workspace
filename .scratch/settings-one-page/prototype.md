@@ -168,3 +168,12 @@ the View-as ribbon guard still reading the deleted `routes/_layout.tsx`.
   IntersectionObserver, which picked the topic hidden under the bar).
 - The contents show how many settings differ from their default, as a blue
   count beside each topic and each scope group under it, in place of the dot.
+
+## Round 5: the Posts tab's switches on TgInlineChoice
+
+The Posts search's Keyword / Meaning switch and the Analysis window editor's
+Live / Fixed and Filtered / All posts switches moved to `TgInlineChoice`
+(production code). `TgSegmentedControl` is now used only by
+DiscoverFilterBar, ReadingControls (Summary) and the old Settings sections
+(AppearanceSection, SyncSectionParts, SettingRow, TorPanelSections), which B
+replaces.
