@@ -28,26 +28,11 @@ async function gotoWorkspace(page: Page, tab = "channels") {
   ).toBeVisible()
 }
 
-async function openSettingsSection(page: Page, sectionLabel: string) {
-  await gotoWorkspace(page, "settings")
+/** The Settings page, scrolled to one topic (SET-02). */
+async function openSettingsTopic(page: Page, topic: string) {
+  await page.goto(`/?tab=settings&section=${topic}`)
   await expect(page.getByTestId("settings-search")).toBeVisible()
-  // Nested TOC leaves: expand parent via twistie when children are collapsed.
-  const nestedParents: Record<string, string> = {
-    Proxy: "network",
-    Tor: "network",
-    "Setting Groups": "channels-sync",
-  }
-  const parentId = nestedParents[sectionLabel]
-  if (parentId) {
-    const child = page.getByRole("button", {
-      name: sectionLabel,
-      exact: true,
-    })
-    if (!(await child.isVisible().catch(() => false))) {
-      await page.getByTestId(`toc-twistie-${parentId}`).click()
-    }
-  }
-  await page.getByRole("button", { name: sectionLabel, exact: true }).click()
+  await expect(page.locator(`#settings-topic-${topic}`)).toBeVisible()
 }
 
 async function setTheme(page: Page, theme: "light" | "dark") {
@@ -99,12 +84,17 @@ test.describe("TG UI primitives", () => {
     await search.fill("alpha")
     await expect(search).toHaveValue("alpha")
 
-    // Channels & Sync exposes TgInput without Advanced Mode / proxy gates.
-    await openSettingsSection(page, "Channels & Sync")
-    const settingsField = page.locator('[data-slot="tg-input"]').first()
+    // A number Setting is a plain field; Escape undoes the draft unsaved.
+    await openSettingsTopic(page, "sync")
+    const settingsField = page.getByRole("textbox", {
+      name: "Dynamic sync expected Posts",
+    })
     await expect(settingsField).toBeVisible()
+    const before = await settingsField.inputValue()
     await settingsField.fill("42")
     await expect(settingsField).toHaveValue("42")
+    await settingsField.press("Escape")
+    await expect(settingsField).toHaveValue(before)
   })
 
   test("the Tools tab's logs open without telemetry tabs", async ({ page }) => {
@@ -188,10 +178,8 @@ test.describe("TG UI primitives", () => {
     expect(nativeConfirmOpened).toBe(false)
   })
 
-  test("sync bulk reset uses inline confirm (not a modal)", async ({
-    page,
-  }) => {
-    await openSettingsSection(page, "Channels & Sync")
+  test("sync bulk reset asks in the app's own dialog", async ({ page }) => {
+    await openSettingsTopic(page, "sync")
 
     let nativeConfirmOpened = false
     page.on("dialog", async (dialog) => {
@@ -199,21 +187,15 @@ test.describe("TG UI primitives", () => {
       await dialog.dismiss()
     })
 
-    const start = page.getByRole("button", {
-      name: /Reset & sync all channels/i,
-    })
-    await expect(start).toBeVisible()
-    await start.click()
-
-    await expect(page.getByRole("dialog")).toHaveCount(0)
-    const confirm = page.getByRole("button", {
-      name: /Confirm reset & sync/i,
-    })
-    await expect(confirm).toBeVisible()
+    await page
+      .getByRole("button", { name: "Reset and sync all channels" })
+      .click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+    const confirm = dialog.getByRole("button", { name: "Reset and sync" })
     await expect(confirm).toHaveAttribute("data-slot", "tg-button")
-    await expect(confirm).toHaveAttribute("data-variant", "successSoft")
-    await page.getByRole("button", { name: "Cancel" }).click()
-    await expect(confirm).not.toBeVisible()
+    await dialog.getByRole("button", { name: "Cancel" }).click()
+    await expect(dialog).not.toBeVisible()
     expect(nativeConfirmOpened).toBe(false)
   })
 
@@ -237,24 +219,22 @@ test.describe("TG UI primitives", () => {
     }
   })
 
-  test("appearance dense theme control and toggles are keyboard-focusable", async ({
+  test("appearance theme choice and toggles are keyboard-focusable", async ({
     page,
   }) => {
-    await openSettingsSection(page, "Appearance")
-    const theme = page.locator('[data-slot="tg-segmented-control"]')
+    await openSettingsTopic(page, "appearance")
+    const theme = page.getByRole("group", { name: "Color theme" })
     await expect(theme).toBeVisible()
-    const light = theme.getByRole("button", { name: /Light/i })
+    const light = theme.getByRole("button", { name: "Light", exact: true })
     await light.focus()
     await expect(light).toBeFocused()
-    const lightClass = (await light.getAttribute("class")) ?? ""
-    expect(lightClass).toContain("focus-visible:ring-2")
 
-    const toggle = page.locator('[data-slot="tg-toggle"]').first()
-    await expect(toggle).toBeVisible()
+    const toggle = page
+      .locator("#settings-topic-appearance")
+      .getByRole("button", { name: "On", exact: true })
+      .first()
     await toggle.focus()
     await expect(toggle).toBeFocused()
-    const toggleClass = (await toggle.getAttribute("class")) ?? ""
-    expect(toggleClass).toContain("focus-visible:ring-2")
   })
 
   test("channels toolbar controls are tab-focusable with focus-visible rings", async ({

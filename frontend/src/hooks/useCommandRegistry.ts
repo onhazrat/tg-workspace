@@ -2,6 +2,7 @@ import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
 import { api } from "@/api"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
+import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
 import { useData } from "@/contexts/DataContext"
@@ -17,7 +18,6 @@ import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
-import { useSettingsSection } from "@/hooks/useSettingsSection"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import {
   addFunnel,
@@ -78,7 +78,22 @@ export function useCommandRegistry(): {
     starredOnly,
     setStarredOnly,
   } = useUI()
-  const { setActiveSection } = useSettingsSection()
+  // The Settings commands come from the registry, read while the palette is
+  // open (SET-02).
+  const settingsRegistry = useSettingsRegistry({ enabled: palette.open })
+  const openSetting = useCallback(
+    (id: string) => {
+      navigateWorkspace({
+        search: (previous) => ({
+          ...previous,
+          tab: "settings" as const,
+          section: undefined,
+          setting: id,
+        }),
+      })
+    },
+    [navigateWorkspace],
+  )
   const {
     handleScrapeAll,
     handleScrapeSelected,
@@ -134,7 +149,7 @@ export function useCommandRegistry(): {
         search: (previous) => ({
           ...previous,
           tab: "settings" as const,
-          section: "configuration" as const,
+          section: undefined,
           setting: id,
         }),
       })
@@ -162,7 +177,7 @@ export function useCommandRegistry(): {
   const context = useMemo<CommandContext>(
     () => ({
       setActiveTab,
-      setActiveSection,
+      openSetting,
       openConfigurationEntry,
       configurationCatalog,
       channels,
@@ -335,7 +350,7 @@ export function useCommandRegistry(): {
       postSortOrder,
       groupByChannel,
       selectedChannels,
-      setActiveSection,
+      openSetting,
       openConfigurationEntry,
       setActiveTab,
       setAutoSyncPauseUntil,
@@ -373,7 +388,7 @@ export function useCommandRegistry(): {
     const all = [
       ...buildNavigateCommands(),
       ...buildActionCommands(),
-      ...buildSettingCommands(),
+      ...buildSettingCommands(settingsRegistry),
       ...buildConfigurationCommands(configurationCatalog),
       ...buildGroupCommands(),
       ...buildChannelEntityCommands(),
@@ -383,7 +398,7 @@ export function useCommandRegistry(): {
       ...buildExtendedCommands(),
     ]
     return all.filter((command) => !command.when || command.when(context))
-  }, [configurationCatalog, context])
+  }, [configurationCatalog, context, settingsRegistry])
 
   return { commands, context }
 }

@@ -23,17 +23,17 @@ test.describe("the workspace at /", () => {
     await expect(page).toHaveURL(/^[^?]*\/\?tab=history$/)
   })
 
-  test("/settings opens Settings on the Account section", async ({ page }) => {
+  test("/settings opens Settings on Account › Profile", async ({ page }) => {
     await page.goto("/settings")
     await expect(page).toHaveURL(/tab=settings/)
-    await expect(page).toHaveURL(/section=account/)
+    await expect(page).toHaveURL(/setting=account\.yours\.profile/)
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible()
   })
 
-  test("/admin opens Settings on the Users section", async ({ page }) => {
+  test("/admin opens Settings on Operator › Users", async ({ page }) => {
     await page.goto("/admin")
     await expect(page).toHaveURL(/tab=settings/)
-    await expect(page).toHaveURL(/section=users/)
+    await expect(page).toHaveURL(/setting=operator\.deployment\.users/)
     await expect(page.getByTestId("users-table")).toBeVisible()
   })
 })

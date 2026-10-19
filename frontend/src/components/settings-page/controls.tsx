@@ -227,7 +227,6 @@ export function Highlight({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         i % 2 ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
           <mark key={i} className="rounded-sm bg-amber-300/50 text-inherit">
             {part}
           </mark>

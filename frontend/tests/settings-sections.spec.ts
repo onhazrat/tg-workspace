@@ -178,15 +178,15 @@ test.describe("Settings, Sync", () => {
       return route.fulfill({ json: { enabled: true, lastStatus: "running" } })
     })
 
-    await gotoSection(page, "channels-sync")
+    await gotoSection(page, "jobs")
     const row = page
       .locator("div")
-      .filter({ has: page.getByText("Auto Sync", { exact: true }) })
-      .filter({ has: page.getByRole("button", { name: "Run" }) })
+      .filter({ has: page.getByText("Auto sync", { exact: true }) })
+      .filter({ has: page.getByRole("button", { name: "Run now" }) })
       .last()
-    await row.getByRole("button", { name: "Run" }).click()
+    await row.getByRole("button", { name: "Run now" }).click()
 
-    await expect(page.getByText("Triggered Auto Sync")).toBeVisible()
+    await expect(page.getByText("Triggered Auto sync")).toBeVisible()
     expect(triggered).toEqual(["/api/v1/jobs/auto_sync/trigger"])
   })
 
@@ -210,19 +210,20 @@ test.describe("Settings, Sync", () => {
 
     await gotoSection(page, "channels-sync")
     await page
-      .getByRole("button", { name: "Reset & sync all channels" })
+      .getByRole("button", { name: "Reset and sync all channels" })
       .click()
     // The first click only asks.
     expect(sent).toHaveLength(0)
 
-    await page.getByRole("button", { name: "Confirm reset & sync" }).click()
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Reset and sync" })
+      .click()
     await expect(
       page.getByText("Reset 7 channel(s); deleted 42 post(s). 1 error(s)."),
     ).toBeVisible()
     expect(sent).toEqual([{ confirm: true }])
     // Back to the unarmed button, so a second click asks again.
-    await expect(
-      page.getByRole("button", { name: "Reset & sync all channels" }),
-    ).toBeVisible()
+    await expect(page.getByRole("dialog")).toHaveCount(0)
   })
 })

@@ -77,7 +77,10 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider defaultTheme={APP_DEFAULT_THEME} storageKey={THEME_STORAGE_KEY}>
+    <ThemeProvider
+      defaultTheme={APP_DEFAULT_THEME}
+      storageKey={THEME_STORAGE_KEY}
+    >
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>

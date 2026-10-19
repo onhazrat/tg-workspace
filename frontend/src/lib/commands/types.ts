@@ -3,7 +3,6 @@ import type { Dispatch, SetStateAction } from "react"
 import type { JobStatusEntry } from "@/api/jobs"
 import type { ConfigurationCatalogResponse } from "@/client"
 import type { ActionLimit } from "@/lib/channels/selection-regions"
-import type { SettingsSection } from "@/lib/settingsSection"
 import type {
   Channel,
   ChannelStats,
@@ -128,7 +127,8 @@ export interface JobToggleApi {
 
 export interface CommandContext {
   setActiveTab: (tab: TabType) => void
-  setActiveSection: (section: SettingsSection) => void
+  /** Opens Settings at a Setting id, a panel id or a topic id (SET-02). */
+  openSetting: (id: string) => void
   openConfigurationEntry: (id: string) => void
   configurationCatalog?: ConfigurationCatalogResponse
   channels: Channel[]

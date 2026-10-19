@@ -79,7 +79,7 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     selectedChannels: new Set(["alpha"]),
     settingGroups: sampleGroups,
     setActiveTab: () => {},
-    setActiveSection: () => {},
+    openSetting: () => {},
     setChannelGroupFilter: () => {},
     setSelectedSettingGroup: () => {},
     setSelectedChannels: () => {},
@@ -144,18 +144,14 @@ describe("buildGroupCommands", () => {
     expect(filterId).toBe("slow-feed-global")
   })
 
-  test("open command navigates to sync settings and selects group", () => {
-    let activeTab = null as string | null
-    let section = null as string | null
+  test("open command navigates to the Setting groups panel and selects group", () => {
+    let setting = null as string | null
     let groupId = null as string | null
     const open = commands.find((command) => command.id === "open-setting-group")
     open?.run(
       makeContext({
-        setActiveTab: (tab) => {
-          activeTab = tab
-        },
-        setActiveSection: (next) => {
-          section = next
+        openSetting: (id) => {
+          setting = id
         },
         setSelectedSettingGroup: (id) => {
           groupId = id
@@ -163,8 +159,7 @@ describe("buildGroupCommands", () => {
       }),
       "custom-1",
     )
-    expect(activeTab).toBe("settings")
-    expect(section).toBe("channels-sync")
+    expect(setting).toBe("sync.yours.settingGroups")
     expect(groupId).toBe("custom-1")
   })
 })

@@ -167,6 +167,7 @@ const SECTION_TOPICS: Record<string, string> = {
   data: "retention",
   "data-management": "retention",
   users: "operator",
+  configuration: "server",
   admin: "operator",
 }
 

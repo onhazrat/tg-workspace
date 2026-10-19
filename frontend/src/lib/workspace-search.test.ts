@@ -59,17 +59,13 @@ describe("validateWorkspaceSearch", () => {
     ).toEqual({ tab: "settings", section: "network" })
   })
 
-  test("a section is normalised, blank or unknown falls back", () => {
+  test("a section is trimmed, and blank or non-string ones are dropped", () => {
+    // The Settings page maps an old section id to its topic (SET-02).
     expect(
       validateWorkspaceSearch({ tab: "settings", section: " network " })
         .section,
     ).toBe("network")
-    expect(validateWorkspaceSearch({ section: "" }).section).toBe(
-      "commonly-used",
-    )
-    expect(validateWorkspaceSearch({ section: "bogus" }).section).toBe(
-      "commonly-used",
-    )
+    expect("section" in validateWorkspaceSearch({ section: "" })).toBe(false)
     expect("section" in validateWorkspaceSearch({ section: 4 })).toBe(false)
   })
 

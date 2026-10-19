@@ -36,11 +36,15 @@ describe("old addresses land in the workspace at /", () => {
     expect(landing(Summarizer, "?tab=chat")).toBe("/?tab=chat")
   })
 
-  test("/settings opens the Settings tab on the Account section", () => {
-    expect(landing(Settings, "")).toBe("/?tab=settings&section=account")
+  test("/settings opens Settings on Account › Profile", () => {
+    expect(landing(Settings, "")).toBe(
+      "/?tab=settings&setting=account.yours.profile",
+    )
   })
 
-  test("/admin opens the Settings tab on the Users section", () => {
-    expect(landing(Admin, "")).toBe("/?tab=settings&section=users")
+  test("/admin opens Settings on Operator › Users", () => {
+    expect(landing(Admin, "")).toBe(
+      "/?tab=settings&setting=operator.deployment.users",
+    )
   })
 })

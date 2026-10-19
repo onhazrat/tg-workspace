@@ -9,15 +9,14 @@ import {
   DIRECTORY_PARAMS,
   type DirectoryParams,
 } from "@/lib/directory/directory-view"
-import type { SettingsSection } from "@/lib/settingsSection"
-import { normalizeSettingsSection } from "@/lib/settingsSection"
 import { tabFromSearch, tabSearch } from "@/lib/workspace-tabs"
 import type { ArtifactStatusFilter, TabType } from "@/types"
 
 export type WorkspaceSearch = {
   tab?: TabType
-  section?: SettingsSection
-  /** Deep-link to a catalog setting id (scroll + highlight). */
+  /** An old Settings section id or a topic id; the page lands on its topic. */
+  section?: string
+  /** A Setting, panel or topic id the Settings page scrolls to (SET-02). */
   setting?: string
   /**
    * The Channel filter on the Channels tab, in its text form
@@ -87,9 +86,8 @@ export function validateWorkspaceSearch(
 ): WorkspaceSearch {
   if (search.tab === "network") return { tab: "settings", section: "network" }
   const result: WorkspaceSearch = { tab: workspaceTab(search.tab) }
-  if (typeof search.section === "string") {
-    result.section = normalizeSettingsSection(search.section)
-  }
+  const section = trimmedString(search.section)
+  if (section) result.section = section
   for (const key of ID_PARAMS) {
     const value = trimmedString(search[key])
     if (value) result[key] = value

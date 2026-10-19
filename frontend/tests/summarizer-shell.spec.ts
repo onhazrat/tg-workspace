@@ -180,7 +180,7 @@ test.describe("TG Workspace shell", () => {
     // Chrome (document ID map sometimes misses React-assigned ids).
     //
     // The workspace tabs are `link`, not `button`: they navigate to `?tab=`, so
-    // they are real anchors now. The settings sidebar below is still buttons.
+    // they are real anchors now, and so are the Settings contents.
     await expect(
       page.getByRole("link", { name: "Summary", exact: true }).first(),
     ).toBeVisible()
@@ -188,11 +188,14 @@ test.describe("TG Workspace shell", () => {
     // Settings starts closed (TABS-01); the "+" menu opens it.
     await page.getByTestId("workspace-tab-add").click()
     await page.getByRole("menuitem", { name: "Settings" }).click()
-    await page.getByRole("button", { name: "Network", exact: true }).click()
+    await page
+      .getByRole("navigation", { name: "Settings contents" })
+      .getByRole("link", { name: /^Network/ })
+      .click()
 
     await expect(page.getByTestId("settings-search")).toBeVisible()
     await expect(page).toHaveURL(/tab=settings/)
-    await expect(page).toHaveURL(/section=network/)
+    await expect(page.locator("#settings-topic-network")).toBeInViewport()
   })
 
   /**

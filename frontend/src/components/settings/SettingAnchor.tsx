@@ -1,5 +1,4 @@
 import type React from "react"
-import { settingElementId } from "@/lib/settings/catalog"
 import { cn } from "@/lib/utils"
 
 /** Matches SettingRow deep-link highlight styling. */
@@ -8,7 +7,8 @@ export const SETTING_HIGHLIGHT_CLASS =
 
 /**
  * Stable DOM target for `?setting=<catalogId>` deep-links outside SettingRow.
- * Renders `id="setting-<id>"` and `data-setting-id` so SettingsHub can scroll/highlight.
+ * Renders `id="setting-<id>"` and `data-setting-id`, which the panels still
+ * carry until SET-03 redraws them.
  */
 export const SettingAnchor: React.FC<{
   settingId: string
@@ -17,7 +17,7 @@ export const SettingAnchor: React.FC<{
   children: React.ReactNode
 }> = ({ settingId, highlighted = false, className, children }) => (
   <div
-    id={settingElementId(settingId)}
+    id={`setting-${settingId}`}
     data-setting-id={settingId}
     className={cn(
       "scroll-mt-24",

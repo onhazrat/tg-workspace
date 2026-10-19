@@ -20,8 +20,8 @@ import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
 import QuotaWarning from "./components/QuotaWarning"
-import { SettingsHub } from "./components/SettingsHub"
 import { SummaryView } from "./components/SummaryView"
+import { SettingsPage } from "./components/settings-page/SettingsPage"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import { ToolsTab } from "./components/tools/ToolsTab"
@@ -223,7 +223,7 @@ export default function App() {
       directory: () => <DirectoryView />,
       summary: () => <SummaryView />,
       action: () => <ActionView />,
-      settings: () => <SettingsHub />,
+      settings: () => <SettingsPage />,
       tools: () => <ToolsTab />,
     }
     const view = views[activeTab]

@@ -143,7 +143,6 @@ export function useSettingsPage() {
     const timer = setTimeout(() => setFlash(null), FLASH_MS)
     return () => clearTimeout(timer)
     // Only a new link or the first load re-runs this, never a write.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   }, [target, loaded])
 
   return {
