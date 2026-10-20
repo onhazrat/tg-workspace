@@ -347,9 +347,13 @@ class TimeCond:
 
 @dataclass(frozen=True)
 class MineCond:
-    """Cited by your channels, ever or within the last `days`."""
+    """Cited by your channels, within a Time bound on when the citing Posts
+    were published, `[start, end)` as `TimeCond` reads it; ever with both
+    ends open (TB-02)."""
 
-    days: int | None = None
+    mode: TimeMode = "live"
+    start: int | None = None
+    end: int | None = None
 
 
 # The three Conditions taking Seeds hold either the handles the browser
@@ -691,15 +695,18 @@ def _of_kinds(view: DirectoryView) -> list[ColumnElement[bool]]:
 
 
 def _references(
-    view: DirectoryView, *, days: int | None = None
+    view: DirectoryView, window: MineCond | None = None
 ) -> list[ColumnElement[bool]]:
     """The References "your channels" make, narrowed by the Reference kinds,
-    and to the last `days` when given."""
+    and to the window when given."""
     clauses = [col(PostReference.source_channel) == any_(_handles(view.sources))]
     clauses += _of_kinds(view)
-    if days is not None:
-        since_ms = _epoch_ms(view.now) - days * 86_400_000
-        clauses.append(col(PostReference.timestamp) >= since_ms)
+    if window is not None:
+        base = _epoch_ms(view.now) if window.mode == "live" else 0
+        if window.start is not None:
+            clauses.append(col(PostReference.timestamp) >= base + window.start)
+        if window.end is not None:
+            clauses.append(col(PostReference.timestamp) < base + window.end)
     return clauses
 
 
@@ -830,7 +837,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     if isinstance(cond, MineCond):
         if not view.sources:
             return false()
-        refs = _references(view, days=cond.days)
+        refs = _references(view, cond)
         # Uncorrelated, so Postgres hashes it once even under an OR or a NOT.
         return handle.in_(sa_select(col(PostReference.target_handle)).where(*refs))
     if isinstance(cond, CitedByCond | CitesCond):
@@ -1598,28 +1605,26 @@ def why_its_here(
     session: Session,
     view: DirectoryView,
     handle: str,
-    *,
-    days: int | None,
+    window: MineCond,
 ) -> Why:
     """The Posts of "your channels" that cite `handle`, newest first, and the
     Channels it shares with the Seeds of each Shared Condition in the view's
     tree, whatever the Seeds came from (DFP-05).
 
-    One entry per Post, with every kind it cites in; inside the last `days`
-    when the "Cited by your channels" Condition sets a window, so the panel
-    counts what the sort and the Condition count.
+    One entry per Post, with every kind it cites in; inside the "Cited by your
+    channels" Condition's window, so the panel counts what the Condition counts.
     """
     parents = _first_shared(view.tree, "parents")
     children = _first_shared(view.tree, "children")
     return replace(
-        _citing_posts(session, view, handle, days=days),
+        _citing_posts(session, view, handle, window),
         parents=None if parents is None else shared_why(session, handle, parents),
         children=None if children is None else shared_why(session, handle, children),
     )
 
 
 def _citing_posts(
-    session: Session, view: DirectoryView, handle: str, *, days: int | None
+    session: Session, view: DirectoryView, handle: str, window: MineCond
 ) -> Why:
     if not view.sources:
         return Why(posts=[], total=0)
@@ -1631,7 +1636,7 @@ def _citing_posts(
             func.max(col(r.timestamp)).label("ts"),
             func.array_agg(distinct(col(r.kind))).label("kinds"),
         )
-        .where(*_references(view, days=days), col(r.target_handle) == handle)
+        .where(*_references(view, window), col(r.target_handle) == handle)
         .group_by(col(r.source_channel), col(r.source_post_id))
         .subquery("per_post")
     )

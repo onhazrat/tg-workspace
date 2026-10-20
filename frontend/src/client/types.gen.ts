@@ -2193,17 +2193,26 @@ export type DirectoryMeasureCondition = {
 /**
  * DirectoryMineCondition
  *
- * Cited by your channels, ever or within the last `days`.
+ * Cited by your channels, within a Time bound on when the citing Posts
+ * were published; ever with both ends open.
  */
 export type DirectoryMineCondition = {
+    /**
+     * Mode
+     */
+    mode?: 'live' | 'fixed';
+    /**
+     * Start
+     */
+    start?: number | null;
+    /**
+     * End
+     */
+    end?: number | null;
     /**
      * Type
      */
     type: 'mine';
-    /**
-     * Days
-     */
-    days?: number | null;
 };
 
 /**
@@ -2622,18 +2631,9 @@ export type DirectoryTagSeeds = {
 /**
  * DirectoryTimeCondition
  *
- * A Time bound, start included and end excluded, either end open: Fixed
- * ends are epoch ms, Live ends signed ms from now.
+ * A Time bound on one moment; `none` keeps only entries with no value.
  */
 export type DirectoryTimeCondition = {
-    /**
-     * Type
-     */
-    type: 'time';
-    /**
-     * Moment
-     */
-    moment: 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
     /**
      * Mode
      */
@@ -2646,6 +2646,14 @@ export type DirectoryTimeCondition = {
      * End
      */
     end?: number | null;
+    /**
+     * Type
+     */
+    type: 'time';
+    /**
+     * Moment
+     */
+    moment: 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
     /**
      * None
      */
@@ -2670,9 +2678,22 @@ export type DirectoryViewRequest = {
 /**
  * DirectoryWhyRequest
  *
- * Whose Posts citing `handle` "Why it's here" lists.
+ * Whose Posts citing `handle` "Why it's here" lists, inside the "Cited by
+ * your channels" Condition's Time bound; every Post with both ends open.
  */
 export type DirectoryWhyRequest = {
+    /**
+     * Mode
+     */
+    mode?: 'live' | 'fixed';
+    /**
+     * Start
+     */
+    start?: number | null;
+    /**
+     * End
+     */
+    end?: number | null;
     yours?: YourChannels;
     /**
      * Referencekinds
@@ -2682,10 +2703,6 @@ export type DirectoryWhyRequest = {
      * Handle
      */
     handle: string;
-    /**
-     * Days
-     */
-    days?: number | null;
     /**
      * Parents
      */
