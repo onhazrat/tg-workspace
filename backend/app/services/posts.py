@@ -1128,7 +1128,7 @@ def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str,
 
 # ---- A measure's spread (PTI-01) ------------------------------------------------
 
-#: The Channels tab's bar count (`ChannelMetricEditor`), so one component draws both.
+#: Every spread's bar count (`BINS` in `components/Spread.tsx`), so one component draws both.
 VALUE_BINS = 32
 
 

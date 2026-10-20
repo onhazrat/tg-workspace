@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
-import { type Bin, Spread } from "@/components/directory/DirectoryBoundEditor"
-import { dateText } from "@/components/directory/DirectoryTimeEditor"
+import { BINS, type Bin, dateText, Spread } from "@/components/Spread"
 import { type Range, useZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
@@ -14,13 +13,11 @@ import {
 } from "@/lib/channels/channel-moments"
 import {
   inTimeBound,
+  MOMENT_OPTIONS,
+  minuteBound,
   resolveTimeBound,
   type TimeBound,
 } from "@/lib/time-bound/bound"
-import { BINS } from "./ChannelMetricEditor"
-
-/** What a moment's Time bound turns on (ADR-033): all three switches. */
-const OPTIONS = { openEnds: true, ahead: true }
 
 /**
  * A moment's spread as the Directory's `Spread` draws it, binned here from
@@ -82,11 +79,7 @@ function MomentSpread({
   const onBar = (bin: Bin) => {
     const minutes = bars[spread.bins.indexOf(bin)]
     if (!minutes.length) return
-    onPick({
-      mode: "fixed",
-      start: minutes[0],
-      end: minutes[minutes.length - 1] + MINUTE_MS,
-    })
+    onPick(minuteBound(minutes[0], minutes[minutes.length - 1]))
   }
   return (
     <Spread
@@ -188,7 +181,7 @@ export function ChannelTimeEditor({
       <TimeBoundEditor
         value={bound}
         onChange={setBound}
-        opts={OPTIONS}
+        opts={MOMENT_OPTIONS}
         modeLabel={`${m.label} mode`}
         noValue={{ on: none, onChange: setNone }}
       />

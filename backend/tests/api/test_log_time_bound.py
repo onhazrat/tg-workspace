@@ -113,6 +113,15 @@ def test_a_crossed_bound_is_refused(client: TestClient) -> None:
     assert r.status_code == 422
 
 
+def test_a_bound_inside_one_minute_is_refused(client: TestClient) -> None:
+    """Both ends floor to the same minute, so nothing could be kept."""
+    r = client.get(
+        f"{PREFIX}/logs/embedding?mode=fixed&start={T0 + 10_000}&end={T0 + 50_000}",
+        headers=_auth(client),
+    )
+    assert r.status_code == 422
+
+
 def test_an_end_without_a_mode_is_refused(client: TestClient) -> None:
     headers = _auth(client)
     r = client.get(f"{PREFIX}/logs/embedding?start={T0}", headers=headers)
@@ -178,6 +187,14 @@ def test_the_spread_follows_the_search(client: TestClient) -> None:
 
 def test_a_half_zoom_is_refused(client: TestClient) -> None:
     r = client.get(f"{PREFIX}/logs/embedding/spread?lo={T0}", headers=_auth(client))
+    assert r.status_code == 422
+
+
+def test_a_crossed_zoom_is_refused(client: TestClient) -> None:
+    r = client.get(
+        f"{PREFIX}/logs/embedding/spread?lo={T0 + MINUTE}&hi={T0}",
+        headers=_auth(client),
+    )
     assert r.status_code == 422
 
 

@@ -199,6 +199,11 @@ INVENTORY: dict[str, str] = {
     # on read and Directory entries at probe time, and neither owns the other.
     "reach.py": PURE_TRANSFORM,
     "serialization.py": PURE_TRANSFORM,
+    # A spread's bars, zoomed or not (TB-04, TB-05): the bucket expression and
+    # the bars from per-bar counts, shared by the Directory's spread and the
+    # Logs tab's. Builds SQL and executes none; each caller counts under its
+    # own scoping.
+    "spread_bars.py": PURE_TRANSFORM,
     # PGMQ lane naming (ticket 09) — string constants and one function, no
     # Session, no network. See its module docstring.
     "proxy_pacing.py": PURE_TRANSFORM,

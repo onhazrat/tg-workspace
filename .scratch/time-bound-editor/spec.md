@@ -356,3 +356,7 @@ cost a session before.
   refreshes when a sync lands) and not part of this work.
 - TanStack Router reads `?variant=1` as a number. Any new text search
   parameter must accept a number too.
+
+## Comments
+
+- 2026-10-21: code-review fixes for the integration branch are on `claude/tb-review-fixes` (one Time bound resolver, query-model validation for the Logs routes, one binning helper, shared spread pieces in `components/Spread.tsx`, Directory bars rounded out to whole minutes).

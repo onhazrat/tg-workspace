@@ -5,10 +5,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, cast
+from typing import Any, NamedTuple, cast
 
 from fastapi import HTTPException
-from sqlalchemy import Float, Text, func
+from sqlalchemy import Text, func
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
@@ -25,13 +25,18 @@ from app.models_tg import (
     SyncLogPayload,
     utc_now,
 )
-from app.services.analysis_window import current_minute_start
+from app.services.analysis_window import (
+    ResolvedWindow,
+    TimeBound,
+    current_minute_start,
+)
 from app.services.serialization import (
     mapping_to_camel,
     model_to_camel,
     normalize_body,
     sync_log_to_camel,
 )
+from app.services.spread_bars import Bin, spread_range
 from app.services.tenancy import (
     Scope,
     assert_owner,
@@ -724,44 +729,27 @@ def _light_columns(model: type[SQLModel], heavy: frozenset[str]) -> list[Any]:
     return [c for c in _log_table(model).columns if c.key not in heavy]
 
 
-#: `[start, end)` in epoch ms, either end open: a Logged bound resolved.
-type LogBound = tuple[int | None, int | None]
-
-#: No bound at all.
-ANY_TIME: LogBound = (None, None)
+#: No Logged bound at all.
+ANY_TIME = ResolvedWindow(None, None)
 
 
 def resolve_log_bound(
-    mode: Literal["live", "fixed"] | None,
-    start: int | None,
-    end: int | None,
-    *,
-    now_ms: int | None = None,
-) -> LogBound:
+    bound: TimeBound | None, *, now_ms: int | None = None
+) -> ResolvedWindow:
     """A Logged Time bound as `[start, end)` in epoch ms (TB-05, ADR-033).
 
-    A Live end is signed ms from the server's current minute, as the Analysis
-    window's is, so two reads a second apart select the same rows; a Fixed end
-    is an instant. Both are floored to the minute, the editor's precision. A
-    crossed bound is refused rather than swapped, and an end without a mode is
-    refused rather than guessed at.
+    A Live end is placed against the server's current minute, as the Analysis
+    window's is, so two reads a second apart select the same rows. Then both
+    ends are floored to the minute, the editor's precision.
     """
-    if mode is None:
-        if start is None and end is None:
-            return ANY_TIME
-        raise HTTPException(status_code=422, detail="A Time bound needs a mode.")
-    base = current_minute_start(now_ms) if mode == "live" else 0
+    if bound is None:
+        return ANY_TIME
+    at = bound.resolve(current_minute_start(now_ms))
 
-    def at(ms: int | None) -> int | None:
-        return None if ms is None else current_minute_start(base + ms)
+    def floored(ms: int | None) -> int | None:
+        return None if ms is None else current_minute_start(ms)
 
-    lo, hi = at(start), at(end)
-    if lo is not None and hi is not None and lo >= hi:
-        raise HTTPException(
-            status_code=422,
-            detail="The Time bound must start at least one minute before it ends.",
-        )
-    return lo, hi
+    return ResolvedWindow(floored(at.start), floored(at.end))
 
 
 def _visible(
@@ -771,7 +759,7 @@ def _visible(
     user_id: uuid.UUID,
     search: str | None,
     search_in_details: bool,
-    bound: LogBound = ANY_TIME,
+    bound: ResolvedWindow = ANY_TIME,
 ) -> Any:
     """The rows of one log the caller may see, matching the search and the bound.
 
@@ -792,11 +780,10 @@ def _visible(
         statement = statement.where(
             _log_search_clause(log_type, search.strip(), in_details=search_in_details)
         )
-    start, end = bound
-    if start is not None:
-        statement = statement.where(timestamp >= start)
-    if end is not None:
-        statement = statement.where(timestamp < end)
+    if bound.start is not None:
+        statement = statement.where(timestamp >= bound.start)
+    if bound.end is not None:
+        statement = statement.where(timestamp < bound.end)
     return statement
 
 
@@ -809,7 +796,7 @@ def _list_logs_page(
     offset: int,
     search: str | None,
     search_in_details: bool,
-    bound: LogBound,
+    bound: ResolvedWindow,
 ) -> list[dict[str, Any]]:
     """Return one newest-first page of a log table, without its heavy columns.
 
@@ -850,7 +837,7 @@ def list_logs(
     offset: int = 0,
     search: str | None = None,
     search_in_details: bool = False,
-    bound: LogBound = ANY_TIME,
+    bound: ResolvedWindow = ANY_TIME,
 ) -> list[dict[str, Any]]:
     """One newest-first page of any log type, in the light projection.
 
@@ -882,17 +869,6 @@ def list_logs(
     )
 
 
-#: Bars in a log's spread, as many as a Directory moment's.
-LOG_SPREAD_BINS = 32
-
-
-@dataclass(frozen=True)
-class LogSpreadBin:
-    lo: float
-    hi: float
-    count: int
-
-
 @dataclass(frozen=True)
 class LogSpread:
     #: Entries matching the search; every one has a timestamp.
@@ -900,7 +876,7 @@ class LogSpread:
     min: int | None
     max: int | None
     median: float | None
-    bins: list[LogSpreadBin]
+    bins: list[Bin]
 
 
 def log_spread(
@@ -943,32 +919,16 @@ def log_spread(
             )
         )
     ).one()
-    bins: list[LogSpreadBin] = []
-    a, b = lo, hi
-    if zoom is not None and lo is not None and hi is not None:
-        a, b = max(zoom[0], lo), min(zoom[1], hi)
-    if a is not None and b is not None and b > a:
-        bucket = func.least(
-            func.width_bucket(sa_cast(timestamp, Float), a, b, LOG_SPREAD_BINS),
-            LOG_SPREAD_BINS,
-        )
-        counts = {
-            int(i): int(n)
-            for i, n in session.execute(
-                visible(
-                    sa_select(bucket, func.count()).where(
-                        timestamp >= a, timestamp <= b
-                    )
-                ).group_by(bucket)
-            ).all()
-        }
-        step = (b - a) / LOG_SPREAD_BINS
-        bins = [
-            LogSpreadBin(
-                lo=a + i * step, hi=a + (i + 1) * step, count=counts.get(i + 1, 0)
-            )
-            for i in range(LOG_SPREAD_BINS)
-        ]
+    bins: list[Bin] = []
+    covered = spread_range(lo, hi, zoom)
+    if covered is not None:
+        bar = covered.bar_of(timestamp)
+        counts = session.execute(
+            visible(
+                sa_select(bar, func.count()).where(*covered.holds(timestamp))
+            ).group_by(bar)
+        ).all()
+        bins = covered.bars({int(i): int(n) for i, n in counts})
     return LogSpread(
         total=int(total),
         min=None if lo is None else int(lo),

@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.common import ZoomRequest
 from app.schemas.post_filter import check_tree_bounds
+from app.services.analysis_window import TimeBound, TimeMode
 from app.services.channel_directory import MAX_PRIORITY_BOOST, BoostMode
 from app.services.directory_reads import (
     SEARCH_FIELDS,
@@ -41,7 +42,6 @@ from app.services.directory_reads import (
     SharedRelation,
     TagCond,
     TimeCond,
-    TimeMode,
     YoursSource,
 )
 from app.services.post_filters import TreeAtom, TreeGroup
@@ -198,6 +198,9 @@ class _TimeBound(BaseModel):
     start: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
     end: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
 
+    def bound(self) -> TimeBound:
+        return TimeBound(self.mode, self.start, self.end)
+
     @model_validator(mode="after")
     def _ordered(self) -> Self:
         if self.mode == "live":
@@ -217,7 +220,7 @@ class DirectoryTimeCondition(_Cond, _TimeBound):
     none: bool = False
 
     def to_cond(self) -> DirectoryCond:
-        return TimeCond(self.moment, self.mode, self.start, self.end, self.none)
+        return TimeCond(self.moment, self.bound(), self.none)
 
 
 class DirectoryMineCondition(_Cond, _TimeBound):
@@ -228,7 +231,7 @@ class DirectoryMineCondition(_Cond, _TimeBound):
     mode: TimeMode = "live"
 
     def to_cond(self) -> DirectoryCond:
-        return MineCond(self.mode, self.start, self.end)
+        return MineCond(self.bound())
 
 
 #: How many fixed handles one "cited by" or "cites" Condition names: 500 keeps
@@ -734,9 +737,6 @@ class DirectoryWhyRequest(DirectoryYoursRequest, _TimeBound):
     parents: Seeds | None = None
     #: The Shared children Condition's Seeds, when it is on.
     children: Seeds | None = None
-
-    def window(self) -> MineCond:
-        return MineCond(self.mode, self.start, self.end)
 
     def shared(self) -> DirectoryTree:
         """The Shared Conditions whose Seeds the panel names, as a tree, so

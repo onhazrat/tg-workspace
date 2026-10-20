@@ -6,7 +6,7 @@
  * the Analysis window editor's four fields means for a bound. The other half
  * is `components/TimeBoundEditor.tsx`.
  */
-import { MINUTE_MS } from "@/lib/analysis-window"
+import { floorToMinute, MINUTE_MS } from "@/lib/analysis-window"
 import {
   ERRORS,
   formatElapsed,
@@ -28,6 +28,9 @@ export type TimeBoundOptions = {
   ahead?: boolean
 }
 
+/** What a moment's Time bound turns on (ADR-033): all three switches. */
+export const MOMENT_OPTIONS: TimeBoundOptions = { openEnds: true, ahead: true }
+
 /** The bound's ends as epoch ms against `at`. */
 export function resolveTimeBound(b: TimeBound, at: number) {
   const shift = b.mode === "live" ? at : 0
@@ -35,6 +38,29 @@ export function resolveTimeBound(b: TimeBound, at: number) {
     start: b.start === undefined ? undefined : b.start + shift,
     end: b.end === undefined ? undefined : b.end + shift,
   }
+}
+
+/**
+ * The Fixed bound over values from `oldest` to `newest`, rounded out to whole
+ * minutes, its End one minute past the newest, so it keeps both.
+ */
+export function minuteBound(oldest: number, newest: number): TimeBound {
+  return {
+    mode: "fixed",
+    start: floorToMinute(oldest),
+    end: floorToMinute(newest) + MINUTE_MS,
+  }
+}
+
+/**
+ * The bound a clicked bar of a server's spread sets. A bar counts `[lo, hi)`
+ * and the last one `[lo, hi]`, so its newest value is just under `hi`, or `hi`.
+ */
+export function barBound(
+  bin: { lo: number; hi: number },
+  last: boolean,
+): TimeBound {
+  return minuteBound(bin.lo, last ? bin.hi : Math.ceil(bin.hi) - 1)
 }
 
 /** Whether an instant falls inside the bound, `[start, end)`, against `at`. */

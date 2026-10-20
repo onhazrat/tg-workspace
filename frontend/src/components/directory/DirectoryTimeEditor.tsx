@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
+import { type Bin, dateText, Spread } from "@/components/Spread"
 import type { ZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
@@ -8,20 +9,12 @@ import type {
   DirectoryTimeCond,
   Moment,
 } from "@/lib/directory/directory-filter"
-import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
-import { type Bin, Spread } from "./DirectoryBoundEditor"
-
-const DAY_MS = 86_400_000
-
-/** A time spread's captions: dates, and the time of day once under three days show. */
-export const dateText = (ms: number, shown = Number.POSITIVE_INFINITY) =>
-  new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    ...(shown < 3 * DAY_MS && { timeStyle: "short" }),
-  }).format(ms)
-
-/** What a moment's Time bound turns on (ADR-033): all three switches. */
-const OPTIONS = { openEnds: true, ahead: true }
+import {
+  barBound,
+  MOMENT_OPTIONS,
+  resolveTimeBound,
+  type TimeBound,
+} from "@/lib/time-bound/bound"
 
 /** The Condition Add would apply; `null` while the bound is Any time. */
 function condition(
@@ -39,7 +32,8 @@ function condition(
  * A Time bound in the Directory filter (DPF, TB-01): the moment's name and
  * spread, the Analysis window editor with open ends, an End ahead of now and
  * No value, and Add or Update with the count it keeps. The spread is drawn by
- * the server in epoch ms, and a click on a bar sets a Fixed bound over it.
+ * the server in epoch ms, and a click on a bar sets a Fixed bound over it,
+ * out to whole minutes.
  * NOT is the chip's, not the editor's.
  */
 export function DirectoryTimeEditor({
@@ -78,7 +72,7 @@ export function DirectoryTimeEditor({
 
   const onBar = (bin: Bin) => {
     setNone(false)
-    setBound({ mode: "fixed", start: bin.lo, end: bin.hi })
+    setBound(barBound(bin, bin === distribution?.bins.at(-1)))
   }
   return (
     <form
@@ -116,7 +110,7 @@ export function DirectoryTimeEditor({
       <TimeBoundEditor
         value={bound}
         onChange={setBound}
-        opts={OPTIONS}
+        opts={MOMENT_OPTIONS}
         modeLabel={`${moment.label} mode`}
         noValue={{ on: none, onChange: setNone }}
       />
