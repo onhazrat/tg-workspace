@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
+import type { ZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import { serverNow } from "@/lib/analysis-window"
@@ -48,11 +49,14 @@ export function DirectoryTimeEditor({
   countFor,
   onSubmit,
   onBack,
+  zoom,
 }: {
   moment: Moment
   /** The Condition being changed; without one the editor adds. */
   initial?: DirectoryTimeCond
   distribution?: DirectoryDistributionResponse
+  /** The range `distribution` was asked for; the container keeps it (TB-04). */
+  zoom?: ZoomState
   countFor: (cond: DirectoryTimeCond) => ReactNode
   onSubmit: (cond: DirectoryTimeCond) => void
   onBack?: () => void
@@ -104,6 +108,7 @@ export function DirectoryTimeEditor({
           bound={highlight || null}
           onBar={onBar}
           format={dateText}
+          zoom={zoom}
         />
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>

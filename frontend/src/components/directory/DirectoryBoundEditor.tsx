@@ -107,11 +107,14 @@ export function DirectoryBoundEditor({
   countFor,
   onSubmit,
   onBack,
+  zoom,
 }: {
   measure: Measure
   /** The Condition being changed; without one the editor adds. */
   initial?: MetricBound
   distribution?: DirectoryDistributionResponse
+  /** The range `distribution` was asked for; the container keeps it (TB-04). */
+  zoom?: ZoomState
   countFor: (bound: MetricBound) => ReactNode
   onSubmit: (bound: MetricBound) => void
   onBack?: () => void
@@ -153,7 +156,7 @@ export function DirectoryBoundEditor({
       </div>
       <p className="text-[11px] text-app-ink/50">{measure.description}</p>
       {distribution ? (
-        <Spread spread={distribution} bound={bound} onBar={onBar} />
+        <Spread spread={distribution} bound={bound} onBar={onBar} zoom={zoom} />
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
       )}

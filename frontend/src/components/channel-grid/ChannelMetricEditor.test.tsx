@@ -226,6 +226,21 @@ describe("zoom (TB-04)", () => {
     expect(caption()).toBe("23.4median 100, log scale417")
   })
 
+  test("a zoom held at the spread's lowest value still leaves that end open", () => {
+    // On log(1 + x), 10 comes back as 10.000000000000002 unless kept exact.
+    mount([10, 100, 1000, 10_000, 100_000], { max: 10 })
+    zoom("Zoom in")
+    drag(0, 3)
+    expect(pressed()).toEqual(["at most"])
+  })
+
+  test("and at the highest value, that end", () => {
+    mount([0.01, 0.1, 1, 7], { min: 7 })
+    zoom("Zoom in")
+    drag(31, 28)
+    expect(pressed()).toEqual(["at least"])
+  })
+
   test("a zoomed run touching the first bar leaves no end open", () => {
     mount(LINEAR)
     zoom("Zoom in")

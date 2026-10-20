@@ -13,6 +13,7 @@ import {
 } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryDistributionResponse } from "@/client"
+import { type Range, useZoomState } from "@/components/SpreadZoom"
 import {
   type DirectoryTimeCond,
   type MomentKey,
@@ -237,5 +238,36 @@ describe("the Time bound editor", () => {
         .getByRole("button", { name: "No value" })
         .getAttribute("aria-pressed"),
     ).toBe("true")
+  })
+})
+
+describe("zoom (TB-04)", () => {
+  test("asks for a third of the spread around the bound", () => {
+    const asked: (Range | null)[] = []
+    function Container() {
+      const zoom = useZoomState()
+      asked.push(zoom.range)
+      return (
+        <DirectoryTimeEditor
+          moment={momentOf("refresh_due_at")}
+          initial={{
+            type: "time",
+            moment: "refresh_due_at",
+            mode: "fixed",
+            start: SPREAD.min ?? 0,
+            end: (SPREAD.min ?? 0) + DAY / 2,
+          }}
+          distribution={SPREAD}
+          zoom={zoom}
+          countFor={() => null}
+          onSubmit={() => {}}
+        />
+      )
+    }
+    render(<Container />)
+    click("Zoom in")
+    // Two days in thirds is 16 hours, held inside the spread at its start.
+    const start = SPREAD.min ?? 0
+    expect(asked.at(-1)).toEqual([start, start + (2 * DAY) / 3])
   })
 })

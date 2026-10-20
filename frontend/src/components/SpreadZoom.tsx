@@ -61,7 +61,7 @@ export function spreadZoom(
     const start = Math.min(Math.max(centre - width / 2, A), B - width)
     return [
       start === A ? lo : inv(start),
-      start + width === B ? hi : inv(start + width),
+      start === B - width ? hi : inv(start + width),
     ]
   }
   return {
