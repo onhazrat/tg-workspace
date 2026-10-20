@@ -1,0 +1,12 @@
+# Frontend architecture
+
+Loaded with any work under `frontend/`. Commands, testing and conventions are in
+the root `CLAUDE.md`; every guard named below has a row in
+`docs/agents/architecture-guards.md`.
+
+- **Two API clients, split per *call* by contract** (ADR-006). *Enforced: `src/api/client-split.conform.ts`.* Generated `src/client/` (committed, **do not hand-edit**) wherever its type is at least as useful; hand-written `src/api/` for SSE, blobs, and calls whose generated type would be a *downgrade* (an **open** model, or a **closed but all-optional** one). Measure openness with `string extends keyof T`, never by grepping for `[key: string]`. Regenerate with `bash scripts/generate-client.sh`.
+- **Server state = TanStack Query, always.** *Enforced (partially): `src/lib/architecture-invariants.test.ts` pins `DataContext`'s field set.* It derives from queries and exposes setters as query-cache write-throughs; keys in `hooks/queryKeys.ts`.
+- **PostgreSQL is the only client-side store.** *Enforced: `src/lib/architecture-invariants.test.ts`.* No `idb`/`localforage`/`dexie`, no `indexedDB`, no DB worker. The browser keeps settings and the current selection, nothing else.
+- **Nothing says `localStorage` except four modules.** *Enforced: `src/lib/architecture-invariants.test.ts`.* Use `scopedStorage` (`lib/storage/scoped.ts`), which namespaces every key under `u:<userId>:` from the unverified JWT `sub`. The rule is "do not name `localStorage`" rather than "namespace your keys" because only the first can be checked. The four exceptions are **device-scoped on purpose** and `DEVICE_SCOPED_KEYS` is asserted as an exact pair. Signing out clears the **query cache**, not just the token; stored preferences are deliberately kept. Every accessor swallows storage errors, because reads run inside `useState` initialisers. Playwright seeds through `tests/utils/scoped-storage.ts`, never bare keys.
+- **Settings are declared once, in the backend.** *Enforced: `backend/tests/services/test_setting_declarations.py`.* `services/setting_declarations.py` declares every Setting, browser ones too; `src/lib/settings/schema.ts` keeps how the browser stores its own, held in step by the guard. Never a new `useState` hook. Theme is owned by `theme-provider` in `main.tsx`; one theme toggle (*enforced*).
+- **Routing and tabs come from the URL.** TanStack Router; the workspace tab is `?tab=` on `/`, settings sub-sections are `?section=`.
