@@ -4134,7 +4134,7 @@ export type LogSpreadBinResponse = {
 /**
  * LogSpreadResponse
  *
- * When a log's entries were logged, for the Logged editor (TB-05).
+ * When a log's entries were logged, for the Logged editor.
  *
  * Empty `bins` when fewer than two instants are logged. Zoomed, the bars
  * span the zoom and `total`, `min`, `max` and `median` stay the whole

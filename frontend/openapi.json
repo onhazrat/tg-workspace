@@ -11042,7 +11042,7 @@
         "type": "object",
         "required": ["total", "min", "max", "median", "bins"],
         "title": "LogSpreadResponse",
-        "description": "When a log's entries were logged, for the Logged editor (TB-05).\n\nEmpty `bins` when fewer than two instants are logged. Zoomed, the bars\nspan the zoom and `total`, `min`, `max` and `median` stay the whole\nspread's."
+        "description": "When a log's entries were logged, for the Logged editor.\n\nEmpty `bins` when fewer than two instants are logged. Zoomed, the bars\nspan the zoom and `total`, `min`, `max` and `median` stay the whole\nspread's."
       },
       "LogWriteResponse": {
         "properties": {
