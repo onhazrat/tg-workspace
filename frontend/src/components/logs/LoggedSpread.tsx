@@ -7,26 +7,16 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import type { LogSearch, LogType } from "@/api/data"
 import { dataGetLogSpreadRoute, type LogSpreadResponse } from "@/client"
-import { type Bin, Spread } from "@/components/directory/DirectoryBoundEditor"
+import { Spread } from "@/components/directory/DirectoryBoundEditor"
 import { dateText } from "@/components/directory/DirectoryTimeEditor"
 import { useZoomState, type ZoomState } from "@/components/SpreadZoom"
 import { queryKeys } from "@/hooks/queryKeys"
-import { floorToMinute, MINUTE_MS, serverNow } from "@/lib/analysis-window"
-import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
-
-/**
- * The Fixed bound a clicked bar sets, rounded out to whole minutes: from the
- * bar's first minute to one past its newest. A bar holds `[lo, hi)`, the
- * last one `[lo, hi]`, as the server bins them.
- */
-function barBound(bin: Bin, last: boolean): TimeBound {
-  const newest = last ? Math.floor(bin.hi) : Math.ceil(bin.hi) - 1
-  return {
-    mode: "fixed",
-    start: floorToMinute(Math.floor(bin.lo)),
-    end: floorToMinute(newest) + MINUTE_MS,
-  }
-}
+import { floorToMinute, serverNow } from "@/lib/analysis-window"
+import {
+  barBound,
+  resolveTimeBound,
+  type TimeBound,
+} from "@/lib/time-bound/bound"
 
 export function LoggedSpreadView({
   spread,

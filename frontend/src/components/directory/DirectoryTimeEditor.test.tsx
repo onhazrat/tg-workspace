@@ -158,7 +158,22 @@ describe("the Time bound editor", () => {
     expect(field("End").value).toBe("2026-10-01T00:00")
   })
 
-  test("a bar sets a Fixed range over it", () => {
+  test("a bar sets a Fixed range over it, out to whole minutes", () => {
+    const { submitted } = mount()
+    fireEvent.click(screen.getByTestId("directory-bound-bar-0"))
+    fireEvent.click(submit())
+    expect(submitted).toEqual([
+      {
+        type: "time",
+        moment: "refresh_due_at",
+        mode: "fixed",
+        start: Date.UTC(2026, 0, 1),
+        end: Date.UTC(2026, 0, 2),
+      },
+    ])
+  })
+
+  test("the last bar keeps the maximum: its End is a minute past it", () => {
     const { submitted } = mount()
     fireEvent.click(screen.getByTestId("directory-bound-bar-1"))
     fireEvent.click(submit())
@@ -168,7 +183,7 @@ describe("the Time bound editor", () => {
         moment: "refresh_due_at",
         mode: "fixed",
         start: Date.UTC(2026, 0, 2),
-        end: Date.UTC(2026, 0, 3),
+        end: Date.UTC(2026, 0, 3, 0, 1),
       },
     ])
   })

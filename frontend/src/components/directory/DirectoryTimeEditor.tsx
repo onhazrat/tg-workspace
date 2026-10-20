@@ -8,7 +8,11 @@ import type {
   DirectoryTimeCond,
   Moment,
 } from "@/lib/directory/directory-filter"
-import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
+import {
+  barBound,
+  resolveTimeBound,
+  type TimeBound,
+} from "@/lib/time-bound/bound"
 import { type Bin, Spread } from "./DirectoryBoundEditor"
 
 const DAY_MS = 86_400_000
@@ -39,7 +43,7 @@ function condition(
  * A Time bound in the Directory filter (DPF, TB-01): the moment's name and
  * spread, the Analysis window editor with open ends, an End ahead of now and
  * No value, and Add or Update with the count it keeps. The spread is drawn by
- * the server in epoch ms, and a click on a bar sets a Fixed bound over it.
+ * the server in epoch ms, and a click on a bar sets a Fixed bound over it, out to whole minutes.
  * NOT is the chip's, not the editor's.
  */
 export function DirectoryTimeEditor({
@@ -78,7 +82,7 @@ export function DirectoryTimeEditor({
 
   const onBar = (bin: Bin) => {
     setNone(false)
-    setBound({ mode: "fixed", start: bin.lo, end: bin.hi })
+    setBound(barBound(bin, bin === distribution?.bins.at(-1)))
   }
   return (
     <form

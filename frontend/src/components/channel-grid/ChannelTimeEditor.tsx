@@ -14,6 +14,7 @@ import {
 } from "@/lib/channels/channel-moments"
 import {
   inTimeBound,
+  minuteBound,
   resolveTimeBound,
   type TimeBound,
 } from "@/lib/time-bound/bound"
@@ -82,11 +83,7 @@ function MomentSpread({
   const onBar = (bin: Bin) => {
     const minutes = bars[spread.bins.indexOf(bin)]
     if (!minutes.length) return
-    onPick({
-      mode: "fixed",
-      start: minutes[0],
-      end: minutes[minutes.length - 1] + MINUTE_MS,
-    })
+    onPick(minuteBound(minutes[0], minutes[minutes.length - 1]))
   }
   return (
     <Spread
