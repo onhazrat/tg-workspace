@@ -4,6 +4,7 @@ frontend/node_modules
 frontend/dist
 __pycache__
 .env
+.env.worktree
 htmlcov
 .coverage
 TG-Summarizer/tor-bin
