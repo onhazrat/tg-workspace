@@ -26,14 +26,14 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.permissions import Permission
 from app.jobs.settings import (
-    _default_directory,
-    _default_jobs,
-    _default_media,
-    _default_retention_policy,
-    _default_retention_prefs,
-    _default_sync,
-    _default_translation,
     default_ai_prefs,
+    default_directory,
+    default_jobs,
+    default_media,
+    default_retention_policy,
+    default_retention_prefs,
+    default_sync,
+    default_translation,
     load_directory_settings,
     load_jobs_settings,
     load_media_settings,
@@ -100,36 +100,46 @@ def _default_reach() -> dict[str, Any]:
 #: What each key's loader merges stored values over. A key absent here
 #: (`network`, `quota`) has no loader default; its declarations name one.
 LOADER_DEFAULTS: dict[str, Callable[[], dict[str, Any]]] = {
-    "jobs": _default_jobs,
-    SYNC_KEY: _default_sync,
-    SYNC_PREFS_KEY: _default_sync,
-    RETENTION_KEY: _default_retention_policy,
-    RETENTION_PREFS_KEY: _default_retention_prefs,
-    "media": _default_media,
-    "translation": _default_translation,
-    DIRECTORY_KEY: _default_directory,
+    "jobs": default_jobs,
+    SYNC_KEY: default_sync,
+    SYNC_PREFS_KEY: default_sync,
+    RETENTION_KEY: default_retention_policy,
+    RETENTION_PREFS_KEY: default_retention_prefs,
+    "media": default_media,
+    "translation": default_translation,
+    DIRECTORY_KEY: default_directory,
     REACH_KEY: _default_reach,
     PUBLISHING_KEY: _default_publishing,
     AI_PREFS_KEY: default_ai_prefs,
 }
 
 
+#: The keys read through a loader of their own, which merges stored values over
+#: its defaults (and reassembles a facade); any other key is merged here.
+_LOADERS: dict[str, Callable[[Session, uuid.UUID], dict[str, Any]]] = {
+    "jobs": lambda session, _user_id: load_jobs_settings(session),
+    SYNC_KEY: lambda session, user_id: load_sync_settings(session, user_id=user_id),
+    SYNC_PREFS_KEY: lambda session, user_id: load_sync_settings(
+        session, user_id=user_id
+    ),
+    RETENTION_KEY: lambda session, user_id: load_retention_settings(
+        session, user_id=user_id
+    ),
+    RETENTION_PREFS_KEY: lambda session, user_id: load_retention_settings(
+        session, user_id=user_id
+    ),
+    "media": lambda session, _user_id: load_media_settings(session),
+    "translation": lambda session, _user_id: load_translation_settings(session),
+    DIRECTORY_KEY: lambda session, _user_id: load_directory_settings(session),
+    REACH_KEY: lambda session, _user_id: load_reach_settings(session),
+}
+
+
 def _effective(session: Session, key: str, user_id: uuid.UUID) -> dict[str, Any]:
     """The section as the app reads it: stored values over the loader defaults."""
-    if key == "jobs":
-        return load_jobs_settings(session)
-    if key in (SYNC_KEY, SYNC_PREFS_KEY):
-        return load_sync_settings(session, user_id=user_id)
-    if key in (RETENTION_KEY, RETENTION_PREFS_KEY):
-        return load_retention_settings(session, user_id=user_id)
-    if key == "media":
-        return load_media_settings(session)
-    if key == "translation":
-        return load_translation_settings(session)
-    if key == DIRECTORY_KEY:
-        return load_directory_settings(session)
-    if key == REACH_KEY:
-        return load_reach_settings(session)
+    loader = _LOADERS.get(key)
+    if loader is not None:
+        return loader(session, user_id)
     if home_for(key) is Home.USER:
         stored = get_user_setting(session, key, user_id=user_id)
     else:

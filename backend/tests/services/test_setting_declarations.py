@@ -44,9 +44,9 @@ from pathlib import Path
 from app.core.config import settings
 from app.jobs.settings import (
     JOB_IDS,
-    _default_directory,
-    _default_media,
-    _default_translation,
+    default_directory,
+    default_media,
+    default_translation,
 )
 from app.services.network_settings import NETWORK_UI_KEYS
 from app.services.quota import Budget, quota_settings_field
@@ -85,9 +85,9 @@ FIELD_INVENTORY: dict[str, frozenset[str]] = {
     "sync_prefs": SYNC_PREF_FIELDS,
     "retention": RETENTION_POLICY_FIELDS,
     "retention_prefs": RETENTION_PREF_FIELDS,
-    "media": frozenset(_default_media()),
-    "translation": frozenset(_default_translation()),
-    "directory": frozenset(_default_directory()),
+    "media": frozenset(default_media()),
+    "translation": frozenset(default_translation()),
+    "directory": frozenset(default_directory()),
     "reach": frozenset(REACH_SETTING_FIELDS),
     "publishing": frozenset(_default_publishing()),
     "ai_prefs": AI_PREF_FIELDS,

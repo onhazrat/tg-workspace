@@ -42,7 +42,7 @@ Per `CLAUDE.md`, this file was watched to fail. Eight defects were applied one
 at a time and each turned it red; the last line confirms it went green again:
 
 1. declare `"jobs"` in `USER_KEYS` as well → the disjoint test fails
-2. add a field to `_default_sync()` and to no `SYNC_*_FIELDS` set → the
+2. add a field to `default_sync()` and to no `SYNC_*_FIELDS` set → the
    partition test fails
 3. drop `require_home` from `settings_store` → the refusal test fails
 4. drop `require_home` from `user_settings` → the other refusal test fails
@@ -76,9 +76,9 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.jobs.settings import (
-    _default_retention_policy,
-    _default_retention_prefs,
-    _default_sync,
+    default_retention_policy,
+    default_retention_prefs,
+    default_sync,
     load_sync_settings,
     save_sync_settings,
 )
@@ -262,7 +262,7 @@ def test_every_sync_field_has_exactly_one_home() -> None:
     """
     homes = [SYNC_POLICY_FIELDS, SYNC_RUNTIME_FIELDS, SYNC_PREF_FIELDS]
     declared = set().union(*homes)
-    on_disk = set(_default_sync())
+    on_disk = set(default_sync())
 
     assert declared == on_disk, (
         f"sync field(s) with no home: {sorted(on_disk - declared)}; "
@@ -286,7 +286,7 @@ def test_every_retention_field_has_exactly_one_home() -> None:
     """
     homes = [RETENTION_POLICY_FIELDS, RETENTION_PREF_FIELDS]
     declared = set().union(*homes)
-    on_disk = set(_default_retention_policy()) | set(_default_retention_prefs())
+    on_disk = set(default_retention_policy()) | set(default_retention_prefs())
 
     assert declared == on_disk, (
         f"retention field(s) with no home: {sorted(on_disk - declared)}; "
@@ -306,7 +306,7 @@ def test_the_two_retention_defaults_do_not_overlap() -> None:
     and still both emit `logRetentionDays`, at which point the reassembled
     facade would answer with whichever ran last.
     """
-    assert not set(_default_retention_policy()) & set(_default_retention_prefs())
+    assert not set(default_retention_policy()) & set(default_retention_prefs())
 
 
 # --------------------------------------------------------------------------
@@ -368,7 +368,7 @@ def test_the_facade_returns_the_whole_blob(db: Session, user_id: uuid.UUID) -> N
     """
     merged = load_sync_settings(db, user_id=user_id)
 
-    assert set(merged) == set(_default_sync())
+    assert set(merged) == set(default_sync())
 
 
 def test_a_write_lands_in_the_table_its_field_belongs_to(

@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.jobs.translation_batch import TRANSLATION_LANGUAGE_CODES
+from app.schemas.settings_registry import SettingRowType
 from app.services.network_settings import PROXY_CONCURRENCY_MAX, PROXY_CONCURRENCY_MIN
 from app.services.publication_parts import CITATION_STYLES
 from app.services.settings_registry import (
@@ -50,7 +51,8 @@ from app.services.settings_registry import (
     VIEW_OBSERVATIONS_KEY,
 )
 
-SettingType = Literal["boolean", "integer", "number", "string", "enum", "json"]
+#: One list of value types, the wire's: a declaration is what a row is built from.
+SettingType = SettingRowType
 SettingScope = Literal["browser", "account", "deployment"]
 #: Who sees a Setting: every Account, for what affects them; holders of
 #: `settings:manage`, for the infrastructure (plan decision 20).
