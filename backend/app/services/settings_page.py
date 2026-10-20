@@ -17,13 +17,22 @@ everything" shape this repo has fixed twice.
 
 from __future__ import annotations
 
+import ast
+import json
+import os
+import re
 import uuid
+from collections import Counter
 from collections.abc import Callable
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
+from pydantic import JsonValue
+from pydantic_core import PydanticUndefined
 from sqlmodel import Session
 
-from app.core.config import settings
+from app.core.config import SENSITIVE_CONFIG_SUFFIXES, Settings, settings
 from app.core.permissions import Permission
 from app.jobs.settings import (
     _default_directory,
@@ -44,17 +53,25 @@ from app.jobs.settings import (
 from app.schemas.settings_registry import (
     SettingOption,
     SettingRow,
+    SettingRowType,
     SettingsRegistryResponse,
     SettingTopic,
 )
 from app.services import rbac
+from app.services.network_settings import redact_proxy_url
 from app.services.publication_parts import PublishingSettings
 from app.services.reach import (
     DEFAULT_REACH_SETTINGS,
     REACH_SETTING_FIELDS,
     reach_settings_from,
 )
-from app.services.setting_declarations import DECLARATIONS, TOPICS, Declaration
+from app.services.setting_declarations import (
+    CONSTANT_TOPICS,
+    DECLARATIONS,
+    TOPICS,
+    Declaration,
+    env_topic,
+)
 from app.services.settings_registry import (
     DIRECTORY_KEY,
     PUBLISHING_KEY,
@@ -204,6 +221,243 @@ def _row(
     )
 
 
+# --- Configuration (SET-04) -------------------------------------------------
+# What the deployment is tuned by that is not a Setting: every `.env` value the
+# backend reads, every frontend build value and every tuning constant. Only a
+# holder of `settings:manage` sees any of it, and none of it is writable here.
+
+RESTART_LOCK = "Read at startup: change .env and restart"
+REBUILD_LOCK = "Built into the frontend: change .env and rebuild"
+DEPLOY_LOCK = "Constant in code: needs a deploy"
+
+_CORE = Path(__file__).resolve().parents[1] / "core"
+_CONFIG_SOURCE = _CORE / "config.py"
+_ENV_CATALOG = _CORE / "env_catalog.generated.json"
+_CONSTANTS_CATALOG = _CORE / "constants_catalog.generated.json"
+
+
+@lru_cache(maxsize=1)
+def constants_catalog() -> tuple[dict[str, Any], ...]:
+    """The generated catalog of code constants (`scripts/generate_constants_catalog.py`)."""
+    return tuple(json.loads(_CONSTANTS_CATALOG.read_text())["constants"])
+
+
+@lru_cache(maxsize=1)
+def _env_manifest() -> dict[str, dict[str, Any]]:
+    variables = json.loads(_ENV_CATALOG.read_text())["variables"]
+    return {item["name"]: item for item in variables}
+
+
+def _comment_above(lines: list[str], lineno: int) -> str:
+    out: list[str] = []
+    i = lineno - 2
+    while i >= 0 and lines[i].strip().startswith("#"):
+        out.append(re.sub(r"^#:?\s?", "", lines[i].strip()))
+        i -= 1
+    return re.sub(r"\s+", " ", " ".join(reversed(out))).strip()
+
+
+@lru_cache(maxsize=1)
+def _settings_source() -> dict[str, tuple[int, str]]:
+    """Each `Settings` field's line in `config.py` and the comment above it."""
+    source = _CONFIG_SOURCE.read_text()
+    lines = source.splitlines()
+    cls = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.ClassDef) and node.name == "Settings"
+    )
+    return {
+        node.target.id: (node.lineno, _comment_above(lines, node.lineno))
+        for node in cls.body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    }
+
+
+@lru_cache(maxsize=1)
+def _dotenv_names() -> frozenset[str]:
+    """Names the configured dotenv files assign, without loading their values."""
+    configured = Settings.model_config.get("env_file")
+    if not configured:
+        return frozenset()
+    paths = [configured] if isinstance(configured, (str, Path)) else list(configured)
+    backend_root = Path(__file__).resolve().parents[2]
+    names: set[str] = set()
+    for raw in paths:
+        path = Path(raw)
+        candidates = (
+            [path] if path.is_absolute() else [Path.cwd() / path, backend_root / path]
+        )
+        found = next((c for c in candidates if c.is_file()), None)
+        if found is None:
+            continue
+        for line in found.read_text().splitlines():
+            match = re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
+            if match:
+                names.add(match.group(1).upper())
+    return frozenset(names)
+
+
+def _camel(name: str) -> str:
+    head, *rest = name.lower().strip("_").split("_")
+    return head + "".join(part.title() for part in rest)
+
+
+def _title(name: str) -> str:
+    return name.strip("_").replace("_", " ").capitalize()
+
+
+def _plain(value: Any) -> JsonValue:
+    """A value as JSON, with any credential in a URL masked."""
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return redact_proxy_url(value) or value
+    if isinstance(value, (list, tuple, set)):
+        return [_plain(item) for item in value]
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    return _plain(str(value))
+
+
+def _type_of(value: Any) -> SettingRowType:
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, (list, dict)):
+        return "json"
+    return "string"
+
+
+def is_secret(name: str) -> bool:
+    return name.endswith(SENSITIVE_CONFIG_SUFFIXES) or bool(
+        _env_manifest().get(name, {}).get("sensitive")
+    )
+
+
+def _is_set(value: Any) -> bool:
+    return value not in (None, "", [], {})
+
+
+def _env_row(name: str) -> SettingRow:
+    line, comment = _settings_source()[name]
+    field = Settings.model_fields[name]
+    default = None if field.default is PydanticUndefined else _plain(field.default)
+    value = _plain(getattr(settings, name))
+    source = (
+        "Environment"
+        if name in os.environ
+        else ".env"
+        if name in _dotenv_names()
+        else "Code default"
+    )
+    secret = is_secret(name)
+    return SettingRow(
+        id=f"{env_topic(name)}.env.{_camel(name)}",
+        title=_title(name),
+        description=comment,
+        topic=env_topic(name),
+        scope="env",
+        type="string" if secret else _type_of(value if value is not None else default),
+        value=("set" if _is_set(value) else "not set") if secret else value,
+        default=None if secret else default,
+        defaultSource="code",
+        modified=not secret and value != default,
+        canEdit=False,
+        lockReason=RESTART_LOCK,
+        applies="restart",
+        storage=f"{source}: {name}",
+        sensitive=secret,
+        envName=name,
+        sourceRef=f"backend/app/core/config.py:{line}",
+    )
+
+
+def _build_row(spec: dict[str, Any]) -> SettingRow:
+    """A frontend build value; the page fills in what this browser's bundle runs."""
+    name = spec["name"]
+    secret = is_secret(name)
+    default = None if secret else spec.get("default")
+    return SettingRow(
+        id=f"{env_topic(name)}.env.{_camel(name)}",
+        title=_title(name.removeprefix("VITE_")),
+        description="Built into the frontend bundle; the value shown is what this browser runs.",
+        topic=env_topic(name),
+        scope="env",
+        type="string" if secret else _type_of(default),
+        value=None,
+        default=default,
+        defaultSource="code",
+        modified=False,
+        canEdit=False,
+        lockReason=REBUILD_LOCK,
+        applies="rebuild",
+        storage=f"Frontend build: {name}",
+        sensitive=secret,
+        envName=name,
+    )
+
+
+def _module_name(path: str) -> str:
+    return _camel(re.sub(r"(?<=[a-z0-9])(?=[A-Z])|-", "_", Path(path).stem))
+
+
+def _code_rows() -> list[SettingRow]:
+    catalog = constants_catalog()
+    ids = [f"{CONSTANT_TOPICS[c['file']]}.code.{_camel(c['name'])}" for c in catalog]
+    taken = Counter(ids)
+    rows: list[SettingRow] = []
+    for constant, base in zip(catalog, ids, strict=True):
+        topic = CONSTANT_TOPICS[constant["file"]]
+        name = _camel(constant["name"])
+        if taken[base] > 1:
+            # One name in two modules of a topic: the module tells them apart.
+            module = _module_name(constant["file"])
+            name = module + name[0].upper() + name[1:]
+        expression = constant["expression"]
+        written = (
+            "" if expression == str(constant["value"]) else f" Written as {expression}."
+        )
+        ref = f"{constant['file']}:{constant['line']}"
+        rows.append(
+            SettingRow(
+                id=f"{topic}.code.{name}",
+                title=_title(constant["name"]),
+                description=(constant["comment"] + written).strip(),
+                topic=topic,
+                scope="code",
+                type=_type_of(constant["value"]),
+                value=constant["value"],
+                default=constant["value"],
+                defaultSource="code",
+                modified=False,
+                canEdit=False,
+                lockReason=DEPLOY_LOCK,
+                applies="deploy",
+                storage=ref,
+                sourceRef=ref,
+            )
+        )
+    return rows
+
+
+def configuration_rows() -> list[SettingRow]:
+    """Every `.env` value, frontend build value and code constant, as rows."""
+    builds = [s for s in _env_manifest().values() if s["scope"] == "frontend_build"]
+    return [
+        *(_env_row(name) for name in sorted(Settings.model_fields)),
+        *(_build_row(spec) for spec in builds),
+        *_code_rows(),
+    ]
+
+
+def configuration_row(setting_id: str) -> SettingRow | None:
+    return next((r for r in configuration_rows() if r.id == setting_id), None)
+
+
 def build_registry(session: Session, user_id: uuid.UUID) -> SettingsRegistryResponse:
     """Every row `user_id` may see, each key read once."""
     permissions = rbac.permissions_for(session, user_id)
@@ -215,6 +469,8 @@ def build_registry(session: Session, user_id: uuid.UUID) -> SettingsRegistryResp
         if decl.scope != "browser" and decl.key not in sections:
             sections[decl.key] = _effective(session, decl.key, user_id)
         rows.append(_row(decl, sections.get(decl.key, {}), permissions))
+    if Permission.SETTINGS_MANAGE in permissions:
+        rows.extend(configuration_rows())
     return SettingsRegistryResponse(
         topics=[SettingTopic(id=tid, title=title) for tid, title in TOPICS],
         rows=rows,

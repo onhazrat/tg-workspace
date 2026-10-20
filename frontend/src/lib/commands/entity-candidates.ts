@@ -23,13 +23,6 @@ export function getExtendedEntityCandidates(
         id: table,
         label: table,
       }))
-    case "open-configuration":
-      return (ctx.configurationCatalog?.layers ?? []).flatMap((layer) =>
-        (layer.entries ?? []).map((entry) => ({
-          id: entry.id,
-          label: `[${layer.id}] ${entry.key}`,
-        })),
-      )
     case "remove-tag-pick": {
       const channel = entityPayload as Channel | undefined
       const tagNames = getTagNames(channel?.tags)
@@ -65,7 +58,6 @@ export function isNonChannelEntityFlow(flow: EntityFlowType): boolean {
     flow === "delete-summary" ||
     flow === "pick-post" ||
     flow === "clear-db-table" ||
-    flow === "open-configuration" ||
     flow === "remove-tag-pick" ||
     isSettingGroupEntityFlow(flow)
   )

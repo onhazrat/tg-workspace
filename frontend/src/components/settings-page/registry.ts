@@ -5,7 +5,8 @@
  * arrives without a value, because only this browser knows it: the value
  * comes from `SettingsContext` (or the theme provider) and the default from
  * the frontend schema, which `test_setting_declarations.py` holds equal to
- * the declarations.
+ * the declarations. A frontend build value (SET-04) arrives without one for
+ * the same reason: only this bundle knows what it was built with.
  *
  * A server write goes through `PUT /settings/{settingId}` and its answer
  * replaces the row. The same value is then handed to `SettingsContext`, which
@@ -22,6 +23,7 @@ import {
 import { APP_DEFAULT_THEME, type Theme } from "@/components/theme-provider"
 import { useSettings } from "@/contexts/SettingsContext"
 import { queryKeys } from "@/hooks/queryKeys"
+import { frontendBuildValue, hasFrontendBuildValue } from "@/lib/env"
 import { appSettingsSpec } from "@/lib/settings/schema"
 import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
 import type { Row } from "./model"
@@ -45,6 +47,24 @@ function browserValue(key: string, value: unknown): unknown {
   return typeof def === "number" && typeof value === "string"
     ? Number(value)
     : value
+}
+
+/**
+ * What this bundle runs for a build value: the built one, or the fallback the
+ * code uses without one. Built differently from that fallback counts as
+ * changed; a secret is only "set" or "not set", and never changed.
+ */
+function withBuildValue(row: Row): Row {
+  const name = row.envName ?? ""
+  const built = hasFrontendBuildValue(name)
+  if (row.sensitive)
+    return { ...row, value: built ? "set" : "not set", modified: false }
+  const value = frontendBuildValue(name, row.default)
+  return {
+    ...row,
+    value: value as Row["value"],
+    modified: built && String(value) !== String(row.default),
+  }
 }
 
 function setterName(field: string) {
@@ -76,6 +96,7 @@ export function useSettingsRegistry({ enabled = true } = {}) {
   const rows = useMemo<Row[]>(
     () =>
       (query.data?.rows ?? []).map((row) => {
+        if (row.applies === "rebuild") return withBuildValue(row)
         if (row.scope !== "browser") return row
         const key = browserKey(row)
         if (key === THEME_STORAGE_KEY) {

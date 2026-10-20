@@ -230,19 +230,19 @@ def test_the_observation_stride_is_deployment_state(db: Session) -> None:
     """REACH-05's runtime row, placed where `sync_runtime` is.
 
     The stride samples one corpus-wide table under one row cap, and the app's
-    own controller writes it, so it is global and the catalog does not offer it
-    for editing. It is read on every sync page, so a row nobody wrote reads as
-    stride 1 and a hand-edited one that is not a positive integer does too.
+    own controller writes it, so it is global and the Settings page does not
+    offer it as a Setting. It is read on every sync page, so a row nobody wrote
+    reads as stride 1 and a hand-edited one that is not a positive integer does
+    too.
 
-    Mutations watched: move the key to `USER_KEYS`; drop it from the catalog's
-    non-editable set; accept any stored value as the stride.
+    Mutations watched: move the key to `USER_KEYS`; drop it from the
+    declarations' `NOT_SETTINGS`; accept any stored value as the stride.
     """
-    from app.services.configuration_catalog import _global_entries
+    from app.services.setting_declarations import NOT_SETTINGS
 
     assert home_for(VIEW_OBSERVATIONS_KEY) is Home.GLOBAL
-    editable = {entry.key: entry.editable for entry in _global_entries(db)}
-    assert editable[SYNC_RUNTIME_KEY] is False
-    assert editable[VIEW_OBSERVATIONS_KEY] is False
+    assert SYNC_RUNTIME_KEY in NOT_SETTINGS
+    assert VIEW_OBSERVATIONS_KEY in NOT_SETTINGS
 
     assert observation_stride(db) == 1
     put_global_setting(db, VIEW_OBSERVATIONS_KEY, {"stride": 4})

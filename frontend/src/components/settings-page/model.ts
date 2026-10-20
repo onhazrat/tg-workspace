@@ -48,6 +48,16 @@ export const SCOPES: {
   },
 ]
 
+/** What changing a Configuration row costs; a Setting applies at once. */
+const APPLIES_LABEL: Record<string, string> = {
+  restart: "Restart to apply",
+  rebuild: "Rebuild to apply",
+  deploy: "Needs a deploy",
+}
+
+export const appliesLabel = (row: Pick<Row, "applies">) =>
+  APPLIES_LABEL[row.applies ?? "now"]
+
 export const scopeLabel = (scope: Scope) =>
   SCOPES.find((s) => s.id === scope)?.label ?? scope
 

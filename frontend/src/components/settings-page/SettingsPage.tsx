@@ -27,6 +27,7 @@ import { TgMetaChip } from "@/components/ui/tg-chips"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { Control, Highlight, RowMenu } from "./controls"
 import {
+  appliesLabel,
   elementId,
   formatValue,
   OPERATORS,
@@ -439,6 +440,9 @@ export function Item({
           >
             Changed · default {formatValue(row, row.default)}
           </button>
+        )}
+        {appliesLabel(row) && (
+          <TgMetaChip className="font-normal">{appliesLabel(row)}</TgMetaChip>
         )}
         {state.kind === "saved" && (
           <TgMetaChip className="font-normal">Saved</TgMetaChip>

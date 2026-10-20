@@ -191,7 +191,7 @@ def build_runtime_config(
 ) -> dict[str, Any]:
     """Return effective runtime settings merged from DB AppSettings and env defaults.
 
-    Unlike the five-layer configuration catalog, this snapshot also reports
+    Unlike the Settings page's registry, this snapshot also reports
     resolved, time-varying operational state: the current clock and cutoff,
     effective start time, live proxy lanes, and the caller's active sync job.
 

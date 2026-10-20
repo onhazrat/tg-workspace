@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, col, delete
 
 from app.api.deps import VIEW_AS_READ_ONLY_DETAIL
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.db import engine
 from app.core.permissions import ROLE_OWNER
 from app.models import User
@@ -381,3 +381,119 @@ def test_view_as_shows_the_targets_page_and_refuses_writes_until_elevated(
     written = _put(client, elevated_headers, "retention.yours.logDays", {"value": 2})
     assert written.status_code == 200, written.text
     assert _rows(client, member[1])["retention.yours.logDays"]["value"] == 2
+
+
+# --------------------------------------------------------------------------
+# Configuration (SET-04): `.env`, frontend build values and code constants
+# --------------------------------------------------------------------------
+
+CONFIGURATION = {"env", "code"}
+
+
+def test_configuration_is_listed_for_an_operator_and_absent_for_an_account(
+    client: TestClient, member: Account, operator: Account
+) -> None:
+    mine = _rows(client, member[1])
+    theirs = _rows(client, operator[1])
+
+    assert not [i for i, r in mine.items() if r["scope"] in CONFIGURATION]
+    scopes = {r["scope"] for r in theirs.values()}
+    assert CONFIGURATION <= scopes
+    env_names = {r["envName"] for r in theirs.values() if r["scope"] == "env"}
+    assert set(Settings.model_fields) <= env_names
+    assert "VITE_API_URL" in env_names
+    assert any(r["scope"] == "code" for r in theirs.values())
+
+
+def test_an_env_row_says_what_it_is_where_it_came_from_and_what_it_costs(
+    client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    row = _rows(client, operator[1])["server.env.slowRequestLogMs"]
+    assert row["envName"] == "SLOW_REQUEST_LOG_MS"
+    assert "time-to-first-byte" in row["description"]
+    assert row["value"] == settings.SLOW_REQUEST_LOG_MS
+    assert row["default"] == 1000
+    assert row["applies"] == "restart"
+    assert row["canEdit"] is False
+    assert row["lockReason"] == "Read at startup: change .env and restart"
+    assert row["sourceRef"].startswith("backend/app/core/config.py:")
+
+    monkeypatch.setenv("SLOW_REQUEST_LOG_MS", "1234")
+    monkeypatch.setattr(settings, "SLOW_REQUEST_LOG_MS", 1234)
+    changed = _rows(client, operator[1])["server.env.slowRequestLogMs"]
+    assert changed["value"] == 1234
+    assert changed["modified"] is True
+    assert changed["storage"].startswith("Environment")
+
+
+def test_a_secret_is_only_set_or_not_set_and_never_changed(
+    client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secret = "a-very-secret-value-nobody-should-see"
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", secret)
+    response = client.get(REGISTRY, headers=operator[1])
+    assert response.status_code == 200
+    assert secret not in response.text
+    assert settings.SECRET_KEY not in response.text
+    assert settings.POSTGRES_PASSWORD not in response.text
+
+    rows = {r["id"]: r for r in response.json()["rows"]}
+    secrets = [r for r in rows.values() if r["sensitive"]]
+    assert {r["envName"] for r in secrets} >= {"GEMINI_API_KEY", "SECRET_KEY"}
+    for row in secrets:
+        # A frontend build value is filled in by the browser, never sent.
+        allowed = (None,) if row["applies"] == "rebuild" else ("set", "not set")
+        assert row["value"] in allowed, row["id"]
+        assert row["default"] is None, row["id"]
+        assert row["modified"] is False, row["id"]
+    gemini = next(r for r in secrets if r["envName"] == "GEMINI_API_KEY")
+    assert gemini["value"] == "set"
+
+
+def test_a_frontend_build_value_is_rebuilt_to_apply(
+    client: TestClient, operator: Account
+) -> None:
+    rows = _rows(client, operator[1])
+    row = next(r for r in rows.values() if r.get("envName") == "VITE_API_URL")
+    assert row["scope"] == "env"
+    assert row["applies"] == "rebuild"
+    assert row["canEdit"] is False
+    # Only the browser knows what its bundle was built with.
+    assert row["value"] is None
+
+
+def test_a_code_constant_names_its_file_and_line(
+    client: TestClient, operator: Account
+) -> None:
+    from app.services.channels import CHANNEL_CLAIM_LEASE_SECONDS
+
+    row = _rows(client, operator[1])["sync.code.channelClaimLeaseSeconds"]
+    assert row["value"] == CHANNEL_CLAIM_LEASE_SECONDS
+    assert row["default"] == CHANNEL_CLAIM_LEASE_SECONDS
+    assert row["modified"] is False
+    assert row["type"] == "integer"
+    assert row["applies"] == "deploy"
+    assert row["lockReason"] == "Constant in code: needs a deploy"
+    assert row["sourceRef"].startswith("backend/app/services/channels.py:")
+    assert row["description"]
+
+
+def test_every_row_id_is_unique(client: TestClient, operator: Account) -> None:
+    response = client.get(REGISTRY, headers=operator[1])
+    ids = [r["id"] for r in response.json()["rows"]]
+    assert len(ids) == len(set(ids))
+
+
+def test_configuration_cannot_be_written_and_is_not_found_without_the_permission(
+    client: TestClient, member: Account, operator: Account
+) -> None:
+    refused = _put(client, operator[1], "server.env.slowRequestLogMs", {"value": 5})
+    assert refused.status_code == 403
+    assert refused.json()["detail"] == "Read at startup: change .env and restart"
+    constant = _put(
+        client, operator[1], "sync.code.channelClaimLeaseSeconds", {"value": 5}
+    )
+    assert constant.status_code == 403
+    assert constant.json()["detail"] == "Constant in code: needs a deploy"
+    hidden = _put(client, member[1], "server.env.slowRequestLogMs", {"value": 5})
+    assert hidden.status_code == 404

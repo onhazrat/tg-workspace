@@ -1,0 +1,1717 @@
+{
+  "constants": [
+    {
+      "comment": "How long a fetched model list stays good. Long enough that opening the Action tab, changing the model and opening it again is one outbound call; short enough that a new model on OpenRouter shows up the same working day.",
+      "expression": "600.0",
+      "file": "backend/app/ai/registry.py",
+      "line": 122,
+      "name": "MODEL_CACHE_TTL_SECONDS",
+      "value": 600.0
+    },
+    {
+      "comment": "Postgres refuses a `NOTIFY` payload over 8000 bytes, and it refuses it at *send* time \u2014 the transaction errors rather than the notification being silently truncated. Callers send deltas small enough that this never trips; it is checked here anyway so a caller that grows its payload finds out from a log line naming the channel, rather than from an exception raised inside a sync that then looks like a scrape failure.",
+      "expression": "8000",
+      "file": "backend/app/core/pg_notify.py",
+      "line": 57,
+      "name": "MAX_PAYLOAD_BYTES",
+      "value": 8000
+    },
+    {
+      "comment": "Seconds between reconnect attempts after the listen connection drops.",
+      "expression": "2.0",
+      "file": "backend/app/core/pg_notify.py",
+      "line": 60,
+      "name": "_RECONNECT_DELAY_SECONDS",
+      "value": 2.0
+    },
+    {
+      "comment": "How long a Summary waits after a failed run, doubling per consecutive failure, capped at a day. **The other half of \"a failed run does not disable the schedule.\"** That rule is right and this is what makes it affordable. `_is_due` stays true forever once the window has passed, and the scheduler ticks every 60 seconds (`AUTO_SUMMARY_JOB_INTERVAL_SECONDS`), so without a damper a Summary whose Key cannot work retries 1,440 times a day \u2014 1,440 failed log rows, 1,440 authenticated calls to a Provider already rejecting them, and an etag bump every minute that re-invalidates the log list for every open client. The likeliest case is not exotic: an Account that had `autoRegenerate` on before BYOK and has not saved a Key yet fails on `AI_KEY_MISSING_DETAIL` every single tick. Backoff rather than a cap, because a cap is the auto-disable wearing a different hat \u2014 the Summary would stop for good on a Provider outage that cleared itself. A day is the ceiling because that is roughly how long somebody takes to notice a Key needs re-saving, and the first retry is still a minute away.",
+      "expression": "60000",
+      "file": "backend/app/jobs/auto_summary.py",
+      "line": 126,
+      "name": "_RETRY_BACKOFF_MS",
+      "value": 60000
+    },
+    {
+      "comment": "",
+      "expression": "24 * 60 * 60 * 1000",
+      "file": "backend/app/jobs/auto_summary.py",
+      "line": 127,
+      "name": "_RETRY_BACKOFF_CAP_MS",
+      "value": 86400000
+    },
+    {
+      "comment": "The reference-extraction walk's cadence (the harvest tick), at the same page size. That pace ran on staging's ~4.7M-Post corpus without competing with sync. The batch size is the dial, and this is not a second one.",
+      "expression": "300",
+      "file": "backend/app/jobs/post_language.py",
+      "line": 29,
+      "name": "POST_LANGUAGE_INTERVAL_SECONDS",
+      "value": 300
+    },
+    {
+      "comment": "Delete expired posts in bounded batches: a backlog can be hundreds of thousands of rows, and materialising them all at once OOM-killed the worker.",
+      "expression": "500",
+      "file": "backend/app/jobs/retention.py",
+      "line": 109,
+      "name": "POST_DELETE_BATCH",
+      "value": 500
+    },
+    {
+      "comment": "Channels collected per retention pass. Each one is a full corpus delete and nothing waits on the queue draining, so the next hourly run takes the rest.",
+      "expression": "100",
+      "file": "backend/app/jobs/retention.py",
+      "line": 113,
+      "name": "COLLECT_LIMIT",
+      "value": 100
+    },
+    {
+      "comment": "Longest `detail` an announcement carries, comfortably under `pg_notify`'s 8000-byte payload cap with room for the rest of the entry.",
+      "expression": "2000",
+      "file": "backend/app/jobs/scheduler.py",
+      "line": 140,
+      "name": "_MAX_DETAIL_CHARS",
+      "value": 2000
+    },
+    {
+      "comment": "",
+      "expression": "60",
+      "file": "backend/app/jobs/settling_curve_fit.py",
+      "line": 34,
+      "name": "SETTLING_CURVE_CHECK_SECONDS",
+      "value": 60
+    },
+    {
+      "comment": "Attempts one worker runs at once. Each is one Provider stream, waiting on a remote model rather than on this process.",
+      "expression": "4",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 99,
+      "name": "GENERATION_CONCURRENCY",
+      "value": 4
+    },
+    {
+      "comment": "How often a running Attempt writes its text so far to its row.",
+      "expression": "1.0",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 101,
+      "name": "FLUSH_SECONDS",
+      "value": 1.0
+    },
+    {
+      "comment": "How long a watcher waits on notifications before reading the row again, and how long the consumer waits on a ring before sweeping the Lane.",
+      "expression": "1.0",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 104,
+      "name": "WATCH_POLL_SECONDS",
+      "value": 1.0
+    },
+    {
+      "comment": "",
+      "expression": "30.0",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 105,
+      "name": "SWEEP_SECONDS",
+      "value": 30.0
+    },
+    {
+      "comment": "Only covers claim-then-archive, which happen in one transaction.",
+      "expression": "60",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 107,
+      "name": "_CLAIM_VT_SECONDS",
+      "value": 60
+    },
+    {
+      "comment": "The temperature Generate always used when nobody chose one.",
+      "expression": "0.7",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 109,
+      "name": "DEFAULT_TEMPERATURE",
+      "value": 0.7
+    },
+    {
+      "comment": "How long the automatic retry of a transient failure waits when the Provider named no Retry-After (SFR-03), and the most it waits when it did.",
+      "expression": "10.0",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 112,
+      "name": "RETRY_DELAY_SECONDS",
+      "value": 10.0
+    },
+    {
+      "comment": "",
+      "expression": "600.0",
+      "file": "backend/app/jobs/summary_generation.py",
+      "line": 113,
+      "name": "MAX_RETRY_DELAY_SECONDS",
+      "value": 600.0
+    },
+    {
+      "comment": "How long the drain waits for a healthy worker before concluding that every proxy is parked. Only reached when no worker is free *and* none can become free by a release \u2014 which is either \"everything is busy\" (resolved by waiting on the running tasks) or \"every proxy is in cooldown\" (resolved by giving up and letting the 30-second sweep come back). **Ticket 14's per-proxy wait does not feed into this, and that is a claim worth stating rather than assuming.** Ticket 13's handover asked that if deliberate waits longer than this constant appeared, it be re-derived from them instead of left a literal. They appeared, and the two still do not meet: this bounds the wait for a *free and healthy worker*, and a worker serving a paced fetch is `busy` \u2014 not free, not parked. Pacing lengthens the message a worker is already running, which the drain sees through `all_busy()` as ordinary backpressure. Deriving this from `PACE_MAX_MS` would make every empty-queue sweep block for thirty seconds to no purpose. `tests/services/test_adaptive_proxy_wait.py` holds the guard.",
+      "expression": "5.0",
+      "file": "backend/app/jobs/sync_queue.py",
+      "line": 178,
+      "name": "_NO_HEALTHY_WORKER_WAIT_SECONDS",
+      "value": 5.0
+    },
+    {
+      "comment": "How many accounts one lane read will interleave between. A bound because each one costs a read: the round-robin below issues one `pgmq.read` per account with work, and a deployment with 200 accounts on one lane should serve 20 of them per pass rather than issue 200 queries to fill ten slots. The accounts it does not reach this pass are reached on the next, because `distinct_due_values` orders by value and the ones it served have had their messages claimed out of the due set.",
+      "expression": "20",
+      "file": "backend/app/jobs/sync_queue.py",
+      "line": 344,
+      "name": "MAX_INTERLEAVED_USERS",
+      "value": 20
+    },
+    {
+      "comment": "How often the paused-lane set is re-read during one drain. See `_LaneBuffers._refresh_pauses` \u2014 a drain is not bounded in length, so a snapshot taken at its start can be hours stale.",
+      "expression": "5.0",
+      "file": "backend/app/jobs/sync_queue.py",
+      "line": 349,
+      "name": "_PAUSE_RECHECK_SECONDS",
+      "value": 5.0
+    },
+    {
+      "comment": "How long a lane that read empty is left alone before being asked again. Bounds the cost of re-checking the normal tier while a long best-effort backlog drains \u2014 the strict-tier rule needs that re-check to be live, and without an interval it would be a query per dispatched message.",
+      "expression": "0.5",
+      "file": "backend/app/jobs/sync_queue.py",
+      "line": 355,
+      "name": "_EMPTY_LANE_RECHECK_SECONDS",
+      "value": 0.5
+    },
+    {
+      "comment": "",
+      "expression": "60 * 60",
+      "file": "backend/app/jobs/view_observation_stride.py",
+      "line": 28,
+      "name": "VIEW_OBSERVATION_STRIDE_INTERVAL_SECONDS",
+      "value": 3600
+    },
+    {
+      "comment": "A single prompt is capped so an oversized selection is refused with a clear error rather than silently truncated (the user's explicit choice) or sent on to blow past a model's context window. ~200k tokens is the context limit of many models; tokens are estimated at ~4 chars each.",
+      "expression": "200000",
+      "file": "backend/app/prompts/posts.py",
+      "line": 21,
+      "name": "MAX_PROMPT_TOKENS",
+      "value": 200000
+    },
+    {
+      "comment": "",
+      "expression": "4",
+      "file": "backend/app/prompts/posts.py",
+      "line": 22,
+      "name": "_CHARS_PER_TOKEN",
+      "value": 4
+    },
+    {
+      "comment": "9999-12-31T23:59:59.999Z. An upper bound on every instant and every span, because without one the arithmetic leaves the range PostgreSQL can compare a `bigint` against: a Duration of 10**25 minutes resolves to a start that makes psycopg raise `NumericValueOutOfRange`, and a 500 is the wrong answer to a number a client simply made up. Far past any real corpus, so the only requests it refuses are ones that were never going to work.",
+      "expression": "253402300799999",
+      "file": "backend/app/schemas/analysis_window.py",
+      "line": 32,
+      "name": "MAX_INSTANT_MS",
+      "value": 253402300799999
+    },
+    {
+      "comment": "A century. The same argument as `MAX_INSTANT_MS`, for the elapsed values.",
+      "expression": "100 * 365 * 24 * 60",
+      "file": "backend/app/schemas/analysis_window.py",
+      "line": 35,
+      "name": "MAX_SPAN_MINUTES",
+      "value": 52560000
+    },
+    {
+      "comment": "A Live end's reach either way: a century, in ms.",
+      "expression": "100 * 366 * 86400000",
+      "file": "backend/app/schemas/directory.py",
+      "line": 186,
+      "name": "_MAX_OFFSET_MS",
+      "value": 3162240000000
+    },
+    {
+      "comment": "A Fixed end's reach either way, inside what a `datetime` holds (years 1 to 9999), so an absurd instant is a 422 and never an overflow.",
+      "expression": "62000000000000",
+      "file": "backend/app/schemas/directory.py",
+      "line": 189,
+      "name": "_MAX_INSTANT_MS",
+      "value": 62000000000000
+    },
+    {
+      "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
+      "expression": "500",
+      "file": "backend/app/schemas/directory.py",
+      "line": 230,
+      "name": "MAX_CONDITION_HANDLES",
+      "value": 500
+    },
+    {
+      "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
+      "expression": "10000",
+      "file": "backend/app/schemas/directory.py",
+      "line": 233,
+      "name": "MAX_SEEDS",
+      "value": 10000
+    },
+    {
+      "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
+      "expression": "10000",
+      "file": "backend/app/schemas/directory.py",
+      "line": 383,
+      "name": "MAX_YOUR_CHANNELS",
+      "value": 10000
+    },
+    {
+      "comment": "The most handles one paste may add (DADD).",
+      "expression": "100000",
+      "file": "backend/app/schemas/directory.py",
+      "line": 673,
+      "name": "MAX_ADDED_HANDLES",
+      "value": 100000
+    },
+    {
+      "comment": "",
+      "expression": "6",
+      "file": "backend/app/schemas/post_filter.py",
+      "line": 47,
+      "name": "MAX_FILTER_DEPTH",
+      "value": 6
+    },
+    {
+      "comment": "",
+      "expression": "100",
+      "file": "backend/app/schemas/post_filter.py",
+      "line": 48,
+      "name": "MAX_FILTER_NODES",
+      "value": 100
+    },
+    {
+      "comment": "The limit explicitly named Posts had before (ADR-026).",
+      "expression": "5000",
+      "file": "backend/app/schemas/post_filter.py",
+      "line": 213,
+      "name": "MAX_SELECTION_PICKS",
+      "value": 5000
+    },
+    {
+      "comment": "",
+      "expression": "50",
+      "file": "backend/app/schemas/post_filter.py",
+      "line": 214,
+      "name": "MAX_SELECTION_RULES",
+      "value": 50
+    },
+    {
+      "comment": "",
+      "expression": "100",
+      "file": "backend/app/services/artifacts.py",
+      "line": 54,
+      "name": "DEFAULT_ARTIFACT_PAGE_SIZE",
+      "value": 100
+    },
+    {
+      "comment": "",
+      "expression": "1000",
+      "file": "backend/app/services/artifacts.py",
+      "line": 55,
+      "name": "MAX_ARTIFACT_PAGE_SIZE",
+      "value": 1000
+    },
+    {
+      "comment": "How much of a summary's body travels as the list preview. The read cost is unchanged either way \u2014 the detoast happens server-side \u2014 but four kinds on one page multiplies the *wire* cost, and the list renders a two-line clamp.",
+      "expression": "200",
+      "file": "backend/app/services/artifacts.py",
+      "line": 62,
+      "name": "ARTIFACT_TITLE_CHARS",
+      "value": 200
+    },
+    {
+      "comment": "How stale the worker's view of `cancel_requested` may be, in seconds. Small, because a person pressed Cancel and is watching; not zero, because the alternative is a `Session` per checkpoint per handle. See `_cancelled`.",
+      "expression": "1.0",
+      "file": "backend/app/services/bulk_follow.py",
+      "line": 510,
+      "name": "_CANCEL_POLL_SECONDS",
+      "value": 1.0
+    },
+    {
+      "comment": "How long to wait before re-probing a handle that keeps failing. Doubles per consecutive failure and stops growing at a day: a handle that has failed eight times in a row is probably failing for a reason a tighter loop will not fix, and the sweep should not keep spending proxy lanes on it.",
+      "expression": "15",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 157,
+      "name": "RETRY_BACKOFF_BASE_MINUTES",
+      "value": 15
+    },
+    {
+      "comment": "",
+      "expression": "24 * 60",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 158,
+      "name": "RETRY_BACKOFF_MAX_MINUTES",
+      "value": 1440
+    },
+    {
+      "comment": "Priority for a row nothing has ranked. Large rather than 0 so a handle enqueued with a real candidate rank always sorts ahead of one that was not.",
+      "expression": "1000000",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 162,
+      "name": "DEFAULT_PROBE_PRIORITY",
+      "value": 1000000
+    },
+    {
+      "comment": "A manual recheck or refresh jumps the queue. The operator is looking at that row, and one that waited behind a freshly generated report would take minutes. **Negative, so it beats a rank rather than tying with one.** `enqueue_handles` numbers a report's candidates from zero, so at `0` this sorted level with the strongest candidate of the newest report and the tie fell to whichever handle was alphabetically first. `test_recheck_jumps_the_queue` passed on exactly that accident. Ticket 03 gave the constant a second caller \u2014 `refresh_entries` \u2014 and the property has to hold by construction for both. **A Priority boost can still beat it** (DPF). The drain order is `priority - priority_boost` and nothing else: an Operator who boosts a batch by more than the gap has said that batch matters more, and an exception here would be one more rule to remember about a number they set themselves.",
+      "expression": "-1",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 178,
+      "name": "RECHECK_PRIORITY",
+      "value": -1
+    },
+    {
+      "comment": "The largest Priority boost either way. `priority` is int4 and the bands sit within a few million of zero, so the difference cannot overflow. With bands 500,000 apart, that leaves two thousand bands of headroom.",
+      "expression": "1000000000",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 183,
+      "name": "MAX_PRIORITY_BOOST",
+      "value": 1000000000
+    },
+    {
+      "comment": "Priority for a handle the harvest sweep found in a stored Post (ticket 04). Behind `DEFAULT_PROBE_PRIORITY` and ahead of `REFRESH_PRIORITY`, which is the ladder's own argument applied once more: a handle somebody's report named is worth more than one nobody asked about, and one nobody asked about is still an answer we have never had, which beats re-fetching an answer we hold. **One number for every harvested handle, not a rank**, and that is the fairness mechanism the ticket asks for rather than a shrug. The sweep walks the corpus with a single cursor and no idea who follows what, so the handles it finds arrive in whatever order the Posts did; giving them all one priority makes `dequeue_handles` fall through to its `handle` tiebreak, and an alphabetical order cannot prefer one account's corpus over another's. Ranking them by discovery order would hand the queue to whichever account's Channels the cursor happened to be walking.",
+      "expression": "1500000",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 200,
+      "name": "HARVEST_PRIORITY",
+      "value": 1500000
+    },
+    {
+      "comment": "Priority for a handle an Operator pasted into the Directory (DADD). Behind `HARVEST_PRIORITY` and ahead of `REFRESH_PRIORITY`. A pasted handle is one we have never had an answer for, which beats re-fetching one we hold; but the Directory's own discoveries go first, and an Operator who wants a paste sooner has the Priority boost. One value for the whole paste, like a harvest, so the drain order within it falls through to `handle`.",
+      "expression": "1750000",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 209,
+      "name": "NAMED_PRIORITY",
+      "value": 1750000
+    },
+    {
+      "comment": "Priority for an entry that already has an answer and is only going stale. Larger than `DEFAULT_PROBE_PRIORITY`, so a scheduled refresh drains behind every handle nobody has ever looked at: an answer we hold is worth less than one we have never had. Set on the conclusive branch of `record_probe_result` rather than left alone, because a row keeps the rank of whatever first enqueued it \u2014 and a handle rechecked once carries `RECHECK_PRIORITY`, which would put a week-old entry at the front of the queue for ever after.",
+      "expression": "2000000",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 219,
+      "name": "REFRESH_PRIORITY",
+      "value": 2000000
+    },
+    {
+      "comment": "",
+      "expression": "200",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 232,
+      "name": "DEFAULT_PROBE_PAGE_SIZE",
+      "value": 200
+    },
+    {
+      "comment": "",
+      "expression": "1000",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 233,
+      "name": "MAX_PROBE_PAGE_SIZE",
+      "value": 1000
+    },
+    {
+      "comment": "The search document's recipe (`search_text`). Raise it when the recipe changes, and `scripts/backfill_directory_search.py` re-indexes older rows.",
+      "expression": "1",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 239,
+      "name": "SEARCH_INDEX_VERSION",
+      "value": 1
+    },
+    {
+      "comment": "Entries re-indexed per statement by retention and the backfill.",
+      "expression": "500",
+      "file": "backend/app/services/channel_directory.py",
+      "line": 241,
+      "name": "SEARCH_BATCH",
+      "value": 500
+    },
+    {
+      "comment": "",
+      "expression": "True",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 138,
+      "name": "DEFAULT_GROUP_REGULAR_SYNC_ENABLED",
+      "value": true
+    },
+    {
+      "comment": "",
+      "expression": "False",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 139,
+      "name": "DEFAULT_GROUP_DYNAMIC_SYNC_ENABLED",
+      "value": false
+    },
+    {
+      "comment": "",
+      "expression": "60",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 140,
+      "name": "DEFAULT_GROUP_AUTO_SYNC_INTERVAL_MINUTES",
+      "value": 60
+    },
+    {
+      "comment": "",
+      "expression": "15",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 141,
+      "name": "DEFAULT_GROUP_DYNAMIC_SYNC_EXPECTED_POSTS",
+      "value": 15
+    },
+    {
+      "comment": "",
+      "expression": "False",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 142,
+      "name": "DEFAULT_GROUP_AUTO_FOLLOW_FORWARDED",
+      "value": false
+    },
+    {
+      "comment": "",
+      "expression": "1440",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 144,
+      "name": "SLOW_FEED_AUTO_SYNC_INTERVAL_MINUTES",
+      "value": 1440
+    },
+    {
+      "comment": "",
+      "expression": "1",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 145,
+      "name": "SLOW_FEED_DYNAMIC_SYNC_EXPECTED_POSTS",
+      "value": 1
+    },
+    {
+      "comment": "",
+      "expression": "60",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 146,
+      "name": "HIGH_VELOCITY_AUTO_SYNC_INTERVAL_MINUTES",
+      "value": 60
+    },
+    {
+      "comment": "",
+      "expression": "10",
+      "file": "backend/app/services/channel_setting_groups.py",
+      "line": 147,
+      "name": "HIGH_VELOCITY_DYNAMIC_SYNC_EXPECTED_POSTS",
+      "value": 10
+    },
+    {
+      "comment": "",
+      "expression": "0",
+      "file": "backend/app/services/channel_tags.py",
+      "line": 9,
+      "name": "LEGACY_ASSIGNED_AT",
+      "value": 0
+    },
+    {
+      "comment": "How long a claim stays valid without a heartbeat. This bounds one thing only: how long a **dead** holder blocks its Channel. A live sync renews well inside it (`CHANNEL_CLAIM_HEARTBEAT_SECONDS`), so a deep backfill running for an hour is never at risk of having its claim stolen mid-walk -- which would put a second backward walk into the cursors the first is still writing, the precise interleaving this exists to prevent. Five minutes rather than the visibility timeout's ~2.4 hours, and the difference is the point. The VT decides when a crashed worker's *message* comes back; the lease decides when its *Channel* does. Sizing the lease off the VT would mean a Channel that crashed at 12:00 refusing every sync until 14:24 -- including the ones a person is sitting in front of.",
+      "expression": "300",
+      "file": "backend/app/services/channels.py",
+      "line": 903,
+      "name": "CHANNEL_CLAIM_LEASE_SECONDS",
+      "value": 300
+    },
+    {
+      "comment": "",
+      "expression": "200",
+      "file": "backend/app/services/chat_sessions.py",
+      "line": 38,
+      "name": "DEFAULT_CHAT_SESSION_PAGE_SIZE",
+      "value": 200
+    },
+    {
+      "comment": "",
+      "expression": "2000",
+      "file": "backend/app/services/chat_sessions.py",
+      "line": 39,
+      "name": "MAX_CHAT_SESSION_PAGE_SIZE",
+      "value": 2000
+    },
+    {
+      "comment": "Matches `SUMMARY_PROMPT_EXCERPT_CHARS`. The title is the one line that distinguishes this chat from its siblings in a list, not a summary of it.",
+      "expression": "80",
+      "file": "backend/app/services/chat_sessions.py",
+      "line": 61,
+      "name": "CHAT_TITLE_CHARS",
+      "value": 80
+    },
+    {
+      "comment": "",
+      "expression": "500",
+      "file": "backend/app/services/data_import_export.py",
+      "line": 1327,
+      "name": "EXPORT_CHUNK_ROWS",
+      "value": 500
+    },
+    {
+      "comment": "",
+      "expression": "500",
+      "file": "backend/app/services/data_vectors.py",
+      "line": 16,
+      "name": "DEFAULT_VECTOR_PAGE_SIZE",
+      "value": 500
+    },
+    {
+      "comment": "",
+      "expression": "5000",
+      "file": "backend/app/services/data_vectors.py",
+      "line": 17,
+      "name": "MAX_VECTOR_PAGE_SIZE",
+      "value": 5000
+    },
+    {
+      "comment": "",
+      "expression": "100",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 112,
+      "name": "PAGE_SIZE",
+      "value": 100
+    },
+    {
+      "comment": "How long a view's total and Language counts, and the Directory's size, are reused. A Directory that grows while it is read moves by a row or two.",
+      "expression": "300",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 115,
+      "name": "COUNTS_TTL_SECONDS",
+      "value": 300
+    },
+    {
+      "comment": "",
+      "expression": "1000",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 116,
+      "name": "_MAX_CACHED_VIEWS",
+      "value": 1000
+    },
+    {
+      "comment": "",
+      "expression": "32",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 286,
+      "name": "_HISTOGRAM_BINS",
+      "value": 32
+    },
+    {
+      "comment": "A middle Channel past this many links is an aggregator, not a taste: a source citing more than this many Channels, or a target cited by more.",
+      "expression": "3000",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 713,
+      "name": "AGGREGATOR_LINKS",
+      "value": 3000
+    },
+    {
+      "comment": "The most entries Tick all turns into Ticks; above it a view is All matching (ADR-031). The same number as the ticked Seeds a Condition takes.",
+      "expression": "10000",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 1414,
+      "name": "MAX_TICK_ALL",
+      "value": 10000
+    },
+    {
+      "comment": "How many citing Posts \"Why it's here\" quotes; the rest are counted.",
+      "expression": "20",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 1571,
+      "name": "WHY_LIMIT",
+      "value": 20
+    },
+    {
+      "comment": "How many shared Channels \"Why it's here\" names per relation; the rest are counted.",
+      "expression": "5",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 1711,
+      "name": "SHARED_LIMIT",
+      "value": 5
+    },
+    {
+      "comment": "How many Channels each side of the panel's neighbour lists shows.",
+      "expression": "10",
+      "file": "backend/app/services/directory_reads.py",
+      "line": 1767,
+      "name": "NEIGHBOURS_LIMIT",
+      "value": 10
+    },
+    {
+      "comment": "How many samples a rate needs before it is reported at all. One constant, not a confidence model and not an error bar. A median over three Posts is a number pretending to be a measurement, and without a floor a three-Post Channel outranks a real one in a sort. Below it the raw sample count still shows, so a suppressed rate can explain itself.",
+      "expression": "5",
+      "file": "backend/app/services/directory_statistics.py",
+      "line": 87,
+      "name": "MIN_SAMPLES",
+      "value": 5
+    },
+    {
+      "comment": "",
+      "expression": "100",
+      "file": "backend/app/services/discover_reports.py",
+      "line": 53,
+      "name": "DEFAULT_REPORT_PAGE_SIZE",
+      "value": 100
+    },
+    {
+      "comment": "",
+      "expression": "1000",
+      "file": "backend/app/services/discover_reports.py",
+      "line": 54,
+      "name": "MAX_REPORT_PAGE_SIZE",
+      "value": 1000
+    },
+    {
+      "comment": "Below this many letters a Post is `UNDETERMINED` without asking the model. One global value rather than one per language (ADR-021): the corpus is a handful of high-resource languages and nobody tunes this from `.env`. ponytail: counts characters, so a full Chinese or Japanese sentence under 20 characters is `und`; weight dense scripts if a CJK Channel ever matters.",
+      "expression": "20",
+      "file": "backend/app/services/language.py",
+      "line": 42,
+      "name": "MIN_LETTERS",
+      "value": 20
+    },
+    {
+      "comment": "The model's top score must reach this, or the Post is `UNDETERMINED`. On the ADR-021 benchmark it kept fastText's mistakes on two-word Posts to 41 of 1,143.",
+      "expression": "0.5",
+      "file": "backend/app/services/language.py",
+      "line": 45,
+      "name": "MIN_SCORE",
+      "value": 0.5
+    },
+    {
+      "comment": "How many of a Channel's newest Posts carrying a code decide its Language: enough to outvote a run of forwards-with-comment, few enough that a Channel which switched language is judged on what it publishes now.",
+      "expression": "100",
+      "file": "backend/app/services/language.py",
+      "line": 49,
+      "name": "LANGUAGE_WINDOW",
+      "value": 100
+    },
+    {
+      "comment": "Log list endpoints are viewers, not exports: cap what one request can load.",
+      "expression": "500",
+      "file": "backend/app/services/logs.py",
+      "line": 44,
+      "name": "DEFAULT_LOG_PAGE_SIZE",
+      "value": 500
+    },
+    {
+      "comment": "",
+      "expression": "5000",
+      "file": "backend/app/services/logs.py",
+      "line": 45,
+      "name": "MAX_LOG_PAGE_SIZE",
+      "value": 5000
+    },
+    {
+      "comment": "Attempts a media fetch gets. One, meaning no retry ladder at all. `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is sized for a page fetch, where losing the page loses the sync. Media is not that. An avatar is re-resolved on **every page** of a walk, so the page loop already is the retry, and a thumb is cosmetic. Left at the default, one dead avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds to 8 minutes when the avatar cache first moved onto the lane pool, which is what surfaced this. Shared by both image caches rather than spelled twice, because they are twins and `test_image_cache_egress.py` asserts they stay that way.",
+      "expression": "1",
+      "file": "backend/app/services/network.py",
+      "line": 466,
+      "name": "MEDIA_FETCH_RETRIES",
+      "value": 1
+    },
+    {
+      "comment": "",
+      "expression": "1",
+      "file": "backend/app/services/network_settings.py",
+      "line": 17,
+      "name": "PROXY_CONCURRENCY_MIN",
+      "value": 1
+    },
+    {
+      "comment": "",
+      "expression": "20",
+      "file": "backend/app/services/network_settings.py",
+      "line": 18,
+      "name": "PROXY_CONCURRENCY_MAX",
+      "value": 20
+    },
+    {
+      "comment": "The columns `write_references` binds per row. Named here rather than counted from the model, because the statement binds exactly the keys that function builds and a model column it does not set would not be one of them -- the number has to move when *that dict* does.",
+      "expression": "9",
+      "file": "backend/app/services/post_references.py",
+      "line": 72,
+      "name": "_BOUND_COLUMNS_PER_ROW",
+      "value": 9
+    },
+    {
+      "comment": "",
+      "expression": "300",
+      "file": "backend/app/services/post_thumbnails.py",
+      "line": 21,
+      "name": "_ENFORCE_MIN_INTERVAL_SECONDS",
+      "value": 300
+    },
+    {
+      "comment": "Telegram thumbnails are small; anything larger is not one, and reading it into memory unbounded is how a sync run turns into an OOM.",
+      "expression": "8 * 1024 * 1024",
+      "file": "backend/app/services/post_thumbnails.py",
+      "line": 41,
+      "name": "_MAX_THUMB_BYTES",
+      "value": 8388608
+    },
+    {
+      "comment": "",
+      "expression": "500",
+      "file": "backend/app/services/posts.py",
+      "line": 61,
+      "name": "DEFAULT_POST_PAGE_SIZE",
+      "value": 500
+    },
+    {
+      "comment": "",
+      "expression": "5000",
+      "file": "backend/app/services/posts.py",
+      "line": 62,
+      "name": "MAX_POST_PAGE_SIZE",
+      "value": 5000
+    },
+    {
+      "comment": "",
+      "expression": "200",
+      "file": "backend/app/services/posts.py",
+      "line": 63,
+      "name": "MAX_POST_LOOKUP_BATCH",
+      "value": 200
+    },
+    {
+      "comment": "The Channels tab's bar count (`ChannelMetricEditor`), so one component draws both.",
+      "expression": "32",
+      "file": "backend/app/services/posts.py",
+      "line": 1132,
+      "name": "VALUE_BINS",
+      "value": 32
+    },
+    {
+      "comment": "Upper bound on how many posts one prompt assembles. The token budget is the real user-facing limit; this is a generous fetch-safety bound so a pathological scope never materialises a giant result. Like the token cap, exceeding it is a clear error, never a silent truncation. The AI paths assemble *all* posts in scope (not a page) up to these limits \u2014 pagination is display-only.",
+      "expression": "10000",
+      "file": "backend/app/services/prompt_assembly.py",
+      "line": 41,
+      "name": "MAX_PROMPT_POSTS",
+      "value": 10000
+    },
+    {
+      "comment": "The wait a proxy widens to from healthy. Multiplicative widening from zero stays zero, so the first step is additive and every one after it is not.",
+      "expression": "500.0",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 108,
+      "name": "PACE_STEP_MS",
+      "value": 500.0
+    },
+    {
+      "comment": "What an explicit rejection or a soft block multiplies the wait by.",
+      "expression": "2.0",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 111,
+      "name": "PACE_WIDEN_FACTOR",
+      "value": 2.0
+    },
+    {
+      "comment": "The ceiling. Also the point at which a further rejection stops meaning \"slow down\" and starts meaning \"this proxy is unusable\" \u2014 see the module docstring on the top rung.",
+      "expression": "30000.0",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 116,
+      "name": "PACE_MAX_MS",
+      "value": 30000.0
+    },
+    {
+      "comment": "Consecutive successes before the wait narrows one step. Narrowing on *every* success would undo a widening as fast as one request, which re-provokes the limit that caused it.",
+      "expression": "5",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 121,
+      "name": "PACE_NARROW_AFTER_SUCCESSES",
+      "value": 5
+    },
+    {
+      "comment": "What one narrowing step multiplies the wait by. Gradual on purpose: this is the \"narrows it gradually\" half of the ticket, and the failure it avoids is an oscillation between the ceiling and zero rather than a convergence.",
+      "expression": "0.7",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 126,
+      "name": "PACE_NARROW_FACTOR",
+      "value": 0.7
+    },
+    {
+      "comment": "Weight of the newest sample in the per-proxy latency EMA.",
+      "expression": "0.2",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 135,
+      "name": "PACE_LATENCY_EMA_ALPHA",
+      "value": 0.2
+    },
+    {
+      "comment": "How many samples the EMA needs before drift is allowed to mean anything. The first request through a lane is always \"slower than average\" when there is no average, and a cold lane must not throttle itself on that.",
+      "expression": "5",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 140,
+      "name": "PACE_DRIFT_MIN_SAMPLES",
+      "value": 5
+    },
+    {
+      "comment": "How far above the EMA an attempt must land to count as drift.",
+      "expression": "2.0",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 143,
+      "name": "PACE_DRIFT_RATIO",
+      "value": 2.0
+    },
+    {
+      "comment": "What drift multiplies the wait by \u2014 deliberately smaller than `PACE_WIDEN_FACTOR`. Drift is a symptom with many innocent causes; a 429 is Telegram saying so.",
+      "expression": "1.25",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 148,
+      "name": "PACE_DRIFT_FACTOR",
+      "value": 1.25
+    },
+    {
+      "comment": "The ceiling drift alone may push the wait to. A rejection can reach `PACE_MAX_MS`; latency cannot. This is what makes \"weak signal\" a number rather than an adjective \u2014 a proxy that is merely slow must not end up throttled as though it were being refused.",
+      "expression": "5000.0",
+      "file": "backend/app/services/proxy_pacing.py",
+      "line": 154,
+      "name": "PACE_DRIFT_MAX_MS",
+      "value": 5000.0
+    },
+    {
+      "comment": "",
+      "expression": "1",
+      "file": "backend/app/services/proxy_pool.py",
+      "line": 58,
+      "name": "PROXY_SLOTS_MIN",
+      "value": 1
+    },
+    {
+      "comment": "",
+      "expression": "20",
+      "file": "backend/app/services/proxy_pool.py",
+      "line": 59,
+      "name": "PROXY_SLOTS_MAX",
+      "value": 20
+    },
+    {
+      "comment": "",
+      "expression": "120.0",
+      "file": "backend/app/services/proxy_pool.py",
+      "line": 60,
+      "name": "ACQUIRE_TIMEOUT_SECONDS",
+      "value": 120.0
+    },
+    {
+      "comment": "How long `ProxyWorkerPool.acquire` sleeps before re-checking whether a parked worker's proxy has recovered. A release wakes it immediately; this only bounds how long a *cooldown lapsing* takes to notice, which nothing signals.",
+      "expression": "0.25",
+      "file": "backend/app/services/proxy_pool.py",
+      "line": 66,
+      "name": "WORKER_WAKE_POLL_SECONDS",
+      "value": 0.25
+    },
+    {
+      "comment": "How long a fan-out waits for a healthy Slot before giving up on one Channel. **Unbounded is a hang, not patience** (found in review). `_take_free` skips a worker whose proxy is in cooldown, so with every proxy parked `acquire(timeout=None)` waits for ever \u2014 and the two fan-outs that take Slots outside the drain had no deadline at all. A bulk follow's three hundred tasks would all park with the row left `running`, the `finally` that charges the ledger never reached; an `auto_summary` walk would never return and, under APScheduler's `max_instances=1`, suppress every later tick. The old `asyncio.Semaphore` always granted, so this is a hazard the Slots introduced. `sync_queue` has always passed a deadline here, for exactly this reason; these two now do too. Sized like one whole fetch rather than like the drain's five seconds, because a cooldown is ten minutes and these callers have no sweep behind them to come back: giving up marks the Channel failed, which a person sees.",
+      "expression": "120.0",
+      "file": "backend/app/services/proxy_pool.py",
+      "line": 668,
+      "name": "SLOT_WAIT_SECONDS",
+      "value": 120.0
+    },
+    {
+      "comment": "Telegram's `sendMessage` text limit, after entity parsing.",
+      "expression": "4096",
+      "file": "backend/app/services/publication_parts.py",
+      "line": 38,
+      "name": "TELEGRAM_MESSAGE_LIMIT",
+      "value": 4096
+    },
+    {
+      "comment": "An allowance of this or less is unlimited. Negative rather than a sentinel object because the setting is an integer an operator types into `.env`, and this is the one value that cannot collide with a real limit \u2014 zero already means something specific (decision 18: always best-effort, never blocked).",
+      "expression": "-1",
+      "file": "backend/app/services/quota.py",
+      "line": 118,
+      "name": "UNLIMITED",
+      "value": -1
+    },
+    {
+      "comment": "The refresh horizon: sync stops refreshing a stored Post's View count at 7 days (ADR-024). A settling age at or past it would call a count Settled that sync could never have observed that old.",
+      "expression": "7 * 24",
+      "file": "backend/app/services/reach.py",
+      "line": 56,
+      "name": "REFRESH_HORIZON_HOURS",
+      "value": 168
+    },
+    {
+      "comment": "A span between two knots learns its shape from the data only when at least this many pairs cross it; below, it takes the seed's.",
+      "expression": "30",
+      "file": "backend/app/services/reach.py",
+      "line": 274,
+      "name": "MIN_PAIRS_PER_SPAN",
+      "value": 30
+    },
+    {
+      "comment": "Rows per delete transaction in `prune_finished_jobs`. Bounds transaction length, not memory \u2014 see that function.",
+      "expression": "1000",
+      "file": "backend/app/services/scraper_jobs.py",
+      "line": 46,
+      "name": "SYNC_JOB_DELETE_BATCH",
+      "value": 1000
+    },
+    {
+      "comment": "How many watched-but-not-run jobs this process keeps mirrored. Evicting one costs a row read to rebuild it, never correctness, so a modest cap is free insurance against the mirror becoming a leak: `GET /jobs/sync/{id}` seeds an entry for any job id a client asks about, and nothing about a finished job makes it fall out on its own.",
+      "expression": "256",
+      "file": "backend/app/services/scraper_jobs.py",
+      "line": 276,
+      "name": "MAX_MIRRORED_JOBS",
+      "value": 256
+    },
+    {
+      "comment": "Same bound, same reason, for the cancellation flags. See `_get_cancel_event`.",
+      "expression": "256",
+      "file": "backend/app/services/scraper_jobs.py",
+      "line": 279,
+      "name": "MAX_TRACKED_CANCEL_EVENTS",
+      "value": 256
+    },
+    {
+      "comment": "What the index holds per entry (ADR-027): the newest samples, capped.",
+      "expression": "8",
+      "file": "backend/app/services/search_text.py",
+      "line": 44,
+      "name": "SAMPLES_INDEXED",
+      "value": 8
+    },
+    {
+      "comment": "",
+      "expression": "12000",
+      "file": "backend/app/services/search_text.py",
+      "line": 45,
+      "name": "SAMPLE_CHARS",
+      "value": 12000
+    },
+    {
+      "comment": "The last word typed matches as a prefix from this many characters.",
+      "expression": "3",
+      "file": "backend/app/services/search_text.py",
+      "line": 47,
+      "name": "PREFIX_FROM",
+      "value": 3
+    },
+    {
+      "comment": "How much text a snippet keeps around its first match.",
+      "expression": "60",
+      "file": "backend/app/services/search_text.py",
+      "line": 158,
+      "name": "SNIPPET_BEFORE",
+      "value": 60
+    },
+    {
+      "comment": "",
+      "expression": "240",
+      "file": "backend/app/services/search_text.py",
+      "line": 159,
+      "name": "SNIPPET_LENGTH",
+      "value": 240
+    },
+    {
+      "comment": "",
+      "expression": "200",
+      "file": "backend/app/services/summaries.py",
+      "line": 38,
+      "name": "DEFAULT_SUMMARY_PAGE_SIZE",
+      "value": 200
+    },
+    {
+      "comment": "",
+      "expression": "2000",
+      "file": "backend/app/services/summaries.py",
+      "line": 39,
+      "name": "MAX_SUMMARY_PAGE_SIZE",
+      "value": 2000
+    },
+    {
+      "comment": "Matches truncatePreview's default in frontend/src/lib/commands/search-filters.ts.",
+      "expression": "80",
+      "file": "backend/app/services/summaries.py",
+      "line": 83,
+      "name": "SUMMARY_PROMPT_EXCERPT_CHARS",
+      "value": 80
+    },
+    {
+      "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
+      "expression": "900",
+      "file": "backend/app/services/sync_orchestrator.py",
+      "line": 1482,
+      "name": "COALESCE_MAX_WAIT_SECONDS",
+      "value": 900
+    },
+    {
+      "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
+      "expression": "2.0",
+      "file": "backend/app/services/sync_orchestrator.py",
+      "line": 1487,
+      "name": "_COALESCE_POLL_SECONDS",
+      "value": 2.0
+    },
+    {
+      "comment": "",
+      "expression": "100",
+      "file": "backend/app/services/tag_runs.py",
+      "line": 29,
+      "name": "DEFAULT_TAG_RUN_PAGE_SIZE",
+      "value": 100
+    },
+    {
+      "comment": "",
+      "expression": "1000",
+      "file": "backend/app/services/tag_runs.py",
+      "line": 30,
+      "name": "MAX_TAG_RUN_PAGE_SIZE",
+      "value": 1000
+    },
+    {
+      "comment": "How long after publication a Post's sightings are kept.",
+      "expression": "14 * 24 * 60 * 60 * 1000",
+      "file": "backend/app/services/view_observations.py",
+      "line": 42,
+      "name": "OBSERVATION_WINDOW_MS",
+      "value": 1209600000
+    },
+    {
+      "comment": "How far ahead the stride controller forecasts, and the span its inflow is measured over.",
+      "expression": "6 * 60 * 60 * 1000",
+      "file": "backend/app/services/view_observations.py",
+      "line": 46,
+      "name": "FORECAST_HORIZON_MS",
+      "value": 21600000
+    },
+    {
+      "comment": "Threads over and above the connection pool, for the `to_thread` calls that open no `Session` at all \u2014 `pg_notify` sends, file writes, the Tor control socket. Small on purpose: threads past the connection count are not more parallelism, they are the same queue one layer down.",
+      "expression": "4",
+      "file": "backend/app/worker.py",
+      "line": 83,
+      "name": "_NON_DB_THREAD_HEADROOM",
+      "value": 4
+    },
+    {
+      "comment": "",
+      "expression": "60",
+      "file": "frontend/src/components/AnalysisWindowControl.tsx",
+      "line": 62,
+      "name": "BUCKETS",
+      "value": 60
+    },
+    {
+      "comment": "Rows drawn under the paste; a 100,000-line paste would freeze the popover.",
+      "expression": "200",
+      "file": "frontend/src/components/HandlePasteBox.tsx",
+      "line": 10,
+      "name": "SHOWN_ROWS",
+      "value": 200
+    },
+    {
+      "comment": "",
+      "expression": "20",
+      "file": "frontend/src/components/LogsView.tsx",
+      "line": 42,
+      "name": "PAGE_SIZE",
+      "value": 20
+    },
+    {
+      "comment": "",
+      "expression": "10000",
+      "file": "frontend/src/components/NetworkTelemetry.tsx",
+      "line": 20,
+      "name": "TELEMETRY_REFRESH_MS",
+      "value": 10000
+    },
+    {
+      "comment": "The floor's default in `services/reach.py`, until the server's arrives.",
+      "expression": "1",
+      "file": "frontend/src/components/PostFilter.tsx",
+      "line": 131,
+      "name": "DEFAULT_ESTIMATION_FLOOR_HOURS",
+      "value": 1
+    },
+    {
+      "comment": "",
+      "expression": "32",
+      "file": "frontend/src/components/channel-grid/ChannelMetricEditor.tsx",
+      "line": 20,
+      "name": "BINS",
+      "value": 32
+    },
+    {
+      "comment": "Rows kept mounted beyond the viewport. Deliberately generous. Beyond smoothing scrolling, it keeps a workable number of cards reachable to anything that locates them by `[data-channel-name]` without scrolling first \u2014 which is how the command palette's channel actions and much of the e2e suite find cards.",
+      "expression": "6",
+      "file": "frontend/src/components/channel-grid/VirtualizedChannelGrid.tsx",
+      "line": 63,
+      "name": "OVERSCAN_ROWS",
+      "value": 6
+    },
+    {
+      "comment": "The server's cap on one paste (`MAX_ADDED_HANDLES`).",
+      "expression": "100_000",
+      "file": "frontend/src/components/directory/DirectoryAddBox.tsx",
+      "line": 9,
+      "name": "MAX_ADDED_HANDLES",
+      "value": 100000
+    },
+    {
+      "comment": "The server refuses a longer search.",
+      "expression": "256",
+      "file": "frontend/src/components/directory/DirectoryBar.tsx",
+      "line": 146,
+      "name": "SEARCH_MAX",
+      "value": 256
+    },
+    {
+      "comment": "The server's range either way (`MAX_PRIORITY_BOOST`).",
+      "expression": "1_000_000_000",
+      "file": "frontend/src/components/directory/DirectoryBoost.tsx",
+      "line": 9,
+      "name": "MAX_BOOST",
+      "value": 1000000000
+    },
+    {
+      "comment": "",
+      "expression": "3",
+      "file": "frontend/src/components/directory/DirectoryBulkBar.tsx",
+      "line": 11,
+      "name": "SHOWN",
+      "value": 3
+    },
+    {
+      "comment": "Posts shown before \"Show N more\".",
+      "expression": "3",
+      "file": "frontend/src/components/directory/DirectorySamples.tsx",
+      "line": 16,
+      "name": "FIRST_POSTS",
+      "value": 3
+    },
+    {
+      "comment": "",
+      "expression": "100",
+      "file": "frontend/src/components/directory/DirectoryTable.tsx",
+      "line": 41,
+      "name": "PAGE_SIZE",
+      "value": 100
+    },
+    {
+      "comment": "A card hidden under the workspace's sticky header is not \"on screen\".",
+      "expression": "80",
+      "file": "frontend/src/components/post-card/FeedKeyboard.tsx",
+      "line": 14,
+      "name": "HEADER_PX",
+      "value": 80
+    },
+    {
+      "comment": "How near the last loaded photo the viewer asks the feed for its next page.",
+      "expression": "3",
+      "file": "frontend/src/components/post-card/PhotoViewer.tsx",
+      "line": 67,
+      "name": "PAGE_AHEAD",
+      "value": 3
+    },
+    {
+      "comment": "Long enough for the second click or tap of a double to arrive before the first one closes the viewer or toggles its controls.",
+      "expression": "250",
+      "file": "frontend/src/components/post-card/PhotoViewer.tsx",
+      "line": 303,
+      "name": "DOUBLE_TAP_MS",
+      "value": 250
+    },
+    {
+      "comment": "How far apart, in px, the two taps of a double-tap may land.",
+      "expression": "30",
+      "file": "frontend/src/components/post-card/PhotoViewer.tsx",
+      "line": 305,
+      "name": "DOUBLE_TAP_PX",
+      "value": 30
+    },
+    {
+      "comment": "How far one finger must travel at 1x before it steps or closes.",
+      "expression": "60",
+      "file": "frontend/src/components/post-card/PhotoViewer.tsx",
+      "line": 307,
+      "name": "SWIPE_PX",
+      "value": 60
+    },
+    {
+      "comment": "",
+      "expression": "8",
+      "file": "frontend/src/components/post-card/photo-viewer-model.ts",
+      "line": 5,
+      "name": "MAX_ZOOM",
+      "value": 8
+    },
+    {
+      "comment": "",
+      "expression": "2.5",
+      "file": "frontend/src/components/post-card/photo-viewer-model.ts",
+      "line": 6,
+      "name": "DOUBLE_CLICK_ZOOM",
+      "value": 2.5
+    },
+    {
+      "comment": "",
+      "expression": "1500",
+      "file": "frontend/src/components/settings-page/SettingsPage.tsx",
+      "line": 370,
+      "name": "SAVED_MS",
+      "value": 1500
+    },
+    {
+      "comment": "The topic or row a link names, and how long it stays highlighted.",
+      "expression": "2500",
+      "file": "frontend/src/components/settings-page/sections.ts",
+      "line": 41,
+      "name": "FLASH_MS",
+      "value": 2500
+    },
+    {
+      "comment": "",
+      "expression": "20",
+      "file": "frontend/src/components/summary-view/ChannelPostsSheet.tsx",
+      "line": 28,
+      "name": "PAGE",
+      "value": 20
+    },
+    {
+      "comment": "How much of a draft shows before Show all.",
+      "expression": "280",
+      "file": "frontend/src/components/summary-view/PartialResponses.tsx",
+      "line": 20,
+      "name": "PREVIEW_CHARS",
+      "value": 280
+    },
+    {
+      "comment": "",
+      "expression": "5",
+      "file": "frontend/src/constants.ts",
+      "line": 8,
+      "name": "AUTO_SYNC_INTERVAL_MIN_MINUTES",
+      "value": 5
+    },
+    {
+      "comment": "Max auto-sync staleness interval (24 hours).",
+      "expression": "24 * 60",
+      "file": "frontend/src/constants.ts",
+      "line": 10,
+      "name": "AUTO_SYNC_INTERVAL_MAX_MINUTES",
+      "value": 1440
+    },
+    {
+      "comment": "Below this width the app lays out for a phone; one number for every \"narrow\".",
+      "expression": "768",
+      "file": "frontend/src/constants.ts",
+      "line": 128,
+      "name": "MOBILE_BREAKPOINT",
+      "value": 768
+    },
+    {
+      "comment": "How long a typed field waits for the next keystroke before committing.",
+      "expression": "400",
+      "file": "frontend/src/contexts/ScopeContext.tsx",
+      "line": 46,
+      "name": "DRAFT_COMMIT_MS",
+      "value": 400
+    },
+    {
+      "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
+      "expression": "60 * 60 * 1000",
+      "file": "frontend/src/hooks/queryKeys.ts",
+      "line": 159,
+      "name": "VIEW_ESTIMATE_STALE_TIME",
+      "value": 3600000
+    },
+    {
+      "comment": "One server page. Small, because History renders a card per row.",
+      "expression": "40",
+      "file": "frontend/src/hooks/useArtifacts.ts",
+      "line": 19,
+      "name": "ARTIFACT_PAGE_SIZE",
+      "value": 40
+    },
+    {
+      "comment": "The whole Directory's size moves slowly; the server caches it as long.",
+      "expression": "5 * 60_000",
+      "file": "frontend/src/hooks/useDirectory.ts",
+      "line": 86,
+      "name": "SIZE_STALE_TIME",
+      "value": 300000
+    },
+    {
+      "comment": "How long the box waits for typing to stop before the view takes it.",
+      "expression": "300",
+      "file": "frontend/src/hooks/useDirectorySearchBox.ts",
+      "line": 17,
+      "name": "SEARCH_DEBOUNCE_MS",
+      "value": 300
+    },
+    {
+      "comment": "How often to re-read the queue while it is draining. Slower than the old sweep's 1.5s because it no longer drives anything \u2014 the server probes at its own pace regardless, so this only sets how promptly resolved rows appear.",
+      "expression": "4000",
+      "file": "frontend/src/hooks/useDiscoverProbeQueue.ts",
+      "line": 14,
+      "name": "DRAINING_POLL_INTERVAL_MS",
+      "value": 4000
+    },
+    {
+      "comment": "How often to re-read the queue while nothing is draining (ticket 04). Five minutes rather than four seconds because of what is on screen in this state: a day's and a week's Request spend, which moves a few times an hour at most, and which nobody is watching tick. The argument the drain predicate makes against polling for `retrying` \u2014 do not poll for the life of a tab to observe something that changes a few times a day \u2014 applies here in full, and is why this cadence is slow rather than why there is no cadence at all.",
+      "expression": "5 * 60 * 1000",
+      "file": "frontend/src/hooks/useDiscoverProbeQueue.ts",
+      "line": 26,
+      "name": "IDLE_POLL_INTERVAL_MS",
+      "value": 300000
+    },
+    {
+      "comment": "How often the scheduler's status is re-read. Was `App`'s `setInterval`.",
+      "expression": "30_000",
+      "file": "frontend/src/hooks/useJobsStatus.ts",
+      "line": 8,
+      "name": "JOBS_STATUS_POLL_MS",
+      "value": 30000
+    },
+    {
+      "comment": "The signed-in account's three Budgets (ticket 24). One query behind both the banner and the settings panel, so the two cannot disagree about whether this account is out of Requests. Refetched on an interval, and that is not decoration: the spend changes without the browser doing anything \u2014 the scheduler syncs, and the ceiling lifts at UTC midnight \u2014 so a banner fetched once at mount would still be telling somebody they are blocked hours after an Admin lifted them. Sixty seconds is the same order as the app's other background polls and the payload is three rows.",
+      "expression": "60_000",
+      "file": "frontend/src/hooks/useMyQuota.ts",
+      "line": 19,
+      "name": "REFRESH_MS",
+      "value": 60000
+    },
+    {
+      "comment": "How long a keystroke waits before it reaches a query key.",
+      "expression": "300",
+      "file": "frontend/src/hooks/usePostFilters.ts",
+      "line": 54,
+      "name": "POST_SEARCH_DEBOUNCE_MS",
+      "value": 300
+    },
+    {
+      "comment": "One page of the infinite Posts feed.",
+      "expression": "20",
+      "file": "frontend/src/hooks/usePostsView.ts",
+      "line": 48,
+      "name": "FEED_PAGE_SIZE",
+      "value": 20
+    },
+    {
+      "comment": "",
+      "expression": "500",
+      "file": "frontend/src/hooks/useRecentCommands.ts",
+      "line": 7,
+      "name": "RECENTS_MAX_ENTRIES",
+      "value": 500
+    },
+    {
+      "comment": "The most handles one Tag request carries: the server's cap on a bulk write's handles, a trust boundary it keeps. A Tag is not capped, so a longer list goes in batches of this size.",
+      "expression": "10_000",
+      "file": "frontend/src/hooks/useTags.ts",
+      "line": 32,
+      "name": "TAG_BATCH",
+      "value": 10000
+    },
+    {
+      "comment": "",
+      "expression": "0",
+      "file": "frontend/src/lib/channels/channel-tag-model.ts",
+      "line": 3,
+      "name": "DEFAULT_LEGACY_ASSIGNED_AT",
+      "value": 0
+    },
+    {
+      "comment": "Tailwind's default breakpoints, in pixels.",
+      "expression": "768",
+      "file": "frontend/src/lib/channels/grid-lanes.ts",
+      "line": 14,
+      "name": "MD",
+      "value": 768
+    },
+    {
+      "comment": "",
+      "expression": "1024",
+      "file": "frontend/src/lib/channels/grid-lanes.ts",
+      "line": 15,
+      "name": "LG",
+      "value": 1024
+    },
+    {
+      "comment": "",
+      "expression": "1280",
+      "file": "frontend/src/lib/channels/grid-lanes.ts",
+      "line": 16,
+      "name": "XL",
+      "value": 1280
+    },
+    {
+      "comment": "The most columns at zoom 0; other zoom levels derive theirs from card width.",
+      "expression": "4",
+      "file": "frontend/src/lib/channels/grid-lanes.ts",
+      "line": 19,
+      "name": "MAX_GRID_LANES",
+      "value": 4
+    },
+    {
+      "comment": "The grid's `gap-4`, shared with the virtualised grid that renders it.",
+      "expression": "16",
+      "file": "frontend/src/lib/channels/grid-lanes.ts",
+      "line": 22,
+      "name": "GAP_PX",
+      "value": 16
+    },
+    {
+      "comment": "How far past its next sync time an enabled schedule must be to read as late.",
+      "expression": "24 * 60 * 60 * 1000",
+      "file": "frontend/src/lib/channels/sync-schedule-summary.ts",
+      "line": 93,
+      "name": "LATE_AFTER_MS",
+      "value": 86400000
+    },
+    {
+      "comment": "A channel synced within this long of the window's end counts as current.",
+      "expression": "60_000",
+      "file": "frontend/src/lib/chat-sessions/chat-turn.ts",
+      "line": 19,
+      "name": "SYNC_SLACK_MS",
+      "value": 60000
+    },
+    {
+      "comment": "",
+      "expression": "16",
+      "file": "frontend/src/lib/citations/find-citation.ts",
+      "line": 24,
+      "name": "POLL_MS",
+      "value": 16
+    },
+    {
+      "comment": "",
+      "expression": "2000",
+      "file": "frontend/src/lib/citations/find-citation.ts",
+      "line": 25,
+      "name": "MAX_WAIT_MS",
+      "value": 2000
+    },
+    {
+      "comment": "",
+      "expression": "1000",
+      "file": "frontend/src/lib/commands/rank-commands.ts",
+      "line": 5,
+      "name": "AFFINITY_MAX_ENTRIES",
+      "value": 1000
+    },
+    {
+      "comment": "",
+      "expression": "0.35",
+      "file": "frontend/src/lib/commands/rank-commands.ts",
+      "line": 6,
+      "name": "AFFINITY_WEIGHT",
+      "value": 0.35
+    },
+    {
+      "comment": "",
+      "expression": "7 * 24 * 60 * 60 * 1000",
+      "file": "frontend/src/lib/commands/rank-commands.ts",
+      "line": 7,
+      "name": "RECENCY_HALF_LIFE_MS",
+      "value": 604800000
+    },
+    {
+      "comment": "",
+      "expression": "50",
+      "file": "frontend/src/lib/commands/search-filters.ts",
+      "line": 7,
+      "name": "SEARCH_RESULTS_CAP",
+      "value": 50
+    },
+    {
+      "comment": "Past this age, a cached figure is called out rather than shown plainly.",
+      "expression": "24 * 60 * 60 * 1000",
+      "file": "frontend/src/lib/data-freshness.ts",
+      "line": 10,
+      "name": "STALE_AFTER_MS",
+      "value": 86400000
+    },
+    {
+      "comment": "",
+      "expression": "500",
+      "file": "frontend/src/lib/data-transfer/entities/post.ts",
+      "line": 9,
+      "name": "POST_CHUNK_SIZE",
+      "value": 500
+    },
+    {
+      "comment": "Rows per request when reading the corpus for an export (A2). `MAX_POST_PAGE_SIZE` in `app/services/posts.py`; asking for more is a 422, so this is the largest page the server will serve and the fewest round trips an export can make.",
+      "expression": "5000",
+      "file": "frontend/src/lib/data-transfer/entities/post.ts",
+      "line": 18,
+      "name": "EXPORT_PAGE_SIZE",
+      "value": 5000
+    },
+    {
+      "comment": "Safety bound on the export loop, in pages. Paging until a short page arrives is correct but unbounded in principle. This makes a runaway loop a loud error rather than a browser that grows until it dies \u2014 the failure mode that motivated the whole server-side-reads workstream.",
+      "expression": "1000",
+      "file": "frontend/src/lib/data-transfer/entities/post.ts",
+      "line": 27,
+      "name": "MAX_EXPORT_PAGES",
+      "value": 1000
+    },
+    {
+      "comment": "",
+      "expression": "1",
+      "file": "frontend/src/lib/data-transfer/types.ts",
+      "line": 4,
+      "name": "DATA_TRANSFER_SCHEMA_VERSION",
+      "value": 1
+    },
+    {
+      "comment": "The default minimum shared count.",
+      "expression": "2",
+      "file": "frontend/src/lib/directory/directory-filter.ts",
+      "line": 419,
+      "name": "SHARED_MIN",
+      "value": 2
+    },
+    {
+      "comment": "Past this many characters, or six lines, a Post is clamped until \"Read more\".",
+      "expression": "280",
+      "file": "frontend/src/lib/directory/directory-panel.ts",
+      "line": 13,
+      "name": "LONG_POST_CHARS",
+      "value": 280
+    },
+    {
+      "comment": "",
+      "expression": "6",
+      "file": "frontend/src/lib/directory/directory-panel.ts",
+      "line": 14,
+      "name": "LONG_POST_LINES",
+      "value": 6
+    },
+    {
+      "comment": "",
+      "expression": "10_000",
+      "file": "frontend/src/lib/directory/directory-view.ts",
+      "line": 88,
+      "name": "MAX_PAGE",
+      "value": 10000
+    },
+    {
+      "comment": "How long a Dismissal's confirmation, and its Undo, stay up (DIR-06).",
+      "expression": "10_000",
+      "file": "frontend/src/lib/directory/directory-view.ts",
+      "line": 336,
+      "name": "DISMISSAL_NOTICE_MS",
+      "value": 10000
+    },
+    {
+      "comment": "A Dismissal's confirmation: one Channel by handle, several by count. */ The most entries Tick all turns into Ticks; above it a view is All matching, held as the view (ADR-031). The server's `MAX_TICK_ALL`.",
+      "expression": "10_000",
+      "file": "frontend/src/lib/directory/directory-view.ts",
+      "line": 343,
+      "name": "MAX_TICK_ALL",
+      "value": 10000
+    },
+    {
+      "comment": "Two g presses closer than this are gg.",
+      "expression": "600",
+      "file": "frontend/src/lib/keyboard-moves.ts",
+      "line": 36,
+      "name": "GG_MS",
+      "value": 600
+    },
+    {
+      "comment": "Bounds for the weight inputs \u2014 wide enough to express \"ignore this kind\" (0).",
+      "expression": "0",
+      "file": "frontend/src/lib/posts/discover-candidates.ts",
+      "line": 283,
+      "name": "DISCOVER_WEIGHT_MIN",
+      "value": 0
+    },
+    {
+      "comment": "",
+      "expression": "99",
+      "file": "frontend/src/lib/posts/discover-candidates.ts",
+      "line": 284,
+      "name": "DISCOVER_WEIGHT_MAX",
+      "value": 99
+    },
+    {
+      "comment": "Floor for the \"Min hits\" threshold. 1 rather than 0 because a candidate exists only by being referenced at least once, so 0 and 1 would select the same rows.",
+      "expression": "1",
+      "file": "frontend/src/lib/posts/discover-candidates.ts",
+      "line": 377,
+      "name": "DISCOVER_MIN_TOTAL_MIN",
+      "value": 1
+    },
+    {
+      "comment": "",
+      "expression": "5",
+      "file": "frontend/src/lib/posts/discover-selection.ts",
+      "line": 3,
+      "name": "BULK_FOLLOW_CONFIRM_THRESHOLD",
+      "value": 5
+    },
+    {
+      "comment": "The server's bounds (`schemas/post_filter.py`).",
+      "expression": "5000",
+      "file": "frontend/src/lib/posts/post-selection.ts",
+      "line": 59,
+      "name": "MAX_PICKS",
+      "value": 5000
+    },
+    {
+      "comment": "",
+      "expression": "50",
+      "file": "frontend/src/lib/posts/post-selection.ts",
+      "line": 60,
+      "name": "MAX_RULES",
+      "value": 50
+    },
+    {
+      "comment": "Ceiling on the non-semantic branch's fetch (A1c). The branch used to be unbounded: it paged a channel's whole history into the browser and filtered there. It is now one `POST /data/posts` call, and bounding it is only sound because the server **sorts before it limits** \u2014 so `limit: N` returns the first N of the same ordering the client pipeline produced, not an arbitrary N. The one caller that reaches this branch (`useEntityFlow`'s pick-post pool) takes `.slice(0, 100)` immediately, so 200 is generous. A caller that needs more than this should page the feed (`usePostsFeed`) rather than raise the number.",
+      "expression": "200",
+      "file": "frontend/src/lib/posts/scoped-posts.ts",
+      "line": 26,
+      "name": "SCOPED_POSTS_LIMIT",
+      "value": 200
+    },
+    {
+      "comment": "",
+      "expression": "5000",
+      "file": "frontend/src/lib/posts/selected-export.ts",
+      "line": 9,
+      "name": "EXPORT_LIMIT",
+      "value": 5000
+    },
+    {
+      "comment": "Must not exceed MAX_POST_LOOKUP_BATCH in backend/app/services/posts.py.",
+      "expression": "200",
+      "file": "frontend/src/lib/posts/store.ts",
+      "line": 22,
+      "name": "POST_LOOKUP_BATCH",
+      "value": 200
+    },
+    {
+      "comment": "How often subscribers are notified.",
+      "expression": "10_000",
+      "file": "frontend/src/lib/shared-ticker.ts",
+      "line": 16,
+      "name": "TICK_INTERVAL_MS",
+      "value": 10000
+    },
+    {
+      "comment": "The server's own estimate (`backend/app/prompts/posts.py`).",
+      "expression": "4",
+      "file": "frontend/src/lib/summaries/retry-choice.ts",
+      "line": 14,
+      "name": "CHARS_PER_TOKEN",
+      "value": 4
+    },
+    {
+      "comment": "Matches SUMMARY_PROMPT_EXCERPT_CHARS in backend/app/services/summaries.py.",
+      "expression": "80",
+      "file": "frontend/src/lib/summary-projection.ts",
+      "line": 36,
+      "name": "SUMMARY_PROMPT_EXCERPT_CHARS",
+      "value": 80
+    },
+    {
+      "comment": "",
+      "expression": "10 * 60 * 1000",
+      "file": "frontend/src/lib/sync/run-server-sync.ts",
+      "line": 63,
+      "name": "AUTO_SYNC_PAUSE_MS",
+      "value": 600000
+    }
+  ],
+  "generatedBy": "scripts/generate_constants_catalog.py"
+}

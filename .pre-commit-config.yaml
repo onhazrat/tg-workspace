@@ -78,6 +78,13 @@ repos:
         language: system
         files: ^backend/app/core/(config\.py|env_catalog\.generated\.json)$|^frontend/.*\.(ts|tsx)$|^compose.*\.yml$|^scripts/generate_env_example\.py$|^\.env\.example$
 
+      - id: generate-constants-catalog
+        name: Generate constants catalog
+        entry: python3 scripts/generate_constants_catalog.py
+        pass_filenames: false
+        language: system
+        files: ^backend/app/.*\.py$|^backend/app/core/constants_catalog\.generated\.json$|^frontend/src/.*\.(ts|tsx)$|^scripts/generate_constants_catalog\.py$
+
       - id: zizmor
         name: zizmor
         language: python

@@ -15,6 +15,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.permissions import Permission
 from app.jobs.settings import write_setting_field
 from app.schemas.settings_registry import (
     SettingRow,
@@ -48,6 +49,12 @@ def update_setting(
 ) -> SettingRow:
     decl = declaration(setting_id)
     permissions = rbac.permissions_for(session, current_user.id)
+    if decl is None and Permission.SETTINGS_MANAGE in permissions:
+        # Configuration is listed, never written here: `.env` needs a
+        # restart, a build value a rebuild and a constant a deploy.
+        configured = settings_page.configuration_row(setting_id)
+        if configured is not None:
+            raise HTTPException(status_code=403, detail=configured.lock_reason)
     if decl is None or not settings_page.is_visible(decl, permissions):
         raise HTTPException(status_code=404, detail=NO_SUCH_SETTING)
     if decl.scope == "browser":

@@ -116,11 +116,59 @@ interface Mock {
   puts: { id: string; body: Record<string, unknown> }[]
 }
 
-async function mockRegistry(page: Page): Promise<Mock> {
+// Configuration (SET-04): what an Operator holding settings:manage also reads.
+const CONFIGURATION: Row[] = [
+  row("server.env.slowRequestLogMs", {
+    title: "Slow request log ms",
+    value: 500,
+    default: 1000,
+    modified: true,
+    canEdit: false,
+    lockReason: "Read at startup: change .env and restart",
+    applies: "restart",
+    storage: ".env: SLOW_REQUEST_LOG_MS",
+    envName: "SLOW_REQUEST_LOG_MS",
+  }),
+  row("server.env.secretKey", {
+    title: "Secret key",
+    type: "string",
+    value: "set",
+    default: null,
+    canEdit: false,
+    lockReason: "Read at startup: change .env and restart",
+    applies: "restart",
+    sensitive: true,
+    storage: "Environment: SECRET_KEY",
+    envName: "SECRET_KEY",
+  }),
+  row("network.env.viteTelegramWebDomain", {
+    title: "Telegram web domain",
+    type: "string",
+    value: null,
+    default: "t.me",
+    canEdit: false,
+    lockReason: "Built into the frontend: change .env and rebuild",
+    applies: "rebuild",
+    storage: "Frontend build: VITE_TELEGRAM_WEB_DOMAIN",
+    envName: "VITE_TELEGRAM_WEB_DOMAIN",
+  }),
+  row("sync.code.channelClaimLeaseSeconds", {
+    title: "Channel claim lease seconds",
+    value: 300,
+    default: 300,
+    canEdit: false,
+    lockReason: "Constant in code: needs a deploy",
+    applies: "deploy",
+    storage: "backend/app/services/channels.py:40",
+    sourceRef: "backend/app/services/channels.py:40",
+  }),
+]
+
+async function mockRegistry(page: Page, extra: Row[] = []): Promise<Mock> {
   const mock: Mock = { puts: [] }
   await page.route("**/api/v1/settings/registry", (route) =>
     route.fulfill({
-      json: { topics: TOPICS, rows: ROWS, permissions: [] },
+      json: { topics: TOPICS, rows: [...ROWS, ...extra], permissions: [] },
     }),
   )
   await page.route(
@@ -262,6 +310,42 @@ test.describe("Settings page", () => {
       .getByRole("button", { name: /^\.env/ })
       .click()
     await expect(item(page, "server.env.logLevel")).toBeVisible()
+  })
+
+  test("Configuration is found by @restart and @scope, says what it costs, and counts as changed", async ({
+    page,
+  }) => {
+    await mockRegistry(page, CONFIGURATION)
+    await openSettings(page)
+
+    // A changed .env value counts in the contents even while its group is folded.
+    const server = contents(page).getByRole("link", { name: /^Server/ })
+    await expect(server.getByTestId("settings-changed-count")).toHaveText("1")
+    await expect(item(page, "server.env.slowRequestLogMs")).toHaveCount(0)
+
+    await search(page).fill("@restart")
+    await expect(item(page, "server.env.slowRequestLogMs")).toContainText(
+      "Restart to apply",
+    )
+    await expect(item(page, "server.env.secretKey")).toContainText("set")
+    await expect(item(page, "server.env.logLevel")).toBeVisible()
+    await expect(item(page, "network.env.viteTelegramWebDomain")).toHaveCount(0)
+    await expect(item(page, "sync.code.channelClaimLeaseSeconds")).toHaveCount(
+      0,
+    )
+    await expect(item(page, "retention.yours.logDays")).toHaveCount(0)
+
+    await search(page).fill("@scope:code")
+    const constant = item(page, "sync.code.channelClaimLeaseSeconds")
+    await expect(constant).toContainText("Needs a deploy")
+    await expect(constant).toContainText("backend/app/services/channels.py:40")
+    await expect(item(page, "server.env.slowRequestLogMs")).toHaveCount(0)
+
+    // A build value shows what this bundle runs, not the server's null.
+    await search(page).fill("@scope:env telegram")
+    const build = item(page, "network.env.viteTelegramWebDomain")
+    await expect(build).toContainText("Rebuild to apply")
+    await expect(build).toContainText("t.me")
   })
 
   test("?setting= and an old ?section= land where they point", async ({

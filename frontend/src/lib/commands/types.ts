@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from "react"
 
 import type { JobStatusEntry } from "@/api/jobs"
-import type { ConfigurationCatalogResponse } from "@/client"
 import type { ActionLimit } from "@/lib/channels/selection-regions"
 import type {
   Channel,
@@ -60,7 +59,6 @@ export type EntityFlowType =
   | "filter-by-setting-group"
   | "move-to-setting-group"
   | "open-setting-group"
-  | "open-configuration"
 
 export interface CommandDisabledState {
   disabled: boolean
@@ -129,8 +127,6 @@ export interface CommandContext {
   setActiveTab: (tab: TabType) => void
   /** Opens Settings at a Setting id, a panel id or a topic id (SET-02). */
   openSetting: (id: string) => void
-  openConfigurationEntry: (id: string) => void
-  configurationCatalog?: ConfigurationCatalogResponse
   channels: Channel[]
   channelStats: Record<string, ChannelStats>
   selectedChannels: Set<string>

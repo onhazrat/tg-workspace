@@ -861,3 +861,175 @@ BY_ID: dict[str, Declaration] = {d.id: d for d in DECLARATIONS}
 def declaration(setting_id: str) -> Declaration | None:
     """The declaration a Setting id addresses, or `None`."""
     return BY_ID.get(setting_id)
+
+
+# --- Configuration (SET-04) -------------------------------------------------
+# Configuration is not declared row by row: `.env` rows come from the
+# `Settings` class and code rows from the generated constants catalog. What is
+# declared is where each lands on the page, because a topic guessed from a
+# name or a path is a topic nobody chose.
+
+#: A `.env` name's topic: the first prefix it starts with, in this order
+#: (`VITE_` stripped first). A name no prefix claims is a Server value.
+ENV_TOPICS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("JOBS_",), "jobs"),
+    (("QUOTA_",), "quota"),
+    (
+        ("RETENTION_", "SYNC_JOB_RETENTION", "SUMMARY_PARTIAL_DISMISSED_RETENTION"),
+        "retention",
+    ),
+    (("PROXY_", "NETWORK_", "TOR_", "DEFAULT_PROXY", "TELEGRAM_"), "network"),
+    (("DIRECTORY_", "DISCOVER_", "POST_REFERENCE_"), "directory"),
+    (
+        (
+            "AUTO_SYNC_",
+            "SYNC_",
+            "SCRAPER_",
+            "DIRECT_LANE_",
+            "DYNAMIC_SYNC_",
+            "POST_LANGUAGE_",
+        ),
+        "sync",
+    ),
+    (
+        (
+            "USERS_",
+            "ACCESS_TOKEN",
+            "VIEW_AS_",
+            "SECRET_KEY",
+            "FIRST_SUPERUSER",
+            "EMAIL_RESET",
+            "TOKEN_ENCRYPTION",
+            "API_KEY",
+            "TENANCY",
+            "BACKEND_CORS",
+        ),
+        "access",
+    ),
+    (("SMTP_", "EMAILS_", "EMAIL_TEST"), "email"),
+    (("POSTGRES_", "DB_"), "database"),
+    (
+        ("DEFAULT_AI", "GEMINI", "EMBEDDING", "TRANSLATION_", "RAG_", "AUTO_SUMMARY"),
+        "ai",
+    ),
+    (("POST_THUMB", "CHANNEL_PHOTO", "CHANNEL_IMAGE"), "media"),
+    (("VIEW_OBSERVATION",), "reach"),
+)
+
+
+def env_topic(name: str) -> str:
+    bare = name.removeprefix("VITE_")
+    return next(
+        (topic for prefixes, topic in ENV_TOPICS if bare.startswith(prefixes)),
+        "server",
+    )
+
+
+#: The topic of every module that holds a catalogued constant. Exact, both
+#: ways: `tests/deployment/test_constants_catalog.py` fails on a module with a
+#: constant and no entry, and on an entry whose module has none.
+CONSTANT_TOPICS: dict[str, str] = {
+    "backend/app/ai/registry.py": "ai",
+    "backend/app/core/pg_notify.py": "server",
+    "backend/app/jobs/auto_summary.py": "ai",
+    "backend/app/jobs/post_language.py": "sync",
+    "backend/app/jobs/retention.py": "retention",
+    "backend/app/jobs/scheduler.py": "jobs",
+    "backend/app/jobs/settling_curve_fit.py": "reach",
+    "backend/app/jobs/summary_generation.py": "ai",
+    "backend/app/jobs/sync_queue.py": "sync",
+    "backend/app/jobs/view_observation_stride.py": "reach",
+    "backend/app/prompts/posts.py": "ai",
+    "backend/app/schemas/analysis_window.py": "ai",
+    "backend/app/schemas/directory.py": "directory",
+    "backend/app/schemas/post_filter.py": "sync",
+    "backend/app/services/artifacts.py": "ai",
+    "backend/app/services/bulk_follow.py": "directory",
+    "backend/app/services/channel_directory.py": "directory",
+    "backend/app/services/channel_setting_groups.py": "sync",
+    "backend/app/services/channel_tags.py": "ai",
+    "backend/app/services/channels.py": "sync",
+    "backend/app/services/chat_sessions.py": "ai",
+    "backend/app/services/data_import_export.py": "database",
+    "backend/app/services/data_vectors.py": "ai",
+    "backend/app/services/directory_reads.py": "directory",
+    "backend/app/services/directory_statistics.py": "directory",
+    "backend/app/services/discover_reports.py": "directory",
+    "backend/app/services/language.py": "sync",
+    "backend/app/services/logs.py": "server",
+    "backend/app/services/network.py": "network",
+    "backend/app/services/network_settings.py": "network",
+    "backend/app/services/post_references.py": "directory",
+    "backend/app/services/post_thumbnails.py": "media",
+    "backend/app/services/posts.py": "sync",
+    "backend/app/services/prompt_assembly.py": "ai",
+    "backend/app/services/proxy_pacing.py": "network",
+    "backend/app/services/proxy_pool.py": "network",
+    "backend/app/services/publication_parts.py": "publishing",
+    "backend/app/services/quota.py": "quota",
+    "backend/app/services/reach.py": "reach",
+    "backend/app/services/scraper_jobs.py": "sync",
+    "backend/app/services/search_text.py": "sync",
+    "backend/app/services/summaries.py": "ai",
+    "backend/app/services/sync_orchestrator.py": "sync",
+    "backend/app/services/tag_runs.py": "ai",
+    "backend/app/services/view_observations.py": "reach",
+    "backend/app/worker.py": "jobs",
+    "frontend/src/components/AnalysisWindowControl.tsx": "ai",
+    "frontend/src/components/HandlePasteBox.tsx": "directory",
+    "frontend/src/components/LogsView.tsx": "server",
+    "frontend/src/components/NetworkTelemetry.tsx": "network",
+    "frontend/src/components/PostFilter.tsx": "sync",
+    "frontend/src/components/channel-grid/ChannelMetricEditor.tsx": "sync",
+    "frontend/src/components/channel-grid/VirtualizedChannelGrid.tsx": "appearance",
+    "frontend/src/components/directory/DirectoryAddBox.tsx": "directory",
+    "frontend/src/components/directory/DirectoryBar.tsx": "directory",
+    "frontend/src/components/directory/DirectoryBoost.tsx": "directory",
+    "frontend/src/components/directory/DirectoryBulkBar.tsx": "directory",
+    "frontend/src/components/directory/DirectorySamples.tsx": "directory",
+    "frontend/src/components/directory/DirectoryTable.tsx": "directory",
+    "frontend/src/components/post-card/FeedKeyboard.tsx": "appearance",
+    "frontend/src/components/post-card/PhotoViewer.tsx": "media",
+    "frontend/src/components/post-card/photo-viewer-model.ts": "media",
+    "frontend/src/components/settings-page/SettingsPage.tsx": "appearance",
+    "frontend/src/components/settings-page/sections.ts": "appearance",
+    "frontend/src/components/summary-view/ChannelPostsSheet.tsx": "ai",
+    "frontend/src/components/summary-view/PartialResponses.tsx": "ai",
+    "frontend/src/constants.ts": "sync",
+    "frontend/src/contexts/ScopeContext.tsx": "sync",
+    "frontend/src/hooks/queryKeys.ts": "server",
+    "frontend/src/hooks/useArtifacts.ts": "ai",
+    "frontend/src/hooks/useDirectory.ts": "directory",
+    "frontend/src/hooks/useDirectorySearchBox.ts": "directory",
+    "frontend/src/hooks/useDiscoverProbeQueue.ts": "directory",
+    "frontend/src/hooks/useJobsStatus.ts": "jobs",
+    "frontend/src/hooks/useMyQuota.ts": "quota",
+    "frontend/src/hooks/usePostFilters.ts": "sync",
+    "frontend/src/hooks/usePostsView.ts": "sync",
+    "frontend/src/hooks/useRecentCommands.ts": "appearance",
+    "frontend/src/hooks/useTags.ts": "ai",
+    "frontend/src/lib/channels/channel-tag-model.ts": "ai",
+    "frontend/src/lib/channels/grid-lanes.ts": "appearance",
+    "frontend/src/lib/channels/sync-schedule-summary.ts": "sync",
+    "frontend/src/lib/chat-sessions/chat-turn.ts": "ai",
+    "frontend/src/lib/citations/find-citation.ts": "ai",
+    "frontend/src/lib/commands/rank-commands.ts": "appearance",
+    "frontend/src/lib/commands/search-filters.ts": "appearance",
+    "frontend/src/lib/data-freshness.ts": "server",
+    "frontend/src/lib/data-transfer/entities/post.ts": "database",
+    "frontend/src/lib/data-transfer/types.ts": "database",
+    "frontend/src/lib/directory/directory-filter.ts": "directory",
+    "frontend/src/lib/directory/directory-panel.ts": "directory",
+    "frontend/src/lib/directory/directory-view.ts": "directory",
+    "frontend/src/lib/keyboard-moves.ts": "appearance",
+    "frontend/src/lib/posts/discover-candidates.ts": "directory",
+    "frontend/src/lib/posts/discover-selection.ts": "directory",
+    "frontend/src/lib/posts/post-selection.ts": "sync",
+    "frontend/src/lib/posts/scoped-posts.ts": "sync",
+    "frontend/src/lib/posts/selected-export.ts": "sync",
+    "frontend/src/lib/posts/store.ts": "sync",
+    "frontend/src/lib/shared-ticker.ts": "server",
+    "frontend/src/lib/summaries/retry-choice.ts": "ai",
+    "frontend/src/lib/summary-projection.ts": "ai",
+    "frontend/src/lib/sync/run-server-sync.ts": "sync",
+}

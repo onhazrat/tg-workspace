@@ -11,7 +11,6 @@ import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
 import { useApiStatus } from "@/hooks/useApiStatus"
-import { useConfigurationCatalog } from "@/hooks/useConfigurationCatalog"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useJobToggles } from "@/hooks/useJobToggles"
 import {
@@ -31,7 +30,6 @@ import {
   buildChannelEntityCommands,
   buildChannelOpsCommands,
   buildChannelTelegramChatIdCommands,
-  buildConfigurationCommands,
   buildDataTransferCommands,
   buildExtendedCommands,
   buildGroupCommands,
@@ -51,9 +49,6 @@ export function useCommandRegistry(): {
 } {
   const settings = useSettings()
   const palette = useCommandPaletteContext()
-  // This admin-only inventory is requested only while the palette is open.
-  // Its 403 response, not is_superuser, decides whether entries are available.
-  const { data: configurationCatalog } = useConfigurationCatalog(palette.open)
   const navigateWorkspace = workspaceRoute.useNavigate()
   const {
     channels,
@@ -143,20 +138,6 @@ export function useCommandRegistry(): {
       ),
     )
   const invalidateSettingGroups = useInvalidateSettingGroups()
-  const openConfigurationEntry = useCallback(
-    (id: string) => {
-      navigateWorkspace({
-        search: (previous) => ({
-          ...previous,
-          tab: "settings" as const,
-          section: undefined,
-          setting: id,
-        }),
-      })
-    },
-    [navigateWorkspace],
-  )
-
   // Per-channel in-scope counts on demand, as ChannelGrid shows them: the
   // selected Posts in the window, which a meaning search does not change
   // (PTR-05).
@@ -178,8 +159,6 @@ export function useCommandRegistry(): {
     () => ({
       setActiveTab,
       openSetting,
-      openConfigurationEntry,
-      configurationCatalog,
       channels,
       channelStats,
       selectedChannels,
@@ -325,7 +304,6 @@ export function useCommandRegistry(): {
       channelStats,
       channels,
       completePendingSummary,
-      configurationCatalog,
       copySummaryPrompt,
       currentSummaryId,
       endDate,
@@ -351,7 +329,6 @@ export function useCommandRegistry(): {
       groupByChannel,
       selectedChannels,
       openSetting,
-      openConfigurationEntry,
       setActiveTab,
       setAutoSyncPauseUntil,
       setChannels,
@@ -389,7 +366,6 @@ export function useCommandRegistry(): {
       ...buildNavigateCommands(),
       ...buildActionCommands(),
       ...buildSettingCommands(settingsRegistry),
-      ...buildConfigurationCommands(configurationCatalog),
       ...buildGroupCommands(),
       ...buildChannelEntityCommands(),
       ...buildChannelOpsCommands(),
@@ -398,7 +374,7 @@ export function useCommandRegistry(): {
       ...buildExtendedCommands(),
     ]
     return all.filter((command) => !command.when || command.when(context))
-  }, [configurationCatalog, context, settingsRegistry])
+  }, [context, settingsRegistry])
 
   return { commands, context }
 }

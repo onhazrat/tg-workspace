@@ -215,9 +215,8 @@ def get_runtime_config(
 ) -> RuntimeConfigResponse:
     """Return time-varying effective state that is not configuration inventory.
 
-    This API remains separate from ``/data/configuration`` for compatibility and
-    because its clock, resolved cutoff/start time, proxy lanes, and active job
-    are runtime diagnostics rather than values from one of the five config layers.
+    Its clock, resolved cutoff/start time, proxy lanes and active job are
+    runtime diagnostics, not Settings or Configuration rows.
     """
     payload = build_runtime_config(session, user_id=current_user.id)
     return RuntimeConfigResponse(**payload)

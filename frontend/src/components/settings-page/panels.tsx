@@ -7,13 +7,11 @@
  * panels are gone. A panel names the Permission that shows it, read from the
  * registry's own answer rather than from a 403.
  */
-import { getRouteApi } from "@tanstack/react-router"
 import type React from "react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api"
 import type { JobStatusEntry } from "@/api/jobs"
-import { ConfigurationCatalogView } from "@/components/ConfigurationCatalogView"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
@@ -40,14 +38,6 @@ export interface Panel {
   /** The Permission that shows it; none means every Account. */
   permission?: string
   render: () => React.ReactNode
-}
-
-const workspaceRoute = getRouteApi("/_tg/")
-
-/** The `.env` and runtime inventory, until SET-04 makes them rows. */
-function Configuration() {
-  const { setting } = workspaceRoute.useSearch()
-  return <ConfigurationCatalogView focusId={setting} />
 }
 
 function Version() {
@@ -321,16 +311,6 @@ export const PANELS: Panel[] = [
     keywords: "scheduler job run trigger status",
     permission: "jobs:manage",
     render: () => <JobRuns />,
-  },
-  {
-    id: "server.deployment.configuration",
-    topic: "server",
-    title: "Configuration",
-    description:
-      "Every .env value the deployment reads and every runtime settings row, as stored.",
-    keywords: "configuration env environment catalog",
-    permission: "data:admin",
-    render: () => <Configuration />,
   },
   {
     id: "operator.deployment.users",

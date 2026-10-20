@@ -232,11 +232,6 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "the server's wall clock (AW-02); the same two integers for everybody",
     ),
     ("POST", f"{V1}/utils/test-email/"): (Reason.DEPLOYMENT_WIDE, "superuser probe"),
-    ("GET", f"{DATA}/configuration"): (
-        Reason.DEPLOYMENT_WIDE,
-        "DATA_ADMIN inventory: the user layer is the caller's own settings, while "
-        "global settings and per-account quota overrides deliberately cross accounts",
-    ),
     ("GET", f"{V1}/settings/registry"): (
         Reason.COVERED_ELSEWHERE,
         "the caller's own Settings and the deployment's, with two live accounts; "

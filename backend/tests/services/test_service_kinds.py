@@ -139,9 +139,6 @@ INVENTORY: dict[str, str] = {
     # Unions four aggregates into one time-ordered page for History. Owns no
     # table and never commits.
     "artifacts.py": READ_MODEL,
-    # Joins environment metadata with both settings aggregates and quota
-    # overrides for one read-only admin inventory; owns and commits nothing.
-    "configuration_catalog.py": READ_MODEL,
     # The Directory tab's reads (DIR-02): a page, its totals and a measure's
     # spread over Directory entries, References and the caller's Follows.
     # Writes nothing; its caches are process memory, not a table.
