@@ -7,6 +7,7 @@ import {
   type LogRowsByTab,
 } from "@/components/logs/ActiveLogPanel"
 import { LogFilterBar } from "@/components/logs/LogFilterBar"
+import { LoggedSpread } from "@/components/logs/LoggedSpread"
 import { LogsHeader } from "@/components/logs/LogsHeader"
 import { LogTabBar } from "@/components/logs/LogTabBar"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
@@ -74,8 +75,10 @@ export const LogsView: React.FC = () => {
    * table rather than the 500 rows that happened to be fetched.
    *
    * Debounced because it is a request per change, and part of the query key so
-   * a new term refetches. The other filters stay client-side: they read fields
-   * the list still carries and cost nothing there.
+   * a new term refetches. The Logged bound rides the same request (TB-05),
+   * so it reaches entries older than the page. The other filters stay
+   * client-side: they read fields the list still carries and cost nothing
+   * there.
    */
   const logSearch = useDebouncedValue(
     useMemo(
@@ -88,11 +91,12 @@ export const LogsView: React.FC = () => {
     300,
   )
 
-  const publishQuery = usePublishLogsQuery(true, { search: logSearch })
-  const syncQuery = useSyncLogsQuery(true, { search: logSearch })
-  const llmQuery = useLLMLogsQuery(true, { search: logSearch })
-  const networkQuery = useNetworkLogsQuery(true, { search: logSearch })
-  const embeddingQuery = useEmbeddingLogsQuery(true, { search: logSearch })
+  const read = { search: logSearch, bound: filters.timeBound }
+  const publishQuery = usePublishLogsQuery(true, read)
+  const syncQuery = useSyncLogsQuery(true, read)
+  const llmQuery = useLLMLogsQuery(true, read)
+  const networkQuery = useNetworkLogsQuery(true, read)
+  const embeddingQuery = useEmbeddingLogsQuery(true, read)
 
   const publish = logQueryRows(publishQuery, EMPTY_PUBLISH)
   const sync = logQueryRows(syncQuery, EMPTY_SYNC)
@@ -306,6 +310,14 @@ export const LogsView: React.FC = () => {
           modelOptions={modelOptions}
           botOptions={botOptions}
           channelOptions={channelOptions}
+          loggedSpread={
+            <LoggedSpread
+              type={activeLogTab}
+              search={logSearch}
+              bound={filters.timeBound}
+              onPick={(timeBound) => updateFilters({ timeBound })}
+            />
+          }
         />
       </div>
 

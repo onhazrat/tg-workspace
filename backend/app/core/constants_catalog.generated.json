@@ -1108,7 +1108,7 @@
       "comment": "",
       "expression": "20",
       "file": "frontend/src/components/LogsView.tsx",
-      "line": 42,
+      "line": 43,
       "name": "PAGE_SIZE",
       "value": 20
     },
@@ -1140,7 +1140,7 @@
       "comment": "How often a Live bound's fields are redrawn against the clock.",
       "expression": "15_000",
       "file": "frontend/src/components/TimeBoundEditor.tsx",
-      "line": 35,
+      "line": 42,
       "name": "REDRAW_MS",
       "value": 15000
     },

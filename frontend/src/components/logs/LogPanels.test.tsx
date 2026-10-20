@@ -8,7 +8,7 @@
  * business, not the card's.
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { DEFAULT_LOG_FILTERS, type LogFilters } from "@/lib/logs/filters"
 import type { LogTab } from "@/lib/logs/tabs"
 import type {
@@ -281,6 +281,7 @@ describe("LogFilterBar", () => {
         modelOptions={["gpt-x"]}
         botOptions={["herald"]}
         channelOptions={["alpha"]}
+        loggedSpread={<p>the Logged spread</p>}
         {...h}
       />,
     )
@@ -324,7 +325,7 @@ describe("LogFilterBar", () => {
     expect(container.querySelectorAll("select")).toHaveLength(0)
   })
 
-  test("the dropdowns, status chips and dates report their patch", () => {
+  test("the dropdowns and status chips report their patch", () => {
     const h = renderBar("llm", { statusFilter: "failed" })
     fireEvent.change(h.container.querySelector("select") as HTMLElement, {
       target: { value: "gpt-x" },
@@ -333,15 +334,7 @@ describe("LogFilterBar", () => {
     expect(screen.getByText("failed").className).toContain("bg-app-ink")
     fireEvent.click(screen.getByText("success"))
     expect(h.onFiltersChange).toHaveBeenCalledWith({ statusFilter: "success" })
-    const [start, end] = h.container.querySelectorAll("input[type=date]")
-    fireEvent.change(start, { target: { value: "2026-01-02" } })
-    expect(h.onFiltersChange).toHaveBeenCalledWith({
-      startDate: new Date("2026-01-02T00:00:00").getTime(),
-    })
-    fireEvent.change(end, { target: { value: "2026-01-05" } })
-    expect(h.onFiltersChange).toHaveBeenCalledWith({
-      endDate: new Date("2026-01-05T00:00:00").getTime(),
-    })
+    expect(h.container.querySelectorAll("input[type=date]")).toHaveLength(0)
     cleanup()
     const pub = renderBar("publish")
     fireEvent.change(pub.container.querySelector("select") as HTMLElement, {
@@ -354,6 +347,25 @@ describe("LogFilterBar", () => {
       target: { value: "alpha" },
     })
     expect(syn.onFiltersChange).toHaveBeenCalledWith({ channelFilter: "alpha" })
+  })
+
+  // TB-05: the Posts tab's collapsed line and popover, labelled Logged.
+  test("the Logged bar reads Any time, and emits the bound it edits", () => {
+    const h = renderBar("sync")
+    const trigger = screen.getByRole("button", { name: "Logged" })
+    expect(trigger.textContent).toBe("Any time")
+    act(() => {
+      fireEvent.click(trigger)
+    })
+    expect(screen.getByText("the Logged spread")).toBeTruthy()
+    const duration = screen.getByLabelText("Duration") as HTMLInputElement
+    act(() => {
+      fireEvent.change(duration, { target: { value: "1d" } })
+      fireEvent.keyDown(duration, { key: "Enter" })
+    })
+    expect(h.onFiltersChange).toHaveBeenCalledWith({
+      timeBound: { mode: "live", start: -86_400_000, end: 0 },
+    })
   })
 
   test("Clear All Filters is live only while a filter is set", () => {

@@ -1,3 +1,4 @@
+import type { TimeBound } from "@/lib/time-bound/bound"
 import type {
   EmbeddingLog,
   LLMLogListItem,
@@ -18,8 +19,9 @@ import type {
  * `fields OR bodies`; a second pass over fields alone would drop exactly the
  * rows that matched only on a body — the ones "search in details" exists for.
  *
- * What stays here is what is cheap and already present: status, date range,
- * and the bot/channel/model dropdowns.
+ * What stays here is what is cheap and already present: status and the
+ * bot/channel/model dropdowns. The Logged Time bound went to the server too
+ * (TB-05): bounding the newest page missed every older entry.
  */
 
 export type LogStatus = "success" | "failed"
@@ -29,8 +31,8 @@ export type LogStatusFilter = "all" | LogStatus
 export interface LogFilters {
   searchQuery: string
   statusFilter: LogStatusFilter
-  startDate: number | null
-  endDate: number | null
+  /** When entries were logged; the server applies it (TB-05). */
+  timeBound: TimeBound
   modelFilter: string
   botFilter: string
   channelFilter: string
@@ -40,8 +42,7 @@ export interface LogFilters {
 export const DEFAULT_LOG_FILTERS: LogFilters = {
   searchQuery: "",
   statusFilter: "all",
-  startDate: null,
-  endDate: null,
+  timeBound: { mode: "live" },
   modelFilter: "all",
   botFilter: "all",
   channelFilter: "all",
@@ -52,32 +53,14 @@ export const DEFAULT_LOG_FILTERS: LogFilters = {
 export interface CommonLogFilterCriteria {
   statusFilter: LogStatusFilter
   searchQuery: string
-  startDate: number | null
-  endDate: number | null
   searchInDetails: boolean
 }
-
-export const DAY_MS = 24 * 60 * 60 * 1000
 
 export function matchesStatus(
   status: LogStatus,
   filter: LogStatusFilter,
 ): boolean {
   return filter === "all" || status === filter
-}
-
-/**
- * A timestamp is in range when it is on/after the start of `startDate` and
- * no later than the end of the `endDate` day (endDate + 24h).
- */
-export function matchesDateRange(
-  timestamp: number,
-  startDate: number | null,
-  endDate: number | null,
-): boolean {
-  if (startDate !== null && timestamp < startDate) return false
-  if (endDate !== null && timestamp > endDate + DAY_MS) return false
-  return true
 }
 
 /**
@@ -99,8 +82,6 @@ export function filterPublishLogs(
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (filters.botFilter !== "all" && log.botName !== filters.botFilter)
       return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
     return true
   })
 }
@@ -116,8 +97,6 @@ export function filterSyncLogs(
       log.channelName !== filters.channelFilter
     )
       return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
     return true
   })
 }
@@ -130,8 +109,6 @@ export function filterLlmLogs(
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (filters.modelFilter !== "all" && log.model !== filters.modelFilter)
       return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
     return true
   })
 }
@@ -142,8 +119,6 @@ export function filterNetworkLogs(
 ): NetworkLog[] {
   return logs.filter((log) => {
     if (!matchesStatus(log.status, filters.statusFilter)) return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
     return true
   })
 }
@@ -154,8 +129,6 @@ export function filterEmbeddingLogs(
 ): EmbeddingLog[] {
   return logs.filter((log) => {
     if (!matchesStatus(log.status, filters.statusFilter)) return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
     return true
   })
 }
@@ -169,8 +142,8 @@ export function isAnyLogFilterActive(filters: LogFilters): boolean {
   return (
     filters.searchQuery !== "" ||
     filters.statusFilter !== "all" ||
-    filters.startDate !== null ||
-    filters.endDate !== null ||
+    filters.timeBound.start !== undefined ||
+    filters.timeBound.end !== undefined ||
     filters.modelFilter !== "all" ||
     filters.botFilter !== "all" ||
     filters.channelFilter !== "all" ||
