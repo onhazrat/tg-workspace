@@ -52,6 +52,16 @@ export const isLongPost = (text: string) =>
  * it's here" counts in so it lists what the sort and the Condition count;
  * `null` for every Post.
  */
+/** PROTOTYPE (time-bound): the Cited-by window as a Time bound, if it is one. */
+export function mineBound(filter: DirectoryFilter | undefined) {
+  for (const atom of filter ? atoms(filter) : []) {
+    const c = atom.cond
+    if (c.type === "mine" && c.mode)
+      return { mode: c.mode, start: c.start, end: c.end }
+  }
+  return null
+}
+
 export function mineWindow(filter: DirectoryFilter | undefined): number | null {
   if (!filter) return null
   for (const atom of atoms(filter)) {

@@ -1,5 +1,10 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
+import {
+  type TimeBound,
+  TimeBoundEditor,
+} from "@/components/time-bound-prototype/TimeBoundEditor"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import type {
   DirectoryTimeCond,
@@ -131,7 +136,13 @@ export function DirectoryTimeEditor({
   onSubmit: (cond: DirectoryTimeCond) => void
   onBack?: () => void
 }) {
-  const [mode, setMode] = useState<TimeMode>(initial?.mode ?? "live")
+  const v1 = useIsVariant1()
+  const [bound, setBound] = useState<TimeBound>(() => ({
+    mode: initial?.mode ?? "live",
+    ...(!initial?.none && { start: initial?.start, end: initial?.end }),
+  }))
+  const [mode0, setMode] = useState<TimeMode>(initial?.mode ?? "live")
+  const mode = v1 ? bound.mode : mode0
   const [none, setNone] = useState(!!initial?.none)
   const fixed = initial?.mode === "fixed"
   const [live, setLive] = useState(() => ({
@@ -143,8 +154,9 @@ export function DirectoryTimeEditor({
     end: localText(fixed ? initial?.end : undefined),
   }))
 
-  const [start, end] =
-    mode === "live"
+  const [start, end] = v1
+    ? [bound.start, bound.end]
+    : mode === "live"
       ? [liveMs(live.start), liveMs(live.end)]
       : [localMs(at.start), localMs(at.end)]
   const cond: DirectoryTimeCond | null = none
@@ -172,6 +184,7 @@ export function DirectoryTimeEditor({
     setNone(false)
     setMode("fixed")
     setAt({ start: localText(bin.lo), end: localText(bin.hi) })
+    setBound({ mode: "fixed", start: bin.lo, end: bin.hi })
   }
   const toggle = "rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
   return (
@@ -207,20 +220,21 @@ export function DirectoryTimeEditor({
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
       )}
       <div className="flex gap-1 rounded-full bg-app-ink/5 p-0.5">
-        {(["live", "fixed"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            aria-pressed={!none && mode === m}
-            onClick={() => {
-              setNone(false)
-              setMode(m)
-            }}
-            className={`${toggle} ${!none && mode === m ? "bg-app-surface shadow-sm" : "text-app-ink/60"}`}
-          >
-            {m === "live" ? "Live" : "Fixed"}
-          </button>
-        ))}
+        {!v1 &&
+          (["live", "fixed"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={!none && mode === m}
+              onClick={() => {
+                setNone(false)
+                setMode(m)
+              }}
+              className={`${toggle} ${!none && mode === m ? "bg-app-surface shadow-sm" : "text-app-ink/60"}`}
+            >
+              {m === "live" ? "Live" : "Fixed"}
+            </button>
+          ))}
         <button
           type="button"
           aria-pressed={none}
@@ -230,7 +244,15 @@ export function DirectoryTimeEditor({
           No value
         </button>
       </div>
-      {!none && mode === "live" && (
+      {v1 && !none && (
+        <TimeBoundEditor
+          value={bound}
+          onChange={setBound}
+          opts={{ openEnds: true, ahead: true }}
+          modeLabel={`${moment.label} mode`}
+        />
+      )}
+      {!v1 && !none && mode === "live" && (
         <div className="space-y-1">
           <LiveFields
             side="Start"
@@ -248,7 +270,7 @@ export function DirectoryTimeEditor({
           </p>
         </div>
       )}
-      {!none && mode === "fixed" && (
+      {!v1 && !none && mode === "fixed" && (
         <div className="space-y-1">
           {(["start", "end"] as const).map((side) => (
             <label key={side} className="flex items-center gap-1 text-[11px]">

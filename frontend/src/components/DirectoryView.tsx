@@ -34,6 +34,7 @@ import {
   type MeasureEditorRender,
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
+import { timeBoundSummary } from "@/components/time-bound-prototype/TimeBoundEditor"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
@@ -55,7 +56,7 @@ import {
   type SeedSets,
   seedForms,
 } from "@/lib/directory/directory-filter"
-import { mineWindow } from "@/lib/directory/directory-panel"
+import { mineBound, mineWindow } from "@/lib/directory/directory-panel"
 import type { Tagging } from "@/lib/directory/directory-tags"
 import {
   chooseSort,
@@ -239,7 +240,10 @@ function DirectoryPanelReads({
   onFilter,
   tagging,
   onBoost,
+  bound,
 }: {
+  /** PROTOTYPE (time-bound): the Cited-by window as a Time bound. */
+  bound: ReturnType<typeof mineBound>
   handle: string
   request: DirectoryViewRequest
   /** Each Shared relation's Seeds while it is on, for Why (DIR-07). */
@@ -269,6 +273,11 @@ function DirectoryPanelReads({
     yours: request.yours,
     referenceKinds: request.referenceKinds,
     days: windowDays,
+    ...(bound && {
+      mineMode: bound.mode,
+      mineStart: bound.start,
+      mineEnd: bound.end,
+    }),
     ...shared,
   }
   const why = useQuery({
@@ -286,6 +295,7 @@ function DirectoryPanelReads({
       posts={posts.isError ? [] : posts.data}
       why={why.data}
       windowDays={windowDays}
+      windowLabel={bound ? `in ${timeBoundSummary(bound)}` : undefined}
       following={following}
       onFollow={onFollow}
       onDismiss={onDismiss}
@@ -465,6 +475,7 @@ export function DirectoryView() {
             children: seedsOf("children"),
           }}
           windowDays={mineWindow(d.filter)}
+          bound={mineBound(d.filter)}
           following={d.following.has(d.open)}
           onFollow={() => d.open && void d.follow([d.open])}
           onDismiss={(dismissed) =>

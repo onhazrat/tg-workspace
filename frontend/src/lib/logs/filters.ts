@@ -35,6 +35,15 @@ export interface LogFilters {
   botFilter: string
   channelFilter: string
   searchInDetails: boolean
+  /** PROTOTYPE (time-bound): the Time bound on when each entry was logged. */
+  timeBound?: LogTimeBound
+}
+
+/** `[start, end)`, either end open; Live ends are signed ms from now. */
+export type LogTimeBound = {
+  mode: "live" | "fixed"
+  start?: number
+  end?: number
 }
 
 export const DEFAULT_LOG_FILTERS: LogFilters = {
@@ -55,6 +64,21 @@ export interface CommonLogFilterCriteria {
   startDate: number | null
   endDate: number | null
   searchInDetails: boolean
+  timeBound?: LogTimeBound
+}
+
+/** PROTOTYPE (time-bound): the Time bound when one is set, else the day range. */
+function matchesWhen(
+  timestamp: number,
+  filters: Pick<CommonLogFilterCriteria, "startDate" | "endDate" | "timeBound">,
+): boolean {
+  const b = filters.timeBound
+  if (!b) return matchesDateRange(timestamp, filters.startDate, filters.endDate)
+  const shift = b.mode === "live" ? Date.now() : 0
+  return (
+    (b.start === undefined || timestamp >= b.start + shift) &&
+    (b.end === undefined || timestamp < b.end + shift)
+  )
 }
 
 export const DAY_MS = 24 * 60 * 60 * 1000
@@ -99,8 +123,7 @@ export function filterPublishLogs(
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (filters.botFilter !== "all" && log.botName !== filters.botFilter)
       return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
+    if (!matchesWhen(log.timestamp, filters)) return false
     return true
   })
 }
@@ -116,8 +139,7 @@ export function filterSyncLogs(
       log.channelName !== filters.channelFilter
     )
       return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
+    if (!matchesWhen(log.timestamp, filters)) return false
     return true
   })
 }
@@ -130,8 +152,7 @@ export function filterLlmLogs(
     if (!matchesStatus(log.status, filters.statusFilter)) return false
     if (filters.modelFilter !== "all" && log.model !== filters.modelFilter)
       return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
+    if (!matchesWhen(log.timestamp, filters)) return false
     return true
   })
 }
@@ -142,8 +163,7 @@ export function filterNetworkLogs(
 ): NetworkLog[] {
   return logs.filter((log) => {
     if (!matchesStatus(log.status, filters.statusFilter)) return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
+    if (!matchesWhen(log.timestamp, filters)) return false
     return true
   })
 }
@@ -154,8 +174,7 @@ export function filterEmbeddingLogs(
 ): EmbeddingLog[] {
   return logs.filter((log) => {
     if (!matchesStatus(log.status, filters.statusFilter)) return false
-    if (!matchesDateRange(log.timestamp, filters.startDate, filters.endDate))
-      return false
+    if (!matchesWhen(log.timestamp, filters)) return false
     return true
   })
 }
@@ -171,6 +190,7 @@ export function isAnyLogFilterActive(filters: LogFilters): boolean {
     filters.statusFilter !== "all" ||
     filters.startDate !== null ||
     filters.endDate !== null ||
+    filters.timeBound !== undefined ||
     filters.modelFilter !== "all" ||
     filters.botFilter !== "all" ||
     filters.channelFilter !== "all" ||

@@ -1,4 +1,5 @@
 import { FilterRow } from "@/components/filter-tree/FilterRow"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
 import {
   type ChannelFilter,
   conditionLabel,
@@ -34,16 +35,21 @@ export function ChannelFilterRow({
   onClearSearch: () => void
   onClearAll: () => void
 }) {
+  const v1 = useIsVariant1()
   return (
     <FilterRow
       {...rest}
       testId="channel-filter"
       vocabulary={{
-        ...channelVocabulary(options, metrics),
+        ...channelVocabulary(options, metrics, v1),
         label: (cond) => conditionLabel(cond, names),
         icon: (cond) => CONDITION_ICON[cond.type],
         chipId: (cond) =>
-          cond.type === "metric" ? `metric-${cond.metric}` : cond.value,
+          cond.type === "metric"
+            ? `metric-${cond.metric}`
+            : cond.type === "time"
+              ? `time-${cond.moment}`
+              : cond.value,
       }}
     />
   )

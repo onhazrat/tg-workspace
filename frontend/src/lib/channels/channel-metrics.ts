@@ -161,6 +161,8 @@ export type MetricData = {
   values: (key: MetricKey) => number[]
   /** Every Channel, measured or not. */
   total: number
+  /** PROTOTYPE (time-bound): the Channels, for a Time bound's count. */
+  channels?: Channel[]
 }
 
 /** A missing value fails every bound and passes only `none`. */

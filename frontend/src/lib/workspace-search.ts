@@ -14,6 +14,8 @@ import type { ArtifactStatusFilter, TabType } from "@/types"
 
 export type WorkspaceSearch = {
   tab?: TabType
+  /** PROTOTYPE (time-bound): the app-wide variant. */
+  variant?: string
   /** An old Settings section id or a topic id; the page lands on its topic. */
   section?: string
   /** A Setting, panel or topic id the Settings page scrolls to (SET-02). */
@@ -103,6 +105,7 @@ export function validateWorkspaceSearch(
 ): WorkspaceSearch {
   if (search.tab === "network") return { tab: "settings", section: "network" }
   const result: WorkspaceSearch = { tab: workspaceTab(search.tab) }
+  if (typeof search.variant === "string") result.variant = search.variant
   const section = trimmedString(search.section)
   if (result.tab === "settings" && section && TOOL_SECTIONS.includes(section))
     return { tab: "tools" }

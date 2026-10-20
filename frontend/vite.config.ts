@@ -53,7 +53,18 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE (time-bound): the Tailscale HTTPS name, and the Directory
+      // reads that carry the Cited-by window to the local prototype API.
+      allowedHosts: [".ts.net"],
       proxy: {
+        ...(process.env.PROTO_API_PORT
+          ? {
+              "^/api/v1/data/directory/(list|count|handles|distribution|why)$":
+                {
+                  target: `http://127.0.0.1:${process.env.PROTO_API_PORT}`,
+                },
+            }
+          : {}),
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

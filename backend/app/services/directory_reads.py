@@ -350,6 +350,8 @@ class MineCond:
     """Cited by your channels, ever or within the last `days`."""
 
     days: int | None = None
+    #: PROTOTYPE (time-bound): (mode, start, end) on the citing Posts.
+    when: tuple[str, int | None, int | None] | None = None
 
 
 # The three Conditions taking Seeds hold either the handles the browser
@@ -691,7 +693,10 @@ def _of_kinds(view: DirectoryView) -> list[ColumnElement[bool]]:
 
 
 def _references(
-    view: DirectoryView, *, days: int | None = None
+    view: DirectoryView,
+    *,
+    days: int | None = None,
+    when: tuple[str, int | None, int | None] | None = None,
 ) -> list[ColumnElement[bool]]:
     """The References "your channels" make, narrowed by the Reference kinds,
     and to the last `days` when given."""
@@ -700,6 +705,14 @@ def _references(
     if days is not None:
         since_ms = _epoch_ms(view.now) - days * 86_400_000
         clauses.append(col(PostReference.timestamp) >= since_ms)
+    if when is not None:
+        # PROTOTYPE (time-bound): [start, end), a Live end relative to now.
+        mode, start, end = when
+        shift = _epoch_ms(view.now) if mode == "live" else 0
+        if start is not None:
+            clauses.append(col(PostReference.timestamp) >= start + shift)
+        if end is not None:
+            clauses.append(col(PostReference.timestamp) < end + shift)
     return clauses
 
 
@@ -830,7 +843,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     if isinstance(cond, MineCond):
         if not view.sources:
             return false()
-        refs = _references(view, days=cond.days)
+        refs = _references(view, days=cond.days, when=cond.when)
         # Uncorrelated, so Postgres hashes it once even under an OR or a NOT.
         return handle.in_(sa_select(col(PostReference.target_handle)).where(*refs))
     if isinstance(cond, CitedByCond | CitesCond):
@@ -1600,6 +1613,7 @@ def why_its_here(
     handle: str,
     *,
     days: int | None,
+    when: tuple[str, int | None, int | None] | None = None,
 ) -> Why:
     """The Posts of "your channels" that cite `handle`, newest first, and the
     Channels it shares with the Seeds of each Shared Condition in the view's
@@ -1612,14 +1626,19 @@ def why_its_here(
     parents = _first_shared(view.tree, "parents")
     children = _first_shared(view.tree, "children")
     return replace(
-        _citing_posts(session, view, handle, days=days),
+        _citing_posts(session, view, handle, days=days, when=when),
         parents=None if parents is None else shared_why(session, handle, parents),
         children=None if children is None else shared_why(session, handle, children),
     )
 
 
 def _citing_posts(
-    session: Session, view: DirectoryView, handle: str, *, days: int | None
+    session: Session,
+    view: DirectoryView,
+    handle: str,
+    *,
+    days: int | None,
+    when: tuple[str, int | None, int | None] | None = None,
 ) -> Why:
     if not view.sources:
         return Why(posts=[], total=0)
@@ -1631,7 +1650,7 @@ def _citing_posts(
             func.max(col(r.timestamp)).label("ts"),
             func.array_agg(distinct(col(r.kind))).label("kinds"),
         )
-        .where(*_references(view, days=days), col(r.target_handle) == handle)
+        .where(*_references(view, days=days, when=when), col(r.target_handle) == handle)
         .group_by(col(r.source_channel), col(r.source_post_id))
         .subquery("per_post")
     )

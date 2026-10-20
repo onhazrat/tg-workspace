@@ -28,11 +28,23 @@ import {
   metric,
   metricValue,
 } from "@/lib/channels/channel-metrics"
+import {
+  type ChannelMomentKey,
+  channelMoment,
+  isChannelMomentKey,
+} from "@/lib/channels/channel-moments"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import {
   CHANNEL_PSEUDO_TAGS,
   findChannelPseudoTag,
 } from "@/lib/channels/channel-tags"
+import {
+  END,
+  endValue,
+  instantText,
+  offsetText,
+  timeBoundWords,
+} from "@/lib/directory/directory-filter"
 import {
   ParseError,
   parseTree,
@@ -57,7 +69,16 @@ export type CondType = "tag" | "group" | "language"
 export type ValueCond = { type: CondType; value: string }
 /** A bound on a number; `none` passes only a Channel with no value. */
 export type MetricCond = { type: "metric"; metric: MetricKey } & MetricBound
-export type Cond = ValueCond | MetricCond
+/** PROTOTYPE (time-bound): a Time bound on one of a Channel's moments. */
+export type TimeCond = {
+  type: "time"
+  moment: ChannelMomentKey
+  mode: "live" | "fixed"
+  start?: number
+  end?: number
+  none?: true
+}
+export type Cond = ValueCond | MetricCond | TimeCond
 export type { Joiner }
 
 // The tree itself is `lib/filter-tree.ts`, shared with the Posts tab; these
@@ -105,6 +126,16 @@ function testCond(cond: Cond, channel: Channel, inputs: MetricInputs): boolean {
       return languageValue(channel.language) === cond.value
     case "metric":
       return inBound(metricValue(cond.metric, channel, inputs), cond)
+    case "time": {
+      const at = channelMoment(cond.moment).value(channel) ?? undefined
+      if (cond.none) return at === undefined
+      if (at === undefined) return false
+      const shift = cond.mode === "live" ? Date.now() : 0
+      return (
+        (cond.start === undefined || at >= cond.start + shift) &&
+        (cond.end === undefined || at < cond.end + shift)
+      )
+    }
   }
 }
 
@@ -169,6 +200,8 @@ export function conditionLabel(cond: Cond, names: FilterNames): string {
       return languageLabel(cond.value)
     case "metric":
       return `${metric(cond.metric).label}${cond.none ? ":" : ""} ${boundText(cond)}`
+    case "time":
+      return timeBoundWords(channelMoment(cond.moment).label, cond)
   }
 }
 
@@ -187,6 +220,34 @@ function condText(cond: Cond, names: FilterNames): string {
         gte: `${cond.metric} >= ${cond.min}`,
         lte: `${cond.metric} <= ${cond.max}`,
       }[boundKind(cond)]
+    case "time": {
+      if (cond.none) return `${cond.moment} = none`
+      const end = cond.mode === "fixed" ? instantText : offsetText
+      const at = (ms: number | undefined) => (ms === undefined ? "" : end(ms))
+      return `${cond.moment} ${at(cond.start)}..${at(cond.end)}`
+    }
+  }
+}
+
+const TIME = new RegExp(
+  String.raw`^([a-z_]+)(?:\s*=\s*none(?![\p{L}\p{N}_])|\s+${END}?\.\.${END}?(?![\p{L}\p{N}_.]))`,
+  "iu",
+)
+
+function timeCond(m: RegExpExecArray): TimeCond | null {
+  const moment = m[1].toLowerCase()
+  if (!isChannelMomentKey(moment)) return null
+  if (m[2] === undefined && m[3] === undefined) {
+    if (m[0].includes("..")) return null
+    return { type: "time", moment, mode: "fixed", none: true }
+  }
+  const ends = [m[2], m[3]].map((e) => (e ? endValue(e) : undefined))
+  return {
+    type: "time",
+    moment,
+    mode: (ends[0] ?? ends[1])?.mode ?? "live",
+    ...(ends[0] && { start: ends[0].ms }),
+    ...(ends[1] && { end: ends[1].ms }),
   }
 }
 
@@ -223,6 +284,9 @@ function metricCond(m: RegExpExecArray): MetricCond {
 function channelText(names: FilterNames): TextVocabulary<Cond> {
   return {
     bound: (rest) => {
+      const t = TIME.exec(rest)
+      const time = t && timeCond(t)
+      if (t && time) return { cond: time, length: t[0].length }
       const m = METRIC.exec(rest)
       return m && isMetricKey(m[1].toLowerCase())
         ? { cond: metricCond(m), length: m[0].length }

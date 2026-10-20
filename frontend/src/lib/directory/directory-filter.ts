@@ -74,7 +74,14 @@ export type DirectoryCond =
   | { type: "name"; value: string }
   | { type: "flag"; value: DirectoryFlag }
   /** Cited by "your channels", ever or within the last `days`. */
-  | { type: "mine"; days?: number }
+  | {
+      type: "mine"
+      days?: number
+      /** PROTOTYPE (time-bound): the window as a Time bound on the citing Posts. */
+      mode?: TimeMode
+      start?: number
+      end?: number
+    }
   /** Cited by any of the Seeds, in the view's Reference kinds (DIR-05). */
   | { type: "citedby"; seeds: FixedSeeds }
   /** Cites any of the Seeds, in the view's Reference kinds (DIR-05). */
@@ -473,9 +480,19 @@ function timeLabel(
   locale?: string,
   timeZone?: string,
 ): string {
-  const name = momentOf(cond.moment).label
+  return timeBoundWords(momentOf(cond.moment).label, cond, locale, timeZone)
+}
+
+/** PROTOTYPE (time-bound): a Time bound in words, for any moment's name. */
+export function timeBoundWords(
+  name: string,
+  cond: Pick<DirectoryTimeCond, "mode" | "start" | "end" | "none">,
+  locale?: string,
+  timeZone?: string,
+): string {
   if (cond.none) return `${name}: no value`
-  const end = (ms: number) => endLabel(cond, ms, locale, timeZone)
+  const end = (ms: number) =>
+    endLabel(cond as DirectoryTimeCond, ms, locale, timeZone)
   if (cond.start !== undefined && cond.end !== undefined)
     return `${name} from ${end(cond.start)} to ${end(cond.end)}`
   if (cond.start !== undefined) return `${name} from ${end(cond.start)}`
@@ -505,6 +522,17 @@ export function directoryConditionLabel(
     case "flag":
       return FLAG_LABEL[cond.value]
     case "mine":
+      if (cond.mode) {
+        const c: DirectoryTimeCond = {
+          type: "time",
+          moment: "last_post_at",
+          mode: cond.mode,
+        }
+        const at = (ms: number) => endLabel(c, ms, locale, timeZone)
+        const from = cond.start === undefined ? "" : ` from ${at(cond.start)}`
+        const to = cond.end === undefined ? "" : ` to ${at(cond.end)}`
+        return `Cited by your channels${from}${to}`
+      }
       return cond.days
         ? `Cited by your channels, last ${cond.days} days`
         : "Cited by your channels"
@@ -522,14 +550,14 @@ export function directoryConditionLabel(
 // ---- The text form ---------------------------------------------------------
 
 /** A Fixed end as UTC, to the minute when the seconds are zero. */
-function instantText(ms: number): string {
+export function instantText(ms: number): string {
   const iso = new Date(ms).toISOString()
   return iso.endsWith(":00.000Z")
     ? `${iso.slice(0, 16)}Z`
     : iso.replace(".000Z", "Z")
 }
 
-function offsetText(ms: number): string {
+export function offsetText(ms: number): string {
   if (ms === 0) return "now"
   const [n, [unit]] = inUnits(Math.abs(ms))
   return `${ms < 0 ? "-" : "+"}${n}${unit}`
@@ -558,8 +586,14 @@ function condText(cond: DirectoryCond): string {
       return `tag:${quote(cond.name)}`
     case "flag":
       return `is:${cond.value}`
-    case "mine":
+    case "mine": {
+      if (cond.mode) {
+        const end = cond.mode === "fixed" ? instantText : offsetText
+        const at = (ms: number | undefined) => (ms === undefined ? "" : end(ms))
+        return `mine:${quote(`${at(cond.start)}..${at(cond.end)}`)}`
+      }
       return `mine:${cond.days ? `${cond.days}d` : "all"}`
+    }
     case "citedby":
     case "cites":
       return `${cond.type}:${quote(seedForms(cond.seeds).text)}`
@@ -614,7 +648,7 @@ function boundCond(m: RegExpExecArray): DirectoryMeasureCond {
 
 const INSTANT = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z`
 const OFFSET = String.raw`now|[+-]\d+[wdhms]`
-const END = `(${INSTANT}|${OFFSET})`
+export const END = `(${INSTANT}|${OFFSET})`
 const TIME = new RegExp(
   String.raw`^(${MOMENTS.map((m) => m.key).join("|")})(?:\s*=\s*none(?![\p{L}\p{N}_])|\s+${END}?\.\.${END}?(?![\p{L}\p{N}_.]))`,
   "iu",
@@ -624,7 +658,7 @@ const UNIT_MS: Record<string, number> = Object.fromEntries(
 )
 
 /** A Time bound end: an offset (Live) or an instant (Fixed). */
-function endValue(text: string): { mode: TimeMode; ms: number } {
+export function endValue(text: string): { mode: TimeMode; ms: number } {
   if (text === "now") return { mode: "live", ms: 0 }
   const offset = /^([+-])(\d+)([wdhms])$/.exec(text)
   if (offset)
@@ -726,6 +760,17 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
       if (text === "all") return { type: "mine" }
       const days = Number(WINDOW.exec(text)?.[1])
       if (days >= 1) return { type: "mine", days }
+      const w = new RegExp(String.raw`^${END}?\.\.${END}?$`, "iu").exec(text)
+      if (w && (w[1] || w[2])) {
+        const ends = [w[1], w[2]].map((e) => (e ? endValue(e) : undefined))
+        const mode = (ends[0] ?? ends[1])?.mode ?? "live"
+        return {
+          type: "mine",
+          mode,
+          ...(ends[0] && { start: ends[0].ms }),
+          ...(ends[1] && { end: ends[1].ms }),
+        }
+      }
     }
     if (prefix === "citedby" || prefix === "cites") {
       const seeds = fixedSeeds(text.trim())

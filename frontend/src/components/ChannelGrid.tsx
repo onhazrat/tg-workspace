@@ -181,6 +181,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     () => ({
       values: (key) => metricValues(key, channels, metricInputs),
       total: channels.length,
+      channels,
     }),
     [channels, metricInputs],
   )

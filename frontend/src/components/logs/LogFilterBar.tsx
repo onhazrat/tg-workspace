@@ -1,6 +1,8 @@
 import { ChevronDown, Filter, Search, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
+import { TimeBoundBar } from "@/components/time-bound-prototype/TimeBoundEditor"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgFieldLabel } from "@/components/ui/tg-input"
 import { isAnyLogFilterActive, type LogFilters } from "@/lib/logs/filters"
@@ -31,6 +33,7 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
   botOptions,
   channelOptions,
 }) => {
+  const v1 = useIsVariant1()
   const filterActive = isAnyLogFilterActive(filters)
   const maxDate = formatDateToLocalISO(new Date()).split("T")[0]
 
@@ -130,33 +133,49 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
                 {/* Date Range Filter */}
                 <div className="space-y-2 col-span-1 md:col-span-2">
                   <TgFieldLabel className="mb-0 text-[9px] font-sans font-bold tracking-normal opacity-50">
-                    Date Range
+                    {v1 ? "Logged" : "Date Range"}
                   </TgFieldLabel>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="date"
-                      value={toDateInputValue(filters.startDate)}
-                      max={maxDate}
-                      onChange={(e) =>
+                  {v1 ? (
+                    <TimeBoundBar
+                      label="Logged"
+                      value={filters.timeBound ?? { mode: "live" }}
+                      onChange={(b) =>
                         onFiltersChange({
-                          startDate: parseDateInputValue(e.target.value),
+                          timeBound:
+                            b.start === undefined && b.end === undefined
+                              ? undefined
+                              : b,
                         })
                       }
-                      className="bg-transparent border border-app-ink/10 px-2 py-1 text-[10px] font-mono focus:outline-none focus:border-app-ink/30"
+                      opts={{ openEnds: true }}
                     />
-                    <span className="opacity-30 text-[10px]">TO</span>
-                    <input
-                      type="date"
-                      value={toDateInputValue(filters.endDate)}
-                      max={maxDate}
-                      onChange={(e) =>
-                        onFiltersChange({
-                          endDate: parseDateInputValue(e.target.value),
-                        })
-                      }
-                      className="bg-transparent border border-app-ink/10 px-2 py-1 text-[10px] font-mono focus:outline-none focus:border-app-ink/30"
-                    />
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="date"
+                        value={toDateInputValue(filters.startDate)}
+                        max={maxDate}
+                        onChange={(e) =>
+                          onFiltersChange({
+                            startDate: parseDateInputValue(e.target.value),
+                          })
+                        }
+                        className="bg-transparent border border-app-ink/10 px-2 py-1 text-[10px] font-mono focus:outline-none focus:border-app-ink/30"
+                      />
+                      <span className="opacity-30 text-[10px]">TO</span>
+                      <input
+                        type="date"
+                        value={toDateInputValue(filters.endDate)}
+                        max={maxDate}
+                        onChange={(e) =>
+                          onFiltersChange({
+                            endDate: parseDateInputValue(e.target.value),
+                          })
+                        }
+                        className="bg-transparent border border-app-ink/10 px-2 py-1 text-[10px] font-mono focus:outline-none focus:border-app-ink/30"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

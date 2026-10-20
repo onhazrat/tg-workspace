@@ -129,12 +129,18 @@ function WhyHere({
   handle,
   why,
   windowDays,
+  windowLabel,
 }: {
   handle: string
   why: DirectoryWhyResponse | undefined
   windowDays: number | null
+  windowLabel?: string
 }) {
-  const within = windowDays ? ` in the last ${windowDays} days` : ""
+  const within = windowLabel
+    ? ` ${windowLabel}`
+    : windowDays
+      ? ` in the last ${windowDays} days`
+      : ""
   return (
     <section className="mt-5 rounded-lg border border-app-ink/10 bg-app-ink/5 p-3">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-app-ink/50">
@@ -344,6 +350,7 @@ export function DirectoryPanel({
   posts,
   why,
   windowDays,
+  windowLabel,
   following,
   onFollow,
   onDismiss,
@@ -359,6 +366,8 @@ export function DirectoryPanel({
   why: DirectoryWhyResponse | undefined
   /** The "Cited by your channels" Condition's window, if one is set. */
   windowDays: number | null
+  /** PROTOTYPE (time-bound): the window as words, when it is a Time bound. */
+  windowLabel?: string
   following: boolean
   onFollow: () => void
   /** `true` dismisses, `false` takes the Dismissal back (DIR-06). */
@@ -444,7 +453,12 @@ export function DirectoryPanel({
                 />
               </div>
             )}
-            <WhyHere handle={handle} why={why} windowDays={windowDays} />
+            <WhyHere
+              handle={handle}
+              why={why}
+              windowDays={windowDays}
+              windowLabel={windowLabel}
+            />
             <h4 className={HEADING}>Recent posts</h4>
             {posts ? (
               <DirectorySamples handle={handle} posts={posts} />

@@ -4,8 +4,14 @@
  * / children (DIR-07), whose Seeds can be a Tag (DFP-05). Bounds have their
  * own editor.
  */
+
 import type React from "react"
 import { useState } from "react"
+import {
+  type TimeBound,
+  TimeBoundEditor,
+} from "@/components/time-bound-prototype/TimeBoundEditor"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   DIRECTORY_FILTER_BOUNDS,
@@ -446,7 +452,64 @@ const WINDOWS = [7, 14, 30, 90]
 const presetClass = (on: boolean) =>
   `rounded-full border px-2 py-0.5 font-mono text-[11px] ${on ? "border-app-ink bg-app-ink text-app-bg" : "border-app-ink/15 hover:border-app-ink/30"}`
 
-export function MineEditor({
+export function MineEditor(
+  props: EditorProps<Extract<DirectoryCond, { type: "mine" }>>,
+) {
+  return useIsVariant1() ? (
+    <MineEditorV1 {...props} />
+  ) : (
+    <MineEditor0 {...props} />
+  )
+}
+
+/** PROTOTYPE (time-bound): the window as a Time bound on the citing Posts. */
+function MineEditorV1({
+  start,
+  onSubmit,
+  onBack,
+}: EditorProps<Extract<DirectoryCond, { type: "mine" }>>) {
+  const [bound, setBound] = useState<TimeBound>(() =>
+    start?.mode
+      ? { mode: start.mode, start: start.start, end: start.end }
+      : {
+          mode: "live",
+          start:
+            start?.days === undefined && start
+              ? undefined
+              : -(start?.days ?? 14) * 86_400_000,
+        },
+  )
+  const open = bound.start === undefined && bound.end === undefined
+  return (
+    <Shell
+      title="Cited by your channels"
+      explain="Your channels forwarded, mentioned, linked or replied to it, in Posts published inside this window. Clear both ends for any time."
+      onBack={onBack}
+      submit={start ? "Update" : "Add"}
+      onSubmit={() =>
+        onSubmit(
+          open
+            ? { type: "mine" }
+            : {
+                type: "mine",
+                mode: bound.mode,
+                ...(bound.start !== undefined && { start: bound.start }),
+                ...(bound.end !== undefined && { end: bound.end }),
+              },
+        )
+      }
+    >
+      <TimeBoundEditor
+        value={bound}
+        onChange={setBound}
+        opts={{ openEnds: true }}
+        modeLabel="Cited-by window mode"
+      />
+    </Shell>
+  )
+}
+
+function MineEditor0({
   start,
   onSubmit,
   onBack,

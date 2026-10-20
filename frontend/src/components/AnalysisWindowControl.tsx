@@ -17,6 +17,7 @@
 import { ArrowLeft, Clock, ZoomIn, ZoomOut } from "lucide-react"
 import { Popover } from "radix-ui"
 import type React from "react"
+import type { ReactNode } from "react"
 import { createContext, useContext, useEffect, useId, useState } from "react"
 
 import { BarHistogram } from "@/components/filter-tree/BarHistogram"
@@ -30,7 +31,7 @@ import { TgButton } from "@/components/ui/tg-button"
 import { TgFilterChip } from "@/components/ui/tg-chips"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { TgInput } from "@/components/ui/tg-input"
-import { useScope } from "@/contexts/ScopeContext"
+import { type ScopeContextType, useScope } from "@/contexts/ScopeContext"
 import { useUI } from "@/contexts/UIContext"
 import { useIsMobile } from "@/hooks/useMobile"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
@@ -43,6 +44,34 @@ import {
   SCOPE_FIELDS,
   type ScopeField,
 } from "@/lib/scope/window"
+
+// ---- The source (PROTOTYPE time-bound) --------------------------------------
+
+/**
+ * What the four fields read and write. The Scope is one source; a Time bound
+ * draft (`time-bound-prototype/useTimeBoundSource`) is another, so one editor
+ * serves the Analysis window and every Time bound.
+ */
+export type WindowEditorSource = Pick<
+  ScopeContextType,
+  | "mode"
+  | "setMode"
+  | "applyValue"
+  | "draftText"
+  | "setDraft"
+  | "commitDraft"
+  | "errors"
+>
+
+export const WindowEditorSourceContext =
+  createContext<WindowEditorSource | null>(null)
+
+/** The injected source, or the Scope when nothing injects one. */
+function useWindowEditorSource(): WindowEditorSource {
+  const injected = useContext(WindowEditorSourceContext)
+  const scope = useScope()
+  return injected ?? scope
+}
 
 // ---- The chart (PTI-03) ------------------------------------------------------
 
@@ -170,7 +199,7 @@ const WindowField: React.FC<WindowFieldProps> = ({
   label,
   onElapsedFocus,
 }) => {
-  const { draftText, setDraft, commitDraft, errors } = useScope()
+  const { draftText, setDraft, commitDraft, errors } = useWindowEditorSource()
   const id = useId()
   const errorId = `${id}-error`
   const error = errors[field]
@@ -237,8 +266,12 @@ const WindowField: React.FC<WindowFieldProps> = ({
  * four-field form is two places for the propagation rules to be wired up
  * differently.
  */
-const WindowEditor: React.FC<{ onReturn?: () => void }> = ({ onReturn }) => {
-  const { mode, setMode, applyValue } = useScope()
+export const WindowEditor: React.FC<{
+  onReturn?: () => void
+  /** The mode switch's accessible name. */
+  modeLabel?: string
+}> = ({ onReturn, modeLabel = "Analysis window mode" }) => {
+  const { mode, setMode, applyValue } = useWindowEditorSource()
   const [elapsedFocus, setElapsedFocus] = useState<ScopeField | null>(null)
   const read = useContext(WindowHistogramContext)
 
@@ -267,7 +300,7 @@ const WindowEditor: React.FC<{ onReturn?: () => void }> = ({ onReturn }) => {
       )}
 
       <TgInlineChoice
-        aria-label="Analysis window mode"
+        aria-label={modeLabel}
         value={mode}
         onChange={setMode}
         options={[
@@ -321,10 +354,10 @@ const WindowEditor: React.FC<{ onReturn?: () => void }> = ({ onReturn }) => {
 }
 
 /** The collapsed line both surfaces draw: a clock, then the whole window. */
-const TRIGGER_CLASS =
+export const TRIGGER_CLASS =
   "flex w-full items-center gap-2.5 rounded-xl border border-app-ink/10 bg-app-muted/50 px-3.5 py-2.5 text-left transition-colors hover:border-app-ink/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
 
-const TriggerFace: React.FC<{ summary: string }> = ({ summary }) => (
+export const TriggerFace: React.FC<{ summary: string }> = ({ summary }) => (
   <>
     <Clock size={13} className="shrink-0 text-app-ink/60" />
     <span className="text-[11px] font-mono text-app-ink/90">{summary}</span>
@@ -371,7 +404,6 @@ export const AnalysisWindowControl: React.FC<{
     editorRequested,
     clearEditorRequest,
   } = useScope()
-  const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
   /** Whether this opening came from Action, which is what earns the way back. */
   const [sentHere, setSentHere] = useState(false)
@@ -407,19 +439,6 @@ export const AnalysisWindowControl: React.FC<{
     setOpen(next)
   }
 
-  // `aria-haspopup` / `aria-expanded` and the focus return are the trigger
-  // primitive's, in both branches. Setting them by hand would be a second
-  // answer to a question Radix already answers from the same `open`.
-  const trigger = (
-    <button
-      type="button"
-      aria-label="Analysis window"
-      className={TRIGGER_CLASS}
-    >
-      <TriggerFace summary={summary} />
-    </button>
-  )
-
   /*
    * Leaving by the button is still leaving, so it goes out through the same
    * door. `AnimatePresence` unmounts this on the tab change without Radix ever
@@ -435,6 +454,40 @@ export const AnalysisWindowControl: React.FC<{
         }
       : undefined
 
+  return (
+    <WindowOverlay
+      label="Analysis window"
+      summary={summary}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <WindowEditor onReturn={editorReturn} />
+    </WindowOverlay>
+  )
+}
+
+/**
+ * The collapsed line and what it opens: an anchored popover on desktop, a
+ * bottom sheet on mobile. Shared by the Analysis window and any Time bound
+ * edited from a bar (PROTOTYPE time-bound).
+ */
+export const WindowOverlay: React.FC<{
+  label: string
+  summary: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  children: ReactNode
+}> = ({ label, summary, open, onOpenChange, children }) => {
+  const isMobile = useIsMobile()
+  // `aria-haspopup` / `aria-expanded` and the focus return are the trigger
+  // primitive's, in both branches. Setting them by hand would be a second
+  // answer to a question Radix already answers from the same `open`.
+  const trigger = (
+    <button type="button" aria-label={label} className={TRIGGER_CLASS}>
+      <TriggerFace summary={summary} />
+    </button>
+  )
+
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -444,11 +497,9 @@ export const AnalysisWindowControl: React.FC<{
             reimplement on a viewport where it does not fit anyway. */}
         <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
           <SheetTitle className="px-4 pt-4 text-xs uppercase tracking-widest">
-            Analysis window
+            {label}
           </SheetTitle>
-          <div className="px-4 pb-6">
-            <WindowEditor onReturn={editorReturn} />
-          </div>
+          <div className="px-4 pb-6">{children}</div>
         </SheetContent>
       </Sheet>
     )
@@ -461,10 +512,10 @@ export const AnalysisWindowControl: React.FC<{
         <Popover.Content
           align="start"
           sideOffset={6}
-          aria-label="Analysis window"
+          aria-label={label}
           className="z-50 w-[26rem] max-w-[calc(100vw-2rem)] rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-xl"
         >
-          <WindowEditor onReturn={editorReturn} />
+          {children}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

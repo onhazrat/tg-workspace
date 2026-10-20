@@ -369,6 +369,12 @@ def get_directory_why(
         kinds=body.reference_kinds,
     )
     why = directory_reads.why_its_here(
-        session, view, normalize_handle(body.handle), days=body.days
+        session,
+        view,
+        normalize_handle(body.handle),
+        days=body.days,
+        when=None
+        if body.mine_mode is None
+        else (body.mine_mode, body.mine_start, body.mine_end),
     )
     return DirectoryWhyResponse.model_validate(asdict(why))

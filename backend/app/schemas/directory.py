@@ -219,9 +219,14 @@ class DirectoryMineCondition(_Cond):
 
     type: Literal["mine"]
     days: int | None = Field(None, ge=1, le=36_500)
+    # PROTOTYPE (time-bound): the window as a Time bound on the citing Posts.
+    mode: TimeMode | None = None
+    start: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
+    end: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
 
     def to_cond(self) -> DirectoryCond:
-        return MineCond(self.days)
+        when = None if self.mode is None else (self.mode, self.start, self.end)
+        return MineCond(self.days, when)
 
 
 #: How many fixed handles one "cited by" or "cites" Condition names: 500 keeps
@@ -720,6 +725,10 @@ class DirectoryWhyRequest(DirectoryYoursRequest):
     handle: Handle
     #: The "Cited by your channels" Condition's window; every Post when absent.
     days: int | None = Field(None, ge=1, le=36_500)
+    # PROTOTYPE (time-bound): the Condition's window as a Time bound.
+    mine_mode: TimeMode | None = Field(None, alias="mineMode")
+    mine_start: int | None = Field(None, alias="mineStart")
+    mine_end: int | None = Field(None, alias="mineEnd")
     #: The Shared parents Condition's Seeds, when it is on (DIR-07).
     parents: Seeds | None = None
     #: The Shared children Condition's Seeds, when it is on.
