@@ -22,9 +22,9 @@ browser-side; the server filter and the spread are new:
 - Prior-art tests: `test_stats_logs.py`, `test_log_list_payload_cost.py`, `lib/logs/filters.test.ts`, `LogPanels.test.tsx`.
 - Regenerate the generated client after the schema change.
 
-- [ ] Each log list endpoint takes an optional Time bound (`mode`, `start`, `end`, either end open) and applies it in SQL as `[start, end)`, a Live end relative to now, before paging.
-- [ ] The browser stops filtering logs by time; the two calendar-day inputs and their inclusive-end rule are gone.
-- [ ] The Logged bar is the shared collapsed line and popover with open ends and no ahead; an empty bound reads "Any time"; clearing all filters clears it.
-- [ ] A server read draws when a log's entries were logged, with the shared zoom, keeping its scale when zoomed; clicking a bar sets a Fixed bound over it.
-- [ ] The generated client is regenerated; Playwright mocks of the touched log routes are updated; both typechecks pass.
-- [ ] API tests: a bound reaches entries older than the first page, each end open, Live and Fixed; the spread read with and without a zoomed range. Render tests: the bar emits the bound and the spread zooms. Each new guard is mutation-tested.
+- [x] Each log list endpoint takes an optional Time bound (`mode`, `start`, `end`, either end open) and applies it in SQL as `[start, end)`, a Live end relative to now, before paging.
+- [x] The browser stops filtering logs by time; the two calendar-day inputs and their inclusive-end rule are gone.
+- [x] The Logged bar is the shared collapsed line and popover with open ends and no ahead; an empty bound reads "Any time"; clearing all filters clears it.
+- [x] A server read draws when a log's entries were logged, with the shared zoom, keeping its scale when zoomed; clicking a bar sets a Fixed bound over it.
+- [x] The generated client is regenerated; Playwright mocks of the touched log routes are updated; both typechecks pass.
+- [x] API tests: a bound reaches entries older than the first page, each end open, Live and Fixed; the spread read with and without a zoomed range. Render tests: the bar emits the bound and the spread zooms. Each new guard is mutation-tested.
