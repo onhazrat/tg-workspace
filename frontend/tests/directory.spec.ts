@@ -129,8 +129,14 @@ async function mockDirectory(page: Page, shown: typeof ROWS = ROWS) {
   await page.route("**/api/v1/data/directory/count", (route) =>
     route.fulfill({ json: { total: 42 } }),
   )
-  await page.route("**/api/v1/data/directory/distribution", (route) =>
-    route.fulfill({
+  await page.route("**/api/v1/data/directory/distribution", (route) => {
+    // A zoom (TB-04) bins only its range; the whole spread's fields stay.
+    const { lo = 10, hi = 100_000 } = route.request().postDataJSON() as {
+      lo?: number
+      hi?: number
+    }
+    const mid = Math.sqrt(lo * hi)
+    return route.fulfill({
       json: {
         scale: "log",
         total: 250,
@@ -139,12 +145,12 @@ async function mockDirectory(page: Page, shown: typeof ROWS = ROWS) {
         max: 100_000,
         median: 1500,
         bins: [
-          { lo: 10, hi: 1000, count: 120 },
-          { lo: 1000, hi: 100_000, count: 120 },
+          { lo, hi: mid, count: 120 },
+          { lo: mid, hi, count: 120 },
         ],
       },
-    }),
-  )
+    })
+  })
   await page.route("**/api/v1/data/directory/size", (route) =>
     route.fulfill({ json: { size: 297_345 } }),
   )
