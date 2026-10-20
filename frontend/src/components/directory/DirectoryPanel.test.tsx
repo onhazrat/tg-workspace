@@ -17,6 +17,7 @@ import type {
   DirectoryCitingPostResponse,
   DirectoryEntryResponse,
 } from "@/client"
+import { directoryConditionLabel } from "@/lib/directory/directory-filter"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
@@ -24,6 +25,8 @@ import {
 import { DirectoryPanel } from "./DirectoryPanel"
 
 afterEach(cleanup)
+
+const DAY = 86_400_000
 
 const entry = (
   over: Partial<DirectoryEntryResponse> = {},
@@ -75,7 +78,7 @@ function mount(over: Partial<ComponentProps<typeof DirectoryPanel>> = {}) {
       entry={entry()}
       posts={[]}
       why={{ posts: [], total: 0, parents: null, children: null }}
-      windowDays={null}
+      citedWindow={null}
       following={false}
       onFollow={() => calls.follow++}
       onDismiss={(dismissed) => calls.dismiss.push(dismissed)}
@@ -166,10 +169,10 @@ describe("why it's here", () => {
         parents: null,
         children: null,
       },
-      windowDays: 14,
+      citedWindow: { mode: "live", start: -14 * 86_400_000 },
     })
     expect(
-      screen.getByText("2 Posts of your channels cite it in the last 14 days"),
+      screen.getByText("2 Posts of your channels cite it from 2 weeks ago"),
     ).toBeTruthy()
     expect(screen.getByText("linked + mentioned it")).toBeTruthy()
     expect(screen.getByText("src_one says 1")).toBeTruthy()
@@ -219,6 +222,19 @@ describe("why it's here", () => {
   test("says when none of your channels cite it", () => {
     mount()
     expect(screen.getByText("None of your channels cite it.")).toBeTruthy()
+  })
+
+  test("reads the window in the chip's words (TB-02)", () => {
+    const window = { mode: "live" as const, start: -30 * DAY, end: -DAY }
+    mount({ citedWindow: window })
+    expect(
+      screen.getByText(
+        "None of your channels cite it from 30 days ago to 1 day ago.",
+      ),
+    ).toBeTruthy()
+    expect(directoryConditionLabel({ type: "mine", ...window })).toBe(
+      "Cited by your channels from 30 days ago to 1 day ago",
+    )
   })
 
   test("names a few shared Channels for each Shared relation on (DIR-07)", () => {

@@ -1,14 +1,21 @@
 /**
  * The Directory's small Condition editors (DIR-02): Name contains takes any
- * text, and Cited by your channels takes all time or a window in days.
+ * text, and Cited by your channels takes all time or a Time bound (TB-02).
  * DIR-07's Shared editor was watched to fail on offering the saved ticked
  * choice with nothing ticked; the table's Shared column on showing while its
  * Condition is off (`DirectoryTable.test.tsx`). DFP-05's were watched to fail
  * on a fill that copied the wrong set, on a 501st handle still submitting, on
  * the Tag choice sending handles, and on the Tag choice offered with no Tags.
  */
-import { afterEach, describe, expect, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryCond } from "@/lib/directory/directory-filter"
 import type { TagChoices } from "@/lib/directory/directory-tags"
 import {
@@ -187,36 +194,78 @@ describe("Cited by @x and Cites @x", () => {
   })
 })
 
-describe("Cited by your channels", () => {
-  test("all time is no window", () => {
+describe("Cited by your channels, a Time bound (TB-02)", () => {
+  const NOW = Date.UTC(2026, 9, 20, 12, 0)
+  const DAY = 86_400_000
+  beforeEach(() => setSystemTime(new Date(NOW)))
+  afterEach(() => setSystemTime())
+
+  const mount = (start?: Extract<DirectoryCond, { type: "mine" }>) => {
     const got: DirectoryCond[] = []
-    render(<MineEditor onSubmit={(c) => got.push(c)} />)
-    fireEvent.click(screen.getByRole("button", { name: "any time" }))
+    render(<MineEditor start={start} onSubmit={(c) => got.push(c)} />)
+    return got
+  }
+  const field = (label: string) =>
+    screen.getByLabelText(label) as HTMLInputElement
+  const typeAndCommit = (label: string, text: string) => {
+    act(() => {
+      fireEvent.change(field(label), { target: { value: text } })
+      fireEvent.keyDown(field(label), { key: "Enter" })
+    })
+  }
+
+  test("is the one editor, Live or Fixed, with no No value", () => {
+    mount()
+    for (const label of ["Start", "End", "Duration", "End gap"])
+      expect(field(label)).toBeTruthy()
+    expect(
+      screen.getByRole("group", { name: "Cited by your channels mode" })
+        .textContent,
+    ).toBe("LiveFixed")
+    expect(screen.queryByRole("spinbutton", { name: "Days" })).toBeNull()
+  })
+
+  test("adds from 14 days ago, End open, until changed", () => {
+    const got = mount()
+    fireEvent.click(submit())
+    expect(got).toEqual([{ type: "mine", mode: "live", start: -14 * DAY }])
+  })
+
+  test("a Duration shortcut moves the Start back from the End", () => {
+    const got = mount({ type: "mine", mode: "live", start: -7 * DAY, end: 0 })
+    act(() => {
+      fireEvent.focus(field("Duration"))
+    })
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "30d" }))
+    })
+    fireEvent.click(submit())
+    expect(got).toEqual([
+      { type: "mine", mode: "live", start: -30 * DAY, end: 0 },
+    ])
+  })
+
+  test("an End ahead of now is refused", () => {
+    const got = mount()
+    typeAndCommit("End gap", "-2d")
+    expect(screen.getByRole("alert")).toBeTruthy()
+    fireEvent.click(submit())
+    expect(got).toEqual([{ type: "mine", mode: "live", start: -14 * DAY }])
+  })
+
+  test("both ends cleared is any time, no window", () => {
+    const got = mount()
+    typeAndCommit("Start", "")
+    expect(field("Start").value).toBe("")
     fireEvent.click(submit())
     expect(got).toEqual([{ type: "mine" }])
   })
 
-  test("a preset or any number of days is a window", () => {
-    const got: DirectoryCond[] = []
-    render(<MineEditor onSubmit={(c) => got.push(c)} />)
-    fireEvent.click(screen.getByRole("button", { name: "30d" }))
-    fireEvent.click(submit())
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Days" }), {
-      target: { value: "45" },
-    })
-    fireEvent.click(submit())
-    expect(got).toEqual([
-      { type: "mine", days: 30 },
-      { type: "mine", days: 45 },
-    ])
-  })
-
   test("opens on the window it edits", () => {
-    render(<MineEditor start={{ type: "mine", days: 7 }} onSubmit={() => {}} />)
-    expect(
-      (screen.getByRole("spinbutton", { name: "Days" }) as HTMLInputElement)
-        .value,
-    ).toBe("7")
+    mount({ type: "mine", mode: "live", start: -7 * DAY, end: -DAY })
+    expect(field("Duration").value).toBe("6d")
+    expect(field("End gap").value).toBe("1d")
+    expect(submit().textContent).toBe("Update")
   })
 })
 

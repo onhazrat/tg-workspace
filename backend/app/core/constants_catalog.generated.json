@@ -236,7 +236,7 @@
       "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
       "expression": "500",
       "file": "backend/app/schemas/directory.py",
-      "line": 231,
+      "line": 237,
       "name": "MAX_CONDITION_HANDLES",
       "value": 500
     },
@@ -244,7 +244,7 @@
       "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 234,
+      "line": 240,
       "name": "MAX_SEEDS",
       "value": 10000
     },
@@ -252,7 +252,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 384,
+      "line": 390,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -260,7 +260,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 677,
+      "line": 683,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },
@@ -596,7 +596,7 @@
       "comment": "A middle Channel past this many links is an aggregator, not a taste: a source citing more than this many Channels, or a target cited by more.",
       "expression": "3000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 713,
+      "line": 720,
       "name": "AGGREGATOR_LINKS",
       "value": 3000
     },
@@ -604,7 +604,7 @@
       "comment": "The most entries Tick all turns into Ticks; above it a view is All matching (ADR-031). The same number as the ticked Seeds a Condition takes.",
       "expression": "10000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1414,
+      "line": 1421,
       "name": "MAX_TICK_ALL",
       "value": 10000
     },
@@ -612,7 +612,7 @@
       "comment": "How many citing Posts \"Why it's here\" quotes; the rest are counted.",
       "expression": "20",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1571,
+      "line": 1578,
       "name": "WHY_LIMIT",
       "value": 20
     },
@@ -620,7 +620,7 @@
       "comment": "How many shared Channels \"Why it's here\" names per relation; the rest are counted.",
       "expression": "5",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1711,
+      "line": 1716,
       "name": "SHARED_LIMIT",
       "value": 5
     },
@@ -628,7 +628,7 @@
       "comment": "How many Channels each side of the panel's neighbour lists shows.",
       "expression": "10",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1767,
+      "line": 1772,
       "name": "NEIGHBOURS_LIMIT",
       "value": 10
     },
@@ -1580,7 +1580,7 @@
       "comment": "The default minimum shared count.",
       "expression": "2",
       "file": "frontend/src/lib/directory/directory-filter.ts",
-      "line": 425,
+      "line": 446,
       "name": "SHARED_MIN",
       "value": 2
     },
@@ -1588,7 +1588,7 @@
       "comment": "Past this many characters, or six lines, a Post is clamped until \"Read more\".",
       "expression": "280",
       "file": "frontend/src/lib/directory/directory-panel.ts",
-      "line": 13,
+      "line": 17,
       "name": "LONG_POST_CHARS",
       "value": 280
     },
@@ -1596,7 +1596,7 @@
       "comment": "",
       "expression": "6",
       "file": "frontend/src/lib/directory/directory-panel.ts",
-      "line": 14,
+      "line": 18,
       "name": "LONG_POST_LINES",
       "value": 6
     },

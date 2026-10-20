@@ -52,9 +52,16 @@ describe("the window of Why it's here", () => {
   const window = (text: string) =>
     mineWindow(parseDirectoryFilter(text) ?? undefined)
 
-  test("is the Cited by your channels Condition's days", () => {
-    expect(window("lang:fa and mine:14d")).toBe(14)
-    expect(window("(lang:fa or mine:7d)")).toBe(7)
+  test("is the Cited by your channels Condition's Time bound (TB-02)", () => {
+    expect(window("lang:fa and mine:14d")).toEqual({
+      mode: "live",
+      start: -14 * 86_400_000,
+    })
+    expect(window("(lang:fa or mine:-30d..-1w)")).toEqual({
+      mode: "live",
+      start: -30 * 86_400_000,
+      end: -7 * 86_400_000,
+    })
   })
 
   test("is every Post without one, or with no window", () => {

@@ -6,8 +6,12 @@
  * addresses it shows, and lists the Links it does not show under the Post.
  */
 import type { DirectorySampleLinkResponse } from "@/client"
-import type { DirectoryFilter } from "@/lib/directory/directory-filter"
+import {
+  type DirectoryFilter,
+  mineBound,
+} from "@/lib/directory/directory-filter"
 import { atoms } from "@/lib/filter-tree"
+import type { TimeBound } from "@/lib/time-bound/bound"
 
 /** Past this many characters, or six lines, a Post is clamped until "Read more". */
 const LONG_POST_CHARS = 280
@@ -48,14 +52,15 @@ export const isLongPost = (text: string) =>
   text.length > LONG_POST_CHARS || text.split("\n").length > LONG_POST_LINES
 
 /**
- * The window of the filter's "Cited by your channels" Condition, which "Why
- * it's here" counts in so it lists what the sort and the Condition count;
+ * The Time bound of the filter's "Cited by your channels" Condition, which
+ * "Why it's here" counts in so it lists what the Condition counts (TB-02);
  * `null` for every Post.
  */
-export function mineWindow(filter: DirectoryFilter | undefined): number | null {
-  if (!filter) return null
-  for (const atom of atoms(filter)) {
-    if (atom.cond.type === "mine") return atom.cond.days ?? null
+export function mineWindow(
+  filter: DirectoryFilter | undefined,
+): TimeBound | null {
+  for (const atom of filter ? atoms(filter) : []) {
+    if (atom.cond.type === "mine") return mineBound(atom.cond)
   }
   return null
 }

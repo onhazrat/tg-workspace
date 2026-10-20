@@ -190,19 +190,16 @@ _MAX_OFFSET_MS = 100 * 366 * 86_400_000
 _MAX_INSTANT_MS = 62_000_000_000_000
 
 
-class DirectoryTimeCondition(_Cond):
+class _TimeBound(BaseModel):
     """A Time bound, start included and end excluded, either end open: Fixed
     ends are epoch ms, Live ends signed ms from now."""
 
-    type: Literal["time"]
-    moment: DirectoryMoment
     mode: TimeMode
     start: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
     end: int | None = Field(None, ge=-_MAX_INSTANT_MS, le=_MAX_INSTANT_MS)
-    none: bool = False
 
     @model_validator(mode="after")
-    def _ordered(self) -> DirectoryTimeCondition:
+    def _ordered(self) -> Self:
         if self.mode == "live":
             for end in (self.start, self.end):
                 if end is not None and abs(end) > _MAX_OFFSET_MS:
@@ -211,18 +208,27 @@ class DirectoryTimeCondition(_Cond):
             raise ValueError("A Time bound ends after it starts")
         return self
 
+
+class DirectoryTimeCondition(_Cond, _TimeBound):
+    """A Time bound on one moment; `none` keeps only entries with no value."""
+
+    type: Literal["time"]
+    moment: DirectoryMoment
+    none: bool = False
+
     def to_cond(self) -> DirectoryCond:
         return TimeCond(self.moment, self.mode, self.start, self.end, self.none)
 
 
-class DirectoryMineCondition(_Cond):
-    """Cited by your channels, ever or within the last `days`."""
+class DirectoryMineCondition(_Cond, _TimeBound):
+    """Cited by your channels, within a Time bound on when the citing Posts
+    were published; ever with both ends open."""
 
     type: Literal["mine"]
-    days: int | None = Field(None, ge=1, le=36_500)
+    mode: TimeMode = "live"
 
     def to_cond(self) -> DirectoryCond:
-        return MineCond(self.days)
+        return MineCond(self.mode, self.start, self.end)
 
 
 #: How many fixed handles one "cited by" or "cites" Condition names: 500 keeps
@@ -718,16 +724,19 @@ class DirectoryTagSeeds(BaseModel):
 Seeds = Annotated[list[Handle], Field(max_length=MAX_SEEDS)] | DirectoryTagSeeds
 
 
-class DirectoryWhyRequest(DirectoryYoursRequest):
-    """Whose Posts citing `handle` "Why it's here" lists."""
+class DirectoryWhyRequest(DirectoryYoursRequest, _TimeBound):
+    """Whose Posts citing `handle` "Why it's here" lists, inside the "Cited by
+    your channels" Condition's Time bound; every Post with both ends open."""
 
     handle: Handle
-    #: The "Cited by your channels" Condition's window; every Post when absent.
-    days: int | None = Field(None, ge=1, le=36_500)
+    mode: TimeMode = "live"
     #: The Shared parents Condition's Seeds, when it is on (DIR-07).
     parents: Seeds | None = None
     #: The Shared children Condition's Seeds, when it is on.
     children: Seeds | None = None
+
+    def window(self) -> MineCond:
+        return MineCond(self.mode, self.start, self.end)
 
     def shared(self) -> DirectoryTree:
         """The Shared Conditions whose Seeds the panel names, as a tree, so
