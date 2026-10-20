@@ -182,7 +182,13 @@ describe("zoom (TB-04)", () => {
     expect(caption()).toBe("4001 channels, 690–700700")
   })
 
-  test("a between bound centres on its middle, clamped inside the spread", () => {
+  test("a between bound centres on its middle", () => {
+    mount(LINEAR, { min: 500, max: 800 })
+    zoom("Zoom in")
+    expect(caption()).toBe("500median 550800")
+  })
+
+  test("the third is clamped inside the whole spread", () => {
     mount(LINEAR, { min: 200, max: 300 })
     zoom("Zoom in")
     expect(caption()).toBe("100median 550400")

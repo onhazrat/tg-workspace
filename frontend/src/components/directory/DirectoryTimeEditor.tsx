@@ -10,9 +10,14 @@ import type {
 import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
 import { type Bin, Spread } from "./DirectoryBoundEditor"
 
-/** A time spread's captions: dates. */
-export const dateText = (ms: number) =>
-  new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(ms)
+const DAY_MS = 86_400_000
+
+/** A time spread's captions: dates, and the time of day once under three days show. */
+export const dateText = (ms: number, shown = Number.POSITIVE_INFINITY) =>
+  new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    ...(shown < 3 * DAY_MS && { timeStyle: "short" }),
+  }).format(ms)
 
 /** What a moment's Time bound turns on (ADR-033): all three switches. */
 const OPTIONS = { openEnds: true, ahead: true }

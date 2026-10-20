@@ -64,10 +64,8 @@ export function spreadZoom(
       start + width === B ? hi : inv(start + width),
     ]
   }
-  const focus = f(boundFocus(bound) ?? median)
-  const centre = focus >= a && focus <= b ? focus : (a + b) / 2
   return {
-    zoomIn: () => setRange(place(centre, span / 3)),
+    zoomIn: () => setRange(place(f(boundFocus(bound) ?? median), span / 3)),
     zoomOut: () => setRange(place((a + b) / 2, span * 3)),
     canIn: whole > 0 && span / whole > 3 ** -MAX_STEPS * (1 + 1e-6),
     canOut: range !== null,

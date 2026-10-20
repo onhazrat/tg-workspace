@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
+import { SpreadZoomBar, type ZoomState } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -25,29 +26,48 @@ const inside = (bin: Bin, bound: MetricBound | null) =>
 
 /**
  * A measure's spread as bars, a click on one choosing it. `format` writes a
- * value: a count by default, a moment's epoch ms as a date (DPF).
+ * value: a count by default, a moment's epoch ms as a date (DPF), told how
+ * wide a span is shown. With a `zoom` the bars span its range (TB-04); the
+ * median and scale stay the whole spread's.
  */
 export function Spread({
   spread,
   bound,
   onBar,
   format = formatCount,
+  zoom,
 }: {
   spread: DirectoryDistributionResponse
   bound: MetricBound | null
   onBar: (bin: Bin) => void
-  format?: (value: number) => string
+  format?: (value: number, shown: number) => string
+  zoom?: ZoomState
 }) {
   const peak = Math.max(1, ...spread.bins.map((bin) => bin.count))
+  const [lo, hi] = [spread.min ?? 0, spread.max ?? 0]
+  const [from, to] = zoom?.range ?? [lo, hi]
+  const write = (value: number) => format(value, to - from)
   return (
     <div className="space-y-1">
+      {zoom && (
+        <SpreadZoomBar
+          spreading={{
+            lo,
+            hi,
+            log: spread.scale === "log",
+            median: spread.median ?? lo,
+            bound,
+          }}
+          zoom={zoom}
+        />
+      )}
       <div className="flex h-16 items-end gap-px rounded-md bg-app-ink/[0.03] px-0.5">
         {spread.bins.map((bin, i) => (
           <button
             key={bin.lo}
             type="button"
             data-testid={`directory-bound-bar-${i}`}
-            title={`${format(bin.lo)}–${format(bin.hi)}: ${bin.count} channels`}
+            title={`${write(bin.lo)}–${write(bin.hi)}: ${bin.count} channels`}
             onClick={() => onBar(bin)}
             className={`flex-1 rounded-t-[2px] ${inside(bin, bound) ? "bg-app-ink/70" : "bg-app-ink/15 hover:bg-app-ink/40"}`}
             style={{
@@ -56,13 +76,16 @@ export function Spread({
           />
         ))}
       </div>
-      <div className="flex justify-between gap-2 text-[10px] tabular-nums text-app-ink/50">
-        <span>{format(spread.min ?? 0)}</span>
+      <div
+        data-testid="spread-caption"
+        className="flex justify-between gap-2 text-[10px] tabular-nums text-app-ink/50"
+      >
+        <span>{write(from)}</span>
         <span>
-          median {format(spread.median ?? 0)}
+          median {write(spread.median ?? 0)}
           {spread.scale === "log" ? ", log scale" : ""}
         </span>
-        <span>{format(spread.max ?? 0)}</span>
+        <span>{write(to)}</span>
       </div>
     </div>
   )
