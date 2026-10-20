@@ -19,10 +19,19 @@ bound text form shared by the Directory and Channel filters.
 **Status:** ready-for-agent
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: the editor,
-the Time bound source, No value, two wrappers, one text form). Prototype rows
-"TB-01" in `../prototype.md`, pinned to 10b8c6af. ADR-033.
+the Time bound source, No value, two wrappers, one text form), ADR-033,
+`../prototype.md`. Prototype at 10b8c6af, port and rename out of
+`time-bound-prototype/`, dropping every `useIsVariant1` gate:
 
-- [ ] Before any change, a Playwright screenshot of the Posts tab's collapsed Analysis window line and its open popover is taken on `main`; after the change both match.
+- [AnalysisWindowControl.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/AnalysisWindowControl.tsx): the source type and context, `WindowEditor` with `modeLabel` and `noValue`, `WindowOverlay`, `ZoomControls`. Everything else in the file is `main`'s and must not change.
+- [TimeBoundEditor.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/time-bound-prototype/TimeBoundEditor.tsx): `useTimeBoundSource` (field mapping, open ends, ahead, drafts), `TimeBoundEditor` (embedded), `TimeBoundBar`, `timeBoundSummary`, `resolveTimeBound`, `inTimeBound`.
+- [directory-filter.ts](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/lib/directory/directory-filter.ts): `END`, `endValue`, `instantText`, `offsetText`, `timeBoundWords`, exported there in the prototype; move them into their own module.
+- [DirectoryTimeEditor.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/directory/DirectoryTimeEditor.tsx): the variant-1 branch, which becomes the only branch.
+- Not ported: `variant.tsx`, the `?variant=` wiring in the app shell and the workspace search, the Vite proxy entries, `backend/scripts/proto_time_bound_api.py`.
+- Today's code it builds on: the Scope context (drafts, debounce, the server minute clock) and the Scope window rules (elapsed and local-minute parsing and formatting, the error messages).
+- Prior-art tests: `AnalysisWindowControl.test.tsx`, `ScopeContext.test.tsx`, `lib/scope/window.test.ts`, `DirectoryTimeEditor.test.tsx`, `directory-filter.test.ts`.
+
+- [ ] The ticket's first commit, on unchanged code, adds a markup snapshot test of the Posts tab's collapsed Analysis window line and its open popover (desktop and the phone sheet); every later commit passes it without updating the snapshot. Optionally, compare a local Playwright screenshot before and after; it is not committed, since CI renders on another platform.
 - [ ] The Posts editor's existing unit tests keep every assertion (imports may change) and pass.
 - [ ] The editor body, the collapsed line with popover or bottom sheet, and the zoom buttons are each one shared piece; the Posts editor uses them with no wiring beyond the Scope default.
 - [ ] A Time bound source drives the same body: Start and End are instants in both modes; Duration and End gap move the ends as the spec says; a blank Start or End opens that end only where open ends are allowed; a leading `-` on End gap is accepted only where ahead is allowed; errors and drafts behave as in the Posts editor.

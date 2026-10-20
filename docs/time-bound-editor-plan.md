@@ -7,8 +7,9 @@ terms are **Analysis window** and **Time bound** in `CONTEXT.md`.
 Prototype: variant 1 on
 [`prototype/time-bound-editor` @ 10b8c6af](https://github.com/onhazrat/tg-workspace/tree/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19),
 switch with `?variant=1`. It was checked on staging data on 2026-10-20. Its code
-is prototype code (no tests, prototype naming, a `?variant=` gate); fold the
-decisions in, never the code as is.
+is prototype code (no tests, prototype naming, a `?variant=` gate): each
+ticket names the pieces to port, renamed, ungated and test-first, and nothing
+else is ported.
 
 ## Decisions
 
@@ -25,8 +26,9 @@ decisions in, never the code as is.
   source.
 - **The Posts tab's Analysis window editor looks and behaves exactly as on
   `main`.** Its code may change. `AnalysisWindowControl.test.tsx` keeps its
-  assertions, and a Playwright screenshot of the collapsed line and the open
-  popover is taken on `main` before TB-01 and compared after.
+  assertions, and TB-01's first commit, on unchanged code, adds a markup
+  snapshot of the collapsed line and the open popover that nothing after it
+  updates.
 - Two wrappers. **Bar**: the collapsed line and popover, for Logs. **Embedded**:
   inside a condition menu, with the moment's name, its description, its spread,
   and Add or Update with a live count, for Directory and Channels.
@@ -110,7 +112,7 @@ them. After TB-01, TB-02 and TB-03 run in parallel.
 
 | # | Ticket | Blocked by |
 |---|---|---|
-| TB-01 | One editor, Directory Time bounds on it: the editor split into body, bar and zoom buttons; the Time bound source (open ends, ahead, No value); the shared text form; Directory moments on the embedded editor. Posts unchanged, proven by the screenshot pair | |
+| TB-01 | One editor, Directory Time bounds on it: the editor split into body, bar and zoom buttons; the Time bound source (open ends, ahead, No value); the shared text form; Directory moments on the embedded editor. Posts unchanged, proven by a markup snapshot taken before the change | |
 | TB-02 | Cited by your channels as a Time bound: API, legacy `mine:14d`, Why wording, client regenerated | TB-01 |
 | TB-03 | Channel Time bounds (seven moments, the minute tick, the editor with its spread, day counts removed) and a symbol on every Posts and Channels Filters menu row | TB-01 |
 | TB-04 | Zoom on every spread: server `lo`/`hi` with the scale kept, browser re-binning, time-of-day captions | TB-03 |

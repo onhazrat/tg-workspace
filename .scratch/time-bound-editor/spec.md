@@ -259,9 +259,11 @@ prior art to copy:
   time". Prior art: `AnalysisWindowControl.test.tsx`,
   `DirectoryTimeEditor.test.tsx`.
 - **The Posts freeze.** `AnalysisWindowControl.test.tsx` keeps every
-  assertion (imports may change). One Playwright screenshot of the collapsed
-  line and the open popover is taken on `main` before TB-01 and compared after.
-  Prior art: the `summarizer-posts-*.spec.ts` specs.
+  assertion (imports may change). TB-01's first commit, on unchanged code, adds
+  a markup snapshot of the collapsed Analysis window line and its open popover
+  (desktop, and the phone sheet); nothing after it updates that snapshot. A
+  Playwright screenshot pair is a useful local check but is not committed: CI
+  renders on another platform, so a committed screenshot would fail there.
 - **Filter logic.** Text form round trips and evaluation for the Directory,
   Channel and Logs filters: `mine:14d` and `mine:-2w..`, every Channel moment
   key, `days_followed` no longer parsing, `[start, end)`, No value, and a Live
@@ -296,18 +298,50 @@ prior art to copy:
 
 ## For implementers
 
-- **Read the prototype before each ticket.** `prototype.md` beside this file
-  maps each ticket to the prototype files that answer it, pinned to 10b8c6af.
-  Port decisions, not code: the prototype has no tests and gates everything
-  behind `?variant=1`.
-- **Branch from a fresh `origin/main`**: fetch first. A worktree needs the root
-  `.env` symlinked, `bun install`, and its own pytest database.
+Written for `/implement-spec`: one integration branch, one worktree and branch
+per ticket, each ticket built test-first. Practical rules, each of which has
+cost a session before.
+
+- **The task graph.** TB-01 first, alone. Then TB-02 and TB-03 in parallel.
+  Then TB-04 (after TB-03), then TB-05 (after TB-04).
+- **Port what the ticket names, rewrite the rest.** Each ticket's context
+  pointers link the prototype files at 10b8c6af that it should port. Port them
+  out of `time-bound-prototype/` with the `?variant=` gate dropped, and write
+  the tests first. Never port the variant switch, its app-shell and
+  workspace-search wiring, the Vite proxy entries or the prototype API script.
+  `prototype.md` lists what the prototype got wrong; the tickets say the right
+  thing.
+- **Set up each worktree with `bash scripts/worktree-setup.sh`.** It links the
+  root `.env`, runs `bun install`, and creates and migrates a private pytest
+  database (`app_test_<worktree>`). Run `--teardown` when the worktree goes.
+  Two pytest runs on one database truncate each other's rows and fail with
+  hundreds of misleading foreign-key errors.
+- **Branch from the integration branch, fetched fresh.** A GitHub merge does
+  not move the local `origin/main`.
+- **The generated client conflicts between parallel tickets.** TB-02 runs
+  beside TB-03 and TB-04, and TB-02, TB-04 and TB-05 each change a schema.
+  Never hand-merge `openapi.json` or the generated client: take either side,
+  then regenerate on the merged tree and commit that.
 - **After a route or response-model change** (TB-02, TB-04, TB-05), regenerate
-  the client, grep `frontend/tests` for that route's `page.route` mocks, and
-  run both the build and the tests typecheck. A new branching component needs a
-  render test, or CI's CRAP ratchet fails.
-- **Handler docstrings ship in the public client**: keep ticket ids in a `#`
-  comment above the route, not in its docstring.
+  the client, grep `frontend/tests` for that route's `page.route` mocks (only
+  CI's Playwright catches a stale mock), and run both the build typecheck and
+  `bun run typecheck:tests`.
+- **A new branching component needs a render test**, or CI's frontend CRAP
+  ratchet fails. Check it locally before pushing.
+- **Handler docstrings ship in the public client.** Keep ticket ids in a `#`
+  comment above the route, never in its docstring.
+- **Playwright runs serially** (one worker), from the worktree's `frontend/`.
+  A backend route change needs the backend container rebuilt before e2e; a
+  stale API fails in ways that look like frontend bugs.
+- **Never restart the shared database** (`docker compose up --build db`)
+  while another worktree is testing.
+- **Commits on a ticket branch need no signature**; the integration branch
+  lands on `main` by squash merge. The typos hook rejects plural SQL keywords;
+  check that a commit actually landed.
+- **Staging is read-only.** The prototype's API and its database role are not
+  part of this work.
+- **Close a ticket** as `docs/agents/issue-tracker.md` says: `Status: done` and
+  a dated comment naming the branch and the merge commit.
 
 ## Further Notes
 

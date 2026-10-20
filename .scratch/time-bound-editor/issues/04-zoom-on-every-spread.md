@@ -15,9 +15,17 @@ The Posts time chart keeps its own zoom unchanged.
 **Status:** ready-for-agent
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: zoom
-contract, zoom rule, captions). Prototype row "TB-04" in `../prototype.md`,
-pinned to 10b8c6af. The prototype let the Posts value histogram re-pick its
-scale per zoom; this ticket keeps the whole spread's scale.
+contract, zoom rule, captions), `../prototype.md`. Prototype at 10b8c6af,
+which let the Posts value histogram re-pick its scale per zoom; this ticket
+keeps the whole spread's scale:
+
+- [zoom.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/time-bound-prototype/zoom.tsx): `spreadZoom`, `boundFocus`, `SpreadZoomBar`, `momentText`.
+- [DirectoryBoundEditor.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/directory/DirectoryBoundEditor.tsx) (`Spread` with `zoom` and zoomed captions), [DirectoryView.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/DirectoryView.tsx) (`lo`/`hi` in the distribution query, previous bars kept while loading), [DirectoryTimeEditor.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/directory/DirectoryTimeEditor.tsx) (zoomed time captions).
+- [ChannelMetricEditor.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/channel-grid/ChannelMetricEditor.tsx) and [ChannelTimeEditor.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/channel-grid/ChannelTimeEditor.tsx): browser re-binning.
+- [PostFilterControls.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/PostFilterControls.tsx) (`PostValueHistogram`), [usePostsView.ts](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/hooks/usePostsView.ts) (`usePostValueHistogram` range), [PostFilter.tsx](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/frontend/src/components/PostFilter.tsx).
+- Backend: [directory_reads.py](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/backend/app/services/directory_reads.py) (`distribution` zoom), [posts.py](https://github.com/onhazrat/tg-workspace/blob/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19/backend/app/services/posts.py) (`value_histogram` zoom; add the kept scale), their schemas and routes.
+- Prior-art tests: `test_post_value_histogram.py`, `test_directory_browse.py`, `ChannelMetricEditor.test.tsx`, `DirectoryBoundEditor.test.tsx`, `PostFilter.test.tsx`.
+- Regenerate the generated client after the schema change.
 
 - [ ] `/data/directory/distribution` and `/data/posts/value-histogram` take an optional `lo` and `hi`, bin only that range, and keep the whole spread's scale; whole-spread fields (minimum, maximum, median, No value count) stay whole-spread. The value histogram request carries the scale it was first drawn on.
 - [ ] The generated client is regenerated; Playwright mocks of both routes are updated; both typechecks pass.
