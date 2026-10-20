@@ -5,6 +5,7 @@ import {
   nice,
 } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
+import { type Range, useZoomState } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -25,20 +26,26 @@ const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
  * 32 bars from the lowest value to the highest. Counts such as subscribers
  * span orders of magnitude, so past two of them the axis is logarithmic, or
  * nearly every Channel would land in the first bar. A range starting at 0 is
- * measured from 1 and drawn on log(1 + x), since log 0 has no place.
+ * measured from 1 and drawn on log(1 + x), since log 0 has no place. A zoom
+ * `range` bins only the values in it, on the whole spread's scale (TB-04).
  */
-export function histogram(values: number[]): Distribution {
+export function histogram(
+  values: number[],
+  range?: Range | null,
+): Distribution {
   const lo = values[0]
   const hi = values[values.length - 1]
   const log = lo >= 0 && hi / (lo > 0 ? lo : 1) > 100
+  const [a, b] = range ?? [lo, hi]
   const identity = (x: number) => x
-  const f = !log ? identity : lo > 0 ? Math.log : Math.log1p
-  const inv = !log ? identity : lo > 0 ? Math.exp : Math.expm1
-  const span = f(hi) - f(lo)
-  const edge = (i: number) => inv(f(lo) + (span * i) / BINS)
+  const f = !log ? identity : a > 0 ? Math.log : Math.log1p
+  const inv = !log ? identity : a > 0 ? Math.exp : Math.expm1
+  const span = f(b) - f(a)
+  const edge = (i: number) => inv(f(a) + (span * i) / BINS)
   const bins = new Array<number>(BINS).fill(0)
   for (const v of values) {
-    const i = span === 0 ? 0 : Math.floor(((f(v) - f(lo)) / span) * BINS)
+    if (v < a || v > b) continue
+    const i = span === 0 ? 0 : Math.floor(((f(v) - f(a)) / span) * BINS)
     bins[Math.min(BINS - 1, i)]++
   }
   return { lo, hi, log, edge, bins, median: median(values) }
@@ -72,6 +79,7 @@ export function ChannelMetricEditor({
   })
   const [b, setB] = useState(String(initial?.max ?? ""))
   const bound = parseBound(op, a, b)
+  const zoom = useZoomState()
   const kept = !bound
     ? 0
     : bound.none
@@ -108,10 +116,11 @@ export function ChannelMetricEditor({
       </div>
       {values.length > 0 ? (
         <BoundHistogram
-          distribution={histogram(values)}
+          distribution={histogram(values, zoom.range)}
           bound={bound}
           noun="channels"
           onSelect={select}
+          zoom={zoom}
         />
       ) : (
         <p className="text-[11px] text-app-ink/50">

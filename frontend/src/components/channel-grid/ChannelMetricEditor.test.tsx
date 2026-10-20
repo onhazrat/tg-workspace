@@ -159,6 +159,76 @@ describe("the count and the Condition", () => {
   })
 })
 
+describe("zoom (TB-04)", () => {
+  const zoom = (name: "Zoom in" | "Zoom out", times = 1) => {
+    for (let i = 0; i < times; i++)
+      fireEvent.click(screen.getByRole("button", { name }))
+  }
+  const caption = () =>
+    screen.getByTestId("metric-histogram-caption").textContent
+  const disabled = (name: string) =>
+    (screen.getByRole("button", { name }) as HTMLButtonElement).disabled
+
+  test("Zoom in shows a third, centred on the bound, the bars recounted", () => {
+    // The bound starts at the median, 550: 900 / 3 = 300 around it.
+    mount(LINEAR)
+    zoom("Zoom in")
+    expect(caption()).toBe("400median 550700")
+    // 400 alone in the first bar of 9.375, where the whole spread had three.
+    fireEvent.pointerEnter(bar(0))
+    expect(caption()).toContain("1 channels, 400–410")
+    // And 700 alone in the last: nothing past the zoom piles into it.
+    fireEvent.pointerEnter(bar(31))
+    expect(caption()).toBe("4001 channels, 690–700700")
+  })
+
+  test("a between bound centres on its middle, clamped inside the spread", () => {
+    mount(LINEAR, { min: 200, max: 300 })
+    zoom("Zoom in")
+    expect(caption()).toBe("100median 550400")
+  })
+
+  test("a bound with one end centres on that end", () => {
+    mount(LINEAR, { min: 990 })
+    zoom("Zoom in")
+    expect(caption()).toBe("700median 5501K")
+  })
+
+  test("with no bound it centres on the median", () => {
+    mount(LINEAR, { min: 990 })
+    fireEvent.click(screen.getByRole("button", { name: "no value" }))
+    zoom("Zoom in")
+    expect(caption()).toBe("400median 550700")
+  })
+
+  test("stops after six steps, and Zoom out is off at the whole spread", () => {
+    mount(LINEAR)
+    expect(disabled("Zoom out")).toBe(true)
+    zoom("Zoom in", 5)
+    expect(disabled("Zoom in")).toBe(false)
+    zoom("Zoom in")
+    expect(disabled("Zoom in")).toBe(true)
+    zoom("Zoom out", 6)
+    expect(disabled("Zoom out")).toBe(true)
+    expect(caption()).toBe("100median 5501K")
+  })
+
+  test("keeps the scale the whole spread was drawn on", () => {
+    // Around 100 a third in log(1 + x) is 23 to 417: linear on its own.
+    mount([1, 10, 100, 1000, 10_000])
+    zoom("Zoom in")
+    expect(caption()).toBe("23.4median 100, log scale417")
+  })
+
+  test("a zoomed run touching the first bar leaves no end open", () => {
+    mount(LINEAR)
+    zoom("Zoom in")
+    drag(0, 3)
+    expect(pressed()).toEqual(["between"])
+    expect([field("From"), field("To")]).toEqual(["400", "440"])
+  })
+})
+
 /**
  * The server's twin of `histogram()` is `value_histogram` (PTI-01), which bins
  * the Posts editors' bars. `test_post_value_histogram.py` pins these three

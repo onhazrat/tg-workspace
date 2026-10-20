@@ -1121,6 +1121,14 @@
       "value": 1
     },
     {
+      "comment": "Six steps at most: 1/729 of the whole spread.",
+      "expression": "6",
+      "file": "frontend/src/components/SpreadZoom.tsx",
+      "line": 27,
+      "name": "MAX_STEPS",
+      "value": 6
+    },
+    {
       "comment": "How often a Live bound's fields are redrawn against the clock.",
       "expression": "15_000",
       "file": "frontend/src/components/TimeBoundEditor.tsx",
@@ -1132,7 +1140,7 @@
       "comment": "",
       "expression": "32",
       "file": "frontend/src/components/channel-grid/ChannelMetricEditor.tsx",
-      "line": 20,
+      "line": 21,
       "name": "BINS",
       "value": 32
     },
