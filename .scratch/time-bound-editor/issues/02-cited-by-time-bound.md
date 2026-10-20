@@ -10,7 +10,7 @@ weeks ago"). Saved links with `mine:14d` keep their meaning.
 
 **Blocked by:** TB-01.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: Cited by
 your channels, API contract), `../prototype.md`. Prototype at 10b8c6af, which
@@ -28,3 +28,7 @@ removes `days`:
 - [x] The text form prints `mine:<start>..<end>` (`mine:-2w..`); `mine:14d` parses as Live from 14 days ago with an open End, and `mine:all` as no window.
 - [x] The chip and "Why it's here" read the window in the same words.
 - [x] API tests (Live and Fixed, each end open, `days` refused) in the Directory browse tests' style; filter tests for the text form; a render test for the editor in the condition menu. Each new guard is mutation-tested.
+
+## Comments
+
+- 2026-10-20: implemented on `claude/tb-02-cited-by-time-bound` and merged into the integration branch in 044d7c7a.
