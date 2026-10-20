@@ -978,6 +978,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "backend/app/services/reach.py": "reach",
     "backend/app/services/scraper_jobs.py": "sync",
     "backend/app/services/search_text.py": "sync",
+    "backend/app/services/spread_bars.py": "directory",
     "backend/app/services/summaries.py": "ai",
     "backend/app/services/sync_orchestrator.py": "sync",
     "backend/app/services/tag_runs.py": "ai",

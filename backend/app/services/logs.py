@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple, cast
 
 from fastapi import HTTPException
-from sqlalchemy import Float, Text, func
+from sqlalchemy import Text, func
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
@@ -36,6 +36,7 @@ from app.services.serialization import (
     normalize_body,
     sync_log_to_camel,
 )
+from app.services.spread_bars import Bin, spread_range
 from app.services.tenancy import (
     Scope,
     assert_owner,
@@ -868,17 +869,6 @@ def list_logs(
     )
 
 
-#: Bars in a log's spread, as many as a Directory moment's.
-LOG_SPREAD_BINS = 32
-
-
-@dataclass(frozen=True)
-class LogSpreadBin:
-    lo: float
-    hi: float
-    count: int
-
-
 @dataclass(frozen=True)
 class LogSpread:
     #: Entries matching the search; every one has a timestamp.
@@ -886,7 +876,7 @@ class LogSpread:
     min: int | None
     max: int | None
     median: float | None
-    bins: list[LogSpreadBin]
+    bins: list[Bin]
 
 
 def log_spread(
@@ -929,32 +919,16 @@ def log_spread(
             )
         )
     ).one()
-    bins: list[LogSpreadBin] = []
-    a, b = lo, hi
-    if zoom is not None and lo is not None and hi is not None:
-        a, b = max(zoom[0], lo), min(zoom[1], hi)
-    if a is not None and b is not None and b > a:
-        bucket = func.least(
-            func.width_bucket(sa_cast(timestamp, Float), a, b, LOG_SPREAD_BINS),
-            LOG_SPREAD_BINS,
-        )
-        counts = {
-            int(i): int(n)
-            for i, n in session.execute(
-                visible(
-                    sa_select(bucket, func.count()).where(
-                        timestamp >= a, timestamp <= b
-                    )
-                ).group_by(bucket)
-            ).all()
-        }
-        step = (b - a) / LOG_SPREAD_BINS
-        bins = [
-            LogSpreadBin(
-                lo=a + i * step, hi=a + (i + 1) * step, count=counts.get(i + 1, 0)
-            )
-            for i in range(LOG_SPREAD_BINS)
-        ]
+    bins: list[Bin] = []
+    covered = spread_range(lo, hi, zoom)
+    if covered is not None:
+        bar = covered.bar_of(timestamp)
+        counts = session.execute(
+            visible(
+                sa_select(bar, func.count()).where(*covered.holds(timestamp))
+            ).group_by(bar)
+        ).all()
+        bins = covered.bars({int(i): int(n) for i, n in counts})
     return LogSpread(
         total=int(total),
         min=None if lo is None else int(lo),
