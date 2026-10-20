@@ -1,11 +1,17 @@
 /**
- * The Time bound editor (DPF), props-only: Live or Fixed like the Analysis
- * window, either end left open, a Live end ago or ahead, a Fixed end typed in
- * the viewer's own zone, the no-value switch, the spread's bars, and the count
- * preview on Add.
+ * The Directory's Time bound editor (DPF, TB-01), props-only: the moment's
+ * name and spread, the Analysis window editor with open ends, an End ahead of
+ * now and No value, and Add or Update with the count preview.
  */
-import { afterEach, describe, expect, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryDistributionResponse } from "@/client"
 import {
   type DirectoryTimeCond,
@@ -14,7 +20,16 @@ import {
 } from "@/lib/directory/directory-filter"
 import { DirectoryTimeEditor } from "./DirectoryTimeEditor"
 
-afterEach(cleanup)
+const NOW = Date.UTC(2026, 9, 20, 12, 0)
+
+beforeEach(() => {
+  setSystemTime(new Date(NOW))
+})
+
+afterEach(() => {
+  cleanup()
+  setSystemTime()
+})
 
 const DAY = 86_400_000
 
@@ -56,18 +71,36 @@ function mount({
 }
 
 const submit = () => screen.getByTestId("directory-time-submit")
-const input = (label: string) =>
-  screen.getByLabelText(label) as HTMLInputElement | HTMLSelectElement
-const type = (label: string, value: string) =>
-  fireEvent.change(input(label), { target: { value } })
+const field = (label: string) =>
+  screen.getByLabelText(label) as HTMLInputElement
+const typeAndCommit = (label: string, text: string) => {
+  act(() => {
+    fireEvent.change(field(label), { target: { value: text } })
+    fireEvent.keyDown(field(label), { key: "Enter" })
+  })
+}
+const click = (name: string) => {
+  act(() => {
+    fireEvent.click(screen.getByRole("button", { name }))
+  })
+}
 
 describe("the Time bound editor", () => {
-  test("a Live end ahead with the start left open", () => {
+  test("is the Analysis window editor; the old fields are gone", () => {
+    mount()
+    for (const label of ["Start", "End", "Duration", "End gap"])
+      expect(field(label)).toBeTruthy()
+    expect(screen.queryByLabelText("End amount")).toBeNull()
+    expect(screen.queryByLabelText("End direction")).toBeNull()
+    expect(
+      screen.getByRole("group", { name: "Refresh due mode" }).textContent,
+    ).toBe("LiveFixedNo value")
+  })
+
+  test("a Live End ahead of now with the Start left open", () => {
     const { submitted, previewed } = mount()
     expect(submit()).toHaveProperty("disabled", true)
-    type("End amount", "2")
-    type("End unit", "d")
-    type("End direction", "ahead")
+    typeAndCommit("End gap", "-2d")
     expect(submit().textContent).toBe("Add · 3 channels")
     fireEvent.click(submit())
     const want: DirectoryTimeCond = {
@@ -80,11 +113,12 @@ describe("the Time bound editor", () => {
     expect(previewed.at(-1)).toEqual(want)
   })
 
-  test("a Live start ago, and now as an end", () => {
+  test("a Duration from now, as a shortcut", () => {
     const { submitted } = mount({ moment: "last_post_at" })
-    type("Start amount", "7")
-    type("Start unit", "d")
-    type("End amount", "0")
+    act(() => {
+      fireEvent.focus(field("Duration"))
+    })
+    click("7d")
     fireEvent.click(submit())
     expect(submitted).toEqual([
       {
@@ -99,8 +133,8 @@ describe("the Time bound editor", () => {
 
   test("a Fixed end is read in the viewer's zone and sent as an instant", () => {
     const { submitted } = mount({ moment: "checked_at" })
-    fireEvent.click(screen.getByRole("button", { name: "Fixed" }))
-    type("Start", "2026-10-01T09:30")
+    click("Fixed")
+    typeAndCommit("Start", "2026-10-01T09:30")
     fireEvent.click(submit())
     expect(submitted).toEqual([
       {
@@ -112,13 +146,15 @@ describe("the Time bound editor", () => {
     ])
   })
 
-  test("an end before the start cannot be added", () => {
+  test("an End before the Start is refused, and cannot be added", () => {
     mount()
-    type("Start amount", "1")
-    type("Start direction", "ahead")
-    type("End amount", "1")
-    type("End direction", "ago")
-    expect(submit()).toHaveProperty("disabled", true)
+    click("Fixed")
+    typeAndCommit("Start", "2026-10-10T00:00")
+    typeAndCommit("End", "2026-10-01T00:00")
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Duration must be at least 1 minute.",
+    )
+    expect(field("End").value).toBe("2026-10-01T00:00")
   })
 
   test("a bar sets a Fixed range over it", () => {
@@ -136,7 +172,39 @@ describe("the Time bound editor", () => {
     ])
   })
 
-  test("no value needs no end, and editing says Update", () => {
+  test("an existing bound opens in the fields, with its open end blank", () => {
+    mount({
+      initial: {
+        type: "time",
+        moment: "last_post_at",
+        mode: "live",
+        start: -7 * DAY,
+      },
+    })
+    expect(field("Start").value).not.toBe("")
+    expect(field("End").value).toBe("")
+    expect(field("Duration").value).toBe("")
+  })
+
+  test("clearing an End leaves that end open", () => {
+    const { submitted } = mount({
+      moment: "last_post_at",
+      initial: {
+        type: "time",
+        moment: "last_post_at",
+        mode: "live",
+        start: -7 * DAY,
+        end: 0,
+      },
+    })
+    typeAndCommit("End", "")
+    fireEvent.click(submit())
+    expect(submitted).toEqual([
+      { type: "time", moment: "last_post_at", mode: "live", start: -7 * DAY },
+    ])
+  })
+
+  test("No value hides the fields, needs no end, and editing says Update", () => {
     const { submitted } = mount({
       initial: {
         type: "time",
@@ -145,12 +213,29 @@ describe("the Time bound editor", () => {
         start: 0,
       },
     })
-    expect(input("Start amount").value).toBe("0")
-    fireEvent.click(screen.getByRole("button", { name: "No value" }))
+    click("No value")
+    expect(screen.queryByLabelText("Start")).toBeNull()
     expect(submit().textContent).toBe("Update · 3 channels")
     fireEvent.click(submit())
     expect(submitted).toEqual([
       { type: "time", moment: "refresh_due_at", mode: "live", none: true },
     ])
+  })
+
+  test("a No value Condition opens on No value", () => {
+    mount({
+      initial: {
+        type: "time",
+        moment: "refresh_due_at",
+        mode: "fixed",
+        none: true,
+      },
+    })
+    expect(screen.queryByLabelText("Start")).toBeNull()
+    expect(
+      screen
+        .getByRole("button", { name: "No value" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true")
   })
 })
