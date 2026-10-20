@@ -1121,6 +1121,14 @@
       "value": 1
     },
     {
+      "comment": "How often a Live bound's fields are redrawn against the clock.",
+      "expression": "15_000",
+      "file": "frontend/src/components/TimeBoundEditor.tsx",
+      "line": 35,
+      "name": "REDRAW_MS",
+      "value": 15000
+    },
+    {
       "comment": "",
       "expression": "32",
       "file": "frontend/src/components/channel-grid/ChannelMetricEditor.tsx",
