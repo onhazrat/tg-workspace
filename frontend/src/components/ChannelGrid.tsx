@@ -23,6 +23,7 @@ import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
 import { TgInput } from "@/components/ui/tg-input"
+import { useScope } from "@/contexts/ScopeContext"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
 import { useSessionFlag } from "@/hooks/useSessionFlag"
 import {
@@ -44,10 +45,10 @@ import {
   filterNames,
   funnelledValues,
   type MetricAtom,
-  type MetricCond,
   parseChannelFilter,
   printChannelFilter,
   removeFunnel,
+  type TimeAtom,
 } from "@/lib/channels/channel-filter"
 import {
   areAllNamesSelected,
@@ -62,6 +63,7 @@ import {
   type MetricInputs,
   metricValues,
 } from "@/lib/channels/channel-metrics"
+import { momentValues } from "@/lib/channels/channel-moments"
 import {
   buildChannelPseudoTagChips,
   CHANNEL_PSEUDO_TAGS,
@@ -172,20 +174,25 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   // Per-channel in-scope counts (SQL GROUP BY, client fallback for semantic).
   const postsInScopeCounts = useScopedPostCounts()
 
-  // What the number Conditions read; days count from when the page loaded.
+  // What the number and Time bound Conditions read. A Live Time bound is
+  // judged against the Scope's server minute, so the grid re-filters on its
+  // tick while the tab stays open (TB-03).
+  const { minuteNow } = useScope()
   const metricInputs = useMemo<MetricInputs>(
-    () => ({ channelStats, postsInScopeCounts, now: performance.timeOrigin }),
-    [channelStats, postsInScopeCounts],
+    () => ({ channelStats, postsInScopeCounts, now: minuteNow }),
+    [channelStats, postsInScopeCounts, minuteNow],
   )
   const metricData = useMemo<MetricData>(
     () => ({
       values: (key) => metricValues(key, channels, metricInputs),
       total: channels.length,
+      moments: (key) => momentValues(key, channels),
     }),
     [channels, metricInputs],
   )
-  const metricConditions = atoms(channelFilter).filter(
-    (a): a is MetricAtom => a.cond.type === "metric",
+  const menuConditions = atoms(channelFilter).filter(
+    (a): a is MetricAtom | TimeAtom =>
+      a.cond.type === "metric" || a.cond.type === "time",
   )
 
   const filteredChannels = useMemo(
@@ -511,9 +518,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             />
           )}
           <ChannelMetricMenu
-            conditions={metricConditions}
+            conditions={menuConditions}
             data={metricData}
-            onAdd={(cond: MetricCond) =>
+            onAdd={(cond) =>
               setChannelFilter(append(channelFilter, "root", cond))
             }
           />

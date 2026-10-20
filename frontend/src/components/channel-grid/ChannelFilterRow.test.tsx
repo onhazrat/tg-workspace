@@ -7,6 +7,7 @@
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -48,7 +49,11 @@ function mount(over: Partial<React.ComponentProps<typeof ChannelFilterRow>>) {
       shownCount={3}
       totalCount={9}
       names={names}
-      metrics={{ values: () => [100, 200, 300], total: 4 }}
+      metrics={{
+        values: () => [100, 200, 300],
+        total: 4,
+        moments: () => [Date.now() - 3 * 86_400_000],
+      }}
       options={options}
       onChange={(next) => changes.push(print(next))}
       onClearSearch={() => calls.push("search")}
@@ -246,6 +251,61 @@ describe("ChannelFilterRow", () => {
     })
     fireEvent.click(submit)
     expect(changes).toEqual(["reach >= 150 and subscribers 500..20000"])
+  })
+
+  test("a number chip carries #, a Time bound chip a clock (TB-03)", () => {
+    mount({ filter: parse("reach >= 1200 and followed_at -30d..now") })
+    const symbol = (id: string) =>
+      chip(id).querySelector("svg")?.getAttribute("class") ?? ""
+    expect(symbol("metric-reach")).toContain("lucide-hash")
+    expect(symbol("time-followed_at")).toContain("lucide-clock")
+    expect(chip("time-followed_at").textContent).toContain(
+      "Followed from 30 days ago to now",
+    )
+  })
+
+  test("the picker lists the moments under Times, and one adds a Time bound", () => {
+    const { changes } = mount({ filter: parse("tag:a") })
+    fireEvent.click(screen.getByRole("button", { name: "Add a condition" }))
+    const times = screen.getByText("Times").parentElement as HTMLElement
+    expect(
+      within(times)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([
+      "Followed",
+      "Last update",
+      "Sync start",
+      "Oldest stored post",
+      "Next regular sync",
+      "Next dynamic sync",
+      "Discovered",
+    ])
+    const numbers = screen.getByText("Numbers").parentElement as HTMLElement
+    expect(within(numbers).queryByText(/^Days/)).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Next regular sync" }))
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "No value" }))
+    })
+    expect(screen.getByTestId("channel-time-submit").textContent).toBe(
+      "Add · 3 with no value",
+    )
+    fireEvent.click(screen.getByTestId("channel-time-submit"))
+    expect(changes).toEqual(["tag:a and next_regular_sync_at = none"])
+  })
+
+  test("a Time bound chip reopens its editor to update it", () => {
+    const { changes } = mount({ filter: parse("followed_at -30d..now") })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Followed from 30 days ago to now" }),
+    )
+    const submit = screen.getByTestId("channel-time-submit")
+    expect(submit.textContent).toBe("Update · 1 of 1 with a value")
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "No value" }))
+    })
+    fireEvent.click(submit)
+    expect(changes).toEqual(["followed_at = none"])
   })
 })
 

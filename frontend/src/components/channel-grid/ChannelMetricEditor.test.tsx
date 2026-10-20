@@ -15,7 +15,7 @@ afterEach(cleanup)
 const LINEAR = Array.from({ length: 91 }, (_, i) => 100 + i * 10)
 
 function mount(values: number[], initial?: MetricBound, total = 100) {
-  const data: MetricData = { values: () => values, total }
+  const data: MetricData = { values: () => values, total, moments: () => [] }
   const submitted: MetricBound[] = []
   render(
     <ChannelMetricEditor
