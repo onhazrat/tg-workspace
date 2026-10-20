@@ -22,7 +22,7 @@ decision). Plan decisions 13, 18.
 
 **Blocked by:** SET-02
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] A new per-Account settings key holds the three values, classified in the settings registry and declared as Settings with resolved defaults.
 - [ ] The frontend reads and writes them through the Account; the browser keys for them are no longer written.
@@ -30,3 +30,8 @@ decision). Plan decisions 13, 18.
 - [ ] Route-seam tests: two Accounts keep separate values; defaults come from the deployment; a write through `PUT /settings/{settingId}` is what the Action tab reads.
 - [ ] A Playwright spec seeds browser values, loads the app against an Account with none, and sees them uploaded once.
 - [ ] The `scopedStorage` and architecture invariants still pass.
+
+## Comments
+
+- 2026-10-20: implemented on `set-05-ai-preferences` and merged into the integration branch `settings-one-page` in 2ddb6a9c.
+  Open: the run bar's per-Key model memory (`modelForKey`) stays in the browser and can still switch the model after hydration on a device whose memory differs; handed to the integration branch's code review. The stored field names are the SettingsContext keys (`selectedModel`, `aiLanguage`, `aiTemperature`).
