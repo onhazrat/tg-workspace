@@ -539,6 +539,35 @@ def test_ai_preferences_default_to_the_deployments_model_and_language(
     assert not {"ai.browser.model", "ai.browser.language"} & set(rows)
 
 
+def test_a_write_moves_the_etag_in_the_same_commit(
+    client: TestClient, member: Account
+) -> None:
+    """`test_sync_meta_commit_cost.py`'s rule: split, a crash between the two
+    commits leaves the change made and every client told there is nothing new."""
+    from sqlalchemy import event
+
+    from app.models_tg import SyncMeta
+
+    with Session(engine) as session:
+        before = session.get(SyncMeta, "settings")
+        etag = before.etag if before else None
+    commits = [0]
+
+    def on_commit(_conn: object) -> None:
+        commits[0] += 1
+
+    event.listen(engine, "commit", on_commit)
+    try:
+        response = _put(client, member[1], "ai.yours.model", {"value": "m-etag"})
+    finally:
+        event.remove(engine, "commit", on_commit)
+    assert response.status_code == 200, response.text
+    assert commits[0] == 1
+    with Session(engine) as session:
+        after = session.get(SyncMeta, "settings")
+        assert after is not None and after.etag != etag
+
+
 def test_two_accounts_keep_separate_ai_preferences(
     client: TestClient, member: Account, other_member: Account
 ) -> None:

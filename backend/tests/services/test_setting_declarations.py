@@ -61,7 +61,6 @@ from app.services.setting_declarations import (
 from app.services.settings_page import (
     LOADER_DEFAULTS,
     _default_publishing,
-    _type_refusal,
     resolve_default,
 )
 from app.services.settings_registry import (
@@ -75,6 +74,7 @@ from app.services.settings_registry import (
     Home,
     home_for,
 )
+from app.services.settings_write import _type_refusal
 
 FRONTEND = Path(__file__).resolve().parents[3] / "frontend/src"
 

@@ -12,25 +12,17 @@ A View-as session reads the target's page, and its writes are refused by
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, SessionDep
-from app.core.permissions import Permission
-from app.jobs.settings import write_setting_field
 from app.schemas.settings_registry import (
     SettingRow,
     SettingsRegistryResponse,
     SettingWriteRequest,
 )
-from app.services import rbac, settings_page
-from app.services.setting_declarations import declaration
-from app.services.sync_meta import touch_sync
+from app.services import settings_page, settings_write
 
 router = APIRouter(prefix="/settings", tags=["settings"])
-
-#: The 404 for an id nobody declared and for one the caller may not see alike,
-#: so a refusal does not say which infrastructure Settings exist.
-NO_SUCH_SETTING = "No such Setting"
 
 
 @router.get("/registry", response_model=SettingsRegistryResponse)
@@ -47,37 +39,6 @@ def update_setting(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> SettingRow:
-    decl = declaration(setting_id)
-    permissions = rbac.permissions_for(session, current_user.id)
-    if decl is None and Permission.SETTINGS_MANAGE in permissions:
-        # Configuration is listed, never written here: `.env` needs a
-        # restart, a build value a rebuild and a constant a deploy.
-        configured = settings_page.configuration_row(setting_id)
-        if configured is not None:
-            raise HTTPException(status_code=403, detail=configured.lock_reason)
-    if decl is None or not settings_page.is_visible(decl, permissions):
-        raise HTTPException(status_code=404, detail=NO_SUCH_SETTING)
-    if decl.scope == "browser":
-        raise HTTPException(
-            status_code=422, detail="Kept in this browser; the page stores it there."
-        )
-    lock = settings_page.lock_reason(decl, permissions)
-    if lock is not None:
-        raise HTTPException(status_code=403, detail=lock)
-    value = body.value
-    if not body.reset:
-        refusal = settings_page.write_refusal(session, decl, value)
-        if refusal is not None:
-            raise HTTPException(status_code=422, detail=refusal)
-        if decl.type == "integer" and isinstance(value, float):
-            value = int(value)
-    write_setting_field(
-        session,
-        decl.key,
-        decl.field,
-        value,
-        reset=body.reset,
-        user_id=current_user.id,
+    return settings_write.update_setting(
+        session, current_user.id, setting_id, body.value, reset=body.reset
     )
-    touch_sync(session, "settings")
-    return settings_page.row_for(session, current_user.id, decl)

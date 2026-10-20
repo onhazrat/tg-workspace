@@ -27,7 +27,7 @@ import subprocess
 import sys
 
 from app.services.setting_declarations import CONSTANT_TOPICS, TOPICS
-from app.services.settings_page import constants_catalog
+from app.services.settings_configuration import constants_catalog
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 GENERATOR = ROOT / "scripts/generate_constants_catalog.py"

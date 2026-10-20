@@ -157,6 +157,7 @@ INVENTORY: dict[str, str] = {
     # caller may see, its value and resolved default. Writes go through
     # `jobs/settings.write_setting_field` to the two settings aggregates.
     "settings_page.py": READ_MODEL,
+    "settings_configuration.py": READ_MODEL,
     "runtime_config.py": READ_MODEL,
     # 3. Integration — owns one external boundary.
     "channel_photos.py": INTEGRATION,
@@ -228,6 +229,7 @@ INVENTORY: dict[str, str] = {
     # SUMTAB-09: plans a Summary's Publication (publication_parts), sends it
     # (publish) and files its one publish log (logs).
     "publications.py": ORCHESTRATOR,
+    "settings_write.py": ORCHESTRATOR,
     # One workflow — an Admin operating a lane (ticket 12) — coordinating the
     # modules that own the pieces: `settings_store` for the paused set,
     # `pgmq` for the messages, `scraper_jobs` for the jobs a purge cancels.
