@@ -94,3 +94,15 @@ export function SpreadZoomBar({ zoom }: { zoom: SpreadZoom }) {
     </div>
   )
 }
+
+const DAY = 86_400_000
+
+/** A moment on a spread: the date, and the time too once a zoom shows under three days. */
+export function momentText(range: Range | null) {
+  const short = !!range && range[1] - range[0] < 3 * DAY
+  const f = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    ...(short && { timeStyle: "short" }),
+  })
+  return (ms: number) => f.format(ms)
+}

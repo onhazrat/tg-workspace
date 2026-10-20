@@ -5,7 +5,7 @@ import {
   TimeBoundEditor,
 } from "@/components/time-bound-prototype/TimeBoundEditor"
 import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
-import type { Range } from "@/components/time-bound-prototype/zoom"
+import { momentText, type Range } from "@/components/time-bound-prototype/zoom"
 import { TgButton } from "@/components/ui/tg-button"
 import type {
   DirectoryTimeCond,
@@ -217,7 +217,7 @@ export function DirectoryTimeEditor({
           spread={distribution}
           bound={highlight || null}
           onBar={onBar}
-          format={dateText}
+          format={zoom ? momentText(zoom.range) : dateText}
           zoom={zoom}
         />
       ) : (
