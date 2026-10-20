@@ -10,7 +10,7 @@ see when failures clustered.
 
 **Blocked by:** TB-01, TB-04.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: Logs on
 the server, Logs spread), `../prototype.md`. Only the bar was prototyped, and
@@ -28,3 +28,7 @@ browser-side; the server filter and the spread are new:
 - [x] A server read draws when a log's entries were logged, with the shared zoom, keeping its scale when zoomed; clicking a bar sets a Fixed bound over it.
 - [x] The generated client is regenerated; Playwright mocks of the touched log routes are updated; both typechecks pass.
 - [x] API tests: a bound reaches entries older than the first page, each end open, Live and Fixed; the spread read with and without a zoomed range. Render tests: the bar emits the bound and the spread zooms. Each new guard is mutation-tested.
+
+## Comments
+
+- 2026-10-20: implemented on `claude/tb-05-logs-time-bound` and merged into the integration branch in 17679cd3.
