@@ -294,6 +294,13 @@ test("a retry runs on another Key and model, warns it won't fit, and leaves the 
     { id: "k-work", label: "Work key", provider: "gemini", baseUrl: null },
     { id: "k-spare", label: "Spare key", provider: "gemini", baseUrl: null },
   ].map((k) => ({ ...k, lastValidated: null, createdAt: NOW }))
+  // The Action tab's model is the Account's (SET-05), and the retry must not move it.
+  const aiPrefs: Record<string, unknown> = { selectedModel: "gemini-x" }
+  await page.route("**/api/v1/data/settings/ai_prefs", (route) => {
+    if (route.request().method() === "PUT")
+      Object.assign(aiPrefs, route.request().postDataJSON())
+    return route.fulfill({ json: { key: "ai_prefs", value: aiPrefs } })
+  })
   await page.route("**/api/v1/data/ai-keys", (route) =>
     route.request().method() === "GET"
       ? route.fulfill({ json: keys })

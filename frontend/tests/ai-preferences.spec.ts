@@ -61,3 +61,50 @@ test("an older browser's AI preferences are uploaded once to an Account with non
   expect(writes).toHaveLength(1)
   expect(held.aiLanguage).toBe("Persian")
 })
+
+test("a second device keeps the Account's model, and switching Key still restores that Key's", async ({
+  page,
+}) => {
+  const held: Record<string, unknown> = {
+    selectedModel: "account/model",
+    aiLanguage: "English",
+    aiTemperature: 0.7,
+  }
+  const writes = await serveAiPrefs(page, held)
+  const keys = ["k-work", "k-spare"].map((id) => ({
+    id,
+    label: id,
+    provider: "gemini",
+    baseUrl: null,
+    lastValidated: null,
+    createdAt: "2026-10-01T00:00:00Z",
+  }))
+  await page.route("**/api/v1/data/ai-keys", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: keys })
+      : route.fallback(),
+  )
+  await page.route("**/api/v1/ai/models", (route) =>
+    route.fulfill({ json: { models: [], default: "" } }),
+  )
+
+  // This browser last ran another model on the Key it has selected.
+  await page.goto("/")
+  await seedScopedStorage(page, {
+    selected_ai_key: "k-work",
+    ai_key_models: JSON.stringify({
+      "k-work": "device/model",
+      "k-spare": "spare/model",
+    }),
+  })
+  await page.goto("/?tab=action")
+
+  const model = page.getByRole("combobox", { name: "Inference model" })
+  await expect(model).toContainText("account/model", { timeout: 20_000 })
+  await page.waitForLoadState("networkidle")
+  expect(writes).toEqual([])
+  expect(held.selectedModel).toBe("account/model")
+
+  await page.getByLabel("AI key", { exact: true }).selectOption("k-spare")
+  await expect(model).toContainText("spare/model")
+})
