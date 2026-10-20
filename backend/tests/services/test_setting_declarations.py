@@ -65,6 +65,7 @@ from app.services.settings_page import (
     resolve_default,
 )
 from app.services.settings_registry import (
+    AI_PREF_FIELDS,
     GLOBAL_KEYS,
     RETENTION_POLICY_FIELDS,
     RETENTION_PREF_FIELDS,
@@ -89,6 +90,7 @@ FIELD_INVENTORY: dict[str, frozenset[str]] = {
     "directory": frozenset(_default_directory()),
     "reach": frozenset(REACH_SETTING_FIELDS),
     "publishing": frozenset(_default_publishing()),
+    "ai_prefs": AI_PREF_FIELDS,
     "network": NETWORK_UI_KEYS,
     "quota": frozenset(
         quota_settings_field(budget, kind)

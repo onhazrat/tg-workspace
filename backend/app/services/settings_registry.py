@@ -284,6 +284,11 @@ GLOBAL_KEYS: dict[str, str] = {
 #: Per-User keys: one row per account, and two accounts never collide.
 PUBLISHING_KEY = "publishing"
 
+#: SET-05's AI preferences. The field names are the frontend's `SettingsContext`
+#: keys, because the section is read and written in that shape.
+AI_PREFS_KEY = "ai_prefs"
+AI_PREF_FIELDS = frozenset({"selectedModel", "aiLanguage", "aiTemperature"})
+
 USER_KEYS: dict[str, str] = {
     PUBLISHING_KEY: (
         "How this account's Publications look (SUMTAB-08): `citationStyle` "
@@ -303,6 +308,12 @@ USER_KEYS: dict[str, str] = {
         "Where a new follow starts and whether dynamic sync is on for it. Two "
         "accounts following one channel can want different history depths, and "
         "since the corpus is shared neither choice costs the other anything."
+    ),
+    AI_PREFS_KEY: (
+        "The model, language and temperature this account's Summaries, Chats "
+        "and Tag runs use (SET-05). Personal because each account runs on its "
+        "own Key and reads in its own language, and kept on the account rather "
+        "than in one browser so the choice follows it to every device."
     ),
 }
 

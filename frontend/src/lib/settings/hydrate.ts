@@ -4,8 +4,8 @@ import {
   RETENTION_POST_DAYS_DEFAULT,
   RETENTION_SHARED_LOG_DAYS_DEFAULT,
 } from "@/constants"
-import type { AppSettings } from "./schema"
-import { decodeServerSection } from "./store"
+import { type AppSettings, specFor } from "./schema"
+import { decodeServerSection, sectionKeys } from "./store"
 
 type Section = Record<string, unknown>
 
@@ -15,6 +15,7 @@ export type HydrationRows = {
   translation: Section | null | undefined
   reach: Section | null | undefined
   publishing?: Section | null
+  ai_prefs?: Section | null
   jobsStatus: Record<string, { enabled?: unknown }> | null
 }
 
@@ -23,6 +24,40 @@ export type Hydration = {
   /** The server sections with legacy browser values merged in, or null when
    * nothing legacy was found and there is nothing to write back. */
   writeBack: { sync: Section; retention: Section } | null
+  /** The AI preferences this browser stored, to upload once because the
+   * Account has none (SET-05); null when there is nothing to upload. */
+  aiUpload: Partial<AppSettings> | null
+}
+
+/**
+ * The AI preferences, all three: the Account's when it has any, otherwise
+ * what this browser stored before they moved to the Account. The first
+ * browser to load uploads its values; every later one finds them there.
+ */
+function aiPreferences(
+  server: Section,
+  storage: { getItem(key: string): string | null },
+): Pick<Hydration, "aiUpload"> & { values: Partial<AppSettings> } {
+  const keys = sectionKeys("ai_prefs")
+  const stored: Partial<AppSettings> = {}
+  const defaults: Partial<AppSettings> = {}
+  for (const key of keys) {
+    const spec = specFor(key)
+    Object.assign(defaults, { [key]: spec.defaultValue })
+    const raw = storage.getItem(spec.storageKey)
+    if (raw === null) continue
+    const parsed = spec.schema.safeParse(spec.decode(raw))
+    if (parsed.success) Object.assign(stored, { [key]: parsed.data })
+  }
+  const hasNone = Object.keys(server).length === 0
+  const upload = hasNone && Object.keys(stored).length > 0 ? stored : null
+  return {
+    aiUpload: upload,
+    values: {
+      ...defaults,
+      ...(upload ?? decodeServerSection("ai_prefs", server)),
+    },
+  }
 }
 
 /** A legacy stored integer, keyed by its server field, unless the server has one. */
@@ -51,6 +86,7 @@ export function hydrateAppSettings(
   browserTimeZone = "",
 ): Hydration {
   const publishing = decodeServerSection("publishing", rows.publishing ?? {})
+  const ai = aiPreferences(rows.ai_prefs ?? {}, storage)
   const sync = rows.sync ?? {}
   const retention = rows.retention ?? {}
   const legacySync = legacyInt(
@@ -78,6 +114,7 @@ export function hydrateAppSettings(
     ...decodeServerSection("translation", rows.translation ?? {}),
     ...decodeServerSection("reach", rows.reach ?? {}),
     ...publishing,
+    ...ai.values,
     // Absent, not empty: an Account that emptied it chose UTC.
     timeZone:
       typeof rows.publishing?.timeZone === "string"
@@ -91,6 +128,7 @@ export function hydrateAppSettings(
     Object.keys(legacyRetention).length > 0
   return {
     updates,
+    aiUpload: ai.aiUpload,
     writeBack: hasLegacy
       ? {
           sync: { ...sync, ...legacySync },

@@ -70,6 +70,7 @@ export function persistAppSettings(
   for (const key of appSettingKeys) {
     if (prev && Object.is(prev[key], next[key])) continue
     const spec = specFor(key)
+    if (spec.persist === false) continue
     storage.setItem(spec.storageKey, spec.encode(next[key]))
   }
 }

@@ -32,6 +32,7 @@ export type BackendSection =
   | "translation"
   | "reach"
   | "publishing"
+  | "ai_prefs"
 
 /** How Citations read in a Publication (SUMTAB-08); the server applies it. */
 export const CITATION_STYLES = ["asWritten", "channelName", "numbered"] as const
@@ -56,12 +57,16 @@ export interface SettingSpec<T> {
   encode: (value: T) => string
   /** Backend section this key is mirrored to, if any. */
   section?: BackendSection
+  /** False for a value kept on the Account only (SET-05): browser storage is
+   *  read once, for the upload, and never written again. */
+  persist?: false
 }
 
 interface SpecOptions {
   legacyStorageKeys?: readonly string[]
   serverLegacyKeys?: readonly string[]
   section?: BackendSection
+  persist?: false
 }
 
 const booleanSetting = (
@@ -237,9 +242,21 @@ const channelActionLimitSetting: SettingSpec<ActionLimit> = {
 // effect; the store now persists EVERY key on change (benign unification — the
 // backend-synced keys still hydrate from the server, browser storage is a fallback).
 export const appSettingsSpec = {
-  aiLanguage: oneOfSetting("aiLanguage", LANGUAGES, DEFAULT_AI_LANGUAGE),
-  selectedModel: modelSetting("selectedModel", DEFAULT_MODEL),
-  aiTemperature: floatSetting("aiTemperature", 0.7),
+  // AI preferences (SET-05): they follow the Account to every device. An
+  // older build's browser values are uploaded once, when the Account has none
+  // (`hydrate.ts`).
+  aiLanguage: oneOfSetting("aiLanguage", LANGUAGES, DEFAULT_AI_LANGUAGE, {
+    section: "ai_prefs",
+    persist: false,
+  }),
+  selectedModel: modelSetting("selectedModel", DEFAULT_MODEL, {
+    section: "ai_prefs",
+    persist: false,
+  }),
+  aiTemperature: floatSetting("aiTemperature", 0.7, {
+    section: "ai_prefs",
+    persist: false,
+  }),
   embeddingsEnabled: booleanSetting("embeddingsEnabled", false),
   embeddingsPaused: booleanSetting("embeddingsPaused", false),
   showChannelBio: booleanSetting("showChannelBio", true),

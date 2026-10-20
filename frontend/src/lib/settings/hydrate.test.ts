@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test"
 import { ApiError } from "@/api/base"
-import { RETENTION_LOG_DAYS_DEFAULT } from "@/constants"
+import {
+  DEFAULT_AI_LANGUAGE,
+  DEFAULT_MODEL,
+  RETENTION_LOG_DAYS_DEFAULT,
+} from "@/constants"
 import { hydrateAppSettings } from "./hydrate"
 import { readerFromRecord, refusalMessage } from "./store"
 
@@ -107,6 +111,50 @@ describe("hydrateAppSettings", () => {
     expect(fresh.updates.timeZone).toBe("Asia/Tehran")
     // Saved empty is the Account's choice (UTC), not a gap to fill again.
     expect(cleared.updates.timeZone).toBe("")
+  })
+})
+
+describe("AI preferences (SET-05)", () => {
+  const stored = readerFromRecord({
+    selectedModel: "anthropic/claude-x",
+    aiLanguage: "Persian",
+    aiTemperature: "0.3",
+  })
+
+  it("uploads what this browser stored when the Account has none", () => {
+    const { updates, aiUpload } = hydrateAppSettings(
+      { ...empty, ai_prefs: {} },
+      stored,
+    )
+    expect(aiUpload).toEqual({
+      selectedModel: "anthropic/claude-x",
+      aiLanguage: "Persian",
+      aiTemperature: 0.3,
+    })
+    expect(updates.selectedModel).toBe("anthropic/claude-x")
+    expect(updates.aiTemperature).toBe(0.3)
+  })
+
+  it("never overwrites what the Account already has", () => {
+    const { updates, aiUpload } = hydrateAppSettings(
+      { ...empty, ai_prefs: { selectedModel: "gemini-x" } },
+      stored,
+    )
+    expect(aiUpload).toBeNull()
+    expect(updates.selectedModel).toBe("gemini-x")
+    // A field the Account lacks is the default, not this browser's.
+    expect(updates.aiLanguage).toBe(DEFAULT_AI_LANGUAGE)
+    expect(updates.aiTemperature).toBe(0.7)
+  })
+
+  it("uploads nothing when neither side has a value", () => {
+    const { updates, aiUpload } = hydrateAppSettings(
+      { ...empty, ai_prefs: {} },
+      readerFromRecord({ aiTemperature: "banana" }),
+    )
+    expect(aiUpload).toBeNull()
+    expect(updates.selectedModel).toBe(DEFAULT_MODEL)
+    expect(updates.aiTemperature).toBe(0.7)
   })
 })
 

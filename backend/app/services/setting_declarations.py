@@ -32,6 +32,7 @@ from app.jobs.translation_batch import TRANSLATION_LANGUAGE_CODES
 from app.services.network_settings import PROXY_CONCURRENCY_MAX, PROXY_CONCURRENCY_MIN
 from app.services.publication_parts import CITATION_STYLES
 from app.services.settings_registry import (
+    AI_PREFS_KEY,
     DIRECTORY_COLUMNS_KEY,
     DIRECTORY_KEY,
     POST_COUNTERS_MOVED_KEY,
@@ -402,29 +403,35 @@ DECLARATIONS: tuple[Declaration, ...] = (
         nullable=True,
     ),
     # --- AI & models ---------------------------------------------------------
-    _browser(
-        "ai.browser.language",
-        "aiLanguage",
-        "AI language",
-        "The language Summaries and Chat answer in.",
-        "enum",
+    Declaration(
+        id="ai.yours.language",
+        title="AI language",
+        description="The language Summaries and Chat answer in.",
+        type="enum",
+        key=AI_PREFS_KEY,
+        field="aiLanguage",
         options=_LANGUAGES,
+        env="DEFAULT_AI_LANGUAGE",
     ),
-    _browser(
-        "ai.browser.model",
-        "selectedModel",
-        "AI model",
-        "The model id Summaries, Chats and Tag runs use.",
-        "string",
+    Declaration(
+        id="ai.yours.model",
+        title="AI model",
+        description="The model id Summaries, Chats and Tag runs use.",
+        type="string",
+        key=AI_PREFS_KEY,
+        field="selectedModel",
+        env="DEFAULT_AI_MODEL",
     ),
-    _browser(
-        "ai.browser.temperature",
-        "aiTemperature",
-        "AI temperature",
-        "Lower is more precise, higher more inventive.",
-        "number",
+    Declaration(
+        id="ai.yours.temperature",
+        title="AI temperature",
+        description="Lower is more precise, higher more inventive.",
+        type="number",
+        key=AI_PREFS_KEY,
+        field="aiTemperature",
         min=0,
         max=1,
+        default=0.7,
     ),
     _browser(
         "ai.browser.embeddings",

@@ -21,10 +21,11 @@ import type {
   DiscoverySignalKind,
 } from "@/lib/posts/discover-candidates"
 import { hydrateAppSettings } from "@/lib/settings/hydrate"
-import type {
-  AppSettings,
-  CitationStyle,
-  SummaryTextSize,
+import {
+  type AppSettings,
+  type CitationStyle,
+  type SummaryTextSize,
+  specFor,
 } from "@/lib/settings/schema"
 import { computeEffectiveGlobalStartTime } from "@/lib/settings/start-time"
 import {
@@ -33,6 +34,7 @@ import {
   loadAppSettings,
   persistAppSettings,
   refusalMessage,
+  sectionKeys,
   sectionValues,
 } from "@/lib/settings/store"
 import { useNetworkSettings } from "@/lib/settings/use-network-settings"
@@ -164,6 +166,14 @@ const SettingsContext = createContext<SettingsContextType | undefined>(
   undefined,
 )
 
+const aiPrefsKey = (s: Partial<AppSettings>) =>
+  JSON.stringify(sectionKeys("ai_prefs").map((key) => s[key]))
+
+function forgetStoredAiPrefs() {
+  for (const key of sectionKeys("ai_prefs"))
+    scopedStorage.removeItem(specFor(key).storageKey)
+}
+
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
@@ -204,6 +214,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   // Hydrate backend-synced sections once on mount: merge legacy browser-stored
   // values into the server payloads and write the merge back when needed.
   const appSettingsHydrated = useRef(false)
+  // The AI preferences the server is known to hold, so hydrating them is not
+  // echoed back as a write.
+  const aiOnServer = useRef<string | null>(null)
+  const aiUploaded = useRef(false)
   useEffect(() => {
     if (typeof window === "undefined") return
     if (!hasSession()) return
@@ -214,6 +228,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       api.getSetting("translation"),
       api.getSetting("reach"),
       api.getSetting("publishing"),
+      api.getSetting("ai_prefs"),
       // Optional, and the `catch` is the point. `GET /jobs/status` became
       // Admin-only in ticket 18, and one rejection inside `Promise.all` rejects
       // the whole thing: sync, retention and translation would never be
@@ -230,22 +245,35 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
           translationRow,
           reachRow,
           publishingRow,
+          aiPrefsRow,
           jobsStatus,
         ]) => {
-          const { updates, writeBack } = hydrateAppSettings(
+          const { updates, writeBack, aiUpload } = hydrateAppSettings(
             {
               sync: syncRow.value,
               retention: retentionRow.value,
               translation: translationRow.value,
               reach: reachRow.value,
               publishing: publishingRow.value,
+              ai_prefs: aiPrefsRow.value,
               jobsStatus,
             },
             scopedStorage,
             Intl.DateTimeFormat().resolvedOptions().timeZone,
           )
           setSettings((prev) => ({ ...prev, ...updates }))
+          aiOnServer.current = aiPrefsKey(updates)
           appSettingsHydrated.current = true
+          // SET-05: the browser stops keeping the AI preferences once the
+          // Account holds them, after the one upload when it held none. The
+          // ref holds StrictMode's second hydration to that one upload.
+          if (aiUpload && !aiUploaded.current) {
+            aiUploaded.current = true
+            api
+              .putSetting("ai_prefs", aiUpload)
+              .then(forgetStoredAiPrefs)
+              .catch(console.error)
+          } else if (!aiUpload) forgetStoredAiPrefs()
           if (writeBack) {
             api.putSetting("sync", writeBack.sync).catch(console.error)
             api
@@ -324,6 +352,22 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
         )
     },
     sectionValues("publishing", settings),
+  )
+
+  // AI preferences (SET-05), on the Account rather than in this browser.
+  useEffect(
+    () => {
+      if (!hasSession() || !appSettingsHydrated.current) return
+      const known = aiPrefsKey(settings)
+      if (known === aiOnServer.current) return
+      aiOnServer.current = known
+      api
+        .putSetting("ai_prefs", buildSectionPayload("ai_prefs", settings))
+        .catch((err) =>
+          console.warn("[Settings] Failed to sync AI preferences:", err),
+        )
+    },
+    sectionValues("ai_prefs", settings),
   )
 
   // Embeddings toggle maps onto the "embeddings" job rather than a section.

@@ -497,3 +497,69 @@ def test_configuration_cannot_be_written_and_is_not_found_without_the_permission
     assert constant.json()["detail"] == "Constant in code: needs a deploy"
     hidden = _put(client, member[1], "server.env.slowRequestLogMs", {"value": 5})
     assert hidden.status_code == 404
+
+
+# --------------------------------------------------------------------------
+# AI preferences follow the Account (SET-05)
+# --------------------------------------------------------------------------
+
+AI_PREFS = f"{V1}/data/settings/ai_prefs"
+
+
+def test_ai_preferences_default_to_the_deployments_model_and_language(
+    client: TestClient, member: Account
+) -> None:
+    rows = _rows(client, member[1])
+    model = rows["ai.yours.model"]
+    assert model["scope"] == "account"
+    assert model["value"] == model["default"] == settings.DEFAULT_AI_MODEL
+    assert model["defaultSource"] == "env"
+    language = rows["ai.yours.language"]
+    assert language["value"] == language["default"] == settings.DEFAULT_AI_LANGUAGE
+    assert language["defaultSource"] == "env"
+    assert rows["ai.yours.temperature"]["default"] == 0.7
+    assert not {"ai.browser.model", "ai.browser.language"} & set(rows)
+
+
+def test_two_accounts_keep_separate_ai_preferences(
+    client: TestClient, member: Account, other_member: Account
+) -> None:
+    mine = _put(client, member[1], "ai.yours.model", {"value": "m-1"})
+    assert mine.status_code == 200, mine.text
+    theirs = _put(client, other_member[1], "ai.yours.model", {"value": "m-2"})
+    assert theirs.status_code == 200, theirs.text
+    assert _rows(client, member[1])["ai.yours.model"]["value"] == "m-1"
+    assert _rows(client, other_member[1])["ai.yours.model"]["value"] == "m-2"
+
+
+def test_a_registry_write_is_what_the_action_tab_reads(
+    client: TestClient, member: Account, other_member: Account
+) -> None:
+    """The run bar reads `SettingsContext`, which hydrates from this section."""
+    _put(client, member[1], "ai.yours.model", {"value": "anthropic/claude-x"})
+    _put(client, member[1], "ai.yours.language", {"value": "Persian"})
+    _put(client, member[1], "ai.yours.temperature", {"value": 0.2})
+
+    mine = client.get(AI_PREFS, headers=member[1]).json()["value"]
+    assert mine == {
+        "selectedModel": "anthropic/claude-x",
+        "aiLanguage": "Persian",
+        "aiTemperature": 0.2,
+    }
+    # An Account with none answers empty, which is what the one-time upload
+    # from an older browser checks before it writes.
+    assert client.get(AI_PREFS, headers=other_member[1]).json()["value"] == {}
+
+
+@pytest.mark.parametrize(
+    ("setting_id", "value"),
+    [
+        ("ai.yours.temperature", 1.5),
+        ("ai.yours.language", "Klingon"),
+        ("ai.yours.model", 3),
+    ],
+)
+def test_an_ai_preference_outside_its_declaration_is_refused(
+    client: TestClient, member: Account, setting_id: str, value: Any
+) -> None:
+    assert _put(client, member[1], setting_id, {"value": value}).status_code == 422
