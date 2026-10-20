@@ -12,7 +12,7 @@ The Posts time chart keeps its own zoom unchanged.
 
 **Blocked by:** TB-03.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: zoom
 contract, zoom rule, captions), `../prototype.md`. Prototype at 10b8c6af,
@@ -34,3 +34,7 @@ keeps the whole spread's scale:
 - [x] Channels numbers and moments re-bin in the browser; Directory spreads and Posts number histograms ask the server for the zoomed range, keeping the previous bars visible while the new ones load.
 - [x] A time spread's captions show the time of day once the shown span is under three days.
 - [x] API tests for `lo`, `hi` and the kept scale on both routes, in the existing value-histogram and Directory browse tests' style. Render tests: Zoom in and out change the range asked for (server spreads) or the bars drawn (browser spreads), centring, the six-step stop, the disabled Zoom out. Each new guard is mutation-tested.
+
+## Comments
+
+- 2026-10-20: implemented on `claude/tb-04-zoom` and merged into the integration branch in bfb5f36d.
