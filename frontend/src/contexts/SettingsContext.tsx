@@ -21,18 +21,22 @@ import type {
   DiscoverySignalKind,
 } from "@/lib/posts/discover-candidates"
 import { hydrateAppSettings } from "@/lib/settings/hydrate"
-import type {
-  AppSettings,
-  CitationStyle,
-  SummaryTextSize,
+import {
+  type AppSettings,
+  type BackendSection,
+  type CitationStyle,
+  type SummaryTextSize,
+  specFor,
 } from "@/lib/settings/schema"
 import { computeEffectiveGlobalStartTime } from "@/lib/settings/start-time"
 import {
   buildSectionPayload,
   createAppSettingSetters,
+  decodeServerSection,
   loadAppSettings,
   persistAppSettings,
   refusalMessage,
+  sectionKeys,
   sectionValues,
 } from "@/lib/settings/store"
 import { useNetworkSettings } from "@/lib/settings/use-network-settings"
@@ -41,6 +45,12 @@ import { isRTLLanguage } from "@/lib/utils"
 import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
 interface SettingsContextType {
+  /**
+   * Re-read the section a settings key lives in, after a write made elsewhere
+   * (the Settings page's registry write, SET-02). What it reads is what the
+   * server holds, so it is not written back.
+   */
+  refreshSection: (key: string | null | undefined) => Promise<void>
   theme: Theme
   resolvedTheme: "light" | "dark"
   setTheme: (theme: Theme) => void
@@ -164,6 +174,44 @@ const SettingsContext = createContext<SettingsContextType | undefined>(
   undefined,
 )
 
+const sectionKey = (section: BackendSection, s: AppSettings) =>
+  JSON.stringify(sectionValues(section, s))
+
+/** The section `GET /data/settings/{section}` answers for each settings key. */
+const SECTION_OF_KEY: Record<string, BackendSection> = {
+  sync: "sync",
+  sync_prefs: "sync",
+  sync_runtime: "sync",
+  retention: "retention",
+  retention_prefs: "retention",
+  translation: "translation",
+  reach: "reach",
+  publishing: "publishing",
+  ai_prefs: "ai_prefs",
+}
+
+/** A section as the server answers it, over the schema's defaults. */
+function readSection(
+  section: BackendSection,
+  value: Record<string, unknown>,
+): Partial<AppSettings> {
+  const updates: Partial<AppSettings> = {}
+  for (const key of sectionKeys(section))
+    Object.assign(updates, { [key]: specFor(key).defaultValue })
+  const { defaults, ...stored } = value
+  if (section === "ai_prefs" && defaults && typeof defaults === "object")
+    Object.assign(
+      updates,
+      decodeServerSection(section, defaults as Record<string, unknown>),
+    )
+  return { ...updates, ...decodeServerSection(section, stored) }
+}
+
+function forgetStoredAiPrefs() {
+  for (const key of sectionKeys("ai_prefs"))
+    scopedStorage.removeItem(specFor(key).storageKey)
+}
+
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
@@ -199,11 +247,47 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
     prevSettings.current = settings
   }, [settings])
 
-  const { network, setters: networkSetters } = useNetworkSettings()
+  const {
+    network,
+    setters: networkSetters,
+    reload: reloadNetwork,
+  } = useNetworkSettings()
 
   // Hydrate backend-synced sections once on mount: merge legacy browser-stored
   // values into the server payloads and write the merge back when needed.
   const appSettingsHydrated = useRef(false)
+  // What each section is known to hold on the server, so applying what was
+  // read (the AI preferences' hydration, any `refreshSection`) is not echoed
+  // back as a write.
+  const onServer = useRef<Partial<Record<BackendSection, string>>>({})
+  const aiUploaded = useRef(false)
+
+  const refreshSection = useCallback(
+    async (key: string | null | undefined) => {
+      if (key === "network") return reloadNetwork()
+      const section = SECTION_OF_KEY[key ?? ""]
+      if (!section) return
+      const { value } = await api.getSetting(section)
+      setSettings((prev) => {
+        const next = { ...prev, ...readSection(section, value) }
+        onServer.current[section] = sectionKey(section, next)
+        return next
+      })
+    },
+    [reloadNetwork],
+  )
+
+  /** PUT a section unless it holds what the server is known to hold. */
+  const pushSection = useCallback(
+    (section: BackendSection, current: AppSettings) => {
+      if (!hasSession() || !appSettingsHydrated.current) return null
+      const known = sectionKey(section, current)
+      if (onServer.current[section] === known) return null
+      onServer.current[section] = known
+      return api.putSetting(section, buildSectionPayload(section, current))
+    },
+    [],
+  )
   useEffect(() => {
     if (typeof window === "undefined") return
     if (!hasSession()) return
@@ -214,6 +298,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
       api.getSetting("translation"),
       api.getSetting("reach"),
       api.getSetting("publishing"),
+      api.getSetting("ai_prefs"),
       // Optional, and the `catch` is the point. `GET /jobs/status` became
       // Admin-only in ticket 18, and one rejection inside `Promise.all` rejects
       // the whole thing: sync, retention and translation would never be
@@ -230,22 +315,38 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
           translationRow,
           reachRow,
           publishingRow,
+          aiPrefsRow,
           jobsStatus,
         ]) => {
-          const { updates, writeBack } = hydrateAppSettings(
+          const { updates, writeBack, aiUpload } = hydrateAppSettings(
             {
               sync: syncRow.value,
               retention: retentionRow.value,
               translation: translationRow.value,
               reach: reachRow.value,
               publishing: publishingRow.value,
+              ai_prefs: aiPrefsRow.value,
               jobsStatus,
             },
             scopedStorage,
             Intl.DateTimeFormat().resolvedOptions().timeZone,
           )
-          setSettings((prev) => ({ ...prev, ...updates }))
+          setSettings((prev) => {
+            const next = { ...prev, ...updates }
+            onServer.current.ai_prefs = sectionKey("ai_prefs", next)
+            return next
+          })
           appSettingsHydrated.current = true
+          // SET-05: the browser stops keeping the AI preferences once the
+          // Account holds them, after the one upload when it held none. The
+          // ref holds StrictMode's second hydration to that one upload.
+          if (aiUpload && !aiUploaded.current) {
+            aiUploaded.current = true
+            api
+              .putSetting("ai_prefs", aiUpload)
+              .then(forgetStoredAiPrefs)
+              .catch(console.error)
+          } else if (!aiUpload) forgetStoredAiPrefs()
           if (writeBack) {
             api.putSetting("sync", writeBack.sync).catch(console.error)
             api
@@ -260,36 +361,27 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   // Push scheduler-related settings to Postgres for APScheduler jobs (Phase 6).
   useEffect(
     () => {
-      if (!hasSession() || !appSettingsHydrated.current) return
-      api
-        .putSetting("sync", buildSectionPayload("sync", settings))
-        .catch((err) =>
-          console.warn("[Settings] Failed to sync scheduler settings:", err),
-        )
+      pushSection("sync", settings)?.catch((err) =>
+        console.warn("[Settings] Failed to sync scheduler settings:", err),
+      )
     },
     sectionValues("sync", settings),
   )
 
   useEffect(
     () => {
-      if (!hasSession() || !appSettingsHydrated.current) return
-      api
-        .putSetting("retention", buildSectionPayload("retention", settings))
-        .catch((err) =>
-          console.warn("[Settings] Failed to sync retention settings:", err),
-        )
+      pushSection("retention", settings)?.catch((err) =>
+        console.warn("[Settings] Failed to sync retention settings:", err),
+      )
     },
     sectionValues("retention", settings),
   )
 
   useEffect(
     () => {
-      if (!hasSession() || !appSettingsHydrated.current) return
-      api
-        .putSetting("translation", buildSectionPayload("translation", settings))
-        .catch((err) =>
-          console.warn("[Settings] Failed to sync translation settings:", err),
-        )
+      pushSection("translation", settings)?.catch((err) =>
+        console.warn("[Settings] Failed to sync translation settings:", err),
+      )
     },
     sectionValues("translation", settings),
   )
@@ -299,10 +391,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   // value on the way to a valid one replaces the message instead of stacking.
   useEffect(
     () => {
-      if (!hasSession() || !appSettingsHydrated.current) return
-      api
-        .putSetting("reach", buildSectionPayload("reach", settings))
-        .then(() => toast.dismiss("reach-settings"))
+      pushSection("reach", settings)
+        ?.then(() => toast.dismiss("reach-settings"))
         .catch((err) => {
           const refused = refusalMessage(err)
           if (refused) toast.error(refused, { id: "reach-settings" })
@@ -316,14 +406,21 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   // hydration above filled from the browser.
   useEffect(
     () => {
-      if (!hasSession() || !appSettingsHydrated.current) return
-      api
-        .putSetting("publishing", buildSectionPayload("publishing", settings))
-        .catch((err) =>
-          console.warn("[Settings] Failed to sync publishing settings:", err),
-        )
+      pushSection("publishing", settings)?.catch((err) =>
+        console.warn("[Settings] Failed to sync publishing settings:", err),
+      )
     },
     sectionValues("publishing", settings),
+  )
+
+  // AI preferences (SET-05), on the Account rather than in this browser.
+  useEffect(
+    () => {
+      pushSection("ai_prefs", settings)?.catch((err) =>
+        console.warn("[Settings] Failed to sync AI preferences:", err),
+      )
+    },
+    sectionValues("ai_prefs", settings),
   )
 
   // Embeddings toggle maps onto the "embeddings" job rather than a section.
@@ -363,6 +460,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
     setTheme,
     isRTL,
     getEffectiveGlobalStartTime,
+    refreshSection,
     ...settings,
     ...setters,
     ...network,

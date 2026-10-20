@@ -14,7 +14,7 @@ test.describe("TG Workspace palette", () => {
   test("command palette opens via shortcut and header button", async ({
     page,
   }) => {
-    await page.goto("/workspace")
+    await page.goto("/")
 
     const palette = page.getByTestId("command-palette")
     await expect(palette).not.toBeVisible()
@@ -32,7 +32,7 @@ test.describe("TG Workspace palette", () => {
   })
 
   test("command palette navigates to channels tab", async ({ page }) => {
-    await page.goto("/workspace?tab=summary")
+    await page.goto("/?tab=summary")
     await page.getByTestId("command-palette-button").click()
 
     await page.getByPlaceholder("Type a command...").fill("channels")
@@ -45,7 +45,7 @@ test.describe("TG Workspace palette", () => {
   })
 
   test("command palette toggles theme", async ({ page }) => {
-    await page.goto("/workspace")
+    await page.goto("/")
     await page.evaluate(() => localStorage.setItem("vite-ui-theme", "light"))
     await page.reload()
 
@@ -107,7 +107,7 @@ test.describe("TG Workspace palette", () => {
   test("import command shows confirmation before file picker", async ({
     page,
   }) => {
-    await page.goto("/workspace")
+    await page.goto("/")
 
     await page.getByTestId("command-palette-button").click()
     await page
@@ -161,7 +161,7 @@ test.describe("TG Workspace palette", () => {
   test("command palette search posts opens in-palette results", async ({
     page,
   }) => {
-    await page.goto("/workspace?tab=posts")
+    await page.goto("/?tab=posts")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("search posts")
     await page
@@ -191,7 +191,7 @@ test.describe("TG Workspace palette", () => {
   test("command palette reload channels command is available", async ({
     page,
   }) => {
-    await page.goto("/workspace?tab=channels")
+    await page.goto("/?tab=channels")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("reload channels")
     await expect(
@@ -202,7 +202,7 @@ test.describe("TG Workspace palette", () => {
   test("command palette clear post filters command is available", async ({
     page,
   }) => {
-    await page.goto("/workspace?tab=posts")
+    await page.goto("/?tab=posts")
     await page.getByTestId("command-palette-button").click()
     await page.getByPlaceholder("Type a command...").fill("clear post filters")
     await expect(

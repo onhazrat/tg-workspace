@@ -179,11 +179,6 @@ describe("persistAppSettings", () => {
   it("round-trips every setting through encode/decode", () => {
     const custom: AppSettings = {
       ...loadAppSettings(readerFromRecord({})),
-      aiLanguage: "Persian",
-      // Must be a real option id: `selectedModel` is membership-validated, so an
-      // arbitrary string would be rejected on read and never round-trip.
-      selectedModel: "gemini-3.1-pro-preview",
-      aiTemperature: 0.25,
       embeddingsEnabled: true,
       showChannelBio: false,
       regularSyncIntervalMinutes: 90,
@@ -201,19 +196,37 @@ describe("persistAppSettings", () => {
 
   it("writes only changed keys when prev is provided", () => {
     const base = loadAppSettings(readerFromRecord({}))
-    const next = { ...base, aiTemperature: 0.9 }
+    const next = { ...base, postRetentionDays: 9 }
     const { record, writer } = recordWriter()
     persistAppSettings(next, writer, base)
-    expect(Object.keys(record)).toEqual(["aiTemperature"])
-    expect(record.aiTemperature).toBe("0.9")
+    expect(Object.keys(record)).toEqual(["postRetentionDays"])
+    expect(record.postRetentionDays).toBe("9")
   })
 
-  it("writes all keys when prev is omitted", () => {
+  it("writes all browser keys when prev is omitted", () => {
     const base = loadAppSettings(readerFromRecord({}))
     const { record, writer } = recordWriter()
     persistAppSettings(base, writer)
-    expect(Object.keys(record).length).toBe(appSettingKeys.length)
+    expect(Object.keys(record).length).toBe(appSettingKeys.length - 3)
     expect(record.showChannelBio).toBe("true")
+  })
+
+  it("never stores the AI preferences, which live on the Account (SET-05)", () => {
+    const base = loadAppSettings(readerFromRecord({}))
+    const next = {
+      ...base,
+      selectedModel: "x",
+      aiLanguage: "Persian",
+      aiTemperature: 0.1,
+    }
+    const { record, writer } = recordWriter()
+    persistAppSettings(next, writer, base)
+    persistAppSettings(next, writer)
+    expect(
+      ["selectedModel", "aiLanguage", "aiTemperature"].filter(
+        (k) => k in record,
+      ),
+    ).toEqual([])
   })
 })
 

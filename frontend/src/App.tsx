@@ -19,10 +19,12 @@ import { DirectoryView } from "./components/DirectoryView"
 import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import { PostFeed } from "./components/PostFeed"
-import { SettingsHub } from "./components/SettingsHub"
+import QuotaWarning from "./components/QuotaWarning"
 import { SummaryView } from "./components/SummaryView"
+import { SettingsPage } from "./components/settings-page/SettingsPage"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
+import { ToolsTab } from "./components/tools/ToolsTab"
 import {
   Tooltip,
   TooltipContent,
@@ -221,7 +223,8 @@ export default function App() {
       directory: () => <DirectoryView />,
       summary: () => <SummaryView />,
       action: () => <ActionView />,
-      settings: () => <SettingsHub />,
+      settings: () => <SettingsPage />,
+      tools: () => <ToolsTab />,
     }
     const view = views[activeTab]
     return view ? (
@@ -255,6 +258,9 @@ export default function App() {
           autoSyncPausedUntil={autoSyncPauseUntil}
           onResumeAutoSync={resumeAutoSync}
         />
+        {/* Under the status banners: a Budget running out is a fact about the
+          account, not about the tab it was noticed on (ticket 24). */}
+        <QuotaWarning />
 
         {/* Main Content Area */}
         <div className="w-full flex min-h-0 flex-1 flex-col">

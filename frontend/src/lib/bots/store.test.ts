@@ -18,7 +18,7 @@ import {
  * Two things are load-bearing here. **A token must never survive a read**, which
  * is the client half of the rule that `BotCredentialResponse` is closed and
  * carries only `hasToken`. And, as with channels and summaries, **a write must
- * not invalidate** — `BotManagement` writes the cache through itself.
+ * not invalidate** — `usePublishing` writes the cache through itself.
  */
 
 let calls: string[] = []

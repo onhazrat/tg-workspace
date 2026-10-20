@@ -51,9 +51,6 @@ import type {
   ChannelSyncProgress,
   ChatArtifactResponse,
   ChatSessionListItemResponse,
-  ConfigurationCatalogResponse,
-  ConfigurationEntry,
-  ConfigurationLayer,
   DirectoryDistributionResponse,
   DirectoryListResponse,
   DirectoryRowResponse,
@@ -120,11 +117,6 @@ export type PublishIsClosed = Assert<IsClosed<PublishResponse>>
 export type PublicationPlanIsClosed = Assert<IsClosed<PublicationPlanResponse>>
 export type PublicationPartIsClosed = Assert<IsClosed<PublicationPartResponse>>
 export type PublicationSendIsClosed = Assert<IsClosed<PublicationSendResponse>>
-export type ConfigurationCatalogIsClosed = Assert<
-  IsClosed<ConfigurationCatalogResponse>
->
-export type ConfigurationLayerIsClosed = Assert<IsClosed<ConfigurationLayer>>
-export type ConfigurationEntryIsClosed = Assert<IsClosed<ConfigurationEntry>>
 
 /**
  * BYOK-01's AI Keys, on the generated client from the first commit.

@@ -228,7 +228,6 @@ export function useEntityFlow({
         await removeTagFromChannel(p.channel, p.tag, context)
         recordAndClose(command)
       },
-      "finish-with": (p) => finishCommand(command, undefined, p.value),
       channel: (p) => pickChannel(command, flow, p.channel),
     }
     await (perform[pick.kind] as (p: PickResolution) => unknown)(pick)

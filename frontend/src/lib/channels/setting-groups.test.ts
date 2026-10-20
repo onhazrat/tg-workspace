@@ -6,7 +6,6 @@ import {
   isHighVelocityReservedGroup,
   isReservedSettingGroup,
   isSlowFeedReservedGroup,
-  resolveInitialSelectedGroupId,
   sortSettingGroupsForDisplay,
 } from "./setting-groups"
 
@@ -64,32 +63,5 @@ describe("setting group helpers", () => {
     expect(
       sortSettingGroupsForDisplay(groups).map((group) => group.name),
     ).toEqual(["default", "Slow feed", "Frozen"])
-  })
-
-  it("prefers URL group id over default when nothing selected", () => {
-    const groups = [
-      {
-        ...frozenGroup("default-global"),
-        id: "default-global",
-        name: "default",
-        isDefault: true,
-        isFrozen: false,
-      },
-      {
-        ...frozenGroup("custom-1"),
-        id: "custom-1",
-        name: "News",
-        isFrozen: false,
-      },
-    ]
-    expect(resolveInitialSelectedGroupId(groups, "custom-1", null)).toBe(
-      "custom-1",
-    )
-    expect(resolveInitialSelectedGroupId(groups, "", null)).toBe(
-      "default-global",
-    )
-    expect(
-      resolveInitialSelectedGroupId(groups, "custom-1", "default-global"),
-    ).toBe("default-global")
   })
 })

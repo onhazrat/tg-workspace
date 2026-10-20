@@ -9,15 +9,14 @@ import {
   DIRECTORY_PARAMS,
   type DirectoryParams,
 } from "@/lib/directory/directory-view"
-import type { SettingsSection } from "@/lib/settingsSection"
-import { normalizeSettingsSection } from "@/lib/settingsSection"
 import { tabFromSearch, tabSearch } from "@/lib/workspace-tabs"
 import type { ArtifactStatusFilter, TabType } from "@/types"
 
 export type WorkspaceSearch = {
   tab?: TabType
-  section?: SettingsSection
-  /** Deep-link to a catalog setting id (scroll + highlight). */
+  /** An old Settings section id or a topic id; the page lands on its topic. */
+  section?: string
+  /** A Setting, panel or topic id the Settings page scrolls to (SET-02). */
   setting?: string
   /**
    * The Channel filter on the Channels tab, in its text form
@@ -78,6 +77,23 @@ function workspaceTab(raw: unknown): TabType {
   return VALID_TABS.includes(raw as TabType) ? (raw as TabType) : "channels"
 }
 
+/** Old Settings sections that held a tool; they live on the Tools tab now. */
+const TOOL_SECTIONS = [
+  "quick-message",
+  "diagnostics",
+  "network-telemetry",
+  "table-sizes",
+  "transfer",
+  "query",
+  "tools",
+  "telemetry",
+  "logs",
+  // The old Data section: three of its four entries are tools now.
+  "db",
+  "data",
+  "data-management",
+]
+
 /**
  * `validateSearch` for `/workspace`. The legacy `?tab=network` became the
  * Network section of Settings, and nothing else survives that redirect.
@@ -87,9 +103,10 @@ export function validateWorkspaceSearch(
 ): WorkspaceSearch {
   if (search.tab === "network") return { tab: "settings", section: "network" }
   const result: WorkspaceSearch = { tab: workspaceTab(search.tab) }
-  if (typeof search.section === "string") {
-    result.section = normalizeSettingsSection(search.section)
-  }
+  const section = trimmedString(search.section)
+  if (result.tab === "settings" && section && TOOL_SECTIONS.includes(section))
+    return { tab: "tools" }
+  if (section) result.section = section
   for (const key of ID_PARAMS) {
     const value = trimmedString(search[key])
     if (value) result[key] = value

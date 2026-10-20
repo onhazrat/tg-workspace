@@ -38,6 +38,7 @@ from app.core.config import settings
 from app.models import User
 from app.services.reach import DEFAULT_REACH_SETTINGS, REACH_SETTING_FIELDS
 from app.services.settings_registry import (
+    AI_PREFS_KEY,
     DIRECTORY_KEY,
     REACH_KEY,
     RETENTION_KEY,
@@ -89,11 +90,11 @@ def default_job_enabled(job_id: str) -> bool:
     return defaults.get(job_id, True)
 
 
-def _default_jobs() -> dict[str, dict[str, Any]]:
+def default_jobs() -> dict[str, dict[str, Any]]:
     return {job_id: {"enabled": default_job_enabled(job_id)} for job_id in JOB_IDS}
 
 
-def _default_sync() -> dict[str, Any]:
+def default_sync() -> dict[str, Any]:
     return {
         "regularSyncIntervalMinutes": settings.AUTO_SYNC_INTERVAL_MINUTES_DEFAULT,
         "dynamicSyncEnabledDefault": False,
@@ -114,7 +115,7 @@ def _default_sync() -> dict[str, Any]:
     }
 
 
-def _default_retention_policy() -> dict[str, Any]:
+def default_retention_policy() -> dict[str, Any]:
     """Deployment half of the old `retention` blob (ticket 20)."""
     return {
         "postRetentionDays": settings.RETENTION_POST_DAYS_DEFAULT,
@@ -129,7 +130,7 @@ def _default_retention_policy() -> dict[str, Any]:
     }
 
 
-def _default_retention_prefs() -> dict[str, Any]:
+def default_retention_prefs() -> dict[str, Any]:
     """Personal half: windows over the rows one account owns (ticket 20)."""
     return {
         "logRetentionDays": settings.RETENTION_LOG_DAYS_DEFAULT,
@@ -140,7 +141,7 @@ def _default_retention_prefs() -> dict[str, Any]:
     }
 
 
-def _default_directory() -> dict[str, Any]:
+def default_directory() -> dict[str, Any]:
     """The Channel Directory's refresh window (ticket 03).
 
     One field, and it is deliberately its own section rather than a fourth
@@ -152,7 +153,7 @@ def _default_directory() -> dict[str, Any]:
     return {"directoryRefreshDays": settings.DIRECTORY_REFRESH_DAYS_DEFAULT}
 
 
-def _default_media() -> dict[str, Any]:
+def default_media() -> dict[str, Any]:
     return {
         "thumbCacheEnabled": True,
         "thumbCacheOnSync": True,
@@ -161,13 +162,34 @@ def _default_media() -> dict[str, Any]:
     }
 
 
-def _default_translation() -> dict[str, Any]:
+def default_translation() -> dict[str, Any]:
     return {
         "translationEnabled": False,
         "autoTranslate": False,
         "translationModel": settings.DEFAULT_AI_MODEL,
         "translationTargetLanguage": settings.TRANSLATION_TARGET_LANGUAGE_DEFAULT,
     }
+
+
+def default_ai_prefs() -> dict[str, Any]:
+    """The deployment's AI preferences, what an Account with none runs on (SET-05)."""
+    return {
+        "selectedModel": settings.DEFAULT_AI_MODEL,
+        "aiLanguage": settings.DEFAULT_AI_LANGUAGE,
+        "aiTemperature": 0.7,
+    }
+
+
+def load_ai_prefs(session: Session, *, user_id: uuid.UUID) -> dict[str, Any]:
+    """The Account's stored AI preferences, with the deployment's under `defaults`.
+
+    Not merged, unlike every other loader: the browser uploads an older build's
+    values once, only to an Account that stored none, so it has to see what is
+    stored. The defaults ride along so the browser has one default, the
+    server's, rather than a `VITE_*` twin baked in at build time.
+    """
+    stored = get_user_setting(session, AI_PREFS_KEY, user_id=user_id)
+    return {**stored, "defaults": default_ai_prefs()}
 
 
 def _merge(defaults: dict[str, Any], stored: dict[str, Any] | None) -> dict[str, Any]:
@@ -232,6 +254,49 @@ def save_settings_section(
     replace_global_setting(session, key, value)
 
 
+def write_setting_field(
+    session: Session,
+    key: str,
+    path: str,
+    value: Any = None,
+    *,
+    reset: bool = False,
+    user_id: uuid.UUID | None = None,
+) -> None:
+    """Set one field of one settings key, or clear it so its default applies.
+
+    The Settings page's write door (SET-02): `path` is a field of the key's
+    value, dotted one level deep for `jobs` (`retention.enabled`). The row is
+    read, changed in that one place and stored whole, in the table the registry
+    says owns the key, so a page write never touches a neighbouring field. A
+    reset removes the field rather than storing the default, so the row follows
+    the default if a deploy changes it.
+    """
+    personal = home_for(key) is Home.USER
+    if personal and user_id is None:
+        raise ValueError(f"Settings key {key!r} is per-User and needs an owner.")
+    stored = (
+        get_user_setting(session, key, user_id=cast(uuid.UUID, user_id))
+        if personal
+        else get_global_setting(session, key)
+    )
+    head, _, leaf = path.rpartition(".")
+    target = dict(stored.get(head) or {}) if head else stored
+    if reset:
+        target.pop(leaf, None)
+    else:
+        target[leaf] = value
+    if head:
+        if target:
+            stored[head] = target
+        else:
+            stored.pop(head, None)
+    if personal:
+        replace_user_setting(session, key, stored, user_id=cast(uuid.UUID, user_id))
+    else:
+        replace_global_setting(session, key, stored)
+
+
 def save_sync_settings(
     session: Session,
     payload: dict[str, Any],
@@ -258,12 +323,12 @@ def save_sync_settings(
 
 
 def load_jobs_settings(session: Session) -> dict[str, Any]:
-    return load_setting(session, "jobs", _default_jobs())
+    return load_setting(session, "jobs", default_jobs())
 
 
 def load_directory_settings(session: Session) -> dict[str, Any]:
     """The Directory's refresh window, merged over its default (ticket 03)."""
-    return load_setting(session, DIRECTORY_KEY, _default_directory())
+    return load_setting(session, DIRECTORY_KEY, default_directory())
 
 
 def load_reach_settings(session: Session) -> dict[str, Any]:
@@ -294,7 +359,7 @@ def load_sync_settings(
     because it reads only policy and runtime fields, both global — see
     `test_the_scheduler_reads_runtime_without_an_owner`.
     """
-    defaults = _default_sync()
+    defaults = default_sync()
     stored = {
         **get_global_setting(session, SYNC_KEY),
         **get_global_setting(session, SYNC_RUNTIME_KEY),
@@ -349,7 +414,7 @@ def load_retention_policy(session: Session) -> dict[str, Any]:
     they have no owner to resolve and no business reading.
     """
     return _merge(
-        _default_retention_policy(), get_global_setting(session, RETENTION_KEY)
+        default_retention_policy(), get_global_setting(session, RETENTION_KEY)
     )
 
 
@@ -366,7 +431,7 @@ def load_retention_prefs_by_user(session: Session) -> dict[uuid.UUID, dict[str, 
     the defaults are what their rows are swept on, and an account missing from
     this map would be an account whose logs nothing ever collects.
     """
-    defaults = _default_retention_prefs()
+    defaults = default_retention_prefs()
     stored = all_user_settings(session, RETENTION_PREFS_KEY)
     return {
         user_id: _merge(defaults, stored.get(user_id))
@@ -382,7 +447,7 @@ def load_retention_prefs(session: Session, *, user_id: uuid.UUID) -> dict[str, A
     and here it would mean sweeping somebody's rows on a window they never set.
     """
     return _merge(
-        _default_retention_prefs(),
+        default_retention_prefs(),
         get_user_setting(session, RETENTION_PREFS_KEY, user_id=user_id),
     )
 
@@ -399,7 +464,7 @@ def load_retention_settings(
     what a caller with no account in hand would have to show anyway.
     """
     merged = load_retention_policy(session)
-    merged.update(_default_retention_prefs())
+    merged.update(default_retention_prefs())
     if user_id is not None:
         merged.update(get_user_setting(session, RETENTION_PREFS_KEY, user_id=user_id))
     return merged
@@ -439,7 +504,7 @@ def save_retention_settings(
 
 
 def load_media_settings(session: Session) -> dict[str, Any]:
-    defaults = _default_media()
+    defaults = default_media()
     merged = load_setting(session, "media", defaults)
     if not isinstance(merged.get("thumbCacheEnabled"), bool):
         merged["thumbCacheEnabled"] = defaults["thumbCacheEnabled"]
@@ -454,7 +519,7 @@ def load_media_settings(session: Session) -> dict[str, Any]:
 
 
 def load_translation_settings(session: Session) -> dict[str, Any]:
-    return load_setting(session, "translation", _default_translation())
+    return load_setting(session, "translation", default_translation())
 
 
 def compute_effective_global_start_time_ms(

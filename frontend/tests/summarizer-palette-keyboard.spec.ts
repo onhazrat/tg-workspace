@@ -19,7 +19,7 @@ import {
 
 test.describe("command palette keyboard", () => {
   test("K1: opens and closes via keyboard shortcut", async ({ page }) => {
-    await page.goto("/workspace")
+    await page.goto("/")
     const palette = page.getByTestId("command-palette")
     await expect(palette).not.toBeVisible()
 
@@ -29,14 +29,14 @@ test.describe("command palette keyboard", () => {
   })
 
   test("K2: navigates to channels tab via type and Enter", async ({ page }) => {
-    await page.goto("/workspace?tab=summary")
+    await page.goto("/?tab=summary")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "channels")
     await expect(page).toHaveURL(/tab=channels/)
   })
 
   test("K3: toggles theme via type and Enter", async ({ page }) => {
-    await page.goto("/workspace")
+    await page.goto("/")
     await page.evaluate(() => localStorage.setItem("vite-ui-theme", "light"))
     await page.reload()
 
@@ -146,7 +146,7 @@ test.describe("command palette keyboard", () => {
   test("K7: search posts opens results and picks via keyboard", async ({
     page,
   }) => {
-    await page.goto("/workspace?tab=posts")
+    await page.goto("/?tab=posts")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "search posts")
     await page.getByLabel(/Search posts/i).fill("test")
@@ -189,7 +189,7 @@ test.describe("command palette keyboard", () => {
   // dialog's keyboard path, not the command, so it now uses one that exists and
   // destroys nothing when it proceeds.
   test("K9: a confirm proceeds via Tab and Enter", async ({ page }) => {
-    await page.goto("/workspace")
+    await page.goto("/")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "restart tor")
 
@@ -270,7 +270,7 @@ test.describe("command palette keyboard", () => {
 
   test("K14: search-results back preserves editor query", async ({ page }) => {
     const searchQuery = `kbdquery${Date.now()}`
-    await page.goto("/workspace?tab=posts")
+    await page.goto("/?tab=posts")
     await openPaletteKeyboard(page)
     await runPaletteCommand(page, "search posts")
 
@@ -294,7 +294,7 @@ test.describe("command palette keyboard", () => {
     await page.route("**/api/v1/utils/health-check/**", (route) =>
       route.abort("failed"),
     )
-    await page.goto("/workspace")
+    await page.goto("/")
     await expect(page.getByText("Server offline.")).toBeVisible({
       timeout: 15_000,
     })

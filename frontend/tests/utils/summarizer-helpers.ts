@@ -122,7 +122,7 @@ export async function clearChannelSelection(page: Page) {
 }
 
 export async function gotoWorkspace(page: Page, tab = "summary") {
-  await page.goto(`/workspace?tab=${tab}`)
+  await page.goto(`/?tab=${tab}`)
   await expect(page.getByTestId("command-palette-button")).toBeVisible()
 }
 

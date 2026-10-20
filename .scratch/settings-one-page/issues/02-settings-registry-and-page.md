@@ -34,7 +34,7 @@ prototype API does not: that one read staging and derived ids by heuristics.
 
 **Blocked by:** SET-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Every Setting (browser, account, deployment) is declared once on the backend with its Setting id, title, Account-facing description, type, bounds or choices, Setting scope, storage key and field, visibility (every Account or `settings:manage`), changing Permission and default source. A guard fails when a stored field has no declaration or two, when an id is declared twice, or when a declared browser Setting and the frontend schema disagree.
 - [ ] Defaults are resolved through the real layers (account → deployment or `.env` seed → code), never restated; the Tor and publishing defaults that lived only in the browser move into the declarations.
@@ -51,3 +51,8 @@ prototype API does not: that one read staging and derived ids by heuristics.
 - [ ] The generated client is regenerated and the client-split conformance holds; the registry and write calls use the generated client.
 - [ ] Deleted: the Settings hub, `SettingsView`, the section components, the settings catalog, the settings tree, "Commonly used", and the old settings Playwright specs.
 - [ ] Tests on the spec's seams: the two routes with two live Accounts (visibility, writes per scope, refusals, reset, View-as, quota fallback, a write visible to the existing section route); Playwright specs with the registry mocked covering search, the tree, saving and refusals, links, the palette and the phone pill; the declaration guards mutation-tested. Route inventory, account isolation, approval gate and route hygiene pass with the new routes registered.
+
+## Comments
+
+- 2026-10-20: implemented on `set-02-settings-registry` and merged into the integration branch `settings-one-page` in 312b3d8c.
+  Open: Tor and proxy fields show both as rows and in the old panel, and an old `?section=<tool>` link does not open Tools, handed to SET-03. `@restart` has no rows yet and the Configuration panel plus `/data/configuration` remain, handed to SET-04. SettingsContext sections update through setters after a registry write rather than a refetch (backlog).

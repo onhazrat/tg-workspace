@@ -68,13 +68,6 @@ describe("resolvePick", () => {
     expect(pick("clear-db-table", "tg_posts", true).kind).toBe("confirm")
   })
 
-  it("hands the configuration id straight to the finish", () => {
-    expect(pick("open-configuration", "proxy")).toEqual({
-      kind: "finish-with",
-      value: "proxy",
-    })
-  })
-
   it("runs a setting-group flow only for a group that exists, and never asks", () => {
     for (const flow of [
       "filter-by-setting-group",

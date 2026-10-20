@@ -1,6 +1,6 @@
 import { getRouteApi } from "@tanstack/react-router"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 export function useWorkspaceGroupParams() {
   const { channelFilter, settingGroup } = workspaceRoute.useSearch()

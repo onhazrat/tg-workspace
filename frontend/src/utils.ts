@@ -1,6 +1,6 @@
 import { ApiError } from "./api/base"
 
-function extractErrorMessage(err: unknown): string {
+export function extractErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     // A 422 body carries `detail` as an array of per-field validation errors;
     // anything else has already been flattened to a string in `message`.

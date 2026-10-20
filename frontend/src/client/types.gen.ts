@@ -1404,100 +1404,6 @@ export type CompletionResult = {
 };
 
 /**
- * ConfigurationCatalogResponse
- */
-export type ConfigurationCatalogResponse = {
-    /**
-     * Schemaversion
-     */
-    schemaVersion?: number;
-    /**
-     * Layers
-     */
-    layers: Array<ConfigurationLayer>;
-};
-
-/**
- * ConfigurationEntry
- */
-export type ConfigurationEntry = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Key
-     */
-    key: string;
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Layer
-     */
-    layer: 'deployment' | 'global' | 'user' | 'specialized' | 'frontend';
-    /**
-     * Value
-     */
-    value?: unknown;
-    /**
-     * Defaultvalue
-     */
-    defaultValue?: unknown;
-    /**
-     * Source
-     */
-    source: string;
-    /**
-     * Description
-     */
-    description?: string;
-    /**
-     * Sensitive
-     */
-    sensitive?: boolean;
-    /**
-     * Configured
-     */
-    configured?: boolean;
-    /**
-     * Editable
-     */
-    editable?: boolean;
-    /**
-     * Restartrequired
-     */
-    restartRequired?: boolean;
-    /**
-     * Ownerid
-     */
-    ownerId?: string | null;
-};
-
-/**
- * ConfigurationLayer
- */
-export type ConfigurationLayer = {
-    /**
-     * Id
-     */
-    id: 'deployment' | 'global' | 'user' | 'specialized' | 'frontend';
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Description
-     */
-    description: string;
-    /**
-     * Entries
-     */
-    entries?: Array<ConfigurationEntry>;
-};
-
-/**
  * DbStatsResponse
  *
  * Row counts across the corpus, scoped to the operator.
@@ -3967,6 +3873,8 @@ export type JobsRuntimeSettings = {
     };
     intervals: JobIntervals;
 };
+
+export type JsonValue = unknown;
 
 /**
  * LLMLogListItemResponse
@@ -6684,6 +6592,155 @@ export type SettingGroupWriteRequest = {
      * Resetsyncenabled
      */
     resetSyncEnabled?: boolean | null;
+};
+
+/**
+ * SettingOption
+ */
+export type SettingOption = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * SettingRow
+ *
+ * One Setting as the calling Account sees it.
+ */
+export type SettingRow = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Topic
+     */
+    topic: string;
+    /**
+     * Scope
+     */
+    scope: 'browser' | 'account' | 'deployment' | 'env' | 'code';
+    /**
+     * Type
+     */
+    type: 'boolean' | 'integer' | 'number' | 'string' | 'enum' | 'json';
+    /**
+     * Options
+     */
+    options?: Array<SettingOption>;
+    /**
+     * Min
+     */
+    min?: number | null;
+    /**
+     * Max
+     */
+    max?: number | null;
+    value?: JsonValue;
+    default?: JsonValue;
+    /**
+     * Defaultsource
+     */
+    defaultSource: 'code' | 'env' | 'deployment';
+    /**
+     * Modified
+     */
+    modified: boolean;
+    /**
+     * Canedit
+     */
+    canEdit: boolean;
+    /**
+     * Lockreason
+     */
+    lockReason: string | null;
+    /**
+     * Applies
+     */
+    applies?: 'now' | 'restart' | 'rebuild' | 'deploy';
+    /**
+     * Storage
+     */
+    storage: string;
+    /**
+     * Key
+     */
+    key?: string | null;
+    /**
+     * Field
+     */
+    field?: string | null;
+    /**
+     * Sensitive
+     */
+    sensitive?: boolean;
+    /**
+     * Envname
+     */
+    envName?: string | null;
+    /**
+     * Sourceref
+     */
+    sourceRef?: string | null;
+};
+
+/**
+ * SettingTopic
+ */
+export type SettingTopic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * SettingWriteRequest
+ *
+ * `{"value": …}` to change a Setting, `{"reset": true}` to reset it.
+ */
+export type SettingWriteRequest = {
+    value?: JsonValue;
+    /**
+     * Reset
+     */
+    reset?: boolean;
+};
+
+/**
+ * SettingsRegistryResponse
+ */
+export type SettingsRegistryResponse = {
+    /**
+     * Topics
+     */
+    topics: Array<SettingTopic>;
+    /**
+     * Rows
+     */
+    rows: Array<SettingRow>;
+    /**
+     * Permissions
+     */
+    permissions: Array<string>;
 };
 
 /**
@@ -12392,22 +12449,6 @@ export type DataClearTableRouteResponses = {
 
 export type DataClearTableRouteResponse = DataClearTableRouteResponses[keyof DataClearTableRouteResponses];
 
-export type DataGetConfigurationCatalogData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/data/configuration';
-};
-
-export type DataGetConfigurationCatalogResponses = {
-    /**
-     * Successful Response
-     */
-    200: ConfigurationCatalogResponse;
-};
-
-export type DataGetConfigurationCatalogResponse = DataGetConfigurationCatalogResponses[keyof DataGetConfigurationCatalogResponses];
-
 export type DataGetNetworkSettingsData = {
     body?: never;
     path?: never;
@@ -13239,3 +13280,49 @@ export type ViewAsReadViewAsSessionsResponses = {
 };
 
 export type ViewAsReadViewAsSessionsResponse = ViewAsReadViewAsSessionsResponses[keyof ViewAsReadViewAsSessionsResponses];
+
+export type SettingsReadSettingsRegistryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/settings/registry';
+};
+
+export type SettingsReadSettingsRegistryResponses = {
+    /**
+     * Successful Response
+     */
+    200: SettingsRegistryResponse;
+};
+
+export type SettingsReadSettingsRegistryResponse = SettingsReadSettingsRegistryResponses[keyof SettingsReadSettingsRegistryResponses];
+
+export type SettingsUpdateSettingData = {
+    body: SettingWriteRequest;
+    path: {
+        /**
+         * Setting Id
+         */
+        setting_id: string;
+    };
+    query?: never;
+    url: '/api/v1/settings/{setting_id}';
+};
+
+export type SettingsUpdateSettingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SettingsUpdateSettingError = SettingsUpdateSettingErrors[keyof SettingsUpdateSettingErrors];
+
+export type SettingsUpdateSettingResponses = {
+    /**
+     * Successful Response
+     */
+    200: SettingRow;
+};
+
+export type SettingsUpdateSettingResponse = SettingsUpdateSettingResponses[keyof SettingsUpdateSettingResponses];

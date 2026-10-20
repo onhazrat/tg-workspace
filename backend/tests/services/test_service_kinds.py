@@ -139,9 +139,6 @@ INVENTORY: dict[str, str] = {
     # Unions four aggregates into one time-ordered page for History. Owns no
     # table and never commits.
     "artifacts.py": READ_MODEL,
-    # Joins environment metadata with both settings aggregates and quota
-    # overrides for one read-only admin inventory; owns and commits nothing.
-    "configuration_catalog.py": READ_MODEL,
     # The Directory tab's reads (DIR-02): a page, its totals and a measure's
     # spread over Directory entries, References and the caller's Follows.
     # Writes nothing; its caches are process memory, not a table.
@@ -156,6 +153,11 @@ INVENTORY: dict[str, str] = {
     # rbac_user_roles joined to rbac_roles and never commits; seeding is done by
     # the migration and init_db, so this module has no reason to write.
     "rbac.py": READ_MODEL,
+    # The Settings page for one Account (SET-02): every declared Setting the
+    # caller may see, its value and resolved default. Writes go through
+    # `jobs/settings.write_setting_field` to the two settings aggregates.
+    "settings_page.py": READ_MODEL,
+    "settings_configuration.py": READ_MODEL,
     "runtime_config.py": READ_MODEL,
     # 3. Integration — owns one external boundary.
     "channel_photos.py": INTEGRATION,
@@ -213,6 +215,9 @@ INVENTORY: dict[str, str] = {
     # free of a `Session` or the refusal would depend on the thing being
     # refused.
     "settings_registry.py": PURE_TRANSFORM,
+    # One declaration per Setting (SET-02, ADR-032): data and a lookup, so the
+    # guards over it need no database.
+    "setting_declarations.py": PURE_TRANSFORM,
     "tenancy.py": PURE_TRANSFORM,
     "telegram_html.py": PURE_TRANSFORM,
     "telegram_web.py": PURE_TRANSFORM,
@@ -224,6 +229,7 @@ INVENTORY: dict[str, str] = {
     # SUMTAB-09: plans a Summary's Publication (publication_parts), sends it
     # (publish) and files its one publish log (logs).
     "publications.py": ORCHESTRATOR,
+    "settings_write.py": ORCHESTRATOR,
     # One workflow — an Admin operating a lane (ticket 12) — coordinating the
     # modules that own the pieces: `settings_store` for the paused set,
     # `pgmq` for the messages, `scraper_jobs` for the jobs a purge cancels.

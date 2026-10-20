@@ -27,6 +27,7 @@ export const WORKSPACE_TABS = [
   { id: "directory", label: "Directory", icon: "Library" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "history", label: "History", icon: "History" },
+  { id: "tools", label: "Tools", icon: "Activity" },
   { id: "settings", label: "Settings", icon: "Settings" },
 ] as const
 
@@ -54,20 +55,6 @@ export type TabType = (typeof WORKSPACE_TABS)[number]["id"]
 export const VALID_TABS: readonly TabType[] = WORKSPACE_TABS.map(
   (tab) => tab.id,
 )
-
-export const SETTINGS_TABS = [
-  { id: "commonly-used", label: "Commonly Used", icon: "Star" },
-  { id: "appearance", label: "Appearance", icon: "Layout" },
-  { id: "channels-sync", label: "Channels & Sync", icon: "RefreshCw" },
-  { id: "ai", label: "AI & Models", icon: "Cpu" },
-  { id: "network", label: "Network", icon: "Globe" },
-  { id: "publishing", label: "Publishing", icon: "Send" },
-  { id: "data", label: "Data", icon: "Database" },
-  { id: "diagnostics", label: "Diagnostics", icon: "Activity" },
-  { id: "configuration", label: "Configuration Catalog", icon: "Braces" },
-] as const
-
-/** Flat list of top-level settings destinations (legacy navigate / labels). Prefer SETTINGS_TOC. */
 
 /** Stored in Summary.model for externally pasted AI responses (not in-app generation). */
 export const PASTED_SUMMARY_MODEL = "external"

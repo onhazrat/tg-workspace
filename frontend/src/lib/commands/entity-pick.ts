@@ -29,8 +29,6 @@ export type PickResolution =
   | { kind: "run-then-close"; payload: unknown }
   /** Take the tag off the channel the previous step chose. */
   | { kind: "remove-tag"; channel: Channel; tag: string }
-  /** Finish with the value as the payload; the command itself reads it. */
-  | { kind: "finish-with"; value: string }
   /** A channel flow: chained steps, then the channel action. */
   | { kind: "channel"; channel: Channel }
 
@@ -78,8 +76,6 @@ export function resolvePick(
     }
     case "clear-db-table":
       return runOrConfirm(value)
-    case "open-configuration":
-      return { kind: "finish-with", value }
   }
 
   if (isSettingGroupEntityFlow(flow)) {

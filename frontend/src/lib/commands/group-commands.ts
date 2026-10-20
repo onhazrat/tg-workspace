@@ -130,8 +130,7 @@ export function buildGroupCommands(): CommandDef[] {
       run: (ctx, payload) => {
         const groupId = payload as string
         if (!groupId) return
-        ctx.setActiveTab("settings")
-        ctx.setActiveSection("channels-sync")
+        ctx.openSetting("sync.yours.settingGroups")
         ctx.setSelectedSettingGroup(groupId)
       },
     },

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ApiError } from "@/api/base"
 import {
   loadNetworkSettings,
@@ -19,16 +19,22 @@ import {
 /**
  * Server-backed network/proxy/Tor settings: hydrates ONCE on mount (merging
  * legacy browser-stored "proxyEnabled"/"torEnabled" values and writing them back),
- * then debounce-saves any change 400ms after it settles.
+ * then debounce-saves any change 400ms after it settles, never what it just
+ * loaded.
  */
 export function useNetworkSettings(): {
   network: NetworkSettings
   setters: NetworkSettingSetters
+  /** Re-read the row after a write made elsewhere, without saving it back. */
+  reload: () => Promise<void>
 } {
   const [network, setNetwork] = useState<NetworkSettings>(
     NETWORK_SETTINGS_DEFAULTS,
   )
   const hydrated = useRef(false)
+  // The payload the server is known to hold. Saving it again would only race
+  // a registry write made since (SET-02), so the debounced save skips it.
+  const onServer = useRef<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const setters = useMemo<NetworkSettingSetters>(() => {
@@ -57,6 +63,19 @@ export function useNetworkSettings(): {
     }
   }, [])
 
+  const applyLoaded = useCallback((value: Record<string, unknown>) => {
+    setNetwork((prev) => {
+      const loaded = mergeNetworkSettings(prev, value)
+      onServer.current = JSON.stringify(buildNetworkSavePayload(loaded))
+      return loaded
+    })
+  }, [])
+
+  const reload = useCallback(
+    () => loadNetworkSettings().then(applyLoaded),
+    [applyLoaded],
+  )
+
   // Hydrate ONCE on mount (the previous implementation accidentally re-ran on
   // every tor* state change because of its effect deps).
   useEffect(() => {
@@ -71,7 +90,7 @@ export function useNetworkSettings(): {
         const legacy = legacyNetworkFlags(value, scopedStorage)
         const merged = { ...value, ...legacy }
         const next = mergeNetworkSettings(NETWORK_SETTINGS_DEFAULTS, merged)
-        setNetwork((prev) => mergeNetworkSettings(prev, merged))
+        applyLoaded(merged)
         hydrated.current = true
         if (Object.keys(legacy).length > 0) {
           saveNetworkSettings({
@@ -99,14 +118,18 @@ export function useNetworkSettings(): {
         if (err instanceof ApiError && err.status === 403) return
         console.error(err)
       })
-  }, [])
+  }, [applyLoaded])
 
   // Debounced save of any writable field change (post-hydration only).
   useEffect(() => {
     if (!hydrated.current || !hasSession()) return
+    const payload = buildNetworkSavePayload(network)
+    const known = JSON.stringify(payload)
+    if (known === onServer.current) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      saveNetworkSettings(buildNetworkSavePayload(network)).catch(console.error)
+      onServer.current = known
+      saveNetworkSettings(payload).catch(console.error)
     }, 400)
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -126,5 +149,5 @@ export function useNetworkSettings(): {
     network.torRotationThreshold,
   ])
 
-  return { network, setters }
+  return { network, setters, reload }
 }

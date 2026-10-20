@@ -3,7 +3,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { configureGeneratedClient } from "@/api/generated-client"
-import { ThemeProvider } from "@/components/theme-provider"
+import { APP_DEFAULT_THEME, ThemeProvider } from "@/components/theme-provider"
 import { syncServerClock } from "@/lib/analysis-window"
 import { queryClient } from "@/lib/queryClient"
 import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
@@ -77,7 +77,10 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider defaultTheme="dark" storageKey={THEME_STORAGE_KEY}>
+    <ThemeProvider
+      defaultTheme={APP_DEFAULT_THEME}
+      storageKey={THEME_STORAGE_KEY}
+    >
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>

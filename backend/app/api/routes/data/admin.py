@@ -40,6 +40,7 @@ from app.core.acting_owner import ActingOwner
 from app.core.acting_owner import bind as bind_acting_owner
 from app.core.permissions import Permission
 from app.jobs.settings import (
+    load_ai_prefs,
     load_directory_settings,
     load_jobs_settings,
     load_reach_settings,
@@ -51,14 +52,12 @@ from app.jobs.settings import (
 )
 from app.models import User
 from app.schemas.common import AppSettingResponse, ImportDataResponse
-from app.schemas.configuration import ConfigurationCatalogResponse
 from app.schemas.stats import (
     ClearTableResponse,
     DbStatsResponse,
     TableSizeResponse,
 )
 from app.services import rbac
-from app.services.configuration_catalog import build_configuration_catalog
 from app.services.data_import_export import (
     EVERYONE,
     SUBJECT_NOT_FOUND,
@@ -74,6 +73,7 @@ from app.services.network_settings import (
 )
 from app.services.reach import reach_settings_from
 from app.services.settings_registry import (
+    AI_PREFS_KEY,
     DIRECTORY_KEY,
     REACH_KEY,
     RETENTION_KEY,
@@ -105,6 +105,7 @@ _SETTING_LOADERS: dict[str, Callable[[Session, uuid.UUID], dict[str, Any]]] = {
     "translation": lambda session, _user_id: load_translation_settings(session),
     DIRECTORY_KEY: lambda session, _user_id: load_directory_settings(session),
     REACH_KEY: lambda session, _user_id: load_reach_settings(session),
+    AI_PREFS_KEY: lambda session, user_id: load_ai_prefs(session, user_id=user_id),
 }
 
 #: The facade keys, and which of their fields the registry calls personal.
@@ -174,18 +175,6 @@ def clear_table_route(
         for resource in CLEARED_SYNC_RESOURCES.get(name, (name,)):
             touch_sync(session, resource)
     return ClearTableResponse(deleted=deleted)
-
-
-@router.get(
-    "/configuration",
-    dependencies=ADMIN_ONLY,
-    response_model=ConfigurationCatalogResponse,
-)
-def get_configuration_catalog(
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> ConfigurationCatalogResponse:
-    return build_configuration_catalog(session, user_id=current_user.id)
 
 
 @router.get("/settings/network", dependencies=ADMIN_ONLY)

@@ -172,6 +172,8 @@ class Settings(BaseSettings):
     DEFAULT_PROXY_URLS: str = ""
     EMBEDDING_MODEL: str = "gemini-embedding-2-preview"
     DEFAULT_AI_MODEL: str = "gemini-3-flash-preview"
+    # The language an Account's Summaries and Chat answer in until it picks one.
+    DEFAULT_AI_LANGUAGE: str = "English"
 
     # Database connection pool
     #

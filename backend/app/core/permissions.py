@@ -84,6 +84,14 @@ class Permission(StrEnum):
     claims leaks to an Admin and to nobody else.
     """
 
+    SETTINGS_MANAGE = "settings:manage"
+    """Change deployment Settings from the Settings page, and read Configuration.
+
+    Separate from `DATA_ADMIN` (plan decision 7, SET-02): tuning how often the
+    scheduler runs or how long Posts are kept is not administering the database,
+    and an Operator should be able to grant the first without the query console.
+    """
+
     VIEW_AS = "view_as"
     """Look at the application as another User (ticket 26 builds the flow).
 
@@ -145,8 +153,8 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
     RoleSeed(
         id=ROLE_OWNER,
         description=(
-            "Everything an Admin can do, plus looking as another User "
-            "and spending on their behalf."
+            "Everything an Admin can do, plus changing deployment Settings, "
+            "looking as another User and spending on their behalf."
         ),
         permissions=(
             Permission.USERS_READ,
@@ -157,6 +165,7 @@ SEEDED_ROLES: tuple[RoleSeed, ...] = (
             Permission.DATA_ADMIN,
             Permission.LOGS_READ_ANY,
             Permission.JOBS_MANAGE,
+            Permission.SETTINGS_MANAGE,
             Permission.VIEW_AS,
             Permission.VIEW_AS_SPEND,
         ),

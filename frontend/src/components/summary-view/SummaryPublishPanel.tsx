@@ -23,7 +23,7 @@ import {
   summaryPublishing,
 } from "./publish-panel-model"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 /**
  * The publish panel wired to the server: the plan route for the preview, the

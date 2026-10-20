@@ -10,7 +10,7 @@ import {
   withinPostFilterBounds,
 } from "@/lib/posts/post-filter"
 
-const workspaceRoute = getRouteApi("/_tg/workspace")
+const workspaceRoute = getRouteApi("/_tg/")
 
 /**
  * The Post filter, read from and written to `?postFilter=` (PTR-03), so a

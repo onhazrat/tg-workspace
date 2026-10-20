@@ -28,8 +28,8 @@ import {
 } from "@/components/ui/sheet"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgFilterChip } from "@/components/ui/tg-chips"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { TgInput } from "@/components/ui/tg-input"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
 import { useScope } from "@/contexts/ScopeContext"
 import { useUI } from "@/contexts/UIContext"
 import { useIsMobile } from "@/hooks/useMobile"
@@ -93,8 +93,7 @@ const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
   return (
     <div className="space-y-2 border-t border-app-ink/5 pt-3">
       <div className="flex items-center gap-1.5">
-        <TgSegmentedControl
-          size="sm"
+        <TgInlineChoice
           aria-label="Posts counted"
           value={unfiltered ? "all" : "filtered"}
           onChange={(next) => setUnfiltered(next === "all")}
@@ -267,8 +266,7 @@ const WindowEditor: React.FC<{ onReturn?: () => void }> = ({ onReturn }) => {
         </TgButton>
       )}
 
-      <TgSegmentedControl
-        size="sm"
+      <TgInlineChoice
         aria-label="Analysis window mode"
         value={mode}
         onChange={setMode}

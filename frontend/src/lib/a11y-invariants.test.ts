@@ -91,7 +91,7 @@ describe("header accessibility", () => {
 
   it("navigates tabs with links, not click handlers", () => {
     expect(stripCode).not.toContain("onClick={() => setActiveTab(tab.id")
-    expect(stripCode).toContain('to="/workspace"')
+    expect(stripCode).toContain('to="/"')
     expect(stripCode).toContain("aria-current={view.ariaCurrent}")
   })
 

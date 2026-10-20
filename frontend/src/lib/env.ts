@@ -14,7 +14,7 @@ function parseStringEnv(value: string | undefined, fallback: string): string {
 const viteEnv = typeof import.meta !== "undefined" ? import.meta.env : undefined
 
 /**
- * Read one public build-time value for the admin configuration inventory.
+ * Read one public build-time value for the Settings page's Configuration rows.
  * The generated map uses explicit property access so Vite can replace every
  * value frozen into this particular bundle.
  */

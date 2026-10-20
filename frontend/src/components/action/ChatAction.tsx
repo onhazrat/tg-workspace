@@ -1,13 +1,10 @@
 import { MessageSquare, Send } from "lucide-react"
 import type React from "react"
 
-import {
-  ACTION_SWITCH_OPTION_CLASS,
-  ActionRow,
-} from "@/components/action/ActionRow"
+import { ActionRow } from "@/components/action/ActionRow"
 import { startChatButton } from "@/components/action/action-view-model"
 import { TgButton } from "@/components/ui/tg-button"
-import { TgSegmentedControl } from "@/components/ui/tg-segmented"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { useChatContext } from "@/contexts/ChatContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
@@ -73,12 +70,10 @@ export const ChatAction: React.FC = () => {
       description="Ask questions instead of generating a document. The first message opens the conversation."
       controls={
         <>
-          <TgSegmentedControl<ChatMode>
-            size="sm"
+          <TgInlineChoice<ChatMode>
             aria-label="Chat mode"
             value={chatMode}
             onChange={setChatMode}
-            optionClassName={ACTION_SWITCH_OPTION_CLASS}
             className="shrink-0"
             options={[
               { value: "full_scope", label: "Selected posts" },

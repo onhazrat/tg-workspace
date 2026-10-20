@@ -1,6 +1,6 @@
 import { Brain, ChevronDown, KeyRound, Languages, Plus } from "lucide-react"
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { AiKeyAddForm } from "@/components/ai/AiKeyAddForm"
 import { ModelCombo } from "@/components/ai/ModelCombo"
@@ -89,11 +89,20 @@ export const RunSettingsBar: React.FC = () => {
    * somebody typed with a default the *server* suggested, on the catalogue
    * arriving; this restores a value the account itself chose, and only when the
    * Key changes.
+   *
+   * **Only on a change, never on mount or on the model moving.** The model is
+   * the Account's (SET-05) and this map is one browser's, so applying it on
+   * mount let the last device to load overwrite every other device's choice,
+   * and depending on `selectedModel` undid a Settings-page write while the
+   * Action tab was open.
    */
+  const lastKeyId = useRef(selectedKeyId)
   useEffect(() => {
+    if (lastKeyId.current === selectedKeyId) return
+    lastKeyId.current = selectedKeyId
     const remembered = modelForKey(selectedKeyId)
-    if (remembered && remembered !== selectedModel) setSelectedModel(remembered)
-  }, [selectedKeyId, selectedModel, setSelectedModel])
+    if (remembered) setSelectedModel(remembered)
+  }, [selectedKeyId, setSelectedModel])
 
   const addButton = (
     <button

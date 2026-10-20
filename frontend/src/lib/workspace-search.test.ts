@@ -2,6 +2,30 @@ import { describe, expect, test } from "bun:test"
 import { validateWorkspaceSearch } from "./workspace-search"
 
 describe("validateWorkspaceSearch", () => {
+  test("an old Settings link to a tool opens the Tools tab", () => {
+    for (const section of [
+      "quick-message",
+      "diagnostics",
+      "network-telemetry",
+      "table-sizes",
+      "transfer",
+      "query",
+      "tools",
+      "telemetry",
+      "logs",
+      "db",
+      "data",
+      "data-management",
+    ]) {
+      expect(validateWorkspaceSearch({ tab: "settings", section })).toEqual({
+        tab: "tools",
+      })
+    }
+    expect(
+      validateWorkspaceSearch({ tab: "settings", section: "proxy" }),
+    ).toEqual({ tab: "settings", section: "proxy" })
+  })
+
   test("no tab, or one that does not exist, is Channels", () => {
     expect(validateWorkspaceSearch({})).toEqual({ tab: "channels" })
     expect(validateWorkspaceSearch({ tab: "nope" })).toEqual({
@@ -59,17 +83,13 @@ describe("validateWorkspaceSearch", () => {
     ).toEqual({ tab: "settings", section: "network" })
   })
 
-  test("a section is normalised, blank or unknown falls back", () => {
+  test("a section is trimmed, and blank or non-string ones are dropped", () => {
+    // The Settings page maps an old section id to its topic (SET-02).
     expect(
       validateWorkspaceSearch({ tab: "settings", section: " network " })
         .section,
     ).toBe("network")
-    expect(validateWorkspaceSearch({ section: "" }).section).toBe(
-      "commonly-used",
-    )
-    expect(validateWorkspaceSearch({ section: "bogus" }).section).toBe(
-      "commonly-used",
-    )
+    expect("section" in validateWorkspaceSearch({ section: "" })).toBe(false)
     expect("section" in validateWorkspaceSearch({ section: 4 })).toBe(false)
   })
 

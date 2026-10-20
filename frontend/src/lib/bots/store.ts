@@ -6,7 +6,7 @@ import type { BotCredential, ChatDestination } from "@/types"
  * Reads and writes for the `BotCredential` and `ChatDestination` aggregates.
  *
  * **Suppress, not invalidate** — the same rule as channels and summaries. The
- * `bots` query is written through by `BotManagement` after each save, and
+ * `bots` query is written through by `usePublishing` after each save, and
  * `repository.ts` marked the resource synced so the next read would not refetch.
  *
  * ## `stripToken` on every read path, deliberately

@@ -2,8 +2,8 @@ import { Plus } from "lucide-react"
 import type React from "react"
 import { useState } from "react"
 
+import { barInputClass } from "@/components/BarPopover"
 import { TgButton } from "@/components/ui/tg-button"
-import { TgInput, tgFieldClassName } from "@/components/ui/tg-input"
 import { useRefreshAiKeys } from "@/hooks/useAiKeys"
 import { saveAiKey } from "@/lib/aiKeys/store"
 
@@ -89,48 +89,52 @@ export const AiKeyAddForm: React.FC<{ onSaved?: () => void }> = ({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <select
         aria-label="Provider"
         value={provider}
         onChange={(e) => setProvider(e.target.value)}
-        className={tgFieldClassName}
+        className={`${barInputClass} w-full`}
       >
         <option value="gemini">Google Gemini</option>
         <option value="openai_compatible">OpenAI-compatible</option>
       </select>
       {provider === "openai_compatible" && (
-        <TgInput
+        <input
           type="text"
+          aria-label="Base URL"
           placeholder="Base URL (e.g. https://openrouter.ai/api/v1)"
           value={baseUrl}
           onChange={(e) => setBaseUrl(e.target.value)}
+          className={`${barInputClass} w-full`}
         />
       )}
-      <TgInput
+      <input
         type="password"
+        aria-label="Provider API key"
         placeholder="Provider API key"
         value={secret}
         onChange={(e) => setSecret(e.target.value)}
+        className={`${barInputClass} w-full`}
       />
-      <TgInput
+      <input
         type="text"
+        aria-label="Label"
         placeholder="Label (e.g. Work key)"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
+        className={`${barInputClass} w-full`}
       />
+      {error && <p className="px-1 text-[11px] text-red-500">{error}</p>}
       <TgButton
         type="button"
-        variant="primary"
-        size="lg"
+        size="sm"
         onClick={addKey}
         loading={saving}
         loadingLabel="Checking…"
-        className="w-full"
       >
-        <Plus size={14} /> Save Key
+        <Plus size={12} /> Save key
       </TgButton>
-      {error && <p className="text-[10px] font-mono text-red-500">{error}</p>}
     </div>
   )
 }

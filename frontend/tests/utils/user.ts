@@ -23,12 +23,13 @@ export async function logInUser(page: Page, email: string, password: string) {
   await page.getByTestId("email-input").fill(email)
   await page.getByTestId("password-input").fill(password)
   await page.getByRole("button", { name: "Log In" }).click()
-  await page.waitForURL(/\/workspace\?.*tab=channels/)
+  await page.waitForURL(/\/\?.*tab=channels/)
   await seedScopedStorage(page, { hasSeenTour: "true" })
 }
 
 export async function logOutUser(page: Page) {
-  await page.getByTestId("user-menu").click()
-  await page.getByRole("menuitem", { name: "Log out" }).click()
-  await page.goto("/login")
+  // Sign out lives in Settings, Account since the template sidebar left (SET-01).
+  await page.goto("/settings")
+  await page.getByRole("button", { name: "Sign out" }).click()
+  await page.waitForURL("/login")
 }
