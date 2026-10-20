@@ -27,10 +27,10 @@ keeps the whole spread's scale:
 - Prior-art tests: `test_post_value_histogram.py`, `test_directory_browse.py`, `ChannelMetricEditor.test.tsx`, `DirectoryBoundEditor.test.tsx`, `PostFilter.test.tsx`.
 - Regenerate the generated client after the schema change.
 
-- [ ] `/data/directory/distribution` and `/data/posts/value-histogram` take an optional `lo` and `hi`, bin only that range, and keep the whole spread's scale; whole-spread fields (minimum, maximum, median, No value count) stay whole-spread. The value histogram request carries the scale it was first drawn on.
-- [ ] The generated client is regenerated; Playwright mocks of both routes are updated; both typechecks pass.
-- [ ] One zoom rule serves every spread: thirds per step, centred on the bound (its middle or its one end) or the median, clamped inside the whole spread, log(1 + x) on a log scale, six steps at most, Zoom out disabled at whole, reset on reopening the editor.
-- [ ] The zoom buttons are the Posts time chart's shared piece, placed the same way above each spread.
-- [ ] Channels numbers and moments re-bin in the browser; Directory spreads and Posts number histograms ask the server for the zoomed range, keeping the previous bars visible while the new ones load.
-- [ ] A time spread's captions show the time of day once the shown span is under three days.
-- [ ] API tests for `lo`, `hi` and the kept scale on both routes, in the existing value-histogram and Directory browse tests' style. Render tests: Zoom in and out change the range asked for (server spreads) or the bars drawn (browser spreads), centring, the six-step stop, the disabled Zoom out. Each new guard is mutation-tested.
+- [x] `/data/directory/distribution` and `/data/posts/value-histogram` take an optional `lo` and `hi`, bin only that range, and keep the whole spread's scale; whole-spread fields (minimum, maximum, median, No value count) stay whole-spread. The value histogram request carries the scale it was first drawn on.
+- [x] The generated client is regenerated; Playwright mocks of both routes are updated; both typechecks pass.
+- [x] One zoom rule serves every spread: thirds per step, centred on the bound (its middle or its one end) or the median, clamped inside the whole spread, log(1 + x) on a log scale, six steps at most, Zoom out disabled at whole, reset on reopening the editor.
+- [x] The zoom buttons are the Posts time chart's shared piece, placed the same way above each spread.
+- [x] Channels numbers and moments re-bin in the browser; Directory spreads and Posts number histograms ask the server for the zoomed range, keeping the previous bars visible while the new ones load.
+- [x] A time spread's captions show the time of day once the shown span is under three days.
+- [x] API tests for `lo`, `hi` and the kept scale on both routes, in the existing value-histogram and Directory browse tests' style. Render tests: Zoom in and out change the range asked for (server spreads) or the bars drawn (browser spreads), centring, the six-step stop, the disabled Zoom out. Each new guard is mutation-tested.
