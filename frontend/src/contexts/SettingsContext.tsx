@@ -50,7 +50,7 @@ interface SettingsContextType {
    * (the Settings page's registry write, SET-02). What it reads is what the
    * server holds, so it is not written back.
    */
-  refreshSection: (key: string) => Promise<void>
+  refreshSection: (key: string | null | undefined) => Promise<void>
   theme: Theme
   resolvedTheme: "light" | "dark"
   setTheme: (theme: Theme) => void
@@ -263,9 +263,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({
   const aiUploaded = useRef(false)
 
   const refreshSection = useCallback(
-    async (key: string) => {
+    async (key: string | null | undefined) => {
       if (key === "network") return reloadNetwork()
-      const section = SECTION_OF_KEY[key]
+      const section = SECTION_OF_KEY[key ?? ""]
       if (!section) return
       const { value } = await api.getSetting(section)
       setSettings((prev) => {

@@ -73,13 +73,14 @@ export function useSettingsRegistry({ enabled = true } = {}) {
 
   const values = settings as unknown as Record<string, unknown>
 
-  /** Hands a browser value to `SettingsContext`'s setter for its key. */
+  /** Hands a browser value to the theme provider or `SettingsContext`'s setter. */
   const setBrowserValue = useCallback(
     (key: string, value: unknown) => {
+      if (key === THEME_STORAGE_KEY) return settings.setTheme(value as Theme)
       const setter = values[setterName(key)]
-      if (typeof setter === "function") setter(value)
+      if (typeof setter === "function") setter(browserValue(key, value))
     },
-    [values],
+    [settings, values],
   )
 
   const rows = useMemo<Row[]>(
@@ -118,13 +119,11 @@ export function useSettingsRegistry({ enabled = true } = {}) {
 
   const write = useCallback(
     async (row: Row, body: { value?: unknown; reset?: boolean }) => {
-      if (row.scope === "browser") {
-        const key = row.key ?? ""
-        const next = body.reset ? row.default : body.value
-        if (key === THEME_STORAGE_KEY) settings.setTheme(next as Theme)
-        else setBrowserValue(key, browserValue(key, next))
-        return
-      }
+      if (row.scope === "browser")
+        return setBrowserValue(
+          row.key ?? "",
+          body.reset ? row.default : body.value,
+        )
       const updated = await settingsUpdateSetting({
         path: { setting_id: row.id },
         body,
@@ -132,7 +131,7 @@ export function useSettingsRegistry({ enabled = true } = {}) {
       replaceRow(updated)
       // The rest of the app reads whole sections: re-read this one rather
       // than echo the value into a setter, which would write it again.
-      if (updated.key) settings.refreshSection(updated.key).catch(console.error)
+      settings.refreshSection(updated.key).catch(console.error)
     },
     [setBrowserValue, replaceRow, settings],
   )
