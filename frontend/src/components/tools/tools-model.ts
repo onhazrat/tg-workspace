@@ -6,29 +6,23 @@
 
 export type ToolId = "logs" | "quick-message" | "network-telemetry" | "database"
 
-export interface ToolAccess {
-  /** `data:admin`: table sizes, import / export and the query console. */
-  canAdministerData: boolean
-  /** `logs:read_any`: the network log telemetry reads. */
-  canReadNetworkLogs: boolean
-}
-
 export interface ToolEntry {
   id: ToolId
   title: string
 }
 
-export function visibleTools(access: ToolAccess): ToolEntry[] {
+/** The tools `permissions` (the registry's list for this Account) reach. */
+export function visibleTools(permissions: readonly string[]): ToolEntry[] {
   const tools: ToolEntry[] = [
     { id: "logs", title: "Logs" },
     { id: "quick-message", title: "Quick message" },
   ]
-  if (access.canReadNetworkLogs)
+  if (permissions.includes("logs:read_any"))
     tools.push({ id: "network-telemetry", title: "Network telemetry" })
   // One entry, not three: table sizes, import / export and the query console
   // are one panel (`DatabaseManagement`'s table view), and drawing it three
   // times would load and list the same tables three times.
-  if (access.canAdministerData)
+  if (permissions.includes("data:admin"))
     tools.push({
       id: "database",
       title: "Table sizes, import / export and query console",

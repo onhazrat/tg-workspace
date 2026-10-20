@@ -1,13 +1,9 @@
-import { useQuery } from "@tanstack/react-query"
 import type React from "react"
 
-import { api } from "@/api"
 import { DatabaseManagement } from "@/components/DatabaseManagement"
 import { DiagnosticsView } from "@/components/DiagnosticsView"
 import { NetworkTelemetry } from "@/components/NetworkTelemetry"
-import { queryKeys } from "@/hooks/queryKeys"
-import { useNetworkLogsQuery } from "@/hooks/useLogs"
-import type { DBStats } from "@/types"
+import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { QuickMessageTool } from "./QuickMessageTool"
 import { type ToolId, visibleTools } from "./tools-model"
 
@@ -20,29 +16,11 @@ const TOOL_BODIES: Record<ToolId, () => React.ReactNode> = {
 
 /**
  * The Tools tab (SET-01): what left Settings because it is a tool, not a
- * setting. Restyling it like the Settings page is a later ticket.
- *
- * ## How it knows the Permissions
- *
- * The server publishes nobody's permission set (see `useCanManageJobs`), so
- * each gated tool is shown when the read it starts with succeeds: the table
- * stats for `data:admin` and the network log list for `logs:read_any`. Both
- * are reads the tools make anyway, so an Account that holds the Permission
- * pays no extra request, and one that does not pays one 403 each.
- * `retry: false` because that 403 is the answer.
+ * setting. Which gated tools show comes from the Permissions the Settings
+ * registry lists for this Account, the same list the Settings page reads.
  */
 export const ToolsTab: React.FC = () => {
-  const stats = useQuery({
-    queryKey: queryKeys.dbStats,
-    queryFn: () => api.getStats() as Promise<DBStats>,
-    retry: false,
-    staleTime: 30_000,
-  })
-  const networkLogs = useNetworkLogsQuery(true, { retry: false })
-  const tools = visibleTools({
-    canAdministerData: stats.isSuccess,
-    canReadNetworkLogs: networkLogs.isSuccess,
-  })
+  const tools = visibleTools(useSettingsRegistry().permissions)
   return (
     <div className="space-y-4" data-testid="tools-tab">
       {tools.map((tool) => (

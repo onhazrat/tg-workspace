@@ -60,8 +60,6 @@ export type LogLister = <T>(type: LogType, search?: LogSearch) => Promise<T[]>
 export type LogsQueryOptions = {
   /** Poll interval in ms. Omit for no polling. */
   refetchInterval?: number
-  /** `false` where a 403 is the answer rather than a failure (the Tools tab). */
-  retry?: false
   /** Test seam; see `LogLister`. */
   lister?: LogLister
   /**
@@ -88,7 +86,6 @@ export function useLogsQuery(
     staleTime: SUMMARIZER_STALE_TIME,
     enabled,
     refetchInterval: options.refetchInterval,
-    ...(options.retry === false ? { retry: false } : {}),
   })
 }
 

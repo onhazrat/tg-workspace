@@ -74,20 +74,22 @@ test.describe("the Tools tab", () => {
       await createUser({ email, password })
       await logInUser(page, email, password)
 
-      // The gated tools show once their first read succeeds, so wait for both
-      // refusals before asserting they stayed hidden.
-      const refused = (path: string) =>
-        page.waitForResponse(
-          (r) => r.url().includes(path) && r.status() === 403,
-        )
-      const stats = refused("/api/v1/data/stats")
-      const networkLogs = refused("/api/v1/data/logs/network")
+      // The gated tools follow the registry's Permission list, so wait for it
+      // before asserting they stayed hidden; nothing is probed for a 403.
+      const probes: string[] = []
+      page.on("response", (r) => {
+        if (r.url().includes("/api/v1/data/stats")) probes.push(r.url())
+      })
+      const registry = page.waitForResponse((r) =>
+        r.url().includes("/api/v1/settings/registry"),
+      )
       await page.goto("/?tab=tools")
-      await Promise.all([stats, networkLogs])
+      await registry
       await expect(page.getByTestId("tool-logs")).toBeVisible()
       await expect(page.getByTestId("tool-quick-message")).toBeVisible()
       await expect(page.getByTestId("tool-network-telemetry")).toHaveCount(0)
       await expect(page.getByTestId("tool-database")).toHaveCount(0)
+      expect(probes).toEqual([])
     })
   })
 })

@@ -2,25 +2,27 @@ import { describe, expect, test } from "bun:test"
 
 import { visibleTools } from "./tools-model"
 
-const ids = (access: Parameters<typeof visibleTools>[0]) =>
-  visibleTools(access).map((t) => t.id)
+const ids = (permissions: string[]) =>
+  visibleTools(permissions).map((t) => t.id)
 
 describe("the Tools tab", () => {
   test("every Account gets Logs and Quick message", () => {
-    expect(
-      ids({ canAdministerData: false, canReadNetworkLogs: false }),
-    ).toEqual(["logs", "quick-message"])
+    expect(ids([])).toEqual(["logs", "quick-message"])
   })
 
   test("network telemetry needs the network-log read, nothing else", () => {
-    expect(ids({ canAdministerData: false, canReadNetworkLogs: true })).toEqual(
-      ["logs", "quick-message", "network-telemetry"],
-    )
+    expect(ids(["logs:read_any"])).toEqual([
+      "logs",
+      "quick-message",
+      "network-telemetry",
+    ])
   })
 
   test("the database tools need data administration, nothing else", () => {
-    expect(ids({ canAdministerData: true, canReadNetworkLogs: false })).toEqual(
-      ["logs", "quick-message", "database"],
-    )
+    expect(ids(["data:admin", "jobs:manage"])).toEqual([
+      "logs",
+      "quick-message",
+      "database",
+    ])
   })
 })
