@@ -15,6 +15,7 @@ import json
 import os
 import re
 from collections import Counter
+from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -80,28 +81,40 @@ def _settings_source() -> dict[str, tuple[int, str]]:
     }
 
 
-@lru_cache(maxsize=1)
-def _dotenv_names() -> frozenset[str]:
-    """Names the configured dotenv files assign, without loading their values."""
-    configured = Settings.model_config.get("env_file")
+_DOTENV_ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
+
+
+def dotenv_names_in(
+    configured: str | Path | Sequence[str | Path] | None, roots: Sequence[Path]
+) -> frozenset[str]:
+    """Names assigned by the dotenv files `configured` names, without their values.
+
+    A relative path is looked up under each of `roots` in turn; a missing file
+    is skipped, because pydantic-settings skips it too.
+    """
     if not configured:
         return frozenset()
     paths = [configured] if isinstance(configured, (str, Path)) else list(configured)
-    backend_root = Path(__file__).resolve().parents[2]
     names: set[str] = set()
     for raw in paths:
         path = Path(raw)
-        candidates = (
-            [path] if path.is_absolute() else [Path.cwd() / path, backend_root / path]
-        )
+        candidates = [path] if path.is_absolute() else [root / path for root in roots]
         found = next((c for c in candidates if c.is_file()), None)
         if found is None:
             continue
         for line in found.read_text().splitlines():
-            match = re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
-            if match:
+            if match := _DOTENV_ASSIGNMENT.match(line):
                 names.add(match.group(1).upper())
     return frozenset(names)
+
+
+@lru_cache(maxsize=1)
+def _dotenv_names() -> frozenset[str]:
+    """Names the configured dotenv files assign, without loading their values."""
+    return dotenv_names_in(
+        Settings.model_config.get("env_file"),
+        [Path.cwd(), Path(__file__).resolve().parents[2]],
+    )
 
 
 def _camel(name: str) -> str:
