@@ -24,9 +24,13 @@ reclaim disk and the log must still list with null bodies.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.schemas.common import ZoomRequest
+from app.services.analysis_window import MINUTE_MS, TimeBound, TimeMode
+from app.services.logs import DEFAULT_LOG_PAGE_SIZE, MAX_LOG_PAGE_SIZE
 
 #: JSON captured verbatim from an upstream request or response. Left loose on
 #: purpose: it is whatever the provider sent, which is not ours to model.
@@ -250,6 +254,62 @@ class LLMLogListItemResponse(BaseModel):
     error: str | None = None
     timestamp: int = 0
     log_type: str = Field(default="", alias="type")
+
+
+class LogBoundQuery(BaseModel):
+    """When entries were logged, `[start, end)` to the minute, either end
+    open; no mode is Any time."""
+
+    mode: TimeMode | None = Field(
+        None, description="The Logged bound's mode; none is Any time"
+    )
+    start: int | None = Field(
+        None, description="Included. Epoch ms when Fixed, signed ms from now when Live"
+    )
+    end: int | None = Field(
+        None, description="Excluded. Epoch ms when Fixed, signed ms from now when Live"
+    )
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        # An end without a mode is refused rather than guessed at, and a
+        # crossed bound rather than swapped. Live ends sit on the server's
+        # minute, so flooring the offsets floors the instants alike.
+        if self.mode is None and (self.start is not None or self.end is not None):
+            raise ValueError("A Time bound needs a mode.")
+        if (
+            self.start is not None
+            and self.end is not None
+            and self.start // MINUTE_MS >= self.end // MINUTE_MS
+        ):
+            raise ValueError(
+                "The Time bound must start at least one minute before it ends."
+            )
+        return self
+
+    def bound(self) -> TimeBound | None:
+        return None if self.mode is None else TimeBound(self.mode, self.start, self.end)
+
+
+class LogSearchQuery(BaseModel):
+    """A text search over a log, in SQL so the whole table is searched."""
+
+    search: str | None = None
+    search_in_details: bool = Field(False, alias="searchInDetails")
+
+
+# One model per route, because FastAPI reads a model's fields as query
+# parameters only when it is the route's sole query parameter; its validators
+# then answer a 422 like any other bad parameter.
+class LogPageQuery(LogSearchQuery, LogBoundQuery):
+    """One newest-first page of a log, searched and bounded before paging."""
+
+    limit: int = Field(DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE)
+    offset: int = Field(0, ge=0)
+
+
+class LogSpreadQuery(LogSearchQuery, ZoomRequest):
+    """A log's spread under the search, zoomed by `lo` and `hi`."""
 
 
 class LogSpreadBinResponse(BaseModel):

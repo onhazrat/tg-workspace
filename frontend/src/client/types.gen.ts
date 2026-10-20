@@ -12331,22 +12331,6 @@ export type DataListLogsRouteData = {
     };
     query?: {
         /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-        /**
-         * Search
-         */
-        search?: string | null;
-        /**
-         * Searchindetails
-         */
-        searchInDetails?: boolean;
-        /**
          * Mode
          *
          * The Logged bound's mode; none is Any time
@@ -12364,6 +12348,22 @@ export type DataListLogsRouteData = {
          * Excluded. Epoch ms when Fixed, signed ms from now when Live
          */
         end?: number | null;
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Searchindetails
+         */
+        searchInDetails?: boolean;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
     };
     url: '/api/v1/data/logs/{log_type}';
 };
@@ -12437,14 +12437,6 @@ export type DataGetLogSpreadRouteData = {
     };
     query?: {
         /**
-         * Search
-         */
-        search?: string | null;
-        /**
-         * Searchindetails
-         */
-        searchInDetails?: boolean;
-        /**
          * Lo
          */
         lo?: number | null;
@@ -12452,6 +12444,14 @@ export type DataGetLogSpreadRouteData = {
          * Hi
          */
         hi?: number | null;
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Searchindetails
+         */
+        searchInDetails?: boolean;
     };
     url: '/api/v1/data/logs/{log_type}/spread';
 };

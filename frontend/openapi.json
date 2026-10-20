@@ -5159,48 +5159,6 @@
             "description": "publish | sync | llm | embedding | network"
           },
           {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 5000,
-              "minimum": 1,
-              "default": 500,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Search"
-            }
-          },
-          {
-            "name": "searchInDetails",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Searchindetails"
-            }
-          },
-          {
             "name": "mode",
             "in": "query",
             "required": false,
@@ -5235,6 +5193,48 @@
               "title": "End"
             },
             "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "searchInDetails",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Searchindetails"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
           }
         ],
         "responses": {
@@ -5331,6 +5331,24 @@
             "description": "publish | sync | llm | embedding | network"
           },
           {
+            "name": "lo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Lo"
+            }
+          },
+          {
+            "name": "hi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Hi"
+            }
+          },
+          {
             "name": "search",
             "in": "query",
             "required": false,
@@ -5347,24 +5365,6 @@
               "type": "boolean",
               "default": false,
               "title": "Searchindetails"
-            }
-          },
-          {
-            "name": "lo",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "number" }, { "type": "null" }],
-              "title": "Lo"
-            }
-          },
-          {
-            "name": "hi",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "number" }, { "type": "null" }],
-              "title": "Hi"
             }
           }
         ],

@@ -88,6 +88,7 @@ from app.models_tg import (
     utc_now,
 )
 from app.services import search_text, tags
+from app.services.analysis_window import TimeBound
 from app.services.channel_directory import LISTED_KIND
 from app.services.channel_directory_samples import samples_by_handle
 from app.services.channel_tags import tag_key
@@ -161,7 +162,6 @@ DIRECTORY_MOMENTS: tuple[DirectoryMoment, ...] = get_args(DirectoryMoment)
 #: What the "is" Condition tests, and what the "contains" Condition searches.
 IsField = Literal["status", "kind"]
 ContainsField = Literal["last_error"]
-TimeMode = Literal["live", "fixed"]
 #: Every column of the catalogue, plus the "your channels" reads: how many cite
 #: it, and how many days since the newest of them did.
 DirectorySort = Literal[
@@ -339,9 +339,7 @@ class TimeCond:
     """
 
     moment: DirectoryMoment
-    mode: TimeMode
-    start: int | None = None
-    end: int | None = None
+    bound: TimeBound
     none: bool = False
 
 
@@ -351,9 +349,7 @@ class MineCond:
     were published, `[start, end)` as `TimeCond` reads it; ever with both
     ends open (TB-02)."""
 
-    mode: TimeMode = "live"
-    start: int | None = None
-    end: int | None = None
+    bound: TimeBound = TimeBound()
 
 
 # The three Conditions taking Seeds hold either the handles the browser
@@ -695,18 +691,18 @@ def _of_kinds(view: DirectoryView) -> list[ColumnElement[bool]]:
 
 
 def _references(
-    view: DirectoryView, window: MineCond | None = None
+    view: DirectoryView, window: TimeBound | None = None
 ) -> list[ColumnElement[bool]]:
     """The References "your channels" make, narrowed by the Reference kinds,
     and to the window when given."""
     clauses = [col(PostReference.source_channel) == any_(_handles(view.sources))]
     clauses += _of_kinds(view)
     if window is not None:
-        base = _epoch_ms(view.now) if window.mode == "live" else 0
-        if window.start is not None:
-            clauses.append(col(PostReference.timestamp) >= base + window.start)
-        if window.end is not None:
-            clauses.append(col(PostReference.timestamp) < base + window.end)
+        at = window.resolve(_epoch_ms(view.now))
+        if at.start is not None:
+            clauses.append(col(PostReference.timestamp) >= at.start)
+        if at.end is not None:
+            clauses.append(col(PostReference.timestamp) < at.end)
     return clauses
 
 
@@ -837,7 +833,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     if isinstance(cond, MineCond):
         if not view.sources:
             return false()
-        refs = _references(view, cond)
+        refs = _references(view, cond.bound)
         # Uncorrelated, so Postgres hashes it once even under an OR or a NOT.
         return handle.in_(sa_select(col(PostReference.target_handle)).where(*refs))
     if isinstance(cond, CitedByCond | CitesCond):
@@ -870,12 +866,12 @@ def _time_bound(cond: TimeCond, now: datetime) -> ColumnElement[bool]:
     column = col(getattr(DirectoryEntry, cond.moment))
     if cond.none:
         return column.is_(None)
-    base = _epoch_ms(now) if cond.mode == "live" else 0
+    at = cond.bound.resolve(_epoch_ms(now))
     bounds: list[ColumnElement[bool]] = [column.is_not(None)]
-    if cond.start is not None:
-        bounds.append(column >= literal(_naive(base + cond.start), DateTime))
-    if cond.end is not None:
-        bounds.append(column < literal(_naive(base + cond.end), DateTime))
+    if at.start is not None:
+        bounds.append(column >= literal(_naive(at.start), DateTime))
+    if at.end is not None:
+        bounds.append(column < literal(_naive(at.end), DateTime))
     return and_(*bounds)
 
 
@@ -1605,7 +1601,7 @@ def why_its_here(
     session: Session,
     view: DirectoryView,
     handle: str,
-    window: MineCond,
+    window: TimeBound,
 ) -> Why:
     """The Posts of "your channels" that cite `handle`, newest first, and the
     Channels it shares with the Seeds of each Shared Condition in the view's
@@ -1624,7 +1620,7 @@ def why_its_here(
 
 
 def _citing_posts(
-    session: Session, view: DirectoryView, handle: str, window: MineCond
+    session: Session, view: DirectoryView, handle: str, window: TimeBound
 ) -> Why:
     if not view.sources:
         return Why(posts=[], total=0)

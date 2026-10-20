@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, cast
+from typing import Any, NamedTuple, cast
 
 from fastapi import HTTPException
 from sqlalchemy import Float, Text, func
@@ -25,7 +25,11 @@ from app.models_tg import (
     SyncLogPayload,
     utc_now,
 )
-from app.services.analysis_window import current_minute_start
+from app.services.analysis_window import (
+    ResolvedWindow,
+    TimeBound,
+    current_minute_start,
+)
 from app.services.serialization import (
     mapping_to_camel,
     model_to_camel,
@@ -724,44 +728,27 @@ def _light_columns(model: type[SQLModel], heavy: frozenset[str]) -> list[Any]:
     return [c for c in _log_table(model).columns if c.key not in heavy]
 
 
-#: `[start, end)` in epoch ms, either end open: a Logged bound resolved.
-type LogBound = tuple[int | None, int | None]
-
-#: No bound at all.
-ANY_TIME: LogBound = (None, None)
+#: No Logged bound at all.
+ANY_TIME = ResolvedWindow(None, None)
 
 
 def resolve_log_bound(
-    mode: Literal["live", "fixed"] | None,
-    start: int | None,
-    end: int | None,
-    *,
-    now_ms: int | None = None,
-) -> LogBound:
+    bound: TimeBound | None, *, now_ms: int | None = None
+) -> ResolvedWindow:
     """A Logged Time bound as `[start, end)` in epoch ms (TB-05, ADR-033).
 
-    A Live end is signed ms from the server's current minute, as the Analysis
-    window's is, so two reads a second apart select the same rows; a Fixed end
-    is an instant. Both are floored to the minute, the editor's precision. A
-    crossed bound is refused rather than swapped, and an end without a mode is
-    refused rather than guessed at.
+    A Live end is placed against the server's current minute, as the Analysis
+    window's is, so two reads a second apart select the same rows. Then both
+    ends are floored to the minute, the editor's precision.
     """
-    if mode is None:
-        if start is None and end is None:
-            return ANY_TIME
-        raise HTTPException(status_code=422, detail="A Time bound needs a mode.")
-    base = current_minute_start(now_ms) if mode == "live" else 0
+    if bound is None:
+        return ANY_TIME
+    at = bound.resolve(current_minute_start(now_ms))
 
-    def at(ms: int | None) -> int | None:
-        return None if ms is None else current_minute_start(base + ms)
+    def floored(ms: int | None) -> int | None:
+        return None if ms is None else current_minute_start(ms)
 
-    lo, hi = at(start), at(end)
-    if lo is not None and hi is not None and lo >= hi:
-        raise HTTPException(
-            status_code=422,
-            detail="The Time bound must start at least one minute before it ends.",
-        )
-    return lo, hi
+    return ResolvedWindow(floored(at.start), floored(at.end))
 
 
 def _visible(
@@ -771,7 +758,7 @@ def _visible(
     user_id: uuid.UUID,
     search: str | None,
     search_in_details: bool,
-    bound: LogBound = ANY_TIME,
+    bound: ResolvedWindow = ANY_TIME,
 ) -> Any:
     """The rows of one log the caller may see, matching the search and the bound.
 
@@ -792,11 +779,10 @@ def _visible(
         statement = statement.where(
             _log_search_clause(log_type, search.strip(), in_details=search_in_details)
         )
-    start, end = bound
-    if start is not None:
-        statement = statement.where(timestamp >= start)
-    if end is not None:
-        statement = statement.where(timestamp < end)
+    if bound.start is not None:
+        statement = statement.where(timestamp >= bound.start)
+    if bound.end is not None:
+        statement = statement.where(timestamp < bound.end)
     return statement
 
 
@@ -809,7 +795,7 @@ def _list_logs_page(
     offset: int,
     search: str | None,
     search_in_details: bool,
-    bound: LogBound,
+    bound: ResolvedWindow,
 ) -> list[dict[str, Any]]:
     """Return one newest-first page of a log table, without its heavy columns.
 
@@ -850,7 +836,7 @@ def list_logs(
     offset: int = 0,
     search: str | None = None,
     search_in_details: bool = False,
-    bound: LogBound = ANY_TIME,
+    bound: ResolvedWindow = ANY_TIME,
 ) -> list[dict[str, Any]]:
     """One newest-first page of any log type, in the light projection.
 
