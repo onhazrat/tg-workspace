@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
-import { type Bin, Spread } from "@/components/directory/DirectoryBoundEditor"
-import { dateText } from "@/components/directory/DirectoryTimeEditor"
+import { BINS, type Bin, dateText, Spread } from "@/components/Spread"
 import { type Range, useZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
@@ -18,7 +17,6 @@ import {
   resolveTimeBound,
   type TimeBound,
 } from "@/lib/time-bound/bound"
-import { BINS } from "./ChannelMetricEditor"
 
 /** What a moment's Time bound turns on (ADR-033): all three switches. */
 const OPTIONS = { openEnds: true, ahead: true }

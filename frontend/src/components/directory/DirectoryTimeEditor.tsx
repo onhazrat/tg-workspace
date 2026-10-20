@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
+import { type Bin, dateText, Spread } from "@/components/Spread"
 import type { ZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
@@ -13,16 +14,6 @@ import {
   resolveTimeBound,
   type TimeBound,
 } from "@/lib/time-bound/bound"
-import { type Bin, Spread } from "./DirectoryBoundEditor"
-
-const DAY_MS = 86_400_000
-
-/** A time spread's captions: dates, and the time of day once under three days show. */
-export const dateText = (ms: number, shown = Number.POSITIVE_INFINITY) =>
-  new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    ...(shown < 3 * DAY_MS && { timeStyle: "short" }),
-  }).format(ms)
 
 /** What a moment's Time bound turns on (ADR-033): all three switches. */
 const OPTIONS = { openEnds: true, ahead: true }

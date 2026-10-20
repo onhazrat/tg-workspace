@@ -5,6 +5,7 @@ import {
   nice,
 } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
+import { BINS } from "@/components/Spread"
 import { type Range, useZoomState } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
@@ -17,8 +18,6 @@ import {
   metric,
   parseBound,
 } from "@/lib/channels/channel-metrics"
-
-export const BINS = 32
 
 const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
 
