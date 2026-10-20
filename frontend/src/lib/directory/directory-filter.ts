@@ -43,6 +43,12 @@ import {
 } from "@/lib/filter-text"
 import { atoms, type FilterNode, type FilterTree } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/language-name"
+import {
+  parseTimeBound,
+  TIME_BOUND,
+  timeBoundText,
+  timeBoundWords,
+} from "@/lib/time-bound/text"
 
 export type MeasureKey = DirectoryMeasureCondition["measure"]
 export type MomentKey = DirectoryTimeCondition["moment"]
@@ -434,52 +440,12 @@ export const OPENING_FILTER =
 
 // ---- Labels ----------------------------------------------------------------
 
-const UNITS = [
-  ["w", 7 * 86_400_000, "week"],
-  ["d", 86_400_000, "day"],
-  ["h", 3_600_000, "hour"],
-  ["m", 60_000, "minute"],
-  ["s", 1000, "second"],
-] as const
-
-/** The largest unit `ms` is a whole number of: [count, unit]. */
-function inUnits(ms: number): [number, (typeof UNITS)[number]] {
-  const unit =
-    UNITS.find(([, size]) => ms % size === 0) ?? UNITS[UNITS.length - 1]
-  return [Math.round(ms / unit[1]), unit]
-}
-
-/** One Time bound end in words: "7 days ago", "in 2 days", "now", a local time. */
-function endLabel(
-  cond: DirectoryTimeCond,
-  ms: number,
-  locale?: string,
-  timeZone?: string,
-): string {
-  if (cond.mode === "fixed")
-    return new Intl.DateTimeFormat(locale, {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone,
-    }).format(ms)
-  if (ms === 0) return "now"
-  const [n, [, , name]] = inUnits(Math.abs(ms))
-  const span = `${n} ${name}${n === 1 ? "" : "s"}`
-  return ms < 0 ? `${span} ago` : `in ${span}`
-}
-
 function timeLabel(
   cond: DirectoryTimeCond,
   locale?: string,
   timeZone?: string,
 ): string {
-  const name = momentOf(cond.moment).label
-  if (cond.none) return `${name}: no value`
-  const end = (ms: number) => endLabel(cond, ms, locale, timeZone)
-  if (cond.start !== undefined && cond.end !== undefined)
-    return `${name} from ${end(cond.start)} to ${end(cond.end)}`
-  if (cond.start !== undefined) return `${name} from ${end(cond.start)}`
-  return `${name} before ${end(cond.end ?? 0)}`
+  return timeBoundWords(momentOf(cond.moment).label, cond, locale, timeZone)
 }
 
 /** A chip's label: "Persian", "Followed", "Subscribers ≥ 1K". */
@@ -521,25 +487,9 @@ export function directoryConditionLabel(
 
 // ---- The text form ---------------------------------------------------------
 
-/** A Fixed end as UTC, to the minute when the seconds are zero. */
-function instantText(ms: number): string {
-  const iso = new Date(ms).toISOString()
-  return iso.endsWith(":00.000Z")
-    ? `${iso.slice(0, 16)}Z`
-    : iso.replace(".000Z", "Z")
-}
-
-function offsetText(ms: number): string {
-  if (ms === 0) return "now"
-  const [n, [unit]] = inUnits(Math.abs(ms))
-  return `${ms < 0 ? "-" : "+"}${n}${unit}`
-}
-
 function timeText(cond: DirectoryTimeCond): string {
   if (cond.none) return `${cond.moment} = none`
-  const end = cond.mode === "fixed" ? instantText : offsetText
-  const at = (ms: number | undefined) => (ms === undefined ? "" : end(ms))
-  return `${cond.moment} ${at(cond.start)}..${at(cond.end)}`
+  return `${cond.moment} ${timeBoundText(cond)}`
 }
 
 function condText(cond: DirectoryCond): string {
@@ -612,50 +562,16 @@ function boundCond(m: RegExpExecArray): DirectoryMeasureCond {
     : { type: "measure", measure, max: Number(m[3]) }
 }
 
-const INSTANT = String.raw`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z`
-const OFFSET = String.raw`now|[+-]\d+[wdhms]`
-const END = `(${INSTANT}|${OFFSET})`
 const TIME = new RegExp(
-  String.raw`^(${MOMENTS.map((m) => m.key).join("|")})(?:\s*=\s*none(?![\p{L}\p{N}_])|\s+${END}?\.\.${END}?(?![\p{L}\p{N}_.]))`,
+  String.raw`^(${MOMENTS.map((m) => m.key).join("|")})(?:\s*=\s*none(?![\p{L}\p{N}_])|\s+${TIME_BOUND}(?![\p{L}\p{N}_.]))`,
   "iu",
 )
-const UNIT_MS: Record<string, number> = Object.fromEntries(
-  UNITS.map(([unit, size]) => [unit, size]),
-)
-
-/** A Time bound end: an offset (Live) or an instant (Fixed). */
-function endValue(text: string): { mode: TimeMode; ms: number } {
-  if (text === "now") return { mode: "live", ms: 0 }
-  const offset = /^([+-])(\d+)([wdhms])$/.exec(text)
-  if (offset)
-    return {
-      mode: "live",
-      ms: (offset[1] === "-" ? -1 : 1) * Number(offset[2]) * UNIT_MS[offset[3]],
-    }
-  return { mode: "fixed", ms: Date.parse(text) }
-}
 
 function timeCond(m: RegExpExecArray): DirectoryTimeCond {
   const moment = m[1].toLowerCase() as MomentKey
-  if (m[2] === undefined && m[3] === undefined) {
-    if (m[0].includes("..")) throw new ParseError(`${moment} has no end`)
+  if (m[2] === undefined && m[3] === undefined && !m[0].includes(".."))
     return { type: "time", moment, mode: "fixed", none: true }
-  }
-  const ends = [m[2], m[3]].map((e) =>
-    e === undefined ? undefined : endValue(e),
-  )
-  const modes = [...new Set(ends.flatMap((e) => (e ? [e.mode] : [])))]
-  if (modes.length > 1) throw new ParseError(`${moment} mixes Live and Fixed`)
-  const [start, end] = ends.map((e) => e?.ms)
-  if (start !== undefined && end !== undefined && end <= start)
-    throw new ParseError(`${moment} ends before it starts`)
-  return {
-    type: "time",
-    moment,
-    mode: modes[0],
-    ...(start !== undefined && { start }),
-    ...(end !== undefined && { end }),
-  }
+  return { type: "time", moment, ...parseTimeBound(m[2], m[3]) }
 }
 
 const FLAGS = new Set<string>(Object.keys(FLAG_LABEL))

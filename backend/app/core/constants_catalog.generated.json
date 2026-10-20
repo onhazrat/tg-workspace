@@ -1084,7 +1084,7 @@
       "comment": "",
       "expression": "60",
       "file": "frontend/src/components/AnalysisWindowControl.tsx",
-      "line": 62,
+      "line": 101,
       "name": "BUCKETS",
       "value": 60
     },
@@ -1119,6 +1119,14 @@
       "line": 131,
       "name": "DEFAULT_ESTIMATION_FLOOR_HOURS",
       "value": 1
+    },
+    {
+      "comment": "How often a Live bound's fields are redrawn against the clock.",
+      "expression": "15_000",
+      "file": "frontend/src/components/TimeBoundEditor.tsx",
+      "line": 35,
+      "name": "REDRAW_MS",
+      "value": 15000
     },
     {
       "comment": "",
@@ -1556,7 +1564,7 @@
       "comment": "The default minimum shared count.",
       "expression": "2",
       "file": "frontend/src/lib/directory/directory-filter.ts",
-      "line": 419,
+      "line": 425,
       "name": "SHARED_MIN",
       "value": 2
     },
