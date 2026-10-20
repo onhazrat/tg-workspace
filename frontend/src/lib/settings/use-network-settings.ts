@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ApiError } from "@/api/base"
 import {
   loadNetworkSettings,
@@ -25,6 +25,8 @@ import {
 export function useNetworkSettings(): {
   network: NetworkSettings
   setters: NetworkSettingSetters
+  /** Re-read the row after a write made elsewhere, without saving it back. */
+  reload: () => Promise<void>
 } {
   const [network, setNetwork] = useState<NetworkSettings>(
     NETWORK_SETTINGS_DEFAULTS,
@@ -61,6 +63,19 @@ export function useNetworkSettings(): {
     }
   }, [])
 
+  const applyLoaded = useCallback((value: Record<string, unknown>) => {
+    setNetwork((prev) => {
+      const loaded = mergeNetworkSettings(prev, value)
+      onServer.current = JSON.stringify(buildNetworkSavePayload(loaded))
+      return loaded
+    })
+  }, [])
+
+  const reload = useCallback(
+    () => loadNetworkSettings().then(applyLoaded),
+    [applyLoaded],
+  )
+
   // Hydrate ONCE on mount (the previous implementation accidentally re-ran on
   // every tor* state change because of its effect deps).
   useEffect(() => {
@@ -75,11 +90,7 @@ export function useNetworkSettings(): {
         const legacy = legacyNetworkFlags(value, scopedStorage)
         const merged = { ...value, ...legacy }
         const next = mergeNetworkSettings(NETWORK_SETTINGS_DEFAULTS, merged)
-        setNetwork((prev) => {
-          const loaded = mergeNetworkSettings(prev, merged)
-          onServer.current = JSON.stringify(buildNetworkSavePayload(loaded))
-          return loaded
-        })
+        applyLoaded(merged)
         hydrated.current = true
         if (Object.keys(legacy).length > 0) {
           saveNetworkSettings({
@@ -107,7 +118,7 @@ export function useNetworkSettings(): {
         if (err instanceof ApiError && err.status === 403) return
         console.error(err)
       })
-  }, [])
+  }, [applyLoaded])
 
   // Debounced save of any writable field change (post-hydration only).
   useEffect(() => {
@@ -138,5 +149,5 @@ export function useNetworkSettings(): {
     network.torRotationThreshold,
   ])
 
-  return { network, setters }
+  return { network, setters, reload }
 }

@@ -6677,6 +6677,14 @@ export type SettingRow = {
      */
     storage: string;
     /**
+     * Key
+     */
+    key?: string | null;
+    /**
+     * Field
+     */
+    field?: string | null;
+    /**
      * Sensitive
      */
     sensitive?: boolean;

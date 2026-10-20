@@ -221,6 +221,8 @@ def _row(
         canEdit=lock is None,
         lockReason=lock,
         storage=_storage(decl),
+        key=decl.key,
+        field=None if decl.scope == "browser" else decl.field,
     )
 
 

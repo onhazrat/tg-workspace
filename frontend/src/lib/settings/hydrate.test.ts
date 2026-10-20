@@ -1,8 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { ApiError } from "@/api/base"
-import {
-  RETENTION_LOG_DAYS_DEFAULT,
-} from "@/constants"
+import { RETENTION_LOG_DAYS_DEFAULT } from "@/constants"
 import { hydrateAppSettings } from "./hydrate"
 import { readerFromRecord, refusalMessage } from "./store"
 

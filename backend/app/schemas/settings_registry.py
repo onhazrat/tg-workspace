@@ -45,6 +45,10 @@ class SettingRow(BaseModel):
     applies: Literal["now", "restart", "rebuild", "deploy"] = "now"
     #: Where the value is kept, for display.
     storage: str
+    #: The settings key and field a declared Setting is kept in (its storage
+    #: key, for a browser one), for the page to act on; null on Configuration.
+    key: str | None = None
+    field: str | None = None
     sensitive: bool = False
     env_name: str | None = Field(default=None, alias="envName")
     source_ref: str | None = Field(default=None, alias="sourceRef")

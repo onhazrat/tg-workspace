@@ -156,13 +156,17 @@ function makeSetter<K extends AppSettingKey>(
  * Build one setter per setting (setAiLanguage, setPostRetentionDays, ...). Call once —
  * the returned functions have stable identity for the provider's lifetime.
  */
+/** `SettingsContext`'s setter for a key: `setFoo` for `foo`. */
+export function setterName(key: string): string {
+  return `set${key.charAt(0).toUpperCase()}${key.slice(1)}`
+}
+
 export function createAppSettingSetters(
   applyUpdate: (updater: (prev: AppSettings) => AppSettings) => void,
 ): AppSettingSetters {
   const setters: Record<string, unknown> = {}
   for (const key of appSettingKeys) {
-    const name = `set${key.charAt(0).toUpperCase()}${key.slice(1)}`
-    setters[name] = makeSetter(key, applyUpdate)
+    setters[setterName(key)] = makeSetter(key, applyUpdate)
   }
   return setters as unknown as AppSettingSetters
 }

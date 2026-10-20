@@ -13354,6 +13354,14 @@
             "default": "now"
           },
           "storage": { "type": "string", "title": "Storage" },
+          "key": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Key"
+          },
+          "field": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Field"
+          },
           "sensitive": {
             "type": "boolean",
             "title": "Sensitive",

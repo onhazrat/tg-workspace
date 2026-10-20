@@ -9,9 +9,9 @@
  * the same reason: only this bundle knows what it was built with.
  *
  * A server write goes through `PUT /settings/{settingId}` and its answer
- * replaces the row. The same value is then handed to `SettingsContext`, which
- * keeps whole sections for the rest of the app, so every tab sees the change
- * without a reload.
+ * replaces the row. `SettingsContext`, which keeps whole sections for the
+ * rest of the app, then re-reads the row's section, so every tab sees the
+ * change without a reload and nothing writes it a second time.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useMemo } from "react"
@@ -25,16 +25,9 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { queryKeys } from "@/hooks/queryKeys"
 import { frontendBuildValue, hasFrontendBuildValue } from "@/lib/env"
 import { appSettingsSpec } from "@/lib/settings/schema"
+import { setterName } from "@/lib/settings/store"
 import { THEME_STORAGE_KEY } from "@/lib/storage/scoped"
 import type { Row } from "./model"
-
-const BROWSER_PREFIX = "This browser: "
-
-/** The storage key a browser row is kept under. */
-export const browserKey = (row: Row) => row.storage.slice(BROWSER_PREFIX.length)
-
-/** The field of its settings key a server row is stored in. */
-const serverField = (row: Row) => row.storage.split(".").at(-1) ?? ""
 
 type SpecMap = Record<string, { defaultValue: unknown } | undefined>
 const SPECS = appSettingsSpec as unknown as SpecMap
@@ -67,10 +60,6 @@ function withBuildValue(row: Row): Row {
   }
 }
 
-function setterName(field: string) {
-  return `set${field.charAt(0).toUpperCase()}${field.slice(1)}`
-}
-
 export function useSettingsRegistry({ enabled = true } = {}) {
   const settings = useSettings()
   const client = useQueryClient()
@@ -84,10 +73,10 @@ export function useSettingsRegistry({ enabled = true } = {}) {
 
   const values = settings as unknown as Record<string, unknown>
 
-  /** Hands a value to `SettingsContext`'s setter for that field, if it has one. */
-  const applyLocally = useCallback(
-    (field: string, value: unknown) => {
-      const setter = values[setterName(field)]
+  /** Hands a browser value to `SettingsContext`'s setter for its key. */
+  const setBrowserValue = useCallback(
+    (key: string, value: unknown) => {
+      const setter = values[setterName(key)]
       if (typeof setter === "function") setter(value)
     },
     [values],
@@ -98,7 +87,7 @@ export function useSettingsRegistry({ enabled = true } = {}) {
       (query.data?.rows ?? []).map((row) => {
         if (row.applies === "rebuild") return withBuildValue(row)
         if (row.scope !== "browser") return row
-        const key = browserKey(row)
+        const key = row.key ?? ""
         if (key === THEME_STORAGE_KEY) {
           return {
             ...row,
@@ -130,10 +119,10 @@ export function useSettingsRegistry({ enabled = true } = {}) {
   const write = useCallback(
     async (row: Row, body: { value?: unknown; reset?: boolean }) => {
       if (row.scope === "browser") {
-        const key = browserKey(row)
+        const key = row.key ?? ""
         const next = body.reset ? row.default : body.value
         if (key === THEME_STORAGE_KEY) settings.setTheme(next as Theme)
-        else applyLocally(key, browserValue(key, next))
+        else setBrowserValue(key, browserValue(key, next))
         return
       }
       const updated = await settingsUpdateSetting({
@@ -141,9 +130,11 @@ export function useSettingsRegistry({ enabled = true } = {}) {
         body,
       })
       replaceRow(updated)
-      applyLocally(serverField(updated), updated.value)
+      // The rest of the app reads whole sections: re-read this one rather
+      // than echo the value into a setter, which would write it again.
+      if (updated.key) settings.refreshSection(updated.key).catch(console.error)
     },
-    [applyLocally, replaceRow, settings],
+    [setBrowserValue, replaceRow, settings],
   )
 
   return {

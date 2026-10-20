@@ -152,6 +152,19 @@ def test_browser_settings_are_declared_for_the_page_to_fill_in(
     assert [o["value"] for o in theme["options"]] == ["light", "dark", "system"]
 
 
+def test_a_row_names_its_key_and_field_rather_than_leaving_storage_to_parse(
+    client: TestClient, member: Account
+) -> None:
+    """`storage` is for display; a dotted field (`retention.enabled`) broke parsing it."""
+    rows = _rows(client, member[1])
+    assert (
+        rows["appearance.browser.theme"]["key"],
+        rows["appearance.browser.theme"]["field"],
+    ) == ("vite-ui-theme", None)
+    model = rows["ai.yours.model"]
+    assert (model["key"], model["field"]) == ("ai_prefs", "selectedModel")
+
+
 def test_the_registry_names_the_topics_in_page_order(
     client: TestClient, member: Account
 ) -> None:

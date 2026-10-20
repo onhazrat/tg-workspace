@@ -442,6 +442,70 @@ test.describe("Settings page", () => {
   })
 })
 
+test("a registry write reaches the Action tab without writing its section again", async ({
+  page,
+}) => {
+  const held: Record<string, unknown> = { selectedModel: "account/model" }
+  const sectionPuts: unknown[] = []
+  await page.route("**/api/v1/data/settings/ai_prefs", (route) => {
+    if (route.request().method() === "PUT")
+      sectionPuts.push(route.request().postDataJSON())
+    return route.fulfill({ json: { key: "ai_prefs", value: { ...held } } })
+  })
+  await page.route("**/api/v1/ai/models", (route) =>
+    route.fulfill({ json: { models: [], default: "" } }),
+  )
+  await page.route("**/api/v1/data/ai-keys", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({
+          json: [
+            {
+              id: "k-1",
+              label: "k-1",
+              provider: "gemini",
+              baseUrl: null,
+              lastValidated: null,
+              createdAt: "2026-10-01T00:00:00Z",
+            },
+          ],
+        })
+      : route.fallback(),
+  )
+  const model = row("ai.yours.model", {
+    title: "AI model",
+    topic: "ai",
+    type: "string",
+    value: "account/model",
+    default: "account/model",
+    key: "ai_prefs",
+    field: "selectedModel",
+    storage: "tg_user_settings.ai_prefs.selectedModel",
+  })
+  await mockRegistry(page, [model])
+  await page.route("**/api/v1/settings/ai.yours.model", (route) => {
+    const { value } = route.request().postDataJSON() as { value: string }
+    held.selectedModel = value
+    return route.fulfill({ json: { ...model, value, modified: true } })
+  })
+
+  await page.goto("/?tab=action")
+  await expect(
+    page.getByRole("combobox", { name: "Inference model" }),
+  ).toContainText("account/model", { timeout: 20_000 })
+  await page.goto("/?tab=settings&setting=ai.yours.model")
+  const field = item(page, "ai.yours.model").getByRole("textbox")
+  await field.fill("operator/new-model")
+  await field.press("Enter")
+  await expect(item(page, "ai.yours.model").getByText("Saved")).toBeVisible()
+
+  await page.locator('a[href*="tab=action"]').first().click()
+  await expect(
+    page.getByRole("combobox", { name: "Inference model" }),
+  ).toContainText("operator/new-model")
+  await page.waitForLoadState("networkidle")
+  expect(sectionPuts).toEqual([])
+})
+
 test("loading the app writes no network settings back", async ({ page }) => {
   // A registry write to a Tor field between this load and an echo of it would
   // be lost, so what was just loaded is never saved.
