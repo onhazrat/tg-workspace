@@ -91,9 +91,16 @@ echo "==> backend: coverage over the pytest suite in $DB (~7 min)"
 testdb create
 (cd "$ROOT/backend" && POSTGRES_DB="$DB" uv run alembic upgrade head >"$WORK/alembic.log" 2>&1) \
   || { cat "$WORK/alembic.log" >&2; exit 1; }
+# CI's .env is a copy of .env.example, which names every setting, and conftest
+# loads it into os.environ. Layer .env.example under the local .env so the same
+# names are set here too: code reached only for a name missing from the
+# environment then goes as uncovered as it does in CI (`_dotenv_names` passed
+# this run at 98% and failed CI's ratchet at 6%). The local .env still wins.
+ENV_FILES=(--env-file "$ROOT/.env.example")
+[ -f "$ROOT/.env" ] && ENV_FILES+=(--env-file "$ROOT/.env")
 # A failing test still leaves usable coverage, so report it and carry on.
 (cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" TEST_POSTGRES_DB="$DB" \
-  uv run coverage run -m pytest tests/ -q -p no:cacheprovider --color=no >"$WORK/pytest.log" 2>&1) \
+  uv run "${ENV_FILES[@]}" coverage run -m pytest tests/ -q -p no:cacheprovider --color=no >"$WORK/pytest.log" 2>&1) \
   || { echo "warning: pytest reported failures:" >&2; grep -E "^(FAILED|ERROR) " "$WORK/pytest.log" >&2 || true; }
 BACKEND_TESTS=$(grep -E "^[0-9]+ (passed|failed)" "$WORK/pytest.log" | tail -1 | sed -E 's/, [0-9]+ warnings?//; s/ in [0-9.]+s.*//')
 (cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" uv run coverage json -q -o "$WORK/coverage.json")
