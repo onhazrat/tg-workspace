@@ -2,7 +2,12 @@ import { ChevronDown, SlidersHorizontal } from "lucide-react"
 import { useState } from "react"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { pillClass } from "@/components/PostFilterParts"
-import type { MetricAtom, MetricCond } from "@/lib/channels/channel-filter"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
+import type {
+  Cond,
+  MetricAtom,
+  MetricCond,
+} from "@/lib/channels/channel-filter"
 import {
   boundText,
   METRICS,
@@ -10,7 +15,12 @@ import {
   type MetricData,
   type MetricKey,
 } from "@/lib/channels/channel-metrics"
+import {
+  CHANNEL_MOMENTS,
+  type ChannelMomentKey,
+} from "@/lib/channels/channel-moments"
 import { ChannelMetricEditor } from "./ChannelMetricEditor"
+import { ChannelTimeEditor } from "./ChannelTimeEditor"
 
 /**
  * The Filters dropdown (CTB-02): every number criterion with its bounds in
@@ -25,15 +35,20 @@ export function ChannelMetricMenu({
   /** The number Conditions anywhere in the Channel filter. */
   conditions: MetricAtom[]
   data: MetricData
-  onAdd: (cond: MetricCond) => void
+  onAdd: (cond: MetricCond | Cond) => void
 }) {
+  const v1 = useIsVariant1()
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<MetricKey | null>(null)
+  const [moment, setMoment] = useState<ChannelMomentKey | null>(null)
   const [query, setQuery] = useState("")
   const active = conditions.length > 0
   const onOpenChange = (next: boolean) => {
     setOpen(next)
-    if (!next) setPicked(null)
+    if (!next) {
+      setPicked(null)
+      setMoment(null)
+    }
   }
   const add = (metric: MetricKey, bound: MetricBound) => {
     onAdd({ type: "metric", metric, ...bound })
@@ -60,7 +75,17 @@ export function ChannelMetricMenu({
         </button>
       }
     >
-      {picked ? (
+      {moment ? (
+        <ChannelTimeEditor
+          momentKey={moment}
+          channels={data.channels ?? []}
+          onSubmit={(cond) => {
+            onAdd(cond)
+            onOpenChange(false)
+          }}
+          onBack={() => setMoment(null)}
+        />
+      ) : picked ? (
         <ChannelMetricEditor
           metricKey={picked}
           data={data}
@@ -75,8 +100,13 @@ export function ChannelMetricMenu({
             placeholder="Search criteria..."
           />
           <BarHeading>Filter by</BarHeading>
-          {METRICS.filter((m) =>
-            m.label.toLowerCase().includes(query.trim().toLowerCase()),
+          {METRICS.filter(
+            (m) =>
+              m.label.toLowerCase().includes(query.trim().toLowerCase()) &&
+              !(
+                v1 &&
+                (m.key === "days_since_update" || m.key === "days_followed")
+              ),
           ).map((m) => (
             <button
               key={m.key}
@@ -94,6 +124,21 @@ export function ChannelMetricMenu({
               </span>
             </button>
           ))}
+          {v1 && <BarHeading>Times</BarHeading>}
+          {v1 &&
+            CHANNEL_MOMENTS.filter((m) =>
+              m.label.toLowerCase().includes(query.trim().toLowerCase()),
+            ).map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                data-testid={`channel-filters-time-${m.key}`}
+                onClick={() => setMoment(m.key)}
+                className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5"
+              >
+                {m.label}
+              </button>
+            ))}
         </>
       )}
     </BarPopover>

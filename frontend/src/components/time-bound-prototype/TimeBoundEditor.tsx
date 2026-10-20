@@ -67,6 +67,7 @@ function relative(ms: number): string {
 /** `Live · 7d ago → now (7d)`, `Fixed · Sep 10 09:30 → open`. */
 export function timeBoundSummary(b: TimeBound, at = now()): string {
   const { start, end } = resolveTimeBound(b, at)
+  if (start === undefined && end === undefined) return "Any time"
   const side = (ms: number | undefined) =>
     ms === undefined
       ? "open"

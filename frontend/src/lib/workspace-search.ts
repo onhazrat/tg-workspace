@@ -105,7 +105,8 @@ export function validateWorkspaceSearch(
 ): WorkspaceSearch {
   if (search.tab === "network") return { tab: "settings", section: "network" }
   const result: WorkspaceSearch = { tab: workspaceTab(search.tab) }
-  if (typeof search.variant === "string") result.variant = search.variant
+  if (typeof search.variant === "string" || typeof search.variant === "number")
+    result.variant = String(search.variant)
   const section = trimmedString(search.section)
   if (result.tab === "settings" && section && TOOL_SECTIONS.includes(section))
     return { tab: "tools" }

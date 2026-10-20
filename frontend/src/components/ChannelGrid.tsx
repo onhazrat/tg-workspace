@@ -514,7 +514,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           <ChannelMetricMenu
             conditions={metricConditions}
             data={metricData}
-            onAdd={(cond: MetricCond) =>
+            onAdd={(cond) =>
               setChannelFilter(append(channelFilter, "root", cond))
             }
           />
