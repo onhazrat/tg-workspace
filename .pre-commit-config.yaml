@@ -35,6 +35,10 @@ repos:
         language: system
         types: [text]
         files: ^(frontend|scripts/crap)/
+        # The lint script already checks the whole tree from frontend/, which
+        # resolves repo-root filenames as frontend/frontend/... and prints a
+        # bogus "No such file" error beside every real fix.
+        pass_filenames: false
 
       - id: local-ruff-check
         name: ruff check
