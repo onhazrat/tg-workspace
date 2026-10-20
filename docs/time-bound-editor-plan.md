@@ -105,20 +105,18 @@ decisions in, never the code as is.
 
 ## Work, in order
 
-| # | Ticket | Depends on |
-|---|---|---|
-| TB-01 | Editor core: source, `WindowEditor` (with No value), `WindowOverlay`, `ZoomControls`, the Time bound source with open ends and ahead. Posts unchanged, proven by the screenshot pair | |
-| TB-02 | One Time bound text form and chip words, shared by the Directory and Channel filters | |
-| TB-03 | Directory Time bound on the embedded editor | TB-01, TB-02 |
-| TB-04 | Cited by your channels as a Time bound: API, legacy `mine:14d`, Why wording, client regenerated | TB-01, TB-02 |
-| TB-05 | Channel Time bounds: seven moments, the minute tick, the editor with its spread, the Filters menu Times section, day counts removed | TB-01, TB-02 |
-| TB-06 | Logs Time bound on the Bar wrapper, over the loaded page | TB-01 |
-| TB-07 | Spread zoom everywhere, server `lo`/`hi` and kept scale, time-of-day captions | TB-03, TB-05 |
-| TB-08 | Filters menu symbols and Channels `#` chips | |
-| TB-09 | Logs Time bound on the server: the log list endpoints take the bound and filter in SQL, as the text search already does | TB-06 |
-| TB-10 | Logs spread, drawn by the server, with zoom | TB-09, TB-07 |
+Five tickets in `.scratch/time-bound-editor/issues/`, with the spec beside
+them. After TB-01, TB-02 and TB-03 run in parallel.
 
-TB-09 and TB-10 are why the Logs tab has no spread yet. Each log type loads its
+| # | Ticket | Blocked by |
+|---|---|---|
+| TB-01 | One editor, Directory Time bounds on it: the editor split into body, bar and zoom buttons; the Time bound source (open ends, ahead, No value); the shared text form; Directory moments on the embedded editor. Posts unchanged, proven by the screenshot pair | |
+| TB-02 | Cited by your channels as a Time bound: API, legacy `mine:14d`, Why wording, client regenerated | TB-01 |
+| TB-03 | Channel Time bounds (seven moments, the minute tick, the editor with its spread, day counts removed) and a symbol on every Posts and Channels Filters menu row | TB-01 |
+| TB-04 | Zoom on every spread: server `lo`/`hi` with the scale kept, browser re-binning, time-of-day captions | TB-03 |
+| TB-05 | Logs filtered by a Time bound on the server, on the bar, with a server-drawn spread and zoom | TB-01, TB-04 |
+
+TB-05 goes straight to the server, and is why the Logs tab got no spread in the prototype. Each log type loads its
 newest 500 entries (`DEFAULT_LOG_PAGE_SIZE`) and the Time bound filters only
 those, so a spread drawn in the browser would end where the page ends and look
 like nothing older exists.
@@ -138,7 +136,7 @@ like nothing older exists.
 - A changed response or request shape: grep `frontend/tests` for that route's
   `page.route` mocks, and run `bun run typecheck:tests` as well as the build
   typecheck.
-- Regenerate the client after any schema change (TB-04, TB-07, TB-09).
+- Regenerate the client after any schema change (TB-02, TB-04, TB-05).
 
 ## What the prototype found
 

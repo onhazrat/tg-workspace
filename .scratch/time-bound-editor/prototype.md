@@ -32,7 +32,7 @@ provider, and every existing test, sees `main`.
   database through a read-only role, never mounted in the real API. Setup is
   `docs/agents/prototyping-with-live-data.md`.
 - The Logs Time bound filters in the browser over the newest page; the server
-  side is TB-09.
+  side is TB-05.
 - No tests were written. `AnalysisWindowControl.test.tsx` and every existing
   unit test passed unedited throughout.
 
@@ -41,14 +41,14 @@ provider, and every existing test, sees `main`.
 | Ticket | Prototype files |
 |---|---|
 | TB-01 editor core | `components/AnalysisWindowControl.tsx` (`WindowEditorSource`, `WindowEditorSourceContext`, `WindowEditor` with `noValue`, `WindowOverlay`, `ZoomControls`); `components/time-bound-prototype/TimeBoundEditor.tsx` (`useTimeBoundSource`, `TimeBoundEditor`, `TimeBoundBar`, `timeBoundSummary`, `resolveTimeBound`, `inTimeBound`) |
-| TB-02 one text form | `lib/directory/directory-filter.ts` (exported `END`, `endValue`, `instantText`, `offsetText`, `timeBoundWords`); their use in `lib/channels/channel-filter.ts` |
-| TB-03 Directory Time bound | `components/directory/DirectoryTimeEditor.tsx` (the variant-1 branch) |
-| TB-04 Cited by your channels | backend `schemas/directory.py` (`DirectoryMineCondition`, `DirectoryWhyRequest`), `services/directory_reads.py` (`MineCond.when`, `_references`, `why_its_here`), `api/routes/data/directory.py`; frontend `components/directory/DirectoryConditionEditors.tsx` (`MineEditorV1`), `lib/directory/directory-filter.ts` (`mine` label, text, parse), `lib/directory/directory-panel.ts` (`mineBound`), `components/DirectoryView.tsx` and `components/directory/DirectoryPanel.tsx` (Why request and wording) |
-| TB-05 Channel Time bounds | `lib/channels/channel-moments.ts`; `lib/channels/channel-filter.ts` (`TimeCond`, evaluation, label, text form); `components/channel-grid/ChannelTimeEditor.tsx` (editor, browser-drawn spread, minute rounding); `components/channel-grid/ChannelMetricMenu.tsx` and `ChannelConditionPicker.tsx` (Times section, day counts hidden) |
-| TB-06 Logs Time bound | `lib/logs/filters.ts` (`timeBound`, `matchesWhen`); `components/logs/LogFilterBar.tsx` (`TimeBoundBar`, label Logged) |
-| TB-07 spread zoom | `components/time-bound-prototype/zoom.tsx` (`spreadZoom`, `boundFocus`, `SpreadZoomBar`, `momentText`); `components/directory/DirectoryBoundEditor.tsx` (`Spread` with `zoom`); `components/DirectoryView.tsx` (`lo`/`hi` in the distribution query); `components/channel-grid/ChannelMetricEditor.tsx`; `components/PostFilterControls.tsx` and `hooks/usePostsView.ts` (value histogram range); backend `services/directory_reads.py` (`distribution` zoom), `services/posts.py` (`value_histogram` zoom), their schemas and routes |
-| TB-08 menu symbols | `components/time-bound-prototype/MenuRowLabel.tsx`; `components/PostFilterControls.tsx` (`PostFiltersMenu`); `components/channel-grid/ChannelMetricMenu.tsx`; `components/channel-grid/ChannelFilterRow.tsx` (`#` chips) |
-| TB-09, TB-10 Logs on the server, Logs spread | not prototyped |
+| TB-01 one text form | `lib/directory/directory-filter.ts` (exported `END`, `endValue`, `instantText`, `offsetText`, `timeBoundWords`); their use in `lib/channels/channel-filter.ts` |
+| TB-01 Directory Time bound | `components/directory/DirectoryTimeEditor.tsx` (the variant-1 branch) |
+| TB-02 Cited by your channels | backend `schemas/directory.py` (`DirectoryMineCondition`, `DirectoryWhyRequest`), `services/directory_reads.py` (`MineCond.when`, `_references`, `why_its_here`), `api/routes/data/directory.py`; frontend `components/directory/DirectoryConditionEditors.tsx` (`MineEditorV1`), `lib/directory/directory-filter.ts` (`mine` label, text, parse), `lib/directory/directory-panel.ts` (`mineBound`), `components/DirectoryView.tsx` and `components/directory/DirectoryPanel.tsx` (Why request and wording) |
+| TB-03 Channel Time bounds | `lib/channels/channel-moments.ts`; `lib/channels/channel-filter.ts` (`TimeCond`, evaluation, label, text form); `components/channel-grid/ChannelTimeEditor.tsx` (editor, browser-drawn spread, minute rounding); `components/channel-grid/ChannelMetricMenu.tsx` and `ChannelConditionPicker.tsx` (Times section, day counts hidden) |
+| TB-05 Logs Time bound (browser-side; TB-05 moves it to the server) | `lib/logs/filters.ts` (`timeBound`, `matchesWhen`); `components/logs/LogFilterBar.tsx` (`TimeBoundBar`, label Logged) |
+| TB-04 spread zoom | `components/time-bound-prototype/zoom.tsx` (`spreadZoom`, `boundFocus`, `SpreadZoomBar`, `momentText`); `components/directory/DirectoryBoundEditor.tsx` (`Spread` with `zoom`); `components/DirectoryView.tsx` (`lo`/`hi` in the distribution query); `components/channel-grid/ChannelMetricEditor.tsx`; `components/PostFilterControls.tsx` and `hooks/usePostsView.ts` (value histogram range); backend `services/directory_reads.py` (`distribution` zoom), `services/posts.py` (`value_histogram` zoom), their schemas and routes |
+| TB-03 menu symbols | `components/time-bound-prototype/MenuRowLabel.tsx`; `components/PostFilterControls.tsx` (`PostFiltersMenu`); `components/channel-grid/ChannelMetricMenu.tsx`; `components/channel-grid/ChannelFilterRow.tsx` (`#` chips) |
+| TB-05 Logs on the server, Logs spread | not prototyped |
 
 Paths are under `frontend/src/` unless they say backend.
 

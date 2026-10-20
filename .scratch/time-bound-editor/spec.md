@@ -11,6 +11,22 @@ notes and a file-by-file map in `prototype.md` beside this file. Vocabulary
 Condition, Channel filter, Directory filter, Post filter, Directory entry,
 Reference, Follow) is `CONTEXT.md`'s. Ticket ids carry the prefix `TB`.
 
+## Tickets
+
+Five tickets in `issues/` beside this file. After TB-01, TB-02 and TB-03 run
+in parallel.
+
+| Id | Ticket | Blocked by |
+|---|---|---|
+| TB-01 | One editor, Directory Time bounds on it (`issues/01-one-editor-directory-time-bounds.md`) | None |
+| TB-02 | Cited by your channels as a Time bound (`issues/02-cited-by-time-bound.md`) | TB-01 |
+| TB-03 | Channel Time bounds and Filters menu symbols (`issues/03-channel-time-bounds-menu-symbols.md`) | TB-01 |
+| TB-04 | Zoom on every spread (`issues/04-zoom-on-every-spread.md`) | TB-03 |
+| TB-05 | Logs filtered by a Time bound on the server, with a spread (`issues/05-logs-time-bound-on-server.md`) | TB-01, TB-04 |
+
+Each ticket names the prototype files to read, pinned to 10b8c6af, through
+`prototype.md`. A ticket closes as `docs/agents/issue-tracker.md` says.
+
 ## Problem Statement
 
 An Account filters by time in five places and meets four different editors.
@@ -202,10 +218,10 @@ does.
   generated client is regenerated. The text form is `mine:<start>..<end>`;
   `mine:14d` still parses, as Live from 14 days ago with an open End, and
   `mine:all` as no window.
-- **Logs on the server (TB-09).** Each log list endpoint takes an optional Time
+- **Logs on the server (TB-05).** Each log list endpoint takes an optional Time
   bound and applies it in SQL before paging, as the text search already is.
   The browser stops filtering by time.
-- **Logs spread (TB-10).** A read of when a log's entries were logged, binned
+- **Logs spread (TB-05).** A read of when a log's entries were logged, binned
   by the server over the Time bound's surroundings, with zoom.
 - **Zoom, contract.** `/data/directory/distribution` and
   `/data/posts/value-histogram` take an optional `lo` and `hi` (bin only that
@@ -286,7 +302,7 @@ prior art to copy:
   behind `?variant=1`.
 - **Branch from a fresh `origin/main`**: fetch first. A worktree needs the root
   `.env` symlinked, `bun install`, and its own pytest database.
-- **After a route or response-model change** (TB-04, TB-07, TB-09), regenerate
+- **After a route or response-model change** (TB-02, TB-04, TB-05), regenerate
   the client, grep `frontend/tests` for that route's `page.route` mocks, and
   run both the build and the tests typecheck. A new branching component needs a
   render test, or CI's CRAP ratchet fails.
