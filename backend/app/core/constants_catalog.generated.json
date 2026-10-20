@@ -1084,7 +1084,7 @@
       "comment": "",
       "expression": "60",
       "file": "frontend/src/components/AnalysisWindowControl.tsx",
-      "line": 62,
+      "line": 101,
       "name": "BUCKETS",
       "value": 60
     },
