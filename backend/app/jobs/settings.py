@@ -38,6 +38,7 @@ from app.core.config import settings
 from app.models import User
 from app.services.reach import DEFAULT_REACH_SETTINGS, REACH_SETTING_FIELDS
 from app.services.settings_registry import (
+    AI_PREFS_KEY,
     DIRECTORY_KEY,
     REACH_KEY,
     RETENTION_KEY,
@@ -168,6 +169,27 @@ def _default_translation() -> dict[str, Any]:
         "translationModel": settings.DEFAULT_AI_MODEL,
         "translationTargetLanguage": settings.TRANSLATION_TARGET_LANGUAGE_DEFAULT,
     }
+
+
+def default_ai_prefs() -> dict[str, Any]:
+    """The deployment's AI preferences, what an Account with none runs on (SET-05)."""
+    return {
+        "selectedModel": settings.DEFAULT_AI_MODEL,
+        "aiLanguage": settings.DEFAULT_AI_LANGUAGE,
+        "aiTemperature": 0.7,
+    }
+
+
+def load_ai_prefs(session: Session, *, user_id: uuid.UUID) -> dict[str, Any]:
+    """The Account's stored AI preferences, with the deployment's under `defaults`.
+
+    Not merged, unlike every other loader: the browser uploads an older build's
+    values once, only to an Account that stored none, so it has to see what is
+    stored. The defaults ride along so the browser has one default, the
+    server's, rather than a `VITE_*` twin baked in at build time.
+    """
+    stored = get_user_setting(session, AI_PREFS_KEY, user_id=user_id)
+    return {**stored, "defaults": default_ai_prefs()}
 
 
 def _merge(defaults: dict[str, Any], stored: dict[str, Any] | None) -> dict[str, Any]:

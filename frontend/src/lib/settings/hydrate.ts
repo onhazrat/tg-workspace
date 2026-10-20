@@ -33,17 +33,17 @@ export type Hydration = {
  * The AI preferences, all three: the Account's when it has any, otherwise
  * what this browser stored before they moved to the Account. The first
  * browser to load uploads its values; every later one finds them there.
+ *
+ * A field nobody holds is the deployment's, which the server sends under
+ * `defaults`; the build's `VITE_*` value is only the guess before it lands.
  */
 function aiPreferences(
-  server: Section,
+  { defaults, ...server }: Section,
   storage: { getItem(key: string): string | null },
 ): Pick<Hydration, "aiUpload"> & { values: Partial<AppSettings> } {
-  const keys = sectionKeys("ai_prefs")
   const stored: Partial<AppSettings> = {}
-  const defaults: Partial<AppSettings> = {}
-  for (const key of keys) {
+  for (const key of sectionKeys("ai_prefs")) {
     const spec = specFor(key)
-    Object.assign(defaults, { [key]: spec.defaultValue })
     const raw = storage.getItem(spec.storageKey)
     if (raw === null) continue
     const parsed = spec.schema.safeParse(spec.decode(raw))
@@ -51,10 +51,12 @@ function aiPreferences(
   }
   const hasNone = Object.keys(server).length === 0
   const upload = hasNone && Object.keys(stored).length > 0 ? stored : null
+  const deployment =
+    defaults && typeof defaults === "object" ? (defaults as Section) : {}
   return {
     aiUpload: upload,
     values: {
-      ...defaults,
+      ...decodeServerSection("ai_prefs", deployment),
       ...(upload ?? decodeServerSection("ai_prefs", server)),
     },
   }

@@ -504,6 +504,11 @@ def test_configuration_cannot_be_written_and_is_not_found_without_the_permission
 # --------------------------------------------------------------------------
 
 AI_PREFS = f"{V1}/data/settings/ai_prefs"
+AI_DEFAULTS = {
+    "selectedModel": settings.DEFAULT_AI_MODEL,
+    "aiLanguage": settings.DEFAULT_AI_LANGUAGE,
+    "aiTemperature": 0.7,
+}
 
 
 def test_ai_preferences_default_to_the_deployments_model_and_language(
@@ -545,10 +550,27 @@ def test_a_registry_write_is_what_the_action_tab_reads(
         "selectedModel": "anthropic/claude-x",
         "aiLanguage": "Persian",
         "aiTemperature": 0.2,
+        "defaults": AI_DEFAULTS,
     }
-    # An Account with none answers empty, which is what the one-time upload
-    # from an older browser checks before it writes.
-    assert client.get(AI_PREFS, headers=other_member[1]).json()["value"] == {}
+    # An Account with none answers only the deployment's defaults, which is
+    # what the one-time upload from an older browser checks before it writes.
+    theirs = client.get(AI_PREFS, headers=other_member[1]).json()["value"]
+    assert theirs == {"defaults": AI_DEFAULTS}
+
+
+def test_the_section_carries_the_deployments_defaults_not_the_frontend_build(
+    client: TestClient, member: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One default: the browser falls back to these, not to a `VITE_*` twin."""
+    monkeypatch.setattr(settings, "DEFAULT_AI_MODEL", "operator/model")
+    monkeypatch.setattr(settings, "DEFAULT_AI_LANGUAGE", "German")
+    value = client.get(AI_PREFS, headers=member[1]).json()["value"]
+    assert value["defaults"] == {
+        "selectedModel": "operator/model",
+        "aiLanguage": "German",
+        "aiTemperature": 0.7,
+    }
+    assert _rows(client, member[1])["ai.yours.model"]["default"] == "operator/model"
 
 
 @pytest.mark.parametrize(

@@ -1,8 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { ApiError } from "@/api/base"
 import {
-  DEFAULT_AI_LANGUAGE,
-  DEFAULT_MODEL,
   RETENTION_LOG_DAYS_DEFAULT,
 } from "@/constants"
 import { hydrateAppSettings } from "./hydrate"
@@ -121,9 +119,16 @@ describe("AI preferences (SET-05)", () => {
     aiTemperature: "0.3",
   })
 
+  // The deployment's, which the server sends beside what the Account stored.
+  const defaults = {
+    selectedModel: "operator/model",
+    aiLanguage: "German",
+    aiTemperature: 0.5,
+  }
+
   it("uploads what this browser stored when the Account has none", () => {
     const { updates, aiUpload } = hydrateAppSettings(
-      { ...empty, ai_prefs: {} },
+      { ...empty, ai_prefs: { defaults } },
       stored,
     )
     expect(aiUpload).toEqual({
@@ -137,24 +142,25 @@ describe("AI preferences (SET-05)", () => {
 
   it("never overwrites what the Account already has", () => {
     const { updates, aiUpload } = hydrateAppSettings(
-      { ...empty, ai_prefs: { selectedModel: "gemini-x" } },
+      { ...empty, ai_prefs: { selectedModel: "gemini-x", defaults } },
       stored,
     )
     expect(aiUpload).toBeNull()
     expect(updates.selectedModel).toBe("gemini-x")
-    // A field the Account lacks is the default, not this browser's.
-    expect(updates.aiLanguage).toBe(DEFAULT_AI_LANGUAGE)
-    expect(updates.aiTemperature).toBe(0.7)
+    // A field the Account lacks is the deployment's, not this browser's.
+    expect(updates.aiLanguage).toBe("German")
+    expect(updates.aiTemperature).toBe(0.5)
   })
 
-  it("uploads nothing when neither side has a value", () => {
+  it("falls back to the deployment's defaults, not the build's, when neither side has a value", () => {
     const { updates, aiUpload } = hydrateAppSettings(
-      { ...empty, ai_prefs: {} },
+      { ...empty, ai_prefs: { defaults } },
       readerFromRecord({ aiTemperature: "banana" }),
     )
     expect(aiUpload).toBeNull()
-    expect(updates.selectedModel).toBe(DEFAULT_MODEL)
-    expect(updates.aiTemperature).toBe(0.7)
+    expect(updates.selectedModel).toBe("operator/model")
+    expect(updates.aiLanguage).toBe("German")
+    expect(updates.aiTemperature).toBe(0.5)
   })
 })
 

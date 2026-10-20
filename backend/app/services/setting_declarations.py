@@ -431,7 +431,6 @@ DECLARATIONS: tuple[Declaration, ...] = (
         field="aiTemperature",
         min=0,
         max=1,
-        default=0.7,
     ),
     _browser(
         "ai.browser.embeddings",

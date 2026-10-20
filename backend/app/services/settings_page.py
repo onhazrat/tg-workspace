@@ -35,6 +35,7 @@ from sqlmodel import Session
 from app.core.config import SENSITIVE_CONFIG_SUFFIXES, Settings, settings
 from app.core.permissions import Permission
 from app.jobs.settings import (
+    default_ai_prefs,
     _default_directory,
     _default_jobs,
     _default_media,
@@ -73,6 +74,7 @@ from app.services.setting_declarations import (
     env_topic,
 )
 from app.services.settings_registry import (
+    AI_PREFS_KEY,
     DIRECTORY_KEY,
     PUBLISHING_KEY,
     REACH_KEY,
@@ -121,6 +123,7 @@ LOADER_DEFAULTS: dict[str, Callable[[], dict[str, Any]]] = {
     DIRECTORY_KEY: _default_directory,
     REACH_KEY: _default_reach,
     PUBLISHING_KEY: _default_publishing,
+    AI_PREFS_KEY: default_ai_prefs,
 }
 
 
