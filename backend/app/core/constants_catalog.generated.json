@@ -1572,7 +1572,7 @@
       "comment": "The default minimum shared count.",
       "expression": "2",
       "file": "frontend/src/lib/directory/directory-filter.ts",
-      "line": 425,
+      "line": 446,
       "name": "SHARED_MIN",
       "value": 2
     },
@@ -1580,7 +1580,7 @@
       "comment": "Past this many characters, or six lines, a Post is clamped until \"Read more\".",
       "expression": "280",
       "file": "frontend/src/lib/directory/directory-panel.ts",
-      "line": 13,
+      "line": 17,
       "name": "LONG_POST_CHARS",
       "value": 280
     },
@@ -1588,7 +1588,7 @@
       "comment": "",
       "expression": "6",
       "file": "frontend/src/lib/directory/directory-panel.ts",
-      "line": 14,
+      "line": 18,
       "name": "LONG_POST_LINES",
       "value": 6
     },

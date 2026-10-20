@@ -165,7 +165,7 @@ async function mockDirectory(page: Page, shown: typeof ROWS = ROWS) {
 
 /** The detail panel's reads (DIR-03, DIR-05), for the row the journey opens. */
 async function mockPanel(page: Page) {
-  const whys: { handle?: string; days?: number | null }[] = []
+  const whys: Record<string, unknown>[] = []
   await page.route("**/api/v1/data/directory/a2/entry", (route) =>
     route.fulfill({ json: { ...ROWS[1], bio: "The bio of a2" } }),
   )
@@ -426,7 +426,9 @@ test.describe("TG Workspace directory", () => {
     await expect(aside.getByText("sample post 4")).toHaveCount(0)
     await aside.getByRole("button", { name: "Show 1 more post" }).click()
     await expect(aside.getByText("sample post 4")).toBeVisible()
-    expect(panel.lastWhy()).toMatchObject({ handle: "a2", days: null })
+    // No Cited by your channels Condition, so no window (TB-02).
+    expect(panel.lastWhy()).toMatchObject({ handle: "a2" })
+    expect(Object.keys(panel.lastWhy() ?? {})).not.toContain("start")
     await page.reload()
     await expect(aside.getByText("The bio of a2")).toBeVisible()
     await aside.getByRole("button", { name: "Close" }).click()
@@ -441,6 +443,32 @@ test.describe("TG Workspace directory", () => {
     await expect(aside).toHaveCount(0)
     await expect(chip(page, "citedby-src_one")).toBeVisible()
     expect(param(page, "dirFilter")).toContain("citedby:src_one")
+  })
+
+  test("an old mine:14d link counts Why it's here from 14 days ago (TB-02)", async ({
+    page,
+  }) => {
+    await mockDirectory(page)
+    const panel = await mockPanel(page)
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, ["directory.view", "directory.open"])
+    await page.goto("/?tab=directory&dirFilter=mine%3A14d")
+    await expect(chip(page, "mine")).toContainText(
+      "Cited by your channels from 2 weeks ago",
+    )
+    await page.getByText("Channel a2").click()
+    const aside = page.getByTestId("directory-panel")
+    await expect(
+      aside.getByText("None of your channels cite it from 2 weeks ago."),
+    ).toBeVisible()
+    expect(panel.lastWhy()).toMatchObject({
+      handle: "a2",
+      mode: "live",
+      start: -14 * 86_400_000,
+    })
   })
 
   test("a link with a filter that no longer reads is reset, and says so", async ({

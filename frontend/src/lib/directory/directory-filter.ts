@@ -7,7 +7,7 @@
  * It lives in the workspace URL as `?dirFilter=`, in the shared grammar
  * (`lib/filter-text.ts`): `lang:fa`, `name:"news"` (a bare word too),
  * `is:followed`, `is:followable`, `subscribers >= 1000`, `reach 100..5000`,
- * `reach = none`, `mine:all`, `mine:14d`, with `not`, `and`, `or` and
+ * `reach = none`, `mine:all`, `mine:-2w..`, with `not`, `and`, `or` and
  * parentheses. DIR-05 adds `citedby:` and `cites:`; DIR-07 adds
  * `parents:` and `children:` (`ticked`, `selection`, `follows` or typed
  * handles, a trailing number being the minimum). DFP-04 adds `tag:"news"`, In
@@ -18,7 +18,9 @@
  * bounds: `last_post_at -7d..` (Live, signed from now), `refresh_due_at
  * now..+2d`, `checked_at 2026-10-01T00:00Z..` (Fixed, a UTC instant), either
  * end open, `retry_after = none`. The day measures `last_post_days` and
- * `found_days` are gone and no longer parse.
+ * `found_days` are gone and no longer parse. TB-02 makes `mine:`'s window a
+ * Time bound on when the citing Posts were published, in the same form; an
+ * old `mine:14d` still reads, as Live from 14 days ago with the End open.
  */
 
 import type {
@@ -43,6 +45,8 @@ import {
 } from "@/lib/filter-text"
 import { atoms, type FilterNode, type FilterTree } from "@/lib/filter-tree"
 import { languageLabel } from "@/lib/language-name"
+import { DAY_MS } from "@/lib/scope/window"
+import type { TimeBound } from "@/lib/time-bound/bound"
 import {
   parseTimeBound,
   TIME_BOUND,
@@ -70,6 +74,22 @@ export type DirectoryTimeCond = {
   none?: true
 }
 
+/**
+ * Cited by "your channels" (TB-02): ever, or within a Time bound on when the
+ * citing Posts were published. Either end open, never No value.
+ */
+export type DirectoryMineCond = { type: "mine" } & Partial<TimeBound>
+
+/** The Condition's window; `null` for every Post. */
+export const mineBound = (cond: Partial<TimeBound>): TimeBound | null =>
+  cond.mode && (cond.start !== undefined || cond.end !== undefined)
+    ? {
+        mode: cond.mode,
+        ...(cond.start !== undefined && { start: cond.start }),
+        ...(cond.end !== undefined && { end: cond.end }),
+      }
+    : null
+
 export type DirectoryMeasureCond = {
   type: "measure"
   measure: MeasureKey
@@ -79,8 +99,7 @@ export type DirectoryCond =
   | { type: "language"; value: string }
   | { type: "name"; value: string }
   | { type: "flag"; value: DirectoryFlag }
-  /** Cited by "your channels", ever or within the last `days`. */
-  | { type: "mine"; days?: number }
+  | DirectoryMineCond
   /** Cited by any of the Seeds, in the view's Reference kinds (DIR-05). */
   | { type: "citedby"; seeds: FixedSeeds }
   /** Cites any of the Seeds, in the view's Reference kinds (DIR-05). */
@@ -340,6 +359,8 @@ export const FLAG_LABEL: Record<DirectoryFlag, string> = {
   dismissed: "Dismissed",
 }
 
+const MINE_LABEL = "Cited by your channels"
+
 export const HANDLES_LABEL: Record<DirectoryHandlesCond["type"], string> = {
   citedby: "Cited by",
   cites: "Cites",
@@ -470,10 +491,12 @@ export function directoryConditionLabel(
       return `In the Tag ${cond.name}`
     case "flag":
       return FLAG_LABEL[cond.value]
-    case "mine":
-      return cond.days
-        ? `Cited by your channels, last ${cond.days} days`
-        : "Cited by your channels"
+    case "mine": {
+      const window = mineBound(cond)
+      return window
+        ? timeBoundWords(MINE_LABEL, window, locale, timeZone)
+        : MINE_LABEL
+    }
     case "citedby":
     case "cites":
       return `${HANDLES_LABEL[cond.type]} ${seedForms(cond.seeds).label}`
@@ -508,8 +531,10 @@ function condText(cond: DirectoryCond): string {
       return `tag:${quote(cond.name)}`
     case "flag":
       return `is:${cond.value}`
-    case "mine":
-      return `mine:${cond.days ? `${cond.days}d` : "all"}`
+    case "mine": {
+      const window = mineBound(cond)
+      return `mine:${window ? quote(timeBoundText(window)) : "all"}`
+    }
     case "citedby":
     case "cites":
       return `${cond.type}:${quote(seedForms(cond.seeds).text)}`
@@ -613,7 +638,17 @@ function sharedCond(
   const seeds = fixedSeeds(rest)
   return seeds && { type, seeds, min }
 }
-const WINDOW = /^(\d+)d$/
+/** A link written before TB-02: the last so many days. */
+const OLD_WINDOW = /^(\d+)d$/
+const MINE_WINDOW = new RegExp(String.raw`^${TIME_BOUND}$`, "iu")
+
+function mineCond(text: string): DirectoryMineCond | null {
+  if (text === "all") return { type: "mine" }
+  const days = Number(OLD_WINDOW.exec(text)?.[1])
+  if (days >= 1) return { type: "mine", mode: "live", start: -days * DAY_MS }
+  const m = MINE_WINDOW.exec(text)
+  return m && { type: "mine", ...parseTimeBound(m[1], m[2]) }
+}
 
 const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
   bound: (rest) => {
@@ -639,9 +674,8 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
     if (prefix === "error" && text.trim())
       return { type: "contains", field: "last_error", value: text }
     if (prefix === "mine") {
-      if (text === "all") return { type: "mine" }
-      const days = Number(WINDOW.exec(text)?.[1])
-      if (days >= 1) return { type: "mine", days }
+      const cond = mineCond(text)
+      if (cond) return cond
     }
     if (prefix === "citedby" || prefix === "cites") {
       const seeds = fixedSeeds(text.trim())
@@ -668,7 +702,8 @@ export const DIRECTORY_FILTER_BOUNDS = {
   nodes: 100,
   languageLength: 16,
   nameLength: 256,
-  maxDays: 36_500,
+  /** A Live end's reach either way, a century, as the server's. */
+  liveReach: 100 * 366 * DAY_MS,
   /** Cited by and Cites: fixed handles per Condition; past it, use a Tag. */
   handles: 500,
   handleLength: 256,
@@ -684,6 +719,12 @@ const seedsFit = (seeds: SeedSource, most: number) =>
       (h) => h.length <= DIRECTORY_FILTER_BOUNDS.handleLength,
     ))
 
+const withinReach = ({ start, end }: Partial<TimeBound>) =>
+  [start, end].every(
+    (ms) =>
+      ms === undefined || Math.abs(ms) <= DIRECTORY_FILTER_BOUNDS.liveReach,
+  )
+
 /** Whether the server accepts `filter`: depth, node count and values. */
 export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
   const b = DIRECTORY_FILTER_BOUNDS
@@ -697,7 +738,8 @@ export function withinDirectoryFilterBounds(filter: DirectoryFilter): boolean {
     if (cond.type === "language") return cond.value.length <= b.languageLength
     if (cond.type === "name" || cond.type === "contains")
       return cond.value.length <= b.nameLength
-    if (cond.type === "mine") return (cond.days ?? 0) <= b.maxDays
+    if (cond.type === "mine" || cond.type === "time")
+      return cond.mode !== "live" || withinReach(cond)
     if (cond.type === "citedby" || cond.type === "cites")
       return seedsFit(cond.seeds, b.handles)
     if (cond.type === "parents" || cond.type === "children")

@@ -70,6 +70,7 @@ import {
   tickAllState,
 } from "@/lib/directory/directory-view"
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
+import type { TimeBound } from "@/lib/time-bound/bound"
 import { pillClass } from "./PostFilterParts"
 
 /** The filter without its bounds on `measure`, a measure or a moment, which
@@ -241,7 +242,7 @@ function DirectoryPanelReads({
   handle,
   request,
   shared,
-  windowDays,
+  citedWindow,
   following,
   onFollow,
   onDismiss,
@@ -254,7 +255,8 @@ function DirectoryPanelReads({
   request: DirectoryViewRequest
   /** Each Shared relation's Seeds while it is on, for Why (DIR-07). */
   shared: Pick<DirectoryWhyRequest, "parents" | "children">
-  windowDays: number | null
+  /** The "Cited by your channels" Condition's Time bound (TB-02). */
+  citedWindow: TimeBound | null
   following: boolean
   onFollow: () => void
   onDismiss: (dismissed: boolean) => void
@@ -278,7 +280,7 @@ function DirectoryPanelReads({
     handle,
     yours: request.yours,
     referenceKinds: request.referenceKinds,
-    days: windowDays,
+    ...citedWindow,
     ...shared,
   }
   const why = useQuery({
@@ -295,7 +297,7 @@ function DirectoryPanelReads({
       entry={entry.isError ? null : entry.data}
       posts={posts.isError ? [] : posts.data}
       why={why.data}
-      windowDays={windowDays}
+      citedWindow={citedWindow}
       following={following}
       onFollow={onFollow}
       onDismiss={onDismiss}
@@ -474,7 +476,7 @@ export function DirectoryView() {
             parents: seedsOf("parents"),
             children: seedsOf("children"),
           }}
-          windowDays={mineWindow(d.filter)}
+          citedWindow={mineWindow(d.filter)}
           following={d.following.has(d.open)}
           onFollow={() => d.open && void d.follow([d.open])}
           onDismiss={(dismissed) =>

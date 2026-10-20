@@ -6,14 +6,17 @@
  */
 import type React from "react"
 import { useState } from "react"
+import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   DIRECTORY_FILTER_BOUNDS,
   type DirectoryCond,
   type DirectoryHandlesCond,
+  type DirectoryMineCond,
   type DirectorySharedCond,
   HANDLES_LABEL,
   type LiveSource,
+  mineBound,
   parseHandles,
   type SeedSets,
   type SeedSource,
@@ -21,6 +24,11 @@ import {
   SHARED_MIN,
 } from "@/lib/directory/directory-filter"
 import { type TagChoices, tagNames } from "@/lib/directory/directory-tags"
+import { DAY_MS } from "@/lib/scope/window"
+import type { TimeBound, TimeBoundOptions } from "@/lib/time-bound/bound"
+
+/** What Cited by your channels turns on (ADR-033): open ends only. */
+const MINE_OPTIONS: TimeBoundOptions = { openEnds: true }
 
 type EditorProps<C> = {
   start?: C
@@ -441,59 +449,36 @@ export function SharedEditor({
   )
 }
 
-const WINDOWS = [7, 14, 30, 90]
+/** A new Cited by your channels window: the last two weeks. */
+const NEW_WINDOW: TimeBound = { mode: "live", start: -14 * DAY_MS }
 
-const presetClass = (on: boolean) =>
-  `rounded-full border px-2 py-0.5 font-mono text-[11px] ${on ? "border-app-ink bg-app-ink text-app-bg" : "border-app-ink/15 hover:border-app-ink/30"}`
-
+/**
+ * Cited by your channels (TB-02): the one Time bound editor over when the
+ * citing Posts were published, either end open, never ahead of now and never
+ * No value. Both ends open is any time.
+ */
 export function MineEditor({
   start,
   onSubmit,
   onBack,
-}: EditorProps<Extract<DirectoryCond, { type: "mine" }>>) {
-  const [days, setDays] = useState<number | undefined>(start ? start.days : 14)
+}: EditorProps<DirectoryMineCond>) {
+  const [bound, setBound] = useState<TimeBound>(() =>
+    start ? (mineBound(start) ?? { mode: "live" }) : NEW_WINDOW,
+  )
   return (
     <Shell
       title="Cited by your channels"
-      explain="Your channels forwarded, mentioned, linked or replied to it. Which channels are yours is the Sort's Cited by choice, and the Reference kinds narrow it."
+      explain="Your channels forwarded, mentioned, linked or replied to it, in Posts published inside this window. Which channels are yours is the Sort's Cited by choice, and the Reference kinds narrow it."
       onBack={onBack}
       submit={start ? "Update" : "Add"}
-      onSubmit={() =>
-        onSubmit(days ? { type: "mine", days } : { type: "mine" })
-      }
+      onSubmit={() => onSubmit({ type: "mine", ...(mineBound(bound) ?? {}) })}
     >
-      <div className="flex flex-wrap items-center gap-1">
-        <button
-          type="button"
-          aria-pressed={days === undefined}
-          onClick={() => setDays(undefined)}
-          className={presetClass(days === undefined)}
-        >
-          any time
-        </button>
-        {WINDOWS.map((d) => (
-          <button
-            key={d}
-            type="button"
-            aria-pressed={days === d}
-            onClick={() => setDays(d)}
-            className={presetClass(days === d)}
-          >
-            {d}d
-          </button>
-        ))}
-        <input
-          type="number"
-          min={1}
-          aria-label="Days"
-          value={days ?? ""}
-          onChange={(e) => {
-            const n = Number.parseInt(e.target.value, 10)
-            setDays(n >= 1 ? n : undefined)
-          }}
-          className="h-7 w-16 rounded-md border border-app-ink/15 bg-app-muted px-2 text-xs tabular-nums outline-none"
-        />
-      </div>
+      <TimeBoundEditor
+        value={bound}
+        onChange={setBound}
+        opts={MINE_OPTIONS}
+        modeLabel="Cited by your channels mode"
+      />
     </Shell>
   )
 }
