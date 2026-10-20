@@ -19,7 +19,8 @@ import {
 /**
  * Server-backed network/proxy/Tor settings: hydrates ONCE on mount (merging
  * legacy browser-stored "proxyEnabled"/"torEnabled" values and writing them back),
- * then debounce-saves any change 400ms after it settles.
+ * then debounce-saves any change 400ms after it settles, never what it just
+ * loaded.
  */
 export function useNetworkSettings(): {
   network: NetworkSettings
@@ -29,6 +30,9 @@ export function useNetworkSettings(): {
     NETWORK_SETTINGS_DEFAULTS,
   )
   const hydrated = useRef(false)
+  // The payload the server is known to hold. Saving it again would only race
+  // a registry write made since (SET-02), so the debounced save skips it.
+  const onServer = useRef<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const setters = useMemo<NetworkSettingSetters>(() => {
@@ -71,7 +75,11 @@ export function useNetworkSettings(): {
         const legacy = legacyNetworkFlags(value, scopedStorage)
         const merged = { ...value, ...legacy }
         const next = mergeNetworkSettings(NETWORK_SETTINGS_DEFAULTS, merged)
-        setNetwork((prev) => mergeNetworkSettings(prev, merged))
+        setNetwork((prev) => {
+          const loaded = mergeNetworkSettings(prev, merged)
+          onServer.current = JSON.stringify(buildNetworkSavePayload(loaded))
+          return loaded
+        })
         hydrated.current = true
         if (Object.keys(legacy).length > 0) {
           saveNetworkSettings({
@@ -104,9 +112,13 @@ export function useNetworkSettings(): {
   // Debounced save of any writable field change (post-hydration only).
   useEffect(() => {
     if (!hydrated.current || !hasSession()) return
+    const payload = buildNetworkSavePayload(network)
+    const known = JSON.stringify(payload)
+    if (known === onServer.current) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      saveNetworkSettings(buildNetworkSavePayload(network)).catch(console.error)
+      onServer.current = known
+      saveNetworkSettings(payload).catch(console.error)
     }, 400)
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)

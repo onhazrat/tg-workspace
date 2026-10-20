@@ -441,3 +441,25 @@ test.describe("Settings page", () => {
     ).toBeVisible()
   })
 })
+
+test("loading the app writes no network settings back", async ({ page }) => {
+  // A registry write to a Tor field between this load and an echo of it would
+  // be lost, so what was just loaded is never saved.
+  const puts: unknown[] = []
+  await page.route("**/api/v1/data/settings/network", (route) => {
+    if (route.request().method() === "PUT") {
+      puts.push(route.request().postDataJSON())
+      return route.fulfill({ json: { key: "network", value: {} } })
+    }
+    return route.fulfill({
+      json: { key: "network", value: { torEnabled: true, torMode: "single" } },
+    })
+  })
+  const loaded = page.waitForResponse((r) =>
+    r.url().endsWith("/data/settings/network"),
+  )
+  await page.goto("/?tab=settings")
+  await loaded
+  await page.waitForTimeout(1_000) // the save is debounced by 400ms
+  expect(puts).toEqual([])
+})
