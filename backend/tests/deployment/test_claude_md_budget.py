@@ -14,11 +14,28 @@ with the long-form text archived in `docs/agents/architecture-rationale.md`.
 
 Nothing evicted, so it grew. This is the eviction step.
 
+## The split
+
+By 2026-10-20 the cut file was back at its 48,000-byte ceiling, and the ceiling
+was distorting the work: a new guard went unlisted because its row did not fit,
+and six other rows were shortened to make room. 83% of the bytes were the
+backend's invariants and the guard table, paid for by sessions that touched
+neither. So the file became four, each loaded only by the work it governs:
+
+* the root `CLAUDE.md`, loaded every session: layout, commands, conventions, and
+  a pointer to each of the other three
+* `backend/CLAUDE.md` and `frontend/CLAUDE.md`, which Claude Code loads once a
+  session reads a file in that tree
+* `docs/agents/architecture-guards.md`, the guard table, reached when a guard
+  fails or is about to change
+
 ## What is asserted
 
-* **A budget.** Lines and bytes, both ceilings. A budget nobody checks is a
-  preference, and the preference lost every week for six weeks.
-* **Every path it cites resolves.** The whole design rests on the pointer being
+* **A budget per file.** Lines and bytes, both ceilings. A budget nobody checks
+  is a preference, and the preference lost every week for six weeks.
+* **The root points at the other three.** A disclosed file nothing names is a
+  file only the directory walk finds, and only for Claude Code.
+* **Every path they cite resolves.** The whole design rests on the pointer being
   good. A claim whose enforcing test has been renamed is worse than no claim:
   it reads as authority and leads nowhere.
 * **Every `Enforced:` pointer in the prose is a row in the guard table**, and
@@ -30,7 +47,9 @@ Nothing evicted, so it grew. This is the eviction step.
 
 Per `CLAUDE.md`, each assertion here was mutation-tested:
 
-* raise the budget by one line, or paste back a paragraph -> the budget test fails
+* lower a file's budget below its size, or paste back a paragraph -> the budget
+  test fails for that file
+* delete a pointer from the root -> the pointer test fails
 * rename a cited test file -> the path test fails
 * add an `*Enforced: ...*` marker with no table row -> the coverage test fails
 * delete a table row whose file is still cited -> the coverage test fails
@@ -38,11 +57,13 @@ Per `CLAUDE.md`, each assertion here was mutation-tested:
 
 ## Raising the budget
 
-The ceilings sit deliberately close to the current size, so growth is a decision
-rather than a drift. If a new invariant genuinely needs a line, take one back
-from an invariant that has since been enforced in code, or move the reasoning to
-the enforcing test's docstring where it belongs. Raising the numbers is the last
-option, not the first, and doing it should feel like the argument it is.
+The ceilings sit deliberately close to the current sizes, so growth is a
+decision rather than a drift. If a new invariant genuinely needs a line, take
+one back from an invariant that has since been enforced in code, or move the
+reasoning to the enforcing test's docstring where it belongs. Raising the
+numbers is the last option, not the first, and doing it should feel like the
+argument it is. The root's ceiling is the one that matters most: it is the only
+file every session pays for.
 """
 
 from __future__ import annotations
@@ -53,13 +74,23 @@ import re
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
+ROOT_CLAUDE_MD = "CLAUDE.md"
+GUARDS_DOC = "docs/agents/architecture-guards.md"
 
-# Sized against the 2026-09-02 cut (250 lines, 41,458 bytes) with a little room
-# for a genuinely new invariant. See "Raising the budget" above before touching
-# these: the point of a ceiling is that it is reached and argued about.
-MAX_LINES = 275
-MAX_BYTES = 48_000
+# (max lines, max bytes), sized against the 2026-10-20 split (root 97 lines /
+# 7,058 bytes, backend 78 / 24,586, frontend 12 / 2,442, guards 97 / 15,164)
+# with a little room for a genuinely new invariant. See "Raising the budget"
+# above before touching these.
+BUDGETS: dict[str, tuple[int, int]] = {
+    ROOT_CLAUDE_MD: (110, 8_000),
+    "backend/CLAUDE.md": (90, 27_000),
+    "frontend/CLAUDE.md": (20, 3_000),
+    GUARDS_DOC: (115, 17_000),
+}
+
+# The files the root must name, so every harness finds them and not only the
+# one that walks directories.
+DISCLOSED = [path for path in BUDGETS if path != ROOT_CLAUDE_MD]
 
 # A backticked path naming something in the repo. Globs fall outside the
 # character class, so `test_*_projection.py` is skipped rather than failing.
@@ -78,9 +109,13 @@ _TABLE_ROW = re.compile(
 _ANY_PATH = re.compile(r"`([A-Za-z0-9_./*-]+\.[a-z]{2,4})`")
 
 
+def _read(path: str) -> str:
+    return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
 @pytest.fixture(scope="module")
-def claude_md() -> str:
-    return CLAUDE_MD.read_text(encoding="utf-8")
+def guards_doc() -> str:
+    return _read(GUARDS_DOC)
 
 
 def _guard_table_paths(text: str) -> list[str]:
@@ -100,46 +135,60 @@ def _normalise(path: str) -> str:
     return f"backend/{path}"
 
 
-def test_the_file_stays_within_its_line_and_byte_budget(claude_md: str) -> None:
+@pytest.mark.parametrize("path", list(BUDGETS))
+def test_each_file_stays_within_its_line_and_byte_budget(path: str) -> None:
     """The eviction step. Growth has to be argued for, not accumulated."""
-    lines = len(claude_md.splitlines())
-    size = len(claude_md.encode("utf-8"))
-    assert lines <= MAX_LINES, (
-        f"CLAUDE.md is {lines} lines, over the {MAX_LINES}-line budget. "
+    max_lines, max_bytes = BUDGETS[path]
+    text = _read(path)
+    lines = len(text.splitlines())
+    size = len(text.encode("utf-8"))
+    assert lines <= max_lines, (
+        f"{path} is {lines} lines, over its {max_lines}-line budget. "
         "Move the reasoning into the enforcing test's docstring, or take a line "
         "back from an invariant that no longer needs one. Read this module's "
         "docstring before raising the ceiling."
     )
-    assert size <= MAX_BYTES, (
-        f"CLAUDE.md is {size:,} bytes, over the {MAX_BYTES:,}-byte budget. "
-        "Every byte here is loaded into every session, including the ones that "
-        "never touch the subsystem being described."
+    assert size <= max_bytes, (
+        f"{path} is {size:,} bytes, over its {max_bytes:,}-byte budget. "
+        "Every byte is loaded into every session that reaches this file, "
+        "including the ones that never touch the subsystem being described."
     )
 
 
-def test_every_path_it_cites_still_exists(claude_md: str) -> None:
+@pytest.mark.parametrize("path", DISCLOSED)
+def test_the_root_points_at_each_disclosed_file(path: str) -> None:
+    """Claude Code walks into `backend/` and `frontend/`; nothing else does."""
+    assert f"`{path}`" in _read(ROOT_CLAUDE_MD), (
+        f"The root CLAUDE.md no longer names `{path}`, so an agent that does not "
+        "load nested CLAUDE.md files, or never reads a file in that tree, never "
+        "reaches it."
+    )
+
+
+@pytest.mark.parametrize("path", list(BUDGETS))
+def test_every_path_it_cites_still_exists(path: str) -> None:
     """A claim whose pointer leads nowhere reads as authority and is not one."""
     missing = sorted(
         {
-            path
-            for path in _CITED_PATH.findall(claude_md)
-            if not (REPO_ROOT / path).exists()
+            cited
+            for cited in _CITED_PATH.findall(_read(path))
+            if not (REPO_ROOT / cited).exists()
         }
     )
     assert not missing, (
-        "CLAUDE.md cites paths that do not exist: "
+        f"{path} cites paths that do not exist: "
         + ", ".join(missing)
         + ". The file states claims and points at what enforces them, so a moved "
         "file silently turns a rule into a dead end."
     )
 
 
-def test_every_guard_in_the_table_exists(claude_md: str) -> None:
+def test_every_guard_in_the_table_exists(guards_doc: str) -> None:
     """The table is the lookup index; a row pointing at nothing is worse than none."""
     missing = sorted(
         {
             path
-            for path in _guard_table_paths(claude_md)
+            for path in _guard_table_paths(guards_doc)
             if "*" not in path and not (REPO_ROOT / path).exists()
         }
     )
@@ -147,7 +196,7 @@ def test_every_guard_in_the_table_exists(claude_md: str) -> None:
 
 
 def test_every_enforced_pointer_in_the_prose_is_a_row_in_the_guard_table(
-    claude_md: str,
+    guards_doc: str,
 ) -> None:
     """The prose and the table must name the same guards.
 
@@ -155,20 +204,21 @@ def test_every_enforced_pointer_in_the_prose_is_a_row_in_the_guard_table(
     both halves stay individually plausible while the table quietly stops being
     the inventory it is read as.
     """
-    table = set(_guard_table_paths(claude_md))
+    table = set(_guard_table_paths(guards_doc))
     cited: set[str] = set()
-    for block in _ENFORCED_BLOCK.findall(claude_md):
-        cited.update(_normalise(path) for path in _ENFORCED_PATH.findall(block))
+    for path in BUDGETS:
+        for block in _ENFORCED_BLOCK.findall(_read(path)):
+            cited.update(_normalise(p) for p in _ENFORCED_PATH.findall(block))
 
     stranded = sorted(path for path in cited if path not in table)
     assert not stranded, (
-        "These guards are cited by an *Enforced:* marker but are not rows in the "
-        "architecture-guards table: " + ", ".join(stranded)
+        "These guards are cited by an *Enforced:* marker but are not rows in "
+        f"the guard table in {GUARDS_DOC}: " + ", ".join(stranded)
     )
 
 
-def test_the_guard_table_lists_each_file_once(claude_md: str) -> None:
+def test_the_guard_table_lists_each_file_once(guards_doc: str) -> None:
     """Two rows for one guard means one of them is about to go stale."""
-    seen = _guard_table_paths(claude_md)
+    seen = _guard_table_paths(guards_doc)
     duplicates = sorted({path for path in seen if seen.count(path) > 1})
     assert not duplicates, f"Duplicated guard-table rows: {', '.join(duplicates)}"

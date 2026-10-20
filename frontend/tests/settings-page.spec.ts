@@ -418,6 +418,9 @@ test.describe("Settings page", () => {
         id: "publishing.yours.citationStyle",
         body: { value: "numbered" },
       })
+    // The palette closes only once the write resolves, which is after the
+    // mock records it; reopening sooner gets shut by that late close.
+    await expect(page.getByPlaceholder("Type a command...")).toBeHidden()
 
     await page.getByTestId("command-palette-button").click()
     await page
