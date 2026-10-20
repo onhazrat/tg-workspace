@@ -300,8 +300,8 @@ _Avoid_: directory query, directory search, browse filter
 
 **Condition**:
 One test in a Channel filter, a Directory filter or a Post filter. In a Channel filter: a tag, a
-Setting group, a Language, or a bound on a number such as Reach or
-subscribers. In a Post filter: a Type (Is a reply and Has a reply among them), a media
+Setting group, a Language, a bound on a number such as Reach or
+subscribers, or a Time bound. In a Post filter: a Type (Is a reply and Has a reply among them), a media
 kind, a Language, a Channel, or a bound on a View count, an Estimated View
 count, Channel posts in window or Channel posts in filtered window. In a Directory filter: a
 Tag, a Language, part of the handle or name, the followability verdict, being followed
@@ -312,11 +312,14 @@ _Avoid_: rule (a Selection rule is something else), clause, criterion, filter
 chip
 
 **Time bound**:
-A Condition in a Directory filter on one of a Directory entry's moments, such
-as its last Post or when the Directory found it. Like an Analysis window it is
-either Live, its ends fixed offsets from the current time that may point back
-or ahead, or Fixed, its ends exact instants; unlike one, either end may be left
-open, and it decides only which Directory entries are shown. Its ends include
+A Condition in a Directory filter or a Channel filter on one of an entry's
+moments, such as a Directory entry's last Post or when the Directory found it,
+or when a followed Channel was last updated or followed. Like an Analysis
+window it is either Live, its ends fixed offsets from the current time that may
+point back or ahead, or Fixed, its ends exact instants; unlike one, either end
+may be left open, and it decides only which entries are shown. The Logs tab
+filters its entries by a Time bound on when each was logged, and the Cited by
+your channels Condition carries one on when the citing Posts were published. Its ends include
 the start and exclude the end.
 _Avoid_: date range, time range, date filter
 
