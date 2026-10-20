@@ -86,6 +86,12 @@ const TOOL_SECTIONS = [
   "transfer",
   "query",
   "tools",
+  "telemetry",
+  "logs",
+  // The old Data section: three of its four entries are tools now.
+  "db",
+  "data",
+  "data-management",
 ]
 
 /**

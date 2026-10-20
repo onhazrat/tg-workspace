@@ -47,4 +47,19 @@ describe("old addresses land in the workspace at /", () => {
       "/?tab=settings&setting=operator.deployment.users",
     )
   })
+
+  test("/settings and /admin keep their query string", () => {
+    expect(landing(Settings, "?ref=mail")).toBe(
+      "/?ref=mail&tab=settings&setting=account.yours.profile",
+    )
+    expect(landing(Admin, "?q=bob")).toBe(
+      "/?q=bob&tab=settings&setting=operator.deployment.users",
+    )
+  })
+
+  test("an old ?section= link opens its section, not the default", () => {
+    expect(landing(Settings, "?section=sync")).toBe(
+      "/?section=sync&tab=settings",
+    )
+  })
 })

@@ -11,6 +11,11 @@ describe("validateWorkspaceSearch", () => {
       "transfer",
       "query",
       "tools",
+      "telemetry",
+      "logs",
+      "db",
+      "data",
+      "data-management",
     ]) {
       expect(validateWorkspaceSearch({ tab: "settings", section })).toEqual({
         tab: "tools",
