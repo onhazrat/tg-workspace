@@ -388,6 +388,17 @@ describe("the Channel posts bounds (PTI-02)", () => {
     expect(picker).toEqual(NUMBERS)
   })
 
+  test("each Filters menu row carries its symbol: views an eye, counts # (TB-03)", () => {
+    mount()
+    fireEvent.click(screen.getByTestId("post-filters"))
+    const symbols = screen
+      .getAllByTestId(/^post-filters-/)
+      .map((b) => b.querySelector("svg")?.getAttribute("class"))
+    expect(
+      symbols.map((c) => /lucide-(eye|hash)\b/.exec(c ?? "")?.[1]),
+    ).toEqual(["eye", "eye", "hash", "hash"])
+  })
+
   test("the pill counts every number bound, Channel posts included", () => {
     const bound = (cond: PostCond) => ({
       kind: "atom" as const,

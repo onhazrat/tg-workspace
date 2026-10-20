@@ -17,7 +17,7 @@ import {
   parseBound,
 } from "@/lib/channels/channel-metrics"
 
-const BINS = 32
+export const BINS = 32
 
 const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
 

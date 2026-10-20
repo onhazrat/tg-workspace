@@ -17,7 +17,12 @@ import {
 } from "lucide-react"
 import { createContext, useContext, useState } from "react"
 import type { PostValueHistogramResponse } from "@/client"
-import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
+import {
+  BarHeading,
+  BarPopover,
+  BarSearch,
+  MenuRowLabel,
+} from "@/components/BarPopover"
 import { BoundHistogram } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import type { ConditionOption } from "@/components/filter-tree/ConditionPicker"
@@ -461,7 +466,7 @@ export function PostFiltersMenu({
               onClick={() => setPicked(m.value)}
               className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5"
             >
-              {m.label}
+              <MenuRowLabel icon={m.icon} label={m.label} />
               <span className="text-[11px] font-normal tabular-nums text-app-ink/50">
                 {bounds
                   .filter((a) => a.number === m.value)

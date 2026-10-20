@@ -5,6 +5,7 @@
  * A Channel with no value for a number is not measured, and fails any bound
  * on it.
  */
+import type { ChannelMomentKey } from "@/lib/channels/channel-moments"
 import { formatCount } from "@/lib/format-count"
 import type { Channel, ChannelStats } from "@/types"
 
@@ -146,6 +147,8 @@ export type MetricData = {
   values: (key: MetricKey) => number[]
   /** Every Channel, measured or not. */
   total: number
+  /** A moment's values across the Account's Channels, ascending (TB-03). */
+  moments: (key: ChannelMomentKey) => number[]
 }
 
 /** A missing value fails every bound and passes only `none`. */

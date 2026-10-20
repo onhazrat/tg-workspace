@@ -1,11 +1,13 @@
-import { Languages, Layers, SlidersHorizontal, Tag } from "lucide-react"
+import { Clock, Hash, Languages, Layers, Tag } from "lucide-react"
 import type {
   ConditionOption,
   PickerVocabulary,
 } from "@/components/filter-tree/ConditionPicker"
 import type { Cond, CondType } from "@/lib/channels/channel-filter"
 import { METRICS, type MetricData } from "@/lib/channels/channel-metrics"
+import { CHANNEL_MOMENTS } from "@/lib/channels/channel-moments"
 import { ChannelMetricEditor } from "./ChannelMetricEditor"
+import { ChannelTimeEditor } from "./ChannelTimeEditor"
 
 export type { ConditionOption }
 /** What the picker offers for each kind of Condition. */
@@ -15,7 +17,8 @@ export const CONDITION_ICON: Record<Cond["type"], typeof Tag> = {
   tag: Tag,
   group: Layers,
   language: Languages,
-  metric: SlidersHorizontal,
+  metric: Hash,
+  time: Clock,
 }
 
 const KINDS: [CondType, string][] = [
@@ -26,7 +29,8 @@ const KINDS: [CondType, string][] = [
 
 /**
  * The Channels' Conditions as the shared condition picker reads them (CTB-03):
- * a tag, Setting group or Language by name, or a number through its editor.
+ * a tag, Setting group or Language by name, a number through its editor, or
+ * a moment through the one Time bound editor (TB-03).
  */
 export function channelVocabulary(
   options: ConditionOptions,
@@ -52,7 +56,7 @@ export function channelVocabulary(
           kind: "editor" as const,
           id: `metric:${m.key}`,
           label: m.label,
-          icon: SlidersHorizontal,
+          icon: Hash,
           render: ({ start, onSubmit, onBack }) => (
             <ChannelMetricEditor
               metricKey={m.key}
@@ -66,8 +70,30 @@ export function channelVocabulary(
           ),
         })),
       },
+      {
+        heading: "Times",
+        entries: CHANNEL_MOMENTS.map((m) => ({
+          kind: "editor" as const,
+          id: `time:${m.key}`,
+          label: m.label,
+          icon: Clock,
+          render: ({ start, onSubmit, onBack }) => (
+            <ChannelTimeEditor
+              momentKey={m.key}
+              data={metrics}
+              initial={start?.type === "time" ? start : undefined}
+              onBack={onBack}
+              onSubmit={onSubmit}
+            />
+          ),
+        })),
+      },
     ],
     entryOf: (cond) =>
-      cond.type === "metric" ? `metric:${cond.metric}` : cond.type,
+      cond.type === "metric"
+        ? `metric:${cond.metric}`
+        : cond.type === "time"
+          ? `time:${cond.moment}`
+          : cond.type,
   }
 }

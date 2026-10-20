@@ -10,7 +10,8 @@ import type {
 import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
 import { type Bin, Spread } from "./DirectoryBoundEditor"
 
-const dateText = (ms: number) =>
+/** A time spread's captions: dates. */
+export const dateText = (ms: number) =>
   new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(ms)
 
 /** What a moment's Time bound turns on (ADR-033): all three switches. */

@@ -510,7 +510,11 @@ describe("funnels", () => {
 })
 
 const condValue = (cond: Cond) =>
-  cond.type === "metric" ? cond.metric : cond.value
+  cond.type === "metric"
+    ? cond.metric
+    : cond.type === "time"
+      ? cond.moment
+      : cond.value
 
 /** Root children as text, groups joined by "|", to read a shape at a glance. */
 function shared(filter: ChannelFilter): string[] {

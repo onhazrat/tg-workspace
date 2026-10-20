@@ -43,7 +43,11 @@ export function ChannelFilterRow({
         label: (cond) => conditionLabel(cond, names),
         icon: (cond) => CONDITION_ICON[cond.type],
         chipId: (cond) =>
-          cond.type === "metric" ? `metric-${cond.metric}` : cond.value,
+          cond.type === "metric"
+            ? `metric-${cond.metric}`
+            : cond.type === "time"
+              ? `time-${cond.moment}`
+              : cond.value,
       }}
     />
   )
