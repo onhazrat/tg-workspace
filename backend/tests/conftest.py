@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(_REPO_ROOT / ".env")
+# A worktree's private test database, written by `scripts/worktree-setup.sh`.
+# An exported TEST_POSTGRES_DB still wins: load_dotenv never overrides.
+load_dotenv(_REPO_ROOT / ".env.worktree")
 
 _test_db = os.environ.get("TEST_POSTGRES_DB") or os.environ.get(
     "POSTGRES_DB_TEST", "app_test"

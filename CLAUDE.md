@@ -49,7 +49,7 @@ Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagge
 
 ## Testing & migrations
 
-- **pytest uses a separate database (`app_test`) always** — `tests/conftest.py` overrides `POSTGRES_DB` to it and each test truncates `tg_*` tables afterward. Never point the dev server at `app_test`, and keep `POSTGRES_DB=app` for dev. One-time: `createdb app_test && cd backend && POSTGRES_DB=app_test uv run alembic upgrade head`.
+- **pytest never touches the dev database.** `tests/conftest.py` points it at `app_test` (once: `createdb app_test && cd backend && POSTGRES_DB=app_test uv run alembic upgrade head`), or in a worktree at the `app_test_<worktree>` that `bash scripts/worktree-setup.sh` creates and `--teardown` drops. Each test truncates `tg_*` tables.
 - After changing any model, generate an Alembic revision and commit it; migrations live in `backend/app/alembic/versions/`.
 - Maintenance/backfill scripts live in `backend/scripts/` (run with `uv run python backend/scripts/<name>.py`, usually `--dry-run` first) — indexed in `development.md`.
 
