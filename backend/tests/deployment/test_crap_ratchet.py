@@ -208,3 +208,30 @@ def test_a_ratchet_change_triggers_the_check_and_docs_do_not(workflow: str) -> N
             p.startswith("docs") or (p.endswith(".md") and p != "CLAUDE.md")
             for p in paths
         )
+
+
+def test_the_local_run_measures_against_the_environment_ci_has() -> None:
+    """CI's `.env` is `.env.example`, so every setting name is in `os.environ`.
+
+    Code reached only for a name missing from the environment is covered by a
+    developer's thinner `.env` and never by CI. `_dotenv_names` passed a local
+    run at 98% and failed CI's ratchet at 6% for exactly that reason, so the
+    local run layers `.env.example` under `.env`. This pins both halves: if CI
+    stops copying `.env.example`, the layering no longer reproduces it.
+    """
+    jobs = _workflow("test-backend.yml")["jobs"]
+    test_jobs = [
+        job
+        for job in jobs.values()
+        if any("tests-start.sh" in step.get("run", "") for step in job["steps"])
+    ]
+    assert test_jobs, "no job in test-backend.yml runs the pytest suite"
+    for job in test_jobs:
+        assert any(
+            "cp .env.example .env" in step.get("run", "") for step in job["steps"]
+        ), "CI's test job no longer builds its .env from .env.example"
+
+    run_sh = (_ROOT / "scripts" / "crap" / "run.sh").read_text()
+    assert '--env-file "$ROOT/.env.example"' in run_sh, (
+        "scripts/crap/run.sh no longer layers .env.example under the local .env"
+    )
