@@ -11,12 +11,10 @@ import type {
 } from "@/lib/directory/directory-filter"
 import {
   barBound,
+  MOMENT_OPTIONS,
   resolveTimeBound,
   type TimeBound,
 } from "@/lib/time-bound/bound"
-
-/** What a moment's Time bound turns on (ADR-033): all three switches. */
-const OPTIONS = { openEnds: true, ahead: true }
 
 /** The Condition Add would apply; `null` while the bound is Any time. */
 function condition(
@@ -34,7 +32,8 @@ function condition(
  * A Time bound in the Directory filter (DPF, TB-01): the moment's name and
  * spread, the Analysis window editor with open ends, an End ahead of now and
  * No value, and Add or Update with the count it keeps. The spread is drawn by
- * the server in epoch ms, and a click on a bar sets a Fixed bound over it, out to whole minutes.
+ * the server in epoch ms, and a click on a bar sets a Fixed bound over it,
+ * out to whole minutes.
  * NOT is the chip's, not the editor's.
  */
 export function DirectoryTimeEditor({
@@ -111,7 +110,7 @@ export function DirectoryTimeEditor({
       <TimeBoundEditor
         value={bound}
         onChange={setBound}
-        opts={OPTIONS}
+        opts={MOMENT_OPTIONS}
         modeLabel={`${moment.label} mode`}
         noValue={{ on: none, onChange: setNone }}
       />

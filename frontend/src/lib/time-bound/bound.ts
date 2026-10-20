@@ -28,6 +28,9 @@ export type TimeBoundOptions = {
   ahead?: boolean
 }
 
+/** What a moment's Time bound turns on (ADR-033): all three switches. */
+export const MOMENT_OPTIONS: TimeBoundOptions = { openEnds: true, ahead: true }
+
 /** The bound's ends as epoch ms against `at`. */
 export function resolveTimeBound(b: TimeBound, at: number) {
   const shift = b.mode === "live" ? at : 0

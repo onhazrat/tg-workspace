@@ -13,13 +13,11 @@ import {
 } from "@/lib/channels/channel-moments"
 import {
   inTimeBound,
+  MOMENT_OPTIONS,
   minuteBound,
   resolveTimeBound,
   type TimeBound,
 } from "@/lib/time-bound/bound"
-
-/** What a moment's Time bound turns on (ADR-033): all three switches. */
-const OPTIONS = { openEnds: true, ahead: true }
 
 /**
  * A moment's spread as the Directory's `Spread` draws it, binned here from
@@ -183,7 +181,7 @@ export function ChannelTimeEditor({
       <TimeBoundEditor
         value={bound}
         onChange={setBound}
-        opts={OPTIONS}
+        opts={MOMENT_OPTIONS}
         modeLabel={`${m.label} mode`}
         noValue={{ on: none, onChange: setNone }}
       />

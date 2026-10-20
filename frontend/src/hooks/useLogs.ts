@@ -84,7 +84,7 @@ export type LogsQueryOptions = {
 }
 
 /** The bound worth sending: none while both ends are open. */
-function setBound(bound?: TimeBound): TimeBound | undefined {
+function boundToSend(bound?: TimeBound): TimeBound | undefined {
   return bound && (bound.start !== undefined || bound.end !== undefined)
     ? bound
     : undefined
@@ -96,7 +96,7 @@ export function useLogsQuery(
   options: LogsQueryOptions = {},
 ) {
   const search = options.search?.query ? options.search : undefined
-  const bound = setBound(options.bound)
+  const bound = boundToSend(options.bound)
   return useQuery({
     queryKey: [
       ...queryKeys.logs[type],
