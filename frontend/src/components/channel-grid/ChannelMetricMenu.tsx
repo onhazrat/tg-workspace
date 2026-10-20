@@ -1,7 +1,8 @@
-import { ChevronDown, SlidersHorizontal } from "lucide-react"
+import { ChevronDown, Clock, Hash, SlidersHorizontal } from "lucide-react"
 import { useState } from "react"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { pillClass } from "@/components/PostFilterParts"
+import { MenuRowLabel } from "@/components/time-bound-prototype/MenuRowLabel"
 import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
 import type {
   Cond,
@@ -115,7 +116,7 @@ export function ChannelMetricMenu({
               onClick={() => setPicked(m.key)}
               className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5"
             >
-              {m.label}
+              {v1 ? <MenuRowLabel icon={Hash} label={m.label} /> : m.label}
               <span className="text-[11px] font-normal tabular-nums text-app-ink/50">
                 {conditions
                   .filter((a) => a.cond.metric === m.key)
@@ -136,7 +137,7 @@ export function ChannelMetricMenu({
                 onClick={() => setMoment(m.key)}
                 className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5"
               >
-                {m.label}
+                <MenuRowLabel icon={Clock} label={m.label} />
               </button>
             ))}
         </>

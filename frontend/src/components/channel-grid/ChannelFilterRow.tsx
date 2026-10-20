@@ -1,3 +1,4 @@
+import { Hash } from "lucide-react"
 import { FilterRow } from "@/components/filter-tree/FilterRow"
 import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
 import {
@@ -43,7 +44,8 @@ export function ChannelFilterRow({
       vocabulary={{
         ...channelVocabulary(options, metrics, v1),
         label: (cond) => conditionLabel(cond, names),
-        icon: (cond) => CONDITION_ICON[cond.type],
+        icon: (cond) =>
+          v1 && cond.type === "metric" ? Hash : CONDITION_ICON[cond.type],
         chipId: (cond) =>
           cond.type === "metric"
             ? `metric-${cond.metric}`

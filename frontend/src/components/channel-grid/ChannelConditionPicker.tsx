@@ -1,4 +1,11 @@
-import { Clock, Languages, Layers, SlidersHorizontal, Tag } from "lucide-react"
+import {
+  Clock,
+  Hash,
+  Languages,
+  Layers,
+  SlidersHorizontal,
+  Tag,
+} from "lucide-react"
 import type {
   ConditionOption,
   PickerVocabulary,
@@ -61,7 +68,7 @@ export function channelVocabulary(
           kind: "editor" as const,
           id: `metric:${m.key}`,
           label: m.label,
-          icon: SlidersHorizontal,
+          icon: timeBounds ? Hash : SlidersHorizontal,
           render: ({ start, onSubmit, onBack }) => (
             <ChannelMetricEditor
               metricKey={m.key}

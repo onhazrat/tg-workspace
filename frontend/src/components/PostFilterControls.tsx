@@ -28,6 +28,7 @@ import {
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import { pillClass } from "@/components/PostFilterParts"
+import { MenuRowLabel } from "@/components/time-bound-prototype/MenuRowLabel"
 import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
 import {
   boundFocus,
@@ -441,6 +442,7 @@ export function PostFiltersMenu({
   onChange: (next: PostFilter) => void
   floorHours: number
 }) {
+  const v1 = useIsVariant1()
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<PostNumber | null>(null)
   const [query, setQuery] = useState("")
@@ -502,7 +504,7 @@ export function PostFiltersMenu({
               onClick={() => setPicked(m.value)}
               className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-semibold hover:bg-app-ink/5"
             >
-              {m.label}
+              {v1 ? <MenuRowLabel icon={m.icon} label={m.label} /> : m.label}
               <span className="text-[11px] font-normal tabular-nums text-app-ink/50">
                 {bounds
                   .filter((a) => a.number === m.value)
