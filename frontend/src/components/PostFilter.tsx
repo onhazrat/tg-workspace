@@ -448,8 +448,11 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 }
 
 /** The editors' histogram read, over the spotlit Channel when one is. */
-function useSpotlitValueHistogram(measure: PostNumber) {
-  return usePostValueHistogram(measure, useSpotlight().spotlight)
+function useSpotlitValueHistogram(
+  measure: PostNumber,
+  range?: [number, number] | null,
+) {
+  return usePostValueHistogram(measure, useSpotlight().spotlight, range)
 }
 
 /** The Analysis window chart's read, over the spotlit Channel when one is. */

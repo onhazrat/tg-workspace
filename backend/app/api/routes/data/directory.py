@@ -198,7 +198,10 @@ def get_directory_distribution(
 ) -> DirectoryDistributionResponse:
     """A measure's spread across the view with its own bounds left out."""
     spread = directory_reads.distribution(
-        session, view_of(session, current_user.id, body, body.measure), body.measure
+        session,
+        view_of(session, current_user.id, body, body.measure),
+        body.measure,
+        None if body.lo is None or body.hi is None else (body.lo, body.hi),
     )
     return DirectoryDistributionResponse(
         scale=spread.scale,

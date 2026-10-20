@@ -46,7 +46,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 
 from app.api.deps import SessionDep, get_current_user  # noqa: E402
-from app.api.routes.data import directory  # noqa: E402
+from app.api.routes.data import directory, posts  # noqa: E402
 from app.core.db import engine  # noqa: E402
 from app.models import User  # noqa: E402
 
@@ -80,9 +80,10 @@ def proto_user(request: Request, session: SessionDep) -> User:
 
 app = FastAPI(title="PROTOTYPE time-bound API")
 app.dependency_overrides[get_current_user] = proto_user
-app.include_router(
-    directory.router, prefix="/api/v1/data", dependencies=[Depends(proto_user)]
-)
+for module in (directory, posts):
+    app.include_router(
+        module.router, prefix="/api/v1/data", dependencies=[Depends(proto_user)]
+    )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PROTO_PORT", "8021")))

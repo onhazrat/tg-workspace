@@ -133,23 +133,11 @@ const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
           ]}
         />
         <span className="flex-1" />
-        <TgButton
-          size="sm"
-          variant="secondary"
-          aria-label="Zoom in"
-          disabled={zoom === 0}
-          onClick={() => setZoom(zoom - 1)}
-        >
-          <ZoomIn size={13} />
-        </TgButton>
-        <TgButton
-          size="sm"
-          variant="secondary"
-          aria-label="Zoom out"
-          onClick={() => setZoom(zoom + 1)}
-        >
-          <ZoomOut size={13} />
-        </TgButton>
+        <ZoomControls
+          onIn={() => setZoom(zoom - 1)}
+          onOut={() => setZoom(zoom + 1)}
+          inDisabled={zoom === 0}
+        />
       </div>
       {counts ? (
         <BarHistogram
@@ -176,6 +164,38 @@ const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
     </div>
   )
 }
+
+/**
+ * Zoom in and out, as the Analysis window chart draws them. Shared with every
+ * spread a bound is drawn over (PROTOTYPE time-bound).
+ */
+export const ZoomControls: React.FC<{
+  onIn: () => void
+  onOut: () => void
+  inDisabled?: boolean
+  outDisabled?: boolean
+}> = ({ onIn, onOut, inDisabled, outDisabled }) => (
+  <>
+    <TgButton
+      size="sm"
+      variant="secondary"
+      aria-label="Zoom in"
+      disabled={inDisabled}
+      onClick={onIn}
+    >
+      <ZoomIn size={13} />
+    </TgButton>
+    <TgButton
+      size="sm"
+      variant="secondary"
+      aria-label="Zoom out"
+      disabled={outDisabled}
+      onClick={onOut}
+    >
+      <ZoomOut size={13} />
+    </TgButton>
+  </>
+)
 
 /** The four fields, in the order they are read: boundaries, then the spans. */
 const FIELDS: { field: ScopeField; label: string }[] = [

@@ -262,6 +262,9 @@ class PostValueHistogramRequest(PostFilteredRequest):
     """
 
     measure: ValueMeasure
+    # PROTOTYPE (time-bound): bin only this range, a zoomed histogram.
+    lo: float | None = None
+    hi: float | None = None
 
 
 class PostValueHistogramResponse(BaseModel):

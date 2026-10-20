@@ -3,8 +3,10 @@
  * `useDirectory`. Every piece is a props-only component under
  * `components/directory/`; this file only connects them to the server.
  */
-import { useQuery } from "@tanstack/react-query"
+
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Keyboard } from "lucide-react"
+import { useState } from "react"
 import {
   type DirectoryWhyRequest,
   dataCountDirectory,
@@ -34,6 +36,8 @@ import {
   type MeasureEditorRender,
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
+import type { Range } from "@/components/time-bound-prototype/zoom"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
@@ -111,18 +115,24 @@ function MeasureEditor({
     ...request,
     filter: directoryFilterBody(withoutBoundsOn(filter, measure.key), sets),
   }
+  const v1 = useIsVariant1()
+  const [range, setRange] = useState<Range | null>(null)
+  const zoomed = v1 && range ? { lo: range[0], hi: range[1] } : {}
   const distribution = useQuery({
     queryKey: queryKeys.directoryRead("distribution", {
       others,
       measure: measure.key,
+      ...zoomed,
     }),
     queryFn: () =>
       dataGetDirectoryDistribution({
-        body: { ...others, measure: measure.key },
+        body: { ...others, measure: measure.key, ...zoomed },
       }),
+    ...(v1 && { placeholderData: keepPreviousData }),
   })
   return (
     <DirectoryBoundEditor
+      zoom={v1 ? { range, setRange } : undefined}
       measure={measure}
       distribution={distribution.data}
       countFor={(bound) => (
@@ -160,18 +170,24 @@ function MomentEditor({
     ...request,
     filter: directoryFilterBody(withoutBoundsOn(filter, moment.key), sets),
   }
+  const v1 = useIsVariant1()
+  const [range, setRange] = useState<Range | null>(null)
+  const zoomed = v1 && range ? { lo: range[0], hi: range[1] } : {}
   const distribution = useQuery({
     queryKey: queryKeys.directoryRead("distribution", {
       others,
       measure: moment.key,
+      ...zoomed,
     }),
     queryFn: () =>
       dataGetDirectoryDistribution({
-        body: { ...others, measure: moment.key },
+        body: { ...others, measure: moment.key, ...zoomed },
       }),
+    ...(v1 && { placeholderData: keepPreviousData }),
   })
   return (
     <DirectoryTimeEditor
+      zoom={v1 ? { range, setRange } : undefined}
       moment={moment}
       distribution={distribution.data}
       countFor={(cond) => <CandidateCount others={others} cond={cond} />}

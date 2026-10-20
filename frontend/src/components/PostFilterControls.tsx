@@ -4,6 +4,7 @@
  * and condition picker read. Each is a shared `filter-tree` component told
  * what a Post Condition is; the Channels tab's are the same components.
  */
+
 import {
   AtSign,
   ChevronDown,
@@ -15,7 +16,7 @@ import {
   type LucideIcon,
   SlidersHorizontal,
 } from "lucide-react"
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useEffect, useState } from "react"
 import type { PostValueHistogramResponse } from "@/client"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { BoundHistogram } from "@/components/filter-tree/BarHistogram"
@@ -27,6 +28,13 @@ import {
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import { pillClass } from "@/components/PostFilterParts"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
+import {
+  boundFocus,
+  type Range,
+  SpreadZoomBar,
+  spreadZoom,
+} from "@/components/time-bound-prototype/zoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -80,6 +88,8 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
  */
 export type ValueHistogramRead = (
   measure: PostNumber,
+  /** PROTOTYPE (time-bound): bin only this range. */
+  range?: [number, number] | null,
 ) => PostValueHistogramResponse | undefined
 
 export const PostValueHistogramContext =
@@ -96,7 +106,35 @@ function PostValueHistogram({
   bound: MetricBound | null
   onSelect: (bound: MetricBound) => void
 }) {
-  const d = read(measure)
+  // PROTOTYPE (time-bound): the zoom asks the server for the range it shows,
+  // and remembers the whole spread from the last unzoomed answer.
+  const v1 = useIsVariant1()
+  const [range, setRange] = useState<Range | null>(null)
+  const d = read(measure, v1 ? range : null)
+  const [whole, setWhole] = useState<{
+    lo: number
+    hi: number
+    log: boolean
+    median: number
+  }>()
+  useEffect(() => {
+    if (!range && d?.measured && d.edges.length > 1)
+      setWhole({
+        lo: d.edges[0],
+        hi: d.edges[d.edges.length - 1],
+        log: d.log,
+        median: d.median ?? d.edges[0],
+      })
+  }, [d, range])
+  const zoom =
+    v1 && whole
+      ? spreadZoom({
+          ...whole,
+          focus: boundFocus(bound) ?? whole.median,
+          range,
+          setRange,
+        })
+      : null
   if (!d) return <p className="h-16 text-[11px] text-app-ink/50">Counting…</p>
   if (!d.measured)
     return (
@@ -105,19 +143,22 @@ function PostValueHistogram({
       </p>
     )
   return (
-    <BoundHistogram
-      distribution={{
-        bins: d.bins,
-        edge: (i) => d.edges[i],
-        lo: d.edges[0],
-        hi: d.edges[d.edges.length - 1],
-        median: d.median ?? 0,
-        log: d.log,
-      }}
-      bound={bound}
-      noun={POST_NUMBER[measure].noun}
-      onSelect={onSelect}
-    />
+    <>
+      {zoom && <SpreadZoomBar zoom={zoom} />}
+      <BoundHistogram
+        distribution={{
+          bins: d.bins,
+          edge: (i) => d.edges[i],
+          lo: d.edges[0],
+          hi: d.edges[d.edges.length - 1],
+          median: d.median ?? 0,
+          log: d.log,
+        }}
+        bound={bound}
+        noun={POST_NUMBER[measure].noun}
+        onSelect={onSelect}
+      />
+    </>
   )
 }
 

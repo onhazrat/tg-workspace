@@ -161,6 +161,7 @@ def posts_value_histogram(
         filters=parse_post_filters(session, body, tree=body.filter)
         if body.measure == "channel_posts_filtered"
         else None,
+        zoom=None if body.lo is None or body.hi is None else (body.lo, body.hi),
     )
     return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
 

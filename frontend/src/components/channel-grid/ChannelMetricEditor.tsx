@@ -5,6 +5,13 @@ import {
   nice,
 } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
+import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
+import {
+  boundFocus,
+  type Range,
+  SpreadZoomBar,
+  spreadZoom,
+} from "@/components/time-bound-prototype/zoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -77,6 +84,23 @@ export function ChannelMetricEditor({
     : bound.none
       ? data.total - values.length
       : values.filter((v) => inBound(v, bound)).length
+  // PROTOTYPE (time-bound): the zoom re-bins the values it shows.
+  const v1 = useIsVariant1()
+  const [range, setRange] = useState<Range | null>(null)
+  const zoom =
+    v1 && values.length > 1
+      ? spreadZoom({
+          lo: values[0],
+          hi: values[values.length - 1],
+          log: histogram(values).log,
+          focus: boundFocus(bound) ?? median(values),
+          range,
+          setRange,
+        })
+      : null
+  const shown = range
+    ? values.filter((v) => v >= range[0] && v <= range[1])
+    : values
   const select = (next: MetricBound) => {
     setOp(boundKind(next))
     setA(String(next.min ?? next.max))
@@ -106,9 +130,10 @@ export function ChannelMetricEditor({
           <span className="font-normal text-app-ink/50">{m.unit}</span>
         )}
       </div>
-      {values.length > 0 ? (
+      {zoom && <SpreadZoomBar zoom={zoom} />}
+      {shown.length > 0 ? (
         <BoundHistogram
-          distribution={histogram(values)}
+          distribution={histogram(shown)}
           bound={bound}
           noun="channels"
           onSelect={select}

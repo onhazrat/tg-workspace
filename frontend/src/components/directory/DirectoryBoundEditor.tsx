@@ -1,6 +1,12 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
+import {
+  boundFocus,
+  type Range,
+  SpreadZoomBar,
+  spreadZoom,
+} from "@/components/time-bound-prototype/zoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -32,15 +38,31 @@ export function Spread({
   bound,
   onBar,
   format = formatCount,
+  zoom,
 }: {
   spread: DirectoryDistributionResponse
   bound: MetricBound | null
   onBar: (bin: Bin) => void
   format?: (value: number) => string
+  /** PROTOTYPE (time-bound): the zoom, kept by whoever asks for the bars. */
+  zoom?: { range: Range | null; setRange: (next: Range | null) => void }
 }) {
   const peak = Math.max(1, ...spread.bins.map((bin) => bin.count))
+  const z =
+    zoom && spread.min !== null && spread.max !== null
+      ? spreadZoom({
+          lo: spread.min,
+          hi: spread.max,
+          log: spread.scale === "log",
+          focus: boundFocus(bound) ?? spread.median ?? undefined,
+          ...zoom,
+        })
+      : null
+  const [first, last] = [spread.bins[0], spread.bins[spread.bins.length - 1]]
+  const zoomed = !!z?.range && first && last
   return (
     <div className="space-y-1">
+      {z && <SpreadZoomBar zoom={z} />}
       <div className="flex h-16 items-end gap-px rounded-md bg-app-ink/[0.03] px-0.5">
         {spread.bins.map((bin, i) => (
           <button
@@ -57,12 +79,12 @@ export function Spread({
         ))}
       </div>
       <div className="flex justify-between gap-2 text-[10px] tabular-nums text-app-ink/50">
-        <span>{format(spread.min ?? 0)}</span>
+        <span>{format(zoomed ? first.lo : (spread.min ?? 0))}</span>
         <span>
           median {format(spread.median ?? 0)}
           {spread.scale === "log" ? ", log scale" : ""}
         </span>
-        <span>{format(spread.max ?? 0)}</span>
+        <span>{format(zoomed ? last.hi : (spread.max ?? 0))}</span>
       </div>
     </div>
   )
@@ -84,7 +106,9 @@ export function DirectoryBoundEditor({
   countFor,
   onSubmit,
   onBack,
+  zoom,
 }: {
+  zoom?: { range: Range | null; setRange: (next: Range | null) => void }
   measure: Measure
   /** The Condition being changed; without one the editor adds. */
   initial?: MetricBound
@@ -130,7 +154,7 @@ export function DirectoryBoundEditor({
       </div>
       <p className="text-[11px] text-app-ink/50">{measure.description}</p>
       {distribution ? (
-        <Spread spread={distribution} bound={bound} onBar={onBar} />
+        <Spread spread={distribution} bound={bound} onBar={onBar} zoom={zoom} />
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
       )}

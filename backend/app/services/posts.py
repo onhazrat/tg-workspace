@@ -1184,6 +1184,7 @@ def value_histogram(
     scope: PostScope,
     measure: ValueMeasure,
     filters: PostFilters | None = None,
+    zoom: tuple[float, float] | None = None,
 ) -> ValueHistogram:
     """One measure across the Posts, or the Channels, in the scope.
 
@@ -1208,6 +1209,8 @@ def value_histogram(
         stmt = stmt.group_by(col(Post.channel_name))
     inner = stmt.subquery()
     x = inner.c.x
+    # PROTOTYPE (time-bound): a zoom keeps only the values in its range.
+    in_zoom = [] if zoom is None else [x >= zoom[0], x <= zoom[1]]
     lo, hi, measured, total, median = session.execute(
         sa_select(
             func.min(x),
@@ -1218,7 +1221,9 @@ def value_histogram(
             # ceil(n / 2)-th largest is that element, where `percentile_cont`
             # would interpolate and ascending `percentile_disc` takes the lower.
             func.percentile_disc(0.5).within_group(x.desc()),
-        ).select_from(inner)
+        )
+        .select_from(inner)
+        .where(*in_zoom)
     ).one()
     if not measured:
         return ValueHistogram([], [], False, None, 0, int(total))
@@ -1244,7 +1249,7 @@ def value_histogram(
     )
     bins = _bucket_counts(
         session,
-        select(index, func.count()).where(x.is_not(None)),
+        select(index, func.count()).where(x.is_not(None), *in_zoom),
         index,
         VALUE_BINS,
     )

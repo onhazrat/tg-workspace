@@ -5,6 +5,7 @@ import {
   TimeBoundEditor,
 } from "@/components/time-bound-prototype/TimeBoundEditor"
 import { useIsVariant1 } from "@/components/time-bound-prototype/variant"
+import type { Range } from "@/components/time-bound-prototype/zoom"
 import { TgButton } from "@/components/ui/tg-button"
 import type {
   DirectoryTimeCond,
@@ -127,7 +128,9 @@ export function DirectoryTimeEditor({
   countFor,
   onSubmit,
   onBack,
+  zoom,
 }: {
+  zoom?: { range: Range | null; setRange: (next: Range | null) => void }
   moment: Moment
   /** The Condition being changed; without one the editor adds. */
   initial?: DirectoryTimeCond
@@ -215,6 +218,7 @@ export function DirectoryTimeEditor({
           bound={highlight || null}
           onBar={onBar}
           format={dateText}
+          zoom={zoom}
         />
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>

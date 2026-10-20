@@ -63,6 +63,9 @@ export default defineConfig(({ mode }) => {
                 {
                   target: `http://127.0.0.1:${process.env.PROTO_API_PORT}`,
                 },
+              "^/api/v1/data/posts/value-histogram$": {
+                target: `http://127.0.0.1:${process.env.PROTO_API_PORT}`,
+              },
             }
           : {}),
         "/api": {

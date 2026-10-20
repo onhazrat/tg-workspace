@@ -489,6 +489,9 @@ class DirectoryDistributionRequest(DirectoryViewRequest):
     """A measure's spread under every other Condition of the view; a moment's in epoch ms."""
 
     measure: DirectoryMeasure | DirectoryMoment
+    # PROTOTYPE (time-bound): bin only this range, a zoomed spread.
+    lo: float | None = None
+    hi: float | None = None
 
 
 # Closed, and no field carries a server-side default, so every one is required
