@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { type Bin, Spread } from "@/components/directory/DirectoryBoundEditor"
 import { dateText } from "@/components/directory/DirectoryTimeEditor"
+import { type Range, useZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import { floorToMinute, MINUTE_MS, serverNow } from "@/lib/analysis-window"
@@ -23,17 +24,21 @@ const OPTIONS = { openEnds: true, ahead: true }
 
 /**
  * A moment's spread as the Directory's `Spread` draws it, binned here from
- * values the browser already has. Each value is floored to its minute first,
- * so the Channels sharing a minute share a bar, and each bar keeps the
- * minutes it holds for a click to bound.
+ * values the browser already has, over the zoom's `range` when there is one
+ * (TB-04). Each value is floored to its minute first, so the Channels
+ * sharing a minute share a bar, and each bar keeps the minutes it holds for
+ * a click to bound.
  */
-function spreadOf(sorted: number[], total: number) {
+function spreadOf(sorted: number[], total: number, range: Range | null) {
   const minutes = sorted.map(floorToMinute)
-  const lo = minutes[0]
-  const width = (minutes[minutes.length - 1] + MINUTE_MS - lo) / BINS
+  const [a, b] = range ?? [sorted[0], sorted[sorted.length - 1]]
+  const lo = floorToMinute(a)
+  const hi = floorToMinute(b) + MINUTE_MS
+  const width = (hi - lo) / BINS
   const bars = Array.from({ length: BINS }, () => [] as number[])
   for (const m of minutes)
-    bars[Math.min(BINS - 1, Math.floor((m - lo) / width))].push(m)
+    if (m >= lo && m < hi)
+      bars[Math.min(BINS - 1, Math.floor((m - lo) / width))].push(m)
   const spread: DirectoryDistributionResponse = {
     scale: "linear",
     total,
@@ -66,9 +71,10 @@ function MomentSpread({
   bound: TimeBound | null
   onPick: (bound: TimeBound) => void
 }) {
+  const zoom = useZoomState()
   const { spread, bars } = useMemo(
-    () => spreadOf(values, total),
-    [values, total],
+    () => spreadOf(values, total, zoom.range),
+    [values, total, zoom.range],
   )
   const { start, end } = bound
     ? resolveTimeBound(bound, floorToMinute(serverNow()))
@@ -93,6 +99,7 @@ function MomentSpread({
       }
       onBar={onBar}
       format={dateText}
+      zoom={zoom}
     />
   )
 }

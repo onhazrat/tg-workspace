@@ -11,6 +11,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.common import ZoomRequest
 from app.schemas.post_filter import check_tree_bounds
 from app.services.channel_directory import MAX_PRIORITY_BOOST, BoostMode
 from app.services.directory_reads import (
@@ -480,8 +481,11 @@ class DirectoryCountRequest(DirectoryViewRequest):
     candidate: DirectoryFilterAtom | None = None
 
 
-class DirectoryDistributionRequest(DirectoryViewRequest):
-    """A measure's spread under every other Condition of the view; a moment's in epoch ms."""
+class DirectoryDistributionRequest(DirectoryViewRequest, ZoomRequest):
+    """A measure's spread under every other Condition of the view; a moment's in epoch ms.
+
+    A zoom (`lo`, `hi`) bins only that range, on the measure's own scale.
+    """
 
     measure: DirectoryMeasure | DirectoryMoment
 

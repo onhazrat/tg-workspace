@@ -988,6 +988,8 @@ CONSTANT_TOPICS: dict[str, str] = {
     "frontend/src/components/LogsView.tsx": "server",
     "frontend/src/components/NetworkTelemetry.tsx": "network",
     "frontend/src/components/PostFilter.tsx": "sync",
+    "frontend/src/components/SpreadZoom.tsx": "appearance",
+    "frontend/src/components/TimeBoundEditor.tsx": "ai",
     "frontend/src/components/channel-grid/ChannelMetricEditor.tsx": "sync",
     "frontend/src/components/channel-grid/VirtualizedChannelGrid.tsx": "appearance",
     "frontend/src/components/directory/DirectoryAddBox.tsx": "directory",

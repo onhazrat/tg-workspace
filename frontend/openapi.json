@@ -8177,6 +8177,14 @@
       },
       "DirectoryDistributionRequest": {
         "properties": {
+          "lo": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Lo"
+          },
+          "hi": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Hi"
+          },
           "yours": { "$ref": "#/components/schemas/YourChannels" },
           "referenceKinds": {
             "items": {
@@ -8242,7 +8250,7 @@
         "type": "object",
         "required": ["measure"],
         "title": "DirectoryDistributionRequest",
-        "description": "A measure's spread under every other Condition of the view; a moment's in epoch ms."
+        "description": "A measure's spread under every other Condition of the view; a moment's in epoch ms.\n\nA zoom (`lo`, `hi`) bins only that range, on the measure's own scale."
       },
       "DirectoryDistributionResponse": {
         "properties": {
@@ -11830,6 +11838,14 @@
       },
       "PostValueHistogramRequest": {
         "properties": {
+          "lo": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Lo"
+          },
+          "hi": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Hi"
+          },
           "channelNames": {
             "anyOf": [
               { "items": { "type": "string" }, "type": "array" },
@@ -11922,13 +11938,17 @@
               }
             ],
             "title": "Measure"
+          },
+          "log": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Log"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["measure"],
         "title": "PostValueHistogramRequest",
-        "description": "`PostFilteredRequest` plus the measure a number filter's editor bounds.\n\nThe body is the filtered request's so the editor sends the scope it\nalready has; the Post filter and keyword in it are set aside, except by\n`channel_posts_filtered`, which counts what they keep."
+        "description": "`PostFilteredRequest` plus the measure a number filter's editor bounds.\n\nThe body is the filtered request's so the editor sends the scope it\nalready has; the Post filter and keyword in it are set aside, except by\n`channel_posts_filtered`, which counts what they keep. A zoom (`lo`,\n`hi`) bins only that range, on the scale `log` names when given."
       },
       "PostValueHistogramResponse": {
         "properties": {
@@ -11947,13 +11967,30 @@
             "anyOf": [{ "type": "number" }, { "type": "null" }],
             "title": "Median"
           },
+          "min": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Max"
+          },
           "measured": { "type": "integer", "title": "Measured" },
           "total": { "type": "integer", "title": "Total" }
         },
         "type": "object",
-        "required": ["bins", "edges", "log", "median", "measured", "total"],
+        "required": [
+          "bins",
+          "edges",
+          "log",
+          "median",
+          "min",
+          "max",
+          "measured",
+          "total"
+        ],
         "title": "PostValueHistogramResponse",
-        "description": "32 bars and their 33 edges, binned by the Channels tab's rule.\n\nEmpty `bins` and `edges` when nothing in the scope has a value."
+        "description": "32 bars and their 33 edges, binned by the Channels tab's rule.\n\nEmpty `bins` and `edges` when nothing in the scope has a value. Zoomed,\nthe bars span the zoom and `min`, `max`, `median` and the counts stay\nthe whole spread's."
       },
       "PostWindowHistogramRequest": {
         "properties": {

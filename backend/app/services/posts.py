@@ -1154,6 +1154,8 @@ class ValueHistogram:
     median: float | None
     measured: int
     total: int
+    min: float | None = None
+    max: float | None = None
 
 
 def _measured_value(
@@ -1184,6 +1186,8 @@ def value_histogram(
     scope: PostScope,
     measure: ValueMeasure,
     filters: PostFilters | None = None,
+    zoom: tuple[float, float] | None = None,
+    log: bool | None = None,
 ) -> ValueHistogram:
     """One measure across the Posts, or the Channels, in the scope.
 
@@ -1199,6 +1203,10 @@ def value_histogram(
     count in the window (PTI-02); the filtered one counts only what `filters`
     keeps with every Channel posts Condition set aside, as the Condition
     counts, and a Channel whose Posts it all hides is a 0.
+
+    A `zoom` bins only its range, on the scale `log` names (the whole
+    spread's when absent); `min`, `max`, `median` and the counts stay the
+    whole spread's.
     """
     value = _measured_value(session, scope, measure, filters)
     stmt = scoped_select(
@@ -1222,8 +1230,12 @@ def value_histogram(
     ).one()
     if not measured:
         return ValueHistogram([], [], False, None, 0, int(total))
-    lo, hi = float(lo), float(hi)
-    log = lo >= 0 and hi / (lo if lo > 0 else 1) > 100
+    whole = (float(lo), float(hi))
+    lo, hi = zoom or whole
+    if log is None:
+        log = whole[0] >= 0 and whole[1] / (whole[0] if whole[0] > 0 else 1) > 100
+    if log:
+        lo = max(lo, 0.0)  # log(1 + x) has no place below 0.
     scale: tuple[Callable[[float], float], Callable[[float], float], Any]
     if not log:
         scale = (_identity, _identity, x)
@@ -1236,7 +1248,7 @@ def value_histogram(
     # `greatest` because Postgres' ln and Python's can part by one ulp at lo.
     index = (
         literal(0)
-        if span == 0
+        if span <= 0
         else func.least(
             VALUE_BINS - 1,
             func.greatest(0, func.floor((axis - f(lo)) / span * VALUE_BINS)),
@@ -1244,13 +1256,19 @@ def value_histogram(
     )
     bins = _bucket_counts(
         session,
-        select(index, func.count()).where(x.is_not(None)),
+        # A zoom counts only its range; unzoomed, the float ends could miss
+        # the exact lowest or highest value of a numeric column.
+        select(index, func.count()).where(
+            *([x.is_not(None)] if zoom is None else [x >= lo, x <= hi])
+        ),
         index,
         VALUE_BINS,
     )
     edges = [inv(f(lo) + span * i / VALUE_BINS) for i in range(VALUE_BINS + 1)]
     edges[0], edges[-1] = lo, hi
-    return ValueHistogram(bins, edges, log, float(median), int(measured), int(total))
+    return ValueHistogram(
+        bins, edges, log, float(median), int(measured), int(total), *whole
+    )
 
 
 # ---- The Posts across time (PTI-03) ----------------------------------------------

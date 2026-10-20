@@ -16,6 +16,10 @@ the second account `vh_est` and `vh_x`, over one shared corpus.
 * read without the tenancy seam -> another account's Posts
 * apply the Post filter or keyword -> `test_the_filter_and_keyword_are_aside`
 * interpolate the median (`percentile_cont`) -> 550 for `vh_lin`, 54 for `vh_zero`
+* bin the whole spread whatever the zoom -> both zoom cases (TB-04)
+* re-pick the scale from the zoomed range -> the kept-scale case
+* ignore the scale the request carries -> the kept-scale case
+* accept one end, or ends out of order -> the both-ends case
 
 ## Twin of the Channels tab
 
@@ -195,6 +199,8 @@ def test_an_empty_window_has_nothing_measured(
         "edges": [],
         "log": False,
         "median": None,
+        "min": None,
+        "max": None,
         "measured": 0,
         "total": 0,
     }
@@ -243,3 +249,48 @@ def test_the_filter_and_keyword_are_aside(
     )
 
     assert filtered == plain
+
+
+# ---- Zoom (TB-04) ------------------------------------------------------------------
+
+
+def test_a_zoom_bins_only_its_range_and_keeps_the_whole_spread_fields(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = seeded
+    got = _histogram(client, operator, "views", channelNames=["vh_lin"], lo=300, hi=600)
+
+    # 300 to 600 in 32 bars of 9.375: 400 in bar 10, 500 in 21, 600 in the last.
+    assert (got["edges"][0], got["edges"][32]) == (300, 600)
+    assert _filled(got["bins"]) == [0, 10, 21, 31]
+    assert got["log"] is False
+    # The whole spread's own fields.
+    assert (got["min"], got["max"], got["median"]) == (100, 1000, 600)
+    assert (got["measured"], got["total"]) == (10, 10)
+
+
+def test_a_zoom_keeps_the_scale_the_spread_was_drawn_on(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """50 to 500 alone would bin linearly; the whole `vh_log` spread is log."""
+    operator, _ = seeded
+    kept = _histogram(client, operator, "views", channelNames=["vh_log"], lo=50, hi=500)
+    assert kept["log"] is True
+    assert kept["edges"][16] == pytest.approx(25_000**0.5)
+
+    # The request carries the scale it was first drawn on, whatever the
+    # spread has become since.
+    carried = _histogram(
+        client, operator, "views", channelNames=["vh_log"], lo=50, hi=500, log=False
+    )
+    assert carried["log"] is False
+    assert carried["edges"][16] == 275
+
+
+def test_a_zoom_needs_both_ends_in_order(
+    client: TestClient, seeded: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = seeded
+    for zoom in ({"lo": 300}, {"hi": 300}, {"lo": 600, "hi": 300}):
+        response = client.post(URL, json={"measure": "views", **zoom}, headers=operator)
+        assert response.status_code == 422, zoom

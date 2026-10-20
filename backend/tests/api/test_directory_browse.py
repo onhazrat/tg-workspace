@@ -53,6 +53,8 @@ Each mutation was applied alone and this module (or the named guard) went red:
 * resolve "every follow" for an empty selection -> the empty-source case
 * sort without the handle tiebreak -> the opening view's zero-count tail
 * keep the measure's own bound in the distribution -> its total
+* bin the whole spread whatever the zoom -> the zoomed case (TB-04)
+* count values outside the zoom into its end bars -> the zoomed case
 * keep Language Conditions in the Language counts -> the counts case
 * drop `autoescape` from Name contains -> "%" matches everything
 * never reuse a cached total -> the reuse case
@@ -890,6 +892,49 @@ def test_a_linear_measure_and_one_with_no_values(
         f"{DIRECTORY}/distribution", json={"measure": "videos"}, headers=operator
     ).json()
     assert (empty["total"], empty["noValue"], empty["bins"]) == (7, 7, [])
+
+
+def test_a_zoomed_distribution_bins_only_its_range(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """TB-04: the bars span the zoom; the whole spread's fields stay whole."""
+    operator, _ = accounts
+    response = client.post(
+        f"{DIRECTORY}/distribution",
+        json={"measure": "subscribers", "lo": 2000, "hi": 8000},
+        headers=operator,
+    )
+    assert response.status_code == 200, response.text
+    spread = response.json()
+    assert spread["scale"] == "log"
+    assert (spread["min"], spread["max"], spread["median"]) == (800, 50000, 7000)
+    assert (spread["total"], spread["noValue"]) == (7, 2)
+    # 3000 and 7000; 800, 12000 and 50000 lie outside.
+    assert sum(b["count"] for b in spread["bins"]) == 2
+    assert spread["bins"][0]["lo"] == pytest.approx(2000)
+    assert spread["bins"][-1]["hi"] == pytest.approx(8000)
+
+    linear = client.post(
+        f"{DIRECTORY}/distribution",
+        json={"measure": "forward_pct", "lo": 10, "hi": 40},
+        headers=operator,
+    ).json()
+    # 10 to 40 in 32 bars of 0.9375: 20 in bar 10, 40 in the last.
+    assert [i for i, b in enumerate(linear["bins"]) if b["count"]] == [10, 31]
+    assert (linear["min"], linear["max"]) == (0, 40)
+
+
+def test_a_zoom_needs_both_ends_in_order(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    for zoom in ({"lo": 10}, {"hi": 10}, {"lo": 40, "hi": 10}):
+        response = client.post(
+            f"{DIRECTORY}/distribution",
+            json={"measure": "forward_pct", **zoom},
+            headers=operator,
+        )
+        assert response.status_code == 422, zoom
 
 
 def test_the_count_previews_a_candidate_condition(

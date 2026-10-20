@@ -32,6 +32,7 @@ import {
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import { pillClass } from "@/components/PostFilterParts"
+import type { Range } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -85,7 +86,11 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
  */
 export type ValueHistogramRead = (
   measure: PostNumber,
+  zoom?: ValueHistogramZoom | null,
 ) => PostValueHistogramResponse | undefined
+
+/** A zoomed read (TB-04): bin only `[lo, hi]`, on the scale first drawn. */
+export type ValueHistogramZoom = { lo: number; hi: number; log: boolean }
 
 export const PostValueHistogramContext =
   createContext<ValueHistogramRead | null>(null)
@@ -101,7 +106,13 @@ function PostValueHistogram({
   bound: MetricBound | null
   onSelect: (bound: MetricBound) => void
 }) {
-  const d = read(measure)
+  const [zoomed, setZoomed] = useState<{ range: Range; log: boolean } | null>(
+    null,
+  )
+  const d = read(
+    measure,
+    zoomed && { lo: zoomed.range[0], hi: zoomed.range[1], log: zoomed.log },
+  )
   if (!d) return <p className="h-16 text-[11px] text-app-ink/50">Counting…</p>
   if (!d.measured)
     return (
@@ -114,14 +125,18 @@ function PostValueHistogram({
       distribution={{
         bins: d.bins,
         edge: (i) => d.edges[i],
-        lo: d.edges[0],
-        hi: d.edges[d.edges.length - 1],
+        lo: d.min ?? d.edges[0],
+        hi: d.max ?? d.edges[d.edges.length - 1],
         median: d.median ?? 0,
         log: d.log,
       }}
       bound={bound}
       noun={POST_NUMBER[measure].noun}
       onSelect={onSelect}
+      zoom={{
+        range: zoomed?.range ?? null,
+        setRange: (range) => setZoomed(range && { range, log: d.log }),
+      }}
     />
   )
 }

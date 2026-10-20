@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
+import type { ZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import { serverNow } from "@/lib/analysis-window"
@@ -10,9 +11,14 @@ import type {
 import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
 import { type Bin, Spread } from "./DirectoryBoundEditor"
 
-/** A time spread's captions: dates. */
-export const dateText = (ms: number) =>
-  new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(ms)
+const DAY_MS = 86_400_000
+
+/** A time spread's captions: dates, and the time of day once under three days show. */
+export const dateText = (ms: number, shown = Number.POSITIVE_INFINITY) =>
+  new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    ...(shown < 3 * DAY_MS && { timeStyle: "short" }),
+  }).format(ms)
 
 /** What a moment's Time bound turns on (ADR-033): all three switches. */
 const OPTIONS = { openEnds: true, ahead: true }
@@ -43,11 +49,14 @@ export function DirectoryTimeEditor({
   countFor,
   onSubmit,
   onBack,
+  zoom,
 }: {
   moment: Moment
   /** The Condition being changed; without one the editor adds. */
   initial?: DirectoryTimeCond
   distribution?: DirectoryDistributionResponse
+  /** The range `distribution` was asked for; the container keeps it (TB-04). */
+  zoom?: ZoomState
   countFor: (cond: DirectoryTimeCond) => ReactNode
   onSubmit: (cond: DirectoryTimeCond) => void
   onBack?: () => void
@@ -99,6 +108,7 @@ export function DirectoryTimeEditor({
           bound={highlight || null}
           onBar={onBar}
           format={dateText}
+          zoom={zoom}
         />
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>

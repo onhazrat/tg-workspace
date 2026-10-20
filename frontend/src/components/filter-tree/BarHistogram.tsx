@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react"
+import { SpreadZoomBar, type ZoomState } from "@/components/SpreadZoom"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import { formatCount } from "@/lib/format-count"
 
@@ -94,6 +95,7 @@ export type Distribution = {
   bins: number[]
   /** The value bar `i` starts at; `edge(bins.length)` is the highest. */
   edge: (i: number) => number
+  /** The whole spread's, zoomed or not, as are the median and the scale. */
   lo: number
   hi: number
   median: number
@@ -103,13 +105,17 @@ export type Distribution = {
 /**
  * A run of bars as a bound: touching the first bar leaves the low end open
  * ("at most"), touching the last the high end ("at least"), both is every
- * measured value.
+ * measured value. Zoomed, an end is open only where the zoom reaches the
+ * whole spread's.
  */
-function runBound(run: Run, d: Distribution): MetricBound {
+function runBound(run: Run, d: Distribution, shown: [number, number]) {
   const s = Math.min(run.from, run.to)
   const t = Math.max(run.from, run.to)
-  const min = s === 0 ? undefined : nice(d.edge(s))
-  const max = t === d.bins.length - 1 ? undefined : nice(d.edge(t + 1))
+  const min = s === 0 && shown[0] <= d.lo ? undefined : nice(d.edge(s))
+  const max =
+    t === d.bins.length - 1 && shown[1] >= d.hi
+      ? undefined
+      : nice(d.edge(t + 1))
   if (min === undefined && max === undefined) return { min: d.lo }
   return { min, max }
 }
@@ -124,30 +130,37 @@ export function BoundHistogram({
   bound,
   noun,
   onSelect,
+  zoom,
 }: {
   distribution: Distribution
   bound: MetricBound | null
   /** What a bar counts, plural: "channels", "posts". */
   noun: string
   onSelect: (bound: MetricBound) => void
+  /** The range the bars span, kept by whoever bins them (TB-04). */
+  zoom?: ZoomState
 }) {
+  const shown = zoom?.range ?? [d.lo, d.hi]
   return (
-    <BarHistogram
-      bins={d.bins}
-      solid={(i) =>
-        !!bound &&
-        !bound.none &&
-        (bound.min === undefined || d.edge(i + 1) > bound.min) &&
-        (bound.max === undefined || d.edge(i) <= bound.max)
-      }
-      onSelect={(run) => onSelect(runBound(run, d))}
-      caption={(shown) => [
-        formatCount(d.lo),
-        shown !== null
-          ? `${d.bins[shown]} ${noun}, ${formatCount(nice(d.edge(shown)))}–${formatCount(nice(d.edge(shown + 1)))}`
-          : `median ${formatCount(d.median)}${d.log ? ", log scale" : ""}`,
-        formatCount(d.hi),
-      ]}
-    />
+    <>
+      {zoom && <SpreadZoomBar spreading={{ ...d, bound }} zoom={zoom} />}
+      <BarHistogram
+        bins={d.bins}
+        solid={(i) =>
+          !!bound &&
+          !bound.none &&
+          (bound.min === undefined || d.edge(i + 1) > bound.min) &&
+          (bound.max === undefined || d.edge(i) <= bound.max)
+        }
+        onSelect={(run) => onSelect(runBound(run, d, shown))}
+        caption={(bar) => [
+          formatCount(shown[0]),
+          bar !== null
+            ? `${d.bins[bar]} ${noun}, ${formatCount(nice(d.edge(bar)))}–${formatCount(nice(d.edge(bar + 1)))}`
+            : `median ${formatCount(d.median)}${d.log ? ", log scale" : ""}`,
+          formatCount(shown[1]),
+        ]}
+      />
+    </>
   )
 }

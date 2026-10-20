@@ -1873,11 +1873,16 @@ class Distribution:
 
 
 def distribution(
-    session: Session, view: DirectoryView, measure: DirectoryMeasure | DirectoryMoment
+    session: Session,
+    view: DirectoryView,
+    measure: DirectoryMeasure | DirectoryMoment,
+    zoom: tuple[float, float] | None = None,
 ) -> Distribution:
     """`measure` across the view with its own bounds left out, for the bound editor.
 
-    A moment's spread is in epoch ms, on a linear scale (DPF).
+    A moment's spread is in epoch ms, on a linear scale (DPF). A `zoom` bins
+    only its range, inside the spread's (TB-04); the total, No value count,
+    min, max and median stay the whole spread's.
     """
     tree = _without(
         view.tree,
@@ -1904,7 +1909,10 @@ def distribution(
     ).one()
     scale: Scale = "linear" if measure in _LINEAR else "log"
     bins: list[Bin] = []
-    if measured and hi is not None and lo is not None and hi > lo:
+    a_lo, a_hi = lo, hi
+    if zoom is not None and lo is not None and hi is not None:
+        a_lo, a_hi = max(zoom[0], lo), min(zoom[1], hi)
+    if measured and a_hi is not None and a_lo is not None and a_hi > a_lo:
 
         def to_axis(v: float) -> float:
             return math.log(max(v, 0) + 1) if scale == "log" else v
@@ -1912,7 +1920,7 @@ def distribution(
         def from_axis(u: float) -> float:
             return math.exp(u) - 1 if scale == "log" else u
 
-        a, b = to_axis(lo), to_axis(hi)
+        a, b = to_axis(a_lo), to_axis(a_hi)
         axis = func.ln(func.greatest(value, 0) + 1) if scale == "log" else value
         bucket = func.least(
             func.width_bucket(axis, a, b, _HISTOGRAM_BINS), _HISTOGRAM_BINS
@@ -1923,7 +1931,7 @@ def distribution(
                 unscoped_select(
                     sa_select(bucket, func.count())
                     .select_from(_entries(tree, measure))
-                    .where(where, value.is_not(None))
+                    .where(where, value >= a_lo, value <= a_hi)
                     .group_by(bucket),
                     reason=_SCOPE_REASON,
                 )

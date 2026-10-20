@@ -9,9 +9,9 @@ growing a near-identical anonymous object per endpoint.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class StatusResponse(BaseModel):
@@ -43,3 +43,25 @@ class ImportDataResponse(BaseModel):
     """
 
     imported: dict[str, int] = Field(default_factory=dict)
+
+
+class ZoomRequest(BaseModel):
+    """A zoomed spread: bin only `[lo, hi]`, the whole spread's fields kept.
+
+    Both ends or neither; neither is the whole spread.
+    """
+
+    lo: float | None = None
+    hi: float | None = None
+
+    @model_validator(mode="after")
+    def _a_range(self) -> Self:
+        if (self.lo is None) != (self.hi is None):
+            raise ValueError("Give both lo and hi, or neither")
+        if self.lo is not None and self.hi is not None and self.lo >= self.hi:
+            raise ValueError("lo must be below hi")
+        return self
+
+    @property
+    def zoom(self) -> tuple[float, float] | None:
+        return None if self.lo is None or self.hi is None else (self.lo, self.hi)

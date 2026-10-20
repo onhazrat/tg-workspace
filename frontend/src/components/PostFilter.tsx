@@ -67,6 +67,7 @@ import {
   PostFiltersMenu,
   PostValueHistogramContext,
   postVocabulary,
+  type ValueHistogramZoom,
 } from "./PostFilterControls"
 import { PerChannelForm, Pill, pillClass } from "./PostFilterParts"
 import { useSpotlight } from "./post-card/ChannelSpotlight"
@@ -448,8 +449,11 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
 }
 
 /** The editors' histogram read, over the spotlit Channel when one is. */
-function useSpotlitValueHistogram(measure: PostNumber) {
-  return usePostValueHistogram(measure, useSpotlight().spotlight)
+function useSpotlitValueHistogram(
+  measure: PostNumber,
+  zoom?: ValueHistogramZoom | null,
+) {
+  return usePostValueHistogram(measure, useSpotlight().spotlight, zoom)
 }
 
 /** The Analysis window chart's read, over the spotlit Channel when one is. */

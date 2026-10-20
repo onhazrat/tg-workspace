@@ -145,6 +145,77 @@ describe("ChannelTimeEditor", () => {
     ])
   })
 
+  describe("zoom (TB-04)", () => {
+    const counted = () =>
+      bars().reduce(
+        (sum, b) => sum + Number(/: (\d+) channels$/.exec(b.title)?.[1]),
+        0,
+      )
+    const caption = () => screen.getByTestId("spread-caption").textContent
+    const disabled = (name: string) =>
+      (screen.getByRole("button", { name }) as HTMLButtonElement).disabled
+    const time = /\d:\d\d/
+
+    test("re-bins in the browser around the median, clamped inside the spread", () => {
+      mount()
+      expect(counted()).toBe(5)
+      expect(disabled("Zoom out")).toBe(true)
+      // A third of nine days around two days ago runs into the newest
+      // value, so it ends there: the three of the last four days.
+      click("Zoom in")
+      expect(counted()).toBe(3)
+      expect(bars()).toHaveLength(32)
+      // A third again, about a day around the median: that one alone.
+      click("Zoom in")
+      expect(counted()).toBe(1)
+      click("Zoom out")
+      click("Zoom out")
+      expect(counted()).toBe(5)
+      expect(disabled("Zoom out")).toBe(true)
+    })
+
+    test("centres on the bound", () => {
+      mount({
+        initial: {
+          type: "time",
+          moment: "followed_at",
+          mode: "fixed",
+          start: NOW - 11 * DAY,
+          end: NOW - 9 * DAY,
+        },
+      })
+      click("Zoom in")
+      // Three days from the oldest: the two followed ten days ago.
+      expect(counted()).toBe(2)
+    })
+
+    test("a zoomed bar still keeps exactly the Channels it counts", () => {
+      mount()
+      click("Zoom in")
+      for (const bar of bars().filter(
+        (b) => !b.title.endsWith(": 0 channels"),
+      )) {
+        const count = Number(/: (\d+) channels$/.exec(bar.title)?.[1])
+        fireEvent.click(bar)
+        expect(submit().textContent).toBe(`Add · ${count} of 5 with a value`)
+      }
+    })
+
+    test("the captions show the time of day once under three days show", () => {
+      mount()
+      expect(caption()).not.toMatch(time)
+      click("Zoom in")
+      expect(caption()).not.toMatch(time)
+      click("Zoom in")
+      expect(caption()).toMatch(time)
+    })
+
+    test("a spread under three days whole shows the time of day too", () => {
+      mount({ moments: [NOW - DAY, NOW - DAY / 2] })
+      expect(caption()).toMatch(time)
+    })
+  })
+
   test("with no value anywhere there is no spread to draw", () => {
     mount({ moments: [] })
     expect(screen.queryAllByTestId(/^directory-bound-bar-/)).toHaveLength(0)
