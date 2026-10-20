@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import Field as PydanticField
 
 from app.schemas.analysis_window import AnalysisWindowInput
+from app.schemas.common import ZoomRequest
 from app.schemas.post_filter import FilterGroup, PostSelection
 from app.schemas.scope import (
     CapMode,
@@ -253,27 +254,34 @@ class PostFilteredRequest(PostScopeRequest):
     seed: int = 0
 
 
-class PostValueHistogramRequest(PostFilteredRequest):
+class PostValueHistogramRequest(PostFilteredRequest, ZoomRequest):
     """`PostFilteredRequest` plus the measure a number filter's editor bounds.
 
     The body is the filtered request's so the editor sends the scope it
     already has; the Post filter and keyword in it are set aside, except by
-    `channel_posts_filtered`, which counts what they keep.
+    `channel_posts_filtered`, which counts what they keep. A zoom (`lo`,
+    `hi`) bins only that range, on the scale `log` names when given.
     """
 
     measure: ValueMeasure
+    #: The scale the spread was first drawn on; the server picks when absent.
+    log: bool | None = None
 
 
 class PostValueHistogramResponse(BaseModel):
     """32 bars and their 33 edges, binned by the Channels tab's rule.
 
-    Empty `bins` and `edges` when nothing in the scope has a value.
+    Empty `bins` and `edges` when nothing in the scope has a value. Zoomed,
+    the bars span the zoom and `min`, `max`, `median` and the counts stay
+    the whole spread's.
     """
 
     bins: list[int]
     edges: list[float]
     log: bool
     median: float | None
+    min: float | None
+    max: float | None
     # Posts with a value, and all of them.
     measured: int
     total: int

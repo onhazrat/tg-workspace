@@ -220,7 +220,7 @@
       "comment": "A Live end's reach either way: a century, in ms.",
       "expression": "100 * 366 * 86400000",
       "file": "backend/app/schemas/directory.py",
-      "line": 186,
+      "line": 187,
       "name": "_MAX_OFFSET_MS",
       "value": 3162240000000
     },
@@ -228,7 +228,7 @@
       "comment": "A Fixed end's reach either way, inside what a `datetime` holds (years 1 to 9999), so an absurd instant is a 422 and never an overflow.",
       "expression": "62000000000000",
       "file": "backend/app/schemas/directory.py",
-      "line": 189,
+      "line": 190,
       "name": "_MAX_INSTANT_MS",
       "value": 62000000000000
     },
@@ -236,7 +236,7 @@
       "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
       "expression": "500",
       "file": "backend/app/schemas/directory.py",
-      "line": 230,
+      "line": 231,
       "name": "MAX_CONDITION_HANDLES",
       "value": 500
     },
@@ -244,7 +244,7 @@
       "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 233,
+      "line": 234,
       "name": "MAX_SEEDS",
       "value": 10000
     },
@@ -252,7 +252,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 383,
+      "line": 384,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -260,7 +260,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 673,
+      "line": 677,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },

@@ -1697,8 +1697,18 @@ export type DirectoryCountResponse = {
  * DirectoryDistributionRequest
  *
  * A measure's spread under every other Condition of the view; a moment's in epoch ms.
+ *
+ * A zoom (`lo`, `hi`) bins only that range, on the measure's own scale.
  */
 export type DirectoryDistributionRequest = {
+    /**
+     * Lo
+     */
+    lo?: number | null;
+    /**
+     * Hi
+     */
+    hi?: number | null;
     yours?: YourChannels;
     /**
      * Referencekinds
@@ -5046,9 +5056,18 @@ export type PostTranslationResponse = {
  *
  * The body is the filtered request's so the editor sends the scope it
  * already has; the Post filter and keyword in it are set aside, except by
- * `channel_posts_filtered`, which counts what they keep.
+ * `channel_posts_filtered`, which counts what they keep. A zoom (`lo`,
+ * `hi`) bins only that range, on the scale `log` names when given.
  */
 export type PostValueHistogramRequest = {
+    /**
+     * Lo
+     */
+    lo?: number | null;
+    /**
+     * Hi
+     */
+    hi?: number | null;
     /**
      * Channelnames
      */
@@ -5098,6 +5117,10 @@ export type PostValueHistogramRequest = {
      * Measure
      */
     measure: 'views' | 'estimated' | 'channel_posts' | 'channel_posts_filtered';
+    /**
+     * Log
+     */
+    log?: boolean | null;
 };
 
 /**
@@ -5105,7 +5128,9 @@ export type PostValueHistogramRequest = {
  *
  * 32 bars and their 33 edges, binned by the Channels tab's rule.
  *
- * Empty `bins` and `edges` when nothing in the scope has a value.
+ * Empty `bins` and `edges` when nothing in the scope has a value. Zoomed,
+ * the bars span the zoom and `min`, `max`, `median` and the counts stay
+ * the whole spread's.
  */
 export type PostValueHistogramResponse = {
     /**
@@ -5124,6 +5149,14 @@ export type PostValueHistogramResponse = {
      * Median
      */
     median: number | null;
+    /**
+     * Min
+     */
+    min: number | null;
+    /**
+     * Max
+     */
+    max: number | null;
     /**
      * Measured
      */
