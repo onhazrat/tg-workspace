@@ -27,10 +27,10 @@ if [ "$root" = "$main" ]; then
 fi
 
 cd "$root/backend"
-db=$(uv run --quiet python -m scripts.worktree_db name "$root")
+db=$(uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db name "$root")
 
 if [ "$mode" = "--teardown" ]; then
-  uv run --quiet python -m scripts.worktree_db drop "$db"
+  uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db drop "$db"
   rm -f "$root/.env.worktree"
   exit 0
 fi
@@ -44,7 +44,7 @@ if [ ! -e "$root/.env" ]; then
 fi
 
 (cd "$root" && bun install --silent)
-uv run --quiet python -m scripts.worktree_db create "$db"
+uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db create "$db"
 POSTGRES_DB="$db" uv run --quiet alembic upgrade head
 printf 'TEST_POSTGRES_DB=%s\n' "$db" >"$root/.env.worktree"
 echo "Ready: pytest in this worktree uses $db (from .env.worktree)."
