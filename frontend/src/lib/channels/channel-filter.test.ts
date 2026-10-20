@@ -6,6 +6,7 @@ import {
   type ChannelFilter,
   type Cond,
   clearFunnels,
+  conditionLabel,
   emptyFilter,
   type FilterNode,
   filterNames,
@@ -158,8 +159,6 @@ describe("number Conditions", () => {
     videos: 4,
     files: 5,
     links: 6,
-    lastUpdated: now - 2 * DAY,
-    followedAt: now - 30 * DAY,
   })
   const unmeasured = channel({ name: "u" })
   const inputs: MetricInputs = {
@@ -182,8 +181,6 @@ describe("number Conditions", () => {
     ["activity_rate", 0.5],
     ["total_posts", 90],
     ["posts_in_scope", 7],
-    ["days_since_update", 2],
-    ["days_followed", 30],
     ["photos", 3],
     ["videos", 4],
     ["files", 5],
@@ -641,7 +638,7 @@ describe("the URL form", () => {
     roundTrip(
       root("or", [
         atom({ type: "metric", metric: "activity_rate", min: 0.25 }),
-        atom({ type: "metric", metric: "days_followed", max: 1.5e-7 }),
+        atom({ type: "metric", metric: "photos", max: 1.5e-7 }),
         grp("and", [atom(reach({ min: -3 })), atom(tag("reach"))]),
       ]),
     )
@@ -733,5 +730,105 @@ describe("the URL form", () => {
     )
     roundTrip(parsed as ChannelFilter)
     expect(shown(parsed as ChannelFilter)).toEqual([])
+  })
+})
+
+describe("Time bound Conditions (TB-03)", () => {
+  const MIN = 60_000
+  const DAY = 86_400_000
+  const T = Date.parse("2026-10-20T12:00:00Z")
+  const at = (now: number): MetricInputs => ({ ...noMetrics, now })
+  const passes = (text: string, c: Channel, now = T) => {
+    const parsed = parseChannelFilter(text, names)
+    expect(parsed).not.toBeNull()
+    return matchesChannelFilter(parsed as ChannelFilter, c, at(now))
+  }
+  const label = (text: string) => {
+    const node = parseChannelFilter(text, names)?.children[0]
+    return node?.kind === "atom" ? conditionLabel(node.cond, names) : null
+  }
+
+  // Each moment and the Channel field it reads, written out by hand.
+  const MOMENTS: [string, Partial<Channel>][] = [
+    ["followed_at", { followedAt: T }],
+    ["updated_at", { lastUpdated: T }],
+    ["sync_start_at", { startTime: T }],
+    ["oldest_post_at", { oldestStoredPostTimestamp: T }],
+    ["next_regular_sync_at", { nextRegularSyncAt: T }],
+    ["next_dynamic_sync_at", { nextDynamicSyncAt: T }],
+    [
+      "discovered_at",
+      { discoveredVia: { channelName: "x", postId: 1, timestamp: T } },
+    ],
+  ]
+
+  test.each(MOMENTS)("%s prints and reads back in every shape", (key) => {
+    for (const text of [
+      `${key} -30d..now`,
+      `${key} now..+2d`,
+      `${key} -3h..`,
+      `${key} ..-1w`,
+      `${key} 2026-10-01T00:00Z..2026-10-15T00:00Z`,
+      `${key} = none`,
+      `not ${key} = none`,
+    ]) {
+      const parsed = parseChannelFilter(text, names)
+      expect(parsed && printChannelFilter(parsed, names)).toBe(text)
+    }
+  })
+
+  test.each(MOMENTS)(
+    "%s bounds its own field as [start, end), and only no value passes none",
+    (key, field) => {
+      const c = channel(field)
+      const none = channel({})
+      expect(passes(`${key} 2026-10-20T12:00Z..`, c)).toBe(true)
+      expect(passes(`${key} ..2026-10-20T12:00Z`, c)).toBe(false)
+      expect(passes(`${key} ..2026-10-20T12:01Z`, c)).toBe(true)
+      expect(passes(`${key} = none`, c)).toBe(false)
+      expect(passes(`${key} -100w..+100w`, none)).toBe(false)
+      expect(passes(`${key} = none`, none)).toBe(true)
+    },
+  )
+
+  test("a null next sync is no value", () => {
+    const c = channel({ nextRegularSyncAt: null })
+    expect(passes("next_regular_sync_at = none", c)).toBe(true)
+    expect(passes("next_regular_sync_at -100w..", c)).toBe(false)
+  })
+
+  test("a Live bound moves with the minute it is judged against", () => {
+    const c = channel({ followedAt: T - 60 * MIN })
+    expect(passes("followed_at -1h..now", c, T)).toBe(true)
+    expect(passes("followed_at -1h..now", c, T + MIN)).toBe(false)
+    expect(passes("followed_at ..-1d", channel({ followedAt: T - DAY }))).toBe(
+      false,
+    )
+  })
+
+  test("reads as a chip in the shared words", () => {
+    expect(label("followed_at -30d..now")).toBe(
+      "Followed from 30 days ago to now",
+    )
+    expect(label("next_dynamic_sync_at = none")).toBe(
+      "Next dynamic sync: no value",
+    )
+  })
+
+  test("the two day counts no longer parse, so the tab opens unfiltered", () => {
+    expect(parseChannelFilter("days_followed <= 1", names)).toBeNull()
+    expect(parseChannelFilter("days_since_update >= 2", names)).toBeNull()
+    expect(
+      parseChannelFilter("reach >= 2 and days_followed <= 1", names),
+    ).toBeNull()
+  })
+
+  test("a bound with no end, mixed modes or backwards does not parse", () => {
+    for (const text of [
+      "followed_at ..",
+      "followed_at -1d..2026-10-01T00:00Z",
+      "followed_at now..-1d",
+    ])
+      expect(parseChannelFilter(text, names)).toBeNull()
   })
 })

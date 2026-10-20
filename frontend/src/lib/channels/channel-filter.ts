@@ -9,7 +9,9 @@
  * It lives in the workspace URL as the text form below. It is not part of the
  * Scope and never touches the selection. Recovered from the prototype's
  * `tree.ts` (commit e4d5002). The number Conditions (CTB-02) bound a metric,
- * and a Channel with no value for it fails every bound.
+ * and a Channel with no value for it fails every bound. The Time bound
+ * Conditions (TB-03) bound one of a Channel's moments, `[start, end)`, in the
+ * one Time bound text form (`lib/time-bound/text.ts`).
  *
  * The tree and its editing are `lib/filter-tree.ts` (PTR-01), shared with the
  * Posts tab; this module keeps what is Channel's own: the Conditions, their
@@ -28,6 +30,11 @@ import {
   metric,
   metricValue,
 } from "@/lib/channels/channel-metrics"
+import {
+  CHANNEL_MOMENTS,
+  type ChannelMomentKey,
+  channelMoment,
+} from "@/lib/channels/channel-moments"
 import { getTagNames } from "@/lib/channels/channel-tag-model"
 import {
   CHANNEL_PSEUDO_TAGS,
@@ -50,6 +57,13 @@ import {
   type FilterNode as TreeNode,
 } from "@/lib/filter-tree"
 import { languageLabel, languageValue } from "@/lib/language-name"
+import { inTimeBound, type TimeBound } from "@/lib/time-bound/bound"
+import {
+  parseTimeBound,
+  TIME_BOUND,
+  timeBoundText,
+  timeBoundWords,
+} from "@/lib/time-bound/text"
 import type { Channel } from "@/types"
 
 export type CondType = "tag" | "group" | "language"
@@ -57,13 +71,23 @@ export type CondType = "tag" | "group" | "language"
 export type ValueCond = { type: CondType; value: string }
 /** A bound on a number; `none` passes only a Channel with no value. */
 export type MetricCond = { type: "metric"; metric: MetricKey } & MetricBound
-export type Cond = ValueCond | MetricCond
+/**
+ * A Time bound on one of a Channel's moments; `none` passes only a Channel
+ * with no value for it.
+ */
+export type TimeCond = {
+  type: "time"
+  moment: ChannelMomentKey
+  none?: true
+} & TimeBound
+export type Cond = ValueCond | MetricCond | TimeCond
 export type { Joiner }
 
 // The tree itself is `lib/filter-tree.ts`, shared with the Posts tab; these
 // are its node types over the Channels' Conditions.
 export type AtomNode = TreeAtom<Cond>
 export type MetricAtom = AtomNode & { cond: MetricCond }
+export type TimeAtom = AtomNode & { cond: TimeCond }
 export type GroupNode = TreeGroup<Cond>
 export type FilterNode = TreeNode<Cond>
 /** The root is always a group, with the id `root`. */
@@ -105,6 +129,11 @@ function testCond(cond: Cond, channel: Channel, inputs: MetricInputs): boolean {
       return languageValue(channel.language) === cond.value
     case "metric":
       return inBound(metricValue(cond.metric, channel, inputs), cond)
+    case "time": {
+      const at = channelMoment(cond.moment).value(channel)
+      if (cond.none) return at === null
+      return at !== null && inTimeBound(at, cond, inputs.now)
+    }
   }
 }
 
@@ -169,6 +198,8 @@ export function conditionLabel(cond: Cond, names: FilterNames): string {
       return languageLabel(cond.value)
     case "metric":
       return `${metric(cond.metric).label}${cond.none ? ":" : ""} ${boundText(cond)}`
+    case "time":
+      return timeBoundWords(channelMoment(cond.moment).label, cond)
   }
 }
 
@@ -187,13 +218,18 @@ function condText(cond: Cond, names: FilterNames): string {
         gte: `${cond.metric} >= ${cond.min}`,
         lte: `${cond.metric} <= ${cond.max}`,
       }[boundKind(cond)]
+    case "time":
+      return cond.none
+        ? `${cond.moment} = none`
+        : `${cond.moment} ${timeBoundText(cond)}`
   }
 }
 
 /**
  * The readable text form: `tag:name`, `group:"Setting group name"`,
  * `lang:fa`, `reach >= 200`, `subscribers <= 100`, `reach 200..1000`,
- * `reach = none`, `not`, `and`, `or` and parentheses
+ * `reach = none`, `followed_at -30d..now`, `next_regular_sync_at = none`,
+ * `not`, `and`, `or` and parentheses
  * (`lib/filter-text.ts`).
  */
 export const printChannelFilter = (
@@ -220,9 +256,24 @@ function metricCond(m: RegExpExecArray): MetricCond {
     : { type: "metric", metric: key, max: Number(m[3]) }
 }
 
+/** `followed_at -30d..now` or `followed_at = none`. */
+const TIME = new RegExp(
+  String.raw`^(${CHANNEL_MOMENTS.map((m) => m.key).join("|")})(?:\s*=\s*none(?![\p{L}\p{N}_])|\s+${TIME_BOUND}(?![\p{L}\p{N}_.]))`,
+  "iu",
+)
+
+function timeCond(m: RegExpExecArray): TimeCond {
+  const moment = m[1].toLowerCase() as ChannelMomentKey
+  if (m[2] === undefined && m[3] === undefined && !m[0].includes(".."))
+    return { type: "time", moment, mode: "fixed", none: true }
+  return { type: "time", moment, ...parseTimeBound(m[2], m[3]) }
+}
+
 function channelText(names: FilterNames): TextVocabulary<Cond> {
   return {
     bound: (rest) => {
+      const t = TIME.exec(rest)
+      if (t) return { cond: timeCond(t), length: t[0].length }
       const m = METRIC.exec(rest)
       return m && isMetricKey(m[1].toLowerCase())
         ? { cond: metricCond(m), length: m[0].length }
