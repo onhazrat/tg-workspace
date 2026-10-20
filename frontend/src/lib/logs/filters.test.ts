@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
 import {
-  DAY_MS,
   DEFAULT_LOG_FILTERS,
   filterEmbeddingLogs,
   filterLlmLogs,
@@ -10,7 +9,6 @@ import {
   filterSyncLogs,
   isAnyLogFilterActive,
   jsonIncludes,
-  matchesDateRange,
   matchesStatus,
   uniqueSorted,
 } from "@/lib/logs/filters"
@@ -93,22 +91,6 @@ describe("matchesStatus", () => {
   })
 })
 
-describe("matchesDateRange", () => {
-  test("no bounds matches everything", () => {
-    expect(matchesDateRange(0, null, null)).toBe(true)
-  })
-
-  test("start bound is inclusive", () => {
-    expect(matchesDateRange(999, 1_000, null)).toBe(false)
-    expect(matchesDateRange(1_000, 1_000, null)).toBe(true)
-  })
-
-  test("end bound includes the whole end day", () => {
-    expect(matchesDateRange(5_000 + DAY_MS, null, 5_000)).toBe(true)
-    expect(matchesDateRange(5_000 + DAY_MS + 1, null, 5_000)).toBe(false)
-  })
-})
-
 describe("jsonIncludes", () => {
   test("missing values never match", () => {
     expect(jsonIncludes(undefined, "x")).toBe(false)
@@ -150,17 +132,20 @@ describe("filterPublishLogs", () => {
     ).toEqual(["a"])
   })
 
-  test("filters by date range", () => {
+  test("a Logged bound is the server's job, not the browser's (TB-05)", () => {
+    // The server bounds the whole log before paging; bounding the page here
+    // again would only repeat it, and a Live bound would disagree with the
+    // server's minute.
     const dated = [
       publishLog({ id: "old", timestamp: 1_000 }),
-      publishLog({ id: "new", timestamp: DAY_MS * 10 }),
+      publishLog({ id: "new", timestamp: 864_000_000 }),
     ]
     expect(
-      filterPublishLogs(dated, filters({ startDate: DAY_MS })).map((l) => l.id),
-    ).toEqual(["new"])
-    expect(
-      filterPublishLogs(dated, filters({ endDate: 1_000 })).map((l) => l.id),
-    ).toEqual(["old"])
+      filterPublishLogs(
+        dated,
+        filters({ timeBound: { mode: "fixed", start: 86_400_000 } }),
+      ).map((l) => l.id),
+    ).toEqual(["old", "new"])
   })
 
   test("the text query is the server's job and must not be applied here", () => {
@@ -276,11 +261,21 @@ describe("isAnyLogFilterActive", () => {
     expect(isAnyLogFilterActive(filters())).toBe(false)
   })
 
+  test("a Logged bound with both ends open is Any time, so inactive", () => {
+    expect(
+      isAnyLogFilterActive(filters({ timeBound: { mode: "fixed" } })),
+    ).toBe(false)
+  })
+
   test("each field activates the filter state", () => {
     expect(isAnyLogFilterActive(filters({ searchQuery: "x" }))).toBe(true)
     expect(isAnyLogFilterActive(filters({ statusFilter: "failed" }))).toBe(true)
-    expect(isAnyLogFilterActive(filters({ startDate: 1 }))).toBe(true)
-    expect(isAnyLogFilterActive(filters({ endDate: 1 }))).toBe(true)
+    expect(
+      isAnyLogFilterActive(filters({ timeBound: { mode: "live", start: -1 } })),
+    ).toBe(true)
+    expect(
+      isAnyLogFilterActive(filters({ timeBound: { mode: "fixed", end: 1 } })),
+    ).toBe(true)
     expect(isAnyLogFilterActive(filters({ modelFilter: "gpt" }))).toBe(true)
     expect(isAnyLogFilterActive(filters({ botFilter: "bot" }))).toBe(true)
     expect(isAnyLogFilterActive(filters({ channelFilter: "ch" }))).toBe(true)

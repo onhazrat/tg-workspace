@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any, NamedTuple, cast
+from dataclasses import dataclass
+from typing import Any, Literal, NamedTuple, cast
 
 from fastapi import HTTPException
-from sqlalchemy import Text
+from sqlalchemy import Float, Text, func
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
@@ -24,6 +25,7 @@ from app.models_tg import (
     SyncLogPayload,
     utc_now,
 )
+from app.services.analysis_window import current_minute_start
 from app.services.serialization import (
     mapping_to_camel,
     model_to_camel,
@@ -722,6 +724,82 @@ def _light_columns(model: type[SQLModel], heavy: frozenset[str]) -> list[Any]:
     return [c for c in _log_table(model).columns if c.key not in heavy]
 
 
+#: `[start, end)` in epoch ms, either end open: a Logged bound resolved.
+type LogBound = tuple[int | None, int | None]
+
+#: No bound at all.
+ANY_TIME: LogBound = (None, None)
+
+
+def resolve_log_bound(
+    mode: Literal["live", "fixed"] | None,
+    start: int | None,
+    end: int | None,
+    *,
+    now_ms: int | None = None,
+) -> LogBound:
+    """A Logged Time bound as `[start, end)` in epoch ms (TB-05, ADR-033).
+
+    A Live end is signed ms from the server's current minute, as the Analysis
+    window's is, so two reads a second apart select the same rows; a Fixed end
+    is an instant. Both are floored to the minute, the editor's precision. A
+    crossed bound is refused rather than swapped, and an end without a mode is
+    refused rather than guessed at.
+    """
+    if mode is None:
+        if start is None and end is None:
+            return ANY_TIME
+        raise HTTPException(status_code=422, detail="A Time bound needs a mode.")
+    base = current_minute_start(now_ms) if mode == "live" else 0
+
+    def at(ms: int | None) -> int | None:
+        return None if ms is None else current_minute_start(base + ms)
+
+    lo, hi = at(start), at(end)
+    if lo is not None and hi is not None and lo >= hi:
+        raise HTTPException(
+            status_code=422,
+            detail="The Time bound must start at least one minute before it ends.",
+        )
+    return lo, hi
+
+
+def _visible(
+    statement: Any,
+    log_type: str,
+    *,
+    user_id: uuid.UUID,
+    search: str | None,
+    search_in_details: bool,
+    bound: LogBound = ANY_TIME,
+) -> Any:
+    """The rows of one log the caller may see, matching the search and the bound.
+
+    The predicate goes on before any ordering, offset or limit, and it has to:
+    a page ranked over rows the caller cannot see would hand back fewer than
+    `limit` of them, or none at all, while the rows it skipped sit in someone
+    else's account. Same shape as the feed's window in ticket 16. The bound
+    rides the same rule, which is the point of TB-05: the browser used to bound
+    the newest page and missed everything older.
+    """
+    model, _ = LOG_MODELS[log_type]
+    timestamp = _log_table(model).c.timestamp
+    if log_type in ADMIN_ONLY_LOG_TYPES:
+        statement = unscoped_select(statement, reason=_ADMIN_LOG_REASON)
+    else:
+        statement = scoped_select(statement, model, user_id)
+    if search and search.strip():
+        statement = statement.where(
+            _log_search_clause(log_type, search.strip(), in_details=search_in_details)
+        )
+    start, end = bound
+    if start is not None:
+        statement = statement.where(timestamp >= start)
+    if end is not None:
+        statement = statement.where(timestamp < end)
+    return statement
+
+
 def _list_logs_page(
     session: Session,
     log_type: str,
@@ -731,6 +809,7 @@ def _list_logs_page(
     offset: int,
     search: str | None,
     search_in_details: bool,
+    bound: LogBound,
 ) -> list[dict[str, Any]]:
     """Return one newest-first page of a log table, without its heavy columns.
 
@@ -744,19 +823,14 @@ def _list_logs_page(
     model, _ = LOG_MODELS[log_type]
     table = _log_table(model)
     columns = _light_columns(model, LOG_HEAVY_COLUMNS[log_type])
-    statement = select(*columns)
-    # The predicate goes on before the ordering, the offset and the limit, and
-    # it has to: a page ranked over rows the caller cannot see would hand back
-    # fewer than `limit` of them, or none at all, while the rows it skipped sit
-    # in someone else's account. Same shape as the feed's window in ticket 16.
-    if log_type in ADMIN_ONLY_LOG_TYPES:
-        statement = unscoped_select(statement, reason=_ADMIN_LOG_REASON)
-    else:
-        statement = scoped_select(statement, model, user_id)
-    if search and search.strip():
-        statement = statement.where(
-            _log_search_clause(log_type, search.strip(), in_details=search_in_details)
-        )
+    statement = _visible(
+        select(*columns),
+        log_type,
+        user_id=user_id,
+        search=search,
+        search_in_details=search_in_details,
+        bound=bound,
+    )
     statement = statement.order_by(table.c.timestamp.desc()).offset(offset).limit(limit)
     return [
         {
@@ -776,6 +850,7 @@ def list_logs(
     offset: int = 0,
     search: str | None = None,
     search_in_details: bool = False,
+    bound: LogBound = ANY_TIME,
 ) -> list[dict[str, Any]]:
     """One newest-first page of any log type, in the light projection.
 
@@ -803,6 +878,103 @@ def list_logs(
         offset=offset,
         search=search,
         search_in_details=search_in_details,
+        bound=bound,
+    )
+
+
+#: Bars in a log's spread, as many as a Directory moment's.
+LOG_SPREAD_BINS = 32
+
+
+@dataclass(frozen=True)
+class LogSpreadBin:
+    lo: float
+    hi: float
+    count: int
+
+
+@dataclass(frozen=True)
+class LogSpread:
+    #: Entries matching the search; every one has a timestamp.
+    total: int
+    min: int | None
+    max: int | None
+    median: float | None
+    bins: list[LogSpreadBin]
+
+
+def log_spread(
+    session: Session,
+    log_type: str,
+    *,
+    user_id: uuid.UUID,
+    search: str | None = None,
+    search_in_details: bool = False,
+    zoom: tuple[float, float] | None = None,
+) -> LogSpread:
+    """When a log's entries were logged, in epoch ms (TB-05).
+
+    Under the search and without the Logged bound, so the editor shows what
+    lies around the bound, as a Directory moment's spread does. A `zoom` bins
+    only its range, inside the spread's; the total, min, max and median stay
+    the whole spread's.
+    """
+    if log_type not in LOG_MODELS:
+        raise KeyError(log_type)
+    model, _ = LOG_MODELS[log_type]
+    timestamp = _log_table(model).c.timestamp
+
+    def visible(statement: Any) -> Any:
+        return _visible(
+            statement,
+            log_type,
+            user_id=user_id,
+            search=search,
+            search_in_details=search_in_details,
+        )
+
+    total, lo, hi, median = session.execute(
+        visible(
+            sa_select(
+                func.count(timestamp),
+                func.min(timestamp),
+                func.max(timestamp),
+                func.percentile_cont(0.5).within_group(timestamp),
+            )
+        )
+    ).one()
+    bins: list[LogSpreadBin] = []
+    a, b = lo, hi
+    if zoom is not None and lo is not None and hi is not None:
+        a, b = max(zoom[0], lo), min(zoom[1], hi)
+    if a is not None and b is not None and b > a:
+        bucket = func.least(
+            func.width_bucket(sa_cast(timestamp, Float), a, b, LOG_SPREAD_BINS),
+            LOG_SPREAD_BINS,
+        )
+        counts = {
+            int(i): int(n)
+            for i, n in session.execute(
+                visible(
+                    sa_select(bucket, func.count()).where(
+                        timestamp >= a, timestamp <= b
+                    )
+                ).group_by(bucket)
+            ).all()
+        }
+        step = (b - a) / LOG_SPREAD_BINS
+        bins = [
+            LogSpreadBin(
+                lo=a + i * step, hi=a + (i + 1) * step, count=counts.get(i + 1, 0)
+            )
+            for i in range(LOG_SPREAD_BINS)
+        ]
+    return LogSpread(
+        total=int(total),
+        min=None if lo is None else int(lo),
+        max=None if hi is None else int(hi),
+        median=None if median is None else float(median),
+        bins=bins,
     )
 
 

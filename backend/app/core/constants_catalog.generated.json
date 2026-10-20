@@ -684,7 +684,7 @@
       "comment": "Log list endpoints are viewers, not exports: cap what one request can load.",
       "expression": "500",
       "file": "backend/app/services/logs.py",
-      "line": 44,
+      "line": 46,
       "name": "DEFAULT_LOG_PAGE_SIZE",
       "value": 500
     },
@@ -692,9 +692,17 @@
       "comment": "",
       "expression": "5000",
       "file": "backend/app/services/logs.py",
-      "line": 45,
+      "line": 47,
       "name": "MAX_LOG_PAGE_SIZE",
       "value": 5000
+    },
+    {
+      "comment": "Bars in a log's spread, as many as a Directory moment's.",
+      "expression": "32",
+      "file": "backend/app/services/logs.py",
+      "line": 886,
+      "name": "LOG_SPREAD_BINS",
+      "value": 32
     },
     {
       "comment": "Attempts a media fetch gets. One, meaning no retry ladder at all. `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is sized for a page fetch, where losing the page loses the sync. Media is not that. An avatar is re-resolved on **every page** of a walk, so the page loop already is the retry, and a thumb is cosmetic. Left at the default, one dead avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds to 8 minutes when the avatar cache first moved onto the lane pool, which is what surfaced this. Shared by both image caches rather than spelled twice, because they are twins and `test_image_cache_egress.py` asserts they stay that way.",
@@ -1100,7 +1108,7 @@
       "comment": "",
       "expression": "20",
       "file": "frontend/src/components/LogsView.tsx",
-      "line": 42,
+      "line": 43,
       "name": "PAGE_SIZE",
       "value": 20
     },
@@ -1132,7 +1140,7 @@
       "comment": "How often a Live bound's fields are redrawn against the clock.",
       "expression": "15_000",
       "file": "frontend/src/components/TimeBoundEditor.tsx",
-      "line": 35,
+      "line": 42,
       "name": "REDRAW_MS",
       "value": 15000
     },

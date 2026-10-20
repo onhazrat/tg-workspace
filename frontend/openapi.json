@@ -5143,7 +5143,7 @@
       "get": {
         "tags": ["data"],
         "summary": "List Logs Route",
-        "description": "One newest-first page of any log type, without the corpus-sized fields.\n\nPaged rather than whole-table: these tables carry request/response JSON and\ngrow without bound between retention sweeps, so an unfiltered select can\nmaterialise gigabytes and OOM the worker. Full data ships via the export\npath, which streams.\n\nThe bodies are on `GET /logs/{log_type}/{log_id}` \u2014 this page was 56.28 MB\nfor 500 rows, 99.7% of it bodies the viewer only renders for an expanded\nrow. `search` runs in SQL so they stay findable without being sent, and\n`searchInDetails` extends the match into them; both now search the whole\ntable rather than the page that happened to be fetched.",
+        "description": "One newest-first page of any log type, without the corpus-sized fields.\n\nPaged rather than whole-table: these tables carry request/response JSON and\ngrow without bound between retention sweeps, so an unfiltered select can\nmaterialise gigabytes and OOM the worker. Full data ships via the export\npath, which streams.\n\nThe bodies are on `GET /logs/{log_type}/{log_id}` \u2014 this page was 56.28 MB\nfor 500 rows, 99.7% of it bodies the viewer only renders for an expanded\nrow. `search` runs in SQL so they stay findable without being sent, and\n`searchInDetails` extends the match into them; both now search the whole\ntable rather than the page that happened to be fetched.\n\n`mode`, `start` and `end` bound when entries were logged, `[start, end)`\nto the minute, either end open, applied before paging so the bound reaches\nevery entry of the log.",
         "operationId": "data-list_logs_route",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -5199,6 +5199,42 @@
               "default": false,
               "title": "Searchindetails"
             }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "enum": ["live", "fixed"], "type": "string" },
+                { "type": "null" }
+              ],
+              "description": "The Logged bound's mode; none is Any time",
+              "title": "Mode"
+            },
+            "description": "The Logged bound's mode; none is Any time"
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Included. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "Start"
+            },
+            "description": "Included. Epoch ms when Fixed, signed ms from now when Live"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "End"
+            },
+            "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live"
           }
         ],
         "responses": {
@@ -5261,6 +5297,83 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/logs/{log_type}/spread": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Log Spread Route",
+        "description": "When a log's entries were logged: 32 bars over epoch ms.\n\nUnder the text search and without the Logged bound, so the editor shows\nwhat lies around it. A zoom (`lo`, `hi`) bins only that range; `total`,\n`min`, `max` and `median` stay the whole spread's.",
+        "operationId": "data-get_log_spread_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "log_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "publish | sync | llm | embedding | network",
+              "title": "Log Type"
+            },
+            "description": "publish | sync | llm | embedding | network"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "searchInDetails",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Searchindetails"
+            }
+          },
+          {
+            "name": "lo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Lo"
+            }
+          },
+          {
+            "name": "hi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Hi"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LogSpreadResponse" }
               }
             }
           },
@@ -10893,6 +11006,43 @@
           { "items": {}, "type": "array" },
           { "type": "null" }
         ]
+      },
+      "LogSpreadBinResponse": {
+        "properties": {
+          "lo": { "type": "number", "title": "Lo" },
+          "hi": { "type": "number", "title": "Hi" },
+          "count": { "type": "integer", "title": "Count" }
+        },
+        "type": "object",
+        "required": ["lo", "hi", "count"],
+        "title": "LogSpreadBinResponse",
+        "description": "One bar of a log's spread: entries logged from `lo` to `hi`, epoch ms."
+      },
+      "LogSpreadResponse": {
+        "properties": {
+          "total": { "type": "integer", "title": "Total" },
+          "min": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Max"
+          },
+          "median": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Median"
+          },
+          "bins": {
+            "items": { "$ref": "#/components/schemas/LogSpreadBinResponse" },
+            "type": "array",
+            "title": "Bins"
+          }
+        },
+        "type": "object",
+        "required": ["total", "min", "max", "median", "bins"],
+        "title": "LogSpreadResponse",
+        "description": "When a log's entries were logged, for the Logged editor (TB-05).\n\nEmpty `bins` when fewer than two instants are logged. Zoomed, the bars\nspan the zoom and `total`, `min`, `max` and `median` stay the whole\nspread's."
       },
       "LogWriteResponse": {
         "properties": {

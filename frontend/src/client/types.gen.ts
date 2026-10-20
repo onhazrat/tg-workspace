@@ -4112,6 +4112,58 @@ export type LogPayload = {
 } | Array<unknown> | null;
 
 /**
+ * LogSpreadBinResponse
+ *
+ * One bar of a log's spread: entries logged from `lo` to `hi`, epoch ms.
+ */
+export type LogSpreadBinResponse = {
+    /**
+     * Lo
+     */
+    lo: number;
+    /**
+     * Hi
+     */
+    hi: number;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * LogSpreadResponse
+ *
+ * When a log's entries were logged, for the Logged editor (TB-05).
+ *
+ * Empty `bins` when fewer than two instants are logged. Zoomed, the bars
+ * span the zoom and `total`, `min`, `max` and `median` stay the whole
+ * spread's.
+ */
+export type LogSpreadResponse = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Min
+     */
+    min: number | null;
+    /**
+     * Max
+     */
+    max: number | null;
+    /**
+     * Median
+     */
+    median: number | null;
+    /**
+     * Bins
+     */
+    bins: Array<LogSpreadBinResponse>;
+};
+
+/**
  * LogWriteResponse
  *
  * Result of a bulk log write: how many rows were accepted.
@@ -12294,6 +12346,24 @@ export type DataListLogsRouteData = {
          * Searchindetails
          */
         searchInDetails?: boolean;
+        /**
+         * Mode
+         *
+         * The Logged bound's mode; none is Any time
+         */
+        mode?: 'live' | 'fixed' | null;
+        /**
+         * Start
+         *
+         * Included. Epoch ms when Fixed, signed ms from now when Live
+         */
+        start?: number | null;
+        /**
+         * End
+         *
+         * Excluded. Epoch ms when Fixed, signed ms from now when Live
+         */
+        end?: number | null;
     };
     url: '/api/v1/data/logs/{log_type}';
 };
@@ -12354,6 +12424,55 @@ export type DataCreateLogsRouteResponses = {
 };
 
 export type DataCreateLogsRouteResponse = DataCreateLogsRouteResponses[keyof DataCreateLogsRouteResponses];
+
+export type DataGetLogSpreadRouteData = {
+    body?: never;
+    path: {
+        /**
+         * Log Type
+         *
+         * publish | sync | llm | embedding | network
+         */
+        log_type: string;
+    };
+    query?: {
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Searchindetails
+         */
+        searchInDetails?: boolean;
+        /**
+         * Lo
+         */
+        lo?: number | null;
+        /**
+         * Hi
+         */
+        hi?: number | null;
+    };
+    url: '/api/v1/data/logs/{log_type}/spread';
+};
+
+export type DataGetLogSpreadRouteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetLogSpreadRouteError = DataGetLogSpreadRouteErrors[keyof DataGetLogSpreadRouteErrors];
+
+export type DataGetLogSpreadRouteResponses = {
+    /**
+     * Successful Response
+     */
+    200: LogSpreadResponse;
+};
+
+export type DataGetLogSpreadRouteResponse = DataGetLogSpreadRouteResponses[keyof DataGetLogSpreadRouteResponses];
 
 export type DataGetLogRouteData = {
     body?: never;
