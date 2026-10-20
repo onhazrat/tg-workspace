@@ -16,7 +16,7 @@ bound text form shared by the Directory and Channel filters.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: the editor,
 the Time bound source, No value, two wrappers, one text form), ADR-033,
@@ -40,3 +40,7 @@ the Time bound source, No value, two wrappers, one text form), ADR-033,
 - [x] The Directory Time bound editor is the embedded wrapper: name, description, the spread (a bar click sets a Fixed bound), the shared editor with open ends, ahead and No value, and Add or Update with the live count. The old Live and Fixed fields are gone.
 - [x] The Time bound printer, parser and chip words live in one module used by the Directory filter (and ready for the Channel filter); every existing Directory link with a Time bound parses and prints unchanged.
 - [x] Render tests on the editor (both wrappers) cover open ends, ahead accepted and refused, No value, a shortcut, an invalid draft, and "Any time"; filter tests cover the shared text form round trip. Each new guard is mutation-tested.
+
+## Comments
+
+- 2026-10-20: implemented on `claude/tb-01-one-editor` and merged into the integration branch in 791281ea.
