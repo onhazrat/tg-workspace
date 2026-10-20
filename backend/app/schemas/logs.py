@@ -252,6 +252,31 @@ class LLMLogListItemResponse(BaseModel):
     log_type: str = Field(default="", alias="type")
 
 
+class LogSpreadBinResponse(BaseModel):
+    """One bar of a log's spread: entries logged from `lo` to `hi`, epoch ms."""
+
+    lo: float
+    hi: float
+    count: int
+
+
+# Closed, and no field carries a server-side default, so every one is required
+# in the generated client.
+class LogSpreadResponse(BaseModel):
+    """When a log's entries were logged, for the Logged editor (TB-05).
+
+    Empty `bins` when fewer than two instants are logged. Zoomed, the bars
+    span the zoom and `total`, `min`, `max` and `median` stay the whole
+    spread's.
+    """
+
+    total: int
+    min: int | None
+    max: int | None
+    median: float | None
+    bins: list[LogSpreadBinResponse]
+
+
 #: The wire type of `GET /data/logs/{log_type}`.
 #:
 #: A plain union, not a discriminated one: the five payloads share no tag field,

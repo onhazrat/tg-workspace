@@ -65,6 +65,32 @@ const PHOTO_OR_VIDEO = addPostFunnel(
   "video",
 )
 
+describe("listLogs", () => {
+  it("sends the search, and nothing when there is none", async () => {
+    await dataApi.listLogs("sync")
+    await dataApi.listLogs("sync", { query: "boom", inDetails: true })
+    expect(sent.map((s) => s.url)).toEqual([
+      "/api/v1/data/logs/sync",
+      "/api/v1/data/logs/sync?search=boom&searchInDetails=true",
+    ])
+  })
+
+  // TB-05: the server bounds the whole log before paging. A Live end of 0 is
+  // now, and a real zero, so it must not be dropped as unset.
+  it("sends the Logged bound's mode and the ends it has", async () => {
+    await dataApi.listLogs("llm", undefined, {
+      mode: "live",
+      start: -3_600_000,
+      end: 0,
+    })
+    await dataApi.listLogs("llm", undefined, { mode: "fixed", start: 60_000 })
+    expect(sent.map((s) => s.url)).toEqual([
+      "/api/v1/data/logs/llm?mode=live&start=-3600000&end=0",
+      "/api/v1/data/logs/llm?mode=fixed&start=60000",
+    ])
+  })
+})
+
 describe("getPostsFeed", () => {
   it("sends the cap mode and seed alongside a cap, with paging, order and grouping", async () => {
     await dataApi.getPostsFeed({

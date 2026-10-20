@@ -1,12 +1,12 @@
 import { ChevronDown, Filter, Search, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
+import type { ReactNode } from "react"
+import { TimeBoundBar } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgFieldLabel } from "@/components/ui/tg-input"
 import { isAnyLogFilterActive, type LogFilters } from "@/lib/logs/filters"
-import { parseDateInputValue, toDateInputValue } from "@/lib/logs/format"
 import { LOG_TAB_META, type LogTab } from "@/lib/logs/tabs"
-import { formatDateToLocalISO } from "@/lib/utils"
 
 interface LogFilterBarProps {
   activeTab: LogTab
@@ -18,7 +18,12 @@ interface LogFilterBarProps {
   modelOptions: string[]
   botOptions: string[]
   channelOptions: string[]
+  /** The Logged spread, mounted inside the popover while it is open. */
+  loggedSpread?: ReactNode
 }
+
+/** What the Logged bound turns on (ADR-033): open ends, never ahead of now. */
+const LOGGED_OPTIONS = { openEnds: true }
 
 export const LogFilterBar: React.FC<LogFilterBarProps> = ({
   activeTab,
@@ -30,9 +35,9 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
   modelOptions,
   botOptions,
   channelOptions,
+  loggedSpread,
 }) => {
   const filterActive = isAnyLogFilterActive(filters)
-  const maxDate = formatDateToLocalISO(new Date()).split("T")[0]
 
   return (
     <>
@@ -127,36 +132,19 @@ export const LogFilterBar: React.FC<LogFilterBarProps> = ({
                   </div>
                 </div>
 
-                {/* Date Range Filter */}
+                {/* When entries were logged, applied by the server (TB-05) */}
                 <div className="space-y-2 col-span-1 md:col-span-2">
                   <TgFieldLabel className="mb-0 text-[9px] font-sans font-bold tracking-normal opacity-50">
-                    Date Range
+                    Logged
                   </TgFieldLabel>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="date"
-                      value={toDateInputValue(filters.startDate)}
-                      max={maxDate}
-                      onChange={(e) =>
-                        onFiltersChange({
-                          startDate: parseDateInputValue(e.target.value),
-                        })
-                      }
-                      className="bg-transparent border border-app-ink/10 px-2 py-1 text-[10px] font-mono focus:outline-none focus:border-app-ink/30"
-                    />
-                    <span className="opacity-30 text-[10px]">TO</span>
-                    <input
-                      type="date"
-                      value={toDateInputValue(filters.endDate)}
-                      max={maxDate}
-                      onChange={(e) =>
-                        onFiltersChange({
-                          endDate: parseDateInputValue(e.target.value),
-                        })
-                      }
-                      className="bg-transparent border border-app-ink/10 px-2 py-1 text-[10px] font-mono focus:outline-none focus:border-app-ink/30"
-                    />
-                  </div>
+                  <TimeBoundBar
+                    label="Logged"
+                    value={filters.timeBound}
+                    onChange={(timeBound) => onFiltersChange({ timeBound })}
+                    opts={LOGGED_OPTIONS}
+                  >
+                    {loggedSpread}
+                  </TimeBoundBar>
                 </div>
               </div>
 

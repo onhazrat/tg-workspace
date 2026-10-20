@@ -8,7 +8,14 @@
  * Posts tab's collapsed line and popover (Logs). What a bound means per field
  * is `lib/time-bound/bound.ts`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import {
   WindowEditor,
   type WindowEditorSource,
@@ -185,12 +192,15 @@ export function TimeBoundBar({
   value,
   onChange,
   opts,
+  children,
 }: {
   /** The line's accessible name and the sheet's title: "Logged". */
   label: string
   value: TimeBound
   onChange: (next: TimeBound) => void
   opts: TimeBoundOptions
+  /** Above the editor, mounted only while open: the Logs spread (TB-05). */
+  children?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const source = useTimeBoundSource(value, onChange, opts)
@@ -211,6 +221,7 @@ export function TimeBoundBar({
     >
       <WindowEditorSourceContext.Provider value={source}>
         <div className="space-y-2">
+          {children}
           <WindowEditor modeLabel={`${label} mode`} />
           <Hint opts={opts} />
         </div>

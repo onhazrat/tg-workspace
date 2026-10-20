@@ -90,4 +90,33 @@ describe("useLogsQuery", () => {
       expect(result.current.data?.map((l) => l.timestamp)).toEqual([9, 5, 1])
     }
   })
+
+  // TB-05: the server applies the Logged bound before paging, so it rides
+  // the request and the key; an Any time bound sends none at all.
+  it("asks the server for a Logged bound, and none for Any time", async () => {
+    const asked: unknown[] = []
+    const lister = (async (
+      _type: unknown,
+      _search: unknown,
+      bound: unknown,
+    ) => {
+      asked.push(bound)
+      return []
+    }) as unknown as LogLister
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const { rerender } = renderHook(
+      ({ bound }) => useLogsQuery("sync", true, { lister, bound }),
+      {
+        wrapper: wrapper(client),
+        initialProps: { bound: { mode: "fixed" as const } },
+      },
+    )
+    await waitFor(() => expect(asked).toEqual([undefined]))
+    rerender({ bound: { mode: "fixed", start: 60_000 } as never })
+    await waitFor(() =>
+      expect(asked).toEqual([undefined, { mode: "fixed", start: 60_000 }]),
+    )
+  })
 })

@@ -16,18 +16,22 @@ deprecated aliases between D1 and D2 so the frontend could migrate
 independently. **D2 removed them** — `/logs/{log_type}` is now the only way in.
 """
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 
 from app.api.deps import CurrentUser, SessionDep, require_permission
 from app.core.permissions import Permission
+from app.schemas.common import ZoomRequest
 from app.schemas.logs import (
     EmbeddingLogResponse,
     LLMLogListItemResponse,
     LLMLogResponse,
     LogDetailResponse,
     LogEntryResponse,
+    LogSpreadResponse,
     LogWriteResponse,
     NetworkLogResponse,
     PublishLogListItemResponse,
@@ -48,6 +52,8 @@ from app.services.logs import (
     delete_old_logs,
     get_log,
     list_logs,
+    log_spread,
+    resolve_log_bound,
 )
 from app.services.sync_meta import touch_sync
 
@@ -120,6 +126,17 @@ def list_logs_route(
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None),
     search_in_details: bool = Query(default=False, alias="searchInDetails"),
+    mode: Literal["live", "fixed"] | None = Query(
+        default=None, description="The Logged bound's mode; none is Any time"
+    ),
+    start: int | None = Query(
+        default=None,
+        description="Included. Epoch ms when Fixed, signed ms from now when Live",
+    ),
+    end: int | None = Query(
+        default=None,
+        description="Excluded. Epoch ms when Fixed, signed ms from now when Live",
+    ),
 ) -> list[LogEntryResponse]:
     """One newest-first page of any log type, without the corpus-sized fields.
 
@@ -133,6 +150,10 @@ def list_logs_route(
     row. `search` runs in SQL so they stay findable without being sent, and
     `searchInDetails` extends the match into them; both now search the whole
     table rather than the page that happened to be fetched.
+
+    `mode`, `start` and `end` bound when entries were logged, `[start, end)`
+    to the minute, either end open, applied before paging so the bound reaches
+    every entry of the log.
     """
     rows = list_logs(
         session,
@@ -142,8 +163,44 @@ def list_logs_route(
         offset=offset,
         search=search,
         search_in_details=search_in_details,
+        bound=resolve_log_bound(mode, start, end),
     )
     return [LOG_LIST_RESPONSES[log_type].model_validate(row) for row in rows]
+
+
+def _zoom(lo: float | None = None, hi: float | None = None) -> ZoomRequest:
+    """`lo` and `hi` as query parameters, a half or crossed range a 422."""
+    try:
+        return ZoomRequest(lo=lo, hi=hi)
+    except ValidationError as e:
+        raise RequestValidationError(e.errors()) from e
+
+
+# TB-05. Declared before the detail route, whose `{log_id}` would take "spread".
+@router.get("/logs/{log_type}/spread", dependencies=READABLE_LOG_TYPE)
+def get_log_spread_route(
+    session: SessionDep,
+    _current_user: CurrentUser,
+    zoom: Annotated[ZoomRequest, Depends(_zoom)],
+    log_type: str = LogType,
+    search: str | None = Query(default=None),
+    search_in_details: bool = Query(default=False, alias="searchInDetails"),
+) -> LogSpreadResponse:
+    """When a log's entries were logged: 32 bars over epoch ms.
+
+    Under the text search and without the Logged bound, so the editor shows
+    what lies around it. A zoom (`lo`, `hi`) bins only that range; `total`,
+    `min`, `max` and `median` stay the whole spread's.
+    """
+    spread = log_spread(
+        session,
+        _known(log_type),
+        user_id=_current_user.id,
+        search=search,
+        search_in_details=search_in_details,
+        zoom=zoom.zoom,
+    )
+    return LogSpreadResponse.model_validate(spread, from_attributes=True)
 
 
 @router.get("/logs/{log_type}/{log_id}", dependencies=READABLE_LOG_TYPE)

@@ -21,6 +21,7 @@ import type {
   ViewMeasure,
   ViewsFilter,
 } from "../lib/posts/post-view"
+import type { TimeBound } from "../lib/time-bound/bound"
 import type {
   ArtifactKind,
   ArtifactListItem,
@@ -432,8 +433,10 @@ export type LogType = "publish" | "sync" | "llm" | "embedding" | "network"
 /**
  * The text half of the Logs view's filter bar, evaluated by the server.
  *
- * The other filters (status, date, bot, channel, model) stay client-side —
- * they read fields the list still carries and cost nothing there.
+ * The other filters (status, bot, channel, model) stay client-side: they
+ * read fields the list still carries and cost nothing there. The Logged
+ * Time bound does not, because it has to reach entries older than the page
+ * (TB-05).
  */
 export type LogSearch = { query: string; inDetails: boolean }
 
@@ -1013,10 +1016,16 @@ export const dataApi = {
    * so there is nothing left client-side to match "search in details" against.
    * It searches the whole table now instead of the fetched page.
    */
-  listLogs: <T>(type: LogType, search?: LogSearch) => {
+  listLogs: <T>(type: LogType, search?: LogSearch, bound?: TimeBound) => {
     const q = new URLSearchParams()
     if (search?.query) q.set("search", search.query)
     if (search?.inDetails) q.set("searchInDetails", "true")
+    // TB-05: when entries were logged, applied by the server before paging.
+    if (bound) {
+      q.set("mode", bound.mode)
+      if (bound.start !== undefined) q.set("start", String(bound.start))
+      if (bound.end !== undefined) q.set("end", String(bound.end))
+    }
     const suffix = q.size ? `?${q}` : ""
     return request<T[]>(`/api/v1/data/logs/${type}${suffix}`)
   },
