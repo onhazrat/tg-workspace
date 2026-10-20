@@ -43,6 +43,7 @@ import {
   parseElapsed,
   SCOPE_FIELDS,
   type ScopeField,
+  type WindowMode,
 } from "@/lib/scope/window"
 
 // ---- The source (PROTOTYPE time-bound) --------------------------------------
@@ -270,8 +271,15 @@ export const WindowEditor: React.FC<{
   onReturn?: () => void
   /** The mode switch's accessible name. */
   modeLabel?: string
-}> = ({ onReturn, modeLabel = "Analysis window mode" }) => {
+  /**
+   * A third segment, No value, for a Time bound that can ask for entries
+   * with no value instead (PROTOTYPE time-bound). While it is on, the
+   * fields go: there is nothing to bound.
+   */
+  noValue?: { on: boolean; onChange: (on: boolean) => void }
+}> = ({ onReturn, modeLabel = "Analysis window mode", noValue }) => {
   const { mode, setMode, applyValue } = useWindowEditorSource()
+  const fields = !noValue?.on
   const [elapsedFocus, setElapsedFocus] = useState<ScopeField | null>(null)
   const read = useContext(WindowHistogramContext)
 
@@ -299,33 +307,39 @@ export const WindowEditor: React.FC<{
         </TgButton>
       )}
 
-      <TgInlineChoice
+      <TgInlineChoice<WindowMode | "none">
         aria-label={modeLabel}
-        value={mode}
-        onChange={setMode}
+        value={noValue?.on ? "none" : mode}
+        onChange={(next) => {
+          noValue?.onChange(next === "none")
+          if (next !== "none") setMode(next)
+        }}
         options={[
           { value: "live", label: "Live" },
           { value: "fixed", label: "Fixed" },
+          ...(noValue ? [{ value: "none" as const, label: "No value" }] : []),
         ]}
       />
 
-      <div className="grid grid-cols-2 gap-3">
-        {FIELDS.map(({ field, label }) => (
-          <WindowField
-            key={field}
-            field={field}
-            label={label}
-            onElapsedFocus={setElapsedFocus}
-          />
-        ))}
-      </div>
+      {fields && (
+        <div className="grid grid-cols-2 gap-3">
+          {FIELDS.map(({ field, label }) => (
+            <WindowField
+              key={field}
+              field={field}
+              label={label}
+              onElapsedFocus={setElapsedFocus}
+            />
+          ))}
+        </div>
+      )}
 
       {/*
        * One row, two fields, and it belongs to whichever has focus. Rendered
        * only while one does, because a row of durations floating under four
        * fields cannot say which of them it would change.
        */}
-      {elapsedFocus && (
+      {fields && elapsedFocus && (
         <fieldset
           className="flex flex-wrap gap-1.5 border-t border-app-ink/5 pt-3"
           aria-label={`Shortcuts for ${elapsedFocus === "duration" ? "Duration" : "End gap"}`}
@@ -348,7 +362,7 @@ export const WindowEditor: React.FC<{
         </fieldset>
       )}
 
-      {read && <WindowChart read={read} />}
+      {fields && read && <WindowChart read={read} />}
     </div>
   )
 }

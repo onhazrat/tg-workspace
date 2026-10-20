@@ -71,24 +71,13 @@ export function ChannelTimeEditor({
         {m.label}
       </div>
       <p className="text-[11px] text-app-ink/50">{m.description}</p>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          aria-pressed={none}
-          onClick={() => setNone(!none)}
-          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${none ? "bg-app-ink/10" : "text-app-ink/60"}`}
-        >
-          No value
-        </button>
-      </div>
-      {!none && (
-        <TimeBoundEditor
-          value={bound}
-          onChange={setBound}
-          opts={{ openEnds: true, ahead: true }}
-          modeLabel={`${m.label} mode`}
-        />
-      )}
+      <TimeBoundEditor
+        value={bound}
+        onChange={setBound}
+        opts={{ openEnds: true, ahead: true }}
+        modeLabel={`${m.label} mode`}
+        noValue={{ on: none, onChange: setNone }}
+      />
       <TgButton
         type="submit"
         size="sm"

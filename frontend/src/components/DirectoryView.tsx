@@ -34,7 +34,6 @@ import {
   type MeasureEditorRender,
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
-import { timeBoundSummary } from "@/components/time-bound-prototype/TimeBoundEditor"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
@@ -55,6 +54,7 @@ import {
   type Moment,
   type SeedSets,
   seedForms,
+  timeBoundWords,
 } from "@/lib/directory/directory-filter"
 import { mineBound, mineWindow } from "@/lib/directory/directory-panel"
 import type { Tagging } from "@/lib/directory/directory-tags"
@@ -295,7 +295,7 @@ function DirectoryPanelReads({
       posts={posts.isError ? [] : posts.data}
       why={why.data}
       windowDays={windowDays}
-      windowLabel={bound ? `in ${timeBoundSummary(bound)}` : undefined}
+      windowLabel={bound ? timeBoundWords("", bound).trim() : undefined}
       following={following}
       onFollow={onFollow}
       onDismiss={onDismiss}

@@ -219,9 +219,9 @@ export function DirectoryTimeEditor({
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
       )}
-      <div className="flex gap-1 rounded-full bg-app-ink/5 p-0.5">
-        {!v1 &&
-          (["live", "fixed"] as const).map((m) => (
+      {!v1 && (
+        <div className="flex gap-1 rounded-full bg-app-ink/5 p-0.5">
+          {(["live", "fixed"] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -235,21 +235,23 @@ export function DirectoryTimeEditor({
               {m === "live" ? "Live" : "Fixed"}
             </button>
           ))}
-        <button
-          type="button"
-          aria-pressed={none}
-          onClick={() => setNone(!none)}
-          className={`${toggle} ml-auto ${none ? "bg-app-surface shadow-sm" : "text-app-ink/60"}`}
-        >
-          No value
-        </button>
-      </div>
-      {v1 && !none && (
+          <button
+            type="button"
+            aria-pressed={none}
+            onClick={() => setNone(!none)}
+            className={`${toggle} ml-auto ${none ? "bg-app-surface shadow-sm" : "text-app-ink/60"}`}
+          >
+            No value
+          </button>
+        </div>
+      )}
+      {v1 && (
         <TimeBoundEditor
           value={bound}
           onChange={setBound}
           opts={{ openEnds: true, ahead: true }}
           modeLabel={`${moment.label} mode`}
+          noValue={{ on: none, onChange: setNone }}
         />
       )}
       {!v1 && !none && mode === "live" && (

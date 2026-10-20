@@ -277,18 +277,20 @@ export function TimeBoundEditor({
   onChange,
   opts,
   modeLabel,
+  noValue,
 }: {
   value: TimeBound
   onChange: (next: TimeBound) => void
   opts: TimeBoundOptions
   modeLabel: string
+  noValue?: { on: boolean; onChange: (on: boolean) => void }
 }) {
   const source = useTimeBoundSource(value, onChange, opts)
   return (
     <WindowEditorSourceContext.Provider value={source}>
       <div className="space-y-2">
-        <WindowEditor modeLabel={modeLabel} />
-        <Hint opts={opts} />
+        <WindowEditor modeLabel={modeLabel} noValue={noValue} />
+        {!noValue?.on && <Hint opts={opts} />}
       </div>
     </WindowEditorSourceContext.Provider>
   )

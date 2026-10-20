@@ -44,7 +44,6 @@ import {
   filterNames,
   funnelledValues,
   type MetricAtom,
-  type MetricCond,
   parseChannelFilter,
   printChannelFilter,
   removeFunnel,
