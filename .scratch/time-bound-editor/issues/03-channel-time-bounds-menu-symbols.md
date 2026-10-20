@@ -12,7 +12,7 @@ the Directory's condition menu does, and Channels number chips carry `#`.
 
 **Blocked by:** TB-01.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: Channel
 moments, the minute tick, the day counts removed, clicked time bar, menus),
@@ -35,3 +35,7 @@ moments, the minute tick, the day counts removed, clicked time bar, menus),
 - [x] `days_since_update` and `days_followed` are removed from the Channels numbers; a link that bounds them no longer parses and the tab opens unfiltered.
 - [x] Every row of the Posts and Channels Filters menus carries its symbol (views an eye, counts `#`, times a clock); Channels number chips carry `#`.
 - [x] Filter tests: every moment key round-trips, No value, `[start, end)`, `days_followed` not parsing, a Live bound changing its answer when the minute moves. Render tests: the moment editor emits the bound, and a clicked bar's count equals Add's. Each new guard is mutation-tested.
+
+## Comments
+
+- 2026-10-20: implemented on `claude/tb-03-channel-time-bounds` and merged into the integration branch in 42a3f810.
