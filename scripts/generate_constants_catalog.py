@@ -13,7 +13,12 @@ derivation, not a knob, and is left out. ``UNIT_CONVERSIONS`` drops the names
 that are facts about units rather than choices about behaviour.
 
 ``--check`` fails when the committed catalog is stale; the pre-commit hook runs
-it without, and ``tests/deployment/test_constants_catalog.py`` with.
+it without, and ``tests/deployment/test_constants_catalog.py`` with. Both modes
+also fail, naming the module, when a module with a constant has no topic in
+``setting_declarations.CONSTANT_TOPICS`` or a topic names a module with none:
+the same rule as ``test_every_module_with_a_constant_has_a_topic``, moved to
+commit time because a frontend-only change otherwise meets it only in the
+backend suite.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "backend/app/core/constants_catalog.generated.json"
+DECLARATIONS = ROOT / "backend/app/services/setting_declarations.py"
 BACKEND = ROOT / "backend/app"
 FRONTEND = ROOT / "frontend/src"
 
@@ -177,6 +183,36 @@ def frontend_constants() -> list[dict[str, Any]]:
     return found
 
 
+def _constant_topics() -> dict[str, str]:
+    """``CONSTANT_TOPICS``, read as a literal: this script runs without the app's deps."""
+    for node in ast.parse(DECLARATIONS.read_text()).body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "CONSTANT_TOPICS"
+            and node.value is not None
+        ):
+            topics: dict[str, str] = ast.literal_eval(node.value)
+            return topics
+    raise SystemExit(f"CONSTANT_TOPICS not found in {DECLARATIONS.relative_to(ROOT)}")
+
+
+def topic_errors(constants: list[dict[str, Any]]) -> list[str]:
+    modules = {entry["file"] for entry in constants}
+    topics = set(_constant_topics())
+    where = f"{DECLARATIONS.relative_to(ROOT)} CONSTANT_TOPICS"
+    return [
+        *(
+            f"{m} has a constant but no topic; add it to {where}"
+            for m in sorted(modules - topics)
+        ),
+        *(
+            f"{m} is in {where} but has no constant; remove it"
+            for m in sorted(topics - modules)
+        ),
+    ]
+
+
 def render() -> str:
     payload = {
         "generatedBy": "scripts/generate_constants_catalog.py",
@@ -190,6 +226,9 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail if stale")
     args = parser.parse_args()
     expected = render()
+    errors = topic_errors(json.loads(expected)["constants"])
+    for error in errors:
+        sys.stderr.write(error + "\n")
     if args.check:
         if not CATALOG.exists() or CATALOG.read_text() != expected:
             sys.stderr.write(
@@ -197,11 +236,11 @@ def main() -> int:
                 "python3 scripts/generate_constants_catalog.py\n"
             )
             return 1
-        return 0
+        return 1 if errors else 0
     CATALOG.write_text(expected)
     count = len(json.loads(expected)["constants"])
     sys.stdout.write(f"Catalogued {count} constants\n")
-    return 0
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

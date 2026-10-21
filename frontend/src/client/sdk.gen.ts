@@ -1064,7 +1064,7 @@ export const dataListDiscoverProbes = <ThrowOnError extends boolean = true>(opti
  * `enabled` reflects the operator's pause switch — the ordinary job toggle, so
  * pausing is durable and every open tab agrees about it.
  *
- * Ticket 04 added what the lane has *spent* beside what it has left to do. The
+ * The response carries what the lane has *spent* beside what it has left to do. The
  * counts alone say nothing about cost, and the harvest sweep means handles now
  * arrive without anybody asking for them — so an Operator watching a queue
  * drain has no way to tell a healthy crawl from a runaway one until Telegram
@@ -2128,8 +2128,8 @@ export const dataGetLogRoute = <ThrowOnError extends boolean = true>(options: Op
  * `SHARED_LOG_TYPES` is the exception, and it is derived from the tenancy
  * classification rather than listed here: for a type nobody owns a row of,
  * there is no owner for `get_log` to answer to, so the single-row delete is an
- * administrative act like the two sweeps. That covers sync logs from ticket 19
- * and network logs, which have been deletable one row at a time by any
+ * administrative act like the two sweeps. That covers sync logs and network
+ * logs, which have been deletable one row at a time by any
  * authenticated account since the Admin gate went on their *reads* alone.
  */
 export const dataPurgeLogs = <ThrowOnError extends boolean = true>(options?: Options<DataPurgeLogsData, ThrowOnError>) => (options?.client ?? client).delete<DataPurgeLogsResponses, DataPurgeLogsErrors, ThrowOnError, 'data'>({
@@ -2243,14 +2243,14 @@ export const dataPutSetting = <ThrowOnError extends boolean = true>(options: Opt
  *
  * `subject` is the account the document lands under, defaulting to the caller
  * — the same parameter the export takes, so a backup of one person restores
- * as that person instead of as whoever ran it (ticket 28). `all` is refused:
+ * as that person instead of as whoever ran it. `all` is refused:
  * an import writes rows and a document carries no owners, so "everybody" has
  * no meaning here that is not "the caller", which is what leaving it off
  * already says.
  *
  * Importing *for* somebody is a write on their behalf, so the acting Owner is
  * bound for this session before anything is written and every artifact the
- * document restores records who really uploaded it (ticket 27).
+ * document restores records who really uploaded it.
  */
 export const dataImportData = <ThrowOnError extends boolean = true>(options: Options<DataImportDataData, ThrowOnError>) => (options.client ?? client).post<DataImportDataResponses, DataImportDataErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',
@@ -2268,7 +2268,7 @@ export const dataImportData = <ThrowOnError extends boolean = true>(options: Opt
  *
  * One account's export, or the whole deployment's — never truncated.
  *
- * `subject` is ticket 28: absent for the caller's own rows, a user id for that
+ * `subject` is absent for the caller's own rows, a user id for that
  * account's, `all` for everybody's.
  *
  * Streamed rather than built in memory: the payload spans every post and log
@@ -2491,7 +2491,7 @@ export const quotaReadQuotaUsage = <ThrowOnError extends boolean = true>(options
 /**
  * Read My Quota
  *
- * Where the calling account stands on each Budget today (ticket 24).
+ * Where the calling account stands on each Budget today.
  *
  * The fourth checkbox: a User sees per-Budget usage, and the browser turns
  * `status` into the persistent warning. `status` is computed here rather than
@@ -2539,8 +2539,8 @@ export const quotaReadQuotaLimits = <ThrowOnError extends boolean = true>(option
  *
  * Written to the global `quota` settings row through `settings_store`, which
  * is the sole writer of `tg_app_settings` — a second writer here would be the
- * second opinion about where a key belongs that the ticket 06 split exists to
- * remove.
+ * second opinion about where a key belongs that the two-table settings split
+ * exists to remove.
  *
  * A `null` field clears that default, dropping back to `config.py`. It is
  * stored as a null rather than deleted, which `stored_default` reads as
@@ -2623,7 +2623,7 @@ export const quotaLiftQuotaCeiling = <ThrowOnError extends boolean = true>(optio
  * that cannot fail.** This is a POST, and `deps.view_as_allows` does not
  * allowlist it, so a View-as token is refused by `get_current_user` before the
  * handler runs. `test_view_as.py` asserts that at the HTTP level rather than
- * here — which is the assertion that survives ticket 27 widening what an
+ * here — which is the assertion that survives a later widening of what an
  * elevated session may do, where an unreachable branch in this file would
  * silently become the only thing standing between an audit row and a lie.
  */

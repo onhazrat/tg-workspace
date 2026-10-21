@@ -644,7 +644,7 @@ export type CancelSyncJobResponse = {
  * later, and callers render a Telegram web-view link from these three fields so
  * the evidence stays reachable outside our corpus.
  *
- * It was a "sample post" until ticket 01 of discover-signals. The word now
+ * It was once a "sample post". The word now
  * means only the Directory's snapshot of a Channel's *own* Posts, which points
  * the opposite way: a Reference belongs to somebody else's Channel.
  */
@@ -1359,7 +1359,7 @@ export type ChatSessionSubmitRequest = {
  * table. `title` and `messageCount` are derived on write and stripped, so a
  * client round-tripping a list item cannot shadow them.
  *
- * It cannot move the Scope (AW-06). `channels`, `startDate`, `endDate` and
+ * It cannot move the Scope. `channels`, `startDate`, `endDate` and
  * `scope` are dropped by `upsert_chat_session`, which matters more here than
  * it does for a Summary: a chat PUTs its whole session back on every turn, so
  * a settable window meant a conversation held across a Live boundary recorded
@@ -1762,7 +1762,7 @@ export type DirectoryDistributionResponse = {
  * DirectoryEntryResponse
  *
  * One entry for the detail panel, read by handle: the row's measures and
- * the bio, which the list never carries (DIR-03).
+ * the bio, which the list never carries.
  */
 export type DirectoryEntryResponse = {
     /**
@@ -3013,7 +3013,7 @@ export type DiscoverProbeRequest = {
  *
  * Body for `POST /data/discover/reports`.
  *
- * The stateless request with **`window` re-declared as required** (AW-06), the
+ * The stateless request with **`window` re-declared as required**, the
  * same move `DiscoverCandidatesRequest` makes on `channelNames` and for the
  * same kind of reason.
  *
@@ -3174,7 +3174,7 @@ export type DiscoverReportResponse = {
  * Rendered by the scope card instead of live selection state — after the user
  * changes tabs, live state no longer describes where the numbers came from.
  *
- * **It is the shared `FrozenScope`** (AW-06), which is most of what it already
+ * **It is the shared `FrozenScope`**, which is most of what it already
  * was: Discover is the one family that stored the whole filter set from the
  * start, so `keyword`, `forwarded`, `media`, `maxPerChannel`,
  * `maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight
@@ -3182,7 +3182,7 @@ export type DiscoverReportResponse = {
  *
  * One thing is added. `signals` picks which kinds of signal a report
  * describes, not which Posts it reads, so it is a report input rather than
- * part of Scope — which is why it survived AW-07 and the superseded
+ * part of Scope — which is why it survived the Scope cleanup and the superseded
  * `startDate`/`endDate` pair did not. Those were the old spelling of the
  * inherited `start`/`end`, and the scope card reads the inherited pair now.
  */
@@ -7050,7 +7050,7 @@ export type SummaryAttemptResponse = {
 /**
  * SummaryAttemptStartRequest
  *
- * Start an Attempt on a Summary; it runs on the worker (SFR-02).
+ * Start an Attempt on a Summary; it runs on the worker.
  *
  * Every field is optional: left out, the model and AI Key are the last
  * Attempt's, and the temperature is the default Generate always used.
@@ -7270,7 +7270,7 @@ export type SummarySubmitRequest = {
  * a stricter model would break. Declaring the base fields still documents the
  * shape and gives the generated client something better than ``unknown``.
  *
- * **It no longer carries the window or the channels** (AW-05). Those are the
+ * **It no longer carries the window or the channels.** Those are the
  * Scope the text was produced from, frozen at submission; a client that
  * round-trips a list item back through here must not be able to move them,
  * and a field that is not on the request is the version of that rule nobody
@@ -7333,7 +7333,7 @@ export type SyncJobStatusResponse = {
 /**
  * SyncLaneEntry
  *
- * One of the six sync lanes, as an Admin sees it (ticket 12).
+ * One of the six sync lanes, as an Admin sees it.
  */
 export type SyncLaneEntry = {
     /**

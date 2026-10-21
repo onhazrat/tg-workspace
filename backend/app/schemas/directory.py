@@ -704,9 +704,10 @@ class DirectoryAddResponse(BaseModel):
     invalid: int
 
 
+# DIR-03.
 class DirectoryEntryResponse(_DirectoryEntryFields):
     """One entry for the detail panel, read by handle: the row's measures and
-    the bio, which the list never carries (DIR-03)."""
+    the bio, which the list never carries."""
 
     bio: str | None
     #: These three for a `DATA_ADMIN` reader only, absent otherwise (DPF).

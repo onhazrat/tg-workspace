@@ -228,6 +228,7 @@ def list_discover_probes(
     ]
 
 
+# The spend counts are ticket 04.
 @router.get("/discover/probe/queue")
 def get_discover_probe_queue(
     session: SessionDep,
@@ -243,7 +244,7 @@ def get_discover_probe_queue(
     `enabled` reflects the operator's pause switch — the ordinary job toggle, so
     pausing is durable and every open tab agrees about it.
 
-    Ticket 04 added what the lane has *spent* beside what it has left to do. The
+    The response carries what the lane has *spent* beside what it has left to do. The
     counts alone say nothing about cost, and the harvest sweep means handles now
     arrive without anybody asking for them — so an Operator watching a queue
     drain has no way to tell a healthy crawl from a runaway one until Telegram

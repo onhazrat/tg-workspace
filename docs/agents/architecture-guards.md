@@ -17,6 +17,8 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `frontend/src/api/client-split.conform.ts` | the two-client split, **in both directions** | compile error |
 | `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner; storage has exactly four owners; logout and stale-session clear the query cache | test |
 | `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |
+| `backend/tests/api/test_openapi_has_no_ticket_ids.py` | no ticket id (`TB-05`, `ticket 12`) in any OpenAPI `description` or `summary`, which ships as JSDoc in the generated client; ids go in a `#` comment | test |
+| `scripts/generate_constants_catalog.py` | a module with a constant has a `CONSTANT_TOPICS` entry and no entry outlives its constant, at commit time, so a frontend-only change meets it before the backend suite | pre-commit hook |
 | `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
 | `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |
 | `backend/tests/api/test_*_projection.py` | response key sets, no invented `null`s | test |

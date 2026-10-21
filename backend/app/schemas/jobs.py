@@ -57,8 +57,9 @@ class UpdateJobRequest(BaseModel):
     enabled: bool
 
 
+# Ticket 12.
 class SyncLaneEntry(BaseModel):
-    """One of the six sync lanes, as an Admin sees it (ticket 12)."""
+    """One of the six sync lanes, as an Admin sees it."""
 
     model_config = ConfigDict(populate_by_name=True)
 

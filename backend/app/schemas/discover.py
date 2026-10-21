@@ -80,6 +80,7 @@ class ScopeCountsResponse(BaseModel):
     link_posts: int = Field(default=0, alias="linkPosts")
 
 
+# Renamed from "sample post" in discover-signals ticket 01.
 class CandidateReferenceResponse(BaseModel):
     """The Reference: the most recent Post in a followed Channel that named a
     candidate.
@@ -88,7 +89,7 @@ class CandidateReferenceResponse(BaseModel):
     later, and callers render a Telegram web-view link from these three fields so
     the evidence stays reachable outside our corpus.
 
-    It was a "sample post" until ticket 01 of discover-signals. The word now
+    It was once a "sample post". The word now
     means only the Directory's snapshot of a Channel's *own* Posts, which points
     the opposite way: a Reference belongs to somebody else's Channel.
     """
@@ -241,13 +242,14 @@ class DiscoverCandidatesResponse(BaseModel):
     posts_in_scope: int = Field(default=0, alias="postsInScope")
 
 
+# The shared `FrozenScope` is AW-06; `signals` survived AW-07.
 class DiscoverReportScopeResponse(FrozenScope):
     """The frozen inputs a report was generated for.
 
     Rendered by the scope card instead of live selection state — after the user
     changes tabs, live state no longer describes where the numbers came from.
 
-    **It is the shared `FrozenScope`** (AW-06), which is most of what it already
+    **It is the shared `FrozenScope`**, which is most of what it already
     was: Discover is the one family that stored the whole filter set from the
     start, so `keyword`, `forwarded`, `media`, `maxPerChannel`,
     `maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight
@@ -255,7 +257,7 @@ class DiscoverReportScopeResponse(FrozenScope):
 
     One thing is added. `signals` picks which kinds of signal a report
     describes, not which Posts it reads, so it is a report input rather than
-    part of Scope — which is why it survived AW-07 and the superseded
+    part of Scope — which is why it survived the Scope cleanup and the superseded
     `startDate`/`endDate` pair did not. Those were the old spelling of the
     inherited `start`/`end`, and the scope card reads the inherited pair now.
     """
@@ -467,10 +469,11 @@ class DiscoverCandidatesRequest(PostWindowRequest):
         )
 
 
+# `window` required since AW-06.
 class DiscoverReportCreateRequest(DiscoverCandidatesRequest):
     """Body for `POST /data/discover/reports`.
 
-    The stateless request with **`window` re-declared as required** (AW-06), the
+    The stateless request with **`window` re-declared as required**, the
     same move `DiscoverCandidatesRequest` makes on `channelNames` and for the
     same kind of reason.
 

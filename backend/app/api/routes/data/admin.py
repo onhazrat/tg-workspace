@@ -352,6 +352,7 @@ def _resolve_subject(
     return ExportSubject.account(subject_id)
 
 
+# `subject` is ticket 28; recording the acting Owner is ticket 27.
 @router.post("/import", dependencies=ADMIN_ONLY)
 def import_data(
     body: dict[str, Any],
@@ -363,14 +364,14 @@ def import_data(
 
     `subject` is the account the document lands under, defaulting to the caller
     — the same parameter the export takes, so a backup of one person restores
-    as that person instead of as whoever ran it (ticket 28). `all` is refused:
+    as that person instead of as whoever ran it. `all` is refused:
     an import writes rows and a document carries no owners, so "everybody" has
     no meaning here that is not "the caller", which is what leaving it off
     already says.
 
     Importing *for* somebody is a write on their behalf, so the acting Owner is
     bound for this session before anything is written and every artifact the
-    document restores records who really uploaded it (ticket 27).
+    document restores records who really uploaded it.
     """
     resolved = _resolve_subject(session, subject, _current_user)
     if resolved.is_everyone:
@@ -388,6 +389,7 @@ def import_data(
     )
 
 
+# `subject` is ticket 28.
 @router.get("/export", dependencies=ADMIN_ONLY)
 def export_data(
     session: SessionDep,
@@ -396,7 +398,7 @@ def export_data(
 ) -> StreamingResponse:
     """One account's export, or the whole deployment's — never truncated.
 
-    `subject` is ticket 28: absent for the caller's own rows, a user id for that
+    `subject` is absent for the caller's own rows, a user id for that
     account's, `all` for everybody's.
 
     Streamed rather than built in memory: the payload spans every post and log

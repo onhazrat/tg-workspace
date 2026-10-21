@@ -149,6 +149,7 @@ class SummarySubmitRequest(BaseModel):
         return self
 
 
+# The window and channels left this body in AW-05.
 class SummaryUpsertRequest(BaseModel):
     """Body for ``PUT /data/summaries/{id}``.
 
@@ -158,7 +159,7 @@ class SummaryUpsertRequest(BaseModel):
     a stricter model would break. Declaring the base fields still documents the
     shape and gives the generated client something better than ``unknown``.
 
-    **It no longer carries the window or the channels** (AW-05). Those are the
+    **It no longer carries the window or the channels.** Those are the
     Scope the text was produced from, frozen at submission; a client that
     round-trips a list item back through here must not be able to move them,
     and a field that is not on the request is the version of that rule nobody
@@ -231,8 +232,9 @@ class SummaryFailureRequest(BaseModel):
     model: str = Field(max_length=255)
 
 
+# SFR-02.
 class SummaryAttemptStartRequest(BaseModel):
-    """Start an Attempt on a Summary; it runs on the worker (SFR-02).
+    """Start an Attempt on a Summary; it runs on the worker.
 
     Every field is optional: left out, the model and AI Key are the last
     Attempt's, and the temperature is the default Generate always used.

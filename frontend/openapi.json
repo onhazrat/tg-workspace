@@ -2423,7 +2423,7 @@
       "get": {
         "tags": ["data"],
         "summary": "Get Discover Probe Queue",
-        "description": "Probe queue state, for the progress display.\n\nThere is no job id to poll: probing is a scheduled backend job draining a\ndurable queue (`app.jobs.discover_probe`), not something a client starts.\nEverything the UI needs is a count, and the verdicts themselves arrive\nthrough the report read, which already joins the probe table.\n\n`enabled` reflects the operator's pause switch \u2014 the ordinary job toggle, so\npausing is durable and every open tab agrees about it.\n\nTicket 04 added what the lane has *spent* beside what it has left to do. The\ncounts alone say nothing about cost, and the harvest sweep means handles now\narrive without anybody asking for them \u2014 so an Operator watching a queue\ndrain has no way to tell a healthy crawl from a runaway one until Telegram\nsays so. Deployment-wide numbers with no owner: these are a tally, not a\nquota, and reading them charges nobody.",
+        "description": "Probe queue state, for the progress display.\n\nThere is no job id to poll: probing is a scheduled backend job draining a\ndurable queue (`app.jobs.discover_probe`), not something a client starts.\nEverything the UI needs is a count, and the verdicts themselves arrive\nthrough the report read, which already joins the probe table.\n\n`enabled` reflects the operator's pause switch \u2014 the ordinary job toggle, so\npausing is durable and every open tab agrees about it.\n\nThe response carries what the lane has *spent* beside what it has left to do. The\ncounts alone say nothing about cost, and the harvest sweep means handles now\narrive without anybody asking for them \u2014 so an Operator watching a queue\ndrain has no way to tell a healthy crawl from a runaway one until Telegram\nsays so. Deployment-wide numbers with no owner: these are a tally, not a\nquota, and reading them charges nobody.",
         "operationId": "data-get_discover_probe_queue",
         "responses": {
           "200": {
@@ -5443,7 +5443,7 @@
       "delete": {
         "tags": ["data"],
         "summary": "Purge Logs",
-        "description": "Three deletes behind one endpoint, and they are not the same act.\n\n`olderThanDays` and `clearAll` sweep across every account, so both demand\n`DATA_ADMIN`. `logId` removes exactly one row, which is what the delete\nbutton on each of the five Logs tabs calls, for everybody \u2014 gating the whole\nroute turned that into an error toast for any non-Admin, so the gate is per\nbranch. The single-row branch answers to the owner instead.\n\n`SHARED_LOG_TYPES` is the exception, and it is derived from the tenancy\nclassification rather than listed here: for a type nobody owns a row of,\nthere is no owner for `get_log` to answer to, so the single-row delete is an\nadministrative act like the two sweeps. That covers sync logs from ticket 19\nand network logs, which have been deletable one row at a time by any\nauthenticated account since the Admin gate went on their *reads* alone.",
+        "description": "Three deletes behind one endpoint, and they are not the same act.\n\n`olderThanDays` and `clearAll` sweep across every account, so both demand\n`DATA_ADMIN`. `logId` removes exactly one row, which is what the delete\nbutton on each of the five Logs tabs calls, for everybody \u2014 gating the whole\nroute turned that into an error toast for any non-Admin, so the gate is per\nbranch. The single-row branch answers to the owner instead.\n\n`SHARED_LOG_TYPES` is the exception, and it is derived from the tenancy\nclassification rather than listed here: for a type nobody owns a row of,\nthere is no owner for `get_log` to answer to, so the single-row delete is an\nadministrative act like the two sweeps. That covers sync logs and network\nlogs, which have been deletable one row at a time by any\nauthenticated account since the Admin gate went on their *reads* alone.",
         "operationId": "data-purge_logs",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -5716,7 +5716,7 @@
       "post": {
         "tags": ["data"],
         "summary": "Import Data",
-        "description": "Restore a document into one account's rows.\n\n`subject` is the account the document lands under, defaulting to the caller\n\u2014 the same parameter the export takes, so a backup of one person restores\nas that person instead of as whoever ran it (ticket 28). `all` is refused:\nan import writes rows and a document carries no owners, so \"everybody\" has\nno meaning here that is not \"the caller\", which is what leaving it off\nalready says.\n\nImporting *for* somebody is a write on their behalf, so the acting Owner is\nbound for this session before anything is written and every artifact the\ndocument restores records who really uploaded it (ticket 27).",
+        "description": "Restore a document into one account's rows.\n\n`subject` is the account the document lands under, defaulting to the caller\n\u2014 the same parameter the export takes, so a backup of one person restores\nas that person instead of as whoever ran it. `all` is refused:\nan import writes rows and a document carries no owners, so \"everybody\" has\nno meaning here that is not \"the caller\", which is what leaving it off\nalready says.\n\nImporting *for* somebody is a write on their behalf, so the acting Owner is\nbound for this session before anything is written and every artifact the\ndocument restores records who really uploaded it.",
         "operationId": "data-import_data",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -5766,7 +5766,7 @@
       "get": {
         "tags": ["data"],
         "summary": "Export Data",
-        "description": "One account's export, or the whole deployment's \u2014 never truncated.\n\n`subject` is ticket 28: absent for the caller's own rows, a user id for that\naccount's, `all` for everybody's.\n\nStreamed rather than built in memory: the payload spans every post and log\nrow, which is far more than a worker can hold at once. The per-section row\ncounts are computed first and travel in `X-Export-Rows`, because a\n`StreamingResponse` sends its headers before the generator runs \u2014 which is\nwhat makes \"reports the row count before starting\" true for a client that\nhas not parsed a byte of the body yet. The same numbers lead the document,\nfrom the same computation, so the header and the file cannot disagree.",
+        "description": "One account's export, or the whole deployment's \u2014 never truncated.\n\n`subject` is absent for the caller's own rows, a user id for that\naccount's, `all` for everybody's.\n\nStreamed rather than built in memory: the payload spans every post and log\nrow, which is far more than a worker can hold at once. The per-section row\ncounts are computed first and travel in `X-Export-Rows`, because a\n`StreamingResponse` sends its headers before the generator runs \u2014 which is\nwhat makes \"reports the row count before starting\" true for a client that\nhas not parsed a byte of the body yet. The same numbers lead the document,\nfrom the same computation, so the header and the file cannot disagree.",
         "operationId": "data-export_data",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -6311,7 +6311,7 @@
       "get": {
         "tags": ["quota"],
         "summary": "Read My Quota",
-        "description": "Where the calling account stands on each Budget today (ticket 24).\n\nThe fourth checkbox: a User sees per-Budget usage, and the browser turns\n`status` into the persistent warning. `status` is computed here rather than\nin the browser because the derivation is three comparisons in which zero\nmeans opposite things on the two rungs, and getting it wrong client-side\nwould show \"blocked\" to somebody whose work is running.",
+        "description": "Where the calling account stands on each Budget today.\n\nThe fourth checkbox: a User sees per-Budget usage, and the browser turns\n`status` into the persistent warning. `status` is computed here rather than\nin the browser because the derivation is three comparisons in which zero\nmeans opposite things on the two rungs, and getting it wrong client-side\nwould show \"blocked\" to somebody whose work is running.",
         "operationId": "quota-read_my_quota",
         "responses": {
           "200": {
@@ -6349,7 +6349,7 @@
       "put": {
         "tags": ["quota"],
         "summary": "Set Quota Defaults",
-        "description": "Set the deployment-wide default allowance and ceiling per Budget.\n\nWritten to the global `quota` settings row through `settings_store`, which\nis the sole writer of `tg_app_settings` \u2014 a second writer here would be the\nsecond opinion about where a key belongs that the ticket 06 split exists to\nremove.\n\nA `null` field clears that default, dropping back to `config.py`. It is\nstored as a null rather than deleted, which `stored_default` reads as\nabsent either way.",
+        "description": "Set the deployment-wide default allowance and ceiling per Budget.\n\nWritten to the global `quota` settings row through `settings_store`, which\nis the sole writer of `tg_app_settings` \u2014 a second writer here would be the\nsecond opinion about where a key belongs that the two-table settings split\nexists to remove.\n\nA `null` field clears that default, dropping back to `config.py`. It is\nstored as a null rather than deleted, which `stored_default` reads as\nabsent either way.",
         "operationId": "quota-set_quota_defaults",
         "requestBody": {
           "content": {
@@ -6470,7 +6470,7 @@
       "post": {
         "tags": ["view-as"],
         "summary": "Start View As",
-        "description": "Exchange the caller's token for a read-only look at one account.\n\nRefused for a target that holds `VIEW_AS` themselves \u2014 the ticket's \"viewing\nas another holder of the permission is refused\", and the reason is that a\npeer's account is the one place the permission could be used to acquire more\nof itself. Refused for the caller's own account too: a View-as session that\nis read-only over your *own* data is a downgrade nobody asked for, and it\nwould be indistinguishable in the audit trail from the real thing.\n\nBoth refusals, and \"no such account\", answer with **one message**. A caller\nholding `VIEW_AS` also holds `USERS_READ` and can already list every\naccount, so there is no enumeration to protect \u2014 but which accounts hold\nwhich permissions is a different fact, and this route is not the place to\npublish it.\n\n**Nesting needs no check of its own here, and adding one would be a guard\nthat cannot fail.** This is a POST, and `deps.view_as_allows` does not\nallowlist it, so a View-as token is refused by `get_current_user` before the\nhandler runs. `test_view_as.py` asserts that at the HTTP level rather than\nhere \u2014 which is the assertion that survives ticket 27 widening what an\nelevated session may do, where an unreachable branch in this file would\nsilently become the only thing standing between an audit row and a lie.",
+        "description": "Exchange the caller's token for a read-only look at one account.\n\nRefused for a target that holds `VIEW_AS` themselves \u2014 the ticket's \"viewing\nas another holder of the permission is refused\", and the reason is that a\npeer's account is the one place the permission could be used to acquire more\nof itself. Refused for the caller's own account too: a View-as session that\nis read-only over your *own* data is a downgrade nobody asked for, and it\nwould be indistinguishable in the audit trail from the real thing.\n\nBoth refusals, and \"no such account\", answer with **one message**. A caller\nholding `VIEW_AS` also holds `USERS_READ` and can already list every\naccount, so there is no enumeration to protect \u2014 but which accounts hold\nwhich permissions is a different fact, and this route is not the place to\npublish it.\n\n**Nesting needs no check of its own here, and adding one would be a guard\nthat cannot fail.** This is a POST, and `deps.view_as_allows` does not\nallowlist it, so a View-as token is refused by `get_current_user` before the\nhandler runs. `test_view_as.py` asserts that at the HTTP level rather than\nhere \u2014 which is the assertion that survives a later widening of what an\nelevated session may do, where an unreachable branch in this file would\nsilently become the only thing standing between an audit row and a lie.",
         "operationId": "view-as-start_view_as",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -7261,7 +7261,7 @@
         "type": "object",
         "required": ["channelName", "postId", "timestamp"],
         "title": "CandidateReferenceResponse",
-        "description": "The Reference: the most recent Post in a followed Channel that named a\ncandidate.\n\nA pointer rather than the post body on purpose: retention may prune the post\nlater, and callers render a Telegram web-view link from these three fields so\nthe evidence stays reachable outside our corpus.\n\nIt was a \"sample post\" until ticket 01 of discover-signals. The word now\nmeans only the Directory's snapshot of a Channel's *own* Posts, which points\nthe opposite way: a Reference belongs to somebody else's Channel."
+        "description": "The Reference: the most recent Post in a followed Channel that named a\ncandidate.\n\nA pointer rather than the post body on purpose: retention may prune the post\nlater, and callers render a Telegram web-view link from these three fields so\nthe evidence stays reachable outside our corpus.\n\nIt was once a \"sample post\". The word now\nmeans only the Directory's snapshot of a Channel's *own* Posts, which points\nthe opposite way: a Reference belongs to somebody else's Channel."
       },
       "CandidateSeenInResponse": {
         "properties": {
@@ -7901,7 +7901,7 @@
         "additionalProperties": true,
         "type": "object",
         "title": "ChatSessionUpsertRequest",
-        "description": "Body for `PUT /data/chat-sessions/{id}`.\n\nPermissive like the summary one: unrecognised keys go to `extra`, an\nexplicit null removes an `extra` key, and `messages` routes to the payload\ntable. `title` and `messageCount` are derived on write and stripped, so a\nclient round-tripping a list item cannot shadow them.\n\nIt cannot move the Scope (AW-06). `channels`, `startDate`, `endDate` and\n`scope` are dropped by `upsert_chat_session`, which matters more here than\nit does for a Summary: a chat PUTs its whole session back on every turn, so\na settable window meant a conversation held across a Live boundary recorded\nwhichever slice its final message landed in."
+        "description": "Body for `PUT /data/chat-sessions/{id}`.\n\nPermissive like the summary one: unrecognised keys go to `extra`, an\nexplicit null removes an `extra` key, and `messages` routes to the payload\ntable. `title` and `messageCount` are derived on write and stripped, so a\nclient round-tripping a list item cannot shadow them.\n\nIt cannot move the Scope. `channels`, `startDate`, `endDate` and\n`scope` are dropped by `upsert_chat_session`, which matters more here than\nit does for a Summary: a chat PUTs its whole session back on every turn, so\na settable window meant a conversation held across a Live boundary recorded\nwhichever slice its final message landed in."
       },
       "ClearTableResponse": {
         "properties": {
@@ -8511,7 +8511,7 @@
           "bio"
         ],
         "title": "DirectoryEntryResponse",
-        "description": "One entry for the detail panel, read by handle: the row's measures and\nthe bio, which the list never carries (DIR-03)."
+        "description": "One entry for the detail panel, read by handle: the row's measures and\nthe bio, which the list never carries."
       },
       "DirectoryFilterAtom": {
         "properties": {
@@ -9981,7 +9981,7 @@
         "type": "object",
         "required": ["channelNames", "window"],
         "title": "DiscoverReportCreateRequest",
-        "description": "Body for `POST /data/discover/reports`.\n\nThe stateless request with **`window` re-declared as required** (AW-06), the\nsame move `DiscoverCandidatesRequest` makes on `channelNames` and for the\nsame kind of reason.\n\nOmitting a window means \"both sides open\", which is a newest-first pass over\nthe corpus. That is a perfectly good thing to *compute* \u2014 `/candidates` does\nit and forgets \u2014 and it is not a Scope anybody selected, so it is not\nsomething an Artifact can record. A saved report claims to describe which\nPosts produced it, and \"all of them, at some unrecorded moment\" is not that\nclaim.\n\nA subclass rather than a check in the handler so the refusal is a 422 naming\nthe field, produced before the handler runs, exactly as it is for every\nother submission."
+        "description": "Body for `POST /data/discover/reports`.\n\nThe stateless request with **`window` re-declared as required**, the\nsame move `DiscoverCandidatesRequest` makes on `channelNames` and for the\nsame kind of reason.\n\nOmitting a window means \"both sides open\", which is a newest-first pass over\nthe corpus. That is a perfectly good thing to *compute* \u2014 `/candidates` does\nit and forgets \u2014 and it is not a Scope anybody selected, so it is not\nsomething an Artifact can record. A saved report claims to describe which\nPosts produced it, and \"all of them, at some unrecorded moment\" is not that\nclaim.\n\nA subclass rather than a check in the handler so the refusal is a 422 naming\nthe field, produced before the handler runs, exactly as it is for every\nother submission."
       },
       "DiscoverReportFlagsRequest": {
         "properties": {
@@ -10202,7 +10202,7 @@
         "type": "object",
         "required": ["start", "end"],
         "title": "DiscoverReportScopeResponse",
-        "description": "The frozen inputs a report was generated for.\n\nRendered by the scope card instead of live selection state \u2014 after the user\nchanges tabs, live state no longer describes where the numbers came from.\n\n**It is the shared `FrozenScope`** (AW-06), which is most of what it already\nwas: Discover is the one family that stored the whole filter set from the\nstart, so `keyword`, `forwarded`, `media`, `maxPerChannel`,\n`maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight\noff the base model under the names they already had.\n\nOne thing is added. `signals` picks which kinds of signal a report\ndescribes, not which Posts it reads, so it is a report input rather than\npart of Scope \u2014 which is why it survived AW-07 and the superseded\n`startDate`/`endDate` pair did not. Those were the old spelling of the\ninherited `start`/`end`, and the scope card reads the inherited pair now."
+        "description": "The frozen inputs a report was generated for.\n\nRendered by the scope card instead of live selection state \u2014 after the user\nchanges tabs, live state no longer describes where the numbers came from.\n\n**It is the shared `FrozenScope`**, which is most of what it already\nwas: Discover is the one family that stored the whole filter set from the\nstart, so `keyword`, `forwarded`, `media`, `maxPerChannel`,\n`maxPerChannelMode`, `seed`, `channels` and `scopedPostCount` come straight\noff the base model under the names they already had.\n\nOne thing is added. `signals` picks which kinds of signal a report\ndescribes, not which Posts it reads, so it is a report input rather than\npart of Scope \u2014 which is why it survived the Scope cleanup and the superseded\n`startDate`/`endDate` pair did not. Those were the old spelling of the\ninherited `start`/`end`, and the scope card reads the inherited pair now."
       },
       "DiscoveredViaPayload": {
         "properties": {
@@ -13884,7 +13884,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "SummaryAttemptStartRequest",
-        "description": "Start an Attempt on a Summary; it runs on the worker (SFR-02).\n\nEvery field is optional: left out, the model and AI Key are the last\nAttempt's, and the temperature is the default Generate always used."
+        "description": "Start an Attempt on a Summary; it runs on the worker.\n\nEvery field is optional: left out, the model and AI Key are the last\nAttempt's, and the temperature is the default Generate always used."
       },
       "SummaryDerivation": {
         "properties": {
@@ -14108,7 +14108,7 @@
         "additionalProperties": true,
         "type": "object",
         "title": "SummaryUpsertRequest",
-        "description": "Body for ``PUT /data/summaries/{id}``.\n\nIntentionally permissive. The service accepts both camelCase and snake_case\nfor the base columns, routes anything unrecognised into ``extra``, and\ntreats an explicit ``null`` as \"remove this key from ``extra``\" \u2014 behaviour\na stricter model would break. Declaring the base fields still documents the\nshape and gives the generated client something better than ``unknown``.\n\n**It no longer carries the window or the channels** (AW-05). Those are the\nScope the text was produced from, frozen at submission; a client that\nround-trips a list item back through here must not be able to move them,\nand a field that is not on the request is the version of that rule nobody\nhas to remember."
+        "description": "Body for ``PUT /data/summaries/{id}``.\n\nIntentionally permissive. The service accepts both camelCase and snake_case\nfor the base columns, routes anything unrecognised into ``extra``, and\ntreats an explicit ``null`` as \"remove this key from ``extra``\" \u2014 behaviour\na stricter model would break. Declaring the base fields still documents the\nshape and gives the generated client something better than ``unknown``.\n\n**It no longer carries the window or the channels.** Those are the\nScope the text was produced from, frozen at submission; a client that\nround-trips a list item back through here must not be able to move them,\nand a field that is not on the request is the version of that rule nobody\nhas to remember."
       },
       "SyncJobStatusResponse": {
         "properties": {
@@ -14141,7 +14141,7 @@
         "type": "object",
         "required": ["lane", "budget", "tier", "queued", "paused"],
         "title": "SyncLaneEntry",
-        "description": "One of the six sync lanes, as an Admin sees it (ticket 12)."
+        "description": "One of the six sync lanes, as an Admin sees it."
       },
       "SyncLaneListResponse": {
         "properties": {
