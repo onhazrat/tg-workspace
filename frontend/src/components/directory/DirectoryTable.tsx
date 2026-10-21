@@ -391,6 +391,7 @@ function ChannelCell({ row }: { row: Row }) {
         }}
         className="h-7 w-7 shrink-0"
         textClassName="text-xs"
+        view="image"
       />
       <div className="min-w-0">
         <div dir="auto" className="truncate font-semibold">
@@ -699,6 +700,8 @@ function DirectoryCards({
         <li
           key={r.handle}
           data-testid={`directory-card-${r.handle}`}
+          // The keyboard's row, and where the photo viewer lands on close.
+          data-directory-handle={r.handle}
           onClick={() => onOpen(r.handle)}
           className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${ticks.has(r.handle) ? "bg-blue-500/5" : ""} ${r.dismissed ? "opacity-50" : ""}`}
         >

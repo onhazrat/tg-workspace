@@ -4,8 +4,14 @@
  * the header's partial tick, sorting from a header, Follow, the Telegram web
  * view link and the pages.
  */
-import { afterEach, describe, expect, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, mock, test } from "bun:test"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import type { ComponentProps } from "react"
 import type { DirectoryRowResponse } from "@/client"
 import type { ColumnKey } from "@/lib/directory/directory-columns"
@@ -456,5 +462,50 @@ describe("as cards on a phone (DFP-02)", () => {
     expect(calls.ticks).toEqual([["beta", "gamma"]])
     fireEvent.click(screen.getByRole("button", { name: "Next page" }))
     expect(calls.page).toEqual([1])
+  })
+})
+
+describe.each([
+  ["a row", false, "directory-row"],
+  ["a phone card", true, "directory-card"],
+])("the photo viewer from %s (KM-01)", (_, cards, testid) => {
+  // A public address, which the avatar shows as it is, with no fetch.
+  const photo = (h: string) => `https://photos.test/${h}.jpg`
+  const pictured = () => [
+    row("alpha", { photoUrl: photo("alpha") }),
+    row("beta"),
+    row("gamma", { photoUrl: photo("gamma") }),
+  ]
+  const caption = () => screen.getByTestId("photo-viewer-label").textContent
+
+  test("the avatar opens it, steps over rows without a photo, and leaves the page at the last row viewed", async () => {
+    const calls = mount({ cards, rows: pictured() })
+    const avatar = await screen.findByRole("button", {
+      name: "View alpha name's photo",
+    })
+    const gamma = screen.getByTestId(`${testid}-gamma`)
+    gamma.scrollIntoView = mock()
+
+    fireEvent.click(avatar)
+    expect(calls.open).toEqual([])
+    expect(caption()).toStartWith("alpha name · 1 / 2")
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(caption()).toStartWith("gamma name · 2 / 2")
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }))
+    await waitFor(() => expect(screen.queryByTestId("photo-viewer")).toBeNull())
+    expect(gamma.scrollIntoView).toHaveBeenCalledTimes(1)
+
+    // The rest of the row still opens the panel.
+    fireEvent.click(screen.getByText("gamma name"))
+    expect(calls.open).toEqual(["gamma"])
+  })
+
+  test("the avatar's button never shrinks beside a long name", async () => {
+    mount({ cards, rows: pictured() })
+    const avatar = await screen.findByRole("button", {
+      name: "View alpha name's photo",
+    })
+    expect(avatar.className.split(" ")).toContain("shrink-0")
   })
 })

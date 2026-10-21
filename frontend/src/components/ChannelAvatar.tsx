@@ -1,5 +1,5 @@
 import { ZoomIn } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import {
   GALLERY_CAPTION_ATTR,
@@ -29,6 +29,7 @@ export function ChannelAvatar({
   const [src, setSrc] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [viewing, setViewing] = useState(false)
+  const imgRef = useRef<HTMLImageElement>(null)
 
   const gradientClass = getGradientFromName(channel.displayName || channel.name)
   const fallbackLetter =
@@ -59,6 +60,7 @@ export function ChannelAvatar({
     const title = channel.displayName || channel.name
     const img = (
       <img
+        ref={imgRef}
         src={src}
         alt={title}
         {...(view ? { [GALLERY_CAPTION_ATTR]: title } : {})}
@@ -91,13 +93,14 @@ export function ChannelAvatar({
             </button>
           </>
         ) : (
-          // Raised over a compact card's selection layer.
+          // Raised over a compact card's selection layer. Never shrunk in a
+          // flex row, where the photo's max-width: 100% would follow it down.
           <button
             type="button"
             aria-label={label}
             {...shortcut("p")}
             onClick={open}
-            className="relative z-20 block cursor-zoom-in rounded-full"
+            className="relative z-20 block shrink-0 cursor-zoom-in rounded-full"
           >
             {img}
           </button>
@@ -107,6 +110,7 @@ export function ChannelAvatar({
           open={viewing}
           onOpenChange={setViewing}
           title="Channel photo"
+          from={imgRef}
         />
       </>
     )

@@ -380,6 +380,36 @@ describe("a gallery of its own (SUMTAB-05)", () => {
     expect(label()).toContain("Strip x · 1 / 2")
   })
 
+  test("opens on the photo clicked, not the first with its address", () => {
+    // A Directory row and its panel show one photo; the panel's is a gallery
+    // of its own, and the row's comes first on the page.
+    const panel = document.createElement("div")
+    panel.id = "strip"
+    panel.setAttribute(GALLERY_ATTR, "panel")
+    panel.innerHTML = `<img src="blob:b" data-gallery-caption="Panel b">`
+    document.body.appendChild(panel)
+    render(
+      <PhotoViewer
+        start="blob:b"
+        from={panel.querySelector("img") as HTMLImageElement}
+        onClose={() => {}}
+      />,
+    )
+    expect(label()).toStartWith("Panel b · ")
+    expect(label()).not.toContain(" / ")
+    expect(screen.queryByLabelText("Next photo")).toBeNull()
+    cleanup()
+
+    render(
+      <PhotoViewer
+        start="blob:b"
+        from={card("b").querySelector("img") as HTMLImageElement}
+        onClose={() => {}}
+      />,
+    )
+    expect(label()).toContain("Chan b · 2 / 3")
+  })
+
   test("an action over the photo on screen gets that photo and a way to close", () => {
     strip()
     const onClose = mock()

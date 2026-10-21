@@ -20,6 +20,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import {
   createContext,
   type ReactNode,
+  type RefObject,
   useContext,
   useEffect,
   useRef,
@@ -72,9 +73,15 @@ export function PhotoViewerDialog({
   onOpenChange,
   title = "Post image",
   action,
+  from,
 }: {
   /** The photo clicked: its `src` on the card. */
   start: string
+  /**
+   * The photo clicked itself, where another photo on the page shares its
+   * address (a Directory row and its panel); unset, the first with `start`.
+   */
+  from?: RefObject<HTMLImageElement | null>
   open: boolean
   onOpenChange: (open: boolean) => void
   /** The dialog's accessible title. */
@@ -82,21 +89,27 @@ export function PhotoViewerDialog({
   action?: PhotoAction
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        // Closing moves the feed to the last photo's Post; focus returning to
-        // the first photo's button would scroll it straight back.
-        onCloseAutoFocus={(e) => e.preventDefault()}
-        className={`${BOX} block max-w-none sm:max-w-none overflow-hidden border-0 bg-transparent p-0 shadow-none [&>[data-slot=dialog-close]]:rounded-full [&>[data-slot=dialog-close]]:bg-black/50 [&>[data-slot=dialog-close]]:p-2 [&>[data-slot=dialog-close]]:text-white [&:has([data-controls=hidden])>[data-slot=dialog-close]]:hidden`}
-      >
-        <DialogTitle className="sr-only">{title}</DialogTitle>
-        <PhotoViewer
-          start={start}
-          onClose={() => onOpenChange(false)}
-          action={action}
-        />
-      </DialogContent>
-    </Dialog>
+    // React carries a portal's clicks up to whatever holds the photo, so a
+    // click on the viewer would also open a Directory row's panel. An empty
+    // `contents` span adds no box to the row it sits in.
+    <span className="contents" onClick={(e) => e.stopPropagation()}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          // Closing moves the feed to the last photo's Post; focus returning to
+          // the first photo's button would scroll it straight back.
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          className={`${BOX} block max-w-none sm:max-w-none overflow-hidden border-0 bg-transparent p-0 shadow-none [&>[data-slot=dialog-close]]:rounded-full [&>[data-slot=dialog-close]]:bg-black/50 [&>[data-slot=dialog-close]]:p-2 [&>[data-slot=dialog-close]]:text-white [&:has([data-controls=hidden])>[data-slot=dialog-close]]:hidden`}
+        >
+          <DialogTitle className="sr-only">{title}</DialogTitle>
+          <PhotoViewer
+            start={start}
+            from={from?.current ?? undefined}
+            onClose={() => onOpenChange(false)}
+            action={action}
+          />
+        </DialogContent>
+      </Dialog>
+    </span>
   )
 }
 
@@ -118,20 +131,23 @@ export type PhotoAction = (photo: GalleryPhoto, close: () => void) => ReactNode
  * Every photo the page has loaded in the start photo's gallery, in page order,
  * read off the page once.
  */
-function loadedPhotos(start: string): GalleryPhoto[] {
+function loadedPhotos(start: string, clicked?: Element): GalleryPhoto[] {
   const all = Array.from(
     document.querySelectorAll<HTMLImageElement>(`img[${GALLERY_CAPTION_ATTR}]`),
   )
   const galleryOf = (el: Element) => el.closest(`[${GALLERY_ATTR}]`)
-  const from = all.find((el) => el.src === start)
+  const from = clicked ?? all.find((el) => el.src === start)
   const gallery = from ? galleryOf(from) : null
   return all
     .filter((el) => galleryOf(el) === gallery)
     .map((el) => ({
       src: el.src,
       caption: el.getAttribute(GALLERY_CAPTION_ATTR) ?? "",
-      // A Post's card in the feed, or a Channel's card or tile in the grid.
-      card: el.closest<HTMLElement>("[data-post-key], [data-channel-name]"),
+      // A Post's card in the feed, a Channel's card or tile in the grid, or a
+      // Directory row or phone card.
+      card: el.closest<HTMLElement>(
+        "[data-post-key], [data-channel-name], [data-directory-handle]",
+      ),
       rtl: el.closest("[dir]")?.getAttribute("dir") === "rtl",
     }))
 }
@@ -167,14 +183,17 @@ export function PhotoViewer({
   start,
   onClose,
   action,
+  from,
 }: {
   start: string
   onClose: () => void
   action?: PhotoAction
+  /** The photo clicked, as `PhotoViewerDialog`'s `from`. */
+  from?: HTMLImageElement
 }) {
   // The gallery and the position change together, so they never disagree.
   const [view, setView] = useState<Gallery>(() => {
-    const photos = loadedPhotos(start)
+    const photos = loadedPhotos(start, from)
     return {
       photos,
       at: Math.max(
