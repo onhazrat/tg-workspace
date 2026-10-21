@@ -1201,6 +1201,14 @@
       "value": 100
     },
     {
+      "comment": "How long a `g` or a count waits before its next keys show, so a quick gt never flashes them.",
+      "expression": "300",
+      "file": "frontend/src/components/keyboard/KeyHelp.tsx",
+      "line": 18,
+      "name": "HINT_DELAY_MS",
+      "value": 300
+    },
+    {
       "comment": "A card hidden under the workspace's sticky header is not \"on screen\".",
       "expression": "80",
       "file": "frontend/src/components/post-card/FeedKeyboard.tsx",

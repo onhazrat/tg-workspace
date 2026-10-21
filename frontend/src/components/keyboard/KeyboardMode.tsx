@@ -21,6 +21,7 @@ import {
   useHelp,
   useKeyboardMode,
 } from "@/lib/keyboard/mode"
+import { CornerHelp } from "./KeyHelp"
 import { mountedList } from "./useKeyboardList"
 
 /** The workspace's tab strip, as the keys use it. */
@@ -160,7 +161,12 @@ export function KeyboardMode({ ops }: { ops: WorkspaceKeyOps }) {
     }
   }, [])
 
-  return <Announcer />
+  return (
+    <>
+      <CornerHelp />
+      <Announcer />
+    </>
+  )
 }
 
 /** Each move, said politely to a screen reader: "@name, 6 of 20". */

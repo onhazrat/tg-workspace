@@ -54,26 +54,30 @@ export const commandKeyFor = (platform: string | undefined): "Cmd" | "Ctrl" =>
  * alike — so "Run Highlighted Command / Enter" read as an app-wide binding
  * that silently did nothing.
  *
- * Only two shortcuts are genuinely global: the palette (`useCommandPalette`)
- * and this dialog (`App`). The list is short because the app is, not because
- * the list is incomplete.
+ * Three are global: the palette (`useCommandPalette`), `?` and `\`
+ * (keyboard mode's engine). Keyboard mode's own keys come from its key list
+ * (`lib/keyboard/key-list.ts`), and the full list puts them first.
  */
 export function shortcutGroups(commandKey: string) {
   return [
     {
       heading: "Anywhere",
       bindings: [
-        { label: "Command Palette", keys: `${commandKey}+Shift+P` },
-        { label: "Keyboard Shortcuts", keys: "?" },
+        { label: "Command palette", keys: `${commandKey}+Shift+P` },
+        {
+          label: "These keys: in the corner, all of them, or none",
+          keys: "?",
+        },
+        { label: "Keyboard mode on or off", keys: "\\" },
       ],
     },
     {
       heading: "In the command palette",
       bindings: [
-        { label: "Run Highlighted Command", keys: "Enter" },
-        { label: "Alternate Run Command", keys: `${commandKey}+Enter` },
-        { label: "Back / Close Sub-View", keys: "Esc" },
-        { label: "Parent Sub-View", keys: "Backspace (empty)" },
+        { label: "Run the highlighted command", keys: "Enter" },
+        { label: "Run it the other way", keys: `${commandKey}+Enter` },
+        { label: "Back, or close the sub-view", keys: "Esc" },
+        { label: "The parent sub-view", keys: "Backspace (empty)" },
       ],
     },
   ]

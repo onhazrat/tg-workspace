@@ -1,5 +1,7 @@
 import { AlertCircle, AlertTriangle } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
+import { goKeys, listKeys, WORKSPACE_KEYS } from "@/lib/keyboard/key-list"
+import { useShownList } from "@/lib/keyboard/mode"
 import type { TabType } from "@/types"
 import { RelativeTime } from "../RelativeTime"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog"
@@ -87,6 +89,13 @@ export function RateLimitBanner() {
   )
 }
 
+/** The key list's rows as the full list's, each label in sentence case. */
+const bindings = (rows: readonly (readonly [string, string])[]) =>
+  rows.map(([keys, what]) => ({
+    keys,
+    label: what[0].toUpperCase() + what.slice(1),
+  }))
+
 export function ShortcutsDialog({
   open,
   onOpenChange,
@@ -96,16 +105,39 @@ export function ShortcutsDialog({
   onOpenChange: (open: boolean) => void
   commandKey: string
 }) {
+  const shown = useShownList()
+  const groups = [
+    ...(shown
+      ? [
+          {
+            heading: "This tab, in keyboard mode",
+            bindings: bindings(listKeys(shown.list, shown.carried)),
+          },
+        ]
+      : []),
+    {
+      heading: "Every tab, in keyboard mode",
+      bindings: bindings(WORKSPACE_KEYS),
+    },
+    { heading: "Go to a tab, in keyboard mode", bindings: bindings(goKeys()) },
+    ...shortcutGroups(commandKey),
+  ]
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-xl">
+      <DialogContent
+        data-shortcuts-list
+        // Below the header, so the buttons that close it stay in reach, and
+        // scrolling within the window: the keys run longer than a laptop.
+        className="top-[calc(50%+2.5rem)] max-h-[calc(100vh-8rem)] overflow-y-auto border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-xl"
+      >
         <DialogHeader className="border-b border-app-ink/10 p-4">
-          <DialogTitle className="text-lg font-bold tracking-tight uppercase">
-            Keyboard Shortcuts
+          <DialogTitle className="text-lg font-bold tracking-tight">
+            Keyboard shortcuts
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 p-4 text-xs font-mono uppercase tracking-widest">
-          {shortcutGroups(commandKey).map((group) => (
+        {/* Sentence case, keys as typed: a capital means Shift. */}
+        <div className="space-y-4 p-4 text-xs font-mono">
+          {groups.map((group) => (
             <section key={group.heading} className="space-y-2">
               <h3 className="text-[10px] text-app-ink/50">{group.heading}</h3>
               {group.bindings.map((binding) => (

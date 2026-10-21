@@ -183,10 +183,8 @@ export const afterCount = (count: string, g: boolean): Row[] =>
         ["gT", `${count} tabs back`],
       ]
 
-/** The keys that work on every tab in keyboard mode, for the full list. */
+/** The keys on every tab in keyboard mode, for the full list; `\` and `?` work anywhere. */
 export const WORKSPACE_KEYS: Row[] = [
-  ["\\", "keyboard mode on or off"],
-  ["?", "the keys: in the corner, all of them, or none"],
   ["/", "search this tab"],
   ["Esc", "in a field: back to the keys"],
 ]
