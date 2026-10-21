@@ -25,6 +25,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { useVariant } from "../directory-photo-prototype/variant"
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog"
 import {
   clampView,
@@ -72,9 +73,16 @@ export function PhotoViewerDialog({
   onOpenChange,
   title = "Post image",
   action,
+  from,
 }: {
   /** The photo clicked: its `src` on the card. */
   start: string
+  /**
+   * The clicked photo itself, for a photo whose `src` another photo on the
+   * page shares (a Directory row and its panel); unset, the first with
+   * `start` is taken.
+   */
+  from?: React.RefObject<HTMLImageElement | null>
   open: boolean
   onOpenChange: (open: boolean) => void
   /** The dialog's accessible title. */
@@ -92,6 +100,7 @@ export function PhotoViewerDialog({
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <PhotoViewer
           start={start}
+          from={from?.current ?? undefined}
           onClose={() => onOpenChange(false)}
           action={action}
         />
@@ -118,20 +127,23 @@ export type PhotoAction = (photo: GalleryPhoto, close: () => void) => ReactNode
  * Every photo the page has loaded in the start photo's gallery, in page order,
  * read off the page once.
  */
-function loadedPhotos(start: string): GalleryPhoto[] {
+function loadedPhotos(start: string, clicked?: Element): GalleryPhoto[] {
   const all = Array.from(
     document.querySelectorAll<HTMLImageElement>(`img[${GALLERY_CAPTION_ATTR}]`),
   )
   const galleryOf = (el: Element) => el.closest(`[${GALLERY_ATTR}]`)
-  const from = all.find((el) => el.src === start)
+  const from = clicked ?? all.find((el) => el.src === start)
   const gallery = from ? galleryOf(from) : null
   return all
     .filter((el) => galleryOf(el) === gallery)
     .map((el) => ({
       src: el.src,
       caption: el.getAttribute(GALLERY_CAPTION_ATTR) ?? "",
-      // A Post's card in the feed, or a Channel's card or tile in the grid.
-      card: el.closest<HTMLElement>("[data-post-key], [data-channel-name]"),
+      // A Post's card in the feed, a Channel's card or tile in the grid, or a
+      // Directory row.
+      card: el.closest<HTMLElement>(
+        "[data-post-key], [data-channel-name], [data-directory-handle]",
+      ),
       rtl: el.closest("[dir]")?.getAttribute("dir") === "rtl",
     }))
 }
@@ -167,14 +179,16 @@ export function PhotoViewer({
   start,
   onClose,
   action,
+  from,
 }: {
   start: string
   onClose: () => void
   action?: PhotoAction
+  from?: HTMLImageElement
 }) {
   // The gallery and the position change together, so they never disagree.
   const [view, setView] = useState<Gallery>(() => {
-    const photos = loadedPhotos(start)
+    const photos = loadedPhotos(start, from)
     return {
       photos,
       at: Math.max(
@@ -217,10 +231,14 @@ export function PhotoViewer({
   const right = rtl ? -1 : 1
   const atEnd = (d: number) => (d < 0 ? at === 0 : at === photos.length - 1)
 
+  // PROTOTYPE: h / l as well as the arrows in variant A.
+  const vim = useVariant() !== "0"
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") step(-right)
-      if (e.key === "ArrowRight") step(right)
+      if (e.key === "ArrowLeft" || (vim && e.key === "h")) step(-right)
+      if (e.key === "ArrowRight" || (vim && e.key === "l")) step(right)
+      // p opens the viewer from keyboard mode, so it closes it too.
+      if (vim && e.key === "p" && !e.repeat) onClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)

@@ -116,13 +116,24 @@ const ToggleAction: React.FC<{
   disabled?: boolean
   onClick: () => void
   children: React.ReactNode
-}> = ({ active, labels, activeClassName, disabled, onClick, children }) => {
+  /** PROTOTYPE (E): the key keyboard mode presses it with. */
+  shortcut?: string
+}> = ({
+  active,
+  labels,
+  activeClassName,
+  disabled,
+  onClick,
+  children,
+  shortcut,
+}) => {
   const label = active ? labels[1] : labels[0]
   return (
     <TgIconButton
       aria-label={label}
       tooltip={label}
       data-active={active || undefined}
+      data-shortcut={shortcut}
       disabled={disabled}
       onClick={onClick}
       className={active ? activeClassName : undefined}
@@ -158,6 +169,7 @@ export const ArtifactCardActions: React.FC<{
     <ToggleAction
       active={Boolean(artifact.isStarred)}
       labels={["Star item", "Unstar item"]}
+      shortcut="*"
       activeClassName="bg-amber-500/10 text-amber-500"
       onClick={() => onToggleStar(artifact)}
     >
@@ -166,6 +178,7 @@ export const ArtifactCardActions: React.FC<{
     <ToggleAction
       active={Boolean(artifact.note)}
       labels={["Add note", "Edit note"]}
+      shortcut="n"
       onClick={() => onEditNote(artifact)}
     >
       <StickyNote size={14} />

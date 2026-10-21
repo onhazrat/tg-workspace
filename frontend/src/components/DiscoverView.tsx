@@ -1,6 +1,16 @@
+import { Keyboard } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useMemo, useState } from "react"
+import {
+  DirectoryKeyHelp,
+  useDirectoryKeyboard,
+} from "@/components/directory/DirectoryKeyboard"
+import {
+  since,
+  useKeyboardMode,
+  useVariant,
+} from "@/components/directory-photo-prototype/variant"
 import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
 import { DiscoverCandidatePanel } from "@/components/discover/DiscoverCandidatePanel"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
@@ -16,6 +26,7 @@ import {
   followConfirmDescription,
 } from "@/components/discover/DiscoverViewSections"
 import { useDiscoverFollowJob } from "@/components/discover/useDiscoverFollowJob"
+import { pillClass } from "@/components/PostFilterParts"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useDiscoverReportParam } from "@/hooks/useArtifactParams"
 import {
@@ -24,6 +35,7 @@ import {
 } from "@/hooks/useDiscover"
 import { useDiscoverProbeQueue } from "@/hooks/useDiscoverProbeQueue"
 import { useCanManageJobs } from "@/hooks/useJobsStatus"
+import { useIsMobile } from "@/hooks/useMobile"
 import {
   countUnfollowedCandidates,
   DISCOVERY_SIGNAL_KINDS,
@@ -250,6 +262,22 @@ export const DiscoverView: React.FC = () => {
     setNameQuery("")
   }
 
+  // PROTOTYPE (D): keyboard mode, the Directory's, on the candidates.
+  const variant = useVariant()
+  const [keyboardFlag] = useKeyboardMode("discover_keyboard")
+  const phone = useIsMobile()
+  const keyboard = since(variant, "D") && keyboardFlag && !phone
+  const ring = useDirectoryKeyboard({
+    on: keyboard,
+    handles: candidates.map((c) => c.name),
+    open: inspectingName,
+    onOpen: setInspectingName,
+    page: 0,
+    lastPage: 0,
+    onPage: () => {},
+    tab: "discover",
+  })
+
   const runQuickAction = (action: DiscoveryQuickAction) =>
     runDiscoveryQuickAction(action, {
       goToTab: setActiveTab,
@@ -337,6 +365,7 @@ export const DiscoverView: React.FC = () => {
           table={
             <DiscoverCandidateTable
               candidates={candidates}
+              ring={ring}
               selectedForFollow={follow.selectedForFollow}
               setSelectedForFollow={follow.setSelectedForFollow}
               unfollowedCount={unfollowedCount}
@@ -359,6 +388,7 @@ export const DiscoverView: React.FC = () => {
         />
       </div>
 
+      <DirectoryKeyHelp on={keyboard} tab="discover" />
       <DiscoverCandidatePanel
         candidate={inspecting}
         onClose={() => setInspectingName(null)}

@@ -1,3 +1,8 @@
+import {
+  gLive,
+  setGPending,
+} from "@/components/directory-photo-prototype/fkeys"
+import { variantNow } from "@/components/directory-photo-prototype/variant"
 /**
  * How keyboard mode moves its highlight, on the Posts feed and the Channels
  * grid alike: j and k step one card in reading order whatever the column
@@ -27,6 +32,9 @@ export function focusIsTyping(): boolean {
 
 /** Keys belong to the page only when nothing else could be listening for them. */
 export function keyBelongsElsewhere(e: KeyboardEvent): boolean {
+  // A dialog that closed on this key (Escape) has already claimed it.
+  // PROTOTYPE: variant A only.
+  if (e.defaultPrevented && variantNow() !== "0") return true
   if (e.metaKey || e.ctrlKey || e.altKey || focusIsTyping()) return true
   // Includes the photo viewer, which owns the arrow keys while it is open.
   return document.querySelector('[role="dialog"]') !== null
@@ -34,6 +42,9 @@ export function keyBelongsElsewhere(e: KeyboardEvent): boolean {
 
 /** Two g presses closer than this are gg. */
 export const GG_MS = 600
+
+/** The keys whose keydown is a modifier alone. */
+export const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta"])
 
 export function nextIndex(at: number, move: Move, count: number): number {
   if (move === "first") return 0
@@ -50,9 +61,16 @@ export function readMove(
   now: number,
   lastG: number,
 ): { move: Move | null; lastG: number } {
+  // PROTOTYPE (D): a modifier's own keydown (the Shift of g then T) keeps a
+  // pending g.
+  if (MODIFIERS.has(key) && variantNow() !== "0") return { move: null, lastG }
+  // PROTOTYPE (F): a pending g is shown (its pop-up), and waits for its key.
+  const live = gLive(lastG, now, GG_MS)
+  if (key !== "g" || live) setGPending(false)
   if (key === "j" || key === "k") return { move: key, lastG: 0 }
   if (key === "G") return { move: "last", lastG: 0 }
   if (key !== "g") return { move: null, lastG: 0 }
-  if (lastG > 0 && now - lastG < GG_MS) return { move: "first", lastG: 0 }
+  if (live) return { move: "first", lastG: 0 }
+  setGPending(true)
   return { move: null, lastG: now }
 }

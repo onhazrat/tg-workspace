@@ -4,6 +4,15 @@ import type React from "react"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import {
+  forgetSpotlightOrigin,
+  takePendingSpotlight,
+} from "@/components/directory-photo-prototype/keys"
+import {
+  since,
+  useKeyboardMode,
+  useVariant,
+} from "@/components/directory-photo-prototype/variant"
+import {
   isSemanticFeed,
   useLiveWindowRefresh,
   usePostFacets,
@@ -31,6 +40,7 @@ import {
   postsMarkdown,
 } from "@/lib/posts/selected-export"
 import { cn } from "@/lib/utils"
+import type { Post } from "@/types"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
@@ -83,8 +93,28 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   )
   const spotlightApi = useSpotlightState(scrollContainerRef, postFilter, ranked)
   const { spotlight } = spotlightApi
+  // PROTOTYPE (C): the spotlight Channels' c asked for, once; and forget
+  // where it came from once it is left.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on mount only
+  useEffect(() => {
+    const name = takePendingSpotlight()
+    if (name)
+      spotlightApi.enter?.(
+        { channelName: name, id: 0 } as unknown as Post,
+        name,
+      )
+  }, [])
+  const wasSpotlit = useRef(false)
+  useEffect(() => {
+    if (spotlight) wasSpotlit.current = true
+    else if (wasSpotlit.current) {
+      wasSpotlit.current = false
+      forgetSpotlightOrigin()
+    }
+  }, [spotlight])
   const [compact, setCompact] = useCompactPostGrid()
-  const [keyboard, setKeyboard] = useSessionFlag("postFeed_keyboard")
+  const [keyboard, setKeyboard] = useKeyboardMode("postFeed_keyboard") // PROTOTYPE
+  const variant = useVariant()
   const { counts, tooNewToJudge, selectedShown } = useShownPostCounts(spotlight)
   const [selectedFirst, setSelectedFirst] = useSessionFlag(
     "postFeed_selectedFirst",
@@ -242,15 +272,18 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 >
                   <LayoutGrid size={12} /> Compact grid
                 </button>
-                <button
-                  type="button"
-                  aria-pressed={keyboard}
-                  onClick={() => setKeyboard(!keyboard)}
-                  className={pillClass(keyboard)}
-                  title="j / k to move, gg / G to jump, an action's letter to fire it"
-                >
-                  <Keyboard size={12} /> Keyboard
-                </button>
+                {/* PROTOTYPE (D): the switch is in the header. */}
+                {!since(variant, "D") && (
+                  <button
+                    type="button"
+                    aria-pressed={keyboard}
+                    onClick={() => setKeyboard(!keyboard)}
+                    className={pillClass(keyboard)}
+                    title="j / k to move, gg / G to jump, an action's letter to fire it"
+                  >
+                    <Keyboard size={12} /> Keyboard
+                  </button>
+                )}
               </>
             }
           />
@@ -305,7 +338,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
               onToggleSelected={onToggleSelected}
             />
           </ReplyPreviewProvider>
-          <FeedKeyboard on={keyboard} />
+          <FeedKeyboard on={keyboard} onCompact={setCompact} />
         </motion.div>
       </FeedPagingContext.Provider>
     </SpotlightProvider>

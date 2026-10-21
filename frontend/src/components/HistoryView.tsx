@@ -3,7 +3,15 @@ import { AnimatePresence, motion } from "motion/react"
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-
+import {
+  DirectoryKeyHelp,
+  useDirectoryKeyboard,
+} from "@/components/directory/DirectoryKeyboard"
+import {
+  since,
+  useKeyboardMode,
+  useVariant,
+} from "@/components/directory-photo-prototype/variant"
 import { ArtifactCard } from "@/components/history/ArtifactCard"
 import { ARTIFACT_KIND_LABELS } from "@/components/history/artifact-presentation"
 import {
@@ -23,6 +31,7 @@ import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import { useArtifacts, useInvalidateArtifacts } from "@/hooks/useArtifacts"
 import { useHistoryStatusParam } from "@/hooks/useHistoryStatusParam"
+import { useIsMobile } from "@/hooks/useMobile"
 import {
   deleteArtifact,
   setArtifactNote,
@@ -144,6 +153,25 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
 
   const deleteCopy = deleteDialogCopy(pendingDelete)
 
+  // PROTOTYPE (E): keyboard mode on the Directory's terms; Enter opens.
+  const variant = useVariant()
+  const [keyboardFlag] = useKeyboardMode("history_keyboard")
+  const phone = useIsMobile()
+  const keyOf = (a: ArtifactListItem) => `${a.kind}:${a.id}`
+  const ring = useDirectoryKeyboard({
+    on: since(variant, "E") && keyboardFlag && !phone,
+    handles: visible.map(keyOf),
+    open: null,
+    onOpen: (key) => {
+      const artifact = visible.find((a) => keyOf(a) === key)
+      if (artifact) openArtifact(artifact)
+    },
+    page: 0,
+    lastPage: 0,
+    onPage: () => {},
+    tab: "history",
+  })
+
   return (
     <motion.div
       key="history"
@@ -190,7 +218,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
                */
               <motion.div
                 key={`${artifact.kind}:${artifact.id}`}
-                className="min-w-0"
+                // PROTOTYPE (E): keyboard mode finds the card and rings it.
+                data-directory-handle={keyOf(artifact)}
+                data-kbd-selected={ring === keyOf(artifact) || undefined}
+                className="min-w-0 rounded-xl data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:outline-blue-500"
                 layout
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -236,6 +267,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
         />
       )}
 
+      <DirectoryKeyHelp
+        on={since(variant, "E") && keyboardFlag && !phone}
+        tab="history"
+      />
       <TgConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}

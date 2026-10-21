@@ -12,6 +12,10 @@ import {
 import { Popover } from "radix-ui"
 import type React from "react"
 import { BarHeading, BarPopover } from "@/components/BarPopover"
+import {
+  since,
+  useVariant,
+} from "@/components/directory-photo-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import type { TagSuggestion } from "@/lib/channels/bulk-tag-suggestions"
 import type { CardZoom } from "@/lib/channels/card-zoom"
@@ -258,6 +262,7 @@ const Ghost = (props: React.ComponentProps<typeof TgButton>) => (
  */
 export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
   const selecting = p.selection.size > 0
+  const variant = useVariant()
   return (
     <div className="flex min-h-11 flex-wrap items-center gap-1 border-t border-app-ink/10 px-3 py-1.5">
       {selecting ? (
@@ -303,13 +308,16 @@ export function ChannelSelectionBar(p: ChannelSelectionBarProps) {
           title="Number each selected card by its place in the sort"
           testId="channel-show-sort-rank"
         />
-        <BarToggle
-          on={p.keyboard}
-          onClick={() => p.onKeyboardChange(!p.keyboard)}
-          label="Keyboard"
-          title="j / k to move, gg / G to jump, an action's letter to fire it"
-          testId="channel-keyboard"
-        />
+        {/* PROTOTYPE (D): the switch is in the header. */}
+        {!since(variant, "D") && (
+          <BarToggle
+            on={p.keyboard}
+            onClick={() => p.onKeyboardChange(!p.keyboard)}
+            label="Keyboard"
+            title="j / k to move, gg / G to jump, an action's letter to fire it"
+            testId="channel-keyboard"
+          />
+        )}
         <CardSizeSwitch zoom={p.zoom} onZoomChange={p.onZoomChange} />
       </div>
     </div>

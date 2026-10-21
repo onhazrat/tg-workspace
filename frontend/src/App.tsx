@@ -1,4 +1,5 @@
 import {
+  BookKey,
   Command as CommandIcon,
   HelpCircle,
   Keyboard,
@@ -11,6 +12,29 @@ import {
 import { AnimatePresence } from "motion/react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { api } from "@/api"
+import {
+  clearCount,
+  setGPending,
+} from "@/components/directory-photo-prototype/fkeys"
+import {
+  setAdhoc,
+  setHelp,
+  setTabOps,
+  stepHelp,
+  useAdhoc,
+  useHelp,
+  useWorkspaceKeys,
+} from "@/components/directory-photo-prototype/keys"
+import {
+  keyboardNow,
+  setKeyboardMode,
+  since,
+  useSharedKeyboard,
+  useVariant,
+  variantNow,
+} from "@/components/directory-photo-prototype/variant"
+import { CornerKeys, GoPopup } from "@/components/KeyHelp"
+import { sameTab } from "@/lib/workspace-tabs"
 import { ActionView } from "./components/ActionView"
 import { ChannelGrid } from "./components/ChannelGrid"
 import { ChatView } from "./components/ChatView"
@@ -106,6 +130,13 @@ export default function App() {
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // PROTOTYPE (B): the shortcuts list follows ?'s state and keyboard mode.
+  const variant = useVariant()
+  const keyboard = useSharedKeyboard()
+  const help = useHelp()
+  const adhoc = useAdhoc()
+  // Keyboard mode switched either way ends an open-on-its-own list.
+  useEffect(() => setAdhoc(false), [keyboard])
 
   const { theme, setTheme, proxyEnabled, torEnabled } = useSettings()
 
@@ -151,11 +182,41 @@ export default function App() {
     workspaceTabs.openTab(artifactDestination(artifact).tab, artifact.id)
   }
 
+  // PROTOTYPE (C): g p / g c / g d and Channels' c switch tabs through this;
+  // / and Esc in a field.
+  useEffect(() =>
+    setTabOps({
+      go: (kind) => setActiveTab(kind as TabType),
+      step: (by) => {
+        const { tabs, active } = workspaceTabs
+        const at = tabs.findIndex((t) => sameTab(t, active))
+        const n = tabs.length
+        const next = tabs[(((at + by) % n) + n) % n]
+        if (next) workspaceTabs.openTab(next.kind, next.id)
+      },
+      goToIndex: (index) => {
+        const next = workspaceTabs.tabs[index]
+        if (next) workspaceTabs.openTab(next.kind, next.id)
+      },
+      close: () => workspaceTabs.closeTab(workspaceTabs.active),
+      reopen: () => workspaceTabs.reopenLastTab(),
+    }),
+  )
+  useWorkspaceKeys(activeTab)
+  // PROTOTYPE (B): read by the ? listener, which binds once.
+  const helpTab = useRef<string>(activeTab)
+  helpTab.current = activeTab
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!opensShortcuts(event)) return
       event.preventDefault()
-      setShortcutsOpen(true)
+      // PROTOTYPE (B): ? steps closed → corner → full → closed in keyboard
+      // mode; out of it, it opens and closes the full list on its own.
+      if (variantNow() === "0") return setShortcutsOpen(true)
+      // F: ? answers a pending g or count by cancelling it.
+      setGPending(false)
+      clearCount()
+      stepHelp(helpTab.current)
     }
 
     window.addEventListener("keydown", onKeyDown)
@@ -239,6 +300,147 @@ export default function App() {
     )
   }
 
+  // PROTOTYPE (D): whether ?'s list shows, corner or full.
+  const listShown = keyboard ? help !== "closed" : adhoc
+  const dialogOpen =
+    variant !== "0" ? (keyboard ? help === "full" : adhoc) : shortcutsOpen
+  // A press on the shortcuts button with the full list open closes it as a
+  // press outside the dialog; its click must not then count as a step too.
+  const dialogOpenRef = useRef(dialogOpen)
+  dialogOpenRef.current = dialogOpen
+  const pressClosedDialog = useRef(false)
+  // PROTOTYPE (D): the header's buttons, which D orders by purpose.
+  const headerButtons = {
+    mode: (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Keyboard mode"
+            aria-pressed={keyboard}
+            onClick={() => setKeyboardMode(!keyboard)}
+            className={`p-1.5 border transition-all rounded-md max-md:hidden ${keyboard ? "border-app-ink bg-app-ink text-app-bg" : "border-app-ink border-opacity-10 hover:border-opacity-40"}`}
+          >
+            <Keyboard size={14} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>
+            Keyboard mode: {keyboard ? "on" : "off"} ({"\\"})
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    ),
+    palette: (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            id="command-palette-button"
+            data-testid="command-palette-button"
+            aria-label="Command palette"
+            onClick={() => setCommandPaletteOpen(true)}
+            className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+          >
+            <CommandIcon size={14} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Command Palette (⌘⇧P)</p>
+        </TooltipContent>
+      </Tooltip>
+    ),
+    tour: (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            id="tour-help-button"
+            aria-label="Replay guided tour"
+            onClick={startTour}
+            className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+          >
+            <HelpCircle size={14} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Replay Guided Tour</p>
+        </TooltipContent>
+      </Tooltip>
+    ),
+    shortcuts: (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Keyboard shortcuts"
+            // PROTOTYPE (D): the same three steps as ?, and filled while
+            // the list shows, as the Keyboard mode button is while on.
+            aria-pressed={since(variant, "D") ? listShown : undefined}
+            onPointerDown={() => {
+              pressClosedDialog.current = dialogOpenRef.current
+            }}
+            onClick={() => {
+              if (variant === "0") return setShortcutsOpen(true)
+              if (pressClosedDialog.current) {
+                pressClosedDialog.current = false
+                return
+              }
+              stepHelp(activeTab)
+            }}
+            // PROTOTYPE (D): no keyboard on a phone, so no list of its keys either.
+            className={`p-1.5 border transition-all rounded-md ${since(variant, "D") ? "max-md:hidden" : ""} ${since(variant, "D") && listShown ? "border-app-ink bg-app-ink text-app-bg" : "border-app-ink border-opacity-10 hover:border-opacity-40"}`}
+          >
+            {/* PROTOTYPE (D): the keyboard icon is the mode's now. */}
+            {since(variant, "D") ? (
+              <BookKey size={14} />
+            ) : (
+              <Keyboard size={14} />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Keyboard Shortcuts (?)</p>
+        </TooltipContent>
+      </Tooltip>
+    ),
+    fullscreen: (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            data-testid="fullscreen-button"
+            aria-label={fullscreenLabel}
+            onClick={toggleFullscreen}
+            className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+          >
+            {fullscreenIcon}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{fullscreenLabel}</p>
+        </TooltipContent>
+      </Tooltip>
+    ),
+    theme: (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={themeTooltip}
+            onClick={toggleTheme}
+            className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+          >
+            {themeIcon}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{themeTooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    ),
+  }
+
   return (
     <div
       className={`tg-wcag-floor h-[calc(100svh-var(--view-as-offset))] overflow-hidden bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
@@ -284,95 +486,50 @@ export default function App() {
                   className={`w-1 h-1 rounded-full animate-pulse ${routing.dotClass}`}
                 />
               </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    id="command-palette-button"
-                    data-testid="command-palette-button"
-                    aria-label="Command palette"
-                    onClick={() => setCommandPaletteOpen(true)}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <CommandIcon size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Command Palette (⌘⇧P)</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    id="tour-help-button"
-                    aria-label="Replay guided tour"
-                    onClick={startTour}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <HelpCircle size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Replay Guided Tour</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Keyboard shortcuts"
-                    onClick={() => setShortcutsOpen(true)}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <Keyboard size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Keyboard Shortcuts (?)</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    data-testid="fullscreen-button"
-                    aria-label={fullscreenLabel}
-                    onClick={toggleFullscreen}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    {fullscreenIcon}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{fullscreenLabel}</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={themeTooltip}
-                    onClick={toggleTheme}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    {themeIcon}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{themeTooltip}</p>
-                </TooltipContent>
-              </Tooltip>
+              {since(variant, "D") ? (
+                // PROTOTYPE (D): grouped by purpose, a wider gap between groups:
+                // keyboard (the mode, its keys, the palette), help, then view.
+                <>
+                  <div className="flex items-center gap-1.5">
+                    {headerButtons.mode}
+                    {headerButtons.shortcuts}
+                    {headerButtons.palette}
+                  </div>
+                  {headerButtons.tour}
+                  <div className="flex items-center gap-1.5">
+                    {headerButtons.fullscreen}
+                    {headerButtons.theme}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {headerButtons.palette}
+                  {headerButtons.tour}
+                  {headerButtons.shortcuts}
+                  {headerButtons.fullscreen}
+                  {headerButtons.theme}
+                </>
+              )}
             </div>
           </div>
 
           {isRateLimited && <RateLimitBanner />}
 
           <ShortcutsDialog
-            open={shortcutsOpen}
-            onOpenChange={setShortcutsOpen}
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setShortcutsOpen(open)
+              // PROTOTYPE (B): Esc or the close button closes it.
+              if (!open && keyboardNow()) setHelp("closed")
+              if (!open) setAdhoc(false)
+            }}
             commandKey={commandKey}
+            tab={activeTab}
           />
+          {/* PROTOTYPE (B) */}
+          <CornerKeys tab={activeTab} />
+          {/* PROTOTYPE (F) */}
+          <GoPopup />
 
           <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">

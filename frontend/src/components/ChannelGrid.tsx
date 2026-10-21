@@ -15,17 +15,20 @@ import {
 import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
-import { ChannelKeyHelp } from "@/components/channel-grid/ChannelGridKeyboard"
+import {
+  ChannelKeyHelp,
+  useCardZoomKeys,
+} from "@/components/channel-grid/ChannelGridKeyboard"
 import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
+import { useKeyboardMode } from "@/components/directory-photo-prototype/variant"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
-import { useSessionFlag } from "@/hooks/useSessionFlag"
 import {
   useCreateSettingGroup,
   useSettingGroupsQuery,
@@ -134,7 +137,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     channelActionLimit,
     setChannelActionLimit,
   } = settings
-  const [keyboard, setKeyboard] = useSessionFlag("channelGrid_keyboard")
+  const [keyboard, setKeyboard] = useKeyboardMode("channelGrid_keyboard") // PROTOTYPE
+  useCardZoomKeys({
+    on: keyboard,
+    zoom: channelCardZoom,
+    onZoomChange: setChannelCardZoom,
+  })
 
   const { isOffline } = useApiStatus()
 

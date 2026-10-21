@@ -8,6 +8,8 @@ import type {
   DirectoryWhyResponse,
 } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
+import { useVariant } from "@/components/directory-photo-prototype/variant"
+import { GALLERY_ATTR } from "@/components/post-card/PhotoViewer"
 import { RelativeTime } from "@/components/RelativeTime"
 import {
   type DirectoryCond,
@@ -288,19 +290,31 @@ function Header({
   onFollow: () => void
   onDismiss: (dismissed: boolean) => void
 }) {
+  // PROTOTYPE: the viewer in A, a gallery of its own.
+  const variant = useVariant()
+  const avatar = (
+    <ChannelAvatar
+      channel={{
+        id: entry.handle,
+        name: entry.handle,
+        displayName: entry.displayName ?? undefined,
+        photoUrl: entry.photoUrl ?? undefined,
+      }}
+      className="h-14 w-14 shrink-0"
+      textClassName="text-lg"
+      view={variant === "0" ? undefined : "image"}
+    />
+  )
   return (
     <>
       <header className="flex items-start gap-3 pr-8">
-        <ChannelAvatar
-          channel={{
-            id: entry.handle,
-            name: entry.handle,
-            displayName: entry.displayName ?? undefined,
-            photoUrl: entry.photoUrl ?? undefined,
-          }}
-          className="h-14 w-14 shrink-0"
-          textClassName="text-lg"
-        />
+        {variant === "0" ? (
+          avatar
+        ) : (
+          <div className="shrink-0" {...{ [GALLERY_ATTR]: "panel" }}>
+            {avatar}
+          </div>
+        )}
         <div className="min-w-0">
           <h3 dir="auto" className="truncate text-lg font-bold">
             {entry.displayName || entry.handle}

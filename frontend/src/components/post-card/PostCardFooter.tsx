@@ -7,6 +7,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
+import { keyFor } from "@/components/directory-photo-prototype/keys"
 import { formatCount } from "@/lib/format-count"
 import { telegramWebViewPostUrl } from "@/lib/telegram-web"
 import { cn } from "@/lib/utils"
@@ -79,8 +80,9 @@ export type PostTranslationControl = {
 }
 
 /** "Copy link (c)" while Keyboard mode is on, so the tooltip teaches the key. */
+// PROTOTYPE (B): the key list's letter.
 const withKey = (label: string, key: string, keyboard: boolean) =>
-  keyboard ? `${label} (${key})` : label
+  keyboard ? `${label} (${keyFor("posts", key)})` : label
 
 /**
  * The actions, always visible: show this Channel, translate, find related,

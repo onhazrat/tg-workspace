@@ -35,12 +35,17 @@ import {
   type MeasureEditorRender,
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
+import {
+  PrototypeSwitcher,
+  since,
+  useKeyboardMode,
+  useVariant,
+} from "@/components/directory-photo-prototype/variant"
 import { useZoomState } from "@/components/SpreadZoom"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
 import { useIsMobile } from "@/hooks/useMobile"
-import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { useDirectoryTags } from "@/hooks/useTags"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
@@ -353,7 +358,8 @@ export function DirectoryView() {
   }
   // Below md (DFP-02): the controls in a sheet, the rows as cards.
   const phone = useIsMobile()
-  const [keyboardFlag, setKeyboard] = useSessionFlag("directory_keyboard")
+  const [keyboardFlag, setKeyboard] = useKeyboardMode("directory_keyboard") // PROTOTYPE
+  const variant = useVariant()
   // A phone has no Keyboard switch, so a flag left on at a desk stays off here.
   const keyboard = keyboardFlag && !phone
   const ring = useDirectoryKeyboard({
@@ -374,6 +380,8 @@ export function DirectoryView() {
   }
   return (
     <div className="pt-4" data-testid="directory-view">
+      {/* PROTOTYPE */}
+      <PrototypeSwitcher />
       <DirectoryBar
         filter={d.filter}
         onFilter={d.setFilter}
@@ -414,15 +422,18 @@ export function DirectoryView() {
           onRename={(name, to) => void tags.rename(name, to)}
           onDelete={(name) => void tags.remove(name)}
         />
-        <button
-          type="button"
-          aria-pressed={keyboard}
-          onClick={() => setKeyboard(!keyboard)}
-          className={`${pillClass(keyboard)} max-md:hidden`}
-          title="j / k to move, gg / G to jump, ] / [ to turn the page, an action's letter to fire it"
-        >
-          <Keyboard size={12} /> Keyboard
-        </button>
+        {/* PROTOTYPE (D): the switch is in the header. */}
+        {!since(variant, "D") && (
+          <button
+            type="button"
+            aria-pressed={keyboard}
+            onClick={() => setKeyboard(!keyboard)}
+            className={`${pillClass(keyboard)} max-md:hidden`}
+            title="j / k to move, gg / G to jump, ] / [ to turn the page, an action's letter to fire it"
+          >
+            <Keyboard size={12} /> Keyboard
+          </button>
+        )}
       </div>
       <DirectoryBulkBar
         whole={whole}

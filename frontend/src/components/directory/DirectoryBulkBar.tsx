@@ -171,6 +171,7 @@ export function DirectoryBulkBar({
               variant="secondary"
               size="sm"
               disabled={busy}
+              data-bulk-shortcut="D" // PROTOTYPE (F)
               onClick={() => setDismissing(true)}
               className="rounded-full"
             >
@@ -187,6 +188,7 @@ export function DirectoryBulkBar({
               variant="secondary"
               size="sm"
               loading={busy}
+              data-bulk-shortcut="F" // PROTOTYPE (F)
               onClick={() =>
                 needsBulkFollowConfirm(handles.length)
                   ? setConfirming(true)
@@ -203,6 +205,7 @@ export function DirectoryBulkBar({
               variant="secondary"
               size="sm"
               disabled={busy}
+              data-bulk-shortcut="D" // PROTOTYPE (F)
               onClick={() => onDismiss(handles)}
               className="rounded-full"
             >

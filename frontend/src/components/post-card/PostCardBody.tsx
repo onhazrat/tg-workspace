@@ -1,5 +1,9 @@
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { useLayoutEffect, useRef, useState } from "react"
+import {
+  since,
+  variantNow,
+} from "@/components/directory-photo-prototype/variant"
 import { renderPostText } from "@/lib/posts/render-post-text"
 import type { Post } from "@/types"
 import { isLongPost } from "./post-card-model"
@@ -39,6 +43,9 @@ export function PostCardBody({
       {long && (
         <button
           type="button"
+          // PROTOTYPE (F): m presses it, M every post's; its state for M.
+          data-shortcut={since(variantNow(), "F") ? "m" : undefined}
+          aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
           className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-app-ink/15 bg-app-muted/40 px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest text-app-ink/70 transition-colors hover:bg-app-ink/5 hover:text-app-ink"
         >
@@ -119,6 +126,9 @@ export function PostCardClampedBody({
       {(over || open) && (
         <button
           type="button"
+          // PROTOTYPE (F): m presses it, M every post's; its state for M.
+          data-shortcut={since(variantNow(), "F") ? "m" : undefined}
+          aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           className="mt-0.5 self-start text-[12px] font-medium text-blue-500 hover:underline"
         >

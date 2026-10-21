@@ -10,6 +10,7 @@ import {
 import type React from "react"
 import type { DirectoryRowResponse } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
+import { useVariant } from "@/components/directory-photo-prototype/variant"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import {
@@ -380,18 +381,24 @@ export function FollowCell({
 }
 
 function ChannelCell({ row }: { row: Row }) {
+  // PROTOTYPE: the viewer per variant.
+  const variant = useVariant()
+  const avatar = (
+    <ChannelAvatar
+      channel={{
+        id: row.handle,
+        name: row.handle,
+        displayName: row.displayName ?? undefined,
+        photoUrl: row.photoUrl ?? undefined,
+      }}
+      className="h-7 w-7 shrink-0"
+      textClassName="text-xs"
+      view={variant !== "0" ? "image" : undefined}
+    />
+  )
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <ChannelAvatar
-        channel={{
-          id: row.handle,
-          name: row.handle,
-          displayName: row.displayName ?? undefined,
-          photoUrl: row.photoUrl ?? undefined,
-        }}
-        className="h-7 w-7 shrink-0"
-        textClassName="text-xs"
-      />
+      {avatar}
       <div className="min-w-0">
         <div dir="auto" className="truncate font-semibold">
           {row.displayName || row.handle}
@@ -602,6 +609,7 @@ export function DirectoryTable({
             data-testid={`directory-row-${r.handle}`}
             data-directory-handle={r.handle}
             data-kbd-selected={ring === r.handle || undefined}
+            data-selected={ticks.has(r.handle) || undefined} // PROTOTYPE (C)
             onClick={() => onOpen(r.handle)}
             className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
           >
@@ -693,12 +701,16 @@ function DirectoryCards({
   onOpen: (handle: string) => void
   tagging?: Tagging
 }) {
+  // PROTOTYPE: in A the viewer lands back on the card.
+  const viewer = useVariant() !== "0"
   return (
     <ul className="divide-y divide-app-ink/5">
       {rows.map((r) => (
         <li
           key={r.handle}
           data-testid={`directory-card-${r.handle}`}
+          data-directory-handle={viewer ? r.handle : undefined}
+          data-selected={ticks.has(r.handle) || undefined} // PROTOTYPE (C)
           onClick={() => onOpen(r.handle)}
           className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${ticks.has(r.handle) ? "bg-blue-500/5" : ""} ${r.dismissed ? "opacity-50" : ""}`}
         >

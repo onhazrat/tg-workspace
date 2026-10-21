@@ -285,3 +285,24 @@ body {
 .driver-popover-arrow-side-right {
   border-right-color: var(--card-bg);
 }
+
+/* PROTOTYPE (C): one look for a selected Channel, a card in Channels and a
+   ticked row in the Directory alike: a blue tint and a blue edge. Keyboard
+   mode's highlight stays the 2px blue ring it is everywhere already. */
+[data-variant="C"] [data-selected],
+[data-variant="D"] [data-selected] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-blue-500) 10%,
+    var(--color-app-card, transparent)
+  ) !important;
+  border-color: color-mix(
+    in oklab,
+    var(--color-blue-500) 60%,
+    transparent
+  ) !important;
+}
+[data-variant="C"] tr[data-selected],
+[data-variant="D"] tr[data-selected] {
+  box-shadow: inset 3px 0 0 var(--color-blue-500);
+}

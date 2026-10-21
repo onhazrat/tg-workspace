@@ -1,5 +1,14 @@
 import { AlertCircle, AlertTriangle } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
+import {
+  goKeys,
+  keyTabOf,
+  tabKeys,
+} from "@/components/directory-photo-prototype/keys"
+import {
+  since,
+  useVariant,
+} from "@/components/directory-photo-prototype/variant"
 import type { TabType } from "@/types"
 import { RelativeTime } from "../RelativeTime"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog"
@@ -91,21 +100,73 @@ export function ShortcutsDialog({
   open,
   onOpenChange,
   commandKey,
+  tab,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   commandKey: string
+  /** PROTOTYPE (B): the workspace tab, whose keyboard mode keys are listed. */
+  tab?: string
 }) {
+  const variant = useVariant()
+  const keyTab = tab ? keyTabOf(tab) : null
+  const groups = [
+    ...(variant !== "0" && keyTab
+      ? [
+          {
+            heading: `This tab, in keyboard mode (\\ turns it on)`,
+            bindings: tabKeys(keyTab).map(([keys, label]) => ({
+              label: label[0].toUpperCase() + label.slice(1),
+              keys,
+            })),
+          },
+        ]
+      : []),
+    // PROTOTYPE (D): the tabs g + a letter goes to, from any tab.
+    ...(since(variant, "D")
+      ? [
+          {
+            heading: "Go to a tab, in keyboard mode",
+            bindings: [
+              ...(keyTab
+                ? []
+                : [{ label: "Keyboard mode on or off", keys: "\\" }]),
+              ...goKeys().map(([keys, label]) => ({ label, keys })),
+            ],
+          },
+        ]
+      : []),
+    // PROTOTYPE (B): sentence case, not Title Case under an all-caps style.
+    ...shortcutGroups(commandKey).map((group) =>
+      variant !== "0"
+        ? {
+            ...group,
+            bindings: group.bindings.map((b) => ({
+              ...b,
+              label: b.label[0] + b.label.slice(1).toLowerCase(),
+            })),
+          }
+        : group,
+    ),
+  ]
+  const caps = variant !== "0" ? "" : "uppercase"
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-xl">
+      <DialogContent
+        data-shortcuts-dialog
+        // PROTOTYPE (B): the tab's keys make it taller than a laptop screen;
+        // it starts below the header, so the shortcuts button stays clickable.
+        className={`border-app-ink/20 bg-app-card p-0 text-app-ink sm:max-w-xl ${variant !== "0" ? "top-[calc(50%+2.5rem)] max-h-[calc(100vh-8rem)] overflow-y-auto" : ""}`}
+      >
         <DialogHeader className="border-b border-app-ink/10 p-4">
-          <DialogTitle className="text-lg font-bold tracking-tight uppercase">
-            Keyboard Shortcuts
+          <DialogTitle className={`text-lg font-bold tracking-tight ${caps}`}>
+            {variant !== "0" ? "Keyboard shortcuts" : "Keyboard Shortcuts"}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 p-4 text-xs font-mono uppercase tracking-widest">
-          {shortcutGroups(commandKey).map((group) => (
+        <div
+          className={`space-y-4 p-4 text-xs font-mono ${variant !== "0" ? "" : "uppercase tracking-widest"}`}
+        >
+          {groups.map((group) => (
             <section key={group.heading} className="space-y-2">
               <h3 className="text-[10px] text-app-ink/50">{group.heading}</h3>
               {group.bindings.map((binding) => (
@@ -114,6 +175,7 @@ export function ShortcutsDialog({
                   className="flex items-center justify-between rounded-md border border-app-ink/10 bg-app-muted/30 px-3 py-2"
                 >
                   <span>{binding.label}</span>
+                  {/* PROTOTYPE (B): keys as typed; a capital means Shift. */}
                   <code>{binding.keys}</code>
                 </div>
               ))}

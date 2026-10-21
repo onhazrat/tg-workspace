@@ -157,9 +157,10 @@ children mean the two point their readers at the same places.
 _Avoid_: common target, shared link
 
 **Tick**:
-A Directory entry marked in the Directory list, for a bulk action (Follow,
-Dismiss, Tag) or as Seeds. Any entry can be ticked, followed or not. Ticks are
-kept per browser and never travel in a link.
+A Directory entry marked for a bulk action. In the Directory list any entry can
+be ticked, followed or not, for Follow, Dismiss or Tag, or as Seeds. In a
+Discovery report only a Candidate not yet followed can be ticked, for Follow or
+Dismiss. Ticks are kept per browser and never travel in a link.
 _Avoid_: selection (the Channels tab's), check, mark
 
 **All matching**:
@@ -578,6 +579,19 @@ The workspace with its chrome collapsed — no title block, no stats strip, no
 width cap. Independent of native browser fullscreen, which is requested at the
 same time but cannot be restored on reload.
 _Avoid_: zen mode, fullscreen, distraction-free
+
+**Keyboard mode**:
+Working the workspace from the keyboard alone. It is one switch for every tab,
+on until it is turned off or the browser session ends, and a letter means the
+same action in every tab that has that action.
+_Avoid_: shortcuts mode, vim mode, hotkeys
+
+**Highlight**:
+The one item in a tab's list that Keyboard mode is on: a Post, a Channel, a
+Directory entry, a Candidate or an Artifact. Each tab keeps its own. It marks
+where the next key acts and changes nothing; a Tick, a Pick and the Channels
+tab's selection are what keys change, not what the Highlight is.
+_Avoid_: focus (that is Focus mode), cursor, ring, selection
 
 **Tools**:
 The workspace tab for doing rather than tuning: Logs, Quick message, and the

@@ -252,6 +252,7 @@ export function CandidateActions({
           variant="secondary"
           size="sm"
           data-testid={`discover-follow-${row.name}`}
+          data-shortcut="f"
           disabled={isOffline}
           loading={isFollowPending}
           loadingLabel="Follow"
@@ -281,6 +282,7 @@ export function CandidateActions({
         variant="secondary"
         size="sm"
         data-testid={`discover-ignore-${row.name}`}
+        data-shortcut="d"
         onClick={() => onSetIgnored(row.name, !row.isIgnored)}
         title={
           row.isIgnored
@@ -337,6 +339,8 @@ interface CandidateRowProps
   /** Fires before `onToggle`, with whether shift was held for this click. */
   onCheckboxClick: (shiftKey: boolean) => void
   onToggle: () => void
+  /** PROTOTYPE (D): keyboard mode's highlight is on this row. */
+  highlighted?: boolean
 }
 
 /** One Candidate as a table row. */
@@ -349,15 +353,23 @@ export function CandidateRow({
   showScore,
   onCheckboxClick,
   onToggle,
+  highlighted,
   ...actions
 }: CandidateRowProps) {
   const stats = candidateStatistics(row.probe)
   return (
-    <tr className="border-t border-app-ink/10">
+    <tr
+      // PROTOTYPE (D): keyboard mode finds the row, rings it, and sees it ticked.
+      data-directory-handle={row.name}
+      data-kbd-selected={highlighted || undefined}
+      data-selected={(isSelected && !row.isFollowed) || undefined}
+      className="border-t border-app-ink/10 data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500"
+    >
       <td className="py-2 align-middle">
         <input
           type="checkbox"
           data-testid={`discover-select-${row.name}`}
+          data-shortcut="x"
           checked={isSelected}
           disabled={
             actions.isOffline ||
@@ -380,6 +392,7 @@ export function CandidateRow({
           target="_blank"
           rel="noopener noreferrer"
           data-testid={`discover-channel-link-${row.name}`}
+          data-shortcut="o"
           className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.name}
@@ -482,10 +495,13 @@ interface DiscoverCandidateTableProps {
    * arbitrary.
    */
   showScore: boolean
+  /** PROTOTYPE (D): the candidate keyboard mode highlights. */
+  ring?: string | null
 }
 
 export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   candidates,
+  ring,
   selectedForFollow,
   setSelectedForFollow,
   unfollowedCount,
@@ -629,6 +645,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
             <CandidateRow
               key={row.name}
               row={row}
+              highlighted={ring === row.name}
               isSelected={isRowCheckboxChecked(
                 row.name,
                 row.isFollowed,
