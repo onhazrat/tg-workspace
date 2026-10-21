@@ -28,7 +28,7 @@ import { gotoWorkspace, mockBulkFollowJob } from "./utils/summarizer-helpers.ts"
 const ROWS = ["a1", "a2", "a3", "a4", "a5", "a6"].map((handle, i) => ({
   handle,
   displayName: i === 0 ? "خبر فوری" : `Channel ${handle}`,
-  photoUrl: null,
+  photoUrl: null as string | null,
   language: i % 2 ? "en" : "fa",
   subscribers: 1000 * (i + 1),
   reach: 100 * (i + 1),
@@ -205,6 +205,12 @@ async function mockPanel(page: Page) {
   )
   return { lastWhy: () => whys.at(-1) }
 }
+
+/** A one-pixel PNG, served for a row's public photo address. */
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+)
 
 const chip = (page: Page, id: string) =>
   page.getByTestId(`directory-filter-chip-${id}`)
@@ -877,6 +883,110 @@ test.describe("TG Workspace directory", () => {
     await page.getByRole("checkbox", { name: "Tick @a1" }).uncheck()
     await expect(bar).toContainText("5 ticked")
     await expect(bar).not.toContainText("matching.")
+  })
+
+  test("a row's photo opens the viewer, steps to the next row's, and lands there (KM-01)", async ({
+    page,
+  }) => {
+    // Forty rows, three with a public photo: the first, one with a long
+    // name, and the last, well below the fold. Rows without one are skipped.
+    const photoUrl = (handle: string) => `https://photos.test/${handle}.png`
+    const pictured = new Set(["p00", "p01", "p39"])
+    const rows = Array.from({ length: 40 }, (_, i) => {
+      const handle = `p${String(i).padStart(2, "0")}`
+      return {
+        ...ROWS[i % ROWS.length],
+        handle,
+        displayName:
+          i === 1
+            ? "A Channel whose name runs on well past the width of any phone"
+            : `Channel ${handle}`,
+        photoUrl: pictured.has(handle) ? photoUrl(handle) : null,
+      }
+    })
+    await mockDirectory(page, rows)
+    await page.route("https://photos.test/**", (route) =>
+      route.fulfill({ contentType: "image/png", body: PIXEL }),
+    )
+    await page.route("**/api/v1/data/directory/p00/entry", (route) =>
+      route.fulfill({ json: { ...rows[0], bio: "The bio of p00" } }),
+    )
+    await page.route("**/api/v1/data/directory/p00/posts", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await page.route("**/api/v1/data/directory/p00/neighbours", (route) =>
+      route.fulfill({ json: { citedBy: [], cites: [] } }),
+    )
+    await page.route("**/api/v1/data/directory/why", (route) =>
+      route.fulfill({
+        json: { posts: [], total: 0, parents: null, children: null },
+      }),
+    )
+    await page.route("**/api/v1/data/channels", (route) =>
+      route.fulfill({ json: [] }),
+    )
+    await gotoWorkspace(page, "channels")
+    await clearScopedStorage(page, ["directory.view", "directory.open"])
+    await page.goto("/?tab=directory")
+
+    // The avatar opens the viewer, not the panel, on the photo clicked.
+    const viewer = page.getByTestId("photo-viewer")
+    const caption = page.getByTestId("photo-viewer-label")
+    const aside = page.getByTestId("directory-panel")
+    await page.getByRole("button", { name: "View Channel p00's photo" }).click()
+    await expect(caption).toContainText("Channel p00 · 1 / 3")
+    await expect(aside).toHaveCount(0)
+
+    // The arrows step through the rows' photos; closing lands on the last.
+    await page.keyboard.press("ArrowRight")
+    await page.keyboard.press("ArrowRight")
+    await expect(caption).toContainText("Channel p39 · 3 / 3")
+    await expect(page.getByTestId("directory-row-p39")).not.toBeInViewport()
+    await page.keyboard.press("Escape")
+    await expect(viewer).toHaveCount(0)
+    await expect(aside).toHaveCount(0)
+    await expect(page.getByTestId("directory-row-p39")).toBeInViewport()
+
+    // The panel's photo opens alone. In keyboard mode, the Escape that
+    // closes the viewer leaves the Highlight and the panel as they were.
+    // With no closing animation the viewer is gone before the page hears
+    // that Escape, so only the key's being taken can tell the page.
+    await page.addStyleTag({
+      content: "*, *::before { animation: none !important; }",
+    })
+    await page.getByRole("button", { name: "Keyboard", exact: true }).click()
+    await page.keyboard.press("g")
+    await page.keyboard.press("g")
+    await page.keyboard.press("Enter")
+    await expect(aside.getByText("The bio of p00")).toBeVisible()
+    await aside
+      .getByRole("button", { name: "View Channel p00's photo" })
+      .click()
+    await expect(caption).toHaveText(/^Channel p00 · scroll/)
+    await expect(page.getByRole("button", { name: "Next photo" })).toHaveCount(
+      0,
+    )
+    await page.keyboard.press("Escape")
+    await expect(viewer).toHaveCount(0)
+    await expect(aside.getByText("The bio of p00")).toBeVisible()
+    await expect(page.getByTestId("directory-row-p00")).toHaveAttribute(
+      "data-kbd-selected",
+      "true",
+    )
+
+    // p opens the Highlight's photo and closes it again.
+    await page.keyboard.press("p")
+    await expect(caption).toContainText("Channel p00 · 1 / 3")
+    await page.keyboard.press("p")
+    await expect(viewer).toHaveCount(0)
+
+    // On a phone a long name never squeezes the avatar.
+    await page.setViewportSize({ width: 390, height: 844 })
+    const avatar = page
+      .getByTestId("directory-card-p01")
+      .getByRole("button", { name: /^View A Channel whose name/ })
+    await expect(avatar).toBeVisible()
+    expect((await avatar.boundingBox())?.width).toBe(28)
   })
 
   test("on a phone: the controls sheet, cards, and a bottom-sheet panel", async ({
