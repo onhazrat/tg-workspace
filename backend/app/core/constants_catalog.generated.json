@@ -1148,7 +1148,7 @@
       "comment": "Rows kept mounted beyond the viewport. Deliberately generous. Beyond smoothing scrolling, it keeps a workable number of cards reachable to anything that locates them by `[data-channel-name]` without scrolling first \u2014 which is how the command palette's channel actions and much of the e2e suite find cards.",
       "expression": "6",
       "file": "frontend/src/components/channel-grid/VirtualizedChannelGrid.tsx",
-      "line": 63,
+      "line": 67,
       "name": "OVERSCAN_ROWS",
       "value": 6
     },
@@ -1204,7 +1204,7 @@
       "comment": "A card hidden under the workspace's sticky header is not \"on screen\".",
       "expression": "80",
       "file": "frontend/src/components/post-card/FeedKeyboard.tsx",
-      "line": 14,
+      "line": 16,
       "name": "HEADER_PX",
       "value": 80
     },

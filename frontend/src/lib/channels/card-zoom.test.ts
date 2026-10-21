@@ -75,7 +75,7 @@ describe("cardFace", () => {
       bodySelects: true,
       detailed: false,
       statTiles: [],
-      keys: ["x", "s", "o", "p"],
+      keys: ["tick", "sync", "open", "photo"],
     })
   })
 
@@ -108,8 +108,16 @@ describe("cardFace", () => {
       return { detailed, statTiles, keys }
     }
     expect(CARD_ZOOM_LEVELS.map(describeSize)).toEqual([
-      { detailed: false, statTiles: [], keys: ["x", "s", "o", "p"] },
-      { detailed: false, statTiles: [], keys: ["x", "s", "o", "p"] },
+      {
+        detailed: false,
+        statTiles: [],
+        keys: ["tick", "sync", "open", "photo"],
+      },
+      {
+        detailed: false,
+        statTiles: [],
+        keys: ["tick", "sync", "open", "photo"],
+      },
       {
         detailed: false,
         statTiles: [
@@ -120,7 +128,7 @@ describe("cardFace", () => {
           "subscribers",
           "videos",
         ],
-        keys: ["x", "s", "t", "f", "o", "b", "p"],
+        keys: ["tick", "sync", "tag", "freeze", "open", "more", "photo"],
       },
       {
         detailed: true,
@@ -135,7 +143,7 @@ describe("cardFace", () => {
           "files",
           "links",
         ],
-        keys: ["x", "s", "t", "f", "o", "b", "p"],
+        keys: ["tick", "sync", "tag", "freeze", "open", "more", "photo"],
       },
     ])
   })

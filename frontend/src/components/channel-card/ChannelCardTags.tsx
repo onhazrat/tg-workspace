@@ -7,13 +7,13 @@ import {
   cardTagSuggestions,
   matchCardTags,
 } from "@/lib/channels/card-tag-suggestions"
-import { shortcut } from "@/lib/channels/card-zoom"
 import {
   addManualTag,
   normalizeChannelTags,
   removeTagsByName,
 } from "@/lib/channels/channel-tag-model"
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
+import { shortcut } from "@/lib/keyboard/key-list"
 import type { Channel } from "@/types"
 
 type Tags = NonNullable<Channel["tags"]>
@@ -195,7 +195,7 @@ export function ChannelCardTags({
             value={value}
             role="combobox"
             aria-label="Add tag"
-            {...shortcut("t")}
+            {...shortcut("tag")}
             aria-expanded={open}
             aria-controls={listId}
             aria-autocomplete="list"

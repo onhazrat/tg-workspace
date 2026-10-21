@@ -1,5 +1,5 @@
+import { ACTIONS } from "@/lib/keyboard/key-list"
 import { cn } from "@/lib/utils"
-import { SHORTCUTS } from "./FeedKeyboard"
 import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
 import {
   PostCardActions,
@@ -21,6 +21,8 @@ export interface PostCardViewProps extends PostCardHeaderProps {
   compact?: boolean
   /** Keyboard mode is on, so action tooltips name their letter. */
   keyboard?: boolean
+  /** Keyboard mode's Highlight is on this card: the 2 px blue ring. */
+  highlighted?: boolean
   /** The text to show: the translation while it is showing. */
   text: string
   /** Present only when the post is in a language that needs translating. */
@@ -54,14 +56,14 @@ export function SelectBox({
       readOnly
       aria-label={selected ? "Deselect this post" : "Select this post"}
       title="Select for Summarize and Chat (shift-click for a run)"
-      data-shortcut={SHORTCUTS.select}
+      data-shortcut={ACTIONS.tick.key}
       onClick={(e) => onToggle(e.shiftKey)}
       className="mt-1 size-4 shrink-0 cursor-pointer accent-blue-600"
     />
   )
 }
 
-/** Keyboard mode's ring on the card `FeedKeyboard` has selected. */
+/** Keyboard mode's ring on the highlighted card. */
 const RINGABLE =
   "scroll-mt-24 data-[kbd-selected]:ring-2 data-[kbd-selected]:ring-blue-500 data-[kbd-selected]:border-transparent"
 
@@ -73,6 +75,7 @@ const RINGABLE =
 export function PostCardView({
   compact = false,
   keyboard = false,
+  highlighted = false,
   text,
   translation,
   onFindRelated,
@@ -118,6 +121,7 @@ export function PostCardView({
     return (
       <article
         data-post-key={`${post.channelName}_${post.id}`}
+        data-kbd-selected={highlighted || undefined}
         className={cn(
           "flex flex-col gap-2 rounded-xl border border-app-ink/10 bg-app-card px-4 pt-3 pb-1.5 transition-colors hover:border-app-ink/20",
           RINGABLE,
@@ -146,6 +150,7 @@ export function PostCardView({
   return (
     <article
       data-post-key={`${post.channelName}_${post.id}`}
+      data-kbd-selected={highlighted || undefined}
       className={cn(
         "overflow-hidden rounded-2xl border border-app-ink/10 bg-app-card shadow-sm transition-colors hover:border-app-ink/20",
         RINGABLE,

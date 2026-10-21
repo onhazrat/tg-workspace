@@ -16,6 +16,8 @@ interface PostFeedResultsProps {
   compact?: boolean
   /** Keyboard mode is on. */
   keyboard?: boolean
+  /** Keyboard mode's Highlight: the card's `data-post-key`. */
+  highlight?: string | null
   /** Tick or untick a Post (PTR-05). */
   onToggleSelected: (post: Post, shift: boolean) => void
 }
@@ -29,6 +31,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
   postSearch,
   compact = false,
   keyboard = false,
+  highlight = null,
   onToggleSelected,
 }) =>
   isInitialLoading ? (
@@ -73,6 +76,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
           postSearch={postSearch}
           compact={compact}
           keyboard={keyboard}
+          highlighted={highlight === `${post.channelName}_${post.id}`}
           onToggleSelected={onToggleSelected}
         />
       ))}

@@ -8,15 +8,18 @@
  */
 import { useEffect, useRef, useState } from "react"
 import type { Command } from "@/lib/keyboard/interpreter"
-import type { ListId } from "@/lib/keyboard/key-list"
+import type { Action, ListId } from "@/lib/keyboard/key-list"
 import {
   announcement,
   lastHighlight,
+  shownList,
   useKeyboardMode,
 } from "@/lib/keyboard/mode"
 
 export interface ListAdapter {
   list: ListId
+  /** The actions shown now, for the corner list, when only some are. */
+  carried?: readonly Action[]
   /** The items' ids, in order. */
   items: readonly string[]
   /** The item's element, to find its controls; null while it is not mounted. */
@@ -157,6 +160,16 @@ export function useKeyboardList(adapter: ListAdapter): {
       if (mounted === self) mounted = null
     }
   }, [])
+
+  // What the corner list shows: this list's keys, those its items carry.
+  const carriedKey = adapter.carried?.join(" ")
+  useEffect(() => {
+    const shown = { list: adapter.list, carried: ref.current.adapter.carried }
+    shownList.set(shown)
+    return () => {
+      if (shownList.get() === shown) shownList.set(null)
+    }
+  }, [adapter.list, carriedKey])
 
   return { highlight: on ? highlight : null, setHighlight }
 }

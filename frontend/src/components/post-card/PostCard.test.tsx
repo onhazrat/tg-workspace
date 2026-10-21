@@ -11,7 +11,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { Toaster } from "sonner"
 import { isTranslationQuotaError } from "@/lib/translations/translation-errors"
 import type { Post } from "@/types"
-import { FeedKeyboard } from "./FeedKeyboard"
 import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
 import {
   PostCardActions,
@@ -246,9 +245,9 @@ describe("PostCardActions", () => {
     expect(screen.getByLabelText("Translate").textContent).toBe("Translate")
     const letter = (label: string) =>
       (screen.getByLabelText(label) as HTMLElement).dataset.shortcut
-    expect(letter("Translate")).toBe("t")
+    expect(letter("Translate")).toBe("l")
     expect(letter("Find Related Posts")).toBe("r")
-    expect(letter("Copy Link")).toBe("c")
+    expect(letter("Copy Link")).toBe("y")
     expect(letter("Open in Telegram")).toBe("o")
   })
 
@@ -548,28 +547,24 @@ describe("PostCardView", () => {
       )
     })
 
-    test("x fires it in Keyboard mode", () => {
-      toggled.length = 0
+    test("the box carries x, keyboard mode's Pick, and the card its Highlight", () => {
       render(
-        <>
-          <PostCardView
-            channel={undefined}
-            followsForwardSource={false}
-            onAddChannel={() => {}}
-            postSearch=""
-            text={full.text}
-            {...selection(true)}
-          />
-          <FeedKeyboard on />
-        </>,
+        <PostCardView
+          channel={undefined}
+          followsForwardSource={false}
+          onAddChannel={() => {}}
+          postSearch=""
+          text={full.text}
+          highlighted
+          {...selection(true)}
+        />,
       )
-      fireEvent.keyDown(document.body, { key: "j" })
-      fireEvent.keyDown(document.body, { key: "x" })
-
-      expect(toggled).toEqual([false])
-      expect(document.querySelector("article")?.className).not.toContain(
-        "opacity-50",
+      expect(screen.getByRole("checkbox").getAttribute("data-shortcut")).toBe(
+        "x",
       )
+      expect(
+        document.querySelector("article")?.hasAttribute("data-kbd-selected"),
+      ).toBe(true)
     })
   })
 
@@ -602,7 +597,7 @@ describe("PostCardView", () => {
     expect(screen.getByLabelText("Translate").textContent).toBe("")
   })
 
-  test("the name, a followed forward source and the footer open the spotlight, the footer on f", () => {
+  test("the name, a followed forward source and the footer open the spotlight, the footer on c", () => {
     const shown: string[] = []
     renderCard({
       post: { ...full, forwardedFrom: "src", forwardedFromName: "Source" },
@@ -612,7 +607,7 @@ describe("PostCardView", () => {
     fireEvent.click(screen.getByTitle("Show only posts from durov"))
     fireEvent.click(screen.getByTitle("Show only posts from Source"))
     const action = screen.getByLabelText("Show this Channel")
-    expect(action.dataset.shortcut).toBe("f")
+    expect(action.dataset.shortcut).toBe("c")
     fireEvent.click(action)
     expect(shown).toEqual(["durov", "src", "durov"])
   })

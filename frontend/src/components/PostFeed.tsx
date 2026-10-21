@@ -1,4 +1,4 @@
-import { Keyboard, LayoutGrid } from "lucide-react"
+import { LayoutGrid } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useRef } from "react"
@@ -13,6 +13,7 @@ import {
 } from "@/hooks/usePostsView"
 import { useCompactPostGrid, useSessionFlag } from "@/hooks/useSessionFlag"
 import { downloadBlob } from "@/lib/data-transfer/download"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { spotlightView } from "@/lib/posts/channel-spotlight"
 import { feedSubtitle } from "@/lib/posts/post-filter-bar"
 import {
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils"
 import { useData } from "../contexts/DataContext"
 import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { useUI } from "../contexts/UIContext"
 import { PostFeedResults } from "./PostFeedResults"
 import { PostFilter } from "./PostFilter"
 import { pillClass } from "./PostFilterParts"
@@ -41,9 +43,10 @@ import { PostSelectionBar } from "./PostSelectionBar"
 import {
   SpotlightBanner,
   SpotlightProvider,
+  useSpotlightBack,
   useSpotlightState,
 } from "./post-card/ChannelSpotlight"
-import { FeedKeyboard } from "./post-card/FeedKeyboard"
+import { usePostKeys } from "./post-card/FeedKeyboard"
 import { FeedPagingContext } from "./post-card/PhotoViewer"
 import { ReplyPreviewProvider } from "./post-card/ReplyParent"
 
@@ -84,7 +87,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   const spotlightApi = useSpotlightState(scrollContainerRef, postFilter, ranked)
   const { spotlight } = spotlightApi
   const [compact, setCompact] = useCompactPostGrid()
-  const [keyboard, setKeyboard] = useSessionFlag("postFeed_keyboard")
+  const keyboard = useKeyboardMode()
   const { counts, tooNewToJudge, selectedShown } = useShownPostCounts(spotlight)
   const [selectedFirst, setSelectedFirst] = useSessionFlag(
     "postFeed_selectedFirst",
@@ -99,6 +102,17 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   } = usePostsFeed(spotlight, {
     selectedFirst,
     selectedShownTotal: selectedShown,
+  })
+
+  const { setActiveTab } = useUI()
+  const backFromSpotlight = useSpotlightBack(spotlightApi, () =>
+    setActiveTab("channels"),
+  )
+  const highlight = usePostKeys({
+    keys: posts.map((p) => `${p.channelName}_${p.id}`),
+    onCompact: setCompact,
+    spotlit: spotlight !== null,
+    onSpotlightBack: backFromSpotlight,
   })
 
   const totalInScope = Object.values(counts).reduce((sum, n) => sum + n, 0)
@@ -233,25 +247,14 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             subtitle={subtitle}
             tooNewToJudge={tooNewToJudge}
             trailing={
-              <>
-                <button
-                  type="button"
-                  aria-pressed={compact}
-                  onClick={() => setCompact(!compact)}
-                  className={cn(pillClass(compact), "ml-auto")}
-                >
-                  <LayoutGrid size={12} /> Compact grid
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={keyboard}
-                  onClick={() => setKeyboard(!keyboard)}
-                  className={pillClass(keyboard)}
-                  title="j / k to move, gg / G to jump, an action's letter to fire it"
-                >
-                  <Keyboard size={12} /> Keyboard
-                </button>
-              </>
+              <button
+                type="button"
+                aria-pressed={compact}
+                onClick={() => setCompact(!compact)}
+                className={cn(pillClass(compact), "ml-auto")}
+              >
+                <LayoutGrid size={12} /> Compact grid
+              </button>
             }
           />
 
@@ -302,10 +305,10 @@ export const PostFeed: React.FC<PostFeedProps> = ({
               postSearch={postSearch}
               compact={compact}
               keyboard={keyboard}
+              highlight={highlight}
               onToggleSelected={onToggleSelected}
             />
           </ReplyPreviewProvider>
-          <FeedKeyboard on={keyboard} />
         </motion.div>
       </FeedPagingContext.Provider>
     </SpotlightProvider>

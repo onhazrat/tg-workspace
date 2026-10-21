@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { api } from "@/api"
-import { SHORTCUTS } from "./FeedKeyboard"
+import { ACTIONS } from "@/lib/keyboard/key-list"
 import { GALLERY_CAPTION_ATTR, PhotoViewerDialog } from "./PhotoViewer"
 
 /**
@@ -32,7 +32,7 @@ export function PostCardPhoto({
       <button
         type="button"
         aria-label="View image larger"
-        data-shortcut={SHORTCUTS.photo}
+        data-shortcut={ACTIONS.photo.key}
         className="block max-w-full cursor-zoom-in"
         onClick={() => setOpen(true)}
       >

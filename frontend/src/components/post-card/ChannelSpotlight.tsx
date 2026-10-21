@@ -26,8 +26,11 @@ import { ChannelAvatar } from "../ChannelAvatar"
 
 export interface SpotlightApi {
   spotlight: ChannelSpotlight | null
-  /** Absent outside the Posts feed, where there is no spotlight to open. */
-  enter?: (post: Post, channel: string) => void
+  /**
+   * Absent outside the Posts feed, where there is no spotlight to open. With
+   * no Post, leaving it scrolls back to nothing.
+   */
+  enter?: (post: Post | null, channel: string) => void
   leave: () => void
   setKeepFilters: (keep: boolean) => void
   /** An edit to the filter row while the spotlight is on. */
@@ -42,6 +45,21 @@ const SpotlightContext = createContext<SpotlightApi>({
 })
 
 export const SpotlightProvider = SpotlightContext.Provider
+
+/**
+ * A spotlight asked for from outside Posts (the Channels tab's c), for the
+ * feed to open once when it mounts. Only one tab is mounted at a time, so the
+ * request waits here rather than in either tab.
+ */
+let requested: string | null = null
+export const requestSpotlight = (channel: string) => {
+  requested = channel
+}
+export function takeSpotlightRequest(): string | null {
+  const channel = requested
+  requested = null
+  return channel
+}
 export const useSpotlight = () => useContext(SpotlightContext)
 
 /**
@@ -60,12 +78,14 @@ export function useSpotlightState(
   filterRef.current = accountFilter
 
   const enter = useCallback(
-    (post: Post, channel: string) => {
-      const from = `${post.channelName}_${post.id}`
-      origin.current ??= {
-        key: from,
-        top: scrollContainer.current?.scrollTop ?? 0,
-      }
+    (post: Post | null, channel: string) => {
+      // From outside Posts (the Channels tab's c) there is no card to return to.
+      const from = post ? `${post.channelName}_${post.id}` : ""
+      if (post)
+        origin.current ??= {
+          key: from,
+          top: scrollContainer.current?.scrollTop ?? 0,
+        }
       setSpotlight((current) =>
         enterSpotlight(current, channel, from, filterRef.current),
       )
@@ -117,6 +137,40 @@ export function useSpotlightState(
     () => ({ spotlight, enter, leave, setKeepFilters, setFilter }),
     [spotlight, enter, leave, setKeepFilters, setFilter],
   )
+}
+
+/**
+ * Opens the spotlight the Channels tab asked for (`requestSpotlight`), once,
+ * when the feed mounts. Returns keyboard mode's c inside a spotlight: back to
+ * Channels for one opened there, back to the feed otherwise.
+ */
+export function useSpotlightBack(
+  api: SpotlightApi,
+  toChannels: () => void,
+): () => void {
+  const { spotlight, enter, leave } = api
+  const fromChannels = useRef(false)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, on mount
+  useEffect(() => {
+    const channel = takeSpotlightRequest()
+    if (!channel || !enter) return
+    fromChannels.current = true
+    enter(null, channel)
+  }, [])
+  // Left by any way (Esc, its button, a search): no longer Channels'.
+  const wasOn = useRef(false)
+  useEffect(() => {
+    if (spotlight) wasOn.current = true
+    else if (wasOn.current) {
+      wasOn.current = false
+      fromChannels.current = false
+    }
+  }, [spotlight])
+  return () => {
+    const back = fromChannels.current
+    leave()
+    if (back) toChannels()
+  }
 }
 
 /** Escape belongs to whatever is open over the feed, or to a field being typed in. */

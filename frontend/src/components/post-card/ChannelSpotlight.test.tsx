@@ -15,7 +15,12 @@ import {
 import { useState } from "react"
 import { addPostFunnel, emptyPostFilter } from "@/lib/posts/post-filter"
 import type { Post } from "@/types"
-import { SpotlightBanner, useSpotlightState } from "./ChannelSpotlight"
+import {
+  requestSpotlight,
+  SpotlightBanner,
+  useSpotlightBack,
+  useSpotlightState,
+} from "./ChannelSpotlight"
 import { PhotoViewerDialog } from "./PhotoViewer"
 
 afterEach(cleanup)
@@ -156,5 +161,34 @@ describe("useSpotlightState", () => {
     expect(hook.result.current.spotlight).toBeNull()
     expect(scrolled).toEqual([{ top: 0 }])
     container.remove()
+  })
+})
+
+describe("a spotlight opened from the Channels tab", () => {
+  function useFeed(toChannels: () => void) {
+    const api = useSpotlightState({ current: null }, emptyPostFilter(), false)
+    return { api, back: useSpotlightBack(api, toChannels) }
+  }
+
+  test("opens with only a Channel, and c goes back to Channels", () => {
+    let toChannels = 0
+    requestSpotlight("durov")
+    const hook = renderHook(() => useFeed(() => toChannels++))
+    expect(hook.result.current.api.spotlight?.channel).toBe("durov")
+    act(() => hook.result.current.back())
+    expect(hook.result.current.api.spotlight).toBeNull()
+    expect(toChannels).toBe(1)
+  })
+
+  test("is taken once; a spotlight opened in Posts goes back to the feed", () => {
+    let toChannels = 0
+    requestSpotlight("durov")
+    renderHook(() => useFeed(() => toChannels++)).unmount()
+    const hook = renderHook(() => useFeed(() => toChannels++))
+    expect(hook.result.current.api.spotlight).toBeNull()
+    act(() => hook.result.current.api.enter?.(null, "other"))
+    act(() => hook.result.current.back())
+    expect(hook.result.current.api.spotlight).toBeNull()
+    expect(toChannels).toBe(0)
   })
 })

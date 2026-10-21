@@ -147,5 +147,7 @@ export function interpret(
   const n = state.count ? Number(state.count) : null
   if (state.g) return step(IDLE, afterG(key, n, ctx.list), true)
   if (key === "g") return step({ g: true, count: state.count }, null, true)
-  return step(IDLE, plain(key, n, ctx.list))
+  // Whether it did anything is the engine's to say: an Esc with nothing to
+  // drop belongs to whatever else listens (the spotlight's way back).
+  return step(IDLE, plain(key, n, ctx.list), false)
 }

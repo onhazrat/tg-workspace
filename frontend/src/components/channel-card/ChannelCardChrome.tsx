@@ -8,8 +8,8 @@ import {
   Trash2,
 } from "lucide-react"
 import { motion } from "motion/react"
-import { shortcut } from "@/lib/channels/card-zoom"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
+import { shortcut } from "@/lib/keyboard/key-list"
 import { languageLabel, languageValue } from "@/lib/language-name"
 import type { Channel } from "@/types"
 import { TgIconButton } from "../ui/tg-icon-button"
@@ -84,7 +84,7 @@ export function ChannelCardActions({
           variant="frosted"
           aria-label={freezeLabel}
           tooltip={freezeLabel}
-          {...shortcut("f")}
+          {...shortcut("freeze")}
           onClick={(e) => {
             e.stopPropagation()
             onToggleFreeze()
@@ -155,7 +155,7 @@ export function ChannelCardBadges({
         <button
           type="button"
           {...selectionHandlers(onToggleSelected)}
-          {...shortcut("x")}
+          {...shortcut("tick")}
           aria-label={selectLabel(channel.name, isSelected)}
           aria-pressed={isSelected}
           className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${

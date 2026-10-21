@@ -1,4 +1,5 @@
-import { type CardFace, shortcut } from "@/lib/channels/card-zoom"
+import type { CardFace } from "@/lib/channels/card-zoom"
+import { shortcut } from "@/lib/keyboard/key-list"
 import type { Channel, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
@@ -112,7 +113,7 @@ export function ChannelCardFace({
           aria-pressed={isSelected}
           aria-label={selectLabel(channel.name, isSelected)}
           {...selectionHandlers(onToggleSelected)}
-          {...shortcut("x")}
+          {...shortcut("tick")}
           className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         />
       )}

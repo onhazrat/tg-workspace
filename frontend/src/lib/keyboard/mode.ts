@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from "react"
 import { scopedSessionStorage } from "@/lib/storage/scoped"
 import { IDLE, type KeyState } from "./interpreter"
-import type { ListId } from "./key-list"
+import type { Action, ListId } from "./key-list"
 
 function store<T>(initial: T) {
   let value = initial
@@ -89,6 +89,14 @@ export const usePending = pending.use
 
 export const announcement = store("")
 export const useAnnouncement = announcement.use
+
+// ---- the list on screen, for the corner list ----
+
+export const shownList = store<{
+  list: ListId
+  carried?: readonly Action[]
+} | null>(null)
+export const useShownList = shownList.use
 
 // ---- each list's Highlight, kept across a tab switch ----
 

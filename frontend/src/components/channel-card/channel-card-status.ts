@@ -1,7 +1,7 @@
-import { shortcut } from "@/lib/channels/card-zoom"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import { channelAllows } from "@/lib/channels/sync-permissions"
 import { toVirtualGroupTagName } from "@/lib/channels/virtual-group-tags"
+import { shortcut } from "@/lib/keyboard/key-list"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 
 /** Percent of the channel's newest post the local copy has reached, or null when unknown. */
@@ -97,7 +97,7 @@ export function syncButtonProps(
   onSync: () => void,
 ) {
   return {
-    ...shortcut("s"),
+    ...shortcut("sync"),
     label: channel.isUnavailableOnWebView ? "Recheck" : "Sync",
     disabled: busy || !channelAllows(channel, "individual"),
     onClick: (event: { stopPropagation: () => void }) => {

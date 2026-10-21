@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { useLayoutEffect, useRef, useState } from "react"
+import { shortcut } from "@/lib/keyboard/key-list"
 import { renderPostText } from "@/lib/posts/render-post-text"
 import type { Post } from "@/types"
 import { isLongPost } from "./post-card-model"
@@ -39,6 +40,8 @@ export function PostCardBody({
       {long && (
         <button
           type="button"
+          {...shortcut("more")}
+          aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
           className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-app-ink/15 bg-app-muted/40 px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest text-app-ink/70 transition-colors hover:bg-app-ink/5 hover:text-app-ink"
         >
@@ -119,6 +122,8 @@ export function PostCardClampedBody({
       {(over || open) && (
         <button
           type="button"
+          {...shortcut("more")}
+          aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           className="mt-0.5 self-start text-[12px] font-medium text-blue-500 hover:underline"
         >

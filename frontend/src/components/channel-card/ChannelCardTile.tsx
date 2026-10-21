@@ -4,7 +4,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
-import { shortcut } from "@/lib/channels/card-zoom"
+import { shortcut } from "@/lib/keyboard/key-list"
 import type { Channel } from "@/types"
 import { ChannelCardPhoto } from "./ChannelCardHeader"
 import {
@@ -63,7 +63,7 @@ export function ChannelCardTile({
             aria-pressed={isSelected}
             aria-label={selectLabel(channel.name, isSelected)}
             {...selectionHandlers(onToggleSelected)}
-            {...shortcut("x")}
+            {...shortcut("tick")}
             className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
           />
           <ChannelCardPhoto
