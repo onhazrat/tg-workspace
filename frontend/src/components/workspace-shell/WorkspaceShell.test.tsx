@@ -18,6 +18,7 @@ import {
   oldestSync,
   opensShortcuts,
   routingMode,
+  stripNeighbour,
   THEME_TOOLTIPS,
   tabAnnouncements,
   tabLabel,
@@ -27,6 +28,24 @@ import {
 afterEach(cleanup)
 
 describe("workspace-shell-model", () => {
+  test("gt and gT step through the strip by a count, wrapping both ways", () => {
+    const tabs = [
+      { kind: "channels" },
+      { kind: "posts" },
+      { kind: "action" },
+      { kind: "summary", id: "s1" },
+    ] as const
+    const posts = tabs[1]
+    expect(stripNeighbour(tabs, posts, 1)).toEqual({ kind: "action" })
+    expect(stripNeighbour(tabs, posts, -1)).toEqual({ kind: "channels" })
+    expect(stripNeighbour(tabs, posts, -2)).toEqual({
+      kind: "summary",
+      id: "s1",
+    })
+    expect(stripNeighbour(tabs, tabs[3], 1)).toEqual({ kind: "channels" })
+    expect(stripNeighbour(tabs, posts, -5)).toEqual({ kind: "channels" })
+  })
+
   test("Tor wins over a proxy, and neither is direct", () => {
     expect(routingMode({ torEnabled: true, proxyEnabled: true }).label).toBe(
       "Tor",

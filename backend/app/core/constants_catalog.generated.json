@@ -1212,7 +1212,7 @@
       "comment": "How near the last loaded photo the viewer asks the feed for its next page.",
       "expression": "3",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 68,
+      "line": 70,
       "name": "PAGE_AHEAD",
       "value": 3
     },
@@ -1220,7 +1220,7 @@
       "comment": "Long enough for the second click or tap of a double to arrive before the first one closes the viewer or toggles its controls.",
       "expression": "250",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 325,
+      "line": 329,
       "name": "DOUBLE_TAP_MS",
       "value": 250
     },
@@ -1228,7 +1228,7 @@
       "comment": "How far apart, in px, the two taps of a double-tap may land.",
       "expression": "30",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 327,
+      "line": 331,
       "name": "DOUBLE_TAP_PX",
       "value": 30
     },
@@ -1236,7 +1236,7 @@
       "comment": "How far one finger must travel at 1x before it steps or closes.",
       "expression": "60",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 329,
+      "line": 333,
       "name": "SWIPE_PX",
       "value": 60
     },

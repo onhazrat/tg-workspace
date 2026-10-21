@@ -11,29 +11,9 @@ import {
   interpret,
   type KeyContext,
 } from "./interpreter"
+import { keydowns } from "./keydowns"
 
-const SHIFTED: Record<string, string> = {
-  "?": "Slash",
-  "*": "Digit8",
-  "+": "Equal",
-}
-
-/** A key as a US layout sends it: its code, and a Shift keydown before a capital. */
-function keys(...typed: string[]): Input[] {
-  return typed.flatMap((k): Input[] => {
-    if (k === "Escape" || k === "Enter") return [{ key: k, code: k }]
-    if (/^[0-9]$/.test(k)) return [{ key: k, code: `Digit${k}` }]
-    const shiftedCode =
-      SHIFTED[k] ?? (/^[A-Z]$/.test(k) ? `Key${k}` : undefined)
-    const shift: Input = { key: "Shift", code: "ShiftLeft", shiftKey: true }
-    if (shiftedCode)
-      return [shift, { key: k, code: shiftedCode, shiftKey: true }]
-    const code =
-      { "/": "Slash", "\\": "Backslash", "-": "Minus", ",": "Comma" }[k] ??
-      `Key${k.toUpperCase()}`
-    return [{ key: k, code }]
-  })
-}
+const keys = keydowns
 
 const ON_LIST: KeyContext = { on: true, list: true }
 

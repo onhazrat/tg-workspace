@@ -18,6 +18,10 @@ import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
 import { DirectoryView } from "./components/DirectoryView"
 import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
+import {
+  KeyboardMode,
+  type WorkspaceKeyOps,
+} from "./components/keyboard/KeyboardMode"
 import { PostFeed } from "./components/PostFeed"
 import QuotaWarning from "./components/QuotaWarning"
 import { SummaryView } from "./components/SummaryView"
@@ -43,6 +47,7 @@ import {
   oldestSync,
   opensShortcuts,
   routingMode,
+  stripNeighbour,
   THEME_TOOLTIPS,
 } from "./components/workspace-shell/workspace-shell-model"
 import { useData } from "./contexts/DataContext"
@@ -149,6 +154,22 @@ export default function App() {
    */
   const openArtifact = (artifact: ArtifactListItem) => {
     workspaceTabs.openTab(artifactDestination(artifact).tab, artifact.id)
+  }
+
+  /** The tab strip, as keyboard mode's g keys use it. */
+  const keyOps: WorkspaceKeyOps = {
+    go: setActiveTab,
+    step: (by) => {
+      const { tabs, active } = workspaceTabs
+      const next = stripNeighbour(tabs, active, by)
+      if (next) workspaceTabs.openTab(next.kind, next.id)
+    },
+    goToNth: (nth) => {
+      const next = workspaceTabs.tabs[nth - 1]
+      if (next) workspaceTabs.openTab(next.kind, next.id)
+    },
+    close: () => workspaceTabs.closeTab(workspaceTabs.active),
+    reopen: workspaceTabs.reopenLastTab,
   }
 
   useEffect(() => {
@@ -367,6 +388,8 @@ export default function App() {
           </div>
 
           {isRateLimited && <RateLimitBanner />}
+
+          <KeyboardMode ops={keyOps} />
 
           <ShortcutsDialog
             open={shortcutsOpen}

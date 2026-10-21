@@ -27,6 +27,7 @@ import {
 import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
 import { formatCount } from "@/lib/format-count"
+import { ACTIONS } from "@/lib/keyboard/key-list"
 import { languageLabel, languageValue } from "@/lib/language-name"
 import {
   headerCheckboxState,
@@ -34,7 +35,6 @@ import {
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
-import { DIRECTORY_SHORTCUTS } from "./DirectoryKeyboard"
 import { DirectoryMatchRow } from "./DirectoryMatches"
 import { TagBadges, TagPicker } from "./DirectoryTags"
 
@@ -65,7 +65,7 @@ export function RowTagButton({
             variant="ghost"
             size="sm"
             aria-label={`Tag @${row.handle}`}
-            data-shortcut={DIRECTORY_SHORTCUTS.tag}
+            data-shortcut={ACTIONS.tag.key}
             className="h-7 rounded-full px-2 text-app-ink/50"
           >
             <Tag size={11} />
@@ -320,7 +320,7 @@ function FollowButton({
       variant="secondary"
       size="sm"
       aria-label={`Follow @${row.handle}`}
-      data-shortcut={DIRECTORY_SHORTCUTS.follow}
+      data-shortcut={ACTIONS.follow.key}
       loading={busy}
       onClick={(e) => {
         e.stopPropagation()
@@ -360,7 +360,7 @@ export function FollowCell({
         variant="ghost"
         size="sm"
         aria-label={`${verb} @${row.handle}`}
-        data-shortcut={DIRECTORY_SHORTCUTS.dismiss}
+        data-shortcut={ACTIONS.dismiss.key}
         title={
           row.dismissed
             ? "Take the Dismissal back, here and in Discover"
@@ -404,7 +404,7 @@ function ChannelCell({ row }: { row: Row }) {
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           data-testid={`directory-channel-link-${row.handle}`}
-          data-shortcut={DIRECTORY_SHORTCUTS.open}
+          data-shortcut={ACTIONS.open.key}
           className="block truncate font-mono text-[10px] text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.handle}
@@ -610,7 +610,7 @@ export function DirectoryTable({
               <input
                 type="checkbox"
                 aria-label={`Tick @${r.handle}`}
-                data-shortcut={DIRECTORY_SHORTCUTS.tick}
+                data-shortcut={ACTIONS.tick.key}
                 checked={ticks.has(r.handle)}
                 onChange={() =>
                   onTicks(toggleUnfollowedSelection(r.handle, false, ticks))

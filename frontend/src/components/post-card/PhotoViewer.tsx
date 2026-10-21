@@ -16,6 +16,7 @@
  *
  * The photo is the card's cached thumbnail; there is no larger image.
  */
+
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import {
   createContext,
@@ -26,6 +27,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { readKey } from "@/lib/keyboard/interpreter"
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog"
 import {
   clampView,
@@ -239,10 +241,12 @@ export function PhotoViewer({
   useEffect(() => {
     // The viewer holds the keys while open (ADR-034): h / l are the arrows,
     // and p, which opens it from keyboard mode, closes it.
+    // Read by position, as keyboard mode reads them, so a Persian layout works.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" || e.key === "h") step(-right)
-      if (e.key === "ArrowRight" || e.key === "l") step(right)
-      if (e.key === "p" && !e.repeat && !e.metaKey && !e.ctrlKey) onClose()
+      const key = readKey(e)
+      if (key === "ArrowLeft" || key === "h") step(-right)
+      if (key === "ArrowRight" || key === "l") step(right)
+      if (key === "p" && !e.repeat && !e.metaKey && !e.ctrlKey) onClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)

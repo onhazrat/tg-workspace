@@ -4,7 +4,6 @@
  * `components/directory/`; this file only connects them to the server.
  */
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { Keyboard } from "lucide-react"
 import {
   type DirectoryDistributionRequest,
   type DirectoryWhyRequest,
@@ -19,10 +18,7 @@ import { DirectoryBar } from "@/components/directory/DirectoryBar"
 import type { BoostMode } from "@/components/directory/DirectoryBoost"
 import { DirectoryBoundEditor } from "@/components/directory/DirectoryBoundEditor"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
-import {
-  DirectoryKeyHelp,
-  useDirectoryKeyboard,
-} from "@/components/directory/DirectoryKeyboard"
+import { useDirectoryKeys } from "@/components/directory/DirectoryKeyboard"
 import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
 import {
   DirectoryTable,
@@ -40,7 +36,6 @@ import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
 import { useIsMobile } from "@/hooks/useMobile"
-import { useSessionFlag } from "@/hooks/useSessionFlag"
 import { useDirectoryTags } from "@/hooks/useTags"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
@@ -71,7 +66,6 @@ import {
 } from "@/lib/directory/directory-view"
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
 import type { TimeBound } from "@/lib/time-bound/bound"
-import { pillClass } from "./PostFilterParts"
 
 /** The filter without its bounds on `measure`, a measure or a moment, which
  * is what that one's spread is drawn under. */
@@ -353,11 +347,7 @@ export function DirectoryView() {
   }
   // Below md (DFP-02): the controls in a sheet, the rows as cards.
   const phone = useIsMobile()
-  const [keyboardFlag, setKeyboard] = useSessionFlag("directory_keyboard")
-  // A phone has no Keyboard switch, so a flag left on at a desk stays off here.
-  const keyboard = keyboardFlag && !phone
-  const ring = useDirectoryKeyboard({
-    on: keyboard,
+  const ring = useDirectoryKeys({
     handles: shown.rows.map((r) => r.handle),
     open: d.open,
     onOpen: d.setOpen,
@@ -414,15 +404,6 @@ export function DirectoryView() {
           onRename={(name, to) => void tags.rename(name, to)}
           onDelete={(name) => void tags.remove(name)}
         />
-        <button
-          type="button"
-          aria-pressed={keyboard}
-          onClick={() => setKeyboard(!keyboard)}
-          className={`${pillClass(keyboard)} max-md:hidden`}
-          title="j / k to move, gg / G to jump, ] / [ to turn the page, an action's letter to fire it"
-        >
-          <Keyboard size={12} /> Keyboard
-        </button>
       </div>
       <DirectoryBulkBar
         whole={whole}
@@ -496,7 +477,6 @@ export function DirectoryView() {
           }
         />
       )}
-      <DirectoryKeyHelp on={keyboard} />
     </div>
   )
 }

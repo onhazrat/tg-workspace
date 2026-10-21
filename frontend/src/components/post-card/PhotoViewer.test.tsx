@@ -116,7 +116,8 @@ describe("PhotoViewer", () => {
   test("h and l step as the arrows do, and p closes", () => {
     const onClose = mock()
     render(<PhotoViewer start="blob:b" onClose={onClose} />)
-    fireEvent.keyDown(window, { key: "l" })
+    // By position: a Persian layout types م at l.
+    fireEvent.keyDown(window, { key: "م", code: "KeyL" })
     expect(label()).toContain("Chan c · 3 / 3")
     fireEvent.keyDown(window, { key: "h" })
     fireEvent.keyDown(window, { key: "h" })

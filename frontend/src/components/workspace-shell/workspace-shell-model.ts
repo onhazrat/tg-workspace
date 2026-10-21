@@ -156,6 +156,17 @@ export function tabPresentation(
   }
 }
 
+/** The tab `by` places along the strip from `active`, wrapping: gt and gT. */
+export function stripNeighbour(
+  tabs: readonly Tab[],
+  active: Tab,
+  by: number,
+): Tab | undefined {
+  const at = tabs.findIndex((t) => sameTab(t, active))
+  const n = tabs.length
+  return tabs[(((at + by) % n) + n) % n]
+}
+
 /**
  * What a screen reader hears while a tab is dragged (TABS-02): the tabs'
  * labels, where dnd-kit's defaults would read out their internal keys.
