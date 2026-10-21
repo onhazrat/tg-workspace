@@ -19,7 +19,7 @@ drops the Highlight or closes the Directory's panel.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: the photo
 viewer), ADR-034 (the viewer keeps its own keys), `../prototype.md`. Prototype at
@@ -43,3 +43,8 @@ a6aa1eb6; port without the `?variant=` gates:
 - [ ] Escape closing the viewer leaves the Directory's Highlight and panel as they were, and the Channels tab's Highlight as it was.
 - [ ] Unit tests for each of the above; one Playwright spec opens a row's photo, steps to the next row's, closes, and lands on that row.
 - [ ] The build and test typechecks pass, and a render test covers any new branching component.
+
+## Comments
+
+- 2026-10-22: implemented on `claude/km-01-directory-photo-viewer` and merged into the integration branch in a26fae2e (fast-forward).
+  Open: the viewer's `h` / `l` / `p` read the typed character, not the key's position; handed to KM-02.
