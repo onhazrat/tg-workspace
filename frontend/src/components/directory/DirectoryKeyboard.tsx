@@ -133,6 +133,8 @@ const KEY_HELP = [
   [DIRECTORY_SHORTCUTS.dismiss, "dismiss or take back"],
   [DIRECTORY_SHORTCUTS.open, "open in Telegram"],
   [DIRECTORY_SHORTCUTS.tag, "tag"],
+  // The avatar's own key, as on the Channels tab's cards (`ChannelAvatar`).
+  ["p", "view the photo"],
   ["esc", "drop the highlight"],
 ] as const
 

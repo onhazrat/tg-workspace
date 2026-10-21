@@ -6,7 +6,14 @@
  * exactly the letters the current size's cards carry a control for.
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import {
   type CardFieldSettings,
   type CardZoom,
@@ -283,6 +290,30 @@ describe("a letter presses the highlighted card's own control", () => {
     press("x")
     expect(highlighted()).toEqual(["a"])
     expect(s.select).not.toHaveBeenCalled()
+  })
+
+  test("p again closes the photo, and an Esc the viewer took keeps the highlight (KM-01)", async () => {
+    render(<Grid />)
+    await settle()
+    press("j")
+    press("p")
+    expect(screen.getByRole("dialog", { name: "Channel photo" })).toBeTruthy()
+    press("p")
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(highlighted()).toEqual(["a"])
+
+    // In a browser the viewer is gone before the grid hears the Escape that
+    // closed it; all the grid sees is a key already taken.
+    const taken = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    })
+    taken.preventDefault()
+    act(() => {
+      window.dispatchEvent(taken)
+    })
+    expect(highlighted()).toEqual(["a"])
   })
 
   test("a letter with a modifier held, or with nothing highlighted, does nothing", () => {

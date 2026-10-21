@@ -6,7 +6,7 @@
  * follows the highlight while open, and Esc drops the highlight and closes it.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import { DirectoryKeyHelp, useDirectoryKeyboard } from "./DirectoryKeyboard"
 
@@ -145,6 +145,25 @@ describe("the Directory's keyboard mode", () => {
     expect(opened()).toBe("")
     press("x")
     expect(pressed).toEqual([])
+  })
+
+  test("an Esc a dialog already took leaves the highlight and the panel (KM-01)", () => {
+    render(<Directory />)
+    press("j")
+    press("Enter")
+    // The photo viewer closes on Escape and marks it taken; in a browser the
+    // dialog is gone before the page's own listener hears the key.
+    const taken = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    })
+    taken.preventDefault()
+    act(() => {
+      window.dispatchEvent(taken)
+    })
+    expect(ringed()).toEqual(["a"])
+    expect(opened()).toBe("a")
   })
 
   test("typing in a field or an open dialog fires nothing", () => {

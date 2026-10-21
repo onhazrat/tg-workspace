@@ -508,4 +508,16 @@ describe.each([
     })
     expect(avatar.className.split(" ")).toContain("shrink-0")
   })
+
+  test("keyboard mode's p presses the highlighted row's avatar", async () => {
+    mount({ cards, rows: pictured() })
+    const avatar = await screen.findByRole("button", {
+      name: "View alpha name's photo",
+    })
+    expect(
+      screen
+        .getByTestId(`${testid}-alpha`)
+        .querySelector('[data-shortcut="p"]'),
+    ).toBe(avatar)
+  })
 })

@@ -1620,7 +1620,7 @@
       "comment": "Two g presses closer than this are gg.",
       "expression": "600",
       "file": "frontend/src/lib/keyboard-moves.ts",
-      "line": 36,
+      "line": 39,
       "name": "GG_MS",
       "value": 600
     },

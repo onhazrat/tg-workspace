@@ -27,6 +27,9 @@ export function focusIsTyping(): boolean {
 
 /** Keys belong to the page only when nothing else could be listening for them. */
 export function keyBelongsElsewhere(e: KeyboardEvent): boolean {
+  // A dialog that closed on this key (Escape) took it, even though it is
+  // already gone from the page by the time the page's listener hears it.
+  if (e.defaultPrevented) return true
   if (e.metaKey || e.ctrlKey || e.altKey || focusIsTyping()) return true
   // Includes the photo viewer, which owns the arrow keys while it is open.
   return document.querySelector('[role="dialog"]') !== null
