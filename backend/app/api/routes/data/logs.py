@@ -232,6 +232,7 @@ LOG_LIST_RESPONSES: dict[str, type[LogEntryResponse]] = {
 }
 
 
+# Sync logs became shared in ticket 19.
 @router.delete("/logs")
 def purge_logs(
     session: SessionDep,
@@ -252,8 +253,8 @@ def purge_logs(
     `SHARED_LOG_TYPES` is the exception, and it is derived from the tenancy
     classification rather than listed here: for a type nobody owns a row of,
     there is no owner for `get_log` to answer to, so the single-row delete is an
-    administrative act like the two sweeps. That covers sync logs from ticket 19
-    and network logs, which have been deletable one row at a time by any
+    administrative act like the two sweeps. That covers sync logs and network
+    logs, which have been deletable one row at a time by any
     authenticated account since the Admin gate went on their *reads* alone.
     """
     if older_than_days is not None and older_than_days > 0:

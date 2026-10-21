@@ -13,7 +13,7 @@ set -x
 # A script nothing type-checks breaks silently and is discovered by an operator
 # running it, which is the worst moment to discover it. `../scripts/crap` feeds
 # the CRAP ratchet CI gate; ruff reaches it through the pre-commit hooks.
-mypy app scripts ../scripts/crap
-ty check app
-ruff check app scripts
-ruff format app scripts --check
+uv run mypy app scripts ../scripts/crap
+uv run ty check app
+uv run ruff check app scripts
+uv run ruff format app scripts --check

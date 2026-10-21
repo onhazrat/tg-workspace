@@ -49,6 +49,8 @@ router = APIRouter(prefix="/view-as", tags=["view-as"])
 _NOT_VIEWABLE = "No account to view"
 
 
+# Ticket 27 widens what an elevated session may do; the nesting note below is
+# why that widening cannot route around this handler.
 @router.post(
     "/{user_id}",
     dependencies=[Depends(require_permission(Permission.VIEW_AS))],
@@ -76,7 +78,7 @@ def start_view_as(
     that cannot fail.** This is a POST, and `deps.view_as_allows` does not
     allowlist it, so a View-as token is refused by `get_current_user` before the
     handler runs. `test_view_as.py` asserts that at the HTTP level rather than
-    here — which is the assertion that survives ticket 27 widening what an
+    here — which is the assertion that survives a later widening of what an
     elevated session may do, where an unreachable branch in this file would
     silently become the only thing standing between an audit row and a lie.
     """

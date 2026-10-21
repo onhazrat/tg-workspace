@@ -87,6 +87,7 @@ class ChatSessionSubmitRequest(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
+# The Scope became immovable in AW-06.
 class ChatSessionUpsertRequest(BaseModel):
     """Body for `PUT /data/chat-sessions/{id}`.
 
@@ -95,7 +96,7 @@ class ChatSessionUpsertRequest(BaseModel):
     table. `title` and `messageCount` are derived on write and stripped, so a
     client round-tripping a list item cannot shadow them.
 
-    It cannot move the Scope (AW-06). `channels`, `startDate`, `endDate` and
+    It cannot move the Scope. `channels`, `startDate`, `endDate` and
     `scope` are dropped by `upsert_chat_session`, which matters more here than
     it does for a Summary: a chat PUTs its whole session back on every turn, so
     a settable window meant a conversation held across a Live boundary recorded

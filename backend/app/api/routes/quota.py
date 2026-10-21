@@ -118,9 +118,10 @@ def read_quota_usage(
     )
 
 
+# Ticket 24.
 @router.get("/me", response_model=MyQuotaResponse)
 def read_my_quota(session: SessionDep, current_user: CurrentUser) -> MyQuotaResponse:
-    """Where the calling account stands on each Budget today (ticket 24).
+    """Where the calling account stands on each Budget today.
 
     The fourth checkbox: a User sees per-Budget usage, and the browser turns
     `status` into the persistent warning. `status` is computed here rather than
@@ -214,6 +215,7 @@ def read_quota_limits(session: SessionDep) -> QuotaLimitsResponse:
     )
 
 
+# The two-table settings split is ticket 06.
 @router.put(
     "/limits/defaults",
     dependencies=[Depends(require_permission(Permission.QUOTA_MANAGE))],
@@ -226,8 +228,8 @@ def set_quota_defaults(
 
     Written to the global `quota` settings row through `settings_store`, which
     is the sole writer of `tg_app_settings` — a second writer here would be the
-    second opinion about where a key belongs that the ticket 06 split exists to
-    remove.
+    second opinion about where a key belongs that the two-table settings split
+    exists to remove.
 
     A `null` field clears that default, dropping back to `config.py`. It is
     stored as a null rather than deleted, which `stored_default` reads as
