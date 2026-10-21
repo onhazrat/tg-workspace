@@ -306,6 +306,8 @@ function useUncappedView(spotlight: ChannelSpotlight | null) {
 export function usePostValueHistogram(
   measure: PostNumber,
   spotlight: ChannelSpotlight | null,
+  /** Bin only this range, on the scale first drawn (TB-04). */
+  zoom?: { lo: number; hi: number; log: boolean } | null,
 ): PostValueHistogramResponse | undefined {
   const { startDate, endDate, windowKey, view } = useUncappedView(spotlight)
   const { channelNames } = view
@@ -318,6 +320,7 @@ export function usePostValueHistogram(
       channelNames,
       window: windowKey,
       measure,
+      ...zoom,
       ...(filters && {
         keyword: filters.keyword,
         filter: printPostFilter(filters.filter),
@@ -328,6 +331,7 @@ export function usePostValueHistogram(
         body: {
           ...postScopeBody({ channelNames, startDate, endDate, ...filters }),
           measure,
+          ...zoom,
         } as PostValueHistogramRequest,
       }),
     enabled: channelNames.length > 0,

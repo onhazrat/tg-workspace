@@ -49,10 +49,14 @@ Each mutation was applied alone and this module (or the named guard) went red:
 * read Followed from every Account's Follows -> the other Account's opening view
 * count Reference rows instead of distinct Citing Channels -> dt_fa_big counts 3
 * drop the Reference kinds narrowing -> the forward-only case
-* ignore the window on "Cited by your channels" -> `mine(7)` keeps dt_en_news
+* ignore the window on "Cited by your channels" -> its Live start keeps dt_en_news
+* drop the window's End, or include it -> the Cited by your channels windows (TB-02)
+* resolve a Live window from 0 instead of now -> the same
 * resolve "every follow" for an empty selection -> the empty-source case
 * sort without the handle tiebreak -> the opening view's zero-count tail
 * keep the measure's own bound in the distribution -> its total
+* bin the whole spread whatever the zoom -> the zoomed case (TB-04)
+* count values outside the zoom into its end bars -> the zoomed case
 * keep Language Conditions in the Language counts -> the counts case
 * drop `autoescape` from Name contains -> "%" matches everything
 * never reuse a cached total -> the reuse case
@@ -324,8 +328,9 @@ def moment(which: str, mode: str, **ends: Any) -> dict[str, Any]:
     return {"type": "time", "moment": which, "mode": mode, **ends}
 
 
-def mine(days: int | None = None) -> dict[str, Any]:
-    return {"type": "mine", "days": days}
+def mine(mode: str | None = None, **ends: Any) -> dict[str, Any]:
+    """Cited by your channels, with a Time bound on the citing Posts (TB-02)."""
+    return {"type": "mine"} if mode is None else {"type": "mine", "mode": mode, **ends}
 
 
 def cited_by(*handles: str) -> dict[str, Any]:
@@ -466,7 +471,7 @@ def _but(*left_out: str) -> list[str]:
         (root(atom(flag("followable"), negated=True)), ["dt_dead"]),
         (root(atom(mine())), ["dt_fa_big", "dt_en_news", "dt_fa_small"]),
         # The window: dt_en_news was last cited 30 days ago.
-        (root(atom(mine(7))), ["dt_fa_big", "dt_fa_small"]),
+        (root(atom(mine("live", start=-7 * DAY))), ["dt_fa_big", "dt_fa_small"]),
         # DIR-05: counted in distinct Citing Channels, over every Channel.
         (root(atom(measure("cited_by", min=3))), ["dt_en_news"]),
         (
@@ -535,6 +540,62 @@ def test_each_condition_narrows_the_list(
     page = _list(client, operator, filter=tree, sort="subscribers")
     assert [row["handle"] for row in page["rows"]] == expected
     assert page["total"] == len(expected)
+
+
+def test_cited_by_your_channels_counts_the_citing_posts_in_a_time_bound(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """The window is `[start, end)` on when the citing Posts were published,
+    either end open, a Live end from now (TB-02). The Operator's citing Posts
+    are 1, 2 and 4 days old for dt_fa_big, 3 for dt_fa_small, 30 for dt_en_news."""
+    operator, _ = accounts
+    now = int(time.time() * 1000)
+
+    def kept(window: dict[str, Any]) -> tuple[list[str], int]:
+        listed = _handles(
+            client, operator, filter=root(atom(window)), sort="subscribers"
+        )
+        response = client.post(
+            f"{DIRECTORY}/count", json={"candidate": atom(window)}, headers=operator
+        )
+        assert response.status_code == 200, response.text
+        return listed, int(response.json()["total"])
+
+    cases = [
+        (mine("live", start=-35 * DAY, end=-7 * DAY), ["dt_en_news"]),
+        (mine("live", end=-3 * DAY - 12 * HOUR), ["dt_fa_big", "dt_en_news"]),
+        (mine("live"), ["dt_fa_big", "dt_en_news", "dt_fa_small"]),
+        (
+            mine("fixed", start=now - 7 * DAY, end=now - 3 * DAY - 12 * HOUR),
+            ["dt_fa_big"],
+        ),
+        (mine("fixed", start=now - 3 * DAY - 12 * HOUR), ["dt_fa_big", "dt_fa_small"]),
+        (mine("fixed", end=now - 10 * DAY), ["dt_en_news"]),
+    ]
+    for window, expected in cases:
+        assert kept(window) == (expected, len(expected)), window
+
+
+@pytest.mark.parametrize(
+    "window",
+    [
+        {"type": "mine", "days": 14},
+        mine("live", start=-DAY, end=-2 * DAY),
+        mine("live", start=-200 * 365 * DAY),
+        {"type": "mine", "mode": "live", "start": -DAY, "none": True},
+    ],
+)
+def test_a_cited_by_your_channels_window_it_cannot_read_is_refused(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]], window: Any
+) -> None:
+    """`days` is gone, not read as a window (TB-02); nor is No value offered."""
+    operator, _ = accounts
+    response = client.post(
+        f"{DIRECTORY}/list",
+        json={"filter": root(atom(window)), "columns": []},
+        headers=operator,
+    )
+    assert response.status_code == 422
 
 
 def test_followed_is_the_accounts_own(
@@ -892,6 +953,49 @@ def test_a_linear_measure_and_one_with_no_values(
     assert (empty["total"], empty["noValue"], empty["bins"]) == (7, 7, [])
 
 
+def test_a_zoomed_distribution_bins_only_its_range(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """TB-04: the bars span the zoom; the whole spread's fields stay whole."""
+    operator, _ = accounts
+    response = client.post(
+        f"{DIRECTORY}/distribution",
+        json={"measure": "subscribers", "lo": 2000, "hi": 8000},
+        headers=operator,
+    )
+    assert response.status_code == 200, response.text
+    spread = response.json()
+    assert spread["scale"] == "log"
+    assert (spread["min"], spread["max"], spread["median"]) == (800, 50000, 7000)
+    assert (spread["total"], spread["noValue"]) == (7, 2)
+    # 3000 and 7000; 800, 12000 and 50000 lie outside.
+    assert sum(b["count"] for b in spread["bins"]) == 2
+    assert spread["bins"][0]["lo"] == pytest.approx(2000)
+    assert spread["bins"][-1]["hi"] == pytest.approx(8000)
+
+    linear = client.post(
+        f"{DIRECTORY}/distribution",
+        json={"measure": "forward_pct", "lo": 10, "hi": 40},
+        headers=operator,
+    ).json()
+    # 10 to 40 in 32 bars of 0.9375: 20 in bar 10, 40 in the last.
+    assert [i for i, b in enumerate(linear["bins"]) if b["count"]] == [10, 31]
+    assert (linear["min"], linear["max"]) == (0, 40)
+
+
+def test_a_zoom_needs_both_ends_in_order(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    for zoom in ({"lo": 10}, {"hi": 10}, {"lo": 40, "hi": 10}):
+        response = client.post(
+            f"{DIRECTORY}/distribution",
+            json={"measure": "forward_pct", **zoom},
+            headers=operator,
+        )
+        assert response.status_code == 422, zoom
+
+
 def test_the_count_previews_a_candidate_condition(
     client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
 ) -> None:
@@ -1200,12 +1304,69 @@ def test_why_its_here_keeps_the_window_and_the_reference_kinds(
 ) -> None:
     _write_citing_posts()
     operator, _ = accounts
-    assert [p[:2] for p in _why(client, operator, "dt_fa_big", FOLLOWS, days=3)] == [
-        ("src_a1", 0),
-        ("src_a2", 3),
-    ]
+    live = _why(client, operator, "dt_fa_big", FOLLOWS, mode="live", start=-3 * DAY)
+    assert [p[:2] for p in live] == [("src_a1", 0), ("src_a2", 3)]
     by_kind = _why(client, operator, "dt_fa_big", FOLLOWS, referenceKinds=["mention"])
     assert [p[:2] for p in by_kind] == [("src_a1", 1)]
+
+
+def test_why_its_here_counts_the_conditions_time_bound(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """The same `[start, end)` as the Condition, Live or Fixed (TB-02)."""
+    _write_citing_posts()
+    operator, _ = accounts
+    now = int(time.time() * 1000)
+    windows: list[tuple[dict[str, Any], list[tuple[str, int]]]] = [
+        ({"mode": "live", "end": -DAY - 12 * HOUR}, [("src_a2", 3), ("src_a1", 1)]),
+        (
+            {"mode": "live", "start": -5 * DAY, "end": -2 * DAY - 12 * HOUR},
+            [("src_a1", 1)],
+        ),
+        ({"mode": "fixed", "start": now - DAY - 12 * HOUR}, [("src_a1", 0)]),
+        ({"mode": "fixed", "end": now - 3 * DAY}, [("src_a1", 1)]),
+        ({"mode": "live"}, [("src_a1", 0), ("src_a2", 3), ("src_a1", 1)]),
+    ]
+    for window, expected in windows:
+        response = client.post(
+            f"{DIRECTORY}/why",
+            json={"handle": "dt_fa_big", "yours": FOLLOWS, **window},
+            headers=operator,
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert [(p["channel"], p["postId"]) for p in body["posts"]] == expected, window
+        assert body["total"] == len(expected)
+
+
+def test_a_window_keeps_its_start_and_drops_its_end(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    """`[start, end)` to the ms, in the panel and the Condition alike."""
+    _write_citing_posts()
+    operator, _ = accounts
+    small = {"handle": "dt_fa_small", "yours": FOLLOWS}
+    posted = client.post(f"{DIRECTORY}/why", json=small, headers=operator)
+    (only,) = posted.json()["posts"]
+    at = int(only["timestamp"])
+    for window, kept in (({"start": at}, True), ({"end": at}, False)):
+        bound = {"mode": "fixed", **window}
+        why = client.post(f"{DIRECTORY}/why", json=small | bound, headers=operator)
+        assert why.json()["total"] == int(kept), window
+        listed = _handles(client, operator, filter=root(atom(mine(**bound))))
+        assert ("dt_fa_small" in listed) is kept, window
+
+
+def test_why_its_here_refuses_days(
+    client: TestClient, accounts: tuple[dict[str, str], dict[str, str]]
+) -> None:
+    operator, _ = accounts
+    response = client.post(
+        f"{DIRECTORY}/why",
+        json={"handle": "dt_fa_big", "yours": FOLLOWS, "days": 3},
+        headers=operator,
+    )
+    assert response.status_code == 422
 
 
 # ---- Neighbours (DIR-05) -------------------------------------------------------------

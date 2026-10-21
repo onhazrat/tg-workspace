@@ -112,7 +112,9 @@ export interface ScopeContextType {
   clearEditorRequest: () => void
 }
 
-const ScopeContext = createContext<ScopeContextType | undefined>(undefined)
+export const ScopeContext = createContext<ScopeContextType | undefined>(
+  undefined,
+)
 
 type Drafts = Partial<Record<ScopeField, string>>
 

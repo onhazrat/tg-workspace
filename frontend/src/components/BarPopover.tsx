@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react"
 import { Popover } from "radix-ui"
 import type React from "react"
 
@@ -46,6 +47,23 @@ export const BarHeading = ({ children }: { children: React.ReactNode }) => (
   <div className="px-2 pb-1 pt-2 text-[11px] font-semibold text-app-ink/60">
     {children}
   </div>
+)
+
+/**
+ * A Filters menu row's name with its symbol, as the Directory's condition
+ * menu draws one (TB-03).
+ */
+export const MenuRowLabel = ({
+  icon: Icon,
+  label,
+}: {
+  icon: LucideIcon
+  label: string
+}) => (
+  <span className="flex items-center gap-2">
+    <Icon size={11} aria-hidden />
+    {label}
+  </span>
 )
 
 /** The popover input: the search box below, and every field in a bar or panel form. */

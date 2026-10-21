@@ -45,7 +45,6 @@ take-back moves the total at once (DIR-06).
 
 from __future__ import annotations
 
-import math
 import time
 import uuid
 from collections.abc import Mapping, Sequence
@@ -88,6 +87,7 @@ from app.models_tg import (
     utc_now,
 )
 from app.services import search_text, tags
+from app.services.analysis_window import TimeBound
 from app.services.channel_directory import LISTED_KIND
 from app.services.channel_directory_samples import samples_by_handle
 from app.services.channel_tags import tag_key
@@ -106,6 +106,7 @@ from app.services.post_filters import (
 from app.services.posts import lookup_posts
 from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
 from app.services.settings_store import get_global_setting
+from app.services.spread_bars import Bin, spread_range
 from app.services.telegram_web import normalize_handle
 from app.services.tenancy import scoped_select, unscoped_select
 
@@ -161,7 +162,6 @@ DIRECTORY_MOMENTS: tuple[DirectoryMoment, ...] = get_args(DirectoryMoment)
 #: What the "is" Condition tests, and what the "contains" Condition searches.
 IsField = Literal["status", "kind"]
 ContainsField = Literal["last_error"]
-TimeMode = Literal["live", "fixed"]
 #: Every column of the catalogue, plus the "your channels" reads: how many cite
 #: it, and how many days since the newest of them did.
 DirectorySort = Literal[
@@ -283,7 +283,6 @@ _LINEAR: frozenset[str] = frozenset(
         *DIRECTORY_MOMENTS,
     }
 )
-_HISTOGRAM_BINS = 32
 
 
 @dataclass(frozen=True)
@@ -339,17 +338,17 @@ class TimeCond:
     """
 
     moment: DirectoryMoment
-    mode: TimeMode
-    start: int | None = None
-    end: int | None = None
+    bound: TimeBound
     none: bool = False
 
 
 @dataclass(frozen=True)
 class MineCond:
-    """Cited by your channels, ever or within the last `days`."""
+    """Cited by your channels, within a Time bound on when the citing Posts
+    were published, `[start, end)` as `TimeCond` reads it; ever with both
+    ends open (TB-02)."""
 
-    days: int | None = None
+    bound: TimeBound = TimeBound()
 
 
 # The three Conditions taking Seeds hold either the handles the browser
@@ -691,15 +690,18 @@ def _of_kinds(view: DirectoryView) -> list[ColumnElement[bool]]:
 
 
 def _references(
-    view: DirectoryView, *, days: int | None = None
+    view: DirectoryView, window: TimeBound | None = None
 ) -> list[ColumnElement[bool]]:
     """The References "your channels" make, narrowed by the Reference kinds,
-    and to the last `days` when given."""
+    and to the window when given."""
     clauses = [col(PostReference.source_channel) == any_(_handles(view.sources))]
     clauses += _of_kinds(view)
-    if days is not None:
-        since_ms = _epoch_ms(view.now) - days * 86_400_000
-        clauses.append(col(PostReference.timestamp) >= since_ms)
+    if window is not None:
+        at = window.resolve(_epoch_ms(view.now))
+        if at.start is not None:
+            clauses.append(col(PostReference.timestamp) >= at.start)
+        if at.end is not None:
+            clauses.append(col(PostReference.timestamp) < at.end)
     return clauses
 
 
@@ -830,7 +832,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
     if isinstance(cond, MineCond):
         if not view.sources:
             return false()
-        refs = _references(view, days=cond.days)
+        refs = _references(view, cond.bound)
         # Uncorrelated, so Postgres hashes it once even under an OR or a NOT.
         return handle.in_(sa_select(col(PostReference.target_handle)).where(*refs))
     if isinstance(cond, CitedByCond | CitesCond):
@@ -863,12 +865,12 @@ def _time_bound(cond: TimeCond, now: datetime) -> ColumnElement[bool]:
     column = col(getattr(DirectoryEntry, cond.moment))
     if cond.none:
         return column.is_(None)
-    base = _epoch_ms(now) if cond.mode == "live" else 0
+    at = cond.bound.resolve(_epoch_ms(now))
     bounds: list[ColumnElement[bool]] = [column.is_not(None)]
-    if cond.start is not None:
-        bounds.append(column >= literal(_naive(base + cond.start), DateTime))
-    if cond.end is not None:
-        bounds.append(column < literal(_naive(base + cond.end), DateTime))
+    if at.start is not None:
+        bounds.append(column >= literal(_naive(at.start), DateTime))
+    if at.end is not None:
+        bounds.append(column < literal(_naive(at.end), DateTime))
     return and_(*bounds)
 
 
@@ -1598,28 +1600,26 @@ def why_its_here(
     session: Session,
     view: DirectoryView,
     handle: str,
-    *,
-    days: int | None,
+    window: TimeBound,
 ) -> Why:
     """The Posts of "your channels" that cite `handle`, newest first, and the
     Channels it shares with the Seeds of each Shared Condition in the view's
     tree, whatever the Seeds came from (DFP-05).
 
-    One entry per Post, with every kind it cites in; inside the last `days`
-    when the "Cited by your channels" Condition sets a window, so the panel
-    counts what the sort and the Condition count.
+    One entry per Post, with every kind it cites in; inside the "Cited by your
+    channels" Condition's window, so the panel counts what the Condition counts.
     """
     parents = _first_shared(view.tree, "parents")
     children = _first_shared(view.tree, "children")
     return replace(
-        _citing_posts(session, view, handle, days=days),
+        _citing_posts(session, view, handle, window),
         parents=None if parents is None else shared_why(session, handle, parents),
         children=None if children is None else shared_why(session, handle, children),
     )
 
 
 def _citing_posts(
-    session: Session, view: DirectoryView, handle: str, *, days: int | None
+    session: Session, view: DirectoryView, handle: str, window: TimeBound
 ) -> Why:
     if not view.sources:
         return Why(posts=[], total=0)
@@ -1631,7 +1631,7 @@ def _citing_posts(
             func.max(col(r.timestamp)).label("ts"),
             func.array_agg(distinct(col(r.kind))).label("kinds"),
         )
-        .where(*_references(view, days=days), col(r.target_handle) == handle)
+        .where(*_references(view, window), col(r.target_handle) == handle)
         .group_by(col(r.source_channel), col(r.source_post_id))
         .subquery("per_post")
     )
@@ -1853,13 +1853,6 @@ def directory_size(session: Session, *, every_kind: bool = False) -> int:
 
 
 @dataclass(frozen=True)
-class Bin:
-    lo: float
-    hi: float
-    count: int
-
-
-@dataclass(frozen=True)
 class Distribution:
     scale: Scale
     #: Entries in the view under every other Condition.
@@ -1873,11 +1866,16 @@ class Distribution:
 
 
 def distribution(
-    session: Session, view: DirectoryView, measure: DirectoryMeasure | DirectoryMoment
+    session: Session,
+    view: DirectoryView,
+    measure: DirectoryMeasure | DirectoryMoment,
+    zoom: tuple[float, float] | None = None,
 ) -> Distribution:
     """`measure` across the view with its own bounds left out, for the bound editor.
 
-    A moment's spread is in epoch ms, on a linear scale (DPF).
+    A moment's spread is in epoch ms, on a linear scale (DPF). A `zoom` bins
+    only its range, inside the spread's (TB-04); the total, No value count,
+    min, max and median stay the whole spread's.
     """
     tree = _without(
         view.tree,
@@ -1904,40 +1902,19 @@ def distribution(
     ).one()
     scale: Scale = "linear" if measure in _LINEAR else "log"
     bins: list[Bin] = []
-    if measured and hi is not None and lo is not None and hi > lo:
-
-        def to_axis(v: float) -> float:
-            return math.log(max(v, 0) + 1) if scale == "log" else v
-
-        def from_axis(u: float) -> float:
-            return math.exp(u) - 1 if scale == "log" else u
-
-        a, b = to_axis(lo), to_axis(hi)
-        axis = func.ln(func.greatest(value, 0) + 1) if scale == "log" else value
-        bucket = func.least(
-            func.width_bucket(axis, a, b, _HISTOGRAM_BINS), _HISTOGRAM_BINS
-        )
-        counts = {
-            int(n_bucket): int(n)
-            for n_bucket, n in session.execute(
-                unscoped_select(
-                    sa_select(bucket, func.count())
-                    .select_from(_entries(tree, measure))
-                    .where(where, value.is_not(None))
-                    .group_by(bucket),
-                    reason=_SCOPE_REASON,
-                )
-            ).all()
-        }
-        step = (b - a) / _HISTOGRAM_BINS
-        bins = [
-            Bin(
-                lo=from_axis(a + i * step),
-                hi=from_axis(a + (i + 1) * step),
-                count=counts.get(i + 1, 0),
+    covered = spread_range(lo, hi, zoom, log=scale == "log")
+    if covered is not None:
+        bar = covered.bar_of(value)
+        counts = session.execute(
+            unscoped_select(
+                sa_select(bar, func.count())
+                .select_from(_entries(tree, measure))
+                .where(where, *covered.holds(value))
+                .group_by(bar),
+                reason=_SCOPE_REASON,
             )
-            for i in range(_HISTOGRAM_BINS)
-        ]
+        ).all()
+        bins = covered.bars({int(i): int(n) for i, n in counts})
     return Distribution(
         scale=scale,
         total=int(total),

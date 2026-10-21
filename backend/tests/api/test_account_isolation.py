@@ -454,6 +454,10 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "same two files",
     ),
+    ("GET", f"{DATA}/logs/{{log_type}}/spread"): (
+        Reason.COVERED_ELSEWHERE,
+        "the page's predicate (TB-05); test_log_tenancy_scoping.py",
+    ),
     ("POST", f"{DATA}/logs/{{log_type}}"): (
         Reason.COVERED_ELSEWHERE,
         "create_logs refuses a foreign row and foreign telemetry; "

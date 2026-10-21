@@ -20,6 +20,8 @@ import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
+import type { TimeBound } from "@/lib/time-bound/bound"
+import { timeBoundWords } from "@/lib/time-bound/text"
 import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
 import { DirectorySamples, FirstFew, PostText } from "./DirectorySamples"
 import { cell, columnOf, FollowCell } from "./DirectoryTable"
@@ -122,19 +124,20 @@ function CitingPost({ post }: { post: DirectoryCitingPostResponse }) {
 }
 
 /**
- * The Posts of "your channels" that cite this Channel, counting what the sort
- * and the "Cited by your channels" Condition count.
+ * The Posts of "your channels" that cite this Channel, counting what the
+ * "Cited by your channels" Condition counts, its window in the chip's words.
  */
 function WhyHere({
   handle,
   why,
-  windowDays,
+  citedWindow,
 }: {
   handle: string
   why: DirectoryWhyResponse | undefined
-  windowDays: number | null
+  citedWindow: TimeBound | null
 }) {
-  const within = windowDays ? ` in the last ${windowDays} days` : ""
+  const within = (words: string) =>
+    citedWindow ? timeBoundWords(words, citedWindow) : words
   return (
     <section className="mt-5 rounded-lg border border-app-ink/10 bg-app-ink/5 p-3">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-app-ink/50">
@@ -144,13 +147,14 @@ function WhyHere({
         <p className="text-xs text-app-ink/40">Loading…</p>
       ) : why.total === 0 ? (
         <p className="text-xs text-app-ink/70">
-          None of your channels cite it{within}.
+          {within("None of your channels cite it")}.
         </p>
       ) : (
         <>
           <p className="text-xs text-app-ink/80">
-            {why.total} Post{why.total === 1 ? "" : "s"} of your channels cite
-            it{within}
+            {within(
+              `${why.total} Post${why.total === 1 ? "" : "s"} of your channels cite it`,
+            )}
           </p>
           <FirstFew owner={handle} items={why.posts}>
             {(visible) => (
@@ -343,7 +347,7 @@ export function DirectoryPanel({
   entry,
   posts,
   why,
-  windowDays,
+  citedWindow,
   following,
   onFollow,
   onDismiss,
@@ -358,7 +362,7 @@ export function DirectoryPanel({
   posts: DirectorySamplePostResponse[] | undefined
   why: DirectoryWhyResponse | undefined
   /** The "Cited by your channels" Condition's window, if one is set. */
-  windowDays: number | null
+  citedWindow: TimeBound | null
   following: boolean
   onFollow: () => void
   /** `true` dismisses, `false` takes the Dismissal back (DIR-06). */
@@ -444,7 +448,7 @@ export function DirectoryPanel({
                 />
               </div>
             )}
-            <WhyHere handle={handle} why={why} windowDays={windowDays} />
+            <WhyHere handle={handle} why={why} citedWindow={citedWindow} />
             <h4 className={HEADING}>Recent posts</h4>
             {posts ? (
               <DirectorySamples handle={handle} posts={posts} />

@@ -190,6 +190,7 @@ def list_directory_handles(
     return DirectoryHandlesResponse(handles=handles)
 
 
+# Zoomed by `lo` and `hi` since TB-04.
 @router.post("/directory/distribution")
 def get_directory_distribution(
     body: DirectoryDistributionRequest,
@@ -198,7 +199,10 @@ def get_directory_distribution(
 ) -> DirectoryDistributionResponse:
     """A measure's spread across the view with its own bounds left out."""
     spread = directory_reads.distribution(
-        session, view_of(session, current_user.id, body, body.measure), body.measure
+        session,
+        view_of(session, current_user.id, body, body.measure),
+        body.measure,
+        body.zoom,
     )
     return DirectoryDistributionResponse(
         scale=spread.scale,
@@ -369,6 +373,6 @@ def get_directory_why(
         kinds=body.reference_kinds,
     )
     why = directory_reads.why_its_here(
-        session, view, normalize_handle(body.handle), days=body.days
+        session, view, normalize_handle(body.handle), body.bound()
     )
     return DirectoryWhyResponse.model_validate(asdict(why))

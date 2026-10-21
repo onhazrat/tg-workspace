@@ -16,7 +16,7 @@ deprecated aliases between D1 and D2 so the frontend could migrate
 independently. **D2 removed them** — `/logs/{log_type}` is now the only way in.
 """
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
@@ -28,6 +28,9 @@ from app.schemas.logs import (
     LLMLogResponse,
     LogDetailResponse,
     LogEntryResponse,
+    LogPageQuery,
+    LogSpreadQuery,
+    LogSpreadResponse,
     LogWriteResponse,
     NetworkLogResponse,
     PublishLogListItemResponse,
@@ -38,9 +41,7 @@ from app.schemas.logs import (
 )
 from app.services.logs import (
     ADMIN_ONLY_LOG_TYPES,
-    DEFAULT_LOG_PAGE_SIZE,
     LOG_MODELS,
-    MAX_LOG_PAGE_SIZE,
     SHARED_LOG_TYPES,
     clear_logs,
     create_logs,
@@ -48,6 +49,8 @@ from app.services.logs import (
     delete_old_logs,
     get_log,
     list_logs,
+    log_spread,
+    resolve_log_bound,
 )
 from app.services.sync_meta import touch_sync
 
@@ -114,12 +117,9 @@ READABLE_LOG_TYPE = [Depends(require_readable_log_type)]
 @router.get("/logs/{log_type}", dependencies=READABLE_LOG_TYPE)
 def list_logs_route(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
+    query: Annotated[LogPageQuery, Query()],
     log_type: str = LogType,
-    limit: int = Query(default=DEFAULT_LOG_PAGE_SIZE, ge=1, le=MAX_LOG_PAGE_SIZE),
-    offset: int = Query(default=0, ge=0),
-    search: str | None = Query(default=None),
-    search_in_details: bool = Query(default=False, alias="searchInDetails"),
 ) -> list[LogEntryResponse]:
     """One newest-first page of any log type, without the corpus-sized fields.
 
@@ -133,23 +133,53 @@ def list_logs_route(
     row. `search` runs in SQL so they stay findable without being sent, and
     `searchInDetails` extends the match into them; both now search the whole
     table rather than the page that happened to be fetched.
+
+    `mode`, `start` and `end` bound when entries were logged, `[start, end)`
+    to the minute, either end open, applied before paging so the bound reaches
+    every entry of the log.
     """
     rows = list_logs(
         session,
         _known(log_type),
-        user_id=_current_user.id,
-        limit=limit,
-        offset=offset,
-        search=search,
-        search_in_details=search_in_details,
+        user_id=current_user.id,
+        limit=query.limit,
+        offset=query.offset,
+        search=query.search,
+        search_in_details=query.search_in_details,
+        bound=resolve_log_bound(query.bound()),
     )
     return [LOG_LIST_RESPONSES[log_type].model_validate(row) for row in rows]
+
+
+# TB-05. Declared before the detail route, whose `{log_id}` would take "spread".
+@router.get("/logs/{log_type}/spread", dependencies=READABLE_LOG_TYPE)
+def get_log_spread_route(
+    session: SessionDep,
+    current_user: CurrentUser,
+    query: Annotated[LogSpreadQuery, Query()],
+    log_type: str = LogType,
+) -> LogSpreadResponse:
+    """When a log's entries were logged: 32 bars over epoch ms.
+
+    Under the text search and without the Logged bound, so the editor shows
+    what lies around it. A zoom (`lo`, `hi`) bins only that range; `total`,
+    `min`, `max` and `median` stay the whole spread's.
+    """
+    spread = log_spread(
+        session,
+        _known(log_type),
+        user_id=current_user.id,
+        search=query.search,
+        search_in_details=query.search_in_details,
+        zoom=query.zoom,
+    )
+    return LogSpreadResponse.model_validate(spread, from_attributes=True)
 
 
 @router.get("/logs/{log_type}/{log_id}", dependencies=READABLE_LOG_TYPE)
 def get_log_route(
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     log_type: str = LogType,
     log_id: str = Path(description="The log row's id"),
 ) -> LogDetailResponse:
@@ -160,7 +190,7 @@ def get_log_route(
     the viewer renders only for an expanded row — and it expands one at a time.
     This serves that one row.
     """
-    row = get_log(session, _known(log_type), log_id, user_id=_current_user.id)
+    row = get_log(session, _known(log_type), log_id, user_id=current_user.id)
     return LOG_RESPONSES[log_type].model_validate(row)
 
 
@@ -168,12 +198,12 @@ def get_log_route(
 def create_logs_route(
     body: list[dict[str, Any]],
     session: SessionDep,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     log_type: str = LogType,
 ) -> LogWriteResponse:
     """Upsert a batch of log rows of one type."""
     return LogWriteResponse.model_validate(
-        create_logs(session, _known(log_type), body, user_id=_current_user.id)
+        create_logs(session, _known(log_type), body, user_id=current_user.id)
     )
 
 

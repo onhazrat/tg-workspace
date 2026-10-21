@@ -5143,7 +5143,7 @@
       "get": {
         "tags": ["data"],
         "summary": "List Logs Route",
-        "description": "One newest-first page of any log type, without the corpus-sized fields.\n\nPaged rather than whole-table: these tables carry request/response JSON and\ngrow without bound between retention sweeps, so an unfiltered select can\nmaterialise gigabytes and OOM the worker. Full data ships via the export\npath, which streams.\n\nThe bodies are on `GET /logs/{log_type}/{log_id}` \u2014 this page was 56.28 MB\nfor 500 rows, 99.7% of it bodies the viewer only renders for an expanded\nrow. `search` runs in SQL so they stay findable without being sent, and\n`searchInDetails` extends the match into them; both now search the whole\ntable rather than the page that happened to be fetched.",
+        "description": "One newest-first page of any log type, without the corpus-sized fields.\n\nPaged rather than whole-table: these tables carry request/response JSON and\ngrow without bound between retention sweeps, so an unfiltered select can\nmaterialise gigabytes and OOM the worker. Full data ships via the export\npath, which streams.\n\nThe bodies are on `GET /logs/{log_type}/{log_id}` \u2014 this page was 56.28 MB\nfor 500 rows, 99.7% of it bodies the viewer only renders for an expanded\nrow. `search` runs in SQL so they stay findable without being sent, and\n`searchInDetails` extends the match into them; both now search the whole\ntable rather than the page that happened to be fetched.\n\n`mode`, `start` and `end` bound when entries were logged, `[start, end)`\nto the minute, either end open, applied before paging so the bound reaches\nevery entry of the log.",
         "operationId": "data-list_logs_route",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -5157,6 +5157,61 @@
               "title": "Log Type"
             },
             "description": "publish | sync | llm | embedding | network"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "enum": ["live", "fixed"], "type": "string" },
+                { "type": "null" }
+              ],
+              "description": "The Logged bound's mode; none is Any time",
+              "title": "Mode"
+            },
+            "description": "The Logged bound's mode; none is Any time"
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Included. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "Start"
+            },
+            "description": "Included. Epoch ms when Fixed, signed ms from now when Live"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "End"
+            },
+            "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "searchInDetails",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Searchindetails"
+            }
           },
           {
             "name": "limit",
@@ -5179,25 +5234,6 @@
               "minimum": 0,
               "default": 0,
               "title": "Offset"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [{ "type": "string" }, { "type": "null" }],
-              "title": "Search"
-            }
-          },
-          {
-            "name": "searchInDetails",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Searchindetails"
             }
           }
         ],
@@ -5261,6 +5297,83 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/LogWriteResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/logs/{log_type}/spread": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Log Spread Route",
+        "description": "When a log's entries were logged: 32 bars over epoch ms.\n\nUnder the text search and without the Logged bound, so the editor shows\nwhat lies around it. A zoom (`lo`, `hi`) bins only that range; `total`,\n`min`, `max` and `median` stay the whole spread's.",
+        "operationId": "data-get_log_spread_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "log_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "publish | sync | llm | embedding | network",
+              "title": "Log Type"
+            },
+            "description": "publish | sync | llm | embedding | network"
+          },
+          {
+            "name": "lo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Lo"
+            }
+          },
+          {
+            "name": "hi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Hi"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "searchInDetails",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Searchindetails"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LogSpreadResponse" }
               }
             }
           },
@@ -8177,6 +8290,14 @@
       },
       "DirectoryDistributionRequest": {
         "properties": {
+          "lo": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Lo"
+          },
+          "hi": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Hi"
+          },
           "yours": { "$ref": "#/components/schemas/YourChannels" },
           "referenceKinds": {
             "items": {
@@ -8242,7 +8363,7 @@
         "type": "object",
         "required": ["measure"],
         "title": "DirectoryDistributionRequest",
-        "description": "A measure's spread under every other Condition of the view; a moment's in epoch ms."
+        "description": "A measure's spread under every other Condition of the view; a moment's in epoch ms.\n\nA zoom (`lo`, `hi`) bins only that range, on the measure's own scale."
       },
       "DirectoryDistributionResponse": {
         "properties": {
@@ -8895,20 +9016,41 @@
       },
       "DirectoryMineCondition": {
         "properties": {
-          "type": { "type": "string", "const": "mine", "title": "Type" },
-          "days": {
+          "mode": {
+            "type": "string",
+            "enum": ["live", "fixed"],
+            "title": "Mode",
+            "default": "live"
+          },
+          "start": {
             "anyOf": [
-              { "type": "integer", "maximum": 36500.0, "minimum": 1.0 },
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
               { "type": "null" }
             ],
-            "title": "Days"
-          }
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
+              { "type": "null" }
+            ],
+            "title": "End"
+          },
+          "type": { "type": "string", "const": "mine", "title": "Type" }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["type"],
         "title": "DirectoryMineCondition",
-        "description": "Cited by your channels, ever or within the last `days`."
+        "description": "Cited by your channels, within a Time bound on when the citing Posts\nwere published; ever with both ends open."
       },
       "DirectoryNameCondition": {
         "properties": {
@@ -9307,19 +9449,6 @@
       },
       "DirectoryTimeCondition": {
         "properties": {
-          "type": { "type": "string", "const": "time", "title": "Type" },
-          "moment": {
-            "type": "string",
-            "enum": [
-              "last_post_at",
-              "created_at",
-              "checked_at",
-              "attempted_at",
-              "retry_after",
-              "refresh_due_at"
-            ],
-            "title": "Moment"
-          },
           "mode": {
             "type": "string",
             "enum": ["live", "fixed"],
@@ -9347,13 +9476,26 @@
             ],
             "title": "End"
           },
+          "type": { "type": "string", "const": "time", "title": "Type" },
+          "moment": {
+            "type": "string",
+            "enum": [
+              "last_post_at",
+              "created_at",
+              "checked_at",
+              "attempted_at",
+              "retry_after",
+              "refresh_due_at"
+            ],
+            "title": "Moment"
+          },
           "none": { "type": "boolean", "title": "None", "default": false }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["type", "moment", "mode"],
+        "required": ["mode", "type", "moment"],
         "title": "DirectoryTimeCondition",
-        "description": "A Time bound, start included and end excluded, either end open: Fixed\nends are epoch ms, Live ends signed ms from now."
+        "description": "A Time bound on one moment; `none` keeps only entries with no value."
       },
       "DirectoryViewRequest": {
         "properties": {
@@ -9387,6 +9529,34 @@
       },
       "DirectoryWhyRequest": {
         "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["live", "fixed"],
+            "title": "Mode",
+            "default": "live"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
+              { "type": "null" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 62000000000000.0,
+                "minimum": -62000000000000.0
+              },
+              { "type": "null" }
+            ],
+            "title": "End"
+          },
           "yours": { "$ref": "#/components/schemas/YourChannels" },
           "referenceKinds": {
             "items": {
@@ -9402,13 +9572,6 @@
             "maxLength": 256,
             "minLength": 1,
             "title": "Handle"
-          },
-          "days": {
-            "anyOf": [
-              { "type": "integer", "maximum": 36500.0, "minimum": 1.0 },
-              { "type": "null" }
-            ],
-            "title": "Days"
           },
           "parents": {
             "anyOf": [
@@ -9439,7 +9602,7 @@
         "type": "object",
         "required": ["handle"],
         "title": "DirectoryWhyRequest",
-        "description": "Whose Posts citing `handle` \"Why it's here\" lists."
+        "description": "Whose Posts citing `handle` \"Why it's here\" lists, inside the \"Cited by\nyour channels\" Condition's Time bound; every Post with both ends open."
       },
       "DirectoryWhyResponse": {
         "properties": {
@@ -10844,6 +11007,43 @@
           { "type": "null" }
         ]
       },
+      "LogSpreadBinResponse": {
+        "properties": {
+          "lo": { "type": "number", "title": "Lo" },
+          "hi": { "type": "number", "title": "Hi" },
+          "count": { "type": "integer", "title": "Count" }
+        },
+        "type": "object",
+        "required": ["lo", "hi", "count"],
+        "title": "LogSpreadBinResponse",
+        "description": "One bar of a log's spread: entries logged from `lo` to `hi`, epoch ms."
+      },
+      "LogSpreadResponse": {
+        "properties": {
+          "total": { "type": "integer", "title": "Total" },
+          "min": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Max"
+          },
+          "median": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Median"
+          },
+          "bins": {
+            "items": { "$ref": "#/components/schemas/LogSpreadBinResponse" },
+            "type": "array",
+            "title": "Bins"
+          }
+        },
+        "type": "object",
+        "required": ["total", "min", "max", "median", "bins"],
+        "title": "LogSpreadResponse",
+        "description": "When a log's entries were logged, for the Logged editor.\n\nEmpty `bins` when fewer than two instants are logged. Zoomed, the bars\nspan the zoom and `total`, `min`, `max` and `median` stay the whole\nspread's."
+      },
       "LogWriteResponse": {
         "properties": {
           "upserted": { "type": "integer", "title": "Upserted", "default": 0 }
@@ -11830,6 +12030,14 @@
       },
       "PostValueHistogramRequest": {
         "properties": {
+          "lo": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Lo"
+          },
+          "hi": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Hi"
+          },
           "channelNames": {
             "anyOf": [
               { "items": { "type": "string" }, "type": "array" },
@@ -11922,13 +12130,17 @@
               }
             ],
             "title": "Measure"
+          },
+          "log": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Log"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["measure"],
         "title": "PostValueHistogramRequest",
-        "description": "`PostFilteredRequest` plus the measure a number filter's editor bounds.\n\nThe body is the filtered request's so the editor sends the scope it\nalready has; the Post filter and keyword in it are set aside, except by\n`channel_posts_filtered`, which counts what they keep."
+        "description": "`PostFilteredRequest` plus the measure a number filter's editor bounds.\n\nThe body is the filtered request's so the editor sends the scope it\nalready has; the Post filter and keyword in it are set aside, except by\n`channel_posts_filtered`, which counts what they keep. A zoom (`lo`,\n`hi`) bins only that range, on the scale `log` names when given."
       },
       "PostValueHistogramResponse": {
         "properties": {
@@ -11947,13 +12159,30 @@
             "anyOf": [{ "type": "number" }, { "type": "null" }],
             "title": "Median"
           },
+          "min": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Max"
+          },
           "measured": { "type": "integer", "title": "Measured" },
           "total": { "type": "integer", "title": "Total" }
         },
         "type": "object",
-        "required": ["bins", "edges", "log", "median", "measured", "total"],
+        "required": [
+          "bins",
+          "edges",
+          "log",
+          "median",
+          "min",
+          "max",
+          "measured",
+          "total"
+        ],
         "title": "PostValueHistogramResponse",
-        "description": "32 bars and their 33 edges, binned by the Channels tab's rule.\n\nEmpty `bins` and `edges` when nothing in the scope has a value."
+        "description": "32 bars and their 33 edges, binned by the Channels tab's rule.\n\nEmpty `bins` and `edges` when nothing in the scope has a value. Zoomed,\nthe bars span the zoom and `min`, `max`, `median` and the counts stay\nthe whole spread's."
       },
       "PostWindowHistogramRequest": {
         "properties": {

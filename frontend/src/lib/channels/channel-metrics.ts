@@ -5,6 +5,7 @@
  * A Channel with no value for a number is not measured, and fails any bound
  * on it.
  */
+import type { ChannelMomentKey } from "@/lib/channels/channel-moments"
 import { formatCount } from "@/lib/format-count"
 import type { Channel, ChannelStats } from "@/types"
 
@@ -14,8 +15,6 @@ export type MetricKey =
   | "activity_rate"
   | "total_posts"
   | "posts_in_scope"
-  | "days_since_update"
-  | "days_followed"
   | "photos"
   | "videos"
   | "files"
@@ -24,7 +23,10 @@ export type MetricKey =
 export type MetricInputs = {
   channelStats: Record<string, ChannelStats>
   postsInScopeCounts: Record<string, number>
-  /** Days are measured from here, the time the page loaded. */
+  /**
+   * The Scope's server minute a Live Time bound is judged against (TB-03), so
+   * the filter moves on the minute tick rather than the browser's clock.
+   */
   now: number
 }
 
@@ -34,10 +36,6 @@ type Metric = {
   unit?: string
   value: (channel: Channel, inputs: MetricInputs) => number | null
 }
-
-const DAY = 86_400_000
-const daysSince = (at: number | undefined, now: number) =>
-  at ? (now - at) / DAY : null
 
 /** In the Filters dropdown's order. The key is the URL form's word. */
 export const METRICS: Metric[] = [
@@ -67,18 +65,6 @@ export const METRICS: Metric[] = [
     key: "posts_in_scope",
     label: "Posts in scope",
     value: (c, i) => i.postsInScopeCounts[c.name] ?? 0,
-  },
-  {
-    key: "days_since_update",
-    label: "Days since last update",
-    unit: "days",
-    value: (c, i) => daysSince(c.lastUpdated, i.now),
-  },
-  {
-    key: "days_followed",
-    label: "Days followed",
-    unit: "days",
-    value: (c, i) => daysSince(c.followedAt, i.now),
   },
   { key: "photos", label: "Photos", value: (c) => c.photos ?? null },
   { key: "videos", label: "Videos", value: (c) => c.videos ?? null },
@@ -161,6 +147,8 @@ export type MetricData = {
   values: (key: MetricKey) => number[]
   /** Every Channel, measured or not. */
   total: number
+  /** A moment's values across the Account's Channels, ascending (TB-03). */
+  moments: (key: ChannelMomentKey) => number[]
 }
 
 /** A missing value fails every bound and passes only `none`. */

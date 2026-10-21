@@ -1,6 +1,8 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
+import { type Bin, Spread } from "@/components/Spread"
+import type { ZoomState } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -9,64 +11,9 @@ import {
   parseBound,
 } from "@/lib/channels/channel-metrics"
 import type { Measure } from "@/lib/directory/directory-filter"
-import { formatCount } from "@/lib/format-count"
 
 /** Two significant figures, so a bar's edge reads 1,200 and not 1,187.43. */
 const nice = (v: number) => Number(v.toPrecision(2))
-
-export type Bin = DirectoryDistributionResponse["bins"][number]
-
-/** Whether a bar overlaps the bound, so the bars show what it keeps. */
-const inside = (bin: Bin, bound: MetricBound | null) =>
-  !!bound &&
-  !bound.none &&
-  (bound.min === undefined || bin.hi > bound.min) &&
-  (bound.max === undefined || bin.lo <= bound.max)
-
-/**
- * A measure's spread as bars, a click on one choosing it. `format` writes a
- * value: a count by default, a moment's epoch ms as a date (DPF).
- */
-export function Spread({
-  spread,
-  bound,
-  onBar,
-  format = formatCount,
-}: {
-  spread: DirectoryDistributionResponse
-  bound: MetricBound | null
-  onBar: (bin: Bin) => void
-  format?: (value: number) => string
-}) {
-  const peak = Math.max(1, ...spread.bins.map((bin) => bin.count))
-  return (
-    <div className="space-y-1">
-      <div className="flex h-16 items-end gap-px rounded-md bg-app-ink/[0.03] px-0.5">
-        {spread.bins.map((bin, i) => (
-          <button
-            key={bin.lo}
-            type="button"
-            data-testid={`directory-bound-bar-${i}`}
-            title={`${format(bin.lo)}–${format(bin.hi)}: ${bin.count} channels`}
-            onClick={() => onBar(bin)}
-            className={`flex-1 rounded-t-[2px] ${inside(bin, bound) ? "bg-app-ink/70" : "bg-app-ink/15 hover:bg-app-ink/40"}`}
-            style={{
-              height: `${bin.count === 0 ? 2 : Math.max(8, (bin.count / peak) * 100)}%`,
-            }}
-          />
-        ))}
-      </div>
-      <div className="flex justify-between gap-2 text-[10px] tabular-nums text-app-ink/50">
-        <span>{format(spread.min ?? 0)}</span>
-        <span>
-          median {format(spread.median ?? 0)}
-          {spread.scale === "log" ? ", log scale" : ""}
-        </span>
-        <span>{format(spread.max ?? 0)}</span>
-      </div>
-    </div>
-  )
-}
 
 /**
  * One measure's bound in the Directory filter (DIR-02): its spread under
@@ -84,11 +31,14 @@ export function DirectoryBoundEditor({
   countFor,
   onSubmit,
   onBack,
+  zoom,
 }: {
   measure: Measure
   /** The Condition being changed; without one the editor adds. */
   initial?: MetricBound
   distribution?: DirectoryDistributionResponse
+  /** The range `distribution` was asked for; the container keeps it (TB-04). */
+  zoom?: ZoomState
   countFor: (bound: MetricBound) => ReactNode
   onSubmit: (bound: MetricBound) => void
   onBack?: () => void
@@ -130,7 +80,7 @@ export function DirectoryBoundEditor({
       </div>
       <p className="text-[11px] text-app-ink/50">{measure.description}</p>
       {distribution ? (
-        <Spread spread={distribution} bound={bound} onBar={onBar} />
+        <Spread spread={distribution} bound={bound} onBar={onBar} zoom={zoom} />
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
       )}

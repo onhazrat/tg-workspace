@@ -41,6 +41,7 @@ from app.services.logs import (
     ADMIN_ONLY_LOG_TYPES,
     get_log,
     list_logs,
+    log_spread,
     upsert_embedding_log,
     upsert_llm_log,
     upsert_network_log,
@@ -145,6 +146,25 @@ def test_a_page_holds_only_your_own_rows(
     assert mine in visible
     assert theirs not in visible, (
         f"a {log_type} log belonging to another account is on this page"
+    )
+
+
+@pytest.mark.security
+@pytest.mark.parametrize("log_type", OWNED_TYPES)
+def test_a_spread_counts_only_your_own_rows(
+    session: Session,
+    user: User,
+    other_user: User,
+    enforced: None,
+    log_type: str,
+) -> None:
+    """TB-05's spread reads through the page's predicate, so it scopes alike."""
+    _write(session, log_type, f"spread-mine-{log_type}", user.id, timestamp=1_000)
+    _write(session, log_type, f"spread-theirs-{log_type}", other_user.id, 9_000)
+
+    spread = log_spread(session, log_type, user_id=user.id)
+    assert (spread.total, spread.max) == (1, 1_000), (
+        f"a {log_type} spread counts another account's rows"
     )
 
 

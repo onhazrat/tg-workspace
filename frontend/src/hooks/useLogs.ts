@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { api } from "@/api"
 import type { LogSearch, LogType } from "@/api/data"
+import { MINUTE_MS } from "@/lib/analysis-window"
+import type { TimeBound } from "@/lib/time-bound/bound"
 import type {
   EmbeddingLog,
   LLMLogListItem,
@@ -44,8 +46,9 @@ export async function fetchLogs(
   type: LogType,
   list: LogLister = api.listLogs,
   search?: LogSearch,
+  bound?: TimeBound,
 ): Promise<{ timestamp: number }[]> {
-  return sortByTimestamp(await list<{ timestamp: number }>(type, search))
+  return sortByTimestamp(await list<{ timestamp: number }>(type, search, bound))
 }
 
 /**
@@ -55,7 +58,11 @@ export async function fetchLogs(
  * `LogPoster` in `lib/logs/write.ts`), and stubbing the global `fetch` instead
  * leaks across test files.
  */
-export type LogLister = <T>(type: LogType, search?: LogSearch) => Promise<T[]>
+export type LogLister = <T>(
+  type: LogType,
+  search?: LogSearch,
+  bound?: TimeBound,
+) => Promise<T[]>
 
 export type LogsQueryOptions = {
   /** Poll interval in ms. Omit for no polling. */
@@ -68,6 +75,19 @@ export type LogsQueryOptions = {
    * rather than in the browser over the page that was already fetched.
    */
   search?: LogSearch
+  /**
+   * When entries were logged (TB-05). The server applies it before paging,
+   * so it reaches entries older than the newest page; part of the key for
+   * the same reason `search` is.
+   */
+  bound?: TimeBound
+}
+
+/** The bound worth sending: none while both ends are open. */
+function boundToSend(bound?: TimeBound): TimeBound | undefined {
+  return bound && (bound.start !== undefined || bound.end !== undefined)
+    ? bound
+    : undefined
 }
 
 export function useLogsQuery(
@@ -76,16 +96,21 @@ export function useLogsQuery(
   options: LogsQueryOptions = {},
 ) {
   const search = options.search?.query ? options.search : undefined
+  const bound = boundToSend(options.bound)
   return useQuery({
     queryKey: [
       ...queryKeys.logs[type],
       search?.query ?? "",
       search?.inDetails ?? false,
+      bound ?? null,
     ],
-    queryFn: () => fetchLogs(type, options.lister, search),
+    queryFn: () => fetchLogs(type, options.lister, search, bound),
     staleTime: SUMMARIZER_STALE_TIME,
     enabled,
-    refetchInterval: options.refetchInterval,
+    // A Live bound moves with the server's minute, so its page does too.
+    refetchInterval:
+      options.refetchInterval ??
+      (bound?.mode === "live" ? MINUTE_MS : undefined),
   })
 }
 

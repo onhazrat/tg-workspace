@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Literal
 
 from fastapi import HTTPException
 
@@ -58,6 +59,31 @@ class ResolvedWindow:
 
     start: int | None
     end: int | None
+
+
+TimeMode = Literal["live", "fixed"]
+
+
+@dataclass(frozen=True)
+class TimeBound:
+    """A Time bound (ADR-033), `[start, end)`, either end open: Fixed ends are
+    epoch ms, Live ends signed ms from now, negative for the past.
+
+    The one place its ends become instants, for the Directory's moments, the
+    Cited by your channels Condition and the Logs tab alike.
+    """
+
+    mode: TimeMode = "live"
+    start: int | None = None
+    end: int | None = None
+
+    def resolve(self, now_ms: int) -> ResolvedWindow:
+        """The ends as epoch ms, a Live one placed against `now_ms`."""
+        base = now_ms if self.mode == "live" else 0
+        return ResolvedWindow(
+            None if self.start is None else base + self.start,
+            None if self.end is None else base + self.end,
+        )
 
 
 def server_now_ms() -> int:

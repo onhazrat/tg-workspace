@@ -16,7 +16,7 @@ bound text form shared by the Directory and Channel filters.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: the editor,
 the Time bound source, No value, two wrappers, one text form), ADR-033,
@@ -31,12 +31,16 @@ the Time bound source, No value, two wrappers, one text form), ADR-033,
 - Today's code it builds on: the Scope context (drafts, debounce, the server minute clock) and the Scope window rules (elapsed and local-minute parsing and formatting, the error messages).
 - Prior-art tests: `AnalysisWindowControl.test.tsx`, `ScopeContext.test.tsx`, `lib/scope/window.test.ts`, `DirectoryTimeEditor.test.tsx`, `directory-filter.test.ts`.
 
-- [ ] The ticket's first commit, on unchanged code, adds a markup snapshot test of the Posts tab's collapsed Analysis window line and its open popover (desktop and the phone sheet); every later commit passes it without updating the snapshot. Optionally, compare a local Playwright screenshot before and after; it is not committed, since CI renders on another platform.
-- [ ] The Posts editor's existing unit tests keep every assertion (imports may change) and pass.
-- [ ] The editor body, the collapsed line with popover or bottom sheet, and the zoom buttons are each one shared piece; the Posts editor uses them with no wiring beyond the Scope default.
-- [ ] A Time bound source drives the same body: Start and End are instants in both modes; Duration and End gap move the ends as the spec says; a blank Start or End opens that end only where open ends are allowed; a leading `-` on End gap is accepted only where ahead is allowed; errors and drafts behave as in the Posts editor.
-- [ ] No value is a third segment of the mode switch, offered only when the caller asks for it, and hides the fields while chosen.
-- [ ] An empty Time bound reads "Any time".
-- [ ] The Directory Time bound editor is the embedded wrapper: name, description, the spread (a bar click sets a Fixed bound), the shared editor with open ends, ahead and No value, and Add or Update with the live count. The old Live and Fixed fields are gone.
-- [ ] The Time bound printer, parser and chip words live in one module used by the Directory filter (and ready for the Channel filter); every existing Directory link with a Time bound parses and prints unchanged.
-- [ ] Render tests on the editor (both wrappers) cover open ends, ahead accepted and refused, No value, a shortcut, an invalid draft, and "Any time"; filter tests cover the shared text form round trip. Each new guard is mutation-tested.
+- [x] The ticket's first commit, on unchanged code, adds a markup snapshot test of the Posts tab's collapsed Analysis window line and its open popover (desktop and the phone sheet); every later commit passes it without updating the snapshot. Optionally, compare a local Playwright screenshot before and after; it is not committed, since CI renders on another platform.
+- [x] The Posts editor's existing unit tests keep every assertion (imports may change) and pass.
+- [x] The editor body, the collapsed line with popover or bottom sheet, and the zoom buttons are each one shared piece; the Posts editor uses them with no wiring beyond the Scope default.
+- [x] A Time bound source drives the same body: Start and End are instants in both modes; Duration and End gap move the ends as the spec says; a blank Start or End opens that end only where open ends are allowed; a leading `-` on End gap is accepted only where ahead is allowed; errors and drafts behave as in the Posts editor.
+- [x] No value is a third segment of the mode switch, offered only when the caller asks for it, and hides the fields while chosen.
+- [x] An empty Time bound reads "Any time".
+- [x] The Directory Time bound editor is the embedded wrapper: name, description, the spread (a bar click sets a Fixed bound), the shared editor with open ends, ahead and No value, and Add or Update with the live count. The old Live and Fixed fields are gone.
+- [x] The Time bound printer, parser and chip words live in one module used by the Directory filter (and ready for the Channel filter); every existing Directory link with a Time bound parses and prints unchanged.
+- [x] Render tests on the editor (both wrappers) cover open ends, ahead accepted and refused, No value, a shortcut, an invalid draft, and "Any time"; filter tests cover the shared text form round trip. Each new guard is mutation-tested.
+
+## Comments
+
+- 2026-10-20: implemented on `claude/tb-01-one-editor` and merged into the integration branch in 791281ea.

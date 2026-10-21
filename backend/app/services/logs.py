@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from typing import Any, NamedTuple, cast
 
 from fastapi import HTTPException
-from sqlalchemy import Text
+from sqlalchemy import Text, func
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select as sa_select
@@ -24,12 +25,18 @@ from app.models_tg import (
     SyncLogPayload,
     utc_now,
 )
+from app.services.analysis_window import (
+    ResolvedWindow,
+    TimeBound,
+    current_minute_start,
+)
 from app.services.serialization import (
     mapping_to_camel,
     model_to_camel,
     normalize_body,
     sync_log_to_camel,
 )
+from app.services.spread_bars import Bin, spread_range
 from app.services.tenancy import (
     Scope,
     assert_owner,
@@ -722,6 +729,64 @@ def _light_columns(model: type[SQLModel], heavy: frozenset[str]) -> list[Any]:
     return [c for c in _log_table(model).columns if c.key not in heavy]
 
 
+#: No Logged bound at all.
+ANY_TIME = ResolvedWindow(None, None)
+
+
+def resolve_log_bound(
+    bound: TimeBound | None, *, now_ms: int | None = None
+) -> ResolvedWindow:
+    """A Logged Time bound as `[start, end)` in epoch ms (TB-05, ADR-033).
+
+    A Live end is placed against the server's current minute, as the Analysis
+    window's is, so two reads a second apart select the same rows. Then both
+    ends are floored to the minute, the editor's precision.
+    """
+    if bound is None:
+        return ANY_TIME
+    at = bound.resolve(current_minute_start(now_ms))
+
+    def floored(ms: int | None) -> int | None:
+        return None if ms is None else current_minute_start(ms)
+
+    return ResolvedWindow(floored(at.start), floored(at.end))
+
+
+def _visible(
+    statement: Any,
+    log_type: str,
+    *,
+    user_id: uuid.UUID,
+    search: str | None,
+    search_in_details: bool,
+    bound: ResolvedWindow = ANY_TIME,
+) -> Any:
+    """The rows of one log the caller may see, matching the search and the bound.
+
+    The predicate goes on before any ordering, offset or limit, and it has to:
+    a page ranked over rows the caller cannot see would hand back fewer than
+    `limit` of them, or none at all, while the rows it skipped sit in someone
+    else's account. Same shape as the feed's window in ticket 16. The bound
+    rides the same rule, which is the point of TB-05: the browser used to bound
+    the newest page and missed everything older.
+    """
+    model, _ = LOG_MODELS[log_type]
+    timestamp = _log_table(model).c.timestamp
+    if log_type in ADMIN_ONLY_LOG_TYPES:
+        statement = unscoped_select(statement, reason=_ADMIN_LOG_REASON)
+    else:
+        statement = scoped_select(statement, model, user_id)
+    if search and search.strip():
+        statement = statement.where(
+            _log_search_clause(log_type, search.strip(), in_details=search_in_details)
+        )
+    if bound.start is not None:
+        statement = statement.where(timestamp >= bound.start)
+    if bound.end is not None:
+        statement = statement.where(timestamp < bound.end)
+    return statement
+
+
 def _list_logs_page(
     session: Session,
     log_type: str,
@@ -731,6 +796,7 @@ def _list_logs_page(
     offset: int,
     search: str | None,
     search_in_details: bool,
+    bound: ResolvedWindow,
 ) -> list[dict[str, Any]]:
     """Return one newest-first page of a log table, without its heavy columns.
 
@@ -744,19 +810,14 @@ def _list_logs_page(
     model, _ = LOG_MODELS[log_type]
     table = _log_table(model)
     columns = _light_columns(model, LOG_HEAVY_COLUMNS[log_type])
-    statement = select(*columns)
-    # The predicate goes on before the ordering, the offset and the limit, and
-    # it has to: a page ranked over rows the caller cannot see would hand back
-    # fewer than `limit` of them, or none at all, while the rows it skipped sit
-    # in someone else's account. Same shape as the feed's window in ticket 16.
-    if log_type in ADMIN_ONLY_LOG_TYPES:
-        statement = unscoped_select(statement, reason=_ADMIN_LOG_REASON)
-    else:
-        statement = scoped_select(statement, model, user_id)
-    if search and search.strip():
-        statement = statement.where(
-            _log_search_clause(log_type, search.strip(), in_details=search_in_details)
-        )
+    statement = _visible(
+        select(*columns),
+        log_type,
+        user_id=user_id,
+        search=search,
+        search_in_details=search_in_details,
+        bound=bound,
+    )
     statement = statement.order_by(table.c.timestamp.desc()).offset(offset).limit(limit)
     return [
         {
@@ -776,6 +837,7 @@ def list_logs(
     offset: int = 0,
     search: str | None = None,
     search_in_details: bool = False,
+    bound: ResolvedWindow = ANY_TIME,
 ) -> list[dict[str, Any]]:
     """One newest-first page of any log type, in the light projection.
 
@@ -803,6 +865,76 @@ def list_logs(
         offset=offset,
         search=search,
         search_in_details=search_in_details,
+        bound=bound,
+    )
+
+
+@dataclass(frozen=True)
+class LogSpread:
+    #: Entries matching the search; every one has a timestamp.
+    total: int
+    min: int | None
+    max: int | None
+    median: float | None
+    bins: list[Bin]
+
+
+def log_spread(
+    session: Session,
+    log_type: str,
+    *,
+    user_id: uuid.UUID,
+    search: str | None = None,
+    search_in_details: bool = False,
+    zoom: tuple[float, float] | None = None,
+) -> LogSpread:
+    """When a log's entries were logged, in epoch ms (TB-05).
+
+    Under the search and without the Logged bound, so the editor shows what
+    lies around the bound, as a Directory moment's spread does. A `zoom` bins
+    only its range, inside the spread's; the total, min, max and median stay
+    the whole spread's.
+    """
+    if log_type not in LOG_MODELS:
+        raise KeyError(log_type)
+    model, _ = LOG_MODELS[log_type]
+    timestamp = _log_table(model).c.timestamp
+
+    def visible(statement: Any) -> Any:
+        return _visible(
+            statement,
+            log_type,
+            user_id=user_id,
+            search=search,
+            search_in_details=search_in_details,
+        )
+
+    total, lo, hi, median = session.execute(
+        visible(
+            sa_select(
+                func.count(timestamp),
+                func.min(timestamp),
+                func.max(timestamp),
+                func.percentile_cont(0.5).within_group(timestamp),
+            )
+        )
+    ).one()
+    bins: list[Bin] = []
+    covered = spread_range(lo, hi, zoom)
+    if covered is not None:
+        bar = covered.bar_of(timestamp)
+        counts = session.execute(
+            visible(
+                sa_select(bar, func.count()).where(*covered.holds(timestamp))
+            ).group_by(bar)
+        ).all()
+        bins = covered.bars({int(i): int(n) for i, n in counts})
+    return LogSpread(
+        total=int(total),
+        min=None if lo is None else int(lo),
+        max=None if hi is None else int(hi),
+        median=None if median is None else float(median),
+        bins=bins,
     )
 
 

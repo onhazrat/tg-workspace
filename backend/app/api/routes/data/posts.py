@@ -133,8 +133,8 @@ def posts_counts(
     )
 
 
-# PTI-01. A read expressed as a POST for the reason `posts_counts` is one, and
-# on `VIEW_AS_READ_ONLY_PATHS` beside it.
+# PTI-01, zoomed by TB-04. A read expressed as a POST for the reason
+# `posts_counts` is one, and on `VIEW_AS_READ_ONLY_PATHS` beside it.
 @router.post("/posts/value-histogram")
 def posts_value_histogram(
     body: PostValueHistogramRequest,
@@ -161,6 +161,8 @@ def posts_value_histogram(
         filters=parse_post_filters(session, body, tree=body.filter)
         if body.measure == "channel_posts_filtered"
         else None,
+        zoom=body.zoom,
+        log=body.log,
     )
     return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
 

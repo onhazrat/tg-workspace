@@ -3,9 +3,10 @@
  * `useDirectory`. Every piece is a props-only component under
  * `components/directory/`; this file only connects them to the server.
  */
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Keyboard } from "lucide-react"
 import {
+  type DirectoryDistributionRequest,
   type DirectoryWhyRequest,
   dataCountDirectory,
   dataGetDirectoryDistribution,
@@ -34,6 +35,7 @@ import {
   type MeasureEditorRender,
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
+import { useZoomState } from "@/components/SpreadZoom"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useDirectory } from "@/hooks/useDirectory"
@@ -68,6 +70,7 @@ import {
   tickAllState,
 } from "@/lib/directory/directory-view"
 import { appendAnd, mapGroups } from "@/lib/filter-tree"
+import type { TimeBound } from "@/lib/time-bound/bound"
 import { pillClass } from "./PostFilterParts"
 
 /** The filter without its bounds on `measure`, a measure or a moment, which
@@ -110,20 +113,12 @@ function MeasureEditor({
     ...request,
     filter: directoryFilterBody(withoutBoundsOn(filter, measure.key), sets),
   }
-  const distribution = useQuery({
-    queryKey: queryKeys.directoryRead("distribution", {
-      others,
-      measure: measure.key,
-    }),
-    queryFn: () =>
-      dataGetDirectoryDistribution({
-        body: { ...others, measure: measure.key },
-      }),
-  })
+  const { distribution, zoom } = useZoomedSpread(others, measure.key)
   return (
     <DirectoryBoundEditor
       measure={measure}
-      distribution={distribution.data}
+      distribution={distribution}
+      zoom={zoom}
       countFor={(bound) => (
         <BoundCount others={others} measure={measure.key} bound={bound} />
       )}
@@ -159,26 +154,42 @@ function MomentEditor({
     ...request,
     filter: directoryFilterBody(withoutBoundsOn(filter, moment.key), sets),
   }
-  const distribution = useQuery({
-    queryKey: queryKeys.directoryRead("distribution", {
-      others,
-      measure: moment.key,
-    }),
-    queryFn: () =>
-      dataGetDirectoryDistribution({
-        body: { ...others, measure: moment.key },
-      }),
-  })
+  const { distribution, zoom } = useZoomedSpread(others, moment.key)
   return (
     <DirectoryTimeEditor
       moment={moment}
-      distribution={distribution.data}
+      distribution={distribution}
+      zoom={zoom}
       countFor={(cond) => <CandidateCount others={others} cond={cond} />}
       onSubmit={rest.onSubmit}
       initial={rest.initial}
       onBack={rest.onBack}
     />
   )
+}
+
+/**
+ * A bound editor's spread under every other Condition, over the zoom's
+ * range (TB-04). The zoom lives as long as the editor, so each opening
+ * starts whole, and the previous bars stay up while a zoomed range loads.
+ */
+function useZoomedSpread(
+  others: DirectoryViewRequest,
+  measure: DirectoryDistributionRequest["measure"],
+) {
+  const zoom = useZoomState()
+  const zoomed = zoom.range ? { lo: zoom.range[0], hi: zoom.range[1] } : {}
+  const distribution = useQuery({
+    queryKey: queryKeys.directoryRead("distribution", {
+      others,
+      measure,
+      ...zoomed,
+    }),
+    queryFn: () =>
+      dataGetDirectoryDistribution({ body: { ...others, measure, ...zoomed } }),
+    placeholderData: keepPreviousData,
+  })
+  return { distribution: distribution.data, zoom }
 }
 
 /** How many Channels a candidate bound leaves, read a beat after typing stops. */
@@ -231,7 +242,7 @@ function DirectoryPanelReads({
   handle,
   request,
   shared,
-  windowDays,
+  citedWindow,
   following,
   onFollow,
   onDismiss,
@@ -244,7 +255,8 @@ function DirectoryPanelReads({
   request: DirectoryViewRequest
   /** Each Shared relation's Seeds while it is on, for Why (DIR-07). */
   shared: Pick<DirectoryWhyRequest, "parents" | "children">
-  windowDays: number | null
+  /** The "Cited by your channels" Condition's Time bound (TB-02). */
+  citedWindow: TimeBound | null
   following: boolean
   onFollow: () => void
   onDismiss: (dismissed: boolean) => void
@@ -268,7 +280,7 @@ function DirectoryPanelReads({
     handle,
     yours: request.yours,
     referenceKinds: request.referenceKinds,
-    days: windowDays,
+    ...citedWindow,
     ...shared,
   }
   const why = useQuery({
@@ -285,7 +297,7 @@ function DirectoryPanelReads({
       entry={entry.isError ? null : entry.data}
       posts={posts.isError ? [] : posts.data}
       why={why.data}
-      windowDays={windowDays}
+      citedWindow={citedWindow}
       following={following}
       onFollow={onFollow}
       onDismiss={onDismiss}
@@ -464,7 +476,7 @@ export function DirectoryView() {
             parents: seedsOf("parents"),
             children: seedsOf("children"),
           }}
-          windowDays={mineWindow(d.filter)}
+          citedWindow={mineWindow(d.filter)}
           following={d.following.has(d.open)}
           onFollow={() => d.open && void d.follow([d.open])}
           onDismiss={(dismissed) =>

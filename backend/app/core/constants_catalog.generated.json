@@ -220,7 +220,7 @@
       "comment": "A Live end's reach either way: a century, in ms.",
       "expression": "100 * 366 * 86400000",
       "file": "backend/app/schemas/directory.py",
-      "line": 186,
+      "line": 187,
       "name": "_MAX_OFFSET_MS",
       "value": 3162240000000
     },
@@ -228,7 +228,7 @@
       "comment": "A Fixed end's reach either way, inside what a `datetime` holds (years 1 to 9999), so an absurd instant is a 422 and never an overflow.",
       "expression": "62000000000000",
       "file": "backend/app/schemas/directory.py",
-      "line": 189,
+      "line": 190,
       "name": "_MAX_INSTANT_MS",
       "value": 62000000000000
     },
@@ -236,7 +236,7 @@
       "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
       "expression": "500",
       "file": "backend/app/schemas/directory.py",
-      "line": 230,
+      "line": 240,
       "name": "MAX_CONDITION_HANDLES",
       "value": 500
     },
@@ -244,7 +244,7 @@
       "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 233,
+      "line": 243,
       "name": "MAX_SEEDS",
       "value": 10000
     },
@@ -252,7 +252,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 383,
+      "line": 393,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -260,7 +260,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 673,
+      "line": 686,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },
@@ -564,7 +564,7 @@
       "comment": "",
       "expression": "100",
       "file": "backend/app/services/directory_reads.py",
-      "line": 112,
+      "line": 113,
       "name": "PAGE_SIZE",
       "value": 100
     },
@@ -572,7 +572,7 @@
       "comment": "How long a view's total and Language counts, and the Directory's size, are reused. A Directory that grows while it is read moves by a row or two.",
       "expression": "300",
       "file": "backend/app/services/directory_reads.py",
-      "line": 115,
+      "line": 116,
       "name": "COUNTS_TTL_SECONDS",
       "value": 300
     },
@@ -580,23 +580,15 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 116,
+      "line": 117,
       "name": "_MAX_CACHED_VIEWS",
       "value": 1000
-    },
-    {
-      "comment": "",
-      "expression": "32",
-      "file": "backend/app/services/directory_reads.py",
-      "line": 286,
-      "name": "_HISTOGRAM_BINS",
-      "value": 32
     },
     {
       "comment": "A middle Channel past this many links is an aggregator, not a taste: a source citing more than this many Channels, or a target cited by more.",
       "expression": "3000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 713,
+      "line": 715,
       "name": "AGGREGATOR_LINKS",
       "value": 3000
     },
@@ -604,7 +596,7 @@
       "comment": "The most entries Tick all turns into Ticks; above it a view is All matching (ADR-031). The same number as the ticked Seeds a Condition takes.",
       "expression": "10000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1414,
+      "line": 1416,
       "name": "MAX_TICK_ALL",
       "value": 10000
     },
@@ -612,7 +604,7 @@
       "comment": "How many citing Posts \"Why it's here\" quotes; the rest are counted.",
       "expression": "20",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1571,
+      "line": 1573,
       "name": "WHY_LIMIT",
       "value": 20
     },
@@ -684,7 +676,7 @@
       "comment": "Log list endpoints are viewers, not exports: cap what one request can load.",
       "expression": "500",
       "file": "backend/app/services/logs.py",
-      "line": 44,
+      "line": 51,
       "name": "DEFAULT_LOG_PAGE_SIZE",
       "value": 500
     },
@@ -692,7 +684,7 @@
       "comment": "",
       "expression": "5000",
       "file": "backend/app/services/logs.py",
-      "line": 45,
+      "line": 52,
       "name": "MAX_LOG_PAGE_SIZE",
       "value": 5000
     },
@@ -769,7 +761,7 @@
       "value": 200
     },
     {
-      "comment": "The Channels tab's bar count (`ChannelMetricEditor`), so one component draws both.",
+      "comment": "Every spread's bar count (`BINS` in `components/Spread.tsx`), so one component draws both.",
       "expression": "32",
       "file": "backend/app/services/posts.py",
       "line": 1132,
@@ -1001,6 +993,14 @@
       "value": 240
     },
     {
+      "comment": "Bars in a spread.",
+      "expression": "32",
+      "file": "backend/app/services/spread_bars.py",
+      "line": 19,
+      "name": "SPREAD_BARS",
+      "value": 32
+    },
+    {
       "comment": "",
       "expression": "200",
       "file": "backend/app/services/summaries.py",
@@ -1084,7 +1084,7 @@
       "comment": "",
       "expression": "60",
       "file": "frontend/src/components/AnalysisWindowControl.tsx",
-      "line": 62,
+      "line": 101,
       "name": "BUCKETS",
       "value": 60
     },
@@ -1100,7 +1100,7 @@
       "comment": "",
       "expression": "20",
       "file": "frontend/src/components/LogsView.tsx",
-      "line": 42,
+      "line": 43,
       "name": "PAGE_SIZE",
       "value": 20
     },
@@ -1116,17 +1116,33 @@
       "comment": "The floor's default in `services/reach.py`, until the server's arrives.",
       "expression": "1",
       "file": "frontend/src/components/PostFilter.tsx",
-      "line": 131,
+      "line": 132,
       "name": "DEFAULT_ESTIMATION_FLOOR_HOURS",
       "value": 1
     },
     {
-      "comment": "",
+      "comment": "Bars in a spread, as many as the server draws.",
       "expression": "32",
-      "file": "frontend/src/components/channel-grid/ChannelMetricEditor.tsx",
-      "line": 20,
+      "file": "frontend/src/components/Spread.tsx",
+      "line": 12,
       "name": "BINS",
       "value": 32
+    },
+    {
+      "comment": "Six steps at most: 1/729 of the whole spread.",
+      "expression": "6",
+      "file": "frontend/src/components/SpreadZoom.tsx",
+      "line": 27,
+      "name": "MAX_STEPS",
+      "value": 6
+    },
+    {
+      "comment": "How often a Live bound's fields are redrawn against the clock.",
+      "expression": "15_000",
+      "file": "frontend/src/components/TimeBoundEditor.tsx",
+      "line": 42,
+      "name": "REDRAW_MS",
+      "value": 15000
     },
     {
       "comment": "Rows kept mounted beyond the viewport. Deliberately generous. Beyond smoothing scrolling, it keeps a workable number of cards reachable to anything that locates them by `[data-channel-name]` without scrolling first \u2014 which is how the command palette's channel actions and much of the e2e suite find cards.",
@@ -1556,7 +1572,7 @@
       "comment": "The default minimum shared count.",
       "expression": "2",
       "file": "frontend/src/lib/directory/directory-filter.ts",
-      "line": 419,
+      "line": 446,
       "name": "SHARED_MIN",
       "value": 2
     },
@@ -1564,7 +1580,7 @@
       "comment": "Past this many characters, or six lines, a Post is clamped until \"Read more\".",
       "expression": "280",
       "file": "frontend/src/lib/directory/directory-panel.ts",
-      "line": 13,
+      "line": 17,
       "name": "LONG_POST_CHARS",
       "value": 280
     },
@@ -1572,7 +1588,7 @@
       "comment": "",
       "expression": "6",
       "file": "frontend/src/lib/directory/directory-panel.ts",
-      "line": 14,
+      "line": 18,
       "name": "LONG_POST_LINES",
       "value": 6
     },

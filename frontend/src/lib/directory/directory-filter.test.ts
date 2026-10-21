@@ -55,7 +55,10 @@ describe("every Condition prints and parses back unchanged", () => {
     "files <= 3",
     "links >= 10",
     "mine:all",
-    "mine:14d",
+    "mine:-2w..",
+    "mine:-30d..-1w",
+    "mine:..-3d",
+    'mine:"2026-10-01T00:00Z..2026-10-15T00:00Z"',
     "cited_by >= 5",
     "cites <= 0",
     "citedby:durov",
@@ -112,11 +115,27 @@ describe("what each piece of text means", () => {
     expect(roundTrip("news")).toBe("name:news")
   })
 
-  test("mine reads a window in days, or none for all time", () => {
-    expect(conds("mine:all mine:30d")).toEqual([
-      { cond: { type: "mine" }, not: false },
-      { cond: { type: "mine", days: 30 }, not: false },
+  test("mine reads a Time bound, or none for all time (TB-02)", () => {
+    expect(conds('mine:all mine:-30d..-1w mine:"2026-10-01T00:00Z.."')).toEqual(
+      [
+        { cond: { type: "mine" }, not: false },
+        {
+          cond: { type: "mine", mode: "live", start: -30 * DAY, end: -7 * DAY },
+          not: false,
+        },
+        {
+          cond: { type: "mine", mode: "fixed", start: Date.UTC(2026, 9, 1) },
+          not: false,
+        },
+      ],
+    )
+  })
+
+  test("an old mine:14d link reads as Live from 14 days ago, End open", () => {
+    expect(conds("mine:14d")).toEqual([
+      { cond: { type: "mine", mode: "live", start: -14 * DAY }, not: false },
     ])
+    expect(roundTrip("mine:14d")).toBe("mine:-2w..")
   })
 })
 
@@ -292,6 +311,11 @@ describe("text the server would refuse does not parse", () => {
     ["an unknown prefix", "topic:news"],
     ["a window that is not days", "mine:week"],
     ["a zero window", "mine:0d"],
+    ["a window with no end", "mine:.."],
+    ["a backwards window", "mine:-1d..-2d"],
+    ["a window mixing Live and Fixed", 'mine:"-1d..2026-10-01T00:00Z"'],
+    ["a Live window past a century", "mine:-6000w.."],
+    ["a Live Time bound past a century", "last_post_at -6000w.."],
     ["an unknown measure", "indeg >= 3"],
     ["a dangling operator", "lang:fa and"],
     ["an unclosed parenthesis", "(lang:fa or lang:en"],
@@ -352,7 +376,14 @@ describe("chip labels", () => {
       'Last error contains "timeout"',
     ],
     [{ type: "mine" }, "Cited by your channels"],
-    [{ type: "mine", days: 14 }, "Cited by your channels, last 14 days"],
+    [
+      { type: "mine", mode: "live", start: -14 * 86_400_000 },
+      "Cited by your channels from 2 weeks ago",
+    ],
+    [
+      { type: "mine", mode: "live", start: -30 * 86_400_000, end: -86_400_000 },
+      "Cited by your channels from 30 days ago to 1 day ago",
+    ],
     [
       { type: "measure", measure: "cited_by", min: 10 },
       "Cited by (channels) ≥ 10",

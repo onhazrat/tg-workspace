@@ -30,7 +30,10 @@ import {
   PostFilterBar,
   type PostFilterBarProps,
 } from "./PostFilter"
-import { PostValueHistogramContext } from "./PostFilterControls"
+import {
+  PostValueHistogramContext,
+  type ValueHistogramZoom,
+} from "./PostFilterControls"
 
 afterEach(cleanup)
 
@@ -388,6 +391,17 @@ describe("the Channel posts bounds (PTI-02)", () => {
     expect(picker).toEqual(NUMBERS)
   })
 
+  test("each Filters menu row carries its symbol: views an eye, counts # (TB-03)", () => {
+    mount()
+    fireEvent.click(screen.getByTestId("post-filters"))
+    const symbols = screen
+      .getAllByTestId(/^post-filters-/)
+      .map((b) => b.querySelector("svg")?.getAttribute("class"))
+    expect(
+      symbols.map((c) => /lucide-(eye|hash)\b/.exec(c ?? "")?.[1]),
+    ).toEqual(["eye", "eye", "hash", "hash"])
+  })
+
   test("the pill counts every number bound, Channel posts included", () => {
     const bound = (cond: PostCond) => ({
       kind: "atom" as const,
@@ -421,6 +435,8 @@ describe("the Channel posts bounds (PTI-02)", () => {
     edges: Array.from({ length: 33 }, (_, i) => i * 1.55),
     log: false,
     median: 12,
+    min: 0,
+    max: 49.6,
     measured: 40,
     total: 40,
   }
@@ -481,6 +497,8 @@ describe("the number filters' histograms", () => {
     edges: Array.from({ length: 33 }, (_, i) => i * 100),
     log: false,
     median: 1600,
+    min: 0,
+    max: 3200,
     measured: 528,
     total: 600,
   }
@@ -489,18 +507,29 @@ describe("the number filters' histograms", () => {
     edges: [],
     log: false,
     median: null,
+    min: null,
+    max: null,
     measured: 0,
     total: 0,
   }
 
   function withHistogram(answer: PostValueHistogramResponse) {
     const asked: string[] = []
-    const read = (measure: ViewMeasure) => {
+    const zooms: (ValueHistogramZoom | null | undefined)[] = []
+    const read = (measure: ViewMeasure, zoom?: ValueHistogramZoom | null) => {
       asked.push(measure)
-      return answer
+      zooms.push(zoom)
+      // Zoomed, the server's bars span the zoom; the rest stays whole.
+      if (!zoom) return answer
+      const step = (zoom.hi - zoom.lo) / 32
+      return {
+        ...answer,
+        edges: Array.from({ length: 33 }, (_, i) => zoom.lo + i * step),
+      }
     }
     return {
       asked,
+      zoomed: () => zooms.at(-1) ?? null,
       wrapper: ({ children }: { children: React.ReactNode }) => (
         <PostValueHistogramContext.Provider value={read}>
           {children}
@@ -544,6 +573,67 @@ describe("the number filters' histograms", () => {
     expect(bar(19).getAttribute("data-solid")).toBe("false")
     expect(bar(20).getAttribute("data-solid")).toBe("true")
     expect(bar(31).getAttribute("data-solid")).toBe("true")
+  })
+
+  test("Zoom in asks for a third around the median, on the scale first drawn (TB-04)", () => {
+    const { zoomed, wrapper } = withHistogram(LINEAR)
+    mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-views"))
+    expect(zoomed()).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }))
+    // 0 to 3,200 in thirds around 1,600.
+    const asked = zoomed()
+    expect(asked?.log).toBe(false)
+    expect(asked?.lo).toBeCloseTo(1066.67, 1)
+    expect(asked?.hi).toBeCloseTo(2133.33, 1)
+    // The bars are the zoom's and the caption follows; the median is whole.
+    expect(screen.getByTestId("metric-histogram-caption").textContent).toBe(
+      "1.07Kmedian 1.6K2.13K",
+    )
+    // The first zoomed bar starts past the whole spread's lowest value.
+    drag(0, 3)
+    expect(
+      screen
+        .getAllByRole("button", { pressed: true })
+        .map((b) => b.textContent),
+    ).toEqual(["between"])
+    fireEvent.click(screen.getByRole("button", { name: "Zoom out" }))
+    expect(zoomed()).toBeNull()
+  })
+
+  test("a log spread carries its scale, centred on the bound", () => {
+    const { zoomed, wrapper } = withHistogram({
+      ...LINEAR,
+      edges: Array.from({ length: 33 }, (_, i) => Math.expm1(i / 4)),
+      log: true,
+      max: Math.expm1(8),
+    })
+    mount(
+      {
+        postFilter: {
+          ...emptyPostFilter(),
+          children: [
+            {
+              kind: "atom",
+              id: "v",
+              not: false,
+              cond: { type: "views", measure: "views", min: 99 },
+            },
+          ],
+        },
+      },
+      {},
+      wrapper,
+    )
+    const chip = screen.getByTestId("post-filter-chip-views-views")
+    fireEvent.click(within(chip).getByText(/Views/))
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }))
+    // A third of log(1 + x)'s 8 around log(100) = 4.61: 2.65 to 5.27.
+    const asked = zoomed()
+    expect(asked?.log).toBe(true)
+    expect(asked?.lo).toBeCloseTo(Math.expm1(Math.log(100) - 4 / 3), 6)
+    expect(asked?.hi).toBeCloseTo(Math.expm1(Math.log(100) + 4 / 3), 6)
   })
 
   test("a window with nothing measured says so instead of drawing bars", () => {

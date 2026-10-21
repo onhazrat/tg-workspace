@@ -1697,8 +1697,18 @@ export type DirectoryCountResponse = {
  * DirectoryDistributionRequest
  *
  * A measure's spread under every other Condition of the view; a moment's in epoch ms.
+ *
+ * A zoom (`lo`, `hi`) bins only that range, on the measure's own scale.
  */
 export type DirectoryDistributionRequest = {
+    /**
+     * Lo
+     */
+    lo?: number | null;
+    /**
+     * Hi
+     */
+    hi?: number | null;
     yours?: YourChannels;
     /**
      * Referencekinds
@@ -2183,17 +2193,26 @@ export type DirectoryMeasureCondition = {
 /**
  * DirectoryMineCondition
  *
- * Cited by your channels, ever or within the last `days`.
+ * Cited by your channels, within a Time bound on when the citing Posts
+ * were published; ever with both ends open.
  */
 export type DirectoryMineCondition = {
+    /**
+     * Mode
+     */
+    mode?: 'live' | 'fixed';
+    /**
+     * Start
+     */
+    start?: number | null;
+    /**
+     * End
+     */
+    end?: number | null;
     /**
      * Type
      */
     type: 'mine';
-    /**
-     * Days
-     */
-    days?: number | null;
 };
 
 /**
@@ -2612,18 +2631,9 @@ export type DirectoryTagSeeds = {
 /**
  * DirectoryTimeCondition
  *
- * A Time bound, start included and end excluded, either end open: Fixed
- * ends are epoch ms, Live ends signed ms from now.
+ * A Time bound on one moment; `none` keeps only entries with no value.
  */
 export type DirectoryTimeCondition = {
-    /**
-     * Type
-     */
-    type: 'time';
-    /**
-     * Moment
-     */
-    moment: 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
     /**
      * Mode
      */
@@ -2636,6 +2646,14 @@ export type DirectoryTimeCondition = {
      * End
      */
     end?: number | null;
+    /**
+     * Type
+     */
+    type: 'time';
+    /**
+     * Moment
+     */
+    moment: 'last_post_at' | 'created_at' | 'checked_at' | 'attempted_at' | 'retry_after' | 'refresh_due_at';
     /**
      * None
      */
@@ -2660,9 +2678,22 @@ export type DirectoryViewRequest = {
 /**
  * DirectoryWhyRequest
  *
- * Whose Posts citing `handle` "Why it's here" lists.
+ * Whose Posts citing `handle` "Why it's here" lists, inside the "Cited by
+ * your channels" Condition's Time bound; every Post with both ends open.
  */
 export type DirectoryWhyRequest = {
+    /**
+     * Mode
+     */
+    mode?: 'live' | 'fixed';
+    /**
+     * Start
+     */
+    start?: number | null;
+    /**
+     * End
+     */
+    end?: number | null;
     yours?: YourChannels;
     /**
      * Referencekinds
@@ -2672,10 +2703,6 @@ export type DirectoryWhyRequest = {
      * Handle
      */
     handle: string;
-    /**
-     * Days
-     */
-    days?: number | null;
     /**
      * Parents
      */
@@ -4085,6 +4112,58 @@ export type LogPayload = {
 } | Array<unknown> | null;
 
 /**
+ * LogSpreadBinResponse
+ *
+ * One bar of a log's spread: entries logged from `lo` to `hi`, epoch ms.
+ */
+export type LogSpreadBinResponse = {
+    /**
+     * Lo
+     */
+    lo: number;
+    /**
+     * Hi
+     */
+    hi: number;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * LogSpreadResponse
+ *
+ * When a log's entries were logged, for the Logged editor.
+ *
+ * Empty `bins` when fewer than two instants are logged. Zoomed, the bars
+ * span the zoom and `total`, `min`, `max` and `median` stay the whole
+ * spread's.
+ */
+export type LogSpreadResponse = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Min
+     */
+    min: number | null;
+    /**
+     * Max
+     */
+    max: number | null;
+    /**
+     * Median
+     */
+    median: number | null;
+    /**
+     * Bins
+     */
+    bins: Array<LogSpreadBinResponse>;
+};
+
+/**
  * LogWriteResponse
  *
  * Result of a bulk log write: how many rows were accepted.
@@ -5046,9 +5125,18 @@ export type PostTranslationResponse = {
  *
  * The body is the filtered request's so the editor sends the scope it
  * already has; the Post filter and keyword in it are set aside, except by
- * `channel_posts_filtered`, which counts what they keep.
+ * `channel_posts_filtered`, which counts what they keep. A zoom (`lo`,
+ * `hi`) bins only that range, on the scale `log` names when given.
  */
 export type PostValueHistogramRequest = {
+    /**
+     * Lo
+     */
+    lo?: number | null;
+    /**
+     * Hi
+     */
+    hi?: number | null;
     /**
      * Channelnames
      */
@@ -5098,6 +5186,10 @@ export type PostValueHistogramRequest = {
      * Measure
      */
     measure: 'views' | 'estimated' | 'channel_posts' | 'channel_posts_filtered';
+    /**
+     * Log
+     */
+    log?: boolean | null;
 };
 
 /**
@@ -5105,7 +5197,9 @@ export type PostValueHistogramRequest = {
  *
  * 32 bars and their 33 edges, binned by the Channels tab's rule.
  *
- * Empty `bins` and `edges` when nothing in the scope has a value.
+ * Empty `bins` and `edges` when nothing in the scope has a value. Zoomed,
+ * the bars span the zoom and `min`, `max`, `median` and the counts stay
+ * the whole spread's.
  */
 export type PostValueHistogramResponse = {
     /**
@@ -5124,6 +5218,14 @@ export type PostValueHistogramResponse = {
      * Median
      */
     median: number | null;
+    /**
+     * Min
+     */
+    min: number | null;
+    /**
+     * Max
+     */
+    max: number | null;
     /**
      * Measured
      */
@@ -12229,13 +12331,23 @@ export type DataListLogsRouteData = {
     };
     query?: {
         /**
-         * Limit
+         * Mode
+         *
+         * The Logged bound's mode; none is Any time
          */
-        limit?: number;
+        mode?: 'live' | 'fixed' | null;
         /**
-         * Offset
+         * Start
+         *
+         * Included. Epoch ms when Fixed, signed ms from now when Live
          */
-        offset?: number;
+        start?: number | null;
+        /**
+         * End
+         *
+         * Excluded. Epoch ms when Fixed, signed ms from now when Live
+         */
+        end?: number | null;
         /**
          * Search
          */
@@ -12244,6 +12356,14 @@ export type DataListLogsRouteData = {
          * Searchindetails
          */
         searchInDetails?: boolean;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
     };
     url: '/api/v1/data/logs/{log_type}';
 };
@@ -12304,6 +12424,55 @@ export type DataCreateLogsRouteResponses = {
 };
 
 export type DataCreateLogsRouteResponse = DataCreateLogsRouteResponses[keyof DataCreateLogsRouteResponses];
+
+export type DataGetLogSpreadRouteData = {
+    body?: never;
+    path: {
+        /**
+         * Log Type
+         *
+         * publish | sync | llm | embedding | network
+         */
+        log_type: string;
+    };
+    query?: {
+        /**
+         * Lo
+         */
+        lo?: number | null;
+        /**
+         * Hi
+         */
+        hi?: number | null;
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Searchindetails
+         */
+        searchInDetails?: boolean;
+    };
+    url: '/api/v1/data/logs/{log_type}/spread';
+};
+
+export type DataGetLogSpreadRouteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetLogSpreadRouteError = DataGetLogSpreadRouteErrors[keyof DataGetLogSpreadRouteErrors];
+
+export type DataGetLogSpreadRouteResponses = {
+    /**
+     * Successful Response
+     */
+    200: LogSpreadResponse;
+};
+
+export type DataGetLogSpreadRouteResponse = DataGetLogSpreadRouteResponses[keyof DataGetLogSpreadRouteResponses];
 
 export type DataGetLogRouteData = {
     body?: never;

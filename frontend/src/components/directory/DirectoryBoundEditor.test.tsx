@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryDistributionResponse } from "@/client"
+import { type Range, useZoomState } from "@/components/SpreadZoom"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import { measureOf } from "@/lib/directory/directory-filter"
 import { DirectoryBoundEditor } from "./DirectoryBoundEditor"
@@ -84,6 +85,59 @@ describe("the spread", () => {
   test("says so while the spread has not loaded", () => {
     mount({ distribution: null })
     expect(screen.getByText(/Loading the spread/)).toBeTruthy()
+  })
+})
+
+describe("zoom (TB-04)", () => {
+  /** The container's half: keep the zoom, and ask for its range. */
+  function mountZoomed(initial?: MetricBound) {
+    const asked: (Range | null)[] = []
+    function Container() {
+      const zoom = useZoomState()
+      asked.push(zoom.range)
+      return (
+        <DirectoryBoundEditor
+          measure={measureOf("subscribers")}
+          initial={initial}
+          distribution={SPREAD}
+          zoom={zoom}
+          countFor={() => null}
+          onSubmit={() => {}}
+        />
+      )
+    }
+    render(<Container />)
+    return () => asked.at(-1)
+  }
+  const press = (name: string) =>
+    fireEvent.click(screen.getByRole("button", { name }))
+
+  test("Zoom in asks for a third in log(1 + x), around the median", () => {
+    const range = mountZoomed()
+    expect(range()).toBeNull()
+    press("Zoom in")
+    const [lo, hi] = range() ?? []
+    // 10 to 100K, a third of it around 1,234.
+    expect(lo).toBeCloseTo(269.33, 1)
+    expect(hi).toBeCloseTo(5641.03, 1)
+    // The caption follows the range; the median and the scale stay whole.
+    expect(screen.getByTestId("spread-caption").textContent).toBe(
+      "269median 1.23K, log scale5.64K",
+    )
+  })
+
+  test("centres on the bound, and Zoom out asks for the whole spread again", () => {
+    const range = mountZoomed({ min: 100, max: 1000 })
+    press("Zoom in")
+    const [lo, hi] = range() ?? []
+    expect(lo).toBeCloseTo(119.61, 1)
+    expect(hi).toBeCloseTo(2516.21, 1)
+    press("Zoom out")
+    expect(range()).toBeNull()
+    expect(
+      (screen.getByRole("button", { name: "Zoom out" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
   })
 })
 
