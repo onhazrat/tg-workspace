@@ -113,6 +113,24 @@ describe("PhotoViewer", () => {
     ).toBe(true)
   })
 
+  test("h and l step as the arrows do, and p closes", () => {
+    const onClose = mock()
+    render(<PhotoViewer start="blob:b" onClose={onClose} />)
+    fireEvent.keyDown(window, { key: "l" })
+    expect(label()).toContain("Chan c · 3 / 3")
+    fireEvent.keyDown(window, { key: "h" })
+    fireEvent.keyDown(window, { key: "h" })
+    expect(label()).toContain("Chan a · 1 / 3")
+    // Held down, the p that opened the viewer must not close it again; nor
+    // does a p with Ctrl or Cmd, which is the browser's or the palette's.
+    fireEvent.keyDown(window, { key: "p", repeat: true })
+    fireEvent.keyDown(window, { key: "p", metaKey: true })
+    fireEvent.keyDown(window, { key: "p", ctrlKey: true })
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(window, { key: "p" })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   test("a double-click toggles 2.5x and cancels the click that would close", async () => {
     const onClose = mock()
     render(<PhotoViewer start="blob:a" onClose={onClose} />)
@@ -352,6 +370,10 @@ describe("a gallery of its own (SUMTAB-05)", () => {
     fireEvent.keyDown(window, { key: "ArrowRight" })
     expect(label()).toContain("Strip x · 1 / 2")
     fireEvent.keyDown(window, { key: "ArrowLeft" })
+    expect(label()).toContain("Strip y · 2 / 2")
+    fireEvent.keyDown(window, { key: "l" })
+    expect(label()).toContain("Strip x · 1 / 2")
+    fireEvent.keyDown(window, { key: "h" })
     expect(label()).toContain("Strip y · 2 / 2")
     swipe(200, 10)
     swipe(-200, 10)

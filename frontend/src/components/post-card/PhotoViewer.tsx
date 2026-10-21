@@ -218,9 +218,12 @@ export function PhotoViewer({
   const atEnd = (d: number) => (d < 0 ? at === 0 : at === photos.length - 1)
 
   useEffect(() => {
+    // The viewer holds the keys while open (ADR-034): h / l are the arrows,
+    // and p, which opens it from keyboard mode, closes it.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") step(-right)
-      if (e.key === "ArrowRight") step(right)
+      if (e.key === "ArrowLeft" || e.key === "h") step(-right)
+      if (e.key === "ArrowRight" || e.key === "l") step(right)
+      if (e.key === "p" && !e.repeat && !e.metaKey && !e.ctrlKey) onClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
