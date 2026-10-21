@@ -1617,14 +1617,6 @@
       "value": 10000
     },
     {
-      "comment": "Two g presses closer than this are gg.",
-      "expression": "600",
-      "file": "frontend/src/lib/keyboard-moves.ts",
-      "line": 39,
-      "name": "GG_MS",
-      "value": 600
-    },
-    {
       "comment": "Bounds for the weight inputs \u2014 wide enough to express \"ignore this kind\" (0).",
       "expression": "0",
       "file": "frontend/src/lib/posts/discover-candidates.ts",

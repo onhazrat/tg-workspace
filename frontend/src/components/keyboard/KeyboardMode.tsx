@@ -6,15 +6,21 @@
  */
 import { useEffect, useRef } from "react"
 import type { TabType } from "@/constants"
+import { focusIsTyping } from "@/lib/keyboard/focus"
 import { type Command, IDLE, interpret } from "@/lib/keyboard/interpreter"
 import {
+  fullListOpen,
   keyboardOn,
   pending,
+  setAdhocHelp,
+  setHelp,
   setKeyboardMode,
   stepHelp,
+  useAdhocHelp,
   useAnnouncement,
+  useHelp,
+  useKeyboardMode,
 } from "@/lib/keyboard/mode"
-import { focusIsTyping } from "@/lib/keyboard-moves"
 import { mountedList } from "./useKeyboardList"
 
 /** The workspace's tab strip, as the keys use it. */
@@ -39,6 +45,43 @@ const onlyShortcutsOpen = () => {
 /** The corner list shows on a desk, on a tab with a list. */
 const canCorner = () =>
   mountedList() !== null && window.matchMedia("(min-width: 768px)").matches
+
+/**
+ * The header's switch and shortcuts button, and the full list's state. The
+ * button steps the help as `?` does. The full list closes on a press outside
+ * it, so a press on the button that closed it is not also a step.
+ */
+export function useHelpControls() {
+  const keyboard = useKeyboardMode()
+  const help = useHelp()
+  const alone = useAdhocHelp()
+  // Keyboard mode switched either way ends a full list opened on its own.
+  useEffect(() => setAdhocHelp(false), [keyboard])
+  const fullOpen = fullListOpen(keyboard, help, alone)
+  const openRef = useRef(fullOpen)
+  openRef.current = fullOpen
+  const pressClosed = useRef(false)
+  return {
+    keyboard,
+    /** The corner or the full list is showing: the button is filled. */
+    listShown: keyboard ? help !== "closed" : alone,
+    fullOpen,
+    onFullOpenChange: (open: boolean) => {
+      if (open) return
+      if (keyboard) setHelp("closed")
+      setAdhocHelp(false)
+    },
+    button: {
+      onPointerDown: () => {
+        pressClosed.current = openRef.current
+      },
+      onClick: () => {
+        if (pressClosed.current) pressClosed.current = false
+        else stepHelp(canCorner())
+      },
+    },
+  }
+}
 
 export function KeyboardMode({ ops }: { ops: WorkspaceKeyOps }) {
   const opsRef = useRef(ops)

@@ -31,6 +31,7 @@ const HEADER_ICON_BUTTONS = [
   "CommandIcon",
   "HelpCircle",
   "Keyboard",
+  "BookKey",
   "fullscreenIcon",
   "themeIcon",
 ]

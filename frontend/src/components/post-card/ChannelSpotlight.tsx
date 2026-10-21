@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { focusIsTyping } from "@/lib/keyboard-moves"
+import { focusIsTyping } from "@/lib/keyboard/focus"
 import {
   type ChannelSpotlight,
   enterSpotlight,

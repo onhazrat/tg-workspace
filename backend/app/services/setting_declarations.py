@@ -1032,7 +1032,6 @@ CONSTANT_TOPICS: dict[str, str] = {
     "frontend/src/lib/directory/directory-filter.ts": "directory",
     "frontend/src/lib/directory/directory-panel.ts": "directory",
     "frontend/src/lib/directory/directory-view.ts": "directory",
-    "frontend/src/lib/keyboard-moves.ts": "appearance",
     "frontend/src/lib/posts/discover-candidates.ts": "directory",
     "frontend/src/lib/posts/discover-selection.ts": "directory",
     "frontend/src/lib/posts/post-selection.ts": "sync",

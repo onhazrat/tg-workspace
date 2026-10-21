@@ -1,4 +1,5 @@
 import {
+  BookKey,
   Command as CommandIcon,
   HelpCircle,
   Keyboard,
@@ -9,7 +10,7 @@ import {
   Sun,
 } from "lucide-react"
 import { AnimatePresence } from "motion/react"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import { api } from "@/api"
 import { ActionView } from "./components/ActionView"
 import { ChannelGrid } from "./components/ChannelGrid"
@@ -20,6 +21,7 @@ import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import {
   KeyboardMode,
+  useHelpControls,
   type WorkspaceKeyOps,
 } from "./components/keyboard/KeyboardMode"
 import { PostFeed } from "./components/PostFeed"
@@ -45,7 +47,6 @@ import { WorkspaceTabStrip } from "./components/workspace-shell/WorkspaceTabStri
 import {
   commandKeyFor,
   oldestSync,
-  opensShortcuts,
   routingMode,
   stripNeighbour,
   THEME_TOOLTIPS,
@@ -61,9 +62,14 @@ import { useScopedPostCounts } from "./hooks/usePostsView"
 import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
 import { artifactDestination } from "./lib/history/open-artifact"
+import { setKeyboardMode } from "./lib/keyboard/mode"
 import type { ArtifactListItem, TabType } from "./types"
 
 const THEME_ICONS = { system: Monitor, light: Moon, dark: Sun }
+
+/** A header icon button, and one filled while what it switches is on. */
+const OUTLINED = "border-app-ink border-opacity-10 hover:border-opacity-40"
+const FILLED = "border-app-ink bg-app-ink text-app-bg"
 
 /** What focus mode changes in the shell's chrome. */
 const FULLSCREEN_CHROME = {
@@ -110,7 +116,6 @@ export default function App() {
 
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const { theme, setTheme, proxyEnabled, torEnabled } = useSettings()
 
@@ -172,16 +177,8 @@ export default function App() {
     reopen: workspaceTabs.reopenLastTab,
   }
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!opensShortcuts(event)) return
-      event.preventDefault()
-      setShortcutsOpen(true)
-    }
-
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [])
+  // The switch, ? and the shortcuts button share one help state (ADR-034).
+  const help = useHelpControls()
 
   /**
    * Each tab starts at the top.
@@ -305,23 +302,60 @@ export default function App() {
                   className={`w-1 h-1 rounded-full animate-pulse ${routing.dotClass}`}
                 />
               </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    id="command-palette-button"
-                    data-testid="command-palette-button"
-                    aria-label="Command palette"
-                    onClick={() => setCommandPaletteOpen(true)}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <CommandIcon size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Command Palette (⌘⇧P)</p>
-                </TooltipContent>
-              </Tooltip>
+              {/* Grouped: keyboard (the mode, its keys, the palette), help,
+                  then view. The first two are hidden on a phone, which has
+                  no keyboard to use them with. */}
+              <div className="flex items-center gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Keyboard mode"
+                      aria-pressed={help.keyboard}
+                      onClick={() => setKeyboardMode(!help.keyboard)}
+                      className={`p-1.5 border transition-all rounded-md max-md:hidden ${help.keyboard ? FILLED : OUTLINED}`}
+                    >
+                      <Keyboard size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Keyboard mode: {help.keyboard ? "on" : "off"} (\)</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Keyboard shortcuts"
+                      aria-pressed={help.listShown}
+                      {...help.button}
+                      className={`p-1.5 border transition-all rounded-md max-md:hidden ${help.listShown ? FILLED : OUTLINED}`}
+                    >
+                      <BookKey size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Keyboard shortcuts (?)</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      id="command-palette-button"
+                      data-testid="command-palette-button"
+                      aria-label="Command palette"
+                      onClick={() => setCommandPaletteOpen(true)}
+                      className={`p-1.5 border transition-all rounded-md ${OUTLINED}`}
+                    >
+                      <CommandIcon size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Command Palette (⌘⇧P)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -338,52 +372,39 @@ export default function App() {
                   <p>Replay Guided Tour</p>
                 </TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Keyboard shortcuts"
-                    onClick={() => setShortcutsOpen(true)}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <Keyboard size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Keyboard Shortcuts (?)</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    data-testid="fullscreen-button"
-                    aria-label={fullscreenLabel}
-                    onClick={toggleFullscreen}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    {fullscreenIcon}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{fullscreenLabel}</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={themeTooltip}
-                    onClick={toggleTheme}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    {themeIcon}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{themeTooltip}</p>
-                </TooltipContent>
-              </Tooltip>
+              <div className="flex items-center gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="fullscreen-button"
+                      aria-label={fullscreenLabel}
+                      onClick={toggleFullscreen}
+                      className={`p-1.5 border transition-all rounded-md ${OUTLINED}`}
+                    >
+                      {fullscreenIcon}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{fullscreenLabel}</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={themeTooltip}
+                      onClick={toggleTheme}
+                      className={`p-1.5 border transition-all rounded-md ${OUTLINED}`}
+                    >
+                      {themeIcon}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{themeTooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
           </div>
 
@@ -392,8 +413,8 @@ export default function App() {
           <KeyboardMode ops={keyOps} />
 
           <ShortcutsDialog
-            open={shortcutsOpen}
-            onOpenChange={setShortcutsOpen}
+            open={help.fullOpen}
+            onOpenChange={help.onFullOpenChange}
             commandKey={commandKey}
           />
 

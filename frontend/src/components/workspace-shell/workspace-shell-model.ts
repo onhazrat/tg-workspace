@@ -42,24 +42,6 @@ export function oldestSync(
   return times.length === 0 ? null : Math.min(...times)
 }
 
-const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"])
-
-/** Whether a keypress is the bare `?` that opens the shortcuts list, and not typing. */
-export function opensShortcuts(event: {
-  key: string
-  defaultPrevented: boolean
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  target: EventTarget | null
-}): boolean {
-  if (event.key !== "?" || event.defaultPrevented) return false
-  if (event.metaKey || event.ctrlKey || event.altKey) return false
-  const target = event.target
-  if (!(target instanceof HTMLElement)) return true
-  return !target.isContentEditable && !EDITABLE_TAGS.has(target.tagName)
-}
-
 /** The modifier the platform names: Cmd on Apple, Ctrl everywhere else. */
 export const commandKeyFor = (platform: string | undefined): "Cmd" | "Ctrl" =>
   platform && /(Mac|iPhone|iPad|iPod)/i.test(platform) ? "Cmd" : "Ctrl"
