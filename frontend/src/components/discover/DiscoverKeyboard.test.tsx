@@ -52,10 +52,11 @@ type Calls = Record<"follow" | "ignore" | "bulkFollow" | "bulkDismiss", Spy>
 type Spy = ReturnType<typeof mock<(...args: unknown[]) => void>>
 let calls: Calls
 
-function Report() {
+function Report({ report = null }: { report?: string | null }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [inspecting, setInspecting] = useState<string | null>(null)
   const ring = useDiscoverKeys({
+    report,
     names: ROWS.map((r) => r.name),
     onOpen: setInspecting,
     isIgnored: () => false,
@@ -112,11 +113,11 @@ function Report() {
   )
 }
 
-const tab = () => (
+const tab = (report: string | null = null) => (
   <QueryClientProvider client={new QueryClient()}>
     <Toaster />
     <KeyboardMode ops={OPS} />
-    <Report />
+    <Report report={report} />
   </QueryClientProvider>
 )
 
@@ -166,6 +167,19 @@ describe("a Discovery report's keyboard mode", () => {
     expect(screen.getByTestId("keyboard-announcer").textContent).toBe(
       "@b, 2 of 3",
     )
+  })
+
+  test("each report tab remembers its own Highlight across a tab switch", () => {
+    render(tab("r1"))
+    type("j", "j")
+    expect(ringed()).toEqual(["b"])
+    cleanup()
+    render(tab("r2"))
+    expect(ringed()).toEqual([])
+    type("j")
+    cleanup()
+    render(tab("r1"))
+    expect(ringed()).toEqual(["b"])
   })
 
   test("x ticks a Candidate, and cannot tick a followed one", () => {

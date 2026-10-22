@@ -109,4 +109,5 @@ export const useShownList = shownList.use
 
 // ---- each list's Highlight, kept across a tab switch ----
 
-export const lastHighlight = new Map<ListId, string>()
+/** By list, or `list:tab` for a kind with several tabs (`useKeyboardList`). */
+export const lastHighlight = new Map<string, string>()

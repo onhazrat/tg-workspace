@@ -16,11 +16,14 @@ const rowOf = (name: string) =>
 
 /** The highlighted Candidate's name, or null. */
 export function useDiscoverKeys({
+  report,
   names,
   onOpen,
   isIgnored,
   onSetIgnored,
 }: {
+  /** The report's id: each report tab remembers its own Highlight. */
+  report: string | null
   /** The Candidates on screen, in order. */
   names: string[]
   /** Opens a Candidate's Details. */
@@ -32,6 +35,7 @@ export function useDiscoverKeys({
 }): string | null {
   return useKeyboardList({
     list: "discover",
+    instance: report,
     items: names,
     element: rowOf,
     reveal: (at) => rowOf(names[at])?.scrollIntoView({ block: "nearest" }),

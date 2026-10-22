@@ -252,6 +252,7 @@ export const DiscoverView: React.FC = () => {
   }
 
   const ring = useDiscoverKeys({
+    report: reportId,
     names: candidates.map((c) => c.name),
     onOpen: setInspectingName,
     isIgnored: (name) =>

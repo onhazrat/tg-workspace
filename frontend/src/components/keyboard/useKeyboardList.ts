@@ -24,6 +24,11 @@ import {
 
 export interface ListAdapter {
   list: ListId
+  /**
+   * Which tab of the list's kind this is, where there can be several (a
+   * Discovery report's id), so each remembers its own Highlight.
+   */
+  instance?: string | null
   /** The actions shown now, for the corner list, when only some are. */
   carried?: readonly Action[]
   /** The items' ids, in order. */
@@ -61,6 +66,10 @@ export interface MountedList {
 let mounted: MountedList | null = null
 /** The list the engine sends list commands to, if a tab with one is shown. */
 export const mountedList = () => mounted
+
+/** Where a list's Highlight is kept: by list, and by tab where there are several. */
+const memoryOf = ({ list, instance }: ListAdapter) =>
+  instance ? `${list}:${instance}` : list
 
 const clamp = (i: number, length: number) =>
   Math.max(0, Math.min(length - 1, i))
@@ -143,16 +152,16 @@ export function useKeyboardList(adapter: ListAdapter): {
   const setHighlight = (id: string | null) => {
     ref.current.highlight = id
     setHighlightState(id)
-    const { list } = ref.current.adapter
-    if (id) lastHighlight.set(list, id)
-    else lastHighlight.delete(list)
+    const memory = memoryOf(ref.current.adapter)
+    if (id) lastHighlight.set(memory, id)
+    else lastHighlight.delete(memory)
   }
   const setRef = useRef(setHighlight)
   setRef.current = setHighlight
 
   // The Highlight left on this list before a tab switch, once its item loads.
   const restored = useRef(false)
-  const remembered = lastHighlight.get(adapter.list)
+  const remembered = lastHighlight.get(memoryOf(adapter))
   const at = remembered ? adapter.items.indexOf(remembered) : -1
   useEffect(() => {
     if (restored.current || highlight || !remembered || at < 0) return
