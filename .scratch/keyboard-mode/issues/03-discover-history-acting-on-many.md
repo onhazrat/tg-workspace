@@ -20,7 +20,7 @@ one look, a blue tint and edge; the Highlight stays the 2 px blue ring.
 
 **Blocked by:** KM-02.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: toasts, one
 marked look; Out of Scope: Discover's Details panel), ADR-034, glossary **Tick**
@@ -44,3 +44,8 @@ Prototype at a6aa1eb6:
 - [ ] `d` and `*` show a toast with the action and the item, and Undo restores the item's previous state; `x` and `J` / `K` show no toast.
 - [ ] A ticked Directory entry, a ticked Candidate and a selected Channel share one look in every view.
 - [ ] The build and test typechecks pass, the backend suite passes, and a render test covers each new branching component.
+
+## Comments
+
+- 2026-10-22: implemented on `claude/km-03-discover-history-many` and merged into the integration branch in 635b756b (fast-forward).
+  Open: keys wait during a closing dialog's 200 ms animation, so `F` right after Cancel does nothing; DiscoverView's `onSetIgnored` and HistoryView's star Undo have no unit render test. Both go to the integration branch's code review.
