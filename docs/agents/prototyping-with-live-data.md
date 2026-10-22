@@ -92,6 +92,7 @@ done
 One file, `backend/scripts/proto_<name>_api.py`, started **from `backend/`**
 (`cd backend && uv run python scripts/proto_<name>_api.py`): the settings read `.env` relative
 to that directory, and from the repo root the import fails on missing fields before it serves.
+In a worktree, which has no `.env`, start it as the `.env` pitfall below says.
 
 - **Configuration only from the environment, with no defaults that name a deployment**:
   `PROTO_DSN` (a libpq connection string), the deployment's API base for identity, `PROTO_PORT`.
@@ -152,8 +153,29 @@ example.
   password.
 - The user shares the browser pane. Check your work in a tab of your own, save the prototype's
   stored state before a test and restore it after, and never type into the user's tab.
+- **Click by element reference while `resize_window` emulates a size.** The emulated page is
+  scaled into the pane, so a coordinate read off a screenshot lands on another control; take
+  refs from `find` or `read_page` instead.
 - A second prototype at the same time needs its own worktree, its own frontend and API ports
   (`PROTO_API_PORT`), and room under the role's connection limit.
+
+### Checking keyboard features in the browser pane
+
+- **Send keys from a script, as a keyboard sends them.** The pane's own key action turns
+  `shift+t` into a plain `t` with no Shift keydown, so it cannot reproduce a bug that lives in
+  the Shift. Dispatch `keydown` events from the page's script instead, and precede every
+  capital with its own `Shift` keydown (`{ key: "Shift", shiftKey: true }`, then
+  `{ key: "T", shiftKey: true }`). Four keyboard-mode bugs (`gT`, `23G`, `gg`, `?` leaving a
+  `g` waiting) passed tests that sent the capital alone.
+- **Keep each script under the tool's 45-second limit**: one call per tab or per check. A
+  script that times out keeps running in the page and changes it under the next call; check
+  where the page is before running again.
+- **Intercept clicks on anything that writes.** Against a deployment's real API, wrap
+  `HTMLElement.prototype.click` to log instead of press while a key could hit Follow,
+  Dismiss, Freeze, a selection or a delete, and restore it afterwards. A key that opens,
+  moves or filters can run for real.
+- **A dialog left open swallows every key.** Before trusting "nothing happened", check for a
+  `[role="dialog"]` a previous step left open.
 
 ## 6. Keeping it safe to share
 
@@ -169,7 +191,8 @@ example.
   env-catalog hook rewrites `.env.example` for every `PROTO_*` variable. Every commit bound for
   `main` keeps the hooks.
 - Write the design down (glossary, ADRs, spec, tickets) and send it to `main` as a docs PR. The
-  prototype code is never promoted as is.
+  prototype code is never promoted as is. Push the snapshot **before** opening that PR, so the
+  docs link it from their first commit; a docs PR that merges first needs a second PR for the link.
 
 ## 7. Cleaning up
 
@@ -191,4 +214,8 @@ handoff that it exists.
   reword them and check the commit landed.
 - The biome pre-commit hook passes repo-root paths to a command run inside `frontend/`; run biome
   there yourself, then commit with `SKIP=local-biome-check`.
-- A worktree has no `.env`; symlink it before anything reads settings.
+- A worktree has no `.env`, and symlinking the root one into it breaks a frontend proxied to a
+  deployment: its `VITE_API_URL` becomes the browser's cross-origin base (section 5). Start the
+  prototype API from an empty scratch directory whose parent holds a `.env` symlink to the main
+  checkout's (the settings read `../.env`), with `PYTHONPATH` set to the worktree's `backend/`
+  and the main checkout's `.venv` Python. The worktree stays without one.

@@ -999,6 +999,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "frontend/src/components/directory/DirectoryBulkBar.tsx": "directory",
     "frontend/src/components/directory/DirectorySamples.tsx": "directory",
     "frontend/src/components/directory/DirectoryTable.tsx": "directory",
+    "frontend/src/components/history/ArtifactCardParts.tsx": "appearance",
     "frontend/src/components/keyboard/KeyHelp.tsx": "appearance",
     "frontend/src/components/post-card/FeedKeyboard.tsx": "appearance",
     "frontend/src/components/post-card/PhotoViewer.tsx": "media",

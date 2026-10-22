@@ -16,27 +16,36 @@ import {
   setKeyboardMode,
 } from "@/lib/keyboard/mode"
 import type { ArtifactListItem } from "@/types"
-import { ArtifactCardActions, ArtifactCardHeading } from "./ArtifactCardParts"
-import { artifactKey, useHistoryKeys } from "./HistoryKeyboard"
+import { useHistoryKeys } from "./HistoryKeyboard"
+import { HistoryList } from "./HistoryList"
 import { toggleStar } from "./history-view-model"
+
+const T = Date.UTC(2026, 9, 1)
+/** A recorded hour-long window, as the card's window line reads it. */
+const hourTo = (channels: string[]) => ({
+  channels,
+  start: T - 3_600_000,
+  end: T,
+  durationMinutes: 60,
+})
 
 const ARTIFACTS = [
   {
     kind: "summary",
     id: "s1",
     title: "Morning news",
-    timestamp: 1,
+    timestamp: T,
     status: "done",
-    scope: { channels: ["alpha"] },
+    scope: hourTo(["alpha"]),
   },
   {
     kind: "chat",
     id: "c1",
     title: "",
-    timestamp: 1,
-    scope: { channels: ["beta", "gamma"] },
+    timestamp: T,
+    scope: hourTo(["beta", "gamma"]),
   },
-  { kind: "tag", id: "t1", title: "Tagged", timestamp: 1, status: "done" },
+  { kind: "tag", id: "t1", title: "Tagged", timestamp: T, status: "done" },
 ] as unknown as ArtifactListItem[]
 
 const OPS = {
@@ -48,7 +57,7 @@ const OPS = {
 }
 
 type Spy = ReturnType<typeof mock<(a: ArtifactListItem) => void>>
-let spies: Record<"open" | "star" | "note" | "remove", Spy>
+let spies: Record<"open" | "star" | "remove", Spy>
 /** The star's write, as `setArtifactStarred` is called. */
 let starred: [string, boolean][]
 
@@ -60,39 +69,31 @@ function History() {
   return (
     <>
       <input aria-label="Search history" />
-      {ARTIFACTS.map((a) => (
-        // ArtifactCard's frame, without the Scope line's workspace contexts.
-        <div
-          key={artifactKey(a)}
-          data-artifact-kind={a.kind}
-          data-artifact-id={a.id}
-          data-highlight={highlight === artifactKey(a) || undefined}
-        >
-          <ArtifactCardHeading
-            artifact={a}
-            pending={false}
-            onOpen={(x) => spies.open(x)}
-          />
-          <ArtifactCardActions
-            artifact={a}
-            pending={false}
-            // HistoryView's own handler, with the write and refetch faked.
-            onToggleStar={(x) => {
-              spies.star(x)
-              void toggleStar(x, {
-                setStarred: async (a, on) => {
-                  starred.push([a.id, on])
-                },
-                refresh: async () => {},
-              })
-            }}
-            onEditNote={(x) => spies.note(x)}
-            onDelete={(x) => spies.remove(x)}
-            onToggleAutoRegenerate={() => {}}
-            onToggleAutoPublish={() => {}}
-          />
-        </div>
-      ))}
+      <HistoryList
+        rows={ARTIFACTS}
+        actions={{
+          open: (x) => spies.open(x),
+          // HistoryView's own handler, with the write and refetch faked.
+          star: (x) => {
+            spies.star(x)
+            void toggleStar(x, {
+              setStarred: async (a, on) => {
+                starred.push([a.id, on])
+              },
+              refresh: async () => {},
+            })
+          },
+          saveNote: () => {},
+          remove: (x) => spies.remove(x),
+          autoRegenerate: () => {},
+          autoPublish: () => {},
+          useScope: () => {},
+        }}
+        search=""
+        compact={false}
+        days={false}
+        highlight={highlight}
+      />
     </>
   )
 }
@@ -116,7 +117,7 @@ const type = (...keys: string[]) => {
 }
 
 beforeEach(() => {
-  spies = { open: mock(), star: mock(), note: mock(), remove: mock() }
+  spies = { open: mock(), star: mock(), remove: mock() }
   starred = []
   lastHighlight.clear()
   announcement.set("")
@@ -158,11 +159,17 @@ describe("History's keyboard mode", () => {
     expect(ids(spies.open)).toEqual(["c1"])
   })
 
-  test("* stars and n edits the note of the highlighted Artifact only", () => {
+  test("* stars the highlighted Artifact only", () => {
     render(tab())
-    type("j", "j", "*", "n")
+    type("j", "j", "*")
     expect(ids(spies.star)).toEqual(["c1"])
-    expect(ids(spies.note)).toEqual(["c1"])
+  })
+
+  test("n opens the highlighted Artifact's note beside its card", async () => {
+    render(tab())
+    type("j", "j", "n")
+    expect(await screen.findByLabelText("Note on Chat")).toBeTruthy()
+    expect(screen.queryByLabelText("Note on Summary")).toBeNull()
   })
 
   test("* adds no toast of its own: History's star says what it did, with Undo", async () => {

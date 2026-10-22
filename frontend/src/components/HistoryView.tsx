@@ -1,21 +1,15 @@
 import { History as HistoryIcon } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { motion } from "motion/react"
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { ArtifactCard } from "@/components/history/ArtifactCard"
+import type { ArtifactActions } from "@/components/history/ArtifactCardParts"
 import { ARTIFACT_KIND_LABELS } from "@/components/history/artifact-presentation"
-import {
-  artifactKey,
-  useHistoryKeys,
-} from "@/components/history/HistoryKeyboard"
-import {
-  ArtifactNoteEditor,
-  HistoryKindFilters,
-  HistorySearchControls,
-  HistoryStatusFilters,
-} from "@/components/history/HistoryViewParts"
+import { HistoryBar } from "@/components/history/HistoryBar"
+import { useHistoryKeys } from "@/components/history/HistoryKeyboard"
+import { HistoryList } from "@/components/history/HistoryList"
+import { HistorySpread } from "@/components/history/HistorySpread"
 import {
   deleteDialogCopy,
   historyEmptyDescription,
@@ -26,17 +20,22 @@ import {
 } from "@/components/history/history-view-model"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
-import { useArtifacts, useInvalidateArtifacts } from "@/hooks/useArtifacts"
-import { useHistoryStatusParam } from "@/hooks/useHistoryStatusParam"
+import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
+import {
+  useArtifactCounts,
+  useArtifacts,
+  useInvalidateArtifacts,
+} from "@/hooks/useArtifacts"
+import { useHistoryParams } from "@/hooks/useHistoryParams"
+import { useIsMobile } from "@/hooks/useMobile"
+import { useSessionFlag } from "@/hooks/useSessionFlag"
 import {
   deleteArtifact,
   setArtifactNote,
   setArtifactStarred,
   setSummaryFlag,
 } from "@/lib/history/artifact-actions"
-import type { ArtifactKind, ArtifactListItem, TabType } from "@/types"
-
-import { useUI } from "../contexts/UIContext"
+import type { ArtifactListItem, TabType } from "@/types"
 
 interface HistoryViewProps {
   /** Restores an artifact's scope and opens the tab that renders it. */
@@ -45,43 +44,28 @@ interface HistoryViewProps {
 }
 
 /**
- * Everything you have made, newest first.
+ * Everything you have made, newest Written first unless sorted otherwise.
  *
  * One list over four aggregates, not a summary list with the others bolted on
- * beside it. The interleaving is decided server-side by `/data/artifacts` — see
- * `useArtifactsQuery` for why merging four capped lists in the browser gives a
- * "load more" that cannot mean anything.
- *
- * The card is the same for every kind on purpose. History answers "what have I
- * made, and when"; the differences between a summary and a tag run belong on
- * the tab that renders the artifact.
+ * beside it. The interleaving, the time filter, the sort and the counts are
+ * decided server-side by `/data/artifacts`. See `useArtifactsQuery` for why
+ * merging four capped lists in the browser gives a "load more" that cannot
+ * mean anything. Every filter lives in the URL (`useHistoryParams`).
  */
 export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
-  const {
-    historySearchQuery,
-    setHistorySearchQuery,
-    starredOnly,
-    setStarredOnly,
-  } = useUI()
-
-  const [kind, setKind] = useState<ArtifactKind | null>(null)
-  // In the URL rather than state, so a link to "my Failed Summaries" works.
-  const { status, setStatus } = useHistoryStatusParam()
+  const { params, setParams } = useHistoryParams()
+  const phone = useIsMobile()
+  // Off at the start of each session: the full card carries the window and
+  // the note that are History's point.
+  const [compact, setCompact] = useSessionFlag("history_compactGrid")
   const [pendingDelete, setPendingDelete] = useState<ArtifactListItem | null>(
     null,
   )
-  const [editingNoteFor, setEditingNoteFor] = useState<ArtifactListItem | null>(
-    null,
-  )
-  const [noteDraft, setNoteDraft] = useState("")
 
-  const { rows: visible, query } = useArtifacts(
-    kind,
-    historySearchQuery,
-    starredOnly,
-    status,
-  )
+  const { rows, query } = useArtifacts(params)
+  const counts = useArtifactCounts(params).data
   const invalidate = useInvalidateArtifacts()
+  const applyScope = useApplyArtifactScope()
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -103,13 +87,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     return () => observer.disconnect()
   }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage])
 
-  const handleToggleStar = (artifact: ArtifactListItem) =>
-    toggleStar(artifact, {
-      setStarred: setArtifactStarred,
-      refresh: invalidate,
-    })
-
-  const handleToggleSummaryFlag = async (
+  const toggleSummaryFlag = async (
     artifact: ArtifactListItem,
     flag: SummaryFlag,
   ) => {
@@ -123,17 +101,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     await invalidate()
   }
 
-  const closeNoteEditor = () => {
-    setEditingNoteFor(null)
-    setNoteDraft("")
-  }
-
-  const handleSaveNote = async () => {
-    if (!editingNoteFor) return
-    await setArtifactNote(editingNoteFor, noteDraft.trim() || null)
-    await invalidate()
-    closeNoteEditor()
-    toast.success(noteDraft.trim() ? "Note saved." : "Note deleted.")
+  const actions: ArtifactActions = {
+    open: openArtifact,
+    star: (artifact) =>
+      toggleStar(artifact, {
+        setStarred: setArtifactStarred,
+        refresh: invalidate,
+      }),
+    saveNote: async (artifact, note) => {
+      await setArtifactNote(artifact, note)
+      await invalidate()
+      toast.success(note ? "Note saved." : "Note deleted.")
+    },
+    remove: setPendingDelete,
+    autoRegenerate: (artifact) =>
+      void toggleSummaryFlag(artifact, "autoRegenerate"),
+    autoPublish: (artifact) => void toggleSummaryFlag(artifact, "autoPublish"),
+    useScope: applyScope,
   }
 
   const confirmDelete = async () => {
@@ -147,7 +131,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
 
   const deleteCopy = deleteDialogCopy(pendingDelete)
 
-  const highlight = useHistoryKeys({ artifacts: visible, onOpen: openArtifact })
+  const highlight = useHistoryKeys({ artifacts: rows, onOpen: openArtifact })
 
   return (
     <motion.div
@@ -155,92 +139,46 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="space-y-6"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-2">
-          <HistoryKindFilters kind={kind} onSelect={setKind} />
-          <HistoryStatusFilters status={status} onSelect={setStatus} />
-        </div>
-        <HistorySearchControls
-          searchQuery={historySearchQuery}
-          onSearchChange={setHistorySearchQuery}
-          starredOnly={starredOnly}
-          onStarredOnlyChange={setStarredOnly}
-        />
-      </div>
+      <HistoryBar
+        params={params}
+        onChange={setParams}
+        counts={counts}
+        spread={
+          <HistorySpread
+            params={params}
+            onPick={(bound) => setParams({ bound })}
+          />
+        }
+        compact={compact}
+        onCompact={setCompact}
+        phone={phone}
+      />
 
-      {historyShowsEmpty(visible.length, query.isLoading) ? (
+      {historyShowsEmpty(rows.length, query.isLoading) ? (
         <TgHeroEmptyState
           icon={<HistoryIcon size={28} className="opacity-40" />}
           title="Nothing here yet"
-          description={historyEmptyDescription(
-            historySearchQuery,
-            starredOnly,
-            kind,
-            status,
-          )}
+          description={historyEmptyDescription(params)}
         />
       ) : (
-        <div className="grid gap-3">
-          <AnimatePresence initial={false}>
-            {visible.map((artifact) => (
-              /*
-               * `min-w-0` is load-bearing. A grid item defaults to
-               * `min-width: auto`, so the track sizes to the item's
-               * max-content — and one summary here carries 1,722 channel names
-               * on a single `truncate` line. Without it the card measured
-               * 17,374px and every row ran off the panel. Guarded by
-               * `tests/open-artifact.spec.ts`, which measures the scroller.
-               */
-              <motion.div
-                key={artifactKey(artifact)}
-                className="min-w-0"
-                layout
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <ArtifactCard
-                  artifact={artifact}
-                  highlighted={highlight === artifactKey(artifact)}
-                  onOpen={openArtifact}
-                  onToggleStar={handleToggleStar}
-                  onEditNote={(item) => {
-                    setEditingNoteFor(item)
-                    setNoteDraft(item.note ?? "")
-                  }}
-                  onDelete={setPendingDelete}
-                  onToggleAutoRegenerate={(item) =>
-                    void handleToggleSummaryFlag(item, "autoRegenerate")
-                  }
-                  onToggleAutoPublish={(item) =>
-                    void handleToggleSummaryFlag(item, "autoPublish")
-                  }
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+        <HistoryList
+          rows={rows}
+          actions={actions}
+          search={params.search}
+          compact={compact}
+          days={params.sort === "written"}
+          highlight={highlight}
+        />
       )}
 
       <div ref={loadMoreRef} className="h-8" aria-hidden="true">
         {query.isFetchingNextPage && (
-          <p className="text-center font-mono text-[10px] uppercase tracking-widest opacity-40">
+          <p className="pt-2 text-center text-[11px] text-app-ink/40">
             Loading more…
           </p>
         )}
       </div>
-
-      {editingNoteFor && (
-        <ArtifactNoteEditor
-          artifact={editingNoteFor}
-          draft={noteDraft}
-          onDraftChange={setNoteDraft}
-          onCancel={closeNoteEditor}
-          onSave={() => void handleSaveNote()}
-        />
-      )}
 
       <TgConfirmDialog
         open={pendingDelete !== null}

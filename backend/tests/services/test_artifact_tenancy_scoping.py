@@ -34,7 +34,13 @@ from sqlmodel import Session, col, delete
 from app.core.db import engine
 from app.models import User
 from app.models_tg import ChatSession, DiscoverReport, Summary, TagRun
-from app.services.artifacts import ARTIFACT_KINDS, list_artifacts
+from app.services.analysis_window import TimeBound
+from app.services.artifacts import (
+    ARTIFACT_KINDS,
+    artifact_spread,
+    count_artifacts,
+    list_artifacts,
+)
 from app.services.chat_sessions import (
     delete_chat_session,
     get_chat_session,
@@ -47,6 +53,7 @@ from app.services.discover_reports import (
     list_reports,
     update_report_flags,
 )
+from app.services.logs import resolve_log_bound
 from app.services.summaries import (
     delete_summary,
     get_summary,
@@ -489,6 +496,51 @@ def test_history_starred_filter_does_not_widen_the_scope(
     assert _ids(rows) == {"t17-star-mine"}
 
 
+@pytest.mark.usefixtures("enforced")
+@pytest.mark.parametrize("moment", ["written", "window"])
+def test_history_time_filter_and_sort_do_not_widen_the_scope(
+    session: Session, user: User, other_user: User, moment: str
+) -> None:
+    """The bound and the window sort drop the per-leg limit and filter outside
+    the union; the scope stays on every leg either way."""
+    for family in FAMILIES:
+        family.seed(session, f"htr-{family.kind}-mine", user.id)
+        family.seed(session, f"htr-{family.kind}-theirs", other_user.id)
+    bound = resolve_log_bound(TimeBound("fixed", 0, None))
+
+    rows = list_artifacts(
+        session, moment=moment, bound=bound, sort="window", user_id=user.id
+    )
+
+    # Exact, so an empty answer cannot pass. Only the report is seeded with a
+    # window, so a window bound keeps that one and Written keeps all four.
+    kinds = ARTIFACT_KINDS if moment == "written" else ("discovery",)
+    assert {row["id"] for row in rows} == {f"htr-{kind}-mine" for kind in kinds}
+    assert {
+        row["id"] for row in list_artifacts(session, sort="window", user_id=user.id)
+    } == {f"htr-{family.kind}-mine" for family in FAMILIES}
+
+
+@pytest.mark.usefixtures("enforced")
+def test_history_counts_and_spread_count_only_your_artifacts(
+    session: Session, user: User, other_user: User
+) -> None:
+    """Per kind, for the reason the list's test above is: a union that dropped
+    the scope on one leg would still pass a total."""
+    for family in FAMILIES:
+        family.seed(session, f"htr-c-{family.kind}-mine", user.id)
+        family.seed(session, f"htr-c-{family.kind}-theirs", other_user.id)
+
+    counts = count_artifacts(session, user_id=user.id)
+    spread = artifact_spread(session, user_id=user.id)
+
+    assert counts["kinds"] == dict.fromkeys(ARTIFACT_KINDS, 1)
+    assert counts["total"] == counts["kindsAll"] == counts["statusesAll"] == 4
+    assert spread.total == 4
+    for kind in ARTIFACT_KINDS:
+        assert artifact_spread(session, kind=kind, user_id=user.id).total == 1
+
+
 def test_every_family_is_covered_by_this_battery() -> None:
     """A fifth artifact kind must arrive with its scoping, or fail here.
 
@@ -564,6 +616,8 @@ def test_report_is_followed_answers_for_the_viewer_not_the_owner(
         update_report_flags,
         delete_report,
         list_artifacts,
+        count_artifacts,
+        artifact_spread,
     ],
     ids=lambda f: f.__name__,
 )

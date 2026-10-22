@@ -12,6 +12,7 @@ import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
 import { useApiStatus } from "@/hooks/useApiStatus"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
+import { useHistoryParams } from "@/hooks/useHistoryParams"
 import { useJobToggles } from "@/hooks/useJobToggles"
 import {
   useInvalidateSettingGroups,
@@ -38,6 +39,7 @@ import {
 } from "@/lib/commands"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
 import { SERVER_TABLE_NAMES } from "@/lib/data-transfer/tables"
+import { historyPaletteBinding } from "@/lib/history/history-params"
 import { useLoadDBStats } from "./useDBStats"
 import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
@@ -64,15 +66,18 @@ export function useCommandRegistry(): {
   const loadHistory = useInvalidateSummaries()
   const loadDBStats = useLoadDBStats()
   const { startDate, endDate, setFixedRange: setDateRange } = useScope()
+  const { setActiveTab, workspaceTabs, currentSummaryId } = useUI()
+  // History's search and Starred live in the URL, as the bar's do.
+  const history = useHistoryParams()
   const {
-    setActiveTab,
-    workspaceTabs,
-    currentSummaryId,
     historySearchQuery,
     setHistorySearchQuery,
     starredOnly,
     setStarredOnly,
-  } = useUI()
+  } = useMemo(
+    () => historyPaletteBinding(history.params, history.setParams),
+    [history.params, history.setParams],
+  )
   // The Settings commands come from the registry, read while the palette is
   // open (SET-02).
   const settingsRegistry = useSettingsRegistry({ enabled: palette.open })

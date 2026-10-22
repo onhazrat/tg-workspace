@@ -374,6 +374,11 @@ export async function mockDiscoverForwardPosts(
   // any Artifact tab whose Artifact is missing from the History list
   // (TABS-01). So once one is generated, the list carries it too.
   await page.route("**/api/v1/data/artifacts**", async (route) => {
+    // The list only: the counts and the spread answer objects, not rows.
+    if (!new URL(route.request().url()).pathname.endsWith("/data/artifacts")) {
+      await route.fallback()
+      return
+    }
     const response = await fetchThrough(route)
     const rows = (await response.json()) as unknown[]
     const generated = storedReport !== discoverReport

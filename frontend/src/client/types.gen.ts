@@ -120,6 +120,94 @@ export type AppSettingResponse = {
 };
 
 /**
+ * ArtifactCountsResponse
+ *
+ * The total under every filter; each Kind under every filter but Kind,
+ * each Status under every filter but Status.
+ */
+export type ArtifactCountsResponse = {
+    /**
+     * Total
+     */
+    total: number;
+    kinds: ArtifactKindCountsResponse;
+    /**
+     * Kindsall
+     */
+    kindsAll: number;
+    statuses: ArtifactStatusCountsResponse;
+    /**
+     * Statusesall
+     */
+    statusesAll: number;
+};
+
+/**
+ * ArtifactKindCountsResponse
+ */
+export type ArtifactKindCountsResponse = {
+    /**
+     * Summary
+     */
+    summary: number;
+    /**
+     * Chat
+     */
+    chat: number;
+    /**
+     * Tag
+     */
+    tag: number;
+    /**
+     * Discovery
+     */
+    discovery: number;
+};
+
+/**
+ * ArtifactSpreadResponse
+ *
+ * When Artifacts were Written, or their windows started: the Logs spread's
+ * shape, so the same chart draws it.
+ */
+export type ArtifactSpreadResponse = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Min
+     */
+    min: number | null;
+    /**
+     * Max
+     */
+    max: number | null;
+    /**
+     * Median
+     */
+    median: number | null;
+    /**
+     * Bins
+     */
+    bins: Array<LogSpreadBinResponse>;
+};
+
+/**
+ * ArtifactStatusCountsResponse
+ */
+export type ArtifactStatusCountsResponse = {
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Pending
+     */
+    pending: number;
+};
+
+/**
  * BadProxy
  *
  * One proxy in cooldown, with the seconds left on it.
@@ -11847,6 +11935,24 @@ export type DataListArtifactsData = {
     path?: never;
     query?: {
         /**
+         * Mode
+         *
+         * The Time bound's mode; none is Any time
+         */
+        mode?: 'live' | 'fixed' | null;
+        /**
+         * Start
+         *
+         * Included. Epoch ms when Fixed, signed ms from now when Live
+         */
+        start?: number | null;
+        /**
+         * End
+         *
+         * Excluded. Epoch ms when Fixed, signed ms from now when Live
+         */
+        end?: number | null;
+        /**
          * Kind
          */
         kind?: 'summary' | 'chat' | 'tag' | 'discovery' | null;
@@ -11862,6 +11968,20 @@ export type DataListArtifactsData = {
          * Status
          */
         status?: 'failed' | 'pending' | null;
+        /**
+         * Moment
+         *
+         * What the Time bound bounds: Written, or the Analysis window
+         */
+        moment?: 'written' | 'window';
+        /**
+         * Sort
+         */
+        sort?: 'written' | 'window';
+        /**
+         * Descending
+         */
+        descending?: boolean;
         /**
          * Limit
          */
@@ -11901,6 +12021,128 @@ export type DataListArtifactsResponses = {
 };
 
 export type DataListArtifactsResponse = DataListArtifactsResponses[keyof DataListArtifactsResponses];
+
+export type DataCountArtifactsRouteData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Mode
+         *
+         * The Time bound's mode; none is Any time
+         */
+        mode?: 'live' | 'fixed' | null;
+        /**
+         * Start
+         *
+         * Included. Epoch ms when Fixed, signed ms from now when Live
+         */
+        start?: number | null;
+        /**
+         * End
+         *
+         * Excluded. Epoch ms when Fixed, signed ms from now when Live
+         */
+        end?: number | null;
+        /**
+         * Kind
+         */
+        kind?: 'summary' | 'chat' | 'tag' | 'discovery' | null;
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Starred
+         */
+        starred?: boolean;
+        /**
+         * Status
+         */
+        status?: 'failed' | 'pending' | null;
+        /**
+         * Moment
+         *
+         * What the Time bound bounds: Written, or the Analysis window
+         */
+        moment?: 'written' | 'window';
+    };
+    url: '/api/v1/data/artifacts/counts';
+};
+
+export type DataCountArtifactsRouteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataCountArtifactsRouteError = DataCountArtifactsRouteErrors[keyof DataCountArtifactsRouteErrors];
+
+export type DataCountArtifactsRouteResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtifactCountsResponse;
+};
+
+export type DataCountArtifactsRouteResponse = DataCountArtifactsRouteResponses[keyof DataCountArtifactsRouteResponses];
+
+export type DataGetArtifactSpreadRouteData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Lo
+         */
+        lo?: number | null;
+        /**
+         * Hi
+         */
+        hi?: number | null;
+        /**
+         * Kind
+         */
+        kind?: 'summary' | 'chat' | 'tag' | 'discovery' | null;
+        /**
+         * Search
+         */
+        search?: string | null;
+        /**
+         * Starred
+         */
+        starred?: boolean;
+        /**
+         * Status
+         */
+        status?: 'failed' | 'pending' | null;
+        /**
+         * Moment
+         *
+         * What the Time bound bounds: Written, or the Analysis window
+         */
+        moment?: 'written' | 'window';
+    };
+    url: '/api/v1/data/artifacts/spread';
+};
+
+export type DataGetArtifactSpreadRouteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataGetArtifactSpreadRouteError = DataGetArtifactSpreadRouteErrors[keyof DataGetArtifactSpreadRouteErrors];
+
+export type DataGetArtifactSpreadRouteResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtifactSpreadResponse;
+};
+
+export type DataGetArtifactSpreadRouteResponse = DataGetArtifactSpreadRouteResponses[keyof DataGetArtifactSpreadRouteResponses];
 
 export type DataListBotCredentialsData = {
     body?: never;
@@ -12333,7 +12575,7 @@ export type DataListLogsRouteData = {
         /**
          * Mode
          *
-         * The Logged bound's mode; none is Any time
+         * The Time bound's mode; none is Any time
          */
         mode?: 'live' | 'fixed' | null;
         /**

@@ -6,8 +6,10 @@ import {
   ARTIFACT_KIND_LABELS,
   artifactDetail,
   artifactName,
+  channelsMatchingFirst,
   failedAttempts,
   isPendingArtifact,
+  plainTitle,
 } from "./artifact-presentation"
 
 describe("artifactName", () => {
@@ -110,5 +112,40 @@ describe("failedAttempts", () => {
         status: "failed",
       } as ArtifactListItem),
     ).toBeNull()
+  })
+})
+
+describe("plainTitle", () => {
+  it("drops markdown emphasis, code marks and a leading heading", () => {
+    expect(plainTitle("## **Iran** and `oil` __today__")).toBe(
+      "Iran and oil today",
+    )
+  })
+
+  it("drops a leading emoji and the whitespace around it", () => {
+    expect(plainTitle("  📰 ️ Morning brief")).toBe("Morning brief")
+  })
+
+  it("keeps an emoji that is not leading, and plain text as it is", () => {
+    expect(plainTitle("Markets 📈 up")).toBe("Markets 📈 up")
+    expect(plainTitle("خلاصه اخبار")).toBe("خلاصه اخبار")
+  })
+})
+
+describe("channelsMatchingFirst", () => {
+  const channels = ["alpha", "bravo_news", "charlie", "news_delta"]
+
+  it("keeps Scope order with no search", () => {
+    expect(channelsMatchingFirst(channels, "")).toEqual(channels)
+    expect(channelsMatchingFirst(channels, "  ")).toEqual(channels)
+  })
+
+  it("moves matches to the front, each part in Scope order", () => {
+    expect(channelsMatchingFirst(channels, " NEWS ")).toEqual([
+      "bravo_news",
+      "news_delta",
+      "alpha",
+      "charlie",
+    ])
   })
 })

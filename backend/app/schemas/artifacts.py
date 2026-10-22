@@ -23,7 +23,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.common import ZoomRequest
+from app.schemas.logs import LogBoundQuery, LogSpreadResponse
 from app.schemas.scope import FrozenScope
+from app.services.artifacts import DEFAULT_ARTIFACT_PAGE_SIZE, MAX_ARTIFACT_PAGE_SIZE
 
 
 class ArtifactBase(BaseModel):
@@ -110,3 +113,73 @@ ArtifactListItemResponse = Annotated[
     | DiscoveryArtifactResponse,
     Field(discriminator="kind"),
 ]
+
+
+ArtifactKind = Literal["summary", "chat", "tag", "discovery"]
+ArtifactStatus = Literal["failed", "pending"]
+#: What the time filter bounds: Written, or overlap with the Analysis window.
+ArtifactMoment = Literal["written", "window"]
+
+
+class ArtifactFilterQuery(BaseModel):
+    """History's filters, shared by the list, the counts and the spread."""
+
+    kind: ArtifactKind | None = None
+    search: str | None = None
+    starred: bool = False
+    status: ArtifactStatus | None = None
+    moment: ArtifactMoment = Field(
+        "written",
+        description="What the Time bound bounds: Written, or the Analysis window",
+    )
+
+
+# One model per route, because FastAPI reads a model's fields as query
+# parameters only when it is the route's sole query parameter.
+class ArtifactCountsQuery(ArtifactFilterQuery, LogBoundQuery):
+    """The filters and the Time bound, as the Logs list takes it."""
+
+
+class ArtifactPageQuery(ArtifactCountsQuery):
+    """One page, sorted on Written or the window's start, newest first."""
+
+    sort: Literal["written", "window"] = "written"
+    descending: bool = True
+    limit: int = Field(DEFAULT_ARTIFACT_PAGE_SIZE, ge=1, le=MAX_ARTIFACT_PAGE_SIZE)
+    offset: int = Field(0, ge=0)
+
+
+class ArtifactSpreadQuery(ArtifactFilterQuery, ZoomRequest):
+    """The filters without the Time bound, zoomed by `lo` and `hi`."""
+
+
+# Closed, and no field carries a default, so every one is required in the
+# generated client.
+class ArtifactKindCountsResponse(BaseModel):
+    summary: int
+    chat: int
+    tag: int
+    discovery: int
+
+
+class ArtifactStatusCountsResponse(BaseModel):
+    failed: int
+    pending: int
+
+
+class ArtifactCountsResponse(BaseModel):
+    """The total under every filter; each Kind under every filter but Kind,
+    each Status under every filter but Status."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int
+    kinds: ArtifactKindCountsResponse
+    kinds_all: int = Field(alias="kindsAll")
+    statuses: ArtifactStatusCountsResponse
+    statuses_all: int = Field(alias="statusesAll")
+
+
+class ArtifactSpreadResponse(LogSpreadResponse):
+    """When Artifacts were Written, or their windows started: the Logs spread's
+    shape, so the same chart draws it."""

@@ -28,12 +28,16 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.models_tg import DiscoverReport
+from app.services.analysis_window import TimeBound
 from app.services.artifacts import (
     ARTIFACT_FORBIDDEN_COLUMNS,
     ARTIFACT_KINDS,
+    artifact_spread,
+    count_artifacts,
     list_artifacts,
 )
 from app.services.chat_sessions import upsert_chat_session
+from app.services.logs import resolve_log_bound
 from app.services.summaries import list_summaries, upsert_summary
 from app.services.tag_runs import upsert_tag_run
 from tests.utils.discover import stored_report_scope
@@ -124,13 +128,35 @@ def test_the_forbidden_set_is_not_silently_empty() -> None:
     } <= ARTIFACT_FORBIDDEN_COLUMNS
 
 
+#: The three History reads over the union (HTR): the list, under its time
+#: filter and window sort as well as its default, the counts and the spread.
+HISTORY_READS = {
+    "list": lambda s, kind: list_artifacts(s, kind=kind, user_id=ANY_READER),
+    "list-bounded": lambda s, kind: list_artifacts(
+        s,
+        kind=kind,
+        moment="window",
+        bound=resolve_log_bound(TimeBound("fixed", 0, None)),
+        sort="window",
+        user_id=ANY_READER,
+    ),
+    "counts": lambda s, kind: count_artifacts(s, kind=kind, user_id=ANY_READER),
+    "spread": lambda s, kind: artifact_spread(
+        s, kind=kind, moment="window", user_id=ANY_READER
+    ),
+}
+
+
+@pytest.mark.parametrize("read", sorted(HISTORY_READS))
 @pytest.mark.parametrize("kind", [None, *ARTIFACT_KINDS])
-def test_the_union_never_opens_either_payload_table(kind: str | None) -> None:
+def test_the_union_never_opens_either_payload_table(
+    kind: str | None, read: str
+) -> None:
     with Session(engine) as session:
         _seed(session)
 
         with captured_sql() as statements:
-            list_artifacts(session, kind=kind, user_id=ANY_READER)
+            HISTORY_READS[read](session, kind)
 
     assert statements, "no SQL captured — the listener is not wired up"
     for table in PAYLOAD_TABLES:
@@ -138,13 +164,14 @@ def test_the_union_never_opens_either_payload_table(kind: str | None) -> None:
         assert not offenders, f"the union read {table}: {offenders}"
 
 
+@pytest.mark.parametrize("read", sorted(HISTORY_READS))
 @pytest.mark.parametrize("column", sorted(ARTIFACT_FORBIDDEN_COLUMNS))
-def test_the_union_never_selects_a_heavy_column(column: str) -> None:
+def test_the_union_never_selects_a_heavy_column(column: str, read: str) -> None:
     with Session(engine) as session:
         _seed(session)
 
         with captured_sql() as statements:
-            list_artifacts(session, user_id=ANY_READER)
+            HISTORY_READS[read](session, None)
 
     offenders = [s for s in statements if column in s]
     assert not offenders, f"the union selected {column}: {offenders}"

@@ -52,7 +52,7 @@ describe("validateWorkspaceSearch", () => {
     })
   })
 
-  test("History's status filter is kept on History only, and only if known", () => {
+  test("History's filters are kept on every tab, and only if known", () => {
     expect(
       validateWorkspaceSearch({ tab: "history", historyStatus: "failed" }),
     ).toEqual({ tab: "history", historyStatus: "failed" })
@@ -62,9 +62,17 @@ describe("validateWorkspaceSearch", () => {
     expect(
       validateWorkspaceSearch({ tab: "history", historyStatus: "broken" }),
     ).toEqual({ tab: "history" })
+    // The palette sets History's search from any tab.
     expect(
       validateWorkspaceSearch({ tab: "posts", historyStatus: "failed" }),
-    ).toEqual({ tab: "posts" })
+    ).toEqual({ tab: "posts", historyStatus: "failed" })
+    expect(
+      validateWorkspaceSearch({
+        tab: "history",
+        historyTime: "-7d..",
+        historyQ: "iran",
+      }),
+    ).toEqual({ tab: "history", historyTime: "-7d..", historyQ: "iran" })
   })
 
   test("a real tab is kept", () => {

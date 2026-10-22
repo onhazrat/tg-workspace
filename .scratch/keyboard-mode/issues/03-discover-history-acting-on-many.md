@@ -29,6 +29,10 @@ Prototype at a6aa1eb6:
 
 - [DiscoverView.tsx](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/components/DiscoverView.tsx) and [DiscoverCandidateTable.tsx](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/components/discover/DiscoverCandidateTable.tsx): the Candidate list's adapter (rows, controls, Enter to Details).
 - [HistoryView.tsx](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/components/HistoryView.tsx) and [ArtifactCardParts.tsx](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/components/history/ArtifactCardParts.tsx): the Artifact list's adapter, Enter to open, star and note keys.
+  Since the History tab redesign (#202) these files have another shape: the adapter
+  (`history/HistoryKeyboard.ts`) is called in `HistoryView.tsx` and its Highlight is
+  drawn by `history/HistoryList.tsx`; `*` and `n` press `CardActions`' Star and note
+  buttons in `history/ArtifactCardParts.tsx`, and the note opens in a popover.
 - [fkeys.ts](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/components/directory-photo-prototype/fkeys.ts): `ensureSelection` and the last `x`'s direction, `bulkKey`, `pressControl` and its toast with Undo, `itemName`.
 - [DirectoryBulkBar.tsx](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/components/directory/DirectoryBulkBar.tsx) and [DiscoverBulkBar.tsx](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/components/discover/DiscoverBulkBar.tsx): which buttons `F` and `D` press.
 - [index.css](https://github.com/onhazrat/tg-workspace/blob/a6aa1eb6ecbef4886a48817d6228344d6ed64778/frontend/src/index.css) and the `data-selected` marks on the Channel card frames and Directory rows: the one marked look (the prototype only turned it on for C and D; it belongs everywhere).
@@ -49,3 +53,6 @@ Prototype at a6aa1eb6:
 
 - 2026-10-22: implemented on `claude/km-03-discover-history-many` and merged into the integration branch in 635b756b (fast-forward).
   Open: keys wait during a closing dialog's 200 ms animation, so `F` right after Cancel does nothing; DiscoverView's `onSetIgnored` and HistoryView's star Undo have no unit render test. Both go to the integration branch's code review.
+- 2026-10-22: rewired onto the History tab redesign (#202) when `origin/main` was
+  merged into the integration branch; the History keyboard test now renders the real
+  `HistoryList`.

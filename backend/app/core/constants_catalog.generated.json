@@ -300,7 +300,7 @@
       "comment": "",
       "expression": "100",
       "file": "backend/app/services/artifacts.py",
-      "line": 54,
+      "line": 57,
       "name": "DEFAULT_ARTIFACT_PAGE_SIZE",
       "value": 100
     },
@@ -308,7 +308,7 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/artifacts.py",
-      "line": 55,
+      "line": 58,
       "name": "MAX_ARTIFACT_PAGE_SIZE",
       "value": 1000
     },
@@ -316,7 +316,7 @@
       "comment": "How much of a summary's body travels as the list preview. The read cost is unchanged either way \u2014 the detoast happens server-side \u2014 but four kinds on one page multiplies the *wire* cost, and the list renders a two-line clamp.",
       "expression": "200",
       "file": "backend/app/services/artifacts.py",
-      "line": 62,
+      "line": 65,
       "name": "ARTIFACT_TITLE_CHARS",
       "value": 200
     },
@@ -1164,7 +1164,7 @@
       "comment": "The server refuses a longer search.",
       "expression": "256",
       "file": "frontend/src/components/directory/DirectoryBar.tsx",
-      "line": 146,
+      "line": 147,
       "name": "SEARCH_MAX",
       "value": 256
     },
@@ -1199,6 +1199,14 @@
       "line": 42,
       "name": "PAGE_SIZE",
       "value": 100
+    },
+    {
+      "comment": "How many channels the line names before the \"+N\".",
+      "expression": "3",
+      "file": "frontend/src/components/history/ArtifactCardParts.tsx",
+      "line": 135,
+      "name": "SHOWN_CHANNELS",
+      "value": 3
     },
     {
       "comment": "How long a `g` or a count waits before its next keys show, so a quick gt never flashes them.",
@@ -1332,7 +1340,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 159,
+      "line": 156,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
