@@ -14,3 +14,7 @@
 - [ ] A pick checkbox on every row and one in the header for every listed row, all ticked by default; the rows left out leave the whole tab (an API parameter), stay listed and faded; the footer says "N Channels left out" with Pick all.
 - [ ] Tests at seam 2 of the spec: a Playwright journey over the mocked Requests API, plus render tests for each new branching component (CRAP ratchet). Backend: the Breakdown endpoint honours the Channels left out, at seam 1.
 - [ ] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+
+## Comments
+
+- 2026-10-23 (lead): RQS-01 left syncs and failed syncs out of the Breakdown because nothing records them yet. The measures here need them: record them (a sync run and whether it failed) and add them to the Breakdown rows as part of this ticket.
