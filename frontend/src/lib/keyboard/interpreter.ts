@@ -12,6 +12,10 @@ export type Command =
   | { type: "move"; by: number }
   /** gg and G: the nth item, 1 first. */
   | { type: "goto"; nth: number | "last" }
+  /** J / K: one step, ticking or unticking as the list's last x did. */
+  | { type: "sweep"; by: 1 | -1 }
+  /** F / D: the bulk bar's Follow or Dismiss, on everything ticked. */
+  | { type: "bulk"; key: "F" | "D" }
   /** Any other key on a list: the list's action for it, if any. */
   | { type: "act"; key: string }
   | { type: "open" }
@@ -121,6 +125,10 @@ function plain(key: string, n: number | null, list: boolean): Command | null {
   if (key === "j") return { type: "move", by: n ?? 1 }
   if (key === "k") return { type: "move", by: -(n ?? 1) }
   if (key === "G") return { type: "goto", nth: n ?? "last" }
+  // J / K take no count: a count is for moves that tick nothing.
+  if (key === "J") return { type: "sweep", by: 1 }
+  if (key === "K") return { type: "sweep", by: -1 }
+  if (key === "F" || key === "D") return { type: "bulk", key }
   if (key === "Enter") return { type: "open" }
   if (key === "Escape") return { type: "drop" }
   // Arrows, Tab and the rest of the named keys are not keyboard mode's.

@@ -40,6 +40,7 @@ const OPS = {
 function Directory({ shown = 0 }: { shown?: number }) {
   const [open, setOpen] = useState<string | null>(null)
   const [page, setPage] = useState(0)
+  const [ticks, setTicks] = useState<Set<string>>(new Set())
   const handles = PAGES[shown]
   const ring = useDirectoryKeys({
     handles,
@@ -60,13 +61,20 @@ function Directory({ shown = 0 }: { shown?: number }) {
           data-directory-handle={h}
           data-kbd-selected={ring === h || undefined}
         >
-          <button
-            type="button"
+          <input
+            type="checkbox"
+            aria-label={`Tick @${h}`}
             data-shortcut="x"
-            onClick={() => pressed.push(h)}
-          >
-            Tick {h}
-          </button>
+            checked={ticks.has(h)}
+            onChange={() => {
+              pressed.push(h)
+              setTicks((prev) => {
+                const next = new Set(prev)
+                if (!next.delete(h)) next.add(h)
+                return next
+              })
+            }}
+          />
         </div>
       ))}
     </>
@@ -84,6 +92,12 @@ const ringed = () =>
   Array.from(document.querySelectorAll("[data-kbd-selected]")).map((el) =>
     el.getAttribute("data-directory-handle"),
   )
+const ticked = () =>
+  Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+  )
+    .filter((box) => box.checked)
+    .map((box) => box.getAttribute("aria-label")?.slice("Tick @".length))
 const opened = () => screen.getByTestId("open").textContent
 const type = (...keys: string[]) => {
   for (const init of keydowns(...keys))
@@ -142,6 +156,30 @@ describe("the Directory's keyboard mode", () => {
     expect(pressed).toEqual([])
     type("j", "j", "4", "x")
     expect(pressed).toEqual(["b"])
+  })
+
+  test("J and K tick while moving after an x that ticked, and untick after one that unticked", () => {
+    render(tab())
+    type("j", "x", "J")
+    expect(ticked()).toEqual(["a", "b"])
+    expect(ringed()).toEqual(["b"])
+    type("J")
+    expect(ticked()).toEqual(["a", "b", "c"])
+    type("x", "K")
+    expect(ticked()).toEqual(["a"])
+    expect(ringed()).toEqual(["b"])
+    type("K")
+    expect(ticked()).toEqual([])
+    expect(screen.getByTestId("keyboard-announcer").textContent).toBe(
+      "@a, 1 of 3",
+    )
+  })
+
+  test("J with no x yet ticks, and 3J moves one", () => {
+    render(tab())
+    type("j", "3", "J")
+    expect(ticked()).toEqual(["a", "b"])
+    expect(ringed()).toEqual(["b"])
   })
 
   test("Enter opens the panel, which follows every move until Enter closes it", () => {

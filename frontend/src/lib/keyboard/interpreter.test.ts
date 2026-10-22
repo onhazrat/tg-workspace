@@ -51,6 +51,47 @@ const ROWS: [string, (Input | "click")[], Command[], KeyContext?][] = [
     ],
   ],
   ["M is the capital", keys("M"), [{ type: "act", key: "M" }]],
+  // Whether J ticks or unticks is the last x's, which only the list knows;
+  // the interpreter yields the same sweep after either.
+  [
+    "J after an x that ticked sweeps down",
+    keys("x", "J"),
+    [
+      { type: "act", key: "x" },
+      { type: "sweep", by: 1 },
+    ],
+  ],
+  [
+    "K after an x that unticked sweeps up",
+    keys("x", "x", "K"),
+    [
+      { type: "act", key: "x" },
+      { type: "act", key: "x" },
+      { type: "sweep", by: -1 },
+    ],
+  ],
+  [
+    "3J drops the count: a sweep is one step",
+    keys("3", "J", "j"),
+    [
+      { type: "sweep", by: 1 },
+      { type: "move", by: 1 },
+    ],
+  ],
+  [
+    "J and K without a list do nothing",
+    keys("J", "K"),
+    [],
+    { on: true, list: false },
+  ],
+  [
+    "F and D act on everything ticked",
+    keys("F", "D"),
+    [
+      { type: "bulk", key: "F" },
+      { type: "bulk", key: "D" },
+    ],
+  ],
   [
     "- and + resize",
     keys("-", "+"),

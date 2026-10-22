@@ -39,6 +39,8 @@ function Feed({
   onBack?: () => void
 }) {
   const [compact, setCompact] = useState(false)
+  // Every Post starts Picked, as in the feed.
+  const [unpicked, setUnpicked] = useState<string[]>([])
   const highlight = usePostKeys({
     keys: KEYS,
     onCompact: setCompact,
@@ -56,6 +58,20 @@ function Feed({
           data-post-key={key}
           data-kbd-selected={highlight === key || undefined}
         >
+          <input
+            type="checkbox"
+            aria-label={`Pick ${key}`}
+            data-shortcut="x"
+            checked={!unpicked.includes(key)}
+            readOnly
+            onClick={() =>
+              setUnpicked((prev) =>
+                prev.includes(key)
+                  ? prev.filter((k) => k !== key)
+                  : [...prev, key],
+              )
+            }
+          />
           <button
             type="button"
             data-shortcut="l"
@@ -108,6 +124,18 @@ describe("the Posts feed's keyboard mode", () => {
     type("G")
     expect(ringed()).toEqual(["ch_3"])
     type("2", "G")
+    expect(ringed()).toEqual(["ch_2"])
+  })
+
+  test("x unpicks a Post, and K then unpicks while moving up", () => {
+    render(<Feed />)
+    type("G", "x", "K")
+    const picked = () =>
+      screen
+        .getAllByRole("checkbox")
+        .filter((box) => (box as HTMLInputElement).checked)
+        .map((box) => box.getAttribute("aria-label"))
+    expect(picked()).toEqual(["Pick ch_1"])
     expect(ringed()).toEqual(["ch_2"])
   })
 

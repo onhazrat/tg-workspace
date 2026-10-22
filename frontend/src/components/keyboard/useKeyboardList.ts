@@ -8,7 +8,12 @@
  */
 import { useEffect, useRef, useState } from "react"
 import type { Command } from "@/lib/keyboard/interpreter"
-import type { Action, ListId } from "@/lib/keyboard/key-list"
+import {
+  ACTIONS,
+  type Action,
+  type ListId,
+  offers,
+} from "@/lib/keyboard/key-list"
 import {
   announcement,
   lastHighlight,
@@ -54,11 +59,19 @@ export const mountedList = () => mounted
 const clamp = (i: number, length: number) =>
   Math.max(0, Math.min(length - 1, i))
 
+const controlOf = (item: HTMLElement | null, key: string) =>
+  item?.querySelector<HTMLElement>(`[data-shortcut="${CSS.escape(key)}"]`) ??
+  null
+
+/** A tick control is on: a checked box, or a pressed toggle. */
+const isOn = (control: HTMLElement) =>
+  control instanceof HTMLInputElement
+    ? control.checked
+    : control.getAttribute("aria-pressed") === "true"
+
 /** Presses the control carrying `key` in `item`: a field gets the cursor. */
 function press(item: HTMLElement | null, key: string): boolean {
-  const control = item?.querySelector<HTMLElement>(
-    `[data-shortcut="${CSS.escape(key)}"]`,
-  )
+  const control = controlOf(item, key)
   if (!control) return false
   if (control instanceof HTMLInputElement && control.type !== "checkbox")
     control.focus()
@@ -102,6 +115,12 @@ export function useKeyboardList(adapter: ListAdapter): {
   }, [remembered, at, highlight])
 
   useEffect(() => {
+    // J / K follow the last x: ticking, or unticking when it unticked.
+    let ticking = true
+    const tickTo = (item: HTMLElement | null) => {
+      const tick = controlOf(item, ACTIONS.tick.key)
+      if (tick && isOn(tick) !== ticking) tick.click()
+    }
     const moveTo = (index: number) => {
       const { adapter } = ref.current
       const id = adapter.items[index]
@@ -142,11 +161,22 @@ export function useKeyboardList(adapter: ListAdapter): {
           if (!highlight) return false
           setRef.current(null)
           return true
-        case "act":
+        case "sweep": {
+          if (!offers(adapter.list, "tick")) return false
+          if (highlight) tickTo(adapter.element(highlight))
+          if (!run({ type: "move", by: command.by })) return false
+          const now = ref.current.highlight
+          if (now) tickTo(adapter.element(now))
+          return true
+        }
+        case "act": {
           if (adapter.key?.(command.key, highlight)) return true
-          return (
-            highlight !== null && press(adapter.element(highlight), command.key)
-          )
+          if (highlight === null) return false
+          const item = adapter.element(highlight)
+          const tick = controlOf(item, ACTIONS.tick.key)
+          if (command.key === ACTIONS.tick.key && tick) ticking = !isOn(tick)
+          return press(item, command.key)
+        }
         default:
           return false
       }

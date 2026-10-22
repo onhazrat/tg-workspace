@@ -280,6 +280,14 @@ describe("a key presses the highlighted card's own control", () => {
     expect(s.freeze.mock.calls).toEqual([["b"]])
   })
 
+  test("J selects while moving, from the Highlight on", () => {
+    const s = spies()
+    render(<Grid spies={s} />)
+    press("j", "J")
+    expect(s.select.mock.calls).toEqual([["a"], ["b"]])
+    expect(highlighted()).toEqual(["b"])
+  })
+
   test("t puts focus in the tag field, after which keys are typing", () => {
     const s = spies()
     render(<Grid spies={s} />)

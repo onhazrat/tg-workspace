@@ -101,6 +101,10 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
   },
 }
 
+/** Whether a list offers an action. */
+export const offers = (list: ListId, action: Action) =>
+  LISTS[list].actions.includes(action)
+
 const SPOTLIGHT_LABEL: Partial<Record<ListId, string>> = {
   channels: "this Channel's posts, and c there comes back",
 }
