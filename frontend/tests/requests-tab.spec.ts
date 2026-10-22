@@ -30,17 +30,8 @@ const CHANNELS = Array.from({ length: 30 }, (_, i) => ({
   channel: `chan${String(i).padStart(2, "0")}`,
 }))
 const PROBES = { ...part("probe", 100, 200, 500, false), channel: null }
-const AUTO = CHANNELS.reduce(
-  (t, c) => ({
-    ...t,
-    requests: t.requests + c.requests,
-    useful: t.useful + c.useful,
-    idle: t.idle + c.idle,
-    wasted: t.wasted + c.wasted,
-    charged: t.charged + c.charged,
-  }),
-  part("auto", 0, 0, 0, true),
-)
+/** The 30 Channels together: useful 40 down to 11, idle 5 each, wasted 5 once. */
+const AUTO = part("auto", 765, 150, 5, true)
 
 const breakdown = (charged: string | null) => ({
   start: "2026-10-01T00:00:00",
