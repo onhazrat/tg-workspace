@@ -1180,7 +1180,7 @@
       "comment": "",
       "expression": "3",
       "file": "frontend/src/components/directory/DirectoryBulkBar.tsx",
-      "line": 11,
+      "line": 12,
       "name": "SHOWN",
       "value": 3
     },

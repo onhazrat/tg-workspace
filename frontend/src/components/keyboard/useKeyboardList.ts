@@ -7,6 +7,7 @@
  * slot the workspace's engine (`KeyboardMode`) sends list commands to.
  */
 import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import type { Command } from "@/lib/keyboard/interpreter"
 import {
   ACTIONS,
@@ -167,6 +168,20 @@ export function useKeyboardList(adapter: ListAdapter): {
           if (!run({ type: "move", by: command.by })) return false
           const now = ref.current.highlight
           if (now) tickTo(adapter.element(now))
+          return true
+        }
+        case "bulk": {
+          if (!offers(adapter.list, "follow")) return false
+          // The bar's own button, so its confirmation asks as a click's does.
+          const button = document.querySelector<HTMLElement>(
+            `[data-bulk-shortcut="${command.key}"]`,
+          )
+          if (button) button.click()
+          else
+            toast(
+              `Nothing ticked to ${command.key === "F" ? "follow" : "dismiss"}`,
+              { id: "keyboard-bulk" },
+            )
           return true
         }
         case "act": {

@@ -33,6 +33,11 @@ export const shortcut = (action: Action) => ({
   "data-shortcut": ACTIONS[action].key,
 })
 
+/** Marks the bulk bar's button that F (follow) or D (dismiss) presses. */
+export const bulkShortcut = (key: "F" | "D") => ({
+  "data-bulk-shortcut": key,
+})
+
 /** A control's tooltip, naming its key while keyboard mode is on. */
 export const withKey = (label: string, action: Action, on: boolean) =>
   on ? `${label} (${ACTIONS[action].key})` : label
