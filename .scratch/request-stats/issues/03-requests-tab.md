@@ -6,7 +6,7 @@
 
 **Blocked by:** RQS-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A Closable workspace tab, Requests, open at most once, offered only to the Operator, loaded lazily.
 - [x] Filter bar (the app's `FilterBar`): title, All / Charged / Uncharged with counts, and a "Requested" time bound (the app's time-bound editor, without the spread, which is RQS-09). Footer: total and the range in UTC, to the minute when cut mid-day.
@@ -20,3 +20,8 @@
 - [x] No sideways scroll at phone width.
 - [x] Tests at seam 2 of the spec: a Playwright journey over the mocked Requests API, plus render tests for each new branching component (CRAP ratchet).
 - [x] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+
+## Comments
+
+- 2026-10-23: implemented on `claude/rqs-03` and merged into the integration branch in 761f5a6961fc202dce5854640088a9980403d0c0 (fast-forward).
+  Open: Bot API takes dataviz slot 7 (violet), which may clash with RQS-05's violet Account ramp; RQS-05 checks. The kind id `botApi` has no backend enum yet; RQS-14 adds it.
