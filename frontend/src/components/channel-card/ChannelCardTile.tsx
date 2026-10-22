@@ -54,6 +54,7 @@ export function ChannelCardTile({
         <div
           data-channel-name={channel.name}
           data-kbd-selected={highlighted || undefined}
+          data-marked={isSelected || undefined}
           className={`${channelCardFrameClass({
             isFrozen: channel.isFrozen,
             isSelected,

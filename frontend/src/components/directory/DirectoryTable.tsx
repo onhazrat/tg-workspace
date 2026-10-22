@@ -616,8 +616,9 @@ export function DirectoryTable({
             data-testid={`directory-row-${r.handle}`}
             data-directory-handle={r.handle}
             data-kbd-selected={ring === r.handle || undefined}
+            data-marked={ticks.has(r.handle) || undefined}
             onClick={() => onOpen(r.handle)}
-            className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
+            className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
           >
             <td className="pl-3" onClick={(e) => e.stopPropagation()}>
               <input
@@ -716,8 +717,9 @@ function DirectoryCards({
           data-testid={`directory-card-${r.handle}`}
           // The keyboard's row, and where the photo viewer lands on close.
           data-directory-handle={r.handle}
+          data-marked={ticks.has(r.handle) || undefined}
           onClick={() => onOpen(r.handle)}
-          className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${ticks.has(r.handle) ? "bg-blue-500/5" : ""} ${r.dismissed ? "opacity-50" : ""}`}
+          className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${r.dismissed ? "opacity-50" : ""}`}
         >
           <label
             className="-my-1 flex h-9 w-9 shrink-0 items-center justify-center"
