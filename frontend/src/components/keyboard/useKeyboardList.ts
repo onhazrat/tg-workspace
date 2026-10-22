@@ -103,6 +103,22 @@ function say(control: HTMLElement, name: string, undo: () => void) {
 }
 
 /**
+ * F / D: the bulk bar's own button, so its confirmation asks as a click's
+ * does; with no button there is nothing ticked to act on.
+ */
+function bulk(key: "F" | "D"): boolean {
+  const button = document.querySelector<HTMLElement>(
+    `[data-bulk-shortcut="${key}"]`,
+  )
+  if (button) button.click()
+  else
+    toast(`Nothing ticked to ${key === "F" ? "follow" : "dismiss"}`, {
+      id: "keyboard-bulk",
+    })
+  return true
+}
+
+/**
  * The list's Highlight while keyboard mode is on, and a way to set it (a page
  * turn landing on the first row). The Highlight comes back after a tab switch
  * once its item is among `items`.
@@ -184,49 +200,37 @@ export function useKeyboardList(adapter: ListAdapter): {
           if (!highlight) return false
           setRef.current(null)
           return true
-        case "sweep": {
-          if (!offers(adapter.list, "tick")) return false
-          if (highlight) tickTo(adapter.element(highlight))
-          if (!run({ type: "move", by: command.by })) return false
-          const now = ref.current.highlight
-          if (now) tickTo(adapter.element(now))
-          return true
-        }
-        case "bulk": {
-          if (!offers(adapter.list, "follow")) return false
-          // The bar's own button, so its confirmation asks as a click's does.
-          const button = document.querySelector<HTMLElement>(
-            `[data-bulk-shortcut="${command.key}"]`,
-          )
-          if (button) button.click()
-          else
-            toast(
-              `Nothing ticked to ${command.key === "F" ? "follow" : "dismiss"}`,
-              { id: "keyboard-bulk" },
-            )
-          return true
-        }
-        case "act": {
+        case "sweep":
+          return sweep(command.by)
+        case "bulk":
+          return offers(adapter.list, "follow") && bulk(command.key)
+        case "act":
           if (adapter.key?.(command.key, highlight)) return true
-          if (highlight === null) return false
-          const { key } = command
-          const control = controlOf(adapter.element(highlight), key)
-          if (!control) return false
-          if (key === ACTIONS.tick.key) ticking = !isOn(control)
-          if (SAID.includes(key)) {
-            const again = () =>
-              press(controlOf(adapter.element(highlight), key))
-            say(
-              control,
-              adapter.name(highlight),
-              adapter.undo?.(key, highlight) ?? again,
-            )
-          }
-          return press(control)
-        }
+          return highlight !== null && act(adapter, highlight, command.key)
         default:
           return false
       }
+    }
+    /** J / K: the Highlight and the item moved to get the last x's state. */
+    const sweep = (by: 1 | -1) => {
+      const { adapter, highlight } = ref.current
+      if (!offers(adapter.list, "tick")) return false
+      if (highlight) tickTo(adapter.element(highlight))
+      if (!run({ type: "move", by })) return false
+      const now = ref.current.highlight
+      if (now) tickTo(adapter.element(now))
+      return true
+    }
+    /** A key on the Highlight: press its control, said in a toast for d and *. */
+    const act = (adapter: ListAdapter, id: string, key: string) => {
+      const control = controlOf(adapter.element(id), key)
+      if (!control) return false
+      if (key === ACTIONS.tick.key) ticking = !isOn(control)
+      if (SAID.includes(key)) {
+        const again = () => press(controlOf(adapter.element(id), key))
+        say(control, adapter.name(id), adapter.undo?.(key, id) ?? again)
+      }
+      return press(control)
     }
     const self: MountedList = {
       run,
