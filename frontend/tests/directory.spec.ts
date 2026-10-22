@@ -689,7 +689,9 @@ test.describe("TG Workspace directory", () => {
 
     // j highlights the first row, x ticks it, Enter opens its panel, and the
     // panel follows the next j.
-    await page.getByRole("button", { name: "Keyboard", exact: true }).click()
+    await page.getByRole("button", { name: "Keyboard mode" }).click()
+    // ? shows the tab's keys in the corner.
+    await page.keyboard.press("?")
     await expect(page.getByText("open or close the panel")).toBeVisible()
     await page.keyboard.press("j")
     const a1 = page.getByTestId("directory-row-a1")
@@ -954,7 +956,7 @@ test.describe("TG Workspace directory", () => {
     await page.addStyleTag({
       content: "*, *::before { animation: none !important; }",
     })
-    await page.getByRole("button", { name: "Keyboard", exact: true }).click()
+    await page.getByRole("button", { name: "Keyboard mode" }).click()
     await page.keyboard.press("g")
     await page.keyboard.press("g")
     await page.keyboard.press("Enter")

@@ -150,7 +150,7 @@ export function useSpotlightBack(
 ): () => void {
   const { spotlight, enter, leave } = api
   const fromChannels = useRef(false)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: once, on mount
+  // Once, on mount: `enter` is stable.
   useEffect(() => {
     const channel = takeSpotlightRequest()
     if (!channel || !enter) return
