@@ -23,6 +23,8 @@ interface ArtifactCardProps {
   /** Summaries only — the two scheduled-regeneration flags. */
   onToggleAutoRegenerate: (artifact: ArtifactListItem) => void
   onToggleAutoPublish: (artifact: ArtifactListItem) => void
+  /** Keyboard mode's Highlight is on this card. */
+  highlighted?: boolean
 }
 
 /**
@@ -36,6 +38,7 @@ interface ArtifactCardProps {
 export const ArtifactCard: React.FC<ArtifactCardProps> = ({
   artifact,
   onOpen,
+  highlighted = false,
   ...actions
 }) => {
   const pending = isPendingArtifact(artifact)
@@ -52,7 +55,8 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
       data-testid="artifact-card"
       data-artifact-kind={artifact.kind}
       data-artifact-id={artifact.id}
-      className={`group relative flex min-w-0 flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md ${
+      data-kbd-selected={highlighted || undefined}
+      className={`group relative flex min-w-0 scroll-mt-24 flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md data-[kbd-selected]:ring-2 data-[kbd-selected]:ring-blue-500 ${
         failed
           ? "border-red-500/30 bg-red-500/[0.03] hover:border-red-500/50"
           : pending

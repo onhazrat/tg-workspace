@@ -5,9 +5,31 @@ import type { ArtifactListItem } from "@/types"
 import {
   ARTIFACT_KIND_LABELS,
   artifactDetail,
+  artifactName,
   failedAttempts,
   isPendingArtifact,
 } from "./artifact-presentation"
+
+describe("artifactName", () => {
+  const item = (over: Record<string, unknown>) =>
+    ({ kind: "tag", ...over }) as unknown as ArtifactListItem
+
+  it("is the kind and the title, or the Channels when it has none", () => {
+    expect(artifactName(item({ title: "Weekly" }))).toBe("Tag run: Weekly")
+    expect(artifactName(item({ title: "", scope: { channels: ["a"] } }))).toBe(
+      "Tag run: a",
+    )
+  })
+
+  it("cuts a long title at 40 characters", () => {
+    expect(artifactName(item({ title: "x".repeat(41) }))).toBe(
+      `Tag run: ${"x".repeat(40)}…`,
+    )
+    expect(artifactName(item({ title: "x".repeat(40) }))).toBe(
+      `Tag run: ${"x".repeat(40)}`,
+    )
+  })
+})
 
 const base = {
   id: "x",

@@ -13,6 +13,8 @@ import {
 import type React from "react"
 import { TgMetaChip } from "@/components/ui/tg-chips"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
+import { type Action, shortcut, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import type { ArtifactListItem } from "@/types"
 import {
   ARTIFACT_KIND_LABELS,
@@ -116,12 +118,24 @@ const ToggleAction: React.FC<{
   disabled?: boolean
   onClick: () => void
   children: React.ReactNode
-}> = ({ active, labels, activeClassName, disabled, onClick, children }) => {
+  /** The action keyboard mode presses it for. */
+  keyed?: Action
+}> = ({
+  active,
+  labels,
+  activeClassName,
+  disabled,
+  onClick,
+  children,
+  keyed,
+}) => {
   const label = active ? labels[1] : labels[0]
+  const keyboard = useKeyboardMode()
   return (
     <TgIconButton
       aria-label={label}
-      tooltip={label}
+      tooltip={keyed ? withKey(label, keyed, keyboard) : label}
+      {...(keyed && shortcut(keyed))}
       data-active={active || undefined}
       disabled={disabled}
       onClick={onClick}
@@ -158,6 +172,7 @@ export const ArtifactCardActions: React.FC<{
     <ToggleAction
       active={Boolean(artifact.isStarred)}
       labels={["Star item", "Unstar item"]}
+      keyed="star"
       activeClassName="bg-amber-500/10 text-amber-500"
       onClick={() => onToggleStar(artifact)}
     >
@@ -166,6 +181,7 @@ export const ArtifactCardActions: React.FC<{
     <ToggleAction
       active={Boolean(artifact.note)}
       labels={["Add note", "Edit note"]}
+      keyed="note"
       onClick={() => onEditNote(artifact)}
     >
       <StickyNote size={14} />

@@ -6,6 +6,7 @@ import { toast } from "sonner"
 
 import { ArtifactCard } from "@/components/history/ArtifactCard"
 import { ARTIFACT_KIND_LABELS } from "@/components/history/artifact-presentation"
+import { useHistoryKeys } from "@/components/history/HistoryKeyboard"
 import {
   ArtifactNoteEditor,
   HistoryKindFilters,
@@ -144,6 +145,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
 
   const deleteCopy = deleteDialogCopy(pendingDelete)
 
+  const ring = useHistoryKeys({ artifacts: visible, onOpen: openArtifact })
+
   return (
     <motion.div
       key="history"
@@ -198,6 +201,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
               >
                 <ArtifactCard
                   artifact={artifact}
+                  highlighted={ring === `${artifact.kind}:${artifact.id}`}
                   onOpen={openArtifact}
                   onToggleStar={handleToggleStar}
                   onEditNote={(item) => {
