@@ -2,6 +2,8 @@
 
 **What to build:** The Operator opens a new Requests tab and sees, for a range picked on top, the total Requests, their split into Useful, Idle and Wasted, a table by kind of work, and Channels ranked by Requests. Spec: "The Requests tab"; prototype variant A.
 
+**Prototype:** variant A on [`prototype/request-stats` @ b793f374](https://github.com/onhazrat/tg-workspace/tree/b793f3743ee41f41a02ef43ac5c0427d0da36c4d), the working reference for this behaviour; its README says how to run it. Port the behaviour, not the code: the prototype's data layer is synthetic (spec, Further Notes).
+
 **Blocked by:** RQS-01
 
 **Status:** ready-for-agent
