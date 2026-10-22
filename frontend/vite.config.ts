@@ -53,7 +53,13 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE: reachable over `tailscale serve`.
+      allowedHosts: [".ts.net"],
       proxy: {
+        // PROTOTYPE: History's Written spread and filtered list (backend/scripts/proto_history_api.py).
+        "^/api/v1/data/artifacts/(spread|proto-list|proto-counts)": {
+          target: `http://127.0.0.1:${process.env.PROTO_API_PORT || 8013}`,
+        },
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

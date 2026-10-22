@@ -53,6 +53,8 @@ export type WorkspaceSearch = {
   tagRun?: string
   /** History's All / Failed / Pending filter (SFR-01); absent is All. */
   historyStatus?: ArtifactStatusFilter
+  /** PROTOTYPE: History's `?variant=`. */
+  variant?: string
 } & DirectoryParams
 
 const HISTORY_STATUSES: readonly ArtifactStatusFilter[] = ["failed", "pending"]
@@ -67,6 +69,7 @@ const ID_PARAMS = [
   "summary",
   "chatSession",
   "tagRun",
+  "variant",
 ] as const
 
 function trimmedString(value: unknown): string | undefined {

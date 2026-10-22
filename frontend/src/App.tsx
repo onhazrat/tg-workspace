@@ -17,7 +17,7 @@ import { ChatView } from "./components/ChatView"
 import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
 import { DirectoryView } from "./components/DirectoryView"
 import { DiscoverView } from "./components/DiscoverView"
-import { HistoryView } from "./components/HistoryView"
+import { HistoryPrototype } from "./components/history-prototype/HistoryPrototype"
 import { PostFeed } from "./components/PostFeed"
 import QuotaWarning from "./components/QuotaWarning"
 import { SummaryView } from "./components/SummaryView"
@@ -214,7 +214,10 @@ export default function App() {
     if (generating) return generating
     const views: Partial<Record<TabType, () => React.ReactNode>> = {
       history: () => (
-        <HistoryView openArtifact={openArtifact} setActiveTab={setActiveTab} />
+        <HistoryPrototype
+          openArtifact={openArtifact}
+          setActiveTab={setActiveTab}
+        />
       ),
       chat: () => <ChatView />,
       channels: () => <ChannelGrid scrollContainerRef={scrollContainerRef} />,
