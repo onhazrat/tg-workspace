@@ -104,17 +104,25 @@ function say(control: HTMLElement, name: string, undo: () => void) {
 
 /**
  * F / D: the bulk bar's own button, so its confirmation asks as a click's
- * does; with no button there is nothing ticked to act on.
+ * does; with no button there is nothing ticked to act on. A disabled button
+ * says why, from the tooltip the mouse reads.
  */
 function bulk(key: "F" | "D"): boolean {
   const button = document.querySelector<HTMLElement>(
     `[data-bulk-shortcut="${key}"]`,
   )
-  if (button) button.click()
-  else
-    toast(`Nothing ticked to ${key === "F" ? "follow" : "dismiss"}`, {
-      id: "keyboard-bulk",
-    })
+  if (button && !button.matches(":disabled")) {
+    button.click()
+    return true
+  }
+  const label = button?.textContent?.trim()
+  const why = button?.closest("[title]")?.getAttribute("title")
+  toast(
+    !button
+      ? `Nothing ticked to ${key === "F" ? "follow" : "dismiss"}`
+      : `${label} is off${why ? `: ${why}` : " right now"}`,
+    { id: "keyboard-bulk" },
+  )
   return true
 }
 

@@ -310,6 +310,15 @@ describe("F and D in keyboard mode press the bar's own buttons", () => {
     expect(calls.dismiss.length).toBe(1)
   })
 
+  test("F on All matching, where Follow is off, says why in a toast", async () => {
+    const calls = keyed(["a"], [], { total: 48210, state: "held" })
+    type("F")
+    expect(
+      await screen.findByText("Follow is off: Follow acts on 10,000 or fewer"),
+    ).toBeTruthy()
+    expect(calls.follow).toEqual([])
+  })
+
   test("with nothing ticked, or only follows, a toast says so", async () => {
     keyed([])
     type("F")
