@@ -256,7 +256,17 @@ describe("UsageView", () => {
     entries: [entry({})],
     isPending: false,
     onLift: () => {},
+    onOpenRequests: () => {},
   }
+
+  test("links to the Requests tab, where the Requests went (RQS-03)", () => {
+    const onOpenRequests = mock(() => {})
+    render(<UsageView {...props} onOpenRequests={onOpenRequests} />)
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open the Requests tab" }),
+    )
+    expect(onOpenRequests).toHaveBeenCalledTimes(1)
+  })
 
   test("every account is listed today, spent or not, so a blocked one can be lifted", () => {
     const onLift = mock((_id: string) => {})

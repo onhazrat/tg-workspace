@@ -1340,7 +1340,7 @@
       "comment": "Below this width the app lays out for a phone; one number for every \"narrow\".",
       "expression": "768",
       "file": "frontend/src/constants.ts",
-      "line": 128,
+      "line": 129,
       "name": "MOBILE_BREAKPOINT",
       "value": 768
     },
@@ -1356,7 +1356,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 156,
+      "line": 159,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
@@ -1719,6 +1719,22 @@
       "line": 22,
       "name": "POST_LOOKUP_BATCH",
       "value": 200
+    },
+    {
+      "comment": "Rows the Requests tab's Channel table shows first.",
+      "expression": "25",
+      "file": "frontend/src/lib/requests/breakdown.ts",
+      "line": 180,
+      "name": "FIRST_CHANNELS",
+      "value": 25
+    },
+    {
+      "comment": "Rows each \"Show more\" adds to the Requests tab's Channel table.",
+      "expression": "50",
+      "file": "frontend/src/lib/requests/breakdown.ts",
+      "line": 182,
+      "name": "MORE_CHANNELS",
+      "value": 50
     },
     {
       "comment": "How often subscribers are notified.",

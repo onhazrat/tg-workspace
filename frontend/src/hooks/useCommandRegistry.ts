@@ -368,7 +368,7 @@ export function useCommandRegistry(): {
 
   const commands = useMemo(() => {
     const all = [
-      ...buildNavigateCommands(),
+      ...buildNavigateCommands(settingsRegistry.permissions),
       ...buildActionCommands(),
       ...buildSettingCommands(settingsRegistry),
       ...buildGroupCommands(),

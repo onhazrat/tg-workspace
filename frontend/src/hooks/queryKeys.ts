@@ -137,6 +137,9 @@ export const queryKeys = {
    * for a past day is immutable — yesterday cached forever is correct.
    */
   quotaUsage: (day: string) => ["quotaUsage", day] as const,
+  /** The Requests tab's Breakdown for one range, epoch ms (RQS-03). */
+  requestBreakdown: (start: number, end: number, charged: string) =>
+    ["requestBreakdown", start, end, charged] as const,
   /**
    * The signed-in account's own Budgets (ticket 24). Not keyed on a day: it
    * always answers for today, and a key holding a date would go stale across a

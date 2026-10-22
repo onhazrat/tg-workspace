@@ -1,0 +1,154 @@
+/**
+ * The Requests tab's view (RQS-03), props only, held in a harness that keeps
+ * the tab-wide filter the way `RequestsTab` does.
+ */
+import { afterEach, describe, expect, test } from "bun:test"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react"
+import { useState } from "react"
+import type { RequestBreakdownResponse } from "@/client"
+import {
+  initialRequestsFilter,
+  type RequestsFilter,
+} from "@/lib/requests/breakdown"
+import { RequestsView } from "./RequestsView"
+
+afterEach(cleanup)
+
+const part = (kind: string, useful: number, idle: number, wasted: number) => ({
+  kind,
+  requests: useful + idle + wasted,
+  useful,
+  idle,
+  wasted,
+  charged: kind === "probe" ? 0 : useful + idle + wasted,
+  newPosts: 0,
+  repeatedPosts: 0,
+})
+
+const BREAKDOWN: RequestBreakdownResponse = {
+  start: "2026-10-01T00:00:00",
+  end: "2026-10-02T00:00:00",
+  byKind: [part("auto", 60, 30, 10), part("probe", 100, 200, 600)],
+  byChannel: [
+    { ...part("auto", 60, 30, 10), channel: "news" },
+    { ...part("probe", 100, 200, 600), channel: null },
+  ],
+}
+
+const RANGE = {
+  start: Date.parse("2026-10-01T06:30:00Z"),
+  end: Date.parse("2026-10-02T00:00:00Z"),
+}
+
+function Harness(
+  props: Partial<Parameters<typeof RequestsView>[0]> & {
+    seen?: RequestsFilter[]
+  },
+) {
+  const [filter, setFilter] = useState(initialRequestsFilter)
+  return (
+    <RequestsView
+      filter={filter}
+      onFilter={(patch) => {
+        const next = { ...filter, ...patch }
+        props.seen?.push(next)
+        setFilter(next)
+      }}
+      range={RANGE}
+      counts={{ all: 1000, charged: 100, uncharged: 900 }}
+      breakdown={BREAKDOWN}
+      {...props}
+    />
+  )
+}
+
+const kindRow = (label: string) =>
+  screen
+    .getByRole("checkbox", { name: `Show ${label}` })
+    .closest("tr") as HTMLElement
+const cells = (tr: HTMLElement) =>
+  [...tr.querySelectorAll("td")].map((td) => td.textContent)
+const chip = (name: string) =>
+  within(screen.getByRole("region", { name: "By kind of work" })).getByRole(
+    "button",
+    { name },
+  )
+const channelHeaders = () =>
+  within(screen.getByRole("region", { name: "Channels by Requests" }))
+    .getAllByRole("columnheader")
+    .map((th) => th.textContent)
+
+describe("RequestsView", () => {
+  test("the footer gives the total and the range in UTC, to the minute when cut", () => {
+    render(<Harness />)
+    expect(screen.getByTestId("requests-total").textContent).toBe(
+      "1,000 Requests",
+    )
+    expect(screen.getByTestId("requests-range").textContent).toBe(
+      "from 2026-10-01 06:30 to 2026-10-02 00:00 (UTC)",
+    )
+  })
+
+  test("the choice counts All, Charged and Uncharged, and picking one is kept", () => {
+    const seen: RequestsFilter[] = []
+    render(<Harness seen={seen} />)
+    const charged = screen.getByTestId("requests-charged-charged")
+    expect(charged.textContent).toBe("Charged100")
+    expect(screen.getByTestId("requests-charged-uncharged").textContent).toBe(
+      "Uncharged900",
+    )
+    fireEvent.click(charged)
+    expect(seen.at(-1)?.charged).toBe("charged")
+  })
+
+  test("the stat strip splits the Requests by outcome", () => {
+    render(<Harness />)
+    expect(screen.getByTestId("requests-stat-wasted").textContent).toBe(
+      "Wasted61061% of all",
+    )
+  })
+
+  test("a kind's Show box hides it from every share, and marks it uncharged", () => {
+    render(<Harness />)
+    expect(cells(kindRow("Directory probe"))).toContain("90%")
+    expect(kindRow("Directory probe").textContent).toContain("uncharged")
+    expect(kindRow("Auto sync").textContent).not.toContain("uncharged")
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Show Directory probe" }),
+    )
+    expect(cells(kindRow("Auto sync"))).toContain("100%")
+    expect(cells(kindRow("Directory probe"))).toContain("–")
+    expect(
+      screen.queryByText("Directory probes", { selector: "span" }),
+    ).toBeNull()
+  })
+
+  test("an outcome chip hides it on the whole tab, and the last one stays", () => {
+    render(<Harness />)
+    fireEvent.click(chip("Idle"))
+    expect(cells(kindRow("Auto sync"))).toEqual([
+      "",
+      "Auto sync",
+      "70",
+      "9.1%",
+      "",
+      "–",
+      "14%",
+    ])
+    expect(channelHeaders()).not.toContain("Idle")
+    fireEvent.click(chip("Wasted"))
+    const useful = chip("Useful")
+    expect(useful.hasAttribute("disabled")).toBe(true)
+  })
+
+  test("a failed read says so", () => {
+    render(<Harness breakdown={undefined} error={new Error("boom")} />)
+    expect(screen.getByRole("alert").textContent).toContain("boom")
+  })
+})

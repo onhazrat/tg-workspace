@@ -28,6 +28,7 @@ export const WORKSPACE_TABS = [
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "history", label: "History", icon: "History" },
   { id: "tools", label: "Tools", icon: "Activity" },
+  { id: "requests", label: "Requests", icon: "Gauge" },
   { id: "settings", label: "Settings", icon: "Settings" },
 ] as const
 

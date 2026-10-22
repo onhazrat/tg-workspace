@@ -7,8 +7,9 @@ import { isFixed } from "@/lib/workspace-tabs"
 import { useData } from "../contexts/DataContext"
 import { useUI } from "../contexts/UIContext"
 
+// The tour has no step on the Operator's Requests tab, so it never opens it.
 const TOUR_TABS = WORKSPACE_TABS.map((tab) => tab.id).filter(
-  (id) => !isFixed(id),
+  (id) => !isFixed(id) && id !== "requests",
 )
 
 export const useGuidedTour = () => {

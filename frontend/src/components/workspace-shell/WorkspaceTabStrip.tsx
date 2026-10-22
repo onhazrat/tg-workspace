@@ -20,6 +20,7 @@ import {
   Compass,
   Database,
   FileText,
+  Gauge,
   History,
   Library,
   List,
@@ -32,7 +33,8 @@ import {
   X,
   Zap,
 } from "lucide-react"
-import { type KeyboardEventHandler, useRef } from "react"
+import { type KeyboardEventHandler, useRef, useState } from "react"
+import { useSettingsRegistry } from "@/components/settings-page/registry"
 
 import {
   DropdownMenu,
@@ -42,12 +44,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { WORKSPACE_TABS } from "@/constants"
 import type { WorkspaceTabs } from "@/hooks/useWorkspaceTabs"
-import { isFixed, type Tab, tabKey, tabSearch } from "@/lib/workspace-tabs"
+import {
+  isFixed,
+  offeredTab,
+  type Tab,
+  tabKey,
+  tabSearch,
+} from "@/lib/workspace-tabs"
 
 import { tabAnnouncements, tabPresentation } from "./workspace-shell-model"
 
 const TAB_ICONS = {
   Database,
+  Gauge,
   List,
   MessageSquare,
   History,
@@ -66,7 +75,10 @@ function tabIcon(meta: (typeof WORKSPACE_TABS)[number]) {
   return TAB_ICONS[meta.icon as keyof typeof TAB_ICONS] ?? Database
 }
 
-/** What the "+" menu offers: every kind that can be closed. */
+/**
+ * Every kind that can be closed. The "+" menu offers those this Account's
+ * Permissions reach (`offeredTab`), read from the registry while it is open.
+ */
 const CLOSABLE_TABS = WORKSPACE_TABS.filter((tab) => !isFixed(tab.id))
 
 /**
@@ -134,6 +146,8 @@ export function WorkspaceTabStrip({
     }),
   )
   const chose = useRef(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const { permissions } = useSettingsRegistry({ enabled: menuOpen })
   const { tabs } = workspaceTabs
   const closable = tabs.filter((tab) => !isFixed(tab.kind))
   const byKey = new Map(tabs.map((tab) => [tabKey(tab), tab]))
@@ -186,7 +200,7 @@ export function WorkspaceTabStrip({
           </SortableContext>
         </DndContext>
       </div>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -210,20 +224,22 @@ export function WorkspaceTabStrip({
             chose.current = false
           }}
         >
-          {CLOSABLE_TABS.map((meta) => {
-            const Icon = tabIcon(meta)
-            return (
-              <DropdownMenuItem
-                key={meta.id}
-                onSelect={() => {
-                  chose.current = true
-                  workspaceTabs.openTab(meta.id)
-                }}
-              >
-                <Icon size={14} /> {meta.label}
-              </DropdownMenuItem>
-            )
-          })}
+          {CLOSABLE_TABS.filter((meta) => offeredTab(meta.id, permissions)).map(
+            (meta) => {
+              const Icon = tabIcon(meta)
+              return (
+                <DropdownMenuItem
+                  key={meta.id}
+                  onSelect={() => {
+                    chose.current = true
+                    workspaceTabs.openTab(meta.id)
+                  }}
+                >
+                  <Icon size={14} /> {meta.label}
+                </DropdownMenuItem>
+              )
+            },
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </nav>

@@ -17,6 +17,32 @@ export const OUTCOMES: { id: Outcome; label: string }[] = [
   { id: "wasted", label: "Wasted" },
 ]
 
+/**
+ * What every part of the tab reads (spec, "Tab-wide state"). One value, so
+ * the trend and the tables hide the same kinds and outcomes; the Accounts and
+ * the Channels left out join it in later tickets.
+ */
+export interface RequestsFilter {
+  bound: TimeBound
+  charged: ChargedFilter
+  hiddenKinds: ReadonlySet<string>
+  hiddenOutcomes: ReadonlySet<Outcome>
+}
+
+export const initialRequestsFilter = (): RequestsFilter => ({
+  bound: { mode: "live", start: -30 * DAY_MS },
+  charged: "all",
+  hiddenKinds: new Set(),
+  hiddenOutcomes: new Set(),
+})
+
+/** `set` with `item` flipped in or out. */
+export function toggled<T>(set: ReadonlySet<T>, item: T): Set<T> {
+  const next = new Set(set)
+  if (!next.delete(item)) next.add(item)
+  return next
+}
+
 export interface KindMeta {
   id: string
   label: string
@@ -149,6 +175,11 @@ export function channelRows(
     }))
     .sort((a, b) => b.total - a.total)
 }
+
+/** Rows the Requests tab's Channel table shows first. */
+export const FIRST_CHANNELS = 25
+/** Rows each "Show more" adds to the Requests tab's Channel table. */
+export const MORE_CHANNELS = 50
 
 export type ChannelSort =
   | "channel"

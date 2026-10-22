@@ -62,6 +62,24 @@ export function emptyTabSet(): TabSet {
   return { tabs: [], historyClosed: false, closed: [], recent: [] }
 }
 
+/**
+ * The tabs offered only to an Account holding a Permission. The Requests tab
+ * reads every Account's Requests, so it takes the Permission its endpoints
+ * do (RQS-03). A tab is still reachable by URL; it then says it is not yours.
+ */
+const TAB_PERMISSIONS: Partial<Record<TabType, string>> = {
+  requests: "quota:read_any",
+}
+
+/** Whether the "+" menu and the palette offer `kind` to these Permissions. */
+export function offeredTab(
+  kind: TabType,
+  permissions: readonly string[],
+): boolean {
+  const needed = TAB_PERMISSIONS[kind]
+  return !needed || permissions.includes(needed)
+}
+
 export function isFixed(kind: TabType): boolean {
   return (FIXED_TABS as readonly TabType[]).includes(kind)
 }

@@ -8,7 +8,7 @@ import {
   Sun,
 } from "lucide-react"
 import { AnimatePresence } from "motion/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from "react"
 import { api } from "@/api"
 import { ActionView } from "./components/ActionView"
 import { ChannelGrid } from "./components/ChannelGrid"
@@ -32,6 +32,11 @@ import { SettingsPage } from "./components/settings-page/SettingsPage"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import { ToolsTab } from "./components/tools/ToolsTab"
+
+// The Operator's Requests tab downloads only when it opens (RQS-03): most
+// Accounts never see it, and its trend brings Plotly (spec, "The Requests tab").
+const RequestsTab = lazy(() => import("./components/requests/RequestsTab"))
+
 import {
   Tooltip,
   TooltipContent,
@@ -235,6 +240,13 @@ export default function App() {
       action: () => <ActionView />,
       settings: () => <SettingsPage />,
       tools: () => <ToolsTab />,
+      requests: () => (
+        <Suspense
+          fallback={<p className="text-sm text-app-ink/50">Loading…</p>}
+        >
+          <RequestsTab />
+        </Suspense>
+      ),
     }
     const view = views[activeTab]
     return view ? (
