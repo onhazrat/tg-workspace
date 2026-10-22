@@ -1,6 +1,7 @@
 # History tab redesign: plan
 
 Status: grilled and prototyped 2026-10-22; the prototype's variant 1 is final.
+Spec: `.scratch/history-tab-redesign/spec.md` (ready-for-agent, no tickets).
 Glossary: **Written** and the reworded **History** in `CONTEXT.md`. Prototype:
 the local branch `prototype/history-tab-redesign` (never pushed; see below).
 
@@ -75,7 +76,8 @@ fallback on phones anyway.
   blank when the header's badge already says Failed or Awaiting response;
   Star, Note and a "⋯" menu holding Auto-regenerate, Auto-publish and
   Delete. Delete keeps its confirmation.
-- **Search matches are highlighted** while a search is typed, with the
+- **Search matches are marked** while a search is typed (not "highlighted":
+  that is Keyboard mode's **Highlight**), with the
   Posts tab's `highlightText`, in the channel line, the title and the note.
   Matching channels move to the front of the channel line, so a channel match
   is never hidden in the "+N". A match the card cannot show (deep in a
