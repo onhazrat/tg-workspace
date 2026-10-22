@@ -37,9 +37,15 @@ export interface WorkspaceKeyOps {
   reopen: () => void
 }
 
+/**
+ * A dialog still open: Radix keeps a closed one on the page through its exit
+ * animation, and a key pressed then (F right after Cancel) is the list's.
+ */
+const OPEN_DIALOG = '[role="dialog"]:not([data-state="closed"])'
+
 /** The full list is open and nothing else is: `\` and `?` still reach here. */
 const onlyShortcutsOpen = () => {
-  const dialogs = document.querySelectorAll('[role="dialog"]')
+  const dialogs = document.querySelectorAll(OPEN_DIALOG)
   return dialogs.length === 1 && dialogs[0].hasAttribute("data-shortcuts-list")
 }
 
@@ -130,7 +136,7 @@ export function KeyboardMode({ ops }: { ops: WorkspaceKeyOps }) {
       // A dialog that closed on this key took it (KM-01), and a modified key
       // is the browser's or the command palette's.
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
-      const dialog = document.querySelector('[role="dialog"]') !== null
+      const dialog = document.querySelector(OPEN_DIALOG) !== null
       if (focusIsTyping()) {
         // Esc in a field gives the keys back.
         if (e.key === "Escape" && keyboardOn() && !dialog) {

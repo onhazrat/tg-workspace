@@ -137,6 +137,24 @@ describe("the workspace's keys", () => {
     expect(help()).toBe("closed false")
   })
 
+  test("an open dialog holds the keys; one in its closing animation does not", () => {
+    render(<KeyboardMode ops={OPS} />)
+    const dialog = document.createElement("div")
+    dialog.setAttribute("role", "dialog")
+    dialog.setAttribute("data-state", "open")
+    document.body.append(dialog)
+    try {
+      type("g", "p")
+      expect(calls).toEqual([])
+      // Radix keeps a closed dialog on the page for its exit animation.
+      dialog.setAttribute("data-state", "closed")
+      type("g", "p")
+      expect(calls).toEqual(["go posts"])
+    } finally {
+      dialog.remove()
+    }
+  })
+
   test("off, no g key reaches the strip", () => {
     render(<KeyboardMode ops={OPS} />)
     act(() => setKeyboardMode(false))
