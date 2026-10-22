@@ -244,9 +244,13 @@ export function PhotoViewer({
     // Read by position, as keyboard mode reads them, so a Persian layout works.
     const onKey = (e: KeyboardEvent) => {
       const key = readKey(e)
-      if (key === "ArrowLeft" || key === "h") step(-right)
-      if (key === "ArrowRight" || key === "l") step(right)
-      if (key === "p" && !e.repeat && !e.metaKey && !e.ctrlKey) onClose()
+      if (key === "ArrowLeft") step(-right)
+      if (key === "ArrowRight") step(right)
+      // A letter with Cmd or Ctrl is the browser's or the palette's.
+      if (e.metaKey || e.ctrlKey) return
+      if (key === "h") step(-right)
+      if (key === "l") step(right)
+      if (key === "p" && !e.repeat) onClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)

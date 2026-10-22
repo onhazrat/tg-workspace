@@ -122,6 +122,10 @@ describe("PhotoViewer", () => {
     fireEvent.keyDown(window, { key: "h" })
     fireEvent.keyDown(window, { key: "h" })
     expect(label()).toContain("Chan a · 1 / 3")
+    // Cmd+L is the address bar's, Ctrl+H the history's: neither steps.
+    fireEvent.keyDown(window, { key: "l", code: "KeyL", metaKey: true })
+    fireEvent.keyDown(window, { key: "l", code: "KeyL", ctrlKey: true })
+    expect(label()).toContain("Chan a · 1 / 3")
     // Held down, the p that opened the viewer must not close it again; nor
     // does a p with Ctrl or Cmd, which is the browser's or the palette's.
     fireEvent.keyDown(window, { key: "p", repeat: true })

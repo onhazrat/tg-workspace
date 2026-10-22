@@ -1228,7 +1228,7 @@
       "comment": "Long enough for the second click or tap of a double to arrive before the first one closes the viewer or toggles its controls.",
       "expression": "250",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 329,
+      "line": 333,
       "name": "DOUBLE_TAP_MS",
       "value": 250
     },
@@ -1236,7 +1236,7 @@
       "comment": "How far apart, in px, the two taps of a double-tap may land.",
       "expression": "30",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 331,
+      "line": 335,
       "name": "DOUBLE_TAP_PX",
       "value": 30
     },
@@ -1244,7 +1244,7 @@
       "comment": "How far one finger must travel at 1x before it steps or closes.",
       "expression": "60",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 333,
+      "line": 337,
       "name": "SWIPE_PX",
       "value": 60
     },
