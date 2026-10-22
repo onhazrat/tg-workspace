@@ -1,4 +1,4 @@
-"""A git worktree's private pytest database: its name, creation and removal.
+"""A git worktree's private pytest database and ports: names, creation, removal.
 
 Every worktree shares one Postgres, and pytest truncates every `tg_*` table
 after each test. Two worktrees on the shared `app_test` wipe each other's rows
@@ -11,6 +11,7 @@ Only names this module derives are ever dropped: `drop` refuses `app`,
 in the wrong directory must not take the dev or shared test database with it.
 
     uv run python -m scripts.worktree_db name <worktree path>
+    uv run python -m scripts.worktree_db ports <worktree path>
     uv run python -m scripts.worktree_db create <database>
     uv run python -m scripts.worktree_db drop <database>
 """
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import re
 import sys
+import zlib
 from pathlib import Path
 
 import psycopg
@@ -36,6 +38,21 @@ def database_name(worktree: Path) -> str:
     if not slug:
         raise ValueError(f"cannot derive a database name from {worktree}")
     return (PREFIX + slug)[:MAX_IDENTIFIER]
+
+
+#: Where a worktree's Playwright dev server listens. Every worktree used to
+#: share 5180, and `reuseExistingServer` then ran one worktree's specs against
+#: another's code.
+DEV_PORTS = range(5200, 5600)
+#: Its API sits this far above, for a `launch.json` entry of its own.
+API_PORT_OFFSET = 3000
+
+
+def ports(worktree: Path) -> tuple[int, int]:
+    """The worktree's dev server and API ports, the same on every run."""
+    digest = zlib.crc32(database_name(worktree).encode())
+    dev = DEV_PORTS.start + digest % len(DEV_PORTS)
+    return dev, dev + API_PORT_OFFSET
 
 
 def _check_droppable(name: str) -> None:
@@ -89,13 +106,15 @@ def drop(name: str) -> bool:
 
 
 def main(argv: list[str]) -> int:
-    commands = {"name", "create", "drop"}
+    commands = {"name", "ports", "create", "drop"}
     if len(argv) != 2 or argv[0] not in commands:
         print(__doc__, file=sys.stderr)  # noqa: T201
         return 2
     command, arg = argv
     if command == "name":
         print(database_name(Path(arg)))  # noqa: T201
+    elif command == "ports":
+        print(*ports(Path(arg)))  # noqa: T201
     elif command == "create":
         print("created" if create(arg) else "exists")  # noqa: T201
     else:

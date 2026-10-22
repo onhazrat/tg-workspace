@@ -3,7 +3,9 @@
 #
 #   bash scripts/worktree-setup.sh             link the main checkout's .env, bun install,
 #                                               create and migrate app_test_<worktree>, and
-#                                               record it in .env.worktree for pytest
+#                                               record it and the worktree's own ports in
+#                                               .env.worktree; add a "worktree-api" entry
+#                                               to .claude/launch.json
 #   bash scripts/worktree-setup.sh --teardown  drop that database, remove .env.worktree
 #
 # Idempotent: a second run changes nothing. Run it from anywhere in the worktree.
@@ -46,5 +48,28 @@ fi
 (cd "$root" && bun install --silent)
 uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db create "$db"
 POSTGRES_DB="$db" uv run --quiet alembic upgrade head
-printf 'TEST_POSTGRES_DB=%s\n' "$db" >"$root/.env.worktree"
-echo "Ready: pytest in this worktree uses $db (from .env.worktree)."
+read -r dev_port api_port < <(uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db ports "$root")
+printf 'TEST_POSTGRES_DB=%s\nPLAYWRIGHT_DEV_PORT=%s\nWORKTREE_API_PORT=%s\n' \
+  "$db" "$dev_port" "$api_port" >"$root/.env.worktree"
+
+# The worktree's own API, for preview_start, on a port no other worktree uses.
+python3 - "$root" "$api_port" <<'PY'
+import json, sys
+from pathlib import Path
+
+root, port = sys.argv[1], int(sys.argv[2])
+path = Path(root) / ".claude" / "launch.json"
+config = json.loads(path.read_text()) if path.exists() else {"version": "0.0.1"}
+entries = [c for c in config.get("configurations", []) if c.get("name") != "worktree-api"]
+entries.append({
+    "name": "worktree-api",
+    "runtimeExecutable": "bash",
+    "runtimeArgs": ["-c", f"cd {root}/backend && uv run fastapi run app/main.py --port {port}"],
+    "port": port,
+})
+config["configurations"] = entries
+path.parent.mkdir(exist_ok=True)
+path.write_text(json.dumps(config, indent=2) + "\n")
+PY
+
+echo "Ready: pytest uses $db; Playwright serves on :$dev_port; preview_start worktree-api serves :$api_port."

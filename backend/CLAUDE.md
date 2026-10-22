@@ -49,6 +49,7 @@ reasoning for the parts that live nowhere else; `docs/*-plan.md` and
 
 ### Routes and services
 
+- **A new route joins eight inventories.** `bash scripts/route-guards.sh` runs them in about a minute. They cover the `/data` count, response models, the isolation probes, middleware exemptions, approval, admin gating and both View-as allowlists. Run it before the full suite, which catches the same failures ten minutes later.
 - **Thin routes, fat services.** `app/api/routes/*.py` are thin; logic lives in `app/services/*.py`. `/data` is a package, one module per resource family, and the parent router owns the prefix so operation ids stay `data-<function_name>`. **Never rename a route function without regenerating the client.** *Enforced: `tests/api/test_route_inventory.py`.*
 - **Every route declares a response model.** *Enforced: `tests/api/test_route_module_hygiene.py`.* Request and response models live in `app/schemas/<resource>.py`; never inline a `BaseModel` in a route module and never return `dict[str, Any]`, which becomes `Record<string, unknown>` in the generated client.
   - **A list view must not carry a field only its detail view renders.** Same fix twice (26 MB and 56 MB pages). The shape is *list light + `GET .../{id}` full*, with search pushed into SQL. Pushing the projection into SQL does **not** dodge a TOAST detoast. Split the field into a companion **table**, not a sibling column.

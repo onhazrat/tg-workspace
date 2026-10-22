@@ -89,6 +89,12 @@ repos:
         language: system
         files: ^backend/app/.*\.py$|^backend/app/core/constants_catalog\.generated\.json$|^frontend/src/.*\.(ts|tsx)$|^scripts/generate_constants_catalog\.py$
 
+      - id: check-em-dashes
+        name: No em dash in an added line
+        entry: python3 scripts/check_em_dashes.py
+        pass_filenames: false
+        language: system
+
       - id: zizmor
         name: zizmor
         language: python

@@ -63,6 +63,10 @@ worth copying from it, are in `docs/agents/architecture-guards.md`.
 **Mutation-test every guard before trusting it.** A green suite proves nothing
 until you have watched it go red. This caught a false pass in six separate units
 of the simplification programme — including one guard that could not fail at all.
+Commit before you mutate, so `git checkout <file>` takes back the mutation and
+nothing else. Then write each check into the commit body as
+`Mutation-checked: <what you broke> went red`, because a mutation leaves no
+diff and the reviewer reads only the diff and the log.
 
 ## Conventions
 
