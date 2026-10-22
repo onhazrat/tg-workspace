@@ -3,7 +3,7 @@
 Status: grilled and prototyped 2026-10-22; the prototype's variant 1 is final.
 Spec: `.scratch/history-tab-redesign/spec.md` (ready-for-agent, no tickets).
 Glossary: **Written** and the reworded **History** in `CONTEXT.md`. Prototype:
-the local branch `prototype/history-tab-redesign` (never pushed; see below).
+[`prototype/history-tab-redesign` @ ac9c6255](https://github.com/onhazrat/tg-workspace/tree/ac9c6255378a4e81894b761d71acb1f0ec9d3c26) (see below).
 
 ## Goal
 
@@ -120,9 +120,10 @@ moving the Posts bar onto `FilterBar`.
 
 ## Prototype
 
-`prototype/history-tab-redesign`, local only. To keep it for reference, push a
-sanitized snapshot as `docs/agents/prototyping-with-live-data.md` describes,
-never the branch itself. Commits, oldest first: the three list
+[`prototype/history-tab-redesign` @ ac9c6255](https://github.com/onhazrat/tg-workspace/tree/ac9c6255378a4e81894b761d71acb1f0ec9d3c26) is a sanitized
+one-commit snapshot of the local prototype branch, on top of `main`, as
+`docs/agents/prototyping-with-live-data.md` describes. The local branch's
+commits, oldest first, which only this machine has: the three list
 forms in the shared bar (530b1990), fixes from the browser check (c198d7b0),
 the five card ideas (5d4d8593), dropping the losers and tinting kinds
 (f8ccaf5c), the Compact grid (71637a0a), the Written spread (a3fe6c2b), the

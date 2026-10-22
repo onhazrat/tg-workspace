@@ -13,13 +13,13 @@ No tickets. The work fits one session: implement this spec as one unit with
 `/mattpocock-skills:implement`, test-first at the two seams under **Testing
 Decisions**, on a branch off `main`.
 
-Prototype: the local branch `prototype/history-tab-redesign` (never pushed),
-variant 1 (`?tab=history&variant=1`). It was built against a deployment's data
+Prototype: variant 1 (`?tab=history&variant=1`) on
+[`prototype/history-tab-redesign` @ ac9c6255](https://github.com/onhazrat/tg-workspace/tree/ac9c6255378a4e81894b761d71acb1f0ec9d3c26),
+a one-commit snapshot on top of `main`. It was built against a deployment's data
 and is throwaway: read it for the decisions, never copy it. The files worth
 reading are the History prototype directory's `FilterBar`, `variants`,
 `WrittenSpread` and `HistoryPrototype`, and `proto_history_api.py` under the
-backend's scripts, whose queries are the backend decisions below. Its last
-commit is `3fa23d98`.
+backend's scripts, whose queries are the backend decisions below.
 
 ## Problem Statement
 
