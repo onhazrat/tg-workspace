@@ -7,7 +7,6 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { ShortcutsDialog } from "@/components/workspace-shell/WorkspaceShellParts"
 import { keydowns } from "@/lib/keyboard/keydowns"
 import {
   pending,
@@ -15,7 +14,8 @@ import {
   setHelp,
   setKeyboardMode,
 } from "@/lib/keyboard/mode"
-import { KeyboardMode, useHelpControls } from "./KeyboardMode"
+import { KeyboardButtons } from "./KeyboardButtons"
+import { KeyboardMode } from "./KeyboardMode"
 import { useKeyboardList } from "./useKeyboardList"
 
 const OPS = {
@@ -39,17 +39,11 @@ function Directory() {
 
 /** The header's shortcuts button and the full list, as `App` wires them. */
 function Shell({ list = true }: { list?: boolean }) {
-  const help = useHelpControls()
   return (
     <>
       <KeyboardMode ops={OPS} />
       {list && <Directory />}
-      <button type="button" aria-label="Keyboard shortcuts" {...help.button} />
-      <ShortcutsDialog
-        open={help.fullOpen}
-        onOpenChange={help.onFullOpenChange}
-        commandKey="Cmd"
-      />
+      <KeyboardButtons commandKey="Cmd" />
     </>
   )
 }
@@ -129,6 +123,25 @@ describe("help in three steps", () => {
     expect(full()).toBeNull()
     act(() => setKeyboardMode(false))
     expect(full()).toBeNull()
+  })
+
+  test("the header's switch turns keyboard mode on and off, filled while on", () => {
+    render(<Shell />)
+    const mode = screen.getByRole("button", { name: "Keyboard mode" })
+    const shortcuts = screen.getByRole("button", { name: "Keyboard shortcuts" })
+    expect(mode.getAttribute("aria-pressed")).toBe("true")
+    expect(mode.className).toContain("bg-app-ink")
+    expect(shortcuts.getAttribute("aria-pressed")).toBe("false")
+    fireEvent.click(mode)
+    expect(mode.getAttribute("aria-pressed")).toBe("false")
+    expect(mode.className).not.toContain("bg-app-ink")
+    expect(pill()).toBeNull()
+    // Hidden on a phone, which has no keyboard to use them with.
+    expect(mode.className).toContain("max-md:hidden")
+    expect(shortcuts.className).toContain("max-md:hidden")
+    fireEvent.click(mode)
+    type("?")
+    expect(shortcuts.getAttribute("aria-pressed")).toBe("true")
   })
 
   test("a tab without a list skips the corner", () => {

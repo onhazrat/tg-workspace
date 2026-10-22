@@ -1,8 +1,6 @@
 import {
-  BookKey,
   Command as CommandIcon,
   HelpCircle,
-  Keyboard,
   Maximize2,
   Minimize2,
   Monitor,
@@ -20,8 +18,11 @@ import { DirectoryView } from "./components/DirectoryView"
 import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
 import {
+  HEADER_BUTTON_OUTLINED,
+  KeyboardButtons,
+} from "./components/keyboard/KeyboardButtons"
+import {
   KeyboardMode,
-  useHelpControls,
   type WorkspaceKeyOps,
 } from "./components/keyboard/KeyboardMode"
 import { PostFeed } from "./components/PostFeed"
@@ -39,7 +40,6 @@ import {
 import {
   generatingOverlay,
   RateLimitBanner,
-  ShortcutsDialog,
   StatusBanners,
   WorkspaceStats,
 } from "./components/workspace-shell/WorkspaceShellParts"
@@ -62,14 +62,9 @@ import { useScopedPostCounts } from "./hooks/usePostsView"
 import { useWorkspaceFullscreen } from "./hooks/useWorkspaceFullscreen"
 import { APP_VERSION } from "./lib/app-version"
 import { artifactDestination } from "./lib/history/open-artifact"
-import { setKeyboardMode } from "./lib/keyboard/mode"
 import type { ArtifactListItem, TabType } from "./types"
 
 const THEME_ICONS = { system: Monitor, light: Moon, dark: Sun }
-
-/** A header icon button, and one filled while what it switches is on. */
-const OUTLINED = "border-app-ink border-opacity-10 hover:border-opacity-40"
-const FILLED = "border-app-ink bg-app-ink text-app-bg"
 
 /** What focus mode changes in the shell's chrome. */
 const FULLSCREEN_CHROME = {
@@ -176,9 +171,6 @@ export default function App() {
     close: () => workspaceTabs.closeTab(workspaceTabs.active),
     reopen: workspaceTabs.reopenLastTab,
   }
-
-  // The switch, ? and the shortcuts button share one help state (ADR-034).
-  const help = useHelpControls()
 
   /**
    * Each tab starts at the top.
@@ -306,38 +298,7 @@ export default function App() {
                   then view. The first two are hidden on a phone, which has
                   no keyboard to use them with. */}
               <div className="flex items-center gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Keyboard mode"
-                      aria-pressed={help.keyboard}
-                      onClick={() => setKeyboardMode(!help.keyboard)}
-                      className={`p-1.5 border transition-all rounded-md max-md:hidden ${help.keyboard ? FILLED : OUTLINED}`}
-                    >
-                      <Keyboard size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Keyboard mode: {help.keyboard ? "on" : "off"} (\)</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Keyboard shortcuts"
-                      aria-pressed={help.listShown}
-                      {...help.button}
-                      className={`p-1.5 border transition-all rounded-md max-md:hidden ${help.listShown ? FILLED : OUTLINED}`}
-                    >
-                      <BookKey size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Keyboard shortcuts (?)</p>
-                  </TooltipContent>
-                </Tooltip>
+                <KeyboardButtons commandKey={commandKey} />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -346,7 +307,7 @@ export default function App() {
                       data-testid="command-palette-button"
                       aria-label="Command palette"
                       onClick={() => setCommandPaletteOpen(true)}
-                      className={`p-1.5 border transition-all rounded-md ${OUTLINED}`}
+                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
                     >
                       <CommandIcon size={14} />
                     </button>
@@ -380,7 +341,7 @@ export default function App() {
                       data-testid="fullscreen-button"
                       aria-label={fullscreenLabel}
                       onClick={toggleFullscreen}
-                      className={`p-1.5 border transition-all rounded-md ${OUTLINED}`}
+                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
                     >
                       {fullscreenIcon}
                     </button>
@@ -395,7 +356,7 @@ export default function App() {
                       type="button"
                       aria-label={themeTooltip}
                       onClick={toggleTheme}
-                      className={`p-1.5 border transition-all rounded-md ${OUTLINED}`}
+                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
                     >
                       {themeIcon}
                     </button>
@@ -411,12 +372,6 @@ export default function App() {
           {isRateLimited && <RateLimitBanner />}
 
           <KeyboardMode ops={keyOps} />
-
-          <ShortcutsDialog
-            open={help.fullOpen}
-            onOpenChange={help.onFullOpenChange}
-            commandKey={commandKey}
-          />
 
           <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
