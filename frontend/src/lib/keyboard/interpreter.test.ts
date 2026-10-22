@@ -201,6 +201,18 @@ const ROWS: [string, (Input | "click")[], Command[], KeyContext?][] = [
     ],
   ],
   [
+    "? opens help as typed too, where a layout puts it elsewhere",
+    [
+      // German: ? is Shift and the key a US layout calls Minus.
+      { key: "Shift", code: "ShiftLeft", shiftKey: true },
+      { key: "?", code: "Minus", shiftKey: true },
+      // A key sent with no Shift, as Playwright's press("?") does.
+      { key: "?", code: "Slash" },
+    ],
+    [{ type: "help" }, { type: "help" }],
+    { on: false, list: true },
+  ],
+  [
     "a synthetic key with no code is read as typed",
     [{ key: "j", code: "" }],
     [{ type: "move", by: 1 }],

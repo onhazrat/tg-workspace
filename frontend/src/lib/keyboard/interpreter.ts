@@ -146,7 +146,8 @@ export function interpret(
   // A modifier's own keydown (the Shift of gT or 23G) keeps what waits.
   if (key === null) return step(state, null, false)
   if (key === "\\") return step(IDLE, { type: "mode" })
-  if (key === "?") return step(IDLE, { type: "help" })
+  // ? is also read as typed: German and French layouts put it elsewhere.
+  if (key === "?" || input.key === "?") return step(IDLE, { type: "help" })
   if (!ctx.on) return step(IDLE, null, false)
   const waiting = state.g || state.count !== ""
   if (key === "Escape" && waiting) return step(IDLE, null, true)
