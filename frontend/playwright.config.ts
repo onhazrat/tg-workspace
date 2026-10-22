@@ -5,12 +5,20 @@ import dotenv from "dotenv"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, "../.env") })
+// A worktree's own dev port, from scripts/worktree-setup.sh. A shared port let
+// `reuseExistingServer` run one worktree's specs against another's server.
+// It wins over `.env`, whose PLAYWRIGHT_DEV_PORT is blank.
+dotenv.config({
+  path: path.resolve(__dirname, "../.env.worktree"),
+  override: true,
+})
 
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 const playwrightApiUrl = process.env.PLAYWRIGHT_API_URL
-const devPort = playwrightApiUrl ? "5180" : "5173"
+const devPort =
+  process.env.PLAYWRIGHT_DEV_PORT || (playwrightApiUrl ? "5180" : "5173")
 const baseURL = `http://localhost:${devPort}`
 
 export default defineConfig({
@@ -114,7 +122,7 @@ export default defineConfig({
   webServer: {
     command: playwrightApiUrl
       ? `PLAYWRIGHT_API_URL=${playwrightApiUrl} bun run dev -- --port ${devPort} --strictPort`
-      : "bun run dev",
+      : `bun run dev -- --port ${devPort} --strictPort`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },

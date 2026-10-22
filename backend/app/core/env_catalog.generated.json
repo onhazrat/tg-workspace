@@ -1116,6 +1116,13 @@
     },
     {
       "default": null,
+      "name": "PLAYWRIGHT_DEV_PORT",
+      "required": false,
+      "scope": "tooling",
+      "sensitive": false
+    },
+    {
+      "default": null,
       "name": "POSTGRES_DB_TEST",
       "required": false,
       "scope": "tooling",

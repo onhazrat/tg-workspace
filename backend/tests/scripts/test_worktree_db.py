@@ -67,3 +67,16 @@ def test_create_and_drop_are_idempotent_against_the_real_server() -> None:
     finally:
         if worktree_db.exists(name):
             worktree_db.drop(name)
+
+
+def test_each_worktree_gets_its_own_ports_and_keeps_them(tmp_path: Path) -> None:
+    """Two worktrees sharing Playwright's dev port test each other's code: one
+    reused the other's server on 5180 and passed against the wrong checkout."""
+    one = worktree_db.ports(tmp_path / "history-tab-redesign-spec-acb754")
+    other = worktree_db.ports(tmp_path / "channel-directory-priority-filtering")
+
+    assert one == worktree_db.ports(tmp_path / "history-tab-redesign-spec-acb754")
+    assert one != other
+    for dev, api in (one, other):
+        assert worktree_db.DEV_PORTS.start <= dev < worktree_db.DEV_PORTS.stop
+        assert api - dev == worktree_db.API_PORT_OFFSET

@@ -312,16 +312,10 @@ export function MoreMenu({
   const pending = isPendingArtifact(artifact)
   return (
     <DropdownMenu>
-      {/* A plain button: a tooltip's wrapper would swallow the trigger's props. */}
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="More actions"
-          title="More actions"
-          className={actionClass(false)}
-        >
+        <TgIconButton aria-label="More actions" tooltip="More actions">
           <MoreHorizontal size={14} />
-        </button>
+        </TgIconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="text-xs">
         {artifact.kind === "summary" && (

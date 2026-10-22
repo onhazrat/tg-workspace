@@ -228,7 +228,7 @@ def main() -> int:
     expected = render()
     errors = topic_errors(json.loads(expected)["constants"])
     for error in errors:
-        sys.stderr.write(error + "\n")
+        sys.stderr.write(f"error: {error}\n")
     if args.check:
         if not CATALOG.exists() or CATALOG.read_text() != expected:
             sys.stderr.write(

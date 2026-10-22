@@ -147,8 +147,6 @@ Where the build settled what the plan left open:
   `UIContext` state survived a tab switch too.
 - **The spread** is `LoggedSpreadView` with a `noun`, not a second view.
 - **The total says "1 artifact"** in the singular.
-- **The "⋯" trigger is a plain button**: `TgIconButton` with a tooltip wraps
-  its button, so a Radix trigger's handlers never reach it.
 - **KM-03's file references** still point at the old `HistoryView` and
   `ArtifactCardParts`; the list's adapter now belongs on `HistoryList`, and
   `*` and `n` press `CardActions`' Star and Note.
