@@ -320,8 +320,9 @@ window it is either Live, its ends fixed offsets from the current time that may
 point back or ahead, or Fixed, its ends exact instants; unlike one, either end
 may be left open, and it decides only which entries are shown. The Logs tab
 filters its entries by a Time bound on when each was logged, and the Cited by
-your channels Condition carries one on when the citing Posts were published. Its ends include
-the start and exclude the end.
+your channels Condition carries one on when the citing Posts were published. History
+bounds an Artifact's Written moment, or its Analysis window, which matches when
+the window overlaps the bound. Its ends include the start and exclude the end.
 _Avoid_: date range, time range, date filter
 
 **Shown Channels**:
@@ -434,6 +435,12 @@ run, Discovery report. The "deliberately asked for" clause is load-bearing — i
 is what excludes Logs, Sync jobs and Embeddings, which are also durable rows
 with timestamps but which nobody requested individually.
 _Avoid_: record, output, item, entity
+
+**Written**:
+When an Artifact's result was last written. Regenerating or retrying a
+Summary moves it; starring an Artifact or editing its note does not. It is the
+moment History sorts and filters by unless told otherwise.
+_Avoid_: created, made, updated
 
 **Summary**:
 An Artifact holding AI-generated prose about the Posts in its Scope.
@@ -554,7 +561,8 @@ The workspace tab where every Artifact is created. The one entry point.
 _Avoid_: create, new, studio, workbench
 
 **History**:
-The workspace tab listing every Artifact of every kind, newest first.
+The workspace tab listing every Artifact of every kind, most recently Written
+first unless sorted otherwise.
 _Avoid_: archive, library, past runs
 
 **Fixed tab**:
