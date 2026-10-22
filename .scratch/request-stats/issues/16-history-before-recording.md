@@ -2,6 +2,8 @@
 
 **What to build:** Ranges that reach before recording started show the ledger's own daily totals, so the tab's history doesn't start at launch. Spec: "The API" (History before recording).
 
+**Prototype:** variant A on [`prototype/request-stats` @ b793f374](https://github.com/onhazrat/tg-workspace/tree/b793f3743ee41f41a02ef43ac5c0427d0da36c4d), the working reference for this behaviour; its README says how to run it. Port the behaviour, not the code: the prototype's data layer is synthetic (spec, Further Notes).
+
 **Blocked by:** RQS-06
 
 **Status:** ready-for-agent
