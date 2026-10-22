@@ -160,6 +160,14 @@ describe("History's keyboard mode", () => {
     expect(document.querySelector("[data-sonner-toast]")).toBeNull()
   })
 
+  test("J, K, F and D do nothing in History, which ticks nothing", async () => {
+    render(tab())
+    type("j", "J", "K", "F", "D")
+    expect(ringed()).toEqual(["s1"])
+    await new Promise((r) => setTimeout(r, 50))
+    expect(document.querySelector("[data-sonner-toast]")).toBeNull()
+  })
+
   test("no key deletes", () => {
     render(tab())
     type("j")

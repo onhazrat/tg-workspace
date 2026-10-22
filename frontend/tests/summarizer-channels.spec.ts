@@ -506,6 +506,7 @@ test.describe("TG Workspace channels and posts", () => {
       "j / k",
       "gg / G",
       "- / +",
+      "J / K",
       "Esc",
       ...actions,
       "5j / 7k",
