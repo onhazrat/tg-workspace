@@ -53,9 +53,7 @@ export function ChannelTable({
     <button
       type="button"
       onClick={() => sortBy(key)}
-      className={
-        sort === key ? "font-semibold text-app-ink" : "hover:text-app-ink"
-      }
+      className={`uppercase ${sort === key ? "font-semibold text-app-ink" : "hover:text-app-ink"}`}
     >
       {label}
       {sort === key && (direction === "desc" ? " ↓" : " ↑")}
@@ -116,7 +114,7 @@ export function ChannelTable({
               className={`border-t border-app-ink/5 ${r.aggregate ? "bg-app-ink/[0.04]" : ""}`}
             >
               <td className={`${td} text-app-ink/40`}>{i + 1}</td>
-              <td className="px-3 py-1.5">
+              <td className="px-3 py-1.5 max-sm:px-1.5">
                 <span className="flex min-w-0 items-center gap-2">
                   <Swatch color={kindColor(r.mainKind)} />
                   <span

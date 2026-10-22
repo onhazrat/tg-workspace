@@ -3,8 +3,8 @@ import { fmt, type KindRow, type Outcome, pct } from "@/lib/requests/breakdown"
 import { kindColor, OutcomeBar, Swatch } from "./parts"
 
 export const th =
-  "px-3 py-2 text-left font-normal text-[11px] uppercase tracking-wider text-app-ink/50"
-export const td = "px-3 py-1.5 tabular-nums"
+  "px-3 py-2 text-left font-normal text-[11px] uppercase tracking-wider text-app-ink/50 max-sm:px-1.5"
+export const td = "px-3 py-1.5 tabular-nums max-sm:px-1.5"
 
 /**
  * By kind of work (RQS-03): a Show box per kind, its Requests and share, the
@@ -68,8 +68,8 @@ export function KindTable({
                   onChange={() => onToggleKind(r.kind.id)}
                 />
               </td>
-              <td className="px-3 py-1.5">
-                <span className="flex items-center gap-2">
+              <td className="px-3 py-1.5 max-sm:px-1.5">
+                <span className="flex flex-wrap items-center gap-x-2">
                   <Swatch color={kindColor(r.kind.id)} />
                   {r.kind.label}
                   {!r.kind.charged && (
