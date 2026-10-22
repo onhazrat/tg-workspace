@@ -181,16 +181,25 @@ describe("a Discovery report's keyboard mode", () => {
   })
 
   test("each report tab remembers its own Highlight across a tab switch", () => {
-    render(tab("r1"))
+    // From one report tab to another the view stays mounted; only the
+    // report changes.
+    const view = render(tab("r1"))
     type("j", "j")
     expect(highlighted()).toEqual(["b"])
-    cleanup()
-    render(tab("r2"))
+    view.rerender(tab("r2"))
     expect(highlighted()).toEqual([])
     type("j")
-    cleanup()
-    render(tab("r1"))
+    expect(highlighted()).toEqual(["a"])
+    view.rerender(tab("r1"))
     expect(highlighted()).toEqual(["b"])
+    view.rerender(tab("r2"))
+    expect(highlighted()).toEqual(["a"])
+    view.rerender(tab("r1"))
+    expect(highlighted()).toEqual(["b"])
+    // Through another kind of tab the view unmounts.
+    cleanup()
+    render(tab("r2"))
+    expect(highlighted()).toEqual(["a"])
   })
 
   test("x ticks a Candidate, and cannot tick a followed one", () => {

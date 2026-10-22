@@ -155,30 +155,39 @@ export function useKeyboardList(adapter: ListAdapter): {
   setHighlight: (id: string | null) => void
 } {
   const on = useKeyboardMode()
-  const [highlight, setHighlightState] = useState<string | null>(null)
+  // Held with the tab it is on: two report tabs share one mounted view, so a
+  // switch between them changes `instance` and the Highlight goes with it.
+  const memory = memoryOf(adapter)
+  const [held, setHeld] = useState<{ memory: string; id: string | null }>({
+    memory,
+    id: null,
+  })
+  const highlight = held.memory === memory ? held.id : null
   const ref = useRef({ adapter, highlight })
   ref.current = { adapter, highlight }
 
   const setHighlight = (id: string | null) => {
     ref.current.highlight = id
-    setHighlightState(id)
     const memory = memoryOf(ref.current.adapter)
+    setHeld({ memory, id })
     if (id) lastHighlight.set(memory, id)
     else lastHighlight.delete(memory)
   }
   const setRef = useRef(setHighlight)
   setRef.current = setHighlight
 
-  // The Highlight left on this list before a tab switch, once its item loads.
-  const restored = useRef(false)
-  const remembered = lastHighlight.get(memoryOf(adapter))
+  // The Highlight left on this tab before a tab switch, once its item loads.
+  const restored = useRef({ memory, done: false })
+  const remembered = lastHighlight.get(memory)
   const at = remembered ? adapter.items.indexOf(remembered) : -1
   useEffect(() => {
-    if (restored.current || highlight || !remembered || at < 0) return
-    restored.current = true
-    setHighlightState(remembered)
+    if (restored.current.memory !== memory)
+      restored.current = { memory, done: false }
+    if (restored.current.done || highlight || !remembered || at < 0) return
+    restored.current.done = true
+    setHeld({ memory, id: remembered })
     reveal(ref.current.adapter, at)
-  }, [remembered, at, highlight])
+  }, [memory, remembered, at, highlight])
 
   useEffect(() => {
     // J / K follow the last x: ticking, or unticking when it unticked.
