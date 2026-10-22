@@ -485,13 +485,20 @@ def _legs(
 def _union(legs: list[Any]) -> Any:
     # UNION ALL, never UNION: `scope` is a PostgreSQL `json` column and `json`
     # has no equality operator, so a de-duplicating UNION fails outright. It is
-    # also semantically right — two artifacts never dedupe.
+    # also semantically right, because two artifacts never dedupe.
     return union_all(*legs).subquery("artifact")
 
 
 def _window_edge(unioned: Any, edge: str) -> Any:
     """The frozen Scope's `start` or `end`; `NULL` for an Artifact with none."""
     return cast(unioned.c.scope.op("->>")(edge), BigInteger)
+
+
+def _moment_value(unioned: Any, moment: str) -> Any:
+    """The instant a sort or a spread reads: Written, or the window's start."""
+    return (
+        unioned.c.timestamp if moment == "written" else _window_edge(unioned, "start")
+    )
 
 
 def _bounded(statement: Any, unioned: Any, moment: str, bound: ResolvedWindow) -> Any:
@@ -563,7 +570,7 @@ def list_artifacts(
             for one, leg in zip(kinds, legs, strict=True)
         ]
     unioned = _union(legs)
-    key = unioned.c.timestamp if sort == "written" else _window_edge(unioned, "start")
+    key = _moment_value(unioned, sort)
     order = key.desc() if descending else key.asc()
     statement = (
         _bounded(sa_select(unioned), unioned, moment, bound)
@@ -656,9 +663,7 @@ def artifact_spread(
     unioned = _union(
         _legs(user_id, kinds, search=search, starred=starred, status=status)
     )
-    value = (
-        unioned.c.timestamp if moment == "written" else _window_edge(unioned, "start")
-    )
+    value = _moment_value(unioned, moment)
     total, lo, hi, median = session.execute(
         sa_select(
             func.count(value),

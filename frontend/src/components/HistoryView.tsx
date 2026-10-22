@@ -46,7 +46,7 @@ interface HistoryViewProps {
  *
  * One list over four aggregates, not a summary list with the others bolted on
  * beside it. The interleaving, the time filter, the sort and the counts are
- * decided server-side by `/data/artifacts` — see `useArtifactsQuery` for why
+ * decided server-side by `/data/artifacts`. See `useArtifactsQuery` for why
  * merging four capped lists in the browser gives a "load more" that cannot
  * mean anything. Every filter lives in the URL (`useHistoryParams`).
  */

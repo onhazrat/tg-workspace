@@ -150,6 +150,7 @@ export function ChannelsLine({
   return (
     <span
       data-testid="artifact-channels"
+      dir="auto"
       title={channels.join(", ")}
       className="flex min-w-0 items-center gap-1.5 text-sm font-semibold"
     >

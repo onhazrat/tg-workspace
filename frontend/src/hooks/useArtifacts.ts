@@ -49,7 +49,7 @@ function boundedQuery(p: HistoryParams) {
  * paged *together* server-side: the union is what decides the interleaving, and
  * fetching four capped lists to merge in the browser gives a "load more" that
  * cannot mean anything. Every sort ends on the id, which is what makes
- * `offset` paging safe here — without that tiebreak, equal keys let rows
+ * `offset` paging safe here. Without that tiebreak, equal keys let rows
  * repeat across pages.
  */
 export function useArtifactsQuery(p: HistoryParams) {

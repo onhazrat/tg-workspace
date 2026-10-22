@@ -771,7 +771,7 @@ export const dataApi = {
     }),
 
   /**
-   * The unified History list — every artifact kind, newest Written first
+   * The unified History list: every artifact kind, newest Written first
    * unless a sort says otherwise.
    *
    * Hand-written despite the models being closed, because this is the one call

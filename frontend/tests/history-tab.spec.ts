@@ -18,6 +18,8 @@ type Row = {
   kind: "summary" | "chat" | "tag" | "discovery"
   id: string
   timestamp: number
+  /** The Analysis window's start, in a different order from Written. */
+  windowStart: number
   status?: string
 }
 
@@ -26,21 +28,33 @@ const ROWS: Row[] = [
     kind: "summary",
     id: "htr-s1",
     timestamp: T0 + 3 * DAY,
+    windowStart: T0 - 10 * DAY,
     status: "complete",
   },
-  { kind: "summary", id: "htr-s2", timestamp: T0 + 2 * DAY, status: "pending" },
-  { kind: "chat", id: "htr-c1", timestamp: T0 + DAY },
-  { kind: "discovery", id: "htr-d1", timestamp: T0 },
+  {
+    kind: "summary",
+    id: "htr-s2",
+    timestamp: T0 + 2 * DAY,
+    windowStart: T0 - 2 * DAY,
+    status: "pending",
+  },
+  { kind: "chat", id: "htr-c1", timestamp: T0 + DAY, windowStart: T0 - DAY },
+  {
+    kind: "discovery",
+    id: "htr-d1",
+    timestamp: T0,
+    windowStart: T0 - 5 * DAY,
+  },
 ]
 
-const shaped = (r: Row) => ({
+const shaped = ({ windowStart, ...r }: Row) => ({
   ...r,
   title: `Artifact ${r.id}`,
   isStarred: false,
   scope: {
     channels: ["alpha"],
-    start: r.timestamp - DAY,
-    end: r.timestamp,
+    start: windowStart,
+    end: windowStart + DAY,
     durationMinutes: 1440,
   },
   ...(r.kind === "summary" && {
@@ -109,10 +123,10 @@ async function mockHistory(page: Page): Promise<void> {
       })
     }
     if (!url.pathname.endsWith("/artifacts")) return route.fallback()
+    const key = (r: Row) =>
+      q.get("sort") === "window" ? r.windowStart : r.timestamp
     const rows = kept(q).sort((a, b) =>
-      q.get("descending") === "false"
-        ? a.timestamp - b.timestamp
-        : b.timestamp - a.timestamp,
+      q.get("descending") === "false" ? key(a) - key(b) : key(b) - key(a),
     )
     return route.fulfill({
       json: Number(q.get("offset") ?? 0) === 0 ? rows.map(shaped) : [],
@@ -171,7 +185,9 @@ test("a bar of the time filter's spread bounds the list to it", async ({
   expect(await ids(page)).toEqual(["htr-c1"])
 })
 
-test("the sort reads newest first, then oldest first", async ({ page }) => {
+test("the sort reads both ways, on Written and on the window's start", async ({
+  page,
+}) => {
   await page.goto("/?tab=history")
   await expect(cards(page)).toHaveCount(4, { timeout: 20_000 })
   await expect(page.getByTestId("history-footer")).toContainText(
@@ -185,6 +201,25 @@ test("the sort reads newest first, then oldest first", async ({ page }) => {
   await expect
     .poll(() => ids(page))
     .toEqual(["htr-d1", "htr-c1", "htr-s2", "htr-s1"])
+  await expect(page.getByTestId("history-day").first()).toBeVisible()
+
+  // Window start: its own order, and no day headings to split it.
+  await page.getByTestId("history-sort").click()
+  await page.getByRole("radio", { name: "Window start" }).click()
+  await expect(page).toHaveURL(/historySort=window/)
+  await expect(page.getByTestId("history-footer")).toContainText(
+    "Sorted by Window start, oldest first",
+  )
+  await expect
+    .poll(() => ids(page))
+    .toEqual(["htr-s1", "htr-d1", "htr-s2", "htr-c1"])
+  await expect(page.getByTestId("history-day")).toHaveCount(0)
+
+  await page.keyboard.press("Escape")
+  await page.getByRole("button", { name: "Sort ascending" }).click()
+  await expect
+    .poll(() => ids(page))
+    .toEqual(["htr-c1", "htr-s2", "htr-d1", "htr-s1"])
 })
 
 test.describe("on a phone", () => {

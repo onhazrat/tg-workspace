@@ -512,9 +512,10 @@ def test_history_time_filter_and_sort_do_not_widen_the_scope(
         session, moment=moment, bound=bound, sort="window", user_id=user.id
     )
 
-    assert {row["id"] for row in rows} <= {
-        f"htr-{family.kind}-mine" for family in FAMILIES
-    }
+    # Exact, so an empty answer cannot pass. Only the report is seeded with a
+    # window, so a window bound keeps that one and Written keeps all four.
+    kinds = ARTIFACT_KINDS if moment == "written" else ("discovery",)
+    assert {row["id"] for row in rows} == {f"htr-{kind}-mine" for kind in kinds}
     assert {
         row["id"] for row in list_artifacts(session, sort="window", user_id=user.id)
     } == {f"htr-{family.kind}-mine" for family in FAMILIES}

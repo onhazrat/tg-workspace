@@ -181,6 +181,8 @@ PROBED: dict[tuple[str, str], str] = {
     ("PUT", f"{V1}/data/channels/{{channel_id}}"): "follow-scoped write",
     ("DELETE", f"{V1}/data/channels/{{channel_id}}"): "unfollow",
     ("GET", f"{V1}/data/artifacts"): "the unified History",
+    ("GET", f"{V1}/data/artifacts/counts"): "History's total and choice counts",
+    ("GET", f"{V1}/data/artifacts/spread"): "History's time filter spread",
     ("POST", f"{V1}/data/channels/bulk-follow"): (
         "a client-chosen settingGroupId (CTB-05), a write, so ungated"
     ),
@@ -1294,6 +1296,24 @@ def test_the_history_shows_only_your_own_artifacts(
 
     assert mine in ids
     assert theirs not in ids
+
+
+@pytest.mark.security
+def test_the_history_counts_and_spread_count_only_your_own_artifacts(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+) -> None:
+    """The bar's numbers come off the same four legs as the list, so a leg that
+    lost its scope would show up here as a count that includes the stranger."""
+    _seed(FAMILIES[0][1](f"hist-count-mine-{uuid.uuid4()}", alice[0].id))
+    _seed(FAMILIES[0][1](f"hist-count-theirs-{uuid.uuid4()}", bob[0].id))
+
+    counts = client.get(f"{DATA}/artifacts/counts", headers=alice[1]).json()
+    spread = client.get(f"{DATA}/artifacts/spread", headers=alice[1]).json()
+
+    assert counts["total"] == counts["kinds"]["summary"] == 1
+    assert spread["total"] == 1
 
 
 @pytest.mark.security
