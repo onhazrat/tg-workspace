@@ -5,6 +5,7 @@
 #   bash scripts/crap/run.sh --with-e2e [out.html]    # plus Playwright: crap-report/crap-scores-e2e.html
 #   bash scripts/crap/run.sh --reuse-e2e [out.html]   # plus the Playwright dump already on disk
 #   bash scripts/crap/run.sh --update-baseline        # unit only, then rewrite baseline.json
+#   bash scripts/crap/run.sh --frontend               # frontend ratchet only, about a minute
 #
 # A unit-only run ends with the CRAP ratchet CI runs (ratchet.py check), so a red
 # CI check reproduces here. --update-baseline instead rewrites
@@ -18,6 +19,11 @@
 # backend) and adds the length of an e2e run. --reuse-e2e merges whatever that
 # directory holds from an earlier run, so re-scoring skips Playwright.
 #
+# --frontend is the loop for a frontend change: bun's coverage and the
+# frontend half of the ratchet, as CI's test-frontend-unit job runs them, with
+# no pytest, no database and no HTML report. It combines with --update-baseline,
+# which then rewrites only the frontend entries.
+#
 # Needs the dev Postgres from .env running (docker compose up -d db) and `uv sync`
 # plus `bun install` done. Takes ~8 minutes, nearly all of it the pytest suite.
 # The suite runs against its own throwaway database, so it never truncates
@@ -30,17 +36,23 @@ HERE="$ROOT/scripts/crap"
 E2E=""
 OUT=""
 RATCHET=check
+FRONTEND=""
 for arg in "$@"; do
   case "$arg" in
     --with-e2e) E2E=run ;;
     --reuse-e2e) E2E=reuse ;;
     --update-baseline) RATCHET=update ;;
+    --frontend) FRONTEND=1 ;;
     -*) echo "unknown flag: $arg" >&2; exit 2 ;;
     *) OUT="$arg" ;;
   esac
 done
 if [ -n "$E2E" ] && [ "$RATCHET" = update ]; then
   echo "the baseline is unit-only; --update-baseline cannot take Playwright coverage" >&2
+  exit 2
+fi
+if [ -n "$E2E" ] && [ -n "$FRONTEND" ]; then
+  echo "--frontend writes no report, so it cannot take Playwright coverage" >&2
   exit 2
 fi
 OUT="${OUT:-$ROOT/crap-report/crap-scores${E2E:+-e2e}.html}"
@@ -78,34 +90,38 @@ PY
 }
 
 cleanup() {
-  testdb drop >/dev/null 2>&1 || echo "warning: could not drop database $DB" >&2
+  if [ -z "$FRONTEND" ]; then
+    testdb drop >/dev/null 2>&1 || echo "warning: could not drop database $DB" >&2
+  fi
   rm -rf "$WORK"
 }
 trap cleanup EXIT
 
-echo "==> backend: complexity (radon)"
-(cd "$ROOT/backend" && uv run --no-project --with radon==6.0.1 \
-  radon cc -j -e "app/alembic/*" app >"$WORK/radon.json")
+if [ -z "$FRONTEND" ]; then
+  echo "==> backend: complexity (radon)"
+  (cd "$ROOT/backend" && uv run --no-project --with radon==6.0.1 \
+    radon cc -j -e "app/alembic/*" app >"$WORK/radon.json")
 
-echo "==> backend: coverage over the pytest suite in $DB (~7 min)"
-testdb create
-(cd "$ROOT/backend" && POSTGRES_DB="$DB" uv run alembic upgrade head >"$WORK/alembic.log" 2>&1) \
-  || { cat "$WORK/alembic.log" >&2; exit 1; }
-# CI's .env is a copy of .env.example, which names every setting, and conftest
-# loads it into os.environ. Layer .env.example under the local .env so the same
-# names are set here too: code reached only for a name missing from the
-# environment then goes as uncovered as it does in CI (`_dotenv_names` passed
-# this run at 98% and failed CI's ratchet at 6%). The local .env still wins.
-ENV_FILES=(--env-file "$ROOT/.env.example")
-[ -f "$ROOT/.env" ] && ENV_FILES+=(--env-file "$ROOT/.env")
-# A failing test still leaves usable coverage, so report it and carry on.
-(cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" TEST_POSTGRES_DB="$DB" \
-  uv run "${ENV_FILES[@]}" coverage run -m pytest tests/ -q -p no:cacheprovider --color=no >"$WORK/pytest.log" 2>&1) \
-  || { echo "warning: pytest reported failures:" >&2; grep -E "^(FAILED|ERROR) " "$WORK/pytest.log" >&2 || true; }
-BACKEND_TESTS=$(grep -E "^[0-9]+ (passed|failed)" "$WORK/pytest.log" | tail -1 | sed -E 's/, [0-9]+ warnings?//; s/ in [0-9.]+s.*//')
-(cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" uv run coverage json -q -o "$WORK/coverage.json")
-BACKEND_LINE_COV=$(python3 -c "import json,sys; print(f\"{json.load(open(sys.argv[1]))['totals']['percent_covered']:.0f}%\")" "$WORK/coverage.json")
-python3 "$HERE/backend_crap.py" "$WORK/radon.json" "$WORK/coverage.json" "$ROWS/backend.json"
+  echo "==> backend: coverage over the pytest suite in $DB (~7 min)"
+  testdb create
+  (cd "$ROOT/backend" && POSTGRES_DB="$DB" uv run alembic upgrade head >"$WORK/alembic.log" 2>&1) \
+    || { cat "$WORK/alembic.log" >&2; exit 1; }
+  # CI's .env is a copy of .env.example, which names every setting, and conftest
+  # loads it into os.environ. Layer .env.example under the local .env so the same
+  # names are set here too: code reached only for a name missing from the
+  # environment then goes as uncovered as it does in CI (`_dotenv_names` passed
+  # this run at 98% and failed CI's ratchet at 6%). The local .env still wins.
+  ENV_FILES=(--env-file "$ROOT/.env.example")
+  [ -f "$ROOT/.env" ] && ENV_FILES+=(--env-file "$ROOT/.env")
+  # A failing test still leaves usable coverage, so report it and carry on.
+  (cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" TEST_POSTGRES_DB="$DB" \
+    uv run "${ENV_FILES[@]}" coverage run -m pytest tests/ -q -p no:cacheprovider --color=no >"$WORK/pytest.log" 2>&1) \
+    || { echo "warning: pytest reported failures:" >&2; grep -E "^(FAILED|ERROR) " "$WORK/pytest.log" >&2 || true; }
+  BACKEND_TESTS=$(grep -E "^[0-9]+ (passed|failed)" "$WORK/pytest.log" | tail -1 | sed -E 's/, [0-9]+ warnings?//; s/ in [0-9.]+s.*//')
+  (cd "$ROOT/backend" && COVERAGE_FILE="$WORK/.coverage" uv run coverage json -q -o "$WORK/coverage.json")
+  BACKEND_LINE_COV=$(python3 -c "import json,sys; print(f\"{json.load(open(sys.argv[1]))['totals']['percent_covered']:.0f}%\")" "$WORK/coverage.json")
+  python3 "$HERE/backend_crap.py" "$WORK/radon.json" "$WORK/coverage.json" "$ROWS/backend.json"
+fi
 
 echo "==> frontend: coverage over bun test src"
 (cd "$ROOT/frontend" && bun test src --coverage --coverage-reporter=lcov \
@@ -128,6 +144,12 @@ if [ -n "$E2E" ]; then
   E2E_TESTS="${#E2E_FILES[@]} Playwright tests"
 fi
 bun "$HERE/frontend_crap.ts" "$ROOT/frontend" "$WORK/fecov/lcov.info" "$ROWS/frontend.json" ${E2E_FILES[@]+"${E2E_FILES[@]}"}
+
+if [ -n "$FRONTEND" ]; then
+  echo "==> frontend tests: $FRONTEND_TESTS"
+  python3 "$HERE/ratchet.py" "$RATCHET" "$ROWS/frontend.json"
+  exit
+fi
 
 echo "==> backend tests: $BACKEND_TESTS ($BACKEND_LINE_COV of lines); frontend tests: $FRONTEND_TESTS${E2E_TESTS:+; merged with $E2E_TESTS}"
 python3 "$HERE/build_report.py" "$ROWS/backend.json" "$ROWS/frontend.json" "$OUT" \
