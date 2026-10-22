@@ -261,7 +261,7 @@ class LogBoundQuery(BaseModel):
     open; no mode is Any time."""
 
     mode: TimeMode | None = Field(
-        None, description="The Logged bound's mode; none is Any time"
+        None, description="The Time bound's mode; none is Any time"
     )
     start: int | None = Field(
         None, description="Included. Epoch ms when Fixed, signed ms from now when Live"

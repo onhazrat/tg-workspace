@@ -5,20 +5,25 @@ four families and belongs to none of them. `/data/tag-runs` living inside
 `routes/data/summaries.py` is what that looks like when it goes the other way.
 """
 
-from typing import Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import TypeAdapter
 
 from app.api.deps import CurrentUser, SessionDep
-from app.schemas.artifacts import ArtifactListItemResponse
-from app.services.artifacts import (
-    DEFAULT_ARTIFACT_PAGE_SIZE,
-    MAX_ARTIFACT_PAGE_SIZE,
+from app.schemas.artifacts import (
+    ArtifactCountsQuery,
+    ArtifactCountsResponse,
+    ArtifactListItemResponse,
+    ArtifactPageQuery,
+    ArtifactSpreadQuery,
+    ArtifactSpreadResponse,
 )
+from app.services.artifacts import artifact_spread, count_artifacts
 from app.services.artifacts import (
     list_artifacts as list_artifacts_impl,
 )
+from app.services.logs import resolve_log_bound
 
 router = APIRouter()
 
@@ -35,16 +40,9 @@ _ARTIFACT_ADAPTER: TypeAdapter[ArtifactListItemResponse] = TypeAdapter(
 def list_artifacts(
     session: SessionDep,
     current_user: CurrentUser,
-    kind: Literal["summary", "chat", "tag", "discovery"] | None = Query(default=None),
-    search: str | None = Query(default=None),
-    starred: bool = Query(default=False),
-    status: Literal["failed", "pending"] | None = Query(default=None),
-    limit: int = Query(
-        default=DEFAULT_ARTIFACT_PAGE_SIZE, ge=1, le=MAX_ARTIFACT_PAGE_SIZE
-    ),
-    offset: int = Query(default=0, ge=0),
+    query: Annotated[ArtifactPageQuery, Query()],
 ) -> list[ArtifactListItemResponse]:
-    """One newest-first page of every saved artifact, whatever its kind.
+    """One page of every saved artifact, whatever its kind, newest Written first.
 
     A `UNION ALL` over four tables projecting **named columns only**. It must not
     open `tg_summary_payloads` or `tg_chat_session_payloads`, and must not select
@@ -53,17 +51,78 @@ def list_artifacts(
 
     `search` deliberately does not reach summary prompt bodies; that would mean
     opening a payload table. `/data/summaries?search=` still does.
+
+    `mode`, `start` and `end` bound `moment`: when an artifact was Written,
+    `[start, end)`, or its Analysis window, which matches when it overlaps the
+    bound. `sort` is Written or the window's start; a missing window sorts last
+    either way.
     """
     return [
         _ARTIFACT_ADAPTER.validate_python(row)
         for row in list_artifacts_impl(
             session,
-            kind=kind,
-            search=search,
-            starred=starred,
-            status=status,
-            limit=limit,
-            offset=offset,
+            kind=query.kind,
+            search=query.search,
+            starred=query.starred,
+            status=query.status,
+            moment=query.moment,
+            bound=resolve_log_bound(query.bound()),
+            sort=query.sort,
+            descending=query.descending,
+            limit=query.limit,
+            offset=query.offset,
             user_id=current_user.id,
         )
     ]
+
+
+# Declared after the list, whose path has no parameter to take "counts".
+@router.get("/artifacts/counts")
+def count_artifacts_route(
+    session: SessionDep,
+    current_user: CurrentUser,
+    query: Annotated[ArtifactCountsQuery, Query()],
+) -> ArtifactCountsResponse:
+    """The list's total, and how many each Kind and Status choice would show.
+
+    Each Kind is counted under every filter but Kind, each Status under every
+    filter but Status, and the total under all of them.
+    """
+    return ArtifactCountsResponse.model_validate(
+        count_artifacts(
+            session,
+            kind=query.kind,
+            search=query.search,
+            starred=query.starred,
+            status=query.status,
+            moment=query.moment,
+            bound=resolve_log_bound(query.bound()),
+            user_id=current_user.id,
+        )
+    )
+
+
+@router.get("/artifacts/spread")
+def get_artifact_spread_route(
+    session: SessionDep,
+    current_user: CurrentUser,
+    query: Annotated[ArtifactSpreadQuery, Query()],
+) -> ArtifactSpreadResponse:
+    """When artifacts were Written, or their windows started: 32 bars over epoch ms.
+
+    Under every filter but the Time bound, so the editor shows what lies around
+    it. Under `window`, an artifact with no window is left out. A zoom (`lo`,
+    `hi`) bins only that range; `total`, `min`, `max` and `median` stay the
+    whole spread's.
+    """
+    spread = artifact_spread(
+        session,
+        kind=query.kind,
+        search=query.search,
+        starred=query.starred,
+        status=query.status,
+        moment=query.moment,
+        zoom=query.zoom,
+        user_id=current_user.id,
+    )
+    return ArtifactSpreadResponse.model_validate(spread, from_attributes=True)

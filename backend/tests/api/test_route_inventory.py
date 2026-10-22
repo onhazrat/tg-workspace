@@ -174,11 +174,14 @@ def test_the_split_did_not_change_the_route_count() -> None:
     and back to **114** with SET-04 deleting `GET /configuration`, whose
     inventory the Settings page's Configuration rows replaced; and **115**
     with TB-05's `GET /logs/{log_type}/spread`, when a log's entries were
-    logged, for the Logged editor's spread.
+    logged, for the Logged editor's spread; and **117** with the History
+    redesign's `GET /artifacts/counts` and `GET /artifacts/spread`, the bar's
+    Kind and Status counts and the time filter's spread, siblings of the list
+    rather than more of its answer because the list stays a bare array.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 115, (
-        f"expected 115 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 117, (
+        f"expected 117 /data endpoints, found {len(data_routes)}"
     )

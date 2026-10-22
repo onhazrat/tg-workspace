@@ -49,6 +49,9 @@ from sqlalchemy import select as sa_select
 from sqlmodel import Session, SQLModel, col
 
 from app.models_tg import ChatSession, DiscoverReport, Summary, SummaryAttempt, TagRun
+from app.services.analysis_window import ResolvedWindow
+from app.services.logs import ANY_TIME, LogSpread
+from app.services.spread_bars import Bin, spread_range
 from app.services.tenancy import scoped_select
 
 DEFAULT_ARTIFACT_PAGE_SIZE = 100
@@ -444,6 +447,73 @@ _MODELS = {
 }
 
 
+def _kinds(kind: str | None, status: str | None) -> tuple[str, ...]:
+    """The legs to build. A kind with no such state is not in the plan at all."""
+    kinds: tuple[str, ...] = (kind,) if kind else ARTIFACT_KINDS
+    if status:
+        kinds = tuple(one for one in kinds if one in _STATUS_KINDS[status])
+    return kinds
+
+
+def _legs(
+    user_id: uuid.UUID,
+    kinds: tuple[str, ...],
+    *,
+    search: str | None,
+    starred: bool,
+    status: str | None,
+) -> list[Any]:
+    """One leg per kind under the shared filters, unordered and unpaged.
+
+    The list, the counts and the spread all start here, so none of them
+    re-implements a leg or a filter.
+    """
+    term = (search or "").strip()
+    legs = []
+    for one in kinds:
+        leg = _LEGS[one](user_id)
+        if term:
+            leg = leg.where(_search(one, term))
+        if starred:
+            leg = leg.where(_starred(_MODELS[one]))
+        if status:
+            leg = leg.where(_STATUS_COLUMNS[one] == status)
+        legs.append(leg)
+    return legs
+
+
+def _union(legs: list[Any]) -> Any:
+    # UNION ALL, never UNION: `scope` is a PostgreSQL `json` column and `json`
+    # has no equality operator, so a de-duplicating UNION fails outright. It is
+    # also semantically right — two artifacts never dedupe.
+    return union_all(*legs).subquery("artifact")
+
+
+def _window_edge(unioned: Any, edge: str) -> Any:
+    """The frozen Scope's `start` or `end`; `NULL` for an Artifact with none."""
+    return cast(unioned.c.scope.op("->>")(edge), BigInteger)
+
+
+def _bounded(statement: Any, unioned: Any, moment: str, bound: ResolvedWindow) -> Any:
+    """The time filter: Written inside `[start, end)`, or a window overlapping it.
+
+    An overlap is `window.end > start AND window.start < end`, so a window that
+    began before the bound and ends inside it is kept. A `NULL` window compares
+    as unknown, so an Artifact without one never matches a window filter.
+    """
+    if moment == "written":
+        if bound.start is not None:
+            statement = statement.where(unioned.c.timestamp >= bound.start)
+        if bound.end is not None:
+            statement = statement.where(unioned.c.timestamp < bound.end)
+        return statement
+    if bound.start is not None:
+        statement = statement.where(_window_edge(unioned, "end") > bound.start)
+    if bound.end is not None:
+        statement = statement.where(_window_edge(unioned, "start") < bound.end)
+    return statement
+
+
 def list_artifacts(
     session: Session,
     *,
@@ -451,11 +521,15 @@ def list_artifacts(
     search: str | None = None,
     starred: bool = False,
     status: str | None = None,
+    moment: str = "written",
+    bound: ResolvedWindow = ANY_TIME,
+    sort: str = "written",
+    descending: bool = True,
     limit: int = DEFAULT_ARTIFACT_PAGE_SIZE,
     offset: int = 0,
     user_id: uuid.UUID,
 ) -> list[dict[str, Any]]:
-    """One newest-first page of every saved artifact.
+    """One page of every saved artifact, newest Written first by default.
 
     `kind` filters by **not building the leg**, rather than by a `WHERE kind =`
     on the outside: `?kind=chat` must not put `tg_tag_runs` in the plan at all.
@@ -466,43 +540,148 @@ def list_artifacts(
     starred rows in the loaded pages the list renders empty, the infinite-scroll
     sentinel stays in view, and each fetch immediately triggers the next, so the
     browser walks the entire history back to back while showing "no matches".
-    """
-    kinds: tuple[str, ...] = (kind,) if kind else ARTIFACT_KINDS
-    if status:
-        # Not building a leg, as for `kind`: a kind with no such state is not
-        # in the plan at all.
-        kinds = tuple(one for one in kinds if one in _STATUS_KINDS[status])
-        if not kinds:
-            return []
-    term = (search or "").strip()
 
-    legs = []
-    for one in kinds:
-        leg = _LEGS[one](user_id)
-        if term:
-            leg = leg.where(_search(one, term))
-        if starred:
-            leg = leg.where(_starred(_MODELS[one]))
-        if status:
-            leg = leg.where(_STATUS_COLUMNS[one] == status)
-        timestamp_col, id_col = _SORT[one]
+    `sort` is the Written moment or the window's start, and a missing window
+    sorts last in either direction. Every order ends on `id`, because offset
+    paging repeats or drops rows without a total order.
+    """
+    kinds = _kinds(kind, status)
+    if not kinds:
+        return []
+    legs = _legs(user_id, kinds, search=search, starred=starred, status=status)
+    if sort == "written" and bound.start is None and bound.end is None:
         # Each leg can contribute at most `offset + limit` rows to the final
         # page, so bounding it here is exact rather than approximate. With the
         # (timestamp DESC, id) indexes this turns four sorts into four index
-        # scans feeding a MergeAppend.
-        legs.append(leg.order_by(timestamp_col.desc(), id_col).limit(offset + limit))
-
-    # UNION ALL, never UNION: `scope` is a PostgreSQL `json` column and `json`
-    # has no equality operator, so a de-duplicating UNION fails outright. It is
-    # also semantically right — two artifacts never dedupe.
-    unioned = union_all(*legs).subquery("artifact")
+        # scans feeding a MergeAppend. A bound or the window sort filters or
+        # orders on the outside, where a per-leg limit would cut rows short.
+        legs = [
+            leg.order_by(
+                _SORT[one][0].desc() if descending else _SORT[one][0].asc(),
+                _SORT[one][1],
+            ).limit(offset + limit)
+            for one, leg in zip(kinds, legs, strict=True)
+        ]
+    unioned = _union(legs)
+    key = unioned.c.timestamp if sort == "written" else _window_edge(unioned, "start")
+    order = key.desc() if descending else key.asc()
     statement = (
-        sa_select(unioned)
-        .order_by(unioned.c.timestamp.desc(), unioned.c.id)
+        _bounded(sa_select(unioned), unioned, moment, bound)
+        .order_by(order.nulls_last(), unioned.c.id)
         .offset(offset)
         .limit(limit)
     )
     return [_row_to_camel(row) for row in session.execute(statement).mappings().all()]
+
+
+def _has_status(kind: str, status: str | None, wanted: str) -> bool:
+    """Whether a row is what the `wanted` status filter would keep."""
+    return kind in _STATUS_KINDS[wanted] and status == wanted
+
+
+def count_artifacts(
+    session: Session,
+    *,
+    kind: str | None = None,
+    search: str | None = None,
+    starred: bool = False,
+    status: str | None = None,
+    moment: str = "written",
+    bound: ResolvedWindow = ANY_TIME,
+    user_id: uuid.UUID,
+) -> dict[str, Any]:
+    """The footer's total, and each Kind and Status choice as a facet.
+
+    A Kind is counted under every filter but Kind, a Status under every filter
+    but Status, and the total under all of them, so each count says what
+    picking it would show. One statement over the four legs under search,
+    starred and the time filter, grouped by kind and status; the facets are
+    summed here from the groups.
+    """
+    legs = _legs(user_id, ARTIFACT_KINDS, search=search, starred=starred, status=None)
+    unioned = _union(legs)
+    groups = session.execute(
+        _bounded(
+            sa_select(unioned.c.kind, unioned.c.status, func.count()),
+            unioned,
+            moment,
+            bound,
+        ).group_by(unioned.c.kind, unioned.c.status)
+    ).all()
+
+    kinds = dict.fromkeys(ARTIFACT_KINDS, 0)
+    statuses = dict.fromkeys(_STATUS_KINDS, 0)
+    total = statuses_all = 0
+    for one, state, n in groups:
+        kind_ok = kind is None or one == kind
+        status_ok = status is None or _has_status(one, state, status)
+        if status_ok:
+            kinds[one] += n
+        if kind_ok:
+            statuses_all += n
+            for wanted in statuses:
+                statuses[wanted] += n if _has_status(one, state, wanted) else 0
+        if kind_ok and status_ok:
+            total += n
+    return {
+        "total": total,
+        "kinds": kinds,
+        "kindsAll": sum(kinds.values()),
+        "statuses": statuses,
+        "statusesAll": statuses_all,
+    }
+
+
+def artifact_spread(
+    session: Session,
+    *,
+    kind: str | None = None,
+    search: str | None = None,
+    starred: bool = False,
+    status: str | None = None,
+    moment: str = "written",
+    zoom: tuple[float, float] | None = None,
+    user_id: uuid.UUID,
+) -> LogSpread:
+    """When Artifacts were Written, or their windows started, as the Logs spread.
+
+    Under every History filter but the time filter itself, so the popover shows
+    what lies around the bound. An Artifact with no window is left out under
+    `window`. A `zoom` bins only its range; the total, min, max and median stay
+    the whole spread's.
+    """
+    kinds = _kinds(kind, status)
+    if not kinds:
+        return LogSpread(total=0, min=None, max=None, median=None, bins=[])
+    unioned = _union(
+        _legs(user_id, kinds, search=search, starred=starred, status=status)
+    )
+    value = (
+        unioned.c.timestamp if moment == "written" else _window_edge(unioned, "start")
+    )
+    total, lo, hi, median = session.execute(
+        sa_select(
+            func.count(value),
+            func.min(value),
+            func.max(value),
+            func.percentile_cont(0.5).within_group(value),
+        )
+    ).one()
+    bins: list[Bin] = []
+    covered = spread_range(lo, hi, zoom)
+    if covered is not None:
+        bar = covered.bar_of(value)
+        counts = session.execute(
+            sa_select(bar, func.count()).where(*covered.holds(value)).group_by(bar)
+        ).all()
+        bins = covered.bars({int(i): int(n) for i, n in counts})
+    return LogSpread(
+        total=int(total),
+        min=None if lo is None else int(lo),
+        max=None if hi is None else int(hi),
+        median=None if median is None else float(median),
+        bins=bins,
+    )
 
 
 __all__ = [
@@ -510,5 +689,7 @@ __all__ = [
     "ARTIFACT_KINDS",
     "DEFAULT_ARTIFACT_PAGE_SIZE",
     "MAX_ARTIFACT_PAGE_SIZE",
+    "artifact_spread",
+    "count_artifacts",
     "list_artifacts",
 ]
