@@ -35,10 +35,6 @@ interface UIContextType {
    * its own. A chat depends on its scope, not on a summary.
    */
   currentChatSessionId: string | null
-  historySearchQuery: string
-  setHistorySearchQuery: React.Dispatch<React.SetStateAction<string>>
-  starredOnly: boolean
-  setStarredOnly: React.Dispatch<React.SetStateAction<boolean>>
   includeChannelBioInPrompt: boolean
   setIncludeChannelBioInPrompt: React.Dispatch<React.SetStateAction<boolean>>
   includeChannelTagsInPrompt: boolean
@@ -62,8 +58,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
    */
   const { summaryId: currentSummaryId } = useSummaryParam()
   const { chatSessionId: currentChatSessionId } = useChatSessionParam()
-  const [historySearchQuery, setHistorySearchQuery] = useState("")
-  const [starredOnly, setStarredOnly] = useState(false)
   const [includeChannelBioInPrompt, setIncludeChannelBioInPrompt] =
     useState<boolean>(() => {
       if (typeof window === "undefined") return false
@@ -101,10 +95,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setSummarizing,
         currentSummaryId,
         currentChatSessionId,
-        historySearchQuery,
-        setHistorySearchQuery,
-        starredOnly,
-        setStarredOnly,
         includeChannelBioInPrompt,
         setIncludeChannelBioInPrompt,
         includeChannelTagsInPrompt,

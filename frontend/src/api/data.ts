@@ -771,7 +771,8 @@ export const dataApi = {
     }),
 
   /**
-   * The unified History list — every artifact kind, newest first.
+   * The unified History list: every artifact kind, newest Written first
+   * unless a sort says otherwise.
    *
    * Hand-written despite the models being closed, because this is the one call
    * whose paging History drives directly and the generated wrapper adds nothing
@@ -783,6 +784,13 @@ export const dataApi = {
     starred?: boolean
     /** Only Failed or only Pending artifacts (SFR-01). */
     status?: ArtifactStatusFilter
+    /** What the Time bound bounds: Written, or the Analysis window. */
+    moment?: "written" | "window"
+    mode?: "live" | "fixed"
+    start?: number
+    end?: number
+    sort?: "written" | "window"
+    descending?: boolean
     limit?: number
     offset?: number
   }) => {
@@ -791,6 +799,13 @@ export const dataApi = {
     if (params?.search) qs.set("search", params.search)
     if (params?.starred) qs.set("starred", "true")
     if (params?.status) qs.set("status", params.status)
+    if (params?.moment) qs.set("moment", params.moment)
+    if (params?.mode) qs.set("mode", params.mode)
+    if (params?.start != null) qs.set("start", String(params.start))
+    if (params?.end != null) qs.set("end", String(params.end))
+    if (params?.sort) qs.set("sort", params.sort)
+    if (params?.descending != null)
+      qs.set("descending", String(params.descending))
     if (params?.limit != null) qs.set("limit", String(params.limit))
     if (params?.offset != null) qs.set("offset", String(params.offset))
     const q = qs.toString()

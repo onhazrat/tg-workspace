@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -6,17 +7,40 @@ import {
 import { useCallback } from "react"
 
 import { api } from "@/api"
+import { dataCountArtifactsRoute, dataGetArtifactSpreadRoute } from "@/client"
+import type { Range } from "@/components/SpreadZoom"
+import type { HistoryParams } from "@/lib/history/history-params"
 import { findTabArtifacts } from "@/lib/workspace-tabs"
-import type {
-  ArtifactKind,
-  ArtifactListItem,
-  ArtifactStatusFilter,
-} from "@/types"
+import type { ArtifactListItem } from "@/types"
 
 import { queryKeys, SUMMARIZER_STALE_TIME } from "./queryKeys"
 
 /** One server page. Small, because History renders a card per row. */
 export const ARTIFACT_PAGE_SIZE = 40
+
+/** The filters the list, the counts and the spread all send. */
+function filterQuery(p: HistoryParams) {
+  const search = p.search.trim()
+  return {
+    ...(p.kind && { kind: p.kind }),
+    ...(search && { search }),
+    ...(p.starred && { starred: true }),
+    ...(p.status && { status: p.status }),
+    ...(p.moment === "window" && { moment: p.moment }),
+  }
+}
+
+/** The filters and the time filter's bound: the list's and the counts'. */
+function boundedQuery(p: HistoryParams) {
+  const { mode, start, end } = p.bound
+  const bounded = start !== undefined || end !== undefined
+  return {
+    ...filterQuery(p),
+    ...(bounded && { mode }),
+    ...(start !== undefined && { start }),
+    ...(end !== undefined && { end }),
+  }
+}
 
 /**
  * The unified History list.
@@ -24,26 +48,22 @@ export const ARTIFACT_PAGE_SIZE = 40
  * `useInfiniteQuery` rather than a plain query, because the four kinds are
  * paged *together* server-side: the union is what decides the interleaving, and
  * fetching four capped lists to merge in the browser gives a "load more" that
- * cannot mean anything. The stable `(timestamp DESC, id)` ordering is what
- * makes `offset` paging safe here — without the id tiebreak, equal timestamps
- * let rows repeat across pages.
+ * cannot mean anything. Every sort ends on the id, which is what makes
+ * `offset` paging safe here. Without that tiebreak, equal keys let rows
+ * repeat across pages.
  */
-export function useArtifactsQuery(
-  kind: ArtifactKind | null,
-  search: string,
-  starred = false,
-  status: ArtifactStatusFilter | null = null,
-) {
-  const trimmed = search.trim()
+export function useArtifactsQuery(p: HistoryParams) {
+  const query = {
+    ...boundedQuery(p),
+    ...(p.sort === "window" && { sort: p.sort }),
+    ...(!p.descending && { descending: false }),
+  }
   return useInfiniteQuery({
-    queryKey: queryKeys.artifacts(kind, trimmed, starred, status),
+    queryKey: queryKeys.artifacts("list", query),
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       api.listArtifacts({
-        kind: kind ?? undefined,
-        search: trimmed || undefined,
-        starred: starred || undefined,
-        status: status ?? undefined,
+        ...query,
         limit: ARTIFACT_PAGE_SIZE,
         offset: pageParam as number,
       }),
@@ -57,21 +77,45 @@ export function useArtifactsQuery(
 }
 
 /** Flattened rows, for a component that only wants the list. */
-export function useArtifacts(
-  kind: ArtifactKind | null,
-  search: string,
-  starred = false,
-  status: ArtifactStatusFilter | null = null,
-): { rows: ArtifactListItem[]; query: ReturnType<typeof useArtifactsQuery> } {
-  const query = useArtifactsQuery(kind, search, starred, status)
+export function useArtifacts(p: HistoryParams): {
+  rows: ArtifactListItem[]
+  query: ReturnType<typeof useArtifactsQuery>
+} {
+  const query = useArtifactsQuery(p)
   return { rows: query.data?.pages.flat() ?? [], query }
 }
 
+/** The footer's total and each Kind and Status choice's count. */
+export function useArtifactCounts(p: HistoryParams) {
+  const query = boundedQuery(p)
+  return useQuery({
+    queryKey: queryKeys.artifacts("counts", query),
+    queryFn: () => dataCountArtifactsRoute({ query }),
+    placeholderData: keepPreviousData,
+    staleTime: SUMMARIZER_STALE_TIME,
+  })
+}
+
+/** The time filter's spread: every filter but the bound, zoomed by `range`. */
+export function useArtifactSpread(p: HistoryParams, range: Range | null) {
+  const query = {
+    ...filterQuery(p),
+    ...(range && { lo: range[0], hi: range[1] }),
+  }
+  return useQuery({
+    queryKey: queryKeys.artifacts("spread", query),
+    queryFn: () => dataGetArtifactSpreadRoute({ query }),
+    placeholderData: keepPreviousData,
+    staleTime: SUMMARIZER_STALE_TIME,
+  })
+}
+
 /**
- * Invalidate every artifact page, whatever kind or search it was keyed on.
+ * Invalidate every artifact query, whatever it was keyed on.
  *
  * Deliberately a prefix match: starring a tag run has to refresh the "all" list
- * and the "tag" list, and any search that happened to include it.
+ * and the "tag" list, any search that happened to include it, the counts and
+ * the spread.
  */
 export function useInvalidateArtifacts() {
   const queryClient = useQueryClient()

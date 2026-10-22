@@ -22,11 +22,14 @@ export function LoggedSpreadView({
   bound,
   zoom,
   onPick,
+  noun = "entries",
 }: {
   spread?: LogSpreadResponse
   bound: TimeBound
   zoom: ZoomState
   onPick: (bound: TimeBound) => void
+  /** What a bar counts; History's spread counts artifacts. */
+  noun?: string
 }) {
   if (!spread)
     return <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
@@ -46,7 +49,7 @@ export function LoggedSpreadView({
       onBar={(bin) => onPick(barBound(bin, bin === spread.bins.at(-1)))}
       format={dateText}
       zoom={zoom}
-      noun="entries"
+      noun={noun}
     />
   )
 }

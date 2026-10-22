@@ -15,12 +15,15 @@ export const ARTIFACT_KIND_LABELS: Record<ArtifactKind, string> = {
   discovery: "Discovery",
 }
 
-/** Lucide icon names, resolved by the card. */
-export const ARTIFACT_KIND_ICONS: Record<ArtifactKind, string> = {
-  summary: "FileText",
-  chat: "MessageSquare",
-  tag: "Tag",
-  discovery: "Compass",
+/**
+ * Each kind's icon colour, clear of Failed red, Pending amber and the green
+ * and blue of the schedule flags, so colour never says a state.
+ */
+export const ARTIFACT_KIND_COLORS: Record<ArtifactKind, string> = {
+  summary: "text-sky-500",
+  chat: "text-violet-500",
+  tag: "text-orange-500",
+  discovery: "text-teal-500",
 }
 
 /**
@@ -74,4 +77,29 @@ export function isPendingArtifact(artifact: ArtifactListItem): boolean {
     (artifact.kind === "summary" || artifact.kind === "tag") &&
     artifact.status === "pending"
   )
+}
+
+/**
+ * A title as plain text: no markdown emphasis or code marks, no leading
+ * heading marks, then no leading emoji or whitespace. A Summary's title is
+ * the start of its markdown body.
+ */
+export const plainTitle = (text: string) =>
+  text
+    .replace(/\*\*|__|`|^#+\s*/g, "")
+    .replace(/^(?:\s|\p{Extended_Pictographic}|\uFE0F)+/u, "")
+    .trim()
+
+/**
+ * The channel line's order under a search: the matching channels first, so a
+ * match is never hidden in the "+N", each part in Scope order.
+ */
+export function channelsMatchingFirst(
+  channels: readonly string[],
+  search: string,
+): string[] {
+  const term = search.trim().toLowerCase()
+  if (!term) return [...channels]
+  const hit = (c: string) => c.toLowerCase().includes(term)
+  return [...channels.filter(hit), ...channels.filter((c) => !hit(c))]
 }

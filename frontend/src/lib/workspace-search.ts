@@ -9,8 +9,12 @@ import {
   DIRECTORY_PARAMS,
   type DirectoryParams,
 } from "@/lib/directory/directory-view"
+import {
+  type HistorySearch,
+  validateHistorySearch,
+} from "@/lib/history/history-params"
 import { tabFromSearch, tabSearch } from "@/lib/workspace-tabs"
-import type { ArtifactStatusFilter, TabType } from "@/types"
+import type { TabType } from "@/types"
 
 export type WorkspaceSearch = {
   tab?: TabType
@@ -51,11 +55,8 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
-  /** History's All / Failed / Pending filter (SFR-01); absent is All. */
-  historyStatus?: ArtifactStatusFilter
-} & DirectoryParams
-
-const HISTORY_STATUSES: readonly ArtifactStatusFilter[] = ["failed", "pending"]
+} & DirectoryParams &
+  HistorySearch
 
 /** The string params: kept trimmed when non-blank, dropped otherwise. */
 const ID_PARAMS = [
@@ -118,12 +119,9 @@ export function validateWorkspaceSearch(
     if (text) result[key] = text
     else if (key === "dirFilter" && raw === "") result[key] = ""
   }
-  if (
-    result.tab === "history" &&
-    HISTORY_STATUSES.includes(search.historyStatus as ArtifactStatusFilter)
-  ) {
-    result.historyStatus = search.historyStatus as ArtifactStatusFilter
-  }
+  // On every tab, as the Directory's are: the palette sets History's search
+  // and Starred from anywhere, and History keeps them across a tab switch.
+  Object.assign(result, validateHistorySearch(search))
   const legacyGroup = trimmedString(search.channelGroup)
   if (legacyGroup && !result.channelFilter) {
     // No group names here, so it is written by id, which reads back.

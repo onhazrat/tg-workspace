@@ -22,6 +22,7 @@ import type {
 } from "@/client"
 import { BarHeading, BarPopover, BarSearch } from "@/components/BarPopover"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
+import { FilterBar } from "@/components/FilterBar"
 import { ConditionPicker } from "@/components/filter-tree/ConditionPicker"
 import { FacetMenu } from "@/components/filter-tree/FacetMenu"
 import {
@@ -499,7 +500,6 @@ export type DirectoryBarProps = {
 export function DirectoryBar(p: DirectoryBarProps) {
   const conditions = atoms(p.filter).length
   const funnelled = funnelledValues(p.filter, "language")
-  const [sheet, setSheet] = useState(false)
   const search = (
     <DirectorySearch
       search={p.search}
@@ -598,83 +598,49 @@ export function DirectoryBar(p: DirectoryBarProps) {
     </>
   )
   return (
-    <section className="mb-3 rounded-xl border border-app-ink/10 bg-app-card shadow-md">
-      {p.phone ? (
-        <div className="flex items-center gap-2 px-4 pt-4">
-          <div className="min-w-0 flex-1">{search}</div>
-          <button
-            type="button"
-            data-testid="directory-controls-button"
-            aria-label={`Filters and sort${conditions > 0 ? `, ${conditions} on` : ""}`}
-            onClick={() => setSheet(true)}
-            className={`${pillClass(conditions > 0)} h-9 shrink-0`}
-          >
-            <ListFilter size={14} />
-            {conditions > 0 ? conditions : "Filters"}
-          </button>
+    <FilterBar
+      phone={p.phone}
+      active={conditions}
+      testIdPrefix="directory"
+      search={search}
+      controls={controls}
+      sheetLead={
+        <div className="mb-1 flex w-full items-center gap-2 text-xs">
+          <span className="text-app-ink/60">Search in</span>
+          <SearchFields fields={p.fields} onFields={p.onFields} />
         </div>
-      ) : (
-        <div className="px-4 pt-4">{search}</div>
-      )}
-      {!p.phone && (
-        <div className="flex flex-wrap items-center gap-2 p-4">{controls}</div>
-      )}
-      {p.phone && sheet && (
-        // z-40 covers the list; the controls' popovers open at z-50, above it.
-        <div
-          role="dialog"
-          aria-label="Filters and sort"
-          className="fixed inset-0 z-40 flex flex-wrap content-start items-center gap-2.5 overflow-y-auto bg-app-bg p-4 pb-24"
-        >
-          <div className="mb-1 flex w-full items-center justify-between">
-            <b className="text-sm">Filters and sort</b>
-            <button
-              type="button"
-              onClick={() => setSheet(false)}
-              className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white"
-            >
-              Done
-            </button>
-          </div>
-          <div className="mb-1 flex w-full items-center gap-2 text-xs">
-            <span className="text-app-ink/60">Search in</span>
-            <SearchFields fields={p.fields} onFields={p.onFields} />
-          </div>
-          {controls}
-        </div>
-      )}
-
-      <FilterRow
-        filter={p.filter}
-        onChange={p.onFilter}
-        vocabulary={p.vocabulary}
-        testId="directory-filter"
-        search={p.search}
-        shownCount={p.total ?? 0}
-        totalCount={p.size ?? 0}
-        onClearSearch={() => p.onSearch("")}
-        onClearAll={p.onClearAll}
-      />
-
-      <div
-        data-testid="directory-footer"
-        className="flex flex-wrap items-center gap-2 border-t border-app-ink/5 bg-app-muted/30 px-4 py-2.5 text-xs"
-      >
-        <span className="font-semibold">
-          {p.total === undefined ? "…" : p.total.toLocaleString()} channels
-        </span>
-        <span className="text-app-ink/50">
-          {p.ms === undefined ? "loading…" : `${p.ms} ms`}
-        </span>
-        {p.emptyYours && (
-          <span className="text-amber-600">{EMPTY_YOURS[p.emptyYours]}</span>
-        )}
-        {p.size !== undefined && (
-          <span className="ml-auto text-app-ink/40">
-            of {p.size.toLocaleString()} in the Directory
+      }
+      band={
+        <FilterRow
+          filter={p.filter}
+          onChange={p.onFilter}
+          vocabulary={p.vocabulary}
+          testId="directory-filter"
+          search={p.search}
+          shownCount={p.total ?? 0}
+          totalCount={p.size ?? 0}
+          onClearSearch={() => p.onSearch("")}
+          onClearAll={p.onClearAll}
+        />
+      }
+      footer={
+        <>
+          <span className="font-semibold">
+            {p.total === undefined ? "…" : p.total.toLocaleString()} channels
           </span>
-        )}
-      </div>
-    </section>
+          <span className="text-app-ink/50">
+            {p.ms === undefined ? "loading…" : `${p.ms} ms`}
+          </span>
+          {p.emptyYours && (
+            <span className="text-amber-600">{EMPTY_YOURS[p.emptyYours]}</span>
+          )}
+          {p.size !== undefined && (
+            <span className="ml-auto text-app-ink/40">
+              of {p.size.toLocaleString()} in the Directory
+            </span>
+          )}
+        </>
+      }
+    />
   )
 }

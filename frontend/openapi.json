@@ -4488,10 +4488,46 @@
       "get": {
         "tags": ["data"],
         "summary": "List Artifacts",
-        "description": "One newest-first page of every saved artifact, whatever its kind.\n\nA `UNION ALL` over four tables projecting **named columns only**. It must not\nopen `tg_summary_payloads` or `tg_chat_session_payloads`, and must not select\nthe corpus-sized columns of `tg_tag_runs` / `tg_discover_reports` \u2014 pinned by\n`tests/services/test_artifact_list_payload_cost.py`.\n\n`search` deliberately does not reach summary prompt bodies; that would mean\nopening a payload table. `/data/summaries?search=` still does.",
+        "description": "One page of every saved artifact, whatever its kind, newest Written first.\n\nA `UNION ALL` over four tables projecting **named columns only**. It must not\nopen `tg_summary_payloads` or `tg_chat_session_payloads`, and must not select\nthe corpus-sized columns of `tg_tag_runs` / `tg_discover_reports` \u2014 pinned by\n`tests/services/test_artifact_list_payload_cost.py`.\n\n`search` deliberately does not reach summary prompt bodies; that would mean\nopening a payload table. `/data/summaries?search=` still does.\n\n`mode`, `start` and `end` bound `moment`: when an artifact was Written,\n`[start, end)`, or its Analysis window, which matches when it overlaps the\nbound. `sort` is Written or the window's start; a missing window sorts last\neither way.",
         "operationId": "data-list_artifacts",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "enum": ["live", "fixed"], "type": "string" },
+                { "type": "null" }
+              ],
+              "description": "The Time bound's mode; none is Any time",
+              "title": "Mode"
+            },
+            "description": "The Time bound's mode; none is Any time"
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Included. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "Start"
+            },
+            "description": "Included. Epoch ms when Fixed, signed ms from now when Live"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "End"
+            },
+            "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live"
+          },
           {
             "name": "kind",
             "in": "query",
@@ -4536,6 +4572,40 @@
                 { "type": "null" }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "moment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["written", "window"],
+              "type": "string",
+              "description": "What the Time bound bounds: Written, or the Analysis window",
+              "default": "written",
+              "title": "Moment"
+            },
+            "description": "What the Time bound bounds: Written, or the Analysis window"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["written", "window"],
+              "type": "string",
+              "default": "written",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "descending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Descending"
             }
           },
           {
@@ -4591,6 +4661,240 @@
                     }
                   },
                   "title": "Response Data-List Artifacts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/artifacts/counts": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Count Artifacts Route",
+        "description": "The list's total, and how many each Kind and Status choice would show.\n\nEach Kind is counted under every filter but Kind, each Status under every\nfilter but Status, and the total under all of them.",
+        "operationId": "data-count_artifacts_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "enum": ["live", "fixed"], "type": "string" },
+                { "type": "null" }
+              ],
+              "description": "The Time bound's mode; none is Any time",
+              "title": "Mode"
+            },
+            "description": "The Time bound's mode; none is Any time"
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Included. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "Start"
+            },
+            "description": "Included. Epoch ms when Fixed, signed ms from now when Live"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "integer" }, { "type": "null" }],
+              "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live",
+              "title": "End"
+            },
+            "description": "Excluded. Epoch ms when Fixed, signed ms from now when Live"
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": ["summary", "chat", "tag", "discovery"],
+                  "type": "string"
+                },
+                { "type": "null" }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "starred",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Starred"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "enum": ["failed", "pending"], "type": "string" },
+                { "type": "null" }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "moment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["written", "window"],
+              "type": "string",
+              "description": "What the Time bound bounds: Written, or the Analysis window",
+              "default": "written",
+              "title": "Moment"
+            },
+            "description": "What the Time bound bounds: Written, or the Analysis window"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactCountsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data/artifacts/spread": {
+      "get": {
+        "tags": ["data"],
+        "summary": "Get Artifact Spread Route",
+        "description": "When artifacts were Written, or their windows started: 32 bars over epoch ms.\n\nUnder every filter but the Time bound, so the editor shows what lies around\nit. Under `window`, an artifact with no window is left out. A zoom (`lo`,\n`hi`) bins only that range; `total`, `min`, `max` and `median` stay the\nwhole spread's.",
+        "operationId": "data-get_artifact_spread_route",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "lo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Lo"
+            }
+          },
+          {
+            "name": "hi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "title": "Hi"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": ["summary", "chat", "tag", "discovery"],
+                  "type": "string"
+                },
+                { "type": "null" }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "starred",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Starred"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "enum": ["failed", "pending"], "type": "string" },
+                { "type": "null" }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "moment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["written", "window"],
+              "type": "string",
+              "description": "What the Time bound bounds: Written, or the Analysis window",
+              "default": "written",
+              "title": "Moment"
+            },
+            "description": "What the Time bound bounds: Written, or the Analysis window"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactSpreadResponse"
                 }
               }
             }
@@ -5167,10 +5471,10 @@
                 { "enum": ["live", "fixed"], "type": "string" },
                 { "type": "null" }
               ],
-              "description": "The Logged bound's mode; none is Any time",
+              "description": "The Time bound's mode; none is Any time",
               "title": "Mode"
             },
-            "description": "The Logged bound's mode; none is Any time"
+            "description": "The Time bound's mode; none is Any time"
           },
           {
             "name": "start",
@@ -6786,6 +7090,69 @@
         "required": ["key"],
         "title": "AppSettingResponse",
         "description": "A settings row: `{\"key\": \u2026, \"value\": {\u2026}}`.\n\nShipped with B6b. `value` stays an open JSON object on purpose \u2014 the\nsettings surface is a bag of sections whose shapes are owned by their own\nloaders (`jobs`, `sync`, `retention`, `translation`, `network`), and pinning\nthem here would put five unrelated schemas behind one endpoint. The\n*envelope* is what callers depend on, and that is now typed."
+      },
+      "ArtifactCountsResponse": {
+        "properties": {
+          "total": { "type": "integer", "title": "Total" },
+          "kinds": {
+            "$ref": "#/components/schemas/ArtifactKindCountsResponse"
+          },
+          "kindsAll": { "type": "integer", "title": "Kindsall" },
+          "statuses": {
+            "$ref": "#/components/schemas/ArtifactStatusCountsResponse"
+          },
+          "statusesAll": { "type": "integer", "title": "Statusesall" }
+        },
+        "type": "object",
+        "required": ["total", "kinds", "kindsAll", "statuses", "statusesAll"],
+        "title": "ArtifactCountsResponse",
+        "description": "The total under every filter; each Kind under every filter but Kind,\neach Status under every filter but Status."
+      },
+      "ArtifactKindCountsResponse": {
+        "properties": {
+          "summary": { "type": "integer", "title": "Summary" },
+          "chat": { "type": "integer", "title": "Chat" },
+          "tag": { "type": "integer", "title": "Tag" },
+          "discovery": { "type": "integer", "title": "Discovery" }
+        },
+        "type": "object",
+        "required": ["summary", "chat", "tag", "discovery"],
+        "title": "ArtifactKindCountsResponse"
+      },
+      "ArtifactSpreadResponse": {
+        "properties": {
+          "total": { "type": "integer", "title": "Total" },
+          "min": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Max"
+          },
+          "median": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Median"
+          },
+          "bins": {
+            "items": { "$ref": "#/components/schemas/LogSpreadBinResponse" },
+            "type": "array",
+            "title": "Bins"
+          }
+        },
+        "type": "object",
+        "required": ["total", "min", "max", "median", "bins"],
+        "title": "ArtifactSpreadResponse",
+        "description": "When Artifacts were Written, or their windows started: the Logs spread's\nshape, so the same chart draws it."
+      },
+      "ArtifactStatusCountsResponse": {
+        "properties": {
+          "failed": { "type": "integer", "title": "Failed" },
+          "pending": { "type": "integer", "title": "Pending" }
+        },
+        "type": "object",
+        "required": ["failed", "pending"],
+        "title": "ArtifactStatusCountsResponse"
       },
       "BadProxy": {
         "properties": {
