@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import type { ArtifactActions } from "@/components/history/ArtifactCardParts"
 import { ARTIFACT_KIND_LABELS } from "@/components/history/artifact-presentation"
 import { HistoryBar } from "@/components/history/HistoryBar"
+import { useHistoryKeys } from "@/components/history/HistoryKeyboard"
 import { HistoryList } from "@/components/history/HistoryList"
 import { HistorySpread } from "@/components/history/HistorySpread"
 import {
@@ -15,6 +16,7 @@ import {
   historyShowsEmpty,
   type SummaryFlag,
   summaryFlagChange,
+  toggleStar,
 } from "@/components/history/history-view-model"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
@@ -101,13 +103,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
 
   const actions: ArtifactActions = {
     open: openArtifact,
-    star: async (artifact) => {
-      await setArtifactStarred(artifact, !artifact.isStarred)
-      await invalidate()
-      toast[artifact.isStarred ? "info" : "success"](
-        artifact.isStarred ? "Item unstarred." : "Item starred.",
-      )
-    },
+    star: (artifact) =>
+      toggleStar(artifact, {
+        setStarred: setArtifactStarred,
+        refresh: invalidate,
+      }),
     saveNote: async (artifact, note) => {
       await setArtifactNote(artifact, note)
       await invalidate()
@@ -130,6 +130,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
   }
 
   const deleteCopy = deleteDialogCopy(pendingDelete)
+
+  const highlight = useHistoryKeys({ artifacts: rows, onOpen: openArtifact })
 
   return (
     <motion.div
@@ -166,6 +168,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
           search={params.search}
           compact={compact}
           days={params.sort === "written"}
+          highlight={highlight}
         />
       )}
 

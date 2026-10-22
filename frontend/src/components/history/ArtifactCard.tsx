@@ -31,6 +31,8 @@ interface ArtifactCardProps {
   search: string
   /** The Compact grid's card: no window, acted-by or note lines, icon actions. */
   compact?: boolean
+  /** Keyboard mode's Highlight is on this card. */
+  highlighted?: boolean
 }
 
 /**
@@ -46,6 +48,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
   actions,
   search,
   compact = false,
+  highlighted = false,
 }) => {
   const failed = failedAttempts(artifact) !== null
   const term = search.trim()
@@ -63,7 +66,8 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
       data-testid="artifact-card"
       data-artifact-kind={artifact.kind}
       data-artifact-id={artifact.id}
-      className={`flex min-w-0 flex-col gap-2 rounded-xl border bg-app-card px-4 pt-3 pb-1.5 transition-colors ${
+      data-highlight={highlighted || undefined}
+      className={`flex min-w-0 scroll-mt-24 flex-col gap-2 rounded-xl border bg-app-card px-4 pt-3 pb-1.5 transition-colors ${
         failed
           ? "border-red-500/30 hover:border-red-500/50"
           : "border-app-ink/10 hover:border-app-ink/20"

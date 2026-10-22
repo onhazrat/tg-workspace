@@ -611,7 +611,8 @@ describe("the card shell's rules", () => {
     expect(frame("isScraping")).toContain("border-app-ink/10")
   })
 
-  test("keyboard mode's highlight rings the frame blue, over the syncing ring", () => {
+  test("under keyboard mode's Highlight the frame drops its border and the syncing ring", () => {
+    // The blue ring itself is index.css's [data-highlight] rule.
     const frame = (isScraping: boolean, highlighted: boolean) =>
       channelCardFrameClass({
         isFrozen: false,
@@ -619,9 +620,9 @@ describe("the card shell's rules", () => {
         isScraping,
         highlighted,
       })
-    expect(frame(false, false)).not.toContain("ring-blue-500")
-    expect(frame(false, true)).toContain("ring-2 ring-blue-500")
-    expect(frame(true, true)).toContain("ring-blue-500")
+    expect(frame(false, false)).not.toContain("border-transparent")
+    expect(frame(false, true)).toContain("border-transparent")
+    expect(frame(true, false)).toContain("ring-app-ink/20")
     expect(frame(true, true)).not.toContain("ring-app-ink/20")
   })
 

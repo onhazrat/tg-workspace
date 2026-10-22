@@ -3,6 +3,8 @@
  * always was; +1 forces every optional field on; -1 is a compact card whose
  * body selects; -2 is an avatar tile.
  */
+import type { Action } from "@/lib/keyboard/key-list"
+
 export const CARD_ZOOM_LEVELS = [-2, -1, 0, 1] as const
 export type CardZoom = (typeof CARD_ZOOM_LEVELS)[number]
 
@@ -44,17 +46,26 @@ export type StatTileKey =
   | "links"
 
 /**
- * Keyboard mode's action letters: select, sync, tag field, freeze, open in
- * Telegram, bio, photo. A size lists only the letters its cards carry a
- * control for, so the key legend reads them from here and cannot drift.
+ * Keyboard mode's actions on a card (`lib/keyboard/key-list.ts`): select,
+ * sync, the tag field, freeze, open in Telegram, the bio, the photo. A size
+ * lists only the actions its cards carry a control for, so the corner list
+ * reads them from here and cannot drift.
  */
-export type CardKey = "x" | "s" | "t" | "f" | "o" | "b" | "p"
+export type CardKey = Extract<
+  Action,
+  "tick" | "sync" | "tag" | "freeze" | "open" | "more" | "photo"
+>
 
-/** Marks the control keyboard mode presses for `key`. */
-export const shortcut = (key: CardKey) => ({ "data-shortcut": key })
-
-const SMALL_CARD_KEYS: CardKey[] = ["x", "s", "o", "p"]
-const CARD_KEYS: CardKey[] = ["x", "s", "t", "f", "o", "b", "p"]
+const SMALL_CARD_KEYS: CardKey[] = ["tick", "sync", "open", "photo"]
+const CARD_KEYS: CardKey[] = [
+  "tick",
+  "sync",
+  "tag",
+  "freeze",
+  "open",
+  "more",
+  "photo",
+]
 
 /** What a channel card renders at one zoom level. */
 export interface CardFace {

@@ -1,115 +1,224 @@
 /**
- * Keyboard mode (PTR-02): j and k move a ring through the cards, a letter
- * fires the matching action on the ringed card, and nothing fires with a
- * modifier held, in a text field, or while a dialog is open.
+ * The Posts feed's adapter on keyboard mode's engine (PTR-02, ADR-034): j / k,
+ * counts and gg / G move the Highlight, a key presses the highlighted card's
+ * own control, Esc drops the Highlight, - and + switch the Compact grid, m
+ * opens a Post's text and M every Post's, c in a spotlight goes back, and
+ * each move is announced. Keys are typed as a browser sends them, Shift first.
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { FeedKeyboard } from "./FeedKeyboard"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { useState } from "react"
+import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
+import { keydowns } from "@/lib/keyboard/keydowns"
+import {
+  announcement,
+  lastHighlight,
+  setKeyboardMode,
+} from "@/lib/keyboard/mode"
+import { usePostKeys } from "./FeedKeyboard"
+import { PostCardBody } from "./PostCardBody"
 
-const translated = { a: mock(), b: mock() }
+const KEYS = ["ch_1", "ch_2", "ch_3"]
+const LONG = "A long post.\n".repeat(20)
 
-function Feed({ on = true }: { on?: boolean }) {
+const OPS = {
+  go: () => {},
+  step: () => {},
+  goToNth: () => {},
+  close: () => {},
+  reopen: () => {},
+}
+
+let translated: string[] = []
+
+function Feed({
+  spotlit = false,
+  onBack = () => {},
+}: {
+  spotlit?: boolean
+  onBack?: () => void
+}) {
+  const [compact, setCompact] = useState(false)
+  // Every Post starts Picked, as in the feed.
+  const [unpicked, setUnpicked] = useState<string[]>([])
+  const highlight = usePostKeys({
+    keys: KEYS,
+    onCompact: setCompact,
+    spotlit,
+    onSpotlightBack: onBack,
+  })
   return (
     <>
-      <input aria-label="search" />
-      {(["a", "b"] as const).map((id) => (
-        <article key={id} data-post-key={`ch_${id}`}>
-          <button type="button" data-shortcut="t" onClick={translated[id]}>
-            Translate {id}
+      <KeyboardMode ops={OPS} />
+      <output data-testid="compact">{String(compact)}</output>
+      <input aria-label="Keyword search" />
+      {KEYS.map((key) => (
+        <article
+          key={key}
+          data-post-key={key}
+          data-highlight={highlight === key || undefined}
+        >
+          <input
+            type="checkbox"
+            aria-label={`Pick ${key}`}
+            data-shortcut="x"
+            checked={!unpicked.includes(key)}
+            readOnly
+            onClick={() =>
+              setUnpicked((prev) =>
+                prev.includes(key)
+                  ? prev.filter((k) => k !== key)
+                  : [...prev, key],
+              )
+            }
+          />
+          <button
+            type="button"
+            data-shortcut="l"
+            onClick={() => translated.push(key)}
+          >
+            Translate
           </button>
+          <PostCardBody text={LONG} linkSpans={null} postSearch="" />
         </article>
       ))}
-      <FeedKeyboard on={on} />
     </>
   )
 }
 
-const ringed = () =>
-  Array.from(document.querySelectorAll("[data-kbd-selected]")).map((el) =>
+const highlighted = () =>
+  Array.from(document.querySelectorAll("[data-highlight]")).map((el) =>
     el.getAttribute("data-post-key"),
   )
-const press = (key: string, init: KeyboardEventInit = {}) =>
-  fireEvent.keyDown(document.activeElement ?? document.body, { key, ...init })
+const type = (...keys: string[]) => {
+  for (const init of keydowns(...keys))
+    fireEvent.keyDown(document.activeElement ?? document.body, init)
+}
+const expanded = () =>
+  screen
+    .getAllByRole("button", { name: /Show More|Collapse/ })
+    .map((b) => b.getAttribute("aria-expanded"))
 
 beforeEach(() => {
-  translated.a.mockClear()
-  translated.b.mockClear()
+  translated = []
+  lastHighlight.clear()
+  announcement.set("")
+  setKeyboardMode(true)
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  setKeyboardMode(false)
+})
 
-describe("FeedKeyboard", () => {
-  test("j and k move the ring, and a letter fires that card's action", () => {
+describe("the Posts feed's keyboard mode", () => {
+  test("j and k move the Highlight, a count moves that far, G and gg jump", () => {
     render(<Feed />)
-    press("j")
-    expect(ringed()).toEqual(["ch_a"])
-    press("j")
-    press("j")
-    expect(ringed()).toEqual(["ch_b"])
-    press("t")
-    expect(translated.b).toHaveBeenCalledTimes(1)
-    press("k")
-    expect(ringed()).toEqual(["ch_a"])
-    press("t")
-    expect(translated.a).toHaveBeenCalledTimes(1)
+    type("j")
+    expect(highlighted()).toEqual(["ch_1"])
+    type("2", "j")
+    expect(highlighted()).toEqual(["ch_3"])
+    type("k")
+    expect(highlighted()).toEqual(["ch_2"])
+    type("g", "g")
+    expect(highlighted()).toEqual(["ch_1"])
+    type("G")
+    expect(highlighted()).toEqual(["ch_3"])
+    type("2", "G")
+    expect(highlighted()).toEqual(["ch_2"])
   })
 
-  test("G rings the last card and gg the first", () => {
+  test("x unpicks a Post, and K then unpicks while moving up", () => {
     render(<Feed />)
-    press("G")
-    expect(ringed()).toEqual(["ch_b"])
-    press("g")
-    expect(ringed()).toEqual(["ch_b"])
-    press("g")
-    expect(ringed()).toEqual(["ch_a"])
-    expect(screen.getByText("first / last post")).toBeTruthy()
+    type("G", "x", "K")
+    const picked = () =>
+      screen
+        .getAllByRole("checkbox")
+        .filter((box) => (box as HTMLInputElement).checked)
+        .map((box) => box.getAttribute("aria-label"))
+    expect(picked()).toEqual(["Pick ch_1"])
+    expect(highlighted()).toEqual(["ch_2"])
   })
 
-  test("lists the keys while on, and leaves no ring behind when switched off", () => {
-    const { rerender } = render(<Feed />)
-    expect(screen.getByText("next / previous post")).toBeTruthy()
-    press("j")
-    rerender(<Feed on={false} />)
-    expect(screen.queryByText("next / previous post")).toBeNull()
-    expect(ringed()).toEqual([])
-    press("j")
-    expect(ringed()).toEqual([])
+  test("each move is announced with the Post's Channel and its place", () => {
+    render(<Feed />)
+    type("j", "j")
+    expect(screen.getByTestId("keyboard-announcer").textContent).toBe(
+      "@ch, 2 of 3",
+    )
   })
 
-  test("a modifier held fires nothing", () => {
+  test("l presses the highlighted card's translate, and Esc drops the Highlight", () => {
     render(<Feed />)
-    press("j")
-    for (const mod of ["ctrlKey", "metaKey", "altKey"]) {
-      press("t", { [mod]: true })
-      press("j", { [mod]: true })
-    }
-    expect(translated.a).not.toHaveBeenCalled()
-    expect(ringed()).toEqual(["ch_a"])
+    type("j", "j", "l")
+    expect(translated).toEqual(["ch_2"])
+    type("Escape")
+    expect(highlighted()).toEqual([])
+    type("l")
+    expect(translated).toEqual(["ch_2"])
   })
 
-  test("typing in a text field fires nothing", () => {
+  test("Esc with a Highlight is taken, so the spotlight's own Esc waits for the next one", () => {
     render(<Feed />)
-    press("j")
-    screen.getByLabelText("search").focus()
-    press("j")
-    press("t")
-    expect(ringed()).toEqual(["ch_a"])
-    expect(translated.a).not.toHaveBeenCalled()
+    type("j")
+    const esc = new KeyboardEvent("keydown", {
+      key: "Escape",
+      code: "Escape",
+      bubbles: true,
+      cancelable: true,
+    })
+    act(() => {
+      document.body.dispatchEvent(esc)
+    })
+    expect(esc.defaultPrevented).toBe(true)
+    const again = new KeyboardEvent("keydown", {
+      key: "Escape",
+      code: "Escape",
+      bubbles: true,
+      cancelable: true,
+    })
+    act(() => {
+      document.body.dispatchEvent(again)
+    })
+    expect(again.defaultPrevented).toBe(false)
   })
 
-  test("an open dialog fires nothing", () => {
+  test("- and + switch the Compact grid on and off", () => {
     render(<Feed />)
-    press("j")
-    const dialog = document.createElement("div")
-    dialog.setAttribute("role", "dialog")
-    document.body.appendChild(dialog)
-    try {
-      press("j")
-      press("t")
-      expect(ringed()).toEqual(["ch_a"])
-      expect(translated.a).not.toHaveBeenCalled()
-    } finally {
-      dialog.remove()
-    }
+    type("-")
+    expect(screen.getByTestId("compact").textContent).toBe("true")
+    type("+")
+    expect(screen.getByTestId("compact").textContent).toBe("false")
+  })
+
+  test("m opens and closes the highlighted Post's text, M every Post's", () => {
+    render(<Feed />)
+    type("j", "j", "m")
+    expect(expanded()).toEqual(["false", "true", "false"])
+    type("M")
+    expect(expanded()).toEqual(["true", "true", "true"])
+    type("M")
+    expect(expanded()).toEqual(["false", "false", "false"])
+    type("m")
+    expect(expanded()).toEqual(["false", "true", "false"])
+  })
+
+  test("c in a spotlight goes back; outside one it is the card's own control", () => {
+    const onBack = mock()
+    const view = render(<Feed onBack={onBack} />)
+    type("c")
+    expect(onBack).not.toHaveBeenCalled()
+    view.rerender(<Feed spotlit onBack={onBack} />)
+    type("c")
+    expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  test("off, no Highlight shows and no key fires", () => {
+    render(<Feed />)
+    type("j")
+    act(() => setKeyboardMode(false))
+    expect(highlighted()).toEqual([])
+    type("l", "-")
+    expect(translated).toEqual([])
+    expect(screen.getByTestId("compact").textContent).toBe("false")
   })
 })

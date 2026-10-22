@@ -16,8 +16,8 @@ import {
 import {
   commandKeyFor,
   oldestSync,
-  opensShortcuts,
   routingMode,
+  stripNeighbour,
   THEME_TOOLTIPS,
   tabAnnouncements,
   tabLabel,
@@ -27,6 +27,24 @@ import {
 afterEach(cleanup)
 
 describe("workspace-shell-model", () => {
+  test("gt and gT step through the strip by a count, wrapping both ways", () => {
+    const tabs = [
+      { kind: "channels" },
+      { kind: "posts" },
+      { kind: "action" },
+      { kind: "summary", id: "s1" },
+    ] as const
+    const posts = tabs[1]
+    expect(stripNeighbour(tabs, posts, 1)).toEqual({ kind: "action" })
+    expect(stripNeighbour(tabs, posts, -1)).toEqual({ kind: "channels" })
+    expect(stripNeighbour(tabs, posts, -2)).toEqual({
+      kind: "summary",
+      id: "s1",
+    })
+    expect(stripNeighbour(tabs, tabs[3], 1)).toEqual({ kind: "channels" })
+    expect(stripNeighbour(tabs, posts, -5)).toEqual({ kind: "channels" })
+  })
+
   test("Tor wins over a proxy, and neither is direct", () => {
     expect(routingMode({ torEnabled: true, proxyEnabled: true }).label).toBe(
       "Tor",
@@ -56,32 +74,6 @@ describe("workspace-shell-model", () => {
     expect(oldestSync(channels, new Set(["a", "b", "frozen"]))).toBe(100)
     expect(oldestSync(channels, new Set(["frozen"]))).toBeNull()
     expect(oldestSync([{ name: "n" } as Channel], new Set(["n"]))).toBe(0)
-  })
-
-  test("a bare ? opens the shortcuts, but not while typing or with a modifier", () => {
-    const key = (over: Partial<Parameters<typeof opensShortcuts>[0]>) =>
-      opensShortcuts({
-        key: "?",
-        defaultPrevented: false,
-        metaKey: false,
-        ctrlKey: false,
-        altKey: false,
-        target: document.body,
-        ...over,
-      })
-    expect(key({})).toBe(true)
-    expect(key({ target: null })).toBe(true)
-    expect(key({ key: "/" })).toBe(false)
-    expect(key({ defaultPrevented: true })).toBe(false)
-    expect(key({ metaKey: true })).toBe(false)
-    expect(key({ ctrlKey: true })).toBe(false)
-    expect(key({ altKey: true })).toBe(false)
-    for (const tag of ["input", "textarea", "select"])
-      expect(key({ target: document.createElement(tag) })).toBe(false)
-    const editable = document.createElement("div")
-    editable.contentEditable = "true"
-    Object.defineProperty(editable, "isContentEditable", { value: true })
-    expect(key({ target: editable })).toBe(false)
   })
 
   test("Apple platforms say Cmd, everything else Ctrl", () => {

@@ -4,6 +4,7 @@ import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { ownTags, type Tagging } from "@/lib/directory/directory-tags"
 import { MAX_TICK_ALL, type Whole } from "@/lib/directory/directory-view"
+import { bulkShortcut } from "@/lib/keyboard/key-list"
 import { needsBulkFollowConfirm } from "@/lib/posts/discover-selection"
 import { type BoostMode, DirectoryBoost } from "./DirectoryBoost"
 import { TagPicker } from "./DirectoryTags"
@@ -160,6 +161,7 @@ export function DirectoryBulkBar({
                 variant="secondary"
                 size="sm"
                 disabled
+                {...bulkShortcut("F")}
                 className="rounded-full"
               >
                 <Plus size={12} />
@@ -171,6 +173,7 @@ export function DirectoryBulkBar({
               variant="secondary"
               size="sm"
               disabled={busy}
+              {...bulkShortcut("D")}
               onClick={() => setDismissing(true)}
               className="rounded-full"
             >
@@ -187,6 +190,7 @@ export function DirectoryBulkBar({
               variant="secondary"
               size="sm"
               loading={busy}
+              {...bulkShortcut("F")}
               onClick={() =>
                 needsBulkFollowConfirm(handles.length)
                   ? setConfirming(true)
@@ -203,6 +207,7 @@ export function DirectoryBulkBar({
               variant="secondary"
               size="sm"
               disabled={busy}
+              {...bulkShortcut("D")}
               onClick={() => onDismiss(handles)}
               className="rounded-full"
             >

@@ -1,9 +1,8 @@
 import type { ArtifactListItem } from "@/types"
 import { ArtifactCard } from "./ArtifactCard"
 import type { ArtifactActions } from "./ArtifactCardParts"
+import { artifactKey } from "./HistoryKeyboard"
 import { historyDays } from "./history-view-model"
-
-const keyOf = (a: ArtifactListItem) => `${a.kind}:${a.id}`
 
 /**
  * History's cards: one column under day headings while sorted by Written,
@@ -16,6 +15,7 @@ export function HistoryList({
   search,
   compact,
   days,
+  highlight = null,
   now,
 }: {
   rows: ArtifactListItem[]
@@ -24,13 +24,16 @@ export function HistoryList({
   compact: boolean
   /** Day headings, which only mean something while sorted by Written. */
   days: boolean
+  /** Keyboard mode's Highlight: the highlighted Artifact's `kind:id`. */
+  highlight?: string | null
   /** The clock "Today" is read against; the current time by default. */
   now?: number
 }) {
   const card = (a: ArtifactListItem) => (
     <ArtifactCard
-      key={keyOf(a)}
+      key={artifactKey(a)}
       artifact={a}
+      highlighted={highlight === artifactKey(a)}
       actions={actions}
       search={search}
       compact={compact}

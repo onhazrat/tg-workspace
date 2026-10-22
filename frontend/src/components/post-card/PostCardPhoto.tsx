@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { api } from "@/api"
-import { SHORTCUTS } from "./FeedKeyboard"
+import { ACTIONS } from "@/lib/keyboard/key-list"
+import { useKeyTitle } from "@/lib/keyboard/mode"
 import { GALLERY_CAPTION_ATTR, PhotoViewerDialog } from "./PhotoViewer"
 
 /**
@@ -26,13 +27,15 @@ export function PostCardPhoto({
 }) {
   const [src, setSrc] = usePostThumbSrc(thumbApiPath)
   const [open, setOpen] = useState(false)
+  const title = useKeyTitle("View image larger", "photo")
   if (!src) return null
   return (
     <>
       <button
         type="button"
         aria-label="View image larger"
-        data-shortcut={SHORTCUTS.photo}
+        data-shortcut={ACTIONS.photo.key}
+        title={title}
         className="block max-w-full cursor-zoom-in"
         onClick={() => setOpen(true)}
       >

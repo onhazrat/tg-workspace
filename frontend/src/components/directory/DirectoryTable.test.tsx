@@ -4,15 +4,26 @@
  * the header's partial tick, sorting from a header, Follow, the Telegram web
  * view link and the pages.
  */
-import { afterEach, describe, expect, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, mock, test } from "bun:test"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import type { ComponentProps } from "react"
+import { Toaster } from "sonner"
 import type { DirectoryRowResponse } from "@/client"
+import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
 import type { ColumnKey } from "@/lib/directory/directory-columns"
+import { keydowns } from "@/lib/keyboard/keydowns"
+import { setKeyboardMode } from "@/lib/keyboard/mode"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
+import { useDirectoryKeys } from "./DirectoryKeyboard"
 import { DirectoryTable } from "./DirectoryTable"
 
 afterEach(cleanup)
@@ -187,10 +198,10 @@ describe("ticks", () => {
 
 describe("keyboard mode (DFP-01)", () => {
   test("the highlighted row is marked, and x, f, d and o press its tick, Follow, Dismiss and link", () => {
-    mount({ ring: "beta" })
-    const ringed = document.querySelectorAll("[data-kbd-selected]")
+    mount({ highlight: "beta" })
+    const highlighted = document.querySelectorAll("[data-highlight]")
     expect(
-      [...ringed].map((r) => r.getAttribute("data-directory-handle")),
+      [...highlighted].map((r) => r.getAttribute("data-directory-handle")),
     ).toEqual(["beta"])
     const row = screen.getByTestId("directory-row-beta")
     const key = (k: string) =>
@@ -202,11 +213,31 @@ describe("keyboard mode (DFP-01)", () => {
     expect(key("o")).toBe("@beta")
   })
 
+  test("in keyboard mode each row control names its key, x in the Directory's word", () => {
+    setKeyboardMode(true)
+    try {
+      mount({
+        highlight: "beta",
+        tagging: { tags: [], onTag: () => {}, onUntag: () => {} },
+      })
+      const row = screen.getByTestId("directory-row-beta")
+      const title = (k: string) =>
+        row.querySelector(`[data-shortcut="${k}"]`)?.getAttribute("title")
+      expect(title("x")).toBe("Tick @beta (x)")
+      expect(title("f")).toBe("Follow @beta (f)")
+      expect(title("d")).toBe("Hide this channel here and in Discover (d)")
+      expect(title("o")).toBe("Open @beta in Telegram (o)")
+      expect(title("t")).toBe("Tag @beta (t)")
+    } finally {
+      setKeyboardMode(false)
+    }
+  })
+
   test("t presses the row's Tag picker, and a row shows its Tags (DFP-04)", () => {
     const tagged: [string, string[], boolean][] = []
     mount({
       rows: [row("alpha", { tags: ["News"] })],
-      ring: "alpha",
+      highlight: "alpha",
       tagging: {
         tags: [{ name: "News", channels: 1 }],
         onTag: (name, handles) => tagged.push([name, handles, true]),
@@ -222,6 +253,98 @@ describe("keyboard mode (DFP-01)", () => {
     fireEvent.click(button as HTMLElement)
     fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
     expect(tagged).toEqual([["News", ["alpha"], false]])
+  })
+})
+
+/** The table on the engine: the Directory's adapter rings the rows. */
+function Keyed({
+  rows,
+  calls,
+}: {
+  rows: DirectoryRowResponse[]
+  calls: [string, boolean][]
+}) {
+  const highlight = useDirectoryKeys({
+    handles: rows.map((r) => r.handle),
+    open: null,
+    onOpen: () => {},
+    page: 0,
+    lastPage: 0,
+    onPage: () => {},
+  })
+  return (
+    <DirectoryTable
+      rows={rows}
+      total={rows.length}
+      page={0}
+      sort="mine"
+      descending
+      shown={OPENING}
+      ticks={new Set()}
+      onTicks={() => {}}
+      following={new Set()}
+      onFollow={() => {}}
+      onDismiss={(h, dismissed) => calls.push([h, dismissed])}
+      onSort={() => {}}
+      onPage={() => {}}
+      onOpen={() => {}}
+      highlight={highlight}
+    />
+  )
+}
+const KEY_OPS = {
+  go: () => {},
+  step: () => {},
+  goToNth: () => {},
+  close: () => {},
+  reopen: () => {},
+}
+
+describe("d's toast in keyboard mode", () => {
+  const typed = (...keys: string[]) => {
+    for (const init of keydowns(...keys))
+      fireEvent.keyDown(document.activeElement ?? document.body, init)
+  }
+  const keyed = (rows: DirectoryRowResponse[]) => {
+    const calls: [string, boolean][] = []
+    render(
+      <>
+        <Toaster />
+        <KeyboardMode ops={KEY_OPS} />
+        <Keyed rows={rows} calls={calls} />
+      </>,
+    )
+    return calls
+  }
+
+  test("Dismiss says its own outcome, so the key adds no toast", async () => {
+    setKeyboardMode(true)
+    try {
+      const calls = keyed([row("alpha")])
+      typed("j", "d")
+      expect(calls).toEqual([["alpha", true]])
+      await new Promise((r) => setTimeout(r, 50))
+      expect(document.querySelector("[data-sonner-toast]")).toBeNull()
+    } finally {
+      setKeyboardMode(false)
+    }
+  })
+
+  test("Take back says what it did, and Undo presses it again", async () => {
+    setKeyboardMode(true)
+    try {
+      const calls = keyed([row("alpha", { dismissed: true })])
+      typed("j", "d")
+      expect(await screen.findByText("Take back @alpha")).toBeTruthy()
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }))
+      // The rows here never change, so the same control is pressed again.
+      expect(calls).toEqual([
+        ["alpha", false],
+        ["alpha", false],
+      ])
+    } finally {
+      setKeyboardMode(false)
+    }
   })
 })
 
@@ -456,5 +579,62 @@ describe("as cards on a phone (DFP-02)", () => {
     expect(calls.ticks).toEqual([["beta", "gamma"]])
     fireEvent.click(screen.getByRole("button", { name: "Next page" }))
     expect(calls.page).toEqual([1])
+  })
+})
+
+describe.each([
+  ["a row", false, "directory-row"],
+  ["a phone card", true, "directory-card"],
+])("the photo viewer from %s (KM-01)", (_, cards, testid) => {
+  // A public address, which the avatar shows as it is, with no fetch.
+  const photo = (h: string) => `https://photos.test/${h}.jpg`
+  const pictured = () => [
+    row("alpha", { photoUrl: photo("alpha") }),
+    row("beta"),
+    row("gamma", { photoUrl: photo("gamma") }),
+  ]
+  const caption = () => screen.getByTestId("photo-viewer-label").textContent
+
+  test("the avatar opens it, steps over rows without a photo, and leaves the page at the last row viewed", async () => {
+    const calls = mount({ cards, rows: pictured() })
+    const avatar = await screen.findByRole("button", {
+      name: "View alpha name's photo",
+    })
+    const gamma = screen.getByTestId(`${testid}-gamma`)
+    gamma.scrollIntoView = mock()
+
+    fireEvent.click(avatar)
+    expect(calls.open).toEqual([])
+    expect(caption()).toStartWith("alpha name · 1 / 2")
+    fireEvent.keyDown(window, { key: "ArrowRight" })
+    expect(caption()).toStartWith("gamma name · 2 / 2")
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }))
+    await waitFor(() => expect(screen.queryByTestId("photo-viewer")).toBeNull())
+    expect(gamma.scrollIntoView).toHaveBeenCalledTimes(1)
+
+    // The rest of the row still opens the panel.
+    fireEvent.click(screen.getByText("gamma name"))
+    expect(calls.open).toEqual(["gamma"])
+  })
+
+  test("the avatar's button never shrinks beside a long name", async () => {
+    mount({ cards, rows: pictured() })
+    const avatar = await screen.findByRole("button", {
+      name: "View alpha name's photo",
+    })
+    expect(avatar.className.split(" ")).toContain("shrink-0")
+  })
+
+  test("keyboard mode's p presses the highlighted row's avatar", async () => {
+    mount({ cards, rows: pictured() })
+    const avatar = await screen.findByRole("button", {
+      name: "View alpha name's photo",
+    })
+    expect(
+      screen
+        .getByTestId(`${testid}-alpha`)
+        .querySelector('[data-shortcut="p"]'),
+    ).toBe(avatar)
   })
 })

@@ -1,7 +1,7 @@
-import { shortcut } from "@/lib/channels/card-zoom"
 import { findFrozenReservedGroup } from "@/lib/channels/setting-groups"
 import { channelAllows } from "@/lib/channels/sync-permissions"
 import { toVirtualGroupTagName } from "@/lib/channels/virtual-group-tags"
+import { shortcut } from "@/lib/keyboard/key-list"
 import type { Channel, ChannelSettingGroup, ChannelStats } from "@/types"
 
 /** Percent of the channel's newest post the local copy has reached, or null when unknown. */
@@ -97,7 +97,7 @@ export function syncButtonProps(
   onSync: () => void,
 ) {
   return {
-    ...shortcut("s"),
+    ...shortcut("sync"),
     label: channel.isUnavailableOnWebView ? "Recheck" : "Sync",
     disabled: busy || !channelAllows(channel, "individual"),
     onClick: (event: { stopPropagation: () => void }) => {
@@ -118,8 +118,8 @@ export const ALIGNED_SECTIONS_CLASS = "row-span-6 grid grid-rows-subgrid"
 
 /**
  * The card frame: dimmed when frozen, outlined when selected, ringed while
- * syncing, and ringed blue, over the syncing ring, while keyboard mode
- * highlights it.
+ * syncing, and with no border or syncing ring under keyboard mode's blue
+ * Highlight ring.
  */
 export function channelCardFrameClass({
   isFrozen,
@@ -144,7 +144,8 @@ export function channelCardFrameClass({
         }
         ${
           highlighted
-            ? "ring-2 ring-blue-500 border-transparent"
+            ? // The blue ring itself is index.css's [data-highlight].
+              "border-transparent"
             : isScraping
               ? "ring-2 ring-app-ink/20"
               : ""

@@ -61,6 +61,13 @@ export function artifactChannelsLine(artifact: ArtifactListItem): string {
   return channels?.length ? channels.join(", ") : "No channels"
 }
 
+/** An Artifact's name for a screen reader or a toast: kind, then title or Channels. */
+export function artifactName(artifact: ArtifactListItem): string {
+  const what = artifact.title || artifactChannelsLine(artifact)
+  const shown = what.length > 40 ? `${what.slice(0, 40)}…` : what
+  return `${ARTIFACT_KIND_LABELS[artifact.kind]}: ${shown}`
+}
+
 /**
  * A Failed Summary's count of failed Attempts (SFR-01), or `null` for any
  * other row. Failed is a Summary's state only; Tag runs join later.

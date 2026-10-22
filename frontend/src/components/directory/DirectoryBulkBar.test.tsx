@@ -3,10 +3,15 @@
  * handles, Follow and Clear, and the confirmation Discover asks before five
  * or more.
  */
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { Toaster } from "sonner"
+import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
 import type { Whole } from "@/lib/directory/directory-view"
+import { keydowns } from "@/lib/keyboard/keydowns"
+import { setKeyboardMode } from "@/lib/keyboard/mode"
 import { DirectoryBulkBar } from "./DirectoryBulkBar"
+import { useDirectoryKeys } from "./DirectoryKeyboard"
 
 afterEach(cleanup)
 
@@ -228,5 +233,107 @@ describe("tick all that match (ADR-031)", () => {
     ).toBeTruthy()
     fireEvent.click(screen.getByTestId("directory-bulk-dismiss-confirm"))
     expect(calls.dismiss.length).toBe(1)
+  })
+})
+
+const OPS = {
+  go: () => {},
+  step: () => {},
+  goToNth: () => {},
+  close: () => {},
+  reopen: () => {},
+}
+
+/** The Directory's list, mounted so the keys reach a list with a bulk bar. */
+function Rows() {
+  useDirectoryKeys({
+    handles: ["a", "b"],
+    open: null,
+    onOpen: () => {},
+    page: 0,
+    lastPage: 0,
+    onPage: () => {},
+  })
+  return null
+}
+
+function keyed(handles: string[], followed: string[] = [], whole?: Whole) {
+  const calls = { follow: [] as string[][], dismiss: [] as string[][] }
+  render(
+    <>
+      <Toaster />
+      <KeyboardMode ops={OPS} />
+      <Rows />
+      <DirectoryBulkBar
+        ticks={new Set(handles)}
+        busy={false}
+        followed={new Set(followed)}
+        onFollow={(h) => calls.follow.push(h)}
+        onDismiss={(h) => calls.dismiss.push(h)}
+        onClear={() => {}}
+        whole={whole}
+      />
+    </>,
+  )
+  return calls
+}
+const type = (...keys: string[]) => {
+  for (const init of keydowns(...keys))
+    fireEvent.keyDown(document.activeElement ?? document.body, init)
+}
+
+describe("F and D in keyboard mode press the bar's own buttons", () => {
+  beforeEach(() => setKeyboardMode(true))
+  afterEach(() => setKeyboardMode(false))
+
+  test("F follows fewer than five at once, and D dismisses", () => {
+    const calls = keyed(["a", "b"])
+    type("F")
+    expect(calls.follow).toEqual([["a", "b"]])
+    type("D")
+    expect(calls.dismiss).toEqual([["a", "b"]])
+  })
+
+  test("F on five or more asks first, as the button does", () => {
+    const calls = keyed(["a", "b", "c", "d", "e"])
+    type("F")
+    expect(calls.follow).toEqual([])
+    fireEvent.click(screen.getByTestId("directory-bulk-confirm"))
+    expect(calls.follow).toEqual([["a", "b", "c", "d", "e"]])
+  })
+
+  test("D on All matching asks first, as the button does", () => {
+    const calls = keyed(["a"], [], { total: 48210, state: "held" })
+    type("D")
+    expect(calls.dismiss).toEqual([])
+    fireEvent.click(screen.getByTestId("directory-bulk-dismiss-confirm"))
+    expect(calls.dismiss.length).toBe(1)
+  })
+
+  test("F on All matching, where Follow is off, says why in a toast", async () => {
+    const calls = keyed(["a"], [], { total: 48210, state: "held" })
+    type("F")
+    expect(
+      await screen.findByText("Follow is off: Follow acts on 10,000 or fewer"),
+    ).toBeTruthy()
+    expect(calls.follow).toEqual([])
+  })
+
+  test("with nothing ticked, or only follows, a toast says so", async () => {
+    keyed([])
+    type("F")
+    expect(await screen.findByText("Nothing ticked to follow")).toBeTruthy()
+    cleanup()
+    const calls = keyed(["a"], ["a"])
+    type("D")
+    expect(await screen.findByText("Nothing ticked to dismiss")).toBeTruthy()
+    expect(calls.dismiss).toEqual([])
+  })
+
+  test("f and d without Shift are a row's, not the bar's", () => {
+    const calls = keyed(["a", "b"])
+    type("f", "d")
+    expect(calls.follow).toEqual([])
+    expect(calls.dismiss).toEqual([])
   })
 })

@@ -18,6 +18,13 @@ import { join } from "node:path"
  */
 
 const APP = join(import.meta.dir, "..", "App.tsx")
+const KEYBOARD_BUTTONS = join(
+  import.meta.dir,
+  "..",
+  "components",
+  "keyboard",
+  "KeyboardButtons.tsx",
+)
 const STRIP = join(
   import.meta.dir,
   "..",
@@ -31,6 +38,7 @@ const HEADER_ICON_BUTTONS = [
   "CommandIcon",
   "HelpCircle",
   "Keyboard",
+  "BookKey",
   "fullscreenIcon",
   "themeIcon",
 ]
@@ -45,7 +53,9 @@ function stripComments(source: string): string {
 }
 
 describe("header accessibility", () => {
-  const source = readFileSync(APP, "utf8")
+  // The header is App's, but for keyboard mode's switch and shortcuts button.
+  const source =
+    readFileSync(APP, "utf8") + readFileSync(KEYBOARD_BUTTONS, "utf8")
   const code = stripComments(source)
   const stripCode = stripComments(readFileSync(STRIP, "utf8"))
 

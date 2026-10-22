@@ -1148,7 +1148,7 @@
       "comment": "Rows kept mounted beyond the viewport. Deliberately generous. Beyond smoothing scrolling, it keeps a workable number of cards reachable to anything that locates them by `[data-channel-name]` without scrolling first \u2014 which is how the command palette's channel actions and much of the e2e suite find cards.",
       "expression": "6",
       "file": "frontend/src/components/channel-grid/VirtualizedChannelGrid.tsx",
-      "line": 63,
+      "line": 67,
       "name": "OVERSCAN_ROWS",
       "value": 6
     },
@@ -1180,7 +1180,7 @@
       "comment": "",
       "expression": "3",
       "file": "frontend/src/components/directory/DirectoryBulkBar.tsx",
-      "line": 11,
+      "line": 12,
       "name": "SHOWN",
       "value": 3
     },
@@ -1196,7 +1196,7 @@
       "comment": "",
       "expression": "100",
       "file": "frontend/src/components/directory/DirectoryTable.tsx",
-      "line": 41,
+      "line": 42,
       "name": "PAGE_SIZE",
       "value": 100
     },
@@ -1204,15 +1204,23 @@
       "comment": "How many channels the line names before the \"+N\".",
       "expression": "3",
       "file": "frontend/src/components/history/ArtifactCardParts.tsx",
-      "line": 133,
+      "line": 135,
       "name": "SHOWN_CHANNELS",
       "value": 3
+    },
+    {
+      "comment": "How long a `g` or a count waits before its next keys show, so a quick gt never flashes them.",
+      "expression": "300",
+      "file": "frontend/src/components/keyboard/KeyHelp.tsx",
+      "line": 18,
+      "name": "HINT_DELAY_MS",
+      "value": 300
     },
     {
       "comment": "A card hidden under the workspace's sticky header is not \"on screen\".",
       "expression": "80",
       "file": "frontend/src/components/post-card/FeedKeyboard.tsx",
-      "line": 14,
+      "line": 20,
       "name": "HEADER_PX",
       "value": 80
     },
@@ -1220,7 +1228,7 @@
       "comment": "How near the last loaded photo the viewer asks the feed for its next page.",
       "expression": "3",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 67,
+      "line": 70,
       "name": "PAGE_AHEAD",
       "value": 3
     },
@@ -1228,7 +1236,7 @@
       "comment": "Long enough for the second click or tap of a double to arrive before the first one closes the viewer or toggles its controls.",
       "expression": "250",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 303,
+      "line": 333,
       "name": "DOUBLE_TAP_MS",
       "value": 250
     },
@@ -1236,7 +1244,7 @@
       "comment": "How far apart, in px, the two taps of a double-tap may land.",
       "expression": "30",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 305,
+      "line": 335,
       "name": "DOUBLE_TAP_PX",
       "value": 30
     },
@@ -1244,7 +1252,7 @@
       "comment": "How far one finger must travel at 1x before it steps or closes.",
       "expression": "60",
       "file": "frontend/src/components/post-card/PhotoViewer.tsx",
-      "line": 307,
+      "line": 337,
       "name": "SWIPE_PX",
       "value": 60
     },
@@ -1623,14 +1631,6 @@
       "line": 343,
       "name": "MAX_TICK_ALL",
       "value": 10000
-    },
-    {
-      "comment": "Two g presses closer than this are gg.",
-      "expression": "600",
-      "file": "frontend/src/lib/keyboard-moves.ts",
-      "line": 36,
-      "name": "GG_MS",
-      "value": 600
     },
     {
       "comment": "Bounds for the weight inputs \u2014 wide enough to express \"ignore this kind\" (0).",

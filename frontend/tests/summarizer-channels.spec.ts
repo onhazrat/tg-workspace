@@ -500,11 +500,25 @@ test.describe("TG Workspace channels and posts", () => {
     const names = await cards.evaluateAll((elements) =>
       elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
     )
-    const highlighted = page.locator("[data-kbd-selected]")
+    const highlighted = page.locator("[data-highlight]")
     const legend = page.locator("kbd")
+    const corner = (actions: string) => [
+      "j / k",
+      "gg / G",
+      "- / +",
+      "J / K",
+      "Esc",
+      ...actions,
+      "5j / 7k",
+      "37G / 5gg",
+      "?",
+      "\\",
+    ]
 
-    await page.getByTestId("channel-keyboard").click()
-    await expect(legend).toHaveText(["j / k", "gg / G", ..."xstfobp", "esc"])
+    // The header's switch, then ? for the tab's keys in the corner.
+    await page.getByRole("button", { name: "Keyboard mode" }).click()
+    await page.keyboard.press("Shift+Slash")
+    await expect(legend).toHaveText(corner("xstzompc"))
 
     await page.keyboard.press("j")
     await expect(highlighted).toHaveAttribute("data-channel-name", names[0])
@@ -530,7 +544,7 @@ test.describe("TG Workspace channels and posts", () => {
 
     // A compact card carries no tag field, freeze or bio, and the legend says so.
     await page.getByRole("button", { name: "Compact cards" }).click()
-    await expect(legend).toHaveText(["j / k", "gg / G", ..."xsop", "esc"])
+    await expect(legend).toHaveText(corner("xsopc"))
     await page.keyboard.press("Escape")
     await expect(highlighted).toHaveCount(0)
   })

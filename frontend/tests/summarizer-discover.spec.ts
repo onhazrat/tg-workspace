@@ -333,4 +333,56 @@ test.describe("TG Workspace discover", () => {
     }
     expect(body.channels).toHaveLength(5)
   })
+
+  // KM-03: real Shift keydowns (Shift+KeyJ, not "J"), and the bulk bar's own
+  // confirmation for F. The follow job is mocked; no account follows anything.
+  test("keyboard mode ticks a run with J and F asks before following five", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const stamp = Date.now()
+    const carrierName = `dscarr${stamp}`
+    const sources = Array.from(
+      { length: 5 },
+      (_, index) => `dskbd${index}${stamp}`,
+    )
+
+    await gotoWorkspace(page, "channels")
+    await seedTestChannel(page, carrierName)
+
+    const bulkFollow = await mockBulkFollowJob(page)
+    await openDiscoverWithForwards(page, {
+      carrierName,
+      unfollowedSources: sources,
+    })
+
+    await page.locator("body").click()
+    await page.keyboard.press("Backslash")
+    await page.keyboard.press("KeyJ")
+    await page.keyboard.press("KeyX")
+    for (let i = 0; i < 4; i++) await page.keyboard.press("Shift+KeyJ")
+    await expect(
+      page.getByTestId("discover-bulk-bar").getByText("5 selected"),
+    ).toBeVisible()
+    await expect(page.locator("tr[data-highlight]")).toHaveCount(1)
+
+    await page.keyboard.press("Shift+KeyF")
+    const confirmDialog = page.getByRole("dialog")
+    await expect(confirmDialog.getByText(/Follow 5 channels/)).toBeVisible()
+    await confirmDialog.getByRole("button", { name: "Cancel" }).click()
+    // The keys wait while any dialog is on the page, its closing included.
+    await expect(confirmDialog).toHaveCount(0)
+    await expect.poll(() => bulkFollow.getPostCount()).toBe(0)
+
+    await page.keyboard.press("Shift+KeyF")
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Follow" })
+      .click()
+    await expect.poll(() => bulkFollow.getPostCount()).toBe(1)
+    const body = bulkFollow.getPostBodies()[0] as {
+      channels: Array<{ name: string }>
+    }
+    expect(body.channels).toHaveLength(5)
+  })
 })

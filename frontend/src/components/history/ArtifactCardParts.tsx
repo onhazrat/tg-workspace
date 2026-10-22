@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
+import { shortcut, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode, useKeyTitle } from "@/lib/keyboard/mode"
 import { artifactWindowText } from "@/lib/scope/artifact-scope"
 import { highlightText } from "@/lib/utils"
 import type { ArtifactListItem } from "@/types"
@@ -246,6 +248,7 @@ export function NoteButton({
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(artifact.note ?? "")
   const label = artifact.note ? "Edit note" : "Add note"
+  const keyboard = useKeyboardMode()
   return (
     <BarPopover
       open={open}
@@ -258,7 +261,8 @@ export function NoteButton({
         <button
           type="button"
           aria-label={label}
-          title={label}
+          title={withKey(label, "note", keyboard)}
+          {...shortcut("note")}
           className={actionClass(Boolean(artifact.note))}
         >
           <StickyNote size={13} />
@@ -361,11 +365,17 @@ export function CardActions({
   actions: ArtifactActions
 }) {
   const starred = Boolean(artifact.isStarred)
+  const starLabel = starred ? "Unstar item" : "Star item"
+  const starTitle = useKeyTitle(starLabel, "star")
   return (
     <span className="ml-auto flex shrink-0 items-center gap-0.5">
       <button
         type="button"
-        aria-label={starred ? "Unstar item" : "Star item"}
+        aria-label={starLabel}
+        title={starTitle}
+        {...shortcut("star")}
+        // History's star toasts its own outcome with Undo.
+        data-says
         aria-pressed={starred}
         onClick={() => actions.star(artifact)}
         className={actionClass(starred)}

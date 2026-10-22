@@ -1,5 +1,7 @@
+import { ACTIONS, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { cn } from "@/lib/utils"
-import { SHORTCUTS } from "./FeedKeyboard"
+import { postCardKey } from "./FeedKeyboard"
 import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
 import {
   PostCardActions,
@@ -19,8 +21,8 @@ import { PostCardPhoto } from "./PostCardPhoto"
 export interface PostCardViewProps extends PostCardHeaderProps {
   /** The Compact grid's card: one-line header, smaller photo, three lines. */
   compact?: boolean
-  /** Keyboard mode is on, so action tooltips name their letter. */
-  keyboard?: boolean
+  /** Keyboard mode's Highlight is on this card: the 2 px blue ring. */
+  highlighted?: boolean
   /** The text to show: the translation while it is showing. */
   text: string
   /** Present only when the post is in a language that needs translating. */
@@ -45,6 +47,7 @@ export function SelectBox({
   selected: boolean
   onToggle: (shift: boolean) => void
 }) {
+  const keyboard = useKeyboardMode()
   return (
     <input
       type="checkbox"
@@ -53,17 +56,20 @@ export function SelectBox({
       checked={selected}
       readOnly
       aria-label={selected ? "Deselect this post" : "Select this post"}
-      title="Select for Summarize and Chat (shift-click for a run)"
-      data-shortcut={SHORTCUTS.select}
+      title={withKey(
+        "Pick for Summarize and Chat (shift-click for a run)",
+        "tick",
+        keyboard,
+      )}
+      data-shortcut={ACTIONS.tick.key}
       onClick={(e) => onToggle(e.shiftKey)}
       className="mt-1 size-4 shrink-0 cursor-pointer accent-blue-600"
     />
   )
 }
 
-/** Keyboard mode's ring on the card `FeedKeyboard` has selected. */
-const RINGABLE =
-  "scroll-mt-24 data-[kbd-selected]:ring-2 data-[kbd-selected]:ring-blue-500 data-[kbd-selected]:border-transparent"
+/** Room under the sticky header, and no grey border inside the Highlight's ring (index.css). */
+const RINGABLE = "scroll-mt-24 data-[highlight]:border-transparent"
 
 /**
  * A Post as Telegram draws it (PTR-02): header, the photo above the text, the
@@ -72,7 +78,7 @@ const RINGABLE =
  */
 export function PostCardView({
   compact = false,
-  keyboard = false,
+  highlighted = false,
   text,
   translation,
   onFindRelated,
@@ -107,7 +113,6 @@ export function PostCardView({
           ? () => header.onShowChannel?.(post.channelName)
           : undefined
       }
-      keyboard={keyboard}
       labels={!compact}
       translation={translation}
       onFindRelated={onFindRelated}
@@ -117,7 +122,8 @@ export function PostCardView({
   if (compact) {
     return (
       <article
-        data-post-key={`${post.channelName}_${post.id}`}
+        data-post-key={postCardKey(post)}
+        data-highlight={highlighted || undefined}
         className={cn(
           "flex flex-col gap-2 rounded-xl border border-app-ink/10 bg-app-card px-4 pt-3 pb-1.5 transition-colors hover:border-app-ink/20",
           RINGABLE,
@@ -145,7 +151,8 @@ export function PostCardView({
 
   return (
     <article
-      data-post-key={`${post.channelName}_${post.id}`}
+      data-post-key={postCardKey(post)}
+      data-highlight={highlighted || undefined}
       className={cn(
         "overflow-hidden rounded-2xl border border-app-ink/10 bg-app-card shadow-sm transition-colors hover:border-app-ink/20",
         RINGABLE,

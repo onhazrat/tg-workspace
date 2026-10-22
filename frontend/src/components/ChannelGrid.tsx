@@ -15,17 +15,16 @@ import {
 import { ChannelFilterRow } from "@/components/channel-grid/ChannelFilterRow"
 import { ChannelGridBody } from "@/components/channel-grid/ChannelGridBody"
 import { ChannelGridDialogs } from "@/components/channel-grid/ChannelGridDialogs"
-import { ChannelKeyHelp } from "@/components/channel-grid/ChannelGridKeyboard"
 import { ChannelMetricMenu } from "@/components/channel-grid/ChannelMetricMenu"
 import { ChannelSelectionBar } from "@/components/channel-grid/ChannelSelectionBar"
 import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
+import { requestSpotlight } from "@/components/post-card/ChannelSpotlight"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScope } from "@/contexts/ScopeContext"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
-import { useSessionFlag } from "@/hooks/useSessionFlag"
 import {
   useCreateSettingGroup,
   useSettingGroupsQuery,
@@ -111,6 +110,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setIncludeChannelBioInPrompt,
     includeChannelTagsInPrompt,
     setIncludeChannelTagsInPrompt,
+    setActiveTab,
   } = useUI()
 
   const {
@@ -134,7 +134,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     channelActionLimit,
     setChannelActionLimit,
   } = settings
-  const [keyboard, setKeyboard] = useSessionFlag("channelGrid_keyboard")
 
   const { isOffline } = useApiStatus()
 
@@ -486,6 +485,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               value={channelSearch}
               onChange={(e) => setChannelSearch(e.target.value)}
               placeholder="Search channels..."
+              aria-label="Search channels"
               className="h-9 py-0 pl-9"
             />
           </div>
@@ -604,8 +604,6 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onShowSortRankChange={setShowSortRank}
           zoom={channelCardZoom}
           onZoomChange={setChannelCardZoom}
-          keyboard={keyboard}
-          onKeyboardChange={setKeyboard}
         />
       </div>
 
@@ -628,11 +626,12 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         hasMore={hasMoreChannels}
         onLoadMore={loadMoreChannels}
         scrollContainerRef={scrollContainerRef}
-        keyboard={keyboard}
-      />
-      <ChannelKeyHelp
-        on={keyboard}
-        keys={cardFace(channelCardZoom, settings).keys}
+        onZoomChange={setChannelCardZoom}
+        onSpotlight={(name) => {
+          requestSpotlight(name)
+          setActiveTab("posts")
+        }}
+        carried={cardFace(channelCardZoom, settings).keys}
       />
 
       <ChannelGridDialogs

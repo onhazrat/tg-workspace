@@ -221,3 +221,38 @@ test("Space picks a tab up and the arrow keys move it", async ({ page }) => {
   await page.keyboard.press("Enter")
   await expect(page).toHaveURL(new RegExp(`summary=${OPEN_SUMMARY_ID}`))
 })
+
+test("keyboard mode: \\ turns it on, g d goes to the Directory, gT and 3gt walk the strip (KM-02)", async ({
+  page,
+}) => {
+  await page.goto("/?tab=action")
+  const mode = page.getByRole("button", { name: "Keyboard mode" })
+  await expect(mode).toHaveAttribute("aria-pressed", "false")
+  await page.locator("h1").click()
+  await page.keyboard.press("\\")
+  await expect(mode).toHaveAttribute("aria-pressed", "true")
+
+  await page.keyboard.press("g")
+  await page.keyboard.press("d")
+  await expect(page).toHaveURL(/tab=directory/)
+
+  // gT as a browser sends it: Shift down first, then T. It goes to the tab
+  // before the Directory in the strip.
+  const strip = await tabs(page)
+  const before = strip[strip.indexOf("directory") - 1]
+  await page.keyboard.press("g")
+  await page.keyboard.press("Shift+KeyT")
+  await expect(page).toHaveURL(new RegExp(`tab=${before}`))
+
+  // 3gt is the strip's third tab: Action, after the Fixed Channels and Posts.
+  await page.keyboard.press("3")
+  await page.keyboard.press("g")
+  await page.keyboard.press("t")
+  await expect(page).toHaveURL(/tab=action/)
+
+  await page.keyboard.press("\\")
+  await expect(mode).toHaveAttribute("aria-pressed", "false")
+  await page.keyboard.press("g")
+  await page.keyboard.press("d")
+  await expect(page).toHaveURL(/tab=action/)
+})
