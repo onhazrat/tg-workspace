@@ -270,7 +270,12 @@ complexity-against-coverage scatter and a searchable table of every function:
 docker compose up -d db              # the dev Postgres from .env
 bash scripts/crap/run.sh             # writes crap-report/crap-scores.html (gitignored)
 bash scripts/crap/run.sh /tmp/x.html # or anywhere else
+bash scripts/crap/run.sh --frontend  # frontend ratchet only, ~30 s, no database
 ```
+
+For a frontend-only change, `--frontend` runs what CI's `test-frontend-unit`
+job runs: `bun test src` under coverage, then the frontend half of the
+ratchet. It skips pytest, the database and the HTML report.
 
 It runs the whole pytest suite under coverage (~7 minutes) in its own throwaway
 database, dropped on exit, so it is safe beside another suite on `app_test`. It
