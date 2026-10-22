@@ -101,6 +101,12 @@ INVENTORY: dict[str, str] = {
     # itself is not here — `core/request_meter.py` does that, because a
     # ContextVar tally has no table and no domain in it.
     "quota.py": AGGREGATE,
+    # Owns `tg_request_records` (RQS-01, ADR-035) and is its only writer. The
+    # hourly and daily totals are its companions, derived from it by its own
+    # rollup, as `post_references.py` owns its citation tables: a second
+    # writer would add where the rollup replaces. The recording itself is in
+    # `core/request_recording.py`, a ContextVar and a buffer with no table.
+    "request_stats.py": AGGREGATE,
     # Owns `tg_quota_limits` (ticket 24) and is its only writer. A module of its
     # own rather than more of `quota.py`, because an aggregate owns one table:
     # what an Admin allowed and what an account then spent are two facts with

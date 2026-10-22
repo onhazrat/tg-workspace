@@ -106,6 +106,9 @@ from app.models_tg import (
     PublishLog,
     QuotaLimit,
     QuotaUsage,
+    RequestDaily,
+    RequestHourly,
+    RequestRecordRow,
     SettlingCurveFit,
     Summary,
     SummaryAttempt,
@@ -322,6 +325,15 @@ OUT_OF_SCOPE: dict[type[SQLModel], str] = {
         "cascade, so a deleted account leaves rows the seam could not scope "
         "even if it wanted to."
     ),
+    RequestRecordRow: (
+        "One Request to Telegram (RQS-01, ADR-035): the Operator's stats about "
+        "the whole deployment, not something an account owns. `account_id` "
+        "names who was charged, as an attribute to group by, and no route "
+        "lists a row to its account. Who may read them is a permission "
+        "question, `QUOTA_READ_ANY`, the argument `Role` makes."
+    ),
+    RequestHourly: "The hourly totals of `RequestRecordRow`, out of scope for its reason.",
+    RequestDaily: "The daily totals of `RequestRecordRow`, out of scope for its reason.",
 }
 
 

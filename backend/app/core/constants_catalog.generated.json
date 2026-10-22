@@ -49,6 +49,22 @@
       "value": 300
     },
     {
+      "comment": "How often each process writes the Requests it has buffered. A hard kill loses at most this much, the gap the quota ledger already accepts.",
+      "expression": "5",
+      "file": "backend/app/jobs/request_stats.py",
+      "line": 25,
+      "name": "REQUEST_FLUSH_SECONDS",
+      "value": 5
+    },
+    {
+      "comment": "How often the hourly and daily Request totals are rebuilt, so the Requests tab is at most this far behind.",
+      "expression": "300",
+      "file": "backend/app/jobs/request_stats.py",
+      "line": 29,
+      "name": "REQUEST_ROLLUP_INTERVAL_SECONDS",
+      "value": 300
+    },
+    {
       "comment": "Delete expired posts in bounded batches: a backlog can be hundreds of thousands of rows, and materialising them all at once OOM-killed the worker.",
       "expression": "500",
       "file": "backend/app/jobs/retention.py",
@@ -68,7 +84,7 @@
       "comment": "Longest `detail` an announcement carries, comfortably under `pg_notify`'s 8000-byte payload cap with room for the rest of the entry.",
       "expression": "2000",
       "file": "backend/app/jobs/scheduler.py",
-      "line": 140,
+      "line": 145,
       "name": "_MAX_DETAIL_CHARS",
       "value": 2000
     },
@@ -1076,7 +1092,7 @@
       "comment": "Threads over and above the connection pool, for the `to_thread` calls that open no `Session` at all \u2014 `pg_notify` sends, file writes, the Tor control socket. Small on purpose: threads past the connection count are not more parallelism, they are the same queue one layer down.",
       "expression": "4",
       "file": "backend/app/worker.py",
-      "line": 83,
+      "line": 84,
       "name": "_NON_DB_THREAD_HEADROOM",
       "value": 4
     },

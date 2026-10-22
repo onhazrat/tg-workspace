@@ -943,6 +943,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "backend/app/core/pg_notify.py": "server",
     "backend/app/jobs/auto_summary.py": "ai",
     "backend/app/jobs/post_language.py": "sync",
+    "backend/app/jobs/request_stats.py": "quota",
     "backend/app/jobs/retention.py": "retention",
     "backend/app/jobs/scheduler.py": "jobs",
     "backend/app/jobs/settling_curve_fit.py": "reach",

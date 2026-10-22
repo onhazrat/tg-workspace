@@ -15,6 +15,7 @@ from app.api.routes.data.admin import EXPORT_ROWS_HEADER
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.core.startup_checks import run_startup_checks
+from app.jobs.request_stats import start_request_flusher, stop_request_flusher
 from app.jobs.scheduler import (
     start_job_status_subscriber,
     stop_job_status_subscriber,
@@ -59,10 +60,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         init_db(session)
     start_progress_subscriber()
     start_job_status_subscriber()
+    start_request_flusher()
     logger.info("TG Summarizer API started")
     yield
     stop_job_status_subscriber()
     stop_progress_subscriber()
+    await stop_request_flusher()
 
 
 app = FastAPI(
