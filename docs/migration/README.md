@@ -59,6 +59,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 | [ADR-029](./ADR-029-tags-belong-to-the-account.md) | Tags belong to the Account, not the Follow |
 | [ADR-030](./ADR-030-generation-is-an-attempt-on-the-worker.md) | Generating a Summary is an Attempt, run on the worker |
 | [ADR-031](./ADR-031-tick-all-matching.md) | Tick all is a snapshot up to 10,000 and All matching above it |
+| [ADR-035](./ADR-035-every-request-is-recorded.md) | Every Request is recorded, beside the ledger, kept in three tiers |
 
 ## Code references
 

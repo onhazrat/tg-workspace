@@ -398,6 +398,45 @@ view
 
 ### Scraping
 
+**Request**:
+One HTTP call to Telegram that reached the network: a page of its public web
+view, a picture from its CDN, or a Bot API call. Every retry is a Request of its
+own; an attempt refused before it left (a full Lane) is not. The unit every
+Budget and every statistic about Telegram load is counted in. One sync makes
+anywhere from one Request to dozens, so a sync is never the unit.
+_Avoid_: call, fetch, hit, scrape
+
+**Budget**:
+An Account's daily allowance of Requests, of one of three kinds: auto sync,
+manual bulk, manual single. Spending past it makes the work best-effort rather
+than refusing it.
+_Avoid_: quota (for the allowance itself), request budget, limit
+
+**Charged Request**:
+A Request some Account's Budget pays for, because that Account's work made it.
+
+**Uncharged Request**:
+A Request no Budget pays for: the work behind it benefits every Account
+(probing Directory entries, checking handles), Telegram never answered it (a
+transport fault), or it went somewhere other than the web view (a picture from
+the CDN, a Bot API call). It still counts as Telegram load.
+_Avoid_: free request, unmetered request
+
+**Wasted Request**:
+A Request whose answer told the app nothing it could keep: one that failed, was
+turned away by Telegram or answered with an error, and a probe of a handle that
+turns out not to exist. Each retry is judged by its own answer: one that brings
+the page is not Wasted. A private handle is not one either: it exists, and
+saying so is kept.
+_Avoid_: failed request (that is only one of the three), lost request
+
+**Idle Request**:
+A Request that succeeded and changed nothing: no new Post, no stored Post's
+counters or text, no Channel metadata, and for a probe no change to the
+Directory entry and no new sample Posts. Not a Wasted Request. A Channel with
+many is synced more often than it posts.
+_Avoid_: empty request, wasted page, no-op
+
 **Lane**:
 One proxy, with a limit on how many requests may pass through it at once. Every
 request to Telegram leaves through a Lane, whatever kind of work made it.
