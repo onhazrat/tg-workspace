@@ -134,6 +134,25 @@ table and day-row variants. The frontend ran against a deployment's API, and
 role for the spread, the filtered list and the counts. Star, note, the
 Summary flags and delete were stubbed.
 
+## As built
+
+Where the build settled what the plan left open:
+
+- **The URL keys** are `historyKind`, `historyStatus` (kept, so old links
+  work), `historyQ`, `historyStarred`, `historyTime` (the Time bound text form,
+  `-7d..`), `historyMoment=window`, `historySort=window` and
+  `historyOrder=oldest`; a default is absent. They are kept on **every** tab,
+  as the Directory's are, rather than on History only as `historyStatus` was:
+  the palette sets History's search and Starred from any tab, and the old
+  `UIContext` state survived a tab switch too.
+- **The spread** is `LoggedSpreadView` with a `noun`, not a second view.
+- **The total says "1 artifact"** in the singular.
+- **The "⋯" trigger is a plain button**: `TgIconButton` with a tooltip wraps
+  its button, so a Radix trigger's handlers never reach it.
+- **KM-03's file references** still point at the old `HistoryView` and
+  `ArtifactCardParts`; the list's adapter now belongs on `HistoryList`, and
+  `*` and `n` press `CardActions`' Star and Note.
+
 ## Sequencing
 
 This lands before KM-03. KM-03's file references then move to the new list,

@@ -50,15 +50,12 @@ export const queryKeys = {
   chatSessions: ["chatSessions"] as const,
   chatSession: (id: string) => ["chatSession", id] as const,
   /**
-   * The unified History list. Keyed on kind + search because the server does
-   * both — filtering client-side would defeat the paging.
+   * History's list, counts and spread, each keyed on every filter it sends,
+   * all under `artifacts` so one invalidation after a write refreshes the
+   * three. Filtering client-side would defeat the paging.
    */
-  artifacts: (
-    kind: string | null,
-    search: string,
-    starred: boolean,
-    status: string | null = null,
-  ) => ["artifacts", kind ?? "all", search, starred, status ?? "all"] as const,
+  artifacts: (part: "list" | "counts" | "spread", query: object) =>
+    ["artifacts", part, query] as const,
   /** Under `artifacts`, so a History delete re-runs tab reconcile too. */
   artifactTabs: (keys: readonly string[]) =>
     ["artifacts", "tabs", ...keys] as const,

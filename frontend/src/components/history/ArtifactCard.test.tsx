@@ -1,194 +1,279 @@
 /**
- * The pieces a History card is assembled from. Each takes props only; the
- * Analysis window line stays in `ArtifactCard`, because restoring a Scope
- * needs the workspace contexts.
- *
- * What is pinned is what a person scanning the list reads: which kind, which
- * channels, whether it is still out, and which toggles a click flips.
+ * One History card, rendered from props: what a person scanning the list
+ * reads (kind, state, channels, title, window, note), and what each of Star,
+ * Note, "⋯" and "Use this Scope" does.
  */
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type { ArtifactListItem } from "@/types"
 import {
-  ArtifactCardActions,
-  ArtifactCardHeading,
-  ArtifactCardNotes,
-} from "./ArtifactCardParts"
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react"
+import type { ArtifactListItem } from "@/types"
+import { ArtifactCard } from "./ArtifactCard"
+import type { ArtifactActions } from "./ArtifactCardParts"
 import { artifactChannelsLine } from "./artifact-presentation"
 
 afterEach(cleanup)
 
-const summary = {
-  kind: "summary",
-  id: "s1",
-  title: "",
-  timestamp: 1,
-  isStarred: false,
-  status: "done",
-  postCount: 12,
-  scope: { channels: ["alpha", "beta"] },
-} as unknown as ArtifactListItem
+const DAY = 86_400_000
+const scope = (channels: string[]) => ({
+  channels,
+  start: Date.UTC(2026, 9, 1),
+  end: Date.UTC(2026, 9, 1) + DAY,
+  durationMinutes: 1440,
+})
 
-const chat = {
-  kind: "chat",
-  id: "c1",
-  title: "My chat",
-  timestamp: 1,
-  isStarred: true,
-  messageCount: 2,
-  note: "keep",
-} as unknown as ArtifactListItem
+const summary = (over: Record<string, unknown> = {}) =>
+  ({
+    kind: "summary",
+    id: "s1",
+    title: "## 📰 **Morning** brief",
+    timestamp: Date.UTC(2026, 9, 2),
+    isStarred: false,
+    status: "complete",
+    postCount: 12,
+    autoRegenerate: false,
+    autoPublish: false,
+    scope: scope(["alpha", "bravo", "charlie", "delta", "echo_news"]),
+    ...over,
+  }) as unknown as ArtifactListItem
 
-const handlers = () => ({
-  onToggleStar: mock(),
-  onEditNote: mock(),
-  onDelete: mock(),
-  onToggleAutoRegenerate: mock(),
-  onToggleAutoPublish: mock(),
+const actions = (): ArtifactActions => ({
+  open: mock(),
+  star: mock(),
+  saveNote: mock(),
+  remove: mock(),
+  autoRegenerate: mock(),
+  autoPublish: mock(),
+  useScope: mock(),
+})
+
+function mount(
+  artifact: ArtifactListItem,
+  { search = "", compact = false } = {},
+) {
+  const a = actions()
+  render(
+    <ArtifactCard
+      artifact={artifact}
+      actions={a}
+      search={search}
+      compact={compact}
+    />,
+  )
+  return a
+}
+
+const text = (testId: string) => screen.getByTestId(testId).textContent
+
+describe("the header", () => {
+  test("tints each kind's icon in its own colour", () => {
+    mount(summary())
+    expect(
+      screen.getByTestId("artifact-kind-icon").getAttribute("class"),
+    ).toContain("text-sky-500")
+    cleanup()
+    mount({ kind: "chat", id: "c", timestamp: 1 } as ArtifactListItem)
+    expect(
+      screen.getByTestId("artifact-kind-icon").getAttribute("class"),
+    ).toContain("text-violet-500")
+  })
+
+  test("shows a Summary's flag chips only while they are on", () => {
+    mount(summary())
+    expect(screen.queryByText("Auto-regenerates")).toBeNull()
+    expect(screen.queryByText("Auto-publishes")).toBeNull()
+    cleanup()
+    mount(summary({ autoRegenerate: true, autoPublish: true }))
+    expect(screen.getByText("Auto-regenerates")).toBeTruthy()
+    expect(screen.getByText("Auto-publishes")).toBeTruthy()
+  })
+})
+
+describe("the channel line", () => {
+  test("names the first three and counts the rest, the whole list on hover", () => {
+    mount(summary())
+    const line = screen.getByTestId("artifact-channels")
+    expect(line.textContent).toBe("alpha, bravo, charlie+2")
+    expect(line.getAttribute("title")).toBe(
+      "alpha, bravo, charlie, delta, echo_news",
+    )
+  })
+
+  test("moves a search's matching channels to the front", () => {
+    mount(summary(), { search: "news" })
+    expect(text("artifact-channels")).toBe("echo_news, alpha, bravo+2")
+  })
+
+  test("says so when the Scope names none", () => {
+    mount(summary({ scope: null }))
+    expect(screen.getByText("No channels")).toBeTruthy()
+  })
+})
+
+describe("the title", () => {
+  test("is plain text, without markdown marks or a leading emoji", () => {
+    mount(summary())
+    expect(text("artifact-title")).toBe("Morning brief")
+  })
+
+  test("a Failed card keeps its sentence, and its footer repeats nothing", () => {
+    mount(summary({ status: "failed", failedAttempts: 2 }))
+    expect(text("artifact-title")).toBe(
+      "Generation failed. Open it to retry, keep a Partial response or paste a response.",
+    )
+    expect(screen.getByText("Failed ×2")).toBeTruthy()
+    expect(text("artifact-detail")).toBe("")
+  })
+
+  test("a Pending card's footer repeats nothing either; a done one counts", () => {
+    mount(summary({ status: "pending" }))
+    expect(screen.getByText("Awaiting response")).toBeTruthy()
+    expect(text("artifact-detail")).toBe("")
+    cleanup()
+    mount(summary())
+    expect(text("artifact-detail")).toBe("12 posts")
+  })
+
+  test("reads in its own direction, and a click opens the Artifact", () => {
+    const a = mount(summary())
+    const title = screen.getByTestId("artifact-title")
+    expect(title.getAttribute("dir")).toBe("auto")
+    fireEvent.click(title)
+    expect(a.open).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("search marks", () => {
+  test("mark the match in the channels, the title and the note", () => {
+    mount(summary({ title: "Morning news", note: "news for Monday" }), {
+      search: " NEWS ",
+    })
+    const marked = [...document.querySelectorAll("mark")].map(
+      (m) => m.textContent,
+    )
+    expect(marked).toEqual(["news", "news", "news"])
+  })
+
+  test("mark nothing without a search", () => {
+    mount(summary({ note: "news" }))
+    expect(document.querySelectorAll("mark").length).toBe(0)
+  })
+})
+
+describe("the window line", () => {
+  test("ends in a Use this Scope icon that restores the frozen Scope", () => {
+    const artifact = summary()
+    const a = mount(artifact)
+    const line = screen.getByTestId("artifact-scope-line")
+    expect(line.textContent).toContain("· 1d")
+    fireEvent.click(
+      within(line).getByRole("button", { name: "Use this Scope" }),
+    )
+    expect(a.useScope).toHaveBeenCalledWith(artifact.scope)
+  })
+
+  test("says so when no window was recorded, with nothing to restore", () => {
+    mount(summary({ scope: null }))
+    expect(text("artifact-scope-line")).toBe("Analysis window: not recorded")
+    expect(screen.queryByRole("button", { name: "Use this Scope" })).toBeNull()
+  })
+})
+
+describe("the actions", () => {
+  test("Star flips the star", () => {
+    const a = mount(summary())
+    fireEvent.click(screen.getByRole("button", { name: "Star item" }))
+    expect(a.star).toHaveBeenCalledTimes(1)
+  })
+
+  test("the note is edited in a popover beside its button", () => {
+    const artifact = summary({ note: "keep" })
+    const a = mount(artifact)
+    expect(text("artifact-note")).toBe("keep")
+    fireEvent.click(screen.getByRole("button", { name: "Edit note" }))
+    const box = screen.getByLabelText("Note on Summary") as HTMLTextAreaElement
+    expect(box.value).toBe("keep")
+    fireEvent.change(box, { target: { value: "  keep this  " } })
+    fireEvent.click(screen.getByText("Save note"))
+    expect(a.saveNote).toHaveBeenCalledWith(artifact, "keep this")
+  })
+
+  test("saving a blank note deletes it", () => {
+    const a = mount(summary({ note: "keep" }))
+    fireEvent.click(screen.getByRole("button", { name: "Edit note" }))
+    fireEvent.change(screen.getByLabelText("Note on Summary"), {
+      target: { value: "  " },
+    })
+    fireEvent.click(screen.getByText("Save note"))
+    expect(a.saveNote).toHaveBeenCalledWith(expect.anything(), null)
+  })
+
+  const openMenu = () =>
+    act(() => {
+      fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), {
+        key: "Enter",
+      })
+    })
+
+  test("the ⋯ menu holds Auto-regenerate, Auto-publish and Delete", () => {
+    const artifact = summary()
+    const a = mount(artifact)
+    openMenu()
+    const items = [
+      ...screen.getAllByRole("menuitemcheckbox"),
+      ...screen.getAllByRole("menuitem"),
+    ].map((item) => item.textContent?.trim())
+    expect(items).toEqual(["Auto-regenerate", "Auto-publish", "Delete"])
+    fireEvent.click(screen.getByText("Auto-publish"))
+    expect(a.autoPublish).toHaveBeenCalledWith(artifact)
+  })
+
+  test("another kind's menu holds Delete alone", () => {
+    const chat = { kind: "chat", id: "c", timestamp: 1 } as ArtifactListItem
+    const a = mount(chat)
+    openMenu()
+    expect(screen.queryAllByRole("menuitemcheckbox").length).toBe(0)
+    expect(screen.getAllByRole("menuitem").length).toBe(1)
+    fireEvent.click(screen.getByText("Delete"))
+    expect(a.remove).toHaveBeenCalledWith(chat)
+  })
+})
+
+describe("the Compact grid's card", () => {
+  test("drops the window, acted-by and note lines and keeps icon actions", () => {
+    mount(summary({ note: "keep", actedByEmail: "owner@example.com" }), {
+      compact: true,
+    })
+    expect(screen.queryByTestId("artifact-scope-line")).toBeNull()
+    expect(screen.queryByTestId("artifact-acted-by")).toBeNull()
+    expect(screen.queryByTestId("artifact-note")).toBeNull()
+    const star = screen.getByRole("button", { name: "Star item" })
+    expect(star.textContent).toBe("")
+    expect(screen.getByRole("button", { name: "Edit note" }).textContent).toBe(
+      "",
+    )
+    expect(screen.getByRole("button", { name: "More actions" })).toBeTruthy()
+  })
+
+  test("the full card names them, and shows who acted on your behalf", () => {
+    mount(summary({ note: "keep", actedByEmail: "owner@example.com" }))
+    expect(text("artifact-acted-by")).toContain("owner@example.com")
+    expect(screen.getByRole("button", { name: "Star item" }).textContent).toBe(
+      "Star",
+    )
+  })
 })
 
 describe("artifactChannelsLine", () => {
   test("joins the scope's channels, and says so when there are none", () => {
-    expect(artifactChannelsLine(summary)).toBe("alpha, beta")
-    expect(artifactChannelsLine(chat)).toBe("No channels")
-    expect(
-      artifactChannelsLine({
-        ...summary,
-        scope: { channels: [] },
-      } as unknown as ArtifactListItem),
-    ).toBe("No channels")
-  })
-})
-
-describe("ArtifactCardHeading", () => {
-  test("an untitled row falls back to its detail, and a click opens it", () => {
-    const onOpen = mock()
-    render(
-      <ArtifactCardHeading
-        artifact={summary}
-        pending={false}
-        onOpen={onOpen}
-      />,
+    expect(artifactChannelsLine(summary({ scope: scope(["a", "b"]) }))).toBe(
+      "a, b",
     )
-    expect(screen.getByText("Summary")).toBeTruthy()
-    expect(screen.getByText("alpha, beta")).toBeTruthy()
-    expect(screen.getByText("12 posts")).toBeTruthy()
-    expect(screen.queryByText("Awaiting response")).toBeNull()
-    fireEvent.click(screen.getByRole("button"))
-    expect(onOpen).toHaveBeenCalledWith(summary)
-  })
-
-  test("a pending row carries the badge and keeps its own title", () => {
-    render(<ArtifactCardHeading artifact={chat} pending onOpen={() => {}} />)
-    expect(screen.getByText("Awaiting response")).toBeTruthy()
-    expect(screen.getByText("My chat")).toBeTruthy()
-  })
-})
-
-describe("ArtifactCardHeading for a summary whose Attempt is running", () => {
-  test("says Generating, not Failed, while its first Attempt runs", () => {
-    render(
-      <ArtifactCardHeading
-        artifact={{ ...summary, status: "running" } as ArtifactListItem}
-        pending={false}
-        onOpen={() => {}}
-      />,
-    )
-    expect(screen.getByText("Generating")).toBeTruthy()
-    expect(screen.queryByText("Failed")).toBeNull()
-  })
-})
-
-describe("ArtifactCardHeading for a Failed summary", () => {
-  const failed = (n: number) =>
-    ({
-      ...summary,
-      status: "failed",
-      failedAttempts: n,
-    }) as unknown as ArtifactListItem
-
-  test("one failure: a red Failed badge and a line saying what can be done", () => {
-    render(
-      <ArtifactCardHeading
-        artifact={failed(1)}
-        pending={false}
-        onOpen={() => {}}
-      />,
-    )
-    expect(screen.getByText("Failed")).toBeTruthy()
-    expect(screen.getByText(/Generation failed/)).toBeTruthy()
-    expect(screen.queryByText("Awaiting response")).toBeNull()
-  })
-
-  test("several failures: Failed ×n", () => {
-    render(
-      <ArtifactCardHeading
-        artifact={failed(3)}
-        pending={false}
-        onOpen={() => {}}
-      />,
-    )
-    expect(screen.getByText("Failed ×3")).toBeTruthy()
-  })
-})
-
-describe("ArtifactCardNotes", () => {
-  test("shows who acted and the note only when there is one", () => {
-    render(
-      <ArtifactCardNotes
-        artifact={{ ...chat, actedByEmail: "owner@example.com" }}
-      />,
-    )
-    expect(screen.getByTestId("artifact-acted-by").textContent).toContain(
-      "owner@example.com",
-    )
-    expect(screen.getByText("keep")).toBeTruthy()
-    cleanup()
-    const { container } = render(<ArtifactCardNotes artifact={summary} />)
-    expect(container.textContent).toBe("")
-  })
-})
-
-describe("ArtifactCardActions", () => {
-  test("labels name the next state, and a click reaches its handler", () => {
-    const h = handlers()
-    render(<ArtifactCardActions artifact={chat} pending={false} {...h} />)
-    const star = screen.getByLabelText("Unstar item")
-    expect(star.getAttribute("data-active")).toBe("true")
-    fireEvent.click(star)
-    expect(h.onToggleStar).toHaveBeenCalledWith(chat)
-    fireEvent.click(screen.getByLabelText("Edit note"))
-    expect(h.onEditNote).toHaveBeenCalledWith(chat)
-    fireEvent.click(screen.getByLabelText("Delete item"))
-    expect(h.onDelete).toHaveBeenCalledWith(chat)
-    // The schedule toggles are summary-only.
-    expect(screen.queryByLabelText(/auto-regenerate/)).toBeNull()
-  })
-
-  test("a summary gets the schedule toggles, off while it is pending", () => {
-    const h = handlers()
-    const scheduled = {
-      ...summary,
-      autoRegenerate: true,
-    } as unknown as ArtifactListItem
-    render(<ArtifactCardActions artifact={scheduled} pending={false} {...h} />)
-    expect(
-      screen.getByLabelText("Star item").getAttribute("data-active"),
-    ).toBeNull()
-    expect(screen.getByLabelText("Add note")).toBeTruthy()
-    fireEvent.click(screen.getByLabelText("Disable auto-regenerate"))
-    expect(h.onToggleAutoRegenerate).toHaveBeenCalledWith(scheduled)
-    fireEvent.click(screen.getByLabelText("Enable auto-publish"))
-    expect(h.onToggleAutoPublish).toHaveBeenCalledWith(scheduled)
-    cleanup()
-    render(<ArtifactCardActions artifact={scheduled} pending {...h} />)
-    expect(
-      (screen.getByLabelText("Disable auto-regenerate") as HTMLButtonElement)
-        .disabled,
-    ).toBe(true)
-    expect(
-      (screen.getByLabelText("Enable auto-publish") as HTMLButtonElement)
-        .disabled,
-    ).toBe(true)
+    expect(artifactChannelsLine(summary({ scope: null }))).toBe("No channels")
   })
 })

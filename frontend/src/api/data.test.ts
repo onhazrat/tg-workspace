@@ -180,11 +180,17 @@ describe("listArtifacts", () => {
       search: "iran",
       starred: true,
       status: "failed",
+      moment: "window",
+      mode: "fixed",
+      start: 0,
+      end: 60_000,
+      sort: "window",
+      descending: false,
       limit: 20,
       offset: 0,
     })
     expect(sent[0].url).toBe(
-      "/api/v1/data/artifacts?kind=chat&search=iran&starred=true&status=failed&limit=20&offset=0",
+      "/api/v1/data/artifacts?kind=chat&search=iran&starred=true&status=failed&moment=window&mode=fixed&start=0&end=60000&sort=window&descending=false&limit=20&offset=0",
     )
   })
 })

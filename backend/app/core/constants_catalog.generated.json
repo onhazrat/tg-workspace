@@ -1164,7 +1164,7 @@
       "comment": "The server refuses a longer search.",
       "expression": "256",
       "file": "frontend/src/components/directory/DirectoryBar.tsx",
-      "line": 146,
+      "line": 147,
       "name": "SEARCH_MAX",
       "value": 256
     },
@@ -1199,6 +1199,14 @@
       "line": 41,
       "name": "PAGE_SIZE",
       "value": 100
+    },
+    {
+      "comment": "How many channels the line names before the \"+N\".",
+      "expression": "3",
+      "file": "frontend/src/components/history/ArtifactCardParts.tsx",
+      "line": 133,
+      "name": "SHOWN_CHANNELS",
+      "value": 3
     },
     {
       "comment": "A card hidden under the workspace's sticky header is not \"on screen\".",
@@ -1324,7 +1332,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 159,
+      "line": 156,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },

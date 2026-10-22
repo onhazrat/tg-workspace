@@ -462,8 +462,9 @@ test("History's Failed filter shows only the red cards, and keeps it in the URL"
   await expect(page).toHaveURL(/historyStatus=failed/)
   await expect(cards).toHaveCount(4)
   const failed = page.locator(`[data-artifact-id="${FAILED_ID}"]`)
+  // The badge says it; the footer does not say it again.
   await expect(failed).toContainText("Failed ×2")
-  await expect(failed).toContainText("2 failed attempts")
+  await expect(failed).not.toContainText("2 failed attempts")
   await expect(failed).toHaveClass(/border-red-500/)
 
   // A reload keeps the filter.

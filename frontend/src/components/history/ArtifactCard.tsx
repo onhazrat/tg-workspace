@@ -1,28 +1,36 @@
 import type React from "react"
-import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
+import { highlightText } from "@/lib/utils"
 import type { ArtifactListItem } from "@/types"
 
 import { RelativeTime } from "../RelativeTime"
 import {
-  ArtifactCardActions,
-  ArtifactCardHeading,
-  ArtifactCardNotes,
+  ActedBy,
+  type ArtifactActions,
+  CardActions,
+  ChannelsLine,
+  FlagChips,
+  KindLabel,
+  StatusBadge,
+  WindowLine,
 } from "./ArtifactCardParts"
 import {
   artifactDetail,
   failedAttempts,
   isPendingArtifact,
+  plainTitle,
 } from "./artifact-presentation"
+
+/** A Failed card's title: what to do with it. */
+const FAILED_TITLE =
+  "Generation failed. Open it to retry, keep a Partial response or paste a response."
 
 interface ArtifactCardProps {
   artifact: ArtifactListItem
-  onOpen: (artifact: ArtifactListItem) => void
-  onToggleStar: (artifact: ArtifactListItem) => void
-  onEditNote: (artifact: ArtifactListItem) => void
-  onDelete: (artifact: ArtifactListItem) => void
-  /** Summaries only — the two scheduled-regeneration flags. */
-  onToggleAutoRegenerate: (artifact: ArtifactListItem) => void
-  onToggleAutoPublish: (artifact: ArtifactListItem) => void
+  actions: ArtifactActions
+  /** The search as typed; its matches are marked in the text. */
+  search: string
+  /** The Compact grid's card: no window, acted-by or note lines, icon actions. */
+  compact?: boolean
 }
 
 /**
@@ -35,54 +43,78 @@ interface ArtifactCardProps {
  */
 export const ArtifactCard: React.FC<ArtifactCardProps> = ({
   artifact,
-  onOpen,
-  ...actions
+  actions,
+  search,
+  compact = false,
 }) => {
-  const pending = isPendingArtifact(artifact)
   const failed = failedAttempts(artifact) !== null
+  const term = search.trim()
+  const title = failed
+    ? FAILED_TITLE
+    : plainTitle(artifact.title || artifactDetail(artifact))
 
   /*
-   * The `min-w-0`s below make the card safe to drop into any flex or grid
-   * parent; the one that actually fixed History is on the grid item in
-   * `HistoryView`, and the reasoning lives there. Either way `truncate` on the
-   * channel line only ellipsizes once something upstream clamps the width.
+   * The `min-w-0`s make the card safe in any flex or grid parent: a grid item
+   * defaults to `min-width: auto`, and one summary carries 1,722 channel names.
+   * Guarded by `tests/open-artifact.spec.ts`, which measures the scroller.
    */
   return (
-    <div
+    <article
       data-testid="artifact-card"
       data-artifact-kind={artifact.kind}
       data-artifact-id={artifact.id}
-      className={`group relative flex min-w-0 flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md ${
+      className={`flex min-w-0 flex-col gap-2 rounded-xl border bg-app-card px-4 pt-3 pb-1.5 transition-colors ${
         failed
-          ? "border-red-500/30 bg-red-500/[0.03] hover:border-red-500/50"
-          : pending
-            ? "border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50"
-            : "border-app-ink/10 hover:border-app-ink/20"
+          ? "border-red-500/30 hover:border-red-500/50"
+          : "border-app-ink/10 hover:border-app-ink/20"
       }`}
     >
-      <ArtifactCardHeading
-        artifact={artifact}
-        pending={pending}
-        onOpen={onOpen}
-      />
-
-      <div className="flex min-w-0 items-center justify-between gap-3 text-[11px] font-mono text-app-ink/60">
-        <span className="truncate">{artifactDetail(artifact)}</span>
-        <RelativeTime timestamp={artifact.timestamp} />
-      </div>
-
-      {/*
-       * The frozen Analysis window, on the card rather than only on the detail
-       * view: "which hours was this made from" is asked while scanning the
-       * list, and it is the whole of what distinguishes two runs over the same
-       * channels. The relative stamp above it is the *creation* time, which is
-       * a fact about the row and not about its window.
-       */}
-      <ArtifactScopeLine artifact={artifact} />
-
-      <ArtifactCardNotes artifact={artifact} />
-
-      <ArtifactCardActions artifact={artifact} pending={pending} {...actions} />
-    </div>
+      <header className="flex min-w-0 flex-wrap items-center gap-2 text-[12px]">
+        <KindLabel artifact={artifact} />
+        <StatusBadge artifact={artifact} />
+        <FlagChips artifact={artifact} />
+        <span className="ml-auto shrink-0 text-app-ink/50">
+          <RelativeTime timestamp={artifact.timestamp} />
+        </span>
+      </header>
+      <button
+        type="button"
+        onClick={() => actions.open(artifact)}
+        className="flex min-w-0 flex-col gap-1 text-left"
+      >
+        <ChannelsLine channels={artifact.scope?.channels ?? []} search={term} />
+        <span
+          dir="auto"
+          data-testid="artifact-title"
+          className="line-clamp-2 text-start text-[13px] leading-relaxed text-app-ink/80"
+        >
+          {highlightText(title, term)}
+        </span>
+      </button>
+      {!compact && (
+        <>
+          <WindowLine artifact={artifact} onUseScope={actions.useScope} />
+          <ActedBy artifact={artifact} />
+          {artifact.note && (
+            <p
+              dir="auto"
+              data-testid="artifact-note"
+              className="break-words rounded-lg bg-app-ink/5 px-3 py-2 text-[12px] text-app-ink/70"
+            >
+              {highlightText(artifact.note, term)}
+            </p>
+          )}
+        </>
+      )}
+      <footer className="mt-auto flex items-center gap-x-2 border-t border-app-ink/5 pt-1.5 text-[12px] text-app-ink/50">
+        {/* The header's badge already says Failed or Awaiting response. */}
+        <span data-testid="artifact-detail" className="min-w-0 truncate">
+          {failed || isPendingArtifact(artifact)
+            ? ""
+            : artifactDetail(artifact)}
+        </span>
+        <CardActions artifact={artifact} compact={compact} actions={actions} />
+      </footer>
+    </article>
   )
 }
