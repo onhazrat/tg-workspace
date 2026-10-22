@@ -501,15 +501,19 @@ def test_every_tier_answers_the_same_totals(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Mutation: drop a group key from the hourly rollup.
+    """Mutation: count only the answered Requests in the hourly rollup.
 
     The same Requests read three ways: today whole (daily totals), this hour
     whole (hourly totals), and a minute either side of now (the Requests
-    themselves). All three must agree.
+    themselves). All three must agree, a Wasted attempt included.
     """
+    monkeypatch.setattr(settings, "NETWORK_FETCH_RETRIES", 3)
     _follow(client, superuser_token_headers, CHANNEL)
-    telegram.script(_first_page(), _page_html(CHANNEL, [100, 101]))
+    telegram.script(
+        _first_page(), httpx.ConnectError("refused"), _page_html(CHANNEL, [100, 101])
+    )
     _sync(client, superuser_token_headers)
 
     now = datetime.now(UTC)
@@ -555,7 +559,12 @@ def test_a_request_in_an_hour_already_rolled_up_is_counted(
     superuser_token_headers: dict[str, str],
     telegram: FakeTelegram,
 ) -> None:
-    """Mutation: never move the watermark back by the overlap... and never read it."""
+    """Mutation: roll up only the hours after the last one rolled up.
+
+    The second sync lands in the hour the first rollup already wrote, which is
+    the shape of every rollup but the first in an hour: that hour has to be
+    rebuilt, not skipped.
+    """
     _follow(client, superuser_token_headers, CHANNEL)
     telegram.script(_first_page(), _page_html(CHANNEL, [100]))
     _sync(client, superuser_token_headers)
