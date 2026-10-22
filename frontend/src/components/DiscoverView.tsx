@@ -255,10 +255,8 @@ export const DiscoverView: React.FC = () => {
     report: reportId,
     names: candidates.map((c) => c.name),
     onOpen: setInspectingName,
-    isIgnored: (name) =>
-      rawCandidates.some((c) => c.name === name && c.isIgnored),
-    onSetIgnored: (name, ignored) =>
-      setIgnored.mutate({ handles: [name], ignored }),
+    candidates: rawCandidates,
+    setIgnored: setIgnored.mutate,
   })
 
   const runQuickAction = (action: DiscoveryQuickAction) =>

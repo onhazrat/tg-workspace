@@ -8,6 +8,7 @@
  */
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
 import { ACTIONS } from "@/lib/keyboard/key-list"
+import type { DiscoveryCandidate } from "@/lib/posts/discover-candidates"
 
 const rowOf = (name: string) =>
   document.querySelector<HTMLElement>(
@@ -19,8 +20,8 @@ export function useDiscoverKeys({
   report,
   names,
   onOpen,
-  isIgnored,
-  onSetIgnored,
+  candidates,
+  setIgnored,
 }: {
   /** The report's id: each report tab remembers its own Highlight. */
   report: string | null
@@ -28,10 +29,10 @@ export function useDiscoverKeys({
   names: string[]
   /** Opens a Candidate's Details. */
   onOpen: (name: string) => void
-  /** Whether a Candidate is dismissed now. */
-  isIgnored: (name: string) => boolean
-  /** Dismisses a Candidate or restores it, as its row's button does. */
-  onSetIgnored: (name: string, ignored: boolean) => void
+  /** Every Candidate in the report, filtered out or not: whether each is dismissed. */
+  candidates: readonly DiscoveryCandidate[]
+  /** The Dismiss mutation's `mutate`, as the row's button calls it. */
+  setIgnored: (change: { handles: string[]; ignored: boolean }) => void
 }): string | null {
   return useKeyboardList({
     list: "discover",
@@ -44,8 +45,8 @@ export function useDiscoverKeys({
     // A dismissed row leaves the default view, so Undo cannot press it again.
     undo: (key, name) => {
       if (key !== ACTIONS.dismiss.key) return undefined
-      const was = isIgnored(name)
-      return () => onSetIgnored(name, was)
+      const was = candidates.some((c) => c.name === name && c.isIgnored)
+      return () => setIgnored({ handles: [name], ignored: was })
     },
     search: () =>
       document.querySelector('input[aria-label="Filter candidates by name"]'),

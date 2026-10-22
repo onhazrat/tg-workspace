@@ -25,7 +25,7 @@ import { DiscoverCandidatePanel } from "./DiscoverCandidatePanel"
 import { DiscoverCandidateTable } from "./DiscoverCandidateTable"
 import { useDiscoverKeys } from "./DiscoverKeyboard"
 
-const candidate = (name: string, isFollowed = false) =>
+const candidate = (name: string, isFollowed = false, isIgnored = false) =>
   ({
     name,
     counts: { forward: 1, mention: 0, link: 0 },
@@ -34,7 +34,7 @@ const candidate = (name: string, isFollowed = false) =>
     seenInCount: 0,
     lastSeen: 0,
     isFollowed,
-    isIgnored: false,
+    isIgnored,
     probe: null,
   }) as unknown as DiscoveryCandidate
 
@@ -48,19 +48,29 @@ const OPS = {
   reopen: () => {},
 }
 
-type Calls = Record<"follow" | "ignore" | "bulkFollow" | "bulkDismiss", Spy>
+type Calls = Record<
+  "follow" | "ignore" | "setIgnored" | "bulkFollow" | "bulkDismiss",
+  Spy
+>
 type Spy = ReturnType<typeof mock<(...args: unknown[]) => void>>
 let calls: Calls
 
-function Report({ report = null }: { report?: string | null }) {
+function Report({
+  report = null,
+  rows = ROWS,
+}: {
+  report?: string | null
+  rows?: DiscoveryCandidate[]
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [inspecting, setInspecting] = useState<string | null>(null)
   const ring = useDiscoverKeys({
     report,
-    names: ROWS.map((r) => r.name),
+    names: rows.map((r) => r.name),
     onOpen: setInspecting,
-    isIgnored: () => false,
-    onSetIgnored: (name, ignored) => calls.ignore(name, ignored),
+    // As DiscoverView passes them: the whole report, and the mutation's mutate.
+    candidates: rows,
+    setIgnored: (change) => calls.setIgnored(change),
   })
   return (
     <>
@@ -82,7 +92,7 @@ function Report({ report = null }: { report?: string | null }) {
         />
       )}
       <DiscoverCandidateTable
-        candidates={ROWS}
+        candidates={rows}
         ring={ring}
         selectedForFollow={selected}
         setSelectedForFollow={setSelected}
@@ -113,11 +123,11 @@ function Report({ report = null }: { report?: string | null }) {
   )
 }
 
-const tab = (report: string | null = null) => (
+const tab = (report: string | null = null, rows = ROWS) => (
   <QueryClientProvider client={new QueryClient()}>
     <Toaster />
     <KeyboardMode ops={OPS} />
-    <Report report={report} />
+    <Report report={report} rows={rows} />
   </QueryClientProvider>
 )
 
@@ -141,6 +151,7 @@ beforeEach(() => {
   calls = {
     follow: mock(),
     ignore: mock(),
+    setIgnored: mock(),
     bulkFollow: mock(),
     bulkDismiss: mock(),
   }
@@ -215,9 +226,20 @@ describe("a Discovery report's keyboard mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Undo" }))
     // Undo sets the state the Candidate had, whether or not its row is
     // still on screen (a dismissed row leaves the default view).
-    expect(calls.ignore.mock.calls).toEqual([
-      ["b", true],
-      ["b", false],
+    expect(calls.ignore.mock.calls).toEqual([["b", true]])
+    expect(calls.setIgnored.mock.calls).toEqual([
+      [{ handles: ["b"], ignored: false }],
+    ])
+  })
+
+  test("Undo after d on a dismissed Candidate dismisses it again", async () => {
+    const rows = [candidate("a"), candidate("c", false, true)]
+    render(tab(null, rows))
+    type("j", "j", "d")
+    expect(calls.ignore.mock.calls).toEqual([["c", false]])
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }))
+    expect(calls.setIgnored.mock.calls).toEqual([
+      [{ handles: ["c"], ignored: true }],
     ])
   })
 
