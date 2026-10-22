@@ -14,6 +14,7 @@ import {
 } from "@/lib/channels/channel-tag-model"
 import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import { shortcut } from "@/lib/keyboard/key-list"
+import { useKeyTitle } from "@/lib/keyboard/mode"
 import type { Channel } from "@/types"
 
 type Tags = NonNullable<Channel["tags"]>
@@ -143,6 +144,7 @@ export function ChannelCardTags({
       save(removeTagsByName(local, [names[names.length - 1]]))
     }
   }
+  const tagTitle = useKeyTitle("Add tag", "tag")
 
   return (
     <div className="mb-5 flex flex-wrap items-center gap-1.5">
@@ -196,6 +198,7 @@ export function ChannelCardTags({
             role="combobox"
             aria-label="Add tag"
             {...shortcut("tag")}
+            title={tagTitle}
             aria-expanded={open}
             aria-controls={listId}
             aria-autocomplete="list"

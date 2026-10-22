@@ -27,7 +27,8 @@ import {
 import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
 import { formatCount } from "@/lib/format-count"
-import { ACTIONS } from "@/lib/keyboard/key-list"
+import { ACTIONS, keyTitle, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { languageLabel, languageValue } from "@/lib/language-name"
 import {
   headerCheckboxState,
@@ -51,6 +52,7 @@ export function RowTagButton({
   row: Pick<Row, "handle" | "tags">
   tagging: Tagging
 }) {
+  const keyboard = useKeyboardMode()
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <TagPicker
@@ -66,6 +68,7 @@ export function RowTagButton({
             size="sm"
             aria-label={`Tag @${row.handle}`}
             data-shortcut={ACTIONS.tag.key}
+            title={keyTitle(`Tag @${row.handle}`, "tag", keyboard)}
             className="h-7 rounded-full px-2 text-app-ink/50"
           >
             <Tag size={11} />
@@ -307,6 +310,7 @@ function FollowButton({
   busy: boolean
   onFollow: (handle: string) => void
 }) {
+  const keyboard = useKeyboardMode()
   if (row.followed) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] text-app-ink/50">
@@ -321,6 +325,7 @@ function FollowButton({
       size="sm"
       aria-label={`Follow @${row.handle}`}
       data-shortcut={ACTIONS.follow.key}
+      title={keyTitle(`Follow @${row.handle}`, "follow", keyboard)}
       loading={busy}
       onClick={(e) => {
         e.stopPropagation()
@@ -349,6 +354,7 @@ export function FollowCell({
   /** `true` dismisses, `false` takes the Dismissal back. */
   onDismiss: (handle: string, dismissed: boolean) => void
 }) {
+  const keyboard = useKeyboardMode()
   const verb = row.dismissed ? "Take back" : "Dismiss"
   return (
     <span className="inline-flex items-center gap-1">
@@ -361,11 +367,13 @@ export function FollowCell({
         size="sm"
         aria-label={`${verb} @${row.handle}`}
         data-shortcut={ACTIONS.dismiss.key}
-        title={
+        title={withKey(
           row.dismissed
             ? "Take the Dismissal back, here and in Discover"
-            : "Hide this channel here and in Discover"
-        }
+            : "Hide this channel here and in Discover",
+          "dismiss",
+          keyboard,
+        )}
         onClick={(e) => {
           e.stopPropagation()
           onDismiss(row.handle, !row.dismissed)
@@ -380,6 +388,7 @@ export function FollowCell({
 }
 
 function ChannelCell({ row }: { row: Row }) {
+  const keyboard = useKeyboardMode()
   return (
     <div className="flex min-w-0 items-center gap-2">
       <ChannelAvatar
@@ -405,6 +414,7 @@ function ChannelCell({ row }: { row: Row }) {
           onClick={(e) => e.stopPropagation()}
           data-testid={`directory-channel-link-${row.handle}`}
           data-shortcut={ACTIONS.open.key}
+          title={keyTitle(`Open @${row.handle} in Telegram`, "open", keyboard)}
           className="block truncate font-mono text-[10px] text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.handle}
@@ -541,6 +551,7 @@ export function DirectoryTable({
   /** Each row's Tag picker (DFP-04); none while the Tags have not loaded. */
   tagging?: Tagging
 }) {
+  const keyboard = useKeyboardMode()
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
     ...shown.map(columnOf),
@@ -611,6 +622,7 @@ export function DirectoryTable({
                 type="checkbox"
                 aria-label={`Tick @${r.handle}`}
                 data-shortcut={ACTIONS.tick.key}
+                title={keyTitle(`Tick @${r.handle}`, "tick", keyboard)}
                 checked={ticks.has(r.handle)}
                 onChange={() =>
                   onTicks(toggleUnfollowedSelection(r.handle, false, ticks))

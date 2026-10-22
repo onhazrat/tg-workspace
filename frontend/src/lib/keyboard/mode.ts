@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from "react"
 import { scopedSessionStorage } from "@/lib/storage/scoped"
 import { IDLE, type KeyState } from "./interpreter"
-import type { Action, ListId } from "./key-list"
+import { type Action, type ListId, withKey } from "./key-list"
 
 function store<T>(initial: T) {
   let value = initial
@@ -45,6 +45,15 @@ export function setKeyboardMode(on: boolean) {
 }
 export const useKeyboardMode = () =>
   useSyncExternalStore(modeWrites.subscribe, keyboardOn)
+
+/**
+ * A keyed control's `title` for a control with no tooltip of its own: its
+ * label and key while keyboard mode is on, so the control teaches its key;
+ * none while off.
+ */
+export function useKeyTitle(label: string, action: Action): string | undefined {
+  return useKeyboardMode() ? withKey(label, action, true) : undefined
+}
 
 // ---- help: closed, the tab's keys in the corner, or the full list ----
 

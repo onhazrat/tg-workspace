@@ -9,7 +9,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
-import { shortcut } from "@/lib/keyboard/key-list"
+import { shortcut, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode, useKeyTitle } from "@/lib/keyboard/mode"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel } from "@/types"
 
@@ -27,6 +28,7 @@ export function ChannelCardPhoto({
   view: "image" | "corner"
   className?: string
 }) {
+  const keyboard = useKeyboardMode()
   return (
     <div className="relative flex-shrink-0">
       <ChannelAvatar channel={channel} className={className} view={view} />
@@ -45,7 +47,7 @@ export function ChannelCardPhoto({
           </a>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Open in Telegram</p>
+          <p>{withKey("Open in Telegram", "open", keyboard)}</p>
         </TooltipContent>
       </Tooltip>
     </div>
@@ -114,6 +116,7 @@ export function ChannelCardBio({ bio, lines }: { bio: string; lines: 2 | 4 }) {
     observer.observe(el)
     return () => observer.disconnect()
   }, [bio, expanded])
+  const moreTitle = useKeyTitle(expanded ? "Less bio" : "More bio", "more")
 
   return (
     <div className="mb-4">
@@ -130,6 +133,7 @@ export function ChannelCardBio({ bio, lines }: { bio: string; lines: 2 | 4 }) {
           type="button"
           aria-expanded={expanded}
           {...shortcut("more")}
+          title={moreTitle}
           onClick={(e) => {
             e.stopPropagation()
             setExpanded(!expanded)

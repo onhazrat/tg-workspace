@@ -1196,7 +1196,7 @@
       "comment": "",
       "expression": "100",
       "file": "frontend/src/components/directory/DirectoryTable.tsx",
-      "line": 41,
+      "line": 42,
       "name": "PAGE_SIZE",
       "value": 100
     },

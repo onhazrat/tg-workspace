@@ -422,6 +422,24 @@ describe("every size carries a control for each action it lists", () => {
     expect(new Set(carried)).toEqual(new Set<string>(keys))
   })
 
+  test("in keyboard mode a keyed control names its key; off, it does not", async () => {
+    render(<Grid names={["a"]} />)
+    await settle()
+    const titled = () =>
+      Array.from(
+        card("a").querySelectorAll<HTMLElement>("[data-shortcut][title]"),
+        (el) => [el.dataset.shortcut, el.title],
+      )
+    expect(titled()).toEqual([
+      ["x", "Select a (x)"],
+      ["p", "View A's photo (p)"],
+      ["m", "More bio (m)"],
+      ["t", "Add tag (t)"],
+    ])
+    act(() => setKeyboardMode(false))
+    expect(titled()).toEqual([])
+  })
+
   test("Reset and Remove have no key", () => {
     render(<Grid names={["a"]} />)
     for (const label of [/^Reset/, /^Remove Channel/])

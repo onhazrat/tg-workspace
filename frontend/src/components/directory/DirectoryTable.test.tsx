@@ -15,6 +15,7 @@ import {
 import type { ComponentProps } from "react"
 import type { DirectoryRowResponse } from "@/client"
 import type { ColumnKey } from "@/lib/directory/directory-columns"
+import { setKeyboardMode } from "@/lib/keyboard/mode"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
@@ -206,6 +207,26 @@ describe("keyboard mode (DFP-01)", () => {
     expect(key("f")).toBe("Follow @beta")
     expect(key("d")).toBe("Dismiss @beta")
     expect(key("o")).toBe("@beta")
+  })
+
+  test("in keyboard mode each row control names its key, x in the Directory's word", () => {
+    setKeyboardMode(true)
+    try {
+      mount({
+        ring: "beta",
+        tagging: { tags: [], onTag: () => {}, onUntag: () => {} },
+      })
+      const row = screen.getByTestId("directory-row-beta")
+      const title = (k: string) =>
+        row.querySelector(`[data-shortcut="${k}"]`)?.getAttribute("title")
+      expect(title("x")).toBe("Tick @beta (x)")
+      expect(title("f")).toBe("Follow @beta (f)")
+      expect(title("d")).toBe("Hide this channel here and in Discover (d)")
+      expect(title("o")).toBe("Open @beta in Telegram (o)")
+      expect(title("t")).toBe("Tag @beta (t)")
+    } finally {
+      setKeyboardMode(false)
+    }
   })
 
   test("t presses the row's Tag picker, and a row shows its Tags (DFP-04)", () => {

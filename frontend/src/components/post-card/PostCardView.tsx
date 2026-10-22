@@ -1,4 +1,5 @@
-import { ACTIONS } from "@/lib/keyboard/key-list"
+import { ACTIONS, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { cn } from "@/lib/utils"
 import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
 import {
@@ -47,6 +48,7 @@ export function SelectBox({
   selected: boolean
   onToggle: (shift: boolean) => void
 }) {
+  const keyboard = useKeyboardMode()
   return (
     <input
       type="checkbox"
@@ -55,7 +57,11 @@ export function SelectBox({
       checked={selected}
       readOnly
       aria-label={selected ? "Deselect this post" : "Select this post"}
-      title="Select for Summarize and Chat (shift-click for a run)"
+      title={withKey(
+        "Pick for Summarize and Chat (shift-click for a run)",
+        "tick",
+        keyboard,
+      )}
       data-shortcut={ACTIONS.tick.key}
       onClick={(e) => onToggle(e.shiftKey)}
       className="mt-1 size-4 shrink-0 cursor-pointer accent-blue-600"

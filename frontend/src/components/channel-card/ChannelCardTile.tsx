@@ -5,6 +5,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
 import { shortcut } from "@/lib/keyboard/key-list"
+import { useKeyTitle } from "@/lib/keyboard/mode"
 import type { Channel } from "@/types"
 import { ChannelCardPhoto } from "./ChannelCardHeader"
 import {
@@ -45,6 +46,8 @@ export function ChannelCardTile({
   onSync: () => void
 }) {
   const { label: syncLabel, ...sync } = syncButtonProps(channel, busy, onSync)
+  const selectTitle = useKeyTitle(selectLabel(channel.name, isSelected), "tick")
+  const syncTitle = useKeyTitle(syncLabel, "sync")
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -64,6 +67,7 @@ export function ChannelCardTile({
             aria-label={selectLabel(channel.name, isSelected)}
             {...selectionHandlers(onToggleSelected)}
             {...shortcut("tick")}
+            title={selectTitle}
             className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
           />
           <ChannelCardPhoto
@@ -74,6 +78,7 @@ export function ChannelCardTile({
           <button
             type="button"
             aria-label={syncLabel}
+            title={syncTitle}
             {...sync}
             className="absolute top-1 left-1 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-app-ink/10 bg-app-bg opacity-0 shadow-sm transition-all group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:bg-app-ink hover:text-app-bg disabled:hidden"
           >

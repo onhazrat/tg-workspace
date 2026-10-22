@@ -11,6 +11,8 @@ import {
   syncScheduleDetail,
   syncSlots,
 } from "@/lib/channels/sync-schedule-summary"
+import { withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { useNow } from "@/lib/shared-ticker"
 import type { Channel } from "@/types"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
@@ -176,6 +178,7 @@ function SyncButton({
   onSync: () => void
 }) {
   const { label, ...sync } = syncButtonProps(channel, busy, onSync)
+  const keyboard = useKeyboardMode()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -191,7 +194,7 @@ function SyncButton({
       <TooltipContent>
         <p>
           {disabledReason(channel, "individual") ??
-            "Manual sync resets auto-sync timers"}
+            withKey("Manual sync resets auto-sync timers", "sync", keyboard)}
         </p>
       </TooltipContent>
     </Tooltip>

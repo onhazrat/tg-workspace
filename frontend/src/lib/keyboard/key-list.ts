@@ -37,6 +37,10 @@ export const shortcut = (action: Action) => ({
 export const withKey = (label: string, action: Action, on: boolean) =>
   on ? `${label} (${ACTIONS[action].key})` : label
 
+/** A `title` for a keyed control with no tooltip: only in keyboard mode. */
+export const keyTitle = (label: string, action: Action, on: boolean) =>
+  on ? withKey(label, action, true) : undefined
+
 /** `x` in each list's own word (CONTEXT.md): Tick, select, Pick. */
 const TICK_LABEL: Record<ListId, string> = {
   directory: "tick or untick",
