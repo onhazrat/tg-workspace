@@ -113,6 +113,29 @@ describe("PhotoViewer", () => {
     ).toBe(true)
   })
 
+  test("h and l step as the arrows do, and p closes", () => {
+    const onClose = mock()
+    render(<PhotoViewer start="blob:b" onClose={onClose} />)
+    // By position: a Persian layout types م at l.
+    fireEvent.keyDown(window, { key: "م", code: "KeyL" })
+    expect(label()).toContain("Chan c · 3 / 3")
+    fireEvent.keyDown(window, { key: "h" })
+    fireEvent.keyDown(window, { key: "h" })
+    expect(label()).toContain("Chan a · 1 / 3")
+    // Cmd+L is the address bar's, Ctrl+H the history's: neither steps.
+    fireEvent.keyDown(window, { key: "l", code: "KeyL", metaKey: true })
+    fireEvent.keyDown(window, { key: "l", code: "KeyL", ctrlKey: true })
+    expect(label()).toContain("Chan a · 1 / 3")
+    // Held down, the p that opened the viewer must not close it again; nor
+    // does a p with Ctrl or Cmd, which is the browser's or the palette's.
+    fireEvent.keyDown(window, { key: "p", repeat: true })
+    fireEvent.keyDown(window, { key: "p", metaKey: true })
+    fireEvent.keyDown(window, { key: "p", ctrlKey: true })
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(window, { key: "p" })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   test("a double-click toggles 2.5x and cancels the click that would close", async () => {
     const onClose = mock()
     render(<PhotoViewer start="blob:a" onClose={onClose} />)
@@ -353,9 +376,43 @@ describe("a gallery of its own (SUMTAB-05)", () => {
     expect(label()).toContain("Strip x · 1 / 2")
     fireEvent.keyDown(window, { key: "ArrowLeft" })
     expect(label()).toContain("Strip y · 2 / 2")
+    fireEvent.keyDown(window, { key: "l" })
+    expect(label()).toContain("Strip x · 1 / 2")
+    fireEvent.keyDown(window, { key: "h" })
+    expect(label()).toContain("Strip y · 2 / 2")
     swipe(200, 10)
     swipe(-200, 10)
     expect(label()).toContain("Strip x · 1 / 2")
+  })
+
+  test("opens on the photo clicked, not the first with its address", () => {
+    // A Directory row and its panel show one photo; the panel's is a gallery
+    // of its own, and the row's comes first on the page.
+    const panel = document.createElement("div")
+    panel.id = "strip"
+    panel.setAttribute(GALLERY_ATTR, "panel")
+    panel.innerHTML = `<img src="blob:b" data-gallery-caption="Panel b">`
+    document.body.appendChild(panel)
+    render(
+      <PhotoViewer
+        start="blob:b"
+        from={panel.querySelector("img") as HTMLImageElement}
+        onClose={() => {}}
+      />,
+    )
+    expect(label()).toStartWith("Panel b · ")
+    expect(label()).not.toContain(" / ")
+    expect(screen.queryByLabelText("Next photo")).toBeNull()
+    cleanup()
+
+    render(
+      <PhotoViewer
+        start="blob:b"
+        from={card("b").querySelector("img") as HTMLImageElement}
+        onClose={() => {}}
+      />,
+    )
+    expect(label()).toContain("Chan b · 2 / 3")
   })
 
   test("an action over the photo on screen gets that photo and a way to close", () => {

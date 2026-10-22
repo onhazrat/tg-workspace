@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { focusIsTyping } from "@/lib/keyboard-moves"
+import { focusIsTyping } from "@/lib/keyboard/focus"
 import {
   type ChannelSpotlight,
   enterSpotlight,
@@ -23,11 +23,17 @@ import type { PostFilter } from "@/lib/posts/post-filter"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, Post } from "@/types"
 import { ChannelAvatar } from "../ChannelAvatar"
+import { postCardKey } from "./FeedKeyboard"
 
 export interface SpotlightApi {
   spotlight: ChannelSpotlight | null
-  /** Absent outside the Posts feed, where there is no spotlight to open. */
+  /**
+   * From a card: leaving scrolls back to it. Absent outside the Posts feed,
+   * where there is no spotlight to open, as `enterChannel` is.
+   */
   enter?: (post: Post, channel: string) => void
+  /** From outside Posts (the Channels tab's c): nothing to scroll back to. */
+  enterChannel?: (channel: string) => void
   leave: () => void
   setKeepFilters: (keep: boolean) => void
   /** An edit to the filter row while the spotlight is on. */
@@ -42,6 +48,21 @@ const SpotlightContext = createContext<SpotlightApi>({
 })
 
 export const SpotlightProvider = SpotlightContext.Provider
+
+/**
+ * A spotlight asked for from outside Posts (the Channels tab's c), for the
+ * feed to open once when it mounts. Only one tab is mounted at a time, so the
+ * request waits here rather than in either tab.
+ */
+let requested: string | null = null
+export const requestSpotlight = (channel: string) => {
+  requested = channel
+}
+export function takeSpotlightRequest(): string | null {
+  const channel = requested
+  requested = null
+  return channel
+}
 export const useSpotlight = () => useContext(SpotlightContext)
 
 /**
@@ -59,19 +80,30 @@ export function useSpotlightState(
   const filterRef = useRef(accountFilter)
   filterRef.current = accountFilter
 
-  const enter = useCallback(
-    (post: Post, channel: string) => {
-      const from = `${post.channelName}_${post.id}`
-      origin.current ??= {
-        key: from,
-        top: scrollContainer.current?.scrollTop ?? 0,
-      }
+  // `from` is the card's key, or "" with no card to return to.
+  const open = useCallback(
+    (channel: string, from: string) => {
       setSpotlight((current) =>
         enterSpotlight(current, channel, from, filterRef.current),
       )
       scrollContainer.current?.scrollTo({ top: 0 })
     },
     [scrollContainer],
+  )
+  const enter = useCallback(
+    (post: Post, channel: string) => {
+      const from = postCardKey(post)
+      origin.current ??= {
+        key: from,
+        top: scrollContainer.current?.scrollTop ?? 0,
+      }
+      open(channel, from)
+    },
+    [open, scrollContainer],
+  )
+  const enterChannel = useCallback(
+    (channel: string) => open(channel, ""),
+    [open],
   )
   const leave = useCallback(() => setSpotlight(null), [])
   const setKeepFilters = useCallback(
@@ -114,9 +146,50 @@ export function useSpotlightState(
   }, [spotlight, scrollContainer])
 
   return useMemo(
-    () => ({ spotlight, enter, leave, setKeepFilters, setFilter }),
-    [spotlight, enter, leave, setKeepFilters, setFilter],
+    () => ({
+      spotlight,
+      enter,
+      enterChannel,
+      leave,
+      setKeepFilters,
+      setFilter,
+    }),
+    [spotlight, enter, enterChannel, leave, setKeepFilters, setFilter],
   )
+}
+
+/**
+ * Opens the spotlight the Channels tab asked for (`requestSpotlight`), once,
+ * when the feed mounts. Returns keyboard mode's c inside a spotlight: back to
+ * Channels for one opened there, back to the feed otherwise.
+ */
+export function useSpotlightBack(
+  api: SpotlightApi,
+  toChannels: () => void,
+): () => void {
+  const { spotlight, enterChannel, leave } = api
+  const fromChannels = useRef(false)
+  // Once, on mount: `enterChannel` is stable.
+  useEffect(() => {
+    const channel = takeSpotlightRequest()
+    if (!channel || !enterChannel) return
+    fromChannels.current = true
+    enterChannel(channel)
+  }, [])
+  // Left by any way (Esc, its button, a search): no longer Channels'.
+  const wasOn = useRef(false)
+  useEffect(() => {
+    if (spotlight) wasOn.current = true
+    else if (wasOn.current) {
+      wasOn.current = false
+      fromChannels.current = false
+    }
+  }, [spotlight])
+  return () => {
+    const back = fromChannels.current
+    leave()
+    if (back) toChannels()
+  }
 }
 
 /** Escape belongs to whatever is open over the feed, or to a field being typed in. */

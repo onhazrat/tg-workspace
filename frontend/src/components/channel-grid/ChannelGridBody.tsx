@@ -2,7 +2,7 @@ import { Send } from "lucide-react"
 import type React from "react"
 import { VirtualizedChannelGrid } from "@/components/channel-grid/VirtualizedChannelGrid"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { CardZoom } from "@/lib/channels/card-zoom"
+import type { CardKey, CardZoom } from "@/lib/channels/card-zoom"
 import { channelGridCountLabel } from "@/lib/channels/grid-count-label"
 import type { Channel } from "@/types"
 
@@ -29,8 +29,12 @@ type ChannelGridBodyProps = {
   onLoadMore: () => void
   /** The workspace scroll container the grid is windowed against. */
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
-  /** Keyboard mode is on. */
-  keyboard: boolean
+  /** Keyboard mode's - and +, which change the card size. */
+  onZoomChange: (zoom: CardZoom) => void
+  /** Keyboard mode's c: the Channel alone in Posts. */
+  onSpotlight: (name: string) => void
+  /** The actions this card size carries a control for, for the corner list. */
+  carried: readonly CardKey[]
 }
 
 /** Grid body: loading skeletons, empty state, or the ChannelCard grid with infinite-scroll sentinel. */
@@ -51,7 +55,9 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
   hasMore,
   onLoadMore,
   scrollContainerRef,
-  keyboard,
+  onZoomChange,
+  onSpotlight,
+  carried,
 }) => {
   if (isLoading) {
     return (
@@ -129,7 +135,9 @@ export const ChannelGridBody: React.FC<ChannelGridBodyProps> = ({
         onSelectChannel={onSelectChannel}
         hasMore={hasMore}
         onLoadMore={onLoadMore}
-        keyboard={keyboard}
+        onZoomChange={onZoomChange}
+        onSpotlight={onSpotlight}
+        carried={carried}
       />
 
       {/* Kept as a position marker for tests and as the visual end-of-list

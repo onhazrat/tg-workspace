@@ -8,6 +8,7 @@ import type {
   DirectoryWhyResponse,
 } from "@/client"
 import { ChannelAvatar } from "@/components/ChannelAvatar"
+import { GALLERY_ATTR } from "@/components/post-card/PhotoViewer"
 import { RelativeTime } from "@/components/RelativeTime"
 import {
   type DirectoryCond,
@@ -291,16 +292,21 @@ function Header({
   return (
     <>
       <header className="flex items-start gap-3 pr-8">
-        <ChannelAvatar
-          channel={{
-            id: entry.handle,
-            name: entry.handle,
-            displayName: entry.displayName ?? undefined,
-            photoUrl: entry.photoUrl ?? undefined,
-          }}
-          className="h-14 w-14 shrink-0"
-          textClassName="text-lg"
-        />
+        {/* A gallery of its own: its row shows the same photo, which the
+            rows' gallery already steps through. */}
+        <div className="shrink-0" {...{ [GALLERY_ATTR]: "panel" }}>
+          <ChannelAvatar
+            channel={{
+              id: entry.handle,
+              name: entry.handle,
+              displayName: entry.displayName ?? undefined,
+              photoUrl: entry.photoUrl ?? undefined,
+            }}
+            className="h-14 w-14 shrink-0"
+            textClassName="text-lg"
+            view="image"
+          />
+        </div>
         <div className="min-w-0">
           <h3 dir="auto" className="truncate text-lg font-bold">
             {entry.displayName || entry.handle}

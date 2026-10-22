@@ -59,7 +59,7 @@ green before the next, so a fresh context can resume from the last commit:
    corner list, the waiting `g`'s list, the full list's look, the header's
    grouping; tooltips and `x`'s per-tab word; the announcer.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Context pointers:** spec `../spec.md` (Implementation Decisions: the key list,
 the engine in two parts, keys by position, workspace keys, the session switch,
@@ -92,3 +92,8 @@ translates letters at press time):
 - [ ] The live region announces each move.
 - [ ] The full list is sentence case with keys as typed; the header is grouped; the switch and the shortcuts button are hidden on phones.
 - [ ] The build and test typechecks pass, the backend suite passes (a new frontend constant needs its backend topic), and a render test covers each new branching component.
+
+## Comments
+
+- 2026-10-22: implemented on `claude/km-02-one-keyboard-mode` and merged into the integration branch in 0f613fbb (fast-forward).
+  Open: nothing in scope; J / K, F / D, toasts and the one marked look are KM-03's.

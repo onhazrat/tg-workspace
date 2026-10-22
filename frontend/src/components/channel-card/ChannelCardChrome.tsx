@@ -8,8 +8,9 @@ import {
   Trash2,
 } from "lucide-react"
 import { motion } from "motion/react"
-import { shortcut } from "@/lib/channels/card-zoom"
 import { channelAllows, disabledReason } from "@/lib/channels/sync-permissions"
+import { shortcut, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode, useKeyTitle } from "@/lib/keyboard/mode"
 import { languageLabel, languageValue } from "@/lib/language-name"
 import type { Channel } from "@/types"
 import { TgIconButton } from "../ui/tg-icon-button"
@@ -77,14 +78,15 @@ export function ChannelCardActions({
     : "Freeze Channel (Stop Syncing)"
   const resetLabel =
     disabledReason(channel, "reset") ?? "Reset & Sync from beginning"
+  const keyboard = useKeyboardMode()
   return (
     <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-20">
       {!channel.isUnavailableOnWebView && (
         <TgIconButton
           variant="frosted"
           aria-label={freezeLabel}
-          tooltip={freezeLabel}
-          {...shortcut("f")}
+          tooltip={withKey(freezeLabel, "freeze", keyboard)}
+          {...shortcut("freeze")}
           onClick={(e) => {
             e.stopPropagation()
             onToggleFreeze()
@@ -147,6 +149,7 @@ export function ChannelCardBadges({
   /** Sort rank, language and partial-history badges. */
   showDetails: boolean
 }) {
+  const selectTitle = useKeyTitle(selectLabel(channel.name, isSelected), "tick")
   return (
     <div
       className={`absolute flex items-center gap-2 z-20 ${showCheckbox ? "top-4 left-4" : "top-2.5 left-4 pointer-events-none"}`}
@@ -155,7 +158,8 @@ export function ChannelCardBadges({
         <button
           type="button"
           {...selectionHandlers(onToggleSelected)}
-          {...shortcut("x")}
+          {...shortcut("tick")}
+          title={selectTitle}
           aria-label={selectLabel(channel.name, isSelected)}
           aria-pressed={isSelected}
           className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30 ${

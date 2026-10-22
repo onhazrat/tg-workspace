@@ -11,7 +11,8 @@ interface PostCardProps {
   post: Post
   postSearch: string
   compact?: boolean
-  keyboard?: boolean
+  /** Keyboard mode's Highlight is on this card. */
+  highlighted?: boolean
   /** Tick or untick this Post; `shift` asks for the run since the last click. */
   onToggleSelected: (post: Post, shift: boolean) => void
 }
@@ -21,7 +22,7 @@ export const PostCard: React.FC<PostCardProps> = ({
   post,
   postSearch,
   compact,
-  keyboard,
+  highlighted,
   onToggleSelected,
 }) => {
   const { embeddingsEnabled } = useSettings()
@@ -37,7 +38,7 @@ export const PostCard: React.FC<PostCardProps> = ({
       post={post}
       postSearch={postSearch}
       compact={compact}
-      keyboard={keyboard}
+      highlighted={highlighted}
       channel={followed(post.channelName)}
       followsForwardSource={!!followed(post.forwardedFrom)}
       onAddChannel={addNewChannel}

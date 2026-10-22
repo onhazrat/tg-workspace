@@ -5,6 +5,7 @@ import { DiscoverBulkBar } from "@/components/discover/DiscoverBulkBar"
 import { DiscoverCandidatePanel } from "@/components/discover/DiscoverCandidatePanel"
 import { DiscoverCandidateTable } from "@/components/discover/DiscoverCandidateTable"
 import { DiscoverFilterBar } from "@/components/discover/DiscoverFilterBar"
+import { useDiscoverKeys } from "@/components/discover/DiscoverKeyboard"
 import { DiscoverProbeBar } from "@/components/discover/DiscoverProbeBar"
 import { DiscoverReportBar } from "@/components/discover/DiscoverReportBar"
 import { DiscoverScopeCard } from "@/components/discover/DiscoverScopeCard"
@@ -250,6 +251,14 @@ export const DiscoverView: React.FC = () => {
     setNameQuery("")
   }
 
+  const highlight = useDiscoverKeys({
+    report: reportId,
+    names: candidates.map((c) => c.name),
+    onOpen: setInspectingName,
+    candidates: rawCandidates,
+    setIgnored: setIgnored.mutate,
+  })
+
   const runQuickAction = (action: DiscoveryQuickAction) =>
     runDiscoveryQuickAction(action, {
       goToTab: setActiveTab,
@@ -337,6 +346,7 @@ export const DiscoverView: React.FC = () => {
           table={
             <DiscoverCandidateTable
               candidates={candidates}
+              highlight={highlight}
               selectedForFollow={follow.selectedForFollow}
               setSelectedForFollow={follow.setSelectedForFollow}
               unfollowedCount={unfollowedCount}

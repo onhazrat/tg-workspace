@@ -31,7 +31,9 @@ describe("ChannelGridBody", () => {
         hasMore={false}
         onLoadMore={noop}
         scrollContainerRef={{ current: null }}
-        keyboard={false}
+        onZoomChange={noop}
+        onSpotlight={noop}
+        carried={[]}
         {...over}
       />,
     )

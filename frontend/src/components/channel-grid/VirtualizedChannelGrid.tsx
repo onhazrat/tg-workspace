@@ -3,10 +3,10 @@ import type React from "react"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ChannelCard } from "@/components/ChannelCard"
 import {
-  useChannelGridKeyboard,
+  useChannelKeys,
   useRevealChannel,
 } from "@/components/channel-grid/ChannelGridKeyboard"
-import type { CardZoom } from "@/lib/channels/card-zoom"
+import type { CardKey, CardZoom } from "@/lib/channels/card-zoom"
 import { GAP_PX, gridLanesForWidth } from "@/lib/channels/grid-lanes"
 import type { Channel } from "@/types"
 
@@ -41,8 +41,12 @@ type VirtualizedChannelGridProps = {
   hasMore: boolean
   /** Called when the last virtual row comes into range. */
   onLoadMore: () => void
-  /** Keyboard mode is on. */
-  keyboard: boolean
+  /** Keyboard mode's - and +, which change the card size. */
+  onZoomChange: (zoom: CardZoom) => void
+  /** Keyboard mode's c: the Channel alone in Posts. */
+  onSpotlight: (name: string) => void
+  /** The actions this card size carries a control for, for the corner list. */
+  carried: readonly CardKey[]
 }
 
 /** Starting row height per zoom level; measured heights replace it as rows mount. */
@@ -76,7 +80,9 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   onSelectChannel,
   hasMore,
   onLoadMore,
-  keyboard,
+  onZoomChange,
+  onSpotlight,
+  carried,
 }) => {
   const gridRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(() =>
@@ -149,12 +155,15 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   const names = useMemo(() => channels.map((c) => c.name), [channels])
   const scrollToRow = (row: number) =>
     virtualizer.scrollToIndex(row, { align: "center" })
-  const highlighted = useChannelGridKeyboard({
-    on: keyboard,
+  const highlighted = useChannelKeys({
     names,
     lanes,
     firstVisibleRow: virtualizer.range?.startIndex ?? 0,
     scrollToRow,
+    zoom,
+    onZoomChange,
+    onSpotlight,
+    carried,
   })
   useRevealChannel({ names, lanes, scrollToRow })
 

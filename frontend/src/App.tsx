@@ -1,7 +1,6 @@
 import {
   Command as CommandIcon,
   HelpCircle,
-  Keyboard,
   Maximize2,
   Minimize2,
   Monitor,
@@ -9,7 +8,7 @@ import {
   Sun,
 } from "lucide-react"
 import { AnimatePresence } from "motion/react"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import { api } from "@/api"
 import { ActionView } from "./components/ActionView"
 import { ChannelGrid } from "./components/ChannelGrid"
@@ -18,6 +17,14 @@ import { useCommandPaletteContext } from "./components/CommandPaletteProvider"
 import { DirectoryView } from "./components/DirectoryView"
 import { DiscoverView } from "./components/DiscoverView"
 import { HistoryView } from "./components/HistoryView"
+import {
+  HEADER_BUTTON_OUTLINED,
+  KeyboardButtons,
+} from "./components/keyboard/KeyboardButtons"
+import {
+  KeyboardMode,
+  type WorkspaceKeyOps,
+} from "./components/keyboard/KeyboardMode"
 import { PostFeed } from "./components/PostFeed"
 import QuotaWarning from "./components/QuotaWarning"
 import { SummaryView } from "./components/SummaryView"
@@ -33,7 +40,6 @@ import {
 import {
   generatingOverlay,
   RateLimitBanner,
-  ShortcutsDialog,
   StatusBanners,
   WorkspaceStats,
 } from "./components/workspace-shell/WorkspaceShellParts"
@@ -41,8 +47,8 @@ import { WorkspaceTabStrip } from "./components/workspace-shell/WorkspaceTabStri
 import {
   commandKeyFor,
   oldestSync,
-  opensShortcuts,
   routingMode,
+  stripNeighbour,
   THEME_TOOLTIPS,
 } from "./components/workspace-shell/workspace-shell-model"
 import { useData } from "./contexts/DataContext"
@@ -105,7 +111,6 @@ export default function App() {
 
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const { theme, setTheme, proxyEnabled, torEnabled } = useSettings()
 
@@ -151,16 +156,21 @@ export default function App() {
     workspaceTabs.openTab(artifactDestination(artifact).tab, artifact.id)
   }
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!opensShortcuts(event)) return
-      event.preventDefault()
-      setShortcutsOpen(true)
-    }
-
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [])
+  /** The tab strip, as keyboard mode's g keys use it. */
+  const keyOps: WorkspaceKeyOps = {
+    go: setActiveTab,
+    step: (by) => {
+      const { tabs, active } = workspaceTabs
+      const next = stripNeighbour(tabs, active, by)
+      if (next) workspaceTabs.openTab(next.kind, next.id)
+    },
+    goToNth: (nth) => {
+      const next = workspaceTabs.tabs[nth - 1]
+      if (next) workspaceTabs.openTab(next.kind, next.id)
+    },
+    close: () => workspaceTabs.closeTab(workspaceTabs.active),
+    reopen: workspaceTabs.reopenLastTab,
+  }
 
   /**
    * Each tab starts at the top.
@@ -284,23 +294,29 @@ export default function App() {
                   className={`w-1 h-1 rounded-full animate-pulse ${routing.dotClass}`}
                 />
               </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    id="command-palette-button"
-                    data-testid="command-palette-button"
-                    aria-label="Command palette"
-                    onClick={() => setCommandPaletteOpen(true)}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <CommandIcon size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Command Palette (⌘⇧P)</p>
-                </TooltipContent>
-              </Tooltip>
+              {/* Grouped: keyboard (the mode, its keys, the palette), help,
+                  then view. The first two are hidden on a phone, which has
+                  no keyboard to use them with. */}
+              <div className="flex items-center gap-1.5">
+                <KeyboardButtons commandKey={commandKey} />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      id="command-palette-button"
+                      data-testid="command-palette-button"
+                      aria-label="Command palette"
+                      onClick={() => setCommandPaletteOpen(true)}
+                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
+                    >
+                      <CommandIcon size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Command Palette (⌘⇧P)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -317,62 +333,45 @@ export default function App() {
                   <p>Replay Guided Tour</p>
                 </TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Keyboard shortcuts"
-                    onClick={() => setShortcutsOpen(true)}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <Keyboard size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Keyboard Shortcuts (?)</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    data-testid="fullscreen-button"
-                    aria-label={fullscreenLabel}
-                    onClick={toggleFullscreen}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    {fullscreenIcon}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{fullscreenLabel}</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={themeTooltip}
-                    onClick={toggleTheme}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    {themeIcon}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{themeTooltip}</p>
-                </TooltipContent>
-              </Tooltip>
+              <div className="flex items-center gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="fullscreen-button"
+                      aria-label={fullscreenLabel}
+                      onClick={toggleFullscreen}
+                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
+                    >
+                      {fullscreenIcon}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{fullscreenLabel}</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={themeTooltip}
+                      onClick={toggleTheme}
+                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
+                    >
+                      {themeIcon}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{themeTooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
           </div>
 
           {isRateLimited && <RateLimitBanner />}
 
-          <ShortcutsDialog
-            open={shortcutsOpen}
-            onOpenChange={setShortcutsOpen}
-            commandKey={commandKey}
-          />
+          <KeyboardMode ops={keyOps} />
 
           <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
             <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">

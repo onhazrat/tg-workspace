@@ -3,6 +3,7 @@ import type React from "react"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
 import type { Post } from "@/types"
 import { PostCard } from "./PostCard"
+import { postCardKey } from "./post-card/FeedKeyboard"
 import { Skeleton } from "./ui/skeleton"
 
 interface PostFeedResultsProps {
@@ -14,8 +15,8 @@ interface PostFeedResultsProps {
   postSearch: string
   /** Lay the cards out as the Compact grid. */
   compact?: boolean
-  /** Keyboard mode is on. */
-  keyboard?: boolean
+  /** Keyboard mode's Highlight: the card's `data-post-key`. */
+  highlight?: string | null
   /** Tick or untick a Post (PTR-05). */
   onToggleSelected: (post: Post, shift: boolean) => void
 }
@@ -28,7 +29,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
   loadMoreRef,
   postSearch,
   compact = false,
-  keyboard = false,
+  highlight = null,
   onToggleSelected,
 }) =>
   isInitialLoading ? (
@@ -72,7 +73,7 @@ export const PostFeedResults: React.FC<PostFeedResultsProps> = ({
           post={post}
           postSearch={postSearch}
           compact={compact}
-          keyboard={keyboard}
+          highlighted={highlight === postCardKey(post)}
           onToggleSelected={onToggleSelected}
         />
       ))}

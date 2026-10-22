@@ -1,10 +1,12 @@
 /**
  * The History tab's rules, with no React, so they can be tested directly.
- * `HistoryView` keeps the queries, the writes and the toasts.
+ * `HistoryView` keeps the queries, the writes and the toasts, except the
+ * star's (`toggleStar`), which a render test presses Undo on.
  */
+import { toast } from "sonner"
 import type { HistoryParams, HistorySort } from "@/lib/history/history-params"
 import type { ArtifactListItem } from "@/types"
-import { ARTIFACT_KIND_LABELS } from "./artifact-presentation"
+import { ARTIFACT_KIND_LABELS, artifactName } from "./artifact-presentation"
 
 export type SummaryFlag = "autoRegenerate" | "autoPublish"
 
@@ -118,4 +120,35 @@ export function deleteDialogCopy(pending: ArtifactListItem | null): {
     description:
       pending?.scope?.channels?.join(", ") || "This cannot be undone.",
   }
+}
+
+/** What starring `artifact` (as it was before the click) did, and to which one. */
+export const starNotice = (artifact: ArtifactListItem) =>
+  `${artifact.isStarred ? "Unstarred" : "Starred"} ${artifactName(artifact)}`
+
+/**
+ * The star's click, and its toast naming the Artifact. Undo sets the star
+ * back rather than pressing it again: unstarred under "Starred only", the
+ * card is gone. The star control is marked `data-says`, so keyboard mode's
+ * `*` adds no second toast. The write and the refetch are passed in.
+ */
+export async function toggleStar(
+  artifact: ArtifactListItem,
+  {
+    setStarred,
+    refresh,
+  }: {
+    setStarred: (a: ArtifactListItem, isStarred: boolean) => Promise<void>
+    refresh: () => Promise<unknown>
+  },
+) {
+  await setStarred(artifact, !artifact.isStarred)
+  await refresh()
+  toast(starNotice(artifact), {
+    action: {
+      label: "Undo",
+      onClick: () =>
+        void setStarred(artifact, Boolean(artifact.isStarred)).then(refresh),
+    },
+  })
 }

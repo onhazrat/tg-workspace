@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { formatCount } from "@/lib/format-count"
+import { keyTitle, shortcut, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import {
   DISCOVER_PROBE_KIND_LABELS,
   type DiscoverSignalWeights,
@@ -240,6 +242,7 @@ export function CandidateActions({
   onSetIgnored,
   onRecheck,
 }: CandidateActionsProps) {
+  const keyboard = useKeyboardMode()
   return (
     <div className="flex flex-wrap items-center gap-2">
       {row.isFollowed ? (
@@ -252,6 +255,8 @@ export function CandidateActions({
           variant="secondary"
           size="sm"
           data-testid={`discover-follow-${row.name}`}
+          {...shortcut("follow")}
+          title={keyTitle(`Follow @${row.name}`, "follow", keyboard)}
           disabled={isOffline}
           loading={isFollowPending}
           loadingLabel="Follow"
@@ -281,12 +286,15 @@ export function CandidateActions({
         variant="secondary"
         size="sm"
         data-testid={`discover-ignore-${row.name}`}
+        {...shortcut("dismiss")}
         onClick={() => onSetIgnored(row.name, !row.isIgnored)}
-        title={
+        title={withKey(
           row.isIgnored
             ? "Show this channel in reports again"
-            : "Hide this channel from future reports"
-        }
+            : "Hide this channel from future reports",
+          "dismiss",
+          keyboard,
+        )}
         className="rounded-full text-app-ink/60"
       >
         {row.isIgnored ? (
@@ -337,6 +345,8 @@ interface CandidateRowProps
   /** Fires before `onToggle`, with whether shift was held for this click. */
   onCheckboxClick: (shiftKey: boolean) => void
   onToggle: () => void
+  /** Keyboard mode's Highlight is on this row. */
+  highlighted?: boolean
 }
 
 /** One Candidate as a table row. */
@@ -349,15 +359,24 @@ export function CandidateRow({
   showScore,
   onCheckboxClick,
   onToggle,
+  highlighted = false,
   ...actions
 }: CandidateRowProps) {
   const stats = candidateStatistics(row.probe)
+  const keyboard = useKeyboardMode()
   return (
-    <tr className="border-t border-app-ink/10">
+    <tr
+      data-discover-handle={row.name}
+      data-highlight={highlighted || undefined}
+      // A followed Candidate's box is checked but is not a Tick.
+      data-marked={(isSelected && !row.isFollowed) || undefined}
+      className="border-t border-app-ink/10"
+    >
       <td className="py-2 align-middle">
         <input
           type="checkbox"
           data-testid={`discover-select-${row.name}`}
+          {...shortcut("tick")}
           checked={isSelected}
           disabled={
             actions.isOffline ||
@@ -366,7 +385,7 @@ export function CandidateRow({
           onClick={(event) => onCheckboxClick(event.shiftKey)}
           onChange={onToggle}
           className="accent-blue-600"
-          title="Shift-click to select a range"
+          title={withKey("Shift-click to select a range", "tick", keyboard)}
           aria-label={
             row.isFollowed
               ? `@${row.name} already followed`
@@ -380,6 +399,8 @@ export function CandidateRow({
           target="_blank"
           rel="noopener noreferrer"
           data-testid={`discover-channel-link-${row.name}`}
+          {...shortcut("open")}
+          title={keyTitle(`Open @${row.name} in Telegram`, "open", keyboard)}
           className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.name}
@@ -482,10 +503,13 @@ interface DiscoverCandidateTableProps {
    * arbitrary.
    */
   showScore: boolean
+  /** The Candidate keyboard mode highlights. */
+  highlight?: string | null
 }
 
 export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   candidates,
+  highlight = null,
   selectedForFollow,
   setSelectedForFollow,
   unfollowedCount,
@@ -629,6 +653,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
             <CandidateRow
               key={row.name}
               row={row}
+              highlighted={highlight === row.name}
               isSelected={isRowCheckboxChecked(
                 row.name,
                 row.isFollowed,

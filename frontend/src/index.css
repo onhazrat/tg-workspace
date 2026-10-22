@@ -285,3 +285,29 @@ body {
 .driver-popover-arrow-side-right {
   border-right-color: var(--card-bg);
 }
+
+/* One marked look (ADR-034): a ticked Directory entry, a ticked Candidate and
+   a selected Channel share a blue tint and a blue edge. Unlayered, so it wins
+   over the cards' own background and border utilities. */
+[data-marked] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-blue-500) 10%,
+    var(--color-app-card)
+  );
+  border-color: color-mix(in oklab, var(--color-blue-500) 60%, transparent);
+}
+tr[data-marked],
+li[data-marked] {
+  box-shadow: inset 3px 0 0 var(--color-blue-500);
+}
+
+/* The Highlight (ADR-034): keyboard mode's 2px blue ring round the item it is
+   on, a row, a card or a tile. A table row draws it inside its own edge.
+   Unlayered, as [data-marked] is. */
+[data-highlight] {
+  outline: 2px solid var(--color-blue-500);
+}
+tr[data-highlight] {
+  outline-offset: -2px;
+}

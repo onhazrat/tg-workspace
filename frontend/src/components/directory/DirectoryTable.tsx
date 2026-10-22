@@ -27,6 +27,8 @@ import {
 import type { Tagging } from "@/lib/directory/directory-tags"
 import type { DirectorySort } from "@/lib/directory/directory-view"
 import { formatCount } from "@/lib/format-count"
+import { ACTIONS, keyTitle, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { languageLabel, languageValue } from "@/lib/language-name"
 import {
   headerCheckboxState,
@@ -34,7 +36,6 @@ import {
   toggleUnfollowedSelection,
 } from "@/lib/posts/discover-selection"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
-import { DIRECTORY_SHORTCUTS } from "./DirectoryKeyboard"
 import { DirectoryMatchRow } from "./DirectoryMatches"
 import { TagBadges, TagPicker } from "./DirectoryTags"
 
@@ -51,6 +52,7 @@ export function RowTagButton({
   row: Pick<Row, "handle" | "tags">
   tagging: Tagging
 }) {
+  const keyboard = useKeyboardMode()
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <TagPicker
@@ -65,7 +67,8 @@ export function RowTagButton({
             variant="ghost"
             size="sm"
             aria-label={`Tag @${row.handle}`}
-            data-shortcut={DIRECTORY_SHORTCUTS.tag}
+            data-shortcut={ACTIONS.tag.key}
+            title={keyTitle(`Tag @${row.handle}`, "tag", keyboard)}
             className="h-7 rounded-full px-2 text-app-ink/50"
           >
             <Tag size={11} />
@@ -307,6 +310,7 @@ function FollowButton({
   busy: boolean
   onFollow: (handle: string) => void
 }) {
+  const keyboard = useKeyboardMode()
   if (row.followed) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] text-app-ink/50">
@@ -320,7 +324,8 @@ function FollowButton({
       variant="secondary"
       size="sm"
       aria-label={`Follow @${row.handle}`}
-      data-shortcut={DIRECTORY_SHORTCUTS.follow}
+      data-shortcut={ACTIONS.follow.key}
+      title={keyTitle(`Follow @${row.handle}`, "follow", keyboard)}
       loading={busy}
       onClick={(e) => {
         e.stopPropagation()
@@ -349,6 +354,7 @@ export function FollowCell({
   /** `true` dismisses, `false` takes the Dismissal back. */
   onDismiss: (handle: string, dismissed: boolean) => void
 }) {
+  const keyboard = useKeyboardMode()
   const verb = row.dismissed ? "Take back" : "Dismiss"
   return (
     <span className="inline-flex items-center gap-1">
@@ -360,12 +366,16 @@ export function FollowCell({
         variant="ghost"
         size="sm"
         aria-label={`${verb} @${row.handle}`}
-        data-shortcut={DIRECTORY_SHORTCUTS.dismiss}
-        title={
+        data-shortcut={ACTIONS.dismiss.key}
+        // Dismissing toasts its own notice with Undo (DIR-06); taking back does not.
+        data-says={row.dismissed ? undefined : true}
+        title={withKey(
           row.dismissed
             ? "Take the Dismissal back, here and in Discover"
-            : "Hide this channel here and in Discover"
-        }
+            : "Hide this channel here and in Discover",
+          "dismiss",
+          keyboard,
+        )}
         onClick={(e) => {
           e.stopPropagation()
           onDismiss(row.handle, !row.dismissed)
@@ -380,6 +390,7 @@ export function FollowCell({
 }
 
 function ChannelCell({ row }: { row: Row }) {
+  const keyboard = useKeyboardMode()
   return (
     <div className="flex min-w-0 items-center gap-2">
       <ChannelAvatar
@@ -391,6 +402,7 @@ function ChannelCell({ row }: { row: Row }) {
         }}
         className="h-7 w-7 shrink-0"
         textClassName="text-xs"
+        view="image"
       />
       <div className="min-w-0">
         <div dir="auto" className="truncate font-semibold">
@@ -403,7 +415,8 @@ function ChannelCell({ row }: { row: Row }) {
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           data-testid={`directory-channel-link-${row.handle}`}
-          data-shortcut={DIRECTORY_SHORTCUTS.open}
+          data-shortcut={ACTIONS.open.key}
+          title={keyTitle(`Open @${row.handle} in Telegram`, "open", keyboard)}
           className="block truncate font-mono text-[10px] text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.handle}
@@ -511,7 +524,7 @@ export function DirectoryTable({
   onSort,
   onPage,
   onOpen,
-  ring,
+  highlight,
   cards = false,
   tagging,
 }: {
@@ -534,12 +547,13 @@ export function DirectoryTable({
   /** A click anywhere on the row but its links and controls opens the panel. */
   onOpen: (handle: string) => void
   /** The keyboard highlight's handle (DFP-01). */
-  ring?: string | null
+  highlight?: string | null
   /** Below `md`, two-line cards instead of the table (DFP-02). */
   cards?: boolean
   /** Each row's Tag picker (DFP-04); none while the Tags have not loaded. */
   tagging?: Tagging
 }) {
+  const keyboard = useKeyboardMode()
   const sortedColumn = sort === "mine_last_days" ? "mine" : sort
   const columns = [
     ...shown.map(columnOf),
@@ -601,15 +615,17 @@ export function DirectoryTable({
             key={r.handle}
             data-testid={`directory-row-${r.handle}`}
             data-directory-handle={r.handle}
-            data-kbd-selected={ring === r.handle || undefined}
+            data-highlight={highlight === r.handle || undefined}
+            data-marked={ticks.has(r.handle) || undefined}
             onClick={() => onOpen(r.handle)}
-            className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "bg-blue-500/5" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
+            className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""}`}
           >
             <td className="pl-3" onClick={(e) => e.stopPropagation()}>
               <input
                 type="checkbox"
                 aria-label={`Tick @${r.handle}`}
-                data-shortcut={DIRECTORY_SHORTCUTS.tick}
+                data-shortcut={ACTIONS.tick.key}
+                title={keyTitle(`Tick @${r.handle}`, "tick", keyboard)}
                 checked={ticks.has(r.handle)}
                 onChange={() =>
                   onTicks(toggleUnfollowedSelection(r.handle, false, ticks))
@@ -699,8 +715,11 @@ function DirectoryCards({
         <li
           key={r.handle}
           data-testid={`directory-card-${r.handle}`}
+          // The keyboard's row, and where the photo viewer lands on close.
+          data-directory-handle={r.handle}
+          data-marked={ticks.has(r.handle) || undefined}
           onClick={() => onOpen(r.handle)}
-          className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${ticks.has(r.handle) ? "bg-blue-500/5" : ""} ${r.dismissed ? "opacity-50" : ""}`}
+          className={`flex cursor-pointer items-start gap-2 px-2 py-3 ${r.dismissed ? "opacity-50" : ""}`}
         >
           <label
             className="-my-1 flex h-9 w-9 shrink-0 items-center justify-center"

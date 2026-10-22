@@ -109,6 +109,34 @@ describe("the header", () => {
     expect(screen.getByText("25%")).toBeTruthy()
   })
 
+  test("the photo opens the viewer on its own, though its row shows it too (KM-01)", async () => {
+    const photoUrl = "https://photos.test/chan.jpg"
+    // The page's rows come first, the panel's own row among them.
+    const rows = document.createElement("div")
+    rows.innerHTML = ["chan", "other"]
+      .map(
+        (h) =>
+          `<div data-directory-handle="${h}"><img src="${photoUrl}" data-gallery-caption="${h}"></div>`,
+      )
+      .join("")
+    document.body.appendChild(rows)
+    try {
+      const calls = mount({ entry: entry({ photoUrl }) })
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "View Channel Name's photo",
+        }),
+      )
+      const caption = screen.getByTestId("photo-viewer-label").textContent
+      expect(caption).toStartWith("Channel Name · ")
+      expect(caption).not.toContain(" / ")
+      expect(screen.queryByRole("button", { name: "Next photo" })).toBeNull()
+      expect(calls.close).toBe(0)
+    } finally {
+      rows.remove()
+    }
+  })
+
   test("Follow follows, and a followed Channel says Following", () => {
     const calls = mount()
     fireEvent.click(screen.getByRole("button", { name: "Follow @chan" }))

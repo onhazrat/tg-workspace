@@ -8,12 +8,13 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { formatCount } from "@/lib/format-count"
+import { ACTIONS, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { telegramWebViewPostUrl } from "@/lib/telegram-web"
 import { cn } from "@/lib/utils"
 import type { Post } from "@/types"
 import { TgIconButton, tgIconButtonVariants } from "../ui/tg-icon-button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
-import { SHORTCUTS } from "./FeedKeyboard"
 
 /** The view count, the exact number on hover; nothing when unknown. */
 export function PostCardViews({ post }: { post: Post }) {
@@ -78,10 +79,6 @@ export type PostTranslationControl = {
   onToggle: () => void
 }
 
-/** "Copy link (c)" while Keyboard mode is on, so the tooltip teaches the key. */
-const withKey = (label: string, key: string, keyboard: boolean) =>
-  keyboard ? `${label} (${key})` : label
-
 /**
  * The actions, always visible: show this Channel, translate, find related,
  * copy link, open in Telegram. Each carries the letter Keyboard mode fires it with
@@ -92,7 +89,6 @@ export function PostCardActions({
   onShowChannel,
   translation,
   onFindRelated,
-  keyboard = false,
   labels = false,
 }: {
   post: Post
@@ -102,9 +98,9 @@ export function PostCardActions({
   translation?: PostTranslationControl
   /** Present only when embeddings are enabled. */
   onFindRelated?: () => void
-  keyboard?: boolean
   labels?: boolean
 }) {
+  const keyboard = useKeyboardMode()
   const postUrl = telegramWebViewPostUrl(post.channelName, post.id)
   const translateLabel = translation?.showing ? "Show Original" : "Translate"
   const copyLink = () =>
@@ -117,8 +113,8 @@ export function PostCardActions({
       {onShowChannel && (
         <TgIconButton
           aria-label="Show this Channel"
-          tooltip={withKey("Show this Channel", SHORTCUTS.channel, keyboard)}
-          data-shortcut={SHORTCUTS.channel}
+          tooltip={withKey("Show this Channel", "spotlight", keyboard)}
+          data-shortcut={ACTIONS.spotlight.key}
           onClick={onShowChannel}
         >
           <Filter size={14} />
@@ -127,8 +123,8 @@ export function PostCardActions({
       {translation && (
         <TgIconButton
           aria-label={translateLabel}
-          tooltip={withKey(translateLabel, SHORTCUTS.translate, keyboard)}
-          data-shortcut={SHORTCUTS.translate}
+          tooltip={withKey(translateLabel, "translate", keyboard)}
+          data-shortcut={ACTIONS.translate.key}
           onClick={translation.onToggle}
           loading={translation.busy}
           className={cn(
@@ -143,8 +139,8 @@ export function PostCardActions({
       {onFindRelated && (
         <TgIconButton
           aria-label="Find Related Posts"
-          tooltip={withKey("Find Related Posts", SHORTCUTS.related, keyboard)}
-          data-shortcut={SHORTCUTS.related}
+          tooltip={withKey("Find Related Posts", "related", keyboard)}
+          data-shortcut={ACTIONS.related.key}
           onClick={onFindRelated}
           className="text-purple-500/70 hover:text-purple-600 hover:bg-purple-500/10"
         >
@@ -153,8 +149,8 @@ export function PostCardActions({
       )}
       <TgIconButton
         aria-label="Copy Link"
-        tooltip={withKey("Copy Link", SHORTCUTS.copy, keyboard)}
-        data-shortcut={SHORTCUTS.copy}
+        tooltip={withKey("Copy Link", "copy", keyboard)}
+        data-shortcut={ACTIONS.copy.key}
         onClick={copyLink}
       >
         <Copy size={14} />
@@ -166,14 +162,14 @@ export function PostCardActions({
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Open in Telegram"
-            data-shortcut={SHORTCUTS.open}
+            data-shortcut={ACTIONS.open.key}
             className={cn(tgIconButtonVariants({ variant: "ghost" }))}
           >
             <ExternalLink size={14} />
           </a>
         </TooltipTrigger>
         <TooltipContent>
-          <p>{withKey("Open in Telegram", SHORTCUTS.open, keyboard)}</p>
+          <p>{withKey("Open in Telegram", "open", keyboard)}</p>
         </TooltipContent>
       </Tooltip>
     </span>

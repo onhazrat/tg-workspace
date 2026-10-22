@@ -1,4 +1,6 @@
-import { type CardFace, shortcut } from "@/lib/channels/card-zoom"
+import type { CardFace } from "@/lib/channels/card-zoom"
+import { shortcut } from "@/lib/keyboard/key-list"
+import { useKeyTitle } from "@/lib/keyboard/mode"
 import type { Channel, ChannelStats } from "@/types"
 import {
   ChannelCardActions,
@@ -84,11 +86,13 @@ export function ChannelCardFace({
   // Cards and detailed cards line their sections up across the row; a
   // compact card's body is the selection toggle and has no sections to align.
   const aligned = !face.bodySelects
+  const selectTitle = useKeyTitle(selectLabel(channel.name, isSelected), "tick")
 
   return (
     <div
       data-channel-name={channel.name}
-      data-kbd-selected={highlighted || undefined}
+      data-highlight={highlighted || undefined}
+      data-marked={isSelected || undefined}
       className={channelCardFrameClass({
         isFrozen: channel.isFrozen,
         isSelected,
@@ -112,7 +116,8 @@ export function ChannelCardFace({
           aria-pressed={isSelected}
           aria-label={selectLabel(channel.name, isSelected)}
           {...selectionHandlers(onToggleSelected)}
-          {...shortcut("x")}
+          {...shortcut("tick")}
+          title={selectTitle}
           className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-app-ink/30"
         />
       )}

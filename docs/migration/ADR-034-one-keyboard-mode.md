@@ -71,3 +71,17 @@ one key was shared, all of them were.
   sequences (the Shift keydown included), not three times.
 - Discover's Details panel still covers the page, so `j` and `k` stop while it
   is open; making it a side panel is a separate change.
+
+## Deviations in the build
+
+- Undo after Discover's `d` and History's `*` sets back the state the item had,
+  rather than pressing its control again. A dismissed Candidate leaves the
+  default view and an unstarred Artifact leaves "Starred only", so there is
+  often no control left to press.
+- History's star toast now names the Artifact and offers Undo for a mouse click
+  too. It replaced "Item starred.", so the key and the click say the same
+  thing.
+- `?` is read as typed as well as by position. On a German or French layout
+  the key labelled `?` is not Shift and Slash, so reading it by position alone
+  left those users no way to open help. A Persian layout types `؟` at Shift
+  and Slash, so it works either way. Every other key is still read by position.

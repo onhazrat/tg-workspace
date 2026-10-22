@@ -16,6 +16,7 @@ import {
   historyEmptyDescription,
   historyShowsEmpty,
   historySortWords,
+  starNotice,
   summaryFlagChange,
 } from "./history-view-model"
 
@@ -45,6 +46,15 @@ const chat = {
   timestamp: 1,
   isStarred: true,
 } as unknown as ArtifactListItem
+
+describe("starNotice", () => {
+  test("says which way the star went, and on which Artifact", () => {
+    expect(starNotice(summary({ title: "Morning" }))).toBe(
+      "Starred Summary: Morning",
+    )
+    expect(starNotice(chat)).toBe("Unstarred Chat: My chat")
+  })
+})
 
 describe("summaryFlagChange", () => {
   test("only a Summary has schedule flags", () => {

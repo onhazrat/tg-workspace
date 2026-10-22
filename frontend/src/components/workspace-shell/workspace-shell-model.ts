@@ -42,24 +42,6 @@ export function oldestSync(
   return times.length === 0 ? null : Math.min(...times)
 }
 
-const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"])
-
-/** Whether a keypress is the bare `?` that opens the shortcuts list, and not typing. */
-export function opensShortcuts(event: {
-  key: string
-  defaultPrevented: boolean
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  target: EventTarget | null
-}): boolean {
-  if (event.key !== "?" || event.defaultPrevented) return false
-  if (event.metaKey || event.ctrlKey || event.altKey) return false
-  const target = event.target
-  if (!(target instanceof HTMLElement)) return true
-  return !target.isContentEditable && !EDITABLE_TAGS.has(target.tagName)
-}
-
 /** The modifier the platform names: Cmd on Apple, Ctrl everywhere else. */
 export const commandKeyFor = (platform: string | undefined): "Cmd" | "Ctrl" =>
   platform && /(Mac|iPhone|iPad|iPod)/i.test(platform) ? "Cmd" : "Ctrl"
@@ -72,26 +54,30 @@ export const commandKeyFor = (platform: string | undefined): "Cmd" | "Ctrl" =>
  * alike — so "Run Highlighted Command / Enter" read as an app-wide binding
  * that silently did nothing.
  *
- * Only two shortcuts are genuinely global: the palette (`useCommandPalette`)
- * and this dialog (`App`). The list is short because the app is, not because
- * the list is incomplete.
+ * Three are global: the palette (`useCommandPalette`), `?` and `\`
+ * (keyboard mode's engine). Keyboard mode's own keys come from its key list
+ * (`lib/keyboard/key-list.ts`), and the full list puts them first.
  */
 export function shortcutGroups(commandKey: string) {
   return [
     {
       heading: "Anywhere",
       bindings: [
-        { label: "Command Palette", keys: `${commandKey}+Shift+P` },
-        { label: "Keyboard Shortcuts", keys: "?" },
+        { label: "Command palette", keys: `${commandKey}+Shift+P` },
+        {
+          label: "These keys: in the corner, all of them, or none",
+          keys: "?",
+        },
+        { label: "Keyboard mode on or off", keys: "\\" },
       ],
     },
     {
       heading: "In the command palette",
       bindings: [
-        { label: "Run Highlighted Command", keys: "Enter" },
-        { label: "Alternate Run Command", keys: `${commandKey}+Enter` },
-        { label: "Back / Close Sub-View", keys: "Esc" },
-        { label: "Parent Sub-View", keys: "Backspace (empty)" },
+        { label: "Run the highlighted command", keys: "Enter" },
+        { label: "Run it the other way", keys: `${commandKey}+Enter` },
+        { label: "Back, or close the sub-view", keys: "Esc" },
+        { label: "The parent sub-view", keys: "Backspace (empty)" },
       ],
     },
   ]
@@ -154,6 +140,17 @@ export function tabPresentation(
       ? "opacity-70"
       : "opacity-0 group-hover:opacity-70 @max-[4.5rem]:hidden",
   }
+}
+
+/** The tab `by` places along the strip from `active`, wrapping: gt and gT. */
+export function stripNeighbour(
+  tabs: readonly Tab[],
+  active: Tab,
+  by: number,
+): Tab | undefined {
+  const at = tabs.findIndex((t) => sameTab(t, active))
+  const n = tabs.length
+  return tabs[(((at + by) % n) + n) % n]
 }
 
 /**

@@ -1,5 +1,7 @@
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { useLayoutEffect, useRef, useState } from "react"
+import { shortcut } from "@/lib/keyboard/key-list"
+import { useKeyTitle } from "@/lib/keyboard/mode"
 import { renderPostText } from "@/lib/posts/render-post-text"
 import type { Post } from "@/types"
 import { isLongPost } from "./post-card-model"
@@ -19,6 +21,7 @@ export function PostCardBody({
   whole?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
+  const moreTitle = useKeyTitle(expanded ? "Collapse" : "Show more", "more")
   const long = !whole && isLongPost(text)
   const clipped = long && !expanded
   return (
@@ -39,6 +42,9 @@ export function PostCardBody({
       {long && (
         <button
           type="button"
+          {...shortcut("more")}
+          aria-expanded={expanded}
+          title={moreTitle}
           onClick={() => setExpanded(!expanded)}
           className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-app-ink/15 bg-app-muted/40 px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest text-app-ink/70 transition-colors hover:bg-app-ink/5 hover:text-app-ink"
         >
@@ -67,6 +73,7 @@ export function PostCardClampedBody({
   postSearch: string
 }) {
   const [open, setOpen] = useState(false)
+  const moreTitle = useKeyTitle(open ? "Less" : "More", "more")
   const [lines, setLines] = useState<number>()
   const [over, setOver] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -119,6 +126,9 @@ export function PostCardClampedBody({
       {(over || open) && (
         <button
           type="button"
+          {...shortcut("more")}
+          aria-expanded={open}
+          title={moreTitle}
           onClick={() => setOpen((o) => !o)}
           className="mt-0.5 self-start text-[12px] font-medium text-blue-500 hover:underline"
         >
