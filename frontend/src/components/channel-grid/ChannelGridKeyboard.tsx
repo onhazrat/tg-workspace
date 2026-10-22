@@ -6,7 +6,7 @@
  * `data-shortcut`.
  *
  * The grid is virtualised: a card scrolled out of range is unmounted, so the
- * Highlight is a Channel name the card renders as `data-kbd-selected`, and
+ * Highlight is a Channel name the card renders as `data-highlight`, and
  * moving it scrolls the virtualiser rather than the element.
  */
 import { useEffect } from "react"

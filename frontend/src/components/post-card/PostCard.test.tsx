@@ -563,7 +563,7 @@ describe("PostCardView", () => {
         "x",
       )
       expect(
-        document.querySelector("article")?.hasAttribute("data-kbd-selected"),
+        document.querySelector("article")?.hasAttribute("data-highlight"),
       ).toBe(true)
     })
   })

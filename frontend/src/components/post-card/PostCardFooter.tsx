@@ -9,6 +9,7 @@ import {
 import { toast } from "sonner"
 import { formatCount } from "@/lib/format-count"
 import { ACTIONS, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { telegramWebViewPostUrl } from "@/lib/telegram-web"
 import { cn } from "@/lib/utils"
 import type { Post } from "@/types"
@@ -88,7 +89,6 @@ export function PostCardActions({
   onShowChannel,
   translation,
   onFindRelated,
-  keyboard = false,
   labels = false,
 }: {
   post: Post
@@ -98,9 +98,9 @@ export function PostCardActions({
   translation?: PostTranslationControl
   /** Present only when embeddings are enabled. */
   onFindRelated?: () => void
-  keyboard?: boolean
   labels?: boolean
 }) {
+  const keyboard = useKeyboardMode()
   const postUrl = telegramWebViewPostUrl(post.channelName, post.id)
   const translateLabel = translation?.showing ? "Show Original" : "Translate"
   const copyLink = () =>

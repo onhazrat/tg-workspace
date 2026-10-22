@@ -42,7 +42,7 @@ function Directory({ shown = 0 }: { shown?: number }) {
   const [page, setPage] = useState(0)
   const [ticks, setTicks] = useState<Set<string>>(new Set())
   const handles = PAGES[shown]
-  const ring = useDirectoryKeys({
+  const highlight = useDirectoryKeys({
     handles,
     open,
     onOpen: setOpen,
@@ -59,7 +59,7 @@ function Directory({ shown = 0 }: { shown?: number }) {
         <div
           key={h}
           data-directory-handle={h}
-          data-kbd-selected={ring === h || undefined}
+          data-highlight={highlight === h || undefined}
         >
           <input
             type="checkbox"
@@ -88,8 +88,8 @@ const tab = (shown = 0) => (
   </>
 )
 
-const ringed = () =>
-  Array.from(document.querySelectorAll("[data-kbd-selected]")).map((el) =>
+const highlighted = () =>
+  Array.from(document.querySelectorAll("[data-highlight]")).map((el) =>
     el.getAttribute("data-directory-handle"),
   )
 const ticked = () =>
@@ -119,27 +119,27 @@ describe("the Directory's keyboard mode", () => {
   test("j and k move the Highlight, G and gg jump, and nothing moves past an end", () => {
     render(tab())
     type("j")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     type("j")
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
     type("G")
-    expect(ringed()).toEqual(["c"])
+    expect(highlighted()).toEqual(["c"])
     type("j")
-    expect(ringed()).toEqual(["c"])
+    expect(highlighted()).toEqual(["c"])
     type("g", "g")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     type("k")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
   })
 
   test("a count moves that far, and 2G goes to the second row", () => {
     render(tab())
     type("2", "j")
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
     type("9", "k")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     type("2", "G")
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
   })
 
   test("each move is announced with the row's name and place", () => {
@@ -162,12 +162,12 @@ describe("the Directory's keyboard mode", () => {
     render(tab())
     type("j", "x", "J")
     expect(ticked()).toEqual(["a", "b"])
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
     type("J")
     expect(ticked()).toEqual(["a", "b", "c"])
     type("x", "K")
     expect(ticked()).toEqual(["a"])
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
     type("K")
     expect(ticked()).toEqual([])
     expect(screen.getByTestId("keyboard-announcer").textContent).toBe(
@@ -179,7 +179,7 @@ describe("the Directory's keyboard mode", () => {
     render(tab())
     type("j", "3", "J")
     expect(ticked()).toEqual(["a", "b"])
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
   })
 
   test("Enter opens the panel, which follows every move until Enter closes it", () => {
@@ -195,7 +195,7 @@ describe("the Directory's keyboard mode", () => {
     type("Enter")
     expect(opened()).toBe("")
     type("k")
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
     expect(opened()).toBe("")
   })
 
@@ -206,9 +206,9 @@ describe("the Directory's keyboard mode", () => {
     type("]")
     expect(screen.getByTestId("page").textContent).toBe("1")
     // The old page is still shown until the new one's rows arrive.
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     view.rerender(tab(1))
-    expect(ringed()).toEqual(["d"])
+    expect(highlighted()).toEqual(["d"])
     expect(opened()).toBe("d")
     type("]")
     expect(screen.getByTestId("page").textContent).toBe("1")
@@ -219,7 +219,7 @@ describe("the Directory's keyboard mode", () => {
   test("Esc drops the Highlight and closes the panel", () => {
     render(tab())
     type("j", "Enter", "Escape")
-    expect(ringed()).toEqual([])
+    expect(highlighted()).toEqual([])
     expect(opened()).toBe("")
     type("x")
     expect(pressed).toEqual([])
@@ -240,7 +240,7 @@ describe("the Directory's keyboard mode", () => {
     act(() => {
       window.dispatchEvent(taken)
     })
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     expect(opened()).toBe("a")
   })
 
@@ -249,7 +249,7 @@ describe("the Directory's keyboard mode", () => {
     type("j")
     screen.getByLabelText("Search the Directory").focus()
     type("j", "Enter")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     expect(opened()).toBe("")
     ;(document.activeElement as HTMLElement).blur()
     const dialog = document.createElement("div")
@@ -257,7 +257,7 @@ describe("the Directory's keyboard mode", () => {
     document.body.appendChild(dialog)
     try {
       type("j", "x", "]")
-      expect(ringed()).toEqual(["a"])
+      expect(highlighted()).toEqual(["a"])
       expect(pressed).toEqual([])
       expect(screen.getByTestId("page").textContent).toBe("0")
     } finally {
@@ -273,19 +273,19 @@ describe("the Directory's keyboard mode", () => {
     type("Escape")
     expect(document.activeElement).not.toBe(box)
     type("j")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
   })
 
   test("off, no Highlight shows and no key moves it; on again, it is back", () => {
     render(tab())
     type("j")
     act(() => setKeyboardMode(false))
-    expect(ringed()).toEqual([])
+    expect(highlighted()).toEqual([])
     type("j", "]")
-    expect(ringed()).toEqual([])
+    expect(highlighted()).toEqual([])
     expect(screen.getByTestId("page").textContent).toBe("0")
     act(() => setKeyboardMode(true))
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
   })
 
   test("the Highlight comes back when the tab is shown again", () => {
@@ -293,6 +293,6 @@ describe("the Directory's keyboard mode", () => {
     type("j", "j")
     view.unmount()
     render(tab())
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
   })
 })

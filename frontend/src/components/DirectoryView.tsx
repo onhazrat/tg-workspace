@@ -347,7 +347,7 @@ export function DirectoryView() {
   }
   // Below md (DFP-02): the controls in a sheet, the rows as cards.
   const phone = useIsMobile()
-  const ring = useDirectoryKeys({
+  const highlight = useDirectoryKeys({
     handles: shown.rows.map((r) => r.handle),
     open: d.open,
     onOpen: d.setOpen,
@@ -445,7 +445,7 @@ export function DirectoryView() {
         onSort={(key) => patch(headerSort(view, key, d.yours.source))}
         onPage={(page) => patch({ page })}
         onOpen={d.setOpen}
-        ring={ring}
+        highlight={highlight}
         cards={phone}
         tagging={tagging}
       />

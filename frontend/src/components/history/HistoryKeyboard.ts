@@ -8,7 +8,8 @@ import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
 import type { ArtifactListItem } from "@/types"
 import { artifactName } from "./artifact-presentation"
 
-const keyOf = (a: ArtifactListItem) => `${a.kind}:${a.id}`
+/** An Artifact's id in the list: `kind:id`, since ids are per kind. */
+export const artifactKey = (a: ArtifactListItem) => `${a.kind}:${a.id}`
 
 const cardOf = (key: string) => {
   const [kind, id] = key.split(/:(.*)/)
@@ -26,7 +27,7 @@ export function useHistoryKeys({
   artifacts: ArtifactListItem[]
   onOpen: (artifact: ArtifactListItem) => void
 }): string | null {
-  const keys = artifacts.map(keyOf)
+  const keys = artifacts.map(artifactKey)
   const find = (key: string) => artifacts[keys.indexOf(key)]
   return useKeyboardList({
     list: "history",

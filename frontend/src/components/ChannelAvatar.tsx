@@ -6,7 +6,7 @@ import {
   PhotoViewerDialog,
 } from "@/components/post-card/PhotoViewer"
 import { getChannelPhotoSrc } from "@/lib/channels/channel-photo-cache"
-import { shortcut, withKey } from "@/lib/keyboard/key-list"
+import { keyTitle, shortcut } from "@/lib/keyboard/key-list"
 import { useKeyboardMode } from "@/lib/keyboard/mode"
 import type { Channel } from "@/types"
 
@@ -88,7 +88,7 @@ export function ChannelAvatar({
               type="button"
               aria-label={label}
               {...shortcut("photo")}
-              title={keyboard ? withKey(label, "photo", true) : undefined}
+              title={keyTitle(label, "photo", keyboard)}
               onClick={open}
               className={`${PHOTO_CORNER_BUTTON_CLASS} -left-1`}
             >
@@ -102,7 +102,7 @@ export function ChannelAvatar({
             type="button"
             aria-label={label}
             {...shortcut("photo")}
-            title={keyboard ? withKey(label, "photo", true) : undefined}
+            title={keyTitle(label, "photo", keyboard)}
             onClick={open}
             className="relative z-20 block shrink-0 cursor-zoom-in rounded-full"
           >

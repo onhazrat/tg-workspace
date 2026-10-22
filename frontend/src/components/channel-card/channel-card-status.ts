@@ -118,8 +118,8 @@ export const ALIGNED_SECTIONS_CLASS = "row-span-6 grid grid-rows-subgrid"
 
 /**
  * The card frame: dimmed when frozen, outlined when selected, ringed while
- * syncing, and ringed blue, over the syncing ring, while keyboard mode
- * highlights it.
+ * syncing, and with no border or syncing ring under keyboard mode's blue
+ * Highlight ring.
  */
 export function channelCardFrameClass({
   isFrozen,
@@ -144,7 +144,8 @@ export function channelCardFrameClass({
         }
         ${
           highlighted
-            ? "ring-2 ring-blue-500 border-transparent"
+            ? // The blue ring itself is index.css's [data-highlight].
+              "border-transparent"
             : isScraping
               ? "ring-2 ring-app-ink/20"
               : ""

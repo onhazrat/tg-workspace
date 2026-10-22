@@ -91,7 +91,7 @@ export function ChannelCardFace({
   return (
     <div
       data-channel-name={channel.name}
-      data-kbd-selected={highlighted || undefined}
+      data-highlight={highlighted || undefined}
       data-marked={isSelected || undefined}
       className={channelCardFrameClass({
         isFrozen: channel.isFrozen,

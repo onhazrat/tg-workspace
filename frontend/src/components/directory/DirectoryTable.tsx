@@ -524,7 +524,7 @@ export function DirectoryTable({
   onSort,
   onPage,
   onOpen,
-  ring,
+  highlight,
   cards = false,
   tagging,
 }: {
@@ -547,7 +547,7 @@ export function DirectoryTable({
   /** A click anywhere on the row but its links and controls opens the panel. */
   onOpen: (handle: string) => void
   /** The keyboard highlight's handle (DFP-01). */
-  ring?: string | null
+  highlight?: string | null
   /** Below `md`, two-line cards instead of the table (DFP-02). */
   cards?: boolean
   /** Each row's Tag picker (DFP-04); none while the Tags have not loaded. */
@@ -615,10 +615,10 @@ export function DirectoryTable({
             key={r.handle}
             data-testid={`directory-row-${r.handle}`}
             data-directory-handle={r.handle}
-            data-kbd-selected={ring === r.handle || undefined}
+            data-highlight={highlight === r.handle || undefined}
             data-marked={ticks.has(r.handle) || undefined}
             onClick={() => onOpen(r.handle)}
-            className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""} data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500`}
+            className={`cursor-pointer ${tgTableRowClass} ${ticks.has(r.handle) ? "" : "hover:bg-app-ink/5"} ${r.dismissed ? "opacity-50" : ""}`}
           >
             <td className="pl-3" onClick={(e) => e.stopPropagation()}>
               <input

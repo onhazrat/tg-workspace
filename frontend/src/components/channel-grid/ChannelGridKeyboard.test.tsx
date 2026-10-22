@@ -89,7 +89,7 @@ function Grid({
   spies?: Spies
 }) {
   const [zoom, setZoom] = useState<CardZoom>(startZoom)
-  const ring = useChannelKeys({
+  const highlight = useChannelKeys({
     names,
     lanes,
     firstVisibleRow,
@@ -112,7 +112,7 @@ function Grid({
             isSelected={false}
             isScraping={false}
             busy={false}
-            highlighted={ring === name}
+            highlighted={highlight === name}
             onToggleSelected={() => spies?.select(name)}
             onSync={() => spies?.sync(name)}
           />
@@ -129,7 +129,7 @@ function Grid({
             isScraping={false}
             busy={false}
             queuePosition={null}
-            highlighted={ring === name}
+            highlighted={highlight === name}
             onToggleSelected={() => spies?.select(name)}
             onToggleFreeze={() => spies?.freeze(name)}
             onResetAndSync={() => {}}
@@ -144,7 +144,7 @@ function Grid({
 }
 
 const highlighted = () =>
-  Array.from(document.querySelectorAll("[data-kbd-selected]")).map((el) =>
+  Array.from(document.querySelectorAll("[data-highlight]")).map((el) =>
     el.getAttribute("data-channel-name"),
   )
 /** Typed as a browser sends them: a Shift keydown before a capital. */

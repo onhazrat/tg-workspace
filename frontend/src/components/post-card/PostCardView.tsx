@@ -1,6 +1,7 @@
 import { ACTIONS, withKey } from "@/lib/keyboard/key-list"
 import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { cn } from "@/lib/utils"
+import { postCardKey } from "./FeedKeyboard"
 import { PostCardBody, PostCardClampedBody } from "./PostCardBody"
 import {
   PostCardActions,
@@ -20,8 +21,6 @@ import { PostCardPhoto } from "./PostCardPhoto"
 export interface PostCardViewProps extends PostCardHeaderProps {
   /** The Compact grid's card: one-line header, smaller photo, three lines. */
   compact?: boolean
-  /** Keyboard mode is on, so action tooltips name their letter. */
-  keyboard?: boolean
   /** Keyboard mode's Highlight is on this card: the 2 px blue ring. */
   highlighted?: boolean
   /** The text to show: the translation while it is showing. */
@@ -69,9 +68,8 @@ export function SelectBox({
   )
 }
 
-/** Keyboard mode's ring on the highlighted card. */
-const RINGABLE =
-  "scroll-mt-24 data-[kbd-selected]:ring-2 data-[kbd-selected]:ring-blue-500 data-[kbd-selected]:border-transparent"
+/** Room under the sticky header, and no grey border inside the Highlight's ring (index.css). */
+const RINGABLE = "scroll-mt-24 data-[highlight]:border-transparent"
 
 /**
  * A Post as Telegram draws it (PTR-02): header, the photo above the text, the
@@ -80,7 +78,6 @@ const RINGABLE =
  */
 export function PostCardView({
   compact = false,
-  keyboard = false,
   highlighted = false,
   text,
   translation,
@@ -116,7 +113,6 @@ export function PostCardView({
           ? () => header.onShowChannel?.(post.channelName)
           : undefined
       }
-      keyboard={keyboard}
       labels={!compact}
       translation={translation}
       onFindRelated={onFindRelated}
@@ -126,8 +122,8 @@ export function PostCardView({
   if (compact) {
     return (
       <article
-        data-post-key={`${post.channelName}_${post.id}`}
-        data-kbd-selected={highlighted || undefined}
+        data-post-key={postCardKey(post)}
+        data-highlight={highlighted || undefined}
         className={cn(
           "flex flex-col gap-2 rounded-xl border border-app-ink/10 bg-app-card px-4 pt-3 pb-1.5 transition-colors hover:border-app-ink/20",
           RINGABLE,
@@ -155,8 +151,8 @@ export function PostCardView({
 
   return (
     <article
-      data-post-key={`${post.channelName}_${post.id}`}
-      data-kbd-selected={highlighted || undefined}
+      data-post-key={postCardKey(post)}
+      data-highlight={highlighted || undefined}
       className={cn(
         "overflow-hidden rounded-2xl border border-app-ink/10 bg-app-card shadow-sm transition-colors hover:border-app-ink/20",
         RINGABLE,

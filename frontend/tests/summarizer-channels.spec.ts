@@ -500,7 +500,7 @@ test.describe("TG Workspace channels and posts", () => {
     const names = await cards.evaluateAll((elements) =>
       elements.map((el) => el.getAttribute("data-channel-name") ?? ""),
     )
-    const highlighted = page.locator("[data-kbd-selected]")
+    const highlighted = page.locator("[data-highlight]")
     const legend = page.locator("kbd")
     const corner = (actions: string) => [
       "j / k",

@@ -695,7 +695,7 @@ test.describe("TG Workspace directory", () => {
     await expect(page.getByText("open or close the panel")).toBeVisible()
     await page.keyboard.press("j")
     const a1 = page.getByTestId("directory-row-a1")
-    await expect(a1).toHaveAttribute("data-kbd-selected", "true")
+    await expect(a1).toHaveAttribute("data-highlight", "true")
     await page.keyboard.press("x")
     await expect(page.getByRole("checkbox", { name: "Tick @a1" })).toBeChecked()
     await page.keyboard.press("Enter")
@@ -703,7 +703,7 @@ test.describe("TG Workspace directory", () => {
     await expect(aside.getByText("The bio of a1")).toBeVisible()
     await page.keyboard.press("j")
     await expect(page.getByTestId("directory-row-a2")).toHaveAttribute(
-      "data-kbd-selected",
+      "data-highlight",
       "true",
     )
     await expect(aside.getByText("The bio of a2")).toBeVisible()
@@ -712,7 +712,7 @@ test.describe("TG Workspace directory", () => {
     await page.keyboard.press("Enter")
     await expect(aside).toHaveCount(0)
     await page.keyboard.press("Escape")
-    await expect(page.locator("[data-kbd-selected]")).toHaveCount(0)
+    await expect(page.locator("[data-highlight]")).toHaveCount(0)
   })
 
   // DFP-02 at iPhone 12 Pro size: rows on the first screen.
@@ -972,7 +972,7 @@ test.describe("TG Workspace directory", () => {
     await expect(viewer).toHaveCount(0)
     await expect(aside.getByText("The bio of p00")).toBeVisible()
     await expect(page.getByTestId("directory-row-p00")).toHaveAttribute(
-      "data-kbd-selected",
+      "data-highlight",
       "true",
     )
 

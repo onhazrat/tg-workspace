@@ -251,7 +251,7 @@ export const DiscoverView: React.FC = () => {
     setNameQuery("")
   }
 
-  const ring = useDiscoverKeys({
+  const highlight = useDiscoverKeys({
     report: reportId,
     names: candidates.map((c) => c.name),
     onOpen: setInspectingName,
@@ -346,7 +346,7 @@ export const DiscoverView: React.FC = () => {
           table={
             <DiscoverCandidateTable
               candidates={candidates}
-              ring={ring}
+              highlight={highlight}
               selectedForFollow={follow.selectedForFollow}
               setSelectedForFollow={follow.setSelectedForFollow}
               unfollowedCount={unfollowedCount}

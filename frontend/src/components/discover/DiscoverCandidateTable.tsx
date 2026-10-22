@@ -367,10 +367,10 @@ export function CandidateRow({
   return (
     <tr
       data-discover-handle={row.name}
-      data-kbd-selected={highlighted || undefined}
+      data-highlight={highlighted || undefined}
       // A followed Candidate's box is checked but is not a Tick.
       data-marked={(isSelected && !row.isFollowed) || undefined}
-      className="border-t border-app-ink/10 data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500"
+      className="border-t border-app-ink/10"
     >
       <td className="py-2 align-middle">
         <input
@@ -504,12 +504,12 @@ interface DiscoverCandidateTableProps {
    */
   showScore: boolean
   /** The Candidate keyboard mode highlights. */
-  ring?: string | null
+  highlight?: string | null
 }
 
 export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   candidates,
-  ring = null,
+  highlight = null,
   selectedForFollow,
   setSelectedForFollow,
   unfollowedCount,
@@ -653,7 +653,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
             <CandidateRow
               key={row.name}
               row={row}
-              highlighted={ring === row.name}
+              highlighted={highlight === row.name}
               isSelected={isRowCheckboxChecked(
                 row.name,
                 row.isFollowed,

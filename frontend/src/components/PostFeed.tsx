@@ -13,7 +13,6 @@ import {
 } from "@/hooks/usePostsView"
 import { useCompactPostGrid, useSessionFlag } from "@/hooks/useSessionFlag"
 import { downloadBlob } from "@/lib/data-transfer/download"
-import { useKeyboardMode } from "@/lib/keyboard/mode"
 import { spotlightView } from "@/lib/posts/channel-spotlight"
 import { feedSubtitle } from "@/lib/posts/post-filter-bar"
 import {
@@ -46,7 +45,7 @@ import {
   useSpotlightBack,
   useSpotlightState,
 } from "./post-card/ChannelSpotlight"
-import { usePostKeys } from "./post-card/FeedKeyboard"
+import { postCardKey, usePostKeys } from "./post-card/FeedKeyboard"
 import { FeedPagingContext } from "./post-card/PhotoViewer"
 import { ReplyPreviewProvider } from "./post-card/ReplyParent"
 
@@ -87,7 +86,6 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   const spotlightApi = useSpotlightState(scrollContainerRef, postFilter, ranked)
   const { spotlight } = spotlightApi
   const [compact, setCompact] = useCompactPostGrid()
-  const keyboard = useKeyboardMode()
   const { counts, tooNewToJudge, selectedShown } = useShownPostCounts(spotlight)
   const [selectedFirst, setSelectedFirst] = useSessionFlag(
     "postFeed_selectedFirst",
@@ -109,7 +107,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     setActiveTab("channels"),
   )
   const highlight = usePostKeys({
-    keys: posts.map((p) => `${p.channelName}_${p.id}`),
+    keys: posts.map(postCardKey),
     onCompact: setCompact,
     spotlit: spotlight !== null,
     onSpotlightBack: backFromSpotlight,
@@ -304,7 +302,6 @@ export const PostFeed: React.FC<PostFeedProps> = ({
               loadMoreRef={loadMoreRef}
               postSearch={postSearch}
               compact={compact}
-              keyboard={keyboard}
               highlight={highlight}
               onToggleSelected={onToggleSelected}
             />

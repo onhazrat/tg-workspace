@@ -364,7 +364,7 @@ test.describe("TG Workspace discover", () => {
     await expect(
       page.getByTestId("discover-bulk-bar").getByText("5 selected"),
     ).toBeVisible()
-    await expect(page.locator("tr[data-kbd-selected]")).toHaveCount(1)
+    await expect(page.locator("tr[data-highlight]")).toHaveCount(1)
 
     await page.keyboard.press("Shift+KeyF")
     const confirmDialog = page.getByRole("dialog")

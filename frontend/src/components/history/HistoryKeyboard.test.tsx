@@ -17,7 +17,7 @@ import {
 } from "@/lib/keyboard/mode"
 import type { ArtifactListItem } from "@/types"
 import { ArtifactCardActions, ArtifactCardHeading } from "./ArtifactCardParts"
-import { useHistoryKeys } from "./HistoryKeyboard"
+import { artifactKey, useHistoryKeys } from "./HistoryKeyboard"
 import { toggleStar } from "./history-view-model"
 
 const ARTIFACTS = [
@@ -53,7 +53,7 @@ let spies: Record<"open" | "star" | "note" | "remove", Spy>
 let starred: [string, boolean][]
 
 function History() {
-  const ring = useHistoryKeys({
+  const highlight = useHistoryKeys({
     artifacts: ARTIFACTS,
     onOpen: (a) => spies.open(a),
   })
@@ -63,10 +63,10 @@ function History() {
       {ARTIFACTS.map((a) => (
         // ArtifactCard's frame, without the Scope line's workspace contexts.
         <div
-          key={`${a.kind}:${a.id}`}
+          key={artifactKey(a)}
           data-artifact-kind={a.kind}
           data-artifact-id={a.id}
-          data-kbd-selected={ring === `${a.kind}:${a.id}` || undefined}
+          data-highlight={highlight === artifactKey(a) || undefined}
         >
           <ArtifactCardHeading
             artifact={a}
@@ -105,8 +105,8 @@ const tab = () => (
   </>
 )
 
-const ringed = () =>
-  Array.from(document.querySelectorAll("[data-kbd-selected]")).map((el) =>
+const highlighted = () =>
+  Array.from(document.querySelectorAll("[data-highlight]")).map((el) =>
     el.getAttribute("data-artifact-id"),
   )
 const ids = (spy: Spy) => spy.mock.calls.map(([a]) => a.id)
@@ -131,13 +131,13 @@ describe("History's keyboard mode", () => {
   test("j and k move the Highlight, a count, G and gg jump", () => {
     render(tab())
     type("j")
-    expect(ringed()).toEqual(["s1"])
+    expect(highlighted()).toEqual(["s1"])
     type("2", "j")
-    expect(ringed()).toEqual(["t1"])
+    expect(highlighted()).toEqual(["t1"])
     type("g", "g", "j")
-    expect(ringed()).toEqual(["c1"])
+    expect(highlighted()).toEqual(["c1"])
     type("G")
-    expect(ringed()).toEqual(["t1"])
+    expect(highlighted()).toEqual(["t1"])
   })
 
   test("each move is announced with the Artifact's kind and title, or its Channels", () => {
@@ -188,9 +188,9 @@ describe("History's keyboard mode", () => {
   test("J, K, F and D do nothing in History, which ticks nothing", async () => {
     render(tab())
     type("j", "J")
-    expect(ringed()).toEqual(["s1"])
+    expect(highlighted()).toEqual(["s1"])
     type("j", "K", "F", "D")
-    expect(ringed()).toEqual(["c1"])
+    expect(highlighted()).toEqual(["c1"])
     await new Promise((r) => setTimeout(r, 50))
     expect(document.querySelector("[data-sonner-toast]")).toBeNull()
   })

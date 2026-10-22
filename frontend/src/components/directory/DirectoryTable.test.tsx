@@ -198,10 +198,10 @@ describe("ticks", () => {
 
 describe("keyboard mode (DFP-01)", () => {
   test("the highlighted row is marked, and x, f, d and o press its tick, Follow, Dismiss and link", () => {
-    mount({ ring: "beta" })
-    const ringed = document.querySelectorAll("[data-kbd-selected]")
+    mount({ highlight: "beta" })
+    const highlighted = document.querySelectorAll("[data-highlight]")
     expect(
-      [...ringed].map((r) => r.getAttribute("data-directory-handle")),
+      [...highlighted].map((r) => r.getAttribute("data-directory-handle")),
     ).toEqual(["beta"])
     const row = screen.getByTestId("directory-row-beta")
     const key = (k: string) =>
@@ -217,7 +217,7 @@ describe("keyboard mode (DFP-01)", () => {
     setKeyboardMode(true)
     try {
       mount({
-        ring: "beta",
+        highlight: "beta",
         tagging: { tags: [], onTag: () => {}, onUntag: () => {} },
       })
       const row = screen.getByTestId("directory-row-beta")
@@ -237,7 +237,7 @@ describe("keyboard mode (DFP-01)", () => {
     const tagged: [string, string[], boolean][] = []
     mount({
       rows: [row("alpha", { tags: ["News"] })],
-      ring: "alpha",
+      highlight: "alpha",
       tagging: {
         tags: [{ name: "News", channels: 1 }],
         onTag: (name, handles) => tagged.push([name, handles, true]),
@@ -264,7 +264,7 @@ function Keyed({
   rows: DirectoryRowResponse[]
   calls: [string, boolean][]
 }) {
-  const ring = useDirectoryKeys({
+  const highlight = useDirectoryKeys({
     handles: rows.map((r) => r.handle),
     open: null,
     onOpen: () => {},
@@ -288,7 +288,7 @@ function Keyed({
       onSort={() => {}}
       onPage={() => {}}
       onOpen={() => {}}
-      ring={ring}
+      highlight={highlight}
     />
   )
 }

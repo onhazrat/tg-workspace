@@ -56,7 +56,7 @@ function Feed({
         <article
           key={key}
           data-post-key={key}
-          data-kbd-selected={highlight === key || undefined}
+          data-highlight={highlight === key || undefined}
         >
           <input
             type="checkbox"
@@ -86,8 +86,8 @@ function Feed({
   )
 }
 
-const ringed = () =>
-  Array.from(document.querySelectorAll("[data-kbd-selected]")).map((el) =>
+const highlighted = () =>
+  Array.from(document.querySelectorAll("[data-highlight]")).map((el) =>
     el.getAttribute("data-post-key"),
   )
 const type = (...keys: string[]) => {
@@ -114,17 +114,17 @@ describe("the Posts feed's keyboard mode", () => {
   test("j and k move the Highlight, a count moves that far, G and gg jump", () => {
     render(<Feed />)
     type("j")
-    expect(ringed()).toEqual(["ch_1"])
+    expect(highlighted()).toEqual(["ch_1"])
     type("2", "j")
-    expect(ringed()).toEqual(["ch_3"])
+    expect(highlighted()).toEqual(["ch_3"])
     type("k")
-    expect(ringed()).toEqual(["ch_2"])
+    expect(highlighted()).toEqual(["ch_2"])
     type("g", "g")
-    expect(ringed()).toEqual(["ch_1"])
+    expect(highlighted()).toEqual(["ch_1"])
     type("G")
-    expect(ringed()).toEqual(["ch_3"])
+    expect(highlighted()).toEqual(["ch_3"])
     type("2", "G")
-    expect(ringed()).toEqual(["ch_2"])
+    expect(highlighted()).toEqual(["ch_2"])
   })
 
   test("x unpicks a Post, and K then unpicks while moving up", () => {
@@ -136,7 +136,7 @@ describe("the Posts feed's keyboard mode", () => {
         .filter((box) => (box as HTMLInputElement).checked)
         .map((box) => box.getAttribute("aria-label"))
     expect(picked()).toEqual(["Pick ch_1"])
-    expect(ringed()).toEqual(["ch_2"])
+    expect(highlighted()).toEqual(["ch_2"])
   })
 
   test("each move is announced with the Post's Channel and its place", () => {
@@ -152,7 +152,7 @@ describe("the Posts feed's keyboard mode", () => {
     type("j", "j", "l")
     expect(translated).toEqual(["ch_2"])
     type("Escape")
-    expect(ringed()).toEqual([])
+    expect(highlighted()).toEqual([])
     type("l")
     expect(translated).toEqual(["ch_2"])
   })
@@ -216,7 +216,7 @@ describe("the Posts feed's keyboard mode", () => {
     render(<Feed />)
     type("j")
     act(() => setKeyboardMode(false))
-    expect(ringed()).toEqual([])
+    expect(highlighted()).toEqual([])
     type("l", "-")
     expect(translated).toEqual([])
     expect(screen.getByTestId("compact").textContent).toBe("false")

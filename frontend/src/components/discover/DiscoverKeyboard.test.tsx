@@ -64,7 +64,7 @@ function Report({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [inspecting, setInspecting] = useState<string | null>(null)
-  const ring = useDiscoverKeys({
+  const highlight = useDiscoverKeys({
     report,
     names: rows.map((r) => r.name),
     onOpen: setInspecting,
@@ -93,7 +93,7 @@ function Report({
       )}
       <DiscoverCandidateTable
         candidates={rows}
-        ring={ring}
+        highlight={highlight}
         selectedForFollow={selected}
         setSelectedForFollow={setSelected}
         unfollowedCount={2}
@@ -131,8 +131,8 @@ const tab = (report: string | null = null, rows = ROWS) => (
   </QueryClientProvider>
 )
 
-const ringed = () =>
-  Array.from(document.querySelectorAll("tr[data-kbd-selected]")).map((el) =>
+const highlighted = () =>
+  Array.from(document.querySelectorAll("tr[data-highlight]")).map((el) =>
     el.getAttribute("data-discover-handle"),
   )
 const ticked = () =>
@@ -168,13 +168,13 @@ describe("a Discovery report's keyboard mode", () => {
   test("j and k move the Highlight, a count, G and gg jump, and each move is announced", () => {
     render(tab())
     type("j")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     type("2", "j")
-    expect(ringed()).toEqual(["c"])
+    expect(highlighted()).toEqual(["c"])
     type("g", "g")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     type("G", "k")
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
     expect(screen.getByTestId("keyboard-announcer").textContent).toBe(
       "@b, 2 of 3",
     )
@@ -183,14 +183,14 @@ describe("a Discovery report's keyboard mode", () => {
   test("each report tab remembers its own Highlight across a tab switch", () => {
     render(tab("r1"))
     type("j", "j")
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
     cleanup()
     render(tab("r2"))
-    expect(ringed()).toEqual([])
+    expect(highlighted()).toEqual([])
     type("j")
     cleanup()
     render(tab("r1"))
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
   })
 
   test("x ticks a Candidate, and cannot tick a followed one", () => {
@@ -255,14 +255,14 @@ describe("a Discovery report's keyboard mode", () => {
     type("j", "Enter")
     expect(panel()).not.toBeNull()
     type("j")
-    expect(ringed()).toEqual(["a"])
+    expect(highlighted()).toEqual(["a"])
     fireEvent.keyDown(document.activeElement ?? document.body, {
       key: "Escape",
       code: "Escape",
     })
     expect(panel()).toBeNull()
     type("j")
-    expect(ringed()).toEqual(["b"])
+    expect(highlighted()).toEqual(["b"])
   })
 
   test("in keyboard mode each row control names its key; off, it does not", () => {

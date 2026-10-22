@@ -55,8 +55,8 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
       data-testid="artifact-card"
       data-artifact-kind={artifact.kind}
       data-artifact-id={artifact.id}
-      data-kbd-selected={highlighted || undefined}
-      className={`group relative flex min-w-0 scroll-mt-24 flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md data-[kbd-selected]:ring-2 data-[kbd-selected]:ring-blue-500 ${
+      data-highlight={highlighted || undefined}
+      className={`group relative flex min-w-0 scroll-mt-24 flex-col gap-3 rounded-xl border p-5 shadow-sm transition-all hover:shadow-md ${
         failed
           ? "border-red-500/30 bg-red-500/[0.03] hover:border-red-500/50"
           : pending
