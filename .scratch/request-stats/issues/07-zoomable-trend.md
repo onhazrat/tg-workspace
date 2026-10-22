@@ -2,6 +2,8 @@
 
 **What to build:** Under the daily bars, a zoomable trend gets finer as the Operator zooms, down to 5 minutes for the last week, with each bucket's exact count on hover. Spec: "Zoomable trend".
 
+**Prototype:** variant A on [`prototype/request-stats` @ b793f374](https://github.com/onhazrat/tg-workspace/tree/b793f3743ee41f41a02ef43ac5c0427d0da36c4d), the working reference for this behaviour; its README says how to run it. Port the behaviour, not the code: the prototype's data layer is synthetic (spec, Further Notes).
+
 **Blocked by:** RQS-06
 
 **Status:** ready-for-agent

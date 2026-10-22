@@ -2,6 +2,8 @@
 
 **What to build:** The Operator narrows and ranks Channels by any measure, sees each Channel's New Posts per Request, and ticks Channels to narrow the whole tab to them. Spec: "Channels by Requests".
 
+**Prototype:** variant A on [`prototype/request-stats` @ b793f374](https://github.com/onhazrat/tg-workspace/tree/b793f3743ee41f41a02ef43ac5c0427d0da36c4d), the working reference for this behaviour; its README says how to run it. Port the behaviour, not the code: the prototype's data layer is synthetic (spec, Further Notes).
+
 **Blocked by:** RQS-03
 
 **Status:** ready-for-agent
