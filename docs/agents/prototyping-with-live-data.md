@@ -155,6 +155,24 @@ example.
 - A second prototype at the same time needs its own worktree, its own frontend and API ports
   (`PROTO_API_PORT`), and room under the role's connection limit.
 
+### Checking keyboard features in the browser pane
+
+- **Send keys from a script, as a keyboard sends them.** The pane's own key action turns
+  `shift+t` into a plain `t` with no Shift keydown, so it cannot reproduce a bug that lives in
+  the Shift. Dispatch `keydown` events from the page's script instead, and precede every
+  capital with its own `Shift` keydown (`{ key: "Shift", shiftKey: true }`, then
+  `{ key: "T", shiftKey: true }`). Four keyboard-mode bugs (`gT`, `23G`, `gg`, `?` leaving a
+  `g` waiting) passed tests that sent the capital alone.
+- **Keep each script under the tool's 45-second limit**: one call per tab or per check. A
+  script that times out keeps running in the page and changes it under the next call; check
+  where the page is before running again.
+- **Intercept clicks on anything that writes.** Against a deployment's real API, wrap
+  `HTMLElement.prototype.click` to log instead of press while a key could hit Follow,
+  Dismiss, Freeze, a selection or a delete, and restore it afterwards. A key that opens,
+  moves or filters can run for real.
+- **A dialog left open swallows every key.** Before trusting "nothing happened", check for a
+  `[role="dialog"]` a previous step left open.
+
 ## 6. Keeping it safe to share
 
 - **Never push a prototype branch whose history names the deployment** (its domain, host, IPs,
