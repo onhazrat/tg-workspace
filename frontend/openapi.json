@@ -6770,6 +6770,68 @@
         }
       }
     },
+    "/api/v1/requests/breakdown": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Breakdown",
+        "description": "Requests in `[start, end)` by kind of work and by Channel.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests.",
+        "operationId": "requests-read_request_breakdown",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "End"
+            }
+          },
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestBreakdownResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/view-as/{user_id}": {
       "post": {
         "tags": ["view-as"],
@@ -7779,6 +7841,36 @@
         "type": "object",
         "required": ["type"],
         "title": "ChannelPostsFilteredCondition"
+      },
+      "ChannelRequestTotals": {
+        "properties": {
+          "kind": { "type": "string", "title": "Kind" },
+          "requests": { "type": "integer", "title": "Requests" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "charged": { "type": "integer", "title": "Charged" },
+          "newPosts": { "type": "integer", "title": "Newposts" },
+          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "channel": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "requests",
+          "useful",
+          "idle",
+          "wasted",
+          "charged",
+          "newPosts",
+          "repeatedPosts",
+          "channel"
+        ],
+        "title": "ChannelRequestTotals",
+        "description": "One kind of work on one Channel. `channel` is null on an aggregate row."
       },
       "ChannelResponse": {
         "properties": {
@@ -13248,6 +13340,55 @@
         "required": ["name", "counts", "reference"],
         "title": "ReportCandidateResponse",
         "description": "A candidate read back from a saved report, with its probe verdict joined.\n\n`probe` is `null` for a handle nothing has looked at yet, which callers must\nrender as \"not checked\" rather than as a verdict: an unprobed handle and one\nconfirmed unfollowable must not look the same."
+      },
+      "RequestBreakdownResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "byKind": {
+            "items": { "$ref": "#/components/schemas/RequestTotals" },
+            "type": "array",
+            "title": "Bykind"
+          },
+          "byChannel": {
+            "items": { "$ref": "#/components/schemas/ChannelRequestTotals" },
+            "type": "array",
+            "title": "Bychannel"
+          }
+        },
+        "type": "object",
+        "required": ["start", "end", "byKind", "byChannel"],
+        "title": "RequestBreakdownResponse",
+        "description": "Totals by kind and by Channel for one range, in UTC."
+      },
+      "RequestTotals": {
+        "properties": {
+          "kind": { "type": "string", "title": "Kind" },
+          "requests": { "type": "integer", "title": "Requests" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "charged": { "type": "integer", "title": "Charged" },
+          "newPosts": { "type": "integer", "title": "Newposts" },
+          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "requests",
+          "useful",
+          "idle",
+          "wasted",
+          "charged",
+          "newPosts",
+          "repeatedPosts"
+        ],
+        "title": "RequestTotals",
+        "description": "Requests by outcome, and the Posts the answered pages brought."
       },
       "ResolveStartTimeRequest": {
         "properties": {

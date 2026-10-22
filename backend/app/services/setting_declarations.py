@@ -41,6 +41,7 @@ from app.services.settings_registry import (
     QUOTA_KEY,
     REACH_KEY,
     REFERENCE_GRAPH_KEY,
+    REQUEST_ROLLUP_KEY,
     RETENTION_KEY,
     RETENTION_PREFS_KEY,
     SETTLING_CURVE_RUNTIME_KEY,
@@ -94,6 +95,7 @@ NOT_SETTINGS: dict[str, str] = {
     VIEW_OBSERVATIONS_KEY: "The Observation stride the app's controller writes.",
     POST_COUNTERS_MOVED_KEY: "A marker that a one-off data move found nothing left.",
     SETTLING_CURVE_RUNTIME_KEY: "When the Settling curve fit last learned nothing.",
+    REQUEST_ROLLUP_KEY: "How far the Request totals are rolled up, written by the app.",
     REFERENCE_GRAPH_KEY: "The instant the reference graph was created, written once.",
     SYNC_LANES_KEY: "Which sync lanes are paused, run from the lane controls.",
     DIRECTORY_COLUMNS_KEY: (

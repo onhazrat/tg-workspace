@@ -105,6 +105,12 @@ TG_TABLES: tuple[str, ...] = (
     # the next test asserts on, and the failure reads as a probe having made
     # requests it never made.
     "tg_directory_probe_usage",
+    # RQS-01's Requests and their totals. A Request one test recorded is a
+    # Request the next test's Breakdown counts, and the daily totals are kept
+    # forever in production, which is exactly why a test must not inherit them.
+    "tg_request_records",
+    "tg_request_hourly",
+    "tg_request_daily",
     "tg_sync_jobs",
     "tg_follow_jobs",
     "tg_sync_meta",

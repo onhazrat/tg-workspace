@@ -911,6 +911,50 @@ export type ChannelPostsFilteredCondition = {
 };
 
 /**
+ * ChannelRequestTotals
+ *
+ * One kind of work on one Channel. `channel` is null on an aggregate row.
+ */
+export type ChannelRequestTotals = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Charged
+     */
+    charged: number;
+    /**
+     * Newposts
+     */
+    newPosts: number;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number;
+    /**
+     * Channel
+     */
+    channel: string | null;
+};
+
+/**
  * ChannelResponse
  *
  * One channel, as `channel_to_camel` builds it.
@@ -6113,6 +6157,70 @@ export type ReportCandidateResponse = {
     isIgnored?: boolean;
     reference: CandidateReferenceResponse;
     probe?: HandleProbeResponse | null;
+};
+
+/**
+ * RequestBreakdownResponse
+ *
+ * Totals by kind and by Channel for one range, in UTC.
+ */
+export type RequestBreakdownResponse = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Bykind
+     */
+    byKind: Array<RequestTotals>;
+    /**
+     * Bychannel
+     */
+    byChannel: Array<ChannelRequestTotals>;
+};
+
+/**
+ * RequestTotals
+ *
+ * Requests by outcome, and the Posts the answered pages brought.
+ */
+export type RequestTotals = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Charged
+     */
+    charged: number;
+    /**
+     * Newposts
+     */
+    newPosts: number;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number;
 };
 
 /**
@@ -13561,6 +13669,44 @@ export type QuotaLiftQuotaCeilingResponses = {
 };
 
 export type QuotaLiftQuotaCeilingResponse = QuotaLiftQuotaCeilingResponses[keyof QuotaLiftQuotaCeilingResponses];
+
+export type RequestsReadRequestBreakdownData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Start
+         */
+        start: string;
+        /**
+         * End
+         */
+        end: string;
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+    };
+    url: '/api/v1/requests/breakdown';
+};
+
+export type RequestsReadRequestBreakdownErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestBreakdownError = RequestsReadRequestBreakdownErrors[keyof RequestsReadRequestBreakdownErrors];
+
+export type RequestsReadRequestBreakdownResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestBreakdownResponse;
+};
+
+export type RequestsReadRequestBreakdownResponse = RequestsReadRequestBreakdownResponses[keyof RequestsReadRequestBreakdownResponses];
 
 export type ViewAsStartViewAsData = {
     body?: never;

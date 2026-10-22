@@ -1905,3 +1905,95 @@ class DirectoryProbeUsage(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class RequestRecordRow(SQLModel, table=True):
+    """One Request: one attempt that reached Telegram (RQS-01, ADR-035).
+
+    Written in batches by `services/request_stats.flush_recorded_requests` from
+    the buffer `core/request_recording.py` fills inside `fetch_with_retry`. No
+    foreign keys: these are the Operator's stats, kept after an Account or a
+    Channel is gone, and a key would make every flush wait on those rows.
+
+    `recorded_at` is when the row was flushed, on the database's clock, and it
+    is what the rollup's watermark reads: a late Request keeps its own `at`, is
+    still found, and its hour is recomputed.
+    """
+
+    __tablename__ = "tg_request_records"
+    __table_args__ = (
+        Index("ix_tg_request_records_at", "at"),
+        Index("ix_tg_request_records_recorded_at", "recorded_at"),
+    )
+
+    id: uuid.UUID = Field(primary_key=True)
+    at: datetime
+    recorded_at: datetime | None = Field(
+        default=None,
+        sa_column_kwargs={
+            "server_default": text("timezone('utc', now())"),
+            "nullable": False,
+        },
+    )
+    latency_ms: int
+    kind: str
+    charged: bool
+    account_id: uuid.UUID | None = None
+    budget: str | None = None
+    best_effort: bool
+    channel: str | None = None
+    lane: str
+    page_type: str
+    outcome: str
+    cause: str | None = None
+    error_code: str | None = None
+    attempt: int
+    chain_id: uuid.UUID
+    new_posts: int | None = None
+    repeated_posts: int | None = None
+
+
+class _RequestTotals(SQLModel):
+    """What the hourly and daily totals both keep (RQS-01).
+
+    `charged` is a key column rather than a count beside `requests`, so the
+    tab's Charged/Uncharged filter is a `WHERE` that keeps every measure right,
+    new and repeated Posts included. It barely adds rows: a group is nearly
+    always all charged or all uncharged (pages are, pictures and transport
+    faults are not).
+
+    The id is a `BIGINT` because every rollup deletes and re-inserts the open
+    hour and day, so the sequence climbs by thousands every five minutes.
+    """
+
+    id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
+    kind: str
+    account_id: uuid.UUID | None = None
+    channel: str | None = None
+    outcome: str
+    cause: str | None = None
+    page_type: str
+    charged: bool
+    requests: int
+    new_posts: int
+    repeated_posts: int
+
+
+class RequestHourly(_RequestTotals, table=True):
+    """Requests per UTC hour (RQS-01). Each hour is rebuilt whole by the rollup."""
+
+    __tablename__ = "tg_request_hourly"
+    __table_args__ = (Index("ix_tg_request_hourly_hour", "hour"),)
+
+    hour: datetime
+    lane: str
+    best_effort: bool
+
+
+class RequestDaily(_RequestTotals, table=True):
+    """Requests per UTC day (RQS-01), rebuilt from the hourly totals. Never pruned."""
+
+    __tablename__ = "tg_request_daily"
+    __table_args__ = (Index("ix_tg_request_daily_day", "day"),)
+
+    day: date

@@ -148,7 +148,7 @@
       "comment": "How long the drain waits for a healthy worker before concluding that every proxy is parked. Only reached when no worker is free *and* none can become free by a release \u2014 which is either \"everything is busy\" (resolved by waiting on the running tasks) or \"every proxy is in cooldown\" (resolved by giving up and letting the 30-second sweep come back). **Ticket 14's per-proxy wait does not feed into this, and that is a claim worth stating rather than assuming.** Ticket 13's handover asked that if deliberate waits longer than this constant appeared, it be re-derived from them instead of left a literal. They appeared, and the two still do not meet: this bounds the wait for a *free and healthy worker*, and a worker serving a paced fetch is `busy` \u2014 not free, not parked. Pacing lengthens the message a worker is already running, which the drain sees through `all_busy()` as ordinary backpressure. Deriving this from `PACE_MAX_MS` would make every empty-queue sweep block for thirty seconds to no purpose. `tests/services/test_adaptive_proxy_wait.py` holds the guard.",
       "expression": "5.0",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 178,
+      "line": 182,
       "name": "_NO_HEALTHY_WORKER_WAIT_SECONDS",
       "value": 5.0
     },
@@ -156,7 +156,7 @@
       "comment": "How many accounts one lane read will interleave between. A bound because each one costs a read: the round-robin below issues one `pgmq.read` per account with work, and a deployment with 200 accounts on one lane should serve 20 of them per pass rather than issue 200 queries to fill ten slots. The accounts it does not reach this pass are reached on the next, because `distinct_due_values` orders by value and the ones it served have had their messages claimed out of the due set.",
       "expression": "20",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 344,
+      "line": 348,
       "name": "MAX_INTERLEAVED_USERS",
       "value": 20
     },
@@ -164,7 +164,7 @@
       "comment": "How often the paused-lane set is re-read during one drain. See `_LaneBuffers._refresh_pauses` \u2014 a drain is not bounded in length, so a snapshot taken at its start can be hours stale.",
       "expression": "5.0",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 349,
+      "line": 353,
       "name": "_PAUSE_RECHECK_SECONDS",
       "value": 5.0
     },
@@ -172,7 +172,7 @@
       "comment": "How long a lane that read empty is left alone before being asked again. Bounds the cost of re-checking the normal tier while a long best-effort backlog drains \u2014 the strict-tier rule needs that re-check to be live, and without an interval it would be a query per dispatched message.",
       "expression": "0.5",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 355,
+      "line": 359,
       "name": "_EMPTY_LANE_RECHECK_SECONDS",
       "value": 0.5
     },
@@ -692,7 +692,7 @@
       "comment": "Attempts a media fetch gets. One, meaning no retry ladder at all. `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is sized for a page fetch, where losing the page loses the sync. Media is not that. An avatar is re-resolved on **every page** of a walk, so the page loop already is the retry, and a thumb is cosmetic. Left at the default, one dead avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds to 8 minutes when the avatar cache first moved onto the lane pool, which is what surfaced this. Shared by both image caches rather than spelled twice, because they are twins and `test_image_cache_egress.py` asserts they stay that way.",
       "expression": "1",
       "file": "backend/app/services/network.py",
-      "line": 466,
+      "line": 468,
       "name": "MEDIA_FETCH_RETRIES",
       "value": 1
     },
@@ -1028,7 +1028,7 @@
       "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
       "expression": "900",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1482,
+      "line": 1504,
       "name": "COALESCE_MAX_WAIT_SECONDS",
       "value": 900
     },
@@ -1036,7 +1036,7 @@
       "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
       "expression": "2.0",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1487,
+      "line": 1509,
       "name": "_COALESCE_POLL_SECONDS",
       "value": 2.0
     },

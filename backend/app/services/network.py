@@ -10,6 +10,7 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 import httpx
@@ -18,6 +19,7 @@ from stem.control import Controller
 
 from app.core.config import settings
 from app.core.request_meter import record_telegram_request
+from app.core.request_recording import Cause, lane_label, page_for_fetch
 from app.services.network_settings import DIRECT_EGRESS_KEY, normalize_proxy_url
 from app.services.proxy_pacing import (
     FetchOutcome,
@@ -465,6 +467,25 @@ async def _proxy_acquire(
 #: and `test_image_cache_egress.py` asserts they stay that way.
 MEDIA_FETCH_RETRIES = 1
 
+#: The cause a Wasted Request records (RQS-01): proxy pacing's class of the
+#: failure, by its own answer. Anything else that reached the network and got
+#: no usable answer is a transport fault.
+_WASTED_CAUSE = {
+    FetchOutcome.REJECTION: Cause.TURNED_AWAY,
+    FetchOutcome.SOFT_BLOCK: Cause.SOFT_BLOCK,
+    FetchOutcome.ANSWERED_ERROR: Cause.ANSWERED_ERROR,
+}
+
+
+def _error_code(exc: BaseException) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return str(exc.response.status_code)
+    return type(exc).__name__
+
+
+def _utc(ms: float) -> datetime:
+    return datetime.fromtimestamp(ms / 1000, UTC).replace(tzinfo=None)
+
 
 async def fetch_with_retry(
     url: str,
@@ -535,12 +556,18 @@ async def fetch_with_retry(
     # taking a *signal* from one would file another service's 429 against this
     # one's pace.
     paced = counts_towards_quota
+    # Every attempt that reaches the network is a Request (RQS-01, ADR-035),
+    # recorded into the page the caller opened, or a page of its own.
+    recording = page_for_fetch(media=binary)
 
     for i in range(effective_retries):
         attempt_start = time.time() * 1000
         proxy_url: str | None = None
         waited_ms = 0
         fetch_started = attempt_start
+        # Set only once the request is handed to the client: an attempt
+        # refused before that (a full Lane) never left, and is not a Request.
+        sent = False
 
         # Resolved **before** the acquire, which fixes two things at once. The
         # wait is then served outside the lane permit (see `_wait_for_pace`),
@@ -588,6 +615,7 @@ async def fetch_with_retry(
                     if due:
                         await rotate_tor_identity(tor_control_port)
                 fetch_started = time.time() * 1000
+                sent = True
                 data = await _fetch_once(
                     url,
                     client=pool_client,
@@ -627,6 +655,15 @@ async def fetch_with_retry(
             telemetry["success"] = True
             if counts_towards_quota:
                 record_telegram_request()
+            recording.record(
+                at=_utc(fetch_started),
+                latency_ms=latency_ms,
+                lane=lane_label(proxy_url),
+                web_view=counts_towards_quota,
+                cause=None,
+                error_code=None,
+                answered=True,
+            )
             return data, telemetry
 
         except Exception as exc:  # noqa: BLE001
@@ -669,10 +706,19 @@ async def fetch_with_retry(
             # actually served, and would do it worst for the accounts under the
             # most rate-limit pressure, which are the ones generating the most
             # load. See `docs/quota-ledger-plan.md`.
-            if counts_towards_quota and (
-                isinstance(exc, httpx.HTTPStatusError) or is_soft_block
-            ):
+            answered = isinstance(exc, httpx.HTTPStatusError) or is_soft_block
+            if counts_towards_quota and answered:
                 record_telegram_request()
+            if sent:
+                recording.record(
+                    at=_utc(fetch_started),
+                    latency_ms=max(0, int(time.time() * 1000 - fetch_started)),
+                    lane=lane_label(proxy_url),
+                    web_view=counts_towards_quota,
+                    cause=_WASTED_CAUSE.get(outcome, Cause.TRANSPORT_FAULT),
+                    error_code=_error_code(exc),
+                    answered=answered,
+                )
 
             # The wait reacts to what Telegram said; cooldown reacts to the
             # proxy failing to deliver. `should_arm_cooldown` reads the pace as
