@@ -516,7 +516,7 @@ test.describe("TG Workspace channels and posts", () => {
 
     // The header's switch, then ? for the tab's keys in the corner.
     await page.getByRole("button", { name: "Keyboard mode" }).click()
-    await page.keyboard.press("?")
+    await page.keyboard.press("Shift+Slash")
     await expect(legend).toHaveText(corner("xstzompc"))
 
     await page.keyboard.press("j")

@@ -690,8 +690,8 @@ test.describe("TG Workspace directory", () => {
     // j highlights the first row, x ticks it, Enter opens its panel, and the
     // panel follows the next j.
     await page.getByRole("button", { name: "Keyboard mode" }).click()
-    // ? shows the tab's keys in the corner.
-    await page.keyboard.press("?")
+    // ? shows the tab's keys in the corner, Shift first as a browser sends it.
+    await page.keyboard.press("Shift+Slash")
     await expect(page.getByText("open or close the panel")).toBeVisible()
     await page.keyboard.press("j")
     const a1 = page.getByTestId("directory-row-a1")
