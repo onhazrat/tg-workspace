@@ -103,7 +103,7 @@ function Grid({
     <>
       <KeyboardMode ops={OPS} />
       <output data-testid="zoom">{zoom}</output>
-      <input placeholder="Search channels..." />
+      <input aria-label="Search channels" />
       {names.map((name) =>
         face.layout === "tile" ? (
           <ChannelCardTile
@@ -412,7 +412,7 @@ describe("the grid's own keys", () => {
     render(<Grid />)
     press("/")
     expect(document.activeElement).toBe(
-      screen.getByPlaceholderText("Search channels..."),
+      screen.getByLabelText("Search channels"),
     )
   })
 })

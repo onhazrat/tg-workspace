@@ -35,8 +35,11 @@ export interface ListAdapter {
   items: readonly string[]
   /** The item's element, to find its controls; null while it is not mounted. */
   element: (id: string) => HTMLElement | null
-  /** Brings the item at `index` into view. */
-  reveal: (index: number) => void
+  /**
+   * Brings the item at `index` into view; unset, its element scrolls to the
+   * nearest edge. A list whose items unmount out of view scrolls its own way.
+   */
+  reveal?: (index: number) => void
   /** The item's name for a screen reader: "@name". */
   name: (id: string) => string
   /** Where j / k land with no Highlight yet: the first item on screen. */
@@ -70,6 +73,13 @@ export const mountedList = () => mounted
 /** Where a list's Highlight is kept: by list, and by tab where there are several. */
 const memoryOf = ({ list, instance }: ListAdapter) =>
   instance ? `${list}:${instance}` : list
+
+const reveal = (adapter: ListAdapter, index: number) =>
+  adapter.reveal
+    ? adapter.reveal(index)
+    : adapter
+        .element(adapter.items[index])
+        ?.scrollIntoView({ block: "nearest" })
 
 const clamp = (i: number, length: number) =>
   Math.max(0, Math.min(length - 1, i))
@@ -167,7 +177,7 @@ export function useKeyboardList(adapter: ListAdapter): {
     if (restored.current || highlight || !remembered || at < 0) return
     restored.current = true
     setHighlightState(remembered)
-    ref.current.adapter.reveal(at)
+    reveal(ref.current.adapter, at)
   }, [remembered, at, highlight])
 
   useEffect(() => {
@@ -181,7 +191,7 @@ export function useKeyboardList(adapter: ListAdapter): {
       const { adapter } = ref.current
       const id = adapter.items[index]
       setRef.current(id)
-      adapter.reveal(index)
+      reveal(adapter, index)
       adapter.onMove?.(id)
       announcement.set(
         `${adapter.name(id)}, ${index + 1} of ${adapter.items.length}`,

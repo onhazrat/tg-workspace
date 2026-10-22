@@ -485,6 +485,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
               value={channelSearch}
               onChange={(e) => setChannelSearch(e.target.value)}
               placeholder="Search channels..."
+              aria-label="Search channels"
               className="h-9 py-0 pl-9"
             />
           </div>

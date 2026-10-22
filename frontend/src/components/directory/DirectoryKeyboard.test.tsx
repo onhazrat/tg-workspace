@@ -132,6 +132,21 @@ describe("the Directory's keyboard mode", () => {
     expect(highlighted()).toEqual(["a"])
   })
 
+  test("each move scrolls the Highlight's row to the nearest edge", () => {
+    render(tab())
+    const scrolled: [string | null, unknown][] = []
+    for (const row of document.querySelectorAll<HTMLElement>(
+      "[data-directory-handle]",
+    ))
+      row.scrollIntoView = (to) =>
+        scrolled.push([row.dataset.directoryHandle ?? null, to])
+    type("j", "G")
+    expect(scrolled).toEqual([
+      ["a", { block: "nearest" }],
+      ["c", { block: "nearest" }],
+    ])
+  })
+
   test("a count moves that far, and 2G goes to the second row", () => {
     render(tab())
     type("2", "j")

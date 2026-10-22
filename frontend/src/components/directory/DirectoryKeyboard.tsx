@@ -43,7 +43,6 @@ export function useDirectoryKeys({
     list: "directory",
     items: handles,
     element: rowOf,
-    reveal: (at) => rowOf(handles[at])?.scrollIntoView({ block: "nearest" }),
     name: (handle) => `@${handle}`,
     open: (handle) => onOpen(open ? null : handle),
     onMove: (handle) => {

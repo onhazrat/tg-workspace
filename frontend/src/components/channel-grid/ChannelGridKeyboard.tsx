@@ -68,8 +68,7 @@ export function useChannelKeys({
       onSpotlight(highlight)
       return true
     },
-    search: () =>
-      document.querySelector('input[placeholder="Search channels..."]'),
+    search: () => document.querySelector('input[aria-label="Search channels"]'),
   }).highlight
 }
 

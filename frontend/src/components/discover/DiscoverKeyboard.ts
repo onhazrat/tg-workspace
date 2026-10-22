@@ -39,7 +39,6 @@ export function useDiscoverKeys({
     instance: report,
     items: names,
     element: rowOf,
-    reveal: (at) => rowOf(names[at])?.scrollIntoView({ block: "nearest" }),
     name: (name) => `@${name}`,
     open: onOpen,
     // A dismissed row leaves the default view, so Undo cannot press it again.

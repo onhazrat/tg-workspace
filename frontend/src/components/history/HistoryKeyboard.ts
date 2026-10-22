@@ -33,7 +33,6 @@ export function useHistoryKeys({
     list: "history",
     items: keys,
     element: cardOf,
-    reveal: (at) => cardOf(keys[at])?.scrollIntoView({ block: "nearest" }),
     name: (key) => artifactName(find(key)),
     open: (key) => onOpen(find(key)),
     search: () => document.querySelector('input[aria-label="Search history"]'),
