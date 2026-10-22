@@ -254,6 +254,10 @@ export const DiscoverView: React.FC = () => {
   const ring = useDiscoverKeys({
     names: candidates.map((c) => c.name),
     onOpen: setInspectingName,
+    isIgnored: (name) =>
+      rawCandidates.some((c) => c.name === name && c.isIgnored),
+    onSetIgnored: (name, ignored) =>
+      setIgnored.mutate({ handles: [name], ignored }),
   })
 
   const runQuickAction = (action: DiscoveryQuickAction) =>

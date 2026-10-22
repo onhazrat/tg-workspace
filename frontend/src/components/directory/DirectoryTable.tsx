@@ -367,6 +367,8 @@ export function FollowCell({
         size="sm"
         aria-label={`${verb} @${row.handle}`}
         data-shortcut={ACTIONS.dismiss.key}
+        // Dismissing toasts its own notice with Undo (DIR-06); taking back does not.
+        data-says={row.dismissed ? undefined : true}
         title={withKey(
           row.dismissed
             ? "Take the Dismissal back, here and in Discover"

@@ -46,6 +46,11 @@ export interface ListAdapter {
   onDrop?: () => void
   /** The tab's search box, which / puts the cursor in. */
   search?: () => HTMLInputElement | null
+  /**
+   * Undo for d or * on an item, read before the press. Without it Undo
+   * presses the same control again, which needs the item still on screen.
+   */
+  undo?: (key: string, id: string) => (() => void) | undefined
 }
 
 export interface MountedList {
@@ -70,14 +75,31 @@ const isOn = (control: HTMLElement) =>
     ? control.checked
     : control.getAttribute("aria-pressed") === "true"
 
-/** Presses the control carrying `key` in `item`: a field gets the cursor. */
-function press(item: HTMLElement | null, key: string): boolean {
-  const control = controlOf(item, key)
+/** Presses a control: a field gets the cursor. */
+function press(control: HTMLElement | null): boolean {
   if (!control) return false
   if (control instanceof HTMLInputElement && control.type !== "checkbox")
     control.focus()
   else control.click()
   return true
+}
+
+/** The keys whose press is said in a toast, since it acts on what may be out of sight. */
+const SAID: string[] = [ACTIONS.dismiss.key, ACTIONS.star.key]
+
+/**
+ * The toast for d or *: the control's own label (as it read before the
+ * press) and the item, with Undo. A control marked `data-says` toasts its
+ * own outcome, with its own Undo, so the keys add none.
+ */
+function say(control: HTMLElement, name: string, undo: () => void) {
+  if (control.hasAttribute("data-says")) return
+  const label =
+    control.getAttribute("aria-label") || control.textContent?.trim() || ""
+  toast(label.includes(name) ? label : `${label} · ${name}`, {
+    id: "keyboard-action",
+    action: { label: "Undo", onClick: undo },
+  })
 }
 
 /**
@@ -187,10 +209,20 @@ export function useKeyboardList(adapter: ListAdapter): {
         case "act": {
           if (adapter.key?.(command.key, highlight)) return true
           if (highlight === null) return false
-          const item = adapter.element(highlight)
-          const tick = controlOf(item, ACTIONS.tick.key)
-          if (command.key === ACTIONS.tick.key && tick) ticking = !isOn(tick)
-          return press(item, command.key)
+          const { key } = command
+          const control = controlOf(adapter.element(highlight), key)
+          if (!control) return false
+          if (key === ACTIONS.tick.key) ticking = !isOn(control)
+          if (SAID.includes(key)) {
+            const again = () =>
+              press(controlOf(adapter.element(highlight), key))
+            say(
+              control,
+              adapter.name(highlight),
+              adapter.undo?.(key, highlight) ?? again,
+            )
+          }
+          return press(control)
         }
         default:
           return false

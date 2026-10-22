@@ -7,6 +7,7 @@
  * the sheet's own Esc closes it.
  */
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
+import { ACTIONS } from "@/lib/keyboard/key-list"
 
 const rowOf = (name: string) =>
   document.querySelector<HTMLElement>(
@@ -17,11 +18,17 @@ const rowOf = (name: string) =>
 export function useDiscoverKeys({
   names,
   onOpen,
+  isIgnored,
+  onSetIgnored,
 }: {
   /** The Candidates on screen, in order. */
   names: string[]
   /** Opens a Candidate's Details. */
   onOpen: (name: string) => void
+  /** Whether a Candidate is dismissed now. */
+  isIgnored: (name: string) => boolean
+  /** Dismisses a Candidate or restores it, as its row's button does. */
+  onSetIgnored: (name: string, ignored: boolean) => void
 }): string | null {
   return useKeyboardList({
     list: "discover",
@@ -30,6 +37,12 @@ export function useDiscoverKeys({
     reveal: (at) => rowOf(names[at])?.scrollIntoView({ block: "nearest" }),
     name: (name) => `@${name}`,
     open: onOpen,
+    // A dismissed row leaves the default view, so Undo cannot press it again.
+    undo: (key, name) => {
+      if (key !== ACTIONS.dismiss.key) return undefined
+      const was = isIgnored(name)
+      return () => onSetIgnored(name, was)
+    },
     search: () =>
       document.querySelector('input[aria-label="Filter candidates by name"]'),
   }).highlight

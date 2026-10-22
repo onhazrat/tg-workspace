@@ -17,6 +17,7 @@ import {
   historyEmptyDescription,
   historyShowsEmpty,
   kindFilterChip,
+  starNotice,
   summaryFlagChange,
 } from "./history-view-model"
 
@@ -107,6 +108,15 @@ describe("historyShowsEmpty", () => {
     expect(historyShowsEmpty(0, false)).toBe(true)
     expect(historyShowsEmpty(0, true)).toBe(false)
     expect(historyShowsEmpty(3, false)).toBe(false)
+  })
+})
+
+describe("starNotice", () => {
+  test("says which way the star went, and on which Artifact", () => {
+    expect(starNotice(summary({ title: "Morning" }))).toBe(
+      "Starred Summary: Morning",
+    )
+    expect(starNotice(chat)).toBe("Unstarred Chat: My chat")
   })
 })
 

@@ -7,7 +7,7 @@ import type {
   ArtifactListItem,
   ArtifactStatusFilter,
 } from "@/types"
-import { ARTIFACT_KIND_LABELS } from "./artifact-presentation"
+import { ARTIFACT_KIND_LABELS, artifactName } from "./artifact-presentation"
 
 export type SummaryFlag = "autoRegenerate" | "autoPublish"
 
@@ -53,6 +53,10 @@ export function historyEmptyDescription(
 /** The empty state is for a settled answer, never for a first load in flight. */
 export const historyShowsEmpty = (rowCount: number, isLoading: boolean) =>
   rowCount === 0 && !isLoading
+
+/** What starring `artifact` (as it was before the click) did, and to which one. */
+export const starNotice = (artifact: ArtifactListItem) =>
+  `${artifact.isStarred ? "Unstarred" : "Starred"} ${artifactName(artifact)}`
 
 /**
  * The delete dialog names the kind and the channels. It keeps its words while

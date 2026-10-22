@@ -58,6 +58,8 @@ function Report() {
   const ring = useDiscoverKeys({
     names: ROWS.map((r) => r.name),
     onOpen: setInspecting,
+    isIgnored: () => false,
+    onSetIgnored: (name, ignored) => calls.ignore(name, ignored),
   })
   return (
     <>
@@ -190,6 +192,26 @@ describe("a Discovery report's keyboard mode", () => {
     expect(calls.follow.mock.calls).toEqual([["a"]])
     expect(calls.ignore.mock.calls).toEqual([["a", true]])
     expect(opened).toEqual(["a"])
+  })
+
+  test("d says what it did and to whom, and Undo restores the Candidate's state", async () => {
+    render(tab())
+    type("j", "j", "d")
+    expect(await screen.findByText("Dismiss · @b")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }))
+    // Undo sets the state the Candidate had, whether or not its row is
+    // still on screen (a dismissed row leaves the default view).
+    expect(calls.ignore.mock.calls).toEqual([
+      ["b", true],
+      ["b", false],
+    ])
+  })
+
+  test("x and J show no toast", async () => {
+    render(tab())
+    type("j", "x", "J")
+    await new Promise((r) => setTimeout(r, 50))
+    expect(document.querySelector("[data-sonner-toast]")).toBeNull()
   })
 
   test("Enter opens Details, the moves wait while they are open, and Esc closes them", () => {

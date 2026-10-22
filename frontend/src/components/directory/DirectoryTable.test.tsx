@@ -13,13 +13,17 @@ import {
   waitFor,
 } from "@testing-library/react"
 import type { ComponentProps } from "react"
+import { Toaster } from "sonner"
 import type { DirectoryRowResponse } from "@/client"
+import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
 import type { ColumnKey } from "@/lib/directory/directory-columns"
+import { keydowns } from "@/lib/keyboard/keydowns"
 import { setKeyboardMode } from "@/lib/keyboard/mode"
 import {
   telegramWebViewChannelUrl,
   telegramWebViewPostUrl,
 } from "@/lib/telegram-web"
+import { useDirectoryKeys } from "./DirectoryKeyboard"
 import { DirectoryTable } from "./DirectoryTable"
 
 afterEach(cleanup)
@@ -249,6 +253,98 @@ describe("keyboard mode (DFP-01)", () => {
     fireEvent.click(button as HTMLElement)
     fireEvent.click(screen.getByRole("checkbox", { name: /News/ }))
     expect(tagged).toEqual([["News", ["alpha"], false]])
+  })
+})
+
+/** The table on the engine: the Directory's adapter rings the rows. */
+function Keyed({
+  rows,
+  calls,
+}: {
+  rows: DirectoryRowResponse[]
+  calls: [string, boolean][]
+}) {
+  const ring = useDirectoryKeys({
+    handles: rows.map((r) => r.handle),
+    open: null,
+    onOpen: () => {},
+    page: 0,
+    lastPage: 0,
+    onPage: () => {},
+  })
+  return (
+    <DirectoryTable
+      rows={rows}
+      total={rows.length}
+      page={0}
+      sort="mine"
+      descending
+      shown={OPENING}
+      ticks={new Set()}
+      onTicks={() => {}}
+      following={new Set()}
+      onFollow={() => {}}
+      onDismiss={(h, dismissed) => calls.push([h, dismissed])}
+      onSort={() => {}}
+      onPage={() => {}}
+      onOpen={() => {}}
+      ring={ring}
+    />
+  )
+}
+const KEY_OPS = {
+  go: () => {},
+  step: () => {},
+  goToNth: () => {},
+  close: () => {},
+  reopen: () => {},
+}
+
+describe("d's toast in keyboard mode", () => {
+  const typed = (...keys: string[]) => {
+    for (const init of keydowns(...keys))
+      fireEvent.keyDown(document.activeElement ?? document.body, init)
+  }
+  const keyed = (rows: DirectoryRowResponse[]) => {
+    const calls: [string, boolean][] = []
+    render(
+      <>
+        <Toaster />
+        <KeyboardMode ops={KEY_OPS} />
+        <Keyed rows={rows} calls={calls} />
+      </>,
+    )
+    return calls
+  }
+
+  test("Dismiss says its own outcome, so the key adds no toast", async () => {
+    setKeyboardMode(true)
+    try {
+      const calls = keyed([row("alpha")])
+      typed("j", "d")
+      expect(calls).toEqual([["alpha", true]])
+      await new Promise((r) => setTimeout(r, 50))
+      expect(document.querySelector("[data-sonner-toast]")).toBeNull()
+    } finally {
+      setKeyboardMode(false)
+    }
+  })
+
+  test("Take back says what it did, and Undo presses it again", async () => {
+    setKeyboardMode(true)
+    try {
+      const calls = keyed([row("alpha", { dismissed: true })])
+      typed("j", "d")
+      expect(await screen.findByText("Take back @alpha")).toBeTruthy()
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }))
+      // The rows here never change, so the same control is pressed again.
+      expect(calls).toEqual([
+        ["alpha", false],
+        ["alpha", false],
+      ])
+    } finally {
+      setKeyboardMode(false)
+    }
   })
 })
 

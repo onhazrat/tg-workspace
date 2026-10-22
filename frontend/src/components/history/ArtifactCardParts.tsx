@@ -120,6 +120,8 @@ const ToggleAction: React.FC<{
   children: React.ReactNode
   /** The action keyboard mode presses it for. */
   keyed?: Action
+  /** Its click toasts its own outcome, so keyboard mode adds none. */
+  says?: boolean
 }> = ({
   active,
   labels,
@@ -128,6 +130,7 @@ const ToggleAction: React.FC<{
   onClick,
   children,
   keyed,
+  says,
 }) => {
   const label = active ? labels[1] : labels[0]
   const keyboard = useKeyboardMode()
@@ -136,6 +139,7 @@ const ToggleAction: React.FC<{
       aria-label={label}
       tooltip={keyed ? withKey(label, keyed, keyboard) : label}
       {...(keyed && shortcut(keyed))}
+      data-says={says || undefined}
       data-active={active || undefined}
       disabled={disabled}
       onClick={onClick}
@@ -173,6 +177,8 @@ export const ArtifactCardActions: React.FC<{
       active={Boolean(artifact.isStarred)}
       labels={["Star item", "Unstar item"]}
       keyed="star"
+      // History's star toasts its own outcome with Undo.
+      says
       activeClassName="bg-amber-500/10 text-amber-500"
       onClick={() => onToggleStar(artifact)}
     >

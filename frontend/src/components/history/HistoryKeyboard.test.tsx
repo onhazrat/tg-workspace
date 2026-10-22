@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { Toaster } from "sonner"
 import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
 import { keydowns } from "@/lib/keyboard/keydowns"
 import {
@@ -86,6 +87,7 @@ function History() {
 
 const tab = () => (
   <>
+    <Toaster />
     <KeyboardMode ops={OPS} />
     <History />
   </>
@@ -148,6 +150,14 @@ describe("History's keyboard mode", () => {
     type("j", "j", "*", "n")
     expect(ids(spies.star)).toEqual(["c1"])
     expect(ids(spies.note)).toEqual(["c1"])
+  })
+
+  test("* adds no toast of its own: History's star says what it did, with Undo", async () => {
+    render(tab())
+    type("j", "*")
+    expect(ids(spies.star)).toEqual(["s1"])
+    await new Promise((r) => setTimeout(r, 50))
+    expect(document.querySelector("[data-sonner-toast]")).toBeNull()
   })
 
   test("no key deletes", () => {
