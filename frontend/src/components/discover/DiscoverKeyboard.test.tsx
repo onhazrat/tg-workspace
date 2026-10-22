@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import { Toaster } from "sonner"
 import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
@@ -227,6 +227,21 @@ describe("a Discovery report's keyboard mode", () => {
     expect(panel()).toBeNull()
     type("j")
     expect(ringed()).toEqual(["b"])
+  })
+
+  test("in keyboard mode each row control names its key; off, it does not", () => {
+    render(tab())
+    const title = (testId: string) =>
+      screen.getByTestId(testId).getAttribute("title")
+    expect(title("discover-select-a")).toBe("Shift-click to select a range (x)")
+    expect(title("discover-follow-a")).toBe("Follow @a (f)")
+    expect(title("discover-ignore-a")).toBe(
+      "Hide this channel from future reports (d)",
+    )
+    expect(title("discover-channel-link-a")).toBe("Open @a in Telegram (o)")
+    act(() => setKeyboardMode(false))
+    expect(title("discover-select-a")).toBe("Shift-click to select a range")
+    expect(title("discover-follow-a")).toBeNull()
   })
 
   test("/ goes to the name filter", () => {

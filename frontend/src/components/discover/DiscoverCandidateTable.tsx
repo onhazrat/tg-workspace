@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { formatCount } from "@/lib/format-count"
-import { shortcut } from "@/lib/keyboard/key-list"
+import { keyTitle, shortcut, withKey } from "@/lib/keyboard/key-list"
+import { useKeyboardMode } from "@/lib/keyboard/mode"
 import {
   DISCOVER_PROBE_KIND_LABELS,
   type DiscoverSignalWeights,
@@ -241,6 +242,7 @@ export function CandidateActions({
   onSetIgnored,
   onRecheck,
 }: CandidateActionsProps) {
+  const keyboard = useKeyboardMode()
   return (
     <div className="flex flex-wrap items-center gap-2">
       {row.isFollowed ? (
@@ -254,6 +256,7 @@ export function CandidateActions({
           size="sm"
           data-testid={`discover-follow-${row.name}`}
           {...shortcut("follow")}
+          title={keyTitle(`Follow @${row.name}`, "follow", keyboard)}
           disabled={isOffline}
           loading={isFollowPending}
           loadingLabel="Follow"
@@ -285,11 +288,13 @@ export function CandidateActions({
         data-testid={`discover-ignore-${row.name}`}
         {...shortcut("dismiss")}
         onClick={() => onSetIgnored(row.name, !row.isIgnored)}
-        title={
+        title={withKey(
           row.isIgnored
             ? "Show this channel in reports again"
-            : "Hide this channel from future reports"
-        }
+            : "Hide this channel from future reports",
+          "dismiss",
+          keyboard,
+        )}
         className="rounded-full text-app-ink/60"
       >
         {row.isIgnored ? (
@@ -358,6 +363,7 @@ export function CandidateRow({
   ...actions
 }: CandidateRowProps) {
   const stats = candidateStatistics(row.probe)
+  const keyboard = useKeyboardMode()
   return (
     <tr
       data-discover-handle={row.name}
@@ -379,7 +385,7 @@ export function CandidateRow({
           onClick={(event) => onCheckboxClick(event.shiftKey)}
           onChange={onToggle}
           className="accent-blue-600"
-          title="Shift-click to select a range"
+          title={withKey("Shift-click to select a range", "tick", keyboard)}
           aria-label={
             row.isFollowed
               ? `@${row.name} already followed`
@@ -394,6 +400,7 @@ export function CandidateRow({
           rel="noopener noreferrer"
           data-testid={`discover-channel-link-${row.name}`}
           {...shortcut("open")}
+          title={keyTitle(`Open @${row.name} in Telegram`, "open", keyboard)}
           className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.name}
