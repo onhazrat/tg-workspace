@@ -18,6 +18,7 @@ import {
 import type { ArtifactListItem } from "@/types"
 import { ArtifactCardActions, ArtifactCardHeading } from "./ArtifactCardParts"
 import { useHistoryKeys } from "./HistoryKeyboard"
+import { toggleStar } from "./history-view-model"
 
 const ARTIFACTS = [
   {
@@ -48,6 +49,8 @@ const OPS = {
 
 type Spy = ReturnType<typeof mock<(a: ArtifactListItem) => void>>
 let spies: Record<"open" | "star" | "note" | "remove", Spy>
+/** The star's write, as `setArtifactStarred` is called. */
+let starred: [string, boolean][]
 
 function History() {
   const ring = useHistoryKeys({
@@ -73,7 +76,16 @@ function History() {
           <ArtifactCardActions
             artifact={a}
             pending={false}
-            onToggleStar={(x) => spies.star(x)}
+            // HistoryView's own handler, with the write and refetch faked.
+            onToggleStar={(x) => {
+              spies.star(x)
+              void toggleStar(x, {
+                setStarred: async (a, on) => {
+                  starred.push([a.id, on])
+                },
+                refresh: async () => {},
+              })
+            }}
             onEditNote={(x) => spies.note(x)}
             onDelete={(x) => spies.remove(x)}
             onToggleAutoRegenerate={() => {}}
@@ -105,6 +117,7 @@ const type = (...keys: string[]) => {
 
 beforeEach(() => {
   spies = { open: mock(), star: mock(), note: mock(), remove: mock() }
+  starred = []
   lastHighlight.clear()
   announcement.set("")
   setKeyboardMode(true)
@@ -156,8 +169,20 @@ describe("History's keyboard mode", () => {
     render(tab())
     type("j", "*")
     expect(ids(spies.star)).toEqual(["s1"])
-    await new Promise((r) => setTimeout(r, 50))
-    expect(document.querySelector("[data-sonner-toast]")).toBeNull()
+    expect(
+      await screen.findByText("Starred Summary: Morning news"),
+    ).toBeTruthy()
+    expect(document.querySelectorAll("[data-sonner-toast]").length).toBe(1)
+  })
+
+  test("the star's Undo sets the star back, whether or not the card is still shown", async () => {
+    render(tab())
+    type("j", "*")
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }))
+    expect(starred).toEqual([
+      ["s1", true],
+      ["s1", false],
+    ])
   })
 
   test("J, K, F and D do nothing in History, which ticks nothing", async () => {

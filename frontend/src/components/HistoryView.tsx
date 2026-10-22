@@ -18,8 +18,8 @@ import {
   historyEmptyDescription,
   historyShowsEmpty,
   type SummaryFlag,
-  starNotice,
   summaryFlagChange,
+  toggleStar,
 } from "@/components/history/history-view-model"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
@@ -100,22 +100,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     return () => observer.disconnect()
   }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage])
 
-  // Undo sets the star back rather than pressing it again: unstarred under
-  // "Starred only", the card is gone. The star control is marked `data-says`
-  // so keyboard mode's * adds no second toast.
-  const handleToggleStar = async (artifact: ArtifactListItem) => {
-    await setArtifactStarred(artifact, !artifact.isStarred)
-    await invalidate()
-    toast(starNotice(artifact), {
-      action: {
-        label: "Undo",
-        onClick: () =>
-          void setArtifactStarred(artifact, Boolean(artifact.isStarred)).then(
-            invalidate,
-          ),
-      },
+  const handleToggleStar = (artifact: ArtifactListItem) =>
+    toggleStar(artifact, {
+      setStarred: setArtifactStarred,
+      refresh: invalidate,
     })
-  }
 
   const handleToggleSummaryFlag = async (
     artifact: ArtifactListItem,
