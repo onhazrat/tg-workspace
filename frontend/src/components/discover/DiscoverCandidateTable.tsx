@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { formatCount } from "@/lib/format-count"
+import { shortcut } from "@/lib/keyboard/key-list"
 import {
   DISCOVER_PROBE_KIND_LABELS,
   type DiscoverSignalWeights,
@@ -252,6 +253,7 @@ export function CandidateActions({
           variant="secondary"
           size="sm"
           data-testid={`discover-follow-${row.name}`}
+          {...shortcut("follow")}
           disabled={isOffline}
           loading={isFollowPending}
           loadingLabel="Follow"
@@ -281,6 +283,7 @@ export function CandidateActions({
         variant="secondary"
         size="sm"
         data-testid={`discover-ignore-${row.name}`}
+        {...shortcut("dismiss")}
         onClick={() => onSetIgnored(row.name, !row.isIgnored)}
         title={
           row.isIgnored
@@ -337,6 +340,8 @@ interface CandidateRowProps
   /** Fires before `onToggle`, with whether shift was held for this click. */
   onCheckboxClick: (shiftKey: boolean) => void
   onToggle: () => void
+  /** Keyboard mode's Highlight is on this row. */
+  highlighted?: boolean
 }
 
 /** One Candidate as a table row. */
@@ -349,15 +354,23 @@ export function CandidateRow({
   showScore,
   onCheckboxClick,
   onToggle,
+  highlighted = false,
   ...actions
 }: CandidateRowProps) {
   const stats = candidateStatistics(row.probe)
   return (
-    <tr className="border-t border-app-ink/10">
+    <tr
+      data-discover-handle={row.name}
+      data-kbd-selected={highlighted || undefined}
+      // A followed Candidate's box is checked but is not a Tick.
+      data-marked={(isSelected && !row.isFollowed) || undefined}
+      className="border-t border-app-ink/10 data-[kbd-selected]:outline data-[kbd-selected]:outline-2 data-[kbd-selected]:-outline-offset-2 data-[kbd-selected]:outline-blue-500"
+    >
       <td className="py-2 align-middle">
         <input
           type="checkbox"
           data-testid={`discover-select-${row.name}`}
+          {...shortcut("tick")}
           checked={isSelected}
           disabled={
             actions.isOffline ||
@@ -380,6 +393,7 @@ export function CandidateRow({
           target="_blank"
           rel="noopener noreferrer"
           data-testid={`discover-channel-link-${row.name}`}
+          {...shortcut("open")}
           className="font-mono text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
         >
           @{row.name}
@@ -482,10 +496,13 @@ interface DiscoverCandidateTableProps {
    * arbitrary.
    */
   showScore: boolean
+  /** The Candidate keyboard mode highlights. */
+  ring?: string | null
 }
 
 export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
   candidates,
+  ring = null,
   selectedForFollow,
   setSelectedForFollow,
   unfollowedCount,
@@ -629,6 +646,7 @@ export const DiscoverCandidateTable: React.FC<DiscoverCandidateTableProps> = ({
             <CandidateRow
               key={row.name}
               row={row}
+              highlighted={ring === row.name}
               isSelected={isRowCheckboxChecked(
                 row.name,
                 row.isFollowed,

@@ -6,8 +6,8 @@
  */
 import type { TabType } from "@/constants"
 
-/** The lists keyboard mode moves through. KM-03 adds "discover" and "history". */
-export type ListId = "posts" | "channels" | "directory"
+/** The lists keyboard mode moves through. */
+export type ListId = "posts" | "channels" | "directory" | "discover" | "history"
 
 export const ACTIONS = {
   tick: { key: "x", label: "tick or untick" },
@@ -47,13 +47,16 @@ export const keyTitle = (label: string, action: Action, on: boolean) =>
   on ? withKey(label, action, true) : undefined
 
 /** `x` in each list's own word (CONTEXT.md): Tick, select, Pick. */
-const TICK_LABEL: Record<ListId, string> = {
-  directory: "tick or untick",
+const TICK_LABEL: Partial<Record<ListId, string>> = {
   channels: "select or deselect",
   posts: "pick or unpick",
 }
 
 type Row = readonly [keys: string, what: string]
+
+/** J / K, and F / D where a bulk bar acts on the Ticks. */
+const SWEEP = (word: string): Row => ["J / K", `${word} while moving`]
+const BULK: Row = ["F / D", "follow / dismiss everything ticked"]
 
 /** Each list's moves and own keys, then its actions in the list's order. */
 const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
@@ -63,6 +66,7 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["gg / G", "first / last post"],
       ["- / +", "compact / full cards"],
       ["M", "more or less on every post"],
+      SWEEP("pick or unpick"),
       ["Esc", "drop the highlight"],
     ],
     actions: [
@@ -81,6 +85,7 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["j / k", "next / previous channel"],
       ["gg / G", "first / last channel"],
       ["- / +", "smaller / larger cards"],
+      SWEEP("select or deselect"),
       ["Esc", "drop the highlight"],
     ],
     actions: [
@@ -100,9 +105,31 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
       ["gg / G", "first / last on the page"],
       ["] / [", "next / previous page"],
       ["Enter", "open or close the panel"],
+      SWEEP("tick or untick"),
+      BULK,
       ["Esc", "drop the highlight and close the panel"],
     ],
     actions: ["tick", "follow", "dismiss", "open", "tag", "photo"],
+  },
+  discover: {
+    moves: [
+      ["j / k", "next / previous candidate"],
+      ["gg / G", "first / last candidate"],
+      ["Enter", "open the details (Esc closes them)"],
+      SWEEP("tick or untick"),
+      BULK,
+      ["Esc", "drop the highlight"],
+    ],
+    actions: ["tick", "follow", "dismiss", "open"],
+  },
+  history: {
+    moves: [
+      ["j / k", "next / previous item"],
+      ["gg / G", "first / last item"],
+      ["Enter", "open it in its tab"],
+      ["Esc", "drop the highlight"],
+    ],
+    actions: ["star", "note"],
   },
 }
 
@@ -116,7 +143,7 @@ const SPOTLIGHT_LABEL: Partial<Record<ListId, string>> = {
 
 /** An action's label in a list's word. */
 export function actionLabel(list: ListId, action: Action): string {
-  if (action === "tick") return TICK_LABEL[list]
+  if (action === "tick") return TICK_LABEL[list] ?? ACTIONS.tick.label
   if (action === "spotlight")
     return SPOTLIGHT_LABEL[list] ?? ACTIONS.spotlight.label
   return ACTIONS[action].label

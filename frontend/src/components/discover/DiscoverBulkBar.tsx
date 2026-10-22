@@ -2,6 +2,7 @@ import { EyeOff, Plus, RefreshCw, Undo2 } from "lucide-react"
 import type React from "react"
 import type { FollowJobStatus } from "@/api"
 import { TgButton } from "@/components/ui/tg-button"
+import { bulkShortcut } from "@/lib/keyboard/key-list"
 
 interface DiscoverBulkBarProps {
   selectedCount: number
@@ -60,6 +61,7 @@ export const DiscoverBulkBar: React.FC<DiscoverBulkBarProps> = ({
         variant="secondary"
         size="sm"
         data-testid="discover-follow-selected"
+        {...bulkShortcut("F")}
         disabled={isOffline}
         loading={isFollowJobRunning}
         loadingLabel="Follow selected"
@@ -80,6 +82,7 @@ export const DiscoverBulkBar: React.FC<DiscoverBulkBarProps> = ({
       variant="secondary"
       size="sm"
       data-testid="discover-dismiss-selected"
+      {...bulkShortcut("D")}
       disabled={isOffline || isFollowJobRunning}
       loading={isDismissPending}
       loadingLabel={
