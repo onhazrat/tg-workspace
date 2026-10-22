@@ -39,9 +39,21 @@ function useBreakdown(
   })
 }
 
+/** Only the Operator reads the Breakdown; anyone else is told so. */
 export default function RequestsTab() {
   const registry = useSettingsRegistry()
-  const allowed = offeredTab("requests", registry.permissions)
+  if (registry.isLoading)
+    return <p className="text-sm text-app-ink/50">Loading…</p>
+  if (!offeredTab("requests", registry.permissions))
+    return (
+      <p className="text-sm text-app-ink/60" data-testid="requests-refused">
+        The Requests tab is for the Operator.
+      </p>
+    )
+  return <OperatorRequests />
+}
+
+function OperatorRequests() {
   const [filter, setFilter] = useState<RequestsFilter>(initialRequestsFilter)
   // A live range reads the clock when it is picked, not on every render.
   const range = useMemo(
@@ -49,23 +61,10 @@ export default function RequestsTab() {
     [filter.bound],
   )
   // The unfiltered Breakdown gives the choice counts; the picked one, the rest.
-  const all = useBreakdown(range, "all", allowed)
-  const picked = useBreakdown(
-    range,
-    filter.charged,
-    allowed && filter.charged !== "all",
-  )
+  const all = useBreakdown(range, "all", true)
+  const picked = useBreakdown(range, filter.charged, filter.charged !== "all")
   const shown = filter.charged === "all" ? all : picked
   const phone = useIsMobile()
-
-  if (registry.isLoading)
-    return <p className="text-sm text-app-ink/50">Loading…</p>
-  if (!allowed)
-    return (
-      <p className="text-sm text-app-ink/60" data-testid="requests-refused">
-        The Requests tab is for the Operator.
-      </p>
-    )
   return (
     <RequestsView
       filter={filter}
