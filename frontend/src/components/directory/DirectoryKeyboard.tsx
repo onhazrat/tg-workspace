@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef } from "react"
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
+import { LIST_KEYS } from "@/lib/keyboard/key-list"
 
 const rowOf = (handle: string) =>
   document.querySelector<HTMLElement>(
@@ -50,8 +51,9 @@ export function useDirectoryKeys({
     },
     onDrop: () => onOpen(null),
     key: (key) => {
-      if (key !== "]" && key !== "[") return false
-      const next = page + (key === "]" ? 1 : -1)
+      if (key !== LIST_KEYS.nextPage && key !== LIST_KEYS.previousPage)
+        return false
+      const next = page + (key === LIST_KEYS.nextPage ? 1 : -1)
       if (next < 0 || next > lastPage) return false
       turnedFrom.current = rowsKey
       onPage(next)

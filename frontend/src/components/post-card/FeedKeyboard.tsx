@@ -6,7 +6,7 @@
  * `data-shortcut`, so each action keeps one implementation, its button's.
  */
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
-import { ACTIONS } from "@/lib/keyboard/key-list"
+import { ACTIONS, LIST_KEYS } from "@/lib/keyboard/key-list"
 
 const cardOf = (key: string) =>
   document.querySelector<HTMLElement>(
@@ -60,11 +60,11 @@ export function usePostKeys({
         ),
       ),
     key: (key) => {
-      if (key === "-" || key === "+") {
-        onCompact(key === "-")
+      if (key === LIST_KEYS.smaller || key === LIST_KEYS.larger) {
+        onCompact(key === LIST_KEYS.smaller)
         return true
       }
-      if (key === "M") {
+      if (key === LIST_KEYS.everyText) {
         toggleEveryText()
         return true
       }

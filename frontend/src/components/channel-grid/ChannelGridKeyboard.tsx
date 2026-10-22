@@ -16,6 +16,7 @@ import {
   type CardKey,
   type CardZoom,
 } from "@/lib/channels/card-zoom"
+import { ACTIONS, LIST_KEYS } from "@/lib/keyboard/key-list"
 import { REVEAL_CHANNEL } from "../post-card/PhotoViewer"
 
 const cardOf = (name: string) =>
@@ -57,13 +58,13 @@ export function useChannelKeys({
     // The first move lands on the first row on screen, not the grid's top.
     start: () => Math.min(firstVisibleRow * lanes, names.length - 1),
     key: (key, highlight) => {
-      if (key === "-" || key === "+") {
-        const at = CARD_ZOOM_LEVELS.indexOf(zoom) + (key === "+" ? 1 : -1)
-        const next = CARD_ZOOM_LEVELS[at]
+      if (key === LIST_KEYS.smaller || key === LIST_KEYS.larger) {
+        const by = key === LIST_KEYS.larger ? 1 : -1
+        const next = CARD_ZOOM_LEVELS[CARD_ZOOM_LEVELS.indexOf(zoom) + by]
         if (next !== undefined) onZoomChange(next)
         return true
       }
-      if (key !== "c" || !highlight) return false
+      if (key !== ACTIONS.spotlight.key || !highlight) return false
       onSpotlight(highlight)
       return true
     },

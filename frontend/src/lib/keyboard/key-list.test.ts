@@ -3,11 +3,14 @@
  * key, and `x` in each list's own word.
  */
 import { describe, expect, test } from "bun:test"
-import { ACTIONS, actionLabel, GO, listKeys } from "./key-list"
+import { ACTIONS, actionLabel, GO, LIST_KEYS, listKeys } from "./key-list"
 
 describe("the key list", () => {
-  test("no two actions share a key", () => {
-    const keys = Object.values(ACTIONS).map((a) => a.key)
+  test("no two actions share a key, a list's own keys included", () => {
+    const keys = [
+      ...Object.values(ACTIONS).map((a) => a.key),
+      ...Object.values(LIST_KEYS),
+    ]
     expect(new Set(keys).size).toBe(keys.length)
   })
 

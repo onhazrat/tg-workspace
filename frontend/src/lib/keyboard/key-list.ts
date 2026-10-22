@@ -28,6 +28,21 @@ export const ACTIONS = {
 } as const
 export type Action = keyof typeof ACTIONS
 
+/**
+ * A list's own keys, which no item control carries: the adapters read them
+ * here, so they share the actions' one-key-one-meaning check.
+ */
+export const LIST_KEYS = {
+  /** Posts: compact cards; Channels: a smaller card size. */
+  smaller: "-",
+  larger: "+",
+  /** Posts: more or less on every Post. */
+  everyText: "M",
+  /** Directory: the next and previous page. */
+  nextPage: "]",
+  previousPage: "[",
+} as const
+
 /** Marks the control keyboard mode presses for `action`. */
 export const shortcut = (action: Action) => ({
   "data-shortcut": ACTIONS[action].key,
