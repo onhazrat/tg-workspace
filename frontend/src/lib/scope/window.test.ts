@@ -286,6 +286,9 @@ describe("the elapsed-time grammar", () => {
     ["  1d6h ", DAY_MS + 6 * HOUR_MS],
     ["30M", 30 * MINUTE_MS],
     ["0m", 0],
+    // Zero is the same in every unit, so it needs none.
+    ["0", 0],
+    [" 0 ", 0],
     ["7d", 7 * DAY_MS],
   ])("%s parses", (text, expected) => {
     expect(parseElapsed(text)).toBe(expected)

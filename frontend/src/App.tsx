@@ -32,6 +32,7 @@ import { SettingsPage } from "./components/settings-page/SettingsPage"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import { ToolsTab } from "./components/tools/ToolsTab"
+import { RequestsPrototype } from "./components/requests-prototype/RequestsPrototype"
 import {
   Tooltip,
   TooltipContent,
@@ -235,6 +236,7 @@ export default function App() {
       action: () => <ActionView />,
       settings: () => <SettingsPage />,
       tools: () => <ToolsTab />,
+      requests: () => <RequestsPrototype />,
     }
     const view = views[activeTab]
     return view ? (

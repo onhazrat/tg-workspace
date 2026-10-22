@@ -253,15 +253,16 @@ const UNITS = ["d", "h", "m"] as const
 
 /**
  * Whole-minute tokens in strictly descending unit order: `1d 6h`, `2h 30m`,
- * `0m`.
+ * `0m`, and a bare `0`, which means the same in every unit.
  *
  * Not a date parser. Anything ambiguous — an unknown unit, a fraction, a sign,
- * a repeated or ascending unit, trailing prose — is rejected rather than
- * guessed at, because a guess here silently selects Posts nobody asked for.
- * Whitespace is the one forgiving part.
+ * a repeated or ascending unit, a bare number other than zero, trailing prose —
+ * is rejected rather than guessed at, because a guess here silently selects
+ * Posts nobody asked for. Whitespace is the one forgiving part.
  */
 export function parseElapsed(text: string): number | null {
   const compact = text.trim().toLowerCase().replace(/\s+/g, "")
+  if (/^0+$/.test(compact)) return 0
   if (!/^(\d+[dhm])+$/.test(compact)) return null
 
   let total = 0

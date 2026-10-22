@@ -55,6 +55,9 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** PROTOTYPE (request-stats): the Requests tab's `?variant=` and `?bench=`. */
+  variant?: string
+  bench?: string
 } & DirectoryParams &
   HistorySearch
 
@@ -68,6 +71,9 @@ const ID_PARAMS = [
   "summary",
   "chatSession",
   "tagRun",
+  // PROTOTYPE (request-stats): the Requests tab's variant and its sparkline bench.
+  "variant",
+  "bench",
 ] as const
 
 function trimmedString(value: unknown): string | undefined {

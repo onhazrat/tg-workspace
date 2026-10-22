@@ -21,6 +21,7 @@ import {
   Database,
   FileText,
   History,
+  Gauge,
   Library,
   List,
   MessageSquare,
@@ -48,6 +49,7 @@ import { tabAnnouncements, tabPresentation } from "./workspace-shell-model"
 
 const TAB_ICONS = {
   Database,
+  Gauge,
   List,
   MessageSquare,
   History,

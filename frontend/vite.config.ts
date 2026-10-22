@@ -53,7 +53,14 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE: reachable over `tailscale serve`.
+      allowedHosts: [".ts.net"],
       proxy: {
+        // PROTOTYPE (request-stats): backend/scripts/proto_request_stats_api.py
+        "/proto": {
+          target: `http://127.0.0.1:${process.env.PROTO_API_PORT || 8131}`,
+          rewrite: (p) => p.replace(/^\/proto/, ""),
+        },
         "/api": {
           target:
             process.env.PLAYWRIGHT_API_URL ||

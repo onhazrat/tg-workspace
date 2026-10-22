@@ -1,0 +1,44 @@
+/* PROTOTYPE (request-stats): chart tokens, scoped to the Requests tab. Never merge.
+ * Kinds take the dataviz skill's validated categorical slots 1-6 in fixed order
+ * (validated against the app's card surfaces #ffffff and #1a1a1a). Outcomes take
+ * its status palette, which always ships with an icon and a label. Accounts take one
+ * hue the kinds never use, violet, as a four-step ordinal ramp (oklch L 0.42-0.75 light,
+ * 0.52-0.82 dark, C 0.16, h 295), so an Account can never be read as a kind. */
+.req-proto {
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --outcome-useful: #898781;
+  --outcome-idle: #fab219;
+  --outcome-wasted: #d03b3b;
+  --layer-charged: #52514e;
+  --layer-uncharged: #c3c2b7;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #898781;
+  --viz-ink: #0b0b0b;
+  --viz-surface: #ffffff;
+  --account-1: #563199;
+  --account-2: #7553bd;
+  --account-3: #9575e2;
+  --account-4: #b697ff;
+}
+.dark .req-proto {
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
+  --layer-charged: #c3c2b7;
+  --layer-uncharged: #52514e;
+  --viz-grid: #2c2c2a;
+  --viz-ink: #f0efec;
+  --viz-surface: #1a1a1a;
+  --account-1: #7250ba;
+  --account-2: #8f6edb;
+  --account-3: #ad8dfd;
+  --account-4: #ccadff;
+}
