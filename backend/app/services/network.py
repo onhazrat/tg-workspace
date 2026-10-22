@@ -19,7 +19,7 @@ from stem.control import Controller
 
 from app.core.config import settings
 from app.core.request_meter import record_telegram_request
-from app.core.request_recording import Cause, lane_label, page_for_fetch
+from app.core.request_recording import Cause, Page, lane_label, page_for_fetch
 from app.services.network_settings import DIRECT_EGRESS_KEY, normalize_proxy_url
 from app.services.proxy_pacing import (
     FetchOutcome,
@@ -487,6 +487,31 @@ def _utc(ms: float) -> datetime:
     return datetime.fromtimestamp(ms / 1000, UTC).replace(tzinfo=None)
 
 
+def _record_wasted(
+    recording: Page,
+    *,
+    sent: bool,
+    exc: BaseException,
+    outcome: FetchOutcome,
+    fetch_started: float,
+    proxy_url: str | None,
+    web_view: bool,
+    answered: bool,
+) -> None:
+    # An attempt refused before it was sent (a full Lane) is not a Request.
+    if not sent:
+        return
+    recording.record(
+        at=_utc(fetch_started),
+        latency_ms=max(0, int(time.time() * 1000 - fetch_started)),
+        lane=lane_label(proxy_url),
+        web_view=web_view,
+        cause=_WASTED_CAUSE.get(outcome, Cause.TRANSPORT_FAULT),
+        error_code=_error_code(exc),
+        answered=answered,
+    )
+
+
 async def fetch_with_retry(
     url: str,
     *,
@@ -709,16 +734,16 @@ async def fetch_with_retry(
             answered = isinstance(exc, httpx.HTTPStatusError) or is_soft_block
             if counts_towards_quota and answered:
                 record_telegram_request()
-            if sent:
-                recording.record(
-                    at=_utc(fetch_started),
-                    latency_ms=max(0, int(time.time() * 1000 - fetch_started)),
-                    lane=lane_label(proxy_url),
-                    web_view=counts_towards_quota,
-                    cause=_WASTED_CAUSE.get(outcome, Cause.TRANSPORT_FAULT),
-                    error_code=_error_code(exc),
-                    answered=answered,
-                )
+            _record_wasted(
+                recording,
+                sent=sent,
+                exc=exc,
+                outcome=outcome,
+                fetch_started=fetch_started,
+                proxy_url=proxy_url,
+                web_view=counts_towards_quota,
+                answered=answered,
+            )
 
             # The wait reacts to what Telegram said; cooldown reacts to the
             # proxy failing to deliver. `should_arm_cooldown` reads the pace as
