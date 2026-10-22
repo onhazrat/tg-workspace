@@ -8,6 +8,10 @@
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
 import { ACTIONS, LIST_KEYS } from "@/lib/keyboard/key-list"
 
+/** A Post card's `data-post-key`, which is its id in the list. */
+export const postCardKey = (post: { channelName: string; id: number }) =>
+  `${post.channelName}_${post.id}`
+
 const cardOf = (key: string) =>
   document.querySelector<HTMLElement>(
     `article[data-post-key="${CSS.escape(key)}"]`,

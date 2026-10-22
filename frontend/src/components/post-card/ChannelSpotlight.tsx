@@ -23,14 +23,17 @@ import type { PostFilter } from "@/lib/posts/post-filter"
 import { telegramWebViewChannelUrl } from "@/lib/telegram-web"
 import type { Channel, Post } from "@/types"
 import { ChannelAvatar } from "../ChannelAvatar"
+import { postCardKey } from "./FeedKeyboard"
 
 export interface SpotlightApi {
   spotlight: ChannelSpotlight | null
   /**
-   * Absent outside the Posts feed, where there is no spotlight to open. With
-   * no Post, leaving it scrolls back to nothing.
+   * From a card: leaving scrolls back to it. Absent outside the Posts feed,
+   * where there is no spotlight to open, as `enterChannel` is.
    */
-  enter?: (post: Post | null, channel: string) => void
+  enter?: (post: Post, channel: string) => void
+  /** From outside Posts (the Channels tab's c): nothing to scroll back to. */
+  enterChannel?: (channel: string) => void
   leave: () => void
   setKeepFilters: (keep: boolean) => void
   /** An edit to the filter row while the spotlight is on. */
@@ -77,21 +80,30 @@ export function useSpotlightState(
   const filterRef = useRef(accountFilter)
   filterRef.current = accountFilter
 
-  const enter = useCallback(
-    (post: Post | null, channel: string) => {
-      // From outside Posts (the Channels tab's c) there is no card to return to.
-      const from = post ? `${post.channelName}_${post.id}` : ""
-      if (post)
-        origin.current ??= {
-          key: from,
-          top: scrollContainer.current?.scrollTop ?? 0,
-        }
+  // `from` is the card's key, or "" with no card to return to.
+  const open = useCallback(
+    (channel: string, from: string) => {
       setSpotlight((current) =>
         enterSpotlight(current, channel, from, filterRef.current),
       )
       scrollContainer.current?.scrollTo({ top: 0 })
     },
     [scrollContainer],
+  )
+  const enter = useCallback(
+    (post: Post, channel: string) => {
+      const from = postCardKey(post)
+      origin.current ??= {
+        key: from,
+        top: scrollContainer.current?.scrollTop ?? 0,
+      }
+      open(channel, from)
+    },
+    [open, scrollContainer],
+  )
+  const enterChannel = useCallback(
+    (channel: string) => open(channel, ""),
+    [open],
   )
   const leave = useCallback(() => setSpotlight(null), [])
   const setKeepFilters = useCallback(
@@ -134,8 +146,15 @@ export function useSpotlightState(
   }, [spotlight, scrollContainer])
 
   return useMemo(
-    () => ({ spotlight, enter, leave, setKeepFilters, setFilter }),
-    [spotlight, enter, leave, setKeepFilters, setFilter],
+    () => ({
+      spotlight,
+      enter,
+      enterChannel,
+      leave,
+      setKeepFilters,
+      setFilter,
+    }),
+    [spotlight, enter, enterChannel, leave, setKeepFilters, setFilter],
   )
 }
 
@@ -148,14 +167,14 @@ export function useSpotlightBack(
   api: SpotlightApi,
   toChannels: () => void,
 ): () => void {
-  const { spotlight, enter, leave } = api
+  const { spotlight, enterChannel, leave } = api
   const fromChannels = useRef(false)
-  // Once, on mount: `enter` is stable.
+  // Once, on mount: `enterChannel` is stable.
   useEffect(() => {
     const channel = takeSpotlightRequest()
-    if (!channel || !enter) return
+    if (!channel || !enterChannel) return
     fromChannels.current = true
-    enter(null, channel)
+    enterChannel(channel)
   }, [])
   // Left by any way (Esc, its button, a search): no longer Channels'.
   const wasOn = useRef(false)

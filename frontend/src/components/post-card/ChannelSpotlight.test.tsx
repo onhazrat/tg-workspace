@@ -186,7 +186,13 @@ describe("a spotlight opened from the Channels tab", () => {
     renderHook(() => useFeed(() => toChannels++)).unmount()
     const hook = renderHook(() => useFeed(() => toChannels++))
     expect(hook.result.current.api.spotlight).toBeNull()
-    act(() => hook.result.current.api.enter?.(null, "other"))
+    act(() =>
+      hook.result.current.api.enter?.(
+        { id: 1, channelName: "other" } as Post,
+        "other",
+      ),
+    )
+    expect(hook.result.current.api.spotlight?.channel).toBe("other")
     act(() => hook.result.current.back())
     expect(hook.result.current.api.spotlight).toBeNull()
     expect(toChannels).toBe(0)
