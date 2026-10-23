@@ -1660,6 +1660,32 @@ def test_picking_accounts_keeps_only_their_charged_requests(
     assert _by_kind(trend) == _breakdown_by_kind(picked)
 
 
+def test_a_charge_with_no_account_is_the_operators(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutations: key `byAccount` on the recorded Account as it is; match the
+    Accounts filter on it as it is.
+
+    A sync whose message names no owner records no Account, and the ledger
+    bills the Operator for it: the tab does the same.
+    """
+    telegram.script(_first_page(), _page_html(CHANNEL, [100]))
+    _follow(client, superuser_token_headers, CHANNEL)
+    _ownerless_sync(client, superuser_token_headers, CHANNEL)
+    charged = [r for r in _stored(kind="single") if r.charged]
+    assert charged and {r.account_id for r in charged} == {None}
+    me = client.get(f"{API}/users/me", headers=superuser_token_headers).json()["id"]
+
+    everything = _breakdown(client, superuser_token_headers)
+    assert [(r["accountId"], r["requests"]) for r in everything["byAccount"]] == [
+        (me, len(charged))
+    ]
+    picked = _breakdown(client, superuser_token_headers, accounts=[me])
+    assert _row(picked["byKind"], kind="single")["requests"] == len(charged)
+
+
 # --------------------------------------------------------------------------
 # Syncs and the Channels left out (RQS-04)
 # --------------------------------------------------------------------------

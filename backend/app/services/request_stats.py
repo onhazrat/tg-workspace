@@ -492,6 +492,17 @@ class Picked:
     left_out_kinds: Sequence[str] = ()
 
 
+def _owner(model: Any) -> Any:
+    """Who a row's charge is billed to: its Account, or the Operator when it
+    names none, as the ledger bills it (`quota.resolve_charge_owner`)."""
+    operator = (
+        sa_select(col(User.id))
+        .where(col(User.email) == settings.FIRST_SUPERUSER)
+        .scalar_subquery()
+    )
+    return func.coalesce(col(model.account_id), operator)
+
+
 def _filtered(query: Any, model: Any, picked: Picked) -> Any:
     """The tab's filters, the same on every tier and on every endpoint.
 
@@ -504,7 +515,7 @@ def _filtered(query: Any, model: Any, picked: Picked) -> Any:
         query = query.where(col(model.charged).is_(picked.charged == "charged"))
     if picked.accounts:
         query = query.where(
-            col(model.charged).is_(True), col(model.account_id).in_(picked.accounts)
+            col(model.charged).is_(True), _owner(model).in_(picked.accounts)
         )
     channel = _totals_channel(model)
     if picked.left_out:
@@ -564,7 +575,7 @@ def _fold(
         _totals_channel(model),
         model.outcome,
         model.charged,
-        model.account_id,
+        _owner(model),
     ]
     query = sa_select(
         *keys,
