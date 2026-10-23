@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] Both variables are in settings and `.env.example`, defaulting to 7 and 30.
-- [ ] Startup refuses an hourly span shorter than the record span, with a message naming both.
-- [ ] The existing hourly retention job prunes per-Request rows and hourly totals past their spans in batched deletes; daily totals are never pruned.
-- [ ] The retention inventories declare the two spans for the new tables.
-- [ ] Tests run the retention job with a moved clock and read what is left through the API.
-- [ ] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+- [x] Both variables are in settings and `.env.example`, defaulting to 7 and 30.
+- [x] Startup refuses an hourly span shorter than the record span, with a message naming both.
+- [x] The existing hourly retention job prunes per-Request rows and hourly totals past their spans in batched deletes; daily totals are never pruned.
+- [x] The retention inventories declare the two spans for the new tables.
+- [x] Tests run the retention job with a moved clock and read what is left through the API.
+- [x] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
