@@ -1764,7 +1764,7 @@
       "comment": "Buckets across the visible range: about one per 3 to 4 px of the plot.",
       "expression": "220",
       "file": "frontend/src/lib/requests/zoom.ts",
-      "line": 27,
+      "line": 34,
       "name": "TARGET",
       "value": 220
     },
@@ -1772,9 +1772,25 @@
       "comment": "A band's name shows when it spans more than this share of the view.",
       "expression": "0.08",
       "file": "frontend/src/lib/requests/zoom.ts",
-      "line": 107,
+      "line": 114,
       "name": "LABELLED",
       "value": 0.08
+    },
+    {
+      "comment": "Above this many times its 99th percentile, a row's tallest bucket stops setting its scale.",
+      "expression": "1.5",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 138,
+      "name": "SPIKE",
+      "value": 1.5
+    },
+    {
+      "comment": "A capped scale stops this far above the 99th percentile.",
+      "expression": "1.15",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 140,
+      "name": "CAP",
+      "value": 1.15
     },
     {
       "comment": "How often subscribers are notified.",

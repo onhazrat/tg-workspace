@@ -1,13 +1,18 @@
 import { describe, expect, test } from "bun:test"
 import type { RequestTrendBucket } from "@/client"
+import type { Outcome } from "./breakdown"
 import {
   bandLabels,
   fromPlotly,
   grainOf,
   rebucket,
+  type Split,
+  scaleOf,
+  shadeOf,
   storedBuckets,
   tierBands,
   toPlotly,
+  trendChart,
   trendLine,
 } from "./zoom"
 
@@ -247,4 +252,178 @@ describe("Plotly's times", () => {
     expect(fromPlotly("2026-10-20T10:05")).toBe(at("2026-10-20T10:05"))
     expect(fromPlotly(at("2026-10-20T10:05"))).toBe(at("2026-10-20T10:05"))
   })
+})
+
+describe("scaleOf", () => {
+  test("a burst over 1.5 times the 99th percentile caps the scale at 1.15 times it", () => {
+    // 101 buckets: the 99th percentile is the hundredth, 10; the burst is 100.
+    const view = [...Array.from({ length: 100 }, () => 10), 100]
+    expect(scaleOf(view)).toEqual({ cap: 11.5, range: [0, 11.5] })
+  })
+
+  test("without a burst the tallest sets the scale, with a little room", () => {
+    // The 99th percentile of three is the second, 10; 15 is just 1.5 times it.
+    expect(scaleOf([15, 10, 2])).toEqual({ cap: null, range: [0, 15.75] })
+    expect(scaleOf([16, 10, 2]).cap).toBeCloseTo(11.5)
+  })
+
+  test("an empty or idle view stays flat", () => {
+    expect(scaleOf([])).toEqual({ cap: null, range: [0, 1] })
+    expect(scaleOf([0, 0, 0])).toEqual({ cap: null, range: [0, 1] })
+  })
+})
+
+describe("trendChart", () => {
+  const none = new Set<never>()
+  const view: [number, number] = [
+    at("2026-10-20T09:00"),
+    at("2026-10-20T11:00"),
+  ]
+  // Two 5-minute buckets: auto 3 Useful, 1 Idle and probes 2 Useful; then auto 6 Wasted.
+  const { size, points } = rebucket(
+    storedBuckets([
+      bucket("2026-10-20T10:00:00", "2026-10-20T10:05:00", "auto", 3, 1),
+      bucket("2026-10-20T10:00:00", "2026-10-20T10:05:00", "probe", 2),
+      bucket("2026-10-20T10:05:00", "2026-10-20T10:10:00", "auto", 0, 0, 6),
+    ]),
+    ...view,
+  )
+  const chart = (
+    kind: Split,
+    outcome: Split,
+    hiddenKinds: ReadonlySet<string> = none,
+    hiddenOutcomes: ReadonlySet<Outcome> = none,
+  ) =>
+    trendChart(
+      points,
+      size,
+      view,
+      { kind, outcome },
+      hiddenKinds,
+      hiddenOutcomes,
+    )
+  const names = (c: ReturnType<typeof chart>) =>
+    c.rows.map((r) => [r.name, r.series.map((s) => s.name)])
+
+  test("merged, it is one row of one series, in Requests per hour", () => {
+    const c = chart("off", "off")
+    expect(c.legend).toBeNull()
+    expect(names(c)).toEqual([["All Requests", ["All Requests"]]])
+    expect(c.rows[0].series[0].y).toEqual([72, 72, 0])
+  })
+
+  test("stacked, a row splits its area by each kind and outcome with Requests", () => {
+    const c = chart("stacked", "stacked")
+    expect(c.legend).toBe("kind")
+    expect(c.rows).toHaveLength(1)
+    expect(c.rows[0].series.map((s) => [s.part, s.name, s.group, s.y])).toEqual(
+      [
+        [{ kind: "auto", outcome: "useful" }, "Auto sync", "auto", [36, 0, 0]],
+        [{ kind: "auto", outcome: "idle" }, "Auto sync", "auto", [12, 0, 0]],
+        [{ kind: "auto", outcome: "wasted" }, "Auto sync", "auto", [0, 72, 0]],
+        [
+          { kind: "probe", outcome: "useful" },
+          "Directory probe",
+          "probe",
+          [24, 0, 0],
+        ],
+      ],
+    )
+    // Outcomes alone stacked: the legend lists them.
+    const outcomes = chart("off", "stacked")
+    expect(outcomes.legend).toBe("outcome")
+    expect(names(outcomes)).toEqual([
+      ["All Requests", ["Useful", "Idle", "Wasted"]],
+    ])
+    expect(outcomes.rows[0].series.map((s) => s.y)).toEqual([
+      [60, 0, 0],
+      [12, 0, 0],
+      [0, 72, 0],
+    ])
+  })
+
+  test("separate, a row per value; both separate, a row per kind and outcome", () => {
+    expect(names(chart("separate", "stacked"))).toEqual([
+      ["Auto sync", ["Useful", "Idle", "Wasted"]],
+      ["Directory probe", ["Useful"]],
+    ])
+    expect(chart("stacked", "separate").legend).toBe("kind")
+    expect(names(chart("off", "separate"))).toEqual([
+      ["Useful", ["Useful"]],
+      ["Idle", ["Idle"]],
+      ["Wasted", ["Wasted"]],
+    ])
+    const both = chart("separate", "separate")
+    expect(both.legend).toBeNull()
+    expect(both.rows.map((r) => r.name)).toEqual([
+      "Auto sync · Useful",
+      "Auto sync · Idle",
+      "Auto sync · Wasted",
+      "Directory probe · Useful",
+    ])
+  })
+
+  test("a hidden value stays in the legend, greyed and empty, and leaves the rest", () => {
+    const probes = new Set(["probe"])
+    const listed = chart("stacked", "off", probes)
+    expect(listed.rows[0].series.map((s) => [s.name, s.off, s.y])).toEqual([
+      ["Auto sync", false, [48, 72, 0]],
+      ["Directory probe", true, [0, 0, 0]],
+    ])
+    expect(names(chart("separate", "stacked", probes))).toEqual([
+      ["Auto sync", ["Useful", "Idle", "Wasted"]],
+    ])
+    expect(
+      names(chart("stacked", "stacked", none, new Set(["idle"] as const))),
+    ).toEqual([["All Requests", ["Auto sync", "Auto sync", "Directory probe"]]])
+    expect(chart("stacked", "stacked").kinds).toEqual(["auto", "probe"])
+  })
+
+  test("each row's scale comes from the buckets in view, a burst capped with notches", () => {
+    // Two hours of 5-minute auto buckets of 1, one of 50 at 10:00, probes once.
+    const fives = Array.from({ length: 24 }, (_, i) => {
+      const t = new Date(at("2026-10-20T09:00") + i * 300_000)
+      const start = t.toISOString().slice(0, 19)
+      const end = new Date(t.getTime() + 300_000).toISOString().slice(0, 19)
+      return bucket(start, end, "auto", i === 12 ? 50 : 1)
+    })
+    const stored = storedBuckets([
+      ...fives,
+      bucket("2026-10-20T09:30:00", "2026-10-20T09:35:00", "probe", 2),
+    ])
+    const split = (from: string, to: string) => {
+      const v: [number, number] = [at(from), at(to)]
+      const r = rebucket(stored, ...v)
+      return trendChart(
+        r.points,
+        r.size,
+        v,
+        { kind: "separate", outcome: "stacked" },
+        none,
+        none,
+      ).rows
+    }
+    const [auto, probe] = split("2026-10-20T09:00", "2026-10-20T11:00")
+    // Each bucket of 1 is 12 an hour; the burst is 600.
+    expect(auto.cap).toBeCloseTo(13.8)
+    expect(auto.range[1]).toBeCloseTo(13.8)
+    expect(auto.notches).toEqual([{ x: "2026-10-20T10:00:00.000", total: 600 }])
+    // The probes' row keeps its own scale.
+    expect(probe.cap).toBeNull()
+    expect(probe.range[1]).toBeCloseTo(25.2)
+    expect(probe.notches).toEqual([])
+    // With the burst out of view, nothing is capped.
+    const [early] = split("2026-10-20T09:00", "2026-10-20T09:55")
+    expect(early.cap).toBeNull()
+    expect(early.range[1]).toBeCloseTo(12.6)
+  })
+})
+
+test("shadeOf steps a kind's colour toward the surface by outcome, opaque", () => {
+  // Auto sync's blue on white: all of it, 55% of it, 30% of it.
+  expect(shadeOf("#2a78d6", "#ffffff", "useful")).toBe("rgb(42,120,214)")
+  expect(shadeOf("#2a78d6", "#ffffff", "idle")).toBe("rgb(138,181,232)")
+  expect(shadeOf("#2a78d6", "#ffffff", "wasted")).toBe("rgb(191,215,243)")
+  // Toward a dark surface it darkens; a short hex reads as its long form.
+  expect(shadeOf("#fff", "#000", "idle")).toBe("rgb(140,140,140)")
 })

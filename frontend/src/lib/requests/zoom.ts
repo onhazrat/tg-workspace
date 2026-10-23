@@ -7,7 +7,14 @@
 import type { RequestTrendBucket } from "@/client"
 import { MINUTE_MS } from "@/lib/analysis-window"
 import { DAY_MS, HOUR_MS } from "@/lib/scope/window"
-import { fmt, OUTCOMES, type Outcome, rangeText } from "./breakdown"
+import {
+  fmt,
+  KINDS,
+  kindMeta,
+  OUTCOMES,
+  type Outcome,
+  rangeText,
+} from "./breakdown"
 
 export const FINE_MS = 5 * MINUTE_MS
 
@@ -127,6 +134,51 @@ export const toPlotly = (ms: number) => new Date(ms).toISOString().slice(0, 23)
 export const fromPlotly = (v: string | number) =>
   typeof v === "number" ? v : utcMs(v.replace(" ", "T"))
 
+/** Above this many times its 99th percentile, a row's tallest bucket stops setting its scale. */
+export const SPIKE = 1.5
+/** A capped scale stops this far above the 99th percentile. */
+const CAP = 1.15
+
+/**
+ * A row's y scale from the buckets in view, so a burst out of view, or one
+ * burst in it, does not flatten the rest. `cap` is where a burst's scale
+ * stops; an empty or idle view stays flat rather than taking the whole
+ * range's scale.
+ */
+export function scaleOf(view: readonly number[]) {
+  const seen = [...view].sort((a, b) => a - b)
+  const p99 = seen[Math.floor(0.99 * (seen.length - 1))] ?? 0
+  const top = seen.at(-1) ?? 0
+  const cap = p99 > 0 && top > SPIKE * p99 ? p99 * CAP : null
+  const range: [number, number] = [0, cap ?? (top > 0 ? top * 1.05 : 1)]
+  return { cap, range }
+}
+
+/**
+ * How much of a kind's colour each outcome keeps, the rest the chart's
+ * surface: the hue says which kind, the step what came of it.
+ */
+export const STEP: Record<Outcome, number> = {
+  useful: 1,
+  idle: 0.55,
+  wasted: 0.3,
+}
+
+const channels = (hex: string) => {
+  const h = hex.replace("#", "")
+  const n = Number.parseInt(h.length === 3 ? h.replace(/./g, "$&$&") : h, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/**
+ * A kind's colour stepped toward the surface for an outcome, opaque, so the
+ * tier bands behind do not shift its hue. The tokens are hex.
+ */
+export function shadeOf(kind: string, surface: string, outcome: Outcome) {
+  const [k, s, share] = [channels(kind), channels(surface), STEP[outcome]]
+  return `rgb(${k.map((v, i) => Math.round(v * share + s[i] * (1 - share))).join(",")})`
+}
+
 /** What a bucket of `span` adds up. */
 export function grainOf(span: number) {
   if (span === FINE_MS) return "5-minute total, from each Request"
@@ -135,16 +187,30 @@ export function grainOf(span: number) {
   return span < DAY_MS ? `${span / HOUR_MS}-hour total` : "daily total"
 }
 
-/** A bucket's Requests, leaving out the kinds and outcomes hidden. */
+/** A slice of the Requests: one kind, one outcome, both, or (empty) all. */
+export interface Part {
+  kind?: string
+  outcome?: Outcome
+}
+
+const NONE: ReadonlySet<never> = new Set()
+
+/** A bucket's Requests in `part`, leaving out the kinds and outcomes hidden. */
 function countOf(
   pt: Point,
   hiddenKinds: ReadonlySet<string>,
   hiddenOutcomes: ReadonlySet<Outcome>,
+  part: Part = {},
 ) {
   let n = 0
   for (const [key, count] of Object.entries(pt.counts)) {
-    const [kind, outcome] = key.split(":")
-    if (!hiddenKinds.has(kind) && !hiddenOutcomes.has(outcome as Outcome))
+    const [kind, outcome] = key.split(":") as [string, Outcome]
+    if (
+      (part.kind ?? kind) === kind &&
+      (part.outcome ?? outcome) === outcome &&
+      !hiddenKinds.has(kind) &&
+      !hiddenOutcomes.has(outcome)
+    )
       n += count
   }
   return n
@@ -179,8 +245,131 @@ export function trendLine(
   }
   return {
     shape: smooth ? ("spline" as const) : ("hv" as const),
+    /** Each point's instant, epoch ms. */
+    t: x,
     x: x.map(toPlotly),
     y,
     hover,
+  }
+}
+
+/**
+ * How the trend shows a dimension: merged, stacked in a row's area, or a row
+ * per value on its own scale.
+ */
+export type Split = "off" | "stacked" | "separate"
+export interface Splits {
+  kind: Split
+  outcome: Split
+}
+type Dimension = keyof Part
+
+/** The kinds with Requests in `points`, in the tab's order, unknown ones last. */
+function kindsIn(points: readonly Point[]) {
+  const ids = new Set(
+    points.flatMap((pt) => Object.keys(pt.counts).map((k) => k.split(":")[0])),
+  )
+  const rank = (id: string) => {
+    const i = KINDS.findIndex((k) => k.id === id)
+    return i < 0 ? KINDS.length : i
+  }
+  return [...ids].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+}
+
+/** Every value of the dimensions switched on, crossed; one empty part if none. */
+function product(kinds: readonly string[], kind: boolean, outcome: boolean) {
+  const ks = kind ? kinds : [undefined]
+  const os = outcome ? OUTCOMES.map((o) => o.id) : [undefined]
+  return ks.flatMap((k) => os.map((o): Part => ({ kind: k, outcome: o })))
+}
+
+export function labelOf(part: Part) {
+  const outcome = OUTCOMES.find((o) => o.id === part.outcome)
+  return (
+    [part.kind && kindMeta(part.kind).label, outcome?.label]
+      .filter(Boolean)
+      .join(" · ") || "All Requests"
+  )
+}
+
+/** The dimension the legend lists: the one stacked, kinds first. */
+const legendOf = (s: Splits): Dimension | null =>
+  s.kind === "stacked" ? "kind" : s.outcome === "stacked" ? "outcome" : null
+
+/**
+ * The trend's rows and their series for the switches. A stacked dimension
+ * splits a row's area; a separate one gives a row per value; the rows share
+ * the x axis. A value hidden in the legend's dimension stays listed, empty,
+ * to show again; one hidden elsewhere leaves the chart. Each row's scale
+ * comes from its buckets in view, and a bucket above a capped scale gets a
+ * notch carrying its real total.
+ */
+export function trendChart(
+  points: readonly Point[],
+  size: number,
+  [from, to]: [number, number],
+  splits: Splits,
+  hiddenKinds: ReadonlySet<string>,
+  hiddenOutcomes: ReadonlySet<Outcome>,
+) {
+  const line = trendLine(points, size, hiddenKinds, hiddenOutcomes)
+  const kinds = kindsIn(points)
+  const legend = legendOf(splits)
+  const hiddenIn = (p: Part, d: Dimension) =>
+    d === "kind"
+      ? !!p.kind && hiddenKinds.has(p.kind)
+      : !!p.outcome && hiddenOutcomes.has(p.outcome)
+  const listed = (p: Part) =>
+    points.some((pt) => countOf(pt, NONE, NONE, p) > 0) &&
+    (["kind", "outcome"] as const).every((d) => d === legend || !hiddenIn(p, d))
+  const yOf = (p: Part) => {
+    const y = points.map(
+      (pt) => (countOf(pt, hiddenKinds, hiddenOutcomes, p) * HOUR_MS) / pt.span,
+    )
+    return line.y.length > y.length ? [...y, 0] : y
+  }
+  const stack = product(
+    kinds,
+    splits.kind === "stacked",
+    splits.outcome === "stacked",
+  )
+  const rows = product(
+    kinds,
+    splits.kind === "separate",
+    splits.outcome === "separate",
+  ).map((row) => {
+    const series = stack
+      .map(
+        (s): Part => ({
+          kind: s.kind ?? row.kind,
+          outcome: s.outcome ?? row.outcome,
+        }),
+      )
+      .filter(listed)
+      .map((part) => ({
+        part,
+        name: labelOf(legend ? { [legend]: part[legend] } : part),
+        group: legend ? part[legend] : undefined,
+        off: !!legend && hiddenIn(part, legend),
+        y: yOf(part),
+      }))
+    const totals = line.y.map((_, i) =>
+      series.reduce((sum, s) => sum + s.y[i], 0),
+    )
+    const { cap, range } = scaleOf(
+      totals.filter((_, i) => line.t[i] >= from && line.t[i] <= to),
+    )
+    const notches = totals.flatMap((total, i) =>
+      cap !== null && total > cap ? [{ x: line.x[i], total }] : [],
+    )
+    return { name: labelOf(row), series, cap, range, notches }
+  })
+  return {
+    shape: line.shape,
+    x: line.x,
+    hover: line.hover,
+    legend,
+    kinds,
+    rows: rows.filter((r) => r.series.length > 0),
   }
 }
