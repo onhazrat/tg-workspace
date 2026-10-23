@@ -36,6 +36,7 @@ from app.core.request_recording import page_for_fetch
 from app.jobs.discover_probe import run_discover_probe_sweep
 from app.models_tg import DirectoryEntry, RequestRecordRow, utc_now
 from app.services import network, request_stats
+from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
 from app.services.pgmq import queue_length
 from app.services.request_stats import (
@@ -807,6 +808,116 @@ def test_a_handle_check_is_its_own_uncharged_aggregate_row(
         kind="handle",
     )
     assert (checks["requests"], checks[outcome], checks["charged"]) == (1, 1, 0)
+
+
+FOLLOWED = "rqsfollowed"
+
+
+def _wait_for(client: TestClient, headers: dict[str, str], url: str) -> dict[str, Any]:
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        job = client.get(url, headers=headers).json()
+        if job["status"] in ("completed", "failed", "cancelled"):
+            return dict(job)
+        time.sleep(0.05)
+    raise AssertionError(f"{url} never finished")
+
+
+def test_a_bulk_follow_is_charged_as_the_ledger_charges_it(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: leave the follow unattributed; drop its Budget; never judge
+    the follow page.
+
+    A bulk follow checks each handle before it adds it, charged to manual bulk
+    as the ledger charges the batch. A check that added the Channel wrote
+    something, so it is Useful. The sync it chains is a bulk sync of its own.
+    """
+
+    async def run_here(follow_job_id: str) -> None:
+        task = asyncio.create_task(run_follow_job_by_id(follow_job_id))
+        _follow_tasks.add(task)
+        task.add_done_callback(_follow_tasks.discard)
+
+    monkeypatch.setattr("app.api.routes.data.channels.request_follow_job_run", run_here)
+    telegram.script(_first_page(FOLLOWED), _page_html(FOLLOWED, [3]))
+
+    r = client.post(
+        f"{API}/data/channels/bulk-follow",
+        json={"channels": [{"name": FOLLOWED}]},
+        headers=superuser_token_headers,
+    )
+    assert r.status_code == 200, r.text
+    follow = _wait_for(
+        client,
+        superuser_token_headers,
+        f"{API}/data/channels/bulk-follow/{r.json()['followJobId']}",
+    )
+    assert follow["added"] == 1, follow
+    _wait_for(client, superuser_token_headers, f"{API}/jobs/sync/{follow['syncJobId']}")
+
+    [record] = _recorded(kind="follow")
+    assert (record.budget, record.channel, record.charged, record.account_id) == (
+        "manual_bulk",
+        FOLLOWED,
+        True,
+        _recorded(kind="bulk")[0].account_id,
+    )
+    answer = _breakdown(client, superuser_token_headers)
+    follows = _row(answer["byChannel"], channel=FOLLOWED, kind="follow")
+    assert (follows["requests"], follows["useful"], follows["charged"]) == (1, 1, 1)
+
+
+_follow_tasks: set[asyncio.Task[None]] = set()
+
+
+def test_an_auto_follow_inside_a_sync_is_that_syncs_work(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutation: attribute the auto-follow's check as a follow of its own.
+
+    A synced Post forwarded from another Channel makes the sync follow that
+    Channel, after checking its handle. The check is part of syncing this
+    Channel, so it carries the sync's kind, Account and Channel.
+    """
+    group = client.post(
+        f"{API}/data/setting-groups",
+        json={"name": "RQS auto follow", "autoFollowForwarded": True},
+        headers=superuser_token_headers,
+    )
+    assert group.status_code == 200, group.text
+    _follow(client, superuser_token_headers, CHANNEL)
+    r = client.patch(
+        f"{API}/data/channels/bulk-setting-group",
+        json={"channelIds": [CHANNEL], "settingGroupId": group.json()["id"]},
+        headers=superuser_token_headers,
+    )
+    assert r.status_code == 200, r.text
+    forward = (
+        '<a class="tgme_widget_message_forwarded_from_name" '
+        f'href="https://t.me/{FOLLOWED}/9">Followed</a>'
+    )
+    telegram.script(
+        _first_page(),
+        _page_html(CHANNEL, [100]).replace(
+            '<div class="tgme_widget_message_text">',
+            forward + '<div class="tgme_widget_message_text">',
+        ),
+    )
+    telegram.script(_first_page(FOLLOWED), _page_html(FOLLOWED, [3]))
+
+    _sync(client, superuser_token_headers)
+
+    assert _first_page(FOLLOWED) in telegram.calls
+    checks = _recorded(page_type="metadata")
+    assert [(r.kind, r.channel, r.budget) for r in checks] == [
+        ("single", CHANNEL, "manual_single")
+    ]
 
 
 BOT_TOKEN = "4242:RQSBOT"
