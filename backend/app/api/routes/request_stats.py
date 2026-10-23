@@ -18,6 +18,8 @@ from app.schemas.request_stats import (
     AccountRequestTotals,
     ChannelRequestTotals,
     RequestBreakdownResponse,
+    RequestRecord,
+    RequestRecordsResponse,
     RequestSpreadBucket,
     RequestSpreadResponse,
     RequestTotals,
@@ -30,6 +32,7 @@ from app.services.request_stats import (
     Totals,
     account_emails,
     request_breakdown,
+    request_records,
     request_spread,
     request_trend,
 )
@@ -165,6 +168,58 @@ def read_request_trend(
         buckets=[
             RequestTrendBucket.model_validate(asdict(bucket))
             for bucket in request_trend(session, lo, hi, picked)
+        ],
+    )
+
+
+# RQS-10: the sheet a Channel table row opens.
+@router.get(
+    "/records",
+    dependencies=[Depends(require_permission(Permission.QUOTA_READ_ANY))],
+    response_model=RequestRecordsResponse,
+)
+def read_request_records(
+    session: SessionDep,
+    start: datetime,
+    end: datetime,
+    picked: PickedDep,
+    channel: str | None = None,
+    kind: str | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+) -> RequestRecordsResponse:
+    """One Channel table row's Requests in `[start, end)`, newest first.
+
+    Name the row by `channel`, a Channel's handle, or by `kind`, the kind of
+    an aggregate row (work with no Channel), never both. Each Request is kept
+    `recordDays` days, so the range is cut to them. `charged`, `accounts`,
+    `leftOut` and `leftOutKinds` are read as on the Breakdown. The outcome
+    counts cover every page.
+    """
+    if (channel is None) == (kind is None):
+        raise HTTPException(status_code=422, detail="name a channel or a kind")
+    lo, hi = _range(start, end)
+    page = request_records(session, lo, hi, (channel, kind), picked, (offset, limit))
+    emails = account_emails(
+        session, (r.account_id for r in page.records if r.account_id)
+    )
+    return RequestRecordsResponse(
+        start=page.start,
+        end=hi,
+        total=page.outcomes.total(),
+        useful=page.outcomes["useful"],
+        idle=page.outcomes["idle"],
+        wasted=page.outcomes["wasted"],
+        records=[
+            RequestRecord.model_validate(
+                {
+                    **record.model_dump(),
+                    "email": emails.get(record.account_id, "")
+                    if record.account_id
+                    else None,
+                }
+            )
+            for record in page.records
         ],
     )
 

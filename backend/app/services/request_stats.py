@@ -682,6 +682,53 @@ def request_spread(
     return spread
 
 
+@dataclass(frozen=True)
+class RecordsPage:
+    """One page of a row's Requests, and what every page holds (RQS-10)."""
+
+    #: The range's start, moved up to the oldest Request kept.
+    start: datetime
+    outcomes: Counter[str]
+    records: list[RequestRecordRow]
+
+
+def request_records(
+    session: Session,
+    start: datetime,
+    end: datetime,
+    row: tuple[str | None, str | None],
+    picked: Picked,
+    page: tuple[int, int],
+) -> RecordsPage:
+    """The Requests of one Channel table row in `[start, end)`, newest first.
+
+    `row` is `(channel, None)` for a Channel's row or `(None, kind)` for an
+    aggregate row, matched as the totals key them, so a Handle check naming
+    a Channel stays on the Handle checks row. `page` is `(offset, limit)`.
+    """
+    week = utc_now() - timedelta(days=settings.REQUEST_RECORD_DAYS)
+    start = max(start, week.replace(second=0, microsecond=0))
+    channel, kind = row
+    on_row = _totals_channel(RequestRecordRow)
+    at = col(RequestRecordRow.at)
+    within = [at >= start, at < end]
+    if channel is not None:
+        within.append(on_row == channel)
+    else:
+        within += [on_row.is_(None), col(RequestRecordRow.kind) == kind]
+    outcome = col(RequestRecordRow.outcome)
+    counts = sa_select(outcome, func.count()).where(*within)
+    grouped = _filtered(counts, RequestRecordRow, picked).group_by(outcome)
+    outcomes = Counter({o: int(n) for o, n in session.execute(grouped).all()})
+    listed = (
+        _filtered(select(RequestRecordRow).where(*within), RequestRecordRow, picked)
+        .order_by(at.desc(), col(RequestRecordRow.attempt).desc())
+        .offset(page[0])
+        .limit(page[1])
+    )
+    return RecordsPage(start, outcomes, list(session.exec(listed).all()))
+
+
 def _as_datetime(moment: date | datetime) -> datetime:
     """A bucket's start: a daily total's day is its midnight."""
     if isinstance(moment, datetime):

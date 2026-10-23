@@ -6,10 +6,10 @@ it is real. A test posts a sync, the stand-in worker drains it through the real
 Lane, the buffers are flushed, the rollup runs, and the answer is read from the
 Breakdown endpoint over HTTP.
 
-The cause, the error code and the chain id are not in any total, and the
-endpoint that lists one Channel's Requests is RQS-10. Until it lands,
-`_recorded` reads those three from the per-Request rows; RQS-10 should move
-those assertions onto its endpoint.
+The cause, the error code, the chain id, the attempt and the Lane are in no
+total: `_listed` reads them from the endpoint listing one Channel's or
+aggregate row's Requests (RQS-10). `_stored` reads the rows themselves, only
+to count every Request a test made, whatever its row.
 
 The mutation that turns each test red is named on it.
 """
@@ -159,7 +159,7 @@ def _fresh(sync_worker: None, request: pytest.FixtureRequest) -> Iterator[None]:
     # record a Request nobody declared. Only a test asking for `expects_other`
     # makes one on purpose.
     if "expects_other" not in request.fixturenames:
-        undeclared = [(r.page_type, r.channel) for r in _recorded(kind="other")]
+        undeclared = [(r.page_type, r.channel) for r in _stored(kind="other")]
         assert undeclared == [], "a known path recorded kind other"
 
 
@@ -241,13 +241,50 @@ def _row(rows: list[dict[str, Any]], **match: Any) -> dict[str, Any]:
     return found[0]
 
 
-def _recorded(**where: Any) -> list[RequestRecordRow]:
+def _stored(**where: Any) -> list[RequestRecordRow]:
+    """Every Request as stored, whatever its row: for counting them all."""
     flush_recorded_requests()
     with Session(engine) as session:
         query = select(RequestRecordRow)
         for name, value in where.items():
             query = query.where(col(getattr(RequestRecordRow, name)) == value)
         return list(session.exec(query.order_by(col(RequestRecordRow.at))).all())
+
+
+def _requests(
+    client: TestClient,
+    headers: dict[str, str],
+    *,
+    start: str | None = None,
+    end: str | None = None,
+    **params: Any,
+) -> dict[str, Any]:
+    """One Channel's (`channel`) or aggregate row's (`kind`) Requests, today."""
+    flush_recorded_requests()
+    day_start, day_end = _today()
+    r = client.get(
+        f"{API}/requests/records",
+        params={"start": start or day_start, "end": end or day_end, **params},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    return dict(r.json())
+
+
+def _listed(
+    client: TestClient,
+    headers: dict[str, str],
+    *,
+    channel: str | None = None,
+    aggregate: str | None = None,
+    **where: Any,
+) -> list[dict[str, Any]]:
+    """A row's Requests from the endpoint, oldest first, those matching `where`."""
+    row = {"channel": channel} if aggregate is None else {"kind": aggregate}
+    answer = _requests(client, headers, limit=1000, **row)
+    assert answer["total"] == len(answer["records"])
+    records = reversed(answer["records"])
+    return [r for r in records if all(r[k] == v for k, v in where.items())]
 
 
 def _first_page(channel: str = CHANNEL) -> str:
@@ -332,16 +369,18 @@ def test_a_syncs_pictures_are_its_kind_and_uncharged(
     _sync(client, superuser_token_headers)
 
     assert avatar in telegram.calls
-    pictures = _recorded(page_type="media")
+    pictures = _listed(
+        client, superuser_token_headers, channel=CHANNEL, pageType="media"
+    )
     assert len(pictures) == 1
     picture = pictures[0]
-    assert (picture.kind, picture.channel, picture.charged) == (
+    assert (picture["kind"], picture["channel"], picture["charged"]) == (
         "single",
         CHANNEL,
         False,
     )
-    posts = _recorded(page_type="posts")
-    assert picture.chain_id not in {p.chain_id for p in posts}
+    posts = _listed(client, superuser_token_headers, channel=CHANNEL, pageType="posts")
+    assert picture["chainId"] not in {p["chainId"] for p in posts}
 
     single = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="single")
     charged = _row(
@@ -370,14 +409,16 @@ def test_each_request_names_its_account_budget_and_lane(
     _sync(client, superuser_token_headers, mode="bulk")
 
     me = client.get(f"{API}/users/me", headers=superuser_token_headers).json()
-    records = _recorded(page_type="posts")
+    records = _listed(
+        client, superuser_token_headers, channel=CHANNEL, pageType="posts"
+    )
     assert records
     for record in records:
-        assert record.kind == "bulk"
-        assert record.account_id == uuid.UUID(me["id"])
-        assert record.budget == "manual_bulk"
-        assert record.lane == "direct"
-        assert record.best_effort is False
+        assert record["kind"] == "bulk"
+        assert (record["accountId"], record["email"]) == (me["id"], me["email"])
+        assert record["budget"] == "manual_bulk"
+        assert record["lane"] == "direct"
+        assert record["bestEffort"] is False
 
 
 @pytest.mark.parametrize(
@@ -415,9 +456,11 @@ def test_a_sync_past_its_budget_is_recorded_best_effort(
 
     _sync(client, superuser_token_headers)
 
-    records = _recorded(page_type="posts")
+    records = _listed(
+        client, superuser_token_headers, channel=CHANNEL, pageType="posts"
+    )
     assert records
-    assert all(record.best_effort for record in records)
+    assert all(record["bestEffort"] for record in records)
 
 
 def test_an_attempt_refused_by_a_full_lane_is_not_a_request(
@@ -449,8 +492,9 @@ def test_an_attempt_refused_by_a_full_lane_is_not_a_request(
     _sync(client, superuser_token_headers)
 
     assert refused
-    first = [r for r in _recorded(page_type="posts") if r.new_posts]
-    assert [(r.attempt, r.outcome) for r in first] == [(1, "useful")]
+    posts = _listed(client, superuser_token_headers, channel=CHANNEL, pageType="posts")
+    first = [r for r in posts if r["newPosts"]]
+    assert [(r["attempt"], r["outcome"]) for r in first] == [(1, "useful")]
     assert telegram.calls.count(_first_page()) == 1
 
 
@@ -492,15 +536,21 @@ def test_a_failed_attempt_is_wasted_with_its_cause_and_a_retry_that_answers_is_n
 
     _sync(client, superuser_token_headers)
 
-    page = [r for r in _recorded(page_type="posts") if r.chain_id == _first_chain()]
-    assert (page[0].outcome, page[0].cause, page[0].error_code) == (
+    page = _listed(
+        client,
+        superuser_token_headers,
+        channel=CHANNEL,
+        pageType="posts",
+        chainId=_first_chain(client, superuser_token_headers),
+    )
+    assert (page[0]["outcome"], page[0]["cause"], page[0]["errorCode"]) == (
         "wasted",
         cause,
         code,
     )
-    assert page[0].charged is charged
+    assert page[0]["charged"] is charged
     if cause != "softBlock":
-        assert [(r.attempt, r.outcome, r.cause) for r in page[1:]] == [
+        assert [(r["attempt"], r["outcome"], r["cause"]) for r in page[1:]] == [
             (2, "useful", None)
         ]
     wasted = _row(
@@ -605,8 +655,9 @@ def test_a_page_that_changed_the_channels_metadata_is_useful(
     assert after == (before[0] + useful, before[1] + (not useful))
 
 
-def _first_chain() -> uuid.UUID:
-    return _recorded(page_type="posts", attempt=1)[0].chain_id
+def _first_chain(client: TestClient, headers: dict[str, str]) -> str:
+    first = _listed(client, headers, channel=CHANNEL, pageType="posts", attempt=1)
+    return str(first[0]["chainId"])
 
 
 def test_a_chain_ties_a_pages_attempts_across_both_retry_layers(
@@ -629,16 +680,17 @@ def test_a_chain_ties_a_pages_attempts_across_both_retry_layers(
 
     _sync(client, superuser_token_headers)
 
-    first_chain = _first_chain()
-    page = [r for r in _recorded(page_type="posts") if r.chain_id == first_chain]
-    assert [(r.attempt, r.outcome) for r in page] == [
+    first_chain = _first_chain(client, superuser_token_headers)
+    posts = _listed(client, superuser_token_headers, channel=CHANNEL, pageType="posts")
+    page = [r for r in posts if r["chainId"] == first_chain]
+    assert [(r["attempt"], r["outcome"]) for r in page] == [
         (1, "wasted"),
         (2, "wasted"),
         (3, "useful"),
     ]
-    assert page[0].id == first_chain
-    others = [r for r in _recorded(page_type="posts") if r.chain_id != first_chain]
-    assert all(r.attempt == 1 for r in others)
+    assert page[0]["id"] == first_chain
+    others = [r for r in posts if r["chainId"] != first_chain]
+    assert all(r["attempt"] == 1 for r in others)
 
 
 # --------------------------------------------------------------------------
@@ -698,8 +750,13 @@ def test_a_probe_that_adds_sample_posts_is_useful_and_records_them(
 
     _probe(client)
 
-    [record] = _recorded(kind="probe")
-    assert (record.account_id, record.charged, record.channel, record.page_type) == (
+    [record] = _listed(client, superuser_token_headers, aggregate="probe")
+    assert (
+        record["accountId"],
+        record["charged"],
+        record["channel"],
+        record["pageType"],
+    ) == (
         None,
         False,
         HANDLE,
@@ -776,8 +833,8 @@ def test_a_probe_of_a_handle_that_does_not_exist_is_wasted_as_a_missing_handle(
 
     _probe(client)
 
-    [record] = _recorded(kind="probe")
-    assert (record.outcome, record.cause, record.channel) == (
+    [record] = _listed(client, superuser_token_headers, aggregate="probe")
+    assert (record["outcome"], record["cause"], record["channel"]) == (
         "wasted",
         "missingHandle",
         HANDLE,
@@ -858,8 +915,12 @@ def test_a_probe_of_a_private_handle_is_useful_then_idle_and_never_wasted(
     assert _listed_as(client, superuser_token_headers, "private") == [
         (HANDLE, "channel", "Hidden")
     ]
-    [record] = _recorded(kind="probe")
-    assert (record.outcome, record.cause, record.error_code) == ("useful", None, None)
+    [record] = _listed(client, superuser_token_headers, aggregate="probe")
+    assert (record["outcome"], record["cause"], record["errorCode"]) == (
+        "useful",
+        None,
+        None,
+    )
 
     _probe(client)
 
@@ -882,8 +943,8 @@ def test_a_handle_nobody_holds_is_still_a_missing_handle_after_the_parse(
 
     _probe(client)
 
-    [record] = _recorded(kind="probe")
-    assert (record.outcome, record.cause) == ("wasted", "missingHandle")
+    [record] = _listed(client, superuser_token_headers, aggregate="probe")
+    assert (record["outcome"], record["cause"]) == ("wasted", "missingHandle")
     listed = _listed_as(client, superuser_token_headers, "unavailable")
     assert [handle for handle, _kind, _title in listed] == [HANDLE]
 
@@ -928,13 +989,13 @@ def test_a_handle_check_is_its_own_uncharged_aggregate_row(
 
     _check_handle(client, superuser_token_headers, HANDLE)
 
-    [record] = _recorded(kind="handle")
-    assert (record.charged, record.channel, record.page_type) == (
+    [record] = _listed(client, superuser_token_headers, aggregate="handle")
+    assert (record["charged"], record["channel"], record["pageType"]) == (
         False,
         HANDLE,
         "metadata",
     )
-    assert (record.outcome, record.cause) == (outcome, cause)
+    assert (record["outcome"], record["cause"]) == (outcome, cause)
     checks = _row(
         _breakdown(client, superuser_token_headers)["byChannel"],
         channel=None,
@@ -1001,13 +1062,14 @@ def test_a_bulk_follow_is_charged_as_the_ledger_charges_it(
 
     _bulk_follow(client, superuser_token_headers, monkeypatch, FOLLOWED)
 
-    [record] = _recorded(kind="follow")
-    assert (record.budget, record.channel, record.charged, record.account_id) == (
-        "manual_bulk",
-        FOLLOWED,
-        True,
-        _recorded(kind="bulk")[0].account_id,
-    )
+    [record] = _listed(client, superuser_token_headers, channel=FOLLOWED, kind="follow")
+    [bulk, *_] = _listed(client, superuser_token_headers, channel=FOLLOWED, kind="bulk")
+    assert (
+        record["budget"],
+        record["channel"],
+        record["charged"],
+        record["accountId"],
+    ) == ("manual_bulk", FOLLOWED, True, bulk["accountId"])
     answer = _breakdown(client, superuser_token_headers)
     follows = _row(answer["byChannel"], channel=FOLLOWED, kind="follow")
     assert (follows["requests"], follows["useful"], follows["charged"]) == (1, 1, 1)
@@ -1056,8 +1118,10 @@ def test_an_auto_follow_inside_a_sync_is_that_syncs_work(
     _sync(client, superuser_token_headers)
 
     assert _first_page(FOLLOWED) in telegram.calls
-    checks = _recorded(page_type="metadata")
-    assert [(r.kind, r.channel, r.budget) for r in checks] == [
+    checks = _listed(
+        client, superuser_token_headers, channel=CHANNEL, pageType="metadata"
+    )
+    assert [(r["kind"], r["channel"], r["budget"]) for r in checks] == [
         ("single", CHANNEL, "manual_single")
     ]
 
@@ -1108,7 +1172,7 @@ def test_bot_api_calls_are_their_own_uncharged_kind(
     ]
 
     assert [a.status_code for a in answers] == [200, 200, 200]
-    assert len(_recorded(kind="botApi")) == 3
+    assert len(_listed(client, superuser_token_headers, aggregate="botApi")) == 3
     calls = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="botApi")
     assert (calls["requests"], calls["charged"]) == (3, 0)
 
@@ -1214,7 +1278,7 @@ def test_a_request_in_an_hour_already_rolled_up_is_counted(
     second = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="single")
 
     assert second["requests"] > first["requests"]
-    assert second["requests"] == len(_recorded())
+    assert second["requests"] == len(_stored())
 
 
 def test_the_api_writes_its_buffered_requests_when_it_shuts_down(
@@ -1345,7 +1409,7 @@ def test_retention_keeps_requests_a_week_hourly_totals_a_month_and_days_forever(
     now = datetime.now(UTC)
     if now.minute in (0, 59) or now.hour in (0, 23):
         pytest.skip("too close to an hour or day edge to cut a range around now")
-    n = len(_recorded())
+    n = len(_stored())
     assert n >= 2
     assert _requests_by_tier(client, superuser_token_headers, now) == (n, n, n)
 
@@ -1483,10 +1547,8 @@ def test_a_days_charged_requests_equal_the_ledger(
     _bulk_follow(client, superuser_token_headers, monkeypatch, FOLLOWED)
     _ownerless_sync(client, superuser_token_headers, CHANNEL)
 
-    assert [r.account_id for r in _recorded(kind="single", page_type="posts")][
-        -1
-    ] is None
-    assert _recorded(charged=False), "no uncharged Request to leave out"
+    assert [r.account_id for r in _stored(kind="single", page_type="posts")][-1] is None
+    assert _stored(charged=False), "no uncharged Request to leave out"
     charged = _settled(client, superuser_token_headers)
     assert charged == _ledger_total()
     with Session(engine) as session:
@@ -1704,11 +1766,11 @@ def test_the_channels_left_out_leave_the_breakdown_and_the_trend(
     assert _by_kind(trend["buckets"]) == _breakdown_by_kind(no_checks)
 
 
-@pytest.mark.parametrize("route", ["breakdown", "trend", "spread"])
+@pytest.mark.parametrize("route", ["breakdown", "trend", "spread", "records"])
 def test_the_requests_endpoints_are_the_operators_alone(
     client: TestClient, normal_user_token_headers: dict[str, str], route: str
 ) -> None:
-    """Mutation: drop the `QUOTA_READ_ANY` dependency from either route."""
+    """Mutation: drop the `QUOTA_READ_ANY` dependency from any route."""
     start, end = _today()
     r = client.get(
         f"{API}/requests/{route}",
@@ -1876,7 +1938,7 @@ def test_past_each_tiers_span_the_next_one_answers(
     now = datetime.now(UTC)
     if now.minute in (0, 59) or now.hour in (0, 23):
         pytest.skip("too close to an hour or day edge to cut a range around now")
-    n = len(_recorded())
+    n = len(_stored())
     # The rollup runs every 5 minutes, long before retention reaches a Request.
     roll_up_request_totals()
     real_now = utc_now()
@@ -1924,7 +1986,7 @@ def test_the_spread_is_hours_inside_the_month_and_days_before(
     the split on the hourly span keeps them out of the daily bars.
     """
     _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
-    n = len(_recorded())
+    n = len(_stored())
 
     spread = _spread(client, superuser_token_headers)
     assert (spread["recordDays"], spread["hourlyDays"]) == (7, 30)
@@ -1946,7 +2008,7 @@ def test_the_spread_reads_every_filter_but_the_range(
 ) -> None:
     """Mutation: ignore `charged` or `leftOut` on the spread."""
     _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
-    n = len(_recorded())
+    n = len(_stored())
 
     uncharged = _spread(client, superuser_token_headers, charged="uncharged")
     assert _spread_total(uncharged) == 1
@@ -1954,3 +2016,97 @@ def test_the_spread_reads_every_filter_but_the_range(
     assert _spread_total(charged) == n - 1
     left_out = _spread(client, superuser_token_headers, leftOut=[CHANNEL])
     assert left_out["buckets"] == []
+
+
+# --------------------------------------------------------------------------
+# A Channel's Requests (RQS-10)
+# --------------------------------------------------------------------------
+
+
+def _outcomes(answer: dict[str, Any]) -> tuple[int, int, int, int]:
+    return answer["total"], answer["useful"], answer["idle"], answer["wasted"]
+
+
+def test_a_channels_requests_come_newest_first_in_pages_counted_by_outcome(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: list oldest first; count the outcomes on the page alone;
+    ignore `offset`.
+
+    The refused first attempt, its answered retry, then the older page the
+    walk asks for next: one Request of each outcome, in two pages of two.
+    """
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+
+    first = _requests(client, superuser_token_headers, channel=CHANNEL, limit=2)
+    rest = _requests(
+        client, superuser_token_headers, channel=CHANNEL, limit=2, offset=2
+    )
+
+    assert _outcomes(first) == _outcomes(rest) == (3, 1, 1, 1)
+    listed = first["records"] + rest["records"]
+    assert [(r["outcome"], r["attempt"]) for r in listed] == [
+        ("idle", 1),
+        ("useful", 2),
+        ("wasted", 1),
+    ]
+    assert listed[2]["cause"] == "transportFault"
+    assert listed[2]["errorCode"] == "ConnectError"
+    assert listed[1]["chainId"] == listed[2]["chainId"] == listed[2]["id"]
+    assert listed[1]["newPosts"] == 2
+
+
+def test_a_channels_requests_read_the_tabs_range_and_filters(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: drop the cut to the last week; ignore `charged`; list a
+    Handle check of the Channel on its row; drop the end of the range.
+
+    A Handle check names the Channel it checked but is the Handle checks
+    row's Request, never the Channel's.
+    """
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+    _check_handle(client, superuser_token_headers, CHANNEL)
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
+
+    def listed(**params: Any) -> list[tuple[str, str]]:
+        answer = _requests(client, superuser_token_headers, **params)
+        return [(r["kind"], r["outcome"]) for r in answer["records"]]
+
+    assert listed(channel=CHANNEL, charged="uncharged") == [("single", "wasted")]
+    assert listed(kind="handle") == [("handle", "idle")]
+    assert len(listed(channel=CHANNEL)) == 3
+    before = (now - timedelta(minutes=10)).isoformat()
+    assert listed(channel=CHANNEL, end=before) == []
+
+    month = (now - timedelta(days=30)).isoformat()
+    moved = utc_now() + timedelta(days=8)
+    monkeypatch.setattr(request_stats, "utc_now", lambda: moved)
+    answer = _requests(client, superuser_token_headers, channel=CHANNEL, start=month)
+    assert (answer["records"], answer["total"]) == ([], 0)
+    week_back = moved - timedelta(days=settings.REQUEST_RECORD_DAYS)
+    assert datetime.fromisoformat(answer["start"]) == week_back.replace(
+        second=0, microsecond=0
+    )
+
+
+@pytest.mark.parametrize(
+    "row", [{}, {"channel": CHANNEL, "kind": "probe"}], ids=["neither", "both"]
+)
+def test_a_channels_requests_name_one_row(
+    client: TestClient, superuser_token_headers: dict[str, str], row: dict[str, str]
+) -> None:
+    """Mutation: list every Request when no row is named."""
+    start, end = _today()
+    r = client.get(
+        f"{API}/requests/records",
+        params={"start": start, "end": end, **row},
+        headers=superuser_token_headers,
+    )
+    assert r.status_code == 422

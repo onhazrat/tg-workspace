@@ -6972,6 +6972,148 @@
         }
       }
     },
+    "/api/v1/requests/records": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Records",
+        "description": "One Channel table row's Requests in `[start, end)`, newest first.\n\nName the row by `channel`, a Channel's handle, or by `kind`, the kind of\nan aggregate row (work with no Channel), never both. Each Request is kept\n`recordDays` days, so the range is cut to them. `charged`, `accounts`,\n`leftOut` and `leftOutKinds` are read as on the Breakdown. The outcome\ncounts cover every page.",
+        "operationId": "requests-read_request_records",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "End"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
+            }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRecordsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/requests/spread": {
       "get": {
         "tags": ["requests"],
@@ -13631,6 +13773,111 @@
         "required": ["start", "end", "byKind", "byChannel", "byAccount"],
         "title": "RequestBreakdownResponse",
         "description": "Totals by kind and by Channel for one range, in UTC."
+      },
+      "RequestRecord": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "at": { "type": "string", "format": "date-time", "title": "At" },
+          "latencyMs": { "type": "integer", "title": "Latencyms" },
+          "kind": { "type": "string", "title": "Kind" },
+          "charged": { "type": "boolean", "title": "Charged" },
+          "accountId": {
+            "anyOf": [
+              { "type": "string", "format": "uuid" },
+              { "type": "null" }
+            ],
+            "title": "Accountid"
+          },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "budget": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Budget"
+          },
+          "bestEffort": { "type": "boolean", "title": "Besteffort" },
+          "channel": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Channel"
+          },
+          "lane": { "type": "string", "title": "Lane" },
+          "pageType": { "type": "string", "title": "Pagetype" },
+          "outcome": { "type": "string", "title": "Outcome" },
+          "cause": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Cause"
+          },
+          "errorCode": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Errorcode"
+          },
+          "attempt": { "type": "integer", "title": "Attempt" },
+          "chainId": { "type": "string", "format": "uuid", "title": "Chainid" },
+          "newPosts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Newposts"
+          },
+          "repeatedPosts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Repeatedposts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "latencyMs",
+          "kind",
+          "charged",
+          "accountId",
+          "email",
+          "budget",
+          "bestEffort",
+          "channel",
+          "lane",
+          "pageType",
+          "outcome",
+          "cause",
+          "errorCode",
+          "attempt",
+          "chainId",
+          "newPosts",
+          "repeatedPosts"
+        ],
+        "title": "RequestRecord",
+        "description": "One Request: one attempt that reached Telegram (RQS-10, ADR-035).\n\n`channel` is the Channel's handle, or the handle a probe or Handle check\nasked about. `cause` and `errorCode` are set on a Wasted Request alone.\n`chainId` is the id of the first attempt at the same page. `newPosts` and\n`repeatedPosts` are null where the page carried no Posts. `email` is\nblank for an Account deleted since, and null when no Account is charged."
+      },
+      "RequestRecordsResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "total": { "type": "integer", "title": "Total" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "records": {
+            "items": { "$ref": "#/components/schemas/RequestRecord" },
+            "type": "array",
+            "title": "Records"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "total",
+          "useful",
+          "idle",
+          "wasted",
+          "records"
+        ],
+        "title": "RequestRecordsResponse",
+        "description": "One page of a Channel's or aggregate row's Requests, newest first.\n\n`start` is the range's start, moved up to the oldest Request still kept.\n`total` and the outcome counts cover every page."
       },
       "RequestSpreadBucket": {
         "properties": {

@@ -76,6 +76,57 @@ class RequestTrendResponse(BaseModel):
     buckets: list[RequestTrendBucket]
 
 
+class RequestRecord(BaseModel):
+    """One Request: one attempt that reached Telegram (RQS-10, ADR-035).
+
+    `channel` is the Channel's handle, or the handle a probe or Handle check
+    asked about. `cause` and `errorCode` are set on a Wasted Request alone.
+    `chainId` is the id of the first attempt at the same page. `newPosts` and
+    `repeatedPosts` are null where the page carried no Posts. `email` is
+    blank for an Account deleted since, and null when no Account is charged.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+    id: uuid.UUID
+    at: datetime
+    latency_ms: int = Field(alias="latencyMs")
+    kind: str
+    charged: bool
+    account_id: uuid.UUID | None = Field(alias="accountId")
+    email: str | None
+    budget: str | None
+    best_effort: bool = Field(alias="bestEffort")
+    channel: str | None
+    lane: str
+    page_type: str = Field(alias="pageType")
+    outcome: str
+    cause: str | None
+    error_code: str | None = Field(alias="errorCode")
+    attempt: int
+    chain_id: uuid.UUID = Field(alias="chainId")
+    new_posts: int | None = Field(alias="newPosts")
+    repeated_posts: int | None = Field(alias="repeatedPosts")
+
+
+class RequestRecordsResponse(BaseModel):
+    """One page of a Channel's or aggregate row's Requests, newest first.
+
+    `start` is the range's start, moved up to the oldest Request still kept.
+    `total` and the outcome counts cover every page.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    start: datetime
+    end: datetime
+    total: int
+    useful: int
+    idle: int
+    wasted: int
+    records: list[RequestRecord]
+
+
 class RequestSpreadBucket(BaseModel):
     """Every Request in `[start, end)`, in UTC."""
 

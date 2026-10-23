@@ -6253,6 +6253,135 @@ export type RequestBreakdownResponse = {
 };
 
 /**
+ * RequestRecord
+ *
+ * One Request: one attempt that reached Telegram (RQS-10, ADR-035).
+ *
+ * `channel` is the Channel's handle, or the handle a probe or Handle check
+ * asked about. `cause` and `errorCode` are set on a Wasted Request alone.
+ * `chainId` is the id of the first attempt at the same page. `newPosts` and
+ * `repeatedPosts` are null where the page carried no Posts. `email` is
+ * blank for an Account deleted since, and null when no Account is charged.
+ */
+export type RequestRecord = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Latencyms
+     */
+    latencyMs: number;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Charged
+     */
+    charged: boolean;
+    /**
+     * Accountid
+     */
+    accountId: string | null;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Budget
+     */
+    budget: string | null;
+    /**
+     * Besteffort
+     */
+    bestEffort: boolean;
+    /**
+     * Channel
+     */
+    channel: string | null;
+    /**
+     * Lane
+     */
+    lane: string;
+    /**
+     * Pagetype
+     */
+    pageType: string;
+    /**
+     * Outcome
+     */
+    outcome: string;
+    /**
+     * Cause
+     */
+    cause: string | null;
+    /**
+     * Errorcode
+     */
+    errorCode: string | null;
+    /**
+     * Attempt
+     */
+    attempt: number;
+    /**
+     * Chainid
+     */
+    chainId: string;
+    /**
+     * Newposts
+     */
+    newPosts: number | null;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number | null;
+};
+
+/**
+ * RequestRecordsResponse
+ *
+ * One page of a Channel's or aggregate row's Requests, newest first.
+ *
+ * `start` is the range's start, moved up to the oldest Request still kept.
+ * `total` and the outcome counts cover every page.
+ */
+export type RequestRecordsResponse = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Records
+     */
+    records: Array<RequestRecord>;
+};
+
+/**
  * RequestSpreadBucket
  *
  * Every Request in `[start, end)`, in UTC.
@@ -13949,6 +14078,72 @@ export type RequestsReadRequestTrendResponses = {
 };
 
 export type RequestsReadRequestTrendResponse = RequestsReadRequestTrendResponses[keyof RequestsReadRequestTrendResponses];
+
+export type RequestsReadRequestRecordsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Start
+         */
+        start: string;
+        /**
+         * End
+         */
+        end: string;
+        /**
+         * Channel
+         */
+        channel?: string | null;
+        /**
+         * Kind
+         */
+        kind?: string | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
+    };
+    url: '/api/v1/requests/records';
+};
+
+export type RequestsReadRequestRecordsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestRecordsError = RequestsReadRequestRecordsErrors[keyof RequestsReadRequestRecordsErrors];
+
+export type RequestsReadRequestRecordsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestRecordsResponse;
+};
+
+export type RequestsReadRequestRecordsResponse = RequestsReadRequestRecordsResponses[keyof RequestsReadRequestRecordsResponses];
 
 export type RequestsReadRequestSpreadData = {
     body?: never;
