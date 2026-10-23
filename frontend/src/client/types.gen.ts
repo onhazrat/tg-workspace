@@ -6433,7 +6433,7 @@ export type RequestTotals = {
  * One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.
  *
  * `ledgerOnly` counts those on a day before recording started, from the
- * ledger's daily totals, which carry no outcome (RQS-16).
+ * ledger's daily totals, which carry no outcome.
  */
 export type RequestTrendBucket = {
     /**

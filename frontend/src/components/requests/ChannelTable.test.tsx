@@ -25,6 +25,7 @@ const row = (
     useful,
     idle,
     wasted,
+    ledgerOnly: 0,
     syncs,
     failed,
     posts,

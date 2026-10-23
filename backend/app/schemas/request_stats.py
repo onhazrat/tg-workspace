@@ -55,11 +55,12 @@ class RequestBreakdownResponse(BaseModel):
     by_account: list[AccountRequestTotals] = Field(alias="byAccount")
 
 
+# RQS-16: `ledgerOnly`.
 class RequestTrendBucket(BaseModel):
     """One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.
 
     `ledgerOnly` counts those on a day before recording started, from the
-    ledger's daily totals, which carry no outcome (RQS-16).
+    ledger's daily totals, which carry no outcome.
     """
 
     model_config = ConfigDict(populate_by_name=True)

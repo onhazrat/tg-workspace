@@ -19,6 +19,7 @@ const account = (
   idle,
   wasted,
   total: useful + idle + wasted,
+  ledgerOnly: 0,
   byKind: { auto: useful + idle, bulk: wasted },
 })
 

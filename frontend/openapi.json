@@ -13971,7 +13971,7 @@
           "ledgerOnly"
         ],
         "title": "RequestTrendBucket",
-        "description": "One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.\n\n`ledgerOnly` counts those on a day before recording started, from the\nledger's daily totals, which carry no outcome (RQS-16)."
+        "description": "One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.\n\n`ledgerOnly` counts those on a day before recording started, from the\nledger's daily totals, which carry no outcome."
       },
       "RequestTrendResponse": {
         "properties": {
