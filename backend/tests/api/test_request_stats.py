@@ -2266,3 +2266,34 @@ def test_days_before_recording_come_from_the_ledger_on_the_trend(
         (noon.isoformat(), whole[1], "auto", True, 7),
         (noon.isoformat(), whole[1], "probe", False, 5),
     }
+
+
+def test_the_spread_reaches_back_before_recording_from_the_ledger(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: read no ledger on the spread; read it on every day (the day
+    after recording counted too); ignore the filters on it.
+
+    The range picker can only select a day its spread draws (story 61).
+    """
+    start, _end, n = _history(client, superuser_token_headers, telegram, monkeypatch)
+    before = datetime.fromisoformat(start) + timedelta(days=2)
+
+    def days(answer: dict[str, Any]) -> dict[str, int]:
+        return {
+            b["start"]: b["requests"]
+            for b in answer["buckets"]
+            if datetime.fromisoformat(b["start"]) < before + timedelta(days=1)
+        }
+
+    spread = _spread(client, superuser_token_headers)
+    assert days(spread) == {before.isoformat(): 12}
+    assert _spread_total(spread) == n + 12
+    uncharged = _spread(client, superuser_token_headers, charged="uncharged")
+    assert days(uncharged) == {before.isoformat(): 5}
+    assert days(_spread(client, superuser_token_headers, leftOutKinds=["probe"])) == {
+        before.isoformat(): 7
+    }

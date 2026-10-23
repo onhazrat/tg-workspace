@@ -779,7 +779,8 @@ def request_spread(
 
     Hours from the hourly totals inside their span, whole days from the daily
     totals before it. Split on that span, so hourly rows retention has not
-    pruned yet are never counted twice.
+    pruned yet are never counted twice. Days before recording started come
+    from the ledger, as on the Breakdown, so the picker can reach them (RQS-16).
     """
     hourly = _kept().hourly
     tiers: list[tuple[Any, Any, timedelta, Any]] = [
@@ -795,7 +796,14 @@ def request_spread(
         ).all():
             start = _as_datetime(at)
             spread.append(SpreadBucket(start, start + step, int(n)))
-    return spread
+    ledger: Counter[date] = Counter()
+    for day in ledger_history(session, _GRID, utc_now(), picked):
+        ledger[day.day] += day.requests
+    before = [
+        SpreadBucket(_as_datetime(day), _as_datetime(day) + _DAY, n)
+        for day, n in sorted(ledger.items())
+    ]
+    return before + spread
 
 
 @dataclass(frozen=True)
