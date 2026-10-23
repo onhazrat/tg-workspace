@@ -756,6 +756,60 @@ def test_a_probe_of_a_handle_that_does_not_exist_is_wasted_as_a_missing_handle(
 
 
 # --------------------------------------------------------------------------
+# Handle checks, follows, Bot API calls and Other (RQS-14)
+# --------------------------------------------------------------------------
+
+
+def _check_handle(client: TestClient, headers: dict[str, str], handle: str) -> int:
+    r = client.post(
+        f"{API}/telegram/channel-info", json={"channelName": handle}, headers=headers
+    )
+    return r.status_code
+
+
+@pytest.mark.parametrize(
+    ("answer", "outcome", "cause"),
+    [
+        (_page_html(HANDLE, [5]), "idle", None),
+        (TelegramWebViewUnavailable(), "wasted", "missingHandle"),
+    ],
+    ids=["answered", "no such handle"],
+)
+def test_a_handle_check_is_its_own_uncharged_aggregate_row(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    answer: Response,
+    outcome: str,
+    cause: str | None,
+) -> None:
+    """Mutations: leave the route unattributed; drop handle checks from
+    AGGREGATE_KINDS; leave its soft block filed as a soft block.
+
+    The API process checks a handle for whoever asked, writes nothing, and
+    charges nobody: Idle when Telegram answered, Wasted as a missing handle
+    when it has no page for it. Its totals are the one Handle checks row.
+    """
+    telegram.script(_first_page(HANDLE), answer)
+
+    _check_handle(client, superuser_token_headers, HANDLE)
+
+    [record] = _recorded(kind="handle")
+    assert (record.charged, record.channel, record.page_type) == (
+        False,
+        HANDLE,
+        "metadata",
+    )
+    assert (record.outcome, record.cause) == (outcome, cause)
+    checks = _row(
+        _breakdown(client, superuser_token_headers)["byChannel"],
+        channel=None,
+        kind="handle",
+    )
+    assert (checks["requests"], checks[outcome], checks["charged"]) == (1, 1, 0)
+
+
+# --------------------------------------------------------------------------
 # Totals
 # --------------------------------------------------------------------------
 

@@ -1,5 +1,7 @@
 import logging
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import httpx
@@ -10,6 +12,13 @@ from sqlmodel import Session
 from app.api.deps import CurrentUser, SessionDep
 from app.api.http_cache import etag_for, matches_if_none_match
 from app.core.config import settings
+from app.core.request_recording import (
+    Cause,
+    PageType,
+    RequestKind,
+    attributed,
+    page,
+)
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.schemas.telegram import (
@@ -41,7 +50,7 @@ from app.services.scraper import (
     resolve_start_time_to_id,
     scrape_channel,
 )
-from app.services.telegram_web import TelegramWebViewUnavailable
+from app.services.telegram_web import TelegramWebViewUnavailable, normalize_handle
 from app.services.tenancy import may_act_on
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
@@ -129,13 +138,26 @@ def _resolve_bot_token(
     raise HTTPException(status_code=400, detail="credentialId or token is required")
 
 
+@contextmanager
+def _handle_check(handle: str) -> Iterator[None]:
+    # The Requests of a handle checked here are Handle checks (RQS-14): no
+    # Account, Uncharged, the handle as their channel. They write nothing, so
+    # an answer is Idle, and no page for the handle is a missing handle.
+    with (
+        attributed(kind=RequestKind.HANDLE, channel=normalize_handle(handle)),
+        page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE),
+    ):
+        yield
+
+
 @router.post("/scrape")
 async def api_scrape(
     body: ScrapeRequest, _current_user: CurrentUser
 ) -> ScrapeChannelResponse:
     try:
-        return ScrapeChannelResponse.model_validate(
-            await scrape_channel(
+        # A handle check too (RQS-14), with no page around it: it walks several.
+        with attributed(kind=RequestKind.HANDLE):
+            scraped = await scrape_channel(
                 body.url,
                 known_latest_id=body.known_latest_id,
                 known_display_name=body.known_display_name,
@@ -145,7 +167,7 @@ async def api_scrape(
                 tor_rotation_threshold=body.tor_rotation_threshold,
                 proxy_concurrency=_resolve_proxy_concurrency(body),
             )
-        )
+        return ScrapeChannelResponse.model_validate(scraped)
     except TelegramWebViewUnavailable as exc:
         raise HTTPException(
             status_code=400,
@@ -172,15 +194,15 @@ async def api_channel_info(
     body: ChannelInfoRequest, _current_user: CurrentUser
 ) -> ChannelInfoResponse:
     try:
-        return ChannelInfoResponse.model_validate(
-            await get_channel_info(
+        with _handle_check(body.channel_name):
+            info = await get_channel_info(
                 body.channel_name,
                 proxies=_resolve_proxies(body),
                 tor_auto_rotate=body.tor_auto_rotate,
                 tor_rotation_threshold=body.tor_rotation_threshold,
                 proxy_concurrency=_resolve_proxy_concurrency(body),
             )
-        )
+        return ChannelInfoResponse.model_validate(info)
     except TelegramWebViewUnavailable as exc:
         raise HTTPException(
             status_code=400,
@@ -198,14 +220,17 @@ async def api_resolve_start_time(
     body: ResolveStartTimeRequest, _current_user: CurrentUser
 ) -> ResolveStartTimeResponse:
     try:
-        start_id = await resolve_start_time_to_id(
-            body.channel_name,
-            body.target_time_ms,
-            proxies=_resolve_proxies(body),
-            tor_auto_rotate=body.tor_auto_rotate,
-            tor_rotation_threshold=body.tor_rotation_threshold,
-            proxy_concurrency=_resolve_proxy_concurrency(body),
-        )
+        with attributed(
+            kind=RequestKind.HANDLE, channel=normalize_handle(body.channel_name)
+        ):
+            start_id = await resolve_start_time_to_id(
+                body.channel_name,
+                body.target_time_ms,
+                proxies=_resolve_proxies(body),
+                tor_auto_rotate=body.tor_auto_rotate,
+                tor_rotation_threshold=body.tor_rotation_threshold,
+                proxy_concurrency=_resolve_proxy_concurrency(body),
+            )
         return ResolveStartTimeResponse.model_validate({"startId": start_id})
     except TelegramWebViewUnavailable as exc:
         raise HTTPException(

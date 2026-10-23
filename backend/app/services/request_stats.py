@@ -97,8 +97,8 @@ _TOTALS_KEY = (
 
 #: Kinds whose totals carry no Channel: their Requests name the handle they
 #: probed, but the tab shows the kind as one aggregate row (RQS-12, tab
-#: decision 7). Handle checks join it in RQS-14.
-AGGREGATE_KINDS = (RequestKind.PROBE.value,)
+#: decision 7). Handle checks join it (RQS-14).
+AGGREGATE_KINDS = (RequestKind.PROBE.value, RequestKind.HANDLE.value)
 
 
 def _sum(column: Any) -> Any:

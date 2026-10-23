@@ -48,8 +48,14 @@ class RequestKind(StrEnum):
     AUTO = "auto"
     BULK = "bulk"
     SINGLE = "single"
+    #: A bulk follow's handle checks, charged to manual bulk (RQS-14).
+    FOLLOW = "follow"
     #: A Directory probe (RQS-12): no Account, no Budget, the handle it probed.
     PROBE = "probe"
+    #: A handle checked from the API for whoever asked: Uncharged (RQS-14).
+    HANDLE = "handle"
+    #: A call to the Bot API: publishing, bot info, bot files. Uncharged.
+    BOT_API = "botApi"
     #: No work declared itself. A known path recording this is a bug.
     OTHER = "other"
 
