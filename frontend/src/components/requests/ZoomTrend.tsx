@@ -1,26 +1,37 @@
 /**
- * The Requests tab's zoomable trend (RQS-07), in Plotly. `RequestsView`
- * loads this module lazily, so Plotly downloads only when the trend draws.
- * The buckets follow the zoom (`lib/requests/zoom`); Plotly brings the zoom,
- * pan, range slider and range buttons.
+ * The Requests tab's zoomable trend (RQS-07, RQS-08), in Plotly.
+ * `RequestsView` loads this module lazily, so Plotly downloads only when the
+ * trend draws. The buckets follow the zoom, and the rows, shades and scale
+ * follow the switches (`lib/requests/zoom`); Plotly brings the zoom, pan,
+ * range slider and range buttons.
  */
 import { Maximize2, Minimize2 } from "lucide-react"
 import Plotly from "plotly.js-dist-min"
 import { useEffect, useState } from "react"
 import createPlotlyComponentModule from "react-plotly.js/factory"
 import type { RequestTrendResponse } from "@/client"
+import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { MINUTE_MS } from "@/lib/analysis-window"
-import type { Outcome } from "@/lib/requests/breakdown"
+import { KINDS, OUTCOMES, type Outcome } from "@/lib/requests/breakdown"
 import {
   bandLabels,
   fromPlotly,
+  type Hidden,
+  legendClick,
+  legendDoubleClick,
+  type Part,
   rebucket,
+  type Split,
+  type Splits,
+  shadeOf,
   storedBuckets,
   tierBands,
   toPlotly,
-  trendLine,
+  trendChart,
 } from "@/lib/requests/zoom"
 import { DAY_MS } from "@/lib/scope/window"
+import { OutcomeChips } from "./parts"
 
 // The factory is CommonJS; Vite hands it over either bare or as `{ default }`.
 const createPlotlyComponent =
@@ -32,15 +43,17 @@ const createPlotlyComponent =
 const Plot = createPlotlyComponent(Plotly)
 
 /** Plotly styles its own SVG and cannot read CSS variables, so it gets them resolved. */
-const COLOR_VARS = {
+const COLOR_VARS: Record<string, string> = {
   line: "--layer-charged",
   ink: "--ink",
   axis: "--viz-axis",
   grid: "--viz-grid",
   surface: "--card-bg",
   band: "--account-4",
+  ...Object.fromEntries(KINDS.map((k) => [k.id, `--kind-${k.id}`])),
+  ...Object.fromEntries(OUTCOMES.map((o) => [o.id, `--outcome-${o.id}`])),
 }
-type Colors = Record<keyof typeof COLOR_VARS, string>
+type Colors = Record<string, string>
 
 function readColors(): Colors {
   const style = getComputedStyle(document.documentElement)
@@ -49,7 +62,7 @@ function readColors(): Colors {
       k,
       style.getPropertyValue(v).trim(),
     ]),
-  ) as Colors
+  )
 }
 
 /** The theme's colours, read again when the theme's class on `<html>` changes. */
@@ -147,16 +160,166 @@ export function relayoutRange(
   return e["xaxis.autorange"] ? null : undefined
 }
 
+/** One dimension's switches: told apart or not, then stacked or a row each. */
+function SplitSwitch({
+  dim,
+  split,
+  onSplit,
+}: {
+  dim: keyof Splits
+  split: Split
+  onSplit: (split: Split) => void
+}) {
+  const on = split !== "off"
+  return (
+    <span className="flex items-center gap-1">
+      <BarToggle
+        on={on}
+        label={`Separate by ${dim}`}
+        title={on ? `Merge the ${dim}s into one` : `Tell the ${dim}s apart`}
+        testId={`requests-split-${dim}`}
+        onClick={() => onSplit(on ? "off" : "stacked")}
+      />
+      <TgInlineChoice<Split>
+        aria-label={`${dim}s stacked or separate`}
+        options={[
+          { value: "stacked", label: "Stacked", disabled: !on },
+          { value: "separate", label: "Separate", disabled: !on },
+        ]}
+        value={split}
+        onChange={onSplit}
+      />
+    </span>
+  )
+}
+
+type Chart = ReturnType<typeof trendChart>
+
+/** A series' fill: a kind's colour, shaded by outcome when both are told apart. */
+function fillOf(c: Colors, { kind, outcome }: Part) {
+  const hue = kind && c[KINDS.some((k) => k.id === kind) ? kind : "other"]
+  if (hue && outcome) return shadeOf(hue, c.surface, outcome)
+  return hue || (outcome ? c[outcome] : c.line)
+}
+
+const axisOf = (i: number) => (i === 0 ? "y" : `y${i + 1}`)
+
+/**
+ * Each row's series stacked in its own area, on its own y axis. Fills only,
+ * with a hairline in the surface colour between shaded layers: a line in the
+ * series' colour would draw the top one over the rest. A row whose scale is
+ * capped gets a notch on each bucket above it, with the real rate on hover.
+ */
+function traces(chart: Chart, c: Colors): Partial<Plotly.ScatterData>[] {
+  const listed = new Set<string>()
+  return chart.rows.flatMap((row, i) => {
+    const series = row.series.map((s, j): Partial<Plotly.ScatterData> => {
+      const first = !!s.group && !listed.has(s.group)
+      if (s.group) listed.add(s.group)
+      return {
+        type: "scatter",
+        mode: "lines",
+        name: s.name,
+        legendgroup: s.group,
+        showlegend: first,
+        visible: s.off ? "legendonly" : true,
+        x: chart.x,
+        y: s.y,
+        text: chart.hover,
+        yaxis: axisOf(i),
+        stackgroup: `row${i}`,
+        fillcolor: fillOf(c, s.part),
+        line: {
+          shape: chart.shape,
+          smoothing: 0.6,
+          width: s.part.kind && s.part.outcome ? 0.75 : 0,
+          color: c.surface,
+        },
+        // The bucket's span, grain and count once, on the first series.
+        hovertemplate: `${i + j === 0 ? "%{text}<br>" : ""}%{y:,.0f}/h<extra>${s.name}</extra>`,
+      }
+    })
+    if (row.cap === null) return series
+    const notches: Partial<Plotly.ScatterData> = {
+      type: "scatter",
+      mode: "markers",
+      name: "Above the scale",
+      showlegend: false,
+      x: row.notches.map((n) => n.x),
+      y: row.notches.map(() => row.cap as number),
+      customdata: row.notches.map((n) => n.total),
+      yaxis: axisOf(i),
+      cliponaxis: false,
+      marker: { symbol: "triangle-up", size: 7, color: c.ink },
+      hovertemplate:
+        "%{customdata:,.0f}/h in all, above the scale<extra></extra>",
+    }
+    return [...series, notches]
+  })
+}
+
+/** The figure's height: in the layout too, as Plotly measures its box only on a window resize. */
+const heightOf = (rows: number) =>
+  rows === 1 ? 340 : (rows > 6 ? 70 : 110) * rows + 130
+
+/** Row `i` of `n`, top down, as a share of the plot's height. */
+function domainOf(i: number, n: number): [number, number] {
+  const gap = n > 6 ? 0.012 : 0.025
+  const height = (1 - gap * (n - 1)) / n
+  const top = 1 - i * (height + gap)
+  return [Math.max(0, top - height), top]
+}
+
+/**
+ * A y axis per row, each on its own scale, and the rows' names level beside
+ * them: a rotated axis title runs into its neighbours on thin rows.
+ */
+function rowAxes(chart: Chart, c: Colors) {
+  const n = chart.rows.length
+  const axis = { gridcolor: c.grid, linecolor: c.grid, zeroline: false }
+  const axes = chart.rows.map((row, i) => [
+    i === 0 ? "yaxis" : `yaxis${i + 1}`,
+    {
+      ...axis,
+      tickformat: "~s",
+      domain: n > 1 ? domainOf(i, n) : [0, 1],
+      nticks: n > 1 ? 3 : undefined,
+      autorange: false,
+      range: row.range,
+      title:
+        n > 1
+          ? undefined
+          : { text: "per hour", font: { size: 10, color: c.axis } },
+    },
+  ])
+  const names = (n > 1 ? chart.rows : []).map((row, i) => ({
+    xref: "paper" as const,
+    yref: "paper" as const,
+    x: 0,
+    y: domainOf(i, n).reduce((a, b) => a + b) / 2,
+    xanchor: "right" as const,
+    xshift: -34,
+    text: row.name,
+    showarrow: false,
+    font: { size: 10, color: c.axis },
+  }))
+  const nameWidth = Math.max(0, ...names.map((a) => a.text.length)) * 6
+  return { axes: Object.fromEntries(axes), names, nameWidth }
+}
+
 /**
  * The zoomable trend: Requests per hour over the tab's range, its buckets
  * re-summed as the zoom changes, down to 5 minutes where each Request is
- * kept. "Use the visible range" sets the tab's range to the zoom.
+ * kept. The switches split it by kind and outcome; the legend is the kind
+ * table's Show boxes, or the outcome chips. "Use the visible range" sets the
+ * tab's range to the zoom.
  */
 export default function ZoomTrend({
   trend,
   range,
   hiddenKinds,
   hiddenOutcomes,
+  onHidden,
   onRange,
 }: {
   trend: RequestTrendResponse
@@ -164,21 +327,48 @@ export default function ZoomTrend({
   range: { start: number; end: number }
   hiddenKinds: ReadonlySet<string>
   hiddenOutcomes: ReadonlySet<Outcome>
+  /** The legend or a chip hid or showed kinds or outcomes, as an update of the tab's. */
+  onHidden: (update: (h: Hidden) => Partial<Hidden>) => void
   /** The visible range was picked, cut out to whole minutes. */
   onRange: (start: number, end: number) => void
 }) {
   const c = useColors()
   const [full, setFull] = useFullScreen()
+  const [splits, setSplits] = useState<Splits>({
+    kind: "stacked",
+    outcome: "stacked",
+  })
   const stored = storedBuckets(trend.buckets)
   const hi = range.end
   const lo = range.start || (stored[0]?.t ?? hi - DAY_MS)
   // A zoom belongs to the range it was made in; a new range starts unzoomed.
   const [zoom, setZoom] = useState<{ of: string; to: [number, number] }>()
   const visible = zoom?.of === `${lo}-${hi}` ? zoom.to : null
-  const [from, to] = visible ?? [lo, hi]
-  const { size, points } = rebucket(stored, from, to)
-  const line = trendLine(points, size, hiddenKinds, hiddenOutcomes)
+  const view: [number, number] = visible ?? [lo, hi]
+  const { size, points } = rebucket(stored, ...view)
+  const chart = trendChart(
+    points,
+    size,
+    view,
+    splits,
+    hiddenKinds,
+    hiddenOutcomes,
+  )
+  const height = heightOf(Math.max(1, chart.rows.length))
   const Icon = full ? Minimize2 : Maximize2
+  // Plotly's own legend toggling stays off (return false): a click is the tab's switch.
+  const onLegend =
+    (double: boolean) =>
+    (e: { curveNumber: number; data: { legendgroup?: string }[] }) => {
+      const id = e.data[e.curveNumber]?.legendgroup
+      if (chart.legend && id)
+        onHidden(
+          double
+            ? legendDoubleClick(chart.legend, id, chart.kinds)
+            : legendClick(chart.legend, id),
+        )
+      return false
+    }
   return (
     <section
       data-testid="requests-zoom-trend"
@@ -210,6 +400,14 @@ export default function ZoomTrend({
               Use the visible range
             </button>
           )}
+          {(["kind", "outcome"] as const).map((dim) => (
+            <SplitSwitch
+              key={dim}
+              dim={dim}
+              split={splits[dim]}
+              onSplit={(split) => setSplits({ ...splits, [dim]: split })}
+            />
+          ))}
           <button
             type="button"
             className={smallButton}
@@ -225,11 +423,18 @@ export default function ZoomTrend({
           </button>
         </span>
       </div>
+      <div className="px-1" data-testid="requests-trend-chips">
+        <OutcomeChips
+          hidden={hiddenOutcomes}
+          onToggle={(o) => onHidden(legendClick("outcome", o))}
+          shades={splits.kind !== "off" && splits.outcome !== "off"}
+        />
+      </div>
       {/* The size on a wrapper: a className on Plot's own div would drop Plotly's. */}
       <div className={full ? "min-h-0 flex-1" : undefined}>
         {c && (
           <Plot
-            style={{ width: "100%", height: full ? "100%" : 340 }}
+            style={{ width: "100%", height: full ? "100%" : height }}
             useResizeHandler
             config={{
               displaylogo: false,
@@ -242,21 +447,13 @@ export default function ZoomTrend({
                 "toImage",
               ],
             }}
-            data={[
-              {
-                type: "scatter",
-                mode: "lines",
-                name: "Requests",
-                x: line.x,
-                y: line.y,
-                text: line.hover,
-                fill: "tozeroy",
-                fillcolor: c.line,
-                line: { shape: line.shape, smoothing: 0.6, width: 0 },
-                hovertemplate: "%{text}<br>%{y:,.0f}/h<extra></extra>",
-              },
-            ]}
-            layout={layout(c, tierBands(stored, lo, hi), [from, to], full)}
+            data={traces(chart, c)}
+            layout={layout(c, tierBands(stored, lo, hi), view, chart, {
+              full,
+              height,
+            })}
+            onLegendClick={onLegend(false)}
+            onLegendDoubleClick={onLegend(true)}
             onRelayout={(e) => {
               const r = relayoutRange(e as Record<string, unknown>)
               if (r !== undefined)
@@ -269,21 +466,39 @@ export default function ZoomTrend({
   )
 }
 
-/** The trend's look: the app's ink on a transparent ground, the tiers behind. */
+/** The trend's look: the app's ink on a transparent ground, the tiers behind, a row per axis. */
 function layout(
   c: Colors,
   bands: ReturnType<typeof tierBands>,
   view: [number, number],
-  full: boolean,
+  chart: Chart,
+  { full, height }: { full: boolean; height: number },
 ): Partial<Plotly.Layout> {
   const tiers = tierShapes(c, bands, view)
+  const rows = rowAxes(chart, c)
+  const n = chart.rows.length
+  const legend = chart.legend !== null
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
     font: { color: c.ink, size: 11, family: "inherit" },
-    margin: { l: 48, r: 12, t: 30, b: 28 },
-    height: full ? undefined : 340,
-    showlegend: false,
+    margin: {
+      l: n > 1 ? 44 + rows.nameWidth : 48,
+      r: 12,
+      t: legend ? 56 : 30,
+      b: 28,
+    },
+    height: full ? undefined : height,
+    showlegend: legend,
+    // At the figure's top, above the range buttons.
+    legend: {
+      orientation: "h",
+      x: 0,
+      y: 1,
+      yref: "container",
+      yanchor: "top",
+      font: { size: 11 },
+    },
     hovermode: "x unified",
     hoverlabel: {
       bgcolor: c.surface,
@@ -291,16 +506,18 @@ function layout(
       font: { color: c.ink, size: 11 },
     },
     shapes: tiers.shapes,
-    annotations: tiers.annotations,
+    annotations: [...tiers.annotations, ...rows.names],
     xaxis: {
       type: "date",
       range: [toPlotly(view[0]), toPlotly(view[1])],
       gridcolor: c.grid,
       linecolor: c.grid,
       zeroline: false,
+      // Dates under the bottom row, not hanging off the top one into the second.
+      anchor: n > 1 ? (`y${n}` as Plotly.AxisName) : "y",
       rangeslider: {
         visible: true,
-        thickness: 0.09,
+        thickness: n > 1 ? 0.06 : 0.09,
         bgcolor: "rgba(0,0,0,0)",
         bordercolor: c.grid,
         borderwidth: 1,
@@ -317,13 +534,6 @@ function layout(
         buttons: [...RANGE_BUTTONS],
       },
     },
-    yaxis: {
-      gridcolor: c.grid,
-      linecolor: c.grid,
-      zeroline: false,
-      tickformat: "~s",
-      rangemode: "tozero",
-      title: { text: "per hour", font: { size: 10, color: c.axis } },
-    },
+    ...rows.axes,
   }
 }

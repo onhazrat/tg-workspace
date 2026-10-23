@@ -13,6 +13,7 @@ import {
   pct,
   type Tally,
 } from "@/lib/requests/breakdown"
+import { STEP } from "@/lib/requests/zoom"
 
 /** A kind this build does not know takes Other's colour. */
 export const kindColor = (id: string) =>
@@ -72,9 +73,12 @@ export function OutcomeBar({ t, max }: { t: Tally; max: number }) {
 export function OutcomeChips({
   hidden,
   onToggle,
+  shades = false,
 }: {
   hidden: ReadonlySet<Outcome>
   onToggle: (outcome: Outcome) => void
+  /** Each outcome's shade beside it, in the ink: the trend's key when kinds are shaded (RQS-08). */
+  shades?: boolean
 }) {
   return (
     <span className="flex flex-wrap gap-1">
@@ -89,12 +93,27 @@ export function OutcomeChips({
             onClick={() => onToggle(o.id)}
             className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] disabled:cursor-not-allowed ${off ? "border-app-ink/15 text-app-ink/40 line-through" : "border-app-ink/40 text-app-ink/80"}`}
           >
+            {shades && <Shade outcome={o.id} />}
             <OutcomeIcon outcome={o.id} />
             {o.label}
           </button>
         )
       })}
     </span>
+  )
+}
+
+/** An outcome's step of the ink toward the card, as the trend shades each kind. */
+function Shade({ outcome }: { outcome: Outcome }) {
+  return (
+    <span
+      aria-hidden
+      data-testid={`requests-shade-${outcome}`}
+      className="inline-block size-2.5 rounded-sm border border-app-ink/20"
+      style={{
+        background: `color-mix(in srgb, var(--ink) ${STEP[outcome] * 100}%, var(--card-bg))`,
+      }}
+    />
   )
 }
 

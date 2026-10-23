@@ -17,6 +17,7 @@ import {
   type ChargedFilter,
   channelRows,
   chargedCounts,
+  type FilterUpdate,
   fmt,
   kindRows,
   type RequestsFilter,
@@ -64,7 +65,7 @@ export function RequestsView({
   onOpenRow,
 }: {
   filter: RequestsFilter
-  onFilter: (patch: Partial<RequestsFilter>) => void
+  onFilter: (update: FilterUpdate) => void
   /** The range the Breakdown was asked for, epoch ms, cut to the minute. */
   range: { start: number; end: number }
   /**
@@ -212,6 +213,7 @@ export function RequestsView({
                     range={range}
                     hiddenKinds={hiddenKinds}
                     hiddenOutcomes={hiddenOutcomes}
+                    onHidden={onFilter}
                     onRange={(start, end) =>
                       onFilter({ bound: { mode: "fixed", start, end } })
                     }

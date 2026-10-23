@@ -15,6 +15,7 @@ import type { RequestBreakdownResponse } from "@/client"
 import {
   initialRequestsFilter,
   type RequestsFilter,
+  updated,
 } from "@/lib/requests/breakdown"
 import { RequestsView } from "./RequestsView"
 
@@ -63,8 +64,8 @@ function Harness(
   return (
     <RequestsView
       filter={filter}
-      onFilter={(patch) => {
-        const next = { ...filter, ...patch }
+      onFilter={(update) => {
+        const next = updated(filter, update)
         props.seen?.push(next)
         setFilter(next)
       }}

@@ -41,6 +41,22 @@ export interface RequestsFilter {
   channelFilter: ChannelFilter
 }
 
+/**
+ * A change to the filter: the fields to set, or a function of the filter as
+ * it is by then, for a change that builds on one just made (RQS-08).
+ */
+export type FilterUpdate =
+  | Partial<RequestsFilter>
+  | ((f: RequestsFilter) => Partial<RequestsFilter>)
+
+export const updated = (
+  f: RequestsFilter,
+  u: FilterUpdate,
+): RequestsFilter => ({
+  ...f,
+  ...(typeof u === "function" ? u(f) : u),
+})
+
 export const initialRequestsFilter = (): RequestsFilter => ({
   bound: { mode: "live", start: -30 * DAY_MS },
   charged: "all",

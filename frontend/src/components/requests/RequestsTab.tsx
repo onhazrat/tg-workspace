@@ -20,6 +20,7 @@ import {
   leftOutQuery,
   type RequestsFilter,
   requestsRange,
+  updated,
 } from "@/lib/requests/breakdown"
 import { offeredTab } from "@/lib/workspace-tabs"
 import { RequestsSheet } from "./RequestsSheet"
@@ -134,7 +135,7 @@ function OperatorRequests() {
     <>
       <RequestsView
         filter={filter}
-        onFilter={(patch) => setFilter((f) => ({ ...f, ...patch }))}
+        onFilter={(update) => setFilter((f) => updated(f, update))}
         range={range}
         unfiltered={all.data}
         breakdown={shown.data}
