@@ -1769,6 +1769,14 @@
       "value": 220
     },
     {
+      "comment": "A band's name shows when it spans more than this share of the view.",
+      "expression": "0.08",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 107,
+      "name": "LABELLED",
+      "value": 0.08
+    },
+    {
       "comment": "How often subscribers are notified.",
       "expression": "10_000",
       "file": "frontend/src/lib/shared-ticker.ts",

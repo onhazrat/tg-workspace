@@ -12,6 +12,7 @@ import type { RequestTrendResponse } from "@/client"
 import { MINUTE_MS } from "@/lib/analysis-window"
 import type { Outcome } from "@/lib/requests/breakdown"
 import {
+  bandLabels,
   fromPlotly,
   rebucket,
   storedBuckets,
@@ -94,14 +95,17 @@ const RANGE_BUTTONS = [
   { step: "all", label: "All" },
 ] as const
 
-/** The tiers as bands behind the trend, each named at its top when wide enough. */
-function tierShapes(c: Colors, bands: ReturnType<typeof tierBands>) {
+/** The tiers as bands behind the trend, each named at its top when wide in the view. */
+function tierShapes(
+  c: Colors,
+  bands: ReturnType<typeof tierBands>,
+  [from, to]: [number, number],
+) {
   const look: Record<string, { fill: string; opacity: number }> = {
     "daily totals": { fill: "rgba(0,0,0,0)", opacity: 1 },
     "hourly totals": { fill: c.grid, opacity: 0.35 },
     "each Request": { fill: c.band, opacity: 0.16 },
   }
-  const width = (bands.at(-1)?.x1 ?? 0) - (bands[0]?.x0 ?? 0)
   return {
     shapes: bands.map((b) => ({
       type: "rect" as const,
@@ -116,19 +120,17 @@ function tierShapes(c: Colors, bands: ReturnType<typeof tierBands>) {
       line: { width: 0 },
       layer: "below" as const,
     })),
-    annotations: bands
-      .filter((b) => (b.x1 - b.x0) / width > 0.08)
-      .map((b) => ({
-        xref: "x" as const,
-        yref: "paper" as const,
-        x: toPlotly(b.x0),
-        y: 1,
-        xanchor: "left" as const,
-        yanchor: "top" as const,
-        text: b.label,
-        showarrow: false,
-        font: { size: 9, color: c.axis },
-      })),
+    annotations: bandLabels(bands, from, to).map((b) => ({
+      xref: "x" as const,
+      yref: "paper" as const,
+      x: toPlotly(b.x),
+      y: 1,
+      xanchor: "left" as const,
+      yanchor: "top" as const,
+      text: b.text,
+      showarrow: false,
+      font: { size: 9, color: c.axis },
+    })),
   }
 }
 
@@ -274,7 +276,7 @@ function layout(
   view: [number, number],
   full: boolean,
 ): Partial<Plotly.Layout> {
-  const tiers = tierShapes(c, bands)
+  const tiers = tierShapes(c, bands, view)
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
@@ -303,9 +305,10 @@ function layout(
         bordercolor: c.grid,
         borderwidth: 1,
       },
+      // Left, clear of Plotly's mode bar on the right.
       rangeselector: {
-        x: 1,
-        xanchor: "right",
+        x: 0,
+        xanchor: "left",
         y: 1.03,
         yanchor: "bottom",
         bgcolor: c.grid,

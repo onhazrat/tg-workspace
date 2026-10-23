@@ -449,6 +449,132 @@ test("a day past the hourly totals has only its daily total", async ({
   )
 })
 
+const zoomTrend = (page: Page) => page.getByTestId("requests-zoom-trend")
+
+/** Where `share` of the way across the trend's plot is, halfway up, on screen. */
+async function onPlot(page: Page, share: number) {
+  const plot = zoomTrend(page).locator(".nsewdrag").first()
+  await plot.scrollIntoViewIfNeeded()
+  const box = await plot.boundingBox()
+  if (!box) throw new Error("the trend has no plot")
+  return { x: box.x + box.width * share, y: box.y + box.height / 2 }
+}
+
+/** Plotly's unified hover, `share` of the way across: the nearest bucket's. */
+async function hoverTrend(page: Page, share: number) {
+  const { x, y } = await onPlot(page, share)
+  await page.mouse.move(x, y, { steps: 5 })
+  return zoomTrend(page).locator(".hoverlayer")
+}
+
+/** A drag across the plot from one share of it to another: Plotly's zoom box. */
+async function dragTrend(page: Page, from: number, to: number) {
+  const start = await onPlot(page, from)
+  const end = await onPlot(page, to)
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(end.x, end.y, { steps: 10 })
+  await page.mouse.up()
+}
+
+/** The range the last Trend read asked for, epoch ms. */
+const asked = (trend: URL[]) => {
+  const url = trend.at(-1) as URL
+  return ["start", "end"].map((k) =>
+    Date.parse(String(url.searchParams.get(k))),
+  )
+}
+const utc = (ms: number) =>
+  new Date(ms).toISOString().slice(0, 16).replace("T", " ")
+
+test.describe("the zoomable trend", () => {
+  // Far from UTC, so a time read in the browser's zone would show.
+  test.use({ timezoneId: "Asia/Tehran" })
+
+  test("names its tiers, keeps its zoom in full screen, and the visible range becomes the tab's", async ({
+    page,
+  }) => {
+    await mockBreakdown(page)
+    const trend = await mockTrend(page)
+    await page.goto("/?tab=requests")
+    const band = (name: string) => zoomTrend(page).getByText(name)
+    // Over the last 30 days the daily totals fill the view; the finer tiers
+    // are too narrow to name.
+    await expect(band("daily totals")).toBeVisible()
+    await expect(band("hourly totals")).toHaveCount(0)
+    await expect(page.getByTestId("requests-use-visible")).toHaveCount(0)
+
+    // The range buttons count back from the range's end, now.
+    await zoomTrend(page).getByText("7d", { exact: true }).click()
+    await expect(band("hourly totals")).toBeVisible()
+    await zoomTrend(page).getByText("6h", { exact: true }).click()
+    await expect(band("each Request")).toBeVisible()
+    await expect(band("daily totals")).toHaveCount(0)
+
+    // Full screen keeps the zoom, and Escape leaves it.
+    await page.getByRole("button", { name: "Trend full screen" }).click()
+    const viewport = page.viewportSize()?.width ?? 0
+    expect((await zoomTrend(page).boundingBox())?.width).toBeGreaterThan(
+      viewport - 40,
+    )
+    await expect(band("each Request")).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(
+      page.getByRole("button", { name: "Trend full screen" }),
+    ).toBeVisible()
+    await expect(band("each Request")).toBeVisible()
+
+    // The six hours in view become the tab's range, read back in UTC.
+    const before = asked(trend)
+    await page.getByTestId("requests-use-visible").click()
+    await expect
+      .poll(() => asked(trend))
+      .toEqual([before[1] - 6 * 3_600_000, before[1]])
+    await expect(page.getByTestId("requests-range")).toHaveText(
+      `from ${utc(before[1] - 6 * 3_600_000)} to ${utc(before[1])} (UTC)`,
+    )
+    await expect(page.getByTestId("requests-use-visible")).toHaveCount(0)
+  })
+
+  test("its buckets narrow as it zooms, and hover gives each one's count", async ({
+    page,
+  }) => {
+    await mockBreakdown(page)
+    const trend = await mockTrend(page)
+    await page.goto("/?tab=requests")
+    // Yesterday, from the daily bars: a day of 15-minute buckets.
+    await clickDay(page, 2)
+    const day = daysAgo(1).slice(0, 10)
+    await expect(page.getByTestId("requests-range")).toHaveText(
+      `on ${day} (UTC)`,
+    )
+    const at = (hhmm: string) =>
+      (Date.parse(`${day}T${hhmm}:00Z`) - Date.parse(`${day}T00:00:00Z`)) /
+      86_400_000
+    await expect(await hoverTrend(page, at("12:07"))).toContainText(
+      `from ${day} 12:00 to ${day} 12:15 UTC15-minute total · 11 Requests`,
+    )
+
+    // Two hours, dragged out: each Request's 5-minute bucket.
+    await dragTrend(page, at("11:00"), at("13:00"))
+    await expect(page.getByTestId("requests-use-visible")).toBeVisible()
+    await expect(await hoverTrend(page, 0.5 + 1 / 120)).toContainText(
+      `from ${day} 12:00 to ${day} 12:05 UTC5-minute total, from each Request · 11 Requests`,
+    )
+    await page.getByTestId("requests-use-visible").click()
+    await expect
+      .poll(() => {
+        const [start, end] = asked(trend)
+        return Math.abs(end - start - 2 * 3_600_000) < 10 * 60_000
+      })
+      .toBe(true)
+    const [start, end] = asked(trend)
+    await expect(page.getByTestId("requests-range")).toHaveText(
+      `from ${utc(start)} to ${utc(end)} (UTC)`,
+    )
+  })
+})
+
 test("the Channel table searches, sorts and pages", async ({ page }) => {
   await mockBreakdown(page)
   await page.goto("/?tab=requests")

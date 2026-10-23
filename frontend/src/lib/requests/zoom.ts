@@ -103,6 +103,21 @@ export function tierBands(points: readonly Point[], lo: number, hi: number) {
   }))
 }
 
+/** A band's name shows when it spans more than this share of the view. */
+const LABELLED = 0.08
+
+/** The names of the bands wide in the view `from` to `to`, each where the view first shows it. */
+export function bandLabels(
+  bands: ReturnType<typeof tierBands>,
+  from: number,
+  to: number,
+) {
+  return bands
+    .map((b) => ({ x: Math.max(b.x0, from), end: Math.min(b.x1, to), b }))
+    .filter(({ x, end }) => (end - x) / (to - from) > LABELLED)
+    .map(({ x, b }) => ({ x, text: b.label }))
+}
+
 /**
  * Plotly draws a timestamp in the browser's time zone but a date string with
  * no zone as written. So every time goes to Plotly as a zoneless UTC string,

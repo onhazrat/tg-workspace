@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { RequestTrendBucket } from "@/client"
 import {
+  bandLabels,
   fromPlotly,
   rebucket,
   storedBuckets,
@@ -179,6 +180,46 @@ describe("tierBands", () => {
       { x0: lo, x1: hi, label: "each Request" },
     ])
     expect(tierBands([], lo, hi)).toEqual([])
+  })
+})
+
+describe("bandLabels", () => {
+  const bands = [
+    {
+      x0: at("2026-09-01T00:00"),
+      x1: at("2026-10-01T00:00"),
+      label: "daily totals",
+    },
+    {
+      x0: at("2026-10-01T00:00"),
+      x1: at("2026-10-13T00:00"),
+      label: "hourly totals",
+    },
+    {
+      x0: at("2026-10-13T00:00"),
+      x1: at("2026-10-20T00:00"),
+      label: "each Request",
+    },
+  ]
+
+  test("names each band wide in the view, where the view first shows it", () => {
+    expect(
+      bandLabels(bands, at("2026-09-01T00:00"), at("2026-10-20T00:00")),
+    ).toEqual([
+      { x: at("2026-09-01T00:00"), text: "daily totals" },
+      { x: at("2026-10-01T00:00"), text: "hourly totals" },
+      { x: at("2026-10-13T00:00"), text: "each Request" },
+    ])
+    // A week from Oct 12: the daily band is out of view, the hourly one a seventh.
+    expect(
+      bandLabels(bands, at("2026-10-12T12:00"), at("2026-10-19T12:00")),
+    ).toEqual([{ x: at("2026-10-13T00:00"), text: "each Request" }])
+    expect(
+      bandLabels(bands, at("2026-10-12T00:00"), at("2026-10-14T00:00")),
+    ).toEqual([
+      { x: at("2026-10-12T00:00"), text: "hourly totals" },
+      { x: at("2026-10-13T00:00"), text: "each Request" },
+    ])
   })
 })
 
