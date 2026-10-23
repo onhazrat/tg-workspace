@@ -64,7 +64,7 @@ from app.services.ai_keys import (
     resolve_ai_key,
 )
 from app.services.logs import upsert_llm_log
-from app.services.prompt_assembly import PromptScope, assemble_posts_text
+from app.services.prompt_assembly import PromptScope, assemble_posts
 from app.services.summaries import frozen_scope_of, own_summary, store_prompt
 from app.services.summary_attempts import (
     ATTEMPT_NOT_RUNNING_DETAIL,
@@ -160,12 +160,15 @@ def _session_as(owner: acting_owner.ActingOwner | None) -> Iterator[Session]:
         yield session
 
 
-def _prompt_from_scope(session: Session, summary: Summary) -> str:
+def _prompt_from_scope(
+    session: Session, summary: Summary
+) -> tuple[str, list[tuple[str, int]]]:
     """The prompt a Summary's frozen Scope reads, as Generate would build it.
 
     For a Summary that never got as far as storing one: a passing sync or
     network failure can then be retried as it is. A 413 from the assembly is
-    the token limit, and the caller records it as such.
+    the token limit, and the caller records it as such. Returns the refs of
+    the Posts in it too, for a regeneration's Scope to record.
     """
     frozen = frozen_scope_of(summary)
     if frozen is None:
@@ -180,11 +183,11 @@ def _prompt_from_scope(session: Session, summary: Summary) -> str:
         sort=frozen.sort,
         group_by_channel=frozen.group_by_channel,
     )
-    return format_summary_prompt(
-        channels=channels,
-        language=summary.language,
-        posts_text=assemble_posts_text(session, scope, user_id=summary.user_id),
+    posts_text, posts = assemble_posts(session, scope, user_id=summary.user_id)
+    prompt = format_summary_prompt(
+        channels=channels, language=summary.language, posts_text=posts_text
     )
+    return prompt, [(p["channelName"], p["id"]) for p in posts]
 
 
 def start_attempt(
@@ -236,7 +239,7 @@ def start_attempt(
     payload = session.get(SummaryPayload, summary.id)
     if payload is None or payload.prompt_text is None:
         try:
-            store_prompt(session, summary, _prompt_from_scope(session, summary))
+            store_prompt(session, summary, *_prompt_from_scope(session, summary))
             # Kept even if the Key below is refused: "Use another AI" needs it.
             session.commit()
         except HTTPException as exc:

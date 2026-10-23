@@ -1,0 +1,109 @@
+"""A regenerated Summary records every Post it covered, not only its Citations.
+
+A derived Scope (`derived_scope`) names channels and a window and no Posts, so
+the coverage wall of a regenerated Summary listed only what its text cited,
+while a generated one listed everything. Both regeneration doors build the
+prompt at a different moment, so each records the refs where it builds it:
+the scheduler in `_regenerate_one`, the browser's `derivedFrom` when its
+Attempt starts.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+import uuid
+from collections.abc import Iterator
+
+import pytest
+from sqlmodel import Session, col, delete
+
+from app.core.db import engine
+from app.jobs import auto_summary, summary_generation
+from app.models import User
+from app.models_tg import Post, Summary
+from app.schemas.summaries import SummaryDerivation
+from app.services.summaries import get_summary, submit_summary
+from tests.utils.scope import stored_scope
+from tests.utils.tenancy import follow_channels
+from tests.utils.user import create_random_user
+
+
+@pytest.fixture
+def session() -> Iterator[Session]:
+    with Session(engine) as s:
+        yield s
+
+
+@pytest.fixture
+def user(session: Session) -> Iterator[User]:
+    created = create_random_user(session)
+    yield created
+    session.exec(delete(User).where(col(User.id) == created.id))
+    session.commit()
+
+
+def _predecessor(session: Session, owner: uuid.UUID) -> tuple[Summary, str]:
+    """A Summary whose successor window holds two Posts, one per hour ago."""
+    now = int(time.time() * 1000)
+    channel = f"cov-{uuid.uuid4().hex[:8]}"
+    for post_id, ago in ((1, 3_000_000), (2, 1_200_000)):
+        session.add(
+            Post(channel_name=channel, post_id=post_id, text="p", timestamp=now - ago)
+        )
+    follow_channels(session, channel, user_id=owner)
+    row = Summary(
+        id=f"sum-{uuid.uuid4().hex[:8]}",
+        user_id=owner,
+        text="body",
+        scope=stored_scope(
+            channels=[channel], start=now - 7_200_000, end=now - 3_600_000
+        ),
+        language="English",
+        post_count=0,
+        timestamp=now,
+        extra={"autoRegenerate": True},
+    )
+    session.add(row)
+    session.commit()
+    return row, channel
+
+
+def _covered(owner: uuid.UUID, summary_id: str) -> tuple[list[tuple[str, int]], int]:
+    with Session(engine) as check:
+        scope = get_summary(check, summary_id, user_id=owner)["scope"]
+    refs = sorted((r["channelName"], r["postId"]) for r in scope["posts"] or [])
+    return refs, scope["scopedPostCount"]
+
+
+def test_the_scheduler_records_the_posts_it_regenerated_from(
+    session: Session, user: User
+) -> None:
+    predecessor, channel = _predecessor(session, user.id)
+
+    new_id = asyncio.run(
+        auto_summary._regenerate_one(session, predecessor, owner_id=user.id)
+    )
+
+    assert new_id is not None
+    assert _covered(user.id, new_id) == ([(channel, 1), (channel, 2)], 2)
+
+
+def test_a_browser_regeneration_records_them_when_its_attempt_starts(
+    session: Session, user: User
+) -> None:
+    predecessor, channel = _predecessor(session, user.id)
+    new_id = f"sum-{uuid.uuid4().hex[:8]}"
+    submit_summary(
+        session,
+        user_id=user.id,
+        summary_id=new_id,
+        derived_from=SummaryDerivation(summaryId=predecessor.id, mode="successor"),
+    )
+
+    # No Key, so the Attempt is refused, after the prompt and its refs are kept.
+    summary_generation.start_attempt(
+        session, new_id, user_id=user.id, model=None, key_id=None, temperature=None
+    )
+
+    assert _covered(user.id, new_id) == ([(channel, 1), (channel, 2)], 2)
