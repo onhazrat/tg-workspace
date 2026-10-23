@@ -3,6 +3,7 @@ import type { RequestTrendBucket } from "@/client"
 import {
   bandLabels,
   fromPlotly,
+  grainOf,
   rebucket,
   storedBuckets,
   tierBands,
@@ -221,6 +222,20 @@ describe("bandLabels", () => {
       { x: at("2026-10-13T00:00"), text: "each Request" },
     ])
   })
+})
+
+test("grainOf names what a bucket adds up", () => {
+  expect(
+    [5, 15, 30, 60, 120, 720, 1440].map((m) => grainOf(m * 60_000)),
+  ).toEqual([
+    "5-minute total, from each Request",
+    "15-minute total",
+    "30-minute total",
+    "hourly total",
+    "2-hour total",
+    "12-hour total",
+    "daily total",
+  ])
 })
 
 describe("Plotly's times", () => {
