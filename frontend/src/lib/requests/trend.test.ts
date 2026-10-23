@@ -66,8 +66,25 @@ describe("dailyBars", () => {
       ...bucket("2026-10-01T00:00:00", "2026-10-02T00:00:00", "auto", true, 0),
       ledgerOnly: 12,
     }
-    const { bars } = dailyBars([ledger], range, none, new Set(["useful"]))
-    expect(bars.map((b) => b.charged)).toEqual([12, 0, 0])
+    const recorded = bucket(
+      "2026-10-01T00:00:00",
+      "2026-10-02T00:00:00",
+      "auto",
+      true,
+      3,
+    )
+    const { bars } = dailyBars(
+      [ledger, recorded],
+      range,
+      none,
+      new Set(["idle"]),
+    )
+    // Its own hatched layer, beside the recorded Charged ones.
+    expect(bars.map((b) => [b.ledger, b.charged])).toEqual([
+      [12, 3],
+      [0, 0],
+      [0, 0],
+    ])
   })
 
   test("a day with no Requests is still drawn, as nothing", () => {

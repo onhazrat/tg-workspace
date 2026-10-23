@@ -6,14 +6,13 @@
  * range slider and range buttons.
  */
 import { Maximize2, Minimize2 } from "lucide-react"
-import Plotly from "plotly.js-dist-min"
+import type Plotly from "plotly.js-dist-min"
 import { useEffect, useRef, useState } from "react"
-import createPlotlyComponentModule from "react-plotly.js/factory"
 import type { RequestTrendResponse } from "@/client"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { MINUTE_MS } from "@/lib/analysis-window"
-import { KINDS, OUTCOMES, type Outcome } from "@/lib/requests/breakdown"
+import { KINDS, type Outcome } from "@/lib/requests/breakdown"
 import {
   bandLabels,
   DOUBLE_CLICK_MS,
@@ -34,51 +33,7 @@ import {
 } from "@/lib/requests/zoom"
 import { DAY_MS } from "@/lib/scope/window"
 import { OutcomeChips } from "./parts"
-
-// The factory is CommonJS; Vite hands it over either bare or as `{ default }`.
-const createPlotlyComponent =
-  (
-    createPlotlyComponentModule as unknown as {
-      default?: typeof createPlotlyComponentModule
-    }
-  ).default ?? createPlotlyComponentModule
-const Plot = createPlotlyComponent(Plotly)
-
-/** Plotly styles its own SVG and cannot read CSS variables, so it gets them resolved. */
-const COLOR_VARS: Record<string, string> = {
-  line: "--layer-charged",
-  ink: "--ink",
-  axis: "--viz-axis",
-  grid: "--viz-grid",
-  surface: "--card-bg",
-  band: "--account-4",
-  ...Object.fromEntries(KINDS.map((k) => [k.id, `--kind-${k.id}`])),
-  ...Object.fromEntries(OUTCOMES.map((o) => [o.id, `--outcome-${o.id}`])),
-  ledger: "--viz-axis",
-}
-type Colors = Record<string, string>
-
-function readColors(): Colors {
-  const style = getComputedStyle(document.documentElement)
-  return Object.fromEntries(
-    Object.entries(COLOR_VARS).map(([k, v]) => [
-      k,
-      style.getPropertyValue(v).trim(),
-    ]),
-  )
-}
-
-/** The theme's colours, read again when the theme's class on `<html>` changes. */
-function useColors() {
-  const [colors, setColors] = useState<Colors | null>(null)
-  useEffect(() => {
-    setColors(readColors())
-    const watch = new MutationObserver(() => setColors(readColors()))
-    watch.observe(document.documentElement, { attributeFilter: ["class"] })
-    return () => watch.disconnect()
-  }, [])
-  return colors
-}
+import { type Colors, Plot, useColors } from "./plotly"
 
 /**
  * Full screen without a remount: the same frame goes fixed over the page, so

@@ -1,25 +1,98 @@
-import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts"
+/**
+ * The daily bar trend (RQS-06), in Plotly. `RequestsView` loads this module
+ * lazily, as it loads the zoomable trend, so Plotly downloads only when the
+ * tab draws.
+ */
+import type Plotly from "plotly.js-dist-min"
 import type { RequestTrendResponse } from "@/client"
 import type { RequestsFilter } from "@/lib/requests/breakdown"
-import { dailyBars } from "@/lib/requests/trend"
+import { type Bar, dailyBars } from "@/lib/requests/trend"
 import { Swatch } from "./parts"
+import { type Colors, Plot, useColors } from "./plotly"
 
 const LAYERS = [
-  { key: "charged", label: "Charged", color: "var(--layer-charged)" },
-  { key: "uncharged", label: "Uncharged", color: "var(--layer-uncharged)" },
+  { key: "charged", label: "Charged", color: "line" },
+  { key: "uncharged", label: "Uncharged", color: "uncharged" },
+  { key: "ledger", label: "Before recording", color: "ledger" },
 ] as const
 
-const kTick = (v: number) =>
-  v >= 1000 ? `${+(v / 1000).toFixed(1)}k` : String(v)
+type Layer = (typeof LAYERS)[number]
 
-const AXIS = { fontSize: 10, fill: "var(--viz-axis)" }
+/** The swatch beside a layer's name; the ledger's days hatched, as on the bars. */
+const SWATCH: Record<Layer["key"], string> = {
+  charged: "var(--layer-charged)",
+  uncharged: "var(--layer-uncharged)",
+  ledger:
+    "repeating-linear-gradient(45deg, var(--viz-axis) 0 2px, transparent 2px 4px)",
+}
+
+/** A layer's bars: only the days with some of it, so no empty sliver is drawn. */
+function trace(bars: Bar[], l: Layer, c: Colors): Partial<Plotly.BarData> {
+  const some = bars.filter((b) => b[l.key] > 0)
+  return {
+    type: "bar",
+    name: l.label,
+    x: some.map((b) => b.x),
+    y: some.map((b) => b[l.key]),
+    marker: {
+      color: c[l.color],
+      // The ledger's days before recording have no outcome: hatched (RQS-16).
+      ...(l.key === "ledger" && {
+        pattern: { shape: "/", fgcolor: c.surface, size: 6 },
+      }),
+    },
+    hovertemplate: `%{x}: %{y:,.0f}<extra>${l.label}</extra>`,
+  }
+}
+
+/** About this many labels on the x axis, whatever the range. */
+const TICKS = 8
 
 /**
- * The daily bar trend (RQS-06): the range's Requests per UTC day, Charged
- * and Uncharged stacked, or per hour when the range is one day. Clicking a
- * day narrows the whole tab to it. Hidden kinds and outcomes add nothing.
+ * The bars' look: the app's ink on a transparent ground, stacked, no legend.
+ * Every day on the axis, in order, a day with nothing included; a day's
+ * label drops its year.
  */
-export function DailyBars({
+function layout(c: Colors, bars: Bar[], day: boolean): Partial<Plotly.Layout> {
+  const axis = { gridcolor: c.grid, linecolor: c.grid, zeroline: false }
+  const labels = bars.map((b) => b.x)
+  const every = Math.ceil(labels.length / TICKS)
+  const ticks = labels.filter((_, i) => i % every === 0)
+  return {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: c.axis, size: 10, family: "inherit" },
+    margin: { l: 44, r: 12, t: 4, b: 24 },
+    height: 120,
+    barmode: "stack",
+    bargap: 0.1,
+    showlegend: false,
+    hovermode: "x",
+    dragmode: false,
+    xaxis: {
+      ...axis,
+      type: "category",
+      categoryorder: "array",
+      categoryarray: labels,
+      range: [-0.5, labels.length - 0.5],
+      tickvals: ticks,
+      ticktext: ticks.map((x) => (day ? x : x.slice(5))),
+      showgrid: false,
+      fixedrange: true,
+    },
+    yaxis: { ...axis, tickformat: "~s", fixedrange: true },
+    hoverlabel: { bgcolor: c.surface, bordercolor: c.grid },
+    ...(day ? {} : { clickmode: "event" }),
+  }
+}
+
+/**
+ * The range's Requests per UTC day, Charged and Uncharged stacked, and the
+ * ledger's days before recording hatched on top; per hour when the range is
+ * one day. Clicking a day narrows the whole tab to it. Hidden kinds and
+ * outcomes add nothing.
+ */
+export default function DailyBars({
   trend,
   range,
   filter,
@@ -31,6 +104,7 @@ export function DailyBars({
   /** A day was clicked: its midnight, epoch ms. */
   onDay: (start: number) => void
 }) {
+  const c = useColors()
   const { grain, bars, dailyOnly } = dailyBars(
     trend.buckets,
     range,
@@ -39,8 +113,10 @@ export function DailyBars({
   )
   const day =
     grain === "hour" && new Date(range.start).toISOString().slice(0, 10)
-  const layers = LAYERS.filter(
-    (l) => filter.charged === "all" || filter.charged === l.key,
+  const layers = LAYERS.filter((l) =>
+    l.key === "ledger"
+      ? bars.some((b) => b.ledger > 0)
+      : filter.charged === "all" || filter.charged === l.key,
   )
   return (
     <section
@@ -56,7 +132,7 @@ export function DailyBars({
         <span className="ml-auto" />
         {layers.map((l) => (
           <span key={l.key} className="flex items-center gap-1.5 px-1">
-            <Swatch color={l.color} />
+            <Swatch color={SWATCH[l.key]} />
             {l.label}
           </span>
         ))}
@@ -70,56 +146,23 @@ export function DailyBars({
           daily total only.
         </p>
       ) : (
-        <BarChart
-          responsive
-          style={{
-            width: "100%",
-            height: 120,
-            cursor: day ? "auto" : "pointer",
-          }}
-          data={bars}
-          margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-          barCategoryGap={2}
-          // On the chart, not each Bar: the day under the cursor, wherever
-          // in its column the click lands.
-          onClick={(state) => {
-            const bar = bars.find((b) => b.x === state.activeLabel)
-            if (!day && bar) onDay(bar.at)
-          }}
-        >
-          <CartesianGrid vertical={false} stroke="var(--viz-grid)" />
-          <XAxis
-            dataKey="x"
-            tick={AXIS}
-            tickFormatter={(x: string) => (day ? x : x.slice(5))}
-            stroke="var(--viz-grid)"
-          />
-          <YAxis
-            width={44}
-            tick={AXIS}
-            tickFormatter={kTick}
-            stroke="var(--viz-grid)"
-          />
-          <Tooltip
-            cursor={{ fill: "var(--viz-grid)", opacity: 0.5 }}
-            contentStyle={{
-              background: "var(--card-bg)",
-              borderColor: "var(--line-color)",
-              fontSize: 11,
+        c && (
+          <Plot
+            style={{
+              width: "100%",
+              height: 120,
+              cursor: day ? "auto" : "pointer",
+            }}
+            useResizeHandler
+            config={{ displayModeBar: false, responsive: true }}
+            data={layers.map((l) => trace(bars, l, c))}
+            layout={layout(c, bars, !!day)}
+            onClick={(e) => {
+              const bar = bars.find((b) => b.x === e.points[0]?.x)
+              if (!day && bar) onDay(bar.at)
             }}
           />
-          {layers.map((l, i) => (
-            <Bar
-              key={l.key}
-              dataKey={l.key}
-              name={l.label}
-              stackId="requests"
-              fill={l.color}
-              radius={i === layers.length - 1 ? [3, 3, 0, 0] : 0}
-              isAnimationActive={false}
-            />
-          ))}
-        </BarChart>
+        )
       )}
     </section>
   )

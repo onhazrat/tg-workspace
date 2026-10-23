@@ -13,8 +13,11 @@ export interface Bar {
   at: number
   /** Its label: the UTC day, or the UTC hour on a one-day range. */
   x: string
+  /** Recorded Requests, by whether a Budget paid. */
   charged: number
   uncharged: number
+  /** The ledger's Requests on a day before recording: no outcome (RQS-16). */
+  ledger: number
 }
 
 /** The server's times are UTC without a zone. */
@@ -28,10 +31,11 @@ const label = (ms: number, step: number) =>
     : new Date(ms).toISOString().slice(11, 16)
 
 /**
- * One bar per UTC day of the range, Charged and Uncharged apart, or one per
- * hour when the range is a day or less. `dailyOnly` says such a day is past
- * the hourly totals, so only its daily total is kept and no hours can be
- * drawn. Hidden kinds and outcomes add nothing.
+ * One bar per UTC day of the range, or one per hour when the range is a day
+ * or less, Charged, Uncharged and the ledger's days before recording apart.
+ * `dailyOnly` says such a day is past the hourly totals, so only its daily
+ * total is kept and no hours can be drawn. Hidden kinds and outcomes add
+ * nothing.
  */
 export function dailyBars(
   buckets: readonly RequestTrendBucket[],
@@ -45,7 +49,13 @@ export function dailyBars(
   const first = range.start || Math.min(...shown.map((b) => utcMs(b.start)))
   const bars = new Map<number, Bar>()
   for (let t = floorTo(first, step); t < range.end; t += step)
-    bars.set(t, { at: t, x: label(t, step), charged: 0, uncharged: 0 })
+    bars.set(t, {
+      at: t,
+      x: label(t, step),
+      charged: 0,
+      uncharged: 0,
+      ledger: 0,
+    })
   let dailyOnly = false
   for (const b of shown) {
     const [lo, hi] = [utcMs(b.start), utcMs(b.end)]
@@ -53,11 +63,12 @@ export function dailyBars(
     dailyOnly ||= hourly && hi - lo > HOUR_MS && hi > range.start
     const bar = bars.get(floorTo(lo, step))
     if (!bar) continue
-    // A day before recording has the ledger's total and no outcome to hide.
     const n = (["useful", "idle", "wasted"] as const)
       .filter((o) => !hiddenOutcomes.has(o))
-      .reduce((sum, o) => sum + b[o], b.ledgerOnly)
+      .reduce((sum, o) => sum + b[o], 0)
     bar[b.charged ? "charged" : "uncharged"] += n
+    // A day before recording has the ledger's total and no outcome to hide.
+    bar.ledger += b.ledgerOnly
   }
   return { grain: hourly ? "hour" : "day", bars: [...bars.values()], dailyOnly }
 }

@@ -181,6 +181,25 @@ async function mockBreakdown(page: Page): Promise<URL[]> {
   return seen
 }
 
+/**
+ * Both Plotly charts drawn once. They load lazily, and the first mount waits
+ * on Plotly's 1.4 MB chunk, which a cold dev server (CI's) bundles slower than
+ * an expect's 5 seconds. Only this first wait is long; every later assertion
+ * keeps the default.
+ */
+async function chartsDrawn(page: Page) {
+  for (const chart of ["requests-daily-bars", "requests-zoom-trend"])
+    await expect(
+      page.getByTestId(chart).locator(".main-svg").first(),
+    ).toBeAttached({ timeout: 30_000 })
+}
+
+/** The Requests tab, opened by URL, once its charts have drawn. */
+async function openRequests(page: Page) {
+  await page.goto("/?tab=requests")
+  await chartsDrawn(page)
+}
+
 const total = (page: Page) => page.getByTestId("requests-total")
 const kinds = (page: Page) =>
   page.getByRole("region", { name: "By kind of work" })
@@ -197,6 +216,7 @@ test("the Operator opens Requests from the + menu and reads the range's totals",
   await page.getByTestId("workspace-tab-add").click()
   await page.getByRole("menuitem", { name: "Requests" }).click()
   await expect(page).toHaveURL(/tab=requests/)
+  await chartsDrawn(page)
 
   // 30 Channels' 920 auto Requests and 800 probes.
   await expect(total(page)).toHaveText("1,720 Requests")
@@ -260,7 +280,7 @@ test("the range picker's spread shows when Requests were made, and a drag picks 
 }) => {
   const breakdowns = await mockBreakdown(page)
   const spreads = await mockSpread(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await expect(total(page)).toHaveText("1,720 Requests")
   await openRequested(page)
   // Every day kept, under the tab's filters but not its range.
@@ -294,7 +314,7 @@ test("a zoomed spread scrolls, steps with the arrow keys, and keeps its zoom ful
   page,
 }) => {
   await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await openRequested(page)
   await expect(spreadBars(page)).toHaveCount(40)
   const scrollbar = page.getByRole("scrollbar")
@@ -333,7 +353,7 @@ test("a zoomed spread scrolls, steps with the arrow keys, and keeps its zoom ful
 
 test("Charged narrows every number on the tab", async ({ page }) => {
   const seen = await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await expect(total(page)).toHaveText("1,720 Requests")
   await page.getByTestId("requests-charged-charged").click()
   await expect(total(page)).toHaveText("920 Requests")
@@ -348,7 +368,7 @@ test("Accounts narrow the totals, and two compare side by side", async ({
   page,
 }) => {
   const seen = await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await expect(total(page)).toHaveText("1,720 Requests")
   await page.getByTestId("requests-accounts").click()
   await expect(page.getByTestId("requests-accounts-count-a")).toHaveText("600")
@@ -385,7 +405,7 @@ test("Accounts narrow the totals, and two compare side by side", async ({
 
 test("hidden kinds and outcomes reach both tables", async ({ page }) => {
   await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   const probeRow = channels(page).getByRole("row", { name: /Directory probes/ })
   await expect(probeRow).toHaveCount(1)
 
@@ -409,11 +429,14 @@ test("hidden kinds and outcomes reach both tables", async ({ page }) => {
 })
 
 const dailyBars = (page: Page) =>
-  page.getByTestId("requests-daily-bars").locator(".recharts-bar-rectangle")
-/** The chart reads the day under the pointer, so the pointer goes there first. */
+  page.getByTestId("requests-daily-bars").locator(".barlayer .point")
+/**
+ * Plotly reads the day under the pointer from its drag layer, which lies over
+ * the bars: the pointer goes to the bar first, and the click lands there.
+ */
 async function clickDay(page: Page, n: number) {
-  await dailyBars(page).nth(n).hover()
-  await dailyBars(page).nth(n).click()
+  await dailyBars(page).nth(n).hover({ force: true })
+  await dailyBars(page).nth(n).click({ force: true })
 }
 
 test("the daily bars draw the range's days, and a click narrows the tab to one", async ({
@@ -421,7 +444,7 @@ test("the daily bars draw the range's days, and a click narrows the tab to one",
 }) => {
   await mockBreakdown(page)
   const trend = await mockTrend(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   // A bar a day with Requests: the daily total, two hours, the probes.
   await expect(dailyBars(page)).toHaveCount(3)
   await expect(page.getByTestId("requests-daily-title")).toHaveText(
@@ -448,7 +471,7 @@ test("a day past the hourly totals has only its daily total", async ({
   page,
 }) => {
   await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await clickDay(page, 0)
   await expect(page.getByTestId("requests-daily-only")).toHaveText(
     `Hourly totals are kept for 30 days, so ${daysAgo(3).slice(0, 10)} has its daily total only.`,
@@ -486,7 +509,7 @@ test("days before recording show the ledger's totals, with no Channel or outcome
       },
     }),
   )
-  await page.goto("/?tab=requests")
+  await openRequests(page)
 
   await expect(total(page)).toHaveText("2,620 Requests")
   const note = page.getByTestId("requests-before-recording")
@@ -553,7 +576,7 @@ test.describe("the zoomable trend", () => {
   }) => {
     await mockBreakdown(page)
     const trend = await mockTrend(page)
-    await page.goto("/?tab=requests")
+    await openRequests(page)
     const band = (name: string) => zoomTrend(page).getByText(name)
     // Over the last 30 days the daily totals fill the view; the finer tiers
     // are too narrow to name.
@@ -598,7 +621,7 @@ test.describe("the zoomable trend", () => {
   }) => {
     await mockBreakdown(page)
     const trend = await mockTrend(page)
-    await page.goto("/?tab=requests")
+    await openRequests(page)
     // Yesterday, from the daily bars: a day of 15-minute buckets.
     await clickDay(page, 2)
     const day = daysAgo(1).slice(0, 10)
@@ -655,7 +678,7 @@ test("the trend's switches split it, and its legend is the kind table's Show box
 }) => {
   await mockBreakdown(page)
   await mockTrend(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   const show = (kind: string) =>
     page.getByRole("checkbox", { name: `Show ${kind}` })
 
@@ -726,7 +749,7 @@ test("the trend's switches split it, and its legend is the kind table's Show box
 
 test("the Channel table searches, sorts and pages", async ({ page }) => {
   await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await expect(channelRows(page)).toHaveCount(25)
   await channels(page).getByRole("button", { name: "Show 6 more" }).click()
   await expect(channelRows(page)).toHaveCount(31)
@@ -748,7 +771,7 @@ test("the Channel table narrows by kind, uncharged rows and any measure", async 
   page,
 }) => {
   await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await expect(channelRows(page)).toHaveCount(25)
 
   // A kind's row in By kind of work narrows the table to that work.
@@ -781,7 +804,7 @@ test("New Posts per Request ranks the Channels, the aggregate rows last", async 
   page,
 }) => {
   await mockBreakdown(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   // chan20: 200 new Posts in 25 Requests.
   const yieldOf = (name: string) => row(page, name).locator("td").nth(-2)
   await expect(yieldOf("@chan20")).toHaveText("8.0")
@@ -807,7 +830,7 @@ test("a Channel left out leaves the whole tab, stays listed, and Pick all brings
 }) => {
   const seen = await mockBreakdown(page)
   const trend = await mockTrend(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await expect(total(page)).toHaveText("1,720 Requests")
 
   // chan00 made 50 Requests.
@@ -909,7 +932,7 @@ test("a row click opens its Requests in a sheet, in the tab's range", async ({
 }) => {
   const breakdowns = await mockBreakdown(page)
   const seen = await mockRecords(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await page.getByTestId("requests-charged-charged").click()
   await row(page, "@chan00").getByText("@chan00").click()
 
@@ -948,7 +971,7 @@ test("the sheet reads the hidden kinds and outcomes and the Channels left out", 
 }) => {
   await mockBreakdown(page)
   const seen = await mockRecords(page)
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await page.getByRole("checkbox", { name: "Show Directory probe" }).uncheck()
   await kinds(page).getByRole("button", { name: "Wasted", exact: true }).click()
   await page.getByRole("checkbox", { name: "Pick @chan01" }).uncheck()
@@ -979,7 +1002,7 @@ test("the Settings Usage panel links to the tab", async ({ page }) => {
 test("a phone-sized viewport has no sideways scroll", async ({ page }) => {
   await mockBreakdown(page)
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto("/?tab=requests")
+  await openRequests(page)
   await expect(channelRows(page)).toHaveCount(25)
   // What sticks out past the tab's edge, named so a failure says where.
   const overflow = await page.evaluate(() => {
@@ -992,7 +1015,10 @@ test("a phone-sized viewport has no sideways scroll", async ({ page }) => {
       ...[...tab.querySelectorAll("*")]
         .filter((el) => el.getBoundingClientRect().right > edge + 1)
         .slice(0, 3)
-        .map((el) => `${el.tagName}: ${el.textContent?.slice(0, 40)}`),
+        .map(
+          (el) =>
+            `${el.closest("[data-testid]")?.getAttribute("data-testid")} ${el.tagName}.${el.getAttribute("class")}: ${el.textContent?.slice(0, 40)}`,
+        ),
     ]
   })
   expect(overflow).toEqual([0, 0])

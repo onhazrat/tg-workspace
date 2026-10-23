@@ -222,7 +222,7 @@ The Requests tab:
 - **Tab-wide state** shared by every part: the range, Accounts, Charged/Uncharged, hidden kinds, hidden outcomes, Channels left out.
 - **Account comparison** with two or more Accounts, in a violet ramp that doesn't clash with the kinds.
 - **Stat strip**: Requests, Useful, Idle, Wasted.
-- **Daily bar trend** (Recharts, the prototype's "0 Current").
+- **Daily bar trend** (the prototype's "0 Current"; Plotly since 2026-10-24, decision 10).
 - **Zoomable trend** (Plotly, `plotly.js-dist-min` 3 through `react-plotly.js`'s factory) under it:
   - **Switches**: Separate by kind and Separate by outcome, each with Stacked | Separate. A stacked dimension splits the area in a row; a separate one gets a row per value on its own scale; both separate give a row per kind × outcome.
   - **Buckets follow the zoom**: re-summed to about 220 across the view, from 5 minutes to a day (5, 15 and 30 minutes, 1, 2, 4, 6 and 12 hours, a day). Hover gives each bucket's span, grain and exact count. Buckets of 30 minutes or more are drawn as a gentle spline (smoothing 0.6), finer ones as steps.

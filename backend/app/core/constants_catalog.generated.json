@@ -1297,6 +1297,14 @@
       "value": 2.5
     },
     {
+      "comment": "About this many labels on the x axis, whatever the range.",
+      "expression": "8",
+      "file": "frontend/src/components/requests/DailyBars.tsx",
+      "line": 49,
+      "name": "TICKS",
+      "value": 8
+    },
+    {
       "comment": "",
       "expression": "1500",
       "file": "frontend/src/components/settings-page/SettingsPage.tsx",

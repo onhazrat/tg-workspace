@@ -42,6 +42,9 @@ and the breakdowns that survive decide what each Request has to record.
     with `react-plotly.js` 4, which the research did not cover) in two places: the Sankey
     (variants B, B2, B3) and a throwaway `?bench=sparklines` page that times 300 virtualized
     sparklines in each library, measured in Chromium.
+    Reversed on 2026-10-24: the daily bars moved to Plotly and Recharts left the app.
+    Plotly already loads on the Requests tab for the zoomable trend, so one chart stack
+    draws both.
 11. **Palette.** The prototype adds categorical tokens `--chart-1..8` for light and dark, taken
     from the dataviz skill's validated palette, to replace the five neutral greys. Outcomes
     get fixed colours: Wasted in red, Idle in amber, useful in neutral.

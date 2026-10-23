@@ -30,12 +30,12 @@ import { DAY_MS } from "@/lib/scope/window"
 import { extractErrorMessage } from "@/utils"
 import { AccountCompare } from "./AccountCompare"
 import { ChannelTable } from "./ChannelTable"
-import { DailyBars } from "./DailyBars"
 import { KindTable } from "./KindTable"
 import { OutcomeChips, StatStrip } from "./parts"
 import { RequestedSpread } from "./RequestedSpread"
 
-// Plotly downloads only when the trend draws (RQS-07).
+// Plotly downloads only when the charts draw (RQS-07).
+const DailyBars = lazy(() => import("./DailyBars"))
 const ZoomTrend = lazy(() => import("./ZoomTrend"))
 
 const CHOICES: { value: ChargedFilter; label: string }[] = [
@@ -197,7 +197,7 @@ export function RequestsView({
             )}
             <StatStrip t={totals} hiddenOutcomes={hiddenOutcomes} />
             {trend && (
-              <>
+              <Suspense fallback={null}>
                 <DailyBars
                   trend={trend}
                   range={range}
@@ -208,19 +208,17 @@ export function RequestsView({
                     })
                   }
                 />
-                <Suspense fallback={null}>
-                  <ZoomTrend
-                    trend={trend}
-                    range={range}
-                    hiddenKinds={hiddenKinds}
-                    hiddenOutcomes={hiddenOutcomes}
-                    onHidden={onFilter}
-                    onRange={(start, end) =>
-                      onFilter({ bound: { mode: "fixed", start, end } })
-                    }
-                  />
-                </Suspense>
-              </>
+                <ZoomTrend
+                  trend={trend}
+                  range={range}
+                  hiddenKinds={hiddenKinds}
+                  hiddenOutcomes={hiddenOutcomes}
+                  onHidden={onFilter}
+                  onRange={(start, end) =>
+                    onFilter({ bound: { mode: "fixed", start, end } })
+                  }
+                />
+              </Suspense>
             )}
             <KindTable
               {...kindRows(breakdown.byKind, hiddenKinds, hiddenOutcomes)}

@@ -1008,6 +1008,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "frontend/src/components/post-card/FeedKeyboard.tsx": "appearance",
     "frontend/src/components/post-card/PhotoViewer.tsx": "media",
     "frontend/src/components/post-card/photo-viewer-model.ts": "media",
+    "frontend/src/components/requests/DailyBars.tsx": "quota",
     "frontend/src/components/settings-page/SettingsPage.tsx": "appearance",
     "frontend/src/components/settings-page/sections.ts": "appearance",
     "frontend/src/components/summary-view/ChannelPostsSheet.tsx": "ai",
