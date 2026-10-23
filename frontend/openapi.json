@@ -6972,6 +6972,87 @@
         }
       }
     },
+    "/api/v1/requests/spread": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Spread",
+        "description": "When Requests were made, over everything kept, for the range picker.\n\nHours inside the hourly totals' span, whole days before it, without the\nrange. `charged`, `accounts`, `leftOut` and `leftOutKinds` are read as on\nthe Breakdown.",
+        "operationId": "requests-read_request_spread",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
+            }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestSpreadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/view-as/{user_id}": {
       "post": {
         "tags": ["view-as"],
@@ -13550,6 +13631,36 @@
         "required": ["start", "end", "byKind", "byChannel", "byAccount"],
         "title": "RequestBreakdownResponse",
         "description": "Totals by kind and by Channel for one range, in UTC."
+      },
+      "RequestSpreadBucket": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "requests": { "type": "integer", "title": "Requests" }
+        },
+        "type": "object",
+        "required": ["start", "end", "requests"],
+        "title": "RequestSpreadBucket",
+        "description": "Every Request in `[start, end)`, in UTC."
+      },
+      "RequestSpreadResponse": {
+        "properties": {
+          "recordDays": { "type": "integer", "title": "Recorddays" },
+          "hourlyDays": { "type": "integer", "title": "Hourlydays" },
+          "buckets": {
+            "items": { "$ref": "#/components/schemas/RequestSpreadBucket" },
+            "type": "array",
+            "title": "Buckets"
+          }
+        },
+        "type": "object",
+        "required": ["recordDays", "hourlyDays", "buckets"],
+        "title": "RequestSpreadResponse",
+        "description": "When Requests were made, over everything kept: hours inside the hourly\ntotals' span (`hourlyDays`), whole days before. `recordDays` is how far\nback each Request is kept."
       },
       "RequestTotals": {
         "properties": {

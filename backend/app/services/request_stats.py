@@ -646,6 +646,42 @@ def request_trend(
     return [buckets[key] for key in sorted(buckets)]
 
 
+@dataclass(frozen=True)
+class SpreadBucket:
+    """Every Request in `[start, end)`: an hour, or a day past the hourly span."""
+
+    start: datetime
+    end: datetime
+    requests: int
+
+
+def request_spread(
+    session: Session,
+    picked: Picked = Picked(),  # noqa: B008
+) -> list[SpreadBucket]:
+    """When Requests were made, over everything kept, for the range picker (RQS-09).
+
+    Hours from the hourly totals inside their span, whole days from the daily
+    totals before it. Split on that span, so hourly rows retention has not
+    pruned yet are never counted twice.
+    """
+    hourly = _kept().hourly
+    tiers: list[tuple[Any, Any, timedelta, Any]] = [
+        (RequestDaily, col(RequestDaily.day), _DAY, hourly.date()),
+        (RequestHourly, col(RequestHourly.hour), _HOUR, hourly),
+    ]
+    spread: list[SpreadBucket] = []
+    for model, moment, step, edge in tiers:
+        within = moment < edge if model is RequestDaily else moment >= edge
+        query = sa_select(moment, _requests(model)).where(within)
+        for at, n in session.execute(
+            _filtered(query, model, picked).group_by(moment).order_by(moment)
+        ).all():
+            start = _as_datetime(at)
+            spread.append(SpreadBucket(start, start + step, int(n)))
+    return spread
+
+
 def _as_datetime(moment: date | datetime) -> datetime:
     """A bucket's start: a daily total's day is its midnight."""
     if isinstance(moment, datetime):

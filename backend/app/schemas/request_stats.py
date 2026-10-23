@@ -74,3 +74,23 @@ class RequestTrendResponse(BaseModel):
     end: datetime
     hourly_days: int = Field(alias="hourlyDays")
     buckets: list[RequestTrendBucket]
+
+
+class RequestSpreadBucket(BaseModel):
+    """Every Request in `[start, end)`, in UTC."""
+
+    start: datetime
+    end: datetime
+    requests: int
+
+
+class RequestSpreadResponse(BaseModel):
+    """When Requests were made, over everything kept: hours inside the hourly
+    totals' span (`hourlyDays`), whole days before. `recordDays` is how far
+    back each Request is kept."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    record_days: int = Field(alias="recordDays")
+    hourly_days: int = Field(alias="hourlyDays")
+    buckets: list[RequestSpreadBucket]

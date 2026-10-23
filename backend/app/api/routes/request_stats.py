@@ -18,6 +18,8 @@ from app.schemas.request_stats import (
     AccountRequestTotals,
     ChannelRequestTotals,
     RequestBreakdownResponse,
+    RequestSpreadBucket,
+    RequestSpreadResponse,
     RequestTotals,
     RequestTrendBucket,
     RequestTrendResponse,
@@ -28,6 +30,7 @@ from app.services.request_stats import (
     Totals,
     account_emails,
     request_breakdown,
+    request_spread,
     request_trend,
 )
 
@@ -162,5 +165,30 @@ def read_request_trend(
         buckets=[
             RequestTrendBucket.model_validate(asdict(bucket))
             for bucket in request_trend(session, lo, hi, picked)
+        ],
+    )
+
+
+# RQS-09: the range picker's spread.
+@router.get(
+    "/spread",
+    dependencies=[Depends(require_permission(Permission.QUOTA_READ_ANY))],
+    response_model=RequestSpreadResponse,
+)
+def read_request_spread(
+    session: SessionDep, picked: PickedDep
+) -> RequestSpreadResponse:
+    """When Requests were made, over everything kept, for the range picker.
+
+    Hours inside the hourly totals' span, whole days before it, without the
+    range. `charged`, `accounts`, `leftOut` and `leftOutKinds` are read as on
+    the Breakdown.
+    """
+    return RequestSpreadResponse(
+        recordDays=settings.REQUEST_RECORD_DAYS,
+        hourlyDays=settings.REQUEST_HOURLY_DAYS,
+        buckets=[
+            RequestSpreadBucket.model_validate(asdict(bucket))
+            for bucket in request_spread(session, picked)
         ],
     )

@@ -1704,7 +1704,7 @@ def test_the_channels_left_out_leave_the_breakdown_and_the_trend(
     assert _by_kind(trend["buckets"]) == _breakdown_by_kind(no_checks)
 
 
-@pytest.mark.parametrize("route", ["breakdown", "trend"])
+@pytest.mark.parametrize("route", ["breakdown", "trend", "spread"])
 def test_the_requests_endpoints_are_the_operators_alone(
     client: TestClient, normal_user_token_headers: dict[str, str], route: str
 ) -> None:
@@ -1890,3 +1890,67 @@ def test_past_each_tiers_span_the_next_one_answers(
         buckets = _trend(client, superuser_token_headers)["buckets"]
         assert {_span(b) for b in buckets} == {grain}, days
         assert sum(b["useful"] + b["idle"] + b["wasted"] for b in buckets) == n
+
+
+# --------------------------------------------------------------------------
+# The spread (RQS-09)
+# --------------------------------------------------------------------------
+
+
+def _spread(
+    client: TestClient, headers: dict[str, str], **params: Any
+) -> dict[str, Any]:
+    flush_recorded_requests()
+    roll_up_request_totals()
+    r = client.get(f"{API}/requests/spread", params=params, headers=headers)
+    assert r.status_code == 200, r.text
+    return dict(r.json())
+
+
+def _spread_total(answer: dict[str, Any]) -> int:
+    return sum(int(b["requests"]) for b in answer["buckets"])
+
+
+def test_the_spread_is_hours_inside_the_month_and_days_before(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: read the hourly totals past the month as well (each Request
+    counted twice), or the daily totals inside it, or drop the tier spans.
+
+    No retention runs, so a month on the hourly rows are still there and only
+    the split on the hourly span keeps them out of the daily bars.
+    """
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+    n = len(_recorded())
+
+    spread = _spread(client, superuser_token_headers)
+    assert (spread["recordDays"], spread["hourlyDays"]) == (7, 30)
+    assert {_span(b) for b in spread["buckets"]} == {timedelta(hours=1)}
+    assert _spread_total(spread) == n
+
+    moved = utc_now() + timedelta(days=31)
+    monkeypatch.setattr(request_stats, "utc_now", lambda: moved)
+    spread = _spread(client, superuser_token_headers)
+    assert {_span(b) for b in spread["buckets"]} == {timedelta(days=1)}
+    assert _spread_total(spread) == n
+
+
+def test_the_spread_reads_every_filter_but_the_range(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutation: ignore `charged` or `leftOut` on the spread."""
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+    n = len(_recorded())
+
+    uncharged = _spread(client, superuser_token_headers, charged="uncharged")
+    assert _spread_total(uncharged) == 1
+    charged = _spread(client, superuser_token_headers, charged="charged")
+    assert _spread_total(charged) == n - 1
+    left_out = _spread(client, superuser_token_headers, leftOut=[CHANNEL])
+    assert left_out["buckets"] == []

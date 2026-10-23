@@ -6253,6 +6253,48 @@ export type RequestBreakdownResponse = {
 };
 
 /**
+ * RequestSpreadBucket
+ *
+ * Every Request in `[start, end)`, in UTC.
+ */
+export type RequestSpreadBucket = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Requests
+     */
+    requests: number;
+};
+
+/**
+ * RequestSpreadResponse
+ *
+ * When Requests were made, over everything kept: hours inside the hourly
+ * totals' span (`hourlyDays`), whole days before. `recordDays` is how far
+ * back each Request is kept.
+ */
+export type RequestSpreadResponse = {
+    /**
+     * Recorddays
+     */
+    recordDays: number;
+    /**
+     * Hourlydays
+     */
+    hourlyDays: number;
+    /**
+     * Buckets
+     */
+    buckets: Array<RequestSpreadBucket>;
+};
+
+/**
  * RequestTotals
  *
  * Requests by outcome, and the Posts the answered pages brought.
@@ -13907,6 +13949,48 @@ export type RequestsReadRequestTrendResponses = {
 };
 
 export type RequestsReadRequestTrendResponse = RequestsReadRequestTrendResponses[keyof RequestsReadRequestTrendResponses];
+
+export type RequestsReadRequestSpreadData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
+    };
+    url: '/api/v1/requests/spread';
+};
+
+export type RequestsReadRequestSpreadErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestSpreadError = RequestsReadRequestSpreadErrors[keyof RequestsReadRequestSpreadErrors];
+
+export type RequestsReadRequestSpreadResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestSpreadResponse;
+};
+
+export type RequestsReadRequestSpreadResponse = RequestsReadRequestSpreadResponses[keyof RequestsReadRequestSpreadResponses];
 
 export type ViewAsStartViewAsData = {
     body?: never;
