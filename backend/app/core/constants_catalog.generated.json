@@ -68,7 +68,7 @@
       "comment": "Delete expired posts in bounded batches: a backlog can be hundreds of thousands of rows, and materialising them all at once OOM-killed the worker.",
       "expression": "500",
       "file": "backend/app/jobs/retention.py",
-      "line": 109,
+      "line": 115,
       "name": "POST_DELETE_BATCH",
       "value": 500
     },
@@ -76,7 +76,7 @@
       "comment": "Channels collected per retention pass. Each one is a full corpus delete and nothing waits on the queue draining, so the next hourly run takes the rest.",
       "expression": "100",
       "file": "backend/app/jobs/retention.py",
-      "line": 113,
+      "line": 119,
       "name": "COLLECT_LIMIT",
       "value": 100
     },
@@ -943,6 +943,14 @@
       "line": 274,
       "name": "MIN_PAIRS_PER_SPAN",
       "value": 30
+    },
+    {
+      "comment": "Rows per delete, each its own transaction, so a backlog never holds one long transaction that pins the vacuum horizon (see `prune_finished_jobs`).",
+      "expression": "5000",
+      "file": "backend/app/services/request_stats.py",
+      "line": 215,
+      "name": "REQUEST_DELETE_BATCH",
+      "value": 5000
     },
     {
       "comment": "Rows per delete transaction in `prune_finished_jobs`. Bounds transaction length, not memory \u2014 see that function.",

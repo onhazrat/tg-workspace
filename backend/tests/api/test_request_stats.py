@@ -31,11 +31,13 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
 
 from app import main as api_main
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.db import engine
 from app.core.request_recording import RequestKind, attributed, page_for_fetch
 from app.jobs import request_stats as request_stats_jobs
+from app.jobs import retention
 from app.jobs.discover_probe import run_discover_probe_sweep
+from app.jobs.retention import run_retention_cleanup
 from app.models_tg import DirectoryEntry, RequestRecordRow, utc_now
 from app.services import network, request_stats
 from app.services.bulk_follow import run_follow_job_by_id
@@ -1167,6 +1169,79 @@ def test_a_flush_returns_once_every_request_before_it_is_written(
         written = session.exec(select(RequestRecordRow)).all()
     worker.join()
     assert len(written) == 1
+
+
+# --------------------------------------------------------------------------
+# Keeping (RQS-02)
+# --------------------------------------------------------------------------
+
+
+def _requests_by_tier(
+    client: TestClient, headers: dict[str, str], now: datetime
+) -> tuple[int, int, int]:
+    """Today, this hour and a few minutes around `now`: daily, hourly, per-Request."""
+    hour = now.replace(minute=0, second=0, microsecond=0)
+
+    def requests(**span: str) -> int:
+        rows = _breakdown(client, headers, **span)["byKind"]
+        return sum(int(row["requests"]) for row in rows)
+
+    return (
+        requests(),
+        requests(start=hour.isoformat(), end=(hour + timedelta(hours=1)).isoformat()),
+        requests(
+            start=(now - timedelta(minutes=1)).isoformat(),
+            end=(now + timedelta(minutes=2)).isoformat(),
+        ),
+    )
+
+
+def test_retention_keeps_requests_a_week_hourly_totals_a_month_and_days_forever(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: prune Requests or hourly totals one batch per run, or by the
+    other tier's span, or prune the daily totals too.
+
+    Two syncs make two Requests and two hourly rows (one Useful, one Idle), and
+    the batch is cut to one row, so a prune that stops after one batch leaves
+    a row behind. The clock moves forward to either side of each span on the
+    default settings, 7 and 30 days.
+    """
+    monkeypatch.setattr(request_stats, "REQUEST_DELETE_BATCH", 1)
+    _follow(client, superuser_token_headers, CHANNEL)
+    telegram.script(_first_page(), _page_html(CHANNEL, [100, 101]))
+    _sync(client, superuser_token_headers)
+    _sync(client, superuser_token_headers)
+
+    now = datetime.now(UTC)
+    if now.minute in (0, 59) or now.hour in (0, 23):
+        pytest.skip("too close to an hour or day edge to cut a range around now")
+    n = len(_recorded())
+    assert n >= 2
+    assert _requests_by_tier(client, superuser_token_headers, now) == (n, n, n)
+
+    real_now = utc_now()
+    expected = {6: (n, n, n), 8: (n, n, 0), 29: (n, n, 0), 31: (n, 0, 0)}
+    for days, left in expected.items():
+        monkeypatch.setattr(
+            retention, "utc_now", lambda days=days: real_now + timedelta(days=days)
+        )
+        with Session(engine) as session:
+            run_retention_cleanup(session)
+        assert _requests_by_tier(client, superuser_token_headers, now) == left, days
+
+
+def test_startup_refuses_an_hourly_span_shorter_than_the_record_span() -> None:
+    """Mutation: drop the check, or refuse equal spans as well."""
+    with pytest.raises(ValueError) as refused:
+        Settings(PROJECT_NAME="test", REQUEST_RECORD_DAYS=10, REQUEST_HOURLY_DAYS=9)  # type: ignore[call-arg]
+    assert "REQUEST_RECORD_DAYS" in str(refused.value)
+    assert "REQUEST_HOURLY_DAYS" in str(refused.value)
+
+    Settings(PROJECT_NAME="test", REQUEST_RECORD_DAYS=10, REQUEST_HOURLY_DAYS=10)  # type: ignore[call-arg]
 
 
 # --------------------------------------------------------------------------

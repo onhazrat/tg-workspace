@@ -493,6 +493,20 @@
     },
     {
       "default": 30,
+      "name": "REQUEST_HOURLY_DAYS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 7,
+      "name": "REQUEST_RECORD_DAYS",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": 30,
       "name": "RETENTION_DIRECTORY_SAMPLE_DAYS_DEFAULT",
       "required": false,
       "scope": "backend_runtime",

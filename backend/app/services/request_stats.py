@@ -35,6 +35,7 @@ from sqlalchemy import Date, case, cast, delete, func, insert, or_
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import Outcome, RequestKind, drain
 from app.models_tg import RequestDaily, RequestHourly, RequestRecordRow
@@ -203,6 +204,51 @@ def roll_up_request_totals() -> int:
         # together or not at all.
         put_global_setting(session, REQUEST_ROLLUP_KEY, {"through": now.isoformat()})
         return len(hours)
+
+
+# --------------------------------------------------------------------------
+# Keeping (RQS-02)
+# --------------------------------------------------------------------------
+
+#: Rows per delete, each its own transaction, so a backlog never holds one
+#: long transaction that pins the vacuum horizon (see `prune_finished_jobs`).
+REQUEST_DELETE_BATCH = 5000
+
+
+def _delete_before(session: Session, model: Any, moment: Any, cutoff: datetime) -> int:
+    deleted = 0
+    while True:
+        batch = (
+            sa_select(model.id).where(col(moment) < cutoff).limit(REQUEST_DELETE_BATCH)
+        )
+        result = session.execute(delete(model).where(col(model.id).in_(batch)))
+        session.commit()
+        count = int(getattr(result, "rowcount", 0) or 0)
+        deleted += count
+        if count < REQUEST_DELETE_BATCH:
+            return deleted
+
+
+def prune_request_stats(session: Session, now: datetime) -> tuple[int, int]:
+    """Delete Requests past `REQUEST_RECORD_DAYS` and hourly totals past
+    `REQUEST_HOURLY_DAYS`, measured on `at` and `hour`. Returns both counts.
+
+    The daily totals are never pruned: they are the only tier reaching back
+    past a month.
+    """
+    records = _delete_before(
+        session,
+        RequestRecordRow,
+        RequestRecordRow.at,
+        now - timedelta(days=settings.REQUEST_RECORD_DAYS),
+    )
+    hourly = _delete_before(
+        session,
+        RequestHourly,
+        RequestHourly.hour,
+        now - timedelta(days=settings.REQUEST_HOURLY_DAYS),
+    )
+    return records, hourly
 
 
 # --------------------------------------------------------------------------

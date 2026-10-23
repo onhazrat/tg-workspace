@@ -39,6 +39,11 @@ tuning the corpus or the log ones does not silently move it.
 14 days after its publication, fixed in code, because that is the span the
 Settling curve is fitted over.
 
+**Requests are on two deployment spans** (RQS-02, ADR-035): each Request in
+`tg_request_records` for `REQUEST_RECORD_DAYS` (7), measured on `at`, and the
+hourly totals in `tg_request_hourly` for `REQUEST_HOURLY_DAYS` (30), measured
+on `hour`. The daily totals are on no span and never pruned.
+
 Channel collection and the asset sweeps stay deployment-wide and are not
 windows at all: a Channel is collected when nobody follows it, and an orphaned
 avatar is garbage by definition rather than by age.
@@ -97,6 +102,7 @@ from app.services.post_thumbnails import (
     delete_cached_thumb,
     enforce_thumb_cache_size_limit,
 )
+from app.services.request_stats import prune_request_stats
 from app.services.scraper_jobs import prune_finished_jobs
 from app.services.summary_attempts import trim_dismissed_partials
 from app.services.sync_meta import touch_sync
@@ -518,6 +524,11 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         session, max_age_days=app_settings.SYNC_JOB_RETENTION_DAYS
     )
 
+    # Each Request for a week and its hourly totals for a month, on deployment
+    # constants (RQS-02, ADR-035): the Operator's stats, owned by nobody. The
+    # daily totals are on no window at all.
+    deleted_requests, deleted_request_hours = prune_request_stats(session, utc_now())
+
     # A dismissed Partial response's text, on a deployment constant (SFR-03).
     # Its Attempt is never deleted: the Attempts table is on neither log
     # inventory, and this clears the one bulky column somebody set aside.
@@ -549,7 +560,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     logger.info(
         "Retention cleanup: deleted %s posts, %s log rows, %s sync payloads, "
         "%s reports, %s sync jobs, %s unfollowed channels, %s orphaned avatars, "
-        "%s directory samples, %s view observations "
+        "%s directory samples, %s view observations, %s Requests, %s Request hours "
         "(postDays=%s, sharedLogDays=%s, payloadDays=%s, sampleDays=%s, "
         "syncJobDays=%s, accounts=%s)",
         deleted_posts,
@@ -561,6 +572,8 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         deleted_photos,
         deleted_samples,
         deleted_observations,
+        deleted_requests,
+        deleted_request_hours,
         post_days,
         shared_log_days,
         payload_days,
@@ -578,4 +591,6 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
         "deletedPhotos": deleted_photos,
         "deletedDirectorySamples": deleted_samples,
         "deletedViewObservations": deleted_observations,
+        "deletedRequests": deleted_requests,
+        "deletedRequestHours": deleted_request_hours,
     }
