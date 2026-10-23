@@ -47,10 +47,12 @@ function Table({
   rows,
   hiddenOutcomes = new Set(),
   onLeftOut = () => {},
+  onOpen = () => {},
 }: {
   rows: ChannelRow[]
   hiddenOutcomes?: ReadonlySet<Outcome>
   onLeftOut?: (leftOut: Set<string>) => void
+  onOpen?: (row: ChannelRow) => void
 }) {
   const [filter, setFilter] = useState(emptyChannelFilter)
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set())
@@ -66,6 +68,7 @@ function Table({
         onLeftOut(next)
         setLeftOut(next)
       }}
+      onOpen={onOpen}
     />
   )
 }
@@ -211,5 +214,15 @@ describe("ChannelTable's filters, yield and picking (RQS-04)", () => {
       "news",
       "tech",
     ])
+  })
+
+  test("a row click opens that row's Requests; its pick box does not (RQS-10)", () => {
+    const opened: string[] = []
+    render(<Table rows={rows} onOpen={(r) => opened.push(r.id)} />)
+    const [probes, news] = screen.getAllByTestId("requests-channel-row")
+    fireEvent.click(news.querySelectorAll("td")[2])
+    fireEvent.click(probes)
+    fireEvent.click(screen.getByLabelText("Pick @tech"))
+    expect(opened).toEqual(["news", "kind:probe"])
   })
 })

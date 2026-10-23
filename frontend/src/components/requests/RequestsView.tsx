@@ -12,6 +12,7 @@ import { funnelledValues } from "@/lib/filter-tree"
 import {
   type AccountRow,
   accountRows,
+  type ChannelRow,
   type ChargedFilter,
   channelRows,
   chargedCounts,
@@ -43,6 +44,7 @@ const CHOICES: { value: ChargedFilter; label: string }[] = [
  * daily bars (RQS-06), By kind of work and Channels by Requests, all for one
  * range cut to the minute. The Channels left out leave every number but the
  * Channel table's own rows, which list them faded to be picked again (RQS-04).
+ * A Channel table row click asks to open its Requests (RQS-10).
  */
 export function RequestsView({
   filter,
@@ -55,6 +57,7 @@ export function RequestsView({
   spread,
   error,
   phone = false,
+  onOpenRow,
 }: {
   filter: RequestsFilter
   onFilter: (patch: Partial<RequestsFilter>) => void
@@ -75,6 +78,7 @@ export function RequestsView({
   spread?: RequestSpreadResponse
   error?: unknown
   phone?: boolean
+  onOpenRow: (row: ChannelRow) => void
 }) {
   const { hiddenKinds, hiddenOutcomes } = filter
   const totals = breakdown && statTotals(breakdown.byKind)
@@ -231,6 +235,7 @@ export function RequestsView({
               onFilter={(channelFilter) => onFilter({ channelFilter })}
               leftOut={filter.leftOut}
               onLeftOut={(leftOut) => onFilter({ leftOut })}
+              onOpen={onOpenRow}
             />
           </>
         )

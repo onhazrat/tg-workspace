@@ -71,6 +71,7 @@ function Harness(
       range={RANGE}
       unfiltered={BREAKDOWN}
       breakdown={BREAKDOWN}
+      onOpenRow={() => {}}
       {...props}
     />
   )

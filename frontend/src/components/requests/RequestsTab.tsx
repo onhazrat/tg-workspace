@@ -14,6 +14,7 @@ import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useIsMobile } from "@/hooks/useMobile"
 import {
+  type ChannelRow,
   type ChargedFilter,
   initialRequestsFilter,
   leftOutQuery,
@@ -21,6 +22,7 @@ import {
   requestsRange,
 } from "@/lib/requests/breakdown"
 import { offeredTab } from "@/lib/workspace-tabs"
+import { RequestsSheet } from "./RequestsSheet"
 import { RequestsView } from "./RequestsView"
 
 /** What narrows the Breakdown and the trend besides the range. */
@@ -127,18 +129,28 @@ function OperatorRequests() {
   const trend = useTrend(range, filter)
   const spread = useSpread(filter)
   const phone = useIsMobile()
+  const [opened, setOpened] = useState<ChannelRow | null>(null)
   return (
-    <RequestsView
-      filter={filter}
-      onFilter={(patch) => setFilter((f) => ({ ...f, ...patch }))}
-      range={range}
-      unfiltered={all.data}
-      breakdown={shown.data}
-      listed={listed.data}
-      trend={trend.data}
-      spread={spread.data}
-      error={all.error ?? shown.error ?? listed.error ?? trend.error}
-      phone={phone}
-    />
+    <>
+      <RequestsView
+        filter={filter}
+        onFilter={(patch) => setFilter((f) => ({ ...f, ...patch }))}
+        range={range}
+        unfiltered={all.data}
+        breakdown={shown.data}
+        listed={listed.data}
+        trend={trend.data}
+        spread={spread.data}
+        error={all.error ?? shown.error ?? listed.error ?? trend.error}
+        phone={phone}
+        onOpenRow={setOpened}
+      />
+      <RequestsSheet
+        row={opened}
+        range={range}
+        filter={filter}
+        onClose={() => setOpened(null)}
+      />
+    </>
   )
 }

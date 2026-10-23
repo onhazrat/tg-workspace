@@ -25,6 +25,7 @@ import { kindColor, OutcomeBar, Swatch } from "./parts"
  * so an aggregate row runs full width rather than flattening every Channel.
  * A hidden outcome's columns go. Every row has a pick box: a row left out
  * leaves the whole tab but stays listed here, faded, to be picked again.
+ * A row click opens its own Requests (RQS-10).
  */
 export function ChannelTable({
   rows,
@@ -34,6 +35,7 @@ export function ChannelTable({
   onFilter,
   leftOut,
   onLeftOut,
+  onOpen,
 }: {
   rows: ChannelRow[]
   hiddenOutcomes: ReadonlySet<Outcome>
@@ -43,6 +45,7 @@ export function ChannelTable({
   /** The rows left out, by `ChannelRow.id`. */
   leftOut: ReadonlySet<string>
   onLeftOut: (leftOut: Set<string>) => void
+  onOpen: (row: ChannelRow) => void
 }) {
   const [search, setSearch] = useState("")
   const [chosenSort, setSort] = useState<ChannelSort>("total")
@@ -159,6 +162,7 @@ export function ChannelTable({
               columns={columns.map((c) => c.key)}
               picked={!leftOut.has(r.id)}
               onPick={() => onLeftOut(toggled(leftOut, r.id))}
+              onOpen={() => onOpen(r)}
             />
           ))}
         </tbody>
@@ -228,6 +232,7 @@ function ChannelTr({
   columns,
   picked,
   onPick,
+  onOpen,
 }: {
   r: ChannelRow
   rank: number
@@ -235,18 +240,22 @@ function ChannelTr({
   columns: Measure[]
   picked: boolean
   onPick: () => void
+  onOpen: () => void
 }) {
   return (
     <tr
       data-testid="requests-channel-row"
       data-picked={picked}
-      className={`border-t border-app-ink/5 ${r.aggregate ? "bg-app-ink/[0.04]" : ""} ${picked ? "" : "opacity-40"}`}
+      onClick={onOpen}
+      title="Open this row's Requests"
+      className={`cursor-pointer border-t border-app-ink/5 hover:bg-app-ink/5 ${r.aggregate ? "bg-app-ink/[0.04]" : ""} ${picked ? "" : "opacity-40"}`}
     >
       <td className="pl-3 max-sm:pl-1.5">
         <input
           type="checkbox"
           aria-label={`Pick ${r.label}`}
           checked={picked}
+          onClick={(e) => e.stopPropagation()}
           onChange={onPick}
         />
       </td>
