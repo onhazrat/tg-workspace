@@ -48,6 +48,8 @@ class RequestKind(StrEnum):
     AUTO = "auto"
     BULK = "bulk"
     SINGLE = "single"
+    #: A Directory probe (RQS-12): no Account, no Budget, the handle it probed.
+    PROBE = "probe"
     #: No work declared itself. A known path recording this is a bug.
     OTHER = "other"
 

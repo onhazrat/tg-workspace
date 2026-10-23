@@ -55,12 +55,14 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
+from app.core.request_recording import PageType, RequestKind, attributed, page
 from app.services.async_db import run_db
 from app.services.channel_directory import (
+    ProbeVerdict,
     dequeue_handles,
     queue_counts,
-    record_probe_result,
     refresh_due_count,
+    write_probe_verdict,
 )
 from app.services.network_settings import (
     load_network_settings,
@@ -70,7 +72,7 @@ from app.services.network_settings import (
 from app.services.pgmq import queue_length
 from app.services.scraper import get_channel_info
 from app.services.sync_lanes import DISCOVER_PROBE_LANE
-from app.services.telegram_web import TelegramWebViewUnavailable
+from app.services.telegram_web import TelegramWebViewUnavailable, normalize_handle
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +143,9 @@ def _load_network() -> tuple[list[str], tuple[int, dict[str, int]], bool, int]:
 
 def _store_result(
     handle: str, info: dict[str, Any] | None, error: str | None
-) -> dict[str, Any]:
+) -> ProbeVerdict:
     with Session(engine) as session:
-        return record_probe_result(session, handle, info, error=error)
+        return write_probe_verdict(session, handle, info, error=error)
 
 
 async def _probe_one(
@@ -154,7 +156,37 @@ async def _probe_one(
     tor_auto_rotate: bool,
     tor_rotation_threshold: int,
 ) -> str:
-    """Fetch one handle and record the outcome. Returns the resulting status."""
+    """Fetch one handle and record the outcome. Returns the resulting status.
+
+    Its Requests are the Directory's (RQS-12): kind probe, no Account, the
+    handle probed. The page fetch is a metadata page, judged once the verdict
+    is written: Useful when it changed the entry or brought new sample Posts.
+    """
+    with (
+        attributed(kind=RequestKind.PROBE, channel=normalize_handle(handle)),
+        page(PageType.METADATA) as probe_page,
+    ):
+        verdict = await _fetch_and_store(
+            handle,
+            proxies=proxies,
+            proxy_concurrency=proxy_concurrency,
+            tor_auto_rotate=tor_auto_rotate,
+            tor_rotation_threshold=tor_rotation_threshold,
+        )
+        probe_page.report_posts(
+            verdict.new_samples, verdict.repeated_samples, changed=verdict.changed
+        )
+    return str(verdict.entry["status"])
+
+
+async def _fetch_and_store(
+    handle: str,
+    *,
+    proxies: list[str],
+    proxy_concurrency: tuple[int, dict[str, int]],
+    tor_auto_rotate: bool,
+    tor_rotation_threshold: int,
+) -> ProbeVerdict:
     info: dict[str, Any] | None = None
     error: str | None = None
     try:
@@ -188,8 +220,7 @@ async def _probe_one(
     except Exception as exc:  # noqa: BLE001
         error = str(exc)
 
-    result = await run_db(_store_result, handle, info, error)
-    return str(result["status"])
+    return await run_db(_store_result, handle, info, error)
 
 
 async def probe_one_handle(handle: str) -> str:

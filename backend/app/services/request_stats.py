@@ -31,12 +31,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import Date, cast, delete, func, insert, or_
+from sqlalchemy import Date, case, cast, delete, func, insert, or_
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
 from app.core.db import engine
-from app.core.request_recording import Outcome, drain
+from app.core.request_recording import Outcome, RequestKind, drain
 from app.models_tg import RequestDaily, RequestHourly, RequestRecordRow
 from app.services.settings_registry import REQUEST_ROLLUP_KEY
 from app.services.settings_store import get_global_setting, put_global_setting
@@ -95,14 +95,30 @@ _TOTALS_KEY = (
 )
 
 
+#: Kinds whose totals carry no Channel: their Requests name the handle they
+#: probed, but the tab shows the kind as one aggregate row (RQS-12, tab
+#: decision 7). Handle checks join it in RQS-14.
+AGGREGATE_KINDS = (RequestKind.PROBE.value,)
+
+
 def _sum(column: Any) -> Any:
     return func.coalesce(func.sum(column), 0)
+
+
+def _totals_channel(model: Any) -> Any:
+    """A row's Channel in the totals: null for an aggregate kind."""
+    return case((col(model.kind).in_(AGGREGATE_KINDS), None), else_=col(model.channel))
 
 
 def _rebuild_hours(session: Session, hours: list[datetime]) -> None:
     hour_of = func.date_trunc("hour", col(RequestRecordRow.at))
     keys = [
-        *(getattr(RequestRecordRow, k) for k in _TOTALS_KEY),
+        *(
+            _totals_channel(RequestRecordRow)
+            if k == "channel"
+            else getattr(RequestRecordRow, k)
+            for k in _TOTALS_KEY
+        ),
         col(RequestRecordRow.lane),
         col(RequestRecordRow.best_effort),
     ]
@@ -285,7 +301,7 @@ def _fold(
     charged: ChargedFilter,
 ) -> None:
     """Add one tier's rows inside `within` to the Breakdown."""
-    keys = [model.kind, model.channel, model.outcome, model.charged]
+    keys = [model.kind, _totals_channel(model), model.outcome, model.charged]
     requests = func.count() if model is RequestRecordRow else _sum(model.requests)
     query = sa_select(
         *keys, requests, _sum(model.new_posts), _sum(model.repeated_posts)

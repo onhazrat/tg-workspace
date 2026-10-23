@@ -1046,6 +1046,8 @@ async def _process_probe_message(msg: pgmq.PgmqMessage) -> None:
             # the fetch ended badly under-reports precisely the traffic an
             # Operator is watching for.
             await asyncio.to_thread(charge_probe_requests, meter.telegram_requests)
+            # Beside the ledger write, as the sync's are (RQS-12).
+            await asyncio.to_thread(flush_recorded_requests)
 
 
 async def _handle_one(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) -> str:

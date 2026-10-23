@@ -33,13 +33,17 @@ from sqlmodel import Session, col, select
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import page_for_fetch
-from app.models_tg import RequestRecordRow
+from app.jobs.discover_probe import run_discover_probe_sweep
+from app.models_tg import DirectoryEntry, RequestRecordRow, utc_now
 from app.services import network, request_stats
+from app.services.channel_directory import enqueue_handles
+from app.services.pgmq import queue_length
 from app.services.request_stats import (
     flush_recorded_requests,
     roll_up_request_totals,
 )
 from app.services.scraper_jobs import clear_jobs_for_tests
+from app.services.sync_lanes import DISCOVER_PROBE_LANE
 from app.services.telegram_web import TelegramWebViewUnavailable
 
 API = settings.API_V1_STR
@@ -604,6 +608,76 @@ def test_a_chain_ties_a_pages_attempts_across_both_retry_layers(
     assert page[0].id == first_chain
     others = [r for r in _recorded(page_type="posts") if r.chain_id != first_chain]
     assert all(r.attempt == 1 for r in others)
+
+
+# --------------------------------------------------------------------------
+# Probes (RQS-12)
+# --------------------------------------------------------------------------
+
+HANDLE = "rqsprobed"
+
+
+def _probe(client: TestClient, handle: str = HANDLE) -> None:
+    """Queue `handle`, run the probe job, and wait for the worker to drain it."""
+    with Session(engine) as session:
+        enqueue_handles(session, [handle])
+        # A re-probe: the entry holds an answer, so its refresh falls due now.
+        entry = session.get(DirectoryEntry, handle)
+        if entry is not None and entry.status != "unknown":
+            entry.refresh_due_at = utc_now()
+            session.add(entry)
+            session.commit()
+    client.portal.call(run_discover_probe_sweep)
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        with Session(engine) as session:
+            if queue_length(session, DISCOVER_PROBE_LANE) == 0:
+                return
+        time.sleep(0.05)
+    raise AssertionError(f"the probe of @{handle} never drained")
+
+
+def _probe_page(
+    post_ids: list[int], *, title: str = "Probed", subscribers: int = 100
+) -> str:
+    header = (
+        '<div class="tgme_channel_info"><div class="tgme_channel_info_header_title">'
+        f"<span>{title}</span></div></div>"
+    ) + _subscribers(subscribers)
+    return _page_html(HANDLE, post_ids, header=header)
+
+
+def _probes(client: TestClient, headers: dict[str, str]) -> dict[str, Any]:
+    answer = _breakdown(client, headers)
+    return _row(answer["byChannel"], channel=None, kind="probe")
+
+
+def test_a_probe_that_adds_sample_posts_is_useful_and_records_them(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutation: report the verdict writer as never adding a sample Post.
+
+    A probe is the Directory's work, charged to nobody: no Account, Uncharged,
+    the handle it probed, a metadata page. Its totals carry no Channel and show
+    as the one Directory probes row.
+    """
+    telegram.script(_first_page(HANDLE), _probe_page([7, 8, 9]))
+
+    _probe(client)
+
+    [record] = _recorded(kind="probe")
+    assert (record.account_id, record.charged, record.channel, record.page_type) == (
+        None,
+        False,
+        HANDLE,
+        "metadata",
+    )
+    probes = _probes(client, superuser_token_headers)
+    assert (probes["useful"], probes["newPosts"], probes["charged"]) == (1, 3, 0)
+    by_kind = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="probe")
+    assert by_kind["requests"] == probes["requests"] == 1
 
 
 # --------------------------------------------------------------------------
