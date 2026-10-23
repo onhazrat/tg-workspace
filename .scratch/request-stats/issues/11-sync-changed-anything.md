@@ -4,7 +4,7 @@
 
 **Blocked by:** RQS-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] The counter refresh reports whether any value moved.
 - [x] The initial-pass upsert reports whether any stored Post's text changed.
@@ -16,3 +16,4 @@
 ## Comments
 
 - 2026-10-23 (lead): `test_request_stats.py::test_a_syncs_pictures_are_its_kind_and_uncharged` failed once in a full suite run (0 media records instead of 1) and passed alone and on rerun. This ticket works in the same recording path: find whether it is a flush or ordering race and fix it at the cause.
+- 2026-10-23: implemented on `claude/rqs-11` and merged into the integration branch in 615aec8dcddcb376f2f1a50b14cc8e48351df266 (fast-forward). The flaky picture test was a flush race, fixed with a lock from drain to commit in `flush_recorded_requests`.
