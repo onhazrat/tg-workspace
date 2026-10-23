@@ -6,7 +6,7 @@
 
 **Blocked by:** RQS-03
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Kinds facet, Hide uncharged, and a measure filter with criteria search over every measure (Requests, Idle and Wasted counts and shares, syncs, failed syncs, new Posts, Requests per sync, New Posts per Request), whole-row or per kind, edited with the app's bound histogram and fields; sort picker; filter row.
 - [x] Clicking a kind in By kind of work narrows the Channel table to Channels with that work.
@@ -19,3 +19,4 @@
 
 - 2026-10-23 (lead): RQS-01 left syncs and failed syncs out of the Breakdown because nothing records them yet. The measures here need them: record them (a sync run and whether it failed) and add them to the Breakdown rows as part of this ticket.
 - 2026-10-23 (lead): RQS-06 left the trend's Channels-left-out filter to you: add the left-out Channels to `_filtered` in `services/request_stats.py` and both the Breakdown and the trend follow; tick RQS-06's box 2 when done.
+- 2026-10-23: implemented on `claude/rqs-04` and merged into the integration branch in 77a647ac95cc0f142a274202c7c45ae55d6e93bc (fast-forward). Syncs are recorded by `sync_run()` (one held-back Request per Channel sync, marked failed or not); the left-out filter is `leftOut` plus `leftOutKinds`. A sync that made no Request is not counted.
