@@ -51,6 +51,7 @@ type Graph = HTMLElement & {
     y: number[]
     visible?: boolean | "legendonly"
     customdata?: number[]
+    line?: { width: number }
   }[]
   layout: Plotly.Layout & Record<string, unknown>
   emit: (event: string, data: unknown) => void
@@ -157,6 +158,8 @@ describe("ZoomTrend", () => {
     ])
     expect(graph.layout.showlegend).toBe(true)
     expect(screen.getByTestId("requests-shade-idle")).toBeTruthy()
+    // A hairline between the shaded layers.
+    expect(graph.data[0].line?.width).toBe(0.75)
 
     choose("kind", "Separate")
     await waitFor(() =>
@@ -173,6 +176,7 @@ describe("ZoomTrend", () => {
     )
     expect(graph.layout.showlegend).toBe(false)
     expect(screen.queryByTestId("requests-shade-idle")).toBeNull()
+    expect(graph.data[0].line?.width).toBe(0)
 
     fireEvent.click(screen.getByTestId("requests-split-outcome"))
     choose("outcome", "Separate")

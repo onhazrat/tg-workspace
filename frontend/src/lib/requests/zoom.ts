@@ -375,6 +375,9 @@ export function trendChart(
   }
 }
 
+/** How long a legend click waits for a second to make a double click; Plotly's default. */
+export const DOUBLE_CLICK_MS = 300
+
 /** What the legend switches: the tab's own hidden kinds and outcomes. */
 export interface Hidden {
   hiddenKinds: ReadonlySet<string>

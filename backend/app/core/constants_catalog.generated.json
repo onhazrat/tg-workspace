@@ -1793,6 +1793,14 @@
       "value": 1.15
     },
     {
+      "comment": "How long a legend click waits for a second to make a double click; Plotly's default.",
+      "expression": "300",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 379,
+      "name": "DOUBLE_CLICK_MS",
+      "value": 300
+    },
+    {
       "comment": "How often subscribers are notified.",
       "expression": "10_000",
       "file": "frontend/src/lib/shared-ticker.ts",

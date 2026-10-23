@@ -579,6 +579,98 @@ test.describe("the zoomable trend", () => {
   })
 })
 
+/** A legend entry of the zoomable trend, by its name. */
+const legendEntry = (page: Page, name: string) =>
+  zoomTrend(page)
+    .locator(".legend .traces", { hasText: new RegExp(`^${name}$`) })
+    .locator(".legendtoggle")
+/** The trend's rows: one Plotly subplot each. */
+const trendRows = (page: Page) =>
+  zoomTrend(page).locator(".cartesianlayer .subplot")
+const rowNames = (page: Page) => zoomTrend(page).locator(".annotation-text")
+const trendChip = (page: Page, name: string) =>
+  page
+    .getByTestId("requests-trend-chips")
+    .getByRole("button", { name, exact: true })
+const pickSplit = (page: Page, dim: string, split: string) =>
+  zoomTrend(page)
+    .getByRole("group", { name: `${dim}s stacked or separate` })
+    .getByRole("button", { name: split })
+
+test("the trend's switches split it, and its legend is the kind table's Show box", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  await mockTrend(page)
+  await page.goto("/?tab=requests")
+  const show = (kind: string) =>
+    page.getByRole("checkbox", { name: `Show ${kind}` })
+
+  // Kinds and outcomes stacked: the legend lists kinds, the chips their shades.
+  await expect(trendRows(page)).toHaveCount(1)
+  await expect(legendEntry(page, "Directory probe")).toHaveCount(1)
+  await expect(page.getByTestId("requests-shade-idle")).toBeVisible()
+
+  // A legend click is the Show box, both ways.
+  await legendEntry(page, "Directory probe").click()
+  await expect(show("Directory probe")).not.toBeChecked()
+  await show("Directory probe").check()
+  await expect(
+    zoomTrend(page).locator(".legend .traces", { hasText: "Directory probe" }),
+  ).toHaveCSS("opacity", "1")
+  // A double click shows one kind alone, and again shows all.
+  await legendEntry(page, "Auto sync").dblclick()
+  await expect(show("Directory probe")).not.toBeChecked()
+  await expect(show("Auto sync")).toBeChecked()
+  await legendEntry(page, "Auto sync").dblclick()
+  await expect(show("Directory probe")).toBeChecked()
+
+  // A row per kind: the legend lists outcomes, and an outcome's entry is its chip.
+  await pickSplit(page, "kind", "Separate").click()
+  await expect(trendRows(page)).toHaveCount(2)
+  await expect(rowNames(page)).toContainText(["Auto sync", "Directory probe"])
+  await legendEntry(page, "Idle").click()
+  await expect(trendChip(page, "Idle")).toHaveAttribute("aria-pressed", "false")
+  await expect(
+    kinds(page).getByRole("button", { name: "Idle", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false")
+  await trendChip(page, "Idle").click()
+
+  // A row per kind and outcome.
+  await pickSplit(page, "outcome", "Separate").click()
+  await expect(trendRows(page)).toHaveCount(4)
+  await expect(rowNames(page)).toContainText([
+    "Auto sync · Useful",
+    "Auto sync · Idle",
+    "Directory probe · Useful",
+    "Directory probe · Idle",
+  ])
+  // The kind table's Show box takes its kind's rows away.
+  await show("Directory probe").uncheck()
+  await expect(trendRows(page)).toHaveCount(2)
+  await show("Directory probe").check()
+
+  // Outcomes merged: no shades; kinds merged too: one row, no legend.
+  await page.getByTestId("requests-split-outcome").click()
+  await expect(trendRows(page)).toHaveCount(2)
+  await expect(page.getByTestId("requests-shade-idle")).toHaveCount(0)
+  await page.getByTestId("requests-split-kind").click()
+  await expect(trendRows(page)).toHaveCount(1)
+  await expect(zoomTrend(page).locator(".legend")).toHaveCount(0)
+
+  // The kind table's chip hides an outcome in the trend too.
+  await page.getByTestId("requests-split-kind").click()
+  await page.getByTestId("requests-split-outcome").click()
+  await expect(
+    zoomTrend(page).locator(".cartesianlayer .subplot.xy .scatterlayer .trace"),
+  ).toHaveCount(4)
+  await kinds(page).getByRole("button", { name: "Idle", exact: true }).click()
+  await expect(trendChip(page, "Idle")).toHaveAttribute("aria-pressed", "false")
+  await expect(
+    zoomTrend(page).locator(".cartesianlayer .subplot.xy .scatterlayer .trace"),
+  ).toHaveCount(2)
+})
+
 test("the Channel table searches, sorts and pages", async ({ page }) => {
   await mockBreakdown(page)
   await page.goto("/?tab=requests")

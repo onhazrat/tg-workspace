@@ -7,7 +7,7 @@
  */
 import { Maximize2, Minimize2 } from "lucide-react"
 import Plotly from "plotly.js-dist-min"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import createPlotlyComponentModule from "react-plotly.js/factory"
 import type { RequestTrendResponse } from "@/client"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
@@ -16,6 +16,7 @@ import { MINUTE_MS } from "@/lib/analysis-window"
 import { KINDS, OUTCOMES, type Outcome } from "@/lib/requests/breakdown"
 import {
   bandLabels,
+  DOUBLE_CLICK_MS,
   fromPlotly,
   type Hidden,
   legendClick,
@@ -96,6 +97,23 @@ function useFullScreen() {
     return () => window.removeEventListener("keydown", leave, true)
   }, [full])
   return [full, setFull] as const
+}
+
+/**
+ * A legend click waits out the double-click delay, as Plotly's own legend
+ * does, and a double click drops it: a click that hid a kind would redraw the
+ * legend, and the redraw makes Plotly read the second click as a new one.
+ */
+function useLegendClicks(
+  onHidden: (update: (h: Hidden) => Partial<Hidden>) => void,
+) {
+  const pending = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(pending.current), [])
+  return (update: (h: Hidden) => Partial<Hidden>, double: boolean) => {
+    clearTimeout(pending.current)
+    if (double) onHidden(update)
+    else pending.current = setTimeout(() => onHidden(update), DOUBLE_CLICK_MS)
+  }
 }
 
 const smallButton =
@@ -355,6 +373,7 @@ export default function ZoomTrend({
     hiddenOutcomes,
   )
   const height = heightOf(Math.max(1, chart.rows.length))
+  const legendClicks = useLegendClicks(onHidden)
   const Icon = full ? Minimize2 : Maximize2
   // Plotly's own legend toggling stays off (return false): a click is the tab's switch.
   const onLegend =
@@ -362,10 +381,11 @@ export default function ZoomTrend({
     (e: { curveNumber: number; data: { legendgroup?: string }[] }) => {
       const id = e.data[e.curveNumber]?.legendgroup
       if (chart.legend && id)
-        onHidden(
+        legendClicks(
           double
             ? legendDoubleClick(chart.legend, id, chart.kinds)
             : legendClick(chart.legend, id),
+          double,
         )
       return false
     }
@@ -438,6 +458,7 @@ export default function ZoomTrend({
             useResizeHandler
             config={{
               displaylogo: false,
+              doubleClickDelay: DOUBLE_CLICK_MS,
               responsive: true,
               scrollZoom: true,
               modeBarButtonsToRemove: [
