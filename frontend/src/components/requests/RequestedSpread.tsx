@@ -7,7 +7,7 @@
  */
 import { Maximize2, Minimize2 } from "lucide-react"
 import type React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import type { RequestSpreadResponse } from "@/client"
 import { ZoomControls } from "@/components/AnalysisWindowControl"
 import { BarHistogram } from "@/components/filter-tree/BarHistogram"
@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { TgButton } from "@/components/ui/tg-button"
+import { useFullScreen } from "@/hooks/useFullScreen"
 import { floorToMinute, serverNow } from "@/lib/analysis-window"
 import { fmt } from "@/lib/requests/breakdown"
 import {
@@ -63,7 +64,7 @@ export function RequestedSpread({
 }) {
   // One zoom for both views, so full screen opens where the popover was.
   const zoom = useZoomState()
-  const [full, setFull] = useState(false)
+  const [full, setFull] = useFullScreen()
   if (!spread)
     return <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
   const shown = requestedSpread(spread.buckets, zoom.range)

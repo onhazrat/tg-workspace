@@ -15,9 +15,9 @@ import { queryKeys } from "@/hooks/queryKeys"
 import { useIsMobile } from "@/hooks/useMobile"
 import {
   type ChannelRow,
-  type ChargedFilter,
   initialRequestsFilter,
-  leftOutQuery,
+  type Picked,
+  pickedQuery,
   type RequestsFilter,
   requestsRange,
   updated,
@@ -26,22 +26,13 @@ import { offeredTab } from "@/lib/workspace-tabs"
 import { RequestsSheet } from "./RequestsSheet"
 import { RequestsView } from "./RequestsView"
 
-/** What narrows the Breakdown and the trend besides the range. */
-type Picked = {
-  charged: ChargedFilter
-  accounts: readonly string[]
-  leftOut: ReadonlySet<string>
-}
-
 const NONE = new Set<string>()
 
 function query(range: { start: number; end: number }, picked: Picked) {
   return {
     start: new Date(range.start).toISOString(),
     end: new Date(range.end).toISOString(),
-    charged: picked.charged,
-    accounts: [...picked.accounts],
-    ...leftOutQuery(picked.leftOut),
+    ...pickedQuery(picked),
   }
 }
 
@@ -52,13 +43,7 @@ function query(range: { start: number; end: number }, picked: Picked) {
 function useBreakdown(range: { start: number; end: number }, picked: Picked) {
   const q = query(range, picked)
   return useQuery({
-    queryKey: queryKeys.requestBreakdown(
-      range.start,
-      range.end,
-      q.charged,
-      q.accounts,
-      { leftOut: q.leftOut, leftOutKinds: q.leftOutKinds },
-    ),
+    queryKey: queryKeys.requestBreakdown(q),
     queryFn: () => requestsReadRequestBreakdown({ query: q }),
     placeholderData: keepPreviousData,
   })
@@ -68,13 +53,7 @@ function useBreakdown(range: { start: number; end: number }, picked: Picked) {
 function useTrend(range: { start: number; end: number }, picked: Picked) {
   const q = query(range, picked)
   return useQuery({
-    queryKey: queryKeys.requestTrend(
-      range.start,
-      range.end,
-      q.charged,
-      q.accounts,
-      { leftOut: q.leftOut, leftOutKinds: q.leftOutKinds },
-    ),
+    queryKey: queryKeys.requestTrend(q),
     queryFn: () => requestsReadRequestTrend({ query: q }),
     placeholderData: keepPreviousData,
   })
@@ -82,16 +61,9 @@ function useTrend(range: { start: number; end: number }, picked: Picked) {
 
 /** When Requests were made, over everything kept: the range picker's (RQS-09). */
 function useSpread(picked: Picked) {
-  const q = {
-    charged: picked.charged,
-    accounts: [...picked.accounts],
-    ...leftOutQuery(picked.leftOut),
-  }
+  const q = pickedQuery(picked)
   return useQuery({
-    queryKey: queryKeys.requestSpread(q.charged, q.accounts, {
-      leftOut: q.leftOut,
-      leftOutKinds: q.leftOutKinds,
-    }),
+    queryKey: queryKeys.requestSpread(q),
     queryFn: () => requestsReadRequestSpread({ query: q }),
     placeholderData: keepPreviousData,
   })

@@ -1,5 +1,11 @@
 import type React from "react"
-import { fmt, type KindRow, type Outcome, pct } from "@/lib/requests/breakdown"
+import {
+  fmt,
+  type KindRow,
+  type Outcome,
+  outcomeShare,
+  pct,
+} from "@/lib/requests/breakdown"
 import { kindColor, OutcomeBar, Swatch } from "./parts"
 
 export const th =
@@ -31,8 +37,7 @@ export function KindTable({
   /** The outcome chips, in the heading. */
   chips: React.ReactNode
 }) {
-  const share = (o: Outcome, r: KindRow) =>
-    hiddenOutcomes.has(o) || !r.total ? "–" : pct(r[o] / r.total)
+  const share = (o: Outcome, r: KindRow) => outcomeShare(hiddenOutcomes, o, r)
   return (
     <section
       aria-labelledby="requests-by-kind"

@@ -24,9 +24,9 @@ import {
   type ChannelRow,
   fmt,
   kindMeta,
-  leftOutQuery,
   OUTCOMES,
   type Outcome,
+  pickedQuery,
   type RequestsFilter,
 } from "@/lib/requests/breakdown"
 import {
@@ -52,11 +52,9 @@ export function RequestsSheet({
   const query = {
     start: new Date(range.start).toISOString(),
     end: new Date(range.end).toISOString(),
-    charged: filter.charged,
-    accounts: [...filter.accounts],
+    ...pickedQuery(filter),
     hiddenKinds: [...filter.hiddenKinds].sort(),
     hiddenOutcomes: [...filter.hiddenOutcomes].sort(),
-    ...leftOutQuery(filter.leftOut),
     ...(row ? rowQuery(row) : {}),
   }
   const { data, hasNextPage, fetchNextPage } = useInfiniteQuery({

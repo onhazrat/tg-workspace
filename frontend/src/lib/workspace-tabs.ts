@@ -1,6 +1,7 @@
 import type { TabType } from "@/constants"
 import { DIRECTORY_PARAMS } from "@/lib/directory/directory-view"
 import { artifactDestination } from "@/lib/history/open-artifact"
+import { QUOTA_READ_ANY } from "@/lib/permissions"
 import type { WorkspaceSearch } from "@/lib/workspace-search"
 import type { ArtifactListItem } from "@/types"
 
@@ -68,7 +69,7 @@ export function emptyTabSet(): TabSet {
  * do (RQS-03). A tab is still reachable by URL; it then says it is not yours.
  */
 const TAB_PERMISSIONS: Partial<Record<TabType, string>> = {
-  requests: "quota:read_any",
+  requests: QUOTA_READ_ANY,
 }
 
 /** Whether the "+" menu and the palette offer `kind` to these Permissions. */

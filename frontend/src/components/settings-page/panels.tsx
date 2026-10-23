@@ -16,6 +16,7 @@ import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
 import { APP_VERSION } from "@/lib/app-version"
+import { QUOTA_READ_ANY } from "@/lib/permissions"
 import {
   DeleteAccount,
   Usage as MyUsage,
@@ -338,7 +339,7 @@ export const PANELS: Panel[] = [
     title: "Usage",
     description: "Each Account's Requests for one UTC day, and Lift today.",
     keywords: "quota usage requests lift ceiling",
-    permission: "quota:read_any",
+    permission: QUOTA_READ_ANY,
     render: () => <Usage />,
   },
 ]

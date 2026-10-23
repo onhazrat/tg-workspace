@@ -4,6 +4,7 @@ import {
   COMPARE_KINDS,
   fmt,
   type Outcome,
+  outcomeShare,
   pct,
 } from "@/lib/requests/breakdown"
 import { td, th } from "./KindTable"
@@ -32,7 +33,7 @@ export function AccountCompare({
   const max = Math.max(0, ...rows.map((r) => r.total))
   const kinds = COMPARE_KINDS.filter((k) => !hiddenKinds.has(k.id))
   const share = (o: Outcome, r: AccountRow) =>
-    hiddenOutcomes.has(o) || !r.total ? "–" : pct(r[o] / r.total)
+    outcomeShare(hiddenOutcomes, o, r)
   return (
     <section
       aria-labelledby="requests-compare"

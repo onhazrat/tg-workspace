@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react"
 import type { RequestTrendResponse } from "@/client"
 import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
+import { useFullScreen } from "@/hooks/useFullScreen"
 import { MINUTE_MS } from "@/lib/analysis-window"
 import { KINDS, type Outcome } from "@/lib/requests/breakdown"
 import {
@@ -34,27 +35,6 @@ import {
 import { DAY_MS } from "@/lib/scope/window"
 import { OutcomeChips } from "./parts"
 import { type Colors, Plot, useColors } from "./plotly"
-
-/**
- * Full screen without a remount: the same frame goes fixed over the page, so
- * Plotly's zoom carries over. Escape leaves it, before the keyboard mode sees it.
- */
-function useFullScreen() {
-  const [full, setFull] = useState(false)
-  useEffect(() => {
-    // Plotly's resize handler listens to the window, which does not resize here.
-    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")))
-    if (!full) return
-    const leave = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return
-      e.stopPropagation()
-      setFull(false)
-    }
-    window.addEventListener("keydown", leave, true)
-    return () => window.removeEventListener("keydown", leave, true)
-  }, [full])
-  return [full, setFull] as const
-}
 
 /**
  * A legend click waits out the double-click delay, as Plotly's own legend
@@ -312,6 +292,8 @@ export default function ZoomTrend({
   onRange: (start: number, end: number) => void
 }) {
   const c = useColors()
+  // Full screen without a remount: the same frame goes fixed over the
+  // page, so Plotly's zoom carries over.
   const [full, setFull] = useFullScreen()
   const [splits, setSplits] = useState<Splits>({
     kind: "stacked",

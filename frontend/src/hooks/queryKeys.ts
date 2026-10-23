@@ -137,28 +137,14 @@ export const queryKeys = {
    * for a past day is immutable — yesterday cached forever is correct.
    */
   quotaUsage: (day: string) => ["quotaUsage", day] as const,
-  /** The Requests tab's Breakdown for one range, epoch ms (RQS-03). */
-  requestBreakdown: (
-    start: number,
-    end: number,
-    charged: string,
-    accounts: readonly string[],
-    leftOut: { leftOut: string[]; leftOutKinds: string[] },
-  ) => ["requestBreakdown", start, end, charged, accounts, leftOut] as const,
-  /** The Requests tab's Trend for one range, epoch ms (RQS-06). */
-  requestTrend: (
-    start: number,
-    end: number,
-    charged: string,
-    accounts: readonly string[],
-    leftOut: { leftOut: string[]; leftOutKinds: string[] },
-  ) => ["requestTrend", start, end, charged, accounts, leftOut] as const,
-  /** The Requests tab's range picker spread, over everything kept (RQS-09). */
-  requestSpread: (
-    charged: string,
-    accounts: readonly string[],
-    leftOut: { leftOut: string[]; leftOutKinds: string[] },
-  ) => ["requestSpread", charged, accounts, leftOut] as const,
+  /**
+   * The Requests tab's reads, each by the query it sends: the Breakdown
+   * (RQS-03) and the Trend (RQS-06) for one range, the range picker's spread
+   * over everything kept (RQS-09).
+   */
+  requestBreakdown: (query: object) => ["requestBreakdown", query] as const,
+  requestTrend: (query: object) => ["requestTrend", query] as const,
+  requestSpread: (query: object) => ["requestSpread", query] as const,
   /** One Channel table row's Requests, by its row id and query (RQS-10). */
   requestRecords: (row: string, query: object) =>
     ["requestRecords", row, query] as const,

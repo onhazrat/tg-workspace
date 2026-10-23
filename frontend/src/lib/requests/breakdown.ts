@@ -87,6 +87,16 @@ export function leftOutQuery(leftOut: ReadonlySet<string>) {
   }
 }
 
+/** What narrows every Requests read besides the range. */
+export type Picked = Pick<RequestsFilter, "charged" | "accounts" | "leftOut">
+
+/** What is picked, as every Requests endpoint takes it. */
+export const pickedQuery = (picked: Picked) => ({
+  charged: picked.charged,
+  accounts: [...picked.accounts],
+  ...leftOutQuery(picked.leftOut),
+})
+
 /** `set` with `item` flipped in or out. */
 export function toggled<T>(set: ReadonlySet<T>, item: T): Set<T> {
   const next = new Set(set)
@@ -499,3 +509,10 @@ export const fmt = (n: number) => n.toLocaleString("en-US")
 /** A share as a percentage: one decimal under 10%. */
 export const pct = (part: number) =>
   `${(100 * part).toFixed(part < 0.1 ? 1 : 0)}%`
+
+/** An outcome's share of a row's Requests; a dash when it is hidden or there are none. */
+export const outcomeShare = (
+  hidden: ReadonlySet<Outcome>,
+  o: Outcome,
+  t: Tally,
+) => (hidden.has(o) || !t.total ? "–" : pct(t[o] / t.total))
