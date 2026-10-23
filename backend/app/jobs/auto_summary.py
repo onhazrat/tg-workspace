@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
 
 _regenerating: set[str] = set()
 
+NO_PUBLISH_TARGET_DETAIL = (
+    "Not published: choose a bot and a Destination for Auto-publish."
+)
+
 
 def _log_publish_failure(
     session: Session,
@@ -366,11 +370,7 @@ async def after_scheduled_attempt(
             return
         extra = _summary_extra(summary)
         if outcome == "succeeded":
-            if (
-                extra.get("autoPublish")
-                and extra.get("publishBotId")
-                and extra.get("publishChatId")
-            ):
+            if extra.get("autoPublish"):
                 await _auto_publish(session, summary, owner_id=summary.user_id)
             return
         if kind == "quota" and extra.get("autoRegenerate"):
@@ -412,8 +412,23 @@ async def _auto_publish(
     `assert_owner`'s rule that the body is the other half of the answer.
     """
     extra = _summary_extra(summary)
-    bot_id = str(extra.get("publishBotId"))
-    chat_dest_id = str(extra.get("publishChatId"))
+    bot_id = str(extra.get("publishBotId") or "")
+    chat_dest_id = str(extra.get("publishChatId") or "")
+    if not bot_id or not chat_dest_id:
+        # History's Auto-publish toggle once saved the flag with no target for
+        # two months, and this branch was a silent `return` in the caller.
+        _log_publish_failure(
+            session,
+            summary,
+            owner_id=owner_id,
+            bot_id=bot_id,
+            chat_id="",
+            chat_name="",
+            error=NO_PUBLISH_TARGET_DETAIL,
+            text_sent="",
+            status="skipped",
+        )
+        return
     if is_incomplete(summary):
         # A kept Partial response stops short. A person may publish one by
         # hand, with a line saying so; nobody unattended should (SFR-03).

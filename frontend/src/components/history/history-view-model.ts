@@ -5,8 +5,12 @@
  */
 import { toast } from "sonner"
 import type { HistoryParams, HistorySort } from "@/lib/history/history-params"
-import type { ArtifactListItem } from "@/types"
-import { ARTIFACT_KIND_LABELS, artifactName } from "./artifact-presentation"
+import type { ArtifactListItem, BotCredential, ChatDestination } from "@/types"
+import {
+  ARTIFACT_KIND_LABELS,
+  artifactKey,
+  artifactName,
+} from "./artifact-presentation"
 
 export type SummaryFlag = "autoRegenerate" | "autoPublish"
 
@@ -35,6 +39,106 @@ export function summaryFlagChange(
         "Cannot auto-regenerate a summary whose range is under a minute.",
     }
   return { next }
+}
+
+/** A Publish target: the Destination and the bot an Auto-publish sends with. */
+export type PublishPair = { bot: BotCredential; destination: ChatDestination }
+
+/**
+ * A Summary's saved Publish target, or `null` when either half is unset or
+ * names a bot or Destination that was since deleted. The scheduler sends
+ * nothing for either, so the card treats both as missing.
+ */
+export function publishTargetOf(
+  artifact: ArtifactListItem,
+  bots: readonly BotCredential[],
+  destinations: readonly ChatDestination[],
+): PublishPair | null {
+  if (artifact.kind !== "summary") return null
+  const bot = bots.find((b) => b.id === artifact.publishBotId)
+  const destination = destinations.find((d) => d.id === artifact.publishChatId)
+  return bot && destination ? { bot, destination } : null
+}
+
+/**
+ * Every Destination with every bot, Destination first, narrowed by `query`
+ * against the Destination's name or chat id and the bot's name.
+ */
+export function publishPairs(
+  bots: readonly BotCredential[],
+  destinations: readonly ChatDestination[],
+  query: string,
+): PublishPair[] {
+  const q = query.trim().toLowerCase()
+  return destinations
+    .flatMap((destination) => bots.map((bot) => ({ bot, destination })))
+    .filter(
+      ({ bot, destination }) =>
+        !q ||
+        [destination.name, destination.chatId, bot.name].some((text) =>
+          text.toLowerCase().includes(q),
+        ),
+    )
+}
+
+/**
+ * Whether switching `flag` to `next` should open the Publish target chooser:
+ * Auto-publish turned on with no usable target. Saving the flag alone is how
+ * Summaries came to publish nothing for two months.
+ */
+export function opensPublishTarget(
+  artifact: ArtifactListItem,
+  flag: SummaryFlag,
+  next: boolean,
+  bots: readonly BotCredential[],
+  destinations: readonly ChatDestination[],
+): boolean {
+  return (
+    flag === "autoPublish" &&
+    next &&
+    publishTargetOf(artifact, bots, destinations) === null
+  )
+}
+
+/**
+ * Flip a Summary's schedule flag: refuse it with the reason, or save it, open
+ * the Publish target chooser when `opensPublishTarget` says so, and refresh.
+ * The writes are passed in, as `toggleStar`'s are, so the wiring is testable.
+ */
+export async function switchSummaryFlag(
+  artifact: ArtifactListItem,
+  flag: SummaryFlag,
+  deps: {
+    save: (
+      a: ArtifactListItem,
+      flag: SummaryFlag,
+      next: boolean,
+    ) => Promise<void>
+    refresh: () => Promise<unknown>
+    refuse: (reason: string) => void
+    openTarget: (key: string) => void
+    bots: readonly BotCredential[]
+    destinations: readonly ChatDestination[]
+  },
+): Promise<void> {
+  const change = summaryFlagChange(artifact, flag)
+  if (!change) return
+  if ("refusal" in change) {
+    deps.refuse(change.refusal)
+    return
+  }
+  await deps.save(artifact, flag, change.next)
+  if (
+    opensPublishTarget(
+      artifact,
+      flag,
+      change.next,
+      deps.bots,
+      deps.destinations,
+    )
+  )
+    deps.openTarget(artifactKey(artifact))
+  await deps.refresh()
 }
 
 /**

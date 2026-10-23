@@ -7002,6 +7002,14 @@ export type SummaryArtifactResponse = {
      */
     autoPublish?: boolean;
     /**
+     * Publishbotid
+     */
+    publishBotId?: string | null;
+    /**
+     * Publishchatid
+     */
+    publishChatId?: string | null;
+    /**
      * Failedattempts
      */
     failedAttempts?: number;

@@ -14137,6 +14137,14 @@
             "title": "Autopublish",
             "default": false
           },
+          "publishBotId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Publishbotid"
+          },
+          "publishChatId": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Publishchatid"
+          },
           "failedAttempts": {
             "type": "integer",
             "title": "Failedattempts",

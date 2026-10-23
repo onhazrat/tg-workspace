@@ -10,6 +10,7 @@ import {
   ChannelsLine,
   FlagChips,
   KindLabel,
+  PublishChip,
   StatusBadge,
   WindowLine,
 } from "./ArtifactCardParts"
@@ -77,6 +78,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
         <KindLabel artifact={artifact} />
         <StatusBadge artifact={artifact} />
         <FlagChips artifact={artifact} />
+        <PublishChip artifact={artifact} target={actions.publishTarget} />
         <span className="ml-auto shrink-0 text-app-ink/50">
           <RelativeTime timestamp={artifact.timestamp} />
         </span>

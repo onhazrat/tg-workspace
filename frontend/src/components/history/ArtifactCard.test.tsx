@@ -49,6 +49,14 @@ const actions = (): ArtifactActions => ({
   remove: mock(),
   autoRegenerate: mock(),
   autoPublish: mock(),
+  publishTarget: {
+    bots: [],
+    destinations: [],
+    openFor: null,
+    setOpenFor: mock(),
+    set: mock(),
+    openSettings: mock(),
+  },
   useScope: mock(),
 })
 
@@ -86,11 +94,11 @@ describe("the header", () => {
   test("shows a Summary's flag chips only while they are on", () => {
     mount(summary())
     expect(screen.queryByText("Auto-regenerates")).toBeNull()
-    expect(screen.queryByText("Auto-publishes")).toBeNull()
+    expect(screen.queryByText(/Auto-publish/)).toBeNull()
     cleanup()
     mount(summary({ autoRegenerate: true, autoPublish: true }))
     expect(screen.getByText("Auto-regenerates")).toBeTruthy()
-    expect(screen.getByText("Auto-publishes")).toBeTruthy()
+    expect(screen.getByText("Auto-publish: choose where")).toBeTruthy()
   })
 })
 
@@ -275,5 +283,92 @@ describe("artifactChannelsLine", () => {
       "a, b",
     )
     expect(artifactChannelsLine(summary({ scope: null }))).toBe("No channels")
+  })
+})
+
+describe("the Publish target chip", () => {
+  const bots = [{ id: "b1", name: "@newsbot" }]
+  const destinations = [
+    { id: "d1", name: "IranDaily", chatId: "-1001" },
+    { id: "d2", name: "Team chat", chatId: "-1002" },
+  ]
+  const on = (over: Record<string, unknown> = {}) =>
+    summary({ autoPublish: true, ...over })
+
+  function mountWith(
+    artifact: ArtifactListItem,
+    over: Partial<ArtifactActions["publishTarget"]> = {},
+  ) {
+    const target = {
+      ...actions().publishTarget,
+      bots,
+      destinations,
+      ...over,
+    }
+    render(
+      <ArtifactCard
+        artifact={artifact}
+        actions={{ ...actions(), publishTarget: target }}
+        search=""
+        compact
+      />,
+    )
+    return target
+  }
+
+  test("names the Destination once both halves are saved, the bot on hover", () => {
+    mountWith(on({ publishBotId: "b1", publishChatId: "d1" }))
+    const chip = screen.getByRole("button", { name: /Auto-publishes to/ })
+    expect(chip.textContent).toBe("Auto-publishes to IranDaily")
+    expect(chip.getAttribute("title")).toContain("@newsbot")
+  })
+
+  test("asks where while a half is missing or was deleted", () => {
+    for (const over of [
+      { publishBotId: "b1" },
+      { publishBotId: "b1", publishChatId: "deleted" },
+    ]) {
+      mountWith(on(over))
+      expect(screen.getByText("Auto-publish: choose where")).toBeTruthy()
+      cleanup()
+    }
+  })
+
+  test("opens through the card's list, keyed by kind and id", () => {
+    const target = mountWith(on())
+    fireEvent.click(screen.getByText("Auto-publish: choose where"))
+    expect(target.setOpenFor).toHaveBeenCalledWith("summary:s1")
+  })
+
+  test("one pick saves the bot and the Destination together, and closes", () => {
+    const artifact = on()
+    const target = mountWith(artifact, { openFor: "summary:s1" })
+    fireEvent.click(screen.getByRole("button", { name: /Team chat/ }))
+    expect(target.set).toHaveBeenCalledWith(artifact, "b1", "d2")
+    expect(target.setOpenFor).toHaveBeenCalledWith(null)
+  })
+
+  test("the search narrows the pairs", () => {
+    mountWith(on(), { openFor: "summary:s1" })
+    fireEvent.change(screen.getByLabelText("Search Destinations and bots"), {
+      target: { value: "-1002" },
+    })
+    expect(screen.queryByRole("button", { name: /IranDaily/ })).toBeNull()
+    expect(screen.getByRole("button", { name: /Team chat/ })).toBeTruthy()
+  })
+
+  test("with neither saved, it names both", () => {
+    mountWith(on(), { openFor: "summary:s1", bots: [], destinations: [] })
+    expect(
+      screen.getByText(/Auto-publish needs a bot and a Destination/),
+    ).toBeTruthy()
+  })
+
+  test("with no bot saved, it sends you to Settings to add one", () => {
+    const target = mountWith(on(), { openFor: "summary:s1", bots: [] })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Settings › Publishing" }),
+    )
+    expect(target.openSettings).toHaveBeenCalled()
   })
 })

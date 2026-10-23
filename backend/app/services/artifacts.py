@@ -219,6 +219,8 @@ def _summary_leg(user_id: uuid.UUID) -> Any:
             col(Summary.scope).label("scope"),
             _flag(Summary, "autoRegenerate").label("auto_regenerate"),
             _flag(Summary, "autoPublish").label("auto_publish"),
+            _text_flag(Summary, "publishBotId").label("publish_bot_id"),
+            _text_flag(Summary, "publishChatId").label("publish_chat_id"),
             _failed_attempts().label("failed_attempts"),
         ),
         Summary,
@@ -246,6 +248,8 @@ def _chat_leg(user_id: uuid.UUID) -> Any:
             col(ChatSession.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
+            _null(String).label("publish_bot_id"),
+            _null(String).label("publish_chat_id"),
             _null(Integer).label("failed_attempts"),
         ),
         ChatSession,
@@ -277,6 +281,8 @@ def _tag_leg(user_id: uuid.UUID) -> Any:
             col(TagRun.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
+            _null(String).label("publish_bot_id"),
+            _null(String).label("publish_chat_id"),
             _null(Integer).label("failed_attempts"),
         ),
         TagRun,
@@ -307,6 +313,8 @@ def _discovery_leg(user_id: uuid.UUID) -> Any:
             col(DiscoverReport.scope).label("scope"),
             literal(False).label("auto_regenerate"),
             literal(False).label("auto_publish"),
+            _null(String).label("publish_bot_id"),
+            _null(String).label("publish_chat_id"),
             _null(Integer).label("failed_attempts"),
         ),
         DiscoverReport,
@@ -413,6 +421,8 @@ def _row_to_camel(row: Any) -> dict[str, Any]:
         out["language"] = row["language"]
         out["autoRegenerate"] = bool(row["auto_regenerate"])
         out["autoPublish"] = bool(row["auto_publish"])
+        out["publishBotId"] = row["publish_bot_id"]
+        out["publishChatId"] = row["publish_chat_id"]
         out["failedAttempts"] = row["failed_attempts"]
     elif kind == "chat":
         out["messageCount"] = row["message_count"]

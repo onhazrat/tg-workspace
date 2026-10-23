@@ -574,6 +574,20 @@ One Telegram message of a Publication. A Summary longer than Telegram allows in
 one message becomes several Parts, cut between paragraphs.
 _Avoid_: message (a Post is the message the corpus holds), chunk, piece
 
+**Destination**:
+A Telegram chat saved as somewhere to publish. Every Publication goes to one.
+_Avoid_: chat (a Chat is an Artifact), chat destination, target
+
+**Auto-publish**:
+A Summary's choice to make a Publication of each new version its scheduled
+regeneration writes, to its Publish target. With no Publish target it sends
+nothing, and the publish log says so.
+_Avoid_: auto-send, scheduled publish
+
+**Publish target**:
+The Destination and the bot an Auto-publish sends with, chosen as a pair.
+_Avoid_: target on its own, publish config
+
 ### Chat modes
 
 **Selected posts**:

@@ -82,6 +82,9 @@ class SummaryArtifactResponse(ArtifactBase):
     language: str = "English"
     auto_regenerate: bool = Field(default=False, alias="autoRegenerate")
     auto_publish: bool = Field(default=False, alias="autoPublish")
+    #: The Publish target; History's Auto-publish chip shows and sets it.
+    publish_bot_id: str | None = Field(default=None, alias="publishBotId")
+    publish_chat_id: str | None = Field(default=None, alias="publishChatId")
     #: How many of its Attempts failed (SFR-01); History's "Failed ×n".
     failed_attempts: int = Field(default=0, alias="failedAttempts")
 

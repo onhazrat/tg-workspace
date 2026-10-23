@@ -3,7 +3,7 @@
  * on, what the empty list, the delete dialog and the footer say, how many
  * filters the phone's button counts, and how the list falls into days.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 import {
   DEFAULT_HISTORY_PARAMS,
   type HistoryParams,
@@ -16,8 +16,12 @@ import {
   historyEmptyDescription,
   historyShowsEmpty,
   historySortWords,
+  opensPublishTarget,
+  publishPairs,
+  publishTargetOf,
   starNotice,
   summaryFlagChange,
+  switchSummaryFlag,
 } from "./history-view-model"
 
 const params = (over: Partial<HistoryParams> = {}) => ({
@@ -216,5 +220,151 @@ describe("historyDays", () => {
     )
     expect(days.map((d) => d.rows.length)).toEqual([1, 1, 1])
     expect(new Set(days.map((d) => d.key)).size).toBe(3)
+  })
+})
+
+const bots = [
+  { id: "b1", name: "@newsbot" },
+  { id: "b2", name: "@digestbot" },
+]
+const destinations = [
+  { id: "d1", name: "IranDaily", chatId: "-1001" },
+  { id: "d2", name: "Team chat", chatId: "-1002" },
+]
+
+describe("publishTargetOf", () => {
+  test("is the saved bot and Destination when both still exist", () => {
+    const target = publishTargetOf(
+      summary({ publishBotId: "b2", publishChatId: "d1" }),
+      bots,
+      destinations,
+    )
+    expect([target?.bot.name, target?.destination.name]).toEqual([
+      "@digestbot",
+      "IranDaily",
+    ])
+  })
+
+  test("is missing when either half is unset or was deleted", () => {
+    for (const over of [
+      {},
+      { publishBotId: "b1" },
+      { publishChatId: "d1" },
+      { publishBotId: "gone", publishChatId: "d1" },
+      { publishBotId: "b1", publishChatId: "gone" },
+    ])
+      expect(publishTargetOf(summary(over), bots, destinations)).toBeNull()
+  })
+
+  test("only a Summary has one", () => {
+    expect(publishTargetOf(chat, bots, destinations)).toBeNull()
+  })
+})
+
+describe("publishPairs", () => {
+  const names = (query: string) =>
+    publishPairs(bots, destinations, query).map(
+      (p) => `${p.destination.name} via ${p.bot.name}`,
+    )
+
+  test("offers every Destination with every bot, Destination first", () => {
+    expect(names("")).toEqual([
+      "IranDaily via @newsbot",
+      "IranDaily via @digestbot",
+      "Team chat via @newsbot",
+      "Team chat via @digestbot",
+    ])
+  })
+
+  test("matches the Destination's name or chat id, or the bot's name", () => {
+    expect(names("  daily ")).toEqual([
+      "IranDaily via @newsbot",
+      "IranDaily via @digestbot",
+    ])
+    expect(names("-1002")).toEqual([
+      "Team chat via @newsbot",
+      "Team chat via @digestbot",
+    ])
+    expect(names("DIGEST")).toEqual([
+      "IranDaily via @digestbot",
+      "Team chat via @digestbot",
+    ])
+  })
+})
+
+describe("opensPublishTarget", () => {
+  test("turning Auto-publish on with no usable target opens the chooser", () => {
+    for (const over of [{}, { publishBotId: "b1", publishChatId: "gone" }])
+      expect(
+        opensPublishTarget(
+          summary(over),
+          "autoPublish",
+          true,
+          bots,
+          destinations,
+        ),
+      ).toBe(true)
+    // Even with nothing saved to choose from: the chooser says where to add one.
+    expect(opensPublishTarget(summary(), "autoPublish", true, [], [])).toBe(
+      true,
+    )
+  })
+
+  test("not when a target is saved, when turning off, or for the other flag", () => {
+    const saved = summary({ publishBotId: "b1", publishChatId: "d1" })
+    expect(
+      opensPublishTarget(saved, "autoPublish", true, bots, destinations),
+    ).toBe(false)
+    expect(
+      opensPublishTarget(summary(), "autoPublish", false, bots, destinations),
+    ).toBe(false)
+    expect(
+      opensPublishTarget(summary(), "autoRegenerate", true, bots, destinations),
+    ).toBe(false)
+  })
+})
+
+describe("switchSummaryFlag", () => {
+  const deps = () => ({
+    save: mock(
+      async (_a: ArtifactListItem, _flag: string, _next: boolean) => {},
+    ),
+    refresh: mock(async () => {}),
+    refuse: mock(),
+    openTarget: mock(),
+    bots,
+    destinations,
+  })
+
+  test("turning Auto-publish on with no target saves it and opens the chooser", async () => {
+    const d = deps()
+    await switchSummaryFlag(summary(), "autoPublish", d)
+    expect(d.save.mock.calls).toEqual([[summary(), "autoPublish", true]])
+    expect(d.openTarget).toHaveBeenCalledWith("summary:s1")
+    expect(d.refresh).toHaveBeenCalled()
+  })
+
+  test("with a target saved it only saves", async () => {
+    const d = deps()
+    await switchSummaryFlag(
+      summary({ publishBotId: "b1", publishChatId: "d1" }),
+      "autoPublish",
+      d,
+    )
+    expect(d.save).toHaveBeenCalled()
+    expect(d.openTarget).not.toHaveBeenCalled()
+  })
+
+  test("a refusal saves nothing and says why", async () => {
+    const d = deps()
+    await switchSummaryFlag(
+      summary({ scope: { durationMinutes: 0 } }),
+      "autoRegenerate",
+      d,
+    )
+    expect(d.save).not.toHaveBeenCalled()
+    expect(d.refuse).toHaveBeenCalledWith(
+      "Cannot auto-regenerate a summary whose range is under a minute.",
+    )
   })
 })
