@@ -39,6 +39,10 @@ const BREAKDOWN: RequestBreakdownResponse = {
     { ...part("auto", 60, 30, 10), channel: "news" },
     { ...part("probe", 100, 200, 600), channel: null },
   ],
+  byAccount: [
+    { ...part("auto", 40, 20, 0), accountId: "a", email: "ann@example.com" },
+    { ...part("auto", 20, 10, 10), accountId: "b", email: "bob@example.com" },
+  ],
 }
 
 const RANGE = {
@@ -145,6 +149,28 @@ describe("RequestsView", () => {
     fireEvent.click(chip("Wasted"))
     const useful = chip("Useful")
     expect(useful.hasAttribute("disabled")).toBe(true)
+  })
+
+  test("the Accounts facet counts each one's charged Requests, and picking two compares them", () => {
+    const seen: RequestsFilter[] = []
+    render(<Harness seen={seen} byAccount={BREAKDOWN.byAccount} />)
+    expect(screen.queryByTestId("requests-uncharged-hidden")).toBeNull()
+    fireEvent.click(screen.getByTestId("requests-accounts"))
+    expect(screen.getByTestId("requests-accounts-count-b").textContent).toBe(
+      "40",
+    )
+    fireEvent.click(screen.getByTestId("requests-accounts-funnel-a"))
+    expect(seen.at(-1)?.accounts).toEqual(["a"])
+    expect(screen.getByTestId("requests-uncharged-hidden").textContent).toBe(
+      "Uncharged hidden, because no Account pays for it",
+    )
+    // One Account narrows the tab; there is nothing to compare it with.
+    expect(screen.queryByRole("region", { name: /Comparing/ })).toBeNull()
+    fireEvent.click(screen.getByTestId("requests-accounts-funnel-b"))
+    expect(seen.at(-1)?.accounts).toEqual(["a", "b"])
+    expect(
+      screen.getByRole("region", { name: "Comparing 2 Accounts" }),
+    ).toBeTruthy()
   })
 
   test("a failed read says so", () => {

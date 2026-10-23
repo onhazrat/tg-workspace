@@ -138,11 +138,19 @@ export const queryKeys = {
    */
   quotaUsage: (day: string) => ["quotaUsage", day] as const,
   /** The Requests tab's Breakdown for one range, epoch ms (RQS-03). */
-  requestBreakdown: (start: number, end: number, charged: string) =>
-    ["requestBreakdown", start, end, charged] as const,
+  requestBreakdown: (
+    start: number,
+    end: number,
+    charged: string,
+    accounts: readonly string[],
+  ) => ["requestBreakdown", start, end, charged, accounts] as const,
   /** The Requests tab's Trend for one range, epoch ms (RQS-06). */
-  requestTrend: (start: number, end: number, charged: string) =>
-    ["requestTrend", start, end, charged] as const,
+  requestTrend: (
+    start: number,
+    end: number,
+    charged: string,
+    accounts: readonly string[],
+  ) => ["requestTrend", start, end, charged, accounts] as const,
   /**
    * The signed-in account's own Budgets (ticket 24). Not keyed on a day: it
    * always answers for today, and a key holding a date would go stale across a

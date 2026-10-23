@@ -22,19 +22,28 @@ import {
 import { offeredTab } from "@/lib/workspace-tabs"
 import { RequestsView } from "./RequestsView"
 
+/** What narrows the Breakdown and the trend besides the range. */
+type Picked = { charged: ChargedFilter; accounts: readonly string[] }
+
 function useBreakdown(
   range: { start: number; end: number },
-  charged: ChargedFilter,
+  { charged, accounts }: Picked,
   enabled: boolean,
 ) {
   return useQuery({
-    queryKey: queryKeys.requestBreakdown(range.start, range.end, charged),
+    queryKey: queryKeys.requestBreakdown(
+      range.start,
+      range.end,
+      charged,
+      accounts,
+    ),
     queryFn: () =>
       requestsReadRequestBreakdown({
         query: {
           start: new Date(range.start).toISOString(),
           end: new Date(range.end).toISOString(),
           charged,
+          accounts: [...accounts],
         },
       }),
     placeholderData: keepPreviousData,
@@ -45,16 +54,17 @@ function useBreakdown(
 /** The range in buckets, for the daily bars (RQS-06). */
 function useTrend(
   range: { start: number; end: number },
-  charged: ChargedFilter,
+  { charged, accounts }: Picked,
 ) {
   return useQuery({
-    queryKey: queryKeys.requestTrend(range.start, range.end, charged),
+    queryKey: queryKeys.requestTrend(range.start, range.end, charged, accounts),
     queryFn: () =>
       requestsReadRequestTrend({
         query: {
           start: new Date(range.start).toISOString(),
           end: new Date(range.end).toISOString(),
           charged,
+          accounts: [...accounts],
         },
       }),
     placeholderData: keepPreviousData,
@@ -82,11 +92,13 @@ function OperatorRequests() {
     () => requestsRange(filter.bound, Date.now()),
     [filter.bound],
   )
-  // The unfiltered Breakdown gives the choice counts; the picked one, the rest.
-  const all = useBreakdown(range, "all", true)
-  const picked = useBreakdown(range, filter.charged, filter.charged !== "all")
-  const shown = filter.charged === "all" ? all : picked
-  const trend = useTrend(range, filter.charged)
+  // The unfiltered Breakdown gives the choice and Account counts; the picked
+  // one, the rest.
+  const unfiltered = filter.charged === "all" && !filter.accounts.length
+  const all = useBreakdown(range, { charged: "all", accounts: [] }, true)
+  const picked = useBreakdown(range, filter, !unfiltered)
+  const shown = unfiltered ? all : picked
+  const trend = useTrend(range, filter)
   const phone = useIsMobile()
   return (
     <RequestsView
@@ -94,6 +106,7 @@ function OperatorRequests() {
       onFilter={(patch) => setFilter((f) => ({ ...f, ...patch }))}
       range={range}
       counts={all.data && chargedCounts(all.data.byKind)}
+      byAccount={all.data?.byAccount}
       breakdown={shown.data}
       trend={trend.data}
       error={all.error ?? shown.error ?? trend.error}

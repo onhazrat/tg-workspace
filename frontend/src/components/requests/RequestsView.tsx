@@ -1,8 +1,16 @@
-import type { RequestBreakdownResponse, RequestTrendResponse } from "@/client"
+import { Users } from "lucide-react"
+import type {
+  AccountRequestTotals,
+  RequestBreakdownResponse,
+  RequestTrendResponse,
+} from "@/client"
 import { FilterBar } from "@/components/FilterBar"
+import { FacetMenu } from "@/components/filter-tree/FacetMenu"
 import { TimeBoundBar } from "@/components/TimeBoundEditor"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import {
+  type AccountRow,
+  accountRows,
   type ChargedFilter,
   channelRows,
   fmt,
@@ -14,6 +22,7 @@ import {
 } from "@/lib/requests/breakdown"
 import { DAY_MS } from "@/lib/scope/window"
 import { extractErrorMessage } from "@/utils"
+import { AccountCompare } from "./AccountCompare"
 import { ChannelTable } from "./ChannelTable"
 import { DailyBars } from "./DailyBars"
 import { KindTable } from "./KindTable"
@@ -34,6 +43,7 @@ export function RequestsView({
   onFilter,
   range,
   counts,
+  byAccount = [],
   breakdown,
   trend,
   error,
@@ -45,6 +55,8 @@ export function RequestsView({
   range: { start: number; end: number }
   /** All, Charged and Uncharged in the range, whichever is picked. */
   counts?: Record<ChargedFilter, number>
+  /** Every Account's charged Requests in the range, whichever are picked. */
+  byAccount?: readonly AccountRequestTotals[]
   breakdown?: RequestBreakdownResponse
   /** The range in buckets, for the daily bars (RQS-06). */
   trend?: RequestTrendResponse
@@ -53,12 +65,17 @@ export function RequestsView({
 }) {
   const { hiddenKinds, hiddenOutcomes } = filter
   const totals = breakdown && statTotals(breakdown.byKind)
+  const everyAccount = accountRows(byAccount, new Set(), new Set())
+  // Colours follow the Account, ordered by email, never its rank or the pick.
+  const every = [...everyAccount]
+    .sort((a, b) => a.email.localeCompare(b.email))
+    .map((a) => a.id)
   return (
     <div className="space-y-3 pb-16" data-testid="requests-tab">
       <FilterBar
         phone={phone}
         testIdPrefix="requests"
-        active={Number(filter.charged !== "all")}
+        active={Number(filter.charged !== "all") + filter.accounts.length}
         search={<h2 className="text-base font-semibold">Requests</h2>}
         controls={
           <>
@@ -81,6 +98,11 @@ export function RequestsView({
               value={filter.charged}
               onChange={(charged) => onFilter({ charged })}
             />
+            <AccountsFacet
+              everyAccount={everyAccount}
+              picked={filter.accounts}
+              onPick={(accounts) => onFilter({ accounts })}
+            />
             <span className="mx-1 h-5 w-px bg-app-ink/10" />
             <TimeBoundBar
               label="Requested"
@@ -98,6 +120,14 @@ export function RequestsView({
             <span data-testid="requests-range" className="text-app-ink/50">
               {rangeText(range.start, range.end)} (UTC)
             </span>
+            {filter.accounts.length > 0 && (
+              <span
+                data-testid="requests-uncharged-hidden"
+                className="text-app-ink/50"
+              >
+                Uncharged hidden, because no Account pays for it
+              </span>
+            )}
           </>
         }
       />
@@ -109,6 +139,18 @@ export function RequestsView({
         breakdown &&
         totals && (
           <>
+            {filter.accounts.length > 1 && (
+              <AccountCompare
+                rows={accountRows(
+                  breakdown.byAccount,
+                  hiddenKinds,
+                  hiddenOutcomes,
+                )}
+                every={every}
+                hiddenKinds={hiddenKinds}
+                hiddenOutcomes={hiddenOutcomes}
+              />
+            )}
             <StatStrip t={totals} />
             {trend && (
               <DailyBars
@@ -149,5 +191,43 @@ export function RequestsView({
         )
       )}
     </div>
+  )
+}
+
+/** The Accounts facet (RQS-05): each Account's charged Requests; a funnel picks it. */
+function AccountsFacet({
+  everyAccount,
+  picked,
+  onPick,
+}: {
+  everyAccount: readonly AccountRow[]
+  picked: readonly string[]
+  onPick: (accounts: string[]) => void
+}) {
+  const label = (a: AccountRow) => a.email || "Deleted Account"
+  return (
+    <FacetMenu
+      icon={<Users size={12} />}
+      label="Accounts"
+      noun="Account"
+      testId="requests-accounts"
+      countLabel="charged Requests"
+      rows={everyAccount.map((a) => ({
+        id: a.id,
+        label: label(a),
+        selected: 0,
+        total: a.total,
+        tick: "false" as const,
+      }))}
+      funnelled={[...picked]}
+      labelOf={(id) => {
+        const account = everyAccount.find((a) => a.id === id)
+        return account ? label(account) : id
+      }}
+      onFunnel={(id, on) =>
+        onPick(on ? [...picked, id] : picked.filter((x) => x !== id))
+      }
+      onClearFunnels={() => onPick([])}
+    />
   )
 }

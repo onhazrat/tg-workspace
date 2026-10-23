@@ -103,6 +103,16 @@
   --layer-uncharged: #c3c2b7;
   --viz-grid: #e1e0d9;
   --viz-axis: #898781;
+  /*
+   * Accounts (RQS-05): a four-step violet ramp, dark to light (oklch C 0.16,
+   * h 295). Bot API is violet too (slot 7), but they never meet: picking
+   * Accounts hides every Uncharged Request, Bot API's among them, and the
+   * comparison's columns are the charged kinds (COMPARE_KINDS).
+   */
+  --account-1: #563199;
+  --account-2: #7553bd;
+  --account-3: #9575e2;
+  --account-4: #b697ff;
 }
 
 .dark {
@@ -153,6 +163,10 @@
   --kind-other: #807f79;
   --layer-charged: #c3c2b7;
   --layer-uncharged: #52514e;
+  --account-1: #7250ba;
+  --account-2: #8f6edb;
+  --account-3: #ad8dfd;
+  --account-4: #ccadff;
   --viz-grid: #2c2c2a;
 }
 
