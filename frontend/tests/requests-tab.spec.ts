@@ -562,6 +562,112 @@ test("a Channel left out leaves the whole tab, stays listed, and Pick all brings
   )
 })
 
+/**
+ * A row's Requests (RQS-10): 250 for a Channel, newest first a minute apart,
+ * every fifth Wasted as turned away; one probe of a handle for an aggregate
+ * row. Served in the pages asked for.
+ */
+const record = (i: number, over: Record<string, unknown> = {}) => ({
+  id: `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`,
+  at: plus(daysAgo(1), -60_000 * i),
+  latencyMs: 400 + i,
+  kind: "auto",
+  charged: true,
+  accountId: "a",
+  email: "ann@x.org",
+  budget: "auto",
+  bestEffort: false,
+  channel: "chan00",
+  lane: "direct",
+  pageType: "posts",
+  outcome: i % 5 ? "useful" : "wasted",
+  cause: i % 5 ? null : "turnedAway",
+  errorCode: i % 5 ? null : "429",
+  attempt: 1,
+  chainId: `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`,
+  newPosts: i % 5 ? 3 : null,
+  repeatedPosts: i % 5 ? 17 : null,
+  ...over,
+})
+const RECORDS = Array.from({ length: 250 }, (_, i) => record(i))
+const PROBED = record(0, {
+  kind: "probe",
+  charged: false,
+  accountId: null,
+  email: null,
+  channel: "someone",
+  pageType: "metadata",
+  outcome: "idle",
+  cause: null,
+  errorCode: null,
+  newPosts: null,
+  repeatedPosts: null,
+})
+
+/** Every read of a row's Requests, newest last. */
+async function mockRecords(page: Page): Promise<URL[]> {
+  const seen: URL[] = []
+  await page.route("**/api/v1/requests/records?**", (route: Route) => {
+    const url = new URL(route.request().url())
+    seen.push(url)
+    const all = url.searchParams.get("kind") === "probe" ? [PROBED] : RECORDS
+    const offset = Number(url.searchParams.get("offset"))
+    const limit = Number(url.searchParams.get("limit"))
+    const count = (o: string) => all.filter((r) => r.outcome === o).length
+    return route.fulfill({
+      json: {
+        start: daysAgo(7),
+        end: daysAgo(0),
+        total: all.length,
+        useful: count("useful"),
+        idle: count("idle"),
+        wasted: count("wasted"),
+        records: all.slice(offset, offset + limit),
+      },
+    })
+  })
+  return seen
+}
+
+test("a row click opens its Requests in a sheet, in the tab's range", async ({
+  page,
+}) => {
+  const breakdowns = await mockBreakdown(page)
+  const seen = await mockRecords(page)
+  await page.goto("/?tab=requests")
+  await page.getByTestId("requests-charged-charged").click()
+  await row(page, "@chan00").getByText("@chan00").click()
+
+  const sheet = page.getByTestId("requests-sheet")
+  await expect(sheet.getByRole("heading")).toHaveText("@chan00 · each Request")
+  const counts = sheet.getByTestId("requests-record-counts")
+  await expect(counts).toContainText("250 Requests")
+  await expect(counts).toContainText("50 wasted")
+  const records = sheet.getByTestId("requests-record")
+  await expect(records).toHaveCount(200)
+  await expect(records.nth(0)).toContainText(RECORDS[0].at.replace("T", " "))
+  await expect(records.nth(0)).toContainText("Turned away")
+  await expect(records.nth(0)).toContainText("429")
+  await expect(records.nth(1)).toContainText("ann@x.org")
+  const asked = seen.at(-1) as URL
+  const range = breakdowns.at(-1) as URL
+  for (const key of ["start", "end", "charged"])
+    expect(asked.searchParams.get(key)).toBe(range.searchParams.get(key))
+  expect(asked.searchParams.get("channel")).toBe("chan00")
+
+  await sheet.getByRole("button", { name: "Show more" }).click()
+  await expect(records).toHaveCount(250)
+  await expect(sheet.getByRole("button", { name: "Show more" })).toHaveCount(0)
+
+  await page.keyboard.press("Escape")
+  await expect(sheet).toHaveCount(0)
+  await page.getByTestId("requests-charged-all").click()
+  await row(page, "Directory probes").getByText("Directory probes").click()
+  await expect(records).toHaveCount(1)
+  await expect(records.nth(0)).toContainText("@someone")
+  expect((seen.at(-1) as URL).searchParams.get("kind")).toBe("probe")
+})
+
 test("the Settings Usage panel links to the tab", async ({ page }) => {
   await mockBreakdown(page)
   await page.goto("/admin")
