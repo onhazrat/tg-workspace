@@ -6,7 +6,7 @@
 
 **Blocked by:** RQS-03
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Trend endpoint: Operator-only, same filters as the Breakdown; 5-minute buckets from per-Request rows inside the last week, hourly inside the month, daily before; each bucket carries its span and counts by kind × outcome.
 - [ ] Daily bar trend (Recharts) on the tab, following the range, Charged/Uncharged, hidden kinds and outcomes, and the Channels left out; clicking a day narrows the range to it.
@@ -17,3 +17,5 @@
 ## Comments
 
 - 2026-10-23 (lead): after RQS-02, a range cut to the minute older than `REQUEST_RECORD_DAYS` finds no per-Request rows for its partial hours. Both the trend and the Breakdown should fall back to the hourly tier there (the spec's "finest tier covering each stretch"), not read nothing.
+- 2026-10-23: implemented on `claude/rqs-06` and merged into the integration branch in 8fcb3076aa05c272be1859638bdcdb1b1912117b (fast-forward). The minute-cut fallback is `_widen`, in both the trend and the Breakdown.
+  Open: the Channels-left-out part of box 2 waits on RQS-04, which adds them to `_filtered` in `services/request_stats.py` (both endpoints pick it up).

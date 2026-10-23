@@ -18,3 +18,4 @@
 ## Comments
 
 - 2026-10-23 (lead): RQS-01 left syncs and failed syncs out of the Breakdown because nothing records them yet. The measures here need them: record them (a sync run and whether it failed) and add them to the Breakdown rows as part of this ticket.
+- 2026-10-23 (lead): RQS-06 left the trend's Channels-left-out filter to you: add the left-out Channels to `_filtered` in `services/request_stats.py` and both the Breakdown and the trend follow; tick RQS-06's box 2 when done.
