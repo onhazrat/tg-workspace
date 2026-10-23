@@ -1,4 +1,4 @@
-import type { Page, Route } from "@playwright/test"
+import type { Locator, Page, Route } from "@playwright/test"
 
 import { expect, test } from "./fixtures.ts"
 
@@ -137,9 +137,39 @@ async function mockTrend(page: Page): Promise<URL[]> {
   return seen
 }
 
-/** Every Breakdown read, newest last. The Trend is mocked beside it. */
+/**
+ * When Requests were made (RQS-09): ten days 40 to 31 days ago kept only as
+ * daily totals, then one hour on each of the last 30 days. A bar a day: 40.
+ */
+const SPREAD = [
+  ...Array.from({ length: 10 }, (_, i) => ({
+    start: daysAgo(40 - i),
+    end: daysAgo(39 - i),
+    requests: 100 + i,
+  })),
+  ...Array.from({ length: 30 }, (_, i) => ({
+    start: plus(daysAgo(30 - i), 3_600_000 * 6),
+    end: plus(daysAgo(30 - i), 3_600_000 * 7),
+    requests: 10 + i,
+  })),
+]
+
+/** Every Spread read, newest last. */
+async function mockSpread(page: Page): Promise<URL[]> {
+  const seen: URL[] = []
+  await page.route("**/api/v1/requests/spread**", (route: Route) => {
+    seen.push(new URL(route.request().url()))
+    return route.fulfill({
+      json: { recordDays: 7, hourlyDays: 30, buckets: SPREAD },
+    })
+  })
+  return seen
+}
+
+/** Every Breakdown read, newest last. The Trend and Spread are mocked beside it. */
 async function mockBreakdown(page: Page): Promise<URL[]> {
   await mockTrend(page)
+  await mockSpread(page)
   const seen: URL[] = []
   await page.route("**/api/v1/requests/breakdown?**", (route: Route) => {
     const url = new URL(route.request().url())
@@ -213,6 +243,86 @@ test("the Operator opens Requests from the + menu and reads the range's totals",
   await expect(page.getByTestId("requests-range")).toHaveText(
     `from ${utc("start")} to ${utc("end")} (UTC)`,
   )
+})
+
+const openRequested = (page: Page) =>
+  page
+    .getByRole("button", { name: "Requested", exact: true })
+    .and(page.locator("[aria-haspopup=dialog]"))
+    .click()
+const spreadBars = (scope: Page | Locator) =>
+  scope.getByTestId(/^requests-spread-bar-/)
+
+test("the range picker's spread shows when Requests were made, and a drag picks a range", async ({
+  page,
+}) => {
+  const breakdowns = await mockBreakdown(page)
+  const spreads = await mockSpread(page)
+  await page.goto("/?tab=requests")
+  await expect(total(page)).toHaveText("1,720 Requests")
+  await openRequested(page)
+  // Every day kept, under the tab's filters but not its range.
+  await expect(spreadBars(page)).toHaveCount(40)
+  await expect(page.getByText("7d · each Request")).toBeVisible()
+  await expect(page.getByText("30d · hourly")).toBeVisible()
+  expect(spreads.at(-1)?.searchParams.get("charged")).toBe("all")
+  expect(spreads.at(-1)?.searchParams.has("start")).toBe(false)
+
+  // A drag across bars 2 to 4: the three days from 38 days ago.
+  const box = async (i: number) => {
+    const b = await spreadBars(page).nth(i).boundingBox()
+    if (!b) throw new Error(`bar ${i} is not drawn`)
+    return { x: b.x + b.width / 2, y: b.y + b.height - 2 }
+  }
+  const [from, to] = [await box(2), await box(4)]
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(to.x, to.y, { steps: 5 })
+  await page.mouse.up()
+  await expect
+    .poll(() => breakdowns.at(-1)?.searchParams.get("start"))
+    .toBe(`${daysAgo(38)}.000Z`)
+  expect(breakdowns.at(-1)?.searchParams.get("end")).toBe(`${daysAgo(35)}.000Z`)
+  await expect(page.getByTestId("requests-range")).toHaveText(
+    `from ${daysAgo(38).slice(0, 10)} to ${daysAgo(36).slice(0, 10)} (UTC)`,
+  )
+})
+
+test("a zoomed spread scrolls, steps with the arrow keys, and keeps its zoom full screen", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  await page.goto("/?tab=requests")
+  await openRequested(page)
+  await expect(spreadBars(page)).toHaveCount(40)
+  const scrollbar = page.getByRole("scrollbar")
+  await expect(scrollbar).toHaveCount(0)
+
+  await page.getByRole("button", { name: "Zoom in" }).click()
+  await expect(scrollbar).toBeVisible()
+  expect(await spreadBars(page).count()).toBeLessThan(40)
+  const at = async () => Number(await scrollbar.getAttribute("aria-valuenow"))
+  const start = await at()
+
+  await scrollbar.focus()
+  await page.keyboard.press("ArrowLeft")
+  await expect.poll(at).toBeLessThan(start)
+  const stepped = await at()
+  await spreadBars(page).first().hover()
+  await page.mouse.wheel(0, 200)
+  await expect.poll(at).toBeGreaterThan(stepped)
+
+  // A zoom that does not start on a midnight draws one bar more or less.
+  const zoomed = await spreadBars(page).count()
+  await page.getByRole("button", { name: "Spread full screen" }).click()
+  const full = page.getByRole("dialog", { name: "When the Requests were made" })
+  await expect(full).toBeVisible()
+  await expect(spreadBars(full)).toHaveCount(zoomed)
+  await expect(full.getByRole("scrollbar")).toBeVisible()
+  // Esc leaves full screen alone; the popover stays open, still zoomed.
+  await page.keyboard.press("Escape")
+  await expect(full).toHaveCount(0)
+  await expect(spreadBars(page)).toHaveCount(zoomed)
 })
 
 test("Charged narrows every number on the tab", async ({ page }) => {
