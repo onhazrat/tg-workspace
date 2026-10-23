@@ -121,19 +121,23 @@ _TOTALS_KEY = (
 AGGREGATE_KINDS = (RequestKind.PROBE.value, RequestKind.HANDLE.value)
 
 
+#: One of the three tiers of the same fact: each Request, hours, days.
+Tier = type[RequestRecordRow] | type[RequestHourly] | type[RequestDaily]
+
+
 def _sum(column: Any) -> Any:
     return func.coalesce(func.sum(column), 0)
 
 
-def _syncs(model: Any) -> list[Any]:
+def _syncs(model: Tier) -> list[Any]:
     """Sync runs and failed ones: marked on one Request each, summed in the totals."""
-    if model is RequestRecordRow:
+    if issubclass(model, RequestRecordRow):
         flag = col(RequestRecordRow.sync_failed)
         return [func.count(flag), _sum(cast(flag, Integer))]
     return [_sum(model.syncs), _sum(model.failed_syncs)]
 
 
-def _totals_channel(model: Any) -> Any:
+def _totals_channel(model: Tier) -> Any:
     """A row's Channel in the totals: null for an aggregate kind."""
     return case((col(model.kind).in_(AGGREGATE_KINDS), None), else_=col(model.channel))
 
@@ -409,7 +413,7 @@ class Totals:
 
     def add(
         self,
-        outcome: str,
+        outcome: Outcome,
         charged: bool,
         requests: int,
         new: int,
@@ -417,9 +421,9 @@ class Totals:
         syncs: tuple[int, int] = (0, 0),
     ) -> None:
         self.requests += requests
-        if outcome == Outcome.USEFUL:
+        if outcome is Outcome.USEFUL:
             self.useful += requests
-        elif outcome == Outcome.IDLE:
+        elif outcome is Outcome.IDLE:
             self.idle += requests
         else:
             self.wasted += requests
@@ -440,6 +444,8 @@ class Totals:
 
 @dataclass
 class Breakdown:
+    """The range's totals, each dict in the order the API lists it."""
+
     by_kind: dict[str, Totals] = field(default_factory=dict)
     #: Keyed by (Channel, kind); a Channel of `None` is an aggregate row.
     by_channel: dict[tuple[str | None, str], Totals] = field(default_factory=dict)
@@ -519,7 +525,7 @@ class Picked:
     left_out_kinds: Sequence[str] = ()
 
 
-def _owner(model: Any) -> Any:
+def _owner(model: Tier) -> Any:
     """Who a row's charge is billed to: its Account, or the Operator when it
     names none, as the ledger bills it (`quota.resolve_charge_owner`)."""
     operator = (
@@ -530,7 +536,7 @@ def _owner(model: Any) -> Any:
     return func.coalesce(col(model.account_id), operator)
 
 
-def _filtered(query: Any, model: Any, picked: Picked) -> Any:
+def _filtered(query: Any, model: Tier, picked: Picked) -> Any:
     """The tab's filters, the same on every tier and on every endpoint.
 
     Picking Accounts keeps their charged Requests alone: no Account pays for
@@ -554,8 +560,10 @@ def _filtered(query: Any, model: Any, picked: Picked) -> Any:
     return query
 
 
-def _requests(model: Any) -> Any:
-    return func.count() if model is RequestRecordRow else _sum(model.requests)
+def _requests(model: Tier) -> Any:
+    if issubclass(model, RequestRecordRow):
+        return func.count()
+    return _sum(model.requests)
 
 
 def request_breakdown(
@@ -586,13 +594,32 @@ def request_breakdown(
             )
         for totals in parts:
             totals.add_ledger(day.requests, day.charged)
-    return breakdown
+    return _ordered(breakdown)
+
+
+def _ordered(breakdown: Breakdown) -> Breakdown:
+    """Kinds by name, Channel rows busiest first, Accounts by id then kind."""
+    return Breakdown(
+        by_kind=dict(sorted(breakdown.by_kind.items())),
+        by_channel=dict(
+            sorted(
+                breakdown.by_channel.items(),
+                key=lambda item: (-item[1].requests, item[0][0] or "", item[0][1]),
+            )
+        ),
+        by_account=dict(
+            sorted(
+                breakdown.by_account.items(),
+                key=lambda item: (str(item[0][0]), item[0][1]),
+            )
+        ),
+    )
 
 
 def _fold(
     session: Session,
     breakdown: Breakdown,
-    model: Any,
+    model: Tier,
     within: Any,
     picked: Picked,
 ) -> None:
@@ -622,7 +649,7 @@ def _fold(
             parts.append(breakdown.by_account.setdefault((account, kind), Totals()))
         for totals in parts:
             totals.add(
-                outcome,
+                Outcome(outcome),
                 is_charged,
                 int(n),
                 int(new),

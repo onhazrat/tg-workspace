@@ -30,7 +30,6 @@ from app.schemas.request_stats import (
 from app.services.request_stats import (
     ChargedFilter,
     Picked,
-    Totals,
     account_emails,
     request_breakdown,
     request_records,
@@ -71,22 +70,6 @@ def _range(start: datetime, end: datetime) -> tuple[datetime, datetime]:
     return lo, hi
 
 
-def _totals(kind: str, totals: Totals) -> dict[str, object]:
-    return {
-        "kind": kind,
-        "requests": totals.requests,
-        "useful": totals.useful,
-        "idle": totals.idle,
-        "wasted": totals.wasted,
-        "charged": totals.charged,
-        "newPosts": totals.new_posts,
-        "repeatedPosts": totals.repeated_posts,
-        "syncs": totals.syncs,
-        "failedSyncs": totals.failed_syncs,
-        "ledgerOnly": totals.ledger_only,
-    }
-
-
 @router.get(
     "/breakdown",
     dependencies=[Depends(require_permission(Permission.QUOTA_READ_ANY))],
@@ -113,30 +96,21 @@ def read_request_breakdown(
         start=lo,
         end=hi,
         byKind=[
-            RequestTotals.model_validate(_totals(kind, totals))
-            for kind, totals in sorted(breakdown.by_kind.items())
+            RequestTotals(kind=kind, **asdict(totals))
+            for kind, totals in breakdown.by_kind.items()
         ],
         byChannel=[
-            ChannelRequestTotals.model_validate(
-                {**_totals(kind, totals), "channel": channel}
-            )
-            for (channel, kind), totals in sorted(
-                breakdown.by_channel.items(),
-                key=lambda item: (-item[1].requests, item[0][0] or "", item[0][1]),
-            )
+            ChannelRequestTotals(channel=channel, kind=kind, **asdict(totals))
+            for (channel, kind), totals in breakdown.by_channel.items()
         ],
         byAccount=[
-            AccountRequestTotals.model_validate(
-                {
-                    **_totals(kind, totals),
-                    "accountId": account,
-                    "email": emails.get(account, ""),
-                }
+            AccountRequestTotals(
+                accountId=account,
+                email=emails.get(account, ""),
+                kind=kind,
+                **asdict(totals),
             )
-            for (account, kind), totals in sorted(
-                breakdown.by_account.items(),
-                key=lambda item: (str(item[0][0]), item[0][1]),
-            )
+            for (account, kind), totals in breakdown.by_account.items()
         ],
     )
 

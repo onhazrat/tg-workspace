@@ -1,7 +1,7 @@
 import logging
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from typing import Any
 
 import httpx
@@ -138,13 +138,18 @@ def _resolve_bot_token(
     raise HTTPException(status_code=400, detail="credentialId or token is required")
 
 
+def _checking(handle: str) -> AbstractContextManager[None]:
+    # The Requests of a handle checked here are Handle checks (RQS-14): no
+    # Account, Uncharged, the handle as their channel.
+    return attributed(kind=RequestKind.HANDLE, channel=normalize_handle(handle))
+
+
 @contextmanager
 def _handle_check(handle: str) -> Iterator[None]:
-    # The Requests of a handle checked here are Handle checks (RQS-14): no
-    # Account, Uncharged, the handle as their channel. They write nothing, so
-    # an answer is Idle, and no page for the handle is a missing handle.
+    # One page of a Handle check. It writes nothing, so an answer is Idle,
+    # and no page for the handle is a missing handle.
     with (
-        attributed(kind=RequestKind.HANDLE, channel=normalize_handle(handle)),
+        _checking(handle),
         page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE),
     ):
         yield
@@ -220,9 +225,7 @@ async def api_resolve_start_time(
     body: ResolveStartTimeRequest, _current_user: CurrentUser
 ) -> ResolveStartTimeResponse:
     try:
-        with attributed(
-            kind=RequestKind.HANDLE, channel=normalize_handle(body.channel_name)
-        ):
+        with _checking(body.channel_name):
             start_id = await resolve_start_time_to_id(
                 body.channel_name,
                 body.target_time_ms,

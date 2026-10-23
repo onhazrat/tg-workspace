@@ -2278,6 +2278,7 @@ def test_days_before_recording_come_from_the_ledger_on_the_breakdown(
 
     answer = _breakdown(client, superuser_token_headers, start=start, end=end)
     assert _ledger_parts(answer["byKind"]) == {"auto": (7, 7, 7), "probe": (5, 5, 0)}
+    assert [r["kind"] for r in answer["byKind"]] == ["auto", "probe", "single"]
     assert _row(answer["byKind"], kind="single")["requests"] == n
     assert {r["ledgerOnly"] for r in answer["byChannel"]} == {0}
     assert {(r["channel"], r["kind"]) for r in answer["byChannel"]} == {
