@@ -455,6 +455,57 @@ test("a day past the hourly totals has only its daily total", async ({
   )
 })
 
+test("days before recording show the ledger's totals, with no Channel or outcome", async ({
+  page,
+}) => {
+  // RQS-16: five days ago, before recording started, the ledger's 900 auto sync Requests.
+  await mockBreakdown(page)
+  const ledger = (k: ReturnType<typeof part>) =>
+    k.kind === "auto"
+      ? {
+          ...k,
+          requests: k.requests + 900,
+          charged: k.charged + 900,
+          ledgerOnly: 900,
+        }
+      : k
+  await page.route("**/api/v1/requests/breakdown?**", (route: Route) => {
+    const answer = breakdown(new URL(route.request().url()))
+    return route.fulfill({
+      json: { ...answer, byKind: answer.byKind.map(ledger) },
+    })
+  })
+  const before = { ...bucket(daysAgo(5), DAY_MS, "auto", 0), idle: 0 }
+  await page.route("**/api/v1/requests/trend?**", (route: Route) =>
+    route.fulfill({
+      json: {
+        start: "",
+        end: "",
+        hourlyDays: 30,
+        buckets: [{ ...before, ledgerOnly: 900 }, ...BUCKETS],
+      },
+    }),
+  )
+  await page.goto("/?tab=requests")
+
+  await expect(total(page)).toHaveText("2,620 Requests")
+  const note = page.getByTestId("requests-before-recording")
+  await expect(note).toHaveText(
+    "900 Requests come from the ledger's daily totals, on days before recording started: they have no Channel or outcome.",
+  )
+  await expect(
+    kinds(page).getByRole("row", { name: /Auto sync/ }),
+  ).toContainText("1,820")
+  // A bar for the ledger's day beside the three recorded ones, and a hatched layer on the trend.
+  await expect(dailyBars(page)).toHaveCount(4)
+  await expect(zoomTrend(page).locator("pattern").first()).toBeAttached()
+
+  // Hiding an outcome never hides them: they have none.
+  await kinds(page).getByRole("button", { name: "Useful" }).click()
+  await expect(note).toBeVisible()
+  await expect(dailyBars(page)).toHaveCount(4)
+})
+
 const zoomTrend = (page: Page) => page.getByTestId("requests-zoom-trend")
 
 /** Where `share` of the way across the trend's plot is, halfway up, on screen. */
