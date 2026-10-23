@@ -14,6 +14,7 @@ import {
   OUTCOMES,
   type Outcome,
   rangeText,
+  toggled,
 } from "./breakdown"
 
 export const FINE_MS = 5 * MINUTE_MS
@@ -373,3 +374,49 @@ export function trendChart(
     rows: rows.filter((r) => r.series.length > 0),
   }
 }
+
+/** What the legend switches: the tab's own hidden kinds and outcomes. */
+export interface Hidden {
+  hiddenKinds: ReadonlySet<string>
+  hiddenOutcomes: ReadonlySet<Outcome>
+}
+
+/**
+ * A legend click as an update of the tab's hidden kinds or outcomes: the
+ * kind table's Show box, or the outcome chip, whose last one shown stays.
+ * An update, not a value: Plotly fires a click on each half of a double
+ * click, and may still hold the handler of a render before.
+ */
+export const legendClick =
+  (dim: Dimension, id: string) =>
+  (h: Hidden): Partial<Hidden> => {
+    if (dim === "kind") return { hiddenKinds: toggled(h.hiddenKinds, id) }
+    const lastShown =
+      !h.hiddenOutcomes.has(id as Outcome) &&
+      h.hiddenOutcomes.size === OUTCOMES.length - 1
+    return {
+      hiddenOutcomes: lastShown
+        ? new Set(h.hiddenOutcomes)
+        : toggled(h.hiddenOutcomes, id as Outcome),
+    }
+  }
+
+/** Every other of `all` hidden; or, if `id` was already alone, none. */
+function isolated<T>(all: readonly T[], id: T, hidden: ReadonlySet<T>) {
+  const alone = !hidden.has(id) && all.every((v) => v === id || hidden.has(v))
+  return new Set(alone ? [] : all.filter((v) => v !== id))
+}
+
+/** A legend double click: that one alone, or everything again. */
+export const legendDoubleClick =
+  (dim: Dimension, id: string, kinds: readonly string[]) =>
+  (h: Hidden): Partial<Hidden> =>
+    dim === "kind"
+      ? { hiddenKinds: isolated(kinds, id, h.hiddenKinds) }
+      : {
+          hiddenOutcomes: isolated(
+            OUTCOMES.map((o) => o.id),
+            id as Outcome,
+            h.hiddenOutcomes,
+          ),
+        }

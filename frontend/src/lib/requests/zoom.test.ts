@@ -5,6 +5,8 @@ import {
   bandLabels,
   fromPlotly,
   grainOf,
+  legendClick,
+  legendDoubleClick,
   rebucket,
   type Split,
   scaleOf,
@@ -416,6 +418,52 @@ describe("trendChart", () => {
     const [early] = split("2026-10-20T09:00", "2026-10-20T09:55")
     expect(early.cap).toBeNull()
     expect(early.range[1]).toBeCloseTo(12.6)
+  })
+})
+
+describe("the legend", () => {
+  const shown = {
+    hiddenKinds: new Set<string>(),
+    hiddenOutcomes: new Set<Outcome>(),
+  }
+  const kinds = ["auto", "bulk", "probe"]
+
+  test("a click is the kind's Show box, or the outcome's chip", () => {
+    expect(legendClick("kind", "probe")(shown)).toEqual({
+      hiddenKinds: new Set(["probe"]),
+    })
+    expect(
+      legendClick(
+        "kind",
+        "probe",
+      )({ ...shown, hiddenKinds: new Set(["probe"]) }),
+    ).toEqual({ hiddenKinds: new Set() })
+    expect(legendClick("outcome", "idle")(shown)).toEqual({
+      hiddenOutcomes: new Set(["idle"]),
+    })
+    // The last outcome shown stays shown.
+    const lastShown = {
+      ...shown,
+      hiddenOutcomes: new Set<Outcome>(["idle", "wasted"]),
+    }
+    expect(legendClick("outcome", "useful")(lastShown)).toEqual({
+      hiddenOutcomes: new Set(["idle", "wasted"]),
+    })
+  })
+
+  test("a double click shows that one alone, or everything again", () => {
+    const alone = legendDoubleClick("kind", "bulk", kinds)(shown)
+    expect(alone).toEqual({ hiddenKinds: new Set(["auto", "probe"]) })
+    expect(
+      legendDoubleClick("kind", "bulk", kinds)({ ...shown, ...alone }),
+    ).toEqual({ hiddenKinds: new Set() })
+    // Another, while one is alone, is alone instead.
+    expect(
+      legendDoubleClick("kind", "auto", kinds)({ ...shown, ...alone }),
+    ).toEqual({ hiddenKinds: new Set(["bulk", "probe"]) })
+    expect(legendDoubleClick("outcome", "wasted", kinds)(shown)).toEqual({
+      hiddenOutcomes: new Set(["useful", "idle"]),
+    })
   })
 })
 
