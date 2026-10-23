@@ -1,4 +1,4 @@
-"""Every Request a sync makes is recorded, and the Operator reads the totals (RQS-01).
+"""Every Request a sync or probe makes is recorded; the Operator reads the totals.
 
 Seam 1 of `.scratch/request-stats/spec.md`: Telegram is faked at
 `network._fetch_once`, the seam the quota ledger tests use, and everything above
@@ -678,6 +678,15 @@ def test_a_probe_that_adds_sample_posts_is_useful_and_records_them(
     assert (probes["useful"], probes["newPosts"], probes["charged"]) == (1, 3, 0)
     by_kind = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="probe")
     assert by_kind["requests"] == probes["requests"] == 1
+    # Ten minutes hold no whole hour, so this range reads the Requests themselves.
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
+    cut = _breakdown(
+        client,
+        superuser_token_headers,
+        start=(now - timedelta(minutes=5)).isoformat(),
+        end=(now + timedelta(minutes=5)).isoformat(),
+    )
+    assert _row(cut["byChannel"], channel=None, kind="probe")["useful"] == 1
 
 
 @pytest.mark.parametrize(
