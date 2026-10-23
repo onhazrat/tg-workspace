@@ -57,6 +57,8 @@ def _totals(kind: str, totals: Totals) -> dict[str, object]:
         "charged": totals.charged,
         "newPosts": totals.new_posts,
         "repeatedPosts": totals.repeated_posts,
+        "syncs": totals.syncs,
+        "failedSyncs": totals.failed_syncs,
     }
 
 

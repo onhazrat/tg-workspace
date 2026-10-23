@@ -1593,6 +1593,56 @@ def test_picking_accounts_keeps_only_their_charged_requests(
     assert _by_kind(trend) == _breakdown_by_kind(picked)
 
 
+# --------------------------------------------------------------------------
+# Syncs and the Channels left out (RQS-04)
+# --------------------------------------------------------------------------
+
+
+def _syncs(answer: dict[str, Any], channel: str = CHANNEL) -> tuple[int, int]:
+    row = _row(answer["byChannel"], channel=channel, kind="single")
+    return row["syncs"], row["failedSyncs"]
+
+
+def test_each_sync_and_each_failed_sync_is_counted_on_its_channel(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: count a sync per Request, never mark one failed, or count a
+    sync on its refused first attempt, which no Account pays for.
+
+    The first sync's first attempt is refused and Uncharged; the sync is still
+    the Account's, so it counts under Charged and under the Account picked.
+    The second sync meets a 404 on every attempt and fails.
+    """
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+    me = client.get(f"{API}/users/me", headers=superuser_token_headers).json()
+    assert _syncs(_breakdown(client, superuser_token_headers)) == (1, 0)
+    assert _syncs(_breakdown(client, superuser_token_headers, accounts=[me["id"]])) == (
+        1,
+        0,
+    )
+
+    telegram.script(_first_page(), _status(404))
+    _sync(client, superuser_token_headers)
+
+    answer = _breakdown(client, superuser_token_headers)
+    assert _syncs(answer) == (2, 1)
+    single = _row(answer["byKind"], kind="single")
+    assert (single["syncs"], single["failedSyncs"]) == (2, 1)
+    # The same on every tier: this hour from the hourly totals.
+    hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    if datetime.now(UTC) - hour > timedelta(minutes=1):
+        hourly = _breakdown(
+            client,
+            superuser_token_headers,
+            start=hour.isoformat(),
+            end=(hour + timedelta(hours=1)).isoformat(),
+        )
+        assert _syncs(hourly) == (2, 1)
+
+
 @pytest.mark.parametrize("route", ["breakdown", "trend"])
 def test_the_requests_endpoints_are_the_operators_alone(
     client: TestClient, normal_user_token_headers: dict[str, str], route: str

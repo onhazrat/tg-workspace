@@ -130,6 +130,9 @@ class RequestRecord:
     chain_id: uuid.UUID
     new_posts: int | None = None
     repeated_posts: int | None = None
+    #: Set on one Request of each sync run: whether that sync failed (RQS-04).
+    #: `None` on every other Request. See `sync_run`.
+    sync_failed: bool | None = None
 
 
 @dataclass
@@ -242,9 +245,79 @@ _buffer_lock = threading.Lock()
 
 
 def _push(records: list[RequestRecord]) -> None:
+    run = _sync.get()
+    if run is not None:
+        records = run.hold(records)
     if records:
         with _buffer_lock:
             _buffer.extend(records)
+
+
+@dataclass
+class SyncRun:
+    """One sync of one Channel, counted on one of its Requests (RQS-04).
+
+    Whether a sync failed is known only when it ends, so one of its Requests
+    waits here until then and carries the answer: the first charged one, or
+    the first at all when none is charged. A charged one keeps the sync under
+    the Charged choice and the Account picked, which a refused first attempt
+    (Uncharged) would not. A sync that made no Request counts nowhere.
+    """
+
+    who: Attribution
+    failed: bool = False
+    held: RequestRecord | None = None
+    closed: bool = False
+
+    def hold(self, records: list[RequestRecord]) -> list[RequestRecord]:
+        """`records` less the one this sync keeps back, and any it lets go."""
+        if self.closed:
+            return records
+        out: list[RequestRecord] = []
+        for record in records:
+            mine = (record.kind, record.channel) == (
+                self.who.kind.value,
+                self.who.channel,
+            )
+            if mine and (
+                self.held is None or (record.charged and not self.held.charged)
+            ):
+                if self.held is not None:
+                    out.append(self.held)
+                self.held = record
+            else:
+                out.append(record)
+        return out
+
+    def close(self) -> None:
+        self.closed = True
+        if self.held is not None:
+            self.held.sync_failed = self.failed
+            _push([self.held])
+            self.held = None
+
+
+_sync: contextvars.ContextVar[SyncRun | None] = contextvars.ContextVar(
+    "tg_request_sync", default=None
+)
+
+
+@contextmanager
+def sync_run() -> Iterator[SyncRun]:
+    """One sync of the Channel attributed around it; set `failed` before it ends.
+
+    An exception leaving the block fails the sync.
+    """
+    run = SyncRun(_attribution.get())
+    token = _sync.set(run)
+    try:
+        yield run
+    except Exception:
+        run.failed = True
+        raise
+    finally:
+        _sync.reset(token)
+        run.close()
 
 
 def drain() -> list[RequestRecord]:

@@ -93,6 +93,14 @@ export type AccountRequestTotals = {
      */
     repeatedPosts: number;
     /**
+     * Syncs
+     */
+    syncs: number;
+    /**
+     * Failedsyncs
+     */
+    failedSyncs: number;
+    /**
      * Accountid
      */
     accountId: string;
@@ -997,6 +1005,14 @@ export type ChannelRequestTotals = {
      * Repeatedposts
      */
     repeatedPosts: number;
+    /**
+     * Syncs
+     */
+    syncs: number;
+    /**
+     * Failedsyncs
+     */
+    failedSyncs: number;
     /**
      * Channel
      */
@@ -6274,6 +6290,14 @@ export type RequestTotals = {
      * Repeatedposts
      */
     repeatedPosts: number;
+    /**
+     * Syncs
+     */
+    syncs: number;
+    /**
+     * Failedsyncs
+     */
+    failedSyncs: number;
 };
 
 /**

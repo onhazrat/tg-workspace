@@ -37,7 +37,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import Date, case, cast, delete, func, insert, or_
+from sqlalchemy import Date, Integer, case, cast, delete, func, insert, or_
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
@@ -115,6 +115,14 @@ def _sum(column: Any) -> Any:
     return func.coalesce(func.sum(column), 0)
 
 
+def _syncs(model: Any) -> list[Any]:
+    """Sync runs and failed ones: marked on one Request each, summed in the totals."""
+    if model is RequestRecordRow:
+        flag = col(RequestRecordRow.sync_failed)
+        return [func.count(flag), _sum(cast(flag, Integer))]
+    return [_sum(model.syncs), _sum(model.failed_syncs)]
+
+
 def _totals_channel(model: Any) -> Any:
     """A row's Channel in the totals: null for an aggregate kind."""
     return case((col(model.kind).in_(AGGREGATE_KINDS), None), else_=col(model.channel))
@@ -140,6 +148,7 @@ def _rebuild_hours(session: Session, hours: list[datetime]) -> None:
             func.count(),
             _sum(RequestRecordRow.new_posts),
             _sum(RequestRecordRow.repeated_posts),
+            *_syncs(RequestRecordRow),
         )
         .where(
             col(RequestRecordRow.at) >= min(hours),
@@ -158,6 +167,8 @@ def _rebuild_hours(session: Session, hours: list[datetime]) -> None:
                 "requests",
                 "new_posts",
                 "repeated_posts",
+                "syncs",
+                "failed_syncs",
             ],
             rows,
         )
@@ -175,6 +186,7 @@ def _rebuild_days(session: Session, days: list[date]) -> None:
             _sum(RequestHourly.requests),
             _sum(RequestHourly.new_posts),
             _sum(RequestHourly.repeated_posts),
+            *_syncs(RequestHourly),
         )
         .where(
             col(RequestHourly.hour) >= datetime.combine(min(days), datetime.min.time()),
@@ -186,7 +198,16 @@ def _rebuild_days(session: Session, days: list[date]) -> None:
     )
     session.execute(
         insert(RequestDaily).from_select(
-            ["day", *_TOTALS_KEY, "requests", "new_posts", "repeated_posts"], rows
+            [
+                "day",
+                *_TOTALS_KEY,
+                "requests",
+                "new_posts",
+                "repeated_posts",
+                "syncs",
+                "failed_syncs",
+            ],
+            rows,
         )
     )
 
@@ -346,9 +367,17 @@ class Totals:
     charged: int = 0
     new_posts: int = 0
     repeated_posts: int = 0
+    syncs: int = 0
+    failed_syncs: int = 0
 
     def add(
-        self, outcome: str, charged: bool, requests: int, new: int, repeated: int
+        self,
+        outcome: str,
+        charged: bool,
+        requests: int,
+        new: int,
+        repeated: int,
+        syncs: tuple[int, int] = (0, 0),
     ) -> None:
         self.requests += requests
         if outcome == Outcome.USEFUL:
@@ -361,6 +390,8 @@ class Totals:
             self.charged += requests
         self.new_posts += new
         self.repeated_posts += repeated
+        self.syncs += syncs[0]
+        self.failed_syncs += syncs[1]
 
 
 @dataclass
@@ -494,9 +525,13 @@ def _fold(
         model.account_id,
     ]
     query = sa_select(
-        *keys, _requests(model), _sum(model.new_posts), _sum(model.repeated_posts)
+        *keys,
+        _requests(model),
+        _sum(model.new_posts),
+        _sum(model.repeated_posts),
+        *_syncs(model),
     ).where(within)
-    for kind, channel, outcome, is_charged, account, n, new, repeated in (
+    for kind, channel, outcome, is_charged, account, n, new, repeated, *runs in (
         session.execute(_filtered(query, model, charged, accounts).group_by(*keys))
     ).all():
         parts = [
@@ -506,7 +541,14 @@ def _fold(
         if is_charged and account is not None:
             parts.append(breakdown.by_account.setdefault((account, kind), Totals()))
         for totals in parts:
-            totals.add(outcome, is_charged, int(n), int(new), int(repeated))
+            totals.add(
+                outcome,
+                is_charged,
+                int(n),
+                int(new),
+                int(repeated),
+                (int(runs[0]), int(runs[1])),
+            )
 
 
 def account_emails(session: Session, ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, str]:

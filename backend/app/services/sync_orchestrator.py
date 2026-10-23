@@ -20,7 +20,13 @@ from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_meter import metered
-from app.core.request_recording import PageType, RequestKind, attributed, page
+from app.core.request_recording import (
+    PageType,
+    RequestKind,
+    attributed,
+    page,
+    sync_run,
+)
 from app.jobs.settings import (
     compute_scrape_cutoff_ms,
     load_media_settings,
@@ -1958,16 +1964,21 @@ async def sync_single_channel(
     try:
         # Every Request of the walk, its pictures and metadata included, is
         # this sync's (RQS-01). Set here, beside the claim, for the claim's
-        # reason: both callers of this function then get it.
-        with attributed(
-            kind=REQUEST_KIND_BY_BUDGET[budget],
-            account_id=user_id,
-            budget=budget.value,
-            channel=ch_state.channel_name,
+        # reason: both callers of this function then get it. The run counts
+        # as one sync, failed or not (RQS-04).
+        with (
+            attributed(
+                kind=REQUEST_KIND_BY_BUDGET[budget],
+                account_id=user_id,
+                budget=budget.value,
+                channel=ch_state.channel_name,
+            ),
+            sync_run() as run,
         ):
             walked = await _sync_claimed_channel(
                 job, ch_state, user_id=user_id, holder=holder
             )
+            run.failed = ch_state.status == "failed"
     finally:
         heartbeat.cancel()
         with contextlib.suppress(asyncio.CancelledError):

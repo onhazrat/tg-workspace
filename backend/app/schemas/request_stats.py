@@ -21,6 +21,9 @@ class RequestTotals(BaseModel):
     charged: int
     new_posts: int = Field(alias="newPosts")
     repeated_posts: int = Field(alias="repeatedPosts")
+    #: Sync runs and how many failed (RQS-04); 0 on work that is not a sync.
+    syncs: int
+    failed_syncs: int = Field(alias="failedSyncs")
 
 
 class ChannelRequestTotals(RequestTotals):

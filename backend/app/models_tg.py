@@ -1951,6 +1951,8 @@ class RequestRecordRow(SQLModel, table=True):
     chain_id: uuid.UUID
     new_posts: int | None = None
     repeated_posts: int | None = None
+    #: On one Request of each sync run, whether that sync failed (RQS-04).
+    sync_failed: bool | None = None
 
 
 class _RequestTotals(SQLModel):
@@ -1977,6 +1979,9 @@ class _RequestTotals(SQLModel):
     requests: int
     new_posts: int
     repeated_posts: int
+    #: Sync runs, and how many failed: counted on one Request each (RQS-04).
+    syncs: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    failed_syncs: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
 
 
 class RequestHourly(_RequestTotals, table=True):

@@ -7207,6 +7207,8 @@
           "charged": { "type": "integer", "title": "Charged" },
           "newPosts": { "type": "integer", "title": "Newposts" },
           "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "syncs": { "type": "integer", "title": "Syncs" },
+          "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
           "accountId": {
             "type": "string",
             "format": "uuid",
@@ -7224,6 +7226,8 @@
           "charged",
           "newPosts",
           "repeatedPosts",
+          "syncs",
+          "failedSyncs",
           "accountId",
           "email"
         ],
@@ -7977,6 +7981,8 @@
           "charged": { "type": "integer", "title": "Charged" },
           "newPosts": { "type": "integer", "title": "Newposts" },
           "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "syncs": { "type": "integer", "title": "Syncs" },
+          "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
           "channel": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Channel"
@@ -7992,6 +7998,8 @@
           "charged",
           "newPosts",
           "repeatedPosts",
+          "syncs",
+          "failedSyncs",
           "channel"
         ],
         "title": "ChannelRequestTotals",
@@ -13504,7 +13512,9 @@
           "wasted": { "type": "integer", "title": "Wasted" },
           "charged": { "type": "integer", "title": "Charged" },
           "newPosts": { "type": "integer", "title": "Newposts" },
-          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" }
+          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "syncs": { "type": "integer", "title": "Syncs" },
+          "failedSyncs": { "type": "integer", "title": "Failedsyncs" }
         },
         "type": "object",
         "required": [
@@ -13515,7 +13525,9 @@
           "wasted",
           "charged",
           "newPosts",
-          "repeatedPosts"
+          "repeatedPosts",
+          "syncs",
+          "failedSyncs"
         ],
         "title": "RequestTotals",
         "description": "Requests by outcome, and the Posts the answered pages brought."
