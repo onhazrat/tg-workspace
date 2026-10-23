@@ -62,9 +62,20 @@ export function OutcomeBar({ t, max }: { t: Tally; max: number }) {
           title={`${o.label} ${fmt(t[o.id])}`}
         />
       ))}
+      {t.ledgerOnly > 0 && (
+        <div
+          className="last:rounded-r-sm"
+          style={{ flexGrow: t.ledgerOnly, background: LEDGER_HATCH }}
+          title={`Before recording ${fmt(t.ledgerOnly)}`}
+        />
+      )}
     </div>
   )
 }
+
+/** The ledger's days before recording, which have no outcome: hatched, as on the trend (RQS-16). */
+const LEDGER_HATCH =
+  "repeating-linear-gradient(45deg, var(--viz-axis) 0 2px, transparent 2px 4px)"
 
 /**
  * Useful, Idle and Wasted as chips that hide or show each on the whole tab.
@@ -117,20 +128,34 @@ function Shade({ outcome }: { outcome: Outcome }) {
   )
 }
 
-/** Requests, then each outcome with its share of them. */
+/**
+ * Requests, then each outcome with its share of them. Requests on days
+ * before recording have no outcome, and a line says so (RQS-16).
+ */
 export function StatStrip({ t }: { t: Tally }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <Stat label="Requests" value={fmt(t.total)} />
-      {OUTCOMES.map((o) => (
-        <Stat
-          key={o.id}
-          label={o.label}
-          icon={<OutcomeIcon outcome={o.id} />}
-          value={fmt(t[o.id])}
-          share={t.total ? `${pct(t[o.id] / t.total)} of all` : undefined}
-        />
-      ))}
+    <div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label="Requests" value={fmt(t.total)} />
+        {OUTCOMES.map((o) => (
+          <Stat
+            key={o.id}
+            label={o.label}
+            icon={<OutcomeIcon outcome={o.id} />}
+            value={fmt(t[o.id])}
+            share={t.total ? `${pct(t[o.id] / t.total)} of all` : undefined}
+          />
+        ))}
+      </div>
+      {t.ledgerOnly > 0 && (
+        <p
+          data-testid="requests-before-recording"
+          className="mt-1 text-[11px] text-app-ink/50"
+        >
+          {fmt(t.ledgerOnly)} Requests come from the ledger's daily totals, on
+          days before recording started: they have no Channel or outcome.
+        </p>
+      )}
     </div>
   )
 }

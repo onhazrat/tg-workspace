@@ -53,6 +53,7 @@ type Graph = HTMLElement & {
     visible?: boolean | "legendonly"
     customdata?: number[]
     line?: { width: number }
+    fillpattern?: { shape: string }
   }[]
   layout: Plotly.Layout & Record<string, unknown>
   emit: (event: string, data: unknown) => void
@@ -241,6 +242,20 @@ describe("ZoomTrend", () => {
     const range = (graph.layout.yaxis as { range: number[] }).range
     expect(range[1]).toBeCloseTo(13.8)
     expect(notch?.y[0]).toBeCloseTo(13.8)
+  })
+
+  test("a day before recording is hatched: it has no outcome (RQS-16)", async () => {
+    const ledger = {
+      ...fine("2026-10-20T00:00:00", "2026-10-21T00:00:00", 0),
+      ledgerOnly: 48,
+    }
+    const { graph } = await drawn(mock(), {
+      ...TREND,
+      buckets: [ledger, ...TREND.buckets.slice(2)],
+    })
+    const hatched = (d: Graph["data"][number]) => d.fillpattern?.shape === "/"
+    expect(graph.data.filter(hatched).map((d) => d.name)).toEqual(["Auto sync"])
+    expect(graph.data.filter((d) => !hatched(d)).length).toBeGreaterThan(0)
   })
 })
 

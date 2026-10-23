@@ -19,6 +19,7 @@ import {
   DOUBLE_CLICK_MS,
   fromPlotly,
   type Hidden,
+  LEDGER,
   legendClick,
   legendDoubleClick,
   type Part,
@@ -53,6 +54,7 @@ const COLOR_VARS: Record<string, string> = {
   band: "--account-4",
   ...Object.fromEntries(KINDS.map((k) => [k.id, `--kind-${k.id}`])),
   ...Object.fromEntries(OUTCOMES.map((o) => [o.id, `--outcome-${o.id}`])),
+  ledger: "--viz-axis",
 }
 type Colors = Record<string, string>
 
@@ -247,6 +249,10 @@ function traces(chart: Chart, c: Colors): Partial<Plotly.ScatterData>[] {
         yaxis: axisOf(i),
         stackgroup: `row${i}`,
         fillcolor: fillOf(c, s.part),
+        // The ledger's days before recording have no outcome: hatched (RQS-16).
+        ...(s.part.outcome === LEDGER && {
+          fillpattern: { shape: "/", fgcolor: c.surface, size: 6 },
+        }),
         line: {
           shape: chart.shape,
           smoothing: 0.6,

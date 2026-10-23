@@ -123,6 +123,24 @@ describe("RequestsView", () => {
     expect(screen.getByTestId("requests-stat-wasted").textContent).toBe(
       "Wasted61061% of all",
     )
+    expect(screen.queryByTestId("requests-before-recording")).toBeNull()
+  })
+
+  test("days before recording count, and the tab says they have no Channel or outcome (RQS-16)", () => {
+    // 500 auto sync Requests known from the ledger alone.
+    const auto = { ...part("auto", 60, 30, 10), ledgerOnly: 500 }
+    auto.requests += 500
+    const breakdown = { ...BREAKDOWN, byKind: [auto, BREAKDOWN.byKind[1]] }
+    render(<Harness breakdown={breakdown} unfiltered={breakdown} />)
+    expect(screen.getByTestId("requests-total").textContent).toBe(
+      "1,500 Requests",
+    )
+    expect(screen.getByTestId("requests-before-recording").textContent).toBe(
+      "500 Requests come from the ledger's daily totals, on days before recording started: they have no Channel or outcome.",
+    )
+    expect(
+      kindRow("Auto sync").querySelector('[title="Before recording 500"]'),
+    ).not.toBeNull()
   })
 
   test("a kind's Show box hides it from every share, and marks it uncharged", () => {
