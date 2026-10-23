@@ -160,6 +160,7 @@ export function trendLine(
   if (!smooth && last) {
     x.push(last.t + last.span)
     y.push(0)
+    hover.push("")
   }
   return {
     shape: smooth ? ("spline" as const) : ("hv" as const),

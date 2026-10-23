@@ -1,4 +1,5 @@
 import { Users } from "lucide-react"
+import { lazy, Suspense } from "react"
 import type {
   RequestBreakdownResponse,
   RequestSpreadResponse,
@@ -33,6 +34,9 @@ import { KindTable } from "./KindTable"
 import { OutcomeChips, StatStrip } from "./parts"
 import { RequestedSpread } from "./RequestedSpread"
 
+// Plotly downloads only when the trend draws (RQS-07).
+const ZoomTrend = lazy(() => import("./ZoomTrend"))
+
 const CHOICES: { value: ChargedFilter; label: string }[] = [
   { value: "all", label: "All Requests" },
   { value: "charged", label: "Charged" },
@@ -41,7 +45,7 @@ const CHOICES: { value: ChargedFilter; label: string }[] = [
 
 /**
  * The Requests tab, props only (RQS-03): the filter bar, the stat strip, the
- * daily bars (RQS-06), By kind of work and Channels by Requests, all for one
+ * daily bars (RQS-06) and the zoomable trend (RQS-07), By kind of work and Channels by Requests, all for one
  * range cut to the minute. The Channels left out leave every number but the
  * Channel table's own rows, which list them faded to be picked again (RQS-04).
  * A Channel table row click asks to open its Requests (RQS-10).
@@ -191,16 +195,29 @@ export function RequestsView({
             )}
             <StatStrip t={totals} />
             {trend && (
-              <DailyBars
-                trend={trend}
-                range={range}
-                filter={filter}
-                onDay={(start) =>
-                  onFilter({
-                    bound: { mode: "fixed", start, end: start + DAY_MS },
-                  })
-                }
-              />
+              <>
+                <DailyBars
+                  trend={trend}
+                  range={range}
+                  filter={filter}
+                  onDay={(start) =>
+                    onFilter({
+                      bound: { mode: "fixed", start, end: start + DAY_MS },
+                    })
+                  }
+                />
+                <Suspense fallback={null}>
+                  <ZoomTrend
+                    trend={trend}
+                    range={range}
+                    hiddenKinds={hiddenKinds}
+                    hiddenOutcomes={hiddenOutcomes}
+                    onRange={(start, end) =>
+                      onFilter({ bound: { mode: "fixed", start, end } })
+                    }
+                  />
+                </Suspense>
+              </>
             )}
             <KindTable
               {...kindRows(breakdown.byKind, hiddenKinds, hiddenOutcomes)}
