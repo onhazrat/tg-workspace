@@ -53,9 +53,10 @@ export function dailyBars(
     dailyOnly ||= hourly && hi - lo > HOUR_MS && hi > range.start
     const bar = bars.get(floorTo(lo, step))
     if (!bar) continue
+    // A day before recording has the ledger's total and no outcome to hide.
     const n = (["useful", "idle", "wasted"] as const)
       .filter((o) => !hiddenOutcomes.has(o))
-      .reduce((sum, o) => sum + b[o], 0)
+      .reduce((sum, o) => sum + b[o], b.ledgerOnly)
     bar[b.charged ? "charged" : "uncharged"] += n
   }
   return { grain: hourly ? "hour" : "day", bars: [...bars.values()], dailyOnly }

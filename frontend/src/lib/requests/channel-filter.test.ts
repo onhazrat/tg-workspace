@@ -32,6 +32,7 @@ const part = (
   repeatedPosts: 0,
   syncs,
   failedSyncs,
+  ledgerOnly: 0,
 })
 
 const rows = channelRows(

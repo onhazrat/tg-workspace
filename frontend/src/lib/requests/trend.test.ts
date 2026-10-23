@@ -10,7 +10,16 @@ const bucket = (
   useful: number,
   idle = 0,
   wasted = 0,
-): RequestTrendBucket => ({ start, end, kind, charged, useful, idle, wasted })
+): RequestTrendBucket => ({
+  start,
+  end,
+  kind,
+  charged,
+  useful,
+  idle,
+  wasted,
+  ledgerOnly: 0,
+})
 
 const at = (iso: string) => Date.parse(`${iso}Z`)
 const none = new Set<never>()
@@ -50,6 +59,15 @@ describe("dailyBars", () => {
       ["2026-10-03", 1, 4],
     ])
     expect(bars[1].at).toBe(at("2026-10-02T00:00"))
+  })
+
+  test("a day before recording draws the ledger's total, whatever outcome is hidden (RQS-16)", () => {
+    const ledger = {
+      ...bucket("2026-10-01T00:00:00", "2026-10-02T00:00:00", "auto", true, 0),
+      ledgerOnly: 12,
+    }
+    const { bars } = dailyBars([ledger], range, none, new Set(["useful"]))
+    expect(bars.map((b) => b.charged)).toEqual([12, 0, 0])
   })
 
   test("a day with no Requests is still drawn, as nothing", () => {

@@ -1732,7 +1732,7 @@
       "comment": "Rows the Requests tab's Channel table shows first.",
       "expression": "25",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 281,
+      "line": 294,
       "name": "FIRST_CHANNELS",
       "value": 25
     },
@@ -1740,7 +1740,7 @@
       "comment": "Rows each \"Show more\" adds to the Requests tab's Channel table.",
       "expression": "50",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 283,
+      "line": 296,
       "name": "MORE_CHANNELS",
       "value": 50
     },
@@ -1748,7 +1748,7 @@
       "comment": "Steps on the violet Account ramp, `--account-1` to `--account-4`.",
       "expression": "4",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 430,
+      "line": 443,
       "name": "ACCOUNT_STEPS",
       "value": 4
     },
@@ -1772,7 +1772,7 @@
       "comment": "A band's name shows when it spans more than this share of the view.",
       "expression": "0.08",
       "file": "frontend/src/lib/requests/zoom.ts",
-      "line": 115,
+      "line": 127,
       "name": "LABELLED",
       "value": 0.08
     },
@@ -1780,7 +1780,7 @@
       "comment": "Above this many times its 99th percentile, a row's tallest bucket stops setting its scale.",
       "expression": "1.5",
       "file": "frontend/src/lib/requests/zoom.ts",
-      "line": 139,
+      "line": 151,
       "name": "SPIKE",
       "value": 1.5
     },
@@ -1788,7 +1788,7 @@
       "comment": "A capped scale stops this far above the 99th percentile.",
       "expression": "1.15",
       "file": "frontend/src/lib/requests/zoom.ts",
-      "line": 141,
+      "line": 153,
       "name": "CAP",
       "value": 1.15
     },
@@ -1796,7 +1796,7 @@
       "comment": "How long a legend click waits for a second to make a double click; Plotly's default.",
       "expression": "300",
       "file": "frontend/src/lib/requests/zoom.ts",
-      "line": 379,
+      "line": 394,
       "name": "DOUBLE_CLICK_MS",
       "value": 300
     },

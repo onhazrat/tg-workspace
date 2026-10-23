@@ -24,6 +24,7 @@ const part = (
   repeatedPosts: 0,
   syncs: 0,
   failedSyncs: 0,
+  ledgerOnly: 0,
 })
 
 /**
@@ -106,6 +107,7 @@ const bucket = (start: string, span: number, kind: string, useful: number) => ({
   useful,
   idle: 1,
   wasted: 0,
+  ledgerOnly: 0,
 })
 /**
  * Three days of Requests, all Charged but the probes: three days ago only a

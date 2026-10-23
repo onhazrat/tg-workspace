@@ -129,17 +129,30 @@ export interface Tally {
   useful: number
   idle: number
   wasted: number
+  /** Of `total`, the Requests on days before recording, from the ledger: no outcome (RQS-16). */
+  ledgerOnly: number
 }
 
-const emptyTally = (): Tally => ({ total: 0, useful: 0, idle: 0, wasted: 0 })
+const emptyTally = (): Tally => ({
+  total: 0,
+  useful: 0,
+  idle: 0,
+  wasted: 0,
+  ledgerOnly: 0,
+})
 
-/** Adds `row`'s shown outcomes to `into`; a hidden one adds nothing. */
+/**
+ * Adds `row`'s shown outcomes to `into`; a hidden one adds nothing. The
+ * ledger's Requests have no outcome to hide, so they always add.
+ */
 function addTo(into: Tally, row: Tally, hidden: ReadonlySet<Outcome>) {
   for (const { id } of OUTCOMES) {
     if (hidden.has(id)) continue
     into[id] += row[id]
     into.total += row[id]
   }
+  into.ledgerOnly += row.ledgerOnly
+  into.total += row.ledgerOnly
 }
 
 const tallyOf = (row: RequestTotals, hidden: ReadonlySet<Outcome>) => {

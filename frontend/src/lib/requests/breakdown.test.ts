@@ -38,6 +38,7 @@ const totals = (
   repeatedPosts: 0,
   syncs: 0,
   failedSyncs: 0,
+  ledgerOnly: 0,
 })
 const onChannel = (
   channel: string | null,
@@ -178,6 +179,7 @@ describe("the Channel table's measures (RQS-04)", () => {
     ...onChannel(channel, kind, ...requests),
     syncs,
     failedSyncs,
+    ledgerOnly: 0,
     newPosts,
   })
   const byChannel = [
@@ -262,7 +264,39 @@ describe("the totals", () => {
       useful: 6,
       idle: 7,
       wasted: 7,
+      ledgerOnly: 0,
     })
+  })
+})
+
+describe("days before recording (RQS-16)", () => {
+  // 40 auto sync Requests known from the ledger alone, beside 10 recorded.
+  const auto = { ...totals("auto", 6, 3, 1, 50), requests: 50, ledgerOnly: 40 }
+
+  test("the stat strip counts them in the Requests, under no outcome", () => {
+    expect(statTotals([auto])).toEqual({
+      total: 50,
+      useful: 6,
+      idle: 3,
+      wasted: 1,
+      ledgerOnly: 40,
+    })
+  })
+
+  test("hiding outcomes never hides them: they have none", () => {
+    const { rows } = kindRows([auto], none, hide("useful", "idle"))
+    expect(rows.map((r) => [r.total, r.ledgerOnly, r.wasted])).toEqual([
+      [41, 40, 1],
+    ])
+  })
+
+  test("a hidden kind hides them with it", () => {
+    const [account] = accountRows(
+      [{ ...auto, accountId: "a", email: "a@example.com" }],
+      new Set(["auto"]),
+      none,
+    )
+    expect([account.total, account.ledgerOnly]).toEqual([0, 0])
   })
 })
 

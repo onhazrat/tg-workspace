@@ -29,6 +29,7 @@ const fine = (start: string, end: string, useful: number, kind = "auto") => ({
   useful,
   idle: kind === "probe" ? 1 : 0,
   wasted: 0,
+  ledgerOnly: 0,
 })
 
 const TREND: RequestTrendResponse = {

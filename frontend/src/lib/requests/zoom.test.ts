@@ -26,7 +26,16 @@ const bucket = (
   idle = 0,
   wasted = 0,
   charged = true,
-): RequestTrendBucket => ({ start, end, kind, charged, useful, idle, wasted })
+): RequestTrendBucket => ({
+  start,
+  end,
+  kind,
+  charged,
+  useful,
+  idle,
+  wasted,
+  ledgerOnly: 0,
+})
 
 const at = (iso: string) => Date.parse(`${iso}Z`)
 
@@ -474,4 +483,57 @@ test("shadeOf steps a kind's colour toward the surface by outcome, opaque", () =
   expect(shadeOf("#2a78d6", "#ffffff", "wasted")).toBe("rgb(191,215,243)")
   // Toward a dark surface it darkens; a short hex reads as its long form.
   expect(shadeOf("#fff", "#000", "idle")).toBe("rgb(140,140,140)")
+})
+
+describe("days before recording (RQS-16)", () => {
+  const none = new Set<never>()
+  const view: [number, number] = [
+    at("2026-10-19T00:00"),
+    at("2026-10-21T00:00"),
+  ]
+  // The ledger's day: 48 auto sync Requests, no outcome. Then 24 recorded Useful.
+  const { size, points } = rebucket(
+    storedBuckets([
+      {
+        ...bucket("2026-10-19T00:00:00", "2026-10-20T00:00:00", "auto", 0),
+        ledgerOnly: 48,
+      },
+      bucket("2026-10-20T00:00:00", "2026-10-21T00:00:00", "auto", 24),
+    ]),
+    ...view,
+  )
+  const chart = (
+    kind: Split,
+    outcome: Split,
+    hiddenOutcomes: ReadonlySet<Outcome> = none,
+  ) => trendChart(points, size, view, { kind, outcome }, none, hiddenOutcomes)
+  const series = (c: ReturnType<typeof chart>) =>
+    c.rows.map((r) => [r.name, r.series.map((s) => [s.name, s.y])])
+
+  test("merged, the ledger's day draws whatever outcome is hidden", () => {
+    expect(series(chart("off", "off", new Set(["useful"])))).toEqual([
+      ["All Requests", [["All Requests", [2, 0, 0]]]],
+    ])
+  })
+
+  test("told apart by outcome, it is a series of its own, before recording", () => {
+    expect(series(chart("off", "stacked"))).toEqual([
+      [
+        "All Requests",
+        [
+          ["Useful", [0, 1, 0]],
+          ["Before recording", [2, 0, 0]],
+        ],
+      ],
+    ])
+    expect(series(chart("separate", "separate")).map(([name]) => name)).toEqual(
+      ["Auto sync · Useful", "Auto sync · Before recording"],
+    )
+  })
+
+  test("the legend cannot hide it: there is no outcome to hide", () => {
+    const shown = { hiddenKinds: none, hiddenOutcomes: none }
+    expect(legendClick("outcome", "ledger")(shown)).toEqual({})
+    expect(legendDoubleClick("outcome", "ledger", ["auto"])(shown)).toEqual({})
+  })
 })

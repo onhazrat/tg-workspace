@@ -26,6 +26,7 @@ const TREND: RequestTrendResponse = {
       useful: 4,
       idle: 2,
       wasted: 1,
+      ledgerOnly: 0,
     },
   ],
 }

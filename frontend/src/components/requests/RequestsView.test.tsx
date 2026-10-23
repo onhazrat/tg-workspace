@@ -32,6 +32,7 @@ const part = (kind: string, useful: number, idle: number, wasted: number) => ({
   repeatedPosts: 0,
   syncs: 0,
   failedSyncs: 0,
+  ledgerOnly: 0,
 })
 
 const BREAKDOWN: RequestBreakdownResponse = {

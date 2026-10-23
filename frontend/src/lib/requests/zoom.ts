@@ -51,6 +51,15 @@ const utcMs = (naive: string) => Date.parse(`${naive}Z`)
 export const tierOf = (span: number) =>
   span > HOUR_MS ? DAY_MS : span > FINE_MS ? HOUR_MS : FINE_MS
 
+/** A day before recording: the ledger's Requests, which have no outcome (RQS-16). */
+export const LEDGER = "ledger"
+/** What the trend tells apart by outcome: the outcomes, and the ledger's days. */
+export type Shown = Outcome | typeof LEDGER
+const SHOWN: { id: Shown; label: string }[] = [
+  ...OUTCOMES,
+  { id: LEDGER, label: "Before recording" },
+]
+
 /** The server's buckets, each kind and Charged or not folded into one point per instant. */
 export function storedBuckets(buckets: readonly RequestTrendBucket[]): Point[] {
   const points = new Map<number, Point>()
@@ -65,6 +74,9 @@ export function storedBuckets(buckets: readonly RequestTrendBucket[]): Point[] {
       const key = `${b.kind}:${o.id}`
       pt.counts[key] = (pt.counts[key] ?? 0) + b[o.id]
     }
+    const ledger = `${b.kind}:${LEDGER}`
+    if (b.ledgerOnly)
+      pt.counts[ledger] = (pt.counts[ledger] ?? 0) + b.ledgerOnly
     points.set(t, pt)
   }
   return [...points.values()].sort((a, b) => a.t - b.t)
@@ -157,12 +169,14 @@ export function scaleOf(view: readonly number[]) {
 
 /**
  * How much of a kind's colour each outcome keeps, the rest the chart's
- * surface: the hue says which kind, the step what came of it.
+ * surface: the hue says which kind, the step what came of it. The ledger's
+ * days, which have no outcome, are hatched as well (`ZoomTrend`).
  */
-export const STEP: Record<Outcome, number> = {
+export const STEP: Record<Shown, number> = {
   useful: 1,
   idle: 0.55,
   wasted: 0.3,
+  ledger: 0.8,
 }
 
 const channels = (hex: string) => {
@@ -175,7 +189,7 @@ const channels = (hex: string) => {
  * A kind's colour stepped toward the surface for an outcome, opaque, so the
  * tier bands behind do not shift its hue. The tokens are hex.
  */
-export function shadeOf(kind: string, surface: string, outcome: Outcome) {
+export function shadeOf(kind: string, surface: string, outcome: Shown) {
   const [k, s, share] = [channels(kind), channels(surface), STEP[outcome]]
   return `rgb(${k.map((v, i) => Math.round(v * share + s[i] * (1 - share))).join(",")})`
 }
@@ -191,7 +205,7 @@ export function grainOf(span: number) {
 /** A slice of the Requests: one kind, one outcome, both, or (empty) all. */
 export interface Part {
   kind?: string
-  outcome?: Outcome
+  outcome?: Shown
 }
 
 const NONE: ReadonlySet<never> = new Set()
@@ -206,6 +220,7 @@ function countOf(
   let n = 0
   for (const [key, count] of Object.entries(pt.counts)) {
     const [kind, outcome] = key.split(":") as [string, Outcome]
+    // The ledger's days have no outcome to hide.
     if (
       (part.kind ?? kind) === kind &&
       (part.outcome ?? outcome) === outcome &&
@@ -280,12 +295,12 @@ function kindsIn(points: readonly Point[]) {
 /** Every value of the dimensions switched on, crossed; one empty part if none. */
 function product(kinds: readonly string[], kind: boolean, outcome: boolean) {
   const ks = kind ? kinds : [undefined]
-  const os = outcome ? OUTCOMES.map((o) => o.id) : [undefined]
+  const os = outcome ? SHOWN.map((o) => o.id) : [undefined]
   return ks.flatMap((k) => os.map((o): Part => ({ kind: k, outcome: o })))
 }
 
 export function labelOf(part: Part) {
-  const outcome = OUTCOMES.find((o) => o.id === part.outcome)
+  const outcome = SHOWN.find((o) => o.id === part.outcome)
   return (
     [part.kind && kindMeta(part.kind).label, outcome?.label]
       .filter(Boolean)
@@ -319,7 +334,7 @@ export function trendChart(
   const hiddenIn = (p: Part, d: Dimension) =>
     d === "kind"
       ? !!p.kind && hiddenKinds.has(p.kind)
-      : !!p.outcome && hiddenOutcomes.has(p.outcome)
+      : !!p.outcome && hiddenOutcomes.has(p.outcome as Outcome)
   const listed = (p: Part) =>
     points.some((pt) => countOf(pt, NONE, NONE, p) > 0) &&
     (["kind", "outcome"] as const).every((d) => d === legend || !hiddenIn(p, d))
@@ -394,6 +409,7 @@ export const legendClick =
   (dim: Dimension, id: string) =>
   (h: Hidden): Partial<Hidden> => {
     if (dim === "kind") return { hiddenKinds: toggled(h.hiddenKinds, id) }
+    if (id === LEDGER) return {}
     const lastShown =
       !h.hiddenOutcomes.has(id as Outcome) &&
       h.hiddenOutcomes.size === OUTCOMES.length - 1
@@ -416,10 +432,12 @@ export const legendDoubleClick =
   (h: Hidden): Partial<Hidden> =>
     dim === "kind"
       ? { hiddenKinds: isolated(kinds, id, h.hiddenKinds) }
-      : {
-          hiddenOutcomes: isolated(
-            OUTCOMES.map((o) => o.id),
-            id as Outcome,
-            h.hiddenOutcomes,
-          ),
-        }
+      : id === LEDGER
+        ? {}
+        : {
+            hiddenOutcomes: isolated(
+              OUTCOMES.map((o) => o.id),
+              id as Outcome,
+              h.hiddenOutcomes,
+            ),
+          }
