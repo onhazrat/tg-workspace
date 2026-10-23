@@ -1538,6 +1538,13 @@ def test_the_last_weeks_trend_is_five_minute_buckets_of_the_requests(
     for b in buckets:
         assert _span(b) == timedelta(minutes=5), b
         assert datetime.fromisoformat(b["start"]).minute % 5 == 0, b
+    # Each bucket holds what the Breakdown finds in its 5 minutes.
+    for start in {b["start"] for b in buckets}:
+        same = [b for b in buckets if b["start"] == start]
+        cut = _breakdown(
+            client, superuser_token_headers, start=start, end=same[0]["end"]
+        )
+        assert _by_kind(same) == _breakdown_by_kind(cut), start
     useful, _idle, wasted = _by_kind(buckets)["single"]
     assert (useful, wasted) == (1, 1)
     assert _by_kind(buckets) == _breakdown_by_kind(
