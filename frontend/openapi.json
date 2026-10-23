@@ -13846,7 +13846,7 @@
           "repeatedPosts"
         ],
         "title": "RequestRecord",
-        "description": "One Request: one attempt that reached Telegram (RQS-10, ADR-035).\n\n`channel` is the Channel's handle, or the handle a probe or Handle check\nasked about. `cause` and `errorCode` are set on a Wasted Request alone.\n`chainId` is the id of the first attempt at the same page. `newPosts` and\n`repeatedPosts` are null where the page carried no Posts. `email` is\nblank for an Account deleted since, and null when no Account is charged."
+        "description": "One Request: one attempt that reached Telegram.\n\n`channel` is the Channel's handle, or the handle a probe or Handle check\nasked about. `cause` and `errorCode` are set on a Wasted Request alone.\n`chainId` is the id of the first attempt at the same page. `newPosts` and\n`repeatedPosts` are null where the page carried no Posts. `email` is\nblank for an Account deleted since, and null when no Account is charged."
       },
       "RequestRecordsResponse": {
         "properties": {

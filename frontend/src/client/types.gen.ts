@@ -6255,7 +6255,7 @@ export type RequestBreakdownResponse = {
 /**
  * RequestRecord
  *
- * One Request: one attempt that reached Telegram (RQS-10, ADR-035).
+ * One Request: one attempt that reached Telegram.
  *
  * `channel` is the Channel's handle, or the handle a probe or Handle check
  * asked about. `cause` and `errorCode` are set on a Wasted Request alone.

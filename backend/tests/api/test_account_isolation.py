@@ -570,6 +570,11 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "QUOTA_READ_ANY reads when every account's Requests were made (RQS-09), "
         "refused to others in test_request_stats.py",
     ),
+    ("GET", f"{V1}/requests/records"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_READ_ANY lists any account's Requests on one Channel table row "
+        "(RQS-10), refused to others in test_request_stats.py",
+    ),
     ("GET", f"{V1}/quota/limits"): (
         Reason.DEPLOYMENT_WIDE,
         "QUOTA_MANAGE reads every account's limits; that is the screen",
