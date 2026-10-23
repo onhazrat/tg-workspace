@@ -5,7 +5,10 @@
  */
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
-import { requestsReadRequestBreakdown } from "@/client"
+import {
+  requestsReadRequestBreakdown,
+  requestsReadRequestTrend,
+} from "@/client"
 import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useIsMobile } from "@/hooks/useMobile"
@@ -39,6 +42,25 @@ function useBreakdown(
   })
 }
 
+/** The range in buckets, for the daily bars (RQS-06). */
+function useTrend(
+  range: { start: number; end: number },
+  charged: ChargedFilter,
+) {
+  return useQuery({
+    queryKey: queryKeys.requestTrend(range.start, range.end, charged),
+    queryFn: () =>
+      requestsReadRequestTrend({
+        query: {
+          start: new Date(range.start).toISOString(),
+          end: new Date(range.end).toISOString(),
+          charged,
+        },
+      }),
+    placeholderData: keepPreviousData,
+  })
+}
+
 /** Only the Operator reads the Breakdown; anyone else is told so. */
 export default function RequestsTab() {
   const registry = useSettingsRegistry()
@@ -64,6 +86,7 @@ function OperatorRequests() {
   const all = useBreakdown(range, "all", true)
   const picked = useBreakdown(range, filter.charged, filter.charged !== "all")
   const shown = filter.charged === "all" ? all : picked
+  const trend = useTrend(range, filter.charged)
   const phone = useIsMobile()
   return (
     <RequestsView
@@ -72,7 +95,8 @@ function OperatorRequests() {
       range={range}
       counts={all.data && chargedCounts(all.data.byKind)}
       breakdown={shown.data}
-      error={all.error ?? shown.error}
+      trend={trend.data}
+      error={all.error ?? shown.error ?? trend.error}
       phone={phone}
     />
   )

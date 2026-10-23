@@ -40,8 +40,56 @@ const breakdown = (charged: string | null) => ({
   byChannel: charged === "charged" ? CHANNELS : [PROBES, ...CHANNELS],
 })
 
-/** Every Breakdown read, newest last. */
+const DAY_MS = 86_400_000
+/** UTC midnight `n` days ago, as the server writes it: naive, no zone. */
+const daysAgo = (n: number) =>
+  new Date(Math.floor(Date.now() / DAY_MS - n) * DAY_MS)
+    .toISOString()
+    .slice(0, 19)
+const plus = (naive: string, ms: number) =>
+  new Date(Date.parse(`${naive}Z`) + ms).toISOString().slice(0, 19)
+const bucket = (start: string, span: number, kind: string, useful: number) => ({
+  start,
+  end: plus(start, span),
+  kind,
+  charged: kind !== "probe",
+  useful,
+  idle: 1,
+  wasted: 0,
+})
+/**
+ * Three days of Requests, all Charged but the probes: three days ago only a
+ * daily total, two days ago two hours, yesterday 5 minutes of probes.
+ */
+const BUCKETS = [
+  bucket(daysAgo(3), DAY_MS, "auto", 40),
+  bucket(plus(daysAgo(2), 3_600_000 * 6), 3_600_000, "auto", 20),
+  bucket(plus(daysAgo(2), 3_600_000 * 9), 3_600_000, "auto", 30),
+  bucket(plus(daysAgo(1), 3_600_000 * 12), 300_000, "probe", 10),
+]
+
+/** Every Trend read, newest last; it answers the buckets inside the range. */
+async function mockTrend(page: Page): Promise<URL[]> {
+  const seen: URL[] = []
+  await page.route("**/api/v1/requests/trend?**", (route: Route) => {
+    const url = new URL(route.request().url())
+    seen.push(url)
+    const [lo, hi] = ["start", "end"].map((k) =>
+      Date.parse(String(url.searchParams.get(k))),
+    )
+    const buckets = BUCKETS.filter(
+      (b) => Date.parse(`${b.end}Z`) > lo && Date.parse(`${b.start}Z`) < hi,
+    )
+    return route.fulfill({
+      json: { start: "", end: "", hourlyDays: 30, buckets },
+    })
+  })
+  return seen
+}
+
+/** Every Breakdown read, newest last. The Trend is mocked beside it. */
 async function mockBreakdown(page: Page): Promise<URL[]> {
+  await mockTrend(page)
   const seen: URL[] = []
   await page.route("**/api/v1/requests/breakdown?**", (route: Route) => {
     const url = new URL(route.request().url())
@@ -153,6 +201,53 @@ test("hidden kinds and outcomes reach both tables", async ({ page }) => {
   await expect(
     channels(page).getByRole("columnheader", { name: "Idle", exact: true }),
   ).toHaveCount(0)
+})
+
+const dailyBars = (page: Page) =>
+  page.getByTestId("requests-daily-bars").locator(".recharts-bar-rectangle")
+/** The chart reads the day under the pointer, so the pointer goes there first. */
+async function clickDay(page: Page, n: number) {
+  await dailyBars(page).nth(n).hover()
+  await dailyBars(page).nth(n).click()
+}
+
+test("the daily bars draw the range's days, and a click narrows the tab to one", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  const trend = await mockTrend(page)
+  await page.goto("/?tab=requests")
+  // A bar a day with Requests: the daily total, two hours, the probes.
+  await expect(dailyBars(page)).toHaveCount(3)
+  await expect(page.getByTestId("requests-daily-title")).toHaveText(
+    "Requests per day (UTC). Click a day to narrow everything to it.",
+  )
+
+  // A hidden kind leaves the bars too.
+  await page.getByRole("checkbox", { name: "Show Directory probe" }).uncheck()
+  await expect(dailyBars(page)).toHaveCount(2)
+
+  const day = daysAgo(2).slice(0, 10)
+  await clickDay(page, 1)
+  await expect(page.getByTestId("requests-range")).toHaveText(`on ${day} (UTC)`)
+  await expect(page.getByTestId("requests-daily-title")).toHaveText(
+    `Requests per hour on ${day} (UTC)`,
+  )
+  const last = trend.at(-1) as URL
+  expect(last.searchParams.get("start")).toBe(`${day}T00:00:00.000Z`)
+  // Its two hours, 06:00 and 09:00.
+  await expect(dailyBars(page)).toHaveCount(2)
+})
+
+test("a day past the hourly totals has only its daily total", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  await page.goto("/?tab=requests")
+  await clickDay(page, 0)
+  await expect(page.getByTestId("requests-daily-only")).toHaveText(
+    `Hourly totals are kept for 30 days, so ${daysAgo(3).slice(0, 10)} has its daily total only.`,
+  )
 })
 
 test("the Channel table searches, sorts and pages", async ({ page }) => {

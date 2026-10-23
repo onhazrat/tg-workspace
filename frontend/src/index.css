@@ -98,6 +98,11 @@
   --outcome-useful: #898781;
   --outcome-idle: #fab219;
   --outcome-wasted: #d03b3b;
+  /* The daily bars (RQS-06): Charged ink-dark, Uncharged light, on the grid. */
+  --layer-charged: #52514e;
+  --layer-uncharged: #c3c2b7;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #898781;
 }
 
 .dark {
@@ -146,6 +151,9 @@
   --kind-handle: #008300;
   --kind-botApi: #9085e9;
   --kind-other: #807f79;
+  --layer-charged: #c3c2b7;
+  --layer-uncharged: #52514e;
+  --viz-grid: #2c2c2a;
 }
 
 .terminal-theme {
