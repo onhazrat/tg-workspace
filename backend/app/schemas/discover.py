@@ -438,7 +438,7 @@ class DiscoverCandidatesRequest(PostWindowRequest):
     too.
     """
 
-    channel_names: list[str] = PydanticField(alias="channelNames")
+    channel_names: list[str] = PydanticField(alias="channelNames")  # ty: ignore[invalid-mutable-override]
     signals: list[str] | None = None
     # PTR-05 (ADR-026): what a report covers is the Post selection, resolved
     # here like every other Action's. The keyword, the cap and the ranked
@@ -489,4 +489,4 @@ class DiscoverReportCreateRequest(DiscoverCandidatesRequest):
     other submission.
     """
 
-    window: AnalysisWindowInput
+    window: AnalysisWindowInput  # ty: ignore[invalid-mutable-override]

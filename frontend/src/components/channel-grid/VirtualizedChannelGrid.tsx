@@ -137,7 +137,6 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
   // Keyed on `lanes` and `zoom` alone: `virtualizer` is a fresh object every render, so
   // depending on it would re-measure each render, and each measure re-renders —
   // a loop that hangs the page under scroll.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   useEffect(() => {
     virtualizer.measure()
     for (const row of gridRef.current?.querySelectorAll<HTMLElement>(
@@ -185,7 +184,7 @@ export const VirtualizedChannelGrid: React.FC<VirtualizedChannelGridProps> = ({
    * go. `range` tracks what the user can actually see.
    */
   const lastVisibleRow = virtualizer.range?.endIndex ?? -1
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onLoadMore's identity changes every render; the row index is the real trigger
+  // onLoadMore's identity changes every render; the row index is the real trigger.
   useEffect(() => {
     if (!hasMore || rowCount === 0) return
     if (lastVisibleRow >= rowCount - 1) onLoadMore()
