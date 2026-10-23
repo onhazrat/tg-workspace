@@ -6,11 +6,11 @@
 
 **Status:** ready-for-agent
 
-- [ ] The probe path parses the soft-block page before raising, and a private Channel gets its own Directory status.
-- [ ] A probe of a private handle is Useful when it changes the entry and Idle when the entry already said private; never Wasted.
-- [ ] Existing Directory filters and counts treat the new status as they treated unavailable unless the Directory's tests say otherwise; nothing that read unavailable silently drops private handles.
-- [ ] Tests at seam 1 of the spec: Telegram faked at `network._fetch_once`, the work run for real, results read through the Requests API over HTTP after flushing and running the rollup.
-- [ ] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+- [x] The probe path parses the soft-block page before raising, and a private Channel gets its own Directory status.
+- [x] A probe of a private handle is Useful when it changes the entry and Idle when the entry already said private; never Wasted.
+- [x] Existing Directory filters and counts treat the new status as they treated unavailable unless the Directory's tests say otherwise; nothing that read unavailable silently drops private handles.
+- [x] Tests at seam 1 of the spec: Telegram faked at `network._fetch_once`, the work run for real, results read through the Requests API over HTTP after flushing and running the rollup.
+- [x] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
 
 ## Comments
 
