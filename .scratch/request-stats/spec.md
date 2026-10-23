@@ -184,7 +184,7 @@ The Requests tab:
 
 ### Keeping (decisions 16, 28)
 
-- `REQUEST_RECORD_DAYS=7` and `REQUEST_HOURLY_DAYS=30`, in settings and `.env.example`. Startup refuses an hourly span shorter than the record span.
+- `REQUEST_RECORD_DAYS=7` and `REQUEST_HOURLY_DAYS=30`, in settings and `.env.example`. Startup refuses an hourly span no longer than the record span.
 - The existing hourly retention job prunes per-Request rows and hourly totals in batched deletes. Daily totals are never pruned. There is no partitioning at about 0.7M per-Request rows; revisit past about 10M.
 - The new tables are Operator stats, not user-owned. Each one is classified in every inventory that requires it (tenancy scopes, retention windows, the `tg_*` cleanup inventory, the service-kind inventory) with a reason, and none of those guards is loosened.
 
@@ -265,7 +265,7 @@ The Requests tab:
     - an hour that gets a late Request is recomputed.
   - **Keeping and the ledger:**
     - retention with a moved clock prunes per-Request rows past `REQUEST_RECORD_DAYS` and hourly rows past `REQUEST_HOURLY_DAYS`, never daily rows;
-    - startup refuses an hourly span shorter than the record span;
+    - startup refuses an hourly span no longer than the record span;
     - the ledger check passes on a clean day and reports a forced mismatch;
     - the existing quota ledger tests pass unchanged.
   - **The API:**

@@ -210,8 +210,8 @@ class Settings(BaseSettings):
     SUMMARY_PARTIAL_DISMISSED_RETENTION_DAYS: int = 30
     #: How long each Request (`tg_request_records`) and the hourly totals
     #: (`tg_request_hourly`) are kept (RQS-02, ADR-035). The daily totals are
-    #: kept forever. The hourly span may not be shorter than the record span:
-    #: the rollup rebuilds an hour from its Requests.
+    #: kept forever. The hourly span must be longer than the record span: the
+    #: rollup rebuilds an hour from its Requests, and its day from the hours.
     REQUEST_RECORD_DAYS: int = 7
     REQUEST_HOURLY_DAYS: int = 30
     #: How often the worker sweeps the sync lanes for anything the
@@ -628,11 +628,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_hourly_span_covers_record_span(self) -> Self:
-        """Refuse to start with hourly totals kept shorter than the Requests (RQS-02)."""
-        if self.REQUEST_HOURLY_DAYS < self.REQUEST_RECORD_DAYS:
+        """Refuse to start unless hourly totals outlive the Requests (RQS-02).
+
+        With equal spans a late Request rebuilds its day from hourly rows
+        retention has already partly pruned.
+        """
+        if self.REQUEST_HOURLY_DAYS <= self.REQUEST_RECORD_DAYS:
             raise ValueError(
-                f"REQUEST_HOURLY_DAYS ({self.REQUEST_HOURLY_DAYS}) must not be "
-                f"shorter than REQUEST_RECORD_DAYS ({self.REQUEST_RECORD_DAYS})"
+                f"REQUEST_HOURLY_DAYS ({self.REQUEST_HOURLY_DAYS}) must be "
+                f"longer than REQUEST_RECORD_DAYS ({self.REQUEST_RECORD_DAYS})"
             )
         return self
 

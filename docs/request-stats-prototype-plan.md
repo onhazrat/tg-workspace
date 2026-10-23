@@ -191,7 +191,9 @@ Kinds, attribution and the tab:
 27. **A best-effort flag** (work past its Account's Budget) is on each Request and in the
     hourly totals.
 28. **`REQUEST_RECORD_DAYS=7` and `REQUEST_HOURLY_DAYS=30`**, in `config.py` and
-    `.env.example`; startup refuses an hourly span shorter than the record span.
+    `.env.example`; startup refuses an hourly span shorter than the record span
+    (and, since 2026-10-24, an equal one: a late Request would rebuild its day from
+    partly pruned hourly rows).
 29. **The tab reads** the finest tier for each stretch of the trend, daily totals for the
     tables (hourly for a day the range cuts), the per-Request rows for a Channel's list, and
     the ledger-only history before recording started; one Operator-only endpoint per need.

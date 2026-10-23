@@ -1425,14 +1425,23 @@ def test_retention_keeps_requests_a_week_hourly_totals_a_month_and_days_forever(
         assert _requests_by_tier(client, superuser_token_headers, now) == left, days
 
 
-def test_startup_refuses_an_hourly_span_shorter_than_the_record_span() -> None:
-    """Mutation: drop the check, or refuse equal spans as well."""
+@pytest.mark.parametrize("hourly", [9, 10], ids=["shorter", "equal"])
+def test_startup_refuses_an_hourly_span_not_longer_than_the_record_span(
+    hourly: int,
+) -> None:
+    """Mutations: drop the check, or let equal spans through.
+
+    With equal spans a late Request rebuilds its day from hourly rows
+    retention has partly pruned.
+    """
     with pytest.raises(ValueError) as refused:
-        Settings(PROJECT_NAME="test", REQUEST_RECORD_DAYS=10, REQUEST_HOURLY_DAYS=9)  # type: ignore[call-arg]
+        Settings(
+            PROJECT_NAME="test", REQUEST_RECORD_DAYS=10, REQUEST_HOURLY_DAYS=hourly
+        )  # type: ignore[call-arg]
     assert "REQUEST_RECORD_DAYS" in str(refused.value)
     assert "REQUEST_HOURLY_DAYS" in str(refused.value)
 
-    Settings(PROJECT_NAME="test", REQUEST_RECORD_DAYS=10, REQUEST_HOURLY_DAYS=10)  # type: ignore[call-arg]
+    Settings(PROJECT_NAME="test", REQUEST_RECORD_DAYS=10, REQUEST_HOURLY_DAYS=11)  # type: ignore[call-arg]
 
 
 # --------------------------------------------------------------------------
