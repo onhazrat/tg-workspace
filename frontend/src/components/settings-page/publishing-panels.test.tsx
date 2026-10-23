@@ -155,6 +155,28 @@ describe("DestinationsView", () => {
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith("-1001", "Daily"))
   })
 
+  test("a chat already saved is not offered", async () => {
+    const onBrowse = async () => ({
+      chats: [
+        { chatId: "-1001", name: "Daily", type: "channel" },
+        { chatId: "-1002", name: "Renamed", type: "channel" },
+      ],
+    })
+    render(
+      <DestinationsView
+        {...destProps}
+        destinations={[{ id: "d2", name: "News", chatId: "-1002" }]}
+        onBrowse={onBrowse}
+      />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Add destination" }))
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show chats your bot can see" }),
+    )
+    await screen.findByRole("button", { name: "Pick Daily" })
+    expect(screen.queryByRole("button", { name: "Pick Renamed" })).toBeNull()
+  })
+
   test("a refused lookup reads what Telegram said", async () => {
     const onBrowse = async () => ({ chats: [], error: "Conflict: webhook" })
     render(<DestinationsView {...destProps} onBrowse={onBrowse} />)

@@ -128,6 +128,19 @@ export function chatsFromUpdates(data: {
   return { chats: [...chats.values()] }
 }
 
+/**
+ * The chats not saved as a destination yet, matched on the numeric chat id
+ * only: a title or `@handle` can change, the id cannot. A destination saved
+ * by its handle is not recognised, so its chat is still offered.
+ */
+export function notYetAdded(
+  chats: BotChat[],
+  destinations: { chatId: string }[],
+): BotChat[] {
+  const saved = new Set(destinations.map((d) => d.chatId.trim()))
+  return chats.filter((c) => !saved.has(c.chatId))
+}
+
 export const DEST_NETWORK_ERROR: DestValidation = {
   isValid: false,
   info: "Network Error",

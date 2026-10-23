@@ -17,6 +17,7 @@ import {
   destinationValidation,
   errorText,
   looksLikeBotToken,
+  notYetAdded,
   publishLogFor,
 } from "./publishing-model"
 
@@ -281,6 +282,18 @@ describe("the chats a bot can see", () => {
     expect(seen(["administrator", "kicked"])).toBe(0)
     expect(seen(["administrator", "left"])).toBe(0)
     expect(seen(["left", "administrator"])).toBe(1)
+  })
+
+  test("a chat is matched to a destination by its id, never its name", () => {
+    const daily = { chatId: "-1001", name: "Daily", type: "channel" }
+    const renamed = { chatId: "-1002", name: "New name", type: "channel" }
+    const other = { chatId: "-1003", name: "Old name", type: "channel" }
+    expect(
+      notYetAdded(
+        [daily, renamed, other],
+        [{ chatId: "-1001" }, { chatId: " -1002 " }, { chatId: "Old name" }],
+      ),
+    ).toEqual([other])
   })
 
   test("a refusal reads Telegram's words", () => {

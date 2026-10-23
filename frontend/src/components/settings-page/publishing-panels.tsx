@@ -11,10 +11,11 @@ import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { usePublishLogsQuery } from "@/hooks/useLogs"
 import { usePublishing } from "@/hooks/usePublishing"
-import type {
-  BotChat,
-  BotValidation,
-  DestValidation,
+import {
+  type BotChat,
+  type BotValidation,
+  type DestValidation,
+  notYetAdded,
 } from "@/lib/bots/publishing-model"
 import type { BotCredential, ChatDestination, PublishLog } from "@/types"
 import {
@@ -71,7 +72,7 @@ function ChatPicker({
             ))}
           </ul>
           <Note>
-            {found.chats.length ? "" : "None found. "}
+            {found.chats.length ? "" : "Nothing new found. "}
             Telegram keeps only the last 24 hours of a bot's activity. Post in a
             missing chat, or add the bot to it again, and it shows up here.
           </Note>
@@ -353,7 +354,17 @@ export function DestinationsView({
         nameLabel="Destination name"
         saveLabel="Save destination"
         onLookUp={onLookUp}
-        onBrowse={hasBot ? onBrowse : undefined}
+        onBrowse={
+          hasBot && onBrowse
+            ? async () => {
+                const found = await onBrowse()
+                return {
+                  ...found,
+                  chats: notYetAdded(found.chats, destinations),
+                }
+              }
+            : undefined
+        }
         onAdd={onAdd}
       />
       <ListTable
