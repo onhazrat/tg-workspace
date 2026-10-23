@@ -1,4 +1,4 @@
-"""Every Request a sync or probe makes is recorded; the Operator reads the totals.
+"""Every Request to Telegram is recorded; the Operator reads the totals.
 
 Seam 1 of `.scratch/request-stats/spec.md`: Telegram is faked at
 `network._fetch_once`, the seam the quota ledger tests use, and everything above
@@ -30,9 +30,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
 
+from app import main as api_main
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_recording import page_for_fetch
+from app.core.request_recording import RequestKind, attributed, page_for_fetch
+from app.jobs import request_stats as request_stats_jobs
 from app.jobs.discover_probe import run_discover_probe_sweep
 from app.models_tg import DirectoryEntry, RequestRecordRow, utc_now
 from app.services import network, request_stats
@@ -139,11 +141,23 @@ def telegram(monkeypatch: pytest.MonkeyPatch) -> FakeTelegram:
 
 
 @pytest.fixture(autouse=True)
-def _fresh(sync_worker: None) -> Iterator[None]:
+def _fresh(sync_worker: None, request: pytest.FixtureRequest) -> Iterator[None]:
     clear_jobs_for_tests()
     flush_recorded_requests()
     yield
     clear_jobs_for_tests()
+    # The guard on Other (RQS-14): every test here drives a known path, a sync,
+    # a probe, a handle check, a follow or a Bot API call, and none of them may
+    # record a Request nobody declared. Only a test asking for `expects_other`
+    # makes one on purpose.
+    if "expects_other" not in request.fixturenames:
+        undeclared = [(r.page_type, r.channel) for r in _recorded(kind="other")]
+        assert undeclared == [], "a known path recorded kind other"
+
+
+@pytest.fixture
+def expects_other() -> None:
+    """This test records a Request with no work behind it. See `_fresh`."""
 
 
 def _follow(client: TestClient, headers: dict[str, str], channel: str) -> None:
@@ -971,6 +985,25 @@ def test_bot_api_calls_are_their_own_uncharged_kind(
     assert (calls["requests"], calls["charged"]) == (3, 0)
 
 
+def test_a_request_nobody_declared_is_other(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    expects_other: None,
+) -> None:
+    """Mutation: default the attribution to a declared kind.
+
+    Nothing disappears silently: a fetch no work declared itself around is
+    still a Request, and its kind says nobody owned it.
+    """
+    telegram.script(_first_page(HANDLE), _page_html(HANDLE, [1]))
+
+    client.portal.call(lambda: network.fetch_with_retry(_first_page(HANDLE), retries=1))
+
+    other = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="other")
+    assert (other["requests"], other["charged"]) == (1, 0)
+
+
 # --------------------------------------------------------------------------
 # Totals
 # --------------------------------------------------------------------------
@@ -1056,8 +1089,49 @@ def test_a_request_in_an_hour_already_rolled_up_is_counted(
     assert second["requests"] == len(_recorded())
 
 
-def test_a_flush_returns_once_every_request_before_it_is_written(
+def test_the_api_writes_its_buffered_requests_when_it_shuts_down(
     monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutation: drop `stop_request_flusher` from the API's lifespan.
+
+    A handle check is the API process's own Request, so the API holds a
+    buffer like the worker's, and a deploy must not lose what it holds. The
+    lifespan runs here on a loop of its own, its other startup work stubbed
+    out, so the module's client and its flusher are untouched.
+    """
+    for name in (
+        "run_startup_checks",
+        "init_db",
+        "start_progress_subscriber",
+        "start_job_status_subscriber",
+        "stop_progress_subscriber",
+        "stop_job_status_subscriber",
+    ):
+        monkeypatch.setattr(api_main, name, lambda *_args: None)
+    monkeypatch.setattr(request_stats_jobs, "_flusher", None)
+
+    async def serve_one_check() -> None:
+        async with api_main.lifespan(api_main.app):
+            with attributed(kind=RequestKind.HANDLE, channel=HANDLE):
+                page_for_fetch(media=False).record(
+                    at=datetime.now(UTC),
+                    latency_ms=1,
+                    lane="direct",
+                    web_view=True,
+                    cause=None,
+                    error_code=None,
+                    answered=True,
+                )
+
+    asyncio.run(serve_one_check())
+
+    with Session(engine) as session:
+        written = session.exec(select(RequestRecordRow)).all()
+    assert [(r.kind, r.channel) for r in written] == [("handle", HANDLE)]
+
+
+def test_a_flush_returns_once_every_request_before_it_is_written(
+    monkeypatch: pytest.MonkeyPatch, expects_other: None
 ) -> None:
     """Mutation: drain the buffer outside the flush lock.
 
