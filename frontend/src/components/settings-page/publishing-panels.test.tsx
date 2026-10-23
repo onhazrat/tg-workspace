@@ -109,6 +109,7 @@ const destProps = {
   hasBot: true,
   validation: {},
   onLookUp: async () => null,
+  onBrowse: async () => ({ chats: [] }),
   onAdd: async () => {},
   onCheck: () => {},
   onTest: () => {},
@@ -137,6 +138,33 @@ describe("DestinationsView", () => {
     )
   })
 
+  test("a chat the bot can see fills in the id and the name", async () => {
+    const onAdd = mock(async (_c: string, _n: string) => {})
+    const onBrowse = async () => ({
+      chats: [{ chatId: "-1001", name: "Daily", type: "channel" }],
+    })
+    render(
+      <DestinationsView {...destProps} onBrowse={onBrowse} onAdd={onAdd} />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Add destination" }))
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show chats your bot can see" }),
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Pick Daily" }))
+    fireEvent.click(screen.getByRole("button", { name: "Save destination" }))
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith("-1001", "Daily"))
+  })
+
+  test("a refused lookup reads what Telegram said", async () => {
+    const onBrowse = async () => ({ chats: [], error: "Conflict: webhook" })
+    render(<DestinationsView {...destProps} onBrowse={onBrowse} />)
+    fireEvent.click(screen.getByRole("button", { name: "Add destination" }))
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show chats your bot can see" }),
+    )
+    expect(await screen.findByText("Conflict: webhook")).toBeTruthy()
+  })
+
   test("Check and the test message act on the row's destination", () => {
     const onCheck = mock((_d: ChatDestination) => {})
     const onTest = mock((_d: ChatDestination) => {})
@@ -159,6 +187,10 @@ describe("DestinationsView", () => {
     ).toBe(true)
     expect(
       screen.queryByRole("button", { name: "Send a test message to News" }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Add destination" }))
+    expect(
+      screen.queryByRole("button", { name: "Show chats your bot can see" }),
     ).toBeNull()
   })
 

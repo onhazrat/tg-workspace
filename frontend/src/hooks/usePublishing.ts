@@ -24,6 +24,7 @@ import {
   botNetworkLog,
   canLookUpChat,
   chatDisplayName,
+  chatsFromUpdates,
   checkBotToken,
   DEST_NETWORK_ERROR,
   type DestValidation,
@@ -111,6 +112,16 @@ export function usePublishing() {
       )
     } catch {
       return null
+    }
+  }
+
+  /** The chats the first bot heard from recently, to pick a destination from. */
+  const listBotChats = async () => {
+    if (!bots.length) return { chats: [], error: "Add a bot first" }
+    try {
+      return chatsFromUpdates(await call(bots[0].id, undefined, "getUpdates"))
+    } catch (e) {
+      return { chats: [], error: errorText(e) }
     }
   }
 
@@ -236,6 +247,7 @@ export function usePublishing() {
     destinations,
     lookUpBotName,
     lookUpChatName,
+    listBotChats,
     addBot,
     checkBot,
     deleteBot,

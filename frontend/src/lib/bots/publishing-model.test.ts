@@ -12,6 +12,7 @@ import {
   botPhotoPath,
   canLookUpChat,
   chatDisplayName,
+  chatsFromUpdates,
   checkBotToken,
   destinationValidation,
   errorText,
@@ -240,5 +241,51 @@ describe("publishLogFor", () => {
   test("errorText reads an Error's message and stringifies the rest", () => {
     expect(errorText(new Error("boom"))).toBe("boom")
     expect(errorText("plain")).toBe("plain")
+  })
+})
+
+describe("the chats a bot can see", () => {
+  const chat = (id: number, title: string, type = "channel") => ({
+    id,
+    title,
+    type,
+  })
+  test("each chat once, from any kind of update, latest name wins", () => {
+    expect(
+      chatsFromUpdates({
+        ok: true,
+        result: [
+          { channel_post: { chat: chat(-1001, "Old name") } },
+          { message: { chat: { id: 7, first_name: "Ann", type: "private" } } },
+          { my_chat_member: { chat: chat(-1002, "Group", "supergroup") } },
+          { edited_channel_post: { chat: chat(-1001, "Daily") } },
+          { poll: {} },
+        ],
+      }).chats,
+    ).toEqual([
+      { chatId: "7", name: "Ann", type: "private" },
+      { chatId: "-1002", name: "Group", type: "supergroup" },
+      { chatId: "-1001", name: "Daily", type: "channel" },
+    ])
+  })
+
+  test("a chat the bot was removed from is not offered", () => {
+    const member = (status: string) => ({
+      my_chat_member: {
+        chat: chat(-1001, "Daily"),
+        new_chat_member: { status },
+      },
+    })
+    const seen = (statuses: string[]) =>
+      chatsFromUpdates({ ok: true, result: statuses.map(member) }).chats.length
+    expect(seen(["administrator", "kicked"])).toBe(0)
+    expect(seen(["administrator", "left"])).toBe(0)
+    expect(seen(["left", "administrator"])).toBe(1)
+  })
+
+  test("a refusal reads Telegram's words", () => {
+    expect(
+      chatsFromUpdates({ ok: false, description: "Conflict: webhook" }),
+    ).toEqual({ chats: [], error: "Conflict: webhook" })
   })
 })
