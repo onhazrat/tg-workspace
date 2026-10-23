@@ -86,7 +86,8 @@ export function RequestsView({
   onOpenRow: (row: ChannelRow) => void
 }) {
   const { hiddenKinds, hiddenOutcomes } = filter
-  const totals = breakdown && statTotals(breakdown.byKind)
+  const totals =
+    breakdown && statTotals(breakdown.byKind, hiddenKinds, hiddenOutcomes)
   const counts = unfiltered && chargedCounts(unfiltered.byKind)
   const everyAccount = accountRows(
     unfiltered?.byAccount ?? [],
@@ -194,7 +195,7 @@ export function RequestsView({
                 hiddenOutcomes={hiddenOutcomes}
               />
             )}
-            <StatStrip t={totals} />
+            <StatStrip t={totals} hiddenOutcomes={hiddenOutcomes} />
             {trend && (
               <>
                 <DailyBars

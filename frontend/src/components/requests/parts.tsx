@@ -129,15 +129,21 @@ function Shade({ outcome }: { outcome: Outcome }) {
 }
 
 /**
- * Requests, then each outcome with its share of them. Requests on days
+ * Requests, then each shown outcome with its share of them. Requests on days
  * before recording have no outcome, and a line says so (RQS-16).
  */
-export function StatStrip({ t }: { t: Tally }) {
+export function StatStrip({
+  t,
+  hiddenOutcomes,
+}: {
+  t: Tally
+  hiddenOutcomes: ReadonlySet<Outcome>
+}) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label="Requests" value={fmt(t.total)} />
-        {OUTCOMES.map((o) => (
+        {OUTCOMES.filter((o) => !hiddenOutcomes.has(o.id)).map((o) => (
           <Stat
             key={o.id}
             label={o.label}

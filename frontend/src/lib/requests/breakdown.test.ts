@@ -259,11 +259,21 @@ describe("the totals", () => {
   })
 
   test("the stat strip adds up every kind", () => {
-    expect(statTotals(byKind)).toEqual({
+    expect(statTotals(byKind, none, none)).toEqual({
       total: 20,
       useful: 6,
       idle: 7,
       wasted: 7,
+      ledgerOnly: 0,
+    })
+  })
+
+  test("the stat strip leaves out hidden kinds and outcomes", () => {
+    expect(statTotals(byKind, new Set(["probe"]), hide("wasted"))).toEqual({
+      total: 9,
+      useful: 6,
+      idle: 3,
+      wasted: 0,
       ledgerOnly: 0,
     })
   })
@@ -274,7 +284,7 @@ describe("days before recording (RQS-16)", () => {
   const auto = { ...totals("auto", 6, 3, 1, 50), requests: 50, ledgerOnly: 40 }
 
   test("the stat strip counts them in the Requests, under no outcome", () => {
-    expect(statTotals([auto])).toEqual({
+    expect(statTotals([auto], none, none)).toEqual({
       total: 50,
       useful: 6,
       idle: 3,

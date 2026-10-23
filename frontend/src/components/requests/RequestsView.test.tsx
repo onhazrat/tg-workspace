@@ -126,6 +126,22 @@ describe("RequestsView", () => {
     expect(screen.queryByTestId("requests-before-recording")).toBeNull()
   })
 
+  test("hiding an outcome or a kind drops it from the stat strip and the footer's total", () => {
+    render(<Harness />)
+    fireEvent.click(chip("Wasted"))
+    expect(screen.queryByTestId("requests-stat-wasted")).toBeNull()
+    expect(screen.getByTestId("requests-total").textContent).toBe(
+      "390 Requests",
+    )
+    expect(screen.getByTestId("requests-stat-idle").textContent).toBe(
+      "Idle23059% of all",
+    )
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Show Directory probe" }),
+    )
+    expect(screen.getByTestId("requests-total").textContent).toBe("90 Requests")
+  })
+
   test("days before recording count, and the tab says they have no Channel or outcome (RQS-16)", () => {
     // 500 auto sync Requests known from the ledger alone.
     const auto = { ...part("auto", 60, 30, 10), ledgerOnly: 500 }

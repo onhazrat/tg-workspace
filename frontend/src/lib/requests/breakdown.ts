@@ -453,10 +453,16 @@ export function chargedCounts(byKind: readonly RequestTotals[]) {
   return { all, charged, uncharged: all - charged }
 }
 
-/** The stat strip: every kind's Requests by outcome. */
-export function statTotals(byKind: readonly RequestTotals[]): Tally {
+/** The stat strip and the footer: the shown kinds' Requests by shown outcome. */
+export function statTotals(
+  byKind: readonly RequestTotals[],
+  hiddenKinds: ReadonlySet<string>,
+  hiddenOutcomes: ReadonlySet<Outcome>,
+): Tally {
   const t = emptyTally()
-  for (const row of byKind) addTo(t, { ...row, total: row.requests }, new Set())
+  for (const row of byKind)
+    if (!hiddenKinds.has(row.kind))
+      addTo(t, { ...row, total: row.requests }, hiddenOutcomes)
   return t
 }
 
