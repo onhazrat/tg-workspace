@@ -24,6 +24,9 @@ class RequestTotals(BaseModel):
     #: Sync runs and how many failed (RQS-04); 0 on work that is not a sync.
     syncs: int
     failed_syncs: int = Field(alias="failedSyncs")
+    #: Of `requests`, those on days before recording started, from the
+    #: ledger's daily totals: no outcome, no Channel (RQS-16).
+    ledger_only: int = Field(alias="ledgerOnly")
 
 
 class ChannelRequestTotals(RequestTotals):
@@ -53,7 +56,13 @@ class RequestBreakdownResponse(BaseModel):
 
 
 class RequestTrendBucket(BaseModel):
-    """One kind's Charged or Uncharged Requests in `[start, end)`, by outcome."""
+    """One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.
+
+    `ledgerOnly` counts those on a day before recording started, from the
+    ledger's daily totals, which carry no outcome (RQS-16).
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     start: datetime
     end: datetime
@@ -62,6 +71,7 @@ class RequestTrendBucket(BaseModel):
     useful: int
     idle: int
     wasted: int
+    ledger_only: int = Field(alias="ledgerOnly")
 
 
 class RequestTrendResponse(BaseModel):

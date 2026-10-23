@@ -7480,6 +7480,7 @@
           "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
           "syncs": { "type": "integer", "title": "Syncs" },
           "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" },
           "accountId": {
             "type": "string",
             "format": "uuid",
@@ -7499,6 +7500,7 @@
           "repeatedPosts",
           "syncs",
           "failedSyncs",
+          "ledgerOnly",
           "accountId",
           "email"
         ],
@@ -8254,6 +8256,7 @@
           "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
           "syncs": { "type": "integer", "title": "Syncs" },
           "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" },
           "channel": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Channel"
@@ -8271,6 +8274,7 @@
           "repeatedPosts",
           "syncs",
           "failedSyncs",
+          "ledgerOnly",
           "channel"
         ],
         "title": "ChannelRequestTotals",
@@ -13920,7 +13924,8 @@
           "newPosts": { "type": "integer", "title": "Newposts" },
           "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
           "syncs": { "type": "integer", "title": "Syncs" },
-          "failedSyncs": { "type": "integer", "title": "Failedsyncs" }
+          "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" }
         },
         "type": "object",
         "required": [
@@ -13933,7 +13938,8 @@
           "newPosts",
           "repeatedPosts",
           "syncs",
-          "failedSyncs"
+          "failedSyncs",
+          "ledgerOnly"
         ],
         "title": "RequestTotals",
         "description": "Requests by outcome, and the Posts the answered pages brought."
@@ -13950,7 +13956,8 @@
           "charged": { "type": "boolean", "title": "Charged" },
           "useful": { "type": "integer", "title": "Useful" },
           "idle": { "type": "integer", "title": "Idle" },
-          "wasted": { "type": "integer", "title": "Wasted" }
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" }
         },
         "type": "object",
         "required": [
@@ -13960,10 +13967,11 @@
           "charged",
           "useful",
           "idle",
-          "wasted"
+          "wasted",
+          "ledgerOnly"
         ],
         "title": "RequestTrendBucket",
-        "description": "One kind's Charged or Uncharged Requests in `[start, end)`, by outcome."
+        "description": "One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.\n\n`ledgerOnly` counts those on a day before recording started, from the\nledger's daily totals, which carry no outcome (RQS-16)."
       },
       "RequestTrendResponse": {
         "properties": {

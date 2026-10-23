@@ -45,10 +45,18 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import Outcome, RequestKind, drain
 from app.models import User
-from app.models_tg import RequestDaily, RequestHourly, RequestRecordRow, utc_now
-from app.services.quota import resolve_charge_owner, usage_rows
+from app.models_tg import (
+    DirectoryProbeUsage,
+    QuotaUsage,
+    RequestDaily,
+    RequestHourly,
+    RequestRecordRow,
+    utc_now,
+)
+from app.services.quota import Budget, resolve_charge_owner, usage_rows
 from app.services.settings_registry import REQUEST_ROLLUP_KEY
 from app.services.settings_store import get_global_setting, put_global_setting
+from app.services.tenancy import unscoped_select
 
 logger = logging.getLogger(__name__)
 
@@ -369,6 +377,8 @@ class Totals:
     repeated_posts: int = 0
     syncs: int = 0
     failed_syncs: int = 0
+    #: Of `requests`, those known from the ledger alone: no outcome (RQS-16).
+    ledger_only: int = 0
 
     def add(
         self,
@@ -392,6 +402,13 @@ class Totals:
         self.repeated_posts += repeated
         self.syncs += syncs[0]
         self.failed_syncs += syncs[1]
+
+    def add_ledger(self, requests: int, charged: bool) -> None:
+        """Requests the ledger alone knows of: no outcome, no Posts (RQS-16)."""
+        self.requests += requests
+        self.ledger_only += requests
+        if charged:
+            self.charged += requests
 
 
 @dataclass
@@ -523,6 +540,14 @@ def request_breakdown(
             continue
         within = or_(*((col(moment) >= a) & (col(moment) < b) for a, b in spans))
         _fold(session, breakdown, model, within, picked)
+    for day in ledger_history(session, start, end, picked):
+        parts = [breakdown.by_kind.setdefault(day.kind, Totals())]
+        if day.account is not None:
+            parts.append(
+                breakdown.by_account.setdefault((day.account, day.kind), Totals())
+            )
+        for totals in parts:
+            totals.add_ledger(day.requests, day.charged)
     return breakdown
 
 
@@ -574,6 +599,87 @@ def account_emails(session: Session, ids: Iterable[uuid.UUID]) -> dict[uuid.UUID
     return {user.id: user.email for user in users}
 
 
+# --------------------------------------------------------------------------
+# History before recording (RQS-16, decision 17)
+# --------------------------------------------------------------------------
+
+#: The work each Budget pays for. A Follow is charged to manual bulk, so the
+#: ledger files it there.
+_BUDGET_KINDS = {
+    Budget.AUTO_SYNC.value: RequestKind.AUTO.value,
+    Budget.MANUAL_BULK.value: RequestKind.BULK.value,
+    Budget.MANUAL_SINGLE.value: RequestKind.SINGLE.value,
+}
+
+
+@dataclass(frozen=True)
+class LedgerDay:
+    """One of the ledger's daily totals: no Channel, no outcome."""
+
+    day: date
+    kind: str
+    charged: bool
+    account: uuid.UUID | None
+    requests: int
+
+
+def _recording_started(session: Session) -> date:
+    """The first day with recorded Requests; today while none is rolled up."""
+    first = session.exec(select(func.min(col(RequestDaily.day)))).one()
+    return first or utc_now().date()
+
+
+def ledger_history(
+    session: Session, start: datetime, end: datetime, picked: Picked
+) -> list[LedgerDay]:
+    """The ledger's totals for each day `[start, end)` touches before recording.
+
+    Read, never backfilled: the quota ledger's charged Requests per Account
+    and Budget, and the probe lane's tally. Only a day's total is kept, so a
+    day the range cuts is read whole. The tab's filters read them as rows
+    with no Channel: a Channel left out keeps them all.
+    """
+    lo = start.date()
+    hi = min(_ceil(end, _DAY).date(), _recording_started(session))
+    if lo >= hi:
+        return []
+    days: list[LedgerDay] = []
+    if picked.charged != "uncharged":
+        query = select(QuotaUsage).where(
+            col(QuotaUsage.day) >= lo, col(QuotaUsage.day) < hi
+        )
+        if picked.accounts:
+            query = query.where(col(QuotaUsage.user_id).in_(picked.accounts))
+        rows = session.exec(
+            unscoped_select(
+                query,
+                reason=(
+                    "The Requests tab reports every account's spend before "
+                    "recording started. Gated on Permission.QUOTA_READ_ANY."
+                ),
+            )
+        ).all()
+        days += [
+            LedgerDay(
+                row.day,
+                _BUDGET_KINDS.get(row.budget, RequestKind.OTHER.value),
+                True,
+                row.user_id,
+                row.requests,
+            )
+            for row in rows
+        ]
+    if picked.charged != "charged" and not picked.accounts:
+        probes = select(DirectoryProbeUsage).where(
+            col(DirectoryProbeUsage.day) >= lo, col(DirectoryProbeUsage.day) < hi
+        )
+        days += [
+            LedgerDay(row.day, RequestKind.PROBE.value, False, None, row.requests)
+            for row in session.exec(probes).all()
+        ]
+    return [day for day in days if day.kind not in picked.left_out_kinds]
+
+
 @dataclass
 class TrendBucket:
     """One kind's Charged or Uncharged Requests in `[start, end)`, by outcome."""
@@ -585,6 +691,8 @@ class TrendBucket:
     useful: int = 0
     idle: int = 0
     wasted: int = 0
+    #: A day before recording started, from the ledger: no outcome (RQS-16).
+    ledger_only: int = 0
 
 
 #: Where 5-minute buckets start: any midnight puts them on the clock's grid.
@@ -643,6 +751,14 @@ def request_trend(
                 TrendBucket(first, min(_as_datetime(at) + step, hi), kind, is_charged),
             )
             setattr(bucket, outcome, getattr(bucket, outcome) + int(n))
+    for day in ledger_history(session, start, end, picked):
+        at = _as_datetime(day.day)
+        first = max(at, start)
+        bucket = buckets.setdefault(
+            (first, day.kind, day.charged),
+            TrendBucket(first, min(at + _DAY, end), day.kind, day.charged),
+        )
+        bucket.ledger_only += day.requests
     return [buckets[key] for key in sorted(buckets)]
 
 

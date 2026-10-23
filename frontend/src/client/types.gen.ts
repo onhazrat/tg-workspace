@@ -101,6 +101,10 @@ export type AccountRequestTotals = {
      */
     failedSyncs: number;
     /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
+    /**
      * Accountid
      */
     accountId: string;
@@ -1013,6 +1017,10 @@ export type ChannelRequestTotals = {
      * Failedsyncs
      */
     failedSyncs: number;
+    /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
     /**
      * Channel
      */
@@ -6413,12 +6421,19 @@ export type RequestTotals = {
      * Failedsyncs
      */
     failedSyncs: number;
+    /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
 };
 
 /**
  * RequestTrendBucket
  *
  * One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.
+ *
+ * `ledgerOnly` counts those on a day before recording started, from the
+ * ledger's daily totals, which carry no outcome (RQS-16).
  */
 export type RequestTrendBucket = {
     /**
@@ -6449,6 +6464,10 @@ export type RequestTrendBucket = {
      * Wasted
      */
     wasted: number;
+    /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
 };
 
 /**

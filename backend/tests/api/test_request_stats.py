@@ -44,6 +44,7 @@ from app.models_tg import DirectoryEntry, RequestRecordRow, utc_now
 from app.services import network, request_stats
 from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
+from app.services.directory_probe_usage import record_probe_requests
 from app.services.pgmq import queue_length
 from app.services.quota import Budget, charge_requests, usage_rows
 from app.services.request_stats import (
@@ -2110,3 +2111,134 @@ def test_a_channels_requests_name_one_row(
         headers=superuser_token_headers,
     )
     assert r.status_code == 422
+
+
+# --------------------------------------------------------------------------
+# History before recording (RQS-16)
+# --------------------------------------------------------------------------
+
+
+def _history(
+    client: TestClient,
+    headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[str, str, int]:
+    """A sync recorded today, the ledger's own days around it, and the clock
+    two days on. Returns the range from three days back to the clock's
+    tomorrow, and how many Requests the sync recorded.
+
+    The ledger's writers charge the day before recording started (7 auto
+    sync Requests, 5 probes), and the day after it (3 and 4): recording ran
+    by then, so only the day before is the ledger's to tell.
+    """
+    _follow(client, headers, CHANNEL)
+    telegram.script(_first_page(), _page_html(CHANNEL, [100]))
+    _sync(client, headers)
+    n = len(_stored())
+    me = uuid.UUID(client.get(f"{API}/users/me", headers=headers).json()["id"])
+    today = datetime.now(UTC).date()
+    with Session(engine) as session:
+        for day, auto, probes in ((-1, 7, 5), (1, 3, 4)):
+            ledger_day = today + timedelta(days=day)
+            charge_requests(session, me, Budget.AUTO_SYNC, auto, day=ledger_day)
+            record_probe_requests(session, probes, day=ledger_day)
+    moved = utc_now() + timedelta(days=2)
+    monkeypatch.setattr(request_stats, "utc_now", lambda: moved)
+    start = datetime.combine(today - timedelta(days=3), datetime.min.time())
+    return start.isoformat(), (start + timedelta(days=6)).isoformat(), n
+
+
+def _ledger_parts(rows: list[dict[str, Any]]) -> dict[str, tuple[int, int, int]]:
+    """Each kind's (Requests, of them from the ledger alone, charged)."""
+    return {
+        r["kind"]: (r["requests"], r["ledgerOnly"], r["charged"])
+        for r in rows
+        if r["ledgerOnly"]
+    }
+
+
+def test_days_before_recording_come_from_the_ledger_on_the_breakdown(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: read no ledger; read it on every day (today's charge counted
+    twice, the day after recording too); end it at the clock's today rather
+    than the first recorded day; give its rows a Channel; ignore `charged`,
+    `accounts` or `leftOutKinds` on it.
+    """
+    start, end, n = _history(client, superuser_token_headers, telegram, monkeypatch)
+    me = client.get(f"{API}/users/me", headers=superuser_token_headers).json()["id"]
+
+    def parts(**params: Any) -> dict[str, tuple[int, int, int]]:
+        answer = _breakdown(
+            client, superuser_token_headers, start=start, end=end, **params
+        )
+        return _ledger_parts(answer["byKind"])
+
+    answer = _breakdown(client, superuser_token_headers, start=start, end=end)
+    assert _ledger_parts(answer["byKind"]) == {"auto": (7, 7, 7), "probe": (5, 5, 0)}
+    assert _row(answer["byKind"], kind="single")["requests"] == n
+    assert {r["ledgerOnly"] for r in answer["byChannel"]} == {0}
+    assert {(r["channel"], r["kind"]) for r in answer["byChannel"]} == {
+        (CHANNEL, "single")
+    }
+    assert _ledger_parts(answer["byAccount"]) == {"auto": (7, 7, 7)}
+    assert _row(answer["byAccount"], kind="auto")["accountId"] == me
+
+    assert parts(charged="charged") == {"auto": (7, 7, 7)}
+    assert parts(charged="uncharged") == {"probe": (5, 5, 0)}
+    assert parts(accounts=[me]) == {"auto": (7, 7, 7)}
+    assert parts(accounts=[str(uuid.uuid4())]) == {}
+    assert parts(left_out=[CHANNEL]) == {"auto": (7, 7, 7), "probe": (5, 5, 0)}
+    assert parts(left_out_kinds=["probe"]) == {"auto": (7, 7, 7)}
+
+
+def test_days_before_recording_come_from_the_ledger_on_the_trend(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: read no ledger on the trend; give its days an outcome; ignore
+    the filters on it; clip none of its days to the range.
+
+    The ledger's day is a whole-day bucket, though it sits inside the hourly
+    totals' span; cut mid-day, the range clips it as any bucket.
+    """
+    start, end, n = _history(client, superuser_token_headers, telegram, monkeypatch)
+    day = datetime.fromisoformat(start) + timedelta(days=2)
+
+    def ledger(**params: Any) -> set[tuple[str, str, str, bool, int]]:
+        answer = _trend(client, superuser_token_headers, **params)
+        return {
+            (b["start"], b["end"], b["kind"], b["charged"], b["ledgerOnly"])
+            for b in answer["buckets"]
+            if b["ledgerOnly"]
+        }
+
+    whole = (day.isoformat(), (day + timedelta(days=1)).isoformat())
+    answer = _trend(client, superuser_token_headers, start=start, end=end)
+    assert ledger(start=start, end=end) == {
+        (*whole, "auto", True, 7),
+        (*whole, "probe", False, 5),
+    }
+    for b in answer["buckets"]:
+        if b["ledgerOnly"]:
+            assert b["useful"] + b["idle"] + b["wasted"] == 0
+    recorded = sum(b["useful"] + b["idle"] + b["wasted"] for b in answer["buckets"])
+    assert recorded == n
+
+    assert ledger(start=start, end=end, charged="uncharged") == {
+        (*whole, "probe", False, 5)
+    }
+    assert ledger(start=start, end=end, left_out_kinds=["probe"]) == {
+        (*whole, "auto", True, 7)
+    }
+    noon = day + timedelta(hours=12)
+    assert ledger(start=noon.isoformat(), end=end) == {
+        (noon.isoformat(), whole[1], "auto", True, 7),
+        (noon.isoformat(), whole[1], "probe", False, 5),
+    }

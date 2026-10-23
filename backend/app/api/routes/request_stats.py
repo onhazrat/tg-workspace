@@ -82,6 +82,7 @@ def _totals(kind: str, totals: Totals) -> dict[str, object]:
         "repeatedPosts": totals.repeated_posts,
         "syncs": totals.syncs,
         "failedSyncs": totals.failed_syncs,
+        "ledgerOnly": totals.ledger_only,
     }
 
 
