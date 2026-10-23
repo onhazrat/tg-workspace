@@ -66,9 +66,9 @@ class ViewAsSession(SQLModel, table=True):
 
     created_at: datetime = Field(
         default_factory=_now_utc,
-        sa_type=DateTime(timezone=True),  # type: ignore
+        sa_type=DateTime(timezone=True),
         index=True,
     )
     expires_at: datetime = Field(
-        sa_type=DateTime(timezone=True),  # type: ignore
+        sa_type=DateTime(timezone=True),
     )

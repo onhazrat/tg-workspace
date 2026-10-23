@@ -640,7 +640,7 @@ function sharedCond(
 }
 /** A link written before TB-02: the last so many days. */
 const OLD_WINDOW = /^(\d+)d$/
-const MINE_WINDOW = new RegExp(String.raw`^${TIME_BOUND}$`, "iu")
+const MINE_WINDOW = new RegExp(`^${TIME_BOUND}$`, "iu")
 
 function mineCond(text: string): DirectoryMineCond | null {
   if (text === "all") return { type: "mine" }

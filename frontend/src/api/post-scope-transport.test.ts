@@ -70,6 +70,7 @@ describe("post scope transport", () => {
       ),
     ).toBe(true)
     expect(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the source text under test
       putsSelectionInUrl("`/api/v1/data/posts?channelNames=${names}`"),
     ).toBe(true)
     expect(
