@@ -53,6 +53,8 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // PROTOTYPE: reachable over `tailscale serve` from the user's devices.
+      allowedHosts: [".ts.net"],
       proxy: {
         "/api": {
           target:

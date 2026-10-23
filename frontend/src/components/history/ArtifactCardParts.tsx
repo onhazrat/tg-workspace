@@ -126,13 +126,7 @@ export function FlagChips({ artifact }: { artifact: ArtifactListItem }) {
           <RefreshCw size={11} /> Auto-regenerates
         </span>
       )}
-      {artifact.autoPublish && (
-        <span
-          className={`${CHIP} bg-blue-500/10 text-blue-700 dark:text-blue-300`}
-        >
-          <Send size={11} /> Auto-publishes
-        </span>
-      )}
+      {/* PROTOTYPE: the Auto-publish chip is `PublishChip`, per variant. */}
     </>
   )
 }

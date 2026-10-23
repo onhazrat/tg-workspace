@@ -5,6 +5,7 @@
  * delete carries none, so no key deletes (ADR-034).
  */
 import { useKeyboardList } from "@/components/keyboard/useKeyboardList"
+import { LIST_KEYS } from "@/lib/keyboard/key-list"
 import type { ArtifactListItem } from "@/types"
 import { artifactName } from "./artifact-presentation"
 
@@ -22,10 +23,13 @@ const cardOf = (key: string) => {
 export function useHistoryKeys({
   artifacts,
   onOpen,
+  onCompact,
 }: {
   /** The Artifacts on screen, in order. */
   artifacts: ArtifactListItem[]
   onOpen: (artifact: ArtifactListItem) => void
+  /** - and +: the Compact grid on or off. PROTOTYPE: absent on variant 0. */
+  onCompact?: (compact: boolean) => void
 }): string | null {
   const keys = artifacts.map(artifactKey)
   const find = (key: string) => artifacts[keys.indexOf(key)]
@@ -35,6 +39,12 @@ export function useHistoryKeys({
     element: cardOf,
     name: (key) => artifactName(find(key)),
     open: (key) => onOpen(find(key)),
+    key: (key) => {
+      if (!onCompact) return false
+      if (key !== LIST_KEYS.smaller && key !== LIST_KEYS.larger) return false
+      onCompact(key === LIST_KEYS.smaller)
+      return true
+    },
     search: () => document.querySelector('input[aria-label="Search history"]'),
   }).highlight
 }

@@ -10,7 +10,6 @@ import {
   ChannelsLine,
   FlagChips,
   KindLabel,
-  PublishTargetLine,
   StatusBadge,
   WindowLine,
 } from "./ArtifactCardParts"
@@ -20,6 +19,7 @@ import {
   isPendingArtifact,
   plainTitle,
 } from "./artifact-presentation"
+import { PublishBody, PublishChip } from "./auto-publish-prototype"
 
 /** A Failed card's title: what to do with it. */
 const FAILED_TITLE =
@@ -78,6 +78,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
         <KindLabel artifact={artifact} />
         <StatusBadge artifact={artifact} />
         <FlagChips artifact={artifact} />
+        <PublishChip artifact={artifact} target={actions.publishTarget} />
         <span className="ml-auto shrink-0 text-app-ink/50">
           <RelativeTime timestamp={artifact.timestamp} />
         </span>
@@ -96,7 +97,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
           {highlightText(title, term)}
         </span>
       </button>
-      <PublishTargetLine artifact={artifact} target={actions.publishTarget} />
+      <PublishBody artifact={artifact} target={actions.publishTarget} />
       {!compact && (
         <>
           <WindowLine artifact={artifact} onUseScope={actions.useScope} />

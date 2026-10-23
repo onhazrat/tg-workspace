@@ -74,7 +74,8 @@ const SWEEP = (word: string): Row => ["J / K", `${word} while moving`]
 const BULK: Row = ["F / D", "follow / dismiss everything ticked"]
 
 /** Each list's moves and own keys, then its actions in the list's order. */
-const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
+// PROTOTYPE: exported so History's prototype can add its - / + row per variant.
+export const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
   posts: {
     moves: [
       ["j / k", "next / previous post"],
