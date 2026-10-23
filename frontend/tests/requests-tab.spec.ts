@@ -298,7 +298,11 @@ test("a zoomed spread scrolls, steps with the arrow keys, and keeps its zoom ful
   const scrollbar = page.getByRole("scrollbar")
   await expect(scrollbar).toHaveCount(0)
 
-  await page.getByRole("button", { name: "Zoom in" }).click()
+  // In the picker: the zoomable trend has a Zoom in of its own (RQS-07).
+  await page
+    .getByRole("dialog", { name: "Requested" })
+    .getByRole("button", { name: "Zoom in" })
+    .click()
   await expect(scrollbar).toBeVisible()
   expect(await spreadBars(page).count()).toBeLessThan(40)
   const at = async () => Number(await scrollbar.getAttribute("aria-valuenow"))
