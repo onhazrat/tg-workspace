@@ -139,9 +139,15 @@ def assemble_posts_text(
     session: Session, scope: PromptScope, *, user_id: uuid.UUID
 ) -> str:
     """Summary/chat posts block for a scope — all matching posts, budget-checked."""
-    return _enforce_token_budget(
-        format_posts_for_prompt(_fetch_scoped_posts(session, scope, user_id=user_id))
-    )
+    return assemble_posts(session, scope, user_id=user_id)[0]
+
+
+def assemble_posts(
+    session: Session, scope: PromptScope, *, user_id: uuid.UUID
+) -> tuple[str, list[dict[str, Any]]]:
+    """`assemble_posts_text`, plus the Posts the block was built from."""
+    posts = _fetch_scoped_posts(session, scope, user_id=user_id)
+    return _enforce_token_budget(format_posts_for_prompt(posts)), posts
 
 
 def assemble_tag_posts_text(

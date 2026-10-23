@@ -10,6 +10,7 @@ both tables and is the only place that knows they are two.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from typing import Any
 
 from fastapi import HTTPException
@@ -657,14 +658,38 @@ def mark_summary_failed(session: Session, summary: Summary) -> None:
     note_write(session, summary)
 
 
-def store_prompt(session: Session, summary: Summary, prompt: str) -> None:
+def covering(scope: FrozenScope, refs: Iterable[tuple[str, int]]) -> FrozenScope:
+    """`scope`, recording the Posts a prompt built from it covered.
+
+    For a derived Scope, which names no Posts (`derived_scope`): without this a
+    regenerated Summary kept only its Citations, and the coverage wall had
+    nothing else to list.
+    """
+    posts = [{"channelName": c, "postId": p} for c, p in refs]
+    return FrozenScope.model_validate({**scope.stored(), "posts": posts})
+
+
+def store_prompt(
+    session: Session,
+    summary: Summary,
+    prompt: str,
+    posts: Iterable[tuple[str, int]] = (),
+) -> None:
     """Keep the prompt an Attempt is about to run; the caller commits.
 
     Stored before the Provider is asked, so a Failed Summary always has the
-    prompt "Use another AI" copies (SFR-02).
+    prompt "Use another AI" copies (SFR-02). `posts` are the refs the prompt
+    was built from, recorded only on a Scope that has none: a selection frozen
+    at submission is never rewritten.
     """
+    updates: dict[str, Any] = {"prompt_text": prompt}
+    frozen = FrozenScope.from_stored(summary.scope)
+    if frozen is not None and frozen.scoped_post_count is None:
+        frozen = covering(frozen, posts)
+        summary.scope = frozen.stored()
+        updates["scope_posts"] = frozen.stored_posts()
     payload = apply_summary_payload(
-        session, summary.id, user_id=summary.user_id, updates={"prompt_text": prompt}
+        session, summary.id, user_id=summary.user_id, updates=updates
     )
     refresh_summary_derived_columns(summary, payload)
     summary.updated_at = utc_now()

@@ -38,6 +38,7 @@ from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import (
     FAILED_STATUS,
     apply_summary_payload,
+    covering,
     derived_scope,
     is_incomplete,
     refresh_summary_derived_columns,
@@ -250,6 +251,9 @@ async def _regenerate_one(
             new_end,
         ).order_by(col(Post.timestamp).desc())
     ).all()
+    # Recorded, because a derived Scope names no Posts and the coverage wall
+    # lists only what the Scope records.
+    scope = covering(scope, ((p.channel_name, p.post_id) for p in posts))
 
     new_id = str(int(time.time() * 1000))
     new_extra = {
@@ -320,7 +324,11 @@ async def _regenerate_one(
         session,
         new_id,
         user_id=owner_id,
-        updates={"prompt_text": prompt} if prompt is not None else {"cited_posts": {}},
+        updates=(
+            {"prompt_text": prompt, "scope_posts": scope.stored_posts()}
+            if prompt is not None
+            else {"cited_posts": {}}
+        ),
     )
     refresh_summary_derived_columns(new_summary, payload)
 
