@@ -6,7 +6,7 @@
 
 **Blocked by:** RQS-07
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Four switches: Separate by kind and Separate by outcome, each with Stacked | Separate. Stacked splits the area in a row; separate gives a row per value on its own scale; both give a row per kind × outcome, with row names level beside each row.
 - [x] Shades: each kind's colour stepped toward the surface, opaque, Useful 100%, Idle 55%, Wasted 30%, with a surface-coloured hairline between layers; the outcome chips show the shade beside each when both are shown.
@@ -14,3 +14,7 @@
 - [x] A legend click is the kind table's Show checkbox (or the outcome chip when the legend lists outcomes); a double click isolates one, or shows all again; the scale follows.
 - [x] Unit tests for the cap, notches, shades and split; tests at seam 2 of the spec: a Playwright journey over the mocked Requests API, plus render tests for each new branching component (CRAP ratchet).
 - [x] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+
+## Comments
+
+- 2026-10-23: implemented on `claude/rqs-08` and merged into the integration branch in d906d6776f6eb668e2056998e4047edf18daf73c (fast-forward). A single legend click waits 300 ms so a double click can cancel it (Plotly 3 fires both).
