@@ -680,6 +680,46 @@ def test_a_probe_that_adds_sample_posts_is_useful_and_records_them(
     assert by_kind["requests"] == probes["requests"] == 1
 
 
+@pytest.mark.parametrize(
+    ("again", "useful", "new_posts"),
+    [
+        (_probe_page([7, 8]), False, 0),
+        (_probe_page([7, 8], title="Renamed"), True, 0),
+        (_probe_page([7, 8], subscribers=250), True, 0),
+        (_probe_page([7, 8, 9]), True, 1),
+    ],
+    ids=["same verdict", "title changed", "subscribers changed", "a new sample"],
+)
+def test_a_re_probe_is_useful_only_when_it_changed_the_entry(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    again: str,
+    useful: bool,
+    new_posts: int,
+) -> None:
+    """Mutations: the verdict writer reporting no change; reporting a change
+    for any probe; counting every sample as new.
+
+    The second probe meets the entry the first one wrote. Only what it changed
+    about the entry, or sample Posts the entry did not hold, make it Useful.
+    """
+    telegram.script(_first_page(HANDLE), _probe_page([7, 8]))
+    _probe(client)
+    before = _probes(client, superuser_token_headers)
+
+    telegram.script(_first_page(HANDLE), again)
+    _probe(client)
+    after = _probes(client, superuser_token_headers)
+
+    assert after["requests"] == before["requests"] + 1
+    assert (after["useful"], after["idle"]) == (
+        before["useful"] + useful,
+        before["idle"] + (not useful),
+    )
+    assert after["newPosts"] == before["newPosts"] + new_posts
+
+
 # --------------------------------------------------------------------------
 # Totals
 # --------------------------------------------------------------------------
