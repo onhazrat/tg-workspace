@@ -6,10 +6,15 @@
 
 **Blocked by:** RQS-03
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] An Accounts facet in the filter bar with each Account's charged Requests; picking any hides Uncharged Requests, and the footer says so.
 - [x] Two or more Accounts show a comparison table in the violet ramp that doesn't clash with the kinds.
 - [x] The Breakdown endpoint takes the Accounts.
 - [x] Tests at seam 2 of the spec: a Playwright journey over the mocked Requests API, plus render tests for each new branching component (CRAP ratchet).
 - [x] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+
+## Comments
+
+- 2026-10-23: implemented on `claude/rqs-05` and merged into the integration branch in 3f502b36f6ab993710d8ed769758af48b502ed30 (fast-forward). Bot API keeps dataviz slot 7: it never shows beside the violet Account ramp, since picking Accounts hides Uncharged Requests (pinned by a unit test).
+  Open: charged Requests with a null `account_id` (billed to the Operator) are left out of `byAccount` and the facet, while RQS-15's check resolves them to the Operator; raised at the code review.
