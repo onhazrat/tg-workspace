@@ -73,6 +73,8 @@ class Cause(StrEnum):
     SOFT_BLOCK = "softBlock"
     ANSWERED_ERROR = "answeredError"
     TRANSPORT_FAULT = "transportFault"
+    #: A probe of a handle that does not exist (RQS-12). See `page`.
+    MISSING_HANDLE = "missingHandle"
 
 
 #: The Lane of a deployment with no proxies. Same spelling as
@@ -129,6 +131,8 @@ class Page:
     """One page fetch and every attempt it took. See the module docstring."""
 
     page_type: PageType
+    #: What a soft block means on this page. See `page`.
+    soft_block: Cause = Cause.SOFT_BLOCK
     chain_id: uuid.UUID | None = None
     attempts: int = 0
     _answered: list[RequestRecord] = field(default_factory=list)
@@ -159,6 +163,8 @@ class Page:
     ) -> None:
         """One attempt that reached the network. `cause` is `None` on success."""
         who = _attribution.get()
+        if cause is Cause.SOFT_BLOCK:
+            cause = self.soft_block
         record_id = uuid.uuid4()
         if self.chain_id is None:
             self.chain_id = record_id
@@ -258,9 +264,16 @@ def attributed(
 
 
 @contextmanager
-def page(page_type: PageType) -> Iterator[Page]:
-    """One page fetch, however many attempts and retry layers it takes."""
-    opened = Page(page_type)
+def page(
+    page_type: PageType, *, soft_block: Cause = Cause.SOFT_BLOCK
+) -> Iterator[Page]:
+    """One page fetch, however many attempts and retry layers it takes.
+
+    `soft_block` is the cause a page withholding its messages records. A probe
+    asks whether a handle exists, so for it that page answers no:
+    `Cause.MISSING_HANDLE` (RQS-12). RQS-13 tells a private handle apart.
+    """
+    opened = Page(page_type, soft_block)
     token = _page.set(opened)
     try:
         yield opened

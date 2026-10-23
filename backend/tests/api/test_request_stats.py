@@ -720,6 +720,32 @@ def test_a_re_probe_is_useful_only_when_it_changed_the_entry(
     assert after["newPosts"] == before["newPosts"] + new_posts
 
 
+def test_a_probe_of_a_handle_that_does_not_exist_is_wasted_as_a_missing_handle(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutation: leave the probe's soft block filed as a soft block.
+
+    Telegram sends `t.me/s/<handle>` for a handle nobody holds to a page with
+    no message feed, which the fetch raises on. For a probe that is the answer
+    "no such handle": one Request, Wasted, and its cause says so. A sync's soft
+    block keeps its own cause (`test_a_failed_attempt_is_wasted_...`).
+    """
+    telegram.script(_first_page(HANDLE), TelegramWebViewUnavailable())
+
+    _probe(client)
+
+    [record] = _recorded(kind="probe")
+    assert (record.outcome, record.cause, record.channel) == (
+        "wasted",
+        "missingHandle",
+        HANDLE,
+    )
+    probes = _probes(client, superuser_token_headers)
+    assert (probes["requests"], probes["wasted"]) == (1, 1)
+
+
 # --------------------------------------------------------------------------
 # Totals
 # --------------------------------------------------------------------------

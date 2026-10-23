@@ -55,7 +55,13 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_recording import PageType, RequestKind, attributed, page
+from app.core.request_recording import (
+    Cause,
+    PageType,
+    RequestKind,
+    attributed,
+    page,
+)
 from app.services.async_db import run_db
 from app.services.channel_directory import (
     ProbeVerdict,
@@ -160,11 +166,12 @@ async def _probe_one(
 
     Its Requests are the Directory's (RQS-12): kind probe, no Account, the
     handle probed. The page fetch is a metadata page, judged once the verdict
-    is written: Useful when it changed the entry or brought new sample Posts.
+    is written: Useful when it changed the entry or brought new sample Posts,
+    Wasted as a missing handle when Telegram has no page for it.
     """
     with (
         attributed(kind=RequestKind.PROBE, channel=normalize_handle(handle)),
-        page(PageType.METADATA) as probe_page,
+        page(PageType.METADATA, soft_block=Cause.MISSING_HANDLE) as probe_page,
     ):
         verdict = await _fetch_and_store(
             handle,
