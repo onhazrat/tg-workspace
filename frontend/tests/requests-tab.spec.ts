@@ -22,16 +22,23 @@ const part = (
   charged: charged ? useful + idle + wasted : 0,
   newPosts: 0,
   repeatedPosts: 0,
+  syncs: 0,
+  failedSyncs: 0,
 })
 
-/** 30 Channels synced, plus Directory probes: one row more than a page. */
+/**
+ * 30 Channels synced, plus Directory probes: one row more than a page. Each
+ * synced 10 times, the first three failing once; chanNN brought NN x 10 new
+ * Posts, so the later Channels yield more per Request (RQS-04).
+ */
 const CHANNELS = Array.from({ length: 30 }, (_, i) => ({
   ...part("auto", 40 - i, 5, i === 0 ? 5 : 0, true),
   channel: `chan${String(i).padStart(2, "0")}`,
+  syncs: 10,
+  failedSyncs: i < 3 ? 1 : 0,
+  newPosts: i * 10,
 }))
 const PROBES = { ...part("probe", 100, 200, 500, false), channel: null }
-/** The 30 Channels together: useful 40 down to 11, idle 5 each, wasted 5 once. */
-const AUTO = part("auto", 765, 150, 5, true)
 
 /** The auto Requests split between two Accounts: 600 and 320 (RQS-05). */
 const ACCOUNTS = [
@@ -39,9 +46,23 @@ const ACCOUNTS = [
   { ...part("auto", 265, 50, 5, true), accountId: "b", email: "bob@x.org" },
 ]
 
+/** Each kind's totals, summed from the Channel rows the API answers. */
+const byKindOf = (rows: ReturnType<typeof part>[]) => {
+  const sums = new Map<string, ReturnType<typeof part>>()
+  for (const { kind, ...row } of rows) {
+    const sum = sums.get(kind) ?? part(kind, 0, 0, 0, false)
+    for (const key of Object.keys(row) as (keyof typeof row)[])
+      if (typeof row[key] === "number") (sum[key] as number) += row[key]
+    sums.set(kind, sum)
+  }
+  return [...sums.values()]
+}
+
 const breakdown = (url: URL) => {
   const charged = url.searchParams.get("charged")
   const accounts = url.searchParams.getAll("accounts")
+  const leftOut = url.searchParams.getAll("leftOut")
+  const leftOutKinds = url.searchParams.getAll("leftOutKinds")
   const byAccount = ACCOUNTS.filter(
     (a) => !accounts.length || accounts.includes(a.accountId),
   )
@@ -53,11 +74,18 @@ const breakdown = (url: URL) => {
       byChannel: CHANNELS,
       byAccount,
     }
+  const byChannel = (
+    charged === "charged" ? CHANNELS : [PROBES, ...CHANNELS]
+  ).filter((c) =>
+    c.channel === null
+      ? !leftOutKinds.includes(c.kind)
+      : !leftOut.includes(c.channel),
+  )
   return {
     start: "2026-10-01T00:00:00",
     end: "2026-10-02T00:00:00",
-    byKind: charged === "charged" ? [AUTO] : [AUTO, PROBES],
-    byChannel: charged === "charged" ? CHANNELS : [PROBES, ...CHANNELS],
+    byKind: byKindOf(byChannel),
+    byChannel,
     byAccount,
   }
 }
@@ -326,6 +354,102 @@ test("the Channel table searches, sorts and pages", async ({ page }) => {
 
   await channels(page).getByLabel("Search Channels").fill("@chan2")
   await expect(channelRows(page)).toHaveCount(10)
+})
+
+const row = (page: Page, name: string) =>
+  channels(page).getByRole("row", { name: new RegExp(name) })
+
+test("the Channel table narrows by kind, uncharged rows and any measure", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  await page.goto("/?tab=requests")
+  await expect(channelRows(page)).toHaveCount(25)
+
+  // A kind's row in By kind of work narrows the table to that work.
+  await kinds(page)
+    .getByRole("row", { name: /Directory probe/ })
+    .click()
+  await expect(channelRows(page)).toHaveCount(1)
+  await expect(page.getByTestId("requests-filter-chip-probe")).toBeVisible()
+  await kinds(page)
+    .getByRole("row", { name: /Directory probe/ })
+    .click()
+  await expect(channelRows(page)).toHaveCount(25)
+
+  await page.getByTestId("requests-switch-uncharged").click()
+  await expect(row(page, "Directory probes")).toHaveCount(0)
+  await page.getByTestId("requests-switch-uncharged").click()
+  await expect(row(page, "Directory probes")).toHaveCount(1)
+
+  // Failed syncs, found by searching the criteria.
+  await page.getByTestId("requests-filters").click()
+  await page.getByPlaceholder("Search criteria...").fill("auto fail")
+  await page.getByTestId("requests-filters-auto-failed").click()
+  await page.getByRole("spinbutton", { name: "Value" }).fill("1")
+  await page.getByTestId("requests-measure-submit").click()
+  await expect(channelRows(page)).toHaveCount(3)
+  await expect(page.getByTestId("requests-filter-count")).toContainText("3")
+})
+
+test("New Posts per Request ranks the Channels, the aggregate rows last", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  await page.goto("/?tab=requests")
+  // chan20: 200 new Posts in 25 Requests.
+  const yieldOf = (name: string) => row(page, name).locator("td").nth(-2)
+  await expect(yieldOf("@chan20")).toHaveText("8.0")
+  await expect(yieldOf("@chan20")).toHaveAttribute(
+    "title",
+    "40% of a 20-Post page per Request",
+  )
+  await expect(yieldOf("Directory probes")).toHaveText("–")
+
+  const header = channels(page).getByRole("button", {
+    name: /New Posts \/ Req/,
+  })
+  await header.click()
+  await expect(channelRows(page).first()).toContainText("@chan29")
+  await header.click()
+  await expect(channelRows(page).first()).toContainText("@chan00")
+  await channels(page).getByRole("button", { name: "Show 6 more" }).click()
+  await expect(channelRows(page).last()).toContainText("Directory probes")
+})
+
+test("a Channel left out leaves the whole tab, stays listed, and Pick all brings it back", async ({
+  page,
+}) => {
+  const seen = await mockBreakdown(page)
+  const trend = await mockTrend(page)
+  await page.goto("/?tab=requests")
+  await expect(total(page)).toHaveText("1,720 Requests")
+
+  // chan00 made 50 Requests.
+  await page.getByRole("checkbox", { name: "Pick @chan00" }).uncheck()
+  await expect(total(page)).toHaveText("1,670 Requests")
+  await expect(page.getByTestId("requests-left-out")).toHaveText(
+    "1 Channel left out Pick all",
+  )
+  expect(seen.at(-1)?.searchParams.getAll("leftOut")).toEqual(["chan00"])
+  expect(trend.at(-1)?.searchParams.getAll("leftOut")).toEqual(["chan00"])
+  await expect(row(page, "@chan00")).toHaveCSS("opacity", "0.4")
+
+  // The probes row leaves by its kind.
+  await page.getByRole("checkbox", { name: "Pick Directory probes" }).uncheck()
+  await expect(total(page)).toHaveText("870 Requests")
+  expect(seen.at(-1)?.searchParams.getAll("leftOutKinds")).toEqual(["probe"])
+
+  await page.getByRole("button", { name: "Pick all" }).click()
+  await expect(total(page)).toHaveText("1,720 Requests")
+  await expect(page.getByTestId("requests-left-out")).toHaveCount(0)
+
+  // The header box leaves out every listed row: the search keeps ten.
+  await channels(page).getByLabel("Search Channels").fill("@chan2")
+  await page.getByRole("checkbox", { name: "Pick every listed row" }).uncheck()
+  await expect(page.getByTestId("requests-left-out")).toHaveText(
+    "10 Channels left out Pick all",
+  )
 })
 
 test("the Settings Usage panel links to the tab", async ({ page }) => {
