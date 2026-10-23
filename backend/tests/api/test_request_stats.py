@@ -1446,14 +1446,176 @@ def test_a_range_is_cut_to_the_minute(
     assert answer["byChannel"] == []
 
 
-def test_the_breakdown_is_the_operators_alone(
-    client: TestClient, normal_user_token_headers: dict[str, str]
+@pytest.mark.parametrize("route", ["breakdown", "trend"])
+def test_the_requests_endpoints_are_the_operators_alone(
+    client: TestClient, normal_user_token_headers: dict[str, str], route: str
 ) -> None:
-    """Mutation: drop the `QUOTA_READ_ANY` dependency from the route."""
+    """Mutation: drop the `QUOTA_READ_ANY` dependency from either route."""
     start, end = _today()
     r = client.get(
-        f"{API}/requests/breakdown",
+        f"{API}/requests/{route}",
         params={"start": start, "end": end},
         headers=normal_user_token_headers,
     )
     assert r.status_code == 403
+
+
+# --------------------------------------------------------------------------
+# The trend (RQS-06)
+# --------------------------------------------------------------------------
+
+
+def _trend(
+    client: TestClient,
+    headers: dict[str, str],
+    *,
+    start: str | None = None,
+    end: str | None = None,
+    charged: str = "all",
+) -> dict[str, Any]:
+    flush_recorded_requests()
+    roll_up_request_totals()
+    day_start, day_end = _today()
+    r = client.get(
+        f"{API}/requests/trend",
+        params={
+            "start": start or day_start,
+            "end": end or day_end,
+            "charged": charged,
+        },
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    return dict(r.json())
+
+
+def _span(bucket: dict[str, Any]) -> timedelta:
+    start = datetime.fromisoformat(bucket["start"])
+    return datetime.fromisoformat(bucket["end"]) - start
+
+
+def _by_kind(buckets: list[dict[str, Any]]) -> dict[str, tuple[int, int, int]]:
+    """Each kind's Useful, Idle and Wasted, summed over the buckets."""
+    sums: dict[str, tuple[int, int, int]] = {}
+    for b in buckets:
+        u, i, w = sums.get(b["kind"], (0, 0, 0))
+        sums[b["kind"]] = (u + b["useful"], i + b["idle"], w + b["wasted"])
+    return sums
+
+
+def _breakdown_by_kind(answer: dict[str, Any]) -> dict[str, tuple[int, int, int]]:
+    return {r["kind"]: (r["useful"], r["idle"], r["wasted"]) for r in answer["byKind"]}
+
+
+def _refused_then_answered(
+    client: TestClient,
+    headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sync whose first attempt is refused and whose retry answers: one
+    Wasted, Uncharged Request, one Useful, Charged one, and the Idle older
+    page the walk asks for next."""
+    monkeypatch.setattr(settings, "NETWORK_FETCH_RETRIES", 3)
+    _follow(client, headers, CHANNEL)
+    telegram.script(
+        _first_page(), httpx.ConnectError("refused"), _page_html(CHANNEL, [100, 101])
+    )
+    _sync(client, headers)
+
+
+def test_the_last_weeks_trend_is_five_minute_buckets_of_the_requests(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: bucket the Requests by hour, or count a Wasted one as Idle."""
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+
+    buckets = _trend(client, superuser_token_headers)["buckets"]
+    assert buckets
+    for b in buckets:
+        assert _span(b) == timedelta(minutes=5), b
+        assert datetime.fromisoformat(b["start"]).minute % 5 == 0, b
+    useful, _idle, wasted = _by_kind(buckets)["single"]
+    assert (useful, wasted) == (1, 1)
+    assert _by_kind(buckets) == _breakdown_by_kind(
+        _breakdown(client, superuser_token_headers)
+    )
+
+
+def test_the_trend_keeps_charged_or_uncharged_requests(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutation: ignore `charged` on the trend, or mark every bucket Charged."""
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+
+    charged = _trend(client, superuser_token_headers, charged="charged")["buckets"]
+    uncharged = _trend(client, superuser_token_headers, charged="uncharged")["buckets"]
+    assert {b["charged"] for b in charged} == {True}
+    assert {b["charged"] for b in uncharged} == {False}
+    assert _by_kind(charged)["single"][::2] == (1, 0)
+    assert _by_kind(uncharged)["single"] == (0, 0, 1)
+
+
+def test_a_trend_cut_to_the_minute_clips_its_end_buckets(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutation: widen a cut range to its whole 5-minute buckets."""
+    _follow(client, superuser_token_headers, CHANNEL)
+    telegram.script(_first_page(), _page_html(CHANNEL, [100]))
+    _sync(client, superuser_token_headers)
+
+    now = utc_now().replace(second=0, microsecond=0)
+    start, end = now - timedelta(minutes=1), now + timedelta(minutes=1)
+    answer = _trend(
+        client, superuser_token_headers, start=start.isoformat(), end=end.isoformat()
+    )
+    assert _by_kind(answer["buckets"])["single"][0] == 1
+    for b in answer["buckets"]:
+        assert datetime.fromisoformat(b["start"]) >= start, b
+        assert datetime.fromisoformat(b["end"]) <= end, b
+
+
+def test_past_each_tiers_span_the_next_one_answers(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: drop the fall back to a coarser tier from the Breakdown, or
+    keep 5-minute or hourly buckets on the trend past their tier's span.
+
+    The clock moves past each span on the default settings, 7 and 30 days,
+    and retention runs. The same ranges, cut to the hour and to the minute,
+    still find every Request: in the hourly totals once the Requests are gone,
+    and in the daily totals once those are. The trend's buckets coarsen too.
+    """
+    _follow(client, superuser_token_headers, CHANNEL)
+    telegram.script(_first_page(), _page_html(CHANNEL, [100, 101]))
+    _sync(client, superuser_token_headers)
+    _sync(client, superuser_token_headers)
+
+    now = datetime.now(UTC)
+    if now.minute in (0, 59) or now.hour in (0, 23):
+        pytest.skip("too close to an hour or day edge to cut a range around now")
+    n = len(_recorded())
+    # The rollup runs every 5 minutes, long before retention reaches a Request.
+    roll_up_request_totals()
+    real_now = utc_now()
+    for days, grain in {8: timedelta(hours=1), 31: timedelta(days=1)}.items():
+        moved = real_now + timedelta(days=days)
+        monkeypatch.setattr(retention, "utc_now", lambda moved=moved: moved)
+        monkeypatch.setattr(request_stats, "utc_now", lambda moved=moved: moved)
+        with Session(engine) as session:
+            run_retention_cleanup(session)
+        assert _requests_by_tier(client, superuser_token_headers, now) == (n, n, n)
+        buckets = _trend(client, superuser_token_headers)["buckets"]
+        assert {_span(b) for b in buckets} == {grain}, days
+        assert sum(b["useful"] + b["idle"] + b["wasted"] for b in buckets) == n

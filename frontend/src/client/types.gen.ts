@@ -6224,6 +6224,67 @@ export type RequestTotals = {
 };
 
 /**
+ * RequestTrendBucket
+ *
+ * One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.
+ */
+export type RequestTrendBucket = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Charged
+     */
+    charged: boolean;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+};
+
+/**
+ * RequestTrendResponse
+ *
+ * One range in buckets: 5 minutes inside the Requests' span, hours inside
+ * the hourly totals' span (`hourlyDays`), whole days before.
+ */
+export type RequestTrendResponse = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Hourlydays
+     */
+    hourlyDays: number;
+    /**
+     * Buckets
+     */
+    buckets: Array<RequestTrendBucket>;
+};
+
+/**
  * ResolveStartTimeRequest
  */
 export type ResolveStartTimeRequest = {
@@ -13707,6 +13768,44 @@ export type RequestsReadRequestBreakdownResponses = {
 };
 
 export type RequestsReadRequestBreakdownResponse = RequestsReadRequestBreakdownResponses[keyof RequestsReadRequestBreakdownResponses];
+
+export type RequestsReadRequestTrendData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Start
+         */
+        start: string;
+        /**
+         * End
+         */
+        end: string;
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+    };
+    url: '/api/v1/requests/trend';
+};
+
+export type RequestsReadRequestTrendErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestTrendError = RequestsReadRequestTrendErrors[keyof RequestsReadRequestTrendErrors];
+
+export type RequestsReadRequestTrendResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestTrendResponse;
+};
+
+export type RequestsReadRequestTrendResponse = RequestsReadRequestTrendResponses[keyof RequestsReadRequestTrendResponses];
 
 export type ViewAsStartViewAsData = {
     body?: never;

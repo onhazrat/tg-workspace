@@ -37,3 +37,27 @@ class RequestBreakdownResponse(BaseModel):
     end: datetime
     by_kind: list[RequestTotals] = Field(alias="byKind")
     by_channel: list[ChannelRequestTotals] = Field(alias="byChannel")
+
+
+class RequestTrendBucket(BaseModel):
+    """One kind's Charged or Uncharged Requests in `[start, end)`, by outcome."""
+
+    start: datetime
+    end: datetime
+    kind: str
+    charged: bool
+    useful: int
+    idle: int
+    wasted: int
+
+
+class RequestTrendResponse(BaseModel):
+    """One range in buckets: 5 minutes inside the Requests' span, hours inside
+    the hourly totals' span (`hourlyDays`), whole days before."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    start: datetime
+    end: datetime
+    hourly_days: int = Field(alias="hourlyDays")
+    buckets: list[RequestTrendBucket]

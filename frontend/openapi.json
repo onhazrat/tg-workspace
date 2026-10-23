@@ -6832,6 +6832,68 @@
         }
       }
     },
+    "/api/v1/requests/trend": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Trend",
+        "description": "Requests in `[start, end)` over time, by kind of work and outcome.\n\nEach bucket is the finest the stored totals allow for its stretch: 5\nminutes inside the last week, an hour inside the last `hourlyDays` days, a\nday before. A range cut finer than its stretch allows is widened to that\ngrain; otherwise the first and last buckets are cut to the range. Times\nand `charged` are read as on the Breakdown.",
+        "operationId": "requests-read_request_trend",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "End"
+            }
+          },
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestTrendResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/view-as/{user_id}": {
       "post": {
         "tags": ["view-as"],
@@ -13389,6 +13451,53 @@
         ],
         "title": "RequestTotals",
         "description": "Requests by outcome, and the Posts the answered pages brought."
+      },
+      "RequestTrendBucket": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "kind": { "type": "string", "title": "Kind" },
+          "charged": { "type": "boolean", "title": "Charged" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "kind",
+          "charged",
+          "useful",
+          "idle",
+          "wasted"
+        ],
+        "title": "RequestTrendBucket",
+        "description": "One kind's Charged or Uncharged Requests in `[start, end)`, by outcome."
+      },
+      "RequestTrendResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "hourlyDays": { "type": "integer", "title": "Hourlydays" },
+          "buckets": {
+            "items": { "$ref": "#/components/schemas/RequestTrendBucket" },
+            "type": "array",
+            "title": "Buckets"
+          }
+        },
+        "type": "object",
+        "required": ["start", "end", "hourlyDays", "buckets"],
+        "title": "RequestTrendResponse",
+        "description": "One range in buckets: 5 minutes inside the Requests' span, hours inside\nthe hourly totals' span (`hourlyDays`), whole days before."
       },
       "ResolveStartTimeRequest": {
         "properties": {

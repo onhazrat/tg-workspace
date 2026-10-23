@@ -19,7 +19,11 @@ watermark already passed; reading those rows twice costs nothing.
 
 `request_breakdown` reads the tiers for a range cut to the minute: daily totals
 for the whole days in it, hourly totals for the whole hours of a cut day, and
-the Requests themselves for the minutes left over.
+the Requests themselves for the minutes left over. `request_trend` reads them
+as buckets: 5 minutes from the Requests, hours, then days. Both read the finest
+tier still kept for each stretch: past `REQUEST_RECORD_DAYS` a cut hour is read
+whole from the hourly totals, and past `REQUEST_HOURLY_DAYS` a cut day whole
+from the daily ones (RQS-06).
 """
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ from sqlmodel import Session, col, select
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import Outcome, RequestKind, drain
-from app.models_tg import RequestDaily, RequestHourly, RequestRecordRow
+from app.models_tg import RequestDaily, RequestHourly, RequestRecordRow, utc_now
 from app.services.quota import resolve_charge_owner, usage_rows
 from app.services.settings_registry import REQUEST_ROLLUP_KEY
 from app.services.settings_store import get_global_setting, put_global_setting
@@ -49,6 +53,7 @@ logger = logging.getLogger(__name__)
 ChargedFilter = Literal["all", "charged", "uncharged"]
 
 _WATERMARK_OVERLAP = timedelta(minutes=1)
+_FIVE_MINUTES = timedelta(minutes=5)
 _HOUR = timedelta(hours=1)
 _DAY = timedelta(days=1)
 
@@ -391,11 +396,53 @@ def _split(spans: Iterable[Span], step: timedelta) -> tuple[list[Span], list[Spa
     return whole, [(a, b) for a, b in rest if a < b]
 
 
+@dataclass(frozen=True)
+class Kept:
+    """Where the two pruned tiers start: the Requests on an hour, the hourly
+    totals on a day. Rounded up, so each tier is whole from there on."""
+
+    records: datetime
+    hourly: datetime
+
+
+def _kept() -> Kept:
+    now = utc_now()
+    hourly = _ceil(now - timedelta(days=settings.REQUEST_HOURLY_DAYS), _DAY)
+    records = _ceil(now - timedelta(days=settings.REQUEST_RECORD_DAYS), _HOUR)
+    return Kept(records=max(records, hourly), hourly=hourly)
+
+
+def _widen(start: datetime, end: datetime, kept: Kept) -> Span:
+    """The range grown at either end to the grain of the finest tier kept there.
+
+    A minute cut older than the Requests reads its whole hour, and an hour cut
+    older than the hourly totals its whole day: the finest tier covering it,
+    rather than nothing.
+    """
+    for step, horizon in ((_HOUR, kept.records), (_DAY, kept.hourly)):
+        if start < horizon:
+            start = _floor(start, step)
+        if _floor(end, step) < horizon:
+            end = _ceil(end, step)
+    return start, end
+
+
+def _filtered(query: Any, model: Any, charged: ChargedFilter) -> Any:
+    """The tab's filters, the same on every tier and on every endpoint."""
+    if charged != "all":
+        query = query.where(col(model.charged).is_(charged == "charged"))
+    return query
+
+
+def _requests(model: Any) -> Any:
+    return func.count() if model is RequestRecordRow else _sum(model.requests)
+
+
 def request_breakdown(
     session: Session, start: datetime, end: datetime, charged: ChargedFilter
 ) -> Breakdown:
     """Totals by kind and by Channel for `[start, end)`, naive UTC to the minute."""
-    days, cut = _split([(start, end)], _DAY)
+    days, cut = _split([_widen(start, end, _kept())], _DAY)
     hours, minutes = _split(cut, _HOUR)
     breakdown = Breakdown()
     tiers: list[tuple[Any, Any, list[tuple[Any, Any]]]] = [
@@ -420,17 +467,90 @@ def _fold(
 ) -> None:
     """Add one tier's rows inside `within` to the Breakdown."""
     keys = [model.kind, _totals_channel(model), model.outcome, model.charged]
-    requests = func.count() if model is RequestRecordRow else _sum(model.requests)
     query = sa_select(
-        *keys, requests, _sum(model.new_posts), _sum(model.repeated_posts)
+        *keys, _requests(model), _sum(model.new_posts), _sum(model.repeated_posts)
     ).where(within)
-    if charged != "all":
-        query = query.where(col(model.charged).is_(charged == "charged"))
     for kind, channel, outcome, is_charged, n, new, repeated in session.execute(
-        query.group_by(*keys)
+        _filtered(query, model, charged).group_by(*keys)
     ).all():
         for totals in (
             breakdown.by_kind.setdefault(kind, Totals()),
             breakdown.by_channel.setdefault((channel, kind), Totals()),
         ):
             totals.add(outcome, is_charged, int(n), int(new), int(repeated))
+
+
+@dataclass
+class TrendBucket:
+    """One kind's Charged or Uncharged Requests in `[start, end)`, by outcome."""
+
+    start: datetime
+    end: datetime
+    kind: str
+    charged: bool
+    useful: int = 0
+    idle: int = 0
+    wasted: int = 0
+
+
+#: Where 5-minute buckets start: any midnight puts them on the clock's grid.
+_GRID = datetime(2000, 1, 1)
+
+
+def request_trend(
+    session: Session, start: datetime, end: datetime, charged: ChargedFilter
+) -> list[TrendBucket]:
+    """`[start, end)` in buckets at the finest tier kept for each stretch.
+
+    5 minutes from the Requests, hours from the hourly totals before them, and
+    days from the daily totals before those. A bucket the range cuts is
+    clipped to it; only a tier's own grain widens one, as in `_widen`.
+    """
+    kept = _kept()
+    start, end = _widen(start, end, kept)
+    buckets: dict[tuple[datetime, str, bool], TrendBucket] = {}
+    stretches: list[tuple[Any, Any, Any, timedelta, Span]] = [
+        (
+            RequestDaily,
+            col(RequestDaily.day),
+            col(RequestDaily.day),
+            _DAY,
+            (start, min(end, kept.hourly)),
+        ),
+        (
+            RequestHourly,
+            col(RequestHourly.hour),
+            col(RequestHourly.hour),
+            _HOUR,
+            (max(start, kept.hourly), min(end, kept.records)),
+        ),
+        (
+            RequestRecordRow,
+            col(RequestRecordRow.at),
+            func.date_bin(_FIVE_MINUTES, col(RequestRecordRow.at), _GRID),
+            _FIVE_MINUTES,
+            (max(start, kept.records), end),
+        ),
+    ]
+    for model, moment, bucket_of, step, (lo, hi) in stretches:
+        if lo >= hi:
+            continue
+        keys = [bucket_of, model.kind, model.charged, model.outcome]
+        query = sa_select(*keys, _requests(model)).where(moment >= lo, moment < hi)
+        for at, kind, is_charged, outcome, n in session.execute(
+            _filtered(query, model, charged).group_by(*keys)
+        ).all():
+            first = max(_as_datetime(at), lo)
+            bucket = buckets.setdefault(
+                (first, kind, is_charged),
+                TrendBucket(first, min(_as_datetime(at) + step, hi), kind, is_charged),
+            )
+            setattr(bucket, outcome, getattr(bucket, outcome) + int(n))
+    return [buckets[key] for key in sorted(buckets)]
+
+
+def _as_datetime(moment: date | datetime) -> datetime:
+    """A bucket's start: a daily total's day is its midnight."""
+    if isinstance(moment, datetime):
+        return moment
+    return datetime.combine(moment, datetime.min.time())
