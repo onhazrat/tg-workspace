@@ -33,12 +33,34 @@ const PROBES = { ...part("probe", 100, 200, 500, false), channel: null }
 /** The 30 Channels together: useful 40 down to 11, idle 5 each, wasted 5 once. */
 const AUTO = part("auto", 765, 150, 5, true)
 
-const breakdown = (charged: string | null) => ({
-  start: "2026-10-01T00:00:00",
-  end: "2026-10-02T00:00:00",
-  byKind: charged === "charged" ? [AUTO] : [AUTO, PROBES],
-  byChannel: charged === "charged" ? CHANNELS : [PROBES, ...CHANNELS],
-})
+/** The auto Requests split between two Accounts: 600 and 320 (RQS-05). */
+const ACCOUNTS = [
+  { ...part("auto", 500, 100, 0, true), accountId: "a", email: "ann@x.org" },
+  { ...part("auto", 265, 50, 5, true), accountId: "b", email: "bob@x.org" },
+]
+
+const breakdown = (url: URL) => {
+  const charged = url.searchParams.get("charged")
+  const accounts = url.searchParams.getAll("accounts")
+  const byAccount = ACCOUNTS.filter(
+    (a) => !accounts.length || accounts.includes(a.accountId),
+  )
+  if (accounts.length)
+    return {
+      start: "2026-10-01T00:00:00",
+      end: "2026-10-02T00:00:00",
+      byKind: byAccount.map(({ accountId, email, ...rest }) => rest),
+      byChannel: CHANNELS,
+      byAccount,
+    }
+  return {
+    start: "2026-10-01T00:00:00",
+    end: "2026-10-02T00:00:00",
+    byKind: charged === "charged" ? [AUTO] : [AUTO, PROBES],
+    byChannel: charged === "charged" ? CHANNELS : [PROBES, ...CHANNELS],
+    byAccount,
+  }
+}
 
 const DAY_MS = 86_400_000
 /** UTC midnight `n` days ago, as the server writes it: naive, no zone. */
@@ -94,7 +116,7 @@ async function mockBreakdown(page: Page): Promise<URL[]> {
   await page.route("**/api/v1/requests/breakdown?**", (route: Route) => {
     const url = new URL(route.request().url())
     seen.push(url)
-    return route.fulfill({ json: breakdown(url.searchParams.get("charged")) })
+    return route.fulfill({ json: breakdown(url) })
   })
   return seen
 }
@@ -176,6 +198,45 @@ test("Charged narrows every number on the tab", async ({ page }) => {
   await expect(
     channels(page).getByRole("row", { name: /Directory probes/ }),
   ).toHaveCount(0)
+})
+
+test("Accounts narrow the totals, and two compare side by side", async ({
+  page,
+}) => {
+  const seen = await mockBreakdown(page)
+  await page.goto("/?tab=requests")
+  await expect(total(page)).toHaveText("1,720 Requests")
+  await page.getByTestId("requests-accounts").click()
+  await expect(page.getByTestId("requests-accounts-count-a")).toHaveText("600")
+  await expect(page.getByTestId("requests-accounts-count-b")).toHaveText("320")
+
+  await page.getByTestId("requests-accounts-funnel-a").click()
+  await expect(total(page)).toHaveText("600 Requests")
+  expect(seen.at(-1)?.searchParams.getAll("accounts")).toEqual(["a"])
+  await expect(page.getByTestId("requests-uncharged-hidden")).toBeVisible()
+  const compare = page.getByRole("region", { name: /Comparing/ })
+  await expect(compare).toHaveCount(0)
+
+  await page.getByTestId("requests-accounts-funnel-b").click()
+  await page.keyboard.press("Escape")
+  await expect(total(page)).toHaveText("920 Requests")
+  await expect(compare).toHaveAccessibleName("Comparing 2 Accounts")
+  await expect(compare.getByRole("row", { name: /ann@x.org/ })).toContainText(
+    "65%",
+  )
+  await expect(compare.getByRole("row", { name: /bob@x.org/ })).toContainText(
+    "320",
+  )
+
+  // The comparison fits a phone.
+  await page.setViewportSize({ width: 375, height: 812 })
+  await expect(compare).toBeVisible()
+  const sideways = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  )
+  expect(sideways).toBe(0)
 })
 
 test("hidden kinds and outcomes reach both tables", async ({ page }) => {
