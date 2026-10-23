@@ -17,6 +17,7 @@ The mutation that turns each test red is named on it.
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 import types
@@ -38,16 +39,18 @@ from app.jobs import request_stats as request_stats_jobs
 from app.jobs import retention
 from app.jobs.discover_probe import run_discover_probe_sweep
 from app.jobs.retention import run_retention_cleanup
+from app.jobs.sync_queue import enqueue_sync_job
 from app.models_tg import DirectoryEntry, RequestRecordRow, utc_now
 from app.services import network, request_stats
 from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
 from app.services.pgmq import queue_length
+from app.services.quota import Budget, charge_requests, usage_rows
 from app.services.request_stats import (
     flush_recorded_requests,
     roll_up_request_totals,
 )
-from app.services.scraper_jobs import clear_jobs_for_tests
+from app.services.scraper_jobs import clear_jobs_for_tests, create_job, get_job
 from app.services.sync_lanes import DISCOVER_PROBE_LANE
 from app.services.telegram_web import TelegramWebViewUnavailable
 
@@ -839,6 +842,33 @@ def _wait_for(client: TestClient, headers: dict[str, str], url: str) -> dict[str
     raise AssertionError(f"{url} never finished")
 
 
+def _bulk_follow(
+    client: TestClient,
+    headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    channel: str,
+) -> None:
+    """Bulk-follow one handle in this process and wait for the sync it chains."""
+
+    async def run_here(follow_job_id: str) -> None:
+        task = asyncio.create_task(run_follow_job_by_id(follow_job_id))
+        _follow_tasks.add(task)
+        task.add_done_callback(_follow_tasks.discard)
+
+    monkeypatch.setattr("app.api.routes.data.channels.request_follow_job_run", run_here)
+    r = client.post(
+        f"{API}/data/channels/bulk-follow",
+        json={"channels": [{"name": channel}]},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    follow = _wait_for(
+        client, headers, f"{API}/data/channels/bulk-follow/{r.json()['followJobId']}"
+    )
+    assert follow["added"] == 1, follow
+    _wait_for(client, headers, f"{API}/jobs/sync/{follow['syncJobId']}")
+
+
 def test_a_bulk_follow_is_charged_as_the_ledger_charges_it(
     client: TestClient,
     superuser_token_headers: dict[str, str],
@@ -853,27 +883,9 @@ def test_a_bulk_follow_is_charged_as_the_ledger_charges_it(
     something, so it is Useful. The sync it chains is a bulk sync of its own.
     """
 
-    async def run_here(follow_job_id: str) -> None:
-        task = asyncio.create_task(run_follow_job_by_id(follow_job_id))
-        _follow_tasks.add(task)
-        task.add_done_callback(_follow_tasks.discard)
-
-    monkeypatch.setattr("app.api.routes.data.channels.request_follow_job_run", run_here)
     telegram.script(_first_page(FOLLOWED), _page_html(FOLLOWED, [3]))
 
-    r = client.post(
-        f"{API}/data/channels/bulk-follow",
-        json={"channels": [{"name": FOLLOWED}]},
-        headers=superuser_token_headers,
-    )
-    assert r.status_code == 200, r.text
-    follow = _wait_for(
-        client,
-        superuser_token_headers,
-        f"{API}/data/channels/bulk-follow/{r.json()['followJobId']}",
-    )
-    assert follow["added"] == 1, follow
-    _wait_for(client, superuser_token_headers, f"{API}/jobs/sync/{follow['syncJobId']}")
+    _bulk_follow(client, superuser_token_headers, monkeypatch, FOLLOWED)
 
     [record] = _recorded(kind="follow")
     assert (record.budget, record.channel, record.charged, record.account_id) == (
@@ -1242,6 +1254,167 @@ def test_startup_refuses_an_hourly_span_shorter_than_the_record_span() -> None:
     assert "REQUEST_HOURLY_DAYS" in str(refused.value)
 
     Settings(PROJECT_NAME="test", REQUEST_RECORD_DAYS=10, REQUEST_HOURLY_DAYS=10)  # type: ignore[call-arg]
+
+
+# --------------------------------------------------------------------------
+# The ledger (RQS-15)
+# --------------------------------------------------------------------------
+
+
+class _Warnings(logging.Handler):
+    """The warnings the ledger check logs, caught by a handler of our own."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.WARNING)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@pytest.fixture
+def ledger_warnings(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Warnings]:
+    """Run the daily check as if today were tomorrow, so it checks today."""
+    tomorrow = datetime.now(UTC).date() + timedelta(days=1)
+    monkeypatch.setattr(request_stats_jobs, "today_utc", lambda: tomorrow)
+    handler = _Warnings()
+    log = logging.getLogger(request_stats.__name__)
+    log.addHandler(handler)
+    yield handler
+    log.removeHandler(handler)
+
+
+def _ledger_total() -> int:
+    with Session(engine) as session:
+        return sum(row.requests for row in usage_rows(session))
+
+
+def _charged_total(client: TestClient, headers: dict[str, str]) -> int:
+    rows = _breakdown(client, headers, charged="charged")["byKind"]
+    return sum(int(row["requests"]) for row in rows)
+
+
+def _settled(client: TestClient, headers: dict[str, str]) -> int:
+    """The day's charged Requests, once the ledger has caught up with them.
+
+    A sync reads finished before its `finally` charges the ledger, so the two
+    are compared only once their totals agree, or after five seconds.
+    """
+    deadline = time.time() + 5
+    while (charged := _charged_total(client, headers)) != _ledger_total():
+        if time.time() > deadline:
+            break
+        time.sleep(0.05)
+    return charged
+
+
+def _ownerless_sync(client: TestClient, headers: dict[str, str], channel: str) -> None:
+    """A legacy sync whose message names no owner: the ledger bills the Operator.
+
+    The job row has an owner, as every job row does since ticket 21; the
+    message does not, which is the shape a legacy message still has.
+    """
+    me = client.get(f"{API}/users/me", headers=headers).json()
+
+    async def enqueue() -> str:
+        job = await create_job(
+            channel_entries=[(channel, channel)],
+            source="Test",
+            user_id=me["id"],
+            sync_mode="individual",
+        )
+        await enqueue_sync_job(job, None)
+        return job.job_id
+
+    job_id = client.portal.call(enqueue)
+    deadline = time.time() + 20
+    while (job := get_job(job_id)) is None or job.status not in (
+        "completed",
+        "failed",
+        "cancelled",
+    ):
+        assert time.time() < deadline, f"sync {job_id} never finished"
+        time.sleep(0.05)
+
+
+def test_a_days_charged_requests_equal_the_ledger(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+    ledger_warnings: _Warnings,
+) -> None:
+    """Mutations: check the recorded Account as it is, so an ownerless sync is
+    nobody's; leave out the charged filter; compare per Account only; check
+    today instead of yesterday.
+
+    A click, a bulk sync, a bulk follow and a sync with no owner, each with a
+    picture the ledger never charges. The Requests API's charged total is the
+    ledger's, and the daily check finds every Account and Budget equal.
+    """
+    avatar = "https://cdn4.telesco.pe/file/rqs-ledger-avatar.jpg"
+    telegram.script(
+        _first_page(),
+        _page_html(CHANNEL, [100, 101]).replace(
+            "<body>",
+            f'<body><div class="tgme_page_photo_image"><img src="{avatar}"></div>',
+        ),
+    )
+    telegram.script(avatar, (b"\xff\xd8\xff", "image/jpeg"))
+    telegram.script(_first_page(FOLLOWED), _page_html(FOLLOWED, [3]))
+    _follow(client, superuser_token_headers, CHANNEL)
+
+    _sync(client, superuser_token_headers)
+    _sync(client, superuser_token_headers, mode="bulk")
+    _bulk_follow(client, superuser_token_headers, monkeypatch, FOLLOWED)
+    _ownerless_sync(client, superuser_token_headers, CHANNEL)
+
+    assert [r.account_id for r in _recorded(kind="single", page_type="posts")][
+        -1
+    ] is None
+    assert _recorded(charged=False), "no uncharged Request to leave out"
+    charged = _settled(client, superuser_token_headers)
+    assert charged == _ledger_total()
+    with Session(engine) as session:
+        budgets = {row.budget for row in usage_rows(session)}
+    assert budgets == {"manual_single", "manual_bulk"}
+
+    asyncio.run(request_stats_jobs.run_request_ledger_check())
+    assert ledger_warnings.records == []
+
+
+def test_the_ledger_check_reports_a_mismatch(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    ledger_warnings: _Warnings,
+) -> None:
+    """Mutations: never log; log without the metric; check today instead of
+    yesterday.
+
+    One sync, settled, then one Request charged that nothing recorded: the
+    check names the Account and Budget, and the metric counts the difference.
+    """
+    telegram.script(_first_page(), _page_html(CHANNEL, [100]))
+    _follow(client, superuser_token_headers, CHANNEL)
+    _sync(client, superuser_token_headers)
+    charged = _settled(client, superuser_token_headers)
+    assert charged > 0
+    me = client.get(f"{API}/users/me", headers=superuser_token_headers).json()
+    with Session(engine) as session:
+        charge_requests(session, uuid.UUID(me["id"]), Budget.MANUAL_SINGLE, 2)
+
+    asyncio.run(request_stats_jobs.run_request_ledger_check())
+
+    [warning] = ledger_warnings.records
+    message = warning.getMessage()
+    assert me["id"] in message
+    assert "manual_single" in message
+    assert f"recorded {charged}, ledger {charged + 2}" in message
+    assert (getattr(warning, "metric", None), getattr(warning, "value", None)) == (
+        "request_ledger_mismatch",
+        2,
+    )
 
 
 # --------------------------------------------------------------------------

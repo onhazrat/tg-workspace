@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
@@ -39,6 +40,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import Outcome, RequestKind, drain
 from app.models_tg import RequestDaily, RequestHourly, RequestRecordRow
+from app.services.quota import resolve_charge_owner, usage_rows
 from app.services.settings_registry import REQUEST_ROLLUP_KEY
 from app.services.settings_store import get_global_setting, put_global_setting
 
@@ -249,6 +251,76 @@ def prune_request_stats(session: Session, now: datetime) -> tuple[int, int]:
         now - timedelta(days=settings.REQUEST_HOURLY_DAYS),
     )
     return records, hourly
+
+
+# --------------------------------------------------------------------------
+# The ledger check (RQS-15)
+# --------------------------------------------------------------------------
+
+
+def _recorded_charges(session: Session, day: date) -> Counter[tuple[Any, str]]:
+    """The day's charged Requests per (who the ledger bills, Budget).
+
+    Read from the per-Request rows, the one tier that keeps the Budget; the
+    check runs the day after, well inside `REQUEST_RECORD_DAYS`. An Account
+    that is null or gone is billed to the Operator, as `charge_sync_job` does.
+    """
+    start = datetime.combine(day, datetime.min.time())
+    rows = session.execute(
+        sa_select(
+            col(RequestRecordRow.account_id),
+            col(RequestRecordRow.budget),
+            func.count(),
+        )
+        .where(
+            col(RequestRecordRow.charged),
+            col(RequestRecordRow.at) >= start,
+            col(RequestRecordRow.at) < start + _DAY,
+        )
+        .group_by(col(RequestRecordRow.account_id), col(RequestRecordRow.budget))
+    ).all()
+    charges: Counter[tuple[Any, str]] = Counter()
+    for account_id, budget, n in rows:
+        charges[(resolve_charge_owner(session, account_id), str(budget))] += int(n)
+    return charges
+
+
+def check_request_ledger(day: date) -> int:
+    """Compare a closed UTC day's charged Requests with the quota ledger.
+
+    Per Account and Budget. Logs one warning naming every pair that differs,
+    carrying the metric, and returns the total difference; a clean day logs
+    nothing and returns 0. A sync running across midnight is charged on the
+    day it finished but recorded on the day of each Request, so a busy
+    midnight can show a small mismatch on both days.
+    """
+    with Session(engine) as session:
+        recorded = _recorded_charges(session, day)
+        ledger: Counter[tuple[Any, str]] = Counter(
+            {
+                (row.user_id, row.budget): row.requests
+                for row in usage_rows(session, day=day)
+            }
+        )
+    pairs = sorted(
+        (str(account), budget, recorded[(account, budget)], ledger[(account, budget)])
+        for account, budget in recorded.keys() | ledger.keys()
+        if recorded[(account, budget)] != ledger[(account, budget)]
+    )
+    difference = sum(abs(r - booked) for _, _, r, booked in pairs)
+    if pairs:
+        # ponytail: the metric rides the log record, as there is no metrics
+        # backend; a counter belongs there once one exists.
+        logger.warning(
+            "Requests: %s's charged Requests differ from the ledger: %s",
+            day.isoformat(),
+            "; ".join(
+                f"{account} {budget} recorded {r}, ledger {booked}"
+                for account, budget, r, booked in pairs
+            ),
+            extra={"metric": "request_ledger_mismatch", "value": difference},
+        )
+    return difference
 
 
 # --------------------------------------------------------------------------
