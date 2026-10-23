@@ -19,7 +19,7 @@ from collections import Counter
 from collections.abc import Iterable
 from typing import Any, Protocol
 
-from fast_langdetect import LangDetectConfig, LangDetector
+from fast_langdetect.infer import LangDetectConfig, LangDetector
 
 from app.services.post_media_parser import LEGACY_MEDIA_PLACEHOLDER
 

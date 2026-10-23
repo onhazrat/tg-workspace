@@ -17,7 +17,9 @@
       "@/*": ["./src/*"]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    // TypeScript 6 stopped including every @types package by default.
+    "types": ["bun", "node"]
   },
   "include": ["src", "tests", "playwright.config.ts"]
 }

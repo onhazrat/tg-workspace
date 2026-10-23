@@ -551,7 +551,7 @@ def run_retention_cleanup(session: Session) -> dict[str, int]:
     # would evict live avatars while leaving the actual garbage in place.
     #
     # Ids only — the sweep needs 2k strings, not 2k hydrated Channel rows.
-    channel_ids = cast(list[str], session.exec(select(Channel.id)).all())
+    channel_ids = cast(list[str], session.exec(select(col(Channel.id))).all())
     deleted_photos = prune_orphaned_photos(
         {photo_stem(cid) for cid in channel_ids},
         max_age_days=app_settings.CHANNEL_PHOTO_ORPHAN_MAX_AGE_DAYS,

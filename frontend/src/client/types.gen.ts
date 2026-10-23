@@ -2137,11 +2137,7 @@ export type DirectoryFilterGroup = {
     /**
      * Children
      */
-    children?: Array<({
-        kind: 'atom';
-    } & DirectoryFilterAtom) | ({
-        kind: 'group';
-    } & DirectoryFilterGroup)>;
+    children?: Array<DirectoryFilterAtom | DirectoryFilterGroup>;
 };
 
 /**
@@ -3002,11 +2998,7 @@ export type DiscoverCandidatesRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)>;
+    selection?: Array<SelectionRuleInput | SelectionPick>;
     /**
      * Viewmeasure
      */
@@ -3245,11 +3237,7 @@ export type DiscoverReportCreateRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)>;
+    selection?: Array<SelectionRuleInput | SelectionPick>;
     /**
      * Viewmeasure
      */
@@ -3403,11 +3391,7 @@ export type DiscoverReportScopeResponse = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleOutput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleOutput | SelectionPick> | null;
     /**
      * Keyword
      */
@@ -3687,11 +3671,7 @@ export type FilterGroupInput = {
     /**
      * Children
      */
-    children?: Array<({
-        kind: 'atom';
-    } & FilterAtom) | ({
-        kind: 'group';
-    } & FilterGroupInput)>;
+    children?: Array<FilterAtom | FilterGroupInput>;
 };
 
 /**
@@ -3719,11 +3699,7 @@ export type FilterGroupOutput = {
     /**
      * Children
      */
-    children?: Array<({
-        kind: 'atom';
-    } & FilterAtom) | ({
-        kind: 'group';
-    } & FilterGroupOutput)>;
+    children?: Array<FilterAtom | FilterGroupOutput>;
 };
 
 /**
@@ -3793,11 +3769,7 @@ export type FrozenScope = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleOutput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleOutput | SelectionPick> | null;
     /**
      * Keyword
      */
@@ -4867,11 +4839,7 @@ export type PostFacetsRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleInput | SelectionPick> | null;
 };
 
 /**
@@ -4935,11 +4903,7 @@ export type PostFeedRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleInput | SelectionPick> | null;
     /**
      * Maxperchannelmode
      */
@@ -5078,11 +5042,7 @@ export type PostFilteredRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleInput | SelectionPick> | null;
     /**
      * Maxperchannelmode
      */
@@ -5162,11 +5122,7 @@ export type PostLookupRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleInput | SelectionPick> | null;
 };
 
 /**
@@ -5362,11 +5318,7 @@ export type PostValueHistogramRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleInput | SelectionPick> | null;
     /**
      * Maxperchannelmode
      */
@@ -5472,11 +5424,7 @@ export type PostWindowHistogramRequest = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)> | null;
+    selection?: Array<SelectionRuleInput | SelectionPick> | null;
     /**
      * Maxperchannelmode
      */
@@ -5553,11 +5501,7 @@ export type PromptScopeInput = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)>;
+    selection?: Array<SelectionRuleInput | SelectionPick>;
     /**
      * Viewmeasure
      */
@@ -6721,11 +6665,7 @@ export type ScopeSubmission = {
     /**
      * Selection
      */
-    selection?: Array<({
-        kind: 'rule';
-    } & SelectionRuleInput) | ({
-        kind: 'pick';
-    } & SelectionPick)>;
+    selection?: Array<SelectionRuleInput | SelectionPick>;
 };
 
 /**
@@ -12426,15 +12366,7 @@ export type DataListArtifactsResponses = {
      *
      * Successful Response
      */
-    200: Array<({
-        kind: 'summary';
-    } & SummaryArtifactResponse) | ({
-        kind: 'chat';
-    } & ChatArtifactResponse) | ({
-        kind: 'tag';
-    } & TagArtifactResponse) | ({
-        kind: 'discovery';
-    } & DiscoveryArtifactResponse)>;
+    200: Array<SummaryArtifactResponse | ChatArtifactResponse | TagArtifactResponse | DiscoveryArtifactResponse>;
 };
 
 export type DataListArtifactsResponse = DataListArtifactsResponses[keyof DataListArtifactsResponses];

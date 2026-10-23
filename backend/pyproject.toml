@@ -14,7 +14,9 @@ dependencies = [
     "alembic<2.0.0,>=1.12.1",
     "httpx[socks]<1.0.0,>=0.25.1",
     "psycopg[binary]<4.0.0,>=3.1.13",
-    "sqlmodel>=0.0.39,<1.0.0",
+    # 0.0.45 maps every `datetime` field to a timestamptz type that rejects
+    # naive values (and needs SQLAlchemy 2.1); moving to it is its own migration.
+    "sqlmodel>=0.0.39,<0.0.45",
     "pydantic-settings<3.0.0,>=2.2.1",
     "sentry-sdk[fastapi]>=2.63.0,<3.0.0",
     "pyjwt>=2.15.0,<3.0.0",
@@ -28,6 +30,8 @@ dependencies = [
     "stem>=1.8.0",
     "socksio>=1.0.0",
     "fast-langdetect>=1.0.1",
+    # Transitive (httpx, sentry-sdk); the floor drops the distrusted eMudhra roots.
+    "certifi>=2026.10.19",
 ]
 
 [dependency-groups]

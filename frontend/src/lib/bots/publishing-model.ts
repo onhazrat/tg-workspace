@@ -77,6 +77,70 @@ export function destinationValidation(data: {
   return { isValid: true, info, loading: false }
 }
 
+/** A chat a bot has heard from, offered as a destination. */
+export type BotChat = { chatId: string; name: string; type: string }
+
+type UpdateChat = Named & { id: number; type: string }
+type Update = Record<string, any>
+
+/** The chat each kind of update is about, if any. */
+const updateChat = (u: Update): UpdateChat | undefined =>
+  (
+    u.message ??
+    u.edited_message ??
+    u.channel_post ??
+    u.edited_channel_post ??
+    u.my_chat_member ??
+    u.chat_member ??
+    u.chat_join_request ??
+    u.callback_query?.message
+  )?.chat
+
+/**
+ * The chats a `getUpdates` answer names, newest last, minus any the bot has
+ * since been removed from. The Bot API cannot list a bot's chats; this is
+ * every chat it heard from in the updates Telegram still holds (24 hours).
+ */
+export function chatsFromUpdates(data: {
+  ok?: boolean
+  description?: string
+  result?: Update[]
+}): { chats: BotChat[]; error?: string } {
+  if (!data.ok)
+    return { chats: [], error: data.description || "Telegram refused" }
+  const chats = new Map<string, BotChat>()
+  for (const u of data.result ?? []) {
+    const chat = updateChat(u)
+    if (!chat) continue
+    const chatId = String(chat.id)
+    const status = u.my_chat_member?.new_chat_member?.status
+    if (status === "left" || status === "kicked") {
+      chats.delete(chatId)
+      continue
+    }
+    chats.delete(chatId)
+    chats.set(chatId, {
+      chatId,
+      name: chatDisplayName(chat) || chatId,
+      type: chat.type,
+    })
+  }
+  return { chats: [...chats.values()] }
+}
+
+/**
+ * The chats not saved as a destination yet, matched on the numeric chat id
+ * only: a title or `@handle` can change, the id cannot. A destination saved
+ * by its handle is not recognised, so its chat is still offered.
+ */
+export function notYetAdded(
+  chats: BotChat[],
+  destinations: { chatId: string }[],
+): BotChat[] {
+  const saved = new Set(destinations.map((d) => d.chatId.trim()))
+  return chats.filter((c) => !saved.has(c.chatId))
+}
+
 export const DEST_NETWORK_ERROR: DestValidation = {
   isValid: false,
   info: "Network Error",

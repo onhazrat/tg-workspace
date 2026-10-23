@@ -32,7 +32,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.models import User
@@ -435,7 +435,7 @@ def load_retention_prefs_by_user(session: Session) -> dict[uuid.UUID, dict[str, 
     stored = all_user_settings(session, RETENTION_PREFS_KEY)
     return {
         user_id: _merge(defaults, stored.get(user_id))
-        for user_id in session.exec(select(User.id)).all()
+        for user_id in session.exec(select(col(User.id))).all()
     }
 
 
