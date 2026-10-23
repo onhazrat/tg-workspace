@@ -1761,6 +1761,14 @@
       "value": 200
     },
     {
+      "comment": "Buckets across the visible range: about one per 3 to 4 px of the plot.",
+      "expression": "220",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 27,
+      "name": "TARGET",
+      "value": 220
+    },
+    {
       "comment": "How often subscribers are notified.",
       "expression": "10_000",
       "file": "frontend/src/lib/shared-ticker.ts",

@@ -1046,6 +1046,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "frontend/src/lib/posts/store.ts": "sync",
     "frontend/src/lib/requests/breakdown.ts": "quota",
     "frontend/src/lib/requests/records.ts": "quota",
+    "frontend/src/lib/requests/zoom.ts": "quota",
     "frontend/src/lib/shared-ticker.ts": "server",
     "frontend/src/lib/summaries/retry-choice.ts": "ai",
     "frontend/src/lib/summary-projection.ts": "ai",
