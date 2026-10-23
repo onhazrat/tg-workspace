@@ -4757,6 +4757,11 @@ export type NewPassword = {
 };
 
 /**
+ * Outcome
+ */
+export type Outcome = 'useful' | 'idle' | 'wasted';
+
+/**
  * PartialPublicationResponse
  *
  * The Summary's latest Publication, stopped after some of its Parts.
@@ -14050,6 +14055,14 @@ export type RequestsReadRequestRecordsData = {
          * Kind
          */
         kind?: string | null;
+        /**
+         * Hiddenkinds
+         */
+        hiddenKinds?: Array<string> | null;
+        /**
+         * Hiddenoutcomes
+         */
+        hiddenOutcomes?: Array<Outcome> | null;
         /**
          * Offset
          */

@@ -6976,7 +6976,7 @@
       "get": {
         "tags": ["requests"],
         "summary": "Read Request Records",
-        "description": "One Channel table row's Requests in `[start, end)`, newest first.\n\nName the row by `channel`, a Channel's handle, or by `kind`, the kind of\nan aggregate row (work with no Channel), never both. Each Request is kept\n`recordDays` days, so the range is cut to them. `charged`, `accounts`,\n`leftOut` and `leftOutKinds` are read as on the Breakdown. The outcome\ncounts cover every page.",
+        "description": "One Channel table row's Requests in `[start, end)`, newest first.\n\nName the row by `channel`, a Channel's handle, or by `kind`, the kind of\nan aggregate row (work with no Channel), never both. Each Request is kept\n`recordDays` days, so the range is cut to them. `charged`, `accounts`,\n`leftOut` and `leftOutKinds` are read as on the Breakdown. `hiddenKinds`\nand `hiddenOutcomes` leave those kinds of work and outcomes out. The\noutcome counts cover every page.",
         "operationId": "requests-read_request_records",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -7016,6 +7016,33 @@
             "schema": {
               "anyOf": [{ "type": "string" }, { "type": "null" }],
               "title": "Kind"
+            }
+          },
+          {
+            "name": "hiddenKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Hiddenkinds"
+            }
+          },
+          {
+            "name": "hiddenOutcomes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Outcome" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Hiddenoutcomes"
             }
           },
           {
@@ -12248,6 +12275,11 @@
         "type": "object",
         "required": ["token", "new_password"],
         "title": "NewPassword"
+      },
+      "Outcome": {
+        "type": "string",
+        "enum": ["useful", "idle", "wasted"],
+        "title": "Outcome"
       },
       "PartialPublicationResponse": {
         "properties": {

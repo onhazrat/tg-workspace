@@ -2097,6 +2097,30 @@ def test_a_channels_requests_read_the_tabs_range_and_filters(
     )
 
 
+def test_a_channels_requests_leave_out_the_hidden_kinds_and_outcomes(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: ignore `hiddenOutcomes`; ignore `hiddenKinds`.
+
+    The sheet reads the whole tab filter, server-side so its pages stay whole.
+    """
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+
+    answer = _requests(
+        client, superuser_token_headers, channel=CHANNEL, hiddenOutcomes=["wasted"]
+    )
+    assert _outcomes(answer) == (2, 1, 1, 0)
+    assert sorted(r["outcome"] for r in answer["records"]) == ["idle", "useful"]
+
+    answer = _requests(
+        client, superuser_token_headers, channel=CHANNEL, hiddenKinds=["single"]
+    )
+    assert (_outcomes(answer), answer["records"]) == ((0, 0, 0, 0), [])
+
+
 @pytest.mark.parametrize(
     "row", [{}, {"channel": CHANNEL, "kind": "probe"}], ids=["neither", "both"]
 )

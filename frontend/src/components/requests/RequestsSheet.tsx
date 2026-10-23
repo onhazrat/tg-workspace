@@ -1,8 +1,10 @@
 /**
  * A Channel table row's own Requests (RQS-10): a click on the row opens them
  * in a sheet, newest first, within the tab's range and the week each Request
- * is kept. The Charged/Uncharged choice and the Accounts narrow them as they
- * narrow the row. Grouping them into retry chains is out of scope (spec).
+ * is kept. The whole tab filter narrows them as it narrows the row: Charged,
+ * the Accounts, hidden kinds and outcomes, the Channels left out, all asked
+ * of the server so its pages stay whole. Grouping them into retry chains is
+ * out of scope (spec).
  */
 import { useInfiniteQuery } from "@tanstack/react-query"
 import {
@@ -22,6 +24,7 @@ import {
   type ChannelRow,
   fmt,
   kindMeta,
+  leftOutQuery,
   OUTCOMES,
   type Outcome,
   type RequestsFilter,
@@ -43,7 +46,7 @@ export function RequestsSheet({
   /** The row opened, or null while the sheet is shut. */
   row: ChannelRow | null
   range: { start: number; end: number }
-  filter: Pick<RequestsFilter, "charged" | "accounts">
+  filter: RequestsFilter
   onClose: () => void
 }) {
   const query = {
@@ -51,6 +54,9 @@ export function RequestsSheet({
     end: new Date(range.end).toISOString(),
     charged: filter.charged,
     accounts: [...filter.accounts],
+    hiddenKinds: [...filter.hiddenKinds].sort(),
+    hiddenOutcomes: [...filter.hiddenOutcomes].sort(),
+    ...leftOutQuery(filter.leftOut),
     ...(row ? rowQuery(row) : {}),
   }
   const { data, hasNextPage, fetchNextPage } = useInfiniteQuery({
@@ -83,6 +89,7 @@ export function RequestsSheet({
         <RequestList
           aggregate={row?.aggregate ?? false}
           pages={data?.pages}
+          hiddenOutcomes={filter.hiddenOutcomes}
           onMore={hasNextPage ? () => fetchNextPage() : undefined}
         />
       </SheetContent>
@@ -107,10 +114,13 @@ function columnsOf(records: RequestRecord[], aggregate: boolean) {
 export function RequestList({
   aggregate,
   pages,
+  hiddenOutcomes = new Set(),
   onMore,
 }: {
   aggregate: boolean
   pages: RequestRecordsResponse[] | undefined
+  /** Outcomes the tab hides: the server left them out, so no count shows. */
+  hiddenOutcomes?: ReadonlySet<Outcome>
   onMore?: () => void
 }) {
   if (!pages?.length)
@@ -119,7 +129,7 @@ export function RequestList({
   const show = columnsOf(records, aggregate)
   return (
     <div className="space-y-3 px-4 pb-6 text-[12px]">
-      <Counts answer={pages[0]} />
+      <Counts answer={pages[0]} hidden={hiddenOutcomes} />
       {records.length === 0 ? (
         <p className="text-app-ink/50">No Requests in this range.</p>
       ) : (
@@ -162,7 +172,13 @@ export function RequestList({
   )
 }
 
-function Counts({ answer }: { answer: RequestRecordsResponse }) {
+function Counts({
+  answer,
+  hidden,
+}: {
+  answer: RequestRecordsResponse
+  hidden: ReadonlySet<Outcome>
+}) {
   return (
     <div
       data-testid="requests-record-counts"
@@ -171,7 +187,7 @@ function Counts({ answer }: { answer: RequestRecordsResponse }) {
       <span className="font-semibold text-app-ink">
         {fmt(answer.total)} Requests
       </span>
-      {OUTCOMES.map((o) => (
+      {OUTCOMES.filter((o) => !hidden.has(o.id)).map((o) => (
         <span key={o.id} className="flex items-center gap-1">
           <OutcomeIcon outcome={o.id} />
           {fmt(answer[o.id])} {o.id}

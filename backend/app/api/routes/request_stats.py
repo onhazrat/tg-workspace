@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import SessionDep, require_permission
 from app.core.config import settings
 from app.core.permissions import Permission
+from app.core.request_recording import Outcome
 from app.schemas.request_stats import (
     AccountRequestTotals,
     ChannelRequestTotals,
@@ -186,6 +187,10 @@ def read_request_records(
     picked: PickedDep,
     channel: str | None = None,
     kind: str | None = None,
+    hidden_kinds: Annotated[list[str] | None, Query(alias="hiddenKinds")] = None,
+    hidden_outcomes: Annotated[
+        list[Outcome] | None, Query(alias="hiddenOutcomes")
+    ] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> RequestRecordsResponse:
@@ -194,13 +199,22 @@ def read_request_records(
     Name the row by `channel`, a Channel's handle, or by `kind`, the kind of
     an aggregate row (work with no Channel), never both. Each Request is kept
     `recordDays` days, so the range is cut to them. `charged`, `accounts`,
-    `leftOut` and `leftOutKinds` are read as on the Breakdown. The outcome
-    counts cover every page.
+    `leftOut` and `leftOutKinds` are read as on the Breakdown. `hiddenKinds`
+    and `hiddenOutcomes` leave those kinds of work and outcomes out. The
+    outcome counts cover every page.
     """
     if (channel is None) == (kind is None):
         raise HTTPException(status_code=422, detail="name a channel or a kind")
     lo, hi = _range(start, end)
-    page = request_records(session, lo, hi, (channel, kind), picked, (offset, limit))
+    page = request_records(
+        session,
+        lo,
+        hi,
+        (channel, kind),
+        picked,
+        (offset, limit),
+        (hidden_kinds or (), [o.value for o in hidden_outcomes or ()]),
+    )
     emails = account_emails(
         session, (r.account_id for r in page.records if r.account_id)
     )

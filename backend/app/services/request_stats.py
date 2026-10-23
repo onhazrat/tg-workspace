@@ -815,12 +815,15 @@ def request_records(
     row: tuple[str | None, str | None],
     picked: Picked,
     page: tuple[int, int],
+    hidden: tuple[Sequence[str], Sequence[str]] = ((), ()),
 ) -> RecordsPage:
     """The Requests of one Channel table row in `[start, end)`, newest first.
 
     `row` is `(channel, None)` for a Channel's row or `(None, kind)` for an
     aggregate row, matched as the totals key them, so a Handle check naming
     a Channel stays on the Handle checks row. `page` is `(offset, limit)`.
+    `hidden` is `(kinds, outcomes)` the tab hides: they leave the list and
+    its counts, so every page stays whole.
     """
     week = utc_now() - timedelta(days=settings.REQUEST_RECORD_DAYS)
     start = max(start, week.replace(second=0, microsecond=0))
@@ -833,6 +836,10 @@ def request_records(
     else:
         within += [on_row.is_(None), col(RequestRecordRow.kind) == kind]
     outcome = col(RequestRecordRow.outcome)
+    within += [
+        col(RequestRecordRow.kind).not_in(hidden[0]),
+        outcome.not_in(hidden[1]),
+    ]
     counts = sa_select(outcome, func.count()).where(*within)
     grouped = _filtered(counts, RequestRecordRow, picked).group_by(outcome)
     outcomes = Counter({o: int(n) for o, n in session.execute(grouped).all()})

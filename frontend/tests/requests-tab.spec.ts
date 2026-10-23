@@ -943,6 +943,28 @@ test("a row click opens its Requests in a sheet, in the tab's range", async ({
   expect((seen.at(-1) as URL).searchParams.get("kind")).toBe("probe")
 })
 
+test("the sheet reads the hidden kinds and outcomes and the Channels left out", async ({
+  page,
+}) => {
+  await mockBreakdown(page)
+  const seen = await mockRecords(page)
+  await page.goto("/?tab=requests")
+  await page.getByRole("checkbox", { name: "Show Directory probe" }).uncheck()
+  await kinds(page).getByRole("button", { name: "Wasted", exact: true }).click()
+  await page.getByRole("checkbox", { name: "Pick @chan01" }).uncheck()
+  await row(page, "@chan00").getByText("@chan00").click()
+
+  const counts = page
+    .getByTestId("requests-sheet")
+    .getByTestId("requests-record-counts")
+  await expect(counts).toContainText("250 Requests")
+  await expect(counts).not.toContainText("wasted")
+  const asked = (seen.at(-1) as URL).searchParams
+  expect(asked.getAll("hiddenKinds")).toEqual(["probe"])
+  expect(asked.getAll("hiddenOutcomes")).toEqual(["wasted"])
+  expect(asked.getAll("leftOut")).toEqual(["chan01"])
+})
+
 test("the Settings Usage panel links to the tab", async ({ page }) => {
   await mockBreakdown(page)
   await page.goto("/admin")

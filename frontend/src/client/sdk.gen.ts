@@ -2683,8 +2683,9 @@ export const requestsReadRequestTrend = <ThrowOnError extends boolean = true>(op
  * Name the row by `channel`, a Channel's handle, or by `kind`, the kind of
  * an aggregate row (work with no Channel), never both. Each Request is kept
  * `recordDays` days, so the range is cut to them. `charged`, `accounts`,
- * `leftOut` and `leftOutKinds` are read as on the Breakdown. The outcome
- * counts cover every page.
+ * `leftOut` and `leftOutKinds` are read as on the Breakdown. `hiddenKinds`
+ * and `hiddenOutcomes` leave those kinds of work and outcomes out. The
+ * outcome counts cover every page.
  */
 export const requestsReadRequestRecords = <ThrowOnError extends boolean = true>(options: Options<RequestsReadRequestRecordsData, ThrowOnError>): RequestResult<RequestsReadRequestRecordsResponses, RequestsReadRequestRecordsErrors, ThrowOnError, 'data'> => (options.client ?? client).get<RequestsReadRequestRecordsResponses, RequestsReadRequestRecordsErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',
