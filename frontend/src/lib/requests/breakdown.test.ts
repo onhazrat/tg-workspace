@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import type { ChannelRequestTotals, RequestTotals } from "@/client"
+import type {
+  AccountRequestTotals,
+  ChannelRequestTotals,
+  RequestTotals,
+} from "@/client"
 import {
+  accountColor,
+  accountRows,
+  COMPARE_KINDS,
   channelColumns,
   channelRows,
   chargedCounts,
@@ -207,5 +214,66 @@ describe("the range", () => {
       rangeText(Date.parse("2026-10-01T06:30:00Z"), day("2026-10-02")),
     ).toBe("from 2026-10-01 06:30 to 2026-10-02 00:00")
     expect(rangeText(0, day("2026-10-02"))).toBe("until 2026-10-02 00:00")
+  })
+})
+
+const onAccount = (
+  accountId: string,
+  kind: string,
+  useful: number,
+  idle: number,
+  wasted: number,
+): AccountRequestTotals => ({
+  ...totals(kind, useful, idle, wasted),
+  accountId,
+  email: `${accountId}@example.com`,
+})
+
+describe("the Accounts (RQS-05)", () => {
+  const byAccount = [
+    onAccount("a", "auto", 10, 5, 1),
+    onAccount("a", "bulk", 4, 0, 0),
+    onAccount("b", "auto", 30, 0, 2),
+  ]
+
+  test("each Account's Requests by kind, busiest first", () => {
+    const rows = accountRows(byAccount, new Set(), new Set())
+    expect(rows.map((r) => [r.id, r.email, r.total])).toEqual([
+      ["b", "b@example.com", 32],
+      ["a", "a@example.com", 20],
+    ])
+    expect(rows[1].byKind).toEqual({ auto: 16, bulk: 4 })
+    expect(rows[1].wasted).toBe(1)
+  })
+
+  test("hidden kinds and outcomes leave the Accounts", () => {
+    const rows = accountRows(byAccount, new Set(["auto"]), new Set(["useful"]))
+    expect(rows.map((r) => [r.id, r.total])).toEqual([
+      ["a", 0],
+      ["b", 0],
+    ])
+    const shown = accountRows(byAccount, new Set(), new Set(["useful"]))
+    expect(shown.find((r) => r.id === "a")?.byKind).toEqual({
+      auto: 6,
+      bulk: 0,
+    })
+  })
+
+  test("an Account keeps its colour whichever are picked", () => {
+    const every = ["a", "b", "c", "d", "e"]
+    expect(accountColor("b", every)).toBe("var(--account-2)")
+    expect(accountColor("e", every)).toBe("var(--account-1)")
+  })
+
+  // The ramp is violet, and so is Bot API (dataviz slot 7). Picking Accounts
+  // hides every Uncharged Request, so Bot API never sits beside an Account.
+  test("the comparison shows only charged kinds, never Bot API", () => {
+    expect(COMPARE_KINDS.map((k) => k.id)).toEqual([
+      "auto",
+      "bulk",
+      "single",
+      "follow",
+      "other",
+    ])
   })
 })

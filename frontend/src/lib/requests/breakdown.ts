@@ -3,7 +3,11 @@
  * table, the Channel table, the totals and the range. No React, so every rule
  * is pinned by `breakdown.test.ts`.
  */
-import type { ChannelRequestTotals, RequestTotals } from "@/client"
+import type {
+  AccountRequestTotals,
+  ChannelRequestTotals,
+  RequestTotals,
+} from "@/client"
 import { floorToMinute } from "@/lib/analysis-window"
 import { DAY_MS } from "@/lib/scope/window"
 import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
@@ -19,12 +23,14 @@ export const OUTCOMES: { id: Outcome; label: string }[] = [
 
 /**
  * What every part of the tab reads (spec, "Tab-wide state"). One value, so
- * the trend and the tables hide the same kinds and outcomes; the Accounts and
- * the Channels left out join it in later tickets.
+ * the trend and the tables hide the same kinds and outcomes; the Channels
+ * left out join it in RQS-04.
  */
 export interface RequestsFilter {
   bound: TimeBound
   charged: ChargedFilter
+  /** Picked Accounts' ids: their charged Requests alone (RQS-05). */
+  accounts: readonly string[]
   hiddenKinds: ReadonlySet<string>
   hiddenOutcomes: ReadonlySet<Outcome>
 }
@@ -32,6 +38,7 @@ export interface RequestsFilter {
 export const initialRequestsFilter = (): RequestsFilter => ({
   bound: { mode: "live", start: -30 * DAY_MS },
   charged: "all",
+  accounts: [],
   hiddenKinds: new Set(),
   hiddenOutcomes: new Set(),
 })
@@ -234,6 +241,52 @@ export function listChannels(
         : sign * (MEASURE[sort](a) - MEASURE[sort](b)),
     )
 }
+
+export interface AccountRow extends Tally {
+  id: string
+  /** Blank for an Account deleted since. */
+  email: string
+  /** The shown Requests of each kind this Account paid for. */
+  byKind: Record<string, number>
+}
+
+/** Each Account's charged Requests, busiest first (RQS-05). */
+export function accountRows(
+  byAccount: readonly AccountRequestTotals[],
+  hiddenKinds: ReadonlySet<string>,
+  hiddenOutcomes: ReadonlySet<Outcome>,
+): AccountRow[] {
+  const rows = new Map<string, AccountRow>()
+  for (const part of byAccount) {
+    const row = rows.get(part.accountId) ?? {
+      ...emptyTally(),
+      id: part.accountId,
+      email: part.email,
+      byKind: {},
+    }
+    const tally = hiddenKinds.has(part.kind)
+      ? emptyTally()
+      : tallyOf(part, hiddenOutcomes)
+    addTo(row, tally, new Set())
+    row.byKind[part.kind] = (row.byKind[part.kind] ?? 0) + tally.total
+    rows.set(part.accountId, row)
+  }
+  return [...rows.values()].sort((a, b) => b.total - a.total)
+}
+
+/**
+ * The comparison's kind columns: only charged work is an Account's. Picking
+ * Accounts hides every Uncharged Request, so Bot API, violet like the
+ * Account ramp, never sits beside an Account.
+ */
+export const COMPARE_KINDS = KINDS.filter((k) => k.charged)
+
+/** Steps on the violet Account ramp, `--account-1` to `--account-4`. */
+const ACCOUNT_STEPS = 4
+
+/** An Account's ramp step, by its place among every Account, so picking never repaints it. */
+export const accountColor = (id: string, every: readonly string[]) =>
+  `var(--account-${(Math.max(0, every.indexOf(id)) % ACCOUNT_STEPS) + 1})`
 
 /** The filter bar's choice counts, from the unfiltered Breakdown. */
 export function chargedCounts(byKind: readonly RequestTotals[]) {
