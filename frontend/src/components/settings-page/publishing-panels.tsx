@@ -11,7 +11,12 @@ import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { usePublishLogsQuery } from "@/hooks/useLogs"
 import { usePublishing } from "@/hooks/usePublishing"
-import type { BotValidation, DestValidation } from "@/lib/bots/publishing-model"
+import {
+  type BotChat,
+  type BotValidation,
+  type DestValidation,
+  notYetAdded,
+} from "@/lib/bots/publishing-model"
 import type { BotCredential, ChatDestination, PublishLog } from "@/types"
 import {
   ConfirmButton,
@@ -21,12 +26,61 @@ import {
   FormInput,
   FormPill,
   ListTable,
+  Note,
   RowAction,
   rowClass,
   Status,
 } from "./kit"
 
 type LookUp = (typed: string, currentName: string) => Promise<string | null>
+type Browse = () => Promise<{ chats: BotChat[]; error?: string }>
+
+/**
+ * The chats a bot heard from lately, each a button that picks it. The Bot
+ * API cannot list a bot's chats, so a quiet chat is missing until something
+ * happens in it; the note says so.
+ */
+function ChatPicker({
+  onBrowse,
+  onPick,
+}: {
+  onBrowse: Browse
+  onPick: (chat: BotChat) => void
+}) {
+  const [found, setFound] = useState<Awaited<ReturnType<Browse>>>()
+  const [busy, setBusy] = useState(false)
+  const browse = async () => {
+    setBusy(true)
+    setFound(await onBrowse())
+    setBusy(false)
+  }
+  return (
+    <div className="space-y-1">
+      <RowAction disabled={busy} onClick={() => void browse()}>
+        {busy ? "Looking…" : "Show chats your bot can see"}
+      </RowAction>
+      {found && <FormError>{found.error}</FormError>}
+      {found && !found.error && (
+        <>
+          <ul className="flex flex-wrap gap-1">
+            {found.chats.map((c) => (
+              <li key={c.chatId}>
+                <RowAction label={`Pick ${c.name}`} onClick={() => onPick(c)}>
+                  {c.name} <span className="text-app-ink/50">{c.type}</span>
+                </RowAction>
+              </li>
+            ))}
+          </ul>
+          <Note>
+            {found.chats.length ? "" : "Nothing new found. "}
+            Telegram keeps only the last 24 hours of a bot's activity. Post in a
+            missing chat, or add the bot to it again, and it shows up here.
+          </Note>
+        </>
+      )}
+    </div>
+  )
+}
 
 /**
  * The add form both tables open: an id field that looks the name up as it is
@@ -42,6 +96,7 @@ function AddForm({
   nameLabel,
   saveLabel,
   onLookUp,
+  onBrowse,
   onAdd,
 }: {
   pill: string
@@ -52,6 +107,7 @@ function AddForm({
   nameLabel: string
   saveLabel: string
   onLookUp: LookUp
+  onBrowse?: Browse
   onAdd: (id: string, name: string) => Promise<unknown>
 }) {
   const [open, setOpen] = useState(false)
@@ -83,6 +139,15 @@ function AddForm({
   }
   return (
     <FormPill label={pill} heading={heading} open={open} onOpenChange={setOpen}>
+      {onBrowse && (
+        <ChatPicker
+          onBrowse={onBrowse}
+          onPick={(c) => {
+            setId(c.chatId)
+            setName(c.name)
+          }}
+        />
+      )}
       <FormInput
         type={secret ? "password" : "text"}
         label={idLabel}
@@ -261,6 +326,7 @@ export function DestinationsView({
   hasBot,
   validation,
   onLookUp,
+  onBrowse,
   onAdd,
   onCheck,
   onTest,
@@ -271,6 +337,8 @@ export function DestinationsView({
   hasBot: boolean
   validation: Record<string, DestValidation>
   onLookUp: LookUp
+  /** The chats the bot heard from lately; absent with no bot to ask. */
+  onBrowse?: Browse
   onAdd: (chatId: string, name: string) => Promise<unknown>
   onCheck: (dest: ChatDestination) => void
   onTest: (dest: ChatDestination) => void
@@ -286,6 +354,17 @@ export function DestinationsView({
         nameLabel="Destination name"
         saveLabel="Save destination"
         onLookUp={onLookUp}
+        onBrowse={
+          hasBot && onBrowse
+            ? async () => {
+                const found = await onBrowse()
+                return {
+                  ...found,
+                  chats: notYetAdded(found.chats, destinations),
+                }
+              }
+            : undefined
+        }
         onAdd={onAdd}
       />
       <ListTable
@@ -375,6 +454,7 @@ export function Destinations() {
         hasBot={p.bots.length > 0}
         validation={validation}
         onLookUp={p.lookUpChatName}
+        onBrowse={p.listBotChats}
         onAdd={async (chatId, name) =>
           void check(await p.addDestination(chatId, name))
         }
