@@ -30,8 +30,9 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
@@ -43,6 +44,7 @@ from sqlmodel import Session, col, select
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import Outcome, RequestKind, drain
+from app.models import User
 from app.models_tg import RequestDaily, RequestHourly, RequestRecordRow, utc_now
 from app.services.quota import resolve_charge_owner, usage_rows
 from app.services.settings_registry import REQUEST_ROLLUP_KEY
@@ -366,6 +368,9 @@ class Breakdown:
     by_kind: dict[str, Totals] = field(default_factory=dict)
     #: Keyed by (Channel, kind); a Channel of `None` is an aggregate row.
     by_channel: dict[tuple[str | None, str], Totals] = field(default_factory=dict)
+    #: Keyed by (Account, kind): each Account's charged Requests alone, as an
+    #: Uncharged one is no Account's spend (RQS-05).
+    by_account: dict[tuple[uuid.UUID, str], Totals] = field(default_factory=dict)
 
 
 Span = tuple[datetime, datetime]
@@ -427,10 +432,20 @@ def _widen(start: datetime, end: datetime, kept: Kept) -> Span:
     return start, end
 
 
-def _filtered(query: Any, model: Any, charged: ChargedFilter) -> Any:
-    """The tab's filters, the same on every tier and on every endpoint."""
+def _filtered(
+    query: Any, model: Any, charged: ChargedFilter, accounts: Sequence[uuid.UUID]
+) -> Any:
+    """The tab's filters, the same on every tier and on every endpoint.
+
+    Picking Accounts keeps their charged Requests alone: no Account pays for
+    an Uncharged one, even one made for its sync (RQS-05).
+    """
     if charged != "all":
         query = query.where(col(model.charged).is_(charged == "charged"))
+    if accounts:
+        query = query.where(
+            col(model.charged).is_(True), col(model.account_id).in_(accounts)
+        )
     return query
 
 
@@ -439,7 +454,11 @@ def _requests(model: Any) -> Any:
 
 
 def request_breakdown(
-    session: Session, start: datetime, end: datetime, charged: ChargedFilter
+    session: Session,
+    start: datetime,
+    end: datetime,
+    charged: ChargedFilter,
+    accounts: Sequence[uuid.UUID] = (),
 ) -> Breakdown:
     """Totals by kind and by Channel for `[start, end)`, naive UTC to the minute."""
     days, cut = _split([_widen(start, end, _kept())], _DAY)
@@ -454,7 +473,7 @@ def request_breakdown(
         if not spans:
             continue
         within = or_(*((col(moment) >= a) & (col(moment) < b) for a, b in spans))
-        _fold(session, breakdown, model, within, charged)
+        _fold(session, breakdown, model, within, charged, accounts)
     return breakdown
 
 
@@ -464,20 +483,36 @@ def _fold(
     model: Any,
     within: Any,
     charged: ChargedFilter,
+    accounts: Sequence[uuid.UUID],
 ) -> None:
     """Add one tier's rows inside `within` to the Breakdown."""
-    keys = [model.kind, _totals_channel(model), model.outcome, model.charged]
+    keys = [
+        model.kind,
+        _totals_channel(model),
+        model.outcome,
+        model.charged,
+        model.account_id,
+    ]
     query = sa_select(
         *keys, _requests(model), _sum(model.new_posts), _sum(model.repeated_posts)
     ).where(within)
-    for kind, channel, outcome, is_charged, n, new, repeated in session.execute(
-        _filtered(query, model, charged).group_by(*keys)
+    for kind, channel, outcome, is_charged, account, n, new, repeated in (
+        session.execute(_filtered(query, model, charged, accounts).group_by(*keys))
     ).all():
-        for totals in (
+        parts = [
             breakdown.by_kind.setdefault(kind, Totals()),
             breakdown.by_channel.setdefault((channel, kind), Totals()),
-        ):
+        ]
+        if is_charged and account is not None:
+            parts.append(breakdown.by_account.setdefault((account, kind), Totals()))
+        for totals in parts:
             totals.add(outcome, is_charged, int(n), int(new), int(repeated))
+
+
+def account_emails(session: Session, ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Each Account's email; an Account deleted since is left out."""
+    users = session.exec(select(User).where(col(User.id).in_(set(ids)))).all()
+    return {user.id: user.email for user in users}
 
 
 @dataclass
@@ -498,7 +533,11 @@ _GRID = datetime(2000, 1, 1)
 
 
 def request_trend(
-    session: Session, start: datetime, end: datetime, charged: ChargedFilter
+    session: Session,
+    start: datetime,
+    end: datetime,
+    charged: ChargedFilter,
+    accounts: Sequence[uuid.UUID] = (),
 ) -> list[TrendBucket]:
     """`[start, end)` in buckets at the finest tier kept for each stretch.
 
@@ -538,7 +577,7 @@ def request_trend(
         keys = [bucket_of, model.kind, model.charged, model.outcome]
         query = sa_select(*keys, _requests(model)).where(moment >= lo, moment < hi)
         for at, kind, is_charged, outcome, n in session.execute(
-            _filtered(query, model, charged).group_by(*keys)
+            _filtered(query, model, charged, accounts).group_by(*keys)
         ).all():
             first = max(_as_datetime(at), lo)
             bucket = buckets.setdefault(

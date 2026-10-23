@@ -948,7 +948,7 @@
       "comment": "Rows per delete, each its own transaction, so a backlog never holds one long transaction that pins the vacuum horizon (see `prune_finished_jobs`).",
       "expression": "5000",
       "file": "backend/app/services/request_stats.py",
-      "line": 222,
+      "line": 224,
       "name": "REQUEST_DELETE_BATCH",
       "value": 5000
     },

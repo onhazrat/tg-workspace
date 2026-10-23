@@ -54,6 +54,55 @@ export type AiKeySaveResponse = {
 };
 
 /**
+ * AccountRequestTotals
+ *
+ * One kind of work charged to one Account. `email` is blank for an
+ * Account deleted since.
+ */
+export type AccountRequestTotals = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Charged
+     */
+    charged: number;
+    /**
+     * Newposts
+     */
+    newPosts: number;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number;
+    /**
+     * Accountid
+     */
+    accountId: string;
+    /**
+     * Email
+     */
+    email: string;
+};
+
+/**
  * ActiveSyncJobSummary
  */
 export type ActiveSyncJobSummary = {
@@ -6181,6 +6230,10 @@ export type RequestBreakdownResponse = {
      * Bychannel
      */
     byChannel: Array<ChannelRequestTotals>;
+    /**
+     * Byaccount
+     */
+    byAccount: Array<AccountRequestTotals>;
 };
 
 /**
@@ -13747,6 +13800,10 @@ export type RequestsReadRequestBreakdownData = {
          * Charged
          */
         charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
     };
     url: '/api/v1/requests/breakdown';
 };
@@ -13785,6 +13842,10 @@ export type RequestsReadRequestTrendData = {
          * Charged
          */
         charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
     };
     url: '/api/v1/requests/trend';
 };

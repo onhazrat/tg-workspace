@@ -4,6 +4,7 @@ Gated on `QUOTA_READ_ANY`, the Permission that already reads every account's
 quota usage: these are the same Requests, broken down further.
 """
 
+import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Annotated
@@ -14,6 +15,7 @@ from app.api.deps import SessionDep, require_permission
 from app.core.config import settings
 from app.core.permissions import Permission
 from app.schemas.request_stats import (
+    AccountRequestTotals,
     ChannelRequestTotals,
     RequestBreakdownResponse,
     RequestTotals,
@@ -23,6 +25,7 @@ from app.schemas.request_stats import (
 from app.services.request_stats import (
     ChargedFilter,
     Totals,
+    account_emails,
     request_breakdown,
     request_trend,
 )
@@ -67,14 +70,18 @@ def read_request_breakdown(
     start: datetime,
     end: datetime,
     charged: Annotated[ChargedFilter, Query()] = "all",
+    accounts: Annotated[list[uuid.UUID] | None, Query()] = None,
 ) -> RequestBreakdownResponse:
-    """Requests in `[start, end)` by kind of work and by Channel.
+    """Requests in `[start, end)` by kind of work, by Channel and by Account.
 
     Times are cut to the minute and read as UTC when they carry no zone.
-    `charged` keeps only Charged or only Uncharged Requests.
+    `charged` keeps only Charged or only Uncharged Requests. `accounts` keeps
+    only the Requests charged to those Accounts. `byAccount` counts each
+    Account's charged Requests alone.
     """
     lo, hi = _range(start, end)
-    breakdown = request_breakdown(session, lo, hi, charged)
+    breakdown = request_breakdown(session, lo, hi, charged, accounts or ())
+    emails = account_emails(session, (a for a, _ in breakdown.by_account))
     return RequestBreakdownResponse(
         start=lo,
         end=hi,
@@ -91,6 +98,19 @@ def read_request_breakdown(
                 key=lambda item: (-item[1].requests, item[0][0] or "", item[0][1]),
             )
         ],
+        byAccount=[
+            AccountRequestTotals.model_validate(
+                {
+                    **_totals(kind, totals),
+                    "accountId": account,
+                    "email": emails.get(account, ""),
+                }
+            )
+            for (account, kind), totals in sorted(
+                breakdown.by_account.items(),
+                key=lambda item: (str(item[0][0]), item[0][1]),
+            )
+        ],
     )
 
 
@@ -105,6 +125,7 @@ def read_request_trend(
     start: datetime,
     end: datetime,
     charged: Annotated[ChargedFilter, Query()] = "all",
+    accounts: Annotated[list[uuid.UUID] | None, Query()] = None,
 ) -> RequestTrendResponse:
     """Requests in `[start, end)` over time, by kind of work and outcome.
 
@@ -112,7 +133,7 @@ def read_request_trend(
     minutes inside the last week, an hour inside the last `hourlyDays` days, a
     day before. A range cut finer than its stretch allows is widened to that
     grain; otherwise the first and last buckets are cut to the range. Times
-    and `charged` are read as on the Breakdown.
+    `charged` and `accounts` are read as on the Breakdown.
     """
     lo, hi = _range(start, end)
     return RequestTrendResponse(
@@ -121,6 +142,6 @@ def read_request_trend(
         hourlyDays=settings.REQUEST_HOURLY_DAYS,
         buckets=[
             RequestTrendBucket.model_validate(asdict(bucket))
-            for bucket in request_trend(session, lo, hi, charged)
+            for bucket in request_trend(session, lo, hi, charged, accounts or ())
         ],
     )

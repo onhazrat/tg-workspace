@@ -6774,7 +6774,7 @@
       "get": {
         "tags": ["requests"],
         "summary": "Read Request Breakdown",
-        "description": "Requests in `[start, end)` by kind of work and by Channel.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests.",
+        "description": "Requests in `[start, end)` by kind of work, by Channel and by Account.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests. `accounts` keeps\nonly the Requests charged to those Accounts. `byAccount` counts each\nAccount's charged Requests alone.",
         "operationId": "requests-read_request_breakdown",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -6808,6 +6808,21 @@
               "default": "all",
               "title": "Charged"
             }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
+            }
           }
         ],
         "responses": {
@@ -6836,7 +6851,7 @@
       "get": {
         "tags": ["requests"],
         "summary": "Read Request Trend",
-        "description": "Requests in `[start, end)` over time, by kind of work and outcome.\n\nEach bucket is the finest the stored totals allow for its stretch: 5\nminutes inside the last week, an hour inside the last `hourlyDays` days, a\nday before. A range cut finer than its stretch allows is widened to that\ngrain; otherwise the first and last buckets are cut to the range. Times\nand `charged` are read as on the Breakdown.",
+        "description": "Requests in `[start, end)` over time, by kind of work and outcome.\n\nEach bucket is the finest the stored totals allow for its stretch: 5\nminutes inside the last week, an hour inside the last `hourlyDays` days, a\nday before. A range cut finer than its stretch allows is widened to that\ngrain; otherwise the first and last buckets are cut to the range. Times\n`charged` and `accounts` are read as on the Breakdown.",
         "operationId": "requests-read_request_trend",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -6869,6 +6884,21 @@
               "type": "string",
               "default": "all",
               "title": "Charged"
+            }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
             }
           }
         ],
@@ -7166,6 +7196,39 @@
         "required": ["key", "validated"],
         "title": "AIKeySaveResponse",
         "description": "A saved Key, plus what the save-time validation found.\n\n`validated` is redundant with `key.lastValidated` and is here anyway,\nbecause the form needs to say \"we tried and your provider said no\" in the\nmoment. A `null` timestamp alone cannot distinguish that from \"not checked\"."
+      },
+      "AccountRequestTotals": {
+        "properties": {
+          "kind": { "type": "string", "title": "Kind" },
+          "requests": { "type": "integer", "title": "Requests" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "charged": { "type": "integer", "title": "Charged" },
+          "newPosts": { "type": "integer", "title": "Newposts" },
+          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Accountid"
+          },
+          "email": { "type": "string", "title": "Email" }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "requests",
+          "useful",
+          "idle",
+          "wasted",
+          "charged",
+          "newPosts",
+          "repeatedPosts",
+          "accountId",
+          "email"
+        ],
+        "title": "AccountRequestTotals",
+        "description": "One kind of work charged to one Account. `email` is blank for an\nAccount deleted since."
       },
       "ActiveSyncJobSummary": {
         "properties": {
@@ -13420,10 +13483,15 @@
             "items": { "$ref": "#/components/schemas/ChannelRequestTotals" },
             "type": "array",
             "title": "Bychannel"
+          },
+          "byAccount": {
+            "items": { "$ref": "#/components/schemas/AccountRequestTotals" },
+            "type": "array",
+            "title": "Byaccount"
           }
         },
         "type": "object",
-        "required": ["start", "end", "byKind", "byChannel"],
+        "required": ["start", "end", "byKind", "byChannel", "byAccount"],
         "title": "RequestBreakdownResponse",
         "description": "Totals by kind and by Channel for one range, in UTC."
       },

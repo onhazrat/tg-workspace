@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +29,14 @@ class ChannelRequestTotals(RequestTotals):
     channel: str | None
 
 
+class AccountRequestTotals(RequestTotals):
+    """One kind of work charged to one Account. `email` is blank for an
+    Account deleted since."""
+
+    account_id: uuid.UUID = Field(alias="accountId")
+    email: str
+
+
 class RequestBreakdownResponse(BaseModel):
     """Totals by kind and by Channel for one range, in UTC."""
 
@@ -37,6 +46,7 @@ class RequestBreakdownResponse(BaseModel):
     end: datetime
     by_kind: list[RequestTotals] = Field(alias="byKind")
     by_channel: list[ChannelRequestTotals] = Field(alias="byChannel")
+    by_account: list[AccountRequestTotals] = Field(alias="byAccount")
 
 
 class RequestTrendBucket(BaseModel):

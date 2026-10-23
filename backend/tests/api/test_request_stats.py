@@ -212,6 +212,7 @@ def _breakdown(
     start: str | None = None,
     end: str | None = None,
     charged: str = "all",
+    accounts: list[str] | None = None,
 ) -> dict[str, Any]:
     flush_recorded_requests()
     roll_up_request_totals()
@@ -222,6 +223,7 @@ def _breakdown(
             "start": start or day_start,
             "end": end or day_end,
             "charged": charged,
+            "accounts": accounts or [],
         },
         headers=headers,
     )
@@ -1554,6 +1556,43 @@ def test_a_range_is_cut_to_the_minute(
     assert answer["byChannel"] == []
 
 
+def test_picking_accounts_keeps_only_their_charged_requests(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    normal_user_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutations: ignore `accounts`, keep a picked Account's Uncharged
+    Requests, or count Uncharged Requests in `byAccount` (RQS-05)."""
+    other_channel = "rqsother"
+    _refused_then_answered(client, superuser_token_headers, telegram, monkeypatch)
+    _follow(client, normal_user_token_headers, other_channel)
+    telegram.script(_first_page(other_channel), _page_html(other_channel, [7]))
+    _sync(client, normal_user_token_headers, other_channel)
+    me = client.get(f"{API}/users/me", headers=superuser_token_headers).json()
+    them = client.get(f"{API}/users/me", headers=normal_user_token_headers).json()
+
+    everything = _breakdown(client, superuser_token_headers)
+    mine = _row(everything["byAccount"], accountId=me["id"], kind="single")
+    theirs = _row(everything["byAccount"], accountId=them["id"], kind="single")
+    assert (mine["email"], theirs["email"]) == (me["email"], them["email"])
+    # Only charged Requests are an Account's: the refused first attempt is not.
+    assert mine["requests"] == mine["charged"] == mine["useful"] + mine["idle"]
+    assert theirs["requests"] == theirs["charged"] > 0
+
+    picked = _breakdown(
+        client, superuser_token_headers, accounts=[me["id"]], charged="all"
+    )
+    single = _row(picked["byKind"], kind="single")
+    assert (single["requests"], single["wasted"]) == (mine["requests"], 0)
+    assert {r["channel"] for r in picked["byChannel"]} == {CHANNEL}
+    assert {r["accountId"] for r in picked["byAccount"]} == {me["id"]}
+
+    trend = _trend(client, superuser_token_headers, accounts=[me["id"]])["buckets"]
+    assert _by_kind(trend) == _breakdown_by_kind(picked)
+
+
 @pytest.mark.parametrize("route", ["breakdown", "trend"])
 def test_the_requests_endpoints_are_the_operators_alone(
     client: TestClient, normal_user_token_headers: dict[str, str], route: str
@@ -1580,6 +1619,7 @@ def _trend(
     start: str | None = None,
     end: str | None = None,
     charged: str = "all",
+    accounts: list[str] | None = None,
 ) -> dict[str, Any]:
     flush_recorded_requests()
     roll_up_request_totals()
@@ -1590,6 +1630,7 @@ def _trend(
             "start": start or day_start,
             "end": end or day_end,
             "charged": charged,
+            "accounts": accounts or [],
         },
         headers=headers,
     )
