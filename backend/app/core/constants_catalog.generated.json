@@ -236,7 +236,7 @@
       "comment": "A Live end's reach either way: a century, in ms.",
       "expression": "100 * 366 * 86400000",
       "file": "backend/app/schemas/directory.py",
-      "line": 187,
+      "line": 191,
       "name": "_MAX_OFFSET_MS",
       "value": 3162240000000
     },
@@ -244,7 +244,7 @@
       "comment": "A Fixed end's reach either way, inside what a `datetime` holds (years 1 to 9999), so an absurd instant is a 422 and never an overflow.",
       "expression": "62000000000000",
       "file": "backend/app/schemas/directory.py",
-      "line": 190,
+      "line": 194,
       "name": "_MAX_INSTANT_MS",
       "value": 62000000000000
     },
@@ -252,7 +252,7 @@
       "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
       "expression": "500",
       "file": "backend/app/schemas/directory.py",
-      "line": 240,
+      "line": 244,
       "name": "MAX_CONDITION_HANDLES",
       "value": 500
     },
@@ -260,7 +260,7 @@
       "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 243,
+      "line": 247,
       "name": "MAX_SEEDS",
       "value": 10000
     },
@@ -268,7 +268,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 393,
+      "line": 397,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -276,7 +276,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 686,
+      "line": 691,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },
@@ -348,7 +348,7 @@
       "comment": "How long to wait before re-probing a handle that keeps failing. Doubles per consecutive failure and stops growing at a day: a handle that has failed eight times in a row is probably failing for a reason a tighter loop will not fix, and the sweep should not keep spending proxy lanes on it.",
       "expression": "15",
       "file": "backend/app/services/channel_directory.py",
-      "line": 157,
+      "line": 162,
       "name": "RETRY_BACKOFF_BASE_MINUTES",
       "value": 15
     },
@@ -356,7 +356,7 @@
       "comment": "",
       "expression": "24 * 60",
       "file": "backend/app/services/channel_directory.py",
-      "line": 158,
+      "line": 163,
       "name": "RETRY_BACKOFF_MAX_MINUTES",
       "value": 1440
     },
@@ -364,7 +364,7 @@
       "comment": "Priority for a row nothing has ranked. Large rather than 0 so a handle enqueued with a real candidate rank always sorts ahead of one that was not.",
       "expression": "1000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 162,
+      "line": 167,
       "name": "DEFAULT_PROBE_PRIORITY",
       "value": 1000000
     },
@@ -372,7 +372,7 @@
       "comment": "A manual recheck or refresh jumps the queue. The operator is looking at that row, and one that waited behind a freshly generated report would take minutes. **Negative, so it beats a rank rather than tying with one.** `enqueue_handles` numbers a report's candidates from zero, so at `0` this sorted level with the strongest candidate of the newest report and the tie fell to whichever handle was alphabetically first. `test_recheck_jumps_the_queue` passed on exactly that accident. Ticket 03 gave the constant a second caller \u2014 `refresh_entries` \u2014 and the property has to hold by construction for both. **A Priority boost can still beat it** (DPF). The drain order is `priority - priority_boost` and nothing else: an Operator who boosts a batch by more than the gap has said that batch matters more, and an exception here would be one more rule to remember about a number they set themselves.",
       "expression": "-1",
       "file": "backend/app/services/channel_directory.py",
-      "line": 178,
+      "line": 183,
       "name": "RECHECK_PRIORITY",
       "value": -1
     },
@@ -380,7 +380,7 @@
       "comment": "The largest Priority boost either way. `priority` is int4 and the bands sit within a few million of zero, so the difference cannot overflow. With bands 500,000 apart, that leaves two thousand bands of headroom.",
       "expression": "1000000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 183,
+      "line": 188,
       "name": "MAX_PRIORITY_BOOST",
       "value": 1000000000
     },
@@ -388,7 +388,7 @@
       "comment": "Priority for a handle the harvest sweep found in a stored Post (ticket 04). Behind `DEFAULT_PROBE_PRIORITY` and ahead of `REFRESH_PRIORITY`, which is the ladder's own argument applied once more: a handle somebody's report named is worth more than one nobody asked about, and one nobody asked about is still an answer we have never had, which beats re-fetching an answer we hold. **One number for every harvested handle, not a rank**, and that is the fairness mechanism the ticket asks for rather than a shrug. The sweep walks the corpus with a single cursor and no idea who follows what, so the handles it finds arrive in whatever order the Posts did; giving them all one priority makes `dequeue_handles` fall through to its `handle` tiebreak, and an alphabetical order cannot prefer one account's corpus over another's. Ranking them by discovery order would hand the queue to whichever account's Channels the cursor happened to be walking.",
       "expression": "1500000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 200,
+      "line": 205,
       "name": "HARVEST_PRIORITY",
       "value": 1500000
     },
@@ -396,7 +396,7 @@
       "comment": "Priority for a handle an Operator pasted into the Directory (DADD). Behind `HARVEST_PRIORITY` and ahead of `REFRESH_PRIORITY`. A pasted handle is one we have never had an answer for, which beats re-fetching one we hold; but the Directory's own discoveries go first, and an Operator who wants a paste sooner has the Priority boost. One value for the whole paste, like a harvest, so the drain order within it falls through to `handle`.",
       "expression": "1750000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 209,
+      "line": 214,
       "name": "NAMED_PRIORITY",
       "value": 1750000
     },
@@ -404,7 +404,7 @@
       "comment": "Priority for an entry that already has an answer and is only going stale. Larger than `DEFAULT_PROBE_PRIORITY`, so a scheduled refresh drains behind every handle nobody has ever looked at: an answer we hold is worth less than one we have never had. Set on the conclusive branch of `record_probe_result` rather than left alone, because a row keeps the rank of whatever first enqueued it \u2014 and a handle rechecked once carries `RECHECK_PRIORITY`, which would put a week-old entry at the front of the queue for ever after.",
       "expression": "2000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 219,
+      "line": 224,
       "name": "REFRESH_PRIORITY",
       "value": 2000000
     },
@@ -412,7 +412,7 @@
       "comment": "",
       "expression": "200",
       "file": "backend/app/services/channel_directory.py",
-      "line": 232,
+      "line": 237,
       "name": "DEFAULT_PROBE_PAGE_SIZE",
       "value": 200
     },
@@ -420,7 +420,7 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 233,
+      "line": 238,
       "name": "MAX_PROBE_PAGE_SIZE",
       "value": 1000
     },
@@ -428,7 +428,7 @@
       "comment": "The search document's recipe (`search_text`). Raise it when the recipe changes, and `scripts/backfill_directory_search.py` re-indexes older rows.",
       "expression": "1",
       "file": "backend/app/services/channel_directory.py",
-      "line": 239,
+      "line": 244,
       "name": "SEARCH_INDEX_VERSION",
       "value": 1
     },
@@ -436,7 +436,7 @@
       "comment": "Entries re-indexed per statement by retention and the backfill.",
       "expression": "500",
       "file": "backend/app/services/channel_directory.py",
-      "line": 241,
+      "line": 246,
       "name": "SEARCH_BATCH",
       "value": 500
     },
@@ -612,7 +612,7 @@
       "comment": "The most entries Tick all turns into Ticks; above it a view is All matching (ADR-031). The same number as the ticked Seeds a Condition takes.",
       "expression": "10000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1416,
+      "line": 1424,
       "name": "MAX_TICK_ALL",
       "value": 10000
     },
@@ -620,7 +620,7 @@
       "comment": "How many citing Posts \"Why it's here\" quotes; the rest are counted.",
       "expression": "20",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1573,
+      "line": 1581,
       "name": "WHY_LIMIT",
       "value": 20
     },
@@ -628,7 +628,7 @@
       "comment": "How many shared Channels \"Why it's here\" names per relation; the rest are counted.",
       "expression": "5",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1711,
+      "line": 1719,
       "name": "SHARED_LIMIT",
       "value": 5
     },
@@ -636,7 +636,7 @@
       "comment": "How many Channels each side of the panel's neighbour lists shows.",
       "expression": "10",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1767,
+      "line": 1775,
       "name": "NEIGHBOURS_LIMIT",
       "value": 10
     },
@@ -708,7 +708,7 @@
       "comment": "Attempts a media fetch gets. One, meaning no retry ladder at all. `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is sized for a page fetch, where losing the page loses the sync. Media is not that. An avatar is re-resolved on **every page** of a walk, so the page loop already is the retry, and a thumb is cosmetic. Left at the default, one dead avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds to 8 minutes when the avatar cache first moved onto the lane pool, which is what surfaced this. Shared by both image caches rather than spelled twice, because they are twins and `test_image_cache_egress.py` asserts they stay that way.",
       "expression": "1",
       "file": "backend/app/services/network.py",
-      "line": 468,
+      "line": 479,
       "name": "MEDIA_FETCH_RETRIES",
       "value": 1
     },

@@ -143,10 +143,15 @@ PROBE_SCOPE_REASON = (
     "of that public page said."
 )
 
-#: Statuses that mean "Telegram answered, and this is the answer".
-CONCLUSIVE_STATUSES = frozenset({"ok", "unavailable"})
+#: The verdicts that mean "exists, but not followable". `private` (RQS-13) is
+#: a Channel whose page names it and withholds its Posts; every reader that
+#: counted or filtered `unavailable` reads both.
+UNAVAILABLE_STATUSES = frozenset({"unavailable", "private"})
 
-PROBE_STATUSES = frozenset({"ok", "unavailable", "unknown"})
+#: Statuses that mean "Telegram answered, and this is the answer".
+CONCLUSIVE_STATUSES = frozenset({"ok", *UNAVAILABLE_STATUSES})
+
+PROBE_STATUSES = frozenset({*CONCLUSIVE_STATUSES, "unknown"})
 PROBE_KINDS = frozenset({"channel", "group", "bot", "user", "unknown"})
 
 #: How long to wait before re-probing a handle that keeps failing.
@@ -449,7 +454,7 @@ def queue_counts(session: Session) -> dict[str, int]:
         "queued": _count(and_(unknown, attempts == 0)),
         "retrying": _count(and_(unknown, attempts > 0)),
         "resolved": _count(col(DirectoryEntry.status) == "ok"),
-        "unavailable": _count(col(DirectoryEntry.status) == "unavailable"),
+        "unavailable": _count(col(DirectoryEntry.status).in_(UNAVAILABLE_STATUSES)),
     }
 
 
@@ -960,6 +965,12 @@ class ProbeVerdict(NamedTuple):
     repeated_samples: int = 0
 
 
+def _verdict(payload: dict[str, Any]) -> str:
+    if payload.get("isPrivate"):
+        return "private"
+    return "unavailable" if payload.get("isUnavailableOnWebView") else "ok"
+
+
 def record_probe_result(
     session: Session,
     handle: str,
@@ -1051,8 +1062,8 @@ def write_probe_verdict(
     # cost of the confirmation is one extra fetch, once, per Channel that
     # genuinely goes dark.
     was_live = row.status == "ok"
-    row.status = "unavailable" if payload.get("isUnavailableOnWebView") else "ok"
-    provisional_downgrade = was_live and row.status == "unavailable"
+    row.status = _verdict(payload)
+    provisional_downgrade = was_live and row.status != "ok"
     if not provisional_downgrade:
         _apply_page_metadata(row, payload)
     # **A payload with no `samples` key is not an empty sample set** (ticket 02).

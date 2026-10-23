@@ -76,9 +76,13 @@ from app.services.network_settings import (
     resolve_proxy_concurrency,
 )
 from app.services.pgmq import queue_length
-from app.services.scraper import get_channel_info
+from app.services.scraper import get_channel_info, private_channel_info
 from app.services.sync_lanes import DISCOVER_PROBE_LANE
-from app.services.telegram_web import TelegramWebViewUnavailable, normalize_handle
+from app.services.telegram_web import (
+    TelegramChannelPrivate,
+    TelegramWebViewUnavailable,
+    normalize_handle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +171,8 @@ async def _probe_one(
     Its Requests are the Directory's (RQS-12): kind probe, no Account, the
     handle probed. The page fetch is a metadata page, judged once the verdict
     is written: Useful when it changed the entry or brought new sample Posts,
-    Wasted as a missing handle when Telegram has no page for it.
+    Wasted as a missing handle when Telegram has no page for it. A private
+    Channel's page is an answer like any other (RQS-13).
     """
     with (
         attributed(kind=RequestKind.PROBE, channel=normalize_handle(handle)),
@@ -208,6 +213,10 @@ async def _fetch_and_store(
             # are the part every probe used to throw away.
             with_samples=True,
         )
+    except TelegramChannelPrivate as exc:
+        # The handle exists and its Posts are private (RQS-13): the page names
+        # the Channel, and the Directory keeps that answer.
+        info = private_channel_info(exc.page, handle)
     except TelegramWebViewUnavailable as exc:
         # Telegram itself said the handle has no readable web view. That is an
         # answer, not a failure, so it is recorded as a verdict.

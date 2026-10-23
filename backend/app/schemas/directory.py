@@ -14,7 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.schemas.common import ZoomRequest
 from app.schemas.post_filter import check_tree_bounds
 from app.services.analysis_window import TimeBound, TimeMode
-from app.services.channel_directory import MAX_PRIORITY_BOOST, BoostMode
+from app.services.channel_directory import (
+    MAX_PRIORITY_BOOST,
+    PROBE_STATUSES,
+    BoostMode,
+)
 from app.services.directory_reads import (
     SEARCH_FIELDS,
     CitedByCond,
@@ -150,7 +154,7 @@ class DirectoryFlagCondition(_Cond):
 #: Every value the Directory writes to each field, so a typo is a 422 rather
 #: than a Condition that quietly matches nothing.
 IS_VALUES: dict[IsField, frozenset[str]] = {
-    "status": frozenset({"ok", "unavailable", "unknown"}),
+    "status": PROBE_STATUSES,
     "kind": frozenset({"channel", "group", "bot", "user", "unknown"}),
 }
 
@@ -616,7 +620,8 @@ class DirectoryRowResponse(BaseModel):
     videos: int | None = None
     files: int | None = None
     links: int | None = None
-    #: `ok`, `unavailable` or `unknown`: the verdict of the last conclusive probe.
+    #: `ok`, `unavailable`, `private` or `unknown`: the verdict of the last
+    #: conclusive probe.
     status: str | None = None
     #: `channel`, `group`, `bot`, `user` or `unknown`. `DATA_ADMIN` only.
     kind: str | None = None

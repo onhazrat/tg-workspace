@@ -166,11 +166,15 @@ class Page:
         cause: Cause | None,
         error_code: str | None,
         answered: bool,
+        private: bool = False,
     ) -> None:
-        """One attempt that reached the network. `cause` is `None` on success."""
+        """One attempt that reached the network. `cause` is `None` on success.
+
+        `private` says a soft-blocked page was a private Channel's own (RQS-13).
+        """
         who = _attribution.get()
         if cause is Cause.SOFT_BLOCK:
-            cause = self.soft_block
+            cause, error_code = self._soft_blocked(error_code, private=private)
         record_id = uuid.uuid4()
         if self.chain_id is None:
             self.chain_id = record_id
@@ -201,6 +205,15 @@ class Page:
             self._answered.append(record)
         else:
             _push([record])
+
+    def _soft_blocked(
+        self, error_code: str | None, *, private: bool
+    ) -> tuple[Cause | None, str | None]:
+        # A page asking whether a handle exists has its answer in a private
+        # Channel's page: it does. An answer, judged when the page closes.
+        if private and self.soft_block is Cause.MISSING_HANDLE:
+            return None, None
+        return self.soft_block, error_code
 
     def _close(self) -> None:
         # Only the last answered attempt carries the page's Posts; an earlier
@@ -277,7 +290,8 @@ def page(
 
     `soft_block` is the cause a page withholding its messages records. A probe
     asks whether a handle exists, so for it that page answers no:
-    `Cause.MISSING_HANDLE` (RQS-12). RQS-13 tells a private handle apart.
+    `Cause.MISSING_HANDLE` (RQS-12), unless the page is a private Channel's:
+    then the handle exists, and the page is an answer (RQS-13).
     """
     opened = Page(page_type, soft_block)
     token = _page.set(opened)

@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 import httpx
+from bs4 import BeautifulSoup
 from stem import Signal
 from stem.control import Controller
 
@@ -31,7 +32,9 @@ from app.services.proxy_pacing import (
     should_arm_cooldown,
 )
 from app.services.proxy_pool import ProxyLane
+from app.services.telegram_html import counts_subscribers
 from app.services.telegram_web import (
+    TelegramChannelPrivate,
     TelegramWebViewUnavailable,
     is_telegram_web_url,
     is_telegram_web_view_url,
@@ -269,12 +272,20 @@ def _validate_telegram_web_view_page(
     if is_telegram_web_view_url(request_url) and not is_telegram_web_view_url(
         final_url
     ):
-        raise TelegramWebViewUnavailable()
+        raise _soft_block(html)
     if is_telegram_web_view_url(request_url):
         has_action = "tgme_page_action" in html
         has_widgets = "tgme_widget_message_date" in html
         if has_action and not has_widgets:
-            raise TelegramWebViewUnavailable()
+            raise _soft_block(html)
+
+
+def _soft_block(html: str) -> TelegramWebViewUnavailable:
+    """The page is parsed before it is raised (RQS-13): a Channel's own page
+    says the handle exists and its Posts are private."""
+    if counts_subscribers(BeautifulSoup(html, "html.parser")):
+        return TelegramChannelPrivate(html)
+    return TelegramWebViewUnavailable()
 
 
 def _build_diagnostic_client(proxy_url: str | None) -> httpx.AsyncClient:
@@ -509,6 +520,7 @@ def _record_wasted(
         cause=_WASTED_CAUSE.get(outcome, Cause.TRANSPORT_FAULT),
         error_code=_error_code(exc),
         answered=answered,
+        private=isinstance(exc, TelegramChannelPrivate),
     )
 
 

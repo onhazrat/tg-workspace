@@ -26,6 +26,7 @@ from app.services.post_media_parser import (
 from app.services.post_reply_parser import extract_reply
 from app.services.telegram_html import (
     attr_str,
+    counts_subscribers,
     extract_link_spans,
     extract_telegram_html_text,
     message_body_element,
@@ -223,7 +224,7 @@ def _classify_handle_kind(
 
     # A subscriber count with no readable feed is a private or restricted
     # channel: real, but not something we can scrape.
-    if "subscriber" in extra:
+    if counts_subscribers(soup):
         return "channel"
     if "member" in extra:
         return "group"
@@ -424,6 +425,16 @@ def _parse_scrape_channel_page(
         "telemetry": telemetry,
         "fullRequest": {"url": url, "beforeId": before_id},
     }
+
+
+def private_channel_info(page: str, channel_name: str) -> dict[str, Any]:
+    """What a private Channel's own page says about it (RQS-13).
+
+    Its title and kind, from the page the fetch raised on. No Posts, so an
+    empty `samples`; and no photo, which would cost a fetch of its own.
+    """
+    info = _parse_channel_meta(make_soup(page), channel_name)
+    return {**info, "isPrivate": True, "photoUrl": None, "samples": []}
 
 
 async def get_channel_info(

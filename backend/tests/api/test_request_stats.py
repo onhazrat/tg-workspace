@@ -775,6 +775,108 @@ def test_a_probe_of_a_handle_that_does_not_exist_is_wasted_as_a_missing_handle(
     assert (probes["requests"], probes["wasted"]) == (1, 1)
 
 
+def _soft_blocked(page: str) -> BaseException:
+    """What `_fetch_once` raises for a web view page with no message feed.
+
+    The real check, run on `page`, so the fake raises exactly what the fetch
+    would: the seam is `_fetch_once`, and the check is inside it.
+    """
+    try:
+        network._validate_telegram_web_view_page(
+            request_url=_first_page(HANDLE), final_url=_first_page(HANDLE), html=page
+        )
+    except TelegramWebViewUnavailable as exc:
+        return exc
+    raise AssertionError("the page has a message feed")
+
+
+#: `t.me/<handle>` for a Channel that will not show its Posts: its title and
+#: subscriber count, and a button to open it in the app.
+_PRIVATE_PAGE = (
+    '<div class="tgme_page"><div class="tgme_page_title"><span>Hidden</span></div>'
+    '<div class="tgme_page_extra">1 234 subscribers</div>'
+    '<div class="tgme_page_action"><a href="tg://resolve">View in Telegram</a></div>'
+    "</div>"
+)
+#: `t.me/<handle>` for a handle nobody holds: no title, nothing to count.
+_MISSING_PAGE = (
+    '<div class="tgme_page"><div class="tgme_page_action">'
+    '<a href="tg://resolve">Send Message</a></div></div>'
+)
+
+
+def _listed_as(client: TestClient, headers: dict[str, str], status: str) -> list[Any]:
+    """The Directory's entries with this status, as the Operator lists them."""
+    cond = {"type": "is", "field": "status", "value": status}
+    r = client.post(
+        f"{API}/data/directory/list",
+        json={
+            "columns": ["kind"],
+            "filter": {
+                "kind": "group",
+                "op": "and",
+                "children": [{"kind": "atom", "cond": cond}],
+            },
+        },
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    return [
+        (row["handle"], row["kind"], row["displayName"]) for row in r.json()["rows"]
+    ]
+
+
+def test_a_probe_of_a_private_handle_is_useful_then_idle_and_never_wasted(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutations: raise a private Channel's page as a plain soft block; file
+    it as a missing handle on the probe; write it to the Directory as
+    unavailable.
+
+    A private Channel's page is soft-blocked like a missing handle's, but it
+    names the Channel. The probe keeps that answer: the entry says private and
+    holds the title, and the probe that wrote it is Useful. A second probe
+    finding the same is Idle. Neither is Wasted.
+    """
+    telegram.script(_first_page(HANDLE), _soft_blocked(_PRIVATE_PAGE))
+
+    _probe(client)
+
+    assert _listed_as(client, superuser_token_headers, "private") == [
+        (HANDLE, "channel", "Hidden")
+    ]
+    [record] = _recorded(kind="probe")
+    assert (record.outcome, record.cause, record.error_code) == ("useful", None, None)
+
+    _probe(client)
+
+    probes = _probes(client, superuser_token_headers)
+    assert (probes["requests"], probes["useful"], probes["idle"]) == (2, 1, 1)
+    assert probes["wasted"] == 0
+
+
+def test_a_handle_nobody_holds_is_still_a_missing_handle_after_the_parse(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutation: raise every soft-blocked page as a private Channel's.
+
+    The parse tells the two apart; a page naming no Channel stays Wasted as a
+    missing handle, and the Directory says unavailable.
+    """
+    telegram.script(_first_page(HANDLE), _soft_blocked(_MISSING_PAGE))
+
+    _probe(client)
+
+    [record] = _recorded(kind="probe")
+    assert (record.outcome, record.cause) == ("wasted", "missingHandle")
+    listed = _listed_as(client, superuser_token_headers, "unavailable")
+    assert [handle for handle, _kind, _title in listed] == [HANDLE]
+
+
 # --------------------------------------------------------------------------
 # Handle checks, follows, Bot API calls and Other (RQS-14)
 # --------------------------------------------------------------------------
