@@ -1,9 +1,5 @@
 import { Users } from "lucide-react"
-import type {
-  AccountRequestTotals,
-  RequestBreakdownResponse,
-  RequestTrendResponse,
-} from "@/client"
+import type { RequestBreakdownResponse, RequestTrendResponse } from "@/client"
 import { FilterBar } from "@/components/FilterBar"
 import { FacetMenu } from "@/components/filter-tree/FacetMenu"
 import { TimeBoundBar } from "@/components/TimeBoundEditor"
@@ -13,6 +9,7 @@ import {
   accountRows,
   type ChargedFilter,
   channelRows,
+  chargedCounts,
   fmt,
   kindRows,
   type RequestsFilter,
@@ -42,8 +39,7 @@ export function RequestsView({
   filter,
   onFilter,
   range,
-  counts,
-  byAccount = [],
+  unfiltered,
   breakdown,
   trend,
   error,
@@ -53,10 +49,12 @@ export function RequestsView({
   onFilter: (patch: Partial<RequestsFilter>) => void
   /** The range the Breakdown was asked for, epoch ms, cut to the minute. */
   range: { start: number; end: number }
-  /** All, Charged and Uncharged in the range, whichever is picked. */
-  counts?: Record<ChargedFilter, number>
-  /** Every Account's charged Requests in the range, whichever are picked. */
-  byAccount?: readonly AccountRequestTotals[]
+  /**
+   * The range's Breakdown before Charged or any Account narrows it: the
+   * choice counts and each Account's charged Requests.
+   */
+  unfiltered?: RequestBreakdownResponse
+  /** The range's Breakdown, narrowed as picked. */
   breakdown?: RequestBreakdownResponse
   /** The range in buckets, for the daily bars (RQS-06). */
   trend?: RequestTrendResponse
@@ -65,7 +63,12 @@ export function RequestsView({
 }) {
   const { hiddenKinds, hiddenOutcomes } = filter
   const totals = breakdown && statTotals(breakdown.byKind)
-  const everyAccount = accountRows(byAccount, new Set(), new Set())
+  const counts = unfiltered && chargedCounts(unfiltered.byKind)
+  const everyAccount = accountRows(
+    unfiltered?.byAccount ?? [],
+    new Set(),
+    new Set(),
+  )
   // Colours follow the Account, ordered by email, never its rank or the pick.
   const every = [...everyAccount]
     .sort((a, b) => a.email.localeCompare(b.email))

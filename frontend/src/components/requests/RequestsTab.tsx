@@ -14,8 +14,8 @@ import { queryKeys } from "@/hooks/queryKeys"
 import { useIsMobile } from "@/hooks/useMobile"
 import {
   type ChargedFilter,
-  chargedCounts,
   initialRequestsFilter,
+  narrowed,
   type RequestsFilter,
   requestsRange,
 } from "@/lib/requests/breakdown"
@@ -94,10 +94,9 @@ function OperatorRequests() {
   )
   // The unfiltered Breakdown gives the choice and Account counts; the picked
   // one, the rest.
-  const unfiltered = filter.charged === "all" && !filter.accounts.length
   const all = useBreakdown(range, { charged: "all", accounts: [] }, true)
-  const picked = useBreakdown(range, filter, !unfiltered)
-  const shown = unfiltered ? all : picked
+  const picked = useBreakdown(range, filter, narrowed(filter))
+  const shown = narrowed(filter) ? picked : all
   const trend = useTrend(range, filter)
   const phone = useIsMobile()
   return (
@@ -105,8 +104,7 @@ function OperatorRequests() {
       filter={filter}
       onFilter={(patch) => setFilter((f) => ({ ...f, ...patch }))}
       range={range}
-      counts={all.data && chargedCounts(all.data.byKind)}
-      byAccount={all.data?.byAccount}
+      unfiltered={all.data}
       breakdown={shown.data}
       trend={trend.data}
       error={all.error ?? shown.error ?? trend.error}

@@ -13,6 +13,7 @@ import {
   chargedCounts,
   kindRows,
   listChannels,
+  narrowed,
   type Outcome,
   rangeText,
   requestsRange,
@@ -257,6 +258,12 @@ describe("the Accounts (RQS-05)", () => {
       auto: 6,
       bulk: 0,
     })
+  })
+
+  test("Charged or any Account narrows the Breakdown", () => {
+    expect(narrowed({ charged: "all", accounts: [] })).toBe(false)
+    expect(narrowed({ charged: "uncharged", accounts: [] })).toBe(true)
+    expect(narrowed({ charged: "all", accounts: ["a"] })).toBe(true)
   })
 
   test("an Account keeps its colour whichever are picked", () => {

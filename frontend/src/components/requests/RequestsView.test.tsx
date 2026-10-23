@@ -65,7 +65,7 @@ function Harness(
         setFilter(next)
       }}
       range={RANGE}
-      counts={{ all: 1000, charged: 100, uncharged: 900 }}
+      unfiltered={BREAKDOWN}
       breakdown={BREAKDOWN}
       {...props}
     />
@@ -153,7 +153,7 @@ describe("RequestsView", () => {
 
   test("the Accounts facet counts each one's charged Requests, and picking two compares them", () => {
     const seen: RequestsFilter[] = []
-    render(<Harness seen={seen} byAccount={BREAKDOWN.byAccount} />)
+    render(<Harness seen={seen} />)
     expect(screen.queryByTestId("requests-uncharged-hidden")).toBeNull()
     fireEvent.click(screen.getByTestId("requests-accounts"))
     expect(screen.getByTestId("requests-accounts-count-b").textContent).toBe(

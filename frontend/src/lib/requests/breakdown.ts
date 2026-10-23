@@ -43,6 +43,10 @@ export const initialRequestsFilter = (): RequestsFilter => ({
   hiddenOutcomes: new Set(),
 })
 
+/** Whether the tab reads a narrower Breakdown than the unfiltered one. */
+export const narrowed = (f: Pick<RequestsFilter, "charged" | "accounts">) =>
+  f.charged !== "all" || f.accounts.length > 0
+
 /** `set` with `item` flipped in or out. */
 export function toggled<T>(set: ReadonlySet<T>, item: T): Set<T> {
   const next = new Set(set)
