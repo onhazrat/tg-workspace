@@ -13828,6 +13828,14 @@ export type RequestsReadRequestBreakdownData = {
          * Accounts
          */
         accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
     };
     url: '/api/v1/requests/breakdown';
 };
@@ -13870,6 +13878,14 @@ export type RequestsReadRequestTrendData = {
          * Accounts
          */
         accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
     };
     url: '/api/v1/requests/trend';
 };

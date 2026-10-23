@@ -463,19 +463,38 @@ def _widen(start: datetime, end: datetime, kept: Kept) -> Span:
     return start, end
 
 
-def _filtered(
-    query: Any, model: Any, charged: ChargedFilter, accounts: Sequence[uuid.UUID]
-) -> Any:
+@dataclass(frozen=True)
+class Picked:
+    """What the tab narrows every number to, besides the range."""
+
+    charged: ChargedFilter = "all"
+    accounts: Sequence[uuid.UUID] = ()
+    #: Channels left out, by handle (RQS-04).
+    left_out: Sequence[str] = ()
+    #: Aggregate rows left out, by kind: the work with no Channel (RQS-04).
+    left_out_kinds: Sequence[str] = ()
+
+
+def _filtered(query: Any, model: Any, picked: Picked) -> Any:
     """The tab's filters, the same on every tier and on every endpoint.
 
     Picking Accounts keeps their charged Requests alone: no Account pays for
-    an Uncharged one, even one made for its sync (RQS-05).
+    an Uncharged one, even one made for its sync (RQS-05). A Channel left out
+    takes its own row with it, never an aggregate row's Requests that name its
+    handle: a Handle check of it stays a Handle check (RQS-04).
     """
-    if charged != "all":
-        query = query.where(col(model.charged).is_(charged == "charged"))
-    if accounts:
+    if picked.charged != "all":
+        query = query.where(col(model.charged).is_(picked.charged == "charged"))
+    if picked.accounts:
         query = query.where(
-            col(model.charged).is_(True), col(model.account_id).in_(accounts)
+            col(model.charged).is_(True), col(model.account_id).in_(picked.accounts)
+        )
+    channel = _totals_channel(model)
+    if picked.left_out:
+        query = query.where(channel.is_(None) | channel.not_in(picked.left_out))
+    if picked.left_out_kinds:
+        query = query.where(
+            channel.is_not(None) | col(model.kind).not_in(picked.left_out_kinds)
         )
     return query
 
@@ -488,8 +507,7 @@ def request_breakdown(
     session: Session,
     start: datetime,
     end: datetime,
-    charged: ChargedFilter,
-    accounts: Sequence[uuid.UUID] = (),
+    picked: Picked = Picked(),  # noqa: B008
 ) -> Breakdown:
     """Totals by kind and by Channel for `[start, end)`, naive UTC to the minute."""
     days, cut = _split([_widen(start, end, _kept())], _DAY)
@@ -504,7 +522,7 @@ def request_breakdown(
         if not spans:
             continue
         within = or_(*((col(moment) >= a) & (col(moment) < b) for a, b in spans))
-        _fold(session, breakdown, model, within, charged, accounts)
+        _fold(session, breakdown, model, within, picked)
     return breakdown
 
 
@@ -513,8 +531,7 @@ def _fold(
     breakdown: Breakdown,
     model: Any,
     within: Any,
-    charged: ChargedFilter,
-    accounts: Sequence[uuid.UUID],
+    picked: Picked,
 ) -> None:
     """Add one tier's rows inside `within` to the Breakdown."""
     keys = [
@@ -532,7 +549,7 @@ def _fold(
         *_syncs(model),
     ).where(within)
     for kind, channel, outcome, is_charged, account, n, new, repeated, *runs in (
-        session.execute(_filtered(query, model, charged, accounts).group_by(*keys))
+        session.execute(_filtered(query, model, picked).group_by(*keys))
     ).all():
         parts = [
             breakdown.by_kind.setdefault(kind, Totals()),
@@ -578,8 +595,7 @@ def request_trend(
     session: Session,
     start: datetime,
     end: datetime,
-    charged: ChargedFilter,
-    accounts: Sequence[uuid.UUID] = (),
+    picked: Picked = Picked(),  # noqa: B008
 ) -> list[TrendBucket]:
     """`[start, end)` in buckets at the finest tier kept for each stretch.
 
@@ -619,7 +635,7 @@ def request_trend(
         keys = [bucket_of, model.kind, model.charged, model.outcome]
         query = sa_select(*keys, _requests(model)).where(moment >= lo, moment < hi)
         for at, kind, is_charged, outcome, n in session.execute(
-            _filtered(query, model, charged, accounts).group_by(*keys)
+            _filtered(query, model, picked).group_by(*keys)
         ).all():
             first = max(_as_datetime(at), lo)
             bucket = buckets.setdefault(

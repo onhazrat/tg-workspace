@@ -24,6 +24,7 @@ from app.schemas.request_stats import (
 )
 from app.services.request_stats import (
     ChargedFilter,
+    Picked,
     Totals,
     account_emails,
     request_breakdown,
@@ -38,6 +39,22 @@ def _utc_minute(moment: datetime) -> datetime:
     if moment.tzinfo is not None:
         moment = moment.astimezone(UTC).replace(tzinfo=None)
     return moment.replace(second=0, microsecond=0)
+
+
+def _picked(
+    charged: ChargedFilter = "all",
+    accounts: Annotated[list[uuid.UUID] | None, Query()] = None,
+    left_out: Annotated[list[str] | None, Query(alias="leftOut")] = None,
+    left_out_kinds: Annotated[list[str] | None, Query(alias="leftOutKinds")] = None,
+) -> Picked:
+    """`charged` keeps only Charged or only Uncharged Requests. `accounts`
+    keeps only the Requests charged to those Accounts. `leftOut` drops those
+    Channels' rows, by handle, and `leftOutKinds` the rows of those kinds'
+    work with no Channel."""
+    return Picked(charged, accounts or (), left_out or (), left_out_kinds or ())
+
+
+PickedDep = Annotated[Picked, Depends(_picked)]
 
 
 def _range(start: datetime, end: datetime) -> tuple[datetime, datetime]:
@@ -71,18 +88,18 @@ def read_request_breakdown(
     session: SessionDep,
     start: datetime,
     end: datetime,
-    charged: Annotated[ChargedFilter, Query()] = "all",
-    accounts: Annotated[list[uuid.UUID] | None, Query()] = None,
+    picked: PickedDep,
 ) -> RequestBreakdownResponse:
     """Requests in `[start, end)` by kind of work, by Channel and by Account.
 
     Times are cut to the minute and read as UTC when they carry no zone.
     `charged` keeps only Charged or only Uncharged Requests. `accounts` keeps
-    only the Requests charged to those Accounts. `byAccount` counts each
-    Account's charged Requests alone.
+    only the Requests charged to those Accounts. `leftOut` drops those
+    Channels, by handle, and `leftOutKinds` the rows of those kinds' work with
+    no Channel. `byAccount` counts each Account's charged Requests alone.
     """
     lo, hi = _range(start, end)
-    breakdown = request_breakdown(session, lo, hi, charged, accounts or ())
+    breakdown = request_breakdown(session, lo, hi, picked)
     emails = account_emails(session, (a for a, _ in breakdown.by_account))
     return RequestBreakdownResponse(
         start=lo,
@@ -126,8 +143,7 @@ def read_request_trend(
     session: SessionDep,
     start: datetime,
     end: datetime,
-    charged: Annotated[ChargedFilter, Query()] = "all",
-    accounts: Annotated[list[uuid.UUID] | None, Query()] = None,
+    picked: PickedDep,
 ) -> RequestTrendResponse:
     """Requests in `[start, end)` over time, by kind of work and outcome.
 
@@ -135,7 +151,8 @@ def read_request_trend(
     minutes inside the last week, an hour inside the last `hourlyDays` days, a
     day before. A range cut finer than its stretch allows is widened to that
     grain; otherwise the first and last buckets are cut to the range. Times
-    `charged` and `accounts` are read as on the Breakdown.
+    `charged`, `accounts`, `leftOut` and `leftOutKinds` are read as on the
+    Breakdown.
     """
     lo, hi = _range(start, end)
     return RequestTrendResponse(
@@ -144,6 +161,6 @@ def read_request_trend(
         hourlyDays=settings.REQUEST_HOURLY_DAYS,
         buckets=[
             RequestTrendBucket.model_validate(asdict(bucket))
-            for bucket in request_trend(session, lo, hi, charged, accounts or ())
+            for bucket in request_trend(session, lo, hi, picked)
         ],
     )

@@ -6774,7 +6774,7 @@
       "get": {
         "tags": ["requests"],
         "summary": "Read Request Breakdown",
-        "description": "Requests in `[start, end)` by kind of work, by Channel and by Account.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests. `accounts` keeps\nonly the Requests charged to those Accounts. `byAccount` counts each\nAccount's charged Requests alone.",
+        "description": "Requests in `[start, end)` by kind of work, by Channel and by Account.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests. `accounts` keeps\nonly the Requests charged to those Accounts. `leftOut` drops those\nChannels, by handle, and `leftOutKinds` the rows of those kinds' work with\nno Channel. `byAccount` counts each Account's charged Requests alone.",
         "operationId": "requests-read_request_breakdown",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -6823,6 +6823,30 @@
               ],
               "title": "Accounts"
             }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
+            }
           }
         ],
         "responses": {
@@ -6851,7 +6875,7 @@
       "get": {
         "tags": ["requests"],
         "summary": "Read Request Trend",
-        "description": "Requests in `[start, end)` over time, by kind of work and outcome.\n\nEach bucket is the finest the stored totals allow for its stretch: 5\nminutes inside the last week, an hour inside the last `hourlyDays` days, a\nday before. A range cut finer than its stretch allows is widened to that\ngrain; otherwise the first and last buckets are cut to the range. Times\n`charged` and `accounts` are read as on the Breakdown.",
+        "description": "Requests in `[start, end)` over time, by kind of work and outcome.\n\nEach bucket is the finest the stored totals allow for its stretch: 5\nminutes inside the last week, an hour inside the last `hourlyDays` days, a\nday before. A range cut finer than its stretch allows is widened to that\ngrain; otherwise the first and last buckets are cut to the range. Times\n`charged`, `accounts`, `leftOut` and `leftOutKinds` are read as on the\nBreakdown.",
         "operationId": "requests-read_request_trend",
         "security": [{ "OAuth2PasswordBearer": [] }],
         "parameters": [
@@ -6899,6 +6923,30 @@
                 { "type": "null" }
               ],
               "title": "Accounts"
+            }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
             }
           }
         ],

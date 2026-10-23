@@ -2645,8 +2645,9 @@ export const quotaLiftQuotaCeiling = <ThrowOnError extends boolean = true>(optio
  *
  * Times are cut to the minute and read as UTC when they carry no zone.
  * `charged` keeps only Charged or only Uncharged Requests. `accounts` keeps
- * only the Requests charged to those Accounts. `byAccount` counts each
- * Account's charged Requests alone.
+ * only the Requests charged to those Accounts. `leftOut` drops those
+ * Channels, by handle, and `leftOutKinds` the rows of those kinds' work with
+ * no Channel. `byAccount` counts each Account's charged Requests alone.
  */
 export const requestsReadRequestBreakdown = <ThrowOnError extends boolean = true>(options: Options<RequestsReadRequestBreakdownData, ThrowOnError>) => (options.client ?? client).get<RequestsReadRequestBreakdownResponses, RequestsReadRequestBreakdownErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',
@@ -2664,7 +2665,8 @@ export const requestsReadRequestBreakdown = <ThrowOnError extends boolean = true
  * minutes inside the last week, an hour inside the last `hourlyDays` days, a
  * day before. A range cut finer than its stretch allows is widened to that
  * grain; otherwise the first and last buckets are cut to the range. Times
- * `charged` and `accounts` are read as on the Breakdown.
+ * `charged`, `accounts`, `leftOut` and `leftOutKinds` are read as on the
+ * Breakdown.
  */
 export const requestsReadRequestTrend = <ThrowOnError extends boolean = true>(options: Options<RequestsReadRequestTrendData, ThrowOnError>) => (options.client ?? client).get<RequestsReadRequestTrendResponses, RequestsReadRequestTrendErrors, ThrowOnError, 'data'>({
     responseStyle: 'data',

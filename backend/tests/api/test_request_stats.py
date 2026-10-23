@@ -213,6 +213,8 @@ def _breakdown(
     end: str | None = None,
     charged: str = "all",
     accounts: list[str] | None = None,
+    left_out: list[str] | None = None,
+    left_out_kinds: list[str] | None = None,
 ) -> dict[str, Any]:
     flush_recorded_requests()
     roll_up_request_totals()
@@ -224,6 +226,8 @@ def _breakdown(
             "end": end or day_end,
             "charged": charged,
             "accounts": accounts or [],
+            "leftOut": left_out or [],
+            "leftOutKinds": left_out_kinds or [],
         },
         headers=headers,
     )
@@ -1643,6 +1647,63 @@ def test_each_sync_and_each_failed_sync_is_counted_on_its_channel(
         assert _syncs(hourly) == (2, 1)
 
 
+def test_the_channels_left_out_leave_the_breakdown_and_the_trend(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutations: ignore `leftOut` or `leftOutKinds` on either endpoint, drop
+    the aggregate rows when leaving out Channels, or leave out a Handle check
+    with the Channel whose handle it checked.
+
+    The Handle check names CHANNEL, but it is the Handle checks row's, so
+    leaving out CHANNEL keeps it; leaving out that row's kind drops it alone.
+    """
+    other = "rqsother"
+    for channel in (CHANNEL, other):
+        _follow(client, superuser_token_headers, channel)
+        telegram.script(_first_page(channel), _page_html(channel, [100]))
+        _sync(client, superuser_token_headers, channel)
+    _check_handle(client, superuser_token_headers, CHANNEL)
+
+    every = _breakdown(client, superuser_token_headers)
+    theirs = _row(every["byChannel"], channel=other, kind="single")
+    checks = _row(every["byChannel"], channel=None, kind="handle")
+
+    without = _breakdown(client, superuser_token_headers, left_out=[CHANNEL])
+    assert {(r["channel"], r["kind"]) for r in without["byChannel"]} == {
+        (other, "single"),
+        (None, "handle"),
+    }
+    assert _row(without["byKind"], kind="single")["requests"] == theirs["requests"]
+    assert _row(without["byChannel"], channel=None, kind="handle") == checks
+    assert _row(without["byKind"], kind="handle") == _row(
+        every["byKind"], kind="handle"
+    )
+    trend = _trend(client, superuser_token_headers, left_out=[CHANNEL])["buckets"]
+    assert _by_kind(trend) == _breakdown_by_kind(without)
+    # The Requests themselves name the handle checked: read them, too. Twelve
+    # minutes hold no whole hour, so they are read from no totals.
+    now = datetime.now(UTC)
+    minutes = _breakdown(
+        client,
+        superuser_token_headers,
+        start=(now - timedelta(minutes=10)).isoformat(),
+        end=(now + timedelta(minutes=2)).isoformat(),
+        left_out=[CHANNEL],
+    )
+    assert minutes["byChannel"] == without["byChannel"]
+
+    no_checks = _breakdown(client, superuser_token_headers, left_out_kinds=["handle"])
+    assert {(r["channel"], r["kind"]) for r in no_checks["byChannel"]} == {
+        (CHANNEL, "single"),
+        (other, "single"),
+    }
+    assert "handle" not in {r["kind"] for r in no_checks["byKind"]}
+    trend = _trend(client, superuser_token_headers, left_out_kinds=["handle"])
+    assert _by_kind(trend["buckets"]) == _breakdown_by_kind(no_checks)
+
+
 @pytest.mark.parametrize("route", ["breakdown", "trend"])
 def test_the_requests_endpoints_are_the_operators_alone(
     client: TestClient, normal_user_token_headers: dict[str, str], route: str
@@ -1670,6 +1731,8 @@ def _trend(
     end: str | None = None,
     charged: str = "all",
     accounts: list[str] | None = None,
+    left_out: list[str] | None = None,
+    left_out_kinds: list[str] | None = None,
 ) -> dict[str, Any]:
     flush_recorded_requests()
     roll_up_request_totals()
@@ -1681,6 +1744,8 @@ def _trend(
             "end": end or day_end,
             "charged": charged,
             "accounts": accounts or [],
+            "leftOut": left_out or [],
+            "leftOutKinds": left_out_kinds or [],
         },
         headers=headers,
     )
