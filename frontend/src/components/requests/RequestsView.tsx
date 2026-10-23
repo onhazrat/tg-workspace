@@ -1,5 +1,9 @@
 import { Users } from "lucide-react"
-import type { RequestBreakdownResponse, RequestTrendResponse } from "@/client"
+import type {
+  RequestBreakdownResponse,
+  RequestSpreadResponse,
+  RequestTrendResponse,
+} from "@/client"
 import { FilterBar } from "@/components/FilterBar"
 import { FacetMenu } from "@/components/filter-tree/FacetMenu"
 import { TimeBoundBar } from "@/components/TimeBoundEditor"
@@ -26,6 +30,7 @@ import { ChannelTable } from "./ChannelTable"
 import { DailyBars } from "./DailyBars"
 import { KindTable } from "./KindTable"
 import { OutcomeChips, StatStrip } from "./parts"
+import { RequestedSpread } from "./RequestedSpread"
 
 const CHOICES: { value: ChargedFilter; label: string }[] = [
   { value: "all", label: "All Requests" },
@@ -47,6 +52,7 @@ export function RequestsView({
   breakdown,
   listed,
   trend,
+  spread,
   error,
   phone = false,
 }: {
@@ -65,6 +71,8 @@ export function RequestsView({
   listed?: RequestBreakdownResponse
   /** The range in buckets, for the daily bars (RQS-06). */
   trend?: RequestTrendResponse
+  /** When Requests were made, for the range picker (RQS-09). */
+  spread?: RequestSpreadResponse
   error?: unknown
   phone?: boolean
 }) {
@@ -123,7 +131,13 @@ export function RequestsView({
               value={filter.bound}
               onChange={(bound) => onFilter({ bound })}
               opts={{ openEnds: true }}
-            />
+            >
+              <RequestedSpread
+                spread={spread}
+                bound={filter.bound}
+                onPick={(bound) => onFilter({ bound })}
+              />
+            </TimeBoundBar>
           </>
         }
         footer={

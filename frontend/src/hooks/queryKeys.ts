@@ -153,6 +153,12 @@ export const queryKeys = {
     accounts: readonly string[],
     leftOut: { leftOut: string[]; leftOutKinds: string[] },
   ) => ["requestTrend", start, end, charged, accounts, leftOut] as const,
+  /** The Requests tab's range picker spread, over everything kept (RQS-09). */
+  requestSpread: (
+    charged: string,
+    accounts: readonly string[],
+    leftOut: { leftOut: string[]; leftOutKinds: string[] },
+  ) => ["requestSpread", charged, accounts, leftOut] as const,
   /**
    * The signed-in account's own Budgets (ticket 24). Not keyed on a day: it
    * always answers for today, and a key holding a date would go stale across a

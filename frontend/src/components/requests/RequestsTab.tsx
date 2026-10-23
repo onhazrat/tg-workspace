@@ -7,6 +7,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import {
   requestsReadRequestBreakdown,
+  requestsReadRequestSpread,
   requestsReadRequestTrend,
 } from "@/client"
 import { useSettingsRegistry } from "@/components/settings-page/registry"
@@ -76,6 +77,23 @@ function useTrend(range: { start: number; end: number }, picked: Picked) {
   })
 }
 
+/** When Requests were made, over everything kept: the range picker's (RQS-09). */
+function useSpread(picked: Picked) {
+  const q = {
+    charged: picked.charged,
+    accounts: [...picked.accounts],
+    ...leftOutQuery(picked.leftOut),
+  }
+  return useQuery({
+    queryKey: queryKeys.requestSpread(q.charged, q.accounts, {
+      leftOut: q.leftOut,
+      leftOutKinds: q.leftOutKinds,
+    }),
+    queryFn: () => requestsReadRequestSpread({ query: q }),
+    placeholderData: keepPreviousData,
+  })
+}
+
 /** Only the Operator reads the Breakdown; anyone else is told so. */
 export default function RequestsTab() {
   const registry = useSettingsRegistry()
@@ -107,6 +125,7 @@ function OperatorRequests() {
   const listed = useBreakdown(range, { ...filter, leftOut: NONE })
   const shown = useBreakdown(range, filter)
   const trend = useTrend(range, filter)
+  const spread = useSpread(filter)
   const phone = useIsMobile()
   return (
     <RequestsView
@@ -117,6 +136,7 @@ function OperatorRequests() {
       breakdown={shown.data}
       listed={listed.data}
       trend={trend.data}
+      spread={spread.data}
       error={all.error ?? shown.error ?? listed.error ?? trend.error}
       phone={phone}
     />
