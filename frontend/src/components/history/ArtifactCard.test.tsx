@@ -49,6 +49,7 @@ const actions = (): ArtifactActions => ({
   remove: mock(),
   autoRegenerate: mock(),
   autoPublish: mock(),
+  publishTarget: { bots: [], destinations: [], set: mock() },
   useScope: mock(),
 })
 
@@ -275,5 +276,56 @@ describe("artifactChannelsLine", () => {
       "a, b",
     )
     expect(artifactChannelsLine(summary({ scope: null }))).toBe("No channels")
+  })
+})
+
+describe("the Auto-publish target", () => {
+  const target = {
+    bots: [{ id: "bot-1", name: "Newsbot" }],
+    destinations: [{ id: "dest-1", name: "Team chat" }],
+  }
+  function mountWith(artifact: ArtifactListItem) {
+    const a = { ...actions(), publishTarget: { ...target, set: mock() } }
+    render(
+      <ArtifactCard
+        artifact={artifact}
+        actions={a as unknown as ArtifactActions}
+        search=""
+        compact
+      />,
+    )
+    return a.publishTarget.set
+  }
+
+  test("is hidden while Auto-publish is off", () => {
+    mountWith(summary())
+    expect(screen.queryByTestId("publish-target")).toBeNull()
+  })
+
+  test("says nothing is sent until both are chosen, even when compact", () => {
+    mountWith(summary({ autoPublish: true, publishBotId: "bot-1" }))
+    expect(text("publish-target")).toContain(
+      "Nothing is sent until both are chosen.",
+    )
+  })
+
+  test("is quiet once both are chosen", () => {
+    mountWith(
+      summary({
+        autoPublish: true,
+        publishBotId: "bot-1",
+        publishChatId: "dest-1",
+      }),
+    )
+    expect(text("publish-target")).not.toContain("Nothing is sent")
+  })
+
+  test("choosing a chat keeps the bot already chosen", () => {
+    const artifact = summary({ autoPublish: true, publishBotId: "bot-1" })
+    const set = mountWith(artifact)
+    fireEvent.change(screen.getByLabelText("Auto-publish chat"), {
+      target: { value: "dest-1" },
+    })
+    expect(set).toHaveBeenCalledWith(artifact, "bot-1", "dest-1")
   })
 })

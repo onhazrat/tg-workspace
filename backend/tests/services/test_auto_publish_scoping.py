@@ -1003,3 +1003,31 @@ def test_scheduled_metadata_generates_the_rows_the_summary_keeps(
         "🤖 AI Model: test-model\n"
         "📝 Posts Analyzed: 1"
     )
+
+
+@pytest.mark.parametrize("missing", ["publishBotId", "publishChatId"])
+def test_a_missing_target_says_so_in_the_publish_log(
+    session: Session, user: User, no_send: _Spy, missing: str
+) -> None:
+    """Auto-publish on with no bot or no chat is a skipped log, never a silence.
+
+    Through `after_scheduled_attempt`, the worker's real entry point, because
+    that is where the missing-id check used to return quietly. History saved
+    the flag with no target from #112 until the picker came back, and the only
+    symptom was a Summary that never arrived.
+    """
+    _seed_bot(session, "bot-of-mine", user.id)
+    _seed_dest(session, "dest-of-mine", user.id)
+    extra = _extra("bot-of-mine", "dest-of-mine")
+    del extra[missing]
+    summary = _seed_summary(session, user.id, extra)
+
+    asyncio.run(
+        auto_summary.after_scheduled_attempt(summary.id, outcome="succeeded", kind=None)
+    )
+
+    assert no_send.calls == []
+    logs = _publish_logs(session, summary.id)
+    assert [(log.status, log.error) for log in logs] == [
+        ("skipped", auto_summary.NO_PUBLISH_TARGET_DETAIL)
+    ]

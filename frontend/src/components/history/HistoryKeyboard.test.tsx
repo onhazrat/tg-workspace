@@ -87,6 +87,7 @@ function History() {
           remove: (x) => spies.remove(x),
           autoRegenerate: () => {},
           autoPublish: () => {},
+          publishTarget: { bots: [], destinations: [], set: () => {} },
           useScope: () => {},
         }}
         search=""

@@ -35,7 +35,7 @@ import { shortcut, withKey } from "@/lib/keyboard/key-list"
 import { useKeyboardMode, useKeyTitle } from "@/lib/keyboard/mode"
 import { artifactWindowText } from "@/lib/scope/artifact-scope"
 import { highlightText } from "@/lib/utils"
-import type { ArtifactListItem } from "@/types"
+import type { ArtifactListItem, BotCredential, ChatDestination } from "@/types"
 import {
   ARTIFACT_KIND_COLORS,
   ARTIFACT_KIND_LABELS,
@@ -63,6 +63,12 @@ export type ArtifactActions = {
   /** Summaries only: the two scheduled-regeneration flags. */
   autoRegenerate: Handler
   autoPublish: Handler
+  /** Summaries only: where Auto-publish sends, and what it can choose from. */
+  publishTarget: {
+    bots: readonly BotCredential[]
+    destinations: readonly ChatDestination[]
+    set: (artifact: ArtifactListItem, botId: string, chatId: string) => void
+  }
   useScope: (scope: FrozenScope) => void
 }
 
@@ -128,6 +134,67 @@ export function FlagChips({ artifact }: { artifact: ArtifactListItem }) {
         </span>
       )}
     </>
+  )
+}
+
+const TARGET_SELECT =
+  "min-w-0 max-w-40 truncate rounded-md border border-app-ink/15 bg-app-card px-1.5 py-0.5 text-[11px] outline-none focus:border-app-ink/40"
+
+/**
+ * Where Auto-publish sends, while it is on. Shown in the Compact grid too:
+ * without both a bot and a chat the scheduler sends nothing, and History
+ * once saved the flag alone for two months with no sign anything was missing.
+ */
+export function PublishTargetLine({
+  artifact,
+  target,
+}: {
+  artifact: ArtifactListItem
+  target: ArtifactActions["publishTarget"]
+}) {
+  if (artifact.kind !== "summary" || !artifact.autoPublish) return null
+  const bot = artifact.publishBotId ?? ""
+  const chat = artifact.publishChatId ?? ""
+  return (
+    <div
+      data-testid="publish-target"
+      className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-app-ink/60"
+    >
+      <Send size={12} className="shrink-0 opacity-60" />
+      Publishes with
+      <select
+        aria-label="Auto-publish bot"
+        value={bot}
+        onChange={(e) => target.set(artifact, e.target.value, chat)}
+        className={TARGET_SELECT}
+      >
+        <option value="">Choose a bot</option>
+        {target.bots.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+      to
+      <select
+        aria-label="Auto-publish chat"
+        value={chat}
+        onChange={(e) => target.set(artifact, bot, e.target.value)}
+        className={TARGET_SELECT}
+      >
+        <option value="">Choose a chat</option>
+        {target.destinations.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+      </select>
+      {(!bot || !chat) && (
+        <span className="text-amber-700 dark:text-amber-300">
+          Nothing is sent until both are chosen.
+        </span>
+      )}
+    </div>
   )
 }
 

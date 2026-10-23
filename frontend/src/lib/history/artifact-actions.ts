@@ -104,6 +104,19 @@ export async function setSummaryFlag(
   await api.upsertSummary(artifact.id, body as never)
 }
 
+/** Where a Summary's Auto-publish sends; an empty id clears that half. */
+export async function setPublishTarget(
+  artifact: ArtifactListItem,
+  publishBotId: string,
+  publishChatId: string,
+): Promise<void> {
+  if (artifact.kind !== "summary") return
+  await api.upsertSummary(artifact.id, {
+    publishBotId,
+    publishChatId,
+  } as never)
+}
+
 export async function deleteArtifact(
   artifact: ArtifactListItem,
 ): Promise<void> {

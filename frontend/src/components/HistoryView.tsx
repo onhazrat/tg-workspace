@@ -26,6 +26,7 @@ import {
   useArtifacts,
   useInvalidateArtifacts,
 } from "@/hooks/useArtifacts"
+import { useBotsQuery } from "@/hooks/useBots"
 import { useHistoryParams } from "@/hooks/useHistoryParams"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useSessionFlag } from "@/hooks/useSessionFlag"
@@ -33,6 +34,7 @@ import {
   deleteArtifact,
   setArtifactNote,
   setArtifactStarred,
+  setPublishTarget,
   setSummaryFlag,
 } from "@/lib/history/artifact-actions"
 import type { ArtifactListItem, TabType } from "@/types"
@@ -66,6 +68,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
   const counts = useArtifactCounts(params).data
   const invalidate = useInvalidateArtifacts()
   const applyScope = useApplyArtifactScope()
+  const bots = useBotsQuery().data
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -117,6 +120,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     autoRegenerate: (artifact) =>
       void toggleSummaryFlag(artifact, "autoRegenerate"),
     autoPublish: (artifact) => void toggleSummaryFlag(artifact, "autoPublish"),
+    publishTarget: {
+      bots: bots?.credentials ?? [],
+      destinations: bots?.destinations ?? [],
+      set: async (artifact, botId, chatId) => {
+        await setPublishTarget(artifact, botId, chatId)
+        await invalidate()
+      },
+    },
     useScope: applyScope,
   }
 

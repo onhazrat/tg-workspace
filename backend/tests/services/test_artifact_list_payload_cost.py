@@ -420,3 +420,25 @@ def test_the_starred_filter_spans_kinds_and_respects_kind() -> None:
         assert (
             list_artifacts(session, kind="chat", starred=True, user_id=ANY_READER) == []
         )
+
+
+def test_a_summary_carries_its_auto_publish_target() -> None:
+    """History's picker shows the target it would otherwise overwrite blind."""
+    with Session(engine) as session:
+        _seed(session)
+        upsert_summary(
+            session,
+            "art-publishes",
+            {
+                "text": "body",
+                "timestamp": 600,
+                "autoPublish": True,
+                "publishBotId": "bot-1",
+                "publishChatId": "dest-1",
+            },
+            user_id=ANY_READER,
+        )
+        rows = list_artifacts(session, user_id=ANY_READER)
+
+    row = next(r for r in rows if r["id"] == "art-publishes")
+    assert (row["publishBotId"], row["publishChatId"]) == ("bot-1", "dest-1")

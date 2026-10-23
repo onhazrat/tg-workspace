@@ -26,6 +26,7 @@ const actions = {
   remove: mock(),
   autoRegenerate: mock(),
   autoPublish: mock(),
+  publishTarget: { bots: [], destinations: [], set: mock() },
   useScope: mock(),
 } satisfies ArtifactActions
 

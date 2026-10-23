@@ -10,6 +10,7 @@ import {
   ChannelsLine,
   FlagChips,
   KindLabel,
+  PublishTargetLine,
   StatusBadge,
   WindowLine,
 } from "./ArtifactCardParts"
@@ -95,6 +96,7 @@ export const ArtifactCard: React.FC<ArtifactCardProps> = ({
           {highlightText(title, term)}
         </span>
       </button>
+      <PublishTargetLine artifact={artifact} target={actions.publishTarget} />
       {!compact && (
         <>
           <WindowLine artifact={artifact} onUseScope={actions.useScope} />
