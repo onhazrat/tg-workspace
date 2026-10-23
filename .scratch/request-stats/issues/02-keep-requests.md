@@ -4,7 +4,7 @@
 
 **Blocked by:** RQS-01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Both variables are in settings and `.env.example`, defaulting to 7 and 30.
 - [x] Startup refuses an hourly span shorter than the record span, with a message naming both.
@@ -12,3 +12,8 @@
 - [x] The retention inventories declare the two spans for the new tables.
 - [x] Tests run the retention job with a moved clock and read what is left through the API.
 - [x] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+
+## Comments
+
+- 2026-10-23: implemented on `claude/rqs-02` and merged into the integration branch in 33ccea6eb0732f542b9d778bc865b0bbb97a401c (fast-forward).
+  Open: past `REQUEST_RECORD_DAYS` the per-Request rows are gone, so the Breakdown's minute-cut partial hour reads nothing there; handed to RQS-06.
