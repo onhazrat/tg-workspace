@@ -52,7 +52,10 @@ from app.services.request_stats import (
 )
 from app.services.scraper_jobs import clear_jobs_for_tests, create_job, get_job
 from app.services.sync_lanes import DISCOVER_PROBE_LANE
-from app.services.telegram_web import TelegramWebViewUnavailable
+from app.services.telegram_web import (
+    TelegramChannelPrivate,
+    TelegramWebViewUnavailable,
+)
 
 API = settings.API_V1_STR
 CHANNEL = "rqschannel"
@@ -456,6 +459,8 @@ def test_an_attempt_refused_by_a_full_lane_is_not_a_request(
         (_status(429), "turnedAway", "429", True),
         (_status(404), "answeredError", "404", True),
         (TelegramWebViewUnavailable(), "softBlock", "TelegramWebViewUnavailable", True),
+        # A sync wants the Posts; a private Channel's page withholds them (RQS-13).
+        (TelegramChannelPrivate(""), "softBlock", "TelegramChannelPrivate", True),
         (httpx.ConnectError("refused"), "transportFault", "ConnectError", False),
     ],
 )
@@ -894,8 +899,9 @@ def _check_handle(client: TestClient, headers: dict[str, str], handle: str) -> i
     [
         (_page_html(HANDLE, [5]), "idle", None),
         (TelegramWebViewUnavailable(), "wasted", "missingHandle"),
+        (_soft_blocked(_PRIVATE_PAGE), "idle", None),
     ],
-    ids=["answered", "no such handle"],
+    ids=["answered", "no such handle", "a private Channel"],
 )
 def test_a_handle_check_is_its_own_uncharged_aggregate_row(
     client: TestClient,
