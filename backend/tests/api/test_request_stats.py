@@ -809,6 +809,57 @@ def test_a_handle_check_is_its_own_uncharged_aggregate_row(
     assert (checks["requests"], checks[outcome], checks["charged"]) == (1, 1, 0)
 
 
+BOT_TOKEN = "4242:RQSBOT"
+
+
+def test_bot_api_calls_are_their_own_uncharged_kind(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Mutations: leave publishing, bot info or a bot file unattributed.
+
+    Publishing a Summary, asking about a bot and fetching a bot's file all
+    reach Telegram through the Bot API. None of them is charged to a Budget.
+    """
+    r = client.put(
+        f"{API}/data/bot-credentials/rqs-bot",
+        json={"name": "RQS Bot", "token": BOT_TOKEN},
+        headers=superuser_token_headers,
+    )
+    assert r.status_code == 200, r.text
+    bot = f"https://api.telegram.org/bot{BOT_TOKEN}"
+    telegram.script(f"{bot}/sendMessage", '{"ok": true, "result": {"message_id": 1}}')
+    telegram.script(f"{bot}/getMe", '{"ok": true, "result": {"id": 1}}')
+    telegram.script(
+        f"https://api.telegram.org/file/bot{BOT_TOKEN}/photos/a.jpg",
+        (b"\xff\xd8\xff", "image/jpeg"),
+    )
+
+    answers = [
+        client.post(
+            f"{API}/telegram/publish",
+            json={"credentialId": "rqs-bot", "chatId": "-100123", "text": "hello"},
+            headers=superuser_token_headers,
+        ),
+        client.post(
+            f"{API}/telegram/bot-info",
+            json={"credentialId": "rqs-bot", "method": "getMe"},
+            headers=superuser_token_headers,
+        ),
+        client.get(
+            f"{API}/telegram/bot-file/rqs-bot",
+            params={"path": "photos/a.jpg"},
+            headers=superuser_token_headers,
+        ),
+    ]
+
+    assert [a.status_code for a in answers] == [200, 200, 200]
+    assert len(_recorded(kind="botApi")) == 3
+    calls = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="botApi")
+    assert (calls["requests"], calls["charged"]) == (3, 0)
+
+
 # --------------------------------------------------------------------------
 # Totals
 # --------------------------------------------------------------------------

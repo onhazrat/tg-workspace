@@ -261,17 +261,20 @@ async def api_bot_info(
 
         target += f"?{urlencode(body.params)}"
     try:
-        data, telemetry = await fetch_with_retry(
-            target,
-            retries=settings.TELEGRAM_API_RETRIES,
-            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
-            proxies=_resolve_proxies(body, session=session, user_id=current_user.id),
-            tor_auto_rotate=body.tor_auto_rotate,
-            tor_rotation_threshold=body.tor_rotation_threshold,
-            proxy_concurrency=_resolve_proxy_concurrency(
-                body, session=session, user_id=current_user.id
-            ),
-        )
+        with attributed(kind=RequestKind.BOT_API):
+            data, telemetry = await fetch_with_retry(
+                target,
+                retries=settings.TELEGRAM_API_RETRIES,
+                initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
+                proxies=_resolve_proxies(
+                    body, session=session, user_id=current_user.id
+                ),
+                tor_auto_rotate=body.tor_auto_rotate,
+                tor_rotation_threshold=body.tor_rotation_threshold,
+                proxy_concurrency=_resolve_proxy_concurrency(
+                    body, session=session, user_id=current_user.id
+                ),
+            )
         if isinstance(data, str):
             import json
 
@@ -385,14 +388,17 @@ async def api_bot_file(
         # `TELEGRAM_API_RETRIES`, the ladder the other Bot API calls use, not
         # the page-fetch default — losing a page loses a sync, whereas this is
         # one interactive download the browser can ask for again.
-        payload, _telemetry = await fetch_with_retry(
-            file_url,
-            retries=settings.TELEGRAM_API_RETRIES,
-            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
-            proxies=resolve_proxies_for_user(session, current_user.id) or None,
-            proxy_concurrency=resolve_proxy_concurrency(load_network_settings(session)),
-            binary=True,
-        )
+        with attributed(kind=RequestKind.BOT_API):
+            payload, _telemetry = await fetch_with_retry(
+                file_url,
+                retries=settings.TELEGRAM_API_RETRIES,
+                initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
+                proxies=resolve_proxies_for_user(session, current_user.id) or None,
+                proxy_concurrency=resolve_proxy_concurrency(
+                    load_network_settings(session)
+                ),
+                binary=True,
+            )
         content, raw_content_type = payload
         return Response(
             content=content,
