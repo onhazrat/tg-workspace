@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { Toaster } from "sonner"
 import { KeyboardMode } from "@/components/keyboard/KeyboardMode"
+import { listKeys } from "@/lib/keyboard/key-list"
 import { keydowns } from "@/lib/keyboard/keydowns"
 import {
   announcement,
@@ -60,11 +61,14 @@ type Spy = ReturnType<typeof mock<(a: ArtifactListItem) => void>>
 let spies: Record<"open" | "star" | "remove", Spy>
 /** The star's write, as `setArtifactStarred` is called. */
 let starred: [string, boolean][]
+/** What - and + asked of the Compact grid, in order. */
+let compact: boolean[]
 
 function History() {
   const highlight = useHistoryKeys({
     artifacts: ARTIFACTS,
     onOpen: (a) => spies.open(a),
+    onCompact: (on) => compact.push(on),
   })
   return (
     <>
@@ -87,7 +91,14 @@ function History() {
           remove: (x) => spies.remove(x),
           autoRegenerate: () => {},
           autoPublish: () => {},
-          publishTarget: { bots: [], destinations: [], set: () => {} },
+          publishTarget: {
+            bots: [],
+            destinations: [],
+            openFor: null,
+            setOpenFor: () => {},
+            set: () => {},
+            openSettings: () => {},
+          },
           useScope: () => {},
         }}
         search=""
@@ -120,6 +131,7 @@ const type = (...keys: string[]) => {
 beforeEach(() => {
   spies = { open: mock(), star: mock(), remove: mock() }
   starred = []
+  compact = []
   lastHighlight.clear()
   announcement.set("")
   setKeyboardMode(true)
@@ -152,6 +164,17 @@ describe("History's keyboard mode", () => {
     expect(screen.getByTestId("keyboard-announcer").textContent).toBe(
       "Chat: beta, gamma, 2 of 3",
     )
+  })
+
+  test("- and + switch the Compact grid on and off, as on Posts", () => {
+    render(tab())
+    type("-")
+    type("+")
+    expect(compact).toEqual([true, false])
+    expect(listKeys("history")).toContainEqual([
+      "- / +",
+      "compact / full cards",
+    ])
   })
 
   test("Enter opens the Artifact in its tab", () => {

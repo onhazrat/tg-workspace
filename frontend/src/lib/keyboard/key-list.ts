@@ -33,7 +33,7 @@ export type Action = keyof typeof ACTIONS
  * here, so they share the actions' one-key-one-meaning check.
  */
 export const LIST_KEYS = {
-  /** Posts: compact cards; Channels: a smaller card size. */
+  /** Posts and History: compact cards; Channels: a smaller card size. */
   smaller: "-",
   larger: "+",
   /** Posts: more or less on every Post. */
@@ -141,6 +141,7 @@ const LISTS: Record<ListId, { moves: Row[]; actions: Action[] }> = {
     moves: [
       ["j / k", "next / previous item"],
       ["gg / G", "first / last item"],
+      ["- / +", "compact / full cards"],
       ["Enter", "open it in its tab"],
       ["Esc", "drop the highlight"],
     ],

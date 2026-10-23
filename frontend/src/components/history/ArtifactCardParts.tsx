@@ -4,6 +4,9 @@
  * and "Use this Scope".
  */
 import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
   Clock,
   Compass,
   Crosshair,
@@ -11,6 +14,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
   Star,
@@ -39,10 +43,12 @@ import type { ArtifactListItem, BotCredential, ChatDestination } from "@/types"
 import {
   ARTIFACT_KIND_COLORS,
   ARTIFACT_KIND_LABELS,
+  artifactKey,
   channelsMatchingFirst,
   failedAttempts,
   isPendingArtifact,
 } from "./artifact-presentation"
+import { publishPairs, publishTargetOf } from "./history-view-model"
 
 const ICONS = {
   summary: FileText,
@@ -63,11 +69,16 @@ export type ArtifactActions = {
   /** Summaries only: the two scheduled-regeneration flags. */
   autoRegenerate: Handler
   autoPublish: Handler
-  /** Summaries only: where Auto-publish sends, and what it can choose from. */
+  /** Summaries only: the Publish target, and what it can be chosen from. */
   publishTarget: {
     bots: readonly BotCredential[]
     destinations: readonly ChatDestination[]
+    /** The card whose target popover is open, as `kind:id`, or `null`. */
+    openFor: string | null
+    setOpenFor: (key: string | null) => void
     set: (artifact: ArtifactListItem, botId: string, chatId: string) => void
+    /** Settings › Publishing, where bots and Destinations are added. */
+    openSettings: () => void
   }
   useScope: (scope: FrozenScope) => void
 }
@@ -114,7 +125,7 @@ export function StatusBadge({ artifact }: { artifact: ArtifactListItem }) {
 const CHIP =
   "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"
 
-/** A Summary's schedule flags, while they are on. */
+/** Auto-regenerate, while it is on; Auto-publish is `PublishChip`. */
 export function FlagChips({ artifact }: { artifact: ArtifactListItem }) {
   if (artifact.kind !== "summary") return null
   return (
@@ -126,75 +137,135 @@ export function FlagChips({ artifact }: { artifact: ArtifactListItem }) {
           <RefreshCw size={11} /> Auto-regenerates
         </span>
       )}
-      {artifact.autoPublish && (
-        <span
-          className={`${CHIP} bg-blue-500/10 text-blue-700 dark:text-blue-300`}
-        >
-          <Send size={11} /> Auto-publishes
-        </span>
-      )}
     </>
   )
 }
 
-const TARGET_SELECT =
-  "min-w-0 max-w-40 truncate rounded-md border border-app-ink/15 bg-app-card px-1.5 py-0.5 text-[11px] outline-none focus:border-app-ink/40"
+/** Focus the search only where a keyboard is likely: on a phone it hides the list. */
+const finePointer = () =>
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(pointer: fine)").matches
 
 /**
- * Where Auto-publish sends, while it is on. Shown in the Compact grid too:
- * without both a bot and a chat the scheduler sends nothing, and History
- * once saved the flag alone for two months with no sign anything was missing.
+ * Where Auto-publish sends, in the header while it is on: the Destination, or
+ * an amber "choose where" until a bot and a Destination are both saved. A
+ * half that names a deleted bot or Destination counts as missing, because the
+ * scheduler sends nothing for it either. One pick in the popover saves both.
  */
-export function PublishTargetLine({
+export function PublishChip({
   artifact,
   target,
 }: {
   artifact: ArtifactListItem
   target: ArtifactActions["publishTarget"]
 }) {
+  const [query, setQuery] = useState("")
   if (artifact.kind !== "summary" || !artifact.autoPublish) return null
-  const bot = artifact.publishBotId ?? ""
-  const chat = artifact.publishChatId ?? ""
+  const key = artifactKey(artifact)
+  const saved = publishTargetOf(artifact, target.bots, target.destinations)
+  const open = target.openFor === key
+  const pairs = open
+    ? publishPairs(target.bots, target.destinations, query)
+    : []
+  const missing = [
+    target.bots.length === 0 && "a bot",
+    target.destinations.length === 0 && "a Destination",
+  ]
+    .filter(Boolean)
+    .join(" and ")
   return (
-    <div
-      data-testid="publish-target"
-      className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-app-ink/60"
+    <BarPopover
+      open={open}
+      onOpenChange={(open) => {
+        if (open) setQuery("")
+        target.setOpenFor(open ? key : null)
+      }}
+      width="w-80"
+      trigger={
+        <button
+          type="button"
+          title={saved ? `Sent by ${saved.bot.name}` : undefined}
+          className={`${CHIP} max-w-64 ${
+            saved
+              ? "bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 dark:text-blue-300"
+              : "bg-amber-500/15 text-amber-800 ring-1 ring-amber-500/40 hover:bg-amber-500/25 dark:text-amber-300"
+          }`}
+        >
+          {saved ? <Send size={11} /> : <AlertTriangle size={11} />}
+          <span className="truncate">
+            {saved
+              ? `Auto-publishes to ${saved.destination.name}`
+              : "Auto-publish: choose where"}
+          </span>
+          <ChevronDown size={11} className="shrink-0 opacity-60" />
+        </button>
+      }
     >
-      <Send size={12} className="shrink-0 opacity-60" />
-      Publishes with
-      <select
-        aria-label="Auto-publish bot"
-        value={bot}
-        onChange={(e) => target.set(artifact, e.target.value, chat)}
-        className={TARGET_SELECT}
-      >
-        <option value="">Choose a bot</option>
-        {target.bots.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name}
-          </option>
-        ))}
-      </select>
-      to
-      <select
-        aria-label="Auto-publish chat"
-        value={chat}
-        onChange={(e) => target.set(artifact, bot, e.target.value)}
-        className={TARGET_SELECT}
-      >
-        <option value="">Choose a chat</option>
-        {target.destinations.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-          </option>
-        ))}
-      </select>
-      {(!bot || !chat) && (
-        <span className="text-amber-700 dark:text-amber-300">
-          Nothing is sent until both are chosen.
-        </span>
+      {missing ? (
+        <p className="p-1 text-app-ink/60">
+          Auto-publish needs {missing}. Add{" "}
+          {missing.includes(" and ") ? "them" : "one"} in{" "}
+          <button
+            type="button"
+            onClick={target.openSettings}
+            className="font-semibold underline"
+          >
+            Settings › Publishing
+          </button>
+          .
+        </p>
+      ) : (
+        <>
+          <label className="mb-2 flex items-center gap-1.5 rounded-md border border-app-ink/15 bg-app-muted px-2 py-1 focus-within:border-app-ink/40">
+            <Search size={12} className="opacity-50" />
+            <input
+              // biome-ignore lint/a11y/noAutofocus: the popover opens to search.
+              autoFocus={finePointer()}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search Destinations and bots"
+              aria-label="Search Destinations and bots"
+              className="min-w-0 flex-1 bg-transparent outline-none"
+            />
+          </label>
+          {pairs.length === 0 && (
+            <p className="px-2 py-1 text-app-ink/50">Nothing matches.</p>
+          )}
+          {pairs.map(({ bot, destination }) => {
+            const on =
+              bot.id === saved?.bot.id &&
+              destination.id === saved?.destination.id
+            return (
+              <button
+                key={`${destination.id}:${bot.id}`}
+                type="button"
+                aria-pressed={on}
+                onClick={() => {
+                  target.set(artifact, bot.id, destination.id)
+                  target.setOpenFor(null)
+                }}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-app-ink/10 ${
+                  on ? "bg-app-ink/5 font-semibold" : ""
+                }`}
+              >
+                <Check
+                  size={12}
+                  className={`shrink-0 ${on ? "" : "invisible"}`}
+                />
+                <span className="min-w-0">
+                  <span dir="auto" className="block truncate">
+                    {destination.name}
+                  </span>
+                  <span className="block truncate font-mono text-[10px] font-normal text-app-ink/45">
+                    via {bot.name}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </>
       )}
-    </div>
+    </BarPopover>
   )
 }
 

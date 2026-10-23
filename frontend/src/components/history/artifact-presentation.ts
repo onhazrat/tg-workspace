@@ -110,3 +110,6 @@ export function channelsMatchingFirst(
   const hit = (c: string) => c.toLowerCase().includes(term)
   return [...channels.filter(hit), ...channels.filter((c) => !hit(c))]
 }
+
+/** An Artifact's id in History's list: `kind:id`, since ids are per kind. */
+export const artifactKey = (a: ArtifactListItem) => `${a.kind}:${a.id}`

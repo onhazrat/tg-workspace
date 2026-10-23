@@ -1,7 +1,7 @@
 import type { ArtifactListItem } from "@/types"
 import { ArtifactCard } from "./ArtifactCard"
 import type { ArtifactActions } from "./ArtifactCardParts"
-import { artifactKey } from "./HistoryKeyboard"
+import { artifactKey } from "./artifact-presentation"
 import { historyDays } from "./history-view-model"
 
 /**

@@ -49,7 +49,9 @@ logger = logging.getLogger(__name__)
 
 _regenerating: set[str] = set()
 
-NO_PUBLISH_TARGET_DETAIL = "Not published: choose a bot and a chat for Auto-publish."
+NO_PUBLISH_TARGET_DETAIL = (
+    "Not published: choose a bot and a Destination for Auto-publish."
+)
 
 
 def _log_publish_failure(

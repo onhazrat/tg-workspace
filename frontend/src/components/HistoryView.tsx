@@ -1,3 +1,4 @@
+import { getRouteApi } from "@tanstack/react-router"
 import { History as HistoryIcon } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
@@ -15,7 +16,7 @@ import {
   historyEmptyDescription,
   historyShowsEmpty,
   type SummaryFlag,
-  summaryFlagChange,
+  switchSummaryFlag,
   toggleStar,
 } from "@/components/history/history-view-model"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
@@ -38,6 +39,8 @@ import {
   setSummaryFlag,
 } from "@/lib/history/artifact-actions"
 import type { ArtifactListItem, TabType } from "@/types"
+
+const workspaceRoute = getRouteApi("/_tg/")
 
 interface HistoryViewProps {
   /** Restores an artifact's scope and opens the tab that renders it. */
@@ -69,6 +72,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
   const invalidate = useInvalidateArtifacts()
   const applyScope = useApplyArtifactScope()
   const bots = useBotsQuery().data
+  const botList = bots?.credentials ?? []
+  const destinations = bots?.destinations ?? []
+  const navigate = workspaceRoute.useNavigate()
+  // The card whose Publish target popover is open, as `kind:id`.
+  const [targetOpenFor, setTargetOpenFor] = useState<string | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -90,19 +98,16 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
     return () => observer.disconnect()
   }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage])
 
-  const toggleSummaryFlag = async (
-    artifact: ArtifactListItem,
-    flag: SummaryFlag,
-  ) => {
-    const change = summaryFlagChange(artifact, flag)
-    if (!change) return
-    if ("refusal" in change) {
-      toast.error(change.refusal)
-      return
-    }
-    await setSummaryFlag(artifact, flag, change.next)
-    await invalidate()
-  }
+  const toggleSummaryFlag = (artifact: ArtifactListItem, flag: SummaryFlag) =>
+    switchSummaryFlag(artifact, flag, {
+      save: setSummaryFlag,
+      refresh: invalidate,
+      refuse: (reason) => toast.error(reason),
+      // Not before the bots load: an empty list would read as "none saved".
+      openTarget: (key) => bots && setTargetOpenFor(key),
+      bots: botList,
+      destinations,
+    })
 
   const actions: ArtifactActions = {
     open: openArtifact,
@@ -121,12 +126,21 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
       void toggleSummaryFlag(artifact, "autoRegenerate"),
     autoPublish: (artifact) => void toggleSummaryFlag(artifact, "autoPublish"),
     publishTarget: {
-      bots: bots?.credentials ?? [],
-      destinations: bots?.destinations ?? [],
+      bots: botList,
+      destinations,
+      openFor: targetOpenFor,
+      setOpenFor: setTargetOpenFor,
       set: async (artifact, botId, chatId) => {
-        await setPublishTarget(artifact, botId, chatId)
+        try {
+          await setPublishTarget(artifact, botId, chatId)
+        } catch {
+          toast.error("Could not save where Auto-publish sends. Try again.")
+          return
+        }
         await invalidate()
       },
+      openSettings: () =>
+        navigate({ search: { tab: "settings", section: "publishing" } }),
     },
     useScope: applyScope,
   }
@@ -142,7 +156,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
 
   const deleteCopy = deleteDialogCopy(pendingDelete)
 
-  const highlight = useHistoryKeys({ artifacts: rows, onOpen: openArtifact })
+  const highlight = useHistoryKeys({
+    artifacts: rows,
+    onOpen: openArtifact,
+    onCompact: setCompact,
+  })
 
   return (
     <motion.div
