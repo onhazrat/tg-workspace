@@ -132,11 +132,17 @@ class Page:
     _answered: list[RequestRecord] = field(default_factory=list)
     _new_posts: int | None = None
     _repeated_posts: int | None = None
+    _changed: bool = False
 
-    def report_posts(self, new: int, repeated: int) -> None:
-        """How many Posts on the page were new, and how many we already had."""
+    def report_posts(self, new: int, repeated: int, *, changed: bool = False) -> None:
+        """How many Posts on the page were new, and how many we already had.
+
+        `changed` says applying the page wrote something besides new Posts: a
+        stored Post's counters or text, or the Channel's metadata (RQS-11).
+        """
         self._new_posts = new
         self._repeated_posts = repeated
+        self._changed = changed
 
     def record(
         self,
@@ -189,7 +195,7 @@ class Page:
             last = self._answered[-1]
             last.new_posts = self._new_posts
             last.repeated_posts = self._repeated_posts
-            if self._new_posts > 0:
+            if self._new_posts > 0 or self._changed:
                 last.outcome = Outcome.USEFUL.value
         _push(self._answered)
         self._answered = []

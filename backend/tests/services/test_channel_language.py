@@ -210,7 +210,7 @@ def test_an_unchanged_answer_neither_writes_nor_announces() -> None:
 def test_posts_for_an_unknown_channel_are_still_written() -> None:
     """The bulk route accepts Posts for a handle nobody created a Channel for."""
     with Session(engine) as session:
-        assert bulk_upsert_posts_impl([_item(1, PERSIAN)], session) == 1
+        assert bulk_upsert_posts_impl([_item(1, PERSIAN)], session).count == 1
         session.commit()
 
 

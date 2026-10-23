@@ -497,6 +497,9 @@ class _PageApplyResult:
     #: Posts on the page we did not hold, and Posts we already had (RQS-01).
     new_posts: int = 0
     repeated_posts: int = 0
+    #: Applying the page moved a stored Post's counters, changed its text, or
+    #: changed the Channel's metadata (RQS-11).
+    changed: bool = False
 
 
 def _prepare_channel_sync(
@@ -806,6 +809,7 @@ def _refresh_channel_meta(
         val = response.get(field_name)
         if val not in (None, "") and getattr(channel, attr) != val:
             setattr(channel, attr, val)
+            result.changed = True
         if field_name == "displayName" and val:
             result.display_name = val
         if field_name == "photoUrl" and val:
@@ -910,18 +914,19 @@ def _persist_page_posts(
     # only through the refresh, so no pass refreshes a Post past the horizon
     # (REACH-02, REACH-10). The initial pass still re-upserts them, which is
     # why that upsert is told to leave their counters alone.
-    refresh_post_counters(
+    if refresh_post_counters(
         session,
         channel.name,
         [p for p in posts_to_save if p["id"] in existing_on_page],
-    )
+    ):
+        result.changed = True
     if ctx.retrieval_pass in ("incremental", "backfill"):
         posts_to_save = [p for p in posts_to_save if p["id"] not in existing_on_page]
 
     if not posts_to_save:
         return
 
-    bulk_upsert_posts_impl(
+    upserted = bulk_upsert_posts_impl(
         posts_to_save,
         session,
         retrieval_job_id=job_id,
@@ -929,6 +934,8 @@ def _persist_page_posts(
         retrieval_source=job_source,
         stored_counters=False,
     )
+    if upserted.edited:
+        result.changed = True
     touch_sync(session, "posts", commit=False)
     session.commit()
     result.posts_saved = len(posts_to_save)
@@ -1412,7 +1419,11 @@ async def _walk_channel_pages(
                 session_seen_ids=session_seen_ids,
                 before_id=before_id,
             )
-            posts_page.report_posts(page_result.new_posts, page_result.repeated_posts)
+            posts_page.report_posts(
+                page_result.new_posts,
+                page_result.repeated_posts,
+                changed=page_result.changed,
+            )
 
         if page_result.reached_channel_start:
             walk.reached_channel_start = True

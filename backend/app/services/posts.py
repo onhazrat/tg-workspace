@@ -118,7 +118,7 @@ def _counter_fields(item: dict[str, Any], now_ms: int) -> dict[str, Any]:
 
 def refresh_post_counters(
     session: Session, channel_name: str, items: list[dict[str, Any]]
-) -> None:
+) -> bool:
     """Re-observe the counters of stored Posts a scraped page met again (REACH-02).
 
     One `UPDATE` for the page, setting the View count, reaction chips and
@@ -137,9 +137,14 @@ def refresh_post_counters(
       found nothing new must not make every browser refetch. Does not commit.
     * Each refreshed Post is a sighting, which REACH-05 keeps as a View
       observation when the Observation stride selects it.
+
+    Returns whether any View count or reaction chip moved (RQS-11). The
+    observation time always moves, so it is not a change. `before` is the
+    table joined to itself: in an `UPDATE`, a row read through `FROM` is the
+    row as it was before the update.
     """
     if not items:
-        return
+        return False
     now_ms = int(time.time() * 1000)
     rows = []
     for item in items:
@@ -157,12 +162,14 @@ def refresh_post_counters(
         column("reaction_counts", JSONB(none_as_null=True)),
         name="seen",
     ).data(rows)
+    before = aliased(Post)
     refreshed = session.execute(
         update(Post)
         .where(
             col(Post.channel_name) == channel_name,
             col(Post.post_id) == seen.c.post_id,
             col(Post.timestamp) >= now_ms - COUNTER_REFRESH_HORIZON_MS,
+            col(before.id) == col(Post.id),
         )
         # Cast, because a column that is NULL on every row of the page types
         # as text inside `VALUES`, and Postgres refuses text for either column.
@@ -172,17 +179,25 @@ def refresh_post_counters(
             views_observed_at=now_ms,
         )
         .returning(
-            col(Post.id), col(Post.post_id), col(Post.views_count), col(Post.timestamp)
+            col(Post.id),
+            col(Post.post_id),
+            col(Post.views_count),
+            col(Post.timestamp),
+            or_(
+                col(before.views_count).is_distinct_from(col(Post.views_count)),
+                col(before.reaction_counts).is_distinct_from(col(Post.reaction_counts)),
+            ),
         )
         .execution_options(synchronize_session=False)
-    )
+    ).all()
     record_view_observations(
         session,
         (
             Sighting(uuid_, post_id, views, ts, now_ms)
-            for uuid_, post_id, views, ts in refreshed
+            for uuid_, post_id, views, ts, _moved in refreshed
         ),
     )
+    return any(moved for *_, moved in refreshed)
 
 
 def _post_links_from_item(item: dict[str, Any]) -> list[Any] | None:
@@ -299,6 +314,15 @@ def _sighting(post: Post) -> Sighting:
     )
 
 
+@dataclass(frozen=True)
+class Upserted:
+    """What `bulk_upsert_posts_impl` wrote: Posts written, and how many of the
+    already-stored ones had their text changed (RQS-11)."""
+
+    count: int
+    edited: int
+
+
 def bulk_upsert_posts_impl(
     body: list[dict[str, Any]],
     session: Session,
@@ -308,7 +332,7 @@ def bulk_upsert_posts_impl(
     retrieval_source: str | None = None,
     announce_relabels: bool = True,
     stored_counters: bool = True,
-) -> int:
+) -> Upserted:
     """Insert or overwrite each Post the payload names, and label its Channels.
 
     `stored_counters=False` leaves an already-stored Post's View count,
@@ -317,7 +341,7 @@ def bulk_upsert_posts_impl(
     horizon (REACH-10); an import restores an export's counters whatever the
     Post's age, so it keeps the default.
     """
-    count = 0
+    count = edited = 0
     now_ms = int(time.time() * 1000)
     touched: set[str] = set()
     sightings: list[Sighting] = []
@@ -352,6 +376,7 @@ def bulk_upsert_posts_impl(
             # null sends the renderer back to its regex (ADR-022).
             if "link_spans" not in fields and existing.text != was_text:
                 existing.link_spans = None
+            edited += existing.text != was_text
             # Conditional, and that is the whole point: an import restores a
             # whole export and a first sync re-upserts its page, so clearing the
             # flag unconditionally would hand reference extraction every
@@ -423,7 +448,7 @@ def bulk_upsert_posts_impl(
         count += 1
     record_view_observations(session, sightings)
     relabel_channels(session, touched, announce=announce_relabels)
-    return count
+    return Upserted(count, edited)
 
 
 def _unread_page(session: Session, limit: int) -> list[Post]:
@@ -1120,7 +1145,7 @@ def _in_scope(
 
 
 def bulk_upsert_posts(session: Session, body: list[dict[str, Any]]) -> dict[str, int]:
-    count = bulk_upsert_posts_impl(body, session)
+    count = bulk_upsert_posts_impl(body, session).count
     session.commit()
     touch_sync(session, "posts")
     return {"upserted": count}

@@ -1266,7 +1266,7 @@ def import_data(
         # other section, rather than holding the etag's row lock until then.
         counts["posts"] = bulk_upsert_posts_impl(
             payload["posts"], session, announce_relabels=False
-        )
+        ).count
 
     if payload.get("summaries"):
         counts["summaries"] = _import_summaries(

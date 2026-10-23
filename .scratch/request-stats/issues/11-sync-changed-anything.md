@@ -6,12 +6,12 @@
 
 **Status:** ready-for-agent
 
-- [ ] The counter refresh reports whether any value moved.
-- [ ] The initial-pass upsert reports whether any stored Post's text changed.
-- [ ] The metadata refresh reports whether anything changed.
-- [ ] A page is Useful when any of these or a new Post happened, Idle otherwise.
-- [ ] Tests at seam 1 of the spec: Telegram faked at `network._fetch_once`, the work run for real, results read through the Requests API over HTTP after flushing and running the rollup.
-- [ ] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
+- [x] The counter refresh reports whether any value moved.
+- [x] The initial-pass upsert reports whether any stored Post's text changed.
+- [x] The metadata refresh reports whether anything changed.
+- [x] A page is Useful when any of these or a new Post happened, Idle otherwise.
+- [x] Tests at seam 1 of the spec: Telegram faked at `network._fetch_once`, the work run for real, results read through the Requests API over HTTP after flushing and running the rollup.
+- [x] Every new test and guard is mutation-checked, named in the commit body as `Mutation-checked: ...`; no existing guard is loosened.
 
 ## Comments
 

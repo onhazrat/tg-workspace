@@ -25,6 +25,7 @@ the Requests themselves for the minutes left over.
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
@@ -48,6 +49,13 @@ _WATERMARK_OVERLAP = timedelta(minutes=1)
 _HOUR = timedelta(hours=1)
 _DAY = timedelta(days=1)
 
+#: Held from the drain to the commit, so a flush returns only once every
+#: Request buffered before it is written, even one another flush took first.
+#: The worker flushes beside the ledger after its job already reads finished,
+#: and a reader flushing then would otherwise find the buffer empty and read
+#: before that write commits (RQS-11).
+_flush_lock = threading.Lock()
+
 
 def flush_recorded_requests() -> int:
     """Write every buffered Request. Blocking: callers on the loop use a thread.
@@ -56,19 +64,20 @@ def flush_recorded_requests() -> int:
     must not fail the sync it measures. The records it held are lost, which is
     the gap ADR-035 accepts for a crash.
     """
-    records = drain()
-    if not records:
-        return 0
-    try:
-        with Session(engine) as session:
-            session.execute(
-                insert(RequestRecordRow), [asdict(record) for record in records]
-            )
-            session.commit()
-    except Exception:  # noqa: BLE001
-        logger.exception("Requests: could not record %d Request(s)", len(records))
-        return 0
-    return len(records)
+    with _flush_lock:
+        records = drain()
+        if not records:
+            return 0
+        try:
+            with Session(engine) as session:
+                session.execute(
+                    insert(RequestRecordRow), [asdict(record) for record in records]
+                )
+                session.commit()
+        except Exception:  # noqa: BLE001
+            logger.exception("Requests: could not record %d Request(s)", len(records))
+            return 0
+        return len(records)
 
 
 # --------------------------------------------------------------------------

@@ -780,7 +780,7 @@
       "comment": "Every spread's bar count (`BINS` in `components/Spread.tsx`), so one component draws both.",
       "expression": "32",
       "file": "backend/app/services/posts.py",
-      "line": 1132,
+      "line": 1157,
       "name": "VALUE_BINS",
       "value": 32
     },
@@ -1044,7 +1044,7 @@
       "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
       "expression": "900",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1504,
+      "line": 1515,
       "name": "COALESCE_MAX_WAIT_SECONDS",
       "value": 900
     },
@@ -1052,7 +1052,7 @@
       "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
       "expression": "2.0",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1509,
+      "line": 1520,
       "name": "_COALESCE_POLL_SECONDS",
       "value": 2.0
     },

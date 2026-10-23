@@ -17,6 +17,7 @@ The mutation that turns each test red is named on it.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 import types
 import uuid
@@ -31,8 +32,9 @@ from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.core.db import engine
+from app.core.request_recording import page_for_fetch
 from app.models_tg import RequestRecordRow
-from app.services import network
+from app.services import network, request_stats
 from app.services.request_stats import (
     flush_recorded_requests,
     roll_up_request_totals,
@@ -46,17 +48,35 @@ CHANNEL = "rqschannel"
 Response = str | tuple[bytes, str] | BaseException
 
 
-def _page_html(channel: str, post_ids: list[int]) -> str:
+def _page_html(
+    channel: str,
+    post_ids: list[int],
+    *,
+    text: str = "post",
+    views: str | None = None,
+    header: str = "",
+) -> str:
     """A web view page holding these Posts, newest last as Telegram serves them."""
+    counter = f'<span class="tgme_widget_message_views">{views}</span>' if views else ""
     messages = "".join(
         f'<div class="tgme_widget_message" data-post="{channel}/{pid}">'
-        f'<div class="tgme_widget_message_text">post {pid}</div>'
+        f'<div class="tgme_widget_message_text">{text} {pid}</div>'
+        f"{counter}"
         f'<time datetime="{datetime.now(UTC).isoformat()}"></time>'
         f'<a class="tgme_widget_message_date" href="https://t.me/{channel}/{pid}"></a>'
         "</div>"
         for pid in sorted(post_ids)
     )
-    return f"<html><body>{messages}</body></html>"
+    return f"<html><body>{header}{messages}</body></html>"
+
+
+def _subscribers(count: int) -> str:
+    """The Channel header's subscriber counter, as the web view draws it."""
+    return (
+        '<div class="tgme_channel_info"><div class="tgme_channel_info_counter">'
+        f'<span class="counter_value">{count}</span>'
+        '<span class="counter_type">subscribers</span></div></div>'
+    )
 
 
 def _status(code: int) -> httpx.HTTPStatusError:
@@ -456,6 +476,100 @@ def test_a_failed_attempt_is_wasted_with_its_cause_and_a_retry_that_answers_is_n
     assert wasted == 1
 
 
+def _useful_and_idle(client: TestClient, headers: dict[str, str]) -> tuple[int, int]:
+    single = _row(_breakdown(client, headers)["byKind"], kind="single")
+    return single["useful"], single["idle"]
+
+
+@pytest.mark.parametrize(
+    ("again", "useful"),
+    [
+        (_page_html(CHANNEL, [100, 101], views="20"), True),
+        (_page_html(CHANNEL, [100, 101], views="10"), False),
+    ],
+    ids=["views moved", "views held"],
+)
+def test_a_page_that_moved_a_stored_posts_counters_is_useful(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    again: str,
+    useful: bool,
+) -> None:
+    """Mutation: report the counter refresh as never moving anything.
+
+    The second sync meets the two Posts it stored and brings nothing new, but
+    their View count moved from 10 to 20, and that is a write.
+    """
+    _follow(client, superuser_token_headers, CHANNEL)
+    telegram.script(_first_page(), _page_html(CHANNEL, [100, 101], views="10"))
+    _sync(client, superuser_token_headers)
+    before = _useful_and_idle(client, superuser_token_headers)
+
+    telegram.script(_first_page(), again)
+    _sync(client, superuser_token_headers)
+    after = _useful_and_idle(client, superuser_token_headers)
+
+    assert after == (before[0] + useful, before[1] + (not useful))
+
+
+@pytest.mark.parametrize(
+    ("text", "useful"),
+    [("edited", True), ("post", False)],
+    ids=["text changed", "text held"],
+)
+def test_a_first_pass_page_that_edited_a_stored_post_is_useful(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    text: str,
+    useful: bool,
+) -> None:
+    """Mutation: report the initial-pass upsert as never changing a text.
+
+    A first sync stores Post 100 from its first page and meets it again, its
+    words edited, on the next page. Nothing on that page is new.
+    """
+    _follow(client, superuser_token_headers, CHANNEL)
+    telegram.script(_first_page(), _page_html(CHANNEL, [100, 101]))
+    telegram.script(_older_page(100), _page_html(CHANNEL, [100], text=text))
+
+    _sync(client, superuser_token_headers)
+
+    single = _row(_breakdown(client, superuser_token_headers)["byKind"], kind="single")
+    assert (single["newPosts"], single["repeatedPosts"]) == (2, 1)
+    # The first page brought two new Posts; the second is judged by the edit.
+    assert single["useful"] == 1 + useful
+
+
+@pytest.mark.parametrize(
+    ("subscribers", "useful"),
+    [(250, True), (100, False)],
+    ids=["metadata changed", "metadata held"],
+)
+def test_a_page_that_changed_the_channels_metadata_is_useful(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    subscribers: int,
+    useful: bool,
+) -> None:
+    """Mutation: report the metadata refresh as never changing anything."""
+    _follow(client, superuser_token_headers, CHANNEL)
+    page = _page_html(CHANNEL, [100, 101], header=_subscribers(100))
+    telegram.script(_first_page(), page)
+    _sync(client, superuser_token_headers)
+    before = _useful_and_idle(client, superuser_token_headers)
+
+    telegram.script(
+        _first_page(), _page_html(CHANNEL, [100, 101], header=_subscribers(subscribers))
+    )
+    _sync(client, superuser_token_headers)
+    after = _useful_and_idle(client, superuser_token_headers)
+
+    assert after == (before[0] + useful, before[1] + (not useful))
+
+
 def _first_chain() -> uuid.UUID:
     return _recorded(page_type="posts", attempt=1)[0].chain_id
 
@@ -575,6 +689,45 @@ def test_a_request_in_an_hour_already_rolled_up_is_counted(
 
     assert second["requests"] > first["requests"]
     assert second["requests"] == len(_recorded())
+
+
+def test_a_flush_returns_once_every_request_before_it_is_written(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutation: drain the buffer outside the flush lock.
+
+    The worker flushes beside the ledger after the job already reads
+    completed, so a reader's flush can find the buffer empty while that flush
+    is still writing what it took. The reader's flush must wait for it: this
+    raced `test_a_syncs_pictures_are_its_kind_and_uncharged` (RQS-11).
+    """
+    writing = threading.Event()
+    real_asdict = request_stats.asdict
+
+    def slow_asdict(record: Any) -> dict[str, Any]:
+        writing.set()
+        time.sleep(0.3)
+        return real_asdict(record)
+
+    monkeypatch.setattr(request_stats, "asdict", slow_asdict)
+    page_for_fetch(media=True).record(
+        at=datetime.now(UTC),
+        latency_ms=1,
+        lane="direct",
+        web_view=False,
+        cause=None,
+        error_code=None,
+        answered=True,
+    )
+    worker = threading.Thread(target=flush_recorded_requests)
+    worker.start()
+    assert writing.wait(5)
+
+    flush_recorded_requests()
+    with Session(engine) as session:
+        written = session.exec(select(RequestRecordRow)).all()
+    worker.join()
+    assert len(written) == 1
 
 
 # --------------------------------------------------------------------------
