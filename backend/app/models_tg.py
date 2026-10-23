@@ -1953,6 +1953,9 @@ class RequestRecordRow(SQLModel, table=True):
     repeated_posts: int | None = None
     #: On one Request of each sync run, whether that sync failed (RQS-04).
     sync_failed: bool | None = None
+    #: The sync or follow job charged for it, which the ledger check reads
+    #: the charge's day from (RQS-15). No key, as for the Account.
+    job_id: str | None = None
 
 
 class _RequestTotals(SQLModel):

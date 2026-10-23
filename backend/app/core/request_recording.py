@@ -106,6 +106,9 @@ class Attribution:
     budget: str | None = None
     channel: str | None = None
     best_effort: bool = False
+    #: The sync or follow job whose charge pays for this work: the ledger
+    #: charges a job once, on the day it ends (RQS-15).
+    job_id: str | None = None
 
 
 @dataclass
@@ -133,6 +136,7 @@ class RequestRecord:
     #: Set on one Request of each sync run: whether that sync failed (RQS-04).
     #: `None` on every other Request. See `sync_run`.
     sync_failed: bool | None = None
+    job_id: str | None = None
 
 
 @dataclass
@@ -202,6 +206,7 @@ class Page:
             error_code=error_code,
             attempt=self.attempts,
             chain_id=self.chain_id,
+            job_id=who.job_id,
         )
         if cause is None and self is _page.get():
             # Judged when the page closes, once the caller knows what it brought.
@@ -336,6 +341,7 @@ def attributed(
     budget: str | None = None,
     channel: str | None = None,
     best_effort: bool | None = None,
+    job_id: str | None = None,
 ) -> Iterator[None]:
     """Attribute the Requests made inside this block, refining any outer block."""
     current = _attribution.get()
@@ -347,6 +353,7 @@ def attributed(
             budget=budget if budget is not None else current.budget,
             channel=channel if channel is not None else current.channel,
             best_effort=best_effort if best_effort is not None else current.best_effort,
+            job_id=job_id if job_id is not None else current.job_id,
         )
     )
     try:

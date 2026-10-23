@@ -1972,6 +1972,7 @@ async def sync_single_channel(
                 account_id=user_id,
                 budget=budget.value,
                 channel=ch_state.channel_name,
+                job_id=job.job_id,
             ),
             sync_run() as run,
         ):

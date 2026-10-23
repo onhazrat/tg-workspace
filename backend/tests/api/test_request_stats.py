@@ -40,7 +40,7 @@ from app.jobs import retention
 from app.jobs.discover_probe import run_discover_probe_sweep
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.sync_queue import enqueue_sync_job
-from app.models_tg import DirectoryEntry, RequestRecordRow, utc_now
+from app.models_tg import DirectoryEntry, RequestRecordRow, SyncJob, utc_now
 from app.services import network, request_stats
 from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
@@ -1525,7 +1525,7 @@ def test_a_days_charged_requests_equal_the_ledger(
 ) -> None:
     """Mutations: check the recorded Account as it is, so an ownerless sync is
     nobody's; leave out the charged filter; compare per Account only; check
-    today instead of yesterday.
+    today instead of yesterday; record a follow without its job.
 
     A click, a bulk sync, a bulk follow and a sync with no owner, each with a
     picture the ledger never charges. The Requests API's charged total is the
@@ -1550,6 +1550,8 @@ def test_a_days_charged_requests_equal_the_ledger(
 
     assert [r.account_id for r in _stored(kind="single", page_type="posts")][-1] is None
     assert _stored(charged=False), "no uncharged Request to leave out"
+    # The check reads the charge's day from the job: every job names itself.
+    assert {r.kind for r in _stored(charged=True) if r.job_id is None} == set()
     charged = _settled(client, superuser_token_headers)
     assert charged == _ledger_total()
     with Session(engine) as session:
@@ -1592,6 +1594,43 @@ def test_the_ledger_check_reports_a_mismatch(
         "request_ledger_mismatch",
         2,
     )
+
+
+def test_a_sync_across_midnight_is_checked_on_the_day_the_ledger_charged_it(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+    ledger_warnings: _Warnings,
+) -> None:
+    """Mutations: check each Request on its own day; tie no Request to its job.
+
+    The ledger charges a job once, on the day it finished. A sync made today
+    is moved to finish just after midnight, its charge with it: neither day
+    may warn, though its Requests were made today.
+    """
+    telegram.script(_first_page(), _page_html(CHANNEL, [100]))
+    _follow(client, superuser_token_headers, CHANNEL)
+    job_id = _sync(client, superuser_token_headers)["jobId"]
+    charged = _settled(client, superuser_token_headers)
+    assert charged > 0
+    today = datetime.now(UTC).date()
+    tomorrow = today + timedelta(days=1)
+    after_midnight = datetime.combine(tomorrow, datetime.min.time(), tzinfo=UTC)
+    with Session(engine) as session:
+        job = session.get(SyncJob, job_id)
+        assert job is not None
+        job.finished_at = int(
+            (after_midnight + timedelta(seconds=5)).timestamp() * 1000
+        )
+        session.add(job)
+        for row in usage_rows(session, day=today):
+            row.day = tomorrow
+            session.add(row)
+        session.commit()
+
+    assert request_stats.check_request_ledger(today) == 0
+    assert request_stats.check_request_ledger(tomorrow) == 0
+    assert ledger_warnings.records == []
 
 
 # --------------------------------------------------------------------------

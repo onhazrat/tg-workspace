@@ -34,7 +34,7 @@ import uuid
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 from sqlalchemy import Date, Integer, case, cast, delete, func, insert, or_
@@ -47,10 +47,12 @@ from app.core.request_recording import Outcome, RequestKind, drain
 from app.models import User
 from app.models_tg import (
     DirectoryProbeUsage,
+    FollowJob,
     QuotaUsage,
     RequestDaily,
     RequestHourly,
     RequestRecordRow,
+    SyncJob,
     utc_now,
 )
 from app.services.quota import Budget, resolve_charge_owner, usage_rows
@@ -295,30 +297,56 @@ def prune_request_stats(session: Session, now: datetime) -> tuple[int, int]:
 
 
 def _recorded_charges(session: Session, day: date) -> Counter[tuple[Any, str]]:
-    """The day's charged Requests per (who the ledger bills, Budget).
+    """The charged Requests the ledger billed on `day`, per (who, Budget).
 
-    Read from the per-Request rows, the one tier that keeps the Budget; the
-    check runs the day after, well inside `REQUEST_RECORD_DAYS`. An Account
-    that is null or gone is billed to the Operator, as `charge_sync_job` does.
+    Read from the per-Request rows, the one tier that keeps the Budget and
+    the job; the check runs the day after, well inside `REQUEST_RECORD_DAYS`.
+    The ledger charges a job once, as it ends, so a Request is counted on the
+    day its job finished, even made the day before: a sync across midnight
+    is no mismatch. A Request whose job never recorded its end is counted on
+    its own day. An Account that is null or gone is billed to the Operator,
+    as `charge_sync_job` does.
     """
     start = datetime.combine(day, datetime.min.time())
+    at = col(RequestRecordRow.at)
+    job = col(RequestRecordRow.job_id)
+    keys = [col(RequestRecordRow.account_id), col(RequestRecordRow.budget), job]
     rows = session.execute(
-        sa_select(
-            col(RequestRecordRow.account_id),
-            col(RequestRecordRow.budget),
-            func.count(),
-        )
+        sa_select(*keys, cast(at, Date), func.count())
         .where(
             col(RequestRecordRow.charged),
-            col(RequestRecordRow.at) >= start,
-            col(RequestRecordRow.at) < start + _DAY,
+            at < start + _DAY,
+            (at >= start) | job.is_not(None),
         )
-        .group_by(col(RequestRecordRow.account_id), col(RequestRecordRow.budget))
+        .group_by(*keys, cast(at, Date))
     ).all()
+    ended = _job_days(session, {job_id for _, _, job_id, _, _ in rows if job_id})
     charges: Counter[tuple[Any, str]] = Counter()
-    for account_id, budget, n in rows:
-        charges[(resolve_charge_owner(session, account_id), str(budget))] += int(n)
+    for account_id, budget, job_id, made_on, n in rows:
+        if ended.get(job_id, made_on) == day:
+            owner = resolve_charge_owner(session, account_id)
+            charges[(owner, str(budget))] += int(n)
     return charges
+
+
+def _job_days(session: Session, ids: set[str]) -> dict[str | None, date]:
+    """The UTC day each of these sync and follow jobs ended, where it did."""
+    days: dict[str | None, date] = {}
+    for model in (SyncJob, FollowJob):
+        query = sa_select(col(model.id), col(model.finished_at)).where(
+            col(model.id).in_(ids), col(model.finished_at).is_not(None)
+        )
+        for job_id, finished_ms in session.execute(
+            unscoped_select(
+                query,
+                reason=(
+                    "The ledger check compares every account's charges with "
+                    "the ledger, so it reads every account's job ends."
+                ),
+            )
+        ).all():
+            days[job_id] = datetime.fromtimestamp(int(finished_ms) / 1000, UTC).date()
+    return days
 
 
 def check_request_ledger(day: date) -> int:
@@ -326,9 +354,8 @@ def check_request_ledger(day: date) -> int:
 
     Per Account and Budget. Logs one warning naming every pair that differs,
     carrying the metric, and returns the total difference; a clean day logs
-    nothing and returns 0. A sync running across midnight is charged on the
-    day it finished but recorded on the day of each Request, so a busy
-    midnight can show a small mismatch on both days.
+    nothing and returns 0. Each Request counts on the day its job was charged
+    (`_recorded_charges`), so a sync across midnight matches on both days.
     """
     with Session(engine) as session:
         recorded = _recorded_charges(session, day)

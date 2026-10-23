@@ -808,6 +808,7 @@ async def run_follow_job(job: FollowJobState) -> None:
                         account_id=user_uuid,
                         budget=Budget.MANUAL_BULK.value,
                         channel=result.name,
+                        job_id=job.follow_job_id,
                     ),
                 ):
                     await _process_one_channel(
