@@ -6,40 +6,61 @@ import {
   FIRST_CHANNELS,
   fmt,
   listChannels,
+  type Measure,
   MORE_CHANNELS,
   type Outcome,
   pct,
   type SortDirection,
+  toggled,
 } from "@/lib/requests/breakdown"
+import { type ChannelFilter, keepRow } from "@/lib/requests/channel-filter"
+import { ChannelBar } from "./ChannelBar"
 import { td, th } from "./KindTable"
 import { kindColor, OutcomeBar, Swatch } from "./parts"
 
 /**
- * Channels by Requests (RQS-03): search, sortable columns, the first 25 and
- * then 50 more. Directory probes and Handle checks rank as rows of their own,
- * and the bars scale to the busiest real Channel, so an aggregate row runs
- * full width rather than flattening every Channel. A hidden outcome's
- * columns go.
+ * Channels by Requests (RQS-03, RQS-04): search and filters, sortable
+ * columns, the first 25 and then 50 more. Directory probes and Handle checks
+ * rank as rows of their own, and the bars scale to the busiest real Channel,
+ * so an aggregate row runs full width rather than flattening every Channel.
+ * A hidden outcome's columns go. Every row has a pick box: a row left out
+ * leaves the whole tab but stays listed here, faded, to be picked again.
  */
 export function ChannelTable({
   rows,
   hiddenOutcomes,
+  hiddenKinds,
+  filter,
+  onFilter,
+  leftOut,
+  onLeftOut,
 }: {
   rows: ChannelRow[]
   hiddenOutcomes: ReadonlySet<Outcome>
+  hiddenKinds: ReadonlySet<string>
+  filter: ChannelFilter
+  onFilter: (filter: ChannelFilter) => void
+  /** The rows left out, by `ChannelRow.id`. */
+  leftOut: ReadonlySet<string>
+  onLeftOut: (leftOut: Set<string>) => void
 }) {
   const [search, setSearch] = useState("")
   const [chosenSort, setSort] = useState<ChannelSort>("total")
   const [chosenDirection, setDirection] = useState<SortDirection>("desc")
   const [shown, setShown] = useState(FIRST_CHANNELS)
   const columns = channelColumns(hiddenOutcomes)
-  // Sorting by a hidden outcome's column falls back to the busiest first, and
-  // comes back when the outcome is shown again.
-  const kept =
-    chosenSort === "channel" || columns.some((c) => c.key === chosenSort)
+  // Sorting by a hidden outcome's measure falls back to the busiest first,
+  // and comes back when the outcome is shown again.
+  const kept = !hiddenSort(chosenSort, hiddenOutcomes)
   const sort = kept ? chosenSort : "total"
   const direction = kept ? chosenDirection : "desc"
-  const listed = listChannels(rows, search, sort, direction)
+  const listed = listChannels(
+    rows,
+    search,
+    sort,
+    direction,
+    keepRow(filter, hiddenKinds, hiddenOutcomes),
+  )
   const max = Math.max(
     0,
     ...listed.filter((r) => !r.aggregate).map((r) => r.total),
@@ -59,33 +80,55 @@ export function ChannelTable({
       {sort === key && (direction === "desc" ? " ↓" : " ↑")}
     </button>
   )
+  const restart =
+    <T,>(set: (v: T) => void) =>
+    (v: T) => {
+      set(v)
+      setShown(FIRST_CHANNELS)
+    }
 
   return (
     <section
       aria-labelledby="requests-by-channel"
       className="rounded-md border border-app-ink/10 bg-app-card"
     >
-      <div className="flex flex-wrap items-center gap-2 px-3 pt-2.5">
-        <h3 id="requests-by-channel" className="text-sm font-semibold">
-          Channels by Requests
-        </h3>
-        <input
-          type="search"
-          aria-label="Search Channels"
-          placeholder="Search Channels"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setShown(FIRST_CHANNELS)
-          }}
-          className="ml-auto h-7 w-48 max-w-full rounded border border-app-ink/15 bg-transparent px-2 text-[12px]"
-        />
-      </div>
-      <table className="w-full table-fixed text-[12px]">
+      <h3
+        id="requests-by-channel"
+        className="px-3 pt-2.5 text-sm font-semibold"
+      >
+        Channels by Requests
+      </h3>
+      <ChannelBar
+        rows={rows}
+        shown={listed.length}
+        search={search}
+        onSearch={restart(setSearch)}
+        filter={filter}
+        onFilter={restart(onFilter)}
+        sort={sort}
+        onSort={(key) => {
+          setSort(key)
+          setDirection(key === "channel" ? "asc" : "desc")
+        }}
+        direction={direction}
+        onToggleDirection={() =>
+          setDirection(direction === "desc" ? "asc" : "desc")
+        }
+        hiddenKinds={hiddenKinds}
+        hiddenOutcomes={hiddenOutcomes}
+      />
+      <table className="mt-1 w-full table-fixed text-[12px]">
         <thead>
           <tr>
-            <th className={`${th} w-10`}>#</th>
-            <th className={`${th} w-1/3`}>{header("channel", "Channel")}</th>
+            <th className={`${th} w-8`}>
+              <PickEvery
+                listed={listed}
+                leftOut={leftOut}
+                onLeftOut={onLeftOut}
+              />
+            </th>
+            <th className={`${th} w-10 max-sm:hidden`}>#</th>
+            <th className={`${th} w-1/4`}>{header("channel", "Channel")}</th>
             {columns.map((c) => (
               <th
                 key={c.key}
@@ -96,41 +139,27 @@ export function ChannelTable({
                       : "ascending"
                     : undefined
                 }
-                className={`${th} text-right ${c.key.endsWith("Share") ? "max-sm:hidden" : ""}`}
+                className={`${th} text-right ${narrowHidden(c.key)}`}
               >
                 {header(c.key, c.label)}
               </th>
             ))}
-            <th className={`${th} w-1/5 max-sm:hidden`}>
+            <th className={`${th} w-1/6 max-sm:hidden`}>
               <span className="sr-only">Outcomes</span>
             </th>
           </tr>
         </thead>
         <tbody>
           {listed.slice(0, shown).map((r, i) => (
-            <tr
-              key={`${r.aggregate}:${r.key}`}
-              data-testid="requests-channel-row"
-              className={`border-t border-app-ink/5 ${r.aggregate ? "bg-app-ink/[0.04]" : ""}`}
-            >
-              <td className={`${td} text-app-ink/40`}>{i + 1}</td>
-              <td className="px-3 py-1.5 max-sm:px-1.5">
-                <span className="flex min-w-0 items-center gap-2">
-                  <Swatch color={kindColor(r.mainKind)} />
-                  <span
-                    className={`truncate ${r.aggregate ? "italic" : "font-medium"}`}
-                  >
-                    {r.label}
-                  </span>
-                </span>
-              </td>
-              {columns.map((c) => (
-                <ChannelCell key={c.key} column={c.key} row={r} />
-              ))}
-              <td className="px-3 py-1.5 max-sm:hidden">
-                <OutcomeBar t={r} max={max} />
-              </td>
-            </tr>
+            <ChannelTr
+              key={r.id}
+              r={r}
+              rank={i + 1}
+              max={max}
+              columns={columns.map((c) => c.key)}
+              picked={!leftOut.has(r.id)}
+              onPick={() => onLeftOut(toggled(leftOut, r.id))}
+            />
           ))}
         </tbody>
       </table>
@@ -152,23 +181,130 @@ export function ChannelTable({
   )
 }
 
-function ChannelCell({
-  column,
-  row,
+/** Whether `sort` reads an outcome that is hidden. */
+const hiddenSort = (sort: ChannelSort, hidden: ReadonlySet<Outcome>) =>
+  (hidden.has("idle") && (sort === "idle" || sort === "idleShare")) ||
+  (hidden.has("wasted") && (sort === "wasted" || sort === "wasteShare"))
+
+/** The shares and the yield give way at phone width. */
+const narrowHidden = (key: Measure) =>
+  key.endsWith("Share") || key === "postsPerReq" ? "max-sm:hidden" : ""
+
+/** The header's box: every listed row picked, or none; mixed shows as such. */
+function PickEvery({
+  listed,
+  leftOut,
+  onLeftOut,
 }: {
-  column: Exclude<ChannelSort, "channel">
-  row: ChannelRow
+  listed: ChannelRow[]
+  leftOut: ReadonlySet<string>
+  onLeftOut: (leftOut: Set<string>) => void
 }) {
+  const out = listed.filter((r) => leftOut.has(r.id)).length
+  return (
+    <input
+      type="checkbox"
+      aria-label="Pick every listed row"
+      title="Pick or leave out every row listed"
+      checked={listed.length > 0 && out === 0}
+      ref={(el) => {
+        if (el) el.indeterminate = out > 0 && out < listed.length
+      }}
+      onChange={(e) => {
+        const next = new Set(leftOut)
+        for (const r of listed)
+          if (e.target.checked) next.delete(r.id)
+          else next.add(r.id)
+        onLeftOut(next)
+      }}
+    />
+  )
+}
+
+function ChannelTr({
+  r,
+  rank,
+  max,
+  columns,
+  picked,
+  onPick,
+}: {
+  r: ChannelRow
+  rank: number
+  max: number
+  columns: Measure[]
+  picked: boolean
+  onPick: () => void
+}) {
+  return (
+    <tr
+      data-testid="requests-channel-row"
+      data-picked={picked}
+      className={`border-t border-app-ink/5 ${r.aggregate ? "bg-app-ink/[0.04]" : ""} ${picked ? "" : "opacity-40"}`}
+    >
+      <td className="pl-3 max-sm:pl-1.5">
+        <input
+          type="checkbox"
+          aria-label={`Pick ${r.label}`}
+          checked={picked}
+          onChange={onPick}
+        />
+      </td>
+      <td className={`${td} text-app-ink/40 max-sm:hidden`}>{rank}</td>
+      <td className="px-3 py-1.5 max-sm:px-1.5">
+        <span className="flex min-w-0 items-center gap-2">
+          <Swatch color={kindColor(r.mainKind)} />
+          <span
+            className={`truncate ${r.aggregate ? "italic" : "font-medium"}`}
+          >
+            {r.label}
+          </span>
+        </span>
+      </td>
+      {columns.map((c) => (
+        <ChannelCell key={c} column={c} row={r} />
+      ))}
+      <td className="px-3 py-1.5 max-sm:hidden">
+        <OutcomeBar t={r} max={max} />
+      </td>
+    </tr>
+  )
+}
+
+/** New Posts a Request brought: one decimal under 10. */
+const yieldText = (v: number) =>
+  v === 0 ? "0" : v < 10 ? v.toFixed(1) : fmt(Math.round(v))
+
+function ChannelCell({ column, row }: { column: Measure; row: ChannelRow }) {
+  if (column === "postsPerReq") return <YieldCell row={row} />
   if (column === "total")
     return (
       <td className={`${td} text-right font-semibold`}>{fmt(row.total)}</td>
     )
-  if (column === "idle" || column === "wasted")
-    return <td className={`${td} text-right`}>{fmt(row[column])}</td>
-  const part = column === "idleShare" ? row.idle : row.wasted
+  if (column === "idleShare" || column === "wasteShare") {
+    const part = column === "idleShare" ? row.idle : row.wasted
+    return (
+      <td className={`${td} text-right text-app-ink/60 max-sm:hidden`}>
+        {pct(row.total ? part / row.total : 0)}
+      </td>
+    )
+  }
+  return <td className={`${td} text-right`}>{fmt(row[column] as number)}</td>
+}
+
+/** New Posts per Request: 20 is a full page, 0 nothing new; a dash where none. */
+function YieldCell({ row }: { row: ChannelRow }) {
+  const none = row.aggregate || !row.total
   return (
-    <td className={`${td} text-right text-app-ink/60 max-sm:hidden`}>
-      {pct(row.total ? part / row.total : 0)}
+    <td
+      className={`${td} text-right text-app-ink/70 max-sm:hidden`}
+      title={
+        none
+          ? undefined
+          : `${pct(row.posts / (row.total * 20))} of a 20-Post page per Request`
+      }
+    >
+      {none ? "–" : yieldText(row.posts / row.total)}
     </td>
   )
 }

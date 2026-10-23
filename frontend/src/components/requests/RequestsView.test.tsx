@@ -29,6 +29,8 @@ const part = (kind: string, useful: number, idle: number, wasted: number) => ({
   charged: kind === "probe" ? 0 : useful + idle + wasted,
   newPosts: 0,
   repeatedPosts: 0,
+  syncs: 0,
+  failedSyncs: 0,
 })
 
 const BREAKDOWN: RequestBreakdownResponse = {
@@ -37,6 +39,8 @@ const BREAKDOWN: RequestBreakdownResponse = {
   byKind: [part("auto", 60, 30, 10), part("probe", 100, 200, 600)],
   byChannel: [
     { ...part("auto", 60, 30, 10), channel: "news" },
+    { ...part("bulk", 0, 0, 0), channel: "news" },
+    { ...part("bulk", 5, 0, 0), channel: "tech" },
     { ...part("probe", 100, 200, 600), channel: null },
   ],
   byAccount: [
@@ -171,6 +175,43 @@ describe("RequestsView", () => {
     expect(
       screen.getByRole("region", { name: "Comparing 2 Accounts" }),
     ).toBeTruthy()
+  })
+
+  test("clicking a kind narrows the Channel table to that work, and again undoes it", () => {
+    render(<Harness />)
+    const channels = () =>
+      within(screen.getByRole("region", { name: "Channels by Requests" }))
+        .getAllByTestId("requests-channel-row")
+        .map((tr) => tr.querySelectorAll("td")[2].textContent)
+    expect(channels()).toEqual(["Directory probes", "@news", "@tech"])
+    fireEvent.click(kindRow("Auto sync"))
+    expect(channels()).toEqual(["@news"])
+    expect(kindRow("Auto sync").dataset.picked).toBe("true")
+    fireEvent.click(kindRow("Auto sync"))
+    expect(channels()).toHaveLength(3)
+  })
+
+  test("a Channel left out leaves the tab; the footer counts it and Pick all brings it back", () => {
+    const seen: RequestsFilter[] = []
+    render(<Harness seen={seen} />)
+    expect(screen.queryByTestId("requests-left-out")).toBeNull()
+    fireEvent.click(screen.getByRole("checkbox", { name: "Pick @news" }))
+    expect([...(seen.at(-1)?.leftOut ?? [])]).toEqual(["news"])
+    expect(screen.getByTestId("requests-left-out").textContent).toBe(
+      "1 Channel left out Pick all",
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Pick all" }))
+    expect(seen.at(-1)?.leftOut.size).toBe(0)
+    expect(screen.queryByTestId("requests-left-out")).toBeNull()
+  })
+
+  test("the Channel table lists the rows before the Channels left out leave", () => {
+    const narrowed = {
+      ...BREAKDOWN,
+      byChannel: BREAKDOWN.byChannel.filter((c) => c.channel !== "tech"),
+    }
+    render(<Harness breakdown={narrowed} listed={BREAKDOWN} />)
+    expect(screen.getByRole("checkbox", { name: "Pick @tech" })).toBeTruthy()
   })
 
   test("a failed read says so", () => {

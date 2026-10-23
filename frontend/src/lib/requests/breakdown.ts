@@ -9,8 +9,10 @@ import type {
   RequestTotals,
 } from "@/client"
 import { floorToMinute } from "@/lib/analysis-window"
+import { emptyTree } from "@/lib/filter-tree"
 import { DAY_MS } from "@/lib/scope/window"
 import { resolveTimeBound, type TimeBound } from "@/lib/time-bound/bound"
+import type { ChannelFilter } from "./channel-filter"
 
 export type Outcome = "useful" | "idle" | "wasted"
 export type ChargedFilter = "all" | "charged" | "uncharged"
@@ -23,8 +25,8 @@ export const OUTCOMES: { id: Outcome; label: string }[] = [
 
 /**
  * What every part of the tab reads (spec, "Tab-wide state"). One value, so
- * the trend and the tables hide the same kinds and outcomes; the Channels
- * left out join it in RQS-04.
+ * the trend and the tables hide the same kinds and outcomes and leave out
+ * the same Channels.
  */
 export interface RequestsFilter {
   bound: TimeBound
@@ -33,6 +35,10 @@ export interface RequestsFilter {
   accounts: readonly string[]
   hiddenKinds: ReadonlySet<string>
   hiddenOutcomes: ReadonlySet<Outcome>
+  /** The Channel table's rows left out, by `ChannelRow.id` (RQS-04). */
+  leftOut: ReadonlySet<string>
+  /** What the Channel table lists; By kind of work adds kinds to it. */
+  channelFilter: ChannelFilter
 }
 
 export const initialRequestsFilter = (): RequestsFilter => ({
@@ -41,11 +47,29 @@ export const initialRequestsFilter = (): RequestsFilter => ({
   accounts: [],
   hiddenKinds: new Set(),
   hiddenOutcomes: new Set(),
+  leftOut: new Set(),
+  channelFilter: emptyTree(),
 })
 
-/** Whether the tab reads a narrower Breakdown than the unfiltered one. */
-export const narrowed = (f: Pick<RequestsFilter, "charged" | "accounts">) =>
-  f.charged !== "all" || f.accounts.length > 0
+const AGGREGATE_ID = "kind:"
+
+/**
+ * A Channel's row by its handle; a row of work with no Channel by its kind.
+ * A Telegram handle never holds a colon, so the two never meet.
+ */
+const rowId = (channel: string | null, kind: string) =>
+  channel ?? `${AGGREGATE_ID}${kind}`
+
+/** The rows left out as the API takes them: handles, and aggregate rows' kinds. */
+export function leftOutQuery(leftOut: ReadonlySet<string>) {
+  const ids = [...leftOut].sort()
+  return {
+    leftOut: ids.filter((id) => !id.startsWith(AGGREGATE_ID)),
+    leftOutKinds: ids
+      .filter((id) => id.startsWith(AGGREGATE_ID))
+      .map((id) => id.slice(AGGREGATE_ID.length)),
+  }
+}
 
 /** `set` with `item` flipped in or out. */
 export function toggled<T>(set: ReadonlySet<T>, item: T): Set<T> {
@@ -137,7 +161,24 @@ export function kindRows(
   return { rows, max: Math.max(0, ...shown.map((t) => t.total)) }
 }
 
-export interface ChannelRow extends Tally {
+/** A row's Requests by outcome, and what its syncs did (RQS-04). */
+export interface KindTally extends Tally {
+  syncs: number
+  failed: number
+  /** New Posts its pages brought. */
+  posts: number
+}
+
+const emptyKindTally = (): KindTally => ({
+  ...emptyTally(),
+  syncs: 0,
+  failed: 0,
+  posts: 0,
+})
+
+export interface ChannelRow extends KindTally {
+  /** What picking it leaves out; see `leftOutQuery`. */
+  id: string
   /** The handle, or the aggregate row's kind. */
   key: string
   /** What the table shows and the search reads: `@handle`, or a row name. */
@@ -147,6 +188,26 @@ export interface ChannelRow extends Tally {
   aggregate: boolean
   /** The kind that spent most on this row, for its swatch. */
   mainKind: string
+  /** The kinds of work with shown Requests on this row. */
+  kinds: ReadonlySet<string>
+  /** The same numbers for each kind of work on this row. */
+  perKind: ReadonlyMap<string, KindTally>
+}
+
+/**
+ * Adds one kind's part to its row, or to that kind on the row. A hidden
+ * outcome's Requests stay out, but every sync and new Post still counts: the
+ * sync happened whether or not its Requests show.
+ */
+function addPart(
+  row: KindTally,
+  part: ChannelRequestTotals,
+  hidden: ReadonlySet<Outcome>,
+) {
+  addTo(row, { ...part, total: part.requests }, hidden)
+  row.syncs += part.syncs
+  row.failed += part.failedSyncs
+  row.posts += part.newPosts
 }
 
 /** One row per Channel, the work with no Channel as a row per kind. */
@@ -155,36 +216,49 @@ export function channelRows(
   hiddenKinds: ReadonlySet<string>,
   hiddenOutcomes: ReadonlySet<Outcome>,
 ): ChannelRow[] {
-  const rows = new Map<string, ChannelRow & { byKind: Map<string, number> }>()
+  const rows = new Map<string, NewRow>()
   for (const part of byChannel) {
     if (hiddenKinds.has(part.kind)) continue
-    const aggregate = part.channel === null
-    const key = part.channel ?? part.kind
-    const name =
-      part.channel ??
-      AGGREGATE_LABEL[part.kind] ??
-      `${kindMeta(part.kind).label}, no Channel`
-    const row = rows.get(`${aggregate}:${key}`) ?? {
-      ...emptyTally(),
-      key,
-      name,
-      label: aggregate ? name : `@${name}`,
-      aggregate,
-      mainKind: part.kind,
-      byKind: new Map(),
-    }
-    const tally = tallyOf(part, hiddenOutcomes)
-    addTo(row, tally, new Set())
-    row.byKind.set(part.kind, (row.byKind.get(part.kind) ?? 0) + tally.total)
-    rows.set(`${aggregate}:${key}`, row)
+    const id = rowId(part.channel, part.kind)
+    const row = rows.get(id) ?? newChannelRow(id, part)
+    const kind = row.perKind.get(part.kind) ?? emptyKindTally()
+    addPart(row, part, hiddenOutcomes)
+    addPart(kind, part, hiddenOutcomes)
+    row.perKind.set(part.kind, kind)
+    rows.set(id, row)
   }
   return [...rows.values()]
     .filter((r) => r.total > 0)
-    .map(({ byKind, ...row }) => ({
-      ...row,
-      mainKind: [...byKind].sort((a, b) => b[1] - a[1])[0][0],
-    }))
+    .map((row) => {
+      const busiest = [...row.perKind].sort((a, b) => b[1].total - a[1].total)
+      return {
+        ...row,
+        mainKind: busiest[0][0],
+        kinds: new Set(busiest.filter(([, t]) => t.total > 0).map(([k]) => k)),
+      }
+    })
     .sort((a, b) => b.total - a.total)
+}
+
+type NewRow = ChannelRow & { perKind: Map<string, KindTally> }
+
+function newChannelRow(id: string, part: ChannelRequestTotals): NewRow {
+  const aggregate = part.channel === null
+  const name =
+    part.channel ??
+    AGGREGATE_LABEL[part.kind] ??
+    `${kindMeta(part.kind).label}, no Channel`
+  return {
+    ...emptyKindTally(),
+    id,
+    key: part.channel ?? part.kind,
+    name,
+    label: aggregate ? name : `@${name}`,
+    aggregate,
+    mainKind: part.kind,
+    kinds: new Set(),
+    perKind: new Map(),
+  }
 }
 
 /** Rows the Requests tab's Channel table shows first. */
@@ -192,18 +266,43 @@ export const FIRST_CHANNELS = 25
 /** Rows each "Show more" adds to the Requests tab's Channel table. */
 export const MORE_CHANNELS = 50
 
-export type ChannelSort =
-  | "channel"
+/** Every number a Channel row has: its columns, sorts and filters (RQS-04). */
+export type Measure =
   | "total"
   | "idle"
   | "wasted"
   | "idleShare"
   | "wasteShare"
+  | "syncs"
+  | "failed"
+  | "posts"
+  | "perSync"
+  | "postsPerReq"
+export type ChannelSort = Measure | "channel"
 export type SortDirection = "asc" | "desc"
+
+/** `outcome` names the outcome a measure is about: hiding it hides the measure. */
+export const MEASURES: {
+  id: Measure
+  label: string
+  unit?: string
+  outcome?: Outcome
+}[] = [
+  { id: "total", label: "Requests" },
+  { id: "idle", label: "Idle Requests", outcome: "idle" },
+  { id: "wasted", label: "Wasted Requests", outcome: "wasted" },
+  { id: "idleShare", label: "Idle share", unit: "%", outcome: "idle" },
+  { id: "wasteShare", label: "Wasted share", unit: "%", outcome: "wasted" },
+  { id: "syncs", label: "Syncs" },
+  { id: "failed", label: "Failed syncs" },
+  { id: "posts", label: "New Posts" },
+  { id: "perSync", label: "Requests per sync" },
+  { id: "postsPerReq", label: "New Posts per Request" },
+]
 
 /** The Channel table's number columns; `outcome` names the one it is about. */
 const CHANNEL_COLUMNS: {
-  key: Exclude<ChannelSort, "channel">
+  key: Measure
   label: string
   outcome?: Outcome
 }[] = [
@@ -212,37 +311,63 @@ const CHANNEL_COLUMNS: {
   { key: "wasted", label: "Wasted", outcome: "wasted" },
   { key: "idleShare", label: "Idle %", outcome: "idle" },
   { key: "wasteShare", label: "Wasted %", outcome: "wasted" },
+  { key: "postsPerReq", label: "New Posts / Req" },
 ]
 
 /** The columns left once a hidden outcome takes its own away. */
 export const channelColumns = (hidden: ReadonlySet<Outcome>) =>
   CHANNEL_COLUMNS.filter((c) => !c.outcome || !hidden.has(c.outcome))
 
-const share = (part: number, whole: number) => (whole ? part / whole : 0)
-
-const MEASURE: Record<Exclude<ChannelSort, "channel">, (r: Tally) => number> = {
-  total: (r) => r.total,
-  idle: (r) => r.idle,
-  wasted: (r) => r.wasted,
-  idleShare: (r) => share(r.idle, r.total),
-  wasteShare: (r) => share(r.wasted, r.total),
+const PER: Partial<Record<Measure, (t: KindTally) => number | null>> = {
+  idleShare: (t) => (t.total ? (100 * t.idle) / t.total : 0),
+  wasteShare: (t) => (t.total ? (100 * t.wasted) / t.total : 0),
+  perSync: (t) => (t.syncs ? t.total / t.syncs : null),
+  // What a Request yields: 20 is a full page of new Posts, 0 nothing new.
+  postsPerReq: (t) => (t.total ? t.posts / t.total : null),
 }
 
-/** The rows a search keeps, in the order picked. */
+/**
+ * A row's number, whole or for one `kind` of its work, as a filter bounds it
+ * (shares in percent). Null when the row has none of that work, and the
+ * aggregate rows have no New Posts per Request: they fetch no Posts.
+ */
+export function measureOf(
+  r: ChannelRow,
+  m: Measure,
+  kind?: string,
+): number | null {
+  const t = kind ? r.perKind.get(kind) : r
+  if (!t || (t.total === 0 && t.syncs === 0)) return null
+  if (m === "postsPerReq" && r.aggregate) return null
+  const per = PER[m]
+  return per
+    ? per(t)
+    : t[m as "total" | "idle" | "wasted" | "syncs" | "failed" | "posts"]
+}
+
+/** Two rows by one measure; a row without it goes last either way. */
+function byMeasure(a: ChannelRow, b: ChannelRow, m: Measure, sign: number) {
+  const [x, y] = [measureOf(a, m), measureOf(b, m)]
+  if (x === null || y === null) return Number(x === null) - Number(y === null)
+  return sign * (x - y)
+}
+
+/** The rows a search and `keep` leave, in the order picked. */
 export function listChannels(
   rows: readonly ChannelRow[],
   search: string,
   sort: ChannelSort,
   direction: SortDirection,
+  keep: (r: ChannelRow) => boolean = () => true,
 ): ChannelRow[] {
   const words = search.trim().toLowerCase().replace(/^@/, "")
   const sign = direction === "desc" ? -1 : 1
   return rows
-    .filter((r) => r.name.toLowerCase().includes(words))
+    .filter((r) => r.name.toLowerCase().includes(words) && keep(r))
     .sort((a, b) =>
       sort === "channel"
         ? sign * a.name.localeCompare(b.name)
-        : sign * (MEASURE[sort](a) - MEASURE[sort](b)),
+        : byMeasure(a, b, sort, sign),
     )
 }
 

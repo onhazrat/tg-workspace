@@ -15,7 +15,7 @@ import { useIsMobile } from "@/hooks/useMobile"
 import {
   type ChargedFilter,
   initialRequestsFilter,
-  narrowed,
+  leftOutQuery,
   type RequestsFilter,
   requestsRange,
 } from "@/lib/requests/breakdown"
@@ -23,50 +23,55 @@ import { offeredTab } from "@/lib/workspace-tabs"
 import { RequestsView } from "./RequestsView"
 
 /** What narrows the Breakdown and the trend besides the range. */
-type Picked = { charged: ChargedFilter; accounts: readonly string[] }
+type Picked = {
+  charged: ChargedFilter
+  accounts: readonly string[]
+  leftOut: ReadonlySet<string>
+}
 
-function useBreakdown(
-  range: { start: number; end: number },
-  { charged, accounts }: Picked,
-  enabled: boolean,
-) {
+const NONE = new Set<string>()
+
+function query(range: { start: number; end: number }, picked: Picked) {
+  return {
+    start: new Date(range.start).toISOString(),
+    end: new Date(range.end).toISOString(),
+    charged: picked.charged,
+    accounts: [...picked.accounts],
+    ...leftOutQuery(picked.leftOut),
+  }
+}
+
+/**
+ * One Breakdown. The tab asks for up to three; two that pick the same are
+ * one key, so react-query asks the server once.
+ */
+function useBreakdown(range: { start: number; end: number }, picked: Picked) {
+  const q = query(range, picked)
   return useQuery({
     queryKey: queryKeys.requestBreakdown(
       range.start,
       range.end,
-      charged,
-      accounts,
+      q.charged,
+      q.accounts,
+      { leftOut: q.leftOut, leftOutKinds: q.leftOutKinds },
     ),
-    queryFn: () =>
-      requestsReadRequestBreakdown({
-        query: {
-          start: new Date(range.start).toISOString(),
-          end: new Date(range.end).toISOString(),
-          charged,
-          accounts: [...accounts],
-        },
-      }),
+    queryFn: () => requestsReadRequestBreakdown({ query: q }),
     placeholderData: keepPreviousData,
-    enabled,
   })
 }
 
 /** The range in buckets, for the daily bars (RQS-06). */
-function useTrend(
-  range: { start: number; end: number },
-  { charged, accounts }: Picked,
-) {
+function useTrend(range: { start: number; end: number }, picked: Picked) {
+  const q = query(range, picked)
   return useQuery({
-    queryKey: queryKeys.requestTrend(range.start, range.end, charged, accounts),
-    queryFn: () =>
-      requestsReadRequestTrend({
-        query: {
-          start: new Date(range.start).toISOString(),
-          end: new Date(range.end).toISOString(),
-          charged,
-          accounts: [...accounts],
-        },
-      }),
+    queryKey: queryKeys.requestTrend(
+      range.start,
+      range.end,
+      q.charged,
+      q.accounts,
+      { leftOut: q.leftOut, leftOutKinds: q.leftOutKinds },
+    ),
+    queryFn: () => requestsReadRequestTrend({ query: q }),
     placeholderData: keepPreviousData,
   })
 }
@@ -92,11 +97,15 @@ function OperatorRequests() {
     () => requestsRange(filter.bound, Date.now()),
     [filter.bound],
   )
-  // The unfiltered Breakdown gives the choice and Account counts; the picked
-  // one, the rest.
-  const all = useBreakdown(range, { charged: "all", accounts: [] }, true)
-  const picked = useBreakdown(range, filter, narrowed(filter))
-  const shown = narrowed(filter) ? picked : all
+  // Before Charged and the Accounts narrow it: the choice and Account counts.
+  const all = useBreakdown(range, {
+    charged: "all",
+    accounts: [],
+    leftOut: filter.leftOut,
+  })
+  // Before the Channels left out leave it: the Channel table's rows (RQS-04).
+  const listed = useBreakdown(range, { ...filter, leftOut: NONE })
+  const shown = useBreakdown(range, filter)
   const trend = useTrend(range, filter)
   const phone = useIsMobile()
   return (
@@ -106,8 +115,9 @@ function OperatorRequests() {
       range={range}
       unfiltered={all.data}
       breakdown={shown.data}
+      listed={listed.data}
       trend={trend.data}
-      error={all.error ?? shown.error ?? trend.error}
+      error={all.error ?? shown.error ?? listed.error ?? trend.error}
       phone={phone}
     />
   )

@@ -12,8 +12,9 @@ import {
   channelRows,
   chargedCounts,
   kindRows,
+  leftOutQuery,
   listChannels,
-  narrowed,
+  measureOf,
   type Outcome,
   rangeText,
   requestsRange,
@@ -35,6 +36,8 @@ const totals = (
   charged,
   newPosts: 0,
   repeatedPosts: 0,
+  syncs: 0,
+  failedSyncs: 0,
 })
 const onChannel = (
   channel: string | null,
@@ -152,12 +155,93 @@ describe("the Channel table", () => {
       "Wasted",
       "Idle %",
       "Wasted %",
+      "New Posts / Req",
     ])
     expect(channelColumns(hide("wasted")).map((c) => c.label)).toEqual([
       "Requests",
       "Idle",
       "Idle %",
+      "New Posts / Req",
     ])
+  })
+})
+
+describe("the Channel table's measures (RQS-04)", () => {
+  const synced = (
+    channel: string | null,
+    kind: string,
+    requests: [number, number, number],
+    syncs: number,
+    failedSyncs: number,
+    newPosts: number,
+  ): ChannelRequestTotals => ({
+    ...onChannel(channel, kind, ...requests),
+    syncs,
+    failedSyncs,
+    newPosts,
+  })
+  const byChannel = [
+    synced("news", "auto", [8, 2, 0], 5, 1, 40),
+    synced("news", "single", [1, 0, 1], 1, 0, 3),
+    synced("tech", "auto", [2, 2, 0], 2, 2, 0),
+    synced(null, "probe", [400, 100, 500], 0, 0, 0),
+  ]
+  const rows = channelRows(byChannel, none, none)
+  const news = rows.find((r) => r.key === "news")
+  const probes = rows.find((r) => r.aggregate)
+
+  test("each row adds up its syncs, failed syncs and new Posts, whole and per kind", () => {
+    expect(news && [news.syncs, news.failed, news.posts]).toEqual([6, 1, 43])
+    expect(news && [...news.kinds].sort()).toEqual(["auto", "single"])
+    const auto = news?.perKind.get("auto")
+    expect(auto && [auto.total, auto.syncs, auto.failed, auto.posts]).toEqual([
+      10, 5, 1, 40,
+    ])
+  })
+
+  test("a hidden outcome leaves the Requests but every sync still counts", () => {
+    const [shown] = channelRows(byChannel, new Set(["probe"]), hide("useful"))
+    expect([shown.key, shown.total, shown.syncs, shown.posts]).toEqual([
+      "news",
+      3,
+      6,
+      43,
+    ])
+  })
+
+  test("measures read the whole row or one kind of its work", () => {
+    if (!news || !probes) throw new Error("rows missing")
+    expect(measureOf(news, "total")).toBe(12)
+    expect(measureOf(news, "wasteShare")).toBeCloseTo(100 / 12)
+    expect(measureOf(news, "perSync")).toBe(2)
+    expect(measureOf(news, "postsPerReq")).toBeCloseTo(43 / 12)
+    expect(measureOf(news, "perSync", "auto")).toBe(2)
+    expect(measureOf(news, "failed", "single")).toBe(0)
+    // No such work on the row, no number: a bound never matches it.
+    expect(measureOf(news, "total", "probe")).toBeNull()
+    // The aggregate rows fetch no Posts at all.
+    expect(measureOf(probes, "postsPerReq")).toBeNull()
+    expect(measureOf(probes, "perSync")).toBeNull()
+  })
+
+  test("by New Posts per Request, the aggregate rows sort last either way", () => {
+    const order = (direction: "asc" | "desc") =>
+      listChannels(rows, "", "postsPerReq", direction).map((r) => r.key)
+    expect(order("desc")).toEqual(["news", "tech", "probe"])
+    expect(order("asc")).toEqual(["tech", "news", "probe"])
+  })
+
+  test("a predicate narrows the rows the search keeps", () => {
+    const kept = listChannels(rows, "", "total", "desc", (r) => !r.aggregate)
+    expect(kept.map((r) => r.key)).toEqual(["news", "tech"])
+  })
+
+  test("the rows left out go to the API as handles and as kinds", () => {
+    expect(leftOutQuery(new Set([news?.id ?? "", probes?.id ?? ""]))).toEqual({
+      leftOut: ["news"],
+      leftOutKinds: ["probe"],
+    })
+    expect(leftOutQuery(new Set())).toEqual({ leftOut: [], leftOutKinds: [] })
   })
 })
 
@@ -258,12 +342,6 @@ describe("the Accounts (RQS-05)", () => {
       auto: 6,
       bulk: 0,
     })
-  })
-
-  test("Charged or any Account narrows the Breakdown", () => {
-    expect(narrowed({ charged: "all", accounts: [] })).toBe(false)
-    expect(narrowed({ charged: "uncharged", accounts: [] })).toBe(true)
-    expect(narrowed({ charged: "all", accounts: ["a"] })).toBe(true)
   })
 
   test("an Account keeps its colour whichever are picked", () => {

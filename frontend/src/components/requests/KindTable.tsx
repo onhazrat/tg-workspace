@@ -9,19 +9,25 @@ export const td = "px-3 py-1.5 tabular-nums max-sm:px-1.5"
 /**
  * By kind of work (RQS-03): a Show box per kind, its Requests and share, the
  * outcome bar, Idle % and Wasted %. A hidden kind keeps its row, faded, with
- * its count; a hidden outcome shows as a dash.
+ * its count; a hidden outcome shows as a dash. Clicking a row narrows the
+ * Channel table to the rows with that work, and again undoes it (RQS-04).
  */
 export function KindTable({
   rows,
   max,
   hiddenOutcomes,
   onToggleKind,
+  picked = [],
+  onPickKind = () => {},
   chips,
 }: {
   rows: KindRow[]
   max: number
   hiddenOutcomes: ReadonlySet<Outcome>
   onToggleKind: (kind: string) => void
+  /** The kinds the Channel table is narrowed to. */
+  picked?: readonly string[]
+  onPickKind?: (kind: string) => void
   /** The outcome chips, in the heading. */
   chips: React.ReactNode
 }) {
@@ -58,13 +64,17 @@ export function KindTable({
           {rows.map((r) => (
             <tr
               key={r.kind.id}
-              className={`border-t border-app-ink/5 ${r.hidden ? "opacity-40" : ""}`}
+              data-picked={picked.includes(r.kind.id)}
+              title="Narrow the Channels below to this work"
+              onClick={() => onPickKind(r.kind.id)}
+              className={`cursor-pointer border-t border-app-ink/5 hover:bg-app-ink/5 data-[picked=true]:bg-app-ink/10 ${r.hidden ? "opacity-40" : ""}`}
             >
               <td className="pl-3">
                 <input
                   type="checkbox"
                   aria-label={`Show ${r.kind.label}`}
                   checked={!r.hidden}
+                  onClick={(e) => e.stopPropagation()}
                   onChange={() => onToggleKind(r.kind.id)}
                 />
               </td>
@@ -95,7 +105,8 @@ export function KindTable({
         </tbody>
       </table>
       <p className="px-3 pb-2 text-[11px] text-app-ink/40">
-        Untick a kind or an outcome to read the rest in proportion.
+        Untick a kind or an outcome to read the rest in proportion. Click a kind
+        to narrow the Channels below to it.
       </p>
     </section>
   )

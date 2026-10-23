@@ -4,6 +4,7 @@ import { FilterBar } from "@/components/FilterBar"
 import { FacetMenu } from "@/components/filter-tree/FacetMenu"
 import { TimeBoundBar } from "@/components/TimeBoundEditor"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
+import { funnelledValues } from "@/lib/filter-tree"
 import {
   type AccountRow,
   accountRows,
@@ -17,6 +18,7 @@ import {
   statTotals,
   toggled,
 } from "@/lib/requests/breakdown"
+import { pickKind } from "@/lib/requests/channel-filter"
 import { DAY_MS } from "@/lib/scope/window"
 import { extractErrorMessage } from "@/utils"
 import { AccountCompare } from "./AccountCompare"
@@ -33,7 +35,9 @@ const CHOICES: { value: ChargedFilter; label: string }[] = [
 
 /**
  * The Requests tab, props only (RQS-03): the filter bar, the stat strip, the
- * daily bars (RQS-06), By kind of work and Channels by Requests, all for one range cut to the minute.
+ * daily bars (RQS-06), By kind of work and Channels by Requests, all for one
+ * range cut to the minute. The Channels left out leave every number but the
+ * Channel table's own rows, which list them faded to be picked again (RQS-04).
  */
 export function RequestsView({
   filter,
@@ -41,6 +45,7 @@ export function RequestsView({
   range,
   unfiltered,
   breakdown,
+  listed,
   trend,
   error,
   phone = false,
@@ -56,6 +61,8 @@ export function RequestsView({
   unfiltered?: RequestBreakdownResponse
   /** The range's Breakdown, narrowed as picked. */
   breakdown?: RequestBreakdownResponse
+  /** The same before the Channels left out leave it: the Channel table's rows. */
+  listed?: RequestBreakdownResponse
   /** The range in buckets, for the daily bars (RQS-06). */
   trend?: RequestTrendResponse
   error?: unknown
@@ -78,7 +85,11 @@ export function RequestsView({
       <FilterBar
         phone={phone}
         testIdPrefix="requests"
-        active={Number(filter.charged !== "all") + filter.accounts.length}
+        active={
+          Number(filter.charged !== "all") +
+          filter.accounts.length +
+          Number(filter.leftOut.size > 0)
+        }
         search={<h2 className="text-base font-semibold">Requests</h2>}
         controls={
           <>
@@ -131,6 +142,12 @@ export function RequestsView({
                 Uncharged hidden, because no Account pays for it
               </span>
             )}
+            {filter.leftOut.size > 0 && (
+              <LeftOut
+                count={filter.leftOut.size}
+                onPickAll={() => onFilter({ leftOut: new Set() })}
+              />
+            )}
           </>
         }
       />
@@ -173,6 +190,12 @@ export function RequestsView({
               onToggleKind={(kind) =>
                 onFilter({ hiddenKinds: toggled(hiddenKinds, kind) })
               }
+              picked={funnelledValues(filter.channelFilter, "kind")}
+              onPickKind={(kind) =>
+                onFilter({
+                  channelFilter: pickKind(filter.channelFilter, kind),
+                })
+              }
               chips={
                 <OutcomeChips
                   hidden={hiddenOutcomes}
@@ -184,16 +207,43 @@ export function RequestsView({
             />
             <ChannelTable
               rows={channelRows(
-                breakdown.byChannel,
+                (listed ?? breakdown).byChannel,
                 hiddenKinds,
                 hiddenOutcomes,
               )}
               hiddenOutcomes={hiddenOutcomes}
+              hiddenKinds={hiddenKinds}
+              filter={filter.channelFilter}
+              onFilter={(channelFilter) => onFilter({ channelFilter })}
+              leftOut={filter.leftOut}
+              onLeftOut={(leftOut) => onFilter({ leftOut })}
             />
           </>
         )
       )}
     </div>
+  )
+}
+
+/** The footer's "N Channels left out", and Pick all to bring them back. */
+function LeftOut({
+  count,
+  onPickAll,
+}: {
+  count: number
+  onPickAll: () => void
+}) {
+  return (
+    <span data-testid="requests-left-out" className="text-app-ink/50">
+      {fmt(count)} Channel{count === 1 ? "" : "s"} left out{" "}
+      <button
+        type="button"
+        className="underline hover:text-app-ink"
+        onClick={onPickAll}
+      >
+        Pick all
+      </button>
+    </span>
   )
 }
 
