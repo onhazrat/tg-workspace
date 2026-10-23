@@ -144,6 +144,7 @@ const DAY = 86_400_000
 describe("Time bounds (DPF)", () => {
   test.each([
     "status:unavailable",
+    "status:private",
     "kind:bot",
     "error:timeout",
     'error:"proxy timeout"',

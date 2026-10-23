@@ -40,10 +40,11 @@ export type DiscoverProbeKind = "channel" | "group" | "bot" | "user" | "unknown"
 
 /**
  * `ok` — a public channel that can be followed.
- * `unavailable` — real, but not followable (bot, account, group, private).
+ * `unavailable`: real, but not followable (bot, account, group, deleted).
+ * `private`: a Channel that keeps its Posts private (RQS-13), not followable.
  * `unknown` — we could not reach a conclusion; will be retried.
  */
-export type DiscoverProbeStatus = "ok" | "unavailable" | "unknown"
+export type DiscoverProbeStatus = "ok" | "unavailable" | "private" | "unknown"
 
 /**
  * What one fetch of `t.me/<handle>` told us (IDEA-011 D9).
@@ -161,7 +162,8 @@ export const DISCOVER_PROBE_KIND_LABELS: Record<DiscoverProbeKind, string> = {
 
 /** True when a probe has concluded the handle cannot be followed. */
 export function isProbedUnavailable(candidate: DiscoveryCandidate): boolean {
-  return candidate.probe?.status === "unavailable"
+  const status = candidate.probe?.status
+  return status === "unavailable" || status === "private"
 }
 
 export type DiscoveryEmptyReason =

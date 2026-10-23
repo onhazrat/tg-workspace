@@ -1660,7 +1660,7 @@
       "comment": "Bounds for the weight inputs \u2014 wide enough to express \"ignore this kind\" (0).",
       "expression": "0",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 283,
+      "line": 285,
       "name": "DISCOVER_WEIGHT_MIN",
       "value": 0
     },
@@ -1668,7 +1668,7 @@
       "comment": "",
       "expression": "99",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 284,
+      "line": 286,
       "name": "DISCOVER_WEIGHT_MAX",
       "value": 99
     },
@@ -1676,7 +1676,7 @@
       "comment": "Floor for the \"Min hits\" threshold. 1 rather than 0 because a candidate exists only by being referenced at least once, so 0 and 1 would select the same rows.",
       "expression": "1",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 377,
+      "line": 379,
       "name": "DISCOVER_MIN_TOTAL_MIN",
       "value": 1
     },

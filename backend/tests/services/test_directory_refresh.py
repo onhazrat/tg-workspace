@@ -41,6 +41,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+import pytest
 from sqlmodel import Session
 
 from app.core.config import settings
@@ -567,7 +568,14 @@ def test_a_failed_first_probe_still_has_no_answer_to_keep() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_one_unavailable_answer_does_not_seal_a_live_entry() -> None:
+@pytest.mark.parametrize(
+    ("dead", "status"),
+    [({}, "unavailable"), ({"isPrivate": True, "kind": "channel"}, "private")],
+    ids=["unavailable", "private (RQS-13)"],
+)
+def test_one_unavailable_answer_does_not_seal_a_live_entry(
+    dead: dict[str, Any], status: str
+) -> None:
     """The weekly lottery ticket 03 would otherwise run over the whole map.
 
     `fetch_with_retry` raises `TelegramWebViewUnavailable` for any response with
@@ -578,10 +586,10 @@ def test_one_unavailable_answer_does_not_seal_a_live_entry() -> None:
     """
     with Session(engine) as session:
         record_probe_result(session, HANDLE, _page())
-        record_probe_result(session, HANDLE, _unavailable())
+        record_probe_result(session, HANDLE, {**_unavailable(), **dead})
 
         row = _entry(session)
-        assert row.status == "unavailable"
+        assert row.status == status
         assert row.refresh_due_at is not None, "a live entry gets a second look"
         assert row.display_name == "Stale News", "and keeps what it knew"
         assert row.subscribers == 12_300

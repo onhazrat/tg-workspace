@@ -211,7 +211,7 @@ export const momentOf = (key: MomentKey): Moment =>
 
 /** The values an "is" Condition offers, which are all the server writes. */
 export const IS_VALUES: Record<IsField, readonly string[]> = {
-  status: ["ok", "unavailable", "unknown"],
+  status: ["ok", "unavailable", "private", "unknown"],
   kind: ["channel", "group", "bot", "user", "unknown"],
 }
 export const IS_LABEL: Record<IsField, string> = {

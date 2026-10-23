@@ -57,6 +57,9 @@ const unprobed = candidate("unprobed")
 const followable = candidate("followable", { probe: { status: "ok" } })
 const bot = candidate("bot", { probe: { status: "unavailable", kind: "bot" } })
 const inconclusive = candidate("inconclusive", { probe: { status: "unknown" } })
+const hidden = candidate("hidden", {
+  probe: { status: "private", kind: "channel" },
+})
 const dismissed = candidate("dismissed", { isIgnored: true })
 const dismissedAndBot = candidate("both", {
   isIgnored: true,
@@ -143,6 +146,7 @@ describe("probe verdicts and dismissals stay separate", () => {
 describe("isProbedUnavailable", () => {
   test("only a concluded verdict counts", () => {
     expect(isProbedUnavailable(bot)).toBe(true)
+    expect(isProbedUnavailable(hidden)).toBe(true)
     expect(isProbedUnavailable(followable)).toBe(false)
     expect(isProbedUnavailable(inconclusive)).toBe(false)
     expect(isProbedUnavailable(unprobed)).toBe(false)
