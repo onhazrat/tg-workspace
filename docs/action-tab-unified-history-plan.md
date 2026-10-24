@@ -95,7 +95,7 @@ single-kind page comes back ordered by accident. It now collides timestamps
 | Artifact merge | New backend `GET /api/v1/data/artifacts` read model |
 
 Sharpened in a follow-up grilling round (Q1-Q23), recorded in `CONTEXT.md` and
-`docs/migration/ADR-010-artifact-model.md`:
+`docs/adr/ADR-010-artifact-model.md`:
 
 | Question | Decision |
 |---|---|
@@ -541,7 +541,7 @@ the test workflows are billing-blocked and disabled.
 
 - `CONTEXT.md` (repo root, new) — the glossary. Artifact and its four kinds,
   Scope, Pending, Full scope vs Semantic, and the workspace terms.
-- `docs/migration/ADR-010-artifact-model.md` (new) — why chats became
+- `docs/adr/ADR-010-artifact-model.md` (new), why chats became
   first-class, why there is no chat→summary link, and why the merge is a server
   union rather than a client merge.
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Self-hosted Telegram channel summarizer, migrated from a standalone app (`TG-Summarizer/`, a parity reference, may be absent from some clones) into a FastAPI + React monorepo. See `README.md` and `development.md` for the full operator/setup guide; `docs/migration/` holds the ADRs and locked decisions (`DECISIONS.md`).
+Self-hosted Telegram channel summarizer, migrated from a standalone app (`TG-Summarizer/`, a parity reference, may be absent from some clones) into a FastAPI + React monorepo. See `README.md` and `development.md` for the full operator/setup guide; `docs/adr/` holds the ADRs and `docs/migration/DECISIONS.md` the locked migration decisions.
 
 This is an **index of invariants**: every rule names its guard. Reasoning lives
 there; history is in `docs/agents/architecture-rationale.md`. Every session
@@ -98,4 +98,4 @@ The five canonical labels, unchanged, recorded as a `Status:` line in each issue
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` at the root, ADRs and `DECISIONS.md` in `docs/migration/` (not `docs/adr/`). See `docs/agents/domain.md`.
+Single-context: `CONTEXT.md` at the root, ADRs in `docs/adr/`, the locked `DECISIONS.md` in `docs/migration/`. See `docs/agents/domain.md`.

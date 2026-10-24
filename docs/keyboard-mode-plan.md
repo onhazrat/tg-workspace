@@ -1,6 +1,6 @@
 # One Keyboard mode: plan
 
-Decision record: `docs/migration/ADR-034-one-keyboard-mode.md`. Spec:
+Decision record: `docs/adr/ADR-034-one-keyboard-mode.md`. Spec:
 `.scratch/keyboard-mode/spec.md`. Prototype: variant H on
 [`prototype/directory-photo-viewer` @ a6aa1eb6](https://github.com/onhazrat/tg-workspace/tree/a6aa1eb6ecbef4886a48817d6228344d6ed64778). Glossary: **Keyboard mode**,
 **Highlight** and the widened **Tick** in `CONTEXT.md`.

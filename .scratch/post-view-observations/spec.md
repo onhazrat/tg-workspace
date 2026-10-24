@@ -9,7 +9,7 @@ spec refreshes View counts during sync, records a sample of View observations, f
 curve from them every day, and computes Reach the same way for followed Channels and Directory
 entries, estimating it where too few Posts are Settled. Settled in a grilling session on
 2026-09-27; the storage change is recorded in
-[ADR-024](../../docs/migration/ADR-024-view-counts-are-observations.md), which supersedes the
+[ADR-024](../../docs/adr/ADR-024-view-counts-are-observations.md), which supersedes the
 storage part of ADR-023. The terms **View count**, **Settled View count**, **Reach**, **Settling
 curve** and **View observation** are defined in `CONTEXT.md`. Ticket ids use the prefix `REACH`.
 

@@ -6,7 +6,7 @@
 **Scope note (2026-09-04):** this file records the *migration* decisions of
 June 2026. Everything decided since is an ADR. Decisions about the repository
 as a published artifact, rather than about the software in it, start at
-[ADR-013](./ADR-013-open-source-publication.md).
+[ADR-013](../adr/ADR-013-open-source-publication.md).
 
 ## Remediation deployment mode — **Mode A** (2026-06-09)
 
@@ -15,7 +15,7 @@ as a published artifact, rather than about the software in it, start at
 **Implications:**
 
 - Production requires `API_KEY`, `TOKEN_ENCRYPTION_KEY`, and a non-default `SECRET_KEY`.
-- ~~`USERS_OPEN_REGISTRATION=false` in production; single superuser owns all data.~~ → ⚠️ **superseded 2026-08-23 by [ADR-011](./ADR-011-multi-user-registration.md)**: registration is a supported path, gated by `USERS_OPEN_REGISTRATION` and `USERS_REQUIRE_APPROVAL`. Mode A remains a supported *configuration* (set open registration to false), no longer the only one.
+- ~~`USERS_OPEN_REGISTRATION=false` in production; single superuser owns all data.~~ → ⚠️ **superseded 2026-08-23 by [ADR-011](../adr/ADR-011-multi-user-registration.md)**: registration is a supported path, gated by `USERS_OPEN_REGISTRATION` and `USERS_REQUIRE_APPROVAL`. Mode A remains a supported *configuration* (set open registration to false), no longer the only one.
 - Nullable `user_id` on TG tables is forward-compatible metadata; reads remain unscoped.
 - WS-B tasks marked **(Mode B only)** are deferred unless multi-user is explicitly chosen later.
 
@@ -25,11 +25,11 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 | # | Topic | Choice |
 |---|--------|--------|
-| 1 | Multi-user scope | ~~**C** — single-operator now; nullable `user_id` columns for future multi-user~~ → ⚠️ **superseded 2026-08-23 by [ADR-011](./ADR-011-multi-user-registration.md)**: multi-user is being built (`docs/multi-user-tenancy-plan.md`); registration and roles exist, per-User scoping is in progress |
+| 1 | Multi-user scope | ~~**C**, single-operator now; nullable `user_id` columns for future multi-user~~ → ⚠️ **superseded 2026-08-23 by [ADR-011](../adr/ADR-011-multi-user-registration.md)**: multi-user is being built (`docs/multi-user-tenancy-plan.md`); registration and roles exist, per-User scoping is in progress |
 | 2 | Bot token migration | **A** — auto-upload from IndexedDB on first login, then purge locally |
 | 3 | Encryption key | **B** — dedicated `TOKEN_ENCRYPTION_KEY` env var |
-| 4 | Transition writes | ~~**C** — API-first; IndexedDB fallback + user-visible warning on failure~~ → ⚠️ **superseded 2026-08-01 by [ADR-009](./ADR-009-server-authoritative-data.md)**: API-first kept, fallback removed |
-| 5 | Offline mode | ~~**C** — browse cached data; disable sync/scrape/summary/publish when API down~~ → ⚠️ **superseded 2026-08-01 by [ADR-009](./ADR-009-server-authoritative-data.md)**: no offline browsing |
+| 4 | Transition writes | ~~**C**, API-first; IndexedDB fallback + user-visible warning on failure~~ → ⚠️ **superseded 2026-08-01 by [ADR-009](../adr/ADR-009-server-authoritative-data.md)**: API-first kept, fallback removed |
+| 5 | Offline mode | ~~**C**, browse cached data; disable sync/scrape/summary/publish when API down~~ → ⚠️ **superseded 2026-08-01 by [ADR-009](../adr/ADR-009-server-authoritative-data.md)**: no offline browsing |
 | 6 | Auto-summary | **C** — per-channel `autoRegenerate` / publish flags respected server-side |
 | 7 | Translation | **C** — scheduler batch now; on-demand hover translations deferred |
 | 8 | Tor deployment | **A** — optional feature flag, off by default in Compose |
@@ -41,7 +41,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ## 1. Multi-user scope — **C**
 
-**Rationale:** The deployment target is a self-hosted single operator ([ADR-002](./ADR-002-auth.md)). Building full multi-tenancy now would delay the Postgres migration without immediate benefit. Adding nullable `user_id` columns to mutable TG tables in Phase 0 keeps the schema forward-compatible without requiring row-level security, per-user JWT scoping, or UI changes today.
+**Rationale:** The deployment target is a self-hosted single operator ([ADR-002](../adr/ADR-002-auth.md)). Building full multi-tenancy now would delay the Postgres migration without immediate benefit. Adding nullable `user_id` columns to mutable TG tables in Phase 0 keeps the schema forward-compatible without requiring row-level security, per-user JWT scoping, or UI changes today.
 
 **Affects:** `backend/app/models_tg.py`, Alembic migrations, `backend/app/api/routes/data.py`.
 
@@ -69,13 +69,13 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ## 4. Transition writes — **C** — ⚠️ **superseded 2026-08-01**
 
-> **Superseded by [ADR-009](./ADR-009-server-authoritative-data.md).** The transition this
+> **Superseded by [ADR-009](../adr/ADR-009-server-authoritative-data.md).** The transition this
 > decision governed is complete: PostgreSQL *is* authoritative. What remains is the fallback
 > branch, and it now costs more than it returns — the IndexedDB write-fallback and its
 > "saved locally only" toast are removed, and a failed write surfaces as an error instead.
 > The API-first write direction itself is unchanged.
 
-**Rationale:** During the hybrid-sync transition ([ADR-003](./ADR-003-hybrid-sync.md)), writes must prefer the API so PostgreSQL becomes authoritative. When the API is unreachable, falling back to IndexedDB prevents data loss for the operator, but silent divergence is worse than a visible warning. The UI shows a toast/banner when a write lands only in cache.
+**Rationale:** During the hybrid-sync transition ([ADR-003](../adr/ADR-003-hybrid-sync.md)), writes must prefer the API so PostgreSQL becomes authoritative. When the API is unreachable, falling back to IndexedDB prevents data loss for the operator, but silent divergence is worse than a visible warning. The UI shows a toast/banner when a write lands only in cache.
 
 **Affects:** Phase 1 — `frontend/src/lib/repository.ts`, all contexts that persist data (`DataContext.tsx`, `AIContext.tsx`, etc.).
 
@@ -83,7 +83,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ## 5. Offline mode — **C** — ⚠️ **superseded 2026-08-01**
 
-> **Superseded by [ADR-009](./ADR-009-server-authoritative-data.md).** The premise no longer
+> **Superseded by [ADR-009](../adr/ADR-009-server-authoritative-data.md).** The premise no longer
 > holds: since the July 2026 remediation the post feed is server-paged, so with the API down the
 > *primary view* already renders nothing. Offline browsing is therefore retired deliberately
 > rather than maintained partially. This is an accepted capability loss, reasonable for a
@@ -97,7 +97,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ## 6. Auto-summary — **C**
 
-**Rationale:** `autoRegenerate` and `autoPublish` flags on `Summary` objects (`frontend/src/types.ts`) currently drive 60 s polling in `AIContext.tsx`. Moving this logic to APScheduler ([ADR-004](./ADR-004-job-runner.md)) ensures summaries regenerate and publish even when the browser tab is closed. The server must read the same flags from Postgres (`Summary.extra` JSON or dedicated columns) and respect per-summary configuration.
+**Rationale:** `autoRegenerate` and `autoPublish` flags on `Summary` objects (`frontend/src/types.ts`) currently drive 60 s polling in `AIContext.tsx`. Moving this logic to APScheduler ([ADR-004](../adr/ADR-004-job-runner.md)) ensures summaries regenerate and publish even when the browser tab is closed. The server must read the same flags from Postgres (`Summary.extra` JSON or dedicated columns) and respect per-summary configuration.
 
 **Affects:** Phase 6 — `backend/app/jobs/scheduler.py`, `backend/app/api/routes/ai_routes.py`, `backend/app/api/routes/telegram.py` (publish).
 
@@ -113,7 +113,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ## 8. Tor deployment — **A**
 
-**Rationale:** Tor is a niche requirement with high operational complexity ([ADR-007](./ADR-007-tor-deployment.md), [MIGRATION-RISKS.md](./MIGRATION-RISKS.md)). Making it an optional Compose profile or `TOR_ENABLED` feature flag (off by default) keeps the default stack simple. Operators who need Tor opt in via env + sidecar; `TOR_CONTROL_PASSWORD` stays server-side only.
+**Rationale:** Tor is a niche requirement with high operational complexity ([ADR-007](../adr/ADR-007-tor-deployment.md), [MIGRATION-RISKS.md](./MIGRATION-RISKS.md)). Making it an optional Compose profile or `TOR_ENABLED` feature flag (off by default) keeps the default stack simple. Operators who need Tor opt in via env + sidecar; `TOR_CONTROL_PASSWORD` stays server-side only.
 
 **Affects:** `compose.yml`, `backend/app/api/routes/network.py`, `backend/app/services/network.py`. Spike notes in [SPIKE-NOTES.md](./SPIKE-NOTES.md).
 
@@ -125,7 +125,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 **Affects:** Phase 4 — in-memory dict in `backend/app/api/routes/telegram.py` or `backend/app/services/scraper.py`. Phase 5.5 (pre-6) — `SyncJob` model in `backend/app/models_tg.py`, Alembic migration, job persistence layer.
 
-**Related:** [ADR-004](./ADR-004-job-runner.md).
+**Related:** [ADR-004](../adr/ADR-004-job-runner.md).
 
 ---
 
@@ -141,7 +141,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 ## 10. TG-Summarizer/ directory — **C**
 
-**Rationale:** The original Express + Vite app in `TG-Summarizer/` is the behavioral reference for scrape parsing, UI flows, and test fixtures. Keeping it indefinitely ([ADR-001](./ADR-001-repo-layout.md)) costs little disk space and aids diffing during parity work. It is not deployed and not imported by the monorepo build.
+**Rationale:** The original Express + Vite app in `TG-Summarizer/` is the behavioral reference for scrape parsing, UI flows, and test fixtures. Keeping it indefinitely ([ADR-001](../adr/ADR-001-repo-layout.md)) costs little disk space and aids diffing during parity work. It is not deployed and not imported by the monorepo build.
 
 **Affects:** Documentation only. No deletion timeline.
 
@@ -151,7 +151,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 | Decision | ADR / doc updated or confirmed |
 |----------|-------------------------------|
-| 1 | Confirms [ADR-002](./ADR-002-auth.md) light auth; extends [DATA-MODEL.md](./DATA-MODEL.md) |
-| 4, 5 | ~~Refines [ADR-003](./ADR-003-hybrid-sync.md) offline and fallback behavior~~ → both superseded by [ADR-009](./ADR-009-server-authoritative-data.md) (2026-08-01), which also supersedes ADR-003 |
-| 6, 7, 9 | Refines [ADR-004](./ADR-004-job-runner.md) job scope and persistence |
-| 8 | Confirms [ADR-007](./ADR-007-tor-deployment.md) optional deployment |
+| 1 | Confirms [ADR-002](../adr/ADR-002-auth.md) light auth; extends [DATA-MODEL.md](./DATA-MODEL.md) |
+| 4, 5 | ~~Refines [ADR-003](../adr/ADR-003-hybrid-sync.md) offline and fallback behavior~~ → both superseded by [ADR-009](../adr/ADR-009-server-authoritative-data.md) (2026-08-01), which also supersedes ADR-003 |
+| 6, 7, 9 | Refines [ADR-004](../adr/ADR-004-job-runner.md) job scope and persistence |
+| 8 | Confirms [ADR-007](../adr/ADR-007-tor-deployment.md) optional deployment |

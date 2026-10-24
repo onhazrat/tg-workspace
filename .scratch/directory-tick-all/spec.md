@@ -6,7 +6,7 @@ Ticket prefix: `DTA`.
 
 Settled in one grilling session on 2026-10-18. The decision record is
 `docs/directory-select-all-plan.md`, and the rationale is
-`docs/migration/ADR-031-tick-all-matching.md`. The terms **Tick**, **Seed** and
+`docs/adr/ADR-031-tick-all-matching.md`. The terms **Tick**, **Seed** and
 **All matching** are defined in `CONTEXT.md`.
 
 ## Problem Statement

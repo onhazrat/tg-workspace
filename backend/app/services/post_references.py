@@ -2,7 +2,7 @@
 
 The **only** module that writes this table. A Reference is one Post naming one
 Channel, once, in one way; `models_tg.PostReference` carries the argument for
-the row's shape and `docs/migration/ADR-019-channel-reference-graph.md` the
+the row's shape and `docs/adr/ADR-019-channel-reference-graph.md` the
 three decisions that are hard to reverse.
 
 ## The extractor is a sibling of Discover's, not a caller

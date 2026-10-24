@@ -27,7 +27,7 @@ the graph makes the crawl recursive: a queued handle is probed, its samples
 name more handles, the next tick queues those. The existing refresh re-probes
 every live entry, so each refresh brings in what that Channel cited since.
 `DIRECTORY_FOLLOW_SAMPLE_REFERENCES` switches the sample source off, which
-queues exactly what the Post walk used to. `docs/migration/ADR-020-*.md`
+queues exactly what the Post walk used to. `docs/adr/ADR-020-*.md`
 records the trade: a Post whose Channel has no chat id is deferred by
 extraction, and so are its handles now.
 

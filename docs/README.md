@@ -3,7 +3,8 @@
 | Section | Description |
 |---------|-------------|
 | **[ideas-log/](ideas-log/)** | Backlog of ideas to pick up in future work sessions (with AI or solo) |
-| **[migration/](migration/)** | TG-Summarizer → FastAPI migration ADRs, inventory, and remediation |
+| **[adr/](adr/)** | Architecture decision records, one per decision |
+| **[migration/](migration/)** | TG-Summarizer → FastAPI migration: locked decisions, inventory, and remediation |
 
 ## Tooling
 

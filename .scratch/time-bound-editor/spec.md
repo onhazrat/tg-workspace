@@ -3,7 +3,7 @@
 Status: ready-for-agent
 
 Plan and decisions: `docs/time-bound-editor-plan.md`. Architecture:
-`docs/migration/ADR-033-one-time-editor.md`. Prototype: variant 1
+`docs/adr/ADR-033-one-time-editor.md`. Prototype: variant 1
 (`?variant=1`) on branch
 [`prototype/time-bound-editor` @ 10b8c6af](https://github.com/onhazrat/tg-workspace/tree/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19),
 notes and a file-by-file map in `prototype.md` beside this file. Vocabulary

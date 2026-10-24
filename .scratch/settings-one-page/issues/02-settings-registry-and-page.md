@@ -19,7 +19,7 @@ restyles them.
 Spec: `.scratch/settings-one-page/spec.md`: stories 1–30, 32–46, 52–53, 65, 77,
 the Registry, API and Page implementation decisions (the row shape there came
 from the prototype), and the Testing decisions. Architecture:
-`docs/migration/ADR-032-one-settings-registry.md`. Plan decisions 2, 4, 7, 10,
+`docs/adr/ADR-032-one-settings-registry.md`. Plan decisions 2, 4, 7, 10,
 12, 14–17, 20, 22–24, 26, 28, 29. Reference implementation: variant B on
 branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af). Its page code ports over, but its
 prototype API does not: that one read staging and derived ids by heuristics.

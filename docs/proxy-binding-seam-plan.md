@@ -6,7 +6,7 @@ was put as a question with alternatives; the rejected option and the reason it
 lost are recorded beside each, because a decision whose alternative is not
 written down gets relitigated by whoever reads the code next.
 
-**Why, in one page:** [ADR-012](./migration/ADR-012-egress-seam.md). This plan
+**Why, in one page:** [ADR-012](./adr/ADR-012-egress-seam.md). This plan
 is the how; the ADR is the decision and what it costs.
 
 ## The rule

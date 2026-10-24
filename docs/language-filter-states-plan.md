@@ -3,7 +3,7 @@
 Every Language filter (Posts, Channels, Directory) lists every Language a row can have, including
 Undetermined, No words and Not read yet, and lets the user filter on each. Decisions from a
 grilling session on 2026-10-15; the rule change is recorded in
-[ADR-021](./migration/ADR-021-post-language.md#revised-2026-10-15-a-channel-can-be-undetermined-or-have-no-words)
+[ADR-021](./adr/ADR-021-post-language.md#revised-2026-10-15-a-channel-can-be-undetermined-or-have-no-words)
 and the vocabulary in `CONTEXT.md` under **Language**.
 
 ## Decisions

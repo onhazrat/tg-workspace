@@ -23,7 +23,7 @@ ADR-020.
 - [x] Existing harvest tests whose outcome still holds pass against the new source; walk-only
       tests are deleted.
 - [x] New guards mutation-tested.
-- [x] `.env.example`, the env catalog and `docs/migration/ADR-020-*.md` updated; ADR-019's
+- [x] `.env.example`, the env catalog and `docs/adr/ADR-020-*.md` updated; ADR-019's
       harvest statement marked superseded.
 - [x] Lint and the backend suite pass.
 

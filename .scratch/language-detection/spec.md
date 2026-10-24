@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-Decided in [ADR-021](../../docs/migration/ADR-021-post-language.md), which supersedes the `script`
+Decided in [ADR-021](../../docs/adr/ADR-021-post-language.md), which supersedes the `script`
 statistic of ADR-015. Ticket ids use the prefix `LANG`.
 
 ## Problem Statement

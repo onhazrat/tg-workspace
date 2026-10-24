@@ -1,6 +1,8 @@
 # ADR-025: Posts are filtered and ordered by their Estimated View count
 
 **Status:** Accepted (2026-09-30). Extends ADR-024. Spec: `.scratch/post-filter-bar/spec.md`.
+The post-filter half is superseded (2026-10-01) by
+[ADR-026](./ADR-026-post-filters-leave-the-scope.md): post filters leave the Scope.
 
 ## Context
 

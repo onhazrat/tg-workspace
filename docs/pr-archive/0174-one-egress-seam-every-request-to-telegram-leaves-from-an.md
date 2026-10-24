@@ -4,7 +4,7 @@
 
 ---
 
-Implements ticket 36 / [ADR-012](docs/migration/ADR-012-egress-seam.md). The
+Implements ticket 36 / [ADR-012](docs/adr/ADR-012-egress-seam.md). The
 design authority is `docs/proxy-binding-seam-plan.md` — every decision, the
 alternative that lost, and the reason.
 

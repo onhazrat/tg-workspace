@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-09
 **Context:** Post-migration security and architecture audit (Phases 0–7 complete per [IMPLEMENTATION-PLAN.md](./IMPLEMENTATION-PLAN.md))
-**Related:** [DECISIONS.md](./DECISIONS.md), [ADR-002-auth.md](./ADR-002-auth.md), [ADR-004-job-runner.md](./ADR-004-job-runner.md), [SECRETS-MATRIX.md](./SECRETS-MATRIX.md)
+**Related:** [DECISIONS.md](./DECISIONS.md), [ADR-002-auth.md](../adr/ADR-002-auth.md), [ADR-004-job-runner.md](../adr/ADR-004-job-runner.md), [SECRETS-MATRIX.md](./SECRETS-MATRIX.md)
 
 This document turns audit findings into **actionable, parallelizable engineering workstreams**. It does not replace locked migration decisions; it remediates gaps between current code and those decisions.
 
@@ -21,14 +21,14 @@ This document turns audit findings into **actionable, parallelizable engineering
 
 - **Minimal blast radius** — prefer targeted fixes over rewrites; reuse existing patterns (`CurrentUser`, `apiWrite`, `AppSetting`, repository cache).
 - **Phase 0 gates parallel work** — tenancy depth depends on deployment mode; security hardening starts immediately regardless.
-- **Single-operator first** — Mode A (below) is the default path per [DECISIONS.md #1](./DECISIONS.md) and [ADR-002](./ADR-002-auth.md).
+- **Single-operator first**. Mode A (below) is the default path per [DECISIONS.md #1](./DECISIONS.md) and [ADR-002](../adr/ADR-002-auth.md).
 - **Behavioral parity preserved** — scrape parsing, publish chunking, summary flows unchanged ([SPIKE-NOTES.md](./SPIKE-NOTES.md)).
 
 ### Non-goals
 
 - Full SaaS multi-tenancy UI (unless Mode B chosen).
-- Celery/Redis job runner ([ADR-004](./ADR-004-job-runner.md) deferred).
-- pgvector/Qdrant migration ([ADR-005](./ADR-005-vector-search.md) deferred unless scale requires it).
+- Celery/Redis job runner ([ADR-004](../adr/ADR-004-job-runner.md) deferred).
+- pgvector/Qdrant migration ([ADR-005](../adr/ADR-005-vector-search.md) deferred unless scale requires it).
 - Deleting `TG-Summarizer/` reference tree ([DECISIONS.md #10](./DECISIONS.md)).
 - Rewriting all 8 React contexts in one pass.
 
@@ -356,7 +356,7 @@ Inverted layering: `backend/app/jobs/retention.py` imports `_touch_sync` from `b
 - [ ] **React Query for server state** — extend `frontend/src/main.tsx` `QueryClientProvider`
   - Add hooks: `frontend/src/hooks/useChannels.ts`, `useSummaries.ts`, `useLogs.ts` with staleTime/refetchOnWindowFocus.
   - Migrate `DataContext` loaders to queries; keep context as thin selector layer initially.
-- [ ] **Unify API clients** — per [ADR-006](./ADR-006-api-client.md)
+- [ ] **Unify API clients**. Per [ADR-006](../adr/ADR-006-api-client.md)
   - Deprecate `frontend/src/client/` generated SDK for TG routes; use `frontend/src/api/` only.
   - Admin/template routes (`users`, `login`) may keep generated client temporarily — document split in `frontend/README.md`.
 - [ ] **Deduplicate sync/proxy logic**
@@ -406,7 +406,7 @@ Inverted layering: `backend/app/jobs/retention.py` imports `_touch_sync` from `b
 
 #### Tasks (deferred — when Phase 0.5 triggers)
 
-- [ ] Enable pgvector per [ADR-005](./ADR-005-vector-search.md): Alembic extension, `vector` column, SQL `<=>` query.
+- [ ] Enable pgvector per [ADR-005](../adr/ADR-005-vector-search.md): Alembic extension, `vector` column, SQL `<=>` query.
 - [ ] Benchmark script `backend/scripts/bench_rag_search.py`.
 
 #### Acceptance criteria
@@ -476,10 +476,10 @@ Inverted layering: `backend/app/jobs/retention.py` imports `_touch_sync` from `b
   USERS_OPEN_REGISTRATION=false
   SECRET_KEY=<strong random>
   ```
-- [ ] **Update `deployment.md`** — production checklist, single-operator semantics, reverse-proxy auth option ([ADR-002](./ADR-002-auth.md)).
+- [ ] **Update `deployment.md`**. Production checklist, single-operator semantics, reverse-proxy auth option ([ADR-002](../adr/ADR-002-auth.md)).
 - [ ] **Scheduler multi-instance guard** — `backend/app/jobs/scheduler.py`
   - Log prominent warning if `SCHEDULER_ENABLED` and multiple replicas detected (env `INSTANCE_ID` optional).
-  - Document single-replica requirement in [ADR-004](./ADR-004-job-runner.md).
+  - Document single-replica requirement in [ADR-004](../adr/ADR-004-job-runner.md).
 - [ ] **Distributed lock (optional)** — if multi-replica ever needed: Postgres advisory lock in `_run_guarded` before job execution.
 
 #### Acceptance criteria

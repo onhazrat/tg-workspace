@@ -1,7 +1,7 @@
 # Directory: tick all that match
 
 Decisions from the 2026-10-18 grilling. The rationale is in
-`docs/migration/ADR-031-tick-all-matching.md`, and the term **All matching** is
+`docs/adr/ADR-031-tick-all-matching.md`, and the term **All matching** is
 defined in `CONTEXT.md`.
 
 ## Behaviour

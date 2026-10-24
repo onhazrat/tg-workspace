@@ -51,7 +51,7 @@ Plus the item ticket 01 left behind:
 
 ## Locked decision reversed, as the spec required
 
-`docs/migration/ADR-011-multi-user-registration.md` is new. It supersedes the
+`docs/adr/ADR-011-multi-user-registration.md` is new. It supersedes the
 registration sentence in ADR-002 and Mode A's
 `USERS_OPEN_REGISTRATION=false`-in-production rule in `DECISIONS.md`; both are
 struck through in place with a pointer, matching how ADR-009 was recorded.

@@ -188,7 +188,7 @@ Produce written decisions (with options + recommendation) for:
 ### 0.6 Discovery outputs (gate before Phase 1)
 
 - `docs/migration/INVENTORY.md` — routes, jobs, stores, contexts
-- `docs/migration/ADR-*.md` — 8 decisions above (including AI provider abstraction)
+- `docs/adr/ADR-*.md`, 8 decisions above (including AI provider abstraction)
 - `docs/migration/TARGET-ARCHITECTURE.md` — diagram + module map
 - `docs/migration/MIGRATION-RISKS.md` — ranked risks + mitigations
 - `docs/migration/DATA-MODEL.md` — SQL schema draft from `types.ts`

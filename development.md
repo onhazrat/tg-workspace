@@ -169,7 +169,7 @@ administrator. With it on, signing up still works and the person can still log i
 `/pending-approval` and every data route refuses them until an Admin sets `is_approved` from the
 users screen. It is a separate flag from `is_active`: disabling an approved account does not send it
 back to the pending queue when it is re-enabled. Turning approval on affects only accounts created
-afterwards. See [ADR-011](docs/migration/ADR-011-multi-user-registration.md).
+afterwards. See [ADR-011](docs/adr/ADR-011-multi-user-registration.md).
 
 Note that `POST /users/signup` answers **202 with the same message for every address**, registered or
 not, so that it cannot be used to discover which addresses have accounts. A person who mistypes an
@@ -285,7 +285,7 @@ only e2e reaches score as untested.
 
 ## API surface (`/api/v1/*`)
 
-**Supported surface:** `/api/v1/*` only. Use hand-written `frontend/src/api/` for the summarizer and generated `frontend/src/client/` for the admin shell ([ADR-006](docs/migration/ADR-006-api-client.md)).
+**Supported surface:** `/api/v1/*` only. Use hand-written `frontend/src/api/` for the summarizer and generated `frontend/src/client/` for the admin shell ([ADR-006](docs/adr/ADR-006-api-client.md)).
 
 - **The pre-versioning `/api/*` aliases are gone.** `routes/legacy.py` re-exported eleven of them (`/api/publish`, `/api/tor-status`, …) in non-production environments; E2 deleted it in 2026-08. They are unrouted in *every* environment now, so a stale caller gets a 404.
 - **Production:** middleware still returns **410 Gone** for any `/api/*` path not under `/api/v1/` — "withdrawn" is a more useful answer than "never existed".
@@ -420,4 +420,5 @@ Remediation chose **Mode A** on 2026-06-09 ([DECISIONS.md](docs/migration/DECISI
 ## Documentation
 
 - **Ideas log** — [`docs/ideas-log/`](docs/ideas-log/README.md) for backlog items to pick up in a later session (reference an `IDEA-NNN` id when starting work with the agent).
+- **Decisions**, [`docs/adr/`](docs/adr/README.md), one ADR per decision since the migration.
 - **Migration** — [`docs/migration/`](docs/migration/README.md). Locked decisions: [DECISIONS.md](docs/migration/DECISIONS.md). Phased plan: [IMPLEMENTATION-PLAN.md](docs/migration/IMPLEMENTATION-PLAN.md). Remediation: [REMEDIATION-PLAN.md](docs/migration/REMEDIATION-PLAN.md).

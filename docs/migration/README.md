@@ -31,35 +31,7 @@ Documentation for migrating the browser-first TG-Summarizer app to the FastAPI +
 
 ## Architectural decision records
 
-| ADR | Topic |
-|-----|-------|
-| [ADR-001](./ADR-001-repo-layout.md) | Repository layout |
-| [ADR-002](./ADR-002-auth.md) | Authentication |
-| [ADR-003](./ADR-003-hybrid-sync.md) | ~~Hybrid sync (API-first + cache)~~ — ⚠️ superseded by ADR-009 |
-| [ADR-004](./ADR-004-job-runner.md) | APScheduler job runner |
-| [ADR-005](./ADR-005-vector-search.md) | Vector search |
-| [ADR-006](./ADR-006-api-client.md) | API client style |
-| [ADR-007](./ADR-007-tor-deployment.md) | Tor deployment |
-| [ADR-008](./ADR-008-ai-providers.md) | AI provider abstraction |
-| [ADR-009](./ADR-009-server-authoritative-data.md) | Server-authoritative data — supersedes ADR-003 and Decisions #4/#5 |
-| [ADR-010](./ADR-010-artifact-model.md) | The Artifact model — the four kinds and their frozen Scope |
-| [ADR-011](./ADR-011-multi-user-registration.md) | Multi-user registration and approval — supersedes the registration half of ADR-002 |
-| [ADR-012](./ADR-012-egress-seam.md) | The Lane is the egress seam — extends ADR-007 |
-| [ADR-013](./ADR-013-open-source-publication.md) | Publishing the repository as open source |
-| [ADR-014](./ADR-014-channel-directory.md) | The probe cache becomes the Channel Directory — extends ADR-009 |
-| [ADR-015](./ADR-015-directory-statistics.md) | Directory statistics are stored at probe time, not derived on read |
-| [ADR-016](./ADR-016-bring-your-own-key.md) | Each Account brings its own AI key |
-| [ADR-017](./ADR-017-spend-session.md) | A third View-as tier that spends without seeing |
-| [ADR-018](./ADR-018-analysis-window.md) | One global Analysis window with explicit Live and Fixed modes |
-| [ADR-019](./ADR-019-channel-reference-graph.md) | The channel reference graph is per-occurrence and permanent |
-| [ADR-020](./ADR-020-references-feed-the-directory.md) | References feed the Directory, superseding part of ADR-019 |
-| [ADR-021](./ADR-021-post-language.md) | A Post has a Language, read on the server by fastText, superseding ADR-015's `script` |
-| [ADR-022](./ADR-022-post-links.md) | A Post keeps its Links as UTF-16 positions over its plain text, beside `links`, with no rescrape |
-| [ADR-025](./ADR-025-posts-are-judged-by-estimated-views.md) | Posts are filtered and ordered by their Estimated View count, never by Channel Reach — extends ADR-024 |
-| [ADR-029](./ADR-029-tags-belong-to-the-account.md) | Tags belong to the Account, not the Follow |
-| [ADR-030](./ADR-030-generation-is-an-attempt-on-the-worker.md) | Generating a Summary is an Attempt, run on the worker |
-| [ADR-031](./ADR-031-tick-all-matching.md) | Tick all is a snapshot up to 10,000 and All matching above it |
-| [ADR-035](./ADR-035-every-request-is-recorded.md) | Every Request is recorded, beside the ledger, kept in three tiers |
+The ADRs and their index live in [`docs/adr/`](../adr/README.md).
 
 ## Code references
 

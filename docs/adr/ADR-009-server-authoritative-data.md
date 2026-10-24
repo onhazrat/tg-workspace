@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-08-01)
 **Supersedes:** [ADR-003 (Hybrid Sync)](./ADR-003-hybrid-sync.md), and Decisions
-[#4 (transition writes)](./DECISIONS.md) and [#5 (offline mode)](./DECISIONS.md).
+[#4 (transition writes)](../migration/DECISIONS.md) and [#5 (offline mode)](../migration/DECISIONS.md).
 
 **Decision:** PostgreSQL is the single source of truth. TanStack Query is the only client-side
 cache. There is no IndexedDB mirror, no read-through repository, and no offline browsing.
