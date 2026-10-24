@@ -345,6 +345,13 @@ search and a per-Channel cap. It is not part of the Scope. It decides what is
 shown, and so what a select-all or deselect-all reaches.
 _Avoid_: post filters (as part of the Scope), query, facet
 
+**Posts view**:
+The Scope and the Post filter and order, resolved once for one Account: what
+the Posts tab shows and what its counts count. Every Posts read is answered
+from one, and each read says which parts it ignores; the facets ignore the Post
+filter, for instance, and the window histogram the per-Channel cap.
+_Avoid_: post view, view (alone; a View is what a View count counts)
+
 **Post selection**:
 Which Posts of the selected Channels and the Analysis window an operation
 covers: an ordered list of Selection rules and Picks, read top to bottom, where
