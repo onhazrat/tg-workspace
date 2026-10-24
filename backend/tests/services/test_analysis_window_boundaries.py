@@ -49,7 +49,7 @@ from app.jobs import auto_summary, summary_generation
 from app.models import User
 from app.models_tg import AICredential, Post, PostEmbedding, Summary, utc_now
 from app.services.discover import compute_discover_candidates
-from app.services.posts import count_posts_in_scope, list_feed
+from app.services.posts_view import count_shown, feed, resolve_posts_view
 from app.services.prompt_assembly import PromptScope, assemble_posts_text
 from tests.utils.scope import stored_scope
 from tests.utils.user import create_random_user
@@ -163,12 +163,11 @@ def channel(client: TestClient, session: Session) -> str:
 def test_the_feed_excludes_a_post_sitting_exactly_on_the_end(
     session: Session, operator: User, channel: str
 ) -> None:
-    rows = list_feed(
+    rows = feed(
         session,
-        user_id=operator.id,
-        channel_names=[channel],
-        start_date=START,
-        end_date=END,
+        resolve_posts_view(
+            session, user_id=operator.id, channel_names=[channel], start=START, end=END
+        ),
     )
 
     assert {r["id"] for r in rows} == IN_WINDOW
@@ -183,13 +182,16 @@ def test_the_capped_feed_excludes_it_too(
     cap ranks only rows the window admits. Applied outside it, the post on the
     end boundary would consume a cap slot before being discarded.
     """
-    rows = list_feed(
+    rows = feed(
         session,
-        user_id=operator.id,
-        channel_names=[channel],
-        start_date=START,
-        end_date=END,
-        max_per_channel=10,
+        resolve_posts_view(
+            session,
+            user_id=operator.id,
+            channel_names=[channel],
+            start=START,
+            end=END,
+            max_per_channel=10,
+        ),
     )
 
     assert {r["id"] for r in rows} == IN_WINDOW
@@ -199,8 +201,11 @@ def test_an_open_ended_window_keeps_everything_after_the_start(
     session: Session, operator: User, channel: str
 ) -> None:
     """`None` is that side left open, and the start stays inclusive."""
-    rows = list_feed(
-        session, user_id=operator.id, channel_names=[channel], start_date=START
+    rows = feed(
+        session,
+        resolve_posts_view(
+            session, user_id=operator.id, channel_names=[channel], start=START
+        ),
     )
 
     assert {r["id"] for r in rows} == {2, 3, 4, 5, 6}
@@ -217,22 +222,28 @@ def test_two_adjacent_windows_share_no_post(
     """
     first = {
         r["id"]
-        for r in list_feed(
+        for r in feed(
             session,
-            user_id=operator.id,
-            channel_names=[channel],
-            start_date=START,
-            end_date=END,
+            resolve_posts_view(
+                session,
+                user_id=operator.id,
+                channel_names=[channel],
+                start=START,
+                end=END,
+            ),
         )
     }
     second = {
         r["id"]
-        for r in list_feed(
+        for r in feed(
             session,
-            user_id=operator.id,
-            channel_names=[channel],
-            start_date=END,
-            end_date=END + 2,
+            resolve_posts_view(
+                session,
+                user_id=operator.id,
+                channel_names=[channel],
+                start=END,
+                end=END + 2,
+            ),
         )
     }
 
@@ -254,13 +265,12 @@ def test_the_counts_agree_with_the_feed_on_the_boundary(
     selection that would have fitted, so the two have to answer the same
     question at the boundary as well as in the middle.
     """
-    counts = count_posts_in_scope(
+    counts = count_shown(
         session,
-        user_id=operator.id,
-        channel_names=[channel],
-        start_date=START,
-        end_date=END,
-    )
+        resolve_posts_view(
+            session, user_id=operator.id, channel_names=[channel], start=START, end=END
+        ),
+    )[0]
 
     assert counts == {channel: len(IN_WINDOW)}
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal, get_args
 
@@ -113,9 +113,10 @@ class ViewReading:
     """What "views" means for one request (PFB-03, ADR-025).
 
     The raw View count, or the Estimated View count through the curve and
-    settings current when the request was read. `settling_curve.view_reading`
-    loads them, and only when an estimate will be read; reading one unloaded
-    raises rather than guessing a curve.
+    settings current when the request was read. A Posts view loads them when
+    it is resolved, and only when an estimate will be read
+    (`posts_view.resolve_posts_view`); reading one unloaded raises rather than
+    guessing a curve.
     """
 
     measure: ViewMeasure = "estimated"
@@ -289,6 +290,37 @@ def tree_measures(node: TreeNode[TreeCond]) -> frozenset[ViewMeasure]:
     return frozenset(c.measure for c in tree_conds(node) if isinstance(c, ViewsCond))
 
 
+def reads_unfollowed(tree: PostTree | None) -> bool:
+    """Whether `tree` needs the followed-channel set: an Unfollowed forwards Type."""
+    return tree is not None and TypeCond("unfollowed_forwarded") in tree_conds(tree)
+
+
+def reads_estimate(
+    tree: PostTree | None, sort: str = "newest", measure: ViewMeasure = "views"
+) -> bool:
+    """Whether a bound of `tree`, or a views `sort` under `measure`, reads an estimate."""
+    if sort in VIEW_SORTS and measure == "estimated":
+        return True
+    return tree is not None and "estimated" in tree_measures(tree)
+
+
+#: The Settling curve and the settings an Estimated View count reads through.
+type Estimate = tuple[CurvePoints, ReachSettings]
+
+
+def reading_of(measure: ViewMeasure, estimate: Estimate | None) -> ViewReading:
+    """`measure`'s reading through `estimate`, loaded when `reads_estimate` said so."""
+    return ViewReading(measure) if estimate is None else ViewReading(measure, *estimate)
+
+
+def tree_readings(
+    tree: PostTree | None, estimate: Estimate | None
+) -> dict[ViewMeasure, ViewReading]:
+    """One reading per measure a Post filter's views bounds name (PTR-03)."""
+    measures = tree_measures(tree) if tree is not None else frozenset()
+    return {m: reading_of(m, estimate) for m in sorted(measures)}
+
+
 @dataclass(frozen=True)
 class PostFilters:
     """The Post filter as SQL predicates: the keyword and the tree (PTR-03).
@@ -308,12 +340,6 @@ class PostFilters:
     def active_tree(self) -> PostTree | None:
         """The tree, when it holds anything to filter by; an empty root keeps all."""
         return self.tree if self.tree is not None and self.tree.children else None
-
-    def reads_unfollowed(self) -> bool:
-        """Whether the tree needs the followed-channel set."""
-        return self.tree is not None and TypeCond("unfollowed_forwarded") in tree_conds(
-            self.tree
-        )
 
 
 @dataclass(frozen=True)
@@ -345,6 +371,127 @@ def channel_posts_aside(filters: PostFilters) -> PostFilters:
     return replace(
         filters,
         tree=prune_tree(filters.tree, lambda c: isinstance(c, ChannelPostsCond)),
+    )
+
+
+# ---- The feed's orders and the per-Channel cap (PFB-01, ADR-036) -------------
+
+
+def random_cap_order(seed: int) -> Any:
+    """A deterministic pseudo-random ordering for the ``random`` per-channel cap.
+
+    Seeded by the scope (channel, post, and a caller-supplied ``seed``) so the
+    *same* posts are chosen across pages: offset paging over a per-request
+    reshuffle (``ORDER BY random()``) would repeat and skip rows. It does not
+    reproduce the old client-side mulberry32 shuffle; the user only requires a
+    stable random selection, not byte-parity with the previous frontend cap.
+    """
+    return func.md5(
+        func.concat(
+            col(Post.channel_name),
+            literal(":"),
+            col(Post.post_id),
+            literal(f":{seed}"),
+        )
+    )
+
+
+def channel_order(sort: FeedSort, entity: Any, reading: ViewReading) -> list[Any]:
+    """The chosen order within one channel, ending in a unique tiebreak.
+
+    Newest and oldest are the timestamp, then `post_id` running the same way,
+    so a collision still reads in posting order. Most and fewest views are the
+    value under `reading`, a Post with none last in both directions, then
+    newest first (PFB-03). `(channel_name, post_id)` is unique, which is what
+    makes offset paging deterministic. Also the ranking the `ordered` cap keeps
+    the first N of, which is the whole of "the cap follows the order" (PFB-01).
+
+    Public because Discover ranks a channel's Posts by it too.
+    """
+    if sort == "oldest":
+        return [entity.timestamp.asc(), entity.post_id.asc()]
+    newest = [entity.timestamp.desc(), entity.post_id.desc()]
+    if sort == "most_views":
+        return [reading.of(entity).desc().nulls_last(), *newest]
+    if sort == "fewest_views":
+        return [reading.of(entity).asc().nulls_last(), *newest]
+    return newest
+
+
+def _block_order(sort: FeedSort, entity: Any, reading: ViewReading) -> Any:
+    """Each channel's best key under the order, as the grouped feed leads with it."""
+    key = reading.of(entity) if sort in VIEW_SORTS else entity.timestamp
+    if sort in ("oldest", "fewest_views"):
+        return func.min(key).over(partition_by=entity.channel_name).asc().nulls_last()
+    return func.max(key).over(partition_by=entity.channel_name).desc().nulls_last()
+
+
+def feed_order_by(
+    sort: FeedSort, group_by_channel: bool, entity: Any, reading: ViewReading
+) -> list[Any]:
+    """Deterministic ORDER BY for the feed, with a stable tiebreak for paging.
+
+    Ungrouped is the chosen order across every channel, with the channel name
+    breaking a tie before `post_id` does.
+
+    Grouped leads with each channel's **best** key under the chosen order (its
+    newest Post under `newest`, its most viewed under `most_views`), so a
+    channel's block sits where its first Post falls, then the chosen order
+    inside the block (PFB-02). The window runs over the rows the query already
+    kept, so under a cap a block is placed by the Posts the cap kept. The
+    channel name breaks a tie between two blocks, which keeps paging
+    deterministic.
+    """
+    *keys, post_id = channel_order(sort, entity, reading)
+    if group_by_channel:
+        return [
+            _block_order(sort, entity, reading),
+            entity.channel_name.asc(),
+            *keys,
+            post_id,
+        ]
+    return [*keys, entity.channel_name.asc(), post_id]
+
+
+@dataclass(frozen=True)
+class Cap:
+    """How many Posts each Channel keeps, and which: the first N of an order."""
+
+    max_per_channel: int = 0
+    mode: CapMode = "ordered"
+    sort: FeedSort = "newest"
+    seed: int = 0
+    #: What the views orders read.
+    reading: ViewReading = ViewReading()
+
+
+def ranked_per_channel(
+    columns: Any,
+    scope: PostScope,
+    where: Sequence[ColumnElement[bool]],
+    cap: Cap,
+) -> Any:
+    """`columns` over the Posts `scope` and `where` keep, each ranked `rn` in its Channel.
+
+    The one per-Channel cap, for the feed and a Selection rule alike, as a
+    subquery the caller keeps `rn <= cap.max_per_channel` of. The Account's
+    scope applies inside it, *before* `row_number()`: applied outside, another
+    Account's Posts would use up the cap (ticket 16). `ordered` ranks by the
+    chosen order, so the N kept are the first N the feed would show; `random`
+    by the seeded hash, so a page and a reload keep the same N. Either ends in
+    the unique `(channel_name, post_id)`, the partition supplying the Channel.
+    """
+    order = (
+        [random_cap_order(cap.seed), col(Post.post_id)]
+        if cap.mode == "random"
+        else channel_order(cap.sort, Post, cap.reading)
+    )
+    rank = func.row_number().over(partition_by=col(Post.channel_name), order_by=order)
+    return (
+        scoped_select(columns, Post, scope.user_id)
+        .where(*scope.clauses(), *where)
+        .add_columns(rank.label("rn"))
+        .subquery()
     )
 
 

@@ -40,8 +40,7 @@ from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
-from app.services.post_filters import PostScope
-from app.services.post_selection import selection_clause
+from app.services.posts_view import resolve_posts_view
 from app.services.serialization import model_to_camel
 from app.services.telegram_web import normalize_handle
 from app.services.tenancy import (
@@ -446,11 +445,14 @@ def create_report(
         start_date=scope.start,
         end_date=scope.end,
         signals=signals,
-        selected=selection_clause(
+        selected=resolve_posts_view(
             session,
-            None if scope.selection is None else to_steps(scope.selection),
-            PostScope(user_id, list(scope.channels) or None, scope.start, scope.end),
-        ),
+            user_id=user_id,
+            channel_names=list(scope.channels) or None,
+            start=scope.start,
+            end=scope.end,
+            steps=None if scope.selection is None else to_steps(scope.selection),
+        ).selected,
     )
 
     report = DiscoverReport(

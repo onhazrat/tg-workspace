@@ -21,13 +21,6 @@ from sqlmodel import Session, col, select
 
 from app.jobs.settings import load_reach_settings
 from app.models_tg import Post, SettlingCurveFit, ViewObservation
-from app.services.post_filters import (
-    VIEW_SORTS,
-    PostTree,
-    ViewMeasure,
-    ViewReading,
-    tree_measures,
-)
 from app.services.reach import (
     MS_PER_HOUR,
     SEED_CURVE,
@@ -70,36 +63,6 @@ def current_curve(session: Session) -> CurvePoints:
 def current_estimate(session: Session) -> tuple[CurvePoints, ReachSettings]:
     """The curve and the reach settings an Estimated View count reads through."""
     return current_curve(session), reach_settings_from(load_reach_settings(session))
-
-
-def view_reading(
-    session: Session, measure: ViewMeasure, *, sort: str = "newest"
-) -> ViewReading:
-    """What the views orders read for one request (PFB-03, ADR-025).
-
-    The curve and the settings are read only when a views order will read an
-    Estimated View count. Per request, never stored, so a refit reaches the
-    next page.
-    """
-    if measure == "views" or sort not in VIEW_SORTS:
-        return ViewReading(measure)
-    return ViewReading(measure, *current_estimate(session))
-
-
-def tree_readings(
-    session: Session, tree: PostTree | None
-) -> dict[ViewMeasure, ViewReading]:
-    """One reading per measure a Post filter's views bounds name (PTR-03).
-
-    The curve is read only when a bound names the Estimated View count.
-    """
-    measures = tree_measures(tree) if tree is not None else frozenset()
-    readings: dict[ViewMeasure, ViewReading] = {}
-    if "views" in measures:
-        readings["views"] = ViewReading("views")
-    if "estimated" in measures:
-        readings["estimated"] = ViewReading("estimated", *current_estimate(session))
-    return readings
 
 
 def observed_pairs(session: Session) -> ObservedPairs:

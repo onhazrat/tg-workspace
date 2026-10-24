@@ -46,8 +46,13 @@ from app.models_tg import Post
 from app.services.channel_directory import enqueue_handles, list_probes, queue_counts
 from app.services.discover import compute_discover_candidates
 from app.services.follows import ensure_follow
-from app.services.post_filters import PostFilters, TreeAtom, TreeGroup, TypeCond
-from app.services.posts import count_posts_in_scope, list_feed, lookup_posts
+from app.services.post_filters import TreeAtom, TreeGroup, TypeCond
+from app.services.posts_view import (
+    count_shown,
+    feed,
+    posts_by_ref,
+    resolve_posts_view,
+)
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.user import create_random_user
 
@@ -138,7 +143,7 @@ def test_feed_hides_posts_from_a_channel_you_do_not_follow(
 ) -> None:
     _split_corpus(session, user, other_user)
 
-    rows = list_feed(session, user_id=user.id)
+    rows = feed(session, resolve_posts_view(session, user_id=user.id))
 
     assert [r["id"] for r in rows] == [1]
 
@@ -152,7 +157,7 @@ def test_feed_is_unfiltered_while_the_flag_is_off(
     """The one thing this ticket promises not to change yet."""
     _split_corpus(session, user, other_user)
 
-    ids = {r["id"] for r in list_feed(session, user_id=user.id)}
+    ids = {r["id"] for r in feed(session, resolve_posts_view(session, user_id=user.id))}
 
     assert {1, 2} <= ids
 
@@ -171,7 +176,9 @@ def test_capped_feed_scopes_inside_the_window(
     mine, _theirs = _split_corpus(session, user, other_user)
     _post(session, mine, 3, text="mine again", timestamp=300)
 
-    rows = list_feed(session, user_id=user.id, max_per_channel=5)
+    rows = feed(
+        session, resolve_posts_view(session, user_id=user.id, max_per_channel=5)
+    )
 
     assert {r["id"] for r in rows} == {1, 3}
 
@@ -192,8 +199,13 @@ def test_two_followers_of_one_channel_both_see_its_posts(
     ensure_follow(session, channel_id="t16-shared", user_id=user.id)
     session.commit()
 
-    assert [r["id"] for r in list_feed(session, user_id=user.id)] == [7]
-    assert [r["id"] for r in list_feed(session, user_id=other_user.id)] == [7]
+    assert [
+        r["id"] for r in feed(session, resolve_posts_view(session, user_id=user.id))
+    ] == [7]
+    assert [
+        r["id"]
+        for r in feed(session, resolve_posts_view(session, user_id=other_user.id))
+    ] == [7]
 
 
 # --------------------------------------------------------------------------
@@ -213,7 +225,7 @@ def test_lookup_omits_a_post_you_may_not_see(
     """
     mine, theirs = _split_corpus(session, user, other_user)
 
-    rows = lookup_posts(session, [(mine, 1), (theirs, 2)], user_id=user.id)
+    rows = posts_by_ref(session, [(mine, 1), (theirs, 2)], user_id=user.id)
 
     assert [r["id"] for r in rows] == [1]
 
@@ -226,7 +238,7 @@ def test_lookup_is_unfiltered_while_the_flag_is_off(
 ) -> None:
     mine, theirs = _split_corpus(session, user, other_user)
 
-    rows = lookup_posts(session, [(mine, 1), (theirs, 2)], user_id=user.id)
+    rows = posts_by_ref(session, [(mine, 1), (theirs, 2)], user_id=user.id)
 
     assert {r["id"] for r in rows} == {1, 2}
 
@@ -242,7 +254,9 @@ def test_counts_exclude_a_channel_you_do_not_follow(
 ) -> None:
     mine, _theirs = _split_corpus(session, user, other_user)
 
-    assert count_posts_in_scope(session, user_id=user.id) == {mine: 1}
+    assert count_shown(session, resolve_posts_view(session, user_id=user.id))[0] == {
+        mine: 1
+    }
 
 
 def test_counts_are_unfiltered_while_the_flag_is_off(
@@ -253,7 +267,7 @@ def test_counts_are_unfiltered_while_the_flag_is_off(
 ) -> None:
     mine, theirs = _split_corpus(session, user, other_user)
 
-    counts = count_posts_in_scope(session, user_id=user.id)
+    counts = count_shown(session, resolve_posts_view(session, user_id=user.id))[0]
 
     assert counts[mine] == 1
     assert counts[theirs] == 1
@@ -271,10 +285,10 @@ def test_counts_and_feed_agree_about_the_scope(
     """
     _split_corpus(session, user, other_user)
 
-    counts = count_posts_in_scope(session, user_id=user.id)
-    feed = list_feed(session, user_id=user.id)
+    counts = count_shown(session, resolve_posts_view(session, user_id=user.id))[0]
+    rows = feed(session, resolve_posts_view(session, user_id=user.id))
 
-    assert sum(counts.values()) == len(feed)
+    assert sum(counts.values()) == len(rows)
 
 
 # --------------------------------------------------------------------------
@@ -320,11 +334,12 @@ def test_unfollowed_forwarded_filter_uses_your_own_follows(
     _post(session, "t16-carrier", 1, text="fwd", forwarded_from="t16-source")
     session.commit()
 
-    rows = list_feed(
+    rows = feed(
         session,
-        user_id=user.id,
-        filters=PostFilters(
-            tree=TreeGroup("and", (TreeAtom(TypeCond("unfollowed_forwarded")),))
+        resolve_posts_view(
+            session,
+            user_id=user.id,
+            tree=TreeGroup("and", (TreeAtom(TypeCond("unfollowed_forwarded")),)),
         ),
     )
 
@@ -519,7 +534,7 @@ def test_handle_probe_is_classified_as_corpus() -> None:
 
 @pytest.mark.parametrize(
     "func",
-    [list_feed, lookup_posts, count_posts_in_scope, compute_discover_candidates],
+    [resolve_posts_view, posts_by_ref, compute_discover_candidates],
 )
 def test_every_scoped_read_demands_a_user_id(func: object) -> None:
     """No default, for the reason `scoped_select` takes none.

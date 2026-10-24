@@ -27,7 +27,7 @@ from app.schemas.summaries import (
     AttemptOutcome,
     SummaryAttemptResponse,
 )
-from app.services.posts import lookup_posts
+from app.services.posts_view import posts_by_ref
 from app.services.summaries import (
     SUMMARY_NOT_FOUND,
     finish_summary,
@@ -387,7 +387,7 @@ def cited_posts(session: Session, text: str, *, user_id: uuid.UUID) -> dict[str,
         return {}
     found = {
         (row["channelName"], row["id"]): row
-        for row in lookup_posts(session, pairs, user_id=user_id)
+        for row in posts_by_ref(session, pairs, user_id=user_id)
     }
     return {f"{c}-{p}": found[(c, p)] for c, p in pairs if (c, p) in found}
 

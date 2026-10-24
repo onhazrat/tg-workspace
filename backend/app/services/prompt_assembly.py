@@ -2,8 +2,8 @@
 
 Replaces the browser round-trip where every post was shipped to the client,
 concatenated into one string, and shipped back. The scope (channels + date
-range + the Post selection + order) is resolved with the same ``list_feed``
-the Posts feed uses, so a summary reads exactly the Posts the feed marks as
+range + the Post selection + order) is resolved into the same Posts view the
+Posts feed reads (``posts_view``), so a summary reads exactly the Posts the feed marks as
 selected, and formatted by the byte-identical ``format_posts_for_prompt``.
 """
 
@@ -22,16 +22,8 @@ from app.prompts.posts import (
     format_posts_for_prompt,
     format_posts_for_tag_prompt,
 )
-from app.services.post_filters import (
-    FEED_SORTS,
-    VIEW_MEASURES,
-    PostFilters,
-    PostScope,
-    Step,
-)
-from app.services.post_selection import selection_clause
-from app.services.posts import count_selected, list_feed
-from app.services.settling_curve import view_reading
+from app.services.post_filters import FEED_SORTS, VIEW_MEASURES, Step
+from app.services.posts_view import count_selected, feed, resolve_posts_view
 
 # Upper bound on how many posts one prompt assembles. The token budget is the
 # real user-facing limit; this is a generous fetch-safety bound so a pathological
@@ -76,24 +68,17 @@ def _fetch_scoped_posts(
         raise HTTPException(422, detail=f"unknown sort: {scope.sort}")
     if scope.view_measure not in VIEW_MEASURES:
         raise HTTPException(422, detail=f"unknown viewMeasure: {scope.view_measure}")
-    filters = PostFilters(
-        reading=view_reading(session, cast("Any", scope.view_measure), sort=scope.sort),
-    )
-    channel_names = scope.channels or None
-    selected = selection_clause(
+    view = resolve_posts_view(
         session,
-        scope.steps,
-        PostScope(user_id, channel_names, scope.start_date, scope.end_date),
-    )
-
-    counts = count_selected(
-        session,
-        selected,
         user_id=user_id,
-        channel_names=channel_names,
-        start_date=scope.start_date,
-        end_date=scope.end_date,
+        channel_names=scope.channels or None,
+        start=scope.start_date,
+        end=scope.end_date,
+        view_measure=cast("Any", scope.view_measure),
+        sort=cast("Any", scope.sort),
+        steps=scope.steps,
     )
+    counts = count_selected(session, view)
     total = sum(counts.values())
     if total > MAX_PROMPT_POSTS:
         raise HTTPException(
@@ -105,18 +90,11 @@ def _fetch_scoped_posts(
             ),
         )
 
-    return list_feed(
+    return feed(
         session,
-        user_id=user_id,
-        channel_names=channel_names,
-        start_date=scope.start_date,
-        end_date=scope.end_date,
-        filters=filters,
-        sort=cast("Any", scope.sort),
-        group_by_channel=scope.group_by_channel,
+        view,
         limit=MAX_PROMPT_POSTS,
-        offset=0,
-        selected=selected,
+        group_by_channel=scope.group_by_channel,
         only_selected=True,
     )
 

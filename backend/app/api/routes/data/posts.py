@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, SessionDep
-from app.api.routes.data._shared import parse_post_filters, selected_in, tree_filters
+from app.api.post_views import view_of
 from app.schemas.posts import (
     BulkUpsertPostsResponse,
     PostCountsResponse,
@@ -28,17 +28,8 @@ from app.schemas.posts import (
     ViewCurveResponse,
     ViewEstimateResponse,
 )
-from app.services.analysis_window import resolve_analysis_window
-from app.services.post_filters import PostScope
-from app.services.posts import (
-    bulk_upsert_posts,
-    count_facets_in_scope,
-    count_shown_and_selected,
-    value_histogram,
-    window_histogram,
-)
-from app.services.posts import list_feed as list_feed_impl
-from app.services.posts import lookup_posts as lookup_posts_impl
+from app.services import posts_view
+from app.services.posts import bulk_upsert_posts
 from app.services.settling_curve import current_estimate
 
 router = APIRouter()
@@ -66,26 +57,14 @@ def list_posts(
     lists the selected Posts before the rest, and ``onlySelected`` returns only
     the selected Posts the filter shows.
     """
-    window = resolve_analysis_window(body.window)
-    channel_names = body.resolved_channel_names()
-    scope = PostScope(current_user.id, channel_names, window.start, window.end)
     return [
         SelectablePostResponse.model_validate(row)
-        for row in list_feed_impl(
+        for row in posts_view.feed(
             session,
-            user_id=current_user.id,
-            channel_names=channel_names,
-            start_date=window.start,
-            end_date=window.end,
-            filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
-            max_per_channel=body.max_per_channel,
-            max_per_channel_mode=body.max_per_channel_mode,
-            sort=body.sort,
-            group_by_channel=body.group_by_channel,
-            seed=body.seed,
+            view_of(session, current_user.id, body),
             limit=body.limit,
             offset=body.offset,
-            selected=selected_in(session, body.selection, scope),
+            group_by_channel=body.group_by_channel,
             only_selected=body.only_selected,
             selected_first=body.selected_first,
         )
@@ -109,22 +88,7 @@ def posts_counts(
     POST rather than GET because the scope carries the channel selection: this is
     a read expressed as a POST purely so the selection travels in the body.
     """
-    window = resolve_analysis_window(body.window)
-    channel_names = body.cleaned_channel_names()
-    scope = PostScope(current_user.id, channel_names, window.start, window.end)
-    counted = count_shown_and_selected(
-        session,
-        selected_in(session, body.selection, scope),
-        user_id=current_user.id,
-        channel_names=channel_names,
-        start_date=window.start,
-        end_date=window.end,
-        filters=parse_post_filters(session, body, tree=body.filter, sort=body.sort),
-        max_per_channel=body.max_per_channel,
-        max_per_channel_mode=body.max_per_channel_mode,
-        sort=body.sort,
-        seed=body.seed,
-    )
+    counted = posts_view.counts(session, view_of(session, current_user.id, body))
     return PostCountsResponse(
         counts=counted["counts"],
         selected=counted["selected"],
@@ -151,18 +115,11 @@ def posts_value_histogram(
     `channel_posts_filtered`, whose count is the Posts they keep, so the
     other bars hold still while the Account changes another Condition.
     """
-    window = resolve_analysis_window(body.window)
-    histogram = value_histogram(
-        session,
-        scope=PostScope(
-            current_user.id, body.cleaned_channel_names(), window.start, window.end
-        ),
-        measure=body.measure,
-        filters=parse_post_filters(session, body, tree=body.filter)
-        if body.measure == "channel_posts_filtered"
-        else None,
-        zoom=body.zoom,
-        log=body.log,
+    view = view_of(
+        session, current_user.id, body, with_estimate=body.measure == "estimated"
+    )
+    histogram = posts_view.value_histogram(
+        session, view, body.measure, zoom=body.zoom, log=body.log
     )
     return PostValueHistogramResponse.model_validate(histogram, from_attributes=True)
 
@@ -183,19 +140,14 @@ def posts_window_histogram(
     selected Channels. A Channel posts Condition counts within the Analysis
     window, not the stretch drawn.
     """
-    window = resolve_analysis_window(body.window)
     return PostWindowHistogramResponse(
-        counts=window_histogram(
+        counts=posts_view.window_histogram(
             session,
-            scope=PostScope(
-                current_user.id, body.cleaned_channel_names(), window.start, window.end
-            ),
+            view_of(session, current_user.id, body),
             extent_start=body.extent_start,
             extent_end=body.extent_end,
             buckets=body.buckets,
-            filters=None
-            if body.unfiltered
-            else parse_post_filters(session, body, tree=body.filter),
+            unfiltered=body.unfiltered,
         )
     )
 
@@ -226,16 +178,8 @@ def posts_facets(
 
     And how many of each value the Post selection selects.
     """
-    window = resolve_analysis_window(body.window)
-    channel_names = body.cleaned_channel_names()
-    scope = PostScope(current_user.id, channel_names, window.start, window.end)
-    facets = count_facets_in_scope(
-        session,
-        user_id=current_user.id,
-        channel_names=channel_names,
-        start_date=window.start,
-        end_date=window.end,
-        selected=selected_in(session, body.selection, scope),
+    facets = posts_view.facets(
+        session, view_of(session, current_user.id, body, with_followed=True)
     )
 
     def counted(rows: list[tuple[str, int, int]]) -> list[PostFacetCount]:
@@ -255,18 +199,12 @@ def lookup_posts_route(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> list[SelectablePostResponse]:
-    window = resolve_analysis_window(body.window)
-    scope = PostScope(current_user.id, body.channel_names, window.start, window.end)
     return [
         SelectablePostResponse.model_validate(row)
-        for row in lookup_posts_impl(
+        for row in posts_view.lookup(
             session,
+            view_of(session, current_user.id, body),
             [(ref.channel_name, ref.post_id) for ref in body.posts],
-            user_id=current_user.id,
-            filters=None if body.filter is None else tree_filters(session, body.filter),
-            selected=selected_in(session, body.selection, scope),
-            start_date=window.start,
-            end_date=window.end,
         )
     ]
 

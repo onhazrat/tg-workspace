@@ -973,6 +973,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "backend/app/services/post_references.py": "directory",
     "backend/app/services/post_thumbnails.py": "media",
     "backend/app/services/posts.py": "sync",
+    "backend/app/services/posts_view.py": "sync",
     "backend/app/services/prompt_assembly.py": "ai",
     "backend/app/services/proxy_pacing.py": "network",
     "backend/app/services/proxy_pool.py": "network",

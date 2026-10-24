@@ -14,7 +14,6 @@ from sqlmodel import Session
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.directory_views import directory_matching
-from app.api.routes.data._shared import selected_in
 from app.jobs.directory_harvest import (
     DIRECTORY_HARVEST_JOB_ID,
     is_harvest_running,
@@ -40,6 +39,7 @@ from app.schemas.discover import (
     HandleProbeResponse,
     IgnoredChannelResponse,
 )
+from app.schemas.post_filter import to_steps
 from app.schemas.scope import FrozenScope
 from app.services.analysis_window import resolve_analysis_window
 from app.services.channel_directory import (
@@ -75,8 +75,7 @@ from app.services.dismissals import (
     list_dismissals,
     take_back_dismissals,
 )
-from app.services.post_filters import PostScope
-from app.services.post_selection import freeze_selection
+from app.services.posts_view import freeze_selection, resolve_posts_view
 
 router = APIRouter()
 
@@ -127,7 +126,14 @@ def _discover_kwargs(
     """
     window = resolve_analysis_window(body.window)
     channel_names = [n.strip() for n in body.channel_names if n.strip()]
-    scope = PostScope(user_id, channel_names, window.start, window.end)
+    view = resolve_posts_view(
+        session,
+        user_id=user_id,
+        channel_names=channel_names,
+        start=window.start,
+        end=window.end,
+        steps=to_steps(body.selection),
+    )
     return {
         "channel_names": channel_names,
         "start_date": window.start,
@@ -135,7 +141,7 @@ def _discover_kwargs(
         "signals": cast(
             "set[SignalKind] | None", _parse_discover_signals(body.signals)
         ),
-        "selected": selected_in(session, body.selection, scope),
+        "selected": view.selected,
     }
 
 

@@ -151,9 +151,13 @@ INVENTORY: dict[str, str] = {
     "directory_reads.py": READ_MODEL,
     "discover.py": READ_MODEL,
     "network_settings.py": READ_MODEL,
-    # Evaluates the Post selection (PTR-05) into a predicate other reads
-    # enclose, and resolves the Posts it reached; reads only, owns no table.
+    # Compiles the Post selection (PTR-05) into a predicate other reads
+    # enclose; reads only what its rules need, owns no table.
     "post_selection.py": READ_MODEL,
+    # The Posts view and every read of it (ADR-036): the feed, its counts,
+    # the facets, both histograms, the lookup and what an Action freezes.
+    # Out of `posts.py` so the aggregate keeps only the writes.
+    "posts_view.py": READ_MODEL,
     "prompt_assembly.py": READ_MODEL,
     # Resolves a User's permissions from their role assignments. Reads
     # rbac_user_roles joined to rbac_roles and never commits; seeding is done by
