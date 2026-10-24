@@ -45,3 +45,4 @@ The locked migration decisions of June 2026 sit outside this series, in
 | [ADR-033](./ADR-033-one-time-editor.md) | One time editor for every time filter |
 | [ADR-034](./ADR-034-one-keyboard-mode.md) | One Keyboard mode, one meaning per key |
 | [ADR-035](./ADR-035-every-request-is-recorded.md) | Every Request is recorded, beside the ledger, kept in three tiers |
+| [ADR-036](./ADR-036-one-resolved-posts-view.md) | Every Posts read compiles from one resolved Posts view |
