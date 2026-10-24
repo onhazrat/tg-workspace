@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import copy
 import time
+from datetime import UTC
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,6 +24,7 @@ from app.jobs.auto_summary import run_auto_summary
 from app.jobs.auto_sync import run_auto_sync
 from app.jobs.directory_harvest import DIRECTORY_HARVEST_JOB_ID
 from app.jobs.discover_probe import DISCOVER_PROBE_JOB_ID
+from app.jobs.request_stats import REQUEST_LEDGER_CHECK_JOB_ID, REQUEST_ROLLUP_JOB_ID
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import (
     JOB_IDS,
@@ -824,18 +826,34 @@ def test_start_scheduler_registers_every_job_and_pauses_the_disabled_ones(
     started = time.time()
     jobs = asyncio.run(run())
 
-    assert set(jobs) == set(JOB_IDS) | {"sync_queue"}
+    # The sync queue, the Request rollup (RQS-01) and the ledger check
+    # (RQS-15) have no toggle, so they are not in `JOB_IDS`, and all three
+    # still have to be registered.
+    assert set(jobs) == set(JOB_IDS) | {
+        "sync_queue",
+        REQUEST_ROLLUP_JOB_ID,
+        REQUEST_LEDGER_CHECK_JOB_ID,
+    }
     assert jobs["embeddings"].next_run_time is None
     assert sched._job_status["embeddings"]["enabled"] is False
     assert sched._job_status["retention"]["enabled"] is True
     assert jobs["auto_sync"].next_run_time is not None
 
-    for job_id in ("retention", DISCOVER_PROBE_JOB_ID, DIRECTORY_HARVEST_JOB_ID):
+    for job_id in (
+        "retention",
+        DISCOVER_PROBE_JOB_ID,
+        DIRECTORY_HARVEST_JOB_ID,
+        REQUEST_ROLLUP_JOB_ID,
+        REQUEST_LEDGER_CHECK_JOB_ID,
+    ):
         assert jobs[job_id].misfire_grace_time is None, job_id
         assert jobs[job_id].coalesce is True, job_id
     retention_at = jobs["retention"].next_run_time.timestamp()
     delay = settings.RETENTION_JOB_STARTUP_DELAY_SECONDS
     assert started + delay - 1 <= retention_at <= time.time() + delay + 1
+    # The ledger check runs once a UTC day has closed (RQS-15).
+    check_at = jobs[REQUEST_LEDGER_CHECK_JOB_ID].next_run_time.astimezone(UTC)
+    assert (check_at.hour, check_at.minute) == (0, 15)
 
 
 def test_start_scheduler_is_a_no_op_while_running(

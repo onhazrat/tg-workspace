@@ -1,8 +1,15 @@
 import { WORKSPACE_TABS } from "@/constants"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
+import { offeredTab } from "@/lib/workspace-tabs"
 
-export function buildNavigateCommands(): CommandDef[] {
-  const workspaceCommands = WORKSPACE_TABS.map((tab) => ({
+/** `permissions` are the Account's, so "Go to" offers only its tabs. */
+export function buildNavigateCommands(
+  permissions: readonly string[],
+): CommandDef[] {
+  const offered = WORKSPACE_TABS.filter((tab) =>
+    offeredTab(tab.id, permissions),
+  )
+  const workspaceCommands = offered.map((tab) => ({
     id: `navigate-tab-${tab.id}`,
     kind: "action" as const,
     label: `Go to ${tab.label}`,

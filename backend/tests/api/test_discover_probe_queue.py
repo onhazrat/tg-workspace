@@ -27,6 +27,12 @@ BOT_PAGE = {
     "isUnavailableOnWebView": True,
     "kind": "bot",
 }
+PRIVATE_PAGE = {
+    "isTelegramPage": True,
+    "isUnavailableOnWebView": True,
+    "isPrivate": True,
+    "kind": "channel",
+}
 
 
 def _auth(client: TestClient) -> dict[str, str]:
@@ -59,6 +65,20 @@ def test_the_queue_endpoint_reports_progress_without_a_job_id(
     # Pause state is the ordinary job toggle, so every tab agrees about it.
     assert body["enabled"] is True
     assert body["running"] is False
+
+
+def test_a_private_channel_counts_as_unavailable(client: TestClient) -> None:
+    """Mutation: count `unavailable` alone.
+
+    RQS-13 split private off `unavailable`; the progress display still counts
+    it as resolved but not followable.
+    """
+    with Session(engine) as session:
+        record_probe_result(session, "hidden_news", PRIVATE_PAGE)
+        record_probe_result(session, "helper_bot", BOT_PAGE)
+
+    body = client.get(f"{DATA}/discover/probe/queue", headers=_auth(client)).json()
+    assert (body["resolved"], body["unavailable"]) == (0, 2)
 
 
 def test_the_queue_endpoint_is_empty_on_a_fresh_install(client: TestClient) -> None:

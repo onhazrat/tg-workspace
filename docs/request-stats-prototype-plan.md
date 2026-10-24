@@ -42,6 +42,9 @@ and the breakdowns that survive decide what each Request has to record.
     with `react-plotly.js` 4, which the research did not cover) in two places: the Sankey
     (variants B, B2, B3) and a throwaway `?bench=sparklines` page that times 300 virtualized
     sparklines in each library, measured in Chromium.
+    Reversed on 2026-10-24: the daily bars moved to Plotly and Recharts left the app.
+    Plotly already loads on the Requests tab for the zoomable trend, so one chart stack
+    draws both.
 11. **Palette.** The prototype adds categorical tokens `--chart-1..8` for light and dark, taken
     from the dataviz skill's validated palette, to replace the five neutral greys. Outcomes
     get fixed colours: Wasted in red, Idle in amber, useful in neutral.
@@ -191,7 +194,9 @@ Kinds, attribution and the tab:
 27. **A best-effort flag** (work past its Account's Budget) is on each Request and in the
     hourly totals.
 28. **`REQUEST_RECORD_DAYS=7` and `REQUEST_HOURLY_DAYS=30`**, in `config.py` and
-    `.env.example`; startup refuses an hourly span shorter than the record span.
+    `.env.example`; startup refuses an hourly span shorter than the record span
+    (and, since 2026-10-24, an equal one: a late Request would rebuild its day from
+    partly pruned hourly rows).
 29. **The tab reads** the finest tier for each stretch of the trend, daily totals for the
     tables (hourly for a day the range cuts), the per-Request rows for a Channel's list, and
     the ledger-only history before recording started; one Operator-only endpoint per need.

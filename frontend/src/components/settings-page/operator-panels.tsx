@@ -32,6 +32,7 @@ import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { RelativeTime } from "@/components/RelativeTime"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
+import { useUI } from "@/contexts/UIContext"
 import { queryKeys } from "@/hooks/queryKeys"
 import useAuth from "@/hooks/useAuth"
 import { budgetLabel } from "@/hooks/useMyQuota"
@@ -618,6 +619,7 @@ export function UsageView({
   entries,
   isPending,
   onLift,
+  onOpenRequests,
 }: {
   day: string
   today: string
@@ -626,6 +628,7 @@ export function UsageView({
   entries: QuotaUsageEntry[]
   isPending: boolean
   onLift: (userId: string) => void
+  onOpenRequests: () => void
 }) {
   const isToday = day === today
   const rows = usageRows(users, entries, isToday)
@@ -691,7 +694,17 @@ export function UsageView({
       </ListTable>
       <Note>
         A Request is one page fetched from Telegram. Lift today lifts all three
-        ceilings until UTC midnight.
+        ceilings until UTC midnight. Where they went, by kind of work and by
+        Channel, is on the{" "}
+        <button
+          type="button"
+          aria-label="Open the Requests tab"
+          className="underline hover:text-app-ink"
+          onClick={onOpenRequests}
+        >
+          Requests tab
+        </button>
+        .
       </Note>
     </div>
   )
@@ -701,6 +714,7 @@ export function UsageView({
 const todayUtc = () => new Date().toISOString().slice(0, 10)
 
 export function Usage() {
+  const { workspaceTabs } = useUI()
   const invalidate = useQuotaInvalidate()
   const today = todayUtc()
   const [day, setDay] = useState(today)
@@ -736,6 +750,7 @@ export function Usage() {
       entries={data?.entries ?? []}
       isPending={isPending}
       onLift={(id) => lift.mutate(id)}
+      onOpenRequests={() => workspaceTabs.openTab("requests")}
     />
   )
 }

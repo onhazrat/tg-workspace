@@ -51,6 +51,12 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
+    // The Requests tab's charts load lazily. In CI's cold dev server Vite
+    // found Plotly and its React factory at runtime, in two separate optimizer
+    // runs, and the lazy trend never mounted. Bundle them up front instead.
+    optimizeDeps: {
+      include: ["plotly.js-dist-min", "react-plotly.js/factory"],
+    },
     server: {
       port: 5173,
       proxy: {

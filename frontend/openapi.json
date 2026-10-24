@@ -6770,6 +6770,458 @@
         }
       }
     },
+    "/api/v1/requests/breakdown": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Breakdown",
+        "description": "Requests in `[start, end)` by kind of work, by Channel and by Account.\n\nTimes are cut to the minute and read as UTC when they carry no zone.\n`charged` keeps only Charged or only Uncharged Requests. `accounts` keeps\nonly the Requests charged to those Accounts. `leftOut` drops those\nChannels, by handle, and `leftOutKinds` the rows of those kinds' work with\nno Channel. `byAccount` counts each Account's charged Requests alone.",
+        "operationId": "requests-read_request_breakdown",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "End"
+            }
+          },
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
+            }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestBreakdownResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/requests/trend": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Trend",
+        "description": "Requests in `[start, end)` over time, by kind of work and outcome.\n\nEach bucket is the finest the stored totals allow for its stretch: 5\nminutes inside the last week, an hour inside the last `hourlyDays` days, a\nday before. A range cut finer than its stretch allows is widened to that\ngrain; otherwise the first and last buckets are cut to the range. Times\n`charged`, `accounts`, `leftOut` and `leftOutKinds` are read as on the\nBreakdown.",
+        "operationId": "requests-read_request_trend",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "End"
+            }
+          },
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
+            }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestTrendResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/requests/records": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Records",
+        "description": "One Channel table row's Requests in `[start, end)`, newest first.\n\nName the row by `channel`, a Channel's handle, or by `kind`, the kind of\nan aggregate row (work with no Channel), never both. Each Request is kept\n`recordDays` days, so the range is cut to them. `charged`, `accounts`,\n`leftOut` and `leftOutKinds` are read as on the Breakdown. `hiddenKinds`\nand `hiddenOutcomes` leave those kinds of work and outcomes out. The\noutcome counts cover every page.",
+        "operationId": "requests-read_request_records",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "End"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "hiddenKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Hiddenkinds"
+            }
+          },
+          {
+            "name": "hiddenOutcomes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Outcome" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Hiddenoutcomes"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
+            }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRecordsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/requests/spread": {
+      "get": {
+        "tags": ["requests"],
+        "summary": "Read Request Spread",
+        "description": "When Requests were made, over everything kept, for the range picker.\n\nHours inside the hourly totals' span, whole days before it, without the\nrange. `charged`, `accounts`, `leftOut` and `leftOutKinds` are read as on\nthe Breakdown.",
+        "operationId": "requests-read_request_spread",
+        "security": [{ "OAuth2PasswordBearer": [] }],
+        "parameters": [
+          {
+            "name": "charged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["all", "charged", "uncharged"],
+              "type": "string",
+              "default": "all",
+              "title": "Charged"
+            }
+          },
+          {
+            "name": "accounts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": { "type": "string", "format": "uuid" }
+                },
+                { "type": "null" }
+              ],
+              "title": "Accounts"
+            }
+          },
+          {
+            "name": "leftOut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftout"
+            }
+          },
+          {
+            "name": "leftOutKinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "null" }
+              ],
+              "title": "Leftoutkinds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestSpreadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/view-as/{user_id}": {
       "post": {
         "tags": ["view-as"],
@@ -7042,6 +7494,45 @@
         "required": ["key", "validated"],
         "title": "AIKeySaveResponse",
         "description": "A saved Key, plus what the save-time validation found.\n\n`validated` is redundant with `key.lastValidated` and is here anyway,\nbecause the form needs to say \"we tried and your provider said no\" in the\nmoment. A `null` timestamp alone cannot distinguish that from \"not checked\"."
+      },
+      "AccountRequestTotals": {
+        "properties": {
+          "kind": { "type": "string", "title": "Kind" },
+          "requests": { "type": "integer", "title": "Requests" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "charged": { "type": "integer", "title": "Charged" },
+          "newPosts": { "type": "integer", "title": "Newposts" },
+          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "syncs": { "type": "integer", "title": "Syncs" },
+          "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" },
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Accountid"
+          },
+          "email": { "type": "string", "title": "Email" }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "requests",
+          "useful",
+          "idle",
+          "wasted",
+          "charged",
+          "newPosts",
+          "repeatedPosts",
+          "syncs",
+          "failedSyncs",
+          "ledgerOnly",
+          "accountId",
+          "email"
+        ],
+        "title": "AccountRequestTotals",
+        "description": "One kind of work charged to one Account. `email` is blank for an\nAccount deleted since."
       },
       "ActiveSyncJobSummary": {
         "properties": {
@@ -7779,6 +8270,42 @@
         "type": "object",
         "required": ["type"],
         "title": "ChannelPostsFilteredCondition"
+      },
+      "ChannelRequestTotals": {
+        "properties": {
+          "kind": { "type": "string", "title": "Kind" },
+          "requests": { "type": "integer", "title": "Requests" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "charged": { "type": "integer", "title": "Charged" },
+          "newPosts": { "type": "integer", "title": "Newposts" },
+          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "syncs": { "type": "integer", "title": "Syncs" },
+          "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" },
+          "channel": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "requests",
+          "useful",
+          "idle",
+          "wasted",
+          "charged",
+          "newPosts",
+          "repeatedPosts",
+          "syncs",
+          "failedSyncs",
+          "ledgerOnly",
+          "channel"
+        ],
+        "title": "ChannelRequestTotals",
+        "description": "One kind of work on one Channel. `channel` is null on an aggregate row."
       },
       "ChannelResponse": {
         "properties": {
@@ -11749,6 +12276,11 @@
         "required": ["token", "new_password"],
         "title": "NewPassword"
       },
+      "Outcome": {
+        "type": "string",
+        "enum": ["useful", "idle", "wasted"],
+        "title": "Outcome"
+      },
       "PartialPublicationResponse": {
         "properties": {
           "id": { "type": "string", "title": "Id" },
@@ -13248,6 +13780,250 @@
         "required": ["name", "counts", "reference"],
         "title": "ReportCandidateResponse",
         "description": "A candidate read back from a saved report, with its probe verdict joined.\n\n`probe` is `null` for a handle nothing has looked at yet, which callers must\nrender as \"not checked\" rather than as a verdict: an unprobed handle and one\nconfirmed unfollowable must not look the same."
+      },
+      "RequestBreakdownResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "byKind": {
+            "items": { "$ref": "#/components/schemas/RequestTotals" },
+            "type": "array",
+            "title": "Bykind"
+          },
+          "byChannel": {
+            "items": { "$ref": "#/components/schemas/ChannelRequestTotals" },
+            "type": "array",
+            "title": "Bychannel"
+          },
+          "byAccount": {
+            "items": { "$ref": "#/components/schemas/AccountRequestTotals" },
+            "type": "array",
+            "title": "Byaccount"
+          }
+        },
+        "type": "object",
+        "required": ["start", "end", "byKind", "byChannel", "byAccount"],
+        "title": "RequestBreakdownResponse",
+        "description": "Totals by kind and by Channel for one range, in UTC."
+      },
+      "RequestRecord": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "at": { "type": "string", "format": "date-time", "title": "At" },
+          "latencyMs": { "type": "integer", "title": "Latencyms" },
+          "kind": { "type": "string", "title": "Kind" },
+          "charged": { "type": "boolean", "title": "Charged" },
+          "accountId": {
+            "anyOf": [
+              { "type": "string", "format": "uuid" },
+              { "type": "null" }
+            ],
+            "title": "Accountid"
+          },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "budget": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Budget"
+          },
+          "bestEffort": { "type": "boolean", "title": "Besteffort" },
+          "channel": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Channel"
+          },
+          "lane": { "type": "string", "title": "Lane" },
+          "pageType": { "type": "string", "title": "Pagetype" },
+          "outcome": { "type": "string", "title": "Outcome" },
+          "cause": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Cause"
+          },
+          "errorCode": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Errorcode"
+          },
+          "attempt": { "type": "integer", "title": "Attempt" },
+          "chainId": { "type": "string", "format": "uuid", "title": "Chainid" },
+          "newPosts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Newposts"
+          },
+          "repeatedPosts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Repeatedposts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "latencyMs",
+          "kind",
+          "charged",
+          "accountId",
+          "email",
+          "budget",
+          "bestEffort",
+          "channel",
+          "lane",
+          "pageType",
+          "outcome",
+          "cause",
+          "errorCode",
+          "attempt",
+          "chainId",
+          "newPosts",
+          "repeatedPosts"
+        ],
+        "title": "RequestRecord",
+        "description": "One Request: one attempt that reached Telegram.\n\n`channel` is the Channel's handle, or the handle a probe or Handle check\nasked about. `cause` and `errorCode` are set on a Wasted Request alone.\n`chainId` is the id of the first attempt at the same page. `newPosts` and\n`repeatedPosts` are null where the page carried no Posts. `email` is\nblank for an Account deleted since, and null when no Account is charged."
+      },
+      "RequestRecordsResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "total": { "type": "integer", "title": "Total" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "records": {
+            "items": { "$ref": "#/components/schemas/RequestRecord" },
+            "type": "array",
+            "title": "Records"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "total",
+          "useful",
+          "idle",
+          "wasted",
+          "records"
+        ],
+        "title": "RequestRecordsResponse",
+        "description": "One page of a Channel's or aggregate row's Requests, newest first.\n\n`start` is the range's start, moved up to the oldest Request still kept.\n`total` and the outcome counts cover every page."
+      },
+      "RequestSpreadBucket": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "requests": { "type": "integer", "title": "Requests" }
+        },
+        "type": "object",
+        "required": ["start", "end", "requests"],
+        "title": "RequestSpreadBucket",
+        "description": "Every Request in `[start, end)`, in UTC."
+      },
+      "RequestSpreadResponse": {
+        "properties": {
+          "recordDays": { "type": "integer", "title": "Recorddays" },
+          "hourlyDays": { "type": "integer", "title": "Hourlydays" },
+          "buckets": {
+            "items": { "$ref": "#/components/schemas/RequestSpreadBucket" },
+            "type": "array",
+            "title": "Buckets"
+          }
+        },
+        "type": "object",
+        "required": ["recordDays", "hourlyDays", "buckets"],
+        "title": "RequestSpreadResponse",
+        "description": "When Requests were made, over everything kept: hours inside the hourly\ntotals' span (`hourlyDays`), whole days before. `recordDays` is how far\nback each Request is kept."
+      },
+      "RequestTotals": {
+        "properties": {
+          "kind": { "type": "string", "title": "Kind" },
+          "requests": { "type": "integer", "title": "Requests" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "charged": { "type": "integer", "title": "Charged" },
+          "newPosts": { "type": "integer", "title": "Newposts" },
+          "repeatedPosts": { "type": "integer", "title": "Repeatedposts" },
+          "syncs": { "type": "integer", "title": "Syncs" },
+          "failedSyncs": { "type": "integer", "title": "Failedsyncs" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "requests",
+          "useful",
+          "idle",
+          "wasted",
+          "charged",
+          "newPosts",
+          "repeatedPosts",
+          "syncs",
+          "failedSyncs",
+          "ledgerOnly"
+        ],
+        "title": "RequestTotals",
+        "description": "Requests by outcome, and the Posts the answered pages brought."
+      },
+      "RequestTrendBucket": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "kind": { "type": "string", "title": "Kind" },
+          "charged": { "type": "boolean", "title": "Charged" },
+          "useful": { "type": "integer", "title": "Useful" },
+          "idle": { "type": "integer", "title": "Idle" },
+          "wasted": { "type": "integer", "title": "Wasted" },
+          "ledgerOnly": { "type": "integer", "title": "Ledgeronly" }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "kind",
+          "charged",
+          "useful",
+          "idle",
+          "wasted",
+          "ledgerOnly"
+        ],
+        "title": "RequestTrendBucket",
+        "description": "One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.\n\n`ledgerOnly` counts those on a day before recording started, from the\nledger's daily totals, which carry no outcome."
+      },
+      "RequestTrendResponse": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": { "type": "string", "format": "date-time", "title": "End" },
+          "hourlyDays": { "type": "integer", "title": "Hourlydays" },
+          "buckets": {
+            "items": { "$ref": "#/components/schemas/RequestTrendBucket" },
+            "type": "array",
+            "title": "Buckets"
+          }
+        },
+        "type": "object",
+        "required": ["start", "end", "hourlyDays", "buckets"],
+        "title": "RequestTrendResponse",
+        "description": "One range in buckets: 5 minutes inside the Requests' span, hours inside\nthe hourly totals' span (`hourlyDays`), whole days before."
       },
       "ResolveStartTimeRequest": {
         "properties": {

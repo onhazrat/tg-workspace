@@ -20,6 +20,13 @@ from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_meter import metered
+from app.core.request_recording import (
+    PageType,
+    RequestKind,
+    attributed,
+    page,
+    sync_run,
+)
 from app.jobs.settings import (
     compute_scrape_cutoff_ms,
     load_media_settings,
@@ -80,11 +87,13 @@ from app.services.proxy_pool import (
     get_partition,
 )
 from app.services.quota import (
+    Budget,
     QuotaCeilingReached,
     assert_within_ceiling,
     budget_for_sync_mode,
     charge_sync_job,
 )
+from app.services.request_stats import flush_recorded_requests
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
@@ -229,6 +238,16 @@ def _existing_post_ids(
         )
     ).all()
     return set(rows)
+
+
+#: The kind of work a sync's Requests are recorded under (RQS-01). From the
+#: Budget, which derives totally from the sync mode, so a new mode cannot reach
+#: the record without first being given a Budget.
+REQUEST_KIND_BY_BUDGET: dict[Budget, RequestKind] = {
+    Budget.AUTO_SYNC: RequestKind.AUTO,
+    Budget.MANUAL_BULK: RequestKind.BULK,
+    Budget.MANUAL_SINGLE: RequestKind.SINGLE,
+}
 
 
 async def _scrape_page_with_retry(
@@ -481,6 +500,12 @@ class _PageApplyResult:
     # The backward walk paginated past the channel's first post: there is no
     # older history to fetch, whatever the cutoff says.
     reached_channel_start: bool = False
+    #: Posts on the page we did not hold, and Posts we already had (RQS-01).
+    new_posts: int = 0
+    repeated_posts: int = 0
+    #: Applying the page moved a stored Post's counters, changed its text, or
+    #: changed the Channel's metadata (RQS-11).
+    changed: bool = False
 
 
 def _prepare_channel_sync(
@@ -790,6 +815,7 @@ def _refresh_channel_meta(
         val = response.get(field_name)
         if val not in (None, "") and getattr(channel, attr) != val:
             setattr(channel, attr, val)
+            result.changed = True
         if field_name == "displayName" and val:
             result.display_name = val
         if field_name == "photoUrl" and val:
@@ -888,22 +914,25 @@ def _persist_page_posts(
         result.break_incremental = True
 
     posts_to_save = _posts_to_save(channel.name, posts)
+    result.repeated_posts = len(existing_on_page)
+    result.new_posts = sum(1 for p in posts_to_save if p["id"] not in existing_on_page)
     # Every pass re-observes the counters of the stored Posts on the page, and
     # only through the refresh, so no pass refreshes a Post past the horizon
     # (REACH-02, REACH-10). The initial pass still re-upserts them, which is
     # why that upsert is told to leave their counters alone.
-    refresh_post_counters(
+    if refresh_post_counters(
         session,
         channel.name,
         [p for p in posts_to_save if p["id"] in existing_on_page],
-    )
+    ):
+        result.changed = True
     if ctx.retrieval_pass in ("incremental", "backfill"):
         posts_to_save = [p for p in posts_to_save if p["id"] not in existing_on_page]
 
     if not posts_to_save:
         return
 
-    bulk_upsert_posts_impl(
+    upserted = bulk_upsert_posts_impl(
         posts_to_save,
         session,
         retrieval_job_id=job_id,
@@ -911,6 +940,8 @@ def _persist_page_posts(
         retrieval_source=job_source,
         stored_counters=False,
     )
+    if upserted.edited:
+        result.changed = True
     touch_sync(session, "posts", commit=False)
     session.commit()
     result.posts_saved = len(posts_to_save)
@@ -1373,24 +1404,32 @@ async def _walk_channel_pages(
             break
         iterations += 1
 
-        response = await _fetch_one_page(
-            ctx, before_id=before_id, known_latest_id=known_latest_id
-        )
+        # One page, one chain of attempts across both retry layers, judged by
+        # what applying it wrote (RQS-01).
+        with page(PageType.POSTS) as posts_page:
+            response = await _fetch_one_page(
+                ctx, before_id=before_id, known_latest_id=known_latest_id
+            )
 
-        if response.get("fullRequest"):
-            walk.requests_log.append(response["fullRequest"])
-        walk.responses_log.append(response)
+            if response.get("fullRequest"):
+                walk.requests_log.append(response["fullRequest"])
+            walk.responses_log.append(response)
 
-        page_result = await run_db(
-            _apply_scrape_page,
-            ctx,
-            response,
-            job_id=job.job_id,
-            job_source=job.source,
-            user_id=user_id,
-            session_seen_ids=session_seen_ids,
-            before_id=before_id,
-        )
+            page_result = await run_db(
+                _apply_scrape_page,
+                ctx,
+                response,
+                job_id=job.job_id,
+                job_source=job.source,
+                user_id=user_id,
+                session_seen_ids=session_seen_ids,
+                before_id=before_id,
+            )
+            posts_page.report_posts(
+                page_result.new_posts,
+                page_result.repeated_posts,
+                changed=page_result.changed,
+            )
 
         if page_result.reached_channel_start:
             walk.reached_channel_start = True
@@ -1923,9 +1962,24 @@ async def sync_single_channel(
     heartbeat = asyncio.create_task(_heartbeat_channel_claim(ch_state, holder))
     walked = False
     try:
-        walked = await _sync_claimed_channel(
-            job, ch_state, user_id=user_id, holder=holder
-        )
+        # Every Request of the walk, its pictures and metadata included, is
+        # this sync's (RQS-01). Set here, beside the claim, for the claim's
+        # reason: both callers of this function then get it. The run counts
+        # as one sync, failed or not (RQS-04).
+        with (
+            attributed(
+                kind=REQUEST_KIND_BY_BUDGET[budget],
+                account_id=user_id,
+                budget=budget.value,
+                channel=ch_state.channel_name,
+                job_id=job.job_id,
+            ),
+            sync_run() as run,
+        ):
+            walked = await _sync_claimed_channel(
+                job, ch_state, user_id=user_id, holder=holder
+            )
+            run.failed = ch_state.status == "failed"
     finally:
         heartbeat.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -2145,3 +2199,4 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
             await run_db(
                 charge_sync_job, user_id, job.sync_mode, meter.telegram_requests
             )
+            await run_db(flush_recorded_requests)

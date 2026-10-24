@@ -184,7 +184,7 @@ The Requests tab:
 
 ### Keeping (decisions 16, 28)
 
-- `REQUEST_RECORD_DAYS=7` and `REQUEST_HOURLY_DAYS=30`, in settings and `.env.example`. Startup refuses an hourly span shorter than the record span.
+- `REQUEST_RECORD_DAYS=7` and `REQUEST_HOURLY_DAYS=30`, in settings and `.env.example`. Startup refuses an hourly span no longer than the record span.
 - The existing hourly retention job prunes per-Request rows and hourly totals in batched deletes. Daily totals are never pruned. There is no partitioning at about 0.7M per-Request rows; revisit past about 10M.
 - The new tables are Operator stats, not user-owned. Each one is classified in every inventory that requires it (tenancy scopes, retention windows, the `tg_*` cleanup inventory, the service-kind inventory) with a reason, and none of those guards is loosened.
 
@@ -222,7 +222,7 @@ The Requests tab:
 - **Tab-wide state** shared by every part: the range, Accounts, Charged/Uncharged, hidden kinds, hidden outcomes, Channels left out.
 - **Account comparison** with two or more Accounts, in a violet ramp that doesn't clash with the kinds.
 - **Stat strip**: Requests, Useful, Idle, Wasted.
-- **Daily bar trend** (Recharts, the prototype's "0 Current").
+- **Daily bar trend** (the prototype's "0 Current"; Plotly since 2026-10-24, decision 10).
 - **Zoomable trend** (Plotly, `plotly.js-dist-min` 3 through `react-plotly.js`'s factory) under it:
   - **Switches**: Separate by kind and Separate by outcome, each with Stacked | Separate. A stacked dimension splits the area in a row; a separate one gets a row per value on its own scale; both separate give a row per kind × outcome.
   - **Buckets follow the zoom**: re-summed to about 220 across the view, from 5 minutes to a day (5, 15 and 30 minutes, 1, 2, 4, 6 and 12 hours, a day). Hover gives each bucket's span, grain and exact count. Buckets of 30 minutes or more are drawn as a gentle spline (smoothing 0.6), finer ones as steps.
@@ -265,7 +265,7 @@ The Requests tab:
     - an hour that gets a late Request is recomputed.
   - **Keeping and the ledger:**
     - retention with a moved clock prunes per-Request rows past `REQUEST_RECORD_DAYS` and hourly rows past `REQUEST_HOURLY_DAYS`, never daily rows;
-    - startup refuses an hourly span shorter than the record span;
+    - startup refuses an hourly span no longer than the record span;
     - the ledger check passes on a clean day and reports a forced mismatch;
     - the existing quota ledger tests pass unchanged.
   - **The API:**

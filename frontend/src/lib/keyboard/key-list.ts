@@ -208,6 +208,7 @@ const TAB_NAMES: Record<TabType, string> = {
   chat: "Chat",
   history: "History",
   tools: "Tools",
+  requests: "Requests",
   settings: "Settings",
 }
 

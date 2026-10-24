@@ -10,6 +10,7 @@ from app.api.routes import (
     private,
     quota,
     rag,
+    request_stats,
     telegram,
     users,
     utils,
@@ -45,6 +46,7 @@ api_router.include_router(data.router, dependencies=APPROVED_ONLY)
 api_router.include_router(rag.router, dependencies=APPROVED_ONLY)
 api_router.include_router(jobs.router, dependencies=APPROVED_ONLY)
 api_router.include_router(quota.router, dependencies=APPROVED_ONLY)
+api_router.include_router(request_stats.router, dependencies=APPROVED_ONLY)
 api_router.include_router(view_as.router, dependencies=APPROVED_ONLY)
 api_router.include_router(settings_routes.router, dependencies=APPROVED_ONLY)
 

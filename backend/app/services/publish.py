@@ -13,6 +13,7 @@ from typing import Any
 from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.request_recording import RequestKind, attributed
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
@@ -171,17 +172,19 @@ async def send_parts(
             # Off unless the Account or the Summary turned them on: a cited Post's card under
             # every Part is noise in the channel (SUMTAB-08).
             payload["link_preview_options"] = {"is_disabled": True}
-        data, telem = await fetch_with_retry(
-            target,
-            retries=settings.TELEGRAM_API_RETRIES,
-            initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
-            proxies=proxies or None,
-            proxy_concurrency=proxy_concurrency,
-            tor_auto_rotate=tor_auto_rotate,
-            tor_rotation_threshold=tor_rotation_threshold,
-            method="POST",
-            json_body=payload,
-        )
+        # A Bot API call (RQS-14), whether a person or the scheduler publishes.
+        with attributed(kind=RequestKind.BOT_API):
+            data, telem = await fetch_with_retry(
+                target,
+                retries=settings.TELEGRAM_API_RETRIES,
+                initial_delay_ms=settings.TELEGRAM_API_INITIAL_DELAY_MS,
+                proxies=proxies or None,
+                proxy_concurrency=proxy_concurrency,
+                tor_auto_rotate=tor_auto_rotate,
+                tor_rotation_threshold=tor_rotation_threshold,
+                method="POST",
+                json_body=payload,
+            )
         if isinstance(data, str):
             import json
 

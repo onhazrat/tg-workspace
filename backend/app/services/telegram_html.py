@@ -32,6 +32,16 @@ def attr_str(value: str | list[str] | None) -> str | None:
     return value
 
 
+def counts_subscribers(page: Tag) -> bool:
+    """The page's header counts subscribers: it is a Channel's own page.
+
+    With no message feed beside it, that is a private Channel rather than a
+    handle nobody holds (RQS-13).
+    """
+    extra = page.select_one(".tgme_page_extra")
+    return extra is not None and "subscriber" in extra.get_text(" ").lower()
+
+
 def message_reply_block(el: Tag) -> Tag | None:
     """The reply-preview anchor of a message widget, if the post is a reply."""
     return el.select_one(f"a.{_REPLY_BLOCK_CLASS}")

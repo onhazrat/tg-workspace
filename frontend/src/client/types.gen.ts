@@ -54,6 +54,67 @@ export type AiKeySaveResponse = {
 };
 
 /**
+ * AccountRequestTotals
+ *
+ * One kind of work charged to one Account. `email` is blank for an
+ * Account deleted since.
+ */
+export type AccountRequestTotals = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Charged
+     */
+    charged: number;
+    /**
+     * Newposts
+     */
+    newPosts: number;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number;
+    /**
+     * Syncs
+     */
+    syncs: number;
+    /**
+     * Failedsyncs
+     */
+    failedSyncs: number;
+    /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
+    /**
+     * Accountid
+     */
+    accountId: string;
+    /**
+     * Email
+     */
+    email: string;
+};
+
+/**
  * ActiveSyncJobSummary
  */
 export type ActiveSyncJobSummary = {
@@ -908,6 +969,62 @@ export type ChannelPostsFilteredCondition = {
      * Type
      */
     type: 'channel_posts_filtered';
+};
+
+/**
+ * ChannelRequestTotals
+ *
+ * One kind of work on one Channel. `channel` is null on an aggregate row.
+ */
+export type ChannelRequestTotals = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Charged
+     */
+    charged: number;
+    /**
+     * Newposts
+     */
+    newPosts: number;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number;
+    /**
+     * Syncs
+     */
+    syncs: number;
+    /**
+     * Failedsyncs
+     */
+    failedSyncs: number;
+    /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
+    /**
+     * Channel
+     */
+    channel: string | null;
 };
 
 /**
@@ -4640,6 +4757,11 @@ export type NewPassword = {
 };
 
 /**
+ * Outcome
+ */
+export type Outcome = 'useful' | 'idle' | 'wasted';
+
+/**
  * PartialPublicationResponse
  *
  * The Summary's latest Publication, stopped after some of its Parts.
@@ -6057,6 +6179,325 @@ export type ReportCandidateResponse = {
     isIgnored?: boolean;
     reference: CandidateReferenceResponse;
     probe?: HandleProbeResponse | null;
+};
+
+/**
+ * RequestBreakdownResponse
+ *
+ * Totals by kind and by Channel for one range, in UTC.
+ */
+export type RequestBreakdownResponse = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Bykind
+     */
+    byKind: Array<RequestTotals>;
+    /**
+     * Bychannel
+     */
+    byChannel: Array<ChannelRequestTotals>;
+    /**
+     * Byaccount
+     */
+    byAccount: Array<AccountRequestTotals>;
+};
+
+/**
+ * RequestRecord
+ *
+ * One Request: one attempt that reached Telegram.
+ *
+ * `channel` is the Channel's handle, or the handle a probe or Handle check
+ * asked about. `cause` and `errorCode` are set on a Wasted Request alone.
+ * `chainId` is the id of the first attempt at the same page. `newPosts` and
+ * `repeatedPosts` are null where the page carried no Posts. `email` is
+ * blank for an Account deleted since, and null when no Account is charged.
+ */
+export type RequestRecord = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Latencyms
+     */
+    latencyMs: number;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Charged
+     */
+    charged: boolean;
+    /**
+     * Accountid
+     */
+    accountId: string | null;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Budget
+     */
+    budget: string | null;
+    /**
+     * Besteffort
+     */
+    bestEffort: boolean;
+    /**
+     * Channel
+     */
+    channel: string | null;
+    /**
+     * Lane
+     */
+    lane: string;
+    /**
+     * Pagetype
+     */
+    pageType: string;
+    /**
+     * Outcome
+     */
+    outcome: string;
+    /**
+     * Cause
+     */
+    cause: string | null;
+    /**
+     * Errorcode
+     */
+    errorCode: string | null;
+    /**
+     * Attempt
+     */
+    attempt: number;
+    /**
+     * Chainid
+     */
+    chainId: string;
+    /**
+     * Newposts
+     */
+    newPosts: number | null;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number | null;
+};
+
+/**
+ * RequestRecordsResponse
+ *
+ * One page of a Channel's or aggregate row's Requests, newest first.
+ *
+ * `start` is the range's start, moved up to the oldest Request still kept.
+ * `total` and the outcome counts cover every page.
+ */
+export type RequestRecordsResponse = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Records
+     */
+    records: Array<RequestRecord>;
+};
+
+/**
+ * RequestSpreadBucket
+ *
+ * Every Request in `[start, end)`, in UTC.
+ */
+export type RequestSpreadBucket = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Requests
+     */
+    requests: number;
+};
+
+/**
+ * RequestSpreadResponse
+ *
+ * When Requests were made, over everything kept: hours inside the hourly
+ * totals' span (`hourlyDays`), whole days before. `recordDays` is how far
+ * back each Request is kept.
+ */
+export type RequestSpreadResponse = {
+    /**
+     * Recorddays
+     */
+    recordDays: number;
+    /**
+     * Hourlydays
+     */
+    hourlyDays: number;
+    /**
+     * Buckets
+     */
+    buckets: Array<RequestSpreadBucket>;
+};
+
+/**
+ * RequestTotals
+ *
+ * Requests by outcome, and the Posts the answered pages brought.
+ */
+export type RequestTotals = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Charged
+     */
+    charged: number;
+    /**
+     * Newposts
+     */
+    newPosts: number;
+    /**
+     * Repeatedposts
+     */
+    repeatedPosts: number;
+    /**
+     * Syncs
+     */
+    syncs: number;
+    /**
+     * Failedsyncs
+     */
+    failedSyncs: number;
+    /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
+};
+
+/**
+ * RequestTrendBucket
+ *
+ * One kind's Charged or Uncharged Requests in `[start, end)`, by outcome.
+ *
+ * `ledgerOnly` counts those on a day before recording started, from the
+ * ledger's daily totals, which carry no outcome.
+ */
+export type RequestTrendBucket = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Charged
+     */
+    charged: boolean;
+    /**
+     * Useful
+     */
+    useful: number;
+    /**
+     * Idle
+     */
+    idle: number;
+    /**
+     * Wasted
+     */
+    wasted: number;
+    /**
+     * Ledgeronly
+     */
+    ledgerOnly: number;
+};
+
+/**
+ * RequestTrendResponse
+ *
+ * One range in buckets: 5 minutes inside the Requests' span, hours inside
+ * the hourly totals' span (`hourlyDays`), whole days before.
+ */
+export type RequestTrendResponse = {
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Hourlydays
+     */
+    hourlyDays: number;
+    /**
+     * Buckets
+     */
+    buckets: Array<RequestTrendBucket>;
 };
 
 /**
@@ -13501,6 +13942,222 @@ export type QuotaLiftQuotaCeilingResponses = {
 };
 
 export type QuotaLiftQuotaCeilingResponse = QuotaLiftQuotaCeilingResponses[keyof QuotaLiftQuotaCeilingResponses];
+
+export type RequestsReadRequestBreakdownData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Start
+         */
+        start: string;
+        /**
+         * End
+         */
+        end: string;
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
+    };
+    url: '/api/v1/requests/breakdown';
+};
+
+export type RequestsReadRequestBreakdownErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestBreakdownError = RequestsReadRequestBreakdownErrors[keyof RequestsReadRequestBreakdownErrors];
+
+export type RequestsReadRequestBreakdownResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestBreakdownResponse;
+};
+
+export type RequestsReadRequestBreakdownResponse = RequestsReadRequestBreakdownResponses[keyof RequestsReadRequestBreakdownResponses];
+
+export type RequestsReadRequestTrendData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Start
+         */
+        start: string;
+        /**
+         * End
+         */
+        end: string;
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
+    };
+    url: '/api/v1/requests/trend';
+};
+
+export type RequestsReadRequestTrendErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestTrendError = RequestsReadRequestTrendErrors[keyof RequestsReadRequestTrendErrors];
+
+export type RequestsReadRequestTrendResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestTrendResponse;
+};
+
+export type RequestsReadRequestTrendResponse = RequestsReadRequestTrendResponses[keyof RequestsReadRequestTrendResponses];
+
+export type RequestsReadRequestRecordsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Start
+         */
+        start: string;
+        /**
+         * End
+         */
+        end: string;
+        /**
+         * Channel
+         */
+        channel?: string | null;
+        /**
+         * Kind
+         */
+        kind?: string | null;
+        /**
+         * Hiddenkinds
+         */
+        hiddenKinds?: Array<string> | null;
+        /**
+         * Hiddenoutcomes
+         */
+        hiddenOutcomes?: Array<Outcome> | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
+    };
+    url: '/api/v1/requests/records';
+};
+
+export type RequestsReadRequestRecordsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestRecordsError = RequestsReadRequestRecordsErrors[keyof RequestsReadRequestRecordsErrors];
+
+export type RequestsReadRequestRecordsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestRecordsResponse;
+};
+
+export type RequestsReadRequestRecordsResponse = RequestsReadRequestRecordsResponses[keyof RequestsReadRequestRecordsResponses];
+
+export type RequestsReadRequestSpreadData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Charged
+         */
+        charged?: 'all' | 'charged' | 'uncharged';
+        /**
+         * Accounts
+         */
+        accounts?: Array<string> | null;
+        /**
+         * Leftout
+         */
+        leftOut?: Array<string> | null;
+        /**
+         * Leftoutkinds
+         */
+        leftOutKinds?: Array<string> | null;
+    };
+    url: '/api/v1/requests/spread';
+};
+
+export type RequestsReadRequestSpreadErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestsReadRequestSpreadError = RequestsReadRequestSpreadErrors[keyof RequestsReadRequestSpreadErrors];
+
+export type RequestsReadRequestSpreadResponses = {
+    /**
+     * Successful Response
+     */
+    200: RequestSpreadResponse;
+};
+
+export type RequestsReadRequestSpreadResponse = RequestsReadRequestSpreadResponses[keyof RequestsReadRequestSpreadResponses];
 
 export type ViewAsStartViewAsData = {
     body?: never;

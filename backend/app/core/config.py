@@ -208,6 +208,12 @@ class Settings(BaseSettings):
     #: Attempt itself is never pruned; only the text somebody said they do not
     #: need is cleared. 0 keeps it forever.
     SUMMARY_PARTIAL_DISMISSED_RETENTION_DAYS: int = 30
+    #: How long each Request (`tg_request_records`) and the hourly totals
+    #: (`tg_request_hourly`) are kept (RQS-02, ADR-035). The daily totals are
+    #: kept forever. The hourly span must be longer than the record span: the
+    #: rollup rebuilds an hour from its Requests, and its day from the hours.
+    REQUEST_RECORD_DAYS: int = 7
+    REQUEST_HOURLY_DAYS: int = 30
     #: How often the worker sweeps the sync lanes for anything the
     #: post-enqueue kick missed (tickets 09, 10) — a crashed kick, or a message
     #: redelivered after its visibility timeout lapsed. The kick handles the
@@ -617,6 +623,20 @@ class Settings(BaseSettings):
                 "VIEW_AS_ELEVATED_MAX_MINUTES: BYOK-04's tier grants more than "
                 "the one below it and must not also last longer, or the ladder "
                 "is a ladder in name only"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_hourly_span_covers_record_span(self) -> Self:
+        """Refuse to start unless hourly totals outlive the Requests (RQS-02).
+
+        With equal spans a late Request rebuilds its day from hourly rows
+        retention has already partly pruned.
+        """
+        if self.REQUEST_HOURLY_DAYS <= self.REQUEST_RECORD_DAYS:
+            raise ValueError(
+                f"REQUEST_HOURLY_DAYS ({self.REQUEST_HOURLY_DAYS}) must be "
+                f"longer than REQUEST_RECORD_DAYS ({self.REQUEST_RECORD_DAYS})"
             )
         return self
 

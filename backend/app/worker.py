@@ -46,6 +46,7 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.core.db import db_pool_capacity, engine, init_db
 from app.core.startup_checks import run_startup_checks
+from app.jobs.request_stats import start_request_flusher, stop_request_flusher
 from app.jobs.scheduler import (
     start_job_trigger_consumer,
     start_scheduler,
@@ -155,6 +156,7 @@ async def main() -> None:
     start_generation_consumer()
     start_follow_job_consumer()
     start_job_trigger_consumer()
+    start_request_flusher()
     start_scheduler()
     logger.info(
         "Sync worker started (scheduler + queue consumer, environment=%s)",
@@ -179,6 +181,7 @@ async def main() -> None:
     stop_generation_consumer()
     stop_lane_consumer()
     stop_progress_subscriber()
+    await stop_request_flusher()
 
 
 if __name__ == "__main__":

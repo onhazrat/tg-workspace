@@ -66,6 +66,11 @@ POST_COUNTERS_MOVED_KEY = "post_counters_moved"
 #: job, the catalog and the guard have to agree on it.
 SETTLING_CURVE_RUNTIME_KEY = "settling_curve_runtime"
 
+#: RQS-01's rollup watermark, `{"through": ISO time}`: the flush time up to
+#: which every touched hour has been rolled up. Named here because the job and
+#: the catalog have to agree on it.
+REQUEST_ROLLUP_KEY = "request_rollup"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -210,6 +215,11 @@ GLOBAL_KEYS: dict[str, str] = {
         "A marker recording that the ticket 04 backfill completed. A fact "
         "about the database, not about anybody — and retention reads it before "
         "collecting channels, with no User in hand."
+    ),
+    REQUEST_ROLLUP_KEY: (
+        "How far the Request totals have been rolled up (RQS-01). Deployment "
+        "state the app writes, like `sync_runtime`: the totals are the "
+        "Operator's stats of the whole deployment, which nobody owns."
     ),
     SETTLING_CURVE_RUNTIME_KEY: (
         "When the Settling curve fit last learned nothing, and at which "

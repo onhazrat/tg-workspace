@@ -725,6 +725,23 @@ def test_the_settling_curve_fits_are_kept_forever() -> None:
     assert "settling_curve" not in source
 
 
+def test_the_daily_request_totals_are_kept_forever() -> None:
+    """Excused from every window, the way the quota ledger is (RQS-01, ADR-035).
+
+    The daily totals are the only tier that reaches back past a month, so a
+    prune of them takes the Requests tab's history with it. Each Request and
+    the hourly totals do get windows of their own (RQS-02), and those must
+    name their own tables rather than this one.
+
+    Mutation watched: prune `RequestDaily` in `run_retention_cleanup`.
+    """
+    from app.jobs import retention
+
+    source = pathlib.Path(retention.__file__).read_text()
+    assert "RequestDaily" not in source
+    assert "tg_request_daily" not in source
+
+
 def test_asset_pruning_stays_deployment_wide() -> None:
     """Avatars and thumbs live on the deployment's disk, so they have no owner.
 

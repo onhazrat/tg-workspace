@@ -555,6 +555,26 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         Reason.COVERED_ELSEWHERE,
         "PK carries user_id; test_quota_usage_route.py",
     ),
+    ("GET", f"{V1}/requests/breakdown"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_READ_ANY reads every account's Requests; the Operator's stats "
+        "(RQS-01), refused to others in test_request_stats.py",
+    ),
+    ("GET", f"{V1}/requests/trend"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_READ_ANY reads every account's Requests over time (RQS-06), "
+        "refused to others in test_request_stats.py",
+    ),
+    ("GET", f"{V1}/requests/spread"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_READ_ANY reads when every account's Requests were made (RQS-09), "
+        "refused to others in test_request_stats.py",
+    ),
+    ("GET", f"{V1}/requests/records"): (
+        Reason.DEPLOYMENT_WIDE,
+        "QUOTA_READ_ANY lists any account's Requests on one Channel table row "
+        "(RQS-10), refused to others in test_request_stats.py",
+    ),
     ("GET", f"{V1}/quota/limits"): (
         Reason.DEPLOYMENT_WIDE,
         "QUOTA_MANAGE reads every account's limits; that is the screen",

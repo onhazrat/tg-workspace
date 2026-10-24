@@ -80,6 +80,39 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /*
+   * The Requests tab (RQS-03). Kinds take the dataviz palette's categorical
+   * slots in fixed order, validated against the card surfaces #ffffff and
+   * #1a1a1a; Other is the fold, a neutral. Slot 8 (red) is left out, because
+   * it reads as Wasted. Outcomes take the status palette and always ship with
+   * an icon; the neutral Useful is the same in both themes, as are they all.
+   */
+  --kind-auto: #2a78d6;
+  --kind-bulk: #eb6834;
+  --kind-single: #1baf7a;
+  --kind-follow: #eda100;
+  --kind-probe: #e87ba4;
+  --kind-handle: #008300;
+  --kind-botApi: #6250d6;
+  --kind-other: #52514e;
+  --outcome-useful: #898781;
+  --outcome-idle: #fab219;
+  --outcome-wasted: #d03b3b;
+  /* The daily bars (RQS-06): Charged ink-dark, Uncharged light, on the grid. */
+  --layer-charged: #52514e;
+  --layer-uncharged: #c3c2b7;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #898781;
+  /*
+   * Accounts (RQS-05): a four-step violet ramp, dark to light (oklch C 0.16,
+   * h 295). Bot API is violet too (slot 7), but they never meet: picking
+   * Accounts hides every Uncharged Request, Bot API's among them, and the
+   * comparison's columns are the charged kinds (COMPARE_KINDS).
+   */
+  --account-1: #563199;
+  --account-2: #7553bd;
+  --account-3: #9575e2;
+  --account-4: #b697ff;
 }
 
 .dark {
@@ -120,6 +153,21 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --kind-auto: #3987e5;
+  --kind-bulk: #d95926;
+  --kind-single: #199e70;
+  --kind-follow: #c98500;
+  --kind-probe: #d55181;
+  --kind-handle: #008300;
+  --kind-botApi: #9085e9;
+  --kind-other: #807f79;
+  --layer-charged: #c3c2b7;
+  --layer-uncharged: #52514e;
+  --account-1: #7250ba;
+  --account-2: #8f6edb;
+  --account-3: #ad8dfd;
+  --account-4: #ccadff;
+  --viz-grid: #2c2c2a;
 }
 
 .terminal-theme {

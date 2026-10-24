@@ -143,10 +143,15 @@ PROBE_SCOPE_REASON = (
     "of that public page said."
 )
 
-#: Statuses that mean "Telegram answered, and this is the answer".
-CONCLUSIVE_STATUSES = frozenset({"ok", "unavailable"})
+#: The verdicts that mean "exists, but not followable". `private` (RQS-13) is
+#: a Channel whose page names it and withholds its Posts; every reader that
+#: counted or filtered `unavailable` reads both.
+UNAVAILABLE_STATUSES = frozenset({"unavailable", "private"})
 
-PROBE_STATUSES = frozenset({"ok", "unavailable", "unknown"})
+#: Statuses that mean "Telegram answered, and this is the answer".
+CONCLUSIVE_STATUSES = frozenset({"ok", *UNAVAILABLE_STATUSES})
+
+PROBE_STATUSES = frozenset({*CONCLUSIVE_STATUSES, "unknown"})
 PROBE_KINDS = frozenset({"channel", "group", "bot", "user", "unknown"})
 
 #: How long to wait before re-probing a handle that keeps failing.
@@ -449,7 +454,7 @@ def queue_counts(session: Session) -> dict[str, int]:
         "queued": _count(and_(unknown, attempts == 0)),
         "retrying": _count(and_(unknown, attempts > 0)),
         "resolved": _count(col(DirectoryEntry.status) == "ok"),
-        "unavailable": _count(col(DirectoryEntry.status) == "unavailable"),
+        "unavailable": _count(col(DirectoryEntry.status).in_(UNAVAILABLE_STATUSES)),
     }
 
 
@@ -939,6 +944,33 @@ def boost_entries(
     return int(cast(Any, changed).rowcount)
 
 
+#: What a probe can change about an entry that makes the probe Useful (RQS-12):
+#: the verdict, the kind, the title and the subscriber count. Compared before
+#: and after the write, so a new status (RQS-13's private) needs nothing here.
+_PROBE_WATCHED = ("status", "kind", "display_name", "subscribers")
+
+
+def _probe_view(row: DirectoryEntry) -> tuple[Any, ...]:
+    return tuple(getattr(row, name) for name in _PROBE_WATCHED)
+
+
+class ProbeVerdict(NamedTuple):
+    """What `write_probe_verdict` wrote: the entry, and what the Requests tab
+    judges the probe by (RQS-12). `new_samples` are sample Posts the entry did
+    not hold before; `repeated_samples` the ones it did."""
+
+    entry: dict[str, Any]
+    changed: bool = False
+    new_samples: int = 0
+    repeated_samples: int = 0
+
+
+def _verdict(payload: dict[str, Any]) -> str:
+    if payload.get("isPrivate"):
+        return "private"
+    return "unavailable" if payload.get("isUnavailableOnWebView") else "ok"
+
+
 def record_probe_result(
     session: Session,
     handle: str,
@@ -946,6 +978,17 @@ def record_probe_result(
     *,
     error: str | None = None,
 ) -> dict[str, Any]:
+    """Store the outcome of one fetch and return the entry. See `write_probe_verdict`."""
+    return write_probe_verdict(session, handle, info, error=error).entry
+
+
+def write_probe_verdict(
+    session: Session,
+    handle: str,
+    info: dict[str, Any] | None,
+    *,
+    error: str | None = None,
+) -> ProbeVerdict:
     """Store the outcome of one fetch.
 
     Pass `info` as the `get_channel_info` payload on success, or `None` with an
@@ -964,6 +1007,7 @@ def record_probe_result(
     """
     key = normalize_handle(handle)
     row = _get_or_create(session, key)
+    before = _probe_view(row)
     now = utc_now()
     row.attempted_at = now
 
@@ -991,7 +1035,9 @@ def record_probe_result(
             row.refresh_due_at = row.retry_after
         session.commit()
         session.refresh(row)
-        return _with_followed_reach(session, [row])[0]
+        return ProbeVerdict(
+            _with_followed_reach(session, [row])[0], _probe_view(row) != before
+        )
 
     payload: dict[str, Any] = info or {}
     # **An `unavailable` that overturns an `ok` is provisional** (ticket 03).
@@ -1016,8 +1062,8 @@ def record_probe_result(
     # cost of the confirmation is one extra fetch, once, per Channel that
     # genuinely goes dark.
     was_live = row.status == "ok"
-    row.status = "unavailable" if payload.get("isUnavailableOnWebView") else "ok"
-    provisional_downgrade = was_live and row.status == "unavailable"
+    row.status = _verdict(payload)
+    provisional_downgrade = was_live and row.status != "ok"
     if not provisional_downgrade:
         _apply_page_metadata(row, payload)
     # **A payload with no `samples` key is not an empty sample set** (ticket 02).
@@ -1035,7 +1081,9 @@ def record_probe_result(
     # a verdict stored without its samples is a row claiming `ok` beside the
     # previous probe's snapshot. See `channel_directory_samples`.
     samples = payload.get("samples")
+    new_samples = repeated_samples = 0
     if isinstance(samples, list):
+        held = {sample.post_id for sample in samples_for(session, key)}
         replace_samples(session, key, samples, captured_at=now)
         # **An `unavailable` verdict keeps the statistics** (ticket 02,
         # ADR-015). This is the one place the statistics and the samples part
@@ -1058,6 +1106,8 @@ def record_probe_result(
         # is what lets the Channels tab point the same function at the corpus
         # later instead of reimplementing these formulas over a second shape.
         stored_samples = samples_for(session, key)
+        repeated_samples = sum(sample.post_id in held for sample in stored_samples)
+        new_samples = len(stored_samples) - repeated_samples
         # **The samples contribute References** (CRG-02). The Posts are already
         # fetched and already parsed, and nothing ever read them for the graph.
         # This is the tier that covers Channels nobody follows.
@@ -1094,7 +1144,12 @@ def record_probe_result(
     index_for_search(session, [key])
     session.commit()
     session.refresh(row)
-    return _with_followed_reach(session, [row])[0]
+    return ProbeVerdict(
+        _with_followed_reach(session, [row])[0],
+        _probe_view(row) != before,
+        new_samples,
+        repeated_samples,
+    )
 
 
 #: The weights are ADR-027's: names A, bio B, the newest samples C.

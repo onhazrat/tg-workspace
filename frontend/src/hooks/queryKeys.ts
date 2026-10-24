@@ -138,6 +138,17 @@ export const queryKeys = {
    */
   quotaUsage: (day: string) => ["quotaUsage", day] as const,
   /**
+   * The Requests tab's reads, each by the query it sends: the Breakdown
+   * (RQS-03) and the Trend (RQS-06) for one range, the range picker's spread
+   * over everything kept (RQS-09).
+   */
+  requestBreakdown: (query: object) => ["requestBreakdown", query] as const,
+  requestTrend: (query: object) => ["requestTrend", query] as const,
+  requestSpread: (query: object) => ["requestSpread", query] as const,
+  /** One Channel table row's Requests, by its row id and query (RQS-10). */
+  requestRecords: (row: string, query: object) =>
+    ["requestRecords", row, query] as const,
+  /**
    * The signed-in account's own Budgets (ticket 24). Not keyed on a day: it
    * always answers for today, and a key holding a date would go stale across a
    * UTC midnight while the cache still thought it was fresh.

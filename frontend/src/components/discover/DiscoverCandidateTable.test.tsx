@@ -363,6 +363,18 @@ describe("DiscoverCandidateTable", () => {
     expect(screen.getByText("Probe name")).toBeTruthy()
   })
 
+  test("a private Channel is badged private, not by its kind", () => {
+    const hidden = row("a", {
+      probe: { ...probe, status: "private", kind: "channel" },
+    })
+    render(<Harness candidates={[hidden]} />)
+    const badge = screen.getByTestId("discover-probe-kind-a")
+    expect(badge.textContent).toBe("Private")
+    expect(badge.getAttribute("title")).toBe(
+      "This Channel keeps its Posts private, so it cannot be followed",
+    )
+  })
+
   test("a known last post renders as a time", () => {
     const recent = row("a", { probe: { ...probe, lastPostAt: Date.now() } })
     render(<Harness candidates={[recent]} />)

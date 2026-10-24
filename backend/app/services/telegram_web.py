@@ -28,6 +28,19 @@ class TelegramWebViewUnavailable(ConnectionError):
         super().__init__(message)
 
 
+class TelegramChannelPrivate(TelegramWebViewUnavailable):
+    """The page withholding the messages is a Channel's own (RQS-13).
+
+    The handle exists and its Posts are private. Carries the page, so a probe
+    can keep what it says about the Channel instead of filing the handle as
+    missing.
+    """
+
+    def __init__(self, page: str) -> None:
+        super().__init__()
+        self.page = page
+
+
 def telegram_web_domain() -> str:
     domain = settings.TELEGRAM_WEB_DOMAIN.strip().lower()
     return domain or "t.me"

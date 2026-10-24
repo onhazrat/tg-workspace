@@ -88,7 +88,7 @@ from app.models_tg import (
 )
 from app.services import search_text, tags
 from app.services.analysis_window import TimeBound
-from app.services.channel_directory import LISTED_KIND
+from app.services.channel_directory import LISTED_KIND, UNAVAILABLE_STATUSES
 from app.services.channel_directory_samples import samples_by_handle
 from app.services.channel_tags import tag_key
 from app.services.dismissals import dismissed_handles
@@ -816,7 +816,7 @@ def _atom(cond: DirectoryCond, view: DirectoryView) -> ColumnElement[bool]:
             col(DirectoryEntry.display_name).icontains(cond.value, autoescape=True),
         )
     if isinstance(cond, IsCond):
-        return col(getattr(DirectoryEntry, cond.field)) == cond.value
+        return _is(cond)
     if isinstance(cond, ContainsCond):
         return col(getattr(DirectoryEntry, cond.field)).icontains(
             cond.value, autoescape=True
@@ -1269,6 +1269,14 @@ def _rows(
             )
         )
     return rows
+
+
+def _is(cond: IsCond) -> ColumnElement[bool]:
+    # `unavailable` was private or deleted until RQS-13 split private off; a
+    # Condition written for it still finds both.
+    if (cond.field, cond.value) == ("status", "unavailable"):
+        return col(DirectoryEntry.status).in_(UNAVAILABLE_STATUSES)
+    return col(getattr(DirectoryEntry, cond.field)) == cond.value
 
 
 def _count_of(counts: dict[str, int] | None, handle: str) -> int | None:

@@ -89,6 +89,7 @@ from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_meter import metered
+from app.core.request_recording import attributed
 from app.services import pgmq
 from app.services.directory_probe_usage import charge_probe_requests
 from app.services.proxy_pacing import PACE_MAX_MS
@@ -108,6 +109,7 @@ from app.services.quota import (
     resolve_charge_owner,
     usage_for_user,
 )
+from app.services.request_stats import flush_recorded_requests
 from app.services.scraper_jobs import (
     SyncJobState,
     claim_job,
@@ -121,11 +123,13 @@ from app.services.sync_lanes import (
     DISCOVER_PROBE_LANE,
     DRAIN_ORDER,
     NON_SYNC_GROUP,
+    TIER_BEST_EFFORT,
     TIER_ORDER,
     LaneScheduler,
     is_sync_lane,
     lane_for_budget,
     lane_for_spend,
+    lane_tier,
     lanes_in_tier,
 )
 
@@ -918,6 +922,9 @@ async def _process_message(msg: pgmq.PgmqMessage, slot: SyncSlot) -> None:
                 await asyncio.to_thread(
                     charge_sync_job, user_id, job.sync_mode, meter.telegram_requests
                 )
+                # Beside the ledger write (RQS-01): a crash loses the Requests
+                # the ledger loses, and no more.
+                await asyncio.to_thread(flush_recorded_requests)
     finally:
         _in_flight.discard(key)
 
@@ -1039,6 +1046,8 @@ async def _process_probe_message(msg: pgmq.PgmqMessage) -> None:
             # the fetch ended badly under-reports precisely the traffic an
             # Operator is watching for.
             await asyncio.to_thread(charge_probe_requests, meter.telegram_requests)
+            # Beside the ledger write, as the sync's are (RQS-12).
+            await asyncio.to_thread(flush_recorded_requests)
 
 
 async def _handle_one(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) -> str:
@@ -1081,7 +1090,10 @@ async def _handle_one_inner(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) ->
         # with the first — and the disagreement would be silent, since both
         # answers name a real handler.
         if is_sync_lane(lane):
-            await _process_message(msg, slot)
+            # Its Requests ran past the Budget when the lane is best-effort
+            # (RQS-01); the sync below says the rest of whose they were.
+            with attributed(best_effort=lane_tier(lane) == TIER_BEST_EFFORT):
+                await _process_message(msg, slot)
         else:
             await _process_probe_message(msg)
     except Exception:

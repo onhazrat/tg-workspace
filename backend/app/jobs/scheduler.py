@@ -35,6 +35,13 @@ from app.jobs.post_language import (
     POST_LANGUAGE_JOB_ID,
     run_post_language_walk,
 )
+from app.jobs.request_stats import (
+    REQUEST_LEDGER_CHECK_JOB_ID,
+    REQUEST_ROLLUP_INTERVAL_SECONDS,
+    REQUEST_ROLLUP_JOB_ID,
+    run_request_ledger_check,
+    run_request_rollup,
+)
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.settings import (
     JOB_IDS,
@@ -573,6 +580,31 @@ def start_scheduler() -> None:
         replace_existing=True,
         # A due tick reads every View observation and fits, which can outlast
         # a 1s grace; a dropped tick only delays the check a minute.
+        misfire_grace_time=None,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        run_request_rollup,
+        "interval",
+        seconds=REQUEST_ROLLUP_INTERVAL_SECONDS,
+        id=REQUEST_ROLLUP_JOB_ID,
+        replace_existing=True,
+        # Not in `JOB_IDS`, like the sync queue: the Requests tab reads these
+        # totals, so there is nothing to turn off (RQS-01). Late is fine and a
+        # catch-up run is the same as one run, since every run replaces.
+        misfire_grace_time=None,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        run_request_ledger_check,
+        "cron",
+        hour=0,
+        minute=15,
+        timezone="UTC",
+        id=REQUEST_LEDGER_CHECK_JOB_ID,
+        replace_existing=True,
+        # Not in `JOB_IDS` either (RQS-15): it only reads and warns. A late run
+        # checks the same closed day, so late is fine.
         misfire_grace_time=None,
         coalesce=True,
     )

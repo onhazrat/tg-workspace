@@ -1,0 +1,323 @@
+import { Users } from "lucide-react"
+import { lazy, Suspense } from "react"
+import type {
+  RequestBreakdownResponse,
+  RequestSpreadResponse,
+  RequestTrendResponse,
+} from "@/client"
+import { FilterBar } from "@/components/FilterBar"
+import { FacetMenu } from "@/components/filter-tree/FacetMenu"
+import { TimeBoundBar } from "@/components/TimeBoundEditor"
+import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
+import { funnelledValues } from "@/lib/filter-tree"
+import {
+  type AccountRow,
+  accountRows,
+  type ChannelRow,
+  type ChargedFilter,
+  channelRows,
+  chargedCounts,
+  type FilterUpdate,
+  fmt,
+  kindRows,
+  type RequestsFilter,
+  rangeText,
+  statTotals,
+  toggled,
+} from "@/lib/requests/breakdown"
+import { pickKind } from "@/lib/requests/channel-filter"
+import { DAY_MS } from "@/lib/scope/window"
+import { extractErrorMessage } from "@/utils"
+import { AccountCompare } from "./AccountCompare"
+import { ChannelTable } from "./ChannelTable"
+import { KindTable } from "./KindTable"
+import { OutcomeChips, StatStrip } from "./parts"
+import { RequestedSpread } from "./RequestedSpread"
+
+// Plotly downloads only when the charts draw (RQS-07).
+const DailyBars = lazy(() => import("./DailyBars"))
+const ZoomTrend = lazy(() => import("./ZoomTrend"))
+
+const CHOICES: { value: ChargedFilter; label: string }[] = [
+  { value: "all", label: "All Requests" },
+  { value: "charged", label: "Charged" },
+  { value: "uncharged", label: "Uncharged" },
+]
+
+/**
+ * The Requests tab, props only (RQS-03): the filter bar, the stat strip, the
+ * daily bars (RQS-06) and the zoomable trend (RQS-07), By kind of work and Channels by Requests, all for one
+ * range cut to the minute. The Channels left out leave every number but the
+ * Channel table's own rows, which list them faded to be picked again (RQS-04).
+ * A Channel table row click asks to open its Requests (RQS-10).
+ */
+export function RequestsView({
+  filter,
+  onFilter,
+  range,
+  unfiltered,
+  breakdown,
+  listed,
+  trend,
+  spread,
+  error,
+  phone = false,
+  onOpenRow,
+}: {
+  filter: RequestsFilter
+  onFilter: (update: FilterUpdate) => void
+  /** The range the Breakdown was asked for, epoch ms, cut to the minute. */
+  range: { start: number; end: number }
+  /**
+   * The range's Breakdown before Charged or any Account narrows it: the
+   * choice counts and each Account's charged Requests.
+   */
+  unfiltered?: RequestBreakdownResponse
+  /** The range's Breakdown, narrowed as picked. */
+  breakdown?: RequestBreakdownResponse
+  /** The same before the Channels left out leave it: the Channel table's rows. */
+  listed?: RequestBreakdownResponse
+  /** The range in buckets, for the daily bars (RQS-06). */
+  trend?: RequestTrendResponse
+  /** When Requests were made, for the range picker (RQS-09). */
+  spread?: RequestSpreadResponse
+  error?: unknown
+  phone?: boolean
+  onOpenRow: (row: ChannelRow) => void
+}) {
+  const { hiddenKinds, hiddenOutcomes } = filter
+  const totals =
+    breakdown && statTotals(breakdown.byKind, hiddenKinds, hiddenOutcomes)
+  const counts = unfiltered && chargedCounts(unfiltered.byKind)
+  const everyAccount = accountRows(
+    unfiltered?.byAccount ?? [],
+    new Set(),
+    new Set(),
+  )
+  // Colours follow the Account, ordered by email, never its rank or the pick.
+  const every = [...everyAccount]
+    .sort((a, b) => a.email.localeCompare(b.email))
+    .map((a) => a.id)
+  return (
+    <div className="space-y-3 pb-16" data-testid="requests-tab">
+      <FilterBar
+        phone={phone}
+        testIdPrefix="requests"
+        active={
+          Number(filter.charged !== "all") +
+          filter.accounts.length +
+          Number(filter.leftOut.size > 0)
+        }
+        search={<h2 className="text-base font-semibold">Requests</h2>}
+        controls={
+          <>
+            <TgInlineChoice<ChargedFilter>
+              aria-label="Charged or Uncharged"
+              options={CHOICES.map((c) => ({
+                value: c.value,
+                "data-testid": `requests-charged-${c.value}`,
+                label: (
+                  <span>
+                    {c.label}
+                    {counts && (
+                      <span className="ml-1 tabular-nums opacity-60">
+                        {fmt(counts[c.value])}
+                      </span>
+                    )}
+                  </span>
+                ),
+              }))}
+              value={filter.charged}
+              onChange={(charged) => onFilter({ charged })}
+            />
+            <AccountsFacet
+              everyAccount={everyAccount}
+              picked={filter.accounts}
+              onPick={(accounts) => onFilter({ accounts })}
+            />
+            <span className="mx-1 h-5 w-px bg-app-ink/10" />
+            <TimeBoundBar
+              label="Requested"
+              value={filter.bound}
+              onChange={(bound) => onFilter({ bound })}
+              opts={{ openEnds: true }}
+            >
+              <RequestedSpread
+                spread={spread}
+                bound={filter.bound}
+                onPick={(bound) => onFilter({ bound })}
+              />
+            </TimeBoundBar>
+          </>
+        }
+        footer={
+          <>
+            <span data-testid="requests-total" className="font-semibold">
+              {totals ? `${fmt(totals.total)} Requests` : "Loading Requests…"}
+            </span>
+            <span data-testid="requests-range" className="text-app-ink/50">
+              {rangeText(range.start, range.end)} (UTC)
+            </span>
+            {filter.accounts.length > 0 && (
+              <span
+                data-testid="requests-uncharged-hidden"
+                className="text-app-ink/50"
+              >
+                Uncharged hidden, because no Account pays for it
+              </span>
+            )}
+            {filter.leftOut.size > 0 && (
+              <LeftOut
+                count={filter.leftOut.size}
+                onPickAll={() => onFilter({ leftOut: new Set() })}
+              />
+            )}
+          </>
+        }
+      />
+      {error ? (
+        <p role="alert" className="text-sm text-red-500">
+          The Requests could not be read: {extractErrorMessage(error)}
+        </p>
+      ) : (
+        breakdown &&
+        totals && (
+          <>
+            {filter.accounts.length > 1 && (
+              <AccountCompare
+                rows={accountRows(
+                  breakdown.byAccount,
+                  hiddenKinds,
+                  hiddenOutcomes,
+                )}
+                every={every}
+                hiddenKinds={hiddenKinds}
+                hiddenOutcomes={hiddenOutcomes}
+              />
+            )}
+            <StatStrip t={totals} hiddenOutcomes={hiddenOutcomes} />
+            {trend && (
+              <Suspense fallback={null}>
+                <DailyBars
+                  trend={trend}
+                  range={range}
+                  filter={filter}
+                  onDay={(start) =>
+                    onFilter({
+                      bound: { mode: "fixed", start, end: start + DAY_MS },
+                    })
+                  }
+                />
+                <ZoomTrend
+                  trend={trend}
+                  range={range}
+                  hiddenKinds={hiddenKinds}
+                  hiddenOutcomes={hiddenOutcomes}
+                  onHidden={onFilter}
+                  onRange={(start, end) =>
+                    onFilter({ bound: { mode: "fixed", start, end } })
+                  }
+                />
+              </Suspense>
+            )}
+            <KindTable
+              {...kindRows(breakdown.byKind, hiddenKinds, hiddenOutcomes)}
+              hiddenOutcomes={hiddenOutcomes}
+              onToggleKind={(kind) =>
+                onFilter({ hiddenKinds: toggled(hiddenKinds, kind) })
+              }
+              picked={funnelledValues(filter.channelFilter, "kind")}
+              onPickKind={(kind) =>
+                onFilter({
+                  channelFilter: pickKind(filter.channelFilter, kind),
+                })
+              }
+              chips={
+                <OutcomeChips
+                  hidden={hiddenOutcomes}
+                  onToggle={(o) =>
+                    onFilter({ hiddenOutcomes: toggled(hiddenOutcomes, o) })
+                  }
+                />
+              }
+            />
+            <ChannelTable
+              rows={channelRows(
+                (listed ?? breakdown).byChannel,
+                hiddenKinds,
+                hiddenOutcomes,
+              )}
+              hiddenOutcomes={hiddenOutcomes}
+              hiddenKinds={hiddenKinds}
+              filter={filter.channelFilter}
+              onFilter={(channelFilter) => onFilter({ channelFilter })}
+              leftOut={filter.leftOut}
+              onLeftOut={(leftOut) => onFilter({ leftOut })}
+              onOpen={onOpenRow}
+            />
+          </>
+        )
+      )}
+    </div>
+  )
+}
+
+/** The footer's "N Channels left out", and Pick all to bring them back. */
+function LeftOut({
+  count,
+  onPickAll,
+}: {
+  count: number
+  onPickAll: () => void
+}) {
+  return (
+    <span data-testid="requests-left-out" className="text-app-ink/50">
+      {fmt(count)} Channel{count === 1 ? "" : "s"} left out{" "}
+      <button
+        type="button"
+        className="underline hover:text-app-ink"
+        onClick={onPickAll}
+      >
+        Pick all
+      </button>
+    </span>
+  )
+}
+
+/** The Accounts facet (RQS-05): each Account's charged Requests; a funnel picks it. */
+function AccountsFacet({
+  everyAccount,
+  picked,
+  onPick,
+}: {
+  everyAccount: readonly AccountRow[]
+  picked: readonly string[]
+  onPick: (accounts: string[]) => void
+}) {
+  const label = (a: AccountRow) => a.email || "Deleted Account"
+  return (
+    <FacetMenu
+      icon={<Users size={12} />}
+      label="Accounts"
+      noun="Account"
+      testId="requests-accounts"
+      countLabel="charged Requests"
+      rows={everyAccount.map((a) => ({
+        id: a.id,
+        label: label(a),
+        selected: 0,
+        total: a.total,
+        tick: "false" as const,
+      }))}
+      funnelled={[...picked]}
+      labelOf={(id) => {
+        const account = everyAccount.find((a) => a.id === id)
+        return account ? label(account) : id
+      }}
+      onFunnel={(id, on) =>
+        onPick(on ? [...picked, id] : picked.filter((x) => x !== id))
+      }
+      onClearFunnels={() => onPick([])}
+    />
+  )
+}

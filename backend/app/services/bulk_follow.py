@@ -15,6 +15,7 @@ from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
 from app.core.request_meter import metered
+from app.core.request_recording import PageType, RequestKind, attributed, page
 from app.jobs.settings import (
     compute_effective_global_start_time_ms,
     load_retention_policy,
@@ -570,53 +571,57 @@ async def _process_one_channel(
         await touch_follow_job(job)
         return
 
-    display_name = result.name
-    photo_url: str | None = None
-    is_unavailable = False
-    telemetry = None
-    try:
-        info = await get_channel_info(
-            result.name,
-            proxies=job.proxies or None,
-            tor_auto_rotate=job.tor_auto_rotate,
-            tor_rotation_threshold=job.tor_rotation_threshold,
-            proxy_concurrency=proxy_concurrency,
-        )
-        display_name = info.get("displayName") or result.name
-        photo_url = info.get("photoUrl")
-        is_unavailable = bool(info.get("isUnavailableOnWebView"))
-        telemetry = info.get("telemetry")
-    except Exception as exc:  # noqa: BLE001
-        msg = str(exc)
-        if isinstance(exc, TelegramWebViewUnavailable):
-            is_unavailable = True
-        else:
-            result.status = "error"
-            result.error = msg
+    # One page, judged by whether it added the Channel (RQS-14): a check that
+    # wrote the follow is Useful, one that wrote nothing Idle.
+    with page(PageType.METADATA) as follow_page:
+        display_name = result.name
+        photo_url: str | None = None
+        is_unavailable = False
+        telemetry = None
+        try:
+            info = await get_channel_info(
+                result.name,
+                proxies=job.proxies or None,
+                tor_auto_rotate=job.tor_auto_rotate,
+                tor_rotation_threshold=job.tor_rotation_threshold,
+                proxy_concurrency=proxy_concurrency,
+            )
+            display_name = info.get("displayName") or result.name
+            photo_url = info.get("photoUrl")
+            is_unavailable = bool(info.get("isUnavailableOnWebView"))
+            telemetry = info.get("telemetry")
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            if isinstance(exc, TelegramWebViewUnavailable):
+                is_unavailable = True
+            else:
+                result.status = "error"
+                result.error = msg
+                await touch_follow_job(job)
+                return
+
+        if await _cancelled(job):
+            result.status = "cancelled"
             await touch_follow_job(job)
             return
 
-    if await _cancelled(job):
-        result.status = "cancelled"
-        await touch_follow_job(job)
-        return
-
-    discovered_via = job.discovered_via_by_name.get(result.name)
-    # Serialize creates: concurrent touch_sync / group ensure races under load.
-    async with _create_lock:
-        created = await run_db(
-            create_followed_channel,
-            result.name,
-            display_name=display_name,
-            photo_url=photo_url,
-            is_unavailable=is_unavailable,
-            discovered_via=discovered_via,
-            user_id=user_uuid,
-            effective_start_time=effective_start_time,
-            telemetry_url=telegram_web_view_channel_url(result.name),
-            telemetry=telemetry,
-            setting_group_id=job.setting_group_id,
-        )
+        discovered_via = job.discovered_via_by_name.get(result.name)
+        # Serialize creates: concurrent touch_sync / group ensure races under load.
+        async with _create_lock:
+            created = await run_db(
+                create_followed_channel,
+                result.name,
+                display_name=display_name,
+                photo_url=photo_url,
+                is_unavailable=is_unavailable,
+                discovered_via=discovered_via,
+                user_id=user_uuid,
+                effective_start_time=effective_start_time,
+                telemetry_url=telegram_web_view_channel_url(result.name),
+                telemetry=telemetry,
+                setting_group_id=job.setting_group_id,
+            )
+        follow_page.report_posts(0, 0, changed=created)
     if not created:
         result.status = "skipped"
         result.reason = "already_followed"
@@ -794,7 +799,18 @@ async def run_follow_job(job: FollowJobState) -> None:
                 await touch_follow_job(job)
                 return
             try:
-                with bound_to(slot):
+                # Its Requests are the follow's, charged to manual bulk as
+                # the ledger charges the batch (RQS-14).
+                with (
+                    bound_to(slot),
+                    attributed(
+                        kind=RequestKind.FOLLOW,
+                        account_id=user_uuid,
+                        budget=Budget.MANUAL_BULK.value,
+                        channel=result.name,
+                        job_id=job.follow_job_id,
+                    ),
+                ):
                     await _process_one_channel(
                         job,
                         result,

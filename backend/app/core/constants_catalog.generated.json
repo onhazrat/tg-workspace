@@ -49,10 +49,26 @@
       "value": 300
     },
     {
+      "comment": "How often each process writes the Requests it has buffered. A hard kill loses at most this much, the gap the quota ledger already accepts.",
+      "expression": "5",
+      "file": "backend/app/jobs/request_stats.py",
+      "line": 31,
+      "name": "REQUEST_FLUSH_SECONDS",
+      "value": 5
+    },
+    {
+      "comment": "How often the hourly and daily Request totals are rebuilt, so the Requests tab is at most this far behind.",
+      "expression": "300",
+      "file": "backend/app/jobs/request_stats.py",
+      "line": 35,
+      "name": "REQUEST_ROLLUP_INTERVAL_SECONDS",
+      "value": 300
+    },
+    {
       "comment": "Delete expired posts in bounded batches: a backlog can be hundreds of thousands of rows, and materialising them all at once OOM-killed the worker.",
       "expression": "500",
       "file": "backend/app/jobs/retention.py",
-      "line": 109,
+      "line": 115,
       "name": "POST_DELETE_BATCH",
       "value": 500
     },
@@ -60,7 +76,7 @@
       "comment": "Channels collected per retention pass. Each one is a full corpus delete and nothing waits on the queue draining, so the next hourly run takes the rest.",
       "expression": "100",
       "file": "backend/app/jobs/retention.py",
-      "line": 113,
+      "line": 119,
       "name": "COLLECT_LIMIT",
       "value": 100
     },
@@ -68,7 +84,7 @@
       "comment": "Longest `detail` an announcement carries, comfortably under `pg_notify`'s 8000-byte payload cap with room for the rest of the entry.",
       "expression": "2000",
       "file": "backend/app/jobs/scheduler.py",
-      "line": 140,
+      "line": 147,
       "name": "_MAX_DETAIL_CHARS",
       "value": 2000
     },
@@ -148,7 +164,7 @@
       "comment": "How long the drain waits for a healthy worker before concluding that every proxy is parked. Only reached when no worker is free *and* none can become free by a release \u2014 which is either \"everything is busy\" (resolved by waiting on the running tasks) or \"every proxy is in cooldown\" (resolved by giving up and letting the 30-second sweep come back). **Ticket 14's per-proxy wait does not feed into this, and that is a claim worth stating rather than assuming.** Ticket 13's handover asked that if deliberate waits longer than this constant appeared, it be re-derived from them instead of left a literal. They appeared, and the two still do not meet: this bounds the wait for a *free and healthy worker*, and a worker serving a paced fetch is `busy` \u2014 not free, not parked. Pacing lengthens the message a worker is already running, which the drain sees through `all_busy()` as ordinary backpressure. Deriving this from `PACE_MAX_MS` would make every empty-queue sweep block for thirty seconds to no purpose. `tests/services/test_adaptive_proxy_wait.py` holds the guard.",
       "expression": "5.0",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 178,
+      "line": 182,
       "name": "_NO_HEALTHY_WORKER_WAIT_SECONDS",
       "value": 5.0
     },
@@ -156,7 +172,7 @@
       "comment": "How many accounts one lane read will interleave between. A bound because each one costs a read: the round-robin below issues one `pgmq.read` per account with work, and a deployment with 200 accounts on one lane should serve 20 of them per pass rather than issue 200 queries to fill ten slots. The accounts it does not reach this pass are reached on the next, because `distinct_due_values` orders by value and the ones it served have had their messages claimed out of the due set.",
       "expression": "20",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 344,
+      "line": 348,
       "name": "MAX_INTERLEAVED_USERS",
       "value": 20
     },
@@ -164,7 +180,7 @@
       "comment": "How often the paused-lane set is re-read during one drain. See `_LaneBuffers._refresh_pauses` \u2014 a drain is not bounded in length, so a snapshot taken at its start can be hours stale.",
       "expression": "5.0",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 349,
+      "line": 353,
       "name": "_PAUSE_RECHECK_SECONDS",
       "value": 5.0
     },
@@ -172,7 +188,7 @@
       "comment": "How long a lane that read empty is left alone before being asked again. Bounds the cost of re-checking the normal tier while a long best-effort backlog drains \u2014 the strict-tier rule needs that re-check to be live, and without an interval it would be a query per dispatched message.",
       "expression": "0.5",
       "file": "backend/app/jobs/sync_queue.py",
-      "line": 355,
+      "line": 359,
       "name": "_EMPTY_LANE_RECHECK_SECONDS",
       "value": 0.5
     },
@@ -220,7 +236,7 @@
       "comment": "A Live end's reach either way: a century, in ms.",
       "expression": "100 * 366 * 86400000",
       "file": "backend/app/schemas/directory.py",
-      "line": 187,
+      "line": 191,
       "name": "_MAX_OFFSET_MS",
       "value": 3162240000000
     },
@@ -228,7 +244,7 @@
       "comment": "A Fixed end's reach either way, inside what a `datetime` holds (years 1 to 9999), so an absurd instant is a 422 and never an overflow.",
       "expression": "62000000000000",
       "file": "backend/app/schemas/directory.py",
-      "line": 190,
+      "line": 194,
       "name": "_MAX_INSTANT_MS",
       "value": 62000000000000
     },
@@ -236,7 +252,7 @@
       "comment": "How many fixed handles one \"cited by\" or \"cites\" Condition names: 500 keeps a shared link under the 8 KB request line common proxies accept, and anything larger is a Tag (DFP-05).",
       "expression": "500",
       "file": "backend/app/schemas/directory.py",
-      "line": 240,
+      "line": 244,
       "name": "MAX_CONDITION_HANDLES",
       "value": 500
     },
@@ -244,7 +260,7 @@
       "comment": "How many Seeds one Shared parents / children Condition sends: every follow, or a Channels tab selection, which can be the whole account.",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 243,
+      "line": 247,
       "name": "MAX_SEEDS",
       "value": 10000
     },
@@ -252,7 +268,7 @@
       "comment": "A Channels tab selection can be the whole account; past this, use \"every follow\".",
       "expression": "10000",
       "file": "backend/app/schemas/directory.py",
-      "line": 393,
+      "line": 397,
       "name": "MAX_YOUR_CHANNELS",
       "value": 10000
     },
@@ -260,7 +276,7 @@
       "comment": "The most handles one paste may add (DADD).",
       "expression": "100000",
       "file": "backend/app/schemas/directory.py",
-      "line": 686,
+      "line": 691,
       "name": "MAX_ADDED_HANDLES",
       "value": 100000
     },
@@ -324,7 +340,7 @@
       "comment": "How stale the worker's view of `cancel_requested` may be, in seconds. Small, because a person pressed Cancel and is watching; not zero, because the alternative is a `Session` per checkpoint per handle. See `_cancelled`.",
       "expression": "1.0",
       "file": "backend/app/services/bulk_follow.py",
-      "line": 510,
+      "line": 511,
       "name": "_CANCEL_POLL_SECONDS",
       "value": 1.0
     },
@@ -332,7 +348,7 @@
       "comment": "How long to wait before re-probing a handle that keeps failing. Doubles per consecutive failure and stops growing at a day: a handle that has failed eight times in a row is probably failing for a reason a tighter loop will not fix, and the sweep should not keep spending proxy lanes on it.",
       "expression": "15",
       "file": "backend/app/services/channel_directory.py",
-      "line": 157,
+      "line": 162,
       "name": "RETRY_BACKOFF_BASE_MINUTES",
       "value": 15
     },
@@ -340,7 +356,7 @@
       "comment": "",
       "expression": "24 * 60",
       "file": "backend/app/services/channel_directory.py",
-      "line": 158,
+      "line": 163,
       "name": "RETRY_BACKOFF_MAX_MINUTES",
       "value": 1440
     },
@@ -348,7 +364,7 @@
       "comment": "Priority for a row nothing has ranked. Large rather than 0 so a handle enqueued with a real candidate rank always sorts ahead of one that was not.",
       "expression": "1000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 162,
+      "line": 167,
       "name": "DEFAULT_PROBE_PRIORITY",
       "value": 1000000
     },
@@ -356,7 +372,7 @@
       "comment": "A manual recheck or refresh jumps the queue. The operator is looking at that row, and one that waited behind a freshly generated report would take minutes. **Negative, so it beats a rank rather than tying with one.** `enqueue_handles` numbers a report's candidates from zero, so at `0` this sorted level with the strongest candidate of the newest report and the tie fell to whichever handle was alphabetically first. `test_recheck_jumps_the_queue` passed on exactly that accident. Ticket 03 gave the constant a second caller \u2014 `refresh_entries` \u2014 and the property has to hold by construction for both. **A Priority boost can still beat it** (DPF). The drain order is `priority - priority_boost` and nothing else: an Operator who boosts a batch by more than the gap has said that batch matters more, and an exception here would be one more rule to remember about a number they set themselves.",
       "expression": "-1",
       "file": "backend/app/services/channel_directory.py",
-      "line": 178,
+      "line": 183,
       "name": "RECHECK_PRIORITY",
       "value": -1
     },
@@ -364,7 +380,7 @@
       "comment": "The largest Priority boost either way. `priority` is int4 and the bands sit within a few million of zero, so the difference cannot overflow. With bands 500,000 apart, that leaves two thousand bands of headroom.",
       "expression": "1000000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 183,
+      "line": 188,
       "name": "MAX_PRIORITY_BOOST",
       "value": 1000000000
     },
@@ -372,7 +388,7 @@
       "comment": "Priority for a handle the harvest sweep found in a stored Post (ticket 04). Behind `DEFAULT_PROBE_PRIORITY` and ahead of `REFRESH_PRIORITY`, which is the ladder's own argument applied once more: a handle somebody's report named is worth more than one nobody asked about, and one nobody asked about is still an answer we have never had, which beats re-fetching an answer we hold. **One number for every harvested handle, not a rank**, and that is the fairness mechanism the ticket asks for rather than a shrug. The sweep walks the corpus with a single cursor and no idea who follows what, so the handles it finds arrive in whatever order the Posts did; giving them all one priority makes `dequeue_handles` fall through to its `handle` tiebreak, and an alphabetical order cannot prefer one account's corpus over another's. Ranking them by discovery order would hand the queue to whichever account's Channels the cursor happened to be walking.",
       "expression": "1500000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 200,
+      "line": 205,
       "name": "HARVEST_PRIORITY",
       "value": 1500000
     },
@@ -380,7 +396,7 @@
       "comment": "Priority for a handle an Operator pasted into the Directory (DADD). Behind `HARVEST_PRIORITY` and ahead of `REFRESH_PRIORITY`. A pasted handle is one we have never had an answer for, which beats re-fetching one we hold; but the Directory's own discoveries go first, and an Operator who wants a paste sooner has the Priority boost. One value for the whole paste, like a harvest, so the drain order within it falls through to `handle`.",
       "expression": "1750000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 209,
+      "line": 214,
       "name": "NAMED_PRIORITY",
       "value": 1750000
     },
@@ -388,7 +404,7 @@
       "comment": "Priority for an entry that already has an answer and is only going stale. Larger than `DEFAULT_PROBE_PRIORITY`, so a scheduled refresh drains behind every handle nobody has ever looked at: an answer we hold is worth less than one we have never had. Set on the conclusive branch of `record_probe_result` rather than left alone, because a row keeps the rank of whatever first enqueued it \u2014 and a handle rechecked once carries `RECHECK_PRIORITY`, which would put a week-old entry at the front of the queue for ever after.",
       "expression": "2000000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 219,
+      "line": 224,
       "name": "REFRESH_PRIORITY",
       "value": 2000000
     },
@@ -396,7 +412,7 @@
       "comment": "",
       "expression": "200",
       "file": "backend/app/services/channel_directory.py",
-      "line": 232,
+      "line": 237,
       "name": "DEFAULT_PROBE_PAGE_SIZE",
       "value": 200
     },
@@ -404,7 +420,7 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/channel_directory.py",
-      "line": 233,
+      "line": 238,
       "name": "MAX_PROBE_PAGE_SIZE",
       "value": 1000
     },
@@ -412,7 +428,7 @@
       "comment": "The search document's recipe (`search_text`). Raise it when the recipe changes, and `scripts/backfill_directory_search.py` re-indexes older rows.",
       "expression": "1",
       "file": "backend/app/services/channel_directory.py",
-      "line": 239,
+      "line": 244,
       "name": "SEARCH_INDEX_VERSION",
       "value": 1
     },
@@ -420,7 +436,7 @@
       "comment": "Entries re-indexed per statement by retention and the backfill.",
       "expression": "500",
       "file": "backend/app/services/channel_directory.py",
-      "line": 241,
+      "line": 246,
       "name": "SEARCH_BATCH",
       "value": 500
     },
@@ -596,7 +612,7 @@
       "comment": "The most entries Tick all turns into Ticks; above it a view is All matching (ADR-031). The same number as the ticked Seeds a Condition takes.",
       "expression": "10000",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1416,
+      "line": 1424,
       "name": "MAX_TICK_ALL",
       "value": 10000
     },
@@ -604,7 +620,7 @@
       "comment": "How many citing Posts \"Why it's here\" quotes; the rest are counted.",
       "expression": "20",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1573,
+      "line": 1581,
       "name": "WHY_LIMIT",
       "value": 20
     },
@@ -612,7 +628,7 @@
       "comment": "How many shared Channels \"Why it's here\" names per relation; the rest are counted.",
       "expression": "5",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1711,
+      "line": 1719,
       "name": "SHARED_LIMIT",
       "value": 5
     },
@@ -620,7 +636,7 @@
       "comment": "How many Channels each side of the panel's neighbour lists shows.",
       "expression": "10",
       "file": "backend/app/services/directory_reads.py",
-      "line": 1767,
+      "line": 1775,
       "name": "NEIGHBOURS_LIMIT",
       "value": 10
     },
@@ -692,7 +708,7 @@
       "comment": "Attempts a media fetch gets. One, meaning no retry ladder at all. `retries=N` is N *attempts*, and the default 8 with a 3s escalating delay is sized for a page fetch, where losing the page loses the sync. Media is not that. An avatar is re-resolved on **every page** of a walk, so the page loop already is the retry, and a thumb is cosmetic. Left at the default, one dead avatar URL cost eight backed-off attempts per page: `tests/api/test_sync_jobs.py` went from 13 seconds to 8 minutes when the avatar cache first moved onto the lane pool, which is what surfaced this. Shared by both image caches rather than spelled twice, because they are twins and `test_image_cache_egress.py` asserts they stay that way.",
       "expression": "1",
       "file": "backend/app/services/network.py",
-      "line": 466,
+      "line": 479,
       "name": "MEDIA_FETCH_RETRIES",
       "value": 1
     },
@@ -764,7 +780,7 @@
       "comment": "Every spread's bar count (`BINS` in `components/Spread.tsx`), so one component draws both.",
       "expression": "32",
       "file": "backend/app/services/posts.py",
-      "line": 1132,
+      "line": 1157,
       "name": "VALUE_BINS",
       "value": 32
     },
@@ -929,6 +945,14 @@
       "value": 30
     },
     {
+      "comment": "Rows per delete, each its own transaction, so a backlog never holds one long transaction that pins the vacuum horizon (see `prune_finished_jobs`).",
+      "expression": "5000",
+      "file": "backend/app/services/request_stats.py",
+      "line": 259,
+      "name": "REQUEST_DELETE_BATCH",
+      "value": 5000
+    },
+    {
       "comment": "Rows per delete transaction in `prune_finished_jobs`. Bounds transaction length, not memory \u2014 see that function.",
       "expression": "1000",
       "file": "backend/app/services/scraper_jobs.py",
@@ -1028,7 +1052,7 @@
       "comment": "How long a coalesced request waits before giving up and reporting a skip. **Ticket 12 removed this constant's original reason and it still earns its place, on a different one.** Ticket 11 justified the bound by the waiter holding a slot in the worker's concurrency gate; ticket 12 made the permit releasable (`sync_queue.SyncSlot`), so a waiter now scrapes nobody's slot. What remains is that the waiter's *message* is claimed from PGMQ under a visibility timeout of about 2.4 hours: a waiter that outlasted it would have its own message redelivered and processed a second time while the first was still waiting. And a person is on the other end of the SSE stream, for whom an answer of \"still running\" beats an open connection. Fifteen minutes is a judgement, not a derivation, and worth naming as such: long enough that an ordinary sync -- seconds to a couple of minutes -- is always ridden rather than skipped, short enough to stay well inside the visibility timeout.",
       "expression": "900",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1482,
+      "line": 1521,
       "name": "COALESCE_MAX_WAIT_SECONDS",
       "value": 900
     },
@@ -1036,7 +1060,7 @@
       "comment": "How often a waiter re-checks the claim when no notification arrives. Small, because it is only reached when a ring was lost or the holder died, and both of those should resolve in seconds rather than at the next sweep.",
       "expression": "2.0",
       "file": "backend/app/services/sync_orchestrator.py",
-      "line": 1487,
+      "line": 1526,
       "name": "_COALESCE_POLL_SECONDS",
       "value": 2.0
     },
@@ -1076,7 +1100,7 @@
       "comment": "Threads over and above the connection pool, for the `to_thread` calls that open no `Session` at all \u2014 `pg_notify` sends, file writes, the Tor control socket. Small on purpose: threads past the connection count are not more parallelism, they are the same queue one layer down.",
       "expression": "4",
       "file": "backend/app/worker.py",
-      "line": 83,
+      "line": 84,
       "name": "_NON_DB_THREAD_HEADROOM",
       "value": 4
     },
@@ -1273,6 +1297,14 @@
       "value": 2.5
     },
     {
+      "comment": "About this many labels on the x axis, whatever the range.",
+      "expression": "8",
+      "file": "frontend/src/components/requests/DailyBars.tsx",
+      "line": 49,
+      "name": "TICKS",
+      "value": 8
+    },
+    {
       "comment": "",
       "expression": "1500",
       "file": "frontend/src/components/settings-page/SettingsPage.tsx",
@@ -1324,7 +1356,7 @@
       "comment": "Below this width the app lays out for a phone; one number for every \"narrow\".",
       "expression": "768",
       "file": "frontend/src/constants.ts",
-      "line": 128,
+      "line": 129,
       "name": "MOBILE_BREAKPOINT",
       "value": 768
     },
@@ -1340,7 +1372,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 156,
+      "line": 167,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
@@ -1636,7 +1668,7 @@
       "comment": "Bounds for the weight inputs \u2014 wide enough to express \"ignore this kind\" (0).",
       "expression": "0",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 283,
+      "line": 285,
       "name": "DISCOVER_WEIGHT_MIN",
       "value": 0
     },
@@ -1644,7 +1676,7 @@
       "comment": "",
       "expression": "99",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 284,
+      "line": 286,
       "name": "DISCOVER_WEIGHT_MAX",
       "value": 99
     },
@@ -1652,7 +1684,7 @@
       "comment": "Floor for the \"Min hits\" threshold. 1 rather than 0 because a candidate exists only by being referenced at least once, so 0 and 1 would select the same rows.",
       "expression": "1",
       "file": "frontend/src/lib/posts/discover-candidates.ts",
-      "line": 377,
+      "line": 379,
       "name": "DISCOVER_MIN_TOTAL_MIN",
       "value": 1
     },
@@ -1703,6 +1735,78 @@
       "line": 22,
       "name": "POST_LOOKUP_BATCH",
       "value": 200
+    },
+    {
+      "comment": "Rows the Requests tab's Channel table shows first.",
+      "expression": "25",
+      "file": "frontend/src/lib/requests/breakdown.ts",
+      "line": 304,
+      "name": "FIRST_CHANNELS",
+      "value": 25
+    },
+    {
+      "comment": "Rows each \"Show more\" adds to the Requests tab's Channel table.",
+      "expression": "50",
+      "file": "frontend/src/lib/requests/breakdown.ts",
+      "line": 306,
+      "name": "MORE_CHANNELS",
+      "value": 50
+    },
+    {
+      "comment": "Steps on the violet Account ramp, `--account-1` to `--account-4`.",
+      "expression": "4",
+      "file": "frontend/src/lib/requests/breakdown.ts",
+      "line": 453,
+      "name": "ACCOUNT_STEPS",
+      "value": 4
+    },
+    {
+      "comment": "Requests the sheet asks for at a time.",
+      "expression": "200",
+      "file": "frontend/src/lib/requests/records.ts",
+      "line": 8,
+      "name": "RECORDS_PAGE",
+      "value": 200
+    },
+    {
+      "comment": "Buckets across the visible range: about one per 3 to 4 px of the plot.",
+      "expression": "220",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 35,
+      "name": "TARGET",
+      "value": 220
+    },
+    {
+      "comment": "A band's name shows when it spans more than this share of the view.",
+      "expression": "0.08",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 127,
+      "name": "LABELLED",
+      "value": 0.08
+    },
+    {
+      "comment": "Above this many times its 99th percentile, a row's tallest bucket stops setting its scale.",
+      "expression": "1.5",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 151,
+      "name": "SPIKE",
+      "value": 1.5
+    },
+    {
+      "comment": "A capped scale stops this far above the 99th percentile.",
+      "expression": "1.15",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 153,
+      "name": "CAP",
+      "value": 1.15
+    },
+    {
+      "comment": "How long a legend click waits for a second to make a double click; Plotly's default.",
+      "expression": "300",
+      "file": "frontend/src/lib/requests/zoom.ts",
+      "line": 394,
+      "name": "DOUBLE_CLICK_MS",
+      "value": 300
     },
     {
       "comment": "How often subscribers are notified.",
