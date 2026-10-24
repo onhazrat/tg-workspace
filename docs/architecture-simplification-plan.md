@@ -152,7 +152,7 @@ before it can be deleted.
 
 Documentation only, but it must land **first** so later PRs aren't relitigating a locked ADR.
 
-**Shipped:** `docs/migration/ADR-009-server-authoritative-data.md` — PostgreSQL authoritative,
+**Shipped:** `docs/adr/ADR-009-server-authoritative-data.md`, PostgreSQL authoritative,
 TanStack Query the only client cache, writes fail loudly, no offline browsing, server state
 never in context. It records both alternatives considered (IndexedDB-as-persister behind
 react-query; freeze-and-decay) and why each was rejected, plus the A4 one-way-door hazard.

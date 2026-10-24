@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-08-23) — supersedes the registration half of
 [ADR-002](./ADR-002-auth.md) and Mode A's `USERS_OPEN_REGISTRATION=false` rule in
-[DECISIONS.md](./DECISIONS.md).
+[DECISIONS.md](../migration/DECISIONS.md).
 
 ## Context
 

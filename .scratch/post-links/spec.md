@@ -3,7 +3,7 @@
 A Post's body renders as plain text except for `@mentions`, so every other address a Channel
 wrote is dead in the feed, and a masked Link ("read more" over a URL) cannot be recovered at all.
 This spec makes a Post keep its Links and render them. The decision is recorded in
-[ADR-022](../../docs/migration/ADR-022-post-links.md); the term **Link** is defined in
+[ADR-022](../../docs/adr/ADR-022-post-links.md); the term **Link** is defined in
 `CONTEXT.md`. Settled in a grilling session on 2026-09-23.
 
 ## Why it happens today

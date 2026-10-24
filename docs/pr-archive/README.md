@@ -3,7 +3,7 @@
 Every pull request from this project's development, exported as markdown.
 
 The repository was republished from a rewritten history (see
-[ADR-013](../migration/ADR-013-open-source-publication.md)), which left the original
+[ADR-013](../adr/ADR-013-open-source-publication.md)), which left the original
 pull request pages behind. They held about 566,000 characters of written rationale,
 roughly one essay per change, so they are archived here instead. Text is verbatim
 apart from the same redactions the history rewrite applied.

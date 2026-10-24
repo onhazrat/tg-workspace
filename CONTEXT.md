@@ -3,7 +3,7 @@
 Self-hosted Telegram channel summarizer: it syncs posts from public `t.me`
 channels into PostgreSQL, then runs AI operations over a chosen slice of them.
 This file is the glossary. It holds no implementation detail — see `CLAUDE.md`
-for architecture and `docs/migration/` for decisions.
+for architecture and `docs/adr/` for decisions.
 
 ## Language
 

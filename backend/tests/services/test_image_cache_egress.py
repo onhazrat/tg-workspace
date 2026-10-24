@@ -1,6 +1,6 @@
 """Guard: an image cache fetch leaves through the caller's proxy, never a bare client.
 
-Ticket 36 / [ADR-012](../../../docs/migration/ADR-012-egress-seam.md): every
+Ticket 36 / [ADR-012](../../../docs/adr/ADR-012-egress-seam.md): every
 request to Telegram leaves through an acquired Lane. Media is not an exception
 and never was. `post_thumbnails.cache_post_thumb` has said so in a comment since
 it was written -- *page fetches and the media they reference must leave from the

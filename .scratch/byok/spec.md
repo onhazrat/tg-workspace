@@ -2,8 +2,8 @@
 
 **Status:** done (BYOK-01 through BYOK-04; all six plan steps shipped 2026-09-09)
 
-Implements [ADR-016](../../docs/migration/ADR-016-bring-your-own-key.md) and
-[ADR-017](../../docs/migration/ADR-017-spend-session.md), settled 2026-09-08. Vocabulary is
+Implements [ADR-016](../../docs/adr/ADR-016-bring-your-own-key.md) and
+[ADR-017](../../docs/adr/ADR-017-spend-session.md), settled 2026-09-08. Vocabulary is
 `CONTEXT.md` under **AI access**; sequencing is `docs/byok-plan.md`. Those documents hold the
 argument. This one holds the work.
 

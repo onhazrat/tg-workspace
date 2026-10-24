@@ -1,8 +1,8 @@
 # BYOK: bring your own AI key
 
 Design settled 2026-09-08 across five rounds of grilling. The decisions live in
-[ADR-016](./migration/ADR-016-bring-your-own-key.md) (who pays, the Provider surface, storage) and
-[ADR-017](./migration/ADR-017-spend-session.md) (the third View-as tier). Vocabulary is in
+[ADR-016](./adr/ADR-016-bring-your-own-key.md) (who pays, the Provider surface, storage) and
+[ADR-017](./adr/ADR-017-spend-session.md) (the third View-as tier). Vocabulary is in
 `CONTEXT.md` under **AI access**. This file is the sequencing, not the argument.
 
 ## The rule everything follows

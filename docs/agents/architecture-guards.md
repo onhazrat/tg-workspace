@@ -77,6 +77,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/services/test_quota_ceilings.py` | a zero allowance degrades where a zero ceiling blocks and a negative one never does; the three layers resolve each number independently; a lift reaches one account, one Budget, one **day**; the refusal reaches the walk and not only the enqueue; an unreadable ledger refuses | test |
 | `backend/tests/deployment/test_tg_cleanup_inventory.py` | every `tg_*` table is truncated between tests or excused, in both directions; the failure it prevents is a **green** test in an unrelated module | test |
 | `backend/tests/deployment/test_claude_md_budget.py` | the root, backend and frontend `CLAUDE.md` and this file each stay inside their budget and cite no path that has moved; the root points at the other three; every `*Enforced:*` pointer is a row here | test |
+| `backend/tests/deployment/test_adr_index.py` | every ADR has a row in `docs/adr/README.md` and lives in `docs/adr/` | test |
 | `backend/tests/api/test_send_email_call_sites.py` | every `send_email` caller checks `emails_enabled` first, the pair rather than the site | test |
 | `backend/tests/api/test_approval_gate.py` | every data router requires an approved account; unknown routers fail, exemptions state a reason | test |
 | `backend/tests/api/test_registration.py` | signup answers identically for a taken and a free address, and never returns an account | test |

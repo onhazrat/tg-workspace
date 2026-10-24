@@ -1,6 +1,8 @@
 # ADR-023: Channel counters and View counts are stored as numbers
 
 **Status:** Accepted (2026-09-24). Plan: `docs/channel-counters-as-integers-plan.md`.
+The Post-media storage part is superseded (2026-09-27) by
+[ADR-024](./ADR-024-view-counts-are-observations.md): View counts are observations.
 
 ## Context
 

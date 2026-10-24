@@ -7,7 +7,7 @@ Phased migration from browser-first TG-Summarizer (IndexedDB + Express) to FastA
 **Migration complete (Phases 0–7), 2026-06-08.** IndexedDB is a read-through cache; Postgres, server jobs, and unified `frontend/src/api/` are in place. See phase completion tables below.
 
 > **Historical document — read principle 1 with care.** As of 2026-08-01 the read-through cache
-> is being retired: [ADR-009](./ADR-009-server-authoritative-data.md) supersedes ADR-003, making
+> is being retired: [ADR-009](../adr/ADR-009-server-authoritative-data.md) supersedes ADR-003, making
 > PostgreSQL authoritative with TanStack Query as the only client cache. "PostgreSQL is
 > authoritative" still holds; "IndexedDB is a read-through cache" no longer does. The rest of
 > this document is kept as written, describing the migration as executed.
@@ -18,9 +18,9 @@ Phased migration from browser-first TG-Summarizer (IndexedDB + Express) to FastA
 
 From [TARGET-ARCHITECTURE.md](./TARGET-ARCHITECTURE.md) and ADRs:
 
-1. **PostgreSQL is authoritative** — all durable TG data lives in `backend/app/models_tg.py` tables; IndexedDB is a read-through cache ([ADR-003](./ADR-003-hybrid-sync.md)).
+1. **PostgreSQL is authoritative**. All durable TG data lives in `backend/app/models_tg.py` tables; IndexedDB is a read-through cache ([ADR-003](../adr/ADR-003-hybrid-sync.md)).
 2. **Secrets server-side only** — API keys, bot tokens, Tor passwords never in the browser bundle ([SECRETS-MATRIX.md](./SECRETS-MATRIX.md)).
-3. **Single-operator, self-hosted** — one backend instance, APScheduler in-process ([ADR-004](./ADR-004-job-runner.md), [ADR-002](./ADR-002-auth.md)).
+3. **Single-operator, self-hosted**. One backend instance, APScheduler in-process ([ADR-004](../adr/ADR-004-job-runner.md), [ADR-002](../adr/ADR-002-auth.md)).
 4. **Behavioral parity** — scrape parsing, summary flows, and publish chunking match `TG-Summarizer/` reference and pytest fixtures ([SPIKE-NOTES.md](./SPIKE-NOTES.md)).
 5. **Incremental cutover** — each phase ships independently; no big-bang rewrite.
 
@@ -39,7 +39,7 @@ From [TARGET-ARCHITECTURE.md](./TARGET-ARCHITECTURE.md) and ADRs:
 | **`resolveStartTimeToId`** | `frontend/src/services/telegram.ts` (client-side binary search) | Backend endpoint |
 | **RAG / embeddings** | `frontend/src/contexts/RAGContext.tsx` — local embed + search | Server `backend/app/api/routes/rag.py` + job backfill |
 | **Background jobs** | Browser intervals in `App.tsx`, `AIContext.tsx`, `RAGContext.tsx`, `TranslationContext.tsx` | `backend/app/jobs/scheduler.py` (placeholders today) |
-| **API client** | Split: `frontend/src/api/client.ts` (TG routes) + `frontend/src/client/` (generated admin) | Unified hand-written `frontend/src/api/` per [ADR-006](./ADR-006-api-client.md) |
+| **API client** | Split: `frontend/src/api/client.ts` (TG routes) + `frontend/src/client/` (generated admin) | Unified hand-written `frontend/src/api/` per [ADR-006](../adr/ADR-006-api-client.md) |
 | **Tor** | Env vars always passed in `compose.yml` | Optional feature flag, off by default ([DECISIONS.md #8](./DECISIONS.md)) |
 | **Reference tree** | `TG-Summarizer/` Express app | Kept indefinitely for parity diffing ([DECISIONS.md #10](./DECISIONS.md)) |
 
@@ -347,7 +347,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 
 ## Phase 5: Unify RAG path
 
-**Objective:** Embeddings generated and searched server-side; browser cache updated via repository ([ADR-005](./ADR-005-vector-search.md)).
+**Objective:** Embeddings generated and searched server-side; browser cache updated via repository ([ADR-005](../adr/ADR-005-vector-search.md)).
 
 ### Backend
 
@@ -392,7 +392,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 
 ## Phase 6: APScheduler jobs
 
-**Objective:** Replace all browser background intervals with server jobs ([ADR-004](./ADR-004-job-runner.md)). Requires `SyncJob` table (Phase 4.5).
+**Objective:** Replace all browser background intervals with server jobs ([ADR-004](../adr/ADR-004-job-runner.md)). Requires `SyncJob` table (Phase 4.5).
 
 ### Backend — real job implementations in `backend/app/jobs/scheduler.py`
 
@@ -449,7 +449,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 
 ## Phase 7: API client consolidation
 
-**Objective:** Single hand-written API module for TG routes + SSE; generated client for admin only ([ADR-006](./ADR-006-api-client.md)).
+**Objective:** Single hand-written API module for TG routes + SSE; generated client for admin only ([ADR-006](../adr/ADR-006-api-client.md)).
 
 ### Frontend
 
@@ -481,7 +481,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 
 ## Tor feature flag (cross-cutting, Phase 2–4)
 
-Per [DECISIONS.md #8](./DECISIONS.md) and [ADR-007](./ADR-007-tor-deployment.md):
+Per [DECISIONS.md #8](./DECISIONS.md) and [ADR-007](../adr/ADR-007-tor-deployment.md):
 
 | Task | Files |
 |------|-------|

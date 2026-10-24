@@ -29,7 +29,7 @@ argument happens risks shipping infrastructure for a policy nobody signed off on
 
 ## Notes
 
-Whoever picks this ticket up should read `docs/migration/ADR-019-channel-reference-graph.md` in
+Whoever picks this ticket up should read `docs/adr/ADR-019-channel-reference-graph.md` in
 full first — the "Decision 2" and "Decision 3" reasoning (chat-id identity, permanence) directly
 constrains what a deep-scraped Post's References can look like, since they land in the same
 `tg_post_references` table.

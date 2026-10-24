@@ -7,7 +7,7 @@ blocks nest in parentheses. The server evaluates it, so the feed, its counts and
 exact over the whole window. The filter lives in the URL. It decides only what the tab shows:
 the flat filters leave the Scope, as ADR-026 decides, and until PTR-05 lands a Summary covers
 every Post in the window. See `.scratch/posts-tab-redesign/spec.md`, "The Post filter", user
-stories 33 to 46 and 49 to 50, and `docs/migration/ADR-026-post-filters-leave-the-scope.md`.
+stories 33 to 46 and 49 to 50, and `docs/adr/ADR-026-post-filters-leave-the-scope.md`.
 
 **Blocked by:** PTR-01
 

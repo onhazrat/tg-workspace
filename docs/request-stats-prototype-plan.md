@@ -121,7 +121,7 @@ Three tiers, each kept for a different span:
 4. **The prototype shows the tiers.** Ranges past 30 days are allowed and drawn daily only.
    A Channel row opens its individual Requests for the last 7 days. The time filter's
    spread marks the 7-day and 30-day edges.
-5. **An ADR** (ADR-035 in `docs/migration/`) records this, written with the recording spec.
+5. **An ADR** (ADR-035 in `docs/adr/`) records this, written with the recording spec.
 
 ## Recording spec decisions (grilling, 2026-10-22)
 
@@ -225,5 +225,5 @@ Packaging:
 
 The spec is `.scratch/request-stats/spec.md` (prefix `RQS`), its tickets are in
 `.scratch/request-stats/issues/` (RQS-01 to 16 to build, 17 to 19 the follow-ups), and ADR-035
-(`docs/migration/ADR-035-every-request-is-recorded.md`) records why every Request is recorded
+(`docs/adr/ADR-035-every-request-is-recorded.md`) records why every Request is recorded
 beside the ledger.

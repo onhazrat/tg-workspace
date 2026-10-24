@@ -201,7 +201,7 @@ This backend extends the FastAPI template with Telegram summarizer-specific mode
 
 ### Scheduler caveat
 
-APScheduler runs **in-process** in a single replica. Do not scale the backend horizontally without external job coordination — see [ADR-004](../docs/migration/ADR-004-job-runner.md).
+APScheduler runs **in-process** in a single replica. Do not scale the backend horizontally without external job coordination. See [ADR-004](../docs/adr/ADR-004-job-runner.md).
 
 ### Test isolation
 

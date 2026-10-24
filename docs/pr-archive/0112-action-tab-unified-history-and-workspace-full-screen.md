@@ -37,7 +37,7 @@ The split is the lesson, and it matches this repo's own thesis: **the backend SQ
 
 `prestart.sh` runs the chat backfill after `alembic upgrade head`. This reverses a decision made earlier in the branch — a deploy that migrates the schema but not the data leaves every existing chat rendering as an empty summary, and a deploy is the only moment the two are guaranteed to be in step. Idempotent, keyset-paged, and reversible via the revision's downgrade; deliberately not wrapped in `|| true`.
 
-Plan and rationale: `docs/action-tab-unified-history-plan.md`, `docs/migration/ADR-010-artifact-model.md`, and a new root `CONTEXT.md` glossary.
+Plan and rationale: `docs/action-tab-unified-history-plan.md`, `docs/adr/ADR-010-artifact-model.md`, and a new root `CONTEXT.md` glossary.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 

@@ -1,7 +1,7 @@
 # Channel reference graph: plan
 
 Spec: `.scratch/channel-reference-graph/spec.md`. Decisions:
-[ADR-019](./migration/ADR-019-channel-reference-graph.md). Tickets:
+[ADR-019](./adr/ADR-019-channel-reference-graph.md). Tickets:
 `.scratch/channel-reference-graph/issues/`.
 
 Status as of 2026-09-21: CRG-01, CRG-02 and CRG-03 landed. CRG-04 remains.

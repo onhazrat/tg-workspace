@@ -1,6 +1,8 @@
 # ADR-010: One artifact model, four kinds, one unified read model
 
-**Status**: accepted (2026-08-20)
+**Status:** Accepted (2026-08-20). The post-filter half of the Scope is superseded
+(2026-10-01) by [ADR-026](./ADR-026-post-filters-leave-the-scope.md): post filters
+are a Post selection now, not part of the Scope.
 
 The app produces four durable outputs a person asks for — Summary, Chat, Tag
 run, Discovery report — but only three had tables and only two reached the

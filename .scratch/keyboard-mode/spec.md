@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 
-Decisions: `docs/migration/ADR-034-one-keyboard-mode.md` and
+Decisions: `docs/adr/ADR-034-one-keyboard-mode.md` and
 `docs/keyboard-mode-plan.md` (19 settled decisions). Prototype: variant H
 (`?variant=H`) on
 [`prototype/directory-photo-viewer` @ a6aa1eb6](https://github.com/onhazrat/tg-workspace/tree/a6aa1eb6ecbef4886a48817d6228344d6ed64778),

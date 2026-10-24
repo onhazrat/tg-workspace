@@ -6,7 +6,8 @@
 /
 ├── backend/          # FastAPI + SQLModel + jobs + AI providers
 ├── frontend/         # TG-Summarizer React UI (ported from TG-Summarizer/)
-├── docs/migration/   # ADRs and discovery
+├── docs/adr/         # Architecture decision records
+├── docs/migration/   # Migration discovery and locked decisions
 ├── compose.yml       # Self-hosted always-on stack
 └── TG-Summarizer/    # Original reference (deprecated after port)
 ```

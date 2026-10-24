@@ -29,9 +29,9 @@ derivation" or "inference" as untested.
 
 ## Related
 
-- ADRs: [ADR-014](../migration/ADR-014-channel-directory.md) (the Directory),
-  [ADR-019](../migration/ADR-019-channel-reference-graph.md) (reference graph),
-  [ADR-020](../migration/ADR-020-references-feed-the-directory.md) (References feed the Directory)
+- ADRs: [ADR-014](../adr/ADR-014-channel-directory.md) (the Directory),
+  [ADR-019](../adr/ADR-019-channel-reference-graph.md) (reference graph),
+  [ADR-020](../adr/ADR-020-references-feed-the-directory.md) (References feed the Directory)
 - Specs: `.scratch/discover-deep-scrape/spec.md` (DDS), `.scratch/channel-directory/`,
   `.scratch/channel-reference-graph/`, `.scratch/directory-tab/`
 - [IDEA-012](../ideas-log/IDEAS-LOG.md) in the ideas log

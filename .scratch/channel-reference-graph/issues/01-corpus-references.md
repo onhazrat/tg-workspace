@@ -15,7 +15,7 @@ service, the scheduler tick and the tests. Two prefactors are folded in because
 everything downstream needs them.
 
 Read `.scratch/channel-reference-graph/spec.md` and
-[ADR-019](../../../docs/migration/ADR-019-channel-reference-graph.md) first. The
+[ADR-019](../../../docs/adr/ADR-019-channel-reference-graph.md) first. The
 decisions below are settled; the argument for each lives there.
 
 ### The folded-in prefactors

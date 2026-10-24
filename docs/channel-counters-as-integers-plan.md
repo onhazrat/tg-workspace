@@ -1,6 +1,6 @@
 # Channel counters and View counts as integers
 
-Decision: [ADR-023](migration/ADR-023-counters-are-numbers.md). Settled in a grilling session on
+Decision: [ADR-023](adr/ADR-023-counters-are-numbers.md). Settled in a grilling session on
 2026-09-24; every question below was answered, none assumed.
 
 ## Decisions

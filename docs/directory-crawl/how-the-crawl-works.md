@@ -153,6 +153,6 @@ to 23-28 s.
 
 ## Related records
 
-- `docs/migration/ADR-014-channel-directory.md`, ADR-019 (reference graph), ADR-020 (References feed the Directory)
+- `docs/adr/ADR-014-channel-directory.md`, ADR-019 (reference graph), ADR-020 (References feed the Directory)
 - `.scratch/discover-deep-scrape/spec.md` (DDS), `.scratch/channel-directory/`, `.scratch/channel-reference-graph/`
 - `docs/discover-probe-queue-plan.md` (why probing is a server-owned queue)

@@ -29,7 +29,7 @@ Self-hosted Telegram channel summarizer. Migrated from browser-heavy `TG-Summari
 
 ## Data pipelines
 
-- **Authoritative store:** PostgreSQL; IndexedDB read-through ([ADR-003](docs/migration/ADR-003-hybrid-sync.md)).
+- **Authoritative store:** PostgreSQL; IndexedDB read-through ([ADR-003](docs/adr/ADR-003-hybrid-sync.md)).
 - **Auto-sync:** `regularSyncEnabled` / `dynamicSyncEnabled` — **not** gated by sync permission flags.
 - **Setting groups:** default, Slow feed, High velocity, Frozen, Restricted (+ custom); strict inheritance.
 - **Jobs:** `auto_sync`, `embeddings`, `auto_summary`, `retention`, `translation_batch`.

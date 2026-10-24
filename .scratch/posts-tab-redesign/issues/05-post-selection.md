@@ -8,7 +8,7 @@ next window. The steps show as removable chips, the last one to reach a Post dec
 Summarize, Chat, Tag run and Discovery cover exactly the selection. Every Artifact freezes the
 steps and a reference to every Post they reached. See `.scratch/posts-tab-redesign/spec.md`, "The
 Post selection" and "Storage", user stories 51 to 55, 58 to 64, 67 to 68 and 70 to 80, and
-`docs/migration/ADR-026-post-filters-leave-the-scope.md`.
+`docs/adr/ADR-026-post-filters-leave-the-scope.md`.
 
 **Blocked by:** PTR-02, PTR-03
 

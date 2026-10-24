@@ -1,7 +1,7 @@
 # One time editor: plan
 
 Every time filter in the app is edited with the Posts tab's Analysis window
-editor. Why is in ADR-033 (`docs/migration/ADR-033-one-time-editor.md`); the
+editor. Why is in ADR-033 (`docs/adr/ADR-033-one-time-editor.md`); the
 terms are **Analysis window** and **Time bound** in `CONTEXT.md`.
 
 Prototype: variant 1 on

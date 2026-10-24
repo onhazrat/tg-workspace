@@ -3,7 +3,7 @@
 Status: ready-for-agent
 
 Plan and decision table: `docs/settings-registry-plan.md`. Architecture:
-`docs/migration/ADR-032-one-settings-registry.md`. Prototype: variant B on
+`docs/adr/ADR-032-one-settings-registry.md`. Prototype: variant B on
 branch [`prototype/settings-one-page` @ 2b81adbd](https://github.com/onhazrat/tg-workspace/tree/2b81adbd5f7c086f91930fd58e0ba8cd0a62a8af), notes in `prototype.md` beside this file.
 Vocabulary (Account, Operator, Owner, Permission, Setting, Setting scope,
 Setting id, Configuration, Tools, Budget) is `CONTEXT.md`'s.

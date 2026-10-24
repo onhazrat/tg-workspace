@@ -109,7 +109,8 @@ deploy workflow are in [deployment.md](deployment.md).
 |---|---|
 | [CONTEXT.md](CONTEXT.md) | The glossary. Start here if a term looks overloaded |
 | [CLAUDE.md](CLAUDE.md) | Every architectural invariant, with the test that enforces it |
-| [docs/migration/](docs/migration/) | Architecture decision records |
+| [docs/adr/](docs/adr/) | Architecture decision records |
+| [docs/migration/](docs/migration/) | The June 2026 migration: locked decisions, plans, inventory |
 | [docs/](docs/) | Performance investigations and design plans |
 | [.scratch/](.scratch/) | The multi-account programme, ticket by ticket |
 | [docs/pr-archive/](docs/pr-archive/) | All 176 pull requests, one written rationale per change |
