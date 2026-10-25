@@ -153,8 +153,21 @@ describe("ChannelMetricMenu", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "Value" }), {
       target: { value: "25" },
     })
-    fireEvent.click(screen.getByTestId("metric-editor-submit"))
+    fireEvent.click(screen.getByTestId("number-bound-submit"))
     expect(added).toEqual([{ type: "metric", metric: "reach", min: 25 }])
-    expect(screen.queryByTestId("metric-editor-submit")).toBeNull()
+    expect(screen.queryByTestId("number-bound-submit")).toBeNull()
+  })
+
+  test("the editor counts out of every Channel, so No value counts the unmeasured", () => {
+    mount()
+    fireEvent.click(button())
+    fireEvent.click(screen.getByTestId("channel-filters-reach"))
+    expect(screen.getByTestId("number-bound-submit").textContent).toBe(
+      "Add · 2 of 3",
+    )
+    fireEvent.click(screen.getByRole("button", { name: "no value" }))
+    expect(screen.getByTestId("number-bound-submit").textContent).toBe(
+      "Add · 2 with no value",
+    )
   })
 })

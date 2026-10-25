@@ -282,10 +282,10 @@ test.describe("TG Workspace directory", () => {
     await page.getByPlaceholder("Search conditions...").fill("subs")
     await page.getByRole("button", { name: "Subscribers" }).click()
     await page.getByRole("spinbutton", { name: "Value" }).fill("1000")
-    await expect(page.getByTestId("directory-bound-submit")).toHaveText(
+    await expect(page.getByTestId("number-bound-submit")).toHaveText(
       /42 channels/,
     )
-    await page.getByTestId("directory-bound-submit").click()
+    await page.getByTestId("number-bound-submit").click()
     await expect(chip(page, "measure-subscribers")).toBeVisible()
     expect(param(page, "dirFilter")).toContain("subscribers >= 1000")
 

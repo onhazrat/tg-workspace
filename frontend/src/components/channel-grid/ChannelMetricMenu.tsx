@@ -19,7 +19,7 @@ import {
   CHANNEL_MOMENTS,
   type ChannelMomentKey,
 } from "@/lib/channels/channel-moments"
-import { ChannelMetricEditor } from "./ChannelMetricEditor"
+import { ChannelNumberEditor } from "./ChannelNumberEditor"
 import { ChannelTimeEditor } from "./ChannelTimeEditor"
 
 const rowClass =
@@ -79,7 +79,7 @@ export function ChannelMetricMenu({
       }
     >
       {picked && isMetricKey(picked) ? (
-        <ChannelMetricEditor
+        <ChannelNumberEditor
           metricKey={picked}
           data={data}
           onSubmit={(bound) =>

@@ -795,7 +795,7 @@ test("the Channel table narrows by kind, uncharged rows and any measure", async 
   await page.getByPlaceholder("Search criteria...").fill("auto fail")
   await page.getByTestId("requests-filters-auto-failed").click()
   await page.getByRole("spinbutton", { name: "Value" }).fill("1")
-  await page.getByTestId("requests-measure-submit").click()
+  await page.getByTestId("number-bound-submit").click()
   await expect(channelRows(page)).toHaveCount(3)
   await expect(page.getByTestId("requests-filter-count")).toContainText("3")
 })

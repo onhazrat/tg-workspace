@@ -6,7 +6,7 @@ import type {
 import type { Cond, CondType } from "@/lib/channels/channel-filter"
 import { METRICS, type MetricData } from "@/lib/channels/channel-metrics"
 import { CHANNEL_MOMENTS } from "@/lib/channels/channel-moments"
-import { ChannelMetricEditor } from "./ChannelMetricEditor"
+import { ChannelNumberEditor } from "./ChannelNumberEditor"
 import { ChannelTimeEditor } from "./ChannelTimeEditor"
 
 export type { ConditionOption }
@@ -58,7 +58,7 @@ export function channelVocabulary(
           label: m.label,
           icon: Hash,
           render: ({ start, onSubmit, onBack }) => (
-            <ChannelMetricEditor
+            <ChannelNumberEditor
               metricKey={m.key}
               data={metrics}
               initial={start?.type === "metric" ? start : undefined}

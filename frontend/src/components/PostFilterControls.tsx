@@ -23,24 +23,15 @@ import {
   BarSearch,
   MenuRowLabel,
 } from "@/components/BarPopover"
-import { BoundFields } from "@/components/filter-tree/BoundFields"
 import type { ConditionOption } from "@/components/filter-tree/ConditionPicker"
 import {
   FacetMenu,
   type FacetMenuRow,
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
-import { NumberSpread } from "@/components/filter-tree/NumberSpread"
+import { NumberBoundEditor } from "@/components/filter-tree/NumberBoundEditor"
 import { pillClass } from "@/components/PostFilterParts"
-import { SETTLE_MS } from "@/components/SpreadZoom"
-import { TgButton } from "@/components/ui/tg-button"
-import {
-  type BoundKind,
-  boundKind,
-  boundText,
-  type MetricBound,
-  parseBound,
-} from "@/lib/channels/channel-metrics"
+import { boundText, type MetricBound } from "@/lib/channels/channel-metrics"
 import {
   append,
   atoms,
@@ -61,7 +52,6 @@ import {
   type PostNumber,
   postConditionLabel,
   postNumberOf,
-  wholeBound,
 } from "@/lib/posts/post-filter"
 import { MEDIA_KIND_OPTIONS } from "@/lib/posts/post-media"
 import type { Range } from "@/lib/spread"
@@ -83,7 +73,7 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
  * Channels, the filters aside but for Channel posts in filtered window, which
  * counts what they keep; `undefined` while they load. Context rather
  * than a prop so the filter bar renders, and tests, without the providers
- * the read needs: with none, the editors draw no Spread.
+ * the read needs: with none, the editors stay on "Loading the spread".
  */
 export type ValueHistogramRead = (
   measure: PostNumber,
@@ -96,62 +86,11 @@ export type ValueHistogramZoom = { lo: number; hi: number; log: boolean }
 export const PostValueHistogramContext =
   createContext<ValueHistogramRead | null>(null)
 
-function PostValueHistogram({
-  read,
-  measure,
-  bound,
-  onSelect,
-}: {
-  read: ValueHistogramRead
-  measure: PostNumber
-  bound: MetricBound | null
-  onSelect: (bound: MetricBound) => void
-}) {
-  const [zoomed, setZoomed] = useState<{ range: Range; log: boolean } | null>(
-    null,
-  )
-  const d = read(
-    measure,
-    zoomed && { lo: zoomed.range[0], hi: zoomed.range[1], log: zoomed.log },
-  )
-  if (!d) return <p className="h-16 text-[11px] text-app-ink/50">Counting…</p>
-  if (!d.measured)
-    return (
-      <p className="text-[11px] text-app-ink/50">
-        Nothing in this window has a value yet.
-      </p>
-    )
-  return (
-    <NumberSpread
-      bars={{
-        bars: d.bins.map((count, i) => ({
-          lo: d.edges[i],
-          hi: d.edges[i + 1],
-          count,
-        })),
-        lo: d.min ?? d.edges[0],
-        hi: d.max ?? d.edges[d.edges.length - 1],
-        median: d.median ?? 0,
-        log: d.log,
-      }}
-      zoom={{
-        range: zoomed?.range ?? null,
-        setRange: (range) => setZoomed(range && { range, log: d.log }),
-      }}
-      bound={bound}
-      onPick={onSelect}
-      noun={POST_NUMBER[measure].noun}
-      title={measureLabel(measure)}
-      settle={SETTLE_MS}
-    />
-  )
-}
-
 /**
- * One number's bound: at least, at most, between or (for a views measure) no
- * value, one or two fields, Add or Update, over the number's Spread,
- * which a drag across fills the fields from. A Channel posts bound is whole:
- * rounded inward, and refused when no whole number is left (PTI-02).
+ * One number's bound: the one Number bound editor over the number's value
+ * histogram, read for the editor's zoom on the scale first drawn (TB-04),
+ * never below zero, and with no count on Add, as the Post filter has no count
+ * read. A Channel posts bound is whole and always has a value (PTI-02).
  */
 export function PostNumberEditor({
   measure,
@@ -167,81 +106,51 @@ export function PostNumberEditor({
   onSubmit: (cond: PostCond) => void
   onBack?: () => void
 }) {
-  const counts = POST_NUMBER[measure].whole
-  const [op, setOp] = useState<BoundKind>(boundKind(initial))
-  const [a, setA] = useState(
-    String((op === "lte" ? initial?.max : initial?.min) ?? ""),
-  )
-  const [b, setB] = useState(String(initial?.max ?? ""))
-  const typed = parseBound(op, a, b, { min: 0 })
-  const bound = counts && typed ? wholeBound(typed) : typed
   const read = useContext(PostValueHistogramContext)
-  const select = (next: MetricBound) => {
-    setOp(boundKind(next))
-    setA(String(next.min ?? next.max))
-    setB(String(next.max ?? ""))
-  }
+  const [zoomed, setZoomed] = useState<{ range: Range; log: boolean } | null>(
+    null,
+  )
+  const d = read?.(
+    measure,
+    zoomed && { lo: zoomed.range[0], hi: zoomed.range[1], log: zoomed.log },
+  )
+  const counts = POST_NUMBER[measure].whole
   return (
-    <form
-      className="space-y-2 p-1"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (bound) onSubmit(numberCond(measure, bound))
+    <NumberBoundEditor
+      label={measureLabel(measure)}
+      description={POST_NUMBER[measure].description(floorHours)}
+      initial={initial}
+      source={{
+        kind: "read",
+        zoom: {
+          range: zoomed?.range ?? null,
+          setRange: (range) =>
+            setZoomed(range && { range, log: zoomed?.log ?? d?.log ?? false }),
+        },
+        read:
+          d &&
+          (d.measured
+            ? {
+                bars: d.bins.map((count, i) => ({
+                  lo: d.edges[i],
+                  hi: d.edges[i + 1],
+                  count,
+                })),
+                lo: d.min ?? d.edges[0],
+                hi: d.max ?? d.edges[d.edges.length - 1],
+                median: d.median ?? 0,
+                log: d.log,
+                noValue: d.total - d.measured,
+              }
+            : null),
       }}
-    >
-      <div className="flex items-center gap-2 text-xs font-semibold">
-        {onBack && (
-          <button
-            type="button"
-            aria-label="Back to the criteria"
-            onClick={onBack}
-            className="text-app-ink/50 hover:text-app-ink"
-          >
-            ←
-          </button>
-        )}
-        {measureLabel(measure)}
-      </div>
-      <p className="text-[11px] text-app-ink/50">
-        {POST_NUMBER[measure].description(floorHours)}
-      </p>
-      {read && (
-        <PostValueHistogram
-          read={read}
-          measure={measure}
-          bound={bound}
-          onSelect={select}
-        />
-      )}
-      <BoundFields
-        op={op}
-        setOp={setOp}
-        a={a}
-        setA={setA}
-        b={b}
-        setB={setB}
-        min={0}
-        noValue={!counts}
-      />
-      {!counts && (
-        <p className="text-[11px] text-app-ink/50">
-          A post with no {measureLabel(measure).toLowerCase()} does not match a
-          bound.
-          {op === "none"
-            ? " No value finds exactly those posts, and NOT on it the ones that have one."
-            : " Choose no value to find them."}
-        </p>
-      )}
-      <TgButton
-        type="submit"
-        size="sm"
-        disabled={!bound}
-        data-testid="post-views-editor-submit"
-        className="w-full"
-      >
-        {initial ? "Update" : "Add"}
-      </TgButton>
-    </form>
+      min={0}
+      whole={counts}
+      noValue={!counts}
+      noun={POST_NUMBER[measure].noun}
+      onSubmit={(bound) => onSubmit(numberCond(measure, bound))}
+      onBack={onBack}
+    />
   )
 }
 

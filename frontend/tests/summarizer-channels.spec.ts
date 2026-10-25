@@ -843,7 +843,7 @@ test.describe("TG Workspace channels and posts", () => {
     await page.getByTestId("channel-filters-reach").click()
     await page.getByRole("button", { name: "at least" }).click()
     await page.getByRole("spinbutton", { name: "Value" }).fill("1000")
-    await page.getByTestId("metric-editor-submit").click()
+    await page.getByTestId("number-bound-submit").click()
 
     await expect(cards).toHaveCount(1)
     await expect(page.locator(`[data-channel-name="${big}"]`)).toBeVisible()
@@ -898,7 +898,7 @@ test.describe("TG Workspace channels and posts", () => {
     await picker.getByRole("button", { name: "Reach", exact: true }).click()
     await picker.getByRole("button", { name: "at least" }).click()
     await picker.getByRole("spinbutton", { name: "Value" }).fill("1000000000")
-    await picker.getByTestId("metric-editor-submit").click()
+    await picker.getByTestId("number-bound-submit").click()
     await expect(cards).toHaveCount(0)
 
     await row

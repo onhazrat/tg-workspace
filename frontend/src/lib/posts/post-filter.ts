@@ -154,21 +154,6 @@ export function numberCond(number: PostNumber, bound: MetricBound): PostCond {
   return { type: number, min: bound.min, max: bound.max }
 }
 
-/**
- * A Channel posts bound rounded inward to whole numbers, low end up and high
- * end down, so "<= 29.5" keeps exactly what "<= 29" keeps; `null` when no
- * whole number is left between its ends.
- */
-export function wholeBound(bound: MetricBound): MetricBound | null {
-  const min = bound.min === undefined ? undefined : Math.ceil(bound.min)
-  const max = bound.max === undefined ? undefined : Math.floor(bound.max)
-  if (min !== undefined && max !== undefined && min > max) return null
-  return {
-    ...(min === undefined ? {} : { min }),
-    ...(max === undefined ? {} : { max }),
-  }
-}
-
 /** The Conditions a dropdown funnels. */
 export type PostFacet = "type" | "media" | "language"
 

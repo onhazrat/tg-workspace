@@ -123,7 +123,7 @@ export function ChannelTimeEditor({
         {onBack && (
           <button
             type="button"
-            aria-label="Back to the criteria"
+            aria-label="Back to the conditions"
             onClick={onBack}
             className="text-app-ink/50 hover:text-app-ink"
           >
