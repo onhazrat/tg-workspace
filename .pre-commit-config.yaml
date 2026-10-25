@@ -101,6 +101,13 @@ repos:
         pass_filenames: false
         language: system
 
+      - id: check-test-ids
+        name: No e2e spec names a test id nothing renders
+        entry: python3 scripts/check_test_ids.py
+        pass_filenames: false
+        language: system
+        files: ^frontend/(src|tests)/.*\.tsx?$|^scripts/check_test_ids\.py$
+
       # The CLAUDE.md budget, pointers and guard-table coverage: file reads
       # only, so it runs at commit rather than ten minutes into the suite.
       - id: claude-md-budget
