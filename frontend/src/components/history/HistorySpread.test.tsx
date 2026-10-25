@@ -48,22 +48,28 @@ function mount(moment: HistoryMoment) {
   return onPick
 }
 
-const bar = (i: number) => screen.getByTestId(`directory-bound-bar-${i}`)
+const bar = (i: number) => screen.getByTestId(`spread-bar-${i}`)
+/** What a bar counts, as the caption says on hover. */
+const counts = (i: number) => {
+  fireEvent.pointerEnter(bar(i))
+  return screen.getByTestId("spread-caption").children[1].textContent
+}
 
 describe("HistorySpread", () => {
   test("its bars count artifacts under Written", () => {
     mount("written")
-    expect(bar(0).title).toEndWith(": 2 artifacts")
+    expect(counts(0)).toStartWith("2 artifacts, ")
   })
 
   test("and window starts under Window", () => {
     mount("window")
-    expect(bar(0).title).toEndWith(": 2 window starts")
+    expect(counts(0)).toStartWith("2 window starts, ")
   })
 
   test("a bar sets a Fixed bound over the minutes it holds", () => {
     const onPick = mount("written")
-    fireEvent.click(bar(3))
+    fireEvent.pointerDown(bar(3))
+    fireEvent.pointerUp(bar(3))
     expect(onPick).toHaveBeenCalledWith({
       mode: "fixed",
       start: T0 + 3 * MINUTE,

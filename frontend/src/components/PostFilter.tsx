@@ -15,6 +15,7 @@ import React from "react"
 import {
   AnalysisWindowControl,
   WindowHistogramContext,
+  WindowOldestPostContext,
 } from "@/components/AnalysisWindowControl"
 import { FilterRow } from "@/components/filter-tree/FilterRow"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
@@ -489,6 +490,15 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
     () => [...selectedChannels].sort(),
     [selectedChannels],
   )
+  // Where the window chart's scrollbar starts (ADR-037).
+  const oldestPost = React.useMemo(() => {
+    const oldest = Math.min(
+      ...channels
+        .filter((c) => selectedChannels.has(c.name))
+        .map((c) => c.oldestStoredPostTimestamp ?? Number.POSITIVE_INFINITY),
+    )
+    return Number.isFinite(oldest) ? oldest : null
+  }, [channels, selectedChannels])
   return (
     <PostValueHistogramContext.Provider value={useSpotlitValueHistogram}>
       <PostFilterBar
@@ -498,9 +508,11 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
         embeddingsEnabled={embeddingsEnabled}
         windowControl={
           <WindowHistogramContext.Provider value={useSpotlitWindowHistogram}>
-            <AnalysisWindowControl
-              onReturnToAction={() => setActiveTab("action")}
-            />
+            <WindowOldestPostContext.Provider value={oldestPost}>
+              <AnalysisWindowControl
+                onReturnToAction={() => setActiveTab("action")}
+              />
+            </WindowOldestPostContext.Provider>
           </WindowHistogramContext.Provider>
         }
         facets={facets}

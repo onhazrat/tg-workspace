@@ -6,7 +6,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { LogSpreadResponse } from "@/client"
-import { type Range, useZoomState } from "@/components/SpreadZoom"
+import { useZoomState } from "@/components/SpreadZoom"
+import type { Range } from "@/lib/spread"
 import type { TimeBound } from "@/lib/time-bound/bound"
 import { LoggedSpreadView } from "./LoggedSpread"
 
@@ -48,6 +49,11 @@ function mount(bound: TimeBound, spread: LogSpreadResponse | null = SPREAD) {
   return { asked, picked, last: () => asked[asked.length - 1] }
 }
 
+const pick = (i: number) => {
+  fireEvent.pointerDown(screen.getByTestId(`spread-bar-${i}`))
+  fireEvent.pointerUp(screen.getByTestId(`spread-bar-${i}`))
+}
+
 const press = (name: string) =>
   act(() => {
     fireEvent.click(screen.getByRole("button", { name }))
@@ -61,9 +67,10 @@ describe("the Logged spread", () => {
 
   test("its bars count entries", () => {
     mount({ mode: "live" })
-    expect(screen.getByTestId("directory-bound-bar-0").title).toEndWith(
-      ": 2 entries",
-    )
+    fireEvent.pointerEnter(screen.getByTestId("spread-bar-0"))
+    expect(
+      screen.getByTestId("spread-caption").children[1].textContent,
+    ).toStartWith("2 entries, ")
   })
 
   test("Zoom in asks for a third, centred on the bound", () => {
@@ -91,15 +98,23 @@ describe("the Logged spread", () => {
 
   test("a bar sets a Fixed bound over the minutes it holds", () => {
     const z = mount({ mode: "live" })
-    fireEvent.click(screen.getByTestId("directory-bound-bar-3"))
+    pick(3)
     expect(z.picked).toEqual([
       { mode: "fixed", start: T0 + 3 * MINUTE, end: T0 + 4 * MINUTE },
     ])
   })
 
-  test("the last bar keeps its closing instant, so its End is a minute past it", () => {
+  test("the last bar touches the end of the whole: its End is left open", () => {
     const z = mount({ mode: "live" })
-    fireEvent.click(screen.getByTestId("directory-bound-bar-31"))
+    pick(31)
+    expect(z.picked).toEqual([{ mode: "fixed", start: T0 + 31 * MINUTE }])
+  })
+
+  test("zoomed short of the end, the last bar keeps its closing instant", () => {
+    // The server's last bar counts its high edge, so the End is a minute past.
+    const z = mount({ mode: "live" })
+    press("Zoom in")
+    pick(31)
     expect(z.picked).toEqual([
       { mode: "fixed", start: T0 + 31 * MINUTE, end: T0 + 33 * MINUTE },
     ])

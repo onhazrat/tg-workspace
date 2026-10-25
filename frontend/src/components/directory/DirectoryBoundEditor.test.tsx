@@ -1,16 +1,16 @@
 /**
  * The Directory's bound editor (DIR-02), props-only: the measure's spread
  * under every other Condition as bars, its median and log scale, the four
- * modes, the no-value note,
- * a click on a bar setting the bound, and the count preview on Add. NOT is
- * the chip's, so the editor has no box for it.
+ * modes, the no-value note, a pick on the Spread setting the bound, and the
+ * count preview on Add. NOT is the chip's, so the editor has no box for it.
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryDistributionResponse } from "@/client"
-import { type Range, useZoomState } from "@/components/SpreadZoom"
+import { useZoomState } from "@/components/SpreadZoom"
 import type { MetricBound } from "@/lib/channels/channel-metrics"
 import { measureOf } from "@/lib/directory/directory-filter"
+import type { Range } from "@/lib/spread"
 import { DirectoryBoundEditor } from "./DirectoryBoundEditor"
 
 afterEach(cleanup)
@@ -58,6 +58,11 @@ function mount({
 const field = (name: string) =>
   screen.getByRole("spinbutton", { name }) as HTMLInputElement
 const submit = () => screen.getByTestId("directory-bound-submit")
+/** A click on a bar: a one-bar run. */
+const pick = (i: number) => {
+  fireEvent.pointerDown(screen.getByTestId(`spread-bar-${i}`))
+  fireEvent.pointerUp(screen.getByTestId(`spread-bar-${i}`))
+}
 
 describe("the spread", () => {
   test("shows the median, the scale and how many have no value", () => {
@@ -66,20 +71,15 @@ describe("the spread", () => {
     expect(screen.getByText(/20 have no value/)).toBeTruthy()
   })
 
-  test("a click on a bar sets the bound from that bar", () => {
+  test.each([
+    { bar: 0, bound: { max: 100 } },
+    { bar: 1, bound: { min: 100, max: 1000 } },
+    { bar: 2, bound: { min: 1000 } },
+  ])("a pick on bar $bar sets $bound", ({ bar, bound }) => {
     const { submitted } = mount()
-    fireEvent.click(screen.getByTestId("directory-bound-bar-1"))
-    expect(field("Value").value).toBe("100")
+    pick(bar)
     fireEvent.click(submit())
-    expect(submitted).toEqual([{ min: 100 }])
-  })
-
-  test("in between mode a bar sets both ends", () => {
-    const { submitted } = mount()
-    fireEvent.click(screen.getByRole("button", { name: "between" }))
-    fireEvent.click(screen.getByTestId("directory-bound-bar-1"))
-    fireEvent.click(submit())
-    expect(submitted).toEqual([{ min: 100, max: 1000 }])
+    expect(submitted).toEqual([bound])
   })
 
   test("says so while the spread has not loaded", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { panned, requestedSpread, tierEdges } from "./spread"
+import { requestedSpread, tierEdges } from "./spread"
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -77,16 +77,5 @@ describe("tierEdges", () => {
     expect(tierEdges(now, 7, 30, now - 10 * DAY, now)).toEqual([
       { at: now - 7 * DAY, label: "7d · each Request" },
     ])
-  })
-})
-
-describe("panned", () => {
-  test("moves the zoom along, its span kept", () => {
-    expect(panned([10, 20], 5, 0, 100)).toEqual([15, 25])
-  })
-
-  test("stops at either end of the whole spread", () => {
-    expect(panned([10, 20], -50, 0, 100)).toEqual([0, 10])
-    expect(panned([10, 20], 500, 0, 100)).toEqual([90, 100])
   })
 })

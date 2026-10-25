@@ -65,7 +65,18 @@ function mount({
 }
 
 const submit = () => screen.getByTestId("channel-time-submit")
-const bars = () => screen.getAllByTestId(/^directory-bound-bar-/)
+const bars = () => screen.getAllByTestId(/^spread-bar-/)
+/** How many Channels a bar counts, as its caption says on hover. */
+const countOf = (bar: HTMLElement) => {
+  fireEvent.pointerEnter(bar)
+  const middle = screen.getByTestId("spread-caption").children[1]
+  return Number(/^(\d+) channels/.exec(middle.textContent ?? "")?.[1])
+}
+/** A click on a bar: a one-bar run. */
+const pick = (bar: HTMLElement) => {
+  fireEvent.pointerDown(bar)
+  fireEvent.pointerUp(bar)
+}
 const click = (name: string) => {
   act(() => {
     fireEvent.click(screen.getByRole("button", { name }))
@@ -102,27 +113,41 @@ describe("ChannelTimeEditor", () => {
     ])
   })
 
-  test("a clicked bar keeps exactly the Channels it counts", () => {
+  test("a picked bar keeps exactly the Channels it counts", () => {
     mount()
-    const counted = bars().filter((b) => !b.title.endsWith(": 0 channels"))
+    const counted = bars().filter((b) => countOf(b) > 0)
     expect(counted.length).toBeGreaterThan(1)
     for (const bar of counted) {
-      const count = Number(/: (\d+) channels$/.exec(bar.title)?.[1])
-      fireEvent.click(bar)
+      const count = countOf(bar)
+      pick(bar)
       expect(submit().textContent).toBe(`Add · ${count} of 5 with a value`)
     }
   })
 
-  test("a clicked bar is a Fixed bound out to whole minutes, its End past the newest value", () => {
+  test("a pick is a Fixed bound out to whole minutes, its End past the newest value", () => {
     const submitted = mount()
-    fireEvent.click(bars()[0])
+    // The second filled bar: neither edge of the spread, so both ends set.
+    const second = bars().filter((b) => countOf(b) > 0)[1]
+    pick(second)
+    fireEvent.click(submit())
+    const [cond] = submitted
+    expect(cond.mode).toBe("fixed")
+    expect((cond.start ?? 0) % MIN).toBe(0)
+    expect((cond.end ?? 0) % MIN).toBe(0)
+    expect(submit().textContent).toBe(
+      `Add · ${countOf(second)} of 5 with a value`,
+    )
+  })
+
+  test("a pick touching the first bar leaves the start open", () => {
+    const submitted = mount()
+    pick(bars()[0])
     fireEvent.click(submit())
     expect(submitted).toEqual([
       {
         type: "time",
         moment: "followed_at",
         mode: "fixed",
-        start: NOW - 10 * DAY,
         end: NOW - 10 * DAY + MIN,
       },
     ])
@@ -146,11 +171,7 @@ describe("ChannelTimeEditor", () => {
   })
 
   describe("zoom (TB-04)", () => {
-    const counted = () =>
-      bars().reduce(
-        (sum, b) => sum + Number(/: (\d+) channels$/.exec(b.title)?.[1]),
-        0,
-      )
+    const counted = () => bars().reduce((sum, b) => sum + countOf(b), 0)
     const caption = () => screen.getByTestId("spread-caption").textContent
     const disabled = (name: string) =>
       (screen.getByRole("button", { name }) as HTMLButtonElement).disabled
@@ -192,11 +213,9 @@ describe("ChannelTimeEditor", () => {
     test("a zoomed bar still keeps exactly the Channels it counts", () => {
       mount()
       click("Zoom in")
-      for (const bar of bars().filter(
-        (b) => !b.title.endsWith(": 0 channels"),
-      )) {
-        const count = Number(/: (\d+) channels$/.exec(bar.title)?.[1])
-        fireEvent.click(bar)
+      for (const bar of bars().filter((b) => countOf(b) > 0)) {
+        const count = countOf(bar)
+        pick(bar)
         expect(submit().textContent).toBe(`Add · ${count} of 5 with a value`)
       }
     })
@@ -218,7 +237,7 @@ describe("ChannelTimeEditor", () => {
 
   test("with no value anywhere there is no spread to draw", () => {
     mount({ moments: [] })
-    expect(screen.queryAllByTestId(/^directory-bound-bar-/)).toHaveLength(0)
+    expect(screen.queryAllByTestId(/^spread-bar-/)).toHaveLength(0)
     expect(
       screen.getByText("None of your channels has a value yet."),
     ).toBeTruthy()

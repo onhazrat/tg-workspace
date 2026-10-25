@@ -17,6 +17,7 @@ import {
   type ScopeField,
   type WindowMode,
 } from "@/lib/scope/window"
+import type { Pick, SpreadBar } from "@/lib/spread"
 
 export type TimeBound = { mode: WindowMode; start?: number; end?: number }
 
@@ -40,27 +41,49 @@ export function resolveTimeBound(b: TimeBound, at: number) {
   }
 }
 
-/**
- * The Fixed bound over values from `oldest` to `newest`, rounded out to whole
- * minutes, its End one minute past the newest, so it keeps both.
- */
-export function minuteBound(oldest: number, newest: number): TimeBound {
+/** The bound's ends against `at`, as a Spread draws them solid; `null` with neither. */
+export function spreadSelection(
+  b: TimeBound,
+  at: number,
+): { min?: number; max?: number } | null {
+  const { start, end } = resolveTimeBound(b, at)
+  if (start === undefined && end === undefined) return null
   return {
-    mode: "fixed",
-    start: floorToMinute(oldest),
-    end: floorToMinute(newest) + MINUTE_MS,
+    ...(start !== undefined && { min: start }),
+    ...(end !== undefined && { max: end }),
   }
 }
 
 /**
- * The bound a clicked bar of a server's spread sets. A bar counts `[lo, hi)`
- * and the last one `[lo, hi]`, so its newest value is just under `hi`, or `hi`.
+ * A Spread's pick as a Fixed bound over `[start, end)`, its open ends
+ * dropped; open at both, everything with a value: from the first bar on.
  */
-export function barBound(
-  bin: { lo: number; hi: number },
-  last: boolean,
+export function pickedBound(
+  p: Omit<Pick, "run">,
+  start: number,
+  end: number,
 ): TimeBound {
-  return minuteBound(bin.lo, last ? bin.hi : Math.ceil(bin.hi) - 1)
+  if (p.all) return { mode: "fixed", start }
+  return {
+    mode: "fixed",
+    ...(p.min !== undefined && { start }),
+    ...(p.max !== undefined && { end }),
+  }
+}
+
+/**
+ * A pick on a server's spread, out to whole minutes. A bar counts `[lo, hi)`
+ * and the last one `[lo, hi]`, so the run's newest value is just under its
+ * high edge, or that edge.
+ */
+export function pickTimeBound(p: Pick, bars: SpreadBar[]): TimeBound {
+  const last = bars[p.run.to]
+  const newest = p.run.to === bars.length - 1 ? last.hi : Math.ceil(last.hi) - 1
+  return pickedBound(
+    p,
+    floorToMinute(bars[p.run.from].lo),
+    floorToMinute(newest) + MINUTE_MS,
+  )
 }
 
 /** Whether an instant falls inside the bound, `[start, end)`, against `at`. */

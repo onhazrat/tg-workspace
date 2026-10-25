@@ -7,15 +7,11 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import type { LogSearch, LogType } from "@/api/data"
 import { dataGetLogSpreadRoute, type LogSpreadResponse } from "@/client"
-import { dateText, Spread } from "@/components/Spread"
 import { useZoomState, type ZoomState } from "@/components/SpreadZoom"
+import { TimeSpread } from "@/components/TimeSpread"
 import { queryKeys } from "@/hooks/queryKeys"
 import { floorToMinute, serverNow } from "@/lib/analysis-window"
-import {
-  barBound,
-  resolveTimeBound,
-  type TimeBound,
-} from "@/lib/time-bound/bound"
+import { spreadSelection, type TimeBound } from "@/lib/time-bound/bound"
 
 export function LoggedSpreadView({
   spread,
@@ -23,6 +19,7 @@ export function LoggedSpreadView({
   zoom,
   onPick,
   noun = "entries",
+  title = "When the entries were logged",
 }: {
   spread?: LogSpreadResponse
   bound: TimeBound
@@ -30,26 +27,19 @@ export function LoggedSpreadView({
   onPick: (bound: TimeBound) => void
   /** What a bar counts; History's spread counts artifacts. */
   noun?: string
+  /** Full screen's heading. */
+  title?: string
 }) {
   if (!spread)
     return <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
-  const { start, end } = resolveTimeBound(bound, floorToMinute(serverNow()))
-  const shown = start !== undefined || end !== undefined
   return (
-    <Spread
+    <TimeSpread
       spread={spread}
-      bound={
-        shown
-          ? {
-              ...(start !== undefined && { min: start }),
-              ...(end !== undefined && { max: end }),
-            }
-          : null
-      }
-      onBar={(bin) => onPick(barBound(bin, bin === spread.bins.at(-1)))}
-      format={dateText}
       zoom={zoom}
+      selected={spreadSelection(bound, floorToMinute(serverNow()))}
+      onPick={onPick}
       noun={noun}
+      title={title}
     />
   )
 }

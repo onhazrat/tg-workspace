@@ -18,7 +18,9 @@ import { useState } from "react"
 
 import {
   AnalysisWindowControl,
+  stampText,
   WindowHistogramContext,
+  WindowOldestPostContext,
 } from "@/components/AnalysisWindowControl"
 import { ScopeProvider, useScope } from "@/contexts/ScopeContext"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
@@ -393,7 +395,7 @@ describe("a request from another surface", () => {
 
 describe("the chart (PTI-03)", () => {
   /** A fake read: every query it was asked, and bucket `i` holding `i` Posts. */
-  function renderCharted() {
+  function renderCharted(oldest: number | null = null) {
     const asked: WindowHistogramQuery[] = []
     const read = (q: WindowHistogramQuery) => {
       asked.push(q)
@@ -402,7 +404,9 @@ describe("the chart (PTI-03)", () => {
     render(
       <ScopeProvider clock={() => NOW}>
         <WindowHistogramContext.Provider value={read}>
-          <AnalysisWindowControl />
+          <WindowOldestPostContext.Provider value={oldest}>
+            <AnalysisWindowControl />
+          </WindowOldestPostContext.Provider>
         </WindowHistogramContext.Provider>
       </ScopeProvider>,
     )
@@ -477,9 +481,55 @@ describe("the chart (PTI-03)", () => {
       fireEvent.pointerEnter(bar(7))
     })
 
-    expect(
-      screen.getByTestId("window-histogram-caption").textContent,
-    ).toContain("7 posts")
+    expect(screen.getByTestId("window-caption").textContent).toContain(
+      "7 posts",
+    )
+  })
+
+  test("pans back to the oldest stored Post, reading once it settles", async () => {
+    const { last } = renderCharted(NOW - 30 * DAY_MS)
+    open()
+    // Three days of thirty, at the end.
+    const scrollbar = screen.getByRole("scrollbar")
+    expect(scrollbar.getAttribute("aria-valuenow")).toBe("90")
+    act(() => {
+      fireEvent.keyDown(scrollbar, { key: "ArrowLeft" })
+    })
+    expect(last().extentEnd).toBe(NOW)
+    await act(() => new Promise((done) => setTimeout(done, 200)))
+    expect(last().extentStart).toBe(NOW - 3.75 * DAY_MS)
+    expect(last().extentEnd).toBe(NOW - 0.75 * DAY_MS)
+  })
+
+  test("a pick in a panned chart sets the window there and centres on it", async () => {
+    const { last } = renderCharted(NOW - 30 * DAY_MS)
+    open()
+    act(() => {
+      fireEvent.keyDown(screen.getByRole("scrollbar"), { key: "ArrowLeft" })
+    })
+    await act(() => new Promise((done) => setTimeout(done, 200)))
+    fireEvent.pointerDown(bar(0))
+    fireEvent.pointerUp(bar(0))
+    expect(value("Start")).toBe(formatLocalMinute(NOW - 3.75 * DAY_MS))
+    // Three times the 72-minute window, around it: the pan is dropped.
+    expect(last().extentStart).toBe(NOW - 3.75 * DAY_MS - 72 * 60_000)
+    expect(last().extentEnd).toBe(NOW - 3.75 * DAY_MS + 144 * 60_000)
+    // And again from a Fixed window to another one.
+    act(() => {
+      fireEvent.keyDown(screen.getByRole("scrollbar"), { key: "ArrowLeft" })
+    })
+    await act(() => new Promise((done) => setTimeout(done, 200)))
+    fireEvent.pointerDown(bar(59))
+    fireEvent.pointerUp(bar(59))
+    // The last 3.6-minute bucket of a view panned 54 minutes back.
+    const start = NOW - 3.75 * DAY_MS + 86.4 * 60_000
+    expect(last().extentStart).toBeLessThanOrEqual(start)
+    expect(last().extentEnd).toBeGreaterThanOrEqual(start + 3.6 * 60_000)
+  })
+
+  test("a caption outside the current year names its year", () => {
+    expect(stampText(Date.UTC(2024, 6, 9, 12), NOW)).toEndWith(", 2024")
+    expect(stampText(Date.UTC(2026, 6, 9, 12), NOW)).not.toContain("2026")
   })
 
   test("the toggle changes what is requested", () => {

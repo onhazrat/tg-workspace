@@ -1,13 +1,13 @@
 /**
  * The number criterion editor (CTB-02), props-only. What is pinned is what an
- * Account does on it: a drag across the histogram and the operator it gives
- * at either edge, the rounding, the log axis, a bar's hover, and how many
- * Channels the bound keeps before it is added.
+ * Account does on it: how a pick on the Spread becomes the operator and the
+ * rounded fields, and how many Channels the bound keeps before it is added.
+ * The Spread's own rules are `Spread.test.tsx`'s.
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { MetricBound, MetricData } from "@/lib/channels/channel-metrics"
-import { ChannelMetricEditor, histogram } from "./ChannelMetricEditor"
+import { ChannelMetricEditor } from "./ChannelMetricEditor"
 
 afterEach(cleanup)
 
@@ -28,7 +28,7 @@ function mount(values: number[], initial?: MetricBound, total = 100) {
   return submitted
 }
 
-const bar = (i: number) => screen.getByTestId(`metric-bar-${i}`)
+const bar = (i: number) => screen.getByTestId(`spread-bar-${i}`)
 const drag = (from: number, to: number) => {
   fireEvent.pointerDown(bar(from))
   for (let i = from; i !== to; i += Math.sign(to - from)) {
@@ -44,7 +44,7 @@ const field = (name: string) =>
   (screen.getByRole("spinbutton", { name }) as HTMLInputElement).value
 const submit = () => screen.getByTestId("metric-editor-submit")
 
-describe("dragging across the histogram", () => {
+describe("a pick on the Spread", () => {
   test("a run touching the first bar is at most", () => {
     mount(LINEAR)
     drag(0, 3)
@@ -85,46 +85,6 @@ describe("dragging across the histogram", () => {
   })
 })
 
-describe("the axis", () => {
-  test("is linear across two orders of magnitude or fewer", () => {
-    mount(LINEAR)
-    expect(screen.getByTestId("metric-histogram-caption").textContent).toBe(
-      "100median 5501K",
-    )
-  })
-
-  test("goes logarithmic past two, and says so", () => {
-    mount([1, 10, 100, 1000, 10_000])
-    const caption = screen.getByTestId("metric-histogram-caption")
-    expect(caption.textContent).toContain("log scale")
-    // A linear axis would put 1, 10, 100 and 1,000 all in the first bar.
-    const filled = Array.from({ length: 32 }, (_, i) => bar(i)).filter(
-      (b) => b.style.height !== "2%",
-    )
-    expect(filled).toHaveLength(5)
-  })
-
-  test("a fractional range spanning two orders of magnitude goes logarithmic too", () => {
-    // Activity rates of 0.01 to 5 posts per hour.
-    mount([0.01, 0.05, 0.2, 1, 5])
-    expect(
-      screen.getByTestId("metric-histogram-caption").textContent,
-    ).toContain("log scale")
-    const filled = Array.from({ length: 32 }, (_, i) => bar(i)).filter(
-      (b) => b.style.height !== "2%",
-    )
-    expect(filled).toHaveLength(5)
-  })
-
-  test("hovering a bar says how many Channels it holds and its range", () => {
-    mount(LINEAR)
-    fireEvent.pointerEnter(bar(0))
-    expect(
-      screen.getByTestId("metric-histogram-caption").textContent,
-    ).toContain("3 channels, 100–130")
-  })
-})
-
 describe("the count and the Condition", () => {
   test("says how many measured Channels the bound keeps", () => {
     mount(LINEAR)
@@ -156,141 +116,5 @@ describe("the count and the Condition", () => {
       target: { value: "" },
     })
     expect((submit() as HTMLButtonElement).disabled).toBe(true)
-  })
-})
-
-describe("zoom (TB-04)", () => {
-  const zoom = (name: "Zoom in" | "Zoom out", times = 1) => {
-    for (let i = 0; i < times; i++)
-      fireEvent.click(screen.getByRole("button", { name }))
-  }
-  const caption = () =>
-    screen.getByTestId("metric-histogram-caption").textContent
-  const disabled = (name: string) =>
-    (screen.getByRole("button", { name }) as HTMLButtonElement).disabled
-
-  test("Zoom in shows a third, centred on the bound, the bars recounted", () => {
-    // The bound starts at the median, 550: 900 / 3 = 300 around it.
-    mount(LINEAR)
-    zoom("Zoom in")
-    expect(caption()).toBe("400median 550700")
-    // 400 alone in the first bar of 9.375, where the whole spread had three.
-    fireEvent.pointerEnter(bar(0))
-    expect(caption()).toContain("1 channels, 400–410")
-    // And 700 alone in the last: nothing past the zoom piles into it.
-    fireEvent.pointerEnter(bar(31))
-    expect(caption()).toBe("4001 channels, 690–700700")
-  })
-
-  test("a between bound centres on its middle", () => {
-    mount(LINEAR, { min: 500, max: 800 })
-    zoom("Zoom in")
-    expect(caption()).toBe("500median 550800")
-  })
-
-  test("the third is clamped inside the whole spread", () => {
-    mount(LINEAR, { min: 200, max: 300 })
-    zoom("Zoom in")
-    expect(caption()).toBe("100median 550400")
-  })
-
-  test("a bound with one end centres on that end", () => {
-    mount(LINEAR, { min: 990 })
-    zoom("Zoom in")
-    expect(caption()).toBe("700median 5501K")
-  })
-
-  test("with no bound it centres on the median", () => {
-    mount(LINEAR, { min: 990 })
-    fireEvent.click(screen.getByRole("button", { name: "no value" }))
-    zoom("Zoom in")
-    expect(caption()).toBe("400median 550700")
-  })
-
-  test("stops after six steps, and Zoom out is off at the whole spread", () => {
-    mount(LINEAR)
-    expect(disabled("Zoom out")).toBe(true)
-    zoom("Zoom in", 5)
-    expect(disabled("Zoom in")).toBe(false)
-    zoom("Zoom in")
-    expect(disabled("Zoom in")).toBe(true)
-    zoom("Zoom out", 6)
-    expect(disabled("Zoom out")).toBe(true)
-    expect(caption()).toBe("100median 5501K")
-  })
-
-  test("keeps the scale the whole spread was drawn on", () => {
-    // Around 100 a third in log(1 + x) is 23 to 417: linear on its own.
-    mount([1, 10, 100, 1000, 10_000])
-    zoom("Zoom in")
-    expect(caption()).toBe("23.4median 100, log scale417")
-  })
-
-  test("a zoom held at the spread's lowest value still leaves that end open", () => {
-    // On log(1 + x), 10 comes back as 10.000000000000002 unless kept exact.
-    mount([10, 100, 1000, 10_000, 100_000], { max: 10 })
-    zoom("Zoom in")
-    drag(0, 3)
-    expect(pressed()).toEqual(["at most"])
-  })
-
-  test("and at the highest value, that end", () => {
-    mount([0.01, 0.1, 1, 7], { min: 7 })
-    zoom("Zoom in")
-    drag(31, 28)
-    expect(pressed()).toEqual(["at least"])
-  })
-
-  test("a zoomed run touching the first bar leaves no end open", () => {
-    mount(LINEAR)
-    zoom("Zoom in")
-    drag(0, 3)
-    expect(pressed()).toEqual(["between"])
-    expect([field("From"), field("To")]).toEqual(["400", "440"])
-  })
-})
-
-/**
- * The server's twin of `histogram()` is `value_histogram` (PTI-01), which bins
- * the Posts editors' bars. `test_post_value_histogram.py` pins these three
- * cases, its `vh_lin`, `vh_log` and `vh_zero`, to the same bars, edges and
- * median: change the rule here and that copy is what disagrees.
- */
-describe("the binning rule the server shares", () => {
-  const filled = (bins: number[]) => bins.flatMap((n, i) => (n > 0 ? [i] : []))
-  test.each([
-    {
-      name: "linear",
-      values: [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000],
-      log: false,
-      bars: [0, 3, 7, 10, 14, 17, 21, 24, 28, 31],
-      mid: 550,
-      median: 600,
-    },
-    {
-      name: "logarithmic",
-      values: [1, 5, 50, 500, 5000],
-      log: true,
-      bars: [0, 6, 14, 23, 31],
-      mid: 5000 ** 0.5,
-      median: 50,
-    },
-    {
-      name: "logarithmic on one plus the value from zero",
-      values: [0, 9, 99, 999],
-      log: true,
-      bars: [0, 10, 21, 31],
-      mid: 1000 ** 0.5 - 1,
-      median: 99,
-    },
-  ])("$name", ({ values, log, bars, mid, median }) => {
-    const got = histogram([...values])
-    expect(got.log).toBe(log)
-    expect(got.bins.length).toBe(32)
-    expect(filled(got.bins)).toEqual([...bars])
-    expect(got.edge(0)).toBe(values[0])
-    expect(got.edge(16)).toBeCloseTo(mid, 6)
-    expect(got.edge(32)).toBeCloseTo(values[values.length - 1], 6)
-    expect(got.median).toBe(median)
   })
 })

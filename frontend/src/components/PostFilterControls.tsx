@@ -23,7 +23,6 @@ import {
   BarSearch,
   MenuRowLabel,
 } from "@/components/BarPopover"
-import { BoundHistogram } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import type { ConditionOption } from "@/components/filter-tree/ConditionPicker"
 import {
@@ -31,8 +30,9 @@ import {
   type FacetMenuRow,
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
+import { NumberSpread } from "@/components/filter-tree/NumberSpread"
 import { pillClass } from "@/components/PostFilterParts"
-import type { Range } from "@/components/SpreadZoom"
+import { SETTLE_MS } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -64,6 +64,7 @@ import {
   wholeBound,
 } from "@/lib/posts/post-filter"
 import { MEDIA_KIND_OPTIONS } from "@/lib/posts/post-media"
+import type { Range } from "@/lib/spread"
 
 export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
   type: Forward,
@@ -82,7 +83,7 @@ export const POST_CONDITION_ICON: Record<PostCond["type"], LucideIcon> = {
  * Channels, the filters aside but for Channel posts in filtered window, which
  * counts what they keep; `undefined` while they load. Context rather
  * than a prop so the filter bar renders, and tests, without the providers
- * the read needs: with none, the editors draw no histogram.
+ * the read needs: with none, the editors draw no Spread.
  */
 export type ValueHistogramRead = (
   measure: PostNumber,
@@ -121,29 +122,34 @@ function PostValueHistogram({
       </p>
     )
   return (
-    <BoundHistogram
-      distribution={{
-        bins: d.bins,
-        edge: (i) => d.edges[i],
+    <NumberSpread
+      bars={{
+        bars: d.bins.map((count, i) => ({
+          lo: d.edges[i],
+          hi: d.edges[i + 1],
+          count,
+        })),
         lo: d.min ?? d.edges[0],
         hi: d.max ?? d.edges[d.edges.length - 1],
         median: d.median ?? 0,
         log: d.log,
       }}
-      bound={bound}
-      noun={POST_NUMBER[measure].noun}
-      onSelect={onSelect}
       zoom={{
         range: zoomed?.range ?? null,
         setRange: (range) => setZoomed(range && { range, log: d.log }),
       }}
+      bound={bound}
+      onPick={onSelect}
+      noun={POST_NUMBER[measure].noun}
+      title={measureLabel(measure)}
+      settle={SETTLE_MS}
     />
   )
 }
 
 /**
  * One number's bound: at least, at most, between or (for a views measure) no
- * value, one or two fields, Add or Update, over the number's histogram,
+ * value, one or two fields, Add or Update, over the number's Spread,
  * which a drag across fills the fields from. A Channel posts bound is whole:
  * rounded inward, and refused when no whole number is left (PTI-02).
  */

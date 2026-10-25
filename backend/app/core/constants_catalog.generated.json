@@ -1108,7 +1108,7 @@
       "comment": "",
       "expression": "60",
       "file": "frontend/src/components/AnalysisWindowControl.tsx",
-      "line": 101,
+      "line": 108,
       "name": "BUCKETS",
       "value": 60
     },
@@ -1140,25 +1140,25 @@
       "comment": "The floor's default in `services/reach.py`, until the server's arrives.",
       "expression": "1",
       "file": "frontend/src/components/PostFilter.tsx",
-      "line": 132,
+      "line": 133,
       "name": "DEFAULT_ESTIMATION_FLOOR_HOURS",
       "value": 1
-    },
-    {
-      "comment": "Bars in a spread, as many as the server draws.",
-      "expression": "32",
-      "file": "frontend/src/components/Spread.tsx",
-      "line": 12,
-      "name": "BINS",
-      "value": 32
     },
     {
       "comment": "Six steps at most: 1/729 of the whole spread.",
       "expression": "6",
       "file": "frontend/src/components/SpreadZoom.tsx",
-      "line": 27,
+      "line": 47,
       "name": "MAX_STEPS",
       "value": 6
+    },
+    {
+      "comment": "How long a server-drawn Spread waits after the last pan before it reads.",
+      "expression": "150",
+      "file": "frontend/src/components/SpreadZoom.tsx",
+      "line": 50,
+      "name": "SETTLE_MS",
+      "value": 150
     },
     {
       "comment": "How often a Live bound's fields are redrawn against the clock.",
@@ -1815,6 +1815,14 @@
       "line": 16,
       "name": "TICK_INTERVAL_MS",
       "value": 10000
+    },
+    {
+      "comment": "Bars in a spread, as many as the server draws.",
+      "expression": "32",
+      "file": "frontend/src/lib/spread.ts",
+      "line": 11,
+      "name": "BINS",
+      "value": 32
     },
     {
       "comment": "The server's own estimate (`backend/app/prompts/posts.py`).",

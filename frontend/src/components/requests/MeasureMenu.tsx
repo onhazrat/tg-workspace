@@ -6,9 +6,8 @@ import {
   BarSearch,
   MenuRowLabel,
 } from "@/components/BarPopover"
-import { histogram } from "@/components/channel-grid/ChannelMetricEditor"
-import { BoundHistogram, nice } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
+import { NumberSpread } from "@/components/filter-tree/NumberSpread"
 import { pillClass } from "@/components/PostFilterParts"
 import { useZoomState } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
@@ -28,8 +27,9 @@ import {
   measureLabel,
   measureMeta,
 } from "@/lib/requests/channel-filter"
+import { binSpread, median, nice } from "@/lib/spread"
 
-/** A measure's values across the rows, ascending, for its histogram. */
+/** A measure's values across the rows, ascending, for its Spread. */
 export type MeasureValues = (m: Measure, kind?: string) => number[]
 
 /**
@@ -158,9 +158,7 @@ function CriteriaRows({
   )
 }
 
-const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
-
-/** One measure's bound over the Channel rows: the Channels tab's histogram and fields. */
+/** One measure's bound over the Channel rows: the Channels tab's Spread and fields. */
 export function MeasureEditor({
   measure,
   kind,
@@ -209,16 +207,17 @@ export function MeasureEditor({
         {unit && <span className="font-normal text-app-ink/50">{unit}</span>}
       </div>
       {values.length > 0 && (
-        <BoundHistogram
-          distribution={histogram(values, zoom.range)}
+        <NumberSpread
+          bars={binSpread(values, zoom.range)}
+          zoom={zoom}
           bound={bound}
-          noun="channels"
-          onSelect={(next) => {
+          onPick={(next) => {
             setOp(boundKind(next))
             setA(String(next.min ?? next.max))
             setB(String(next.max ?? ""))
           }}
-          zoom={zoom}
+          noun="channels"
+          title={measureLabel(measure, kind)}
         />
       )}
       <BoundFields
