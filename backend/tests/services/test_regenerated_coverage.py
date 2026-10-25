@@ -22,8 +22,11 @@ from app.core.db import engine
 from app.jobs import auto_summary, summary_generation
 from app.models import User
 from app.models_tg import Post, Summary, SummaryPayload
+from app.schemas.scope import ScopeSubmission
 from app.schemas.summaries import SummaryDerivation
+from app.services import artifact_coverage
 from app.services.summaries import get_summary, submit_summary
+from app.services.summary_attempts import last_attempt
 from tests.utils.scope import stored_scope
 from tests.utils.tenancy import follow_channels
 from tests.utils.user import create_random_user
@@ -158,3 +161,78 @@ def test_the_scheduler_and_the_browser_build_one_prompt_for_one_successor(
     browser = _prompt_of(browser_id)
     assert "Media: photo" in browser
     assert _prompt_of(scheduled_id) == browser
+
+
+def test_a_scheduled_window_with_no_posts_says_so_and_starts_no_attempt(
+    session: Session, user: User
+) -> None:
+    predecessor, channel = _predecessor(session, user.id)
+    session.exec(delete(Post).where(col(Post.channel_name) == channel))
+    session.commit()
+
+    new_id = asyncio.run(
+        auto_summary._regenerate_one(session, predecessor, owner_id=user.id)
+    )
+
+    assert new_id is not None
+    with Session(engine) as check:
+        successor = get_summary(check, new_id, user_id=user.id)
+        assert successor["text"].startswith("No new posts found")
+        assert "status" not in successor
+        assert last_attempt(check, new_id) is None
+
+
+def test_a_scheduled_window_past_the_post_limit_ends_failed_with_why(
+    session: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(artifact_coverage, "MAX_PROMPT_POSTS", 1)
+    predecessor, _ = _predecessor(session, user.id)
+
+    new_id = asyncio.run(
+        auto_summary._regenerate_one(session, predecessor, owner_id=user.id)
+    )
+
+    assert new_id is not None
+    with Session(engine) as check:
+        assert get_summary(check, new_id, user_id=user.id)["status"] == "failed"
+        attempt = last_attempt(check, new_id)
+        assert attempt is not None and attempt.outcome == "failed"
+        assert "more than the 1 a single prompt" in (attempt.error or "")
+
+
+def test_a_prompt_keeps_its_missing_post_count_and_a_successor_does_not(
+    session: Session, user: User
+) -> None:
+    """The count sits beside the prompt it describes (ADR-038)."""
+    predecessor, channel = _predecessor(session, user.id)
+    now = int(time.time() * 1000)
+    summary_id = f"sum-{uuid.uuid4().hex[:8]}"
+    submit_summary(
+        session,
+        user_id=user.id,
+        summary_id=summary_id,
+        submission=ScopeSubmission.model_validate(
+            {
+                "channels": [channel],
+                "window": {"mode": "fixed", "start": 0, "end": now - 60_000},
+            }
+        ),
+    )
+    # Reclaimed after the freeze.
+    session.exec(delete(Post).where(col(Post.channel_name) == channel))
+    session.commit()
+
+    summary_generation.start_attempt(
+        session, summary_id, user_id=user.id, model=None, key_id=None, temperature=None
+    )
+    predecessor.extra = {**(predecessor.extra or {}), "missingPosts": 2}
+    session.add(predecessor)
+    session.commit()
+    successor = asyncio.run(
+        auto_summary._regenerate_one(session, predecessor, owner_id=user.id)
+    )
+
+    with Session(engine) as check:
+        assert get_summary(check, summary_id, user_id=user.id)["missingPosts"] == 2
+        assert successor is not None
+        assert "missingPosts" not in get_summary(check, successor, user_id=user.id)
