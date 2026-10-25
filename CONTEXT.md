@@ -325,6 +325,20 @@ bounds an Artifact's Written moment, or its Analysis window, which matches when
 the window overlaps the bound. Its ends include the start and exclude the end.
 _Avoid_: date range, time range, date filter
 
+**Number bound**:
+A Condition on one number, in any of the three filters or the Requests tab's:
+at least, at most or between, or No value, which keeps exactly what has no
+number to test. Some numbers are whole, so a bound on them is too, and some
+cannot go below zero. Anything with no value fails every bound but No value.
+_Avoid_: metric bound, threshold, range, number filter
+
+**Spread**:
+Bars counting how much falls at each stretch of one number or moment, drawn
+beside a Number bound, a Time bound or the Analysis window so it can be chosen
+by dragging across them. It counts under every other Condition, so it shows
+what the choice would leave.
+_Avoid_: histogram, distribution, chart
+
 **Shown Channels**:
 The followed Channels that pass the Channel filter and the search box.
 _Avoid_: visible, filtered, matching
