@@ -11,6 +11,18 @@ Fixed window, Condition, Channel filter, Directory filter, Post filter,
 Directory entry, Request, Scope) is `CONTEXT.md`'s. Ticket ids carry the
 prefix `SPR`.
 
+## Tickets
+
+Two tickets in `issues/` beside this file, one per PR. SPR-02 draws the
+Spread SPR-01 builds, so SPR-01 merges first.
+
+| Id | Ticket | Blocked by |
+|---|---|---|
+| SPR-01 | One Spread everywhere (`issues/01-one-spread-everywhere.md`) | None |
+| SPR-02 | One Number bound editor (`issues/02-one-number-bound-editor.md`) | SPR-01 |
+
+A ticket closes as `docs/agents/issue-tracker.md` says.
+
 ## Problem Statement
 
 An Account picks a bound from a Spread in eleven places: four Number bounds

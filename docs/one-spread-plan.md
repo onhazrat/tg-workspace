@@ -46,5 +46,5 @@ Requested spread has full screen, panning and range zoom.
 
 - [x] Prototype, checked on staging data and approved
 - [x] Snapshot built locally (951326bb); push it before the docs PR
-- [ ] Docs PR: glossary, ADR-037, this plan, prototype note, spec and tickets
+- [ ] Docs PR: glossary, ADR-037, this plan, prototype note, spec and tickets (SPR-01, SPR-02)
 - [ ] Implementation
