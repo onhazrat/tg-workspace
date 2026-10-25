@@ -10,7 +10,7 @@ and Scope line. Spec: `.scratch/artifact-coverage/spec.md`; decisions: ADR-038 a
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Written first, and red before any other change: a scheduled regeneration and a `derived_from` regeneration plus `start_attempt` of one predecessor build byte-identical prompts. It replaces the old autoregen scope-parity API test.
 - [ ] The Artifact coverage read model exists (declared in the service-kinds inventory) with `freeze` (moved from the Posts view's `freeze_selection`, every caller moved), `covered_posts`, and `posts_block` in the flat and the tag layout, owning the 10,000-Post and token 413s
@@ -24,3 +24,8 @@ and Scope line. Spec: `.scratch/artifact-coverage/spec.md`; decisions: ADR-038 a
 - [ ] The "N missing" chip shows after "N channels · N posts" in the Summary header and in the Summary's Scope line, absent at zero, explained on tap, and the explanation stays inside the viewport at phone width; a render test covers absent, present and tapped
 - [ ] The Posts view guard fails a Summary-path module (Summary generation, the scheduler's regeneration, Summaries) that names `resolve_posts_view`, `apply_analysis_window` or `select(Post)`; mutation-checked by restoring the scheduler's inline read, written into the commit body; a row in the guard table
 - [ ] Backend suite, backend lint, frontend unit tests and typecheck pass; Playwright mocks of `/ai/summary/prompt` follow the new body
+
+## Comments
+
+- 2026-10-26: implemented on `ac-01-summaries-covered-posts` and merged into the integration branch in 934f86ff (fast-forward).
+  Open: `/ai/summary/prompt` keeps `channelsText`, since dropping it would silently lose the Channel bio and tags setting from Summary prompts; the request takes no `scope`. No test pins the chip's explanation inside the viewport at phone width: it opens as a full-width line below the chip, not a popover. Chat and Tag routes still take `scope` until AC-02.
