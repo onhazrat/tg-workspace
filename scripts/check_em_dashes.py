@@ -41,7 +41,7 @@ def offenders(diff: str) -> list[str]:
 
 def main() -> int:
     diff = subprocess.run(
-        ["git", "diff", "--cached", "-U0", "--no-color", "--diff-filter=AM"],
+        ["git", "diff", "--cached", "-U0", "--no-color", "--diff-filter=AMR"],
         capture_output=True,
         text=True,
         check=True,
