@@ -1,6 +1,6 @@
 """Ticket 16: the feed, lookup, counts, and Discover.
 
-With `TENANCY_ENFORCED` on, `list_feed`/`lookup_posts`/`count_posts_in_scope`/
+With `TENANCY_ENFORCED` on, the feed, the counts, `posts_by_ref` and
 `compute_discover_candidates` return only Posts under Channels the caller
 Follows. With it off they are byte-identical to what they did before, which is
 the one thing every migrate ticket promises.
@@ -217,7 +217,7 @@ def test_two_followers_of_one_channel_both_see_its_posts(
 def test_lookup_omits_a_post_you_may_not_see(
     session: Session, user: User, other_user: User
 ) -> None:
-    """Absent rather than an error — `lookup_posts` already drops unknown pairs.
+    """Absent rather than an error. `posts_by_ref` already drops unknown pairs.
 
     A missing entry is what a caller gets for a post that does not exist, so a
     post they may not see answers identically. That is the same reason
@@ -279,8 +279,8 @@ def test_counts_and_feed_agree_about_the_scope(
 ) -> None:
     """`prompt_assembly` refuses a selection by comparing these two.
 
-    It sums `count_posts_in_scope` to decide whether a prompt fits, then calls
-    `list_feed` to assemble it. If only one of them were scoped the 413 guard
+    It sums a count to decide whether a prompt fits, then calls `feed` to
+    assemble it. If only one of them were scoped the 413 guard
     would be measuring a different set of posts than the one it assembles.
     """
     _split_corpus(session, user, other_user)

@@ -95,6 +95,20 @@ repos:
         pass_filenames: false
         language: system
 
+      - id: check-code-refs
+        name: No dangling path.py::name reference
+        entry: python3 scripts/check_code_refs.py
+        pass_filenames: false
+        language: system
+
+      # The CLAUDE.md budget, pointers and guard-table coverage: file reads
+      # only, so it runs at commit rather than ten minutes into the suite.
+      - id: claude-md-budget
+        name: CLAUDE.md budget and guard table
+        entry: bash -c 'cd backend && uv run pytest -q --noconftest -p no:cacheprovider tests/deployment/test_claude_md_budget.py'
+        pass_filenames: false
+        language: system
+
       - id: zizmor
         name: zizmor
         language: python

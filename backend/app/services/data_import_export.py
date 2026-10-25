@@ -1426,7 +1426,7 @@ def _chat_sessions_statement() -> Any:
 
 #: Tables the seam classifies that a backup deliberately does not carry, and
 #: why. Checked against `tenancy.SCOPES` by
-#: `test_admin_scoped_export.py::test_every_user_owned_table_is_exported_or_excused`,
+#: `test_admin_scoped_export.py::test_every_classified_table_is_exported_or_excused`,
 #: which is the only cheap moment to ask "does this belong in a backup?" — the
 #: same argument `IMPORT_WRITES` makes about the write door.
 EXPORT_OMISSIONS: dict[str, str] = {

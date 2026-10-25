@@ -53,9 +53,9 @@ NOT_THE_ANALYSIS_WINDOW: dict[str, str] = {
 }
 
 #: The same, narrowed to one function, for a module that also holds a path the
-#: Analysis window governs. `posts.py` holds the feed and the counts beside the
-#: write path, so excusing the module would excuse a hand-rolled window in
-#: `list_feed` too (REACH-10).
+#: Analysis window governs. `posts.py` held the feed and the counts beside the
+#: write path until ADR-036 moved them to `posts_view.py`, and an excuse for the
+#: whole module would excuse a read that moved back (REACH-10).
 NOT_THE_ANALYSIS_WINDOW_IN: dict[tuple[str, str], str] = {
     ("services/posts.py", "refresh_post_counters"): (
         "The counter refresh horizon (REACH-02): sync re-observes a stored "
@@ -71,7 +71,7 @@ def _post_aliases(tree: ast.Module) -> set[str]:
     """Names bound to `aliased(Post, ...)` anywhere in the module.
 
     Without this the guard has a hole in the one module it most needs to
-    cover. `posts.py::list_feed` re-aliases `Post` onto its `row_number()`
+    cover. `posts_view.py::_shown` re-aliases `Post` onto its `row_number()`
     subquery (`capped = aliased(Post, ranked)`), so a window predicate written
     as `capped.timestamp <= end_date` — inside the capped branch, the subtler
     of the feed's two query shapes — would be invisible here *and* pass the
