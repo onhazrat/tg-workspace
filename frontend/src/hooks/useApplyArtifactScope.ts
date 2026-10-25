@@ -35,6 +35,11 @@ import {
   emptyPostFilter,
   type PostFilter,
 } from "@/lib/posts/post-filter"
+import type {
+  MaxPostsPerChannelMode,
+  PostSortOrder,
+  ViewMeasure,
+} from "@/lib/posts/post-pipeline"
 import {
   DEFAULT_SELECTION,
   isEmptySnapshot,
@@ -42,11 +47,6 @@ import {
   pick,
   rule,
 } from "@/lib/posts/post-selection"
-import type {
-  MaxPostsPerChannelMode,
-  PostSortOrder,
-  ViewMeasure,
-} from "@/lib/posts/post-view"
 
 /** A frozen Scope's flat filters as the Post filter that says the same thing. */
 function postFilterFromScope(scope: FrozenScope): PostFilter {

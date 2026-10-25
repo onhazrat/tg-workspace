@@ -1,7 +1,7 @@
 """Server-side assembly of the posts block for AI prompts.
 
 Byte-identical to the frontend `formatPostsForPrompt` / `formatPostMediaHints`
-(``frontend/src/lib/posts/post-view.ts`` + ``post-media.ts``) so that moving
+(``frontend/src/lib/posts/post-pipeline.ts`` + ``post-media.ts``) so that moving
 prompt assembly server-side does not change summary / chat / tag output. Any
 change here must be mirrored there, and vice-versa; the parity is covered by
 ``tests/prompts/test_posts_prompt.py`` against the frontend golden fixture.

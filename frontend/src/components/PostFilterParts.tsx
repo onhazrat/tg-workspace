@@ -10,7 +10,7 @@ import { CAP_SHORTCUTS, capCard, parseCount } from "@/lib/posts/post-filter-bar"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
-} from "@/lib/posts/post-view"
+} from "@/lib/posts/post-pipeline"
 
 export const pillClass = (active: boolean) =>
   `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors ${

@@ -36,7 +36,7 @@ import type {
   PostSortOrder,
   PostViewOptions,
   ViewMeasure,
-} from "@/lib/posts/post-view"
+} from "@/lib/posts/post-pipeline"
 import { scopedStorage } from "@/lib/storage/scoped"
 import type { Post } from "@/types"
 import { useDebouncedValue } from "./useDebouncedValue"

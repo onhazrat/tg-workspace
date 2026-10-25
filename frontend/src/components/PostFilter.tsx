@@ -54,12 +54,12 @@ import {
   type SearchMode,
 } from "../lib/posts/post-filter-bar"
 import { MEDIA_KIND_OPTIONS } from "../lib/posts/post-media"
-import { facetRule } from "../lib/posts/post-selection"
 import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
   ViewMeasure,
-} from "../lib/posts/post-view"
+} from "../lib/posts/post-pipeline"
+import { facetRule } from "../lib/posts/post-selection"
 import type { Post } from "../types"
 import {
   PostFacetMenu,

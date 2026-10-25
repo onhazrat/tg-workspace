@@ -7,14 +7,14 @@ import {
   type PostFilter,
 } from "@/lib/posts/post-filter"
 import {
+  applyPostViewPipeline,
+  type PostViewOptions,
+} from "@/lib/posts/post-pipeline"
+import {
   DEFAULT_SELECTION,
   type PostSelection,
   pick,
 } from "@/lib/posts/post-selection"
-import {
-  applyPostViewPipeline,
-  type PostViewOptions,
-} from "@/lib/posts/post-view"
 import {
   computeScopedPosts,
   SCOPED_POSTS_LIMIT,

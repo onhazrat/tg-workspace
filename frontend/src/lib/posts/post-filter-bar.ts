@@ -10,7 +10,7 @@ import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
   ViewMeasure,
-} from "@/lib/posts/post-view"
+} from "@/lib/posts/post-pipeline"
 import type { Post } from "@/types"
 
 /** The Order pill's choices, in its order. The palette lists the same four. */

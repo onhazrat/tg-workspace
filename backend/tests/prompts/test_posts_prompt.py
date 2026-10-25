@@ -1,7 +1,7 @@
 """`format_posts_for_prompt` must stay byte-identical to the frontend.
 
 The golden string here is the same one asserted in the frontend unit test
-(`frontend/src/lib/posts/post-view.test.ts` — "formatPostsForPrompt is
+(`frontend/src/lib/posts/post-pipeline.test.ts`, "formatPostsForPrompt is
 byte-identical to the golden reference"). If one side changes, both fail.
 """
 

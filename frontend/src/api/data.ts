@@ -13,14 +13,14 @@ import type {
 } from "../lib/posts/discover-candidates"
 import { type PostFilter, postFilterBody } from "../lib/posts/post-filter"
 import type { MediaFilterValue } from "../lib/posts/post-media"
-import { type PostSelection, selectionBody } from "../lib/posts/post-selection"
 import type {
   ForwardedFilterValue,
   MaxPostsPerChannelMode,
   PostSortOrder,
   ViewMeasure,
   ViewsFilter,
-} from "../lib/posts/post-view"
+} from "../lib/posts/post-pipeline"
+import { type PostSelection, selectionBody } from "../lib/posts/post-selection"
 import type { TimeBound } from "../lib/time-bound/bound"
 import type {
   ArtifactKind,

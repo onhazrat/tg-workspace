@@ -11,7 +11,7 @@
  * case-insensitive handles) cannot drift between two copies (IDEA-011 D14).
  */
 
-import type { ForwardedFilterValue } from "@/lib/posts/post-view"
+import type { ForwardedFilterValue } from "@/lib/posts/post-pipeline"
 
 export type DiscoverySignalKind = "forward" | "mention" | "link"
 
