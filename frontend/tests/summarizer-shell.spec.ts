@@ -231,7 +231,9 @@ test.describe("TG Workspace shell", () => {
       }),
     )
     await page.route("**/api/v1/ai/summary/prompt", (route) =>
-      route.fulfill({ json: { prompt: "summary prompt for e2e" } }),
+      route.fulfill({
+        json: { prompt: "summary prompt for e2e", missingPosts: 0 },
+      }),
     )
     await page.route("**/api/v1/data/summaries/*/attempts/start", (route) =>
       route.fulfill({ status: 503, json: { detail: overloaded } }),

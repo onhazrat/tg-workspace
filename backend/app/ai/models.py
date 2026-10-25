@@ -94,26 +94,17 @@ class EmbeddingResult(BaseModel):
     dimensions: int
 
 
-class SummaryRequest(BaseModel):
-    channels: list[str]
+class SummaryPromptRequest(BaseModel):
+    """Which Summary's prompt to build: the server reads its Covered Posts."""
+
+    # `extra="forbid"`: a stale tab still sending the old `scope` body must be
+    # a 422 that one reload fixes, never a prompt over the wrong Posts.
+    model_config = {"populate_by_name": True, "extra": "forbid"}
+
+    summary_id: str = Field(alias="summaryId")
+    #: The Channel descriptions the browser formats (bios, tags), in place of
+    #: the bare names; the Posts are never the browser's.
     channels_text: str = Field("", alias="channelsText")
-    # Either the client ships a pre-built postsText (the semantic/related path
-    # and generateBackgroundSummary, which the server cannot reproduce), or it
-    # sends a `scope` the backend resolves + assembles itself.
-    posts_text: str = Field("", alias="postsText")
-    scope: PromptScopeInput | None = None
-    language: str = "English"
-    model: str | None = None
-    temperature: float = 0.7
-    #: Which of the caller's AI Keys pays for this Artifact. `null` means "the
-    #: one I have", resolved by `services/ai_keys.resolve_ai_key` - an Account
-    #: with a single Key never sends this, which is why the client shows no
-    #: chooser in that case.
-    #:
-    #: **Client-supplied and untrusted.** It is checked against the caller
-    #: before the secret is decrypted; a foreign id answers as an absent one.
-    ai_key_id: str | None = Field(default=None, alias="aiKeyId")
-    model_config = {"populate_by_name": True}
 
 
 class ChatRequest(BaseModel):

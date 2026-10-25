@@ -22,7 +22,7 @@ from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.summaries import DerivationMode, SummaryDerivation
-from app.services.posts_view import freeze_selection
+from app.services.artifact_coverage import freeze
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -512,7 +512,6 @@ def submit_summary(
     derived_from: SummaryDerivation | None = None,
     language: str = "English",
     model: str | None = None,
-    post_count: int | None = None,
     extra: dict[str, Any] | None = None,
     now_ms: int | None = None,
 ) -> dict[str, Any]:
@@ -555,7 +554,7 @@ def submit_summary(
         assert_owner_on_write(predecessor.user_id, user_id, detail=SUMMARY_NOT_FOUND)
         scope = derived_scope(predecessor, derived_from.mode)
     elif submission is not None:
-        scope = freeze_selection(session, submission, user_id=user_id, now_ms=now_ms)
+        scope = freeze(session, submission, user_id=user_id, now_ms=now_ms)
     else:
         # `SummarySubmitRequest` requires exactly one, so a route cannot reach
         # this. A raise rather than an `assert`, because a service function is
@@ -570,7 +569,7 @@ def submit_summary(
         text="",
         language=language,
         model=model,
-        post_count=post_count if post_count is not None else scope.scoped_post_count,
+        post_count=scope.scoped_post_count,
         timestamp=int(utc_now().timestamp() * 1000),
         # Flags, verbatim. `status: pending` is **not** forced here: it means
         # "awaiting a response pasted from somewhere else", which is one
@@ -669,24 +668,35 @@ def covering(scope: FrozenScope, refs: Iterable[tuple[str, int]]) -> FrozenScope
     return FrozenScope.model_validate({**scope.stored(), "posts": posts})
 
 
+#: Where a Summary keeps its prompt's Missing Post count (ADR-038).
+MISSING_POSTS_KEY = "missingPosts"
+
+
 def store_prompt(
     session: Session,
     summary: Summary,
     prompt: str,
     posts: Iterable[tuple[str, int]] = (),
+    *,
+    missing: int = 0,
 ) -> None:
     """Keep the prompt an Attempt is about to run; the caller commits.
 
     Stored before the Provider is asked, so a Failed Summary always has the
     prompt "Use another AI" copies (SFR-02). `posts` are the refs the prompt
     was built from, recorded only on a Scope that has none: a selection frozen
-    at submission is never rewritten.
+    at submission is never rewritten. `missing` is how many Covered Posts the
+    prompt left out (ADR-038), kept beside it so a Retry that reuses the
+    prompt reports the same count; zero is not stored.
     """
+    extra = {k: v for k, v in (summary.extra or {}).items() if k != MISSING_POSTS_KEY}
+    summary.extra = {**extra, MISSING_POSTS_KEY: missing} if missing else extra
     updates: dict[str, Any] = {"prompt_text": prompt}
     frozen = FrozenScope.from_stored(summary.scope)
     if frozen is not None and frozen.scoped_post_count is None:
         frozen = covering(frozen, posts)
         summary.scope = frozen.stored()
+        summary.post_count = frozen.scoped_post_count
         updates["scope_posts"] = frozen.stored_posts()
     payload = apply_summary_payload(
         session, summary.id, user_id=summary.user_id, updates=updates

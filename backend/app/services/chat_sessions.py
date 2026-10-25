@@ -23,7 +23,7 @@ from sqlmodel import Session, col, select
 from app.core import acting_owner
 from app.models_tg import ChatSession, ChatSessionPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
-from app.services.posts_view import freeze_selection
+from app.services.artifact_coverage import freeze
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -441,7 +441,7 @@ def submit_chat_session(
     if session.get(ChatSession, chat_session_id) is not None:
         raise HTTPException(status_code=409, detail="Chat session already exists")
 
-    scope = freeze_selection(session, submission, user_id=user_id, now_ms=now_ms)
+    scope = freeze(session, submission, user_id=user_id, now_ms=now_ms)
     row = ChatSession(
         id=chat_session_id,
         user_id=user_id,

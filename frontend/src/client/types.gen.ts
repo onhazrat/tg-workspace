@@ -1587,28 +1587,6 @@ export type ClearTableResponse = {
 };
 
 /**
- * CompletionResult
- */
-export type CompletionResult = {
-    /**
-     * Text
-     */
-    text: string;
-    /**
-     * Prompt
-     */
-    prompt: string;
-    /**
-     * Model
-     */
-    model: string;
-    /**
-     * Provider
-     */
-    provider: string;
-};
-
-/**
  * DbStatsResponse
  *
  * Row counts across the corpus, scoped to the operator.
@@ -5493,6 +5471,10 @@ export type PromptResponse = {
      * Prompt
      */
     prompt?: string;
+    /**
+     * Missingposts
+     */
+    missingPosts?: number;
 };
 
 /**
@@ -7617,10 +7599,6 @@ export type SummaryListItemResponse = {
      */
     model?: string | null;
     /**
-     * Postcount
-     */
-    postCount?: number | null;
-    /**
      * Timestamp
      */
     timestamp?: number;
@@ -7633,38 +7611,19 @@ export type SummaryListItemResponse = {
 };
 
 /**
- * SummaryRequest
+ * SummaryPromptRequest
+ *
+ * Which Summary's prompt to build: the server reads its Covered Posts.
  */
-export type SummaryRequest = {
+export type SummaryPromptRequest = {
     /**
-     * Channels
+     * Summaryid
      */
-    channels: Array<string>;
+    summaryId: string;
     /**
      * Channelstext
      */
     channelsText?: string;
-    /**
-     * Poststext
-     */
-    postsText?: string;
-    scope?: PromptScopeInput | null;
-    /**
-     * Language
-     */
-    language?: string;
-    /**
-     * Model
-     */
-    model?: string | null;
-    /**
-     * Temperature
-     */
-    temperature?: number;
-    /**
-     * Aikeyid
-     */
-    aiKeyId?: string | null;
 };
 
 /**
@@ -7693,10 +7652,6 @@ export type SummaryResponse = {
      */
     model?: string | null;
     /**
-     * Postcount
-     */
-    postCount?: number | null;
-    /**
      * Timestamp
      */
     timestamp?: number;
@@ -7724,10 +7679,6 @@ export type SummarySubmitRequest = {
      * Model
      */
     model?: string | null;
-    /**
-     * Postcount
-     */
-    postCount?: number | null;
     /**
      * Extra
      */
@@ -7766,10 +7717,6 @@ export type SummaryUpsertRequest = {
      * Model
      */
     model?: string | null;
-    /**
-     * Postcount
-     */
-    postCount?: number | null;
     /**
      * Timestamp
      */
@@ -9775,33 +9722,8 @@ export type AiApiListModelsResponses = {
 
 export type AiApiListModelsResponse = AiApiListModelsResponses[keyof AiApiListModelsResponses];
 
-export type AiApiSummaryData = {
-    body: SummaryRequest;
-    path?: never;
-    query?: never;
-    url: '/api/v1/ai/summary';
-};
-
-export type AiApiSummaryErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AiApiSummaryError = AiApiSummaryErrors[keyof AiApiSummaryErrors];
-
-export type AiApiSummaryResponses = {
-    /**
-     * Successful Response
-     */
-    200: CompletionResult;
-};
-
-export type AiApiSummaryResponse = AiApiSummaryResponses[keyof AiApiSummaryResponses];
-
 export type AiApiSummaryPromptData = {
-    body: SummaryRequest;
+    body: SummaryPromptRequest;
     path?: never;
     query?: never;
     url: '/api/v1/ai/summary/prompt';

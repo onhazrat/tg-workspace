@@ -62,19 +62,12 @@ export const aiApi = {
       body: JSON.stringify(aiKeyId ? { aiKeyId } : {}),
     }),
 
-  summaryPrompt: (body: {
-    channels: string[]
-    channelsText?: string
-    postsText: string
-    language: string
-    model?: string
-    temperature?: number
-    scope?: PromptScope
-  }) =>
-    request<{ prompt: string }>("/api/v1/ai/summary/prompt", {
-      method: "POST",
-      body: JSON.stringify(withPromptScope(body)),
-    }),
+  /** A Summary's prompt, read from its Covered Posts (ADR-038). */
+  summaryPrompt: (body: { summaryId: string; channelsText?: string }) =>
+    request<{ prompt: string; missingPosts: number }>(
+      "/api/v1/ai/summary/prompt",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
 
   tagPrompt: (body: {
     channels: string[]

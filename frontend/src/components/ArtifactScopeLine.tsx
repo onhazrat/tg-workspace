@@ -16,6 +16,7 @@ import { Clock } from "lucide-react"
 import type React from "react"
 
 import type { FrozenScope } from "@/client"
+import { MissingPostsChip } from "@/components/MissingPostsChip"
 import { TgButton } from "@/components/ui/tg-button"
 import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
 import { artifactWindowText } from "@/lib/scope/artifact-scope"
@@ -23,11 +24,14 @@ import { artifactWindowText } from "@/lib/scope/artifact-scope"
 interface ArtifactScopeLineProps {
   /** Anything carrying a frozen Scope: a list row or a detail response. */
   artifact: { scope?: FrozenScope | null } | null | undefined
+  /** Covered Posts its latest prompt left out (ADR-038); no chip at zero. */
+  missingPosts?: number | null
   className?: string
 }
 
 export const ArtifactScopeLine: React.FC<ArtifactScopeLineProps> = ({
   artifact,
+  missingPosts,
   className,
 }) => {
   const applyScope = useApplyArtifactScope()
@@ -54,7 +58,13 @@ export const ArtifactScopeLine: React.FC<ArtifactScopeLineProps> = ({
       className={`flex min-w-0 flex-wrap items-center gap-2 text-[11px] font-mono text-app-ink/60 ${className ?? ""}`}
     >
       <Clock size={12} className="shrink-0 opacity-60" />
-      <span className="min-w-0 break-words">{windowText}</span>
+      <span className="min-w-0 break-words">
+        {windowText}
+        <MissingPostsChip
+          count={missingPosts}
+          covered={scope.scopedPostCount}
+        />
+      </span>
       <TgButton
         size="sm"
         variant="secondary"

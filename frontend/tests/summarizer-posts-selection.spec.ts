@@ -1,7 +1,8 @@
 /**
  * The Posts tab's filter and selection, end to end, once (PTR-06): the
  * spec's journey. The posts reads and the prompt are mocked, so what is
- * asserted is what each request carries; the server's half is pinned by
+ * asserted is what each request carries: the Summary's submission states the
+ * selection and the prompt names only the Summary (ADR-038); the server's half is pinned by
  * `test_post_selection.py`. Everything is found by role, label or test id.
  */
 import type { Page } from "@playwright/test"
@@ -25,6 +26,7 @@ type Step = {
 async function mockReads(page: Page, channel: string) {
   const feed: Body[] = []
   const prompts: Body[] = []
+  const submissions: Body[] = []
   const now = Date.now()
   const posts = [1, 2, 3].map((id) => ({
     id,
@@ -65,11 +67,18 @@ async function mockReads(page: Page, channel: string) {
       await route.continue()
     }
   })
+  await page.route("**/api/v1/data/summaries", async (route) => {
+    if (route.request().method() === "POST")
+      submissions.push(route.request().postDataJSON())
+    await route.continue()
+  })
   await page.route("**/api/v1/ai/summary/prompt", async (route) => {
     prompts.push(route.request().postDataJSON())
-    await route.fulfill({ json: { prompt: "summary prompt for e2e" } })
+    await route.fulfill({
+      json: { prompt: "summary prompt for e2e", missingPosts: 0 },
+    })
   })
-  return { feed, prompts }
+  return { feed, prompts, submissions }
 }
 
 const steps = (body: Body | undefined) => (body?.selection ?? []) as Step[]
@@ -82,7 +91,7 @@ test("a filter with NOT and parentheses, a tick, a Pick, a new window, Selected 
   const channel = await seedTestChannel(page, undefined, [], {
     lastUpdated: Date.now(),
   })
-  const { feed, prompts } = await mockReads(page, channel)
+  const { feed, prompts, submissions } = await mockReads(page, channel)
   await clearChannelSelection(page)
   await selectChannelsKeyboard(page, [channel])
   await page.locator("#tour-tab-posts").click()
@@ -151,9 +160,13 @@ test("a filter with NOT and parentheses, a tick, a Pick, a new window, Selected 
   await page.locator("#tour-tab-action").click()
   await page.getByRole("button", { name: "Copy summary prompt" }).click()
   await expect.poll(() => prompts.length).toBeGreaterThan(0)
-  const scope = prompts[prompts.length - 1].scope as Body
+  const submitted = submissions[submissions.length - 1]
+  const scope = submitted.scope as Body
   expect(steps(scope)).toEqual(steps(last()))
   expect(scope.filter).toBeUndefined()
+  const prompt = prompts[prompts.length - 1]
+  expect(prompt.summaryId).toBe(submitted.id)
+  expect(prompt.scope).toBeUndefined()
 
   // ---- A reload keeps the filter in the URL and the selection ----
   await page.locator("#tour-tab-posts").click()

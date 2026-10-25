@@ -11,13 +11,12 @@ from app.ai.base import LLMProvider
 from app.ai.failures import failure_detail, provider_code
 from app.ai.models import (
     ChatRequest,
-    CompletionResult,
     EmbeddingResult,
     EmbedRequest,
     ModelInfo,
     ModelListRequest,
     PromptScopeInput,
-    SummaryRequest,
+    SummaryPromptRequest,
     TagRequest,
     TranslateRequest,
 )
@@ -29,7 +28,9 @@ from app.ai.registry import (
 )
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
-from app.prompts.summary import format_summary_prompt, rtl_instruction
+from app.jobs.summary_generation import summary_prompt
+from app.models_tg import SummaryPayload
+from app.prompts.summary import rtl_instruction
 from app.prompts.tagging import format_tag_prompt
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
 from app.schemas.ai import (
@@ -37,7 +38,7 @@ from app.schemas.ai import (
     PromptResponse,
     TranslateResponse,
 )
-from app.schemas.post_filter import to_steps
+from app.schemas.scope import ScopeSubmission
 from app.services.ai_keys import (
     AI_KEY_REJECTED_DETAIL,
     Purpose,
@@ -45,12 +46,8 @@ from app.services.ai_keys import (
     record_validation,
     resolve_ai_key,
 )
-from app.services.analysis_window import resolve_analysis_window
-from app.services.prompt_assembly import (
-    PromptScope,
-    assemble_posts_text,
-    assemble_tag_posts_text,
-)
+from app.services.artifact_coverage import Layout, freeze, posts_block
+from app.services.summaries import own_summary
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
@@ -146,27 +143,21 @@ def _resolve_posts_text(
     backend resolves the scope itself. Tag prompts use the channel-grouped
     chronological format, summary/chat the flat one.
 
-    Background regeneration used to be in the first group too. It is not any
-    more — it applies no filters beyond the channels and the shifted window, so
-    it is fully expressible as a scope and now sends one (A1b, pinned by
-    ``tests/api/test_autoregen_scope_parity.py``)."""
+    Until AC-02 names the Artifact here as `/ai/summary/prompt` does, the
+    scope is frozen on the spot and read through the Artifact coverage module,
+    so the limits and the formatter are the ones every other prompt gets."""
     if posts_text:
         return posts_text
     if scope is None:
         return ""
-    window = resolve_analysis_window(scope.window)
-    prompt_scope = PromptScope(
-        channels=channels,
-        start_date=window.start,
-        end_date=window.end,
-        steps=to_steps(scope.selection),
-        view_measure=scope.view_measure,
-        sort=scope.sort,
-        group_by_channel=scope.group_by_channel,
+    if scope.window is None:
+        raise HTTPException(status_code=422, detail="A prompt's scope states a window.")
+    submission = ScopeSubmission.model_validate(
+        {**scope.model_dump(by_alias=True), "channels": channels}
     )
-    if tag_format:
-        return assemble_tag_posts_text(session, prompt_scope, user_id=user_id)
-    return assemble_posts_text(session, prompt_scope, user_id=user_id)
+    frozen = freeze(session, submission, user_id=user_id)
+    layout: Layout = "tag" if tag_format else "flat"
+    return posts_block(session, frozen, user_id=user_id, layout=layout)[0]
 
 
 def _default_for(models: list[ModelInfo]) -> str:
@@ -232,58 +223,23 @@ async def api_list_models(
     return ModelListResponse(models=models, default=_default_for(models))
 
 
-@router.post("/summary")
-async def api_summary(
-    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
-) -> CompletionResult:
-    model = body.model or default_model()
-    provider, ai_key = _provider_for(
-        session,
-        user_id=current_user.id,
-        purpose=Purpose.SUMMARY,
-        key_id=body.ai_key_id,
-    )
-    prompt = format_summary_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        language=body.language,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-        ),
-    )
-    # Returned directly: `CompletionResult` is already a Pydantic model, and
-    # the old `.model_dump()` existed only to satisfy a `dict` annotation.
-    try:
-        return await provider.complete(
-            prompt, model=model, temperature=body.temperature
-        )
-    except Exception as exc:
-        if _note_rejection(session, ai_key, exc):
-            raise HTTPException(status_code=502, detail=AI_KEY_REJECTED_DETAIL) from exc
-        raise
-
-
+# The Summary named, never a Scope: the prompt reads its Covered Posts, the
+# same prompt Generate stores (ADR-038). A foreign or absent id is the
+# family's 404.
 @router.post("/summary/prompt")
 def api_summary_prompt(
-    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
+    body: SummaryPromptRequest, session: SessionDep, current_user: CurrentUser
 ) -> PromptResponse:
-    prompt = format_summary_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        language=body.language,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-        ),
+    summary = own_summary(
+        session, body.summary_id, user_id=current_user.id, writing=False
     )
-    return PromptResponse(prompt=prompt)
+    prompt, coverage = summary_prompt(
+        session,
+        summary,
+        session.get(SummaryPayload, summary.id),
+        channels_text=body.channels_text,
+    )
+    return PromptResponse(prompt=prompt, missing_posts=coverage.missing)
 
 
 @router.post("/chat/stream")

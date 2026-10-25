@@ -32,7 +32,7 @@ from app.core.db import engine
 from app.jobs import summary_generation
 from app.models import User
 from app.models_tg import Post
-from app.services import prompt_assembly
+from app.services import artifact_coverage
 from app.services.ai_keys import ResolvedKey
 from tests.utils.setting_groups import add_test_channel
 from tests.utils.utils import get_superuser_token_headers
@@ -375,7 +375,7 @@ def test_a_token_limit_refusal_leaves_a_limit_attempt_and_no_prompt(
     provider: _FakeProvider,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(prompt_assembly, "MAX_PROMPT_TOKENS", -1)
+    monkeypatch.setattr(artifact_coverage, "MAX_PROMPT_TOKENS", -1)
     summary_id = _open(client, headers, prompt=None)
 
     r = _start(client, headers, summary_id)

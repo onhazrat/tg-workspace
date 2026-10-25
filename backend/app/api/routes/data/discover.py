@@ -42,6 +42,7 @@ from app.schemas.discover import (
 from app.schemas.post_filter import to_steps
 from app.schemas.scope import FrozenScope
 from app.services.analysis_window import resolve_analysis_window
+from app.services.artifact_coverage import freeze
 from app.services.channel_directory import (
     DEFAULT_PROBE_PAGE_SIZE,
     MAX_PROBE_PAGE_SIZE,
@@ -75,7 +76,7 @@ from app.services.dismissals import (
     list_dismissals,
     take_back_dismissals,
 )
-from app.services.posts_view import freeze_selection, resolve_posts_view
+from app.services.posts_view import resolve_posts_view
 
 router = APIRouter()
 
@@ -155,10 +156,10 @@ def _report_submission(
     that part was already right — but it shared that resolution with
     `/discover/candidates`, which computes and forgets. AW-06 gives the saving
     route its own submission seam so the value it persists is the same object
-    the aggregation ran on, produced by `freeze_selection` like every other
+    the aggregation ran on, produced by `artifact_coverage.freeze` like every other
     Artifact's.
     """
-    return freeze_selection(session, body.to_scope_submission(), user_id=user_id)
+    return freeze(session, body.to_scope_submission(), user_id=user_id)
 
 
 @router.get("/discover/ignored")

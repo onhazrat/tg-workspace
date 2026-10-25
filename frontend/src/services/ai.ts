@@ -25,26 +25,12 @@ async function* wrapStream(
   }
 }
 
-export const getSummaryPrompt = async (
-  channels: string[],
+/** The prompt the server builds from a Summary's Covered Posts (ADR-038). */
+export const getSummaryPrompt = (
+  summaryId: string,
   channelsText: string,
-  postsText: string,
-  language: string,
-  model: string,
-  temperature: number = 0.7,
-  scope?: PromptScope,
-): Promise<string> => {
-  const result = await api.summaryPrompt({
-    channels,
-    channelsText,
-    postsText,
-    language,
-    model,
-    temperature,
-    scope,
-  })
-  return result.prompt
-}
+): Promise<{ prompt: string; missingPosts: number }> =>
+  api.summaryPrompt({ summaryId, channelsText })
 
 export const translateText = async (
   text: string,

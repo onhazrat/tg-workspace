@@ -41,6 +41,9 @@ class PromptResponse(BaseModel):
     """
 
     prompt: str = ""
+    #: Covered Posts the prompt left out: reclaimed, or of a Channel no longer
+    #: followed (ADR-038).
+    missing_posts: int = Field(default=0, serialization_alias="missingPosts")
 
 
 class TranslateResponse(BaseModel):

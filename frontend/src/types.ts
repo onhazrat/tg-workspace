@@ -332,6 +332,11 @@ export interface Summary {
    * and readable, and a full Attempt clears it. Persisted in server `extra`.
    */
   incomplete?: boolean
+  /**
+   * Covered Posts its prompt left out: reclaimed, or of a Channel no longer
+   * followed (ADR-038). Absent at zero. Persisted in server `extra`.
+   */
+  missingPosts?: number
   /** Full prompt text saved when user copies for external AI (persisted in server `extra`). */
   promptText?: string
   /**

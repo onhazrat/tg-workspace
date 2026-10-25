@@ -277,7 +277,7 @@ def test_counts_are_unfiltered_while_the_flag_is_off(
 def test_counts_and_feed_agree_about_the_scope(
     session: Session, user: User, other_user: User
 ) -> None:
-    """`prompt_assembly` refuses a selection by comparing these two.
+    """`artifact_coverage` refuses a window by comparing these two.
 
     It sums a count to decide whether a prompt fits, then calls `feed` to
     assemble it. If only one of them were scoped the 413 guard

@@ -17,18 +17,19 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from fastapi import HTTPException
 from sqlmodel import Session, col, select
 
 from app.core import acting_owner
 from app.core.db import engine
 from app.jobs.summary_generation import start_attempt
-from app.models_tg import Post, Summary, utc_now
-from app.prompts.summary import format_summary_prompt
+from app.models_tg import Summary, utc_now
 from app.schemas.scope import FrozenScope
+from app.schemas.summaries import SummaryDerivation
+from app.services.artifact_coverage import covered_posts
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.follows import followed_channels_for
 from app.services.logs import upsert_publish_log
-from app.services.post_filters import apply_analysis_window
 from app.services.publications import (
     DestinationNotFound,
     resolve_destination,
@@ -37,11 +38,14 @@ from app.services.publications import (
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import (
     FAILED_STATUS,
+    MISSING_POSTS_KEY,
     apply_summary_payload,
     covering,
     derived_scope,
     is_incomplete,
+    own_summary,
     refresh_summary_derived_columns,
+    submit_summary,
 )
 from app.services.sync_meta import touch_sync
 from app.services.sync_orchestrator import run_sync_job
@@ -225,35 +229,12 @@ async def _regenerate_one(
     only Summaries that have an owner.
     """
     extra = _summary_extra(summary)
-    # The one place the successor window is computed, shared with the browser's
-    # submission path (AW-06). It used to be three lines here and three more in
-    # `AIContext`, and the two had drifted: the worker recorded a complete Scope
-    # and the browser recorded none, for the same chain.
-    scope = derived_scope(summary, "successor")
-    new_start, new_end = scope.start, scope.end
-    # The derived Scope's own channels, not a second read of the row. AW-07
-    # dropped `Summary.channels`, and `derived_scope` carries the predecessor's
-    # list forward, so there is one list here where there were two.
-    channel_names = list(scope.channels)
-
-    await _sync_channels_for_summary(session, channel_names, new_end, owner_id)
-
-    # The successor window opens exactly where its predecessor closed, so this
-    # is the read the half-open rule exists for: an inclusive end summarised
-    # the Post on the shared millisecond twice, once in each Summary (AW-01).
-    posts = session.exec(
-        apply_analysis_window(
-            select(Post).where(
-                col(Post.channel_name).in_(channel_names),
-                col(Post.is_anchor) == False,  # noqa: E712
-            ),
-            new_start,
-            new_end,
-        ).order_by(col(Post.timestamp).desc())
-    ).all()
-    # Recorded, because a derived Scope names no Posts and the coverage wall
-    # lists only what the Scope records.
-    scope = covering(scope, ((p.channel_name, p.post_id) for p in posts))
+    # The successor's Scope, which `submit_summary` derives again from the
+    # same function (AW-06): the Channels to sync, and the window it covers.
+    derived = derived_scope(summary, "successor")
+    await _sync_channels_for_summary(
+        session, list(derived.channels), derived.end, owner_id
+    )
 
     new_id = str(int(time.time() * 1000))
     new_extra = {
@@ -281,64 +262,52 @@ async def _regenerate_one(
         "postSearch": extra.get("postSearch"),
         "semanticSearchQuery": extra.get("semanticSearchQuery"),
         "semanticSearchRespectsChannels": extra.get("semanticSearchRespectsChannels"),
-        "postCount": len(posts),
     }
-    prompt: str | None = None
-    if posts:
-        posts_text = "\n\n---\n\n".join(
-            f"[{p.channel_name}] ID: {p.post_id}\nDate: {p.date}\nContent: {p.text}"
-            for p in posts
-        )
-        prompt = format_summary_prompt(
-            channels=channel_names,
-            language=summary.language,
-            posts_text=posts_text,
-        )
-        # Failed until an Attempt finishes it, as Generate opens its Summary:
-        # a worker that never gets to it leaves it Failed, not blank.
-        new_extra["status"] = FAILED_STATUS
-        text = ""
-    else:
-        text = (
-            f"No new posts found in the selected channels between "
-            f"{datetime.utcfromtimestamp(new_start / 1000).isoformat()} and "
-            f"{datetime.utcfromtimestamp(new_end / 1000).isoformat()}."
-        )
-
-    new_summary = Summary(
-        id=new_id,
-        user_id=owner_id,
-        text=text,
-        scope=scope.stored(),
-        language=summary.language,
-        model=summary.model,
-        post_count=len(posts),
-        timestamp=int(time.time() * 1000),
-        extra=new_extra,
-    )
-    session.add(new_summary)
-    # The prompt is corpus-sized and lives in tg_summary_payloads, not `extra`
-    # — see SummaryPayload. Routed through the aggregate so the derived
-    # columns on tg_summaries stay in step with it.
-    payload = apply_summary_payload(
-        session,
-        new_id,
-        user_id=owner_id,
-        updates=(
-            {"prompt_text": prompt, "scope_posts": scope.stored_posts()}
-            if prompt is not None
-            else {"cited_posts": {}}
-        ),
-    )
-    refresh_summary_derived_columns(new_summary, payload)
-
+    # Pending in this session, so `submit_summary`'s commit moves the chain to
+    # the successor in the same transaction that opens it.
     summary.extra = {**extra, "autoRegenerate": False}
     summary.updated_at = utc_now()
     session.add(summary)
+    # The browser's door (ADR-038): the same derived Scope, and below the same
+    # prompt, as the Regenerate button gets.
+    submit_summary(
+        session,
+        user_id=owner_id,
+        summary_id=new_id,
+        derived_from=SummaryDerivation(summaryId=summary.id, mode="successor"),
+        language=summary.language,
+        model=summary.model,
+        extra=new_extra,
+    )
+    successor = own_summary(session, new_id, user_id=owner_id, writing=True)
+    try:
+        empty = not covered_posts(session, derived, user_id=owner_id).posts
+    except HTTPException:
+        # Past a limit: `start_attempt` records the 413 as the Failed Attempt.
+        empty = False
+
+    if empty:
+        successor.text = (
+            f"No new posts found in the selected channels between "
+            f"{datetime.utcfromtimestamp(derived.start / 1000).isoformat()} and "
+            f"{datetime.utcfromtimestamp(derived.end / 1000).isoformat()}."
+        )
+        # Recorded, so the coverage wall says it covered nothing.
+        successor.scope = covering(derived, ()).stored()
+        successor.post_count = 0
+        payload = apply_summary_payload(
+            session, new_id, user_id=owner_id, updates={"cited_posts": {}}
+        )
+        refresh_summary_derived_columns(successor, payload)
+    else:
+        # Failed until an Attempt finishes it, as Generate opens its Summary:
+        # a worker that never gets to it leaves it Failed, not blank.
+        successor.extra = {**(successor.extra or {}), "status": FAILED_STATUS}
+    session.add(successor)
     session.commit()
     touch_sync(session, "summaries")
 
-    if prompt is not None:
+    if not empty:
         # An unattended regeneration is still the owner's Artifact, so it is
         # charged to the owner's Key and never to the Operator's, and it uses
         # the Key the Account chose when it turned auto-regeneration on rather
@@ -350,6 +319,10 @@ async def _regenerate_one(
         # `start_attempt` checks it against the owner before `decrypt_token`
         # for the reason multi-user-tenancy ticket 33 gives, and records a
         # refusal as the successor's failed Attempt and a failed log row.
+        #
+        # It builds and stores the prompt, recording the Posts it covered.
+        # ponytail: the Covered Posts are read twice, above and there; pass
+        # the Coverage in if a chain's window ever makes that cost show.
         start_attempt(
             session,
             new_id,
@@ -511,6 +484,9 @@ async def _auto_publish(
 #: open bag whose keys are absent or present, and an explicit null would travel
 #: to the client as a field the schema never declared.
 #:
+#: `missingPosts` describes the predecessor's prompt; the successor's own
+#: prompt stores its own count (ADR-038).
+#:
 #: `semanticSearchRespectsTimeRange` is a retired key (AW-01), and it is here
 #: rather than simply deleted from the list below because the spread is what
 #: carries it: an unattended chain copies its predecessor's bag forward every
@@ -521,6 +497,7 @@ _NOT_INHERITED = (
     "autoRegenerateFailures",
     "autoRegenerateRetryAfter",
     "semanticSearchRespectsTimeRange",
+    MISSING_POSTS_KEY,
 )
 
 

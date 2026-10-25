@@ -1,5 +1,6 @@
 import { Check, Copy, Download, RefreshCw, StickyNote } from "lucide-react"
 import { useState } from "react"
+import { MissingPostsChip } from "@/components/MissingPostsChip"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { formatSummaryModelLabel } from "@/constants"
 import { scopeChannels, scopeRange } from "@/lib/scope/artifact-scope"
@@ -129,6 +130,10 @@ export function SummaryHeader({
         <>
           <p className="mt-1 break-words text-sm text-app-ink/80">
             {summaryScopeLine(summary, zone)}
+            <MissingPostsChip
+              count={summary.missingPosts}
+              covered={summary.scope?.scopedPostCount}
+            />
           </p>
           <p className="mt-0.5 break-words text-xs text-app-ink/50">
             {formatSummaryModelLabel(summary.model)} · {summary.language} ·{" "}

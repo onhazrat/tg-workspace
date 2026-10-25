@@ -125,6 +125,9 @@ PROBED: dict[tuple[str, str], str] = {
     ("POST", f"{V1}/data/summaries/{{summary_id}}/publication"): (
         "a Summary's Publication sent by id (SUMTAB-09)"
     ),
+    ("POST", f"{V1}/ai/summary/prompt"): (
+        "a Summary's prompt built from its Covered Posts, named by id (ADR-038)"
+    ),
     ("GET", f"{V1}/data/summaries/{{summary_id}}/attempts"): (
         "a Summary's Attempts read by id (SFR-01)"
     ),
@@ -618,12 +621,10 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     # --- AI, RAG, network, telegram ------------------------------------------
     ("POST", f"{V1}/ai/chat/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/embeddings"): (Reason.EXTERNAL, "provider call"),
-    ("POST", f"{V1}/ai/summary"): (Reason.EXTERNAL, "provider call"),
-    ("POST", f"{V1}/ai/summary/prompt"): (
+    ("POST", f"{V1}/ai/tag/prompt"): (
         Reason.COVERED_ELSEWHERE,
-        "assembles from the caller's scope; test_prompt_assembly.py",
+        "assembles from the caller's scope; test_artifact_coverage.py",
     ),
-    ("POST", f"{V1}/ai/tag/prompt"): (Reason.COVERED_ELSEWHERE, "test_prompt_assembly"),
     ("POST", f"{V1}/ai/tag/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/translate"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/rag/embed"): (Reason.CORPUS, "embeddings key off Posts"),
@@ -944,6 +945,24 @@ def test_a_foreign_summary_cannot_be_planned_or_published(
         f"{DATA}/summaries/{row_id}{suffix}",
         json={"botId": "b", "destinationId": "d"},
         headers=bob[1],
+    )
+
+    assert response.status_code == 404, response.text[:200]
+    assert response.json()["detail"] == "Summary not found"
+
+
+@pytest.mark.security
+def test_a_foreign_summarys_prompt_is_not_found(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+) -> None:
+    """ADR-038: the copied prompt names its Summary, and answers as the family."""
+    row_id = f"iso-prompt-{uuid.uuid4()}"
+    _seed(FAMILIES[0][1](row_id, alice[0].id))
+
+    response = client.post(
+        f"{V1}/ai/summary/prompt", json={"summaryId": row_id}, headers=bob[1]
     )
 
     assert response.status_code == 404, response.text[:200]

@@ -1,8 +1,8 @@
 """The prompt path under the Scope's new shape (PFB-01).
 
-`POST /ai/*/prompt` resolves a `scope` into the prompt's posts block with the
-same `posts_view.feed` the Posts feed pages through, sized first by
-`posts_view.count_selected`. PFB-01 respelled the filter half that scope
+A Summary opened at a `scope` freezes the Posts it reaches, and
+`POST /ai/summary/prompt` builds its posts block from them (ADR-038), in the
+order the feed pages through. PFB-01 respelled the filter half that scope
 carries (media became a set, the order and the grouping two fields, the cap
 mode `ordered`), and it is only a prefactor if an old spelling and its new one
 assemble **the same Posts in the same order**.
@@ -14,13 +14,14 @@ shows.
 
 ## Watched to fail
 
-* drop the legacy mapping from `PromptScopeInput` -> every parity case 422s
-* stop passing `group_by_channel` to `feed` -> the grouped case
+* drop the legacy mapping from `ScopeSubmission` -> every parity case 422s
+* stop passing `group_by_channel` to `selected_refs` -> the grouped case
 * rank the `ordered` cap by `newest` whatever the order -> the oldest case
 """
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import pytest
@@ -67,15 +68,20 @@ def _seed() -> None:
 
 
 def _prompt(client: TestClient, headers: dict[str, str], **scope: Any) -> Any:
-    return client.post(
-        f"{PREFIX}/ai/summary/prompt",
+    """A Summary opened at `scope`, then its copied prompt (ADR-038)."""
+    summary_id = str(uuid.uuid4())
+    opened = client.post(
+        f"{PREFIX}/data/summaries",
         headers=headers,
         json={
-            "channels": CHANNELS,
-            "language": "English",
-            "postsText": "",
-            "scope": {"window": WINDOW, **scope},
+            "id": summary_id,
+            "scope": {"channels": CHANNELS, "window": WINDOW, **scope},
         },
+    )
+    if opened.status_code != 200:
+        return opened
+    return client.post(
+        f"{PREFIX}/ai/summary/prompt", headers=headers, json={"summaryId": summary_id}
     )
 
 

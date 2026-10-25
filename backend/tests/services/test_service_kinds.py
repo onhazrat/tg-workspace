@@ -158,7 +158,9 @@ INVENTORY: dict[str, str] = {
     # the facets, both histograms, the lookup and what an Action freezes.
     # Out of `posts.py` so the aggregate keeps only the writes.
     "posts_view.py": READ_MODEL,
-    "prompt_assembly.py": READ_MODEL,
+    # Which Posts an Artifact covers and the prompt block built from them
+    # (ADR-038); takes a frozen Scope, so it names no Artifact table.
+    "artifact_coverage.py": READ_MODEL,
     # Resolves a User's permissions from their role assignments. Reads
     # rbac_user_roles joined to rbac_roles and never commits; seeding is done by
     # the migration and init_db, so this module has no reason to write.

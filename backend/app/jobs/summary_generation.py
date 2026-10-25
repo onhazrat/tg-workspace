@@ -54,7 +54,6 @@ from app.core import acting_owner, pg_notify
 from app.core.db import engine
 from app.models_tg import Summary, SummaryAttempt, SummaryPayload
 from app.prompts.summary import format_summary_prompt
-from app.schemas.post_filter import to_steps
 from app.schemas.summaries import AttemptKind, AttemptOutcome
 from app.services import pgmq
 from app.services.ai_keys import (
@@ -63,8 +62,8 @@ from app.services.ai_keys import (
     record_validation,
     resolve_ai_key,
 )
+from app.services.artifact_coverage import Coverage, posts_block
 from app.services.logs import upsert_llm_log
-from app.services.prompt_assembly import PromptScope, assemble_posts
 from app.services.summaries import frozen_scope_of, own_summary, store_prompt
 from app.services.summary_attempts import (
     ATTEMPT_NOT_RUNNING_DETAIL,
@@ -160,34 +159,31 @@ def _session_as(owner: acting_owner.ActingOwner | None) -> Iterator[Session]:
         yield session
 
 
-def _prompt_from_scope(
-    session: Session, summary: Summary
-) -> tuple[str, list[tuple[str, int]]]:
-    """The prompt a Summary's frozen Scope reads, as Generate would build it.
+def summary_prompt(
+    session: Session,
+    summary: Summary,
+    payload: SummaryPayload | None,
+    *,
+    channels_text: str = "",
+) -> tuple[str, Coverage]:
+    """The prompt a Summary's Covered Posts make, as Generate builds it.
 
-    For a Summary that never got as far as storing one: a passing sync or
-    network failure can then be retried as it is. A 413 from the assembly is
-    the token limit, and the caller records it as such. Returns the refs of
-    the Posts in it too, for a regeneration's Scope to record.
+    One builder for Generate, Retry, the scheduler and a copied prompt, so the
+    same Summary gets the same prompt from all four (ADR-038). A 413 is a
+    limit, and the caller records it as such. The `Coverage` says which Posts
+    it read, for a regeneration's Scope to record, and how many were missing.
     """
-    frozen = frozen_scope_of(summary)
+    frozen = frozen_scope_of(summary, payload)
     if frozen is None:
         raise HTTPException(status_code=422, detail=_LEGACY_SCOPE_DETAIL)
-    channels = list(frozen.channels)
-    scope = PromptScope(
-        channels=channels,
-        start_date=frozen.start,
-        end_date=frozen.end,
-        steps=to_steps(frozen.selection) if frozen.selection is not None else None,
-        view_measure=frozen.view_measure,
-        sort=frozen.sort,
-        group_by_channel=frozen.group_by_channel,
-    )
-    posts_text, posts = assemble_posts(session, scope, user_id=summary.user_id)
+    posts_text, coverage = posts_block(session, frozen, user_id=summary.user_id)
     prompt = format_summary_prompt(
-        channels=channels, language=summary.language, posts_text=posts_text
+        channels=list(frozen.channels),
+        channels_text=channels_text,
+        language=summary.language,
+        posts_text=posts_text,
     )
-    return prompt, [(p["channelName"], p["id"]) for p in posts]
+    return prompt, coverage
 
 
 def start_attempt(
@@ -239,7 +235,10 @@ def start_attempt(
     payload = session.get(SummaryPayload, summary.id)
     if payload is None or payload.prompt_text is None:
         try:
-            store_prompt(session, summary, *_prompt_from_scope(session, summary))
+            prompt, coverage = summary_prompt(session, summary, payload)
+            store_prompt(
+                session, summary, prompt, coverage.refs, missing=coverage.missing
+            )
             # Kept even if the Key below is refused: "Use another AI" needs it.
             session.commit()
         except HTTPException as exc:

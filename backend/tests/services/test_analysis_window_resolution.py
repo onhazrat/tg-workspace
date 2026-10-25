@@ -444,13 +444,8 @@ def _superuser(client: TestClient) -> dict[str, str]:
         ("/data/discover/candidates", {"channelNames": ["alpha"], **LEGACY_PAIR}),
         ("/rag/search", {"query": "q", **LEGACY_PAIR}),
         (
-            "/ai/summary/prompt",
-            {
-                "channels": ["alpha"],
-                "postsText": "",
-                "language": "English",
-                "scope": LEGACY_PAIR,
-            },
+            "/ai/tag/prompt",
+            {"channels": ["alpha"], "postsText": "", "scope": LEGACY_PAIR},
         ),
     ],
 )
@@ -460,7 +455,7 @@ def test_a_stale_client_sending_the_legacy_pair_is_refused(
     """A tab open across the deploy must not read the whole corpus.
 
     422 and not 200: silently widening is the failure mode worth a test, and on
-    `/ai/summary/prompt` it would also assemble a prompt from every Post the
+    `/ai/tag/prompt` it would also assemble a prompt from every Post the
     account can see and bill it to the caller's own Key.
     """
     response = client.post(

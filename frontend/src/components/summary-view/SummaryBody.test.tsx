@@ -245,6 +245,23 @@ describe("the Summary header", () => {
     )
   })
 
+  test("Missing Posts are a chip after the Post count, explained on tap", () => {
+    renderBody({ summary: { ...scoped, missingPosts: 0 }, body: "body" })
+    expect(screen.queryByTestId("missing-posts-chip")).toBeNull()
+    cleanup()
+
+    renderBody({ summary: { ...scoped, missingPosts: 88 }, body: "body" })
+    expect(lineWith("channels")).toBe(
+      "3h · Oct 7, 2026, 9:27 AM – 12:27 PM (Tehran) · 3 channels · 447 posts 88 missing",
+    )
+    expect(screen.queryByTestId("missing-posts-explanation")).toBeNull()
+
+    fireEvent.click(screen.getByTestId("missing-posts-chip"))
+    expect(screen.getByTestId("missing-posts-explanation").textContent).toBe(
+      "88 Covered Posts of 447 are missing. Retention reclaimed them, or you no longer follow their Channel. They are still listed as covered; the prompt left them out.",
+    )
+  })
+
   test("line two reads the model, Output language and age", () => {
     renderBody({ summary: scoped, body: "body" })
     expect(lineWith("gemini-x")).toBe("gemini-x · English · 2h ago")

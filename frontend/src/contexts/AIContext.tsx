@@ -20,8 +20,6 @@ import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 import { serverMinuteStart } from "@/lib/analysis-window"
 import {
   errorText,
-  frozenScope,
-  type PromptPosts,
   type ProvisionalRow,
   promptPosts,
   searchFilterExtra,
@@ -160,16 +158,14 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const openSummary = async (
     id: string,
     names: string[],
-    posts: PromptPosts,
     row: ProvisionalRow,
     extra: { status?: "pending" | "failed" },
   ) => {
-    const opened = await submitSummary({
+    await submitSummary({
       id,
       scope: getScopeSubmission(names),
       language: aiLanguage,
       model: selectedModel,
-      postCount: posts.postCount,
       extra: {
         ...searchFilterExtra({
           postSearch,
@@ -180,9 +176,21 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       },
     })
     row.opened(id)
-    // Select by what was frozen, not by what the clock says now — the
-    // Artifact and the prompt have to name the same two instants.
-    return frozenScope(posts.scope, opened.scope)
+  }
+
+  /**
+   * Build the opened Summary's prompt and keep it: the server reads the
+   * Covered Posts the submission froze (ADR-038); this tab adds only the
+   * Channel descriptions it formats. Returns the prompt.
+   */
+  const keepPrompt = async (id: string) => {
+    const { prompt, missingPosts } = await getSummaryPrompt(id, channelsText())
+    await saveSummary({
+      id,
+      promptText: prompt,
+      ...(missingPosts > 0 ? { missingPosts } : {}),
+    } as Summary)
+    return prompt
   }
 
   const handleSummarize = async () => {
@@ -215,7 +223,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // The empty Summary tab (or a new one), which the finished run fills.
     workspaceTabs.openTab("summary")
     try {
-      await streamSummary(names, posts, syncError)
+      await streamSummary(names, syncError)
     } catch (err: unknown) {
       console.error(err)
       toast.error(
@@ -237,32 +245,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
    * starts is reported here, with the HTTP status it carried, for the server
    * to classify (SFR-01); the server records every failure after that.
    */
-  const streamSummary = async (
-    names: string[],
-    posts: PromptPosts,
-    syncError: unknown,
-  ) => {
+  const streamSummary = async (names: string[], syncError: unknown) => {
     const newId = crypto.randomUUID()
     // The submission opens the row; failing here leaves nothing to keep.
-    const scope = await openSummary(newId, names, posts, KEEP_ROW, {
-      status: "failed",
-    })
+    await openSummary(newId, names, KEEP_ROW, { status: "failed" })
     setChatMessages([]) // Clear chat when new summary starts
     try {
       await loadHistory()
       if (syncError) throw syncError
-      // Built here rather than on the server when the selection came from a
-      // meaning search, whose Posts only this tab holds.
-      const pendingPrompt = await getSummaryPrompt(
-        names,
-        channelsText(),
-        posts.postsText,
-        aiLanguage,
-        selectedModel,
-        aiTemperature,
-        scope,
-      )
-      await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
+      await keepPrompt(newId)
       await startFirstAttempt(newId)
       workspaceTabs.createTab("summary", newId)
       setSummary(null)
@@ -337,20 +328,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // awaiting a response from somewhere else, which is what `pending` has
     // always meant.
     const newId = crypto.randomUUID()
-    const scope = await openSummary(newId, names, posts, row, {
-      status: "pending",
-    })
-    const prompt = await getSummaryPrompt(
-      names,
-      channelsText(),
-      posts.postsText,
-      aiLanguage,
-      selectedModel,
-      aiTemperature,
-      scope,
-    )
-    await navigator.clipboard.writeText(prompt)
-    await saveSummary({ id: newId, promptText: prompt } as Summary)
+    await openSummary(newId, names, row, { status: "pending" })
+    await navigator.clipboard.writeText(await keepPrompt(newId))
     row.keep()
     workspaceTabs.createTab("summary", newId)
     setSummary(null)

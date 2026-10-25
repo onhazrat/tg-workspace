@@ -474,10 +474,20 @@ def test_a_prompt_covers_exactly_the_selection(
 ) -> None:
     """Never what the filter shows: the body carries no filter at all."""
     operator, _other = seeded
+    summary_id = str(uuid.uuid4())
+    opened = client.post(
+        f"{PREFIX}/summaries",
+        json={
+            "id": summary_id,
+            "scope": {"channels": ALL, "window": BOTH, "selection": STEPS},
+        },
+        headers=operator,
+    )
+    assert opened.status_code == 200, opened.text
 
     response = client.post(
         f"{settings.API_V1_STR}/ai/summary/prompt",
-        json={"channels": ALL, "scope": {"window": BOTH, "selection": STEPS}},
+        json={"summaryId": summary_id},
         headers=operator,
     )
 

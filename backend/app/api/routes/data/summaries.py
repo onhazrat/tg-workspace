@@ -131,7 +131,6 @@ def submit_summary(
         derived_from=body.derived_from,
         language=body.language,
         model=body.model,
-        post_count=body.post_count,
         extra=body.extra,
     )
     touch_sync(session, "summaries")
@@ -355,7 +354,6 @@ def submit_tag_run(
         source=body.source,
         status=body.status,
         model=body.model,
-        post_count=body.post_count,
         extra=body.extra,
     )
     touch_sync(session, "tag_runs")

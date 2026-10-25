@@ -164,7 +164,7 @@ def freeze_scope(
     they are the same two numbers.
 
     The window only: the Posts the selection reached are a read, which
-    `post_selection.freeze_selection` adds, and which every Action calls.
+    `artifact_coverage.freeze` adds, and which every Action calls.
     """
     window = resolve_analysis_window(submission.window, now_ms=now_ms)
     # `resolve_analysis_window` returns `None` on both sides only for the
