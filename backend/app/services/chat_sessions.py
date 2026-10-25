@@ -23,7 +23,7 @@ from sqlmodel import Session, col, select
 from app.core import acting_owner
 from app.models_tg import ChatSession, ChatSessionPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
-from app.services.post_selection import freeze_selection
+from app.services.posts_view import freeze_selection
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,

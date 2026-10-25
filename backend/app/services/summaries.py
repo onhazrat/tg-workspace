@@ -22,7 +22,7 @@ from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.summaries import DerivationMode, SummaryDerivation
-from app.services.post_selection import freeze_selection
+from app.services.posts_view import freeze_selection
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,

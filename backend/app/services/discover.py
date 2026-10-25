@@ -30,8 +30,7 @@ from sqlmodel import Session, col, select
 from app.models_tg import Post
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
-from app.services.post_filters import ViewReading, apply_analysis_window
-from app.services.posts import channel_order
+from app.services.post_filters import ViewReading, apply_analysis_window, channel_order
 from app.services.telegram_web import (
     _all_web_domains,
     extract_channel_post_from_href,

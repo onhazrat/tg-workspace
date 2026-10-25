@@ -103,7 +103,7 @@ from app.services.post_filters import (
     prune_tree,
     tree_conds,
 )
-from app.services.posts import lookup_posts
+from app.services.posts_view import posts_by_ref
 from app.services.settings_registry import DIRECTORY_COLUMNS_KEY
 from app.services.settings_store import get_global_setting
 from app.services.spread_bars import Bin, spread_range
@@ -1698,7 +1698,7 @@ def _citing_texts(
     real = {str(n).lower(): str(n) for n in names}
     texts = {
         (str(post["channelName"]).lower(), int(post["id"])): str(post["text"] or "")
-        for post in lookup_posts(
+        for post in posts_by_ref(
             session,
             [(real[c], p) for c, p in keys if c in real],
             user_id=user_id,

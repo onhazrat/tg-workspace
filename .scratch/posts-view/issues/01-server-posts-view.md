@@ -43,3 +43,14 @@ Directory view.
 - [ ] The route guards script, the full backend suite and the backend lint pass; the client generator shows no diff
 
 ## Comments
+
+- 2026-10-25: implemented on `claude/implement-pv-01-8233d1`, not yet merged. Three
+  deviations from the plan, each forced or approved. The cap builder
+  (`ranked_per_channel`) and the order helpers live in `post_filters.py`, and
+  `selected_refs`/`freeze_selection` moved into `posts_view.py`, because
+  `posts_view` compiles the selection through `post_selection` and the other
+  placement is an import cycle. The user approved editing the call shape (not the
+  assertions) of `test_post_tenancy_scoping.py`, `test_analysis_window_boundaries.py`
+  and `test_posts_counts.py`, which called the removed plain-argument reads.
+  `post_selection.selection_clause` keeps its own loading for the two Discover
+  tests that call it unedited; no app code calls it.

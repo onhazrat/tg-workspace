@@ -8,7 +8,8 @@ not selected. The default is one rule, select all, so an Account that never
 touches it covers every Post in the window, as before.
 
 The browser never evaluates it: every read the Posts tab makes asks for the
-`selected` flag, and every Action resolves the selection here.
+`selected` flag, and every Action resolves the selection through a Posts view
+(`posts_view`), which compiles it here.
 
 `selection_clause` is one predicate over `Post`, for whatever read encloses it:
 a `CASE` over the steps from last to first, which is "last step wins" spelled
@@ -18,7 +19,6 @@ so 5,000 of them cost a probe per row rather than a scan.
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import (
@@ -38,27 +38,24 @@ from sqlalchemy import (
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post
-from app.schemas.post_filter import to_steps
-from app.schemas.scope import FrozenScope, ScopeSubmission
-from app.services.analysis_window import freeze_scope
 from app.services.follows import visible_channel_names
 from app.services.post_filters import (
     SELECT_ALL,
-    FeedSort,
+    Cap,
+    Estimate,
     Pick,
     PostFilters,
     PostScope,
     Rule,
     Step,
-    TypeCond,
-    ViewMeasure,
-    apply_analysis_window,
     post_filter_clauses,
-    tree_conds,
+    ranked_per_channel,
+    reading_of,
+    reads_estimate,
+    reads_unfollowed,
+    tree_readings,
 )
-from app.services.posts import channel_order, feed_order_by, random_cap_order
-from app.services.settling_curve import tree_readings, view_reading
-from app.services.tenancy import scoped_select
+from app.services.settling_curve import current_estimate
 
 
 def _compressed(steps: Sequence[Step]) -> list[Rule | tuple[bool, list[Pick]]]:
@@ -100,49 +97,49 @@ def _picked(picks: list[Pick]) -> ColumnElement[bool]:
 
 
 def _reached(
-    session: Session, rule: Rule, scope: PostScope, followed: frozenset[str] | None
+    rule: Rule,
+    scope: PostScope,
+    estimate: Estimate | None,
+    followed: frozenset[str] | None,
 ) -> ColumnElement[bool]:
     """The Posts `rule` reaches: its filter's over the scope, or with `negated` the rest."""
-    matched = _matched(session, rule, scope, followed)
+    matched = _matched(rule, scope, estimate, followed)
     # A keyword over a Post with no text is NULL, which NOT keeps NULL; the
     # coalesce makes "not matched" two-valued, as the tree's atoms are.
     return not_(func.coalesce(matched, false())) if rule.negated else matched
 
 
 def _matched(
-    session: Session, rule: Rule, scope: PostScope, followed: frozenset[str] | None
+    rule: Rule,
+    scope: PostScope,
+    estimate: Estimate | None,
+    followed: frozenset[str] | None,
 ) -> ColumnElement[bool]:
     """The Posts `rule`'s filter matches over the scope, then its cap."""
-    reading = view_reading(session, rule.view_measure, sort=rule.sort)
+    reading = reading_of(rule.view_measure, estimate)
     filters = PostFilters(
         keyword=rule.keyword,
         tree=rule.tree,
-        tree_readings=tree_readings(session, rule.tree),
+        tree_readings=tree_readings(rule.tree, estimate),
         reading=reading,
     )
-    clauses = [
-        *scope.clauses(),
-        *post_filter_clauses(filters, followed_names=followed, scope=scope),
-    ]
+    kept = post_filter_clauses(filters, followed_names=followed, scope=scope)
     if rule.max_per_channel <= 0:
-        return and_(true(), *clauses)
+        return and_(true(), *scope.clauses(), *kept)
     # The cap ranks among the Posts the rule's filter keeps in this window, as
     # the feed's cap does, and with the seed the rule was made with, so a
     # random cap gives the same Posts every time in one window.
-    order = (
-        [random_cap_order(rule.seed)]
-        if rule.max_per_channel_mode == "random"
-        else channel_order(rule.sort, Post, reading)
-    )
-    rank = func.row_number().over(partition_by=col(Post.channel_name), order_by=order)
-    ranked = (
-        scoped_select(
-            select(col(Post.channel_name), col(Post.post_id), rank.label("rn")),
-            Post,
-            scope.user_id,
-        )
-        .where(*clauses)
-        .subquery()
+    ranked = ranked_per_channel(
+        select(col(Post.channel_name), col(Post.post_id)),
+        scope,
+        kept,
+        Cap(
+            rule.max_per_channel,
+            rule.max_per_channel_mode,
+            rule.sort,
+            rule.seed,
+            reading,
+        ),
     )
     return tuple_(col(Post.channel_name), col(Post.post_id)).in_(
         select(ranked.c.channel_name, ranked.c.post_id).where(
@@ -151,28 +148,36 @@ def _matched(
     )
 
 
-def selection_clause(
-    session: Session, steps: Sequence[Step] | None, scope: PostScope
-) -> ColumnElement[bool]:
-    """Whether each Post the enclosing read covers is selected.
+def _rules(steps: Sequence[Step]) -> list[Rule]:
+    return [s for s in steps if isinstance(s, Rule)]
 
-    The enclosing read keeps the follow scope; a Pick or a rule naming a
-    Channel the caller does not follow reaches a Post that read never returns,
-    which is nothing, and is not an error. `None` is the default, select all.
+
+def rules_read_estimate(steps: Sequence[Step]) -> bool:
+    """Whether a Selection rule's bounds or cap order read an Estimated View count."""
+    return any(reads_estimate(r.tree, r.sort, r.view_measure) for r in _rules(steps))
+
+
+def rules_read_unfollowed(steps: Sequence[Step]) -> bool:
+    """Whether a Selection rule's filter needs the followed-channel set."""
+    return any(reads_unfollowed(r.tree) for r in _rules(steps))
+
+
+def compile_selection(
+    steps: Sequence[Step],
+    scope: PostScope,
+    *,
+    estimate: Estimate | None,
+    followed: frozenset[str] | None,
+) -> ColumnElement[bool]:
+    """Whether each Post the enclosing read covers is selected, from what is loaded.
+
+    Every rule reads through the one `estimate` and the one `followed` set,
+    loaded by the caller when `rules_read_estimate` and
+    `rules_read_unfollowed` say a rule needs them, so a selection with many
+    rules reads the curve once.
     """
-    steps = SELECT_ALL if steps is None else steps
-    followed = (
-        frozenset(visible_channel_names(session, user_id=scope.user_id))
-        if any(
-            isinstance(s, Rule)
-            and s.tree is not None
-            and TypeCond("unfollowed_forwarded") in tree_conds(s.tree)
-            for s in steps
-        )
-        else None
-    )
     branches = [
-        (_reached(session, step, scope, followed), step.select)
+        (_reached(step, scope, estimate, followed), step.select)
         if isinstance(step, Rule)
         else (_picked(step[1]), step[0])
         for step in _compressed(steps)
@@ -188,64 +193,23 @@ def selection_clause(
     )
 
 
-def selected_refs(
-    session: Session,
-    steps: Sequence[Step] | None,
-    scope: PostScope,
-    *,
-    sort: FeedSort = "newest",
-    view_measure: ViewMeasure = "estimated",
-    group_by_channel: bool = False,
-) -> list[tuple[str, int]]:
-    """Every selected Post in the scope, in the feed's order, as references.
+def selection_clause(
+    session: Session, steps: Sequence[Step] | None, scope: PostScope
+) -> ColumnElement[bool]:
+    """Whether each Post the enclosing read covers is selected.
 
-    What an Artifact freezes: no text, and no bound, since it records exactly
-    what an Action covered however many that was.
+    The enclosing read keeps the follow scope; a Pick or a rule naming a
+    Channel the caller does not follow reaches a Post that read never returns,
+    which is nothing, and is not an error. `None` is the default, select all.
+    Loads what its rules read, once; a Posts view compiles its selection with
+    what it loaded instead (`posts_view.resolve_posts_view`).
     """
-    reading = view_reading(session, view_measure, sort=sort)
-    stmt = scoped_select(
-        select(col(Post.channel_name), col(Post.post_id)), Post, scope.user_id
-    )
-    if scope.channel_names:
-        stmt = stmt.where(col(Post.channel_name).in_(scope.channel_names))
-    stmt = apply_analysis_window(stmt, scope.start_date, scope.end_date).where(
-        selection_clause(session, steps, scope)
-    )
-    rows = session.exec(
-        stmt.order_by(*feed_order_by(sort, group_by_channel, Post, reading))
-    ).all()
-    return [(name, post_id) for name, post_id in rows]
-
-
-def freeze_selection(
-    session: Session,
-    submission: ScopeSubmission,
-    *,
-    user_id: uuid.UUID,
-    now_ms: int | None = None,
-) -> FrozenScope:
-    """Freeze a submitted Scope with every Post its selection reached.
-
-    The door every Action submits through (PTR-05). The window is frozen
-    first, by `freeze_scope`, and the selection is applied over it once, so
-    the references an Artifact keeps are the Posts it covered at that minute
-    and inspecting it later never applies a rule to today's corpus.
-    """
-    frozen = freeze_scope(submission, now_ms=now_ms)
-    refs = selected_refs(
-        session,
-        to_steps(submission.selection),
-        PostScope(user_id, frozen.channels or None, frozen.start, frozen.end),
-        sort=frozen.sort,
-        view_measure=frozen.view_measure,
-        group_by_channel=frozen.group_by_channel,
-    )
-    # ponytail: every reference in one JSON column, unbounded as ADR-026 says;
-    # a window of a million Posts stores a million refs. Bound it, or store a
-    # table of refs, if a deployment ever summarizes windows that size.
-    return FrozenScope.model_validate(
-        {
-            **frozen.stored(),
-            "posts": [{"channelName": c, "postId": p} for c, p in refs],
-        }
+    steps = SELECT_ALL if steps is None else steps
+    return compile_selection(
+        steps,
+        scope,
+        estimate=current_estimate(session) if rules_read_estimate(steps) else None,
+        followed=frozenset(visible_channel_names(session, user_id=scope.user_id))
+        if rules_read_unfollowed(steps)
+        else None,
     )

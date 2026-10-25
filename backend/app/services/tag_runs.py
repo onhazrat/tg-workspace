@@ -14,7 +14,7 @@ from app.core import acting_owner
 from app.models_tg import TagRun, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.tag_runs import TagMode, TagRunSource, TagRunStatus
-from app.services.post_selection import freeze_selection
+from app.services.posts_view import freeze_selection
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,

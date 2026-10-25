@@ -652,7 +652,7 @@
       "comment": "",
       "expression": "100",
       "file": "backend/app/services/discover_reports.py",
-      "line": 53,
+      "line": 52,
       "name": "DEFAULT_REPORT_PAGE_SIZE",
       "value": 100
     },
@@ -660,7 +660,7 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/discover_reports.py",
-      "line": 54,
+      "line": 53,
       "name": "MAX_REPORT_PAGE_SIZE",
       "value": 1000
     },
@@ -756,7 +756,7 @@
       "comment": "",
       "expression": "500",
       "file": "backend/app/services/posts.py",
-      "line": 61,
+      "line": 37,
       "name": "DEFAULT_POST_PAGE_SIZE",
       "value": 500
     },
@@ -764,7 +764,7 @@
       "comment": "",
       "expression": "5000",
       "file": "backend/app/services/posts.py",
-      "line": 62,
+      "line": 38,
       "name": "MAX_POST_PAGE_SIZE",
       "value": 5000
     },
@@ -772,15 +772,15 @@
       "comment": "",
       "expression": "200",
       "file": "backend/app/services/posts.py",
-      "line": 63,
+      "line": 39,
       "name": "MAX_POST_LOOKUP_BATCH",
       "value": 200
     },
     {
       "comment": "Every spread's bar count (`BINS` in `components/Spread.tsx`), so one component draws both.",
       "expression": "32",
-      "file": "backend/app/services/posts.py",
-      "line": 1157,
+      "file": "backend/app/services/posts_view.py",
+      "line": 573,
       "name": "VALUE_BINS",
       "value": 32
     },
@@ -788,7 +788,7 @@
       "comment": "Upper bound on how many posts one prompt assembles. The token budget is the real user-facing limit; this is a generous fetch-safety bound so a pathological scope never materialises a giant result. Like the token cap, exceeding it is a clear error, never a silent truncation. The AI paths assemble *all* posts in scope (not a page) up to these limits \u2014 pagination is display-only.",
       "expression": "10000",
       "file": "backend/app/services/prompt_assembly.py",
-      "line": 41,
+      "line": 33,
       "name": "MAX_PROMPT_POSTS",
       "value": 10000
     },

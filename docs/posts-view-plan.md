@@ -52,14 +52,14 @@ a behaviour change and stops the PR.
 
 ### PR 1: backend
 
-- [ ] `services/posts_view.py` (read model, declared in `test_service_kinds.py`): `PostsView`, `resolve_posts_view`, the cap builder, and the feed, counts, facets, histogram and lookup reads moved from `posts.py`
-- [ ] `api/post_views.py::view_of`; `_shared.py` loses its Posts parsing (delete the module if nothing is left)
-- [ ] Posts routes and Discover's `_discover_kwargs` move onto the view
-- [ ] `post_selection` builds from the view's scope and the shared cap builder; the three spellings of the followed-set precondition become one
-- [ ] `prompt_assembly`, `freeze_selection`, `discover_reports` build through `resolve_posts_view`
-- [ ] Interface tests: estimate loaded when read, followed set present when a Rule needs it, curve read once per request
-- [ ] AST guard plus its `architecture-guards.md` row; mutation-check it and record it in the commit body
-- [ ] Verify: `bash scripts/route-guards.sh`, `cd backend && uv run pytest tests/ -q`, `bash scripts/lint.sh`; `bash scripts/generate-client.sh` shows no diff
+- [x] `services/posts_view.py` (read model, declared in `test_service_kinds.py`): `PostsView`, `resolve_posts_view`, the cap builder, and the feed, counts, facets, histogram and lookup reads moved from `posts.py`
+- [x] `api/post_views.py::view_of`; `_shared.py` loses its Posts parsing (delete the module if nothing is left)
+- [x] Posts routes and Discover's `_discover_kwargs` move onto the view
+- [x] `post_selection` builds from the view's scope and the shared cap builder; the three spellings of the followed-set precondition become one
+- [x] `prompt_assembly`, `freeze_selection`, `discover_reports` build through `resolve_posts_view`
+- [x] Interface tests: estimate loaded when read, followed set present when a Rule needs it, curve read once per request
+- [x] AST guard plus its `architecture-guards.md` row; mutation-check it and record it in the commit body
+- [x] Verify: `bash scripts/route-guards.sh`, `cd backend && uv run pytest tests/ -q`, `bash scripts/lint.sh`; `bash scripts/generate-client.sh` shows no diff
 
 ### PR 2: frontend
 
