@@ -169,7 +169,7 @@ class PostFacetCount(BaseModel):
 
 
 # The Type, Media and Language dropdowns' counts (PTR-03); see
-# `services/posts.py::count_facets_in_scope` for what each number means.
+# `services/posts_view.py::facets` for what each number means.
 class PostFacetsResponse(BaseModel):
     """Per-value Post counts for the Type, media and Language dropdowns."""
 

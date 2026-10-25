@@ -1,7 +1,8 @@
 """A caller id for tests that read through the tenancy seam but are not about it.
 
-Ticket 16 made `user_id` a required argument on `list_feed`, `lookup_posts`,
-`count_posts_in_scope` and `compute_discover_candidates`. Tests covering
+Ticket 16 made `user_id` a required argument on every Posts read, which since
+ADR-036 means `resolve_posts_view`, `posts_by_ref` and
+`compute_discover_candidates`. Tests covering
 filters, caps, sort orders or report shapes still have to pass one.
 
 A fixed constant rather than a fresh `uuid4()` per call site, for two reasons: a

@@ -1,10 +1,10 @@
 """The prompt path under the Scope's new shape (PFB-01).
 
 `POST /ai/*/prompt` resolves a `scope` into the prompt's posts block with the
-same `list_feed` the Posts feed pages through, sized first by the same
-`count_posts_in_scope`. PFB-01 respelled the filter half that scope carries —
-media became a set, the order and the grouping two fields, the cap mode
-`ordered` — and it is only a prefactor if an old spelling and its new one
+same `posts_view.feed` the Posts feed pages through, sized first by
+`posts_view.count_selected`. PFB-01 respelled the filter half that scope
+carries (media became a set, the order and the grouping two fields, the cap
+mode `ordered`), and it is only a prefactor if an old spelling and its new one
 assemble **the same Posts in the same order**.
 
 So each old value is asserted against its new equivalent through the wire, and
@@ -15,7 +15,7 @@ shows.
 ## Watched to fail
 
 * drop the legacy mapping from `PromptScopeInput` -> every parity case 422s
-* stop passing `group_by_channel` to `list_feed` -> the grouped case
+* stop passing `group_by_channel` to `feed` -> the grouped case
 * rank the `ordered` cap by `newest` whatever the order -> the oldest case
 """
 
