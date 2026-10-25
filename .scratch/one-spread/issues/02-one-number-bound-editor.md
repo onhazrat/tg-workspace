@@ -15,9 +15,9 @@ Account reads and does the same thing in all four.
   with no value" for No value, the server's count in the Directory, and
   nothing for the Post filter; Update replaces Add for an existing Condition;
   Add is disabled while the fields spell no bound.
-- The field starts at the median when the bars are known as the editor opens,
-  and empty when they arrive later; "Loading the spread" while reading, a
-  plain line when nothing has a value.
+- The field starts at the median for local values, and empty for a read,
+  cached or not; "Loading the spread" while reading, a plain line when
+  nothing has a value.
 - A pick on the Spread fills the operator and the fields, a picked edge
   rounded to two significant figures, except "everything with a value", which
   keeps the whole Spread's low end exactly.
@@ -51,7 +51,7 @@ renamed, ungated and test-first; nothing else is ported.
 - [ ] One Number bound editor serves Channel, Directory, Post and Requests; the four old editors are gone.
 - [ ] Floor, whole and No value switches behave as above on each caller.
 - [ ] One back label, one no-value note and one Add wording, with the right count on each caller.
-- [ ] The median prefill rule holds for local and read sources.
+- [ ] The median prefills from local values only; a read source starts empty.
 - [ ] A pick fills the operator and fields with the rounding above.
 - [ ] Render tests pin the editor through its interface, per source and switch; the Channel and Directory editors' tests fold in.
 - [ ] The Playwright specs that name the old editor test ids use the new ones, and the frontend unit suite, typecheck and lint pass.

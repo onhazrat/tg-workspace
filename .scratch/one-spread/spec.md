@@ -70,7 +70,7 @@ Every Spread is one Spread, and every Number bound is edited with one editor.
 - Every Number bound editor reads the same: the same back label, the same
   no-value note, "Add · 12 of 40" (or "Add · 8 with no value") where the count
   is known locally, the server's count where it is read, and the median
-  prefilled only when the bars are known as the editor opens.
+  prefilled only from local values; a read starts empty.
 
 ## User Stories
 
@@ -142,7 +142,7 @@ Every Spread is one Spread, and every Number bound is edited with one editor.
 49. As an Account, I want Add to say how many have no value when I choose No value, so that the count matches the choice.
 50. As an Account, I want Add to show the server's count in the Directory, so that a bound over a million entries still shows what it keeps.
 51. As an Account, I want Update in place of Add when I am changing a Condition, so that I know the editor changes rather than adds.
-52. As an Account, I want the field prefilled with the median when the bars are known as the editor opens, so that a sensible start is one click from Add.
+52. As an Account, I want the field prefilled with the median when the editor bins local values, so that a sensible start is one click from Add.
 53. As an Account, I want the field left empty when the bars arrive later, so that the field does not change under me.
 54. As an Account, I want the number's name, unit and description at the top of the editor, so that I know what I am bounding.
 55. As an Account, I want "Loading the spread" while the bars are read, and a plain line when nothing has a value, so that an empty editor explains itself.
