@@ -2,7 +2,10 @@
 
 Origin: candidate 4 of the 2026-10-25 architecture review, grilled the same
 day. Terms: **Number bound** and **Spread** in `CONTEXT.md`. Decision record:
-ADR-037 (to write after the prototype). Prototype: not built yet.
+ADR-037 (`docs/adr/ADR-037-one-spread.md`). Prototype: variant 1 on
+[`prototype/one-spread-snapshot` @ 951326bb](https://github.com/onhazrat/tg-workspace/tree/951326bbbd56ded16625f576f78bdc2376ff9c92),
+approved unchanged on 2026-10-25; what it checked is in
+`.scratch/one-spread/prototype.md`.
 
 ## Why
 
@@ -29,7 +32,7 @@ Requested spread has full screen, panning and range zoom.
 | 11 | A run touching the whole Spread's first or last bar leaves that end open (both: everything measured), unless the zoom hides that edge | Per-editor rules |
 | 12 | The Analysis window's run always sets a Fixed window with both ends (ADR-018) | |
 | 13 | One binning function: linear for moments, log once a number spans more than 100x | Separate number and moment binning |
-| 14 | Two zoom adapters: a range inside the whole Spread (scrollbar between known ends), and an extent around the Analysis window (triples per step, pans back in time, stops at now, no scrollbar) | Forcing the Analysis window onto range zoom |
+| 14 | Two zoom adapters: a range inside the whole Spread (scrollbar between known ends), and an extent around the Analysis window (triples per step, pans in time, stops at now). The Analysis window's scrollbar runs from the oldest stored Post of the selected Channels to now, as the Requested spread's runs over everything kept, and an extent outside the current year names its year | Forcing the Analysis window onto range zoom; no scrollbar on the Analysis window |
 | 15 | ADR-037 supersedes ADR-033's "the Analysis window editor keeps its look and behaviour" for the chart only; the mode switch and four fields stay frozen | |
 | 16 | A Spread read from the server keeps its old bars while the next read loads, and waits ~150 ms after the last wheel tick | A read per wheel tick |
 
@@ -41,6 +44,7 @@ Requested spread has full screen, panning and range zoom.
 
 ## Steps
 
-- [ ] Prototype (instructions pending from the user)
-- [ ] Snapshot the prototype, then the docs PR: ADR-037, this plan, spec and tickets
+- [x] Prototype, checked on staging data and approved
+- [x] Snapshot built locally (951326bb); push it before the docs PR
+- [ ] Docs PR: glossary, ADR-037, this plan, prototype note, spec and tickets
 - [ ] Implementation

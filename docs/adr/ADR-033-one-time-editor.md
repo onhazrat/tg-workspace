@@ -1,6 +1,6 @@
 # ADR-033: One time editor for every time filter
 
-**Status:** Accepted (2026-10-20). Plan: `docs/time-bound-editor-plan.md`.
+**Status:** Accepted (2026-10-20); the frozen Analysis window chart superseded by [ADR-037](./ADR-037-one-spread.md). Plan: `docs/time-bound-editor-plan.md`.
 Prototype: variant 1 on [`prototype/time-bound-editor` @ 10b8c6af](https://github.com/onhazrat/tg-workspace/tree/10b8c6afa1e941b10a2e9036a4e9c91e3b5c9a19).
 
 ## Context

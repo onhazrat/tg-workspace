@@ -42,7 +42,8 @@ The locked migration decisions of June 2026 sit outside this series, in
 | [ADR-030](./ADR-030-generation-is-an-attempt-on-the-worker.md) | Generating a Summary is an Attempt, run on the worker |
 | [ADR-031](./ADR-031-tick-all-matching.md) | Tick all is a snapshot up to 10,000 and All matching above it |
 | [ADR-032](./ADR-032-one-settings-registry.md) | One Settings registry, addressed by Setting id |
-| [ADR-033](./ADR-033-one-time-editor.md) | One time editor for every time filter |
+| [ADR-033](./ADR-033-one-time-editor.md) | One time editor for every time filter; its frozen chart superseded by ADR-037 |
 | [ADR-034](./ADR-034-one-keyboard-mode.md) | One Keyboard mode, one meaning per key |
 | [ADR-035](./ADR-035-every-request-is-recorded.md) | Every Request is recorded, beside the ledger, kept in three tiers |
 | [ADR-036](./ADR-036-one-resolved-posts-view.md) | Every Posts read compiles from one resolved Posts view |
+| [ADR-037](./ADR-037-one-spread.md) | One Spread for every bound and the Analysis window, and one Number bound editor; the chart half supersedes part of ADR-033 |
