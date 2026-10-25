@@ -121,20 +121,14 @@ export function postsRead(
       }
     // The Scope's: what an Action covers, so neither the Post filter nor a
     // spotlight is in it (ADR-026).
-    case "scopeCounts":
-    case "facets": {
-      const names =
-        read.kind === "scopeCounts" ? view.scopeChannelNames : channelNames
-      const scope = {
-        channelNames: names,
-        window,
-        selection: view.selectionRevision,
-      }
+    case "scopeCounts": {
+      const names = view.scopeChannelNames
       return {
-        queryKey:
-          read.kind === "scopeCounts"
-            ? queryKeys.postsCounts(scope)
-            : queryKeys.postsFacets(scope),
+        queryKey: queryKeys.postsCounts({
+          channelNames: names,
+          window,
+          selection: view.selectionRevision,
+        }),
         body: postScopeBody({
           channelNames: names,
           startDate,
@@ -143,6 +137,16 @@ export function postsRead(
         }),
       }
     }
+    // Filters aside, though a spotlight's window is its Channel's.
+    case "facets":
+      return {
+        queryKey: queryKeys.postsFacets({
+          channelNames,
+          window,
+          selection: view.selectionRevision,
+        }),
+        body: postScopeBody({ channelNames, startDate, endDate, selection }),
+      }
     // Filters aside, so the bars hold still while another Condition changes;
     // Channel posts in filtered window counts what the filter keeps (PTI-02).
     case "valueHistogram": {

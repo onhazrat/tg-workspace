@@ -270,7 +270,7 @@ describe("post pipeline", () => {
 // backend/tests/api/test_posts_feed.py, so the two halves answer the same
 // question the same way; the server's fixture has no timestamp ties inside a
 // channel, which is the one place their tiebreaks could differ.
-describe("post pipeline — the PFB-01 shape", () => {
+describe("post pipeline, the PFB-01 shape", () => {
   const view = (overrides: Partial<Parameters<typeof sortPosts>[1]> = {}) => ({
     maxPostsPerChannel: 0,
     maxPostsPerChannelMode: "ordered" as const,

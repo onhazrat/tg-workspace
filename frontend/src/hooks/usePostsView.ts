@@ -110,22 +110,44 @@ export function usePostsView(spotlight: ChannelSpotlight | null): PostsView {
     selectionEdit,
   } = useScraper()
   const selected = useSelectedChannelNames()
-  return spotlightView(spotlight, {
-    scopeChannelNames: selected,
-    channelNames: selected,
-    keyword: debouncedPostSearch,
-    filter: postFilter,
-    maxPerChannel: maxPostsPerChannel,
-    maxPerChannelMode: maxPostsPerChannelMode,
-    sort: postSortOrder,
-    groupByChannel,
-    viewMeasure,
-    startDate,
-    endDate,
-    windowKey,
-    selection: postSelection,
-    selectionRevision: selectionEdit.revision,
-  })
+  const selectionRevision = selectionEdit.revision
+  // One identity per view, so a callback built on it (the command registry's
+  // in-scope counts) does not change on every render.
+  return useMemo(
+    () =>
+      spotlightView(spotlight, {
+        scopeChannelNames: selected,
+        channelNames: selected,
+        keyword: debouncedPostSearch,
+        filter: postFilter,
+        maxPerChannel: maxPostsPerChannel,
+        maxPerChannelMode: maxPostsPerChannelMode,
+        sort: postSortOrder,
+        groupByChannel,
+        viewMeasure,
+        startDate,
+        endDate,
+        windowKey,
+        selection: postSelection,
+        selectionRevision,
+      }),
+    [
+      spotlight,
+      selected,
+      debouncedPostSearch,
+      postFilter,
+      maxPostsPerChannel,
+      maxPostsPerChannelMode,
+      postSortOrder,
+      groupByChannel,
+      viewMeasure,
+      startDate,
+      endDate,
+      windowKey,
+      postSelection,
+      selectionRevision,
+    ],
+  )
 }
 
 /**
