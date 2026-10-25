@@ -20,7 +20,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |
 | `backend/tests/api/test_posts_view_guard.py` | no Posts or Discover route names `PostScope`, `parse_post_filters` or the selection compiler, because each reads a Posts view resolved once (`view_of`, `resolve_posts_view`, ADR-036) | test |
 | `backend/tests/api/test_openapi_has_no_ticket_ids.py` | no ticket id (`TB-05`, `ticket 12`) in any OpenAPI `description` or `summary`, which ships as JSDoc in the generated client; ids go in a `#` comment | test |
-| `scripts/check_code_refs.py` | every backticked path.py::name reference outside dated records names something defined, checked at commit | hook |
+| `scripts/check_code_refs.py` | every backticked path.py::name reference outside dated records names something defined; a backticked file path never names only a file the commit deletes or renames away; checked at commit | hook |
 | `scripts/generate_constants_catalog.py` | a module with a constant has a `CONSTANT_TOPICS` entry and no entry outlives its constant, at commit time, so a frontend-only change meets it before the backend suite | pre-commit hook |
 | `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
 | `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |

@@ -1,8 +1,10 @@
-"""The pre-commit check that fails a `path.py::name` reference pointing at nothing.
+"""The pre-commit check that fails a code reference pointing at nothing.
 
-A refactor that moves a function breaks the citations in other files, which
-the commit never touches, so the hook reads the whole tree. These pin how a
-reference resolves: by path suffix, against top-level names and class members.
+A refactor that moves a function or deletes a file breaks the citations in
+other files, which the commit never touches, so the hook reads the whole tree.
+These pin how a reference resolves: a `path.py::name` by path suffix, against
+top-level names and class members; a backticked file path against the files
+the commit deletes or renames away.
 """
 
 from __future__ import annotations
@@ -61,6 +63,41 @@ def test_a_moved_name_or_module_is_flagged() -> None:
 
 def test_an_unbackticked_mention_is_left_alone() -> None:
     assert _offenders("prose naming posts.py::list_feed without backticks") == []
+
+
+TRACKED = ["frontend/src/components/Spread.tsx", "frontend/src/index.ts"]
+GONE = [
+    "frontend/src/components/channel-grid/ChannelMetricEditor.test.tsx",
+    "frontend/src/lib/index.ts",
+]
+
+
+def _file_offenders(text: str) -> list[str]:
+    return check_code_refs.file_offenders({"docs/x.md": text}, TRACKED, GONE)
+
+
+def test_a_path_to_a_file_the_commit_deletes_is_flagged() -> None:
+    assert _file_offenders(
+        "pins it in `ChannelMetricEditor.test.tsx`\n"
+        "and `channel-grid/ChannelMetricEditor.test.tsx` again"
+    ) == [
+        "docs/x.md:1: ChannelMetricEditor.test.tsx",
+        "docs/x.md:2: channel-grid/ChannelMetricEditor.test.tsx",
+    ]
+
+
+def test_a_path_still_naming_a_tracked_file_is_left_alone() -> None:
+    """`index.ts` still names `frontend/src/index.ts`, though one was deleted."""
+    assert _file_offenders("`Spread.tsx` and `index.ts`") == []
+
+
+def test_a_file_deleted_before_this_commit_is_history() -> None:
+    """A record of what was removed long ago names a file no commit deletes now."""
+    assert _file_offenders("`lib/cache.ts` was removed (ADR-012)") == []
+
+
+def test_an_unbackticked_file_path_is_left_alone() -> None:
+    assert _file_offenders("prose naming ChannelMetricEditor.test.tsx") == []
 
 
 def test_the_tree_has_no_dangling_reference() -> None:
