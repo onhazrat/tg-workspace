@@ -239,7 +239,7 @@ def api_summary_prompt(
         session.get(SummaryPayload, summary.id),
         channels_text=body.channels_text,
     )
-    return PromptResponse(prompt=prompt, missing_posts=coverage.missing)
+    return PromptResponse(prompt=prompt, missingPosts=coverage.missing)
 
 
 @router.post("/chat/stream")
