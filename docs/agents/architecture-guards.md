@@ -20,6 +20,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |
 | `backend/tests/api/test_posts_view_guard.py` | no Posts or Discover route names `PostScope`, `parse_post_filters` or the selection compiler, because each reads a Posts view resolved once (`view_of`, `resolve_posts_view`, ADR-036) | test |
 | `backend/tests/api/test_openapi_has_no_ticket_ids.py` | no ticket id (`TB-05`, `ticket 12`) in any OpenAPI `description` or `summary`, which ships as JSDoc in the generated client; ids go in a `#` comment | test |
+| `scripts/check_code_refs.py` | every backticked path.py::name reference outside dated records names something defined, checked at commit | hook |
 | `scripts/generate_constants_catalog.py` | a module with a constant has a `CONSTANT_TOPICS` entry and no entry outlives its constant, at commit time, so a frontend-only change meets it before the backend suite | pre-commit hook |
 | `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
 | `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |
@@ -78,7 +79,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/services/test_lane_selection.py` | the **real** enqueue picks the lane; the boundary is `>=`; zero is always best-effort and negative unlimited; a failed ledger read picks normal; no new path syncs outside the ladder | test |
 | `backend/tests/services/test_quota_ceilings.py` | a zero allowance degrades where a zero ceiling blocks and a negative one never does; the three layers resolve each number independently; a lift reaches one account, one Budget, one **day**; the refusal reaches the walk and not only the enqueue; an unreadable ledger refuses | test |
 | `backend/tests/deployment/test_tg_cleanup_inventory.py` | every `tg_*` table is truncated between tests or excused, in both directions; the failure it prevents is a **green** test in an unrelated module | test |
-| `backend/tests/deployment/test_claude_md_budget.py` | the root, backend and frontend `CLAUDE.md` and this file each stay inside their budget and cite no path that has moved; the root points at the other three; every `*Enforced:*` pointer is a row here | test |
+| `backend/tests/deployment/test_claude_md_budget.py` | the root, backend and frontend `CLAUDE.md` and this file each stay inside their budget and cite no path that has moved; the root points at the other three; every `*Enforced:*` pointer is a row here; runs at commit too | test |
 | `backend/tests/deployment/test_adr_index.py` | every ADR has a row in `docs/adr/README.md` and lives in `docs/adr/` | test |
 | `backend/tests/api/test_send_email_call_sites.py` | every `send_email` caller checks `emails_enabled` first, the pair rather than the site | test |
 | `backend/tests/api/test_approval_gate.py` | every data router requires an approved account; unknown routers fail, exemptions state a reason | test |

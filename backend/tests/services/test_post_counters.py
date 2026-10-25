@@ -16,8 +16,9 @@ its counters in media, which `test_directory_samples.py` pins.
   test and the guard; fall back to `retrieved_at` -> the leftover-key test
 * read `post["media"]["viewsCount"]` in `prompts/posts.py`, or name
   `MEDIA_COUNTER_KEYS` outside the write path -> the guard
-* read `p.media.get("viewsCount")` in `posts.py::lookup_posts` -> the guard,
-  because `posts.py` is excused read by read rather than whole (REACH-10)
+* read `p.media.get("viewsCount")` in `posts_view.py::lookup` -> the guard,
+  because only `posts.py` is excused, and read by read rather than whole
+  (REACH-10)
 * delete `views_of` -> the guard's stale-excuse check
 * drop a field from `post_to_camel` or `PostResponse` -> the round-trip test
 * keep a chip with no integer `count` -> the malformed-chip test
