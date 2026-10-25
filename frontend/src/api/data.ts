@@ -177,6 +177,17 @@ export function shownPostsBody(params: PostFeedQuery): Record<string, unknown> {
   return body
 }
 
+/** `shownPostsBody` plus the feed's grouping, its parts and its page. */
+export function postsFeedBody(params: PostFeedQuery): Record<string, unknown> {
+  const body = shownPostsBody(params)
+  if (params.groupByChannel) body.groupByChannel = true
+  if (params.selectedFirst) body.selectedFirst = true
+  if (params.onlySelected) body.onlySelected = true
+  if (params.limit != null) body.limit = params.limit
+  if (params.offset != null) body.offset = params.offset
+  return body
+}
+
 /**
  * A prompt scope shaped for a JSON request body (AW-02).
  *
@@ -534,18 +545,15 @@ export const dataApi = {
    * `random`), the order and grouping — so the browser fetches only `limit`
    * rows per page instead of a channel's whole history.
    */
-  getPostsFeed: (params: PostFeedQuery) => {
-    const body = shownPostsBody(params)
-    if (params.groupByChannel) body.groupByChannel = true
-    if (params.selectedFirst) body.selectedFirst = true
-    if (params.onlySelected) body.onlySelected = true
-    if (params.limit != null) body.limit = params.limit
-    if (params.offset != null) body.offset = params.offset
-    return request<Post[]>("/api/v1/data/posts", {
+  getPostsFeed: (params: PostFeedQuery) =>
+    dataApi.getPostsFeedBody(postsFeedBody(params)),
+
+  /** The same page, for a body `postsRead` built (PV-02). */
+  getPostsFeedBody: (body: Record<string, unknown>) =>
+    request<Post[]>("/api/v1/data/posts", {
       method: "POST",
       body: JSON.stringify(body),
-    })
-  },
+    }),
 
   /**
    * Resolve specific posts by natural key. Batch capped server-side at 200.

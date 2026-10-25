@@ -15,7 +15,8 @@ not the summary.** Open the file for the full list of what it checks and why.
 |---|---|---|
 | `frontend/src/types.conform.ts` | hand-written domain types match the server | compile error |
 | `frontend/src/api/client-split.conform.ts` | the two-client split, **in both directions** | compile error |
-| `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner; storage has exactly four owners; logout and stale-session clear the query cache | test |
+| `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner; storage has exactly four owners; logout and stale-session clear the query cache; no Posts query key is built outside `postsRead` | test |
+| `frontend/src/lib/posts/posts-view.test.ts` | every Posts read's key moves exactly when its body does, except the three departures it lists (window by `windowKey`, selection by revision, filter by printed text; ADR-036) | test |
 | `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |
 | `backend/tests/api/test_posts_view_guard.py` | no Posts or Discover route names `PostScope`, `parse_post_filters` or the selection compiler, because each reads a Posts view resolved once (`view_of`, `resolve_posts_view`, ADR-036) | test |
 | `backend/tests/api/test_openapi_has_no_ticket_ids.py` | no ticket id (`TB-05`, `ticket 12`) in any OpenAPI `description` or `summary`, which ships as JSDoc in the generated client; ids go in a `#` comment | test |

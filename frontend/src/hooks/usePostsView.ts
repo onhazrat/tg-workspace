@@ -8,7 +8,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { api } from "@/api"
-import { type PostFeedQuery, postScopeBody, shownPostsBody } from "@/api/data"
 import {
   dataPostsCounts,
   dataPostsFacets,
@@ -34,7 +33,8 @@ import {
   type ChannelSpotlight,
   spotlightView,
 } from "@/lib/posts/channel-spotlight"
-import { type PostNumber, printPostFilter } from "@/lib/posts/post-filter"
+import type { PostNumber } from "@/lib/posts/post-filter"
+import { type PostsView, postsRead } from "@/lib/posts/posts-view"
 import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
 import type { Post } from "@/types"
 import {
@@ -42,7 +42,6 @@ import {
   SUMMARIZER_STALE_TIME,
   VIEW_ESTIMATE_STALE_TIME,
 } from "./queryKeys"
-import { useDebouncedValue } from "./useDebouncedValue"
 
 /** One page of the infinite Posts feed. */
 export const FEED_PAGE_SIZE = 20
@@ -93,6 +92,43 @@ function useSelectedChannelNames(): string[] {
 }
 
 /**
+ * The Posts view every Posts read is built from (ADR-036), gathered from the
+ * contexts with `spotlight` applied. `postsRead` turns it into a read's key
+ * and body.
+ */
+export function usePostsView(spotlight: ChannelSpotlight | null): PostsView {
+  const { startDate, endDate, windowKey } = useScope()
+  const {
+    debouncedPostSearch,
+    postFilter,
+    maxPostsPerChannel,
+    maxPostsPerChannelMode,
+    postSortOrder,
+    groupByChannel,
+    viewMeasure,
+    postSelection,
+    selectionEdit,
+  } = useScraper()
+  const selected = useSelectedChannelNames()
+  return spotlightView(spotlight, {
+    scopeChannelNames: selected,
+    channelNames: selected,
+    keyword: debouncedPostSearch,
+    filter: postFilter,
+    maxPerChannel: maxPostsPerChannel,
+    maxPerChannelMode: maxPostsPerChannelMode,
+    sort: postSortOrder,
+    groupByChannel,
+    viewMeasure,
+    startDate,
+    endDate,
+    windowKey,
+    selection: postSelection,
+    selectionRevision: selectionEdit.revision,
+  })
+}
+
+/**
  * Per-channel counts of the Posts an Action covers: the selected Posts in the
  * window (PTR-05). The Scope's, so the Post filter is not in it: a Summary
  * covers the Post selection whatever the tab shows (ADR-026). Server-side
@@ -102,27 +138,13 @@ function useSelectedChannelNames(): string[] {
  */
 export function useScopedPostCounts(): Record<string, number> {
   const { selectedChannels } = useData()
-  const { startDate, endDate, windowKey } = useScope()
-  const { postSelection, selectionEdit } = useScraper()
-  const channelNames = useSelectedChannelNames()
+  const { queryKey, body } = postsRead(usePostsView(null), {
+    kind: "scopeCounts",
+  })
   const enabled = selectedChannels.size > 0
   const query = useQuery({
-    // An edit moves the revision, which stands for the selection here
-    // rather than a key as large as 5,000 Picks.
-    queryKey: queryKeys.postsCounts({
-      channelNames,
-      window: windowKey,
-      selection: selectionEdit.revision,
-    }),
-    queryFn: () =>
-      dataPostsCounts({
-        body: postScopeBody({
-          channelNames,
-          startDate,
-          endDate,
-          selection: postSelection,
-        }) as PostFilteredRequest,
-      }),
+    queryKey,
+    queryFn: () => dataPostsCounts({ body: body as PostFilteredRequest }),
     enabled,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
@@ -146,64 +168,16 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
   selectedShown: number
 } {
   const { selectedChannels } = useData()
-  const { startDate, endDate, windowKey } = useScope()
-  const {
-    postFilter: accountFilter,
-    postSearch,
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-    viewMeasure,
-    semanticSearchQuery,
-    getScopedPosts,
-    postSelection,
-    selectionEdit,
-  } = useScraper()
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
-  const selectedChannelNames = useSelectedChannelNames()
-
+  const { semanticSearchQuery, getScopedPosts } = useScraper()
   const serverEligible =
     !semanticSearchQuery.trim() && selectedChannels.size > 0
-
-  const view = spotlightView(spotlight, {
-    channelNames: selectedChannelNames,
-    keyword: debouncedPostSearch,
-    filter: accountFilter,
-    maxPerChannel: maxPostsPerChannel,
-    groupByChannel: false,
-  })
-  const filter = view.filter
   // Which Posts the cap keeps, as the feed asks: the Venn counts those.
-  const filters = {
-    channelNames: view.channelNames,
-    keyword: view.keyword,
-    maxPerChannel: view.maxPerChannel,
-    maxPerChannelMode: maxPostsPerChannelMode,
-    sort: postSortOrder,
-    viewMeasure,
-    seed: 0,
-  }
-  // The filter by its text, which is stable where the tree's ids are not.
-  const keyed = { ...filters, filter: printPostFilter(filter) }
+  const { queryKey, body } = postsRead(usePostsView(spotlight), {
+    kind: "shownCounts",
+  })
   const query = useQuery({
-    // Keyed on the window rather than the minute it currently resolves to —
-    // see `usePostsFeed`, which pays for this and says why. An edit moves the
-    // revision, which stands for the selection.
-    queryKey: queryKeys.postsCounts({
-      ...keyed,
-      window: windowKey,
-      selection: selectionEdit.revision,
-    }),
-    queryFn: () =>
-      dataPostsCounts({
-        body: shownPostsBody({
-          ...filters,
-          filter,
-          startDate,
-          endDate,
-          selection: postSelection,
-        }) as PostFilteredRequest,
-      }),
+    queryKey,
+    queryFn: () => dataPostsCounts({ body: body as PostFilteredRequest }),
     enabled: serverEligible,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
@@ -238,8 +212,8 @@ const sum = (counts: Record<string, number> | undefined) =>
  * How many Posts in the window have each Type, media kind and Language, and
  * how many there are, for the dropdowns and the filter row (PTR-03), with how
  * many of each value the Post selection selects for the ticks (PTR-06).
- * Filters aside, so it is keyed on the Channels, the window and the
- * selection alone. Server-side, and only while `enabled` and the feed is the
+ * Filters aside; a spotlight's window is its Channel's, so "N of M" reads
+ * against it. Server-side, and only while `enabled` and the feed is the
  * server's: a meaning search's ranked Posts are not a scope the server can
  * count.
  */
@@ -248,26 +222,13 @@ export function usePostFacets(
   spotlight: ChannelSpotlight | null,
 ): PostFacetsResponse | undefined {
   const { selectedChannels } = useData()
-  const { startDate, endDate, windowKey } = useScope()
-  const { semanticSearchQuery, postSelection, selectionEdit } = useScraper()
-  const selected = useSelectedChannelNames()
-  // A spotlight's window is its Channel's, so "N of M" reads against it.
-  const channelNames = spotlight ? [spotlight.channel] : selected
+  const { semanticSearchQuery } = useScraper()
+  const { queryKey, body } = postsRead(usePostsView(spotlight), {
+    kind: "facets",
+  })
   const query = useQuery({
-    queryKey: queryKeys.postsFacets({
-      channelNames,
-      window: windowKey,
-      selection: selectionEdit.revision,
-    }),
-    queryFn: () =>
-      dataPostsFacets({
-        body: postScopeBody({
-          channelNames,
-          startDate,
-          endDate,
-          selection: postSelection,
-        }) as PostFacetsRequest,
-      }),
+    queryKey,
+    queryFn: () => dataPostsFacets({ body: body as PostFacetsRequest }),
     enabled:
       enabled && !semanticSearchQuery.trim() && selectedChannels.size > 0,
     staleTime: SUMMARIZER_STALE_TIME,
@@ -277,31 +238,11 @@ export function usePostFacets(
 }
 
 /**
- * The window, the selected Channels, and the Post filter and keyword as a
- * spotlight shows them with the cap aside: what the two histograms read.
- */
-function useUncappedView(spotlight: ChannelSpotlight | null) {
-  const { startDate, endDate, windowKey } = useScope()
-  const { postFilter, postSearch } = useScraper()
-  const keyword = useDebouncedValue(postSearch, 300)
-  const selected = useSelectedChannelNames()
-  const view = spotlightView(spotlight, {
-    channelNames: selected,
-    keyword,
-    filter: postFilter,
-    maxPerChannel: 0,
-    groupByChannel: false,
-  })
-  return { startDate, endDate, windowKey, selected, view }
-}
-
-/**
  * One number's bars over the window and the selected Channels, or the
- * spotlit one, for a number filter's editor (PTI-01). Filters aside, so it is
- * keyed on the Channels, the window and the number alone, and the bars hold
- * still while the Account changes another Condition. Channel posts in
- * filtered window is the exception: its count is what the filter and the
- * keyword keep, so it sends and is keyed on them too (PTI-02).
+ * spotlit one, for a number filter's editor (PTI-01). Filters aside, so the
+ * bars hold still while the Account changes another Condition. Channel posts
+ * in filtered window is the exception: its count is what the filter and the
+ * keyword keep (PTI-02).
  */
 export function usePostValueHistogram(
   measure: PostNumber,
@@ -309,32 +250,17 @@ export function usePostValueHistogram(
   /** Bin only this range, on the scale first drawn (TB-04). */
   zoom?: { lo: number; hi: number; log: boolean } | null,
 ): PostValueHistogramResponse | undefined {
-  const { startDate, endDate, windowKey, view } = useUncappedView(spotlight)
-  const { channelNames } = view
-  const filtered = measure === "channel_posts_filtered"
-  const filters = filtered
-    ? { keyword: view.keyword, filter: view.filter }
-    : undefined
+  const view = usePostsView(spotlight)
+  const { queryKey, body } = postsRead(view, {
+    kind: "valueHistogram",
+    measure,
+    zoom,
+  })
   return useQuery({
-    queryKey: queryKeys.postsValueHistogram({
-      channelNames,
-      window: windowKey,
-      measure,
-      ...zoom,
-      ...(filters && {
-        keyword: filters.keyword,
-        filter: printPostFilter(filters.filter),
-      }),
-    }),
+    queryKey,
     queryFn: () =>
-      dataPostsValueHistogram({
-        body: {
-          ...postScopeBody({ channelNames, startDate, endDate, ...filters }),
-          measure,
-          ...zoom,
-        } as PostValueHistogramRequest,
-      }),
-    enabled: channelNames.length > 0,
+      dataPostsValueHistogram({ body: body as PostValueHistogramRequest }),
+    enabled: view.channelNames.length > 0,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
   }).data
@@ -349,33 +275,20 @@ export function usePostWindowHistogram(
   query: WindowHistogramQuery,
   spotlight: ChannelSpotlight | null,
 ): number[] | undefined {
-  const { startDate, endDate, windowKey, selected, view } =
-    useUncappedView(spotlight)
-  const scope = query.unfiltered
-    ? { channelNames: selected }
-    : {
-        channelNames: view.channelNames,
-        keyword: view.keyword,
-        filter: view.filter,
-      }
+  const view = usePostsView(spotlight)
+  const { queryKey, body } = postsRead(view, { kind: "windowHistogram", query })
+  const channelNames = query.unfiltered
+    ? view.scopeChannelNames
+    : view.channelNames
   return useQuery({
-    queryKey: queryKeys.postsWindowHistogram({
-      ...query,
-      ...scope,
-      filter: scope.filter && printPostFilter(scope.filter),
-      // A Channel posts Condition counts within the window.
-      window: windowKey,
-    }),
+    queryKey,
     queryFn: async () =>
       (
         await dataPostsWindowHistogram({
-          body: {
-            ...postScopeBody({ ...scope, startDate, endDate }),
-            ...query,
-          } as PostWindowHistogramRequest,
+          body: body as PostWindowHistogramRequest,
         })
       ).counts,
-    enabled: scope.channelNames.length > 0,
+    enabled: channelNames.length > 0,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
   }).data
@@ -439,82 +352,32 @@ export function usePostsFeed(
     selectedShownTotal?: number
   } = {},
 ): PostsFeed {
-  const { startDate, endDate, windowKey } = useScope()
   const {
-    postSearch,
-    postFilter,
-    viewMeasure,
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-    groupByChannel,
-    semanticSearchQuery,
+    debouncedSemanticSearchQuery,
     setSemanticSearchQuery,
     relatedPostSearch,
     setRelatedPostSearch,
     getScopedPosts,
-    postSelection,
     selectionEdit,
   } = useScraper()
   const queryClient = useQueryClient()
   const { embeddingsEnabled } = useSettings()
-  const debouncedPostSearch = useDebouncedValue(postSearch, 300)
-  const debouncedSemantic = useDebouncedValue(semanticSearchQuery, 300)
-  const selectedChannelNames = useSelectedChannelNames()
+  const view = usePostsView(spotlight)
 
   const semanticActive = isSemanticFeed(
     embeddingsEnabled,
     relatedPostSearch,
-    debouncedSemantic,
+    debouncedSemanticSearchQuery,
   )
 
-  const { filter, ...view } = spotlightView(spotlight, {
-    channelNames: selectedChannelNames,
-    keyword: debouncedPostSearch,
-    filter: postFilter,
-    maxPerChannel: maxPostsPerChannel,
-    groupByChannel,
-  })
-  const filters = {
-    ...view,
-    viewMeasure,
-    maxPerChannelMode: maxPostsPerChannelMode,
-    sort: postSortOrder,
-    seed: 0,
-    selectedFirst,
-  }
-  // The selection rides the request and not the key: an edit refreshes the
-  // rows in place below, and a new key would drop the Account back to the
-  // top of the feed on every tick (PTR-05).
-  const feedParams: PostFeedQuery = {
-    ...filters,
-    filter,
-    startDate,
-    endDate,
-    selection: postSelection,
-  }
-  // The filter by its text, which is stable where the tree's ids are not.
-  const keyed = { ...filters, filter: printPostFilter(filter) }
-
+  // The selection rides the body and not the key: an edit refreshes the
+  // rows in place below (PTR-05). See `postsRead` for the window.
+  const feed = postsRead(view, { kind: "feed", selectedFirst })
   const infinite = useInfiniteQuery({
-    /*
-     * Keyed on the *window*, not the boundaries it currently resolves to.
-     *
-     * A Live window resolves to a new pair every minute (AW-04). A key built
-     * from that pair would be a different key every minute: the infinite query
-     * would remount at page one, whatever the Account had scrolled past would
-     * be gone, and a fresh cache entry would be minted per minute per filter
-     * combination. The window's *identity* — 24 hours ending at the current
-     * minute — does not change on a tick, so the key does not either, and
-     * `liveTick` refreshes the pages that are already loaded.
-     *
-     * `feedParams` still carries fresh boundaries: the query function is read
-     * from the latest render, so a refetch asks for the minute it happens in.
-     */
-    queryKey: queryKeys.postsFeed({ ...keyed, window: windowKey }),
+    queryKey: feed.queryKey,
     queryFn: ({ pageParam }) =>
-      api.getPostsFeed({
-        ...feedParams,
+      api.getPostsFeedBody({
+        ...feed.body,
         limit: FEED_PAGE_SIZE,
         offset: pageParam,
       }),
@@ -625,9 +488,8 @@ export function usePostsFeed(
 
   return {
     fetchSelectedShown: async () => ({
-      posts: await api.getPostsFeed({
-        ...feedParams,
-        selectedFirst: false,
+      posts: await api.getPostsFeedBody({
+        ...postsRead(view, { kind: "feed" }).body,
         onlySelected: true,
         limit: EXPORT_LIMIT,
         offset: 0,

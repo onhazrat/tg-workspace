@@ -60,6 +60,9 @@ interface ScraperContextType {
   setPostSearch: React.Dispatch<React.SetStateAction<string>>
   semanticSearchQuery: string
   setSemanticSearchQuery: React.Dispatch<React.SetStateAction<string>>
+  /** The keyword and the meaning query as every read takes them: debounced once. */
+  debouncedPostSearch: string
+  debouncedSemanticSearchQuery: string
   semanticSearchRespectsChannels: boolean
   setSemanticSearchRespectsChannels: React.Dispatch<
     React.SetStateAction<boolean>
@@ -494,6 +497,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setPostSearch,
         semanticSearchQuery,
         setSemanticSearchQuery,
+        debouncedPostSearch,
+        debouncedSemanticSearchQuery,
         semanticSearchRespectsChannels,
         setSemanticSearchRespectsChannels,
         relatedPostSearch,
