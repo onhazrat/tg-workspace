@@ -8,8 +8,8 @@ import { useCallback } from "react"
 
 import { api } from "@/api"
 import { dataCountArtifactsRoute, dataGetArtifactSpreadRoute } from "@/client"
-import type { Range } from "@/components/SpreadZoom"
 import type { HistoryParams } from "@/lib/history/history-params"
+import type { Range } from "@/lib/spread"
 import { findTabArtifacts } from "@/lib/workspace-tabs"
 import type { ArtifactListItem } from "@/types"
 

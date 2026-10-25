@@ -1,8 +1,8 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
-import { type Bin, dateText, Spread } from "@/components/Spread"
-import type { ZoomState } from "@/components/SpreadZoom"
+import { useZoomState, type ZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
+import { TimeSpread } from "@/components/TimeSpread"
 import { TgButton } from "@/components/ui/tg-button"
 import { serverNow } from "@/lib/analysis-window"
 import type {
@@ -10,9 +10,8 @@ import type {
   Moment,
 } from "@/lib/directory/directory-filter"
 import {
-  barBound,
   MOMENT_OPTIONS,
-  resolveTimeBound,
+  spreadSelection,
   type TimeBound,
 } from "@/lib/time-bound/bound"
 
@@ -32,8 +31,8 @@ function condition(
  * A Time bound in the Directory filter (DPF, TB-01): the moment's name and
  * spread, the Analysis window editor with open ends, an End ahead of now and
  * No value, and Add or Update with the count it keeps. The spread is drawn by
- * the server in epoch ms, and a click on a bar sets a Fixed bound over it,
- * out to whole minutes.
+ * the server in epoch ms, and a pick on it sets a Fixed bound out to whole
+ * minutes.
  * NOT is the chip's, not the editor's.
  */
 export function DirectoryTimeEditor({
@@ -63,17 +62,8 @@ export function DirectoryTimeEditor({
   const [none, setNone] = useState(!!initial?.none)
   const cond = condition(moment, bound, none)
   // The bars are in epoch ms, so a Live end is placed against now.
-  const { start, end } = resolveTimeBound(bound, serverNow())
-  const highlight = cond &&
-    !none && {
-      ...(start !== undefined && { min: start }),
-      ...(end !== undefined && { max: end }),
-    }
-
-  const onBar = (bin: Bin) => {
-    setNone(false)
-    setBound(barBound(bin, bin === distribution?.bins.at(-1)))
-  }
+  const highlight = cond && !none ? spreadSelection(bound, serverNow()) : null
+  const own = useZoomState()
   return (
     <form
       className="space-y-2 p-1"
@@ -97,12 +87,15 @@ export function DirectoryTimeEditor({
       </div>
       <p className="text-[11px] text-app-ink/50">{moment.description}</p>
       {distribution ? (
-        <Spread
+        <TimeSpread
           spread={distribution}
-          bound={highlight || null}
-          onBar={onBar}
-          format={dateText}
-          zoom={zoom}
+          zoom={zoom ?? own}
+          selected={highlight}
+          onPick={(next) => {
+            setNone(false)
+            setBound(next)
+          }}
+          title={moment.label}
         />
       ) : (
         <p className="text-[11px] text-app-ink/50">Loading the spread…</p>

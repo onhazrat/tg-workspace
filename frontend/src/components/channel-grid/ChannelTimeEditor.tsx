@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react"
-import type { DirectoryDistributionResponse } from "@/client"
-import { BINS, type Bin, dateText, Spread } from "@/components/Spread"
-import { type Range, useZoomState } from "@/components/SpreadZoom"
+import { dateText, Spread } from "@/components/Spread"
+import { useRangeZoomKit, useZoomState } from "@/components/SpreadZoom"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import { floorToMinute, MINUTE_MS, serverNow } from "@/lib/analysis-window"
@@ -11,88 +10,59 @@ import {
   type ChannelMomentKey,
   channelMoment,
 } from "@/lib/channels/channel-moments"
+import { binSpread } from "@/lib/spread"
 import {
   inTimeBound,
   MOMENT_OPTIONS,
-  minuteBound,
-  resolveTimeBound,
+  pickedBound,
+  spreadSelection,
   type TimeBound,
 } from "@/lib/time-bound/bound"
 
 /**
- * A moment's spread as the Directory's `Spread` draws it, binned here from
- * values the browser already has, over the zoom's `range` when there is one
- * (TB-04). Each value is floored to its minute first, so the Channels
- * sharing a minute share a bar, and each bar keeps the minutes it holds for
- * a click to bound.
- */
-function spreadOf(sorted: number[], total: number, range: Range | null) {
-  const minutes = sorted.map(floorToMinute)
-  const [a, b] = range ?? [sorted[0], sorted[sorted.length - 1]]
-  const lo = floorToMinute(a)
-  const hi = floorToMinute(b) + MINUTE_MS
-  const width = (hi - lo) / BINS
-  const bars = Array.from({ length: BINS }, () => [] as number[])
-  for (const m of minutes)
-    if (m >= lo && m < hi)
-      bars[Math.min(BINS - 1, Math.floor((m - lo) / width))].push(m)
-  const spread: DirectoryDistributionResponse = {
-    scale: "linear",
-    total,
-    noValue: total - sorted.length,
-    min: sorted[0],
-    max: sorted[sorted.length - 1],
-    median: sorted[Math.floor(sorted.length / 2)],
-    bins: bars.map((bar, i) => ({
-      lo: lo + i * width,
-      hi: lo + (i + 1) * width,
-      count: bar.length,
-    })),
-  }
-  return { spread, bars }
-}
-
-/**
- * The spread a moment's editor draws (TB-03). A click on a bar sets a Fixed
- * bound over the minutes it holds, its End one minute past the newest, so
- * the bound keeps exactly the Channels the bar counts.
+ * The spread a moment's editor draws (TB-03), binned here by minute from
+ * values the browser already has, over the zoom's range (TB-04). A pick sets
+ * a Fixed bound over the minutes its bars hold, its End one minute past the
+ * newest, so the bound keeps exactly the Channels the bars count.
  */
 function MomentSpread({
   values,
-  total,
   bound,
   onPick,
+  title,
 }: {
   values: number[]
-  total: number
   bound: TimeBound | null
   onPick: (bound: TimeBound) => void
+  title: string
 }) {
   const zoom = useZoomState()
-  const { spread, bars } = useMemo(
-    () => spreadOf(values, total, zoom.range),
-    [values, total, zoom.range],
+  const d = useMemo(
+    () => binSpread(values, zoom.range, { moments: true }),
+    [values, zoom.range],
   )
-  const { start, end } = bound
-    ? resolveTimeBound(bound, floorToMinute(serverNow()))
-    : {}
-  const onBar = (bin: Bin) => {
-    const minutes = bars[spread.bins.indexOf(bin)]
-    if (!minutes.length) return
-    onPick(minuteBound(minutes[0], minutes[minutes.length - 1]))
-  }
+  const selected = bound && spreadSelection(bound, floorToMinute(serverNow()))
+  const kit = useRangeZoomKit(zoom, { ...d, bound: selected })
   return (
     <Spread
-      spread={spread}
-      bound={
-        bound && {
-          ...(start !== undefined && { min: start }),
-          ...(end !== undefined && { max: end }),
-        }
-      }
-      onBar={onBar}
+      bars={d.bars}
+      whole={[d.lo, d.hi]}
+      shown={zoom.range ?? [d.lo, d.hi]}
+      median={d.median}
+      selected={selected}
+      onPick={(p) => {
+        const held = values.filter((v) => {
+          const i = d.barOf(v)
+          return i !== null && i >= p.run.from && i <= p.run.to
+        })
+        if (!held.length) return
+        const newest = floorToMinute(held[held.length - 1]) + MINUTE_MS
+        onPick(pickedBound(p, floorToMinute(held[0]), newest))
+      }}
       format={dateText}
-      zoom={zoom}
+      noun="channels"
+      zoom={kit}
+      title={title}
     />
   )
 }
@@ -165,8 +135,8 @@ export function ChannelTimeEditor({
       <p className="text-[11px] text-app-ink/50">{m.description}</p>
       {values.length > 0 ? (
         <MomentSpread
+          title={m.label}
           values={values}
-          total={data.total}
           bound={cond && !none ? bound : null}
           onPick={(next) => {
             setNone(false)

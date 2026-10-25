@@ -1,6 +1,7 @@
 /**
- * The Requested range picker's spread (RQS-09), props only: the bars, a
- * drag that picks a range, zoom, panning and full screen.
+ * The Requested range picker's spread (RQS-09), props only: the bars, the
+ * tier lines, and how a pick becomes a Time bound. The Spread's own zoom,
+ * panning and full screen are `Spread.test.tsx`'s.
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import {
@@ -101,6 +102,16 @@ describe("RequestedSpread", () => {
         start: Date.parse(`${day(3)}Z`),
         end: Date.parse(`${day(6)}Z`),
       },
+    ])
+  })
+
+  test("a run touching the last day leaves the end open, as every Spread's does", () => {
+    const picked = mount()
+    fireEvent.pointerDown(bars()[28])
+    fireEvent.pointerEnter(bars()[29])
+    fireEvent.pointerUp(bars()[29])
+    expect(picked).toEqual([
+      { mode: "fixed", start: Date.parse(`${day(28)}Z`) },
     ])
   })
 

@@ -27,6 +27,11 @@ export function HistorySpread({
       zoom={zoom}
       onPick={onPick}
       noun={params.moment === "window" ? "window starts" : "artifacts"}
+      title={
+        params.moment === "window"
+          ? "When the Analysis windows start"
+          : "When the Artifacts were Written"
+      }
     />
   )
 }

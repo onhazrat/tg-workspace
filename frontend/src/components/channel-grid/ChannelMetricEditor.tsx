@@ -1,12 +1,7 @@
 import { useMemo, useState } from "react"
-import {
-  BoundHistogram,
-  type Distribution,
-  nice,
-} from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
-import { BINS } from "@/components/Spread"
-import { type Range, useZoomState } from "@/components/SpreadZoom"
+import { NumberSpread } from "@/components/filter-tree/NumberSpread"
+import { useZoomState } from "@/components/SpreadZoom"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -18,40 +13,10 @@ import {
   metric,
   parseBound,
 } from "@/lib/channels/channel-metrics"
-
-const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
-
-/**
- * 32 bars from the lowest value to the highest. Counts such as subscribers
- * span orders of magnitude, so past two of them the axis is logarithmic, or
- * nearly every Channel would land in the first bar. A range starting at 0 is
- * measured from 1 and drawn on log(1 + x), since log 0 has no place. A zoom
- * `range` bins only the values in it, on the whole spread's scale (TB-04).
- */
-export function histogram(
-  values: number[],
-  range?: Range | null,
-): Distribution {
-  const lo = values[0]
-  const hi = values[values.length - 1]
-  const log = lo >= 0 && hi / (lo > 0 ? lo : 1) > 100
-  const [a, b] = range ?? [lo, hi]
-  const identity = (x: number) => x
-  const f = !log ? identity : a > 0 ? Math.log : Math.log1p
-  const inv = !log ? identity : a > 0 ? Math.exp : Math.expm1
-  const span = f(b) - f(a)
-  const edge = (i: number) => inv(f(a) + (span * i) / BINS)
-  const bins = new Array<number>(BINS).fill(0)
-  for (const v of values) {
-    if (v < a || v > b) continue
-    const i = span === 0 ? 0 : Math.floor(((f(v) - f(a)) / span) * BINS)
-    bins[Math.min(BINS - 1, i)]++
-  }
-  return { lo, hi, log, edge, bins, median: median(values) }
-}
+import { binSpread, median, nice } from "@/lib/spread"
 
 /**
- * One number criterion's editor (CTB-02): a histogram of the Account's
+ * One number criterion's editor (CTB-02): a Spread of the Account's
  * Channels that a drag across sets the bound from, the operator, one or two
  * fields, and how many Channels the bound keeps before it is added.
  */
@@ -114,12 +79,13 @@ export function ChannelMetricEditor({
         )}
       </div>
       {values.length > 0 ? (
-        <BoundHistogram
-          distribution={histogram(values, zoom.range)}
-          bound={bound}
-          noun="channels"
-          onSelect={select}
+        <NumberSpread
+          bars={binSpread(values, zoom.range)}
           zoom={zoom}
+          bound={bound}
+          onPick={select}
+          noun="channels"
+          title={m.label}
         />
       ) : (
         <p className="text-[11px] text-app-ink/50">

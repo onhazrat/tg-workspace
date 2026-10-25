@@ -14,13 +14,14 @@
  * and a rendered summary is what they get instead.
  */
 
-import { ArrowLeft, Clock, ZoomIn, ZoomOut } from "lucide-react"
+import { ArrowLeft, Clock } from "lucide-react"
 import { Popover } from "radix-ui"
 import type React from "react"
 import type { ReactNode } from "react"
 import { createContext, useContext, useEffect, useId, useState } from "react"
 
-import { BarHistogram } from "@/components/filter-tree/BarHistogram"
+import { Spread } from "@/components/Spread"
+import { useExtentZoomKit } from "@/components/SpreadZoom"
 import {
   Sheet,
   SheetContent,
@@ -39,7 +40,6 @@ import {
 import { useUI } from "@/contexts/UIContext"
 import { useIsMobile } from "@/hooks/useMobile"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
-import { MINUTE_MS } from "@/lib/analysis-window"
 import { formatCount } from "@/lib/format-count"
 import {
   ELAPSED_PRESETS,
@@ -98,33 +98,44 @@ export const WindowHistogramContext = createContext<WindowHistogramRead | null>(
   null,
 )
 
+/**
+ * The oldest stored Post of the selected Channels, which the chart's
+ * scrollbar runs back to; `null` when none is known. Context for the same
+ * reason as the read.
+ */
+export const WindowOldestPostContext = createContext<number | null>(null)
+
 const BUCKETS = 60
 
-/**
- * Three times the window, times three again per zoom step, centred on the
- * window and slid back so it never reaches past now.
- */
-function chartExtent(start: number, end: number, now: number, zoom: number) {
-  const span = Math.max(end - start, MINUTE_MS) * 3 * 3 ** zoom
-  const extentEnd = Math.min(Math.floor((start + end) / 2 + span / 2), now)
-  return { extentStart: extentEnd - span, extentEnd }
+/** A bucket's moment, its year named outside the current one. */
+export function stampText(ms: number, now: number) {
+  const year = new Date(ms).getFullYear()
+  return year === new Date(now).getFullYear()
+    ? formatLocalStamp(ms)
+    : `${formatLocalStamp(ms)}, ${year}`
 }
 
 /**
- * The Posts around the window, its own buckets solid; a drag or a click sets
- * a Fixed window over the buckets it covered. The zoom and the toggle are
- * this editor's, so each opening starts at Filtered and the default.
+ * The Posts around the window on the one Spread, its own buckets solid; a
+ * drag or a click sets a Fixed window over the buckets it covered, both ends
+ * set (ADR-018). The extent zoom pans between the oldest stored Post and
+ * now. The zoom and the toggle are this editor's, so each opening starts at
+ * Filtered and the default.
  */
 const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
-  const { startDate, endDate, minuteNow, setFixedRange } = useScope()
-  const [zoom, setZoom] = useState(0)
+  const { mode, startDate, endDate, minuteNow, setFixedRange } = useScope()
+  const oldest = useContext(WindowOldestPostContext)
+  // A Live window's ends against now, so the clock's tick keeps the pan.
+  const shift = mode === "live" ? minuteNow : 0
   const [unfiltered, setUnfiltered] = useState(false)
-  const { extentStart, extentEnd } = chartExtent(
-    startDate,
-    endDate,
-    minuteNow,
-    zoom,
-  )
+  const { extent, kit } = useExtentZoomKit({
+    start: startDate,
+    end: endDate,
+    now: minuteNow,
+    oldest,
+    anchor: `${mode}:${startDate - shift}:${endDate - shift}`,
+  })
+  const [extentStart, extentEnd] = extent
   const counts = read({ extentStart, extentEnd, buckets: BUCKETS, unfiltered })
   const width = (extentEnd - extentStart) / BUCKETS
   const from = (i: number) => extentStart + i * width
@@ -141,31 +152,25 @@ const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
             { value: "all", label: "All posts" },
           ]}
         />
-        <span className="flex-1" />
-        <ZoomControls
-          onIn={() => setZoom(zoom - 1)}
-          onOut={() => setZoom(zoom + 1)}
-          inDisabled={zoom === 0}
-        />
       </div>
       {counts ? (
-        <BarHistogram
+        <Spread
           testId="window"
-          bins={counts}
-          solid={(i) => from(i) < endDate && from(i + 1) > startDate}
-          onSelect={(run) =>
-            setFixedRange(
-              from(Math.min(run.from, run.to)),
-              from(Math.max(run.from, run.to) + 1),
-            )
-          }
-          caption={(shown) => [
-            formatLocalStamp(extentStart),
-            shown === null
-              ? `${formatCount(counts.reduce((a, n) => a + n, 0))} posts`
-              : `${formatCount(counts[shown])} posts from ${formatLocalStamp(from(shown))}`,
-            formatLocalStamp(extentEnd),
-          ]}
+          bars={counts.map((count, i) => ({
+            lo: from(i),
+            hi: from(i + 1),
+            count,
+          }))}
+          whole={null}
+          shown={extent}
+          selected={{ min: startDate, max: endDate }}
+          openEnds={false}
+          onPick={(p) => setFixedRange(from(p.run.from), from(p.run.to + 1))}
+          format={(v) => stampText(v, minuteNow)}
+          noun="posts"
+          middle={`${formatCount(counts.reduce((a, n) => a + n, 0))} posts`}
+          zoom={kit}
+          title="The Posts around the Analysis window"
         />
       ) : (
         <p className="h-16 text-[11px] text-app-ink/50">Counting…</p>
@@ -173,38 +178,6 @@ const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
     </div>
   )
 }
-
-/**
- * Zoom in and out, as the Analysis window chart draws them. Shared with every
- * spread a bound is drawn over (TB-04).
- */
-export const ZoomControls: React.FC<{
-  onIn: () => void
-  onOut: () => void
-  inDisabled?: boolean
-  outDisabled?: boolean
-}> = ({ onIn, onOut, inDisabled, outDisabled }) => (
-  <>
-    <TgButton
-      size="sm"
-      variant="secondary"
-      aria-label="Zoom in"
-      disabled={inDisabled}
-      onClick={onIn}
-    >
-      <ZoomIn size={13} />
-    </TgButton>
-    <TgButton
-      size="sm"
-      variant="secondary"
-      aria-label="Zoom out"
-      disabled={outDisabled}
-      onClick={onOut}
-    >
-      <ZoomOut size={13} />
-    </TgButton>
-  </>
-)
 
 /** The four fields, in the order they are read: boundaries, then the spans. */
 const FIELDS: { field: ScopeField; label: string }[] = [

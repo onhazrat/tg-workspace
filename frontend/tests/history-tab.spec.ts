@@ -176,7 +176,7 @@ test("a bar of the time filter's spread bounds the list to it", async ({
     .and(page.locator("[aria-haspopup=dialog]"))
     .click()
   // The second day's bar holds the Chat alone.
-  await page.getByTestId("directory-bound-bar-1").click()
+  await page.getByTestId("spread-bar-1").click()
   await page.keyboard.press("Escape")
 
   await expect(page).toHaveURL(/historyTime=/)

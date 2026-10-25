@@ -456,15 +456,15 @@ describe("the Channel posts bounds (PTI-02)", () => {
     fireEvent.click(screen.getByTestId("post-filters-channel_posts"))
     expect(asked).toContain("channel_posts")
     expect(screen.queryByRole("button", { name: "no value" })).toBeNull()
-    fireEvent.pointerEnter(screen.getByTestId("metric-bar-2"))
-    expect(
-      screen.getByTestId("metric-histogram-caption").textContent,
-    ).toContain("3 channels")
+    fireEvent.pointerEnter(screen.getByTestId("spread-bar-2"))
+    expect(screen.getByTestId("spread-caption").textContent).toContain(
+      "3 channels",
+    )
     // Bars 0-3 end at 6.2, which is at most 6.
-    fireEvent.pointerDown(screen.getByTestId("metric-bar-0"))
+    fireEvent.pointerDown(screen.getByTestId("spread-bar-0"))
     for (const i of [1, 2, 3])
-      fireEvent.pointerEnter(screen.getByTestId(`metric-bar-${i}`))
-    fireEvent.pointerUp(screen.getByTestId("metric-bar-3"))
+      fireEvent.pointerEnter(screen.getByTestId(`spread-bar-${i}`))
+    fireEvent.pointerUp(screen.getByTestId("spread-bar-3"))
     fireEvent.click(screen.getByTestId("post-views-editor-submit"))
     expect(calls).toEqual([["filter", "channel_posts <= 6"]])
   })
@@ -538,7 +538,7 @@ describe("the number filters' histograms", () => {
     }
   }
 
-  const bar = (i: number) => screen.getByTestId(`metric-bar-${i}`)
+  const bar = (i: number) => screen.getByTestId(`spread-bar-${i}`)
   const drag = (from: number, to: number) => {
     fireEvent.pointerDown(bar(from))
     for (let i = from; i !== to; i += Math.sign(to - from)) {
@@ -553,9 +553,9 @@ describe("the number filters' histograms", () => {
     fireEvent.click(screen.getByTestId("post-filters"))
     fireEvent.click(screen.getByTestId("post-filters-views"))
     expect(asked).toContain("views")
-    expect(
-      screen.getByTestId("metric-histogram-caption").textContent,
-    ).toContain("median 1.6K")
+    expect(screen.getByTestId("spread-caption").textContent).toContain(
+      "median 1.6K",
+    )
     drag(0, 3)
     fireEvent.click(screen.getByTestId("post-views-editor-submit"))
     expect(calls).toEqual([["filter", "views <= 400"]])
@@ -588,7 +588,7 @@ describe("the number filters' histograms", () => {
     expect(asked?.lo).toBeCloseTo(1066.67, 1)
     expect(asked?.hi).toBeCloseTo(2133.33, 1)
     // The bars are the zoom's and the caption follows; the median is whole.
-    expect(screen.getByTestId("metric-histogram-caption").textContent).toBe(
+    expect(screen.getByTestId("spread-caption").textContent).toBe(
       "1.07Kmedian 1.6K2.13K",
     )
     // The first zoomed bar starts past the whole spread's lowest value.
@@ -641,7 +641,7 @@ describe("the number filters' histograms", () => {
     mount({}, {}, wrapper)
     fireEvent.click(screen.getByTestId("post-filters"))
     fireEvent.click(screen.getByTestId("post-filters-views"))
-    expect(screen.queryByTestId("metric-bar-0")).toBeNull()
+    expect(screen.queryByTestId("spread-bar-0")).toBeNull()
     expect(screen.getByText(/Nothing in this window has a value/)).toBeTruthy()
   })
 

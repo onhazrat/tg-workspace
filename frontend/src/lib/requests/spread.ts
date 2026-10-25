@@ -70,14 +70,3 @@ export function tierEdges(
     { at: now - hourlyDays * DAY_MS, label: `${hourlyDays}d · hourly` },
   ].filter((e) => e.at > lo && e.at < hi)
 }
-
-/** The zoom moved `by` ms, its span kept, inside `[min, max]`. */
-export function panned(
-  [a, b]: [number, number],
-  by: number,
-  min: number,
-  max: number,
-): [number, number] {
-  const start = Math.min(Math.max(a + by, min), max - (b - a))
-  return [start, start + (b - a)]
-}

@@ -13,12 +13,13 @@ import {
 } from "bun:test"
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DirectoryDistributionResponse } from "@/client"
-import { type Range, useZoomState } from "@/components/SpreadZoom"
+import { useZoomState } from "@/components/SpreadZoom"
 import {
   type DirectoryTimeCond,
   type MomentKey,
   momentOf,
 } from "@/lib/directory/directory-filter"
+import type { Range } from "@/lib/spread"
 import { DirectoryTimeEditor } from "./DirectoryTimeEditor"
 
 const NOW = Date.UTC(2026, 9, 20, 12, 0)
@@ -158,33 +159,35 @@ describe("the Time bound editor", () => {
     expect(field("End").value).toBe("2026-10-01T00:00")
   })
 
-  test("a bar sets a Fixed range over it, out to whole minutes", () => {
-    const { submitted } = mount()
-    fireEvent.click(screen.getByTestId("directory-bound-bar-0"))
-    fireEvent.click(submit())
-    expect(submitted).toEqual([
-      {
-        type: "time",
-        moment: "refresh_due_at",
-        mode: "fixed",
-        start: Date.UTC(2026, 0, 1),
-        end: Date.UTC(2026, 0, 2),
-      },
-    ])
-  })
+  const pick = (from: number, to = from) => {
+    fireEvent.pointerDown(screen.getByTestId(`spread-bar-${from}`))
+    if (to !== from)
+      fireEvent.pointerEnter(screen.getByTestId(`spread-bar-${to}`))
+    fireEvent.pointerUp(screen.getByTestId(`spread-bar-${to}`))
+  }
 
-  test("the last bar keeps the maximum: its End is a minute past it", () => {
+  test.each([
+    {
+      name: "the first bar leaves the start open",
+      run: [0],
+      end: { end: Date.UTC(2026, 0, 2) },
+    },
+    {
+      name: "the last bar leaves the end open",
+      run: [1],
+      end: { start: Date.UTC(2026, 0, 2) },
+    },
+    {
+      name: "both keep everything with a value",
+      run: [0, 1],
+      end: { start: Date.UTC(2026, 0, 1) },
+    },
+  ])("a pick touching $name", ({ run, end }) => {
     const { submitted } = mount()
-    fireEvent.click(screen.getByTestId("directory-bound-bar-1"))
+    pick(run[0], run[1])
     fireEvent.click(submit())
     expect(submitted).toEqual([
-      {
-        type: "time",
-        moment: "refresh_due_at",
-        mode: "fixed",
-        start: Date.UTC(2026, 0, 2),
-        end: Date.UTC(2026, 0, 3, 0, 1),
-      },
+      { type: "time", moment: "refresh_due_at", mode: "fixed", ...end },
     ])
   })
 
