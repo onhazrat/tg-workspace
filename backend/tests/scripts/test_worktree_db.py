@@ -35,6 +35,18 @@ def test_a_long_worktree_name_is_cut_to_what_postgres_keeps(tmp_path: Path) -> N
     assert name.startswith(worktree_db.PREFIX)
 
 
+def test_the_e2e_database_is_its_own_and_droppable(tmp_path: Path) -> None:
+    """Playwright's API seeds a superuser and Channels; on the pytest database
+    every test's truncate would wipe them, and on the shared `app` another
+    worktree's migrations would not match this branch's."""
+    for directory in ("implement-pv-02-6d8bd6", "x" * 100):
+        worktree = tmp_path / directory
+        e2e = worktree_db.e2e_database_name(worktree)
+        assert e2e != worktree_db.database_name(worktree)
+        assert len(e2e) <= worktree_db.MAX_IDENTIFIER
+        worktree_db._check_droppable(e2e)
+
+
 def test_a_name_with_nothing_to_keep_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="cannot derive"):
         worktree_db.database_name(tmp_path / "---")

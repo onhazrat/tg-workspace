@@ -42,7 +42,7 @@ bun run dev                          # Vite on :5173, proxies /api → :8000
 bun run --filter tg-summarizer-frontend test:unit    # bun test src
 bun run lint                         # biome check --write (no semicolons, double quotes)
 cd frontend && bunx tsc -p tsconfig.build.json --noEmit   # typecheck
-cd frontend && bunx playwright test  # e2e; needs backend up (docker compose up -d db prestart backend)
+cd frontend && bunx playwright test  # e2e; needs backend up (docker compose up -d db prestart backend; in a worktree, preview_start worktree-api)
 ```
 
 Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagger :8000/docs, Adminer :8080). Lint/format everything: `cd backend && uv run prek run --all-files`.

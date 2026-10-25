@@ -3,14 +3,16 @@
 Every worktree shares one Postgres, and pytest truncates every `tg_*` table
 after each test. Two worktrees on the shared `app_test` wipe each other's rows
 mid-run, which reads as hundreds of unrelated ForeignKeyViolations. So each
-worktree gets `app_test_<worktree name>`, created by `scripts/worktree-setup.sh`
-and dropped by its `--teardown`.
+worktree gets `app_test_<worktree name>`, and `app_test_e2e_<worktree name>` for
+the API Playwright runs against, created by `scripts/worktree-setup.sh` and
+dropped by its `--teardown`.
 
 Only names this module derives are ever dropped: `drop` refuses `app`,
 `app_test` and anything without the `app_test_` prefix, because a teardown run
 in the wrong directory must not take the dev or shared test database with it.
 
     uv run python -m scripts.worktree_db name <worktree path>
+    uv run python -m scripts.worktree_db e2e-name <worktree path>
     uv run python -m scripts.worktree_db ports <worktree path>
     uv run python -m scripts.worktree_db create <database>
     uv run python -m scripts.worktree_db drop <database>
@@ -32,12 +34,22 @@ PREFIX = "app_test_"
 MAX_IDENTIFIER = 63
 
 
-def database_name(worktree: Path) -> str:
-    """`app_test_<worktree directory>`, lowercased, non-alphanumerics as `_`."""
+def database_name(worktree: Path, kind: str = "") -> str:
+    """`app_test_<kind><worktree directory>`, lowercased, non-alphanumerics as `_`."""
     slug = re.sub(r"[^a-z0-9]+", "_", worktree.resolve().name.lower()).strip("_")
     if not slug:
         raise ValueError(f"cannot derive a database name from {worktree}")
-    return (PREFIX + slug)[:MAX_IDENTIFIER]
+    return (PREFIX + kind + slug)[:MAX_IDENTIFIER]
+
+
+def e2e_database_name(worktree: Path) -> str:
+    """`app_test_e2e_<worktree>`: what the worktree's own API serves Playwright.
+
+    Not the pytest database, whose truncates would wipe the seeded superuser,
+    and not the dev `app`, which another worktree may have migrated to a
+    different head. The `app_test_` prefix lets `drop` take it.
+    """
+    return database_name(worktree, "e2e_")
 
 
 #: Where a worktree's Playwright dev server listens. Every worktree used to
@@ -106,13 +118,15 @@ def drop(name: str) -> bool:
 
 
 def main(argv: list[str]) -> int:
-    commands = {"name", "ports", "create", "drop"}
+    commands = {"name", "e2e-name", "ports", "create", "drop"}
     if len(argv) != 2 or argv[0] not in commands:
         print(__doc__, file=sys.stderr)  # noqa: T201
         return 2
     command, arg = argv
     if command == "name":
         print(database_name(Path(arg)))  # noqa: T201
+    elif command == "e2e-name":
+        print(e2e_database_name(Path(arg)))  # noqa: T201
     elif command == "ports":
         print(*ports(Path(arg)))  # noqa: T201
     elif command == "create":
