@@ -565,10 +565,19 @@ _Avoid_: AI language, summary language, target language
 
 **Covered Post**:
 A Post in an Artifact's frozen Scope: one the Artifact was made from. A Summary
-of 679 Covered Posts was written from those 679 and no others. A Summary frozen
-before its Scope recorded them has none on record, which is not the same as
-having none.
+of 679 Covered Posts was written from those 679 and no others, and every prompt
+an Artifact sends later reads the same ones, never the Posts tab's selection of
+today. A Summary frozen before its Scope recorded them has none on record, which
+is not the same as having none.
 _Avoid_: used post, input post, source post
+
+**Missing Post**:
+A Covered Post its Artifact can no longer read, because retention reclaimed it
+or the Account no longer follows its Channel. The Artifact still lists it as
+covered; a prompt built from the Artifact leaves it out and says how many it
+left out. Being missing is a fact about today, not about the Artifact:
+following the Channel again brings back any Post retention has not reclaimed.
+_Avoid_: deleted post, lost post, stale ref
 
 **Citation**:
 A reference in a Summary's prose to one exact Post, by Channel and Post number.
