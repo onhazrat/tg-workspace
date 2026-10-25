@@ -7,7 +7,7 @@ import {
   formatPostsForPrompt,
   getPostEmbeddingText,
   sortPosts,
-} from "@/lib/posts/post-view"
+} from "@/lib/posts/post-pipeline"
 import type { Post } from "@/types"
 
 const seedContext = { startDate: 1000, endDate: 9000 }
@@ -28,7 +28,7 @@ function makePost(
   }
 }
 
-describe("post-view pipeline", () => {
+describe("post pipeline", () => {
   test("unlimited + newest matches global timestamp desc sort", () => {
     const posts = [
       makePost("alpha", 1, 100),
@@ -270,7 +270,7 @@ describe("post-view pipeline", () => {
 // backend/tests/api/test_posts_feed.py, so the two halves answer the same
 // question the same way; the server's fixture has no timestamp ties inside a
 // channel, which is the one place their tiebreaks could differ.
-describe("post-view pipeline — the PFB-01 shape", () => {
+describe("post pipeline, the PFB-01 shape", () => {
   const view = (overrides: Partial<Parameters<typeof sortPosts>[1]> = {}) => ({
     maxPostsPerChannel: 0,
     maxPostsPerChannelMode: "ordered" as const,
@@ -340,7 +340,7 @@ describe("post-view pipeline — the PFB-01 shape", () => {
  * them (`pfb_a` and `pfb_b`); the random cap is left out because the two
  * seeded orders were never byte-identical (see `scoped-posts.ts`).
  */
-describe("post-view pipeline: parity with the server feed", () => {
+describe("post pipeline: parity with the server feed", () => {
   const BASE = 1_000_000
   const at = (
     channel: string,
@@ -423,7 +423,7 @@ describe("post-view pipeline: parity with the server feed", () => {
  * (`pv_a` and `pv_b`), read through the seed curve at the default settings.
  * a2 is too new to judge (observed at 1h) and a3 has no View count.
  */
-describe("post-view pipeline: parity with the server's views feed", () => {
+describe("post pipeline: parity with the server's views feed", () => {
   const HOUR = 3_600_000
   // `reach.py`'s SEED_KNOTS: 16 ages log-spaced from 30 minutes to 7 days.
   const SEED_SHARES = [

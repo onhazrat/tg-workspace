@@ -2,12 +2,12 @@ import type { PostFeedQuery } from "@/api/data"
 import type { ViewEstimate } from "@/lib/posts/estimated-views"
 import type { Post } from "@/types"
 import type { PostFilter } from "./post-filter"
-import type { PostSelection } from "./post-selection"
 import {
   buildFilteredPostsFromRaw,
   type PostViewOptions,
   readsEstimatedViews,
-} from "./post-view"
+} from "./post-pipeline"
+import type { PostSelection } from "./post-selection"
 
 /**
  * Ceiling on the non-semantic branch's fetch (A1c).

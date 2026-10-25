@@ -14,6 +14,7 @@
 
 import { newId } from "@/lib/filter-tree"
 import { isEmptyPostFilter, type PostFilter } from "@/lib/posts/post-filter"
+import type { PostsView } from "@/lib/posts/posts-view"
 
 export interface ChannelSpotlight {
   channel: string
@@ -99,25 +100,23 @@ export function spotlitBar<
   }
 }
 
-/** What the feed and its counts read: the Channels, the keyword, the tree, the cap and grouping. */
-export interface PostsView {
-  channelNames: string[]
-  keyword: string
-  filter: PostFilter
-  maxPerChannel: number
-  groupByChannel: boolean
-}
+/** What a spotlight replaces in a view. */
+type Spotlit = Pick<
+  PostsView,
+  "channelNames" | "keyword" | "filter" | "maxPerChannel" | "groupByChannel"
+>
 
 /**
  * The view under a spotlight: its Channel and tree, no cap, no grouping, and
  * the keyword only when the filters are kept.
  */
-export function spotlightView(
+export function spotlightView<T extends Spotlit>(
   spotlight: ChannelSpotlight | null,
-  view: PostsView,
-): PostsView {
+  view: T,
+): T {
   if (!spotlight) return view
   return {
+    ...view,
     channelNames: [spotlight.channel],
     keyword: spotlight.keepFilters ? view.keyword : "",
     filter: spotlight.filter,

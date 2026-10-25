@@ -1444,7 +1444,7 @@
       "comment": "One page of the infinite Posts feed.",
       "expression": "20",
       "file": "frontend/src/hooks/usePostsView.ts",
-      "line": 48,
+      "line": 47,
       "name": "FEED_PAGE_SIZE",
       "value": 20
     },

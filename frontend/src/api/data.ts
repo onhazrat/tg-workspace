@@ -13,14 +13,14 @@ import type {
 } from "../lib/posts/discover-candidates"
 import { type PostFilter, postFilterBody } from "../lib/posts/post-filter"
 import type { MediaFilterValue } from "../lib/posts/post-media"
-import { type PostSelection, selectionBody } from "../lib/posts/post-selection"
 import type {
   ForwardedFilterValue,
   MaxPostsPerChannelMode,
   PostSortOrder,
   ViewMeasure,
   ViewsFilter,
-} from "../lib/posts/post-view"
+} from "../lib/posts/post-pipeline"
+import { type PostSelection, selectionBody } from "../lib/posts/post-selection"
 import type { TimeBound } from "../lib/time-bound/bound"
 import type {
   ArtifactKind,
@@ -174,6 +174,17 @@ export function shownPostsBody(params: PostFeedQuery): Record<string, unknown> {
     if (params.seed != null) body.seed = params.seed
   }
   if (params.sort) body.sort = params.sort
+  return body
+}
+
+/** `shownPostsBody` plus the feed's grouping, its parts and its page. */
+export function postsFeedBody(params: PostFeedQuery): Record<string, unknown> {
+  const body = shownPostsBody(params)
+  if (params.groupByChannel) body.groupByChannel = true
+  if (params.selectedFirst) body.selectedFirst = true
+  if (params.onlySelected) body.onlySelected = true
+  if (params.limit != null) body.limit = params.limit
+  if (params.offset != null) body.offset = params.offset
   return body
 }
 
@@ -534,18 +545,15 @@ export const dataApi = {
    * `random`), the order and grouping — so the browser fetches only `limit`
    * rows per page instead of a channel's whole history.
    */
-  getPostsFeed: (params: PostFeedQuery) => {
-    const body = shownPostsBody(params)
-    if (params.groupByChannel) body.groupByChannel = true
-    if (params.selectedFirst) body.selectedFirst = true
-    if (params.onlySelected) body.onlySelected = true
-    if (params.limit != null) body.limit = params.limit
-    if (params.offset != null) body.offset = params.offset
-    return request<Post[]>("/api/v1/data/posts", {
+  getPostsFeed: (params: PostFeedQuery) =>
+    dataApi.getPostsFeedBody(postsFeedBody(params)),
+
+  /** The same page, for a body `postsRead` built (PV-02). */
+  getPostsFeedBody: (body: Record<string, unknown>) =>
+    request<Post[]>("/api/v1/data/posts", {
       method: "POST",
       body: JSON.stringify(body),
-    })
-  },
+    }),
 
   /**
    * Resolve specific posts by natural key. Batch capped server-side at 200.

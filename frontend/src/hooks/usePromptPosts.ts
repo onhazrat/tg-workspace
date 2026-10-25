@@ -18,8 +18,8 @@ import { useCallback, useRef } from "react"
 import type { PromptScope } from "@/api/data"
 import type { ScopeSubmission } from "@/client"
 import type { PostFilter } from "@/lib/posts/post-filter"
+import type { PostViewOptions } from "@/lib/posts/post-pipeline"
 import { type PostSelection, selectionBody } from "@/lib/posts/post-selection"
-import type { PostViewOptions } from "@/lib/posts/post-view"
 import {
   computeScopedPosts,
   type ScopedPostsDeps,

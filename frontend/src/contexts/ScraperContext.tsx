@@ -32,6 +32,12 @@ import { type StoppableSync, useSyncJob } from "../hooks/useSyncJob"
 import { useSyncQueue } from "../hooks/useSyncQueue"
 import { channelAllows, disabledReason } from "../lib/channels/sync-permissions"
 import type { PostFilter } from "../lib/posts/post-filter"
+import type {
+  MaxPostsPerChannelMode,
+  PostSortOrder,
+  PostViewOptions,
+  ViewMeasure,
+} from "../lib/posts/post-pipeline"
 import {
   appendSteps,
   loadSelection,
@@ -42,12 +48,6 @@ import {
   type SelectionStep,
   saveSelection,
 } from "../lib/posts/post-selection"
-import type {
-  MaxPostsPerChannelMode,
-  PostSortOrder,
-  PostViewOptions,
-  ViewMeasure,
-} from "../lib/posts/post-view"
 import type { Channel, Post } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
@@ -60,6 +60,9 @@ interface ScraperContextType {
   setPostSearch: React.Dispatch<React.SetStateAction<string>>
   semanticSearchQuery: string
   setSemanticSearchQuery: React.Dispatch<React.SetStateAction<string>>
+  /** The keyword and the meaning query as every read takes them: debounced once. */
+  debouncedPostSearch: string
+  debouncedSemanticSearchQuery: string
   semanticSearchRespectsChannels: boolean
   setSemanticSearchRespectsChannels: React.Dispatch<
     React.SetStateAction<boolean>
@@ -494,6 +497,8 @@ export const ScraperProvider: React.FC<{ children: React.ReactNode }> = ({
         setPostSearch,
         semanticSearchQuery,
         setSemanticSearchQuery,
+        debouncedPostSearch,
+        debouncedSemanticSearchQuery,
         semanticSearchRespectsChannels,
         setSemanticSearchRespectsChannels,
         relatedPostSearch,

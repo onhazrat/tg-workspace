@@ -182,11 +182,11 @@ export interface CommandContext {
   setPostFilter: (next: import("@/lib/posts/post-filter").PostFilter) => void
   setMaxPostsPerChannel: (value: number) => void
   setMaxPostsPerChannelMode: (
-    value: import("@/lib/posts/post-view").MaxPostsPerChannelMode,
+    value: import("@/lib/posts/post-pipeline").MaxPostsPerChannelMode,
   ) => void
-  postSortOrder: import("@/lib/posts/post-view").PostSortOrder
+  postSortOrder: import("@/lib/posts/post-pipeline").PostSortOrder
   setPostSortOrder: (
-    value: import("@/lib/posts/post-view").PostSortOrder,
+    value: import("@/lib/posts/post-pipeline").PostSortOrder,
   ) => void
   groupByChannel: boolean
   setGroupByChannel: (value: boolean) => void

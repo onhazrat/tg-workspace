@@ -1,6 +1,7 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
-import { api } from "@/api"
+import { dataPostsCounts, type PostFilteredRequest } from "@/client"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
 import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { useAI } from "@/contexts/AIContext"
@@ -40,7 +41,9 @@ import {
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
 import { SERVER_TABLE_NAMES } from "@/lib/data-transfer/tables"
 import { historyPaletteBinding } from "@/lib/history/history-params"
+import { postsRead } from "@/lib/posts/posts-view"
 import { useLoadDBStats } from "./useDBStats"
+import { usePostsView } from "./usePostsView"
 import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
 const workspaceRoute = getRouteApi("/_tg/")
@@ -117,7 +120,6 @@ export function useCommandRegistry(): {
     setPostSortOrder,
     groupByChannel,
     setGroupByChannel,
-    postSelection,
   } = useScraper()
   const {
     setSummary,
@@ -145,20 +147,22 @@ export function useCommandRegistry(): {
   const invalidateSettingGroups = useInvalidateSettingGroups()
   // Per-channel in-scope counts on demand, as ChannelGrid shows them: the
   // selected Posts in the window, which a meaning search does not change
-  // (PTR-05).
+  // (PTR-05). Through the Scope counts' cache entry, fetched fresh so Trim
+  // selection never acts on stale counts.
+  const queryClient = useQueryClient()
+  const postsView = usePostsView(null)
   const getPostsInScopeCounts = useCallback(async (): Promise<
     Record<string, number>
   > => {
     if (selectedChannels.size === 0) return {}
-    return api.getPostsCounts({
-      channelNames: channels
-        .filter((channel) => selectedChannels.has(channel.name))
-        .map((channel) => channel.name),
-      startDate,
-      endDate,
-      selection: postSelection,
+    const { queryKey, body } = postsRead(postsView, { kind: "scopeCounts" })
+    const counts = await queryClient.fetchQuery({
+      queryKey,
+      queryFn: () => dataPostsCounts({ body: body as PostFilteredRequest }),
+      staleTime: 0,
     })
-  }, [selectedChannels, channels, startDate, endDate, postSelection])
+    return counts.selected
+  }, [selectedChannels, postsView, queryClient])
 
   const context = useMemo<CommandContext>(
     () => ({

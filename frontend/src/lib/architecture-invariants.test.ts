@@ -487,38 +487,29 @@ describe("AW-04 — a Live tick invalidates the Posts key, never replaces it", (
    * carries freshly resolved boundaries. That is the whole of what lets
    * `liveTick` be an invalidation of the key the feed already has.
    *
-   * No type can say this, and it is one careless autocomplete from coming back:
-   * `feedParams` is right there, spelled almost the same.
-   *
    * The Post selection is the same argument one edit at a time (PTR-05): a
    * tick of a checkbox in the feed's key would drop the Account back to the
    * top of the feed on every click. The feed refreshes in place instead.
+   *
+   * Both rules live in `postsRead` (PV-02), and `posts-view.test.ts` asserts
+   * them on the keys it builds. What is left to guard here is that nothing
+   * builds a Posts key by hand beside it.
    */
-  const POSTS_VIEW = "src/hooks/usePostsView.ts"
-  const KEY_CALL = /queryKeys\.posts(?:Feed|Counts)\([^)]*\)/g
+  const KEY_CALL =
+    /queryKeys\.posts(?:Feed|Counts|Facets|ValueHistogram|WindowHistogram)\(/
+  const BUILDER = "src/lib/posts/posts-view.ts"
 
-  it("keys the Posts queries on the window, not on the minute it resolves to", () => {
-    const source = readFileSync(join(FRONTEND, POSTS_VIEW), "utf8")
-    const calls = [...source.matchAll(KEY_CALL)].map(([call]) => call)
-
-    // The feed and both counts, or a tick refreshes part of the screen and
-    // remints the rest.
-    expect(calls.length).toBe(3)
-    for (const call of calls) {
-      expect(call).toContain("window: windowKey")
-      expect(call).not.toContain("startDate")
-      expect(call).not.toContain("feedParams")
-    }
-  })
-
-  it("never keys the feed on the Post selection", () => {
-    const source = readFileSync(join(FRONTEND, POSTS_VIEW), "utf8")
-    const feed = [...source.matchAll(KEY_CALL)]
-      .map(([call]) => call)
-      .filter((call) => call.startsWith("queryKeys.postsFeed"))
-
-    expect(feed.length).toBe(1)
-    expect(feed[0]).not.toMatch(/selection/i)
+  it("builds every Posts read's key through postsRead", () => {
+    const offenders = sourceFiles(SRC)
+      .map(rel)
+      .filter(
+        (file) =>
+          file !== BUILDER &&
+          !/\.test\.tsx?$/.test(file) &&
+          KEY_CALL.test(readFileSync(join(FRONTEND, file), "utf8")),
+      )
+    expect(offenders).toEqual([])
+    expect(readFileSync(join(FRONTEND, BUILDER), "utf8")).toMatch(KEY_CALL)
   })
 })
 

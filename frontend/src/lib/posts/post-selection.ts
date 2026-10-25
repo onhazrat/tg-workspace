@@ -26,7 +26,7 @@ import type {
   MaxPostsPerChannelMode,
   PostSortOrder,
   ViewMeasure,
-} from "./post-view"
+} from "./post-pipeline"
 
 /** A Post filter as it was when a rule was made. */
 export type PostFilterSnapshot = {

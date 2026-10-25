@@ -63,12 +63,12 @@ a behaviour change and stops the PR.
 
 ### PR 2: frontend
 
-- [ ] Rename `post-view.ts` to `post-pipeline.ts`
-- [ ] `lib/posts/posts-view.ts`: `postsRead(view, kind)` for feed, shown counts, scoped counts, facets, value histogram, window histogram, uncapped view
-- [ ] Key/body table test, with the three declared exceptions
-- [ ] `usePostFilters` exposes the debounced keyword (and the semantic query); `usePostsView`'s hooks call `postsRead`
-- [ ] `getPostsInScopeCounts` through `fetchQuery`
-- [ ] Verify: `bun run --filter tg-summarizer-frontend test:unit`, `bunx tsc -p tsconfig.build.json --noEmit`, `bun run typecheck:tests`, `bun run lint`, the Posts Playwright specs with `--workers=1`
+- [x] Rename `post-view.ts` to `post-pipeline.ts`
+- [x] `lib/posts/posts-view.ts`: `postsRead(view, kind)` for feed, shown counts, scoped counts, facets, value histogram, window histogram, uncapped view
+- [x] Key/body table test, with the three declared exceptions
+- [x] `usePostFilters` exposes the debounced keyword (and the semantic query); `usePostsView`'s hooks call `postsRead`
+- [x] `getPostsInScopeCounts` through `fetchQuery`
+- [x] Verify: `bun run --filter tg-summarizer-frontend test:unit`, `bunx tsc -p tsconfig.build.json --noEmit`, `bun run typecheck:tests`, `bun run lint`, the Posts Playwright specs with `--workers=1`
 
 ## Out of scope
 

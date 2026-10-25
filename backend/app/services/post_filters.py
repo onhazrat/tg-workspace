@@ -1,13 +1,13 @@
-"""Server-side port of the frontend post-view filters.
+"""Server-side port of the frontend post-pipeline filters.
 
-`frontend/src/lib/posts/post-view.ts::buildFilteredPostsFromRaw` filters the
+`frontend/src/lib/posts/post-pipeline.ts::buildFilteredPostsFromRaw` filters the
 posts a user sees on the Posts tab — keyword, forwarded-state, media kind — and
 caps how many posts per channel are kept. Discover and the per-channel scope
 counts both derive from that same filtered set, so to compute either
 server-side we must reproduce these filters exactly against the database.
 
 Parity target (keep in lockstep with the frontend):
-  - keyword   → `applyKeywordFilter`        (post-view.ts)
+  - keyword   → `applyKeywordFilter`        (post-pipeline.ts)
 
 The rest of the Post filter is a tree of Conditions (PTR-03) that only the
 server evaluates; the browser sends it and never tests a Post against it.
