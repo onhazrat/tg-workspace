@@ -15,6 +15,12 @@ import {
   chatTranscriptText,
   chatViewSections,
 } from "@/components/chat/chat-view-model"
+// PROTOTYPE
+import {
+  MissingByChannel,
+  MissingChip,
+  MissingLine,
+} from "@/components/coverage-prototype/missing"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { useChatContext } from "../contexts/ChatContext"
 import { useRAG } from "../contexts/RAGContext"
@@ -133,6 +139,7 @@ export const ChatView: React.FC = () => {
       {chatSession && (
         <div className="mb-4 shrink-0">
           <ArtifactScopeLine artifact={chatSession} />
+          <MissingByChannel refs={chatSession.scope?.posts} className="mt-3" />
         </div>
       )}
 
@@ -155,16 +162,23 @@ export const ChatView: React.FC = () => {
         )}
 
         {chatMessages.map((m, i) => (
-          <ChatTurn
-            key={i}
-            message={m}
-            sourcesOpen={expandedSources[i] === true}
-            onToggleSources={() => toggleSources(i)}
-            onCopy={(text) => navigator.clipboard.writeText(text)}
-            isRTL={isRTL}
-            theme={theme}
-            aiLanguage={aiLanguage}
-          />
+          <div key={i}>
+            <ChatTurn
+              message={m}
+              sourcesOpen={expandedSources[i] === true}
+              onToggleSources={() => toggleSources(i)}
+              onCopy={(text) => navigator.clipboard.writeText(text)}
+              isRTL={isRTL}
+              theme={theme}
+              aiLanguage={aiLanguage}
+            />
+            {m.role !== "user" && !m.sources?.length && (
+              <MissingLine
+                refs={chatSession?.scope?.posts}
+                className="ml-12 mt-1.5"
+              />
+            )}
+          </div>
         ))}
 
         <ChatThinking active={isChatting} />

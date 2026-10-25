@@ -16,6 +16,8 @@ import { Clock } from "lucide-react"
 import type React from "react"
 
 import type { FrozenScope } from "@/client"
+// PROTOTYPE
+import { MissingChip } from "@/components/coverage-prototype/missing"
 import { TgButton } from "@/components/ui/tg-button"
 import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
 import { artifactWindowText } from "@/lib/scope/artifact-scope"
@@ -55,6 +57,7 @@ export const ArtifactScopeLine: React.FC<ArtifactScopeLineProps> = ({
     >
       <Clock size={12} className="shrink-0 opacity-60" />
       <span className="min-w-0 break-words">{windowText}</span>
+      <MissingChip refs={scope.posts} />
       <TgButton
         size="sm"
         variant="secondary"

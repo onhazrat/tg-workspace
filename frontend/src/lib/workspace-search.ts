@@ -55,6 +55,10 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** PROTOTYPE: the Artifact coverage prototype's `?variant=`. */
+  variant?: string
+  /** PROTOTYPE: fakes the Missing Posts count. */
+  missing?: string
 } & DirectoryParams &
   HistorySearch
 
@@ -122,6 +126,11 @@ export function validateWorkspaceSearch(
   // On every tab, as the Directory's are: the palette sets History's search
   // and Starred from anywhere, and History keeps them across a tab switch.
   Object.assign(result, validateHistorySearch(search))
+  // PROTOTYPE: the router reads `?variant=1` as a number.
+  if (search.variant != null && search.variant !== "")
+    result.variant = String(search.variant)
+  if (search.missing != null && search.missing !== "")
+    result.missing = String(search.missing)
   const legacyGroup = trimmedString(search.channelGroup)
   if (legacyGroup && !result.channelFilter) {
     // No group names here, so it is written by id, which reads back.

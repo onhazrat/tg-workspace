@@ -1,6 +1,10 @@
 import type React from "react"
 import { useMemo, useState } from "react"
-
+// PROTOTYPE
+import {
+  MissingByChannel,
+  MissingLine,
+} from "@/components/coverage-prototype/missing"
 import {
   partitionPreviewRows,
   proposedTagState,
@@ -56,6 +60,8 @@ export function TagViewBody({
        * selected — the preview below a fresh run has no frozen window yet.
        */}
       {selectedRun && scopeLine(selectedRun)}
+      <MissingLine refs={selectedRun?.scope?.posts} className="mb-3" />
+      <MissingByChannel refs={selectedRun?.scope?.posts} className="mb-3" />
 
       <div className="rounded-xl border border-app-ink/10 bg-app-card p-4 shadow-sm">
         <div className="mb-3">

@@ -1,5 +1,10 @@
 import type React from "react"
 import type { ScopedPostRef } from "@/client"
+import {
+  MissingByChannel,
+  MissingChip,
+  MissingLine,
+} from "@/components/coverage-prototype/missing"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import type { SummaryTextSize } from "@/lib/settings/schema"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
@@ -101,7 +106,9 @@ export function SummaryBody(props: SummaryBodyProps) {
           onToggleNote={() => props.onEditingNoteChange(!props.editingNote)}
           running={props.running}
           onRerun={props.onRerun}
+          missing={<MissingChip refs={props.cited?.covered} />}
         />
+        <MissingLine refs={props.cited?.covered} className="-mt-3 mb-5" />
         {summary && props.cited && (
           <PhotoStrip
             cited={props.cited.posts}
@@ -134,6 +141,9 @@ export function SummaryBody(props: SummaryBodyProps) {
               workspace={props.workspace}
             />
           ))}
+        {summary && props.cited && !props.cited.loading && (
+          <MissingByChannel refs={props.cited.covered} className="mt-4" />
+        )}
 
         {summary && (
           <>

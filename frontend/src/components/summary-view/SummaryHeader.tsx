@@ -53,6 +53,7 @@ export function SummaryHeader({
   onToggleNote,
   running,
   onRerun,
+  missing,
 }: {
   summary: Summary | null | undefined
   body: string
@@ -61,6 +62,8 @@ export function SummaryHeader({
   onToggleNote: () => void
   running: boolean
   onRerun: () => void
+  /** PROTOTYPE: the Missing Posts chip, variant 2. */
+  missing?: import("react").ReactNode
 }) {
   const [copied, setCopied] = useState(false)
   const noteLabel = editingNote
@@ -128,7 +131,7 @@ export function SummaryHeader({
       {summary && (
         <>
           <p className="mt-1 break-words text-sm text-app-ink/80">
-            {summaryScopeLine(summary, zone)}
+            {summaryScopeLine(summary, zone)} {missing}
           </p>
           <p className="mt-0.5 break-words text-xs text-app-ink/50">
             {formatSummaryModelLabel(summary.model)} · {summary.language} ·{" "}
