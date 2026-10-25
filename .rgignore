@@ -1,0 +1,3 @@
+# A snapshot is one line of rendered markup; a broad search pays for all of it.
+# `rg --no-ignore` still reaches them.
+__snapshots__/
