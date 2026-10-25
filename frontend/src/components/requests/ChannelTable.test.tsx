@@ -191,8 +191,21 @@ describe("ChannelTable's filters, yield and picking (RQS-04)", () => {
     fireEvent.change(screen.getByLabelText("Value"), {
       target: { value: "1" },
     })
-    fireEvent.click(screen.getByTestId("requests-measure-submit"))
+    fireEvent.click(screen.getByTestId("number-bound-submit"))
     expect(names()).toEqual(["@news"])
+  })
+
+  test("a measure's editor offers no No value and refuses a negative field", () => {
+    render(<Table rows={rows} />)
+    fireEvent.click(screen.getByTestId("requests-filters"))
+    fireEvent.click(screen.getByTestId("requests-filters-row-failed"))
+    expect(screen.queryByRole("button", { name: "no value" })).toBeNull()
+    fireEvent.change(screen.getByLabelText("Value"), {
+      target: { value: "-1" },
+    })
+    expect(
+      (screen.getByTestId("number-bound-submit") as HTMLButtonElement).disabled,
+    ).toBe(true)
   })
 
   test("a pick box leaves its row out, faded but listed; the header box picks every listed row", () => {

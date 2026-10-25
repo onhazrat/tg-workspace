@@ -23,7 +23,7 @@ the second account `vh_est` and `vh_x`, over one shared corpus.
 
 ## Twin of the Channels tab
 
-`ChannelMetricEditor.test.tsx` pins the same three cases (`vh_lin`, `vh_log`,
+`frontend/src/lib/spread.test.ts` pins the same three cases (`vh_lin`, `vh_log`,
 `vh_zero`) to the same bars, edges and median, the median being the value at
 `floor(n / 2)` of the sorted values. Change the rule on one side and the other
 side's copy of these cases is what tells you.

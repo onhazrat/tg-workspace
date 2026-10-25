@@ -23,7 +23,7 @@ Requested spread has full screen, panning and range zoom.
 | 2 | One Spread for every bound (four number editors, Directory time, Channel time, Logs, History, Requested) and the Analysis window chart; `Spread` and `BarHistogram`/`BoundHistogram` merge | Keeping Spread for time editors; keeping the Directory's click |
 | 3 | The editor's numbers come from a source of two kinds: local values (the editor bins, zooms and counts) or a read (zoom to bars, with an optional count) | Every caller passing ready bars |
 | 4 | One Add wording, "Add · 12 of 40", and "with no value" for No value; Post stays countless (it has no count read) | A new count read for Post |
-| 5 | Prefill the median when the bars are known at mount, otherwise start empty | One rule ignoring when the bars arrive |
+| 5 | Prefill the median from local values, whose bars are known at mount; a read source always starts empty, even when its bars are cached as the editor opens | One rule ignoring when the bars arrive; prefilling a read that happens to be cached |
 | 6 | Tidying is allowed: the back label says "conditions", one no-value note, one set of test ids; the Playwright specs that name the old ids are updated | Byte-identical copy and ids |
 | 7 | The editor lives at `components/filter-tree/NumberBoundEditor.tsx` and absorbs `BoundFields`; binning, `median` and `nice` move to one `lib/` module | BoundFields as a shared part |
 | 8 | Glossary: **Number bound**, **Spread** | |

@@ -221,7 +221,7 @@ describe("ChannelFilterRow", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "Value" }), {
       target: { value: "150" },
     })
-    fireEvent.click(screen.getByTestId("metric-editor-submit"))
+    fireEvent.click(screen.getByTestId("number-bound-submit"))
     expect(changes).toEqual(["tag:a and reach >= 150"])
   })
 
@@ -244,8 +244,8 @@ describe("ChannelFilterRow", () => {
       screen.getByTestId("channel-filter-chip-metric-subscribers").textContent,
     ).toContain("Subscribers 500–20K")
     fireEvent.click(screen.getByRole("button", { name: "Reach ≥ 1.2K" }))
-    const submit = screen.getByTestId("metric-editor-submit")
-    expect(submit.textContent).toBe("Update · 0 of 3 measured")
+    const submit = screen.getByTestId("number-bound-submit")
+    expect(submit.textContent).toBe("Update · 0 of 3")
     fireEvent.change(screen.getByRole("spinbutton", { name: "Value" }), {
       target: { value: "150" },
     })

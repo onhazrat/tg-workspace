@@ -316,7 +316,7 @@ describe("the Filters menu", () => {
     fireEvent.change(screen.getByLabelText("Value"), {
       target: { value: "10000" },
     })
-    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    fireEvent.click(screen.getByTestId("number-bound-submit"))
     expect(calls).toEqual([["filter", "views >= 10000"]])
   })
 
@@ -329,7 +329,7 @@ describe("the Filters menu", () => {
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "5" } })
     // Incomplete, and then backwards: neither can be added.
     const submit = () =>
-      screen.getByTestId("post-views-editor-submit") as HTMLButtonElement
+      screen.getByTestId("number-bound-submit") as HTMLButtonElement
     expect(submit().disabled).toBe(true)
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "1" } })
     expect(submit().disabled).toBe(true)
@@ -465,7 +465,7 @@ describe("the Channel posts bounds (PTI-02)", () => {
     for (const i of [1, 2, 3])
       fireEvent.pointerEnter(screen.getByTestId(`spread-bar-${i}`))
     fireEvent.pointerUp(screen.getByTestId("spread-bar-3"))
-    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    fireEvent.click(screen.getByTestId("number-bound-submit"))
     expect(calls).toEqual([["filter", "channel_posts <= 6"]])
   })
 
@@ -479,7 +479,7 @@ describe("the Channel posts bounds (PTI-02)", () => {
     })
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "3.8" } })
     const submit = () =>
-      screen.getByTestId("post-views-editor-submit") as HTMLButtonElement
+      screen.getByTestId("number-bound-submit") as HTMLButtonElement
     expect(submit().disabled).toBe(true)
     fireEvent.change(screen.getByLabelText("From"), {
       target: { value: "2.5" },
@@ -557,8 +557,22 @@ describe("the number filters' histograms", () => {
       "median 1.6K",
     )
     drag(0, 3)
-    fireEvent.click(screen.getByTestId("post-views-editor-submit"))
+    fireEvent.click(screen.getByTestId("number-bound-submit"))
     expect(calls).toEqual([["filter", "views <= 400"]])
+  })
+
+  test("Views counts the window's Posts with no value, and refuses a negative field", () => {
+    const { wrapper } = withHistogram(LINEAR)
+    mount({}, {}, wrapper)
+    fireEvent.click(screen.getByTestId("post-filters"))
+    fireEvent.click(screen.getByTestId("post-filters-views"))
+    expect(screen.getByText(/72 have no value/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText("Value"), {
+      target: { value: "-1" },
+    })
+    expect(
+      (screen.getByTestId("number-bound-submit") as HTMLButtonElement).disabled,
+    ).toBe(true)
   })
 
   test("Estimated views reads its own measure, and typing redraws the solid bars", () => {
@@ -642,7 +656,7 @@ describe("the number filters' histograms", () => {
     fireEvent.click(screen.getByTestId("post-filters"))
     fireEvent.click(screen.getByTestId("post-filters-views"))
     expect(screen.queryByTestId("spread-bar-0")).toBeNull()
-    expect(screen.getByText(/Nothing in this window has a value/)).toBeTruthy()
+    expect(screen.getByText(/Nothing has a value yet/)).toBeTruthy()
   })
 
   test("the filter row's condition picker opens on the same histogram", () => {

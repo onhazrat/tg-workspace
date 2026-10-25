@@ -16,7 +16,6 @@ import {
 } from "@/client"
 import { DirectoryBar } from "@/components/directory/DirectoryBar"
 import type { BoostMode } from "@/components/directory/DirectoryBoost"
-import { DirectoryBoundEditor } from "@/components/directory/DirectoryBoundEditor"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
 import { useDirectoryKeys } from "@/components/directory/DirectoryKeyboard"
 import { DirectoryPanel } from "@/components/directory/DirectoryPanel"
@@ -31,6 +30,7 @@ import {
   type MeasureEditorRender,
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
+import { NumberBoundEditor } from "@/components/filter-tree/NumberBoundEditor"
 import { useZoomState } from "@/components/SpreadZoom"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -88,7 +88,7 @@ const withoutBoundsOn = (filter: DirectoryFilter, measure: string) =>
  * preview ANDs the candidate on, so it is approximate there; exact needs the
  * Condition's place in the tree.
  */
-function MeasureEditor({
+function DirectoryNumberEditor({
   request,
   filter,
   sets,
@@ -107,15 +107,31 @@ function MeasureEditor({
     ...request,
     filter: directoryFilterBody(withoutBoundsOn(filter, measure.key), sets),
   }
-  const { distribution, zoom } = useZoomedSpread(others, measure.key)
+  const { distribution: d, zoom } = useZoomedSpread(others, measure.key)
   return (
-    <DirectoryBoundEditor
-      measure={measure}
-      distribution={distribution}
-      zoom={zoom}
-      countFor={(bound) => (
-        <BoundCount others={others} measure={measure.key} bound={bound} />
-      )}
+    <NumberBoundEditor
+      label={measure.label}
+      description={measure.description}
+      noun="channels"
+      source={{
+        kind: "read",
+        zoom,
+        read:
+          d &&
+          (d.min === null || d.max === null
+            ? null
+            : {
+                bars: d.bins,
+                lo: d.min,
+                hi: d.max,
+                median: d.median ?? d.min,
+                log: d.scale === "log",
+                noValue: d.noValue,
+              }),
+        count: (bound) => (
+          <BoundCount others={others} measure={measure.key} bound={bound} />
+        ),
+      }}
       onSubmit={(bound) =>
         rest.onSubmit({ type: "measure", measure: measure.key, ...bound })
       }
@@ -313,7 +329,7 @@ export function DirectoryView() {
   const vocabulary = directoryVocabulary(
     shown.languages,
     (props) => (
-      <MeasureEditor
+      <DirectoryNumberEditor
         request={d.request}
         filter={d.filter}
         sets={d.sets}

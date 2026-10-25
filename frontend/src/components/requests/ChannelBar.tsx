@@ -40,7 +40,11 @@ import {
   measureMeta,
   staleReason,
 } from "@/lib/requests/channel-filter"
-import { MeasureEditor, MeasureMenu, type MeasureValues } from "./MeasureMenu"
+import {
+  MeasureMenu,
+  MeasureNumberEditor,
+  type MeasureValues,
+} from "./MeasureMenu"
 
 export interface ChannelBarProps {
   /** Every row before the search and the filter: the counts and histograms. */
@@ -258,7 +262,7 @@ function vocabulary(
             onSubmit: (c: ChannelCond) => void
             onBack: () => void
           }) => (
-            <MeasureEditor
+            <MeasureNumberEditor
               measure={m}
               kind={g.kind}
               values={values(m, g.kind)}

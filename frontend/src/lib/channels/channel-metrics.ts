@@ -141,6 +141,21 @@ export function parseBound(
   return y === undefined || y < x ? null : { min: x, max: y }
 }
 
+/**
+ * A bound on a whole number (a Channel posts count, PTI-02) rounded inward,
+ * low end up and high end down, so "<= 29.5" keeps exactly what "<= 29"
+ * keeps; `null` when no whole number is left between its ends.
+ */
+export function wholeBound(bound: MetricBound): MetricBound | null {
+  const min = bound.min === undefined ? undefined : Math.ceil(bound.min)
+  const max = bound.max === undefined ? undefined : Math.floor(bound.max)
+  if (min !== undefined && max !== undefined && min > max) return null
+  return {
+    ...(min === undefined ? {} : { min }),
+    ...(max === undefined ? {} : { max }),
+  }
+}
+
 /** What a bound editor needs of the Account's Channels. */
 export type MetricData = {
   /** A metric's measured values across the Account's Channels, ascending. */

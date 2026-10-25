@@ -6,19 +6,9 @@ import {
   BarSearch,
   MenuRowLabel,
 } from "@/components/BarPopover"
-import { BoundFields } from "@/components/filter-tree/BoundFields"
-import { NumberSpread } from "@/components/filter-tree/NumberSpread"
+import { NumberBoundEditor } from "@/components/filter-tree/NumberBoundEditor"
 import { pillClass } from "@/components/PostFilterParts"
-import { useZoomState } from "@/components/SpreadZoom"
-import { TgButton } from "@/components/ui/tg-button"
-import {
-  type BoundKind,
-  boundKind,
-  boundText,
-  inBound,
-  type MetricBound,
-  parseBound,
-} from "@/lib/channels/channel-metrics"
+import { boundText, type MetricBound } from "@/lib/channels/channel-metrics"
 import type { Measure } from "@/lib/requests/breakdown"
 import {
   type ChannelCond,
@@ -27,7 +17,6 @@ import {
   measureLabel,
   measureMeta,
 } from "@/lib/requests/channel-filter"
-import { binSpread, median, nice } from "@/lib/spread"
 
 /** A measure's values across the rows, ascending, for its Spread. */
 export type MeasureValues = (m: Measure, kind?: string) => number[]
@@ -79,7 +68,7 @@ export function MeasureMenu({
       }
     >
       {picked ? (
-        <MeasureEditor
+        <MeasureNumberEditor
           measure={picked.measure}
           kind={picked.kind}
           values={values(picked.measure, picked.kind)}
@@ -158,14 +147,15 @@ function CriteriaRows({
   )
 }
 
-/** One measure's bound over the Channel rows: the Channels tab's Spread and fields. */
-export function MeasureEditor({
+/**
+ * One measure's bound over the Channel rows: the one Number bound editor,
+ * never below zero, and with no No value, as every row has the number.
+ */
+export function MeasureNumberEditor({
   measure,
   kind,
   values,
-  initial,
-  onSubmit,
-  onBack,
+  ...rest
 }: {
   measure: Measure
   kind?: string
@@ -174,72 +164,15 @@ export function MeasureEditor({
   onSubmit: (bound: MetricBound) => void
   onBack?: () => void
 }) {
-  const [op, setOp] = useState<BoundKind>(boundKind(initial))
-  const [a, setA] = useState(() => {
-    const start = op === "lte" ? initial?.max : initial?.min
-    return String(start ?? (values.length ? nice(median(values)) : ""))
-  })
-  const [b, setB] = useState(String(initial?.max ?? ""))
-  const bound = parseBound(op, a, b, { min: 0 })
-  const zoom = useZoomState()
-  const kept = bound ? values.filter((v) => inBound(v, bound)).length : 0
-  const unit = measureMeta(measure).unit
   return (
-    <form
-      className="space-y-2 p-1"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (bound) onSubmit(bound)
-      }}
-    >
-      <div className="flex items-center gap-2 text-xs font-semibold">
-        {onBack && (
-          <button
-            type="button"
-            aria-label="Back to the criteria"
-            onClick={onBack}
-            className="text-app-ink/50 hover:text-app-ink"
-          >
-            ←
-          </button>
-        )}
-        {measureLabel(measure, kind)}
-        {unit && <span className="font-normal text-app-ink/50">{unit}</span>}
-      </div>
-      {values.length > 0 && (
-        <NumberSpread
-          bars={binSpread(values, zoom.range)}
-          zoom={zoom}
-          bound={bound}
-          onPick={(next) => {
-            setOp(boundKind(next))
-            setA(String(next.min ?? next.max))
-            setB(String(next.max ?? ""))
-          }}
-          noun="channels"
-          title={measureLabel(measure, kind)}
-        />
-      )}
-      <BoundFields
-        op={op}
-        setOp={setOp}
-        a={a}
-        setA={setA}
-        b={b}
-        setB={setB}
-        min={0}
-        noValue={false}
-      />
-      <TgButton
-        type="submit"
-        size="sm"
-        disabled={!bound}
-        data-testid="requests-measure-submit"
-        className="w-full"
-      >
-        {initial ? "Update" : "Add"} · {kept} of {values.length} with this
-        number
-      </TgButton>
-    </form>
+    <NumberBoundEditor
+      label={measureLabel(measure, kind)}
+      unit={measureMeta(measure).unit}
+      source={{ kind: "values", values }}
+      min={0}
+      noValue={false}
+      noun="channels"
+      {...rest}
+    />
   )
 }
