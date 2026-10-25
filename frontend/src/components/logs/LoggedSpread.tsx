@@ -9,6 +9,8 @@ import type { LogSearch, LogType } from "@/api/data"
 import { dataGetLogSpreadRoute, type LogSpreadResponse } from "@/client"
 import { dateText, Spread } from "@/components/Spread"
 import { useZoomState, type ZoomState } from "@/components/SpreadZoom"
+import { TimeSpread } from "@/components/spread-prototype/TimeSpread"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import { queryKeys } from "@/hooks/queryKeys"
 import { floorToMinute, serverNow } from "@/lib/analysis-window"
 import {
@@ -31,10 +33,35 @@ export function LoggedSpreadView({
   /** What a bar counts; History's spread counts artifacts. */
   noun?: string
 }) {
+  const variant = useSpreadVariant()
   if (!spread)
     return <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
   const { start, end } = resolveTimeBound(bound, floorToMinute(serverNow()))
   const shown = start !== undefined || end !== undefined
+  // PROTOTYPE: variant 1 draws the one Spread.
+  if (variant === "1")
+    return (
+      <TimeSpread
+        spread={spread}
+        zoom={zoom}
+        selected={
+          shown
+            ? {
+                ...(start !== undefined && { min: start }),
+                ...(end !== undefined && { max: end }),
+              }
+            : null
+        }
+        onPick={onPick}
+        noun={noun}
+        title={
+          {
+            entries: "When the entries were logged",
+            artifacts: "When the Artifacts were Written",
+          }[noun] ?? "When the Analysis windows start"
+        }
+      />
+    )
   return (
     <Spread
       spread={spread}

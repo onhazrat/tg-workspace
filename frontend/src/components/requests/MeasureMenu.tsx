@@ -11,6 +11,8 @@ import { BoundHistogram, nice } from "@/components/filter-tree/BarHistogram"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import { pillClass } from "@/components/PostFilterParts"
 import { useZoomState } from "@/components/SpreadZoom"
+import { NumberBoundEditor } from "@/components/spread-prototype/NumberBoundEditor"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -161,7 +163,32 @@ function CriteriaRows({
 const median = (sorted: number[]) => sorted[Math.floor(sorted.length / 2)]
 
 /** One measure's bound over the Channel rows: the Channels tab's histogram and fields. */
-export function MeasureEditor({
+// PROTOTYPE: variant 1 draws the one Number bound editor.
+export function MeasureEditor(props: {
+  measure: Measure
+  kind?: string
+  values: number[]
+  initial?: MetricBound
+  onSubmit: (bound: MetricBound) => void
+  onBack?: () => void
+}) {
+  if (useSpreadVariant() !== "1") return <MeasureEditor0 {...props} />
+  return (
+    <NumberBoundEditor
+      label={measureLabel(props.measure, props.kind)}
+      unit={measureMeta(props.measure).unit}
+      initial={props.initial}
+      source={{ kind: "values", values: props.values }}
+      min={0}
+      noValue={false}
+      noun="channels"
+      onSubmit={props.onSubmit}
+      onBack={props.onBack}
+    />
+  )
+}
+
+function MeasureEditor0({
   measure,
   kind,
   values,

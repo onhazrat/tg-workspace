@@ -18,6 +18,11 @@ import {
   type ZoomState,
 } from "@/components/SpreadZoom"
 import {
+  OneSpread,
+  useRangeZoomKit,
+} from "@/components/spread-prototype/OneSpread"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -65,6 +70,7 @@ export function RequestedSpread({
   // One zoom for both views, so full screen opens where the popover was.
   const zoom = useZoomState()
   const [full, setFull] = useFullScreen()
+  const variant = useSpreadVariant()
   if (!spread)
     return <p className="text-[11px] text-app-ink/50">Loading the spread…</p>
   const shown = requestedSpread(spread.buckets, zoom.range)
@@ -72,6 +78,18 @@ export function RequestedSpread({
     return <p className="text-[11px] text-app-ink/50">No Requests to spread.</p>
   const { lo } = shown.bins[0]
   const hi = shown.bins[shown.bins.length - 1].hi
+  // PROTOTYPE: variant 1 draws the one Spread, with the tier edges as marks.
+  if (variant === "1")
+    return (
+      <RequestedSpread1
+        spread={spread}
+        shown={shown}
+        zoom={zoom}
+        bound={bound}
+        onPick={onPick}
+        now={now}
+      />
+    )
   const view: View = {
     spread: shown,
     zoom,
@@ -104,6 +122,64 @@ export function RequestedSpread({
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+function RequestedSpread1({
+  spread,
+  shown,
+  zoom,
+  bound,
+  onPick,
+  now,
+}: {
+  spread: RequestSpreadResponse
+  shown: Shown
+  zoom: ZoomState
+  bound: TimeBound
+  onPick: (bound: TimeBound) => void
+  now: number
+}) {
+  const { start, end } = resolveTimeBound(bound, now)
+  const selected =
+    start === undefined && end === undefined ? null : { min: start, max: end }
+  const kit = useRangeZoomKit(zoom, {
+    lo: shown.min,
+    hi: shown.max,
+    log: false,
+    median: shown.median,
+    bound: selected,
+  })
+  const { lo } = shown.bins[0]
+  const hi = shown.bins[shown.bins.length - 1].hi
+  return (
+    <OneSpread
+      bars={shown.bins}
+      whole={[shown.min, shown.max]}
+      shown={zoom.range ?? [shown.min, shown.max]}
+      median={shown.median}
+      selected={selected}
+      onPick={(p) => {
+        const s = shown.bins[p.run.from]
+        const t = shown.bins[p.run.to]
+        onPick(
+          p.all
+            ? { mode: "fixed", start: s.lo }
+            : {
+                mode: "fixed",
+                ...(p.min !== undefined && { start: s.lo }),
+                ...(p.max !== undefined && { end: t.hi }),
+              },
+        )
+      }}
+      format={dateText}
+      noun="Requests"
+      zoom={kit}
+      marks={tierEdges(now, spread.recordDays, spread.hourlyDays, lo, hi)}
+      title="When the Requests were made"
+      description={`${timeBoundSummary(bound, now)}.`}
+      testId="requests-spread"
+    />
   )
 }
 

@@ -32,7 +32,9 @@ import {
 } from "@/components/filter-tree/FacetMenu"
 import type { FilterVocabulary } from "@/components/filter-tree/FilterRow"
 import { pillClass } from "@/components/PostFilterParts"
-import type { Range } from "@/components/SpreadZoom"
+import { type Range, useZoomState } from "@/components/SpreadZoom"
+import { NumberBoundEditor } from "@/components/spread-prototype/NumberBoundEditor"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -147,7 +149,70 @@ function PostValueHistogram({
  * which a drag across fills the fields from. A Channel posts bound is whole:
  * rounded inward, and refused when no whole number is left (PTI-02).
  */
-export function PostNumberEditor({
+type PostNumberEditorProps = {
+  measure: PostNumber
+  initial?: MetricBound
+  floorHours: number
+  onSubmit: (cond: PostCond) => void
+  onBack?: () => void
+}
+
+// PROTOTYPE: variant 1 draws the one Number bound editor.
+export function PostNumberEditor(props: PostNumberEditorProps) {
+  const read = useContext(PostValueHistogramContext)
+  if (useSpreadVariant() !== "1" || !read)
+    return <PostNumberEditor0 {...props} />
+  return <PostNumberEditor1 {...props} read={read} />
+}
+
+/** The server's bars for the zoom, read on the scale first drawn (TB-04). */
+function PostNumberEditor1({
+  read,
+  ...props
+}: PostNumberEditorProps & { read: ValueHistogramRead }) {
+  const zoom = useZoomState()
+  const [log, setLog] = useState<boolean | null>(null)
+  const d = read(
+    props.measure,
+    zoom.range && { lo: zoom.range[0], hi: zoom.range[1], log: !!log },
+  )
+  if (d && log === null) setLog(d.log)
+  const counts = POST_NUMBER[props.measure].whole
+  return (
+    <NumberBoundEditor
+      label={measureLabel(props.measure)}
+      description={POST_NUMBER[props.measure].description(props.floorHours)}
+      initial={props.initial}
+      source={{
+        kind: "read",
+        zoom,
+        read:
+          d &&
+          (d.measured
+            ? {
+                bars: d.bins.map((count, i) => ({
+                  lo: d.edges[i],
+                  hi: d.edges[i + 1],
+                  count,
+                })),
+                lo: d.min ?? d.edges[0],
+                hi: d.max ?? d.edges[d.edges.length - 1],
+                median: d.median ?? 0,
+                log: d.log,
+              }
+            : null),
+      }}
+      min={0}
+      whole={counts}
+      noValue={!counts}
+      noun={POST_NUMBER[props.measure].noun}
+      onSubmit={(bound) => props.onSubmit(numberCond(props.measure, bound))}
+      onBack={props.onBack}
+    />
+  )
+}
+
+function PostNumberEditor0({
   measure,
   initial,
   floorHours,

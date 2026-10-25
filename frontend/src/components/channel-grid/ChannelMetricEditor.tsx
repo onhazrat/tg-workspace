@@ -7,6 +7,8 @@ import {
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import { BINS } from "@/components/Spread"
 import { type Range, useZoomState } from "@/components/SpreadZoom"
+import { NumberBoundEditor } from "@/components/spread-prototype/NumberBoundEditor"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -55,7 +57,37 @@ export function histogram(
  * Channels that a drag across sets the bound from, the operator, one or two
  * fields, and how many Channels the bound keeps before it is added.
  */
-export function ChannelMetricEditor({
+type EditorProps = {
+  metricKey: MetricKey
+  data: MetricData
+  initial?: MetricBound
+  onSubmit: (bound: MetricBound) => void
+  onBack?: () => void
+}
+
+// PROTOTYPE: variant 1 draws the one Number bound editor.
+export function ChannelMetricEditor(props: EditorProps) {
+  const variant = useSpreadVariant()
+  const values = useMemo(
+    () => props.data.values(props.metricKey),
+    [props.data, props.metricKey],
+  )
+  if (variant !== "1") return <ChannelMetricEditor0 {...props} />
+  const m = metric(props.metricKey)
+  return (
+    <NumberBoundEditor
+      label={m.label}
+      unit={m.unit}
+      initial={props.initial}
+      source={{ kind: "values", values, total: props.data.total }}
+      noun="channels"
+      onSubmit={props.onSubmit}
+      onBack={props.onBack}
+    />
+  )
+}
+
+function ChannelMetricEditor0({
   metricKey,
   data,
   initial,

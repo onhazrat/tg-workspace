@@ -1,7 +1,9 @@
 import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { type Bin, dateText, Spread } from "@/components/Spread"
-import type { ZoomState } from "@/components/SpreadZoom"
+import { useZoomState, type ZoomState } from "@/components/SpreadZoom"
+import { TimeSpread } from "@/components/spread-prototype/TimeSpread"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import { serverNow } from "@/lib/analysis-window"
@@ -61,6 +63,9 @@ export function DirectoryTimeEditor({
     ...(initial?.end !== undefined && { end: initial.end }),
   }))
   const [none, setNone] = useState(!!initial?.none)
+  // PROTOTYPE: variant 1 draws the one Spread.
+  const variant = useSpreadVariant()
+  const ownZoom = useZoomState()
   const cond = condition(moment, bound, none)
   // The bars are in epoch ms, so a Live end is placed against now.
   const { start, end } = resolveTimeBound(bound, serverNow())
@@ -96,7 +101,18 @@ export function DirectoryTimeEditor({
         {moment.label}
       </div>
       <p className="text-[11px] text-app-ink/50">{moment.description}</p>
-      {distribution ? (
+      {distribution && variant === "1" ? (
+        <TimeSpread
+          spread={distribution}
+          zoom={zoom ?? ownZoom}
+          selected={highlight || null}
+          onPick={(next) => {
+            setNone(false)
+            setBound(next)
+          }}
+          title={moment.label}
+        />
+      ) : distribution ? (
         <Spread
           spread={distribution}
           bound={highlight || null}

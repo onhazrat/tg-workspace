@@ -2,6 +2,12 @@ import { useMemo, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { BINS, type Bin, dateText, Spread } from "@/components/Spread"
 import { type Range, useZoomState } from "@/components/SpreadZoom"
+import {
+  OneSpread,
+  useRangeZoomKit,
+} from "@/components/spread-prototype/OneSpread"
+import { pickMinuteBound } from "@/components/spread-prototype/time-pick"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import { TimeBoundEditor } from "@/components/TimeBoundEditor"
 import { TgButton } from "@/components/ui/tg-button"
 import { floorToMinute, MINUTE_MS, serverNow } from "@/lib/analysis-window"
@@ -62,13 +68,16 @@ function MomentSpread({
   total,
   bound,
   onPick,
+  title = "When",
 }: {
   values: number[]
   total: number
   bound: TimeBound | null
   onPick: (bound: TimeBound) => void
+  title?: string
 }) {
   const zoom = useZoomState()
+  const variant = useSpreadVariant()
   const { spread, bars } = useMemo(
     () => spreadOf(values, total, zoom.range),
     [values, total, zoom.range],
@@ -81,6 +90,38 @@ function MomentSpread({
     if (!minutes.length) return
     onPick(minuteBound(minutes[0], minutes[minutes.length - 1]))
   }
+  const selected = bound && {
+    ...(start !== undefined && { min: start }),
+    ...(end !== undefined && { max: end }),
+  }
+  const lo = spread.min ?? 0
+  const hi = spread.max ?? 0
+  const kit = useRangeZoomKit(zoom, {
+    lo,
+    hi,
+    log: false,
+    median: spread.median ?? lo,
+    bound: selected,
+  })
+  // PROTOTYPE: variant 1 draws the one Spread.
+  if (variant === "1")
+    return (
+      <OneSpread
+        bars={spread.bins}
+        whole={[lo, hi]}
+        shown={zoom.range ?? [lo, hi]}
+        median={spread.median ?? undefined}
+        selected={selected}
+        onPick={(p) => {
+          const next = pickMinuteBound(p, bars)
+          if (next) onPick(next)
+        }}
+        format={dateText}
+        noun="channels"
+        zoom={kit}
+        title={title}
+      />
+    )
   return (
     <Spread
       spread={spread}
@@ -165,6 +206,7 @@ export function ChannelTimeEditor({
       <p className="text-[11px] text-app-ink/50">{m.description}</p>
       {values.length > 0 ? (
         <MomentSpread
+          title={m.label}
           values={values}
           total={data.total}
           bound={cond && !none ? bound : null}

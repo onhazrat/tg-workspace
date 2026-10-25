@@ -18,9 +18,21 @@ import { ArrowLeft, Clock, ZoomIn, ZoomOut } from "lucide-react"
 import { Popover } from "radix-ui"
 import type React from "react"
 import type { ReactNode } from "react"
-import { createContext, useContext, useEffect, useId, useState } from "react"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react"
 
 import { BarHistogram } from "@/components/filter-tree/BarHistogram"
+import {
+  OneSpread,
+  type ZoomKit,
+} from "@/components/spread-prototype/OneSpread"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import {
   Sheet,
   SheetContent,
@@ -31,6 +43,7 @@ import { TgButton } from "@/components/ui/tg-button"
 import { TgFilterChip } from "@/components/ui/tg-chips"
 import { TgInlineChoice } from "@/components/ui/tg-inline-segments"
 import { TgInput } from "@/components/ui/tg-input"
+import { useData } from "@/contexts/DataContext"
 import {
   ScopeContext,
   type ScopeContextType,
@@ -115,7 +128,125 @@ function chartExtent(start: number, end: number, now: number, zoom: number) {
  * a Fixed window over the buckets it covered. The zoom and the toggle are
  * this editor's, so each opening starts at Filtered and the default.
  */
-const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
+const WindowChart: React.FC<{ read: WindowHistogramRead }> = ({ read }) =>
+  // PROTOTYPE: variant 1 draws the one Spread, with its extent zoom.
+  useSpreadVariant() === "1" ? (
+    <WindowChart1 read={read} />
+  ) : (
+    <WindowChart0 read={read} />
+  )
+
+/**
+ * PROTOTYPE: zoom adapter two, an extent around the window. It triples per
+ * step as before; panning slides it in time. The scrollbar runs from the
+ * oldest stored Post of the selected Channels to now, as the Requested
+ * spread's runs over everything kept. A run always sets a Fixed window with
+ * both ends (ADR-018).
+ */
+const WindowChart1: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
+  const { startDate, endDate, minuteNow, setFixedRange } = useScope()
+  const { channels, selectedChannels } = useData()
+  const [zoom, setZoom] = useState(0)
+  const [offset, setOffset] = useState(0)
+  // Where a pan or a thumb drag has got to; the read waits for it to settle.
+  const [pending, setPending] = useState<number | null>(null)
+  const [unfiltered, setUnfiltered] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  const oldest = Math.min(
+    ...channels
+      .filter((c) => selectedChannels.has(c.name))
+      .map((c) => c.oldestStoredPostTimestamp ?? Number.POSITIVE_INFINITY),
+  )
+  const base = chartExtent(startDate, endDate, minuteNow, zoom)
+  const span = base.extentEnd - base.extentStart
+  // Never past now, and never back past the oldest stored Post.
+  const clamp = (o: number) =>
+    Math.max(
+      Math.min(
+        Math.round(o / MINUTE_MS) * MINUTE_MS,
+        minuteNow - base.extentEnd,
+      ),
+      Number.isFinite(oldest)
+        ? Math.min(oldest - base.extentStart, 0)
+        : -Infinity,
+    )
+  const extentStart = base.extentStart + clamp(offset)
+  const extentEnd = base.extentEnd + clamp(offset)
+  const counts = read({ extentStart, extentEnd, buckets: BUCKETS, unfiltered })
+  const width = span / BUCKETS
+  const from = (i: number) => extentStart + i * width
+  const moving = clamp(pending ?? offset)
+  const settle = (next: number) => {
+    setPending(clamp(next))
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      setOffset(clamp(next))
+      setPending(null)
+    }, 150)
+  }
+  const whole = Number.isFinite(oldest) ? minuteNow - oldest : 0
+  const kit: ZoomKit = {
+    canIn: zoom > 0,
+    canOut: true,
+    zoomIn: () => setZoom(zoom - 1),
+    zoomOut: () => setZoom(zoom + 1),
+    pan: (fraction) => settle(moving + fraction * span),
+    thumb:
+      whole > span
+        ? {
+            left: (100 * (base.extentStart + moving - oldest)) / whole,
+            width: (100 * span) / whole,
+          }
+        : null,
+    moveTo: (left) => settle(oldest + left * whole - base.extentStart),
+  }
+  return (
+    <div className="space-y-2 border-t border-app-ink/5 pt-3">
+      <div className="flex items-center gap-1.5">
+        <TgInlineChoice
+          aria-label="Posts counted"
+          value={unfiltered ? "all" : "filtered"}
+          onChange={(next) => setUnfiltered(next === "all")}
+          options={[
+            { value: "filtered", label: "Filtered" },
+            { value: "all", label: "All posts" },
+          ]}
+        />
+      </div>
+      {counts ? (
+        <OneSpread
+          bars={counts.map((count, i) => ({
+            lo: from(i),
+            hi: from(i + 1),
+            count,
+          }))}
+          whole={null}
+          shown={[extentStart, extentEnd]}
+          selected={{ min: startDate, max: endDate }}
+          openEnds={false}
+          onPick={(p) => setFixedRange(from(p.run.from), from(p.run.to + 1))}
+          // The scrollbar reaches back years, so an older one names its year.
+          format={(v) => {
+            const year = new Date(v).getFullYear()
+            return year === new Date(minuteNow).getFullYear()
+              ? formatLocalStamp(v)
+              : `${formatLocalStamp(v)}, ${year}`
+          }}
+          noun="posts"
+          middle={`${formatCount(counts.reduce((a, n) => a + n, 0))} posts`}
+          zoom={kit}
+          title="The Posts around the Analysis window"
+          testId="window"
+        />
+      ) : (
+        <p className="h-16 text-[11px] text-app-ink/50">Counting…</p>
+      )}
+    </div>
+  )
+}
+
+const WindowChart0: React.FC<{ read: WindowHistogramRead }> = ({ read }) => {
   const { startDate, endDate, minuteNow, setFixedRange } = useScope()
   const [zoom, setZoom] = useState(0)
   const [unfiltered, setUnfiltered] = useState(false)

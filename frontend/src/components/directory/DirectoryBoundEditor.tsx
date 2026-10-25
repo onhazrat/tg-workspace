@@ -2,7 +2,9 @@ import { type ReactNode, useState } from "react"
 import type { DirectoryDistributionResponse } from "@/client"
 import { BoundFields } from "@/components/filter-tree/BoundFields"
 import { type Bin, Spread } from "@/components/Spread"
-import type { ZoomState } from "@/components/SpreadZoom"
+import { useZoomState, type ZoomState } from "@/components/SpreadZoom"
+import { NumberBoundEditor } from "@/components/spread-prototype/NumberBoundEditor"
+import { useSpreadVariant } from "@/components/spread-prototype/variant"
 import { TgButton } from "@/components/ui/tg-button"
 import {
   type BoundKind,
@@ -24,7 +26,51 @@ const nice = (v: number) => Number(v.toPrecision(2))
  * `countFor` renders how many a candidate bound leaves; the container passes
  * an element that reads it, so this stays renderable without a server.
  */
-export function DirectoryBoundEditor({
+type DirectoryBoundEditorProps = {
+  measure: Measure
+  initial?: MetricBound
+  distribution?: DirectoryDistributionResponse
+  zoom?: ZoomState
+  countFor: (bound: MetricBound) => ReactNode
+  onSubmit: (bound: MetricBound) => void
+  onBack?: () => void
+}
+
+// PROTOTYPE: variant 1 draws the one Number bound editor.
+export function DirectoryBoundEditor(props: DirectoryBoundEditorProps) {
+  const own = useZoomState()
+  if (useSpreadVariant() !== "1") return <DirectoryBoundEditor0 {...props} />
+  const d = props.distribution
+  return (
+    <NumberBoundEditor
+      label={props.measure.label}
+      description={props.measure.description}
+      initial={props.initial}
+      source={{
+        kind: "read",
+        zoom: props.zoom ?? own,
+        read:
+          d &&
+          (d.min === null || d.max === null
+            ? null
+            : {
+                bars: d.bins,
+                lo: d.min,
+                hi: d.max,
+                median: d.median ?? d.min,
+                log: d.scale === "log",
+                noValue: d.noValue,
+              }),
+        count: props.countFor,
+      }}
+      noun="channels"
+      onSubmit={props.onSubmit}
+      onBack={props.onBack}
+    />
+  )
+}
+
+function DirectoryBoundEditor0({
   measure,
   initial,
   distribution,

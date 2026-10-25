@@ -29,6 +29,7 @@ import { PostFeed } from "./components/PostFeed"
 import QuotaWarning from "./components/QuotaWarning"
 import { SummaryView } from "./components/SummaryView"
 import { SettingsPage } from "./components/settings-page/SettingsPage"
+import { SpreadVariantRoot } from "./components/spread-prototype/variant"
 import { TagView } from "./components/TagView"
 import { getNextTheme } from "./components/theme-provider"
 import { ToolsTab } from "./components/tools/ToolsTab"
@@ -262,185 +263,187 @@ export default function App() {
   }
 
   return (
-    <div
-      className={`tg-wcag-floor h-[calc(100svh-var(--view-as-offset))] overflow-hidden bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
-    >
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-app-card focus:px-3 focus:py-2 focus:text-xs focus:font-mono focus:uppercase focus:tracking-widest focus:text-app-ink focus:outline-none focus:ring-2 focus:ring-app-ink"
+    <SpreadVariantRoot>
+      <div
+        className={`tg-wcag-floor h-[calc(100svh-var(--view-as-offset))] overflow-hidden bg-app-bg text-app-ink font-sans selection:bg-app-ink selection:text-app-bg transition-colors duration-300 flex flex-col`}
       >
-        Skip to content
-      </a>
-      <main
-        id="main-content"
-        className={`flex min-h-0 flex-1 flex-col ${chrome.main}`}
-      >
-        <StatusBanners
-          offline={isOffline}
-          autoSyncPausedUntil={autoSyncPauseUntil}
-          onResumeAutoSync={resumeAutoSync}
-        />
-        {/* Under the status banners: a Budget running out is a fact about the
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-app-card focus:px-3 focus:py-2 focus:text-xs focus:font-mono focus:uppercase focus:tracking-widest focus:text-app-ink focus:outline-none focus:ring-2 focus:ring-app-ink"
+        >
+          Skip to content
+        </a>
+        <main
+          id="main-content"
+          className={`flex min-h-0 flex-1 flex-col ${chrome.main}`}
+        >
+          <StatusBanners
+            offline={isOffline}
+            autoSyncPausedUntil={autoSyncPauseUntil}
+            onResumeAutoSync={resumeAutoSync}
+          />
+          {/* Under the status banners: a Budget running out is a fact about the
           account, not about the tab it was noticed on (ticket 24). */}
-        <QuotaWarning />
+          <QuotaWarning />
 
-        {/* Main Content Area */}
-        <div className="w-full flex min-h-0 flex-1 flex-col">
-          <div
-            className={`flex-col sm:flex-row justify-between items-end mb-4 gap-4 ${
-              chrome.header
-            }`}
-          >
-            <div>
-              <h1 className="text-xl font-bold tracking-tighter uppercase leading-none">
-                Telegram Workspace
-              </h1>
-              <p className="text-[11px] text-app-ink/50 font-mono mt-1">
-                Technical Scraper & AI Analyst v{APP_VERSION}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-3 text-[11px] font-mono uppercase tracking-widest text-app-ink/50">
-                <span>Routing: {routing.label}</span>
-                <span
-                  className={`w-1 h-1 rounded-full animate-pulse ${routing.dotClass}`}
-                />
+          {/* Main Content Area */}
+          <div className="w-full flex min-h-0 flex-1 flex-col">
+            <div
+              className={`flex-col sm:flex-row justify-between items-end mb-4 gap-4 ${
+                chrome.header
+              }`}
+            >
+              <div>
+                <h1 className="text-xl font-bold tracking-tighter uppercase leading-none">
+                  Telegram Workspace
+                </h1>
+                <p className="text-[11px] text-app-ink/50 font-mono mt-1">
+                  Technical Scraper & AI Analyst v{APP_VERSION}
+                </p>
               </div>
-              {/* Grouped: keyboard (the mode, its keys, the palette), help,
+              <div className="flex items-center gap-4">
+                <div className="hidden sm:flex items-center gap-3 text-[11px] font-mono uppercase tracking-widest text-app-ink/50">
+                  <span>Routing: {routing.label}</span>
+                  <span
+                    className={`w-1 h-1 rounded-full animate-pulse ${routing.dotClass}`}
+                  />
+                </div>
+                {/* Grouped: keyboard (the mode, its keys, the palette), help,
                   then view. The first two are hidden on a phone, which has
                   no keyboard to use them with. */}
-              <div className="flex items-center gap-1.5">
-                <KeyboardButtons commandKey={commandKey} />
+                <div className="flex items-center gap-1.5">
+                  <KeyboardButtons commandKey={commandKey} />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        id="command-palette-button"
+                        data-testid="command-palette-button"
+                        aria-label="Command palette"
+                        onClick={() => setCommandPaletteOpen(true)}
+                        className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
+                      >
+                        <CommandIcon size={14} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Command Palette (⌘⇧P)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      id="command-palette-button"
-                      data-testid="command-palette-button"
-                      aria-label="Command palette"
-                      onClick={() => setCommandPaletteOpen(true)}
-                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
+                      id="tour-help-button"
+                      aria-label="Replay guided tour"
+                      onClick={startTour}
+                      className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
                     >
-                      <CommandIcon size={14} />
+                      <HelpCircle size={14} />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Command Palette (⌘⇧P)</p>
+                    <p>Replay Guided Tour</p>
                   </TooltipContent>
                 </Tooltip>
-              </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    id="tour-help-button"
-                    aria-label="Replay guided tour"
-                    onClick={startTour}
-                    className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                  >
-                    <HelpCircle size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Replay Guided Tour</p>
-                </TooltipContent>
-              </Tooltip>
-              <div className="flex items-center gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      data-testid="fullscreen-button"
-                      aria-label={fullscreenLabel}
-                      onClick={toggleFullscreen}
-                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
-                    >
-                      {fullscreenIcon}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{fullscreenLabel}</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={themeTooltip}
-                      onClick={toggleTheme}
-                      className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
-                    >
-                      {themeIcon}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{themeTooltip}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
-          </div>
-
-          {isRateLimited && <RateLimitBanner />}
-
-          <KeyboardMode ops={keyOps} />
-
-          <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
-            <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
-              <div className="flex justify-between items-center">
-                <WorkspaceTabStrip workspaceTabs={workspaceTabs} />
-                <div className="flex items-center gap-6">
-                  {/*
-                   * The way out of focus mode.
-                   *
-                   * The header button that got you here is hidden by focus
-                   * mode, so without this the only exits are Esc and F11 —
-                   * both invisible, and neither discoverable by someone who
-                   * clicked a button they can no longer see.
-                   */}
-                  {isFullscreen && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          data-testid="fullscreen-exit-button"
-                          aria-label={fullscreenLabel}
-                          onClick={toggleFullscreen}
-                          className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
-                        >
-                          {fullscreenIcon}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{fullscreenLabel}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  <div className={`items-center gap-6 ${chrome.header}`}>
-                    <WorkspaceStats
-                      lastSync={oldestSync(channels, selectedChannels)}
-                      activeChannels={selectedChannels.size}
-                      postsInScope={postsInScopeTotal}
-                    />
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        data-testid="fullscreen-button"
+                        aria-label={fullscreenLabel}
+                        onClick={toggleFullscreen}
+                        className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
+                      >
+                        {fullscreenIcon}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{fullscreenLabel}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={themeTooltip}
+                        onClick={toggleTheme}
+                        className={`p-1.5 border transition-all rounded-md ${HEADER_BUTTON_OUTLINED}`}
+                      >
+                        {themeIcon}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{themeTooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             </div>
 
-            {/* `data-tab` is derived from the `?tab=` param, so it always
+            {isRateLimited && <RateLimitBanner />}
+
+            <KeyboardMode ops={keyOps} />
+
+            <div className="border border-app-ink border-opacity-20 flex min-h-0 flex-1 flex-col bg-app-card overflow-hidden">
+              <div className="border-b border-app-ink border-opacity-10 p-4 flex flex-col gap-4 bg-app-muted shrink-0">
+                <div className="flex justify-between items-center">
+                  <WorkspaceTabStrip workspaceTabs={workspaceTabs} />
+                  <div className="flex items-center gap-6">
+                    {/*
+                     * The way out of focus mode.
+                     *
+                     * The header button that got you here is hidden by focus
+                     * mode, so without this the only exits are Esc and F11 —
+                     * both invisible, and neither discoverable by someone who
+                     * clicked a button they can no longer see.
+                     */}
+                    {isFullscreen && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            data-testid="fullscreen-exit-button"
+                            aria-label={fullscreenLabel}
+                            onClick={toggleFullscreen}
+                            className="p-1.5 border border-app-ink border-opacity-10 hover:border-opacity-40 transition-all rounded-md"
+                          >
+                            {fullscreenIcon}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{fullscreenLabel}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    <div className={`items-center gap-6 ${chrome.header}`}>
+                      <WorkspaceStats
+                        lastSync={oldestSync(channels, selectedChannels)}
+                        activeChannels={selectedChannels.size}
+                        postsInScope={postsInScopeTotal}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* `data-tab` is derived from the `?tab=` param, so it always
                 reports the tab the URL resolved to — including when an unknown
                 value falls through to the PostFeed default below. */}
-            <div
-              ref={scrollContainerRef}
-              data-testid="workspace-scroll"
-              data-tab={activeTab}
-              className="min-h-0 flex-1 overflow-y-auto p-3 md:p-8"
-            >
-              <AnimatePresence mode="wait">{tabView()}</AnimatePresence>
+              <div
+                ref={scrollContainerRef}
+                data-testid="workspace-scroll"
+                data-tab={activeTab}
+                className="min-h-0 flex-1 overflow-y-auto p-3 md:p-8"
+              >
+                <AnimatePresence mode="wait">{tabView()}</AnimatePresence>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </SpreadVariantRoot>
   )
 }
