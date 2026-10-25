@@ -47,3 +47,4 @@ The locked migration decisions of June 2026 sit outside this series, in
 | [ADR-035](./ADR-035-every-request-is-recorded.md) | Every Request is recorded, beside the ledger, kept in three tiers |
 | [ADR-036](./ADR-036-one-resolved-posts-view.md) | Every Posts read compiles from one resolved Posts view |
 | [ADR-037](./ADR-037-one-spread.md) | One Spread for every bound and the Analysis window, and one Number bound editor; the chart half supersedes part of ADR-033 |
+| [ADR-038](./ADR-038-prompts-read-covered-posts.md) | An Artifact's prompt reads its Covered Posts, and counts the Missing ones, extending ADR-026 |
