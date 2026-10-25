@@ -1,10 +1,16 @@
-"""Fail a commit that leaves a `path.py::name` reference pointing at nothing.
+"""Fail a commit that leaves a code reference pointing at nothing.
 
 Prose and comments cite code as `services/posts_view.py::feed`. Moving or
 deleting the function leaves every such citation behind, reading as a pointer
 and leading nowhere, and no test notices. This resolves each backticked one in
 the tracked files: the path matches any tracked `.py` file ending in it, and
 the name must be defined at the top level of one of them, or as `Class.member`.
+
+A backticked file path (`channel-grid/ChannelMetricEditor.test.tsx`) is checked
+against the files the staged commit deletes or renames away: it fails when it
+names one of them and no tracked file is left that it could name. A file
+deleted in an earlier commit is history, as the tree is full of records of
+removed modules, so outside a commit (in CI) only the `::name` half runs.
 
 The whole tree is read on every run, because the commit that breaks a
 reference is the one that changes the code it names, not the file that cites
@@ -33,12 +39,23 @@ SCANNED = re.compile(r"\.(py|md|ts|tsx|sh|ya?ml|toml)$")
 #: A backticked reference: `a/b.py::name`, `b.py::Class.method`. A pytest node
 #: id is the same shape and resolves the same way.
 _REF = re.compile(r"`([A-Za-z0-9_./-]*[A-Za-z0-9_]\.py)::([A-Za-z_][A-Za-z0-9_.]*)`")
+#: A backticked file path: `Spread.tsx`, `lib/spread.ts`, `scripts/x.py`.
+_FILE = re.compile(r"`([A-Za-z0-9_.][A-Za-z0-9_./-]*\.(?:py|tsx?))`")
+
+
+def _git(*args: str) -> list[str]:
+    return subprocess.run(
+        ["git", *args], cwd=REPO, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
 
 
 def _tracked() -> list[str]:
-    return subprocess.run(
-        ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
-    ).stdout.splitlines()
+    return _git("ls-files")
+
+
+def _gone() -> list[str]:
+    """The paths the staged commit deletes, a rename's old path included."""
+    return _git("diff", "--cached", "--no-renames", "--name-only", "--diff-filter=D")
 
 
 def defined(source: str) -> set[str]:
@@ -80,6 +97,27 @@ def offenders(files: dict[str, str], python: dict[str, set[str]]) -> list[str]:
     return found
 
 
+def file_offenders(
+    files: dict[str, str], tracked: list[str], gone: list[str]
+) -> list[str]:
+    """`path:line: file` for each backticked file path that names only a gone file.
+
+    `files` maps each scanned path to its text; `tracked` lists the files left,
+    `gone` the ones the commit deletes.
+    """
+
+    def names(paths: list[str], ref: str) -> bool:
+        return any(p == ref or p.endswith(f"/{ref}") for p in paths)
+
+    found: list[str] = []
+    for path, text in sorted(files.items()):
+        for number, line in enumerate(text.splitlines(), start=1):
+            for ref in _FILE.findall(line):
+                if names(gone, ref) and not names(tracked, ref):
+                    found.append(f"{path}:{number}: {ref}")
+    return found
+
+
 def main() -> int:
     tracked = [p for p in _tracked() if (REPO / p).is_file()]
     python: dict[str, set[str]] = {}
@@ -94,7 +132,7 @@ def main() -> int:
         for path in tracked
         if SCANNED.search(path) and not SKIPPED.match(path)
     }
-    found = offenders(files, python)
+    found = offenders(files, python) + file_offenders(files, tracked, _gone())
     for entry in found:
         sys.stderr.write(f"error: dangling reference at {entry}\n")
     if found:

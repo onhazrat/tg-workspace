@@ -96,9 +96,12 @@ repos:
         language: system
 
       - id: check-code-refs
-        name: No dangling path.py::name reference
+        name: No dangling code reference
         entry: python3 scripts/check_code_refs.py
         pass_filenames: false
+        # A commit that only deletes files stages nothing to pass, and is the
+        # one most likely to strand a pointer.
+        always_run: true
         language: system
 
       - id: check-test-ids
