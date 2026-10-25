@@ -137,32 +137,7 @@ export function NumberBoundEditor({
     setB(String(next.max ?? ""))
   }
 
-  const noValueCount =
-    source.kind === "read"
-      ? source.read?.noValue
-      : source.total === undefined
-        ? undefined
-        : source.total - source.values.length
-  const count = !bound
-    ? null
-    : !local
-      ? source.kind === "read" && source.count?.(bound)
-      : bound.none
-        ? noValueCount !== undefined &&
-          ` · ${noValueCount.toLocaleString()} with no value`
-        : ` · ${local.filter((v) => inBound(v, bound)).length.toLocaleString()} of ${local.length.toLocaleString()}`
-
-  const field = (name: string, value: string, set: (t: string) => void) => (
-    <input
-      type="number"
-      min={min}
-      step="any"
-      aria-label={name}
-      value={value}
-      onChange={(e) => set(e.target.value)}
-      className={fieldClass}
-    />
-  )
+  const noValueCount = noValueCountOf(source)
 
   return (
     <form
@@ -206,6 +181,94 @@ export function NumberBoundEditor({
           title={label}
         />
       )}
+      <OperatorFields
+        op={op}
+        setOp={setOp}
+        a={a}
+        setA={setA}
+        b={b}
+        setB={setB}
+        min={min}
+        noValue={noValue}
+      />
+      {noValue && (
+        <p className={noteClass}>
+          {noValueCount
+            ? `${noValueCount.toLocaleString()} have no value and fail every bound.`
+            : "Anything with no value fails every bound."}{" "}
+          No value finds exactly those, and NOT on it the ones that have one.
+        </p>
+      )}
+      <TgButton
+        type="submit"
+        size="sm"
+        disabled={!bound}
+        data-testid="number-bound-submit"
+        className="w-full"
+      >
+        {initial ? "Update" : "Add"}
+        {bound && addCount(source, bound, noValueCount)}
+      </TgButton>
+    </form>
+  )
+}
+
+/** How many have no value, where the source knows. */
+function noValueCountOf(source: NumberSource): number | undefined {
+  if (source.kind === "read") return source.read?.noValue
+  if (source.total === undefined) return undefined
+  return source.total - source.values.length
+}
+
+/** What Add says the bound keeps: counted here, the caller's, or nothing. */
+function addCount(
+  source: NumberSource,
+  bound: MetricBound,
+  noValueCount: number | undefined,
+): ReactNode {
+  if (source.kind === "read") return source.count?.(bound)
+  if (!bound.none) {
+    const kept = source.values.filter((v) => inBound(v, bound)).length
+    return ` · ${kept.toLocaleString()} of ${source.values.length.toLocaleString()}`
+  }
+  return noValueCount === undefined
+    ? null
+    : ` · ${noValueCount.toLocaleString()} with no value`
+}
+
+/** The operator and its one or two fields. */
+function OperatorFields({
+  op,
+  setOp,
+  a,
+  setA,
+  b,
+  setB,
+  min,
+  noValue,
+}: {
+  op: BoundKind
+  setOp: (op: BoundKind) => void
+  a: string
+  setA: (text: string) => void
+  b: string
+  setB: (text: string) => void
+  min?: number
+  noValue: boolean
+}) {
+  const field = (name: string, value: string, set: (t: string) => void) => (
+    <input
+      type="number"
+      min={min}
+      step="any"
+      aria-label={name}
+      value={value}
+      onChange={(e) => set(e.target.value)}
+      className={fieldClass}
+    />
+  )
+  return (
+    <>
       <fieldset aria-label="Operator" className="m-0 flex gap-1 border-0 p-0">
         {OPS.filter(([key]) => noValue || key !== "none").map(([key, text]) => (
           <button
@@ -234,24 +297,6 @@ export function NumberBoundEditor({
           )}
         </div>
       )}
-      {noValue && (
-        <p className={noteClass}>
-          {noValueCount
-            ? `${noValueCount.toLocaleString()} have no value and fail every bound.`
-            : "Anything with no value fails every bound."}{" "}
-          No value finds exactly those, and NOT on it the ones that have one.
-        </p>
-      )}
-      <TgButton
-        type="submit"
-        size="sm"
-        disabled={!bound}
-        data-testid="number-bound-submit"
-        className="w-full"
-      >
-        {initial ? "Update" : "Add"}
-        {count}
-      </TgButton>
-    </form>
+    </>
   )
 }
