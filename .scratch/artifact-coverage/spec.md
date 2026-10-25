@@ -9,6 +9,16 @@ Missing Post, Post selection, Selection rule, Pick, Analysis window, Summary, Ch
 Discovery report, Attempt, Pending, Failed, Follow, Selected posts, Semantic) is
 `CONTEXT.md`'s. Ticket ids carry the prefix `AC`.
 
+## Tickets
+
+Two tickets in `issues/` beside this file, built on one integration branch and landed as one
+PR. Each lands green on its own: until AC-02, the Chat and Tag routes keep their old body.
+
+| Id | Ticket | Blocked by |
+|---|---|---|
+| AC-01 | Summaries read their Covered Posts (`issues/01-summaries-read-covered-posts.md`) | None |
+| AC-02 | Chats, Tag runs and Discovery reports read their Covered Posts (`issues/02-chats-tag-runs-reports-read-covered-posts.md`) | AC-01 |
+
 ## Problem Statement
 
 An Artifact records exactly which Posts it covered, and the coverage wall shows that list.
