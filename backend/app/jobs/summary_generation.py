@@ -63,7 +63,12 @@ from app.services.ai_keys import (
 )
 from app.services.artifact_prompts import summary_prompt
 from app.services.logs import upsert_llm_log
-from app.services.summaries import finish_without_posts, own_summary, store_prompt
+from app.services.summaries import (
+    finish_without_posts,
+    own_summary,
+    store_prompt,
+    summary_scope,
+)
 from app.services.summary_attempts import (
     ATTEMPT_NOT_RUNNING_DETAIL,
     ATTEMPT_RUNNING_DETAIL,
@@ -212,9 +217,13 @@ def start_attempt(
             prompt, coverage = summary_prompt(session, summary, payload)
         except HTTPException as exc:
             return refused(str(exc.detail), failure_kind(exc.status_code), None)
-        if not coverage.posts and not coverage.missing:
-            # A quiet window: the Summary says so and nothing is spent, for
-            # the scheduler and the browser's Regenerate alike (ADR-038).
+        scope = summary_scope(summary)
+        if not coverage.posts and scope is not None and scope.scoped_post_count is None:
+            # A regeneration's quiet window: its derived Scope records no Posts
+            # yet, and covers none. The Summary says so and nothing is spent,
+            # for the scheduler and the browser's Regenerate alike (ADR-038).
+            # A Scope with Posts on record is never rewritten this way, so a
+            # Retry cannot replace a finished report with this text.
             finish_without_posts(session, summary)
             touch_sync(session, "summaries", commit=False)
             session.commit()
