@@ -56,6 +56,13 @@ from app.services.tenancy import scoped_select
 # giant result. The token budget is the real user-facing limit.
 MAX_PROMPT_POSTS = 10_000
 
+#: The Missing Post count's one name: on a prompt response, a stream's first
+#: frame, and a Summary's `extra` beside the prompt it describes.
+MISSING_POSTS_KEY = "missingPosts"
+
+#: An Artifact opened before AW-06 records no Scope to read Posts from.
+NO_SCOPE_DETAIL = "This Artifact records no Scope, so no prompt can be built."
+
 Layout = Literal["flat", "tag"]
 
 
@@ -109,15 +116,43 @@ def freeze(
     )
 
 
-def _too_many(total: int) -> HTTPException:
+def require_scope(scope: FrozenScope | None) -> FrozenScope:
+    """The Scope a prompt reads; 422 for an Artifact that records none."""
+    if scope is None:
+        raise HTTPException(status_code=422, detail=NO_SCOPE_DETAIL)
+    return scope
+
+
+def _too_large(why: str) -> HTTPException:
+    """A prompt past a limit: a 413 that says why, never a silent truncation."""
     return HTTPException(
         status_code=413,
         detail=(
-            f"The selection has {total:,} posts, more than the "
-            f"{MAX_PROMPT_POSTS:,} a single prompt can assemble. Narrow the "
-            "channel selection or date range, or deselect some Posts."
+            f"{why}. Narrow the channel selection or date range, or deselect "
+            "some Posts."
         ),
     )
+
+
+def _too_many(total: int) -> HTTPException:
+    return _too_large(
+        f"The selection has {total:,} posts, more than the "
+        f"{MAX_PROMPT_POSTS:,} a single prompt can assemble"
+    )
+
+
+def _refs(scope: FrozenScope) -> list[tuple[str, int]] | None:
+    """The refs on record, or `None` for a Scope that covers its window.
+
+    `scope` must carry its refs: a `scopedPostCount` with no `posts` is a
+    list projection, and reading its window instead would cover the wrong
+    Posts.
+    """
+    if scope.scoped_post_count is None:
+        return None
+    if scope.posts is None and scope.scoped_post_count:
+        raise ValueError("Artifact coverage needs the Scope's refs loaded")
+    return [(r.channel_name, r.post_id) for r in scope.posts or []]
 
 
 def _window_posts(
@@ -149,15 +184,11 @@ def covered_posts(
 ) -> Coverage:
     """The Covered Posts `user_id` can read, in order, and how many are missing.
 
-    `scope` must carry its refs: a `scopedPostCount` with no `posts` is a
-    list projection, and reading its window instead would cover the wrong
-    Posts. 413 past `MAX_PROMPT_POSTS`.
+    413 past `MAX_PROMPT_POSTS`.
     """
-    if scope.scoped_post_count is None:
+    refs = _refs(scope)
+    if refs is None:
         return Coverage(_window_posts(session, scope, user_id=user_id), missing=0)
-    if scope.posts is None and scope.scoped_post_count:
-        raise ValueError("covered_posts needs the Scope's refs loaded")
-    refs = [(r.channel_name, r.post_id) for r in scope.posts or []]
     if len(refs) > MAX_PROMPT_POSTS:
         raise _too_many(len(refs))
     if not refs:
@@ -178,16 +209,13 @@ def refs_predicate(scope: FrozenScope) -> ColumnElement[bool] | None:
     Scope with no refs on record, which covers its window: the caller's own
     window predicate is then the whole answer.
     """
-    if scope.scoped_post_count is None:
+    refs = _refs(scope)
+    if refs is None:
         return None
-    if scope.posts is None and scope.scoped_post_count:
-        raise ValueError("refs_predicate needs the Scope's refs loaded")
     # ponytail: one IN over every ref, as unbounded as the refs column itself;
     # join a VALUES list or a refs table if a report over a huge window plans
     # slowly.
-    return tuple_(col(Post.channel_name), col(Post.post_id)).in_(
-        [(r.channel_name, r.post_id) for r in scope.posts or []]
-    )
+    return tuple_(col(Post.channel_name), col(Post.post_id)).in_(refs)
 
 
 def posts_block(
@@ -209,12 +237,8 @@ def posts_block(
     )
     tokens = estimate_tokens(text)
     if tokens > MAX_PROMPT_TOKENS:
-        raise HTTPException(
-            status_code=413,
-            detail=(
-                f"The selected posts are ~{tokens:,} tokens, over the "
-                f"{MAX_PROMPT_TOKENS:,}-token limit for a single prompt. Narrow "
-                "the channel selection or date range, or deselect some Posts."
-            ),
+        raise _too_large(
+            f"The selected posts are ~{tokens:,} tokens, over the "
+            f"{MAX_PROMPT_TOKENS:,}-token limit for a single prompt"
         )
     return text, coverage

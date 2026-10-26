@@ -23,7 +23,7 @@ from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.summaries import DerivationMode, SummaryDerivation
-from app.services.artifact_coverage import freeze
+from app.services.artifact_coverage import MISSING_POSTS_KEY, freeze
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -115,11 +115,11 @@ def _with_scope(
     conditional keys around it `scope` has no legacy wire shape to preserve, and
     the client has to render it either way.
     """
-    out.update(scope_key(frozen_scope_of(summary, payload)))
+    out.update(scope_key(summary_scope(summary, payload)))
     return out
 
 
-def frozen_scope_of(
+def summary_scope(
     summary: Summary, payload: SummaryPayload | None = None
 ) -> FrozenScope | None:
     """The Scope this Summary was made from, refs included, or `None`.
@@ -668,10 +668,6 @@ def covering(scope: FrozenScope, refs: Iterable[tuple[str, int]]) -> FrozenScope
     """
     posts = [{"channelName": c, "postId": p} for c, p in refs]
     return FrozenScope.model_validate({**scope.stored(), "posts": posts})
-
-
-#: Where a Summary keeps its prompt's Missing Post count (ADR-038).
-MISSING_POSTS_KEY = "missingPosts"
 
 
 def store_prompt(

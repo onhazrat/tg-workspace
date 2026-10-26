@@ -53,7 +53,6 @@ from app.ai.registry import default_model, get_provider, is_credential_rejection
 from app.core import acting_owner, pg_notify
 from app.core.db import engine
 from app.models_tg import Summary, SummaryAttempt, SummaryPayload
-from app.prompts.summary import format_summary_prompt
 from app.schemas.summaries import AttemptKind, AttemptOutcome
 from app.services import pgmq
 from app.services.ai_keys import (
@@ -62,14 +61,9 @@ from app.services.ai_keys import (
     record_validation,
     resolve_ai_key,
 )
-from app.services.artifact_coverage import Coverage, posts_block
+from app.services.artifact_prompts import summary_prompt
 from app.services.logs import upsert_llm_log
-from app.services.summaries import (
-    finish_without_posts,
-    frozen_scope_of,
-    own_summary,
-    store_prompt,
-)
+from app.services.summaries import finish_without_posts, own_summary, store_prompt
 from app.services.summary_attempts import (
     ATTEMPT_NOT_RUNNING_DETAIL,
     ATTEMPT_RUNNING_DETAIL,
@@ -116,7 +110,6 @@ DEFAULT_TEMPERATURE = 0.7
 RETRY_DELAY_SECONDS = 10.0
 MAX_RETRY_DELAY_SECONDS = 600.0
 #: Why an Attempt was refused before a Provider was reached.
-_LEGACY_SCOPE_DETAIL = "This Summary records no Scope, so no prompt can be built."
 _NO_PROMPT_DETAIL = "This Summary has no prompt to run."
 
 
@@ -162,33 +155,6 @@ def _session_as(owner: acting_owner.ActingOwner | None) -> Iterator[Session]:
     with Session(engine) as session:
         acting_owner.bind(session, owner)
         yield session
-
-
-def summary_prompt(
-    session: Session,
-    summary: Summary,
-    payload: SummaryPayload | None,
-    *,
-    channels_text: str = "",
-) -> tuple[str, Coverage]:
-    """The prompt a Summary's Covered Posts make, as Generate builds it.
-
-    One builder for Generate, Retry, the scheduler and a copied prompt, so the
-    same Summary gets the same prompt from all four (ADR-038). A 413 is a
-    limit, and the caller records it as such. The `Coverage` says which Posts
-    it read, for a regeneration's Scope to record, and how many were missing.
-    """
-    frozen = frozen_scope_of(summary, payload)
-    if frozen is None:
-        raise HTTPException(status_code=422, detail=_LEGACY_SCOPE_DETAIL)
-    posts_text, coverage = posts_block(session, frozen, user_id=summary.user_id)
-    prompt = format_summary_prompt(
-        channels=list(frozen.channels),
-        channels_text=channels_text,
-        language=summary.language,
-        posts_text=posts_text,
-    )
-    return prompt, coverage
 
 
 def start_attempt(

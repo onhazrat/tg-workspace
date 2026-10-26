@@ -161,6 +161,10 @@ INVENTORY: dict[str, str] = {
     # Which Posts an Artifact covers and the prompt block built from them
     # (ADR-038); takes a frozen Scope, so it names no Artifact table.
     "artifact_coverage.py": READ_MODEL,
+    # The prompt each Artifact family gets (ADR-038): reads the Artifact by
+    # its family's guard and its posts block through `artifact_coverage`,
+    # which may not name the Artifact tables itself. Never commits.
+    "artifact_prompts.py": READ_MODEL,
     # Resolves a User's permissions from their role assignments. Reads
     # rbac_user_roles joined to rbac_roles and never commits; seeding is done by
     # the migration and init_db, so this module has no reason to write.

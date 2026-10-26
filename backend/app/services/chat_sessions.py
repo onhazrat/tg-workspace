@@ -170,11 +170,11 @@ def _with_scope(
     The ordering argument lives on `schemas/scope.py::scope_key`, which is the
     one copy of it.
     """
-    out.update(scope_key(frozen_scope_of(row, payload)))
+    out.update(scope_key(chat_scope(row, payload)))
     return out
 
 
-def frozen_scope_of(
+def chat_scope(
     row: ChatSession, payload: ChatSessionPayload | None = None
 ) -> FrozenScope | None:
     """The Scope this Chat was produced from, refs included, or `None`."""

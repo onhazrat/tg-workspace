@@ -56,21 +56,88 @@ RESOLVERS = frozenset(
 
 APP = DATA_ROUTES.parents[2]
 
-#: Every Action path: Summary generation, the scheduler's regeneration, the AI
-#: routes, Discovery reports, Chat sessions, Tag runs and Summaries. The
-#: Discover aggregate's own window code (`services/discover.py`) is not one.
-ACTION_PATH = (
-    "jobs/summary_generation.py",
-    "jobs/auto_summary.py",
-    "api/routes/ai_routes.py",
-    "services/discover_reports.py",
-    "services/chat_sessions.py",
-    "services/tag_runs.py",
-    "services/summaries.py",
+#: The doors to an Artifact's Covered Posts: freezing them, reading them, the
+#: prompt builders over them, and the Attempt that builds a Summary's prompt.
+COVERAGE_DOORS = frozenset(
+    {
+        "freeze",
+        "covered_posts",
+        "posts_block",
+        "refs_predicate",
+        "summary_prompt",
+        "chat_system_prompt",
+        "tag_prompt",
+        "start_attempt",
+    }
 )
+
+#: Modules that use a door and may still build a Post read, and why.
+NOT_ACTION_PATH = {
+    "services/artifact_coverage.py": "The read model itself: the one place an "
+    "Action builds a Post read.",
+    "api/routes/data/discover.py": "Freezes a Discovery report like every "
+    "Action, and also serves the Discover tab's own Posts view through "
+    "`resolve_posts_view` (ADR-036), which builds no prompt.",
+}
+
+
+def _named(tree: ast.Module) -> list[tuple[str, int]]:
+    """Every name, attribute and import alias in `tree`, with its line."""
+    found: list[tuple[str, int]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            found.append((node.id, node.lineno))
+        elif isinstance(node, ast.Attribute):
+            found.append((node.attr, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            found.extend((alias.name, node.lineno) for alias in node.names)
+    return found
+
+
+def _named_in(path: pathlib.Path) -> set[str]:
+    return {name for name, _ in _named(ast.parse(path.read_text(), filename=str(path)))}
+
+
+def _action_path() -> list[str]:
+    """Every module that uses a door to the Covered Posts: the Action path.
+
+    Derived, so a new Action-path module is guarded the day it asks for
+    Covered Posts, without anybody remembering to list it.
+    """
+    return sorted(
+        rel
+        for path in APP.rglob("*.py")
+        if not (rel := path.relative_to(APP).as_posix()).startswith("alembic/")
+        and rel not in NOT_ACTION_PATH
+        and _named_in(path) & COVERAGE_DOORS
+    )
+
+
+ACTION_PATH = _action_path()
 
 #: What building a Post read by hand names.
 POST_READERS = frozenset({"resolve_posts_view", "apply_analysis_window"})
+
+
+def test_the_action_path_is_found_from_the_doors() -> None:
+    """A floor, so a derivation that broke and found nothing cannot pass.
+
+    Summary generation, the scheduler's regeneration, the AI routes, the
+    prompt builders, Discovery reports, Chat sessions, Tag runs and Summaries.
+    The Discover aggregate's own window code (`services/discover.py`) is not
+    one.
+    """
+    assert {
+        "jobs/summary_generation.py",
+        "jobs/auto_summary.py",
+        "api/routes/ai_routes.py",
+        "services/artifact_prompts.py",
+        "services/discover_reports.py",
+        "services/chat_sessions.py",
+        "services/tag_runs.py",
+        "services/summaries.py",
+    } <= set(ACTION_PATH)
+    assert "services/discover.py" not in ACTION_PATH
 
 
 def _post_reads(tree: ast.Module) -> list[tuple[str, int]]:
@@ -105,19 +172,6 @@ def test_no_action_path_module_builds_its_own_post_read(name: str) -> None:
         "prompt reads its Covered Posts through `services/artifact_coverage.py` "
         "(ADR-038)."
     )
-
-
-def _named(tree: ast.Module) -> list[tuple[str, int]]:
-    """Every name, attribute and import alias in `tree`, with its line."""
-    found: list[tuple[str, int]] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name):
-            found.append((node.id, node.lineno))
-        elif isinstance(node, ast.Attribute):
-            found.append((node.attr, node.lineno))
-        elif isinstance(node, ast.ImportFrom):
-            found.extend((alias.name, node.lineno) for alias in node.names)
-    return found
 
 
 @pytest.mark.parametrize("name", ROUTE_MODULES)

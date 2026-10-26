@@ -100,7 +100,7 @@
       "comment": "Attempts one worker runs at once. Each is one Provider stream, waiting on a remote model rather than on this process.",
       "expression": "4",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 103,
+      "line": 97,
       "name": "GENERATION_CONCURRENCY",
       "value": 4
     },
@@ -108,7 +108,7 @@
       "comment": "How often a running Attempt writes its text so far to its row.",
       "expression": "1.0",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 105,
+      "line": 99,
       "name": "FLUSH_SECONDS",
       "value": 1.0
     },
@@ -116,7 +116,7 @@
       "comment": "How long a watcher waits on notifications before reading the row again, and how long the consumer waits on a ring before sweeping the Lane.",
       "expression": "1.0",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 108,
+      "line": 102,
       "name": "WATCH_POLL_SECONDS",
       "value": 1.0
     },
@@ -124,7 +124,7 @@
       "comment": "",
       "expression": "30.0",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 109,
+      "line": 103,
       "name": "SWEEP_SECONDS",
       "value": 30.0
     },
@@ -132,7 +132,7 @@
       "comment": "Only covers claim-then-archive, which happen in one transaction.",
       "expression": "60",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 111,
+      "line": 105,
       "name": "_CLAIM_VT_SECONDS",
       "value": 60
     },
@@ -140,7 +140,7 @@
       "comment": "The temperature Generate always used when nobody chose one.",
       "expression": "0.7",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 113,
+      "line": 107,
       "name": "DEFAULT_TEMPERATURE",
       "value": 0.7
     },
@@ -148,7 +148,7 @@
       "comment": "How long the automatic retry of a transient failure waits when the Provider named no Retry-After (SFR-03), and the most it waits when it did.",
       "expression": "10.0",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 116,
+      "line": 110,
       "name": "RETRY_DELAY_SECONDS",
       "value": 10.0
     },
@@ -156,7 +156,7 @@
       "comment": "",
       "expression": "600.0",
       "file": "backend/app/jobs/summary_generation.py",
-      "line": 117,
+      "line": 111,
       "name": "MAX_RETRY_DELAY_SECONDS",
       "value": 600.0
     },

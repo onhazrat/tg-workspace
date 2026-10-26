@@ -24,6 +24,7 @@ from app.jobs.summary_generation import start_attempt
 from app.models_tg import Summary, utc_now
 from app.schemas.scope import FrozenScope
 from app.schemas.summaries import SummaryDerivation
+from app.services.artifact_coverage import MISSING_POSTS_KEY
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.follows import followed_channels_for
 from app.services.logs import upsert_publish_log
@@ -35,7 +36,6 @@ from app.services.publications import (
 from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import (
     FAILED_STATUS,
-    MISSING_POSTS_KEY,
     derived_scope,
     is_incomplete,
     submit_summary,

@@ -85,7 +85,7 @@ def tag_run_to_camel(tag_run: TagRun) -> dict[str, Any]:
         "createdAt": tag_run.created_at,
         "updatedAt": tag_run.updated_at_ms,
         **(tag_run.extra or {}),
-        **scope_key(frozen_scope_of(tag_run)),
+        **scope_key(tag_run_scope(tag_run)),
     }
 
 
@@ -171,7 +171,7 @@ def own_tag_run(session: Session, tag_run_id: str, *, user_id: uuid.UUID) -> Tag
     return row
 
 
-def frozen_scope_of(row: TagRun) -> FrozenScope | None:
+def tag_run_scope(row: TagRun) -> FrozenScope | None:
     """The Scope this Tag run was produced from, refs included, or `None`."""
     return FrozenScope.from_stored(row.scope, row.scope_posts)
 
