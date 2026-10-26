@@ -36,6 +36,8 @@ in a row.
   and `restore(frozenScope)`, which replaces the ten-setter sequence.
 - **The Action path is pure functions of the view.** The Scope submission and
   the shown or ranked fetch take a `PostsView`; tests hand them a view literal.
+  The "no Posts selected" check before Generate is the view's Scope counts, a
+  Posts read like any other, read fresh.
 - **Invalidating the Posts reads is a plain function** the Posts view module
   owns, so the sync half calls it without depending on the Posts view context.
 - **The rest is `SyncContext`**: sync jobs, the sync queue, the auto-sync pause
@@ -68,4 +70,6 @@ per-Account browser storage, the selection for the browser session.
   a context that also syncs.
 - The command registry takes the view and the edits as two fields instead of 14.
 - `usePromptPosts`, `usePostFilters`' public interface and `handleFilterPosts`
-  go.
+  go, and with ADR-038's Artifact ids in place so do `getPromptPostsInput` and
+  the browser's `PromptScope`: the browser no longer describes a Scope by hand
+  anywhere but in the submission it asks the server to freeze.

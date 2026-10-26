@@ -12,7 +12,7 @@ candidate 2 of the 2026-10-25 architecture review, grilled 2026-10-26. Follows
 |---|---|---|
 | 1 | A meaning search, a find-related and "respects Channels" are part of the Posts view; reads that count or filter ignore the ranking | Ranking as a concept of its own |
 | 2 | Contexts split by how often they change: the view (moves on every edit) and the edits (one identity) | One memoized context; an external store with selectors |
-| 3 | The Action path moves too, as ticket PV-04, built after PR 225 merges | State only; building on PR 225's branch |
+| 3 | The Action path moves too, as ticket PV-04, built after PR 225 merged (it did, 2026-10-26) | State only; building on PR 225's branch |
 | 4 | The `getScopedPosts` identity fix (`postViewOptions` in `usePromptPosts`' deps) lands in PV-03 with a render test that is red on main | Its own PR first |
 | 5 | What remains of `ScraperContext` is `SyncContext` / `useSync`, Follow operations included | Keep the name; split Follow out |
 | 6 | Storage does not move: Post filter in the URL, order and cap in per-Account browser storage, selection for the browser session | |
@@ -24,15 +24,16 @@ candidate 2 of the 2026-10-25 architecture review, grilled 2026-10-26. Follows
 | 12 | `CommandContext` takes the view and the edits as two fields instead of 14 Posts fields | Leave it for review candidate 5 |
 | 13 | Guards: `architecture-invariants.test.ts` pins both contexts' field sets; a render test fails when a keystroke re-renders a sync-only or an edits-only reader | Only the render test |
 | 14 | A new ADR-039 rather than an addendum to ADR-036 | Addendum; no ADR |
-| 15 | Two tickets: PV-03 (the module, the rename, every consumer, the guards) unblocked; PV-04 (the Action path) blocked by PV-03 and PR 225 | One ticket after PR 225; finer tickets |
+| 15 | Two tickets: PV-03 (the module, the rename, every consumer, the guards), a pure move that Playwright passes unchanged; PV-04 (the Action path), blocked by PV-03 alone now PR 225 has merged, and the one ticket that changes a request | One ticket; finer tickets |
 | 16 | No prototype: behaviour-preserving, the render test is the measurement | A prototype measuring re-renders |
+| 17 | The "no Posts selected" check before Generate and copy prompt is the view's `scopeCounts` read, through `fetchQuery` with `staleTime: 0` as Trim's count already is (ADR-036 decision 11); `getPromptPostsInput`, the browser's `PromptScope`, `PromptPostsInput` and `promptPosts` go. Its body loses `viewMeasure`, `sort` and `groupByChannel`, which a count ignores | Feed `promptPosts` from the view |
 
 ## Facts it rests on (origin/main, 2026-10-26)
 
 - `ScraperContext.tsx`: 560 lines, a 51-member interface, an unmemoized value, 20 reading files.
 - Readers by half: 8 read only sync or Follow fields (ChannelCard, ChannelGrid, DiscoverView, SummaryAction, useChannelGridActions, useDirectory, PostPreview, PostCard's `addNewChannel`); 7 read only Posts view fields (PostFeed, PostFilter, usePostsView, useDiscoverGenerate, useApplyArtifactScope, SummaryMarkdown, TagContext); App, AIContext, ChatContext, useCommandRegistry and PostCard read both.
 - The halves share one call: the sync half invalidates the Posts reads after a sync.
-- PR 225 rewrites AIContext, ChatContext and TagContext to send an Artifact id; `getPromptPostsInput` survives in AIContext, `getScopeSubmission` everywhere.
+- After PR 225 (merged 2026-10-26) the AI, Chat and Tag contexts send an Artifact id and read only `getScopeSubmission` from the Action path; AIContext's two `getPromptPostsInput` calls feed nothing but the "no Posts selected" count.
 - No store library is installed.
 
 ## Out of scope
