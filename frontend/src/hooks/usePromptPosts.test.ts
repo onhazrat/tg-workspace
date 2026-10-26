@@ -22,7 +22,6 @@ import {
   EMPTY_SNAPSHOT,
   pick,
   rule,
-  selectionBody,
 } from "@/lib/posts/post-selection"
 import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
 import type { WindowState } from "@/lib/scope/window"
@@ -259,26 +258,5 @@ describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () 
 
     expect(asked.at(-1)?.startDate).toBe(61_000)
     expect(asked.at(-1)?.endDate).toBe(69_000)
-  })
-})
-
-describe("getScopeSubmission", () => {
-  test("the submission an Artifact freezes carries the selection and no Post filter", () => {
-    const submission = render({
-      filter: PERSIAN,
-      selection: SELECTION,
-      maxPerChannel: 3,
-      sort: "oldest",
-      groupByChannel: true,
-    }).getScopeSubmission(["alpha"])
-
-    expect(submission).toEqual({
-      channels: ["alpha"],
-      window: submission.window,
-      viewMeasure: "estimated",
-      sort: "oldest",
-      groupByChannel: true,
-      selection: selectionBody(SELECTION),
-    })
   })
 })

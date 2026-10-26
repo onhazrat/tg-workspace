@@ -160,13 +160,7 @@ describe("PVM-01: the Posts view apart from the Sync context (ADR-039)", () => {
 
   it("the view context holds the view and the Action path", () => {
     expect(fields(VIEW)).toEqual(
-      [
-        "getPromptPostsInput",
-        "getScopeSubmission",
-        "getScopedPosts",
-        "selectionEdit",
-        "view",
-      ].sort(),
+      ["getPromptPostsInput", "getScopedPosts", "selectionEdit", "view"].sort(),
     )
   })
 

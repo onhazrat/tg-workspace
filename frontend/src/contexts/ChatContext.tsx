@@ -35,6 +35,7 @@ import {
   submitChatSession,
 } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
+import { scopeSubmission } from "@/lib/posts/posts-view"
 import { chatWithHistoryStream, generateChatStream } from "../services/ai"
 import type { ChatMessage, ChatMode, Post } from "../types"
 import { useData } from "./DataContext"
@@ -87,7 +88,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const { scrapeChannelsInParallel } = useSync()
   const queryClient = useQueryClient()
-  const { view, getScopeSubmission } = usePostsViewState()
+  const { view } = usePostsViewState()
   const { searchSimilarPosts } = useRAG()
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -307,7 +308,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (send.sessionId) return
     await submitChatSession({
       id: sessionId,
-      scope: getScopeSubmission(selectedChannelNames),
+      scope: scopeSubmission(view, selectedChannelNames),
       language: aiLanguage,
       model: selectedModel,
       mode: chatMode,

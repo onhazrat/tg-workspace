@@ -96,7 +96,6 @@ interface PostsViewContextType {
   /** The Action path (PVM-02 replaces these with functions of `view`). */
   getScopedPosts: PromptPosts["getScopedPosts"]
   getPromptPostsInput: PromptPosts["getPromptPostsInput"]
-  getScopeSubmission: PromptPosts["getScopeSubmission"]
 }
 
 /** Domain operations on the view, one identity for the provider's life. */
@@ -298,24 +297,22 @@ export function PostsViewModule({
     ],
   )
 
-  const { getScopedPosts, getPromptPostsInput, getScopeSubmission } =
-    usePromptPosts({
-      view,
-      embeddingsEnabled: inputs.embeddingsEnabled,
-      searchSimilarPosts: inputs.searchSimilarPosts,
-      getPostsFeed: inputs.getPostsFeed,
-      lookupPosts: inputs.lookupPosts,
-      getViewEstimate: inputs.getViewEstimate,
-    })
+  const { getScopedPosts, getPromptPostsInput } = usePromptPosts({
+    view,
+    embeddingsEnabled: inputs.embeddingsEnabled,
+    searchSimilarPosts: inputs.searchSimilarPosts,
+    getPostsFeed: inputs.getPostsFeed,
+    lookupPosts: inputs.lookupPosts,
+    getViewEstimate: inputs.getViewEstimate,
+  })
   const state = useMemo<PostsViewContextType>(
     () => ({
       view,
       selectionEdit: edit,
       getScopedPosts,
       getPromptPostsInput,
-      getScopeSubmission,
     }),
-    [view, edit, getScopedPosts, getPromptPostsInput, getScopeSubmission],
+    [view, edit, getScopedPosts, getPromptPostsInput],
   )
 
   // The inputs an edit reaches, read when it runs so the edits never change.

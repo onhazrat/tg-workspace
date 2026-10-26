@@ -35,6 +35,7 @@ import {
   tagRunSnapshot,
 } from "@/lib/channels/tag-run"
 import { tryWriteTextToClipboard } from "@/lib/data-transfer/clipboard"
+import { scopeSubmission } from "@/lib/posts/posts-view"
 import {
   deleteTagRun,
   getTagRun,
@@ -79,7 +80,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { channels, selectedChannels, setChannels } = useData()
-  const { getScopeSubmission } = usePostsViewState()
+  const { view } = usePostsViewState()
   const {
     selectedModel,
     aiTemperature,
@@ -182,7 +183,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   const openTagRun = async (source: "generated" | "pasted") =>
     submitTagRun({
       id: crypto.randomUUID(),
-      scope: getScopeSubmission(selectedChannelNames),
+      scope: scopeSubmission(view, selectedChannelNames),
       mode,
       source,
       status: "pending",

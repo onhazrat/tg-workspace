@@ -26,6 +26,7 @@ import {
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
 import { staleSelectedChannels } from "@/lib/chat-sessions/chat-turn"
+import { scopeSubmission } from "@/lib/posts/posts-view"
 import { lookupPosts } from "@/lib/posts/store"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import {
@@ -96,7 +97,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const { workspaceTabs, setSummarizing } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const { scrapeChannelsInParallel } = useSync()
-  const { view, getScopeSubmission, getPromptPostsInput } = usePostsViewState()
+  const { view, getPromptPostsInput } = usePostsViewState()
   const { setChatMessages } = useChatContext()
   const { isOffline } = useApiStatus()
 
@@ -143,7 +144,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     await submitSummary({
       id,
-      scope: getScopeSubmission(names),
+      scope: scopeSubmission(view, names),
       language: aiLanguage,
       model: selectedModel,
       extra: {

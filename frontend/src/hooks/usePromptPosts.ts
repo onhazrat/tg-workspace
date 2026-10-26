@@ -17,8 +17,6 @@
 import { useCallback, useRef } from "react"
 
 import type { PromptScope } from "@/api/data"
-import type { ScopeSubmission } from "@/client"
-import { selectionBody } from "@/lib/posts/post-selection"
 import {
   meaningQuery,
   type PostsView,
@@ -28,7 +26,6 @@ import {
   computeScopedPosts,
   type ScopedPostsDeps,
 } from "@/lib/posts/scoped-posts"
-import { toWireWindow } from "@/lib/scope/window"
 import type { Post } from "@/types"
 
 export interface PromptPostsDeps {
@@ -51,13 +48,6 @@ export interface PromptPosts {
    */
   getScopedPosts: () => Promise<Post[]>
   getPromptPostsInput: () => Promise<PromptPostsInput>
-  /**
-   * The same Scope as a submission, for the server to freeze (AW-05). It
-   * sends the canonical window, never the pair it currently resolves to:
-   * flattening a Live window in the browser is the clock skew AW-02 removed,
-   * reintroduced one layer up.
-   */
-  getScopeSubmission: (channels: string[]) => ScopeSubmission
 }
 
 export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
@@ -145,19 +135,5 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     [startDate, endDate, selection, viewMeasure, sort, groupByChannel],
   )
 
-  const getScopeSubmission = useCallback(
-    (channels: string[]): ScopeSubmission => ({
-      channels,
-      window: toWireWindow(windowKey),
-      viewMeasure,
-      sort,
-      groupByChannel,
-      // The hand-written steps are the generated ones; the tree's ids ride
-      // along untouched, as they do on the feed.
-      selection: selectionBody(selection),
-    }),
-    [windowKey, viewMeasure, sort, groupByChannel, selection],
-  )
-
-  return { getScopedPosts, getPromptPostsInput, getScopeSubmission }
+  return { getScopedPosts, getPromptPostsInput }
 }

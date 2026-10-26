@@ -20,9 +20,10 @@
  */
 
 import { postScopeBody, postsFeedBody, shownPostsBody } from "@/api/data"
+import type { ScopeSubmission } from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
-import type { WindowState } from "@/lib/scope/window"
+import { toWireWindow, type WindowState } from "@/lib/scope/window"
 import type { Post } from "@/types"
 import {
   type PostFilter,
@@ -34,7 +35,7 @@ import type {
   PostSortOrder,
   ViewMeasure,
 } from "./post-pipeline"
-import type { PostSelection } from "./post-selection"
+import { type PostSelection, selectionBody } from "./post-selection"
 
 /**
  * How the tab ranks what it shows: not at all, by a meaning query, or by a
@@ -102,6 +103,26 @@ export type PostsOrder = Pick<
   | "maxPerChannel"
   | "maxPerChannelMode"
 >
+
+/**
+ * The Scope an Action asks the server to freeze (AW-05): `channels`, the
+ * view's window, order and selection. It sends the canonical window, never
+ * the pair it currently resolves to: flattening a Live window in the browser
+ * is the clock skew AW-02 removed, reintroduced one layer up.
+ */
+export const scopeSubmission = (
+  view: PostsView,
+  channels: string[],
+): ScopeSubmission => ({
+  channels,
+  window: toWireWindow(view.windowKey),
+  viewMeasure: view.viewMeasure,
+  sort: view.sort,
+  groupByChannel: view.groupByChannel,
+  // The hand-written steps are the generated ones; the tree's ids ride
+  // along untouched, as they do on the feed.
+  selection: selectionBody(view.selection),
+})
 
 /**
  * The reads, each with its own inputs. The histograms read the uncapped view:
