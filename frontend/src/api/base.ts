@@ -223,6 +223,9 @@ export async function* sseJsonStream<T>(
   }
 }
 
+/** Every frame of a stream, as parsed; how a caller reads one with no text. */
+export type OnFrame = (frame: Record<string, unknown>) => void
+
 /**
  * Parse SSE `data:` lines and yield JSON payload fields.
  *
@@ -233,8 +236,7 @@ export async function* sseTextStream(
   path: string,
   body: Record<string, unknown>,
   field: string,
-  /** Every frame, as parsed; how a caller reads a frame that carries no text. */
-  onFrame?: (frame: Record<string, unknown>) => void,
+  onFrame?: OnFrame,
 ): AsyncGenerator<string> {
   const response = await fetchOk(path, {
     method: "POST",

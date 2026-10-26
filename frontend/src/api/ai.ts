@@ -1,19 +1,15 @@
+import type {
+  ChatRequest,
+  PromptResponse,
+  SummaryPromptRequest,
+  TagRequest,
+} from "@/client"
 import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 
-import { request, sseTextStream } from "./base"
+import { type OnFrame, request, sseTextStream } from "./base"
 
-/** Every frame of a stream; the first carries its Missing Post count. */
-type OnFrame = (frame: Record<string, unknown>) => void
-
-/** A Tag run named by id: the server reads its Covered Posts, never a Scope. */
-export type TagPromptBody = {
-  tagRunId: string
-  channelsText: string
-  allTags: string
-  tagMode: "add" | "remove"
-  model?: string
-  temperature?: number
-}
+/** An Artifact's prompt and how many Covered Posts it left out (ADR-038). */
+export type ArtifactPrompt = Required<PromptResponse>
 
 /**
  * Stamp the paying Key onto an Artifact request (BYOK-01).
@@ -29,7 +25,7 @@ export type TagPromptBody = {
  * the account's most recent working Key, which is exactly right for the common
  * case of holding one.
  */
-const withAiKey = (body: Record<string, unknown>): Record<string, unknown> => {
+const withAiKey = <T extends object>(body: T): T => {
   const aiKeyId = selectedAiKeyId()
   return aiKeyId ? { ...body, aiKeyId } : body
 }
@@ -59,23 +55,23 @@ export const aiApi = {
     }),
 
   /** A Summary's prompt, read from its Covered Posts (ADR-038). */
-  summaryPrompt: (body: { summaryId: string; channelsText?: string }) =>
-    request<{ prompt: string; missingPosts: number }>(
-      "/api/v1/ai/summary/prompt",
-      { method: "POST", body: JSON.stringify(body) },
-    ),
-
-  /** A Tag run's prompt, read from its Covered Posts (ADR-038). */
-  tagPrompt: (body: TagPromptBody) =>
-    request<{ prompt: string; missingPosts: number }>("/api/v1/ai/tag/prompt", {
+  summaryPrompt: (body: SummaryPromptRequest) =>
+    request<ArtifactPrompt>("/api/v1/ai/summary/prompt", {
       method: "POST",
       body: JSON.stringify(body),
     }),
 
-  tagStream: (body: TagPromptBody, onFrame?: OnFrame) =>
+  /** A Tag run's prompt, read from its Covered Posts (ADR-038). */
+  tagPrompt: (body: TagRequest) =>
+    request<ArtifactPrompt>("/api/v1/ai/tag/prompt", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  tagStream: (body: TagRequest, onFrame?: OnFrame) =>
     sseTextStream("/api/v1/ai/tag/stream", withAiKey(body), "text", onFrame),
 
-  chatStream: (body: Record<string, unknown>, onFrame?: OnFrame) =>
+  chatStream: (body: ChatRequest, onFrame?: OnFrame) =>
     sseTextStream("/api/v1/ai/chat/stream", withAiKey(body), "text", onFrame),
 
   embeddings: (texts: string[], model?: string) =>

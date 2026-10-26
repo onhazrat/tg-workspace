@@ -1,5 +1,7 @@
 import { api } from "@/api"
-import type { TagPromptBody } from "@/api/ai"
+import type { ArtifactPrompt } from "@/api/ai"
+import type { OnFrame } from "@/api/base"
+import type { TagRequest } from "@/client"
 import { saveEmbeddingLog } from "@/lib/logs/write"
 import type { EmbeddingLog } from "../types"
 
@@ -23,10 +25,10 @@ export interface LLMStreamResult {
 }
 
 /** Remember the Missing Post count a stream's first frame carries. */
-function missingPostsFrame() {
+function missingPostsFrame(): { onFrame: OnFrame; read: () => number } {
   let missing = 0
   return {
-    onFrame: (frame: Record<string, unknown>) => {
+    onFrame: (frame) => {
       if (typeof frame.missingPosts === "number") missing = frame.missingPosts
     },
     read: () => missing,
@@ -45,8 +47,7 @@ async function* wrapStream(
 export const getSummaryPrompt = (
   summaryId: string,
   channelsText: string,
-): Promise<{ prompt: string; missingPosts: number }> =>
-  api.summaryPrompt({ summaryId, channelsText })
+): Promise<ArtifactPrompt> => api.summaryPrompt({ summaryId, channelsText })
 
 export const translateText = async (
   text: string,
@@ -193,12 +194,11 @@ export const translateTextBatch = async (
 }
 
 /** A Tag run's prompt from its Covered Posts, and how many were missing. */
-export const getTagPrompt = (
-  body: TagPromptBody,
-): Promise<{ prompt: string; missingPosts: number }> => api.tagPrompt(body)
+export const getTagPrompt = (body: TagRequest): Promise<ArtifactPrompt> =>
+  api.tagPrompt(body)
 
 export const generateTagStream = async (
-  body: TagPromptBody,
+  body: TagRequest,
 ): Promise<LLMStreamResult> => {
   try {
     const missing = missingPostsFrame()
