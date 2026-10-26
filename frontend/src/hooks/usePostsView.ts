@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { api } from "@/api"
@@ -27,6 +27,7 @@ import {
   usePostsViewEdits,
   usePostsViewState,
 } from "@/contexts/PostsViewContext"
+import { useRAG } from "@/contexts/RAGContext"
 import { useScope } from "@/contexts/ScopeContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
@@ -44,6 +45,7 @@ import {
   type PostsView,
   postsRead,
 } from "@/lib/posts/posts-view"
+import { fetchShownPosts, shownPostsKey } from "@/lib/posts/scoped-posts"
 import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
 import type { Post } from "@/types"
 import {
@@ -140,7 +142,8 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
   selectedShown: number
 } {
   const { selectedChannels } = useData()
-  const { view, getScopedPosts } = usePostsViewState()
+  const { view } = usePostsViewState()
+  const fetchShown = useShownPostsFetch()
   const serverEligible =
     !meaningQuery(view.ranking).trim() && selectedChannels.size > 0
   // Which Posts the cap keeps, as the feed asks: the Venn counts those.
@@ -160,13 +163,13 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
   useEffect(() => {
     if (serverEligible) return
     let cancelled = false
-    getScopedPosts().then((posts) => {
+    fetchShown().then((posts) => {
       if (!cancelled) setClientCounts(buildPostsInScopeCounts(posts))
     })
     return () => {
       cancelled = true
     }
-  }, [serverEligible, getScopedPosts])
+  }, [serverEligible, fetchShown])
 
   if (!serverEligible)
     return { counts: clientCounts, tooNewToJudge: 0, selectedShown: 0 }
@@ -269,14 +272,43 @@ export function usePostWindowHistogram(
 /**
  * The curve and settings an Estimated View count reads through, cached for an
  * hour: the curve is refitted daily and the settings change by hand. Shares
- * its cache entry with the Posts view module's `getViewEstimate`.
+ * its cache entry with `useShownPostsFetch`'s `getViewEstimate`.
  */
 export function useViewEstimate(): ViewEstimateResponse | undefined {
-  return useQuery({
-    queryKey: queryKeys.viewEstimate,
-    queryFn: () => dataPostsViewEstimate(),
-    staleTime: VIEW_ESTIMATE_STALE_TIME,
-  }).data
+  return useQuery(VIEW_ESTIMATE_QUERY).data
+}
+
+const VIEW_ESTIMATE_QUERY = {
+  queryKey: queryKeys.viewEstimate,
+  queryFn: () => dataPostsViewEstimate(),
+  staleTime: VIEW_ESTIMATE_STALE_TIME,
+}
+
+/**
+ * `fetchShownPosts` over the Posts view (no spotlight), for an effect: one
+ * identity until what it fetches changes (`shownPostsKey`), never for a new
+ * minute of a Live window or a selection edit, which it reads when called, so
+ * neither re-runs a meaning search (AW-04). The feed's meaning search, its
+ * client counts and the command registry call it.
+ */
+export function useShownPostsFetch(): () => Promise<Post[]> {
+  const { view } = usePostsViewState()
+  const { embeddingsEnabled } = useSettings()
+  const { searchSimilarPosts } = useRAG()
+  const queryClient = useQueryClient()
+  const latest = useRef(view)
+  latest.current = view
+  const key = shownPostsKey(view)
+  return useCallback(() => {
+    void key
+    return fetchShownPosts(latest.current, {
+      embeddingsEnabled,
+      searchSimilarPosts,
+      getPostsFeed: api.getPostsFeed,
+      lookupPosts: api.lookupPosts,
+      getViewEstimate: () => queryClient.fetchQuery(VIEW_ESTIMATE_QUERY),
+    })
+  }, [key, embeddingsEnabled, searchSimilarPosts, queryClient])
 }
 
 export interface PostsFeed {
@@ -326,7 +358,8 @@ export function usePostsFeed(
     selectedShownTotal?: number
   } = {},
 ): PostsFeed {
-  const { getScopedPosts, selectionEdit } = usePostsViewState()
+  const { selectionEdit } = usePostsViewState()
+  const fetchShown = useShownPostsFetch()
   const { setRanking } = usePostsViewEdits()
   const queryClient = useQueryClient()
   const { embeddingsEnabled } = useSettings()
@@ -401,7 +434,7 @@ export function usePostsFeed(
     }
     let cancelled = false
     setClientLoading(true)
-    getScopedPosts()
+    fetchShown()
       .then((posts) => {
         if (!cancelled) setClientPosts(posts)
       })
@@ -419,7 +452,7 @@ export function usePostsFeed(
     return () => {
       cancelled = true
     }
-  }, [semanticActive, getScopedPosts, setRanking, ruleEdits])
+  }, [semanticActive, fetchShown, setRanking, ruleEdits])
 
   if (semanticActive) {
     return {

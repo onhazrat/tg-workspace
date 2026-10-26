@@ -1,13 +1,16 @@
+import { hashKey } from "@tanstack/react-query"
+
 import type { PostFeedQuery } from "@/api/data"
 import type { ViewEstimate } from "@/lib/posts/estimated-views"
 import type { Post } from "@/types"
-import type { PostFilter } from "./post-filter"
+import { type PostFilter, printPostFilter } from "./post-filter"
 import {
   buildFilteredPostsFromRaw,
   type PostViewOptions,
   readsEstimatedViews,
 } from "./post-pipeline"
 import type { PostSelection } from "./post-selection"
+import { meaningQuery, type PostsView, relatedPost } from "./posts-view"
 
 /**
  * Ceiling on the non-semantic branch's fetch (A1c).
@@ -26,39 +29,17 @@ import type { PostSelection } from "./post-selection"
 export const SCOPED_POSTS_LIMIT = 200
 
 /**
- * Everything `computeScopedPosts` needs to fetch what the Posts tab shows,
- * with no React/state dependency: the related-post search, the semantic
- * search, or the normal date-range path.
+ * What `fetchShownPosts` calls: the semantic search, the server feed and
+ * lookup, and the view estimate. Injected so it is tested with a fake.
  */
-export interface ScopedPostsDeps {
-  /** Debounced free-text keyword filter (normal path only). */
-  searchText: string
-  /** Debounced semantic-search query; when non-empty it takes the RAG path. */
-  semanticQuery: string
-  /** When set (and embeddings on), the related-post RAG branch is used. */
-  relatedPostSearch: Post | null
+export interface ShownPostsApi {
+  /** Off, a ranking falls through to the shown read. */
   embeddingsEnabled: boolean
-  selectedChannels: string[]
-  startDate: number
-  endDate: number
-  /**
-   * What the Posts tab shows (PTR-03). Empty for an Action's own read, which
-   * the Post filter never narrows (ADR-026).
-   */
-  postFilter: PostFilter
-  /** Flags every Post the read returns with `selected` (PTR-05). */
-  postSelection: PostSelection
-  postViewOptions: PostViewOptions
-  semanticSearchRespectsChannels: boolean
   searchSimilarPosts: (
     query: string,
     limit: number,
     options: { channels?: string[]; startDate: number; endDate: number },
   ) => Promise<Post[]>
-  /**
-   * The server feed. Injected rather than imported so the branch stays
-   * testable without a network stub at module scope.
-   */
   getPostsFeed: (query: PostFeedQuery) => Promise<Post[]>
   /**
    * The server lookup, which passes ranked Posts through the Post filter and
@@ -83,52 +64,51 @@ export interface ScopedPostsDeps {
 }
 
 /**
- * Fetch + filter the posts in the current scope, on demand. This is the pure
- * core behind the Posts view module's `getScopedPosts` (which wires the view
- * into it) and its unit tests. It performs no state writes and surfaces
- * errors to the caller, whose fallback is the feed's to choose.
+ * What a fetch of `view` depends on, as one string: everything but the
+ * minute a Live window resolves to now and the Post selection, which the
+ * fetch reads when it runs. The feed runs a meaning search again when this
+ * moves and never otherwise (AW-04), so a new field of the view is in it
+ * unless it is left out here.
  */
-export async function computeScopedPosts(
-  deps: ScopedPostsDeps,
+export function shownPostsKey(view: PostsView): string {
+  const { startDate, endDate, selection, selectionRevision, ...rest } = view
+  return hashKey([{ ...rest, filter: printPostFilter(view.filter) }])
+}
+
+/**
+ * Fetch what the Posts tab shows under `view`, on demand: ranked by a
+ * find-related or a meaning search, or the shown read. No spotlight: the
+ * Scope's Channels and the Account's Post filter. It performs no state
+ * writes and surfaces errors to the caller, whose fallback is the feed's to
+ * choose.
+ */
+export async function fetchShownPosts(
+  view: PostsView,
+  api: ShownPostsApi,
 ): Promise<Post[]> {
-  const {
-    searchText,
-    semanticQuery,
-    relatedPostSearch,
-    embeddingsEnabled,
-    selectedChannels,
-    startDate,
-    endDate,
-    postFilter,
-    postSelection,
-    postViewOptions,
-    semanticSearchRespectsChannels,
-    searchSimilarPosts,
-    getPostsFeed,
-    lookupPosts,
-    getViewEstimate,
-  } = deps
+  const { scopeChannelNames, startDate, endDate, filter, selection } = view
+  const order: PostViewOptions = {
+    maxPostsPerChannel: view.maxPerChannel,
+    maxPostsPerChannelMode: view.maxPerChannelMode,
+    postSortOrder: view.sort,
+    groupByChannel: view.groupByChannel,
+    viewMeasure: view.viewMeasure,
+  }
 
   // The ranked Posts a vector search returns pass through the Post filter, so
   // the filter means the same thing in both modes, and come back flagged by
   // the Post selection. The server does both, through the lookup, and the
   // rank order is kept. Not the keyword: in meaning mode the search box holds
   // the meaning query.
-  const readsEstimate = readsEstimatedViews(postViewOptions)
   const filterRanked = async (ranked: Post[]) => {
     let kept: Post[] = []
     if (ranked.length > 0) {
       const shown = new Map(
         (
-          await lookupPosts(
+          await api.lookupPosts(
             ranked.map((p) => ({ channelName: p.channelName, postId: p.id })),
-            postFilter,
-            {
-              channelNames: selectedChannels,
-              startDate,
-              endDate,
-              selection: postSelection,
-            },
+            filter,
+            { channelNames: scopeChannelNames, startDate, endDate, selection },
           )
         ).map((p) => [`${p.channelName}:${p.id}`, p]),
       )
@@ -137,8 +117,10 @@ export async function computeScopedPosts(
     return buildFilteredPostsFromRaw(kept, {
       searchText: "",
       view: {
-        ...postViewOptions,
-        viewEstimate: readsEstimate ? await getViewEstimate() : null,
+        ...order,
+        viewEstimate: readsEstimatedViews(order)
+          ? await api.getViewEstimate()
+          : null,
       },
       startDate,
       endDate,
@@ -152,27 +134,28 @@ export async function computeScopedPosts(
   // silently meant all time, and the one with no control on screen admitting
   // to it. Both bounds are required by `searchSimilarPosts`, so a branch that
   // forgets them no longer compiles.
-  if (embeddingsEnabled && relatedPostSearch) {
-    const results = await searchSimilarPosts(relatedPostSearch.text, 50, {
+  const related = relatedPost(view.ranking)
+  if (api.embeddingsEnabled && related) {
+    const results = await api.searchSimilarPosts(related.text, 50, {
       startDate,
       endDate,
     })
-    const otherPosts = results.filter(
-      (p) =>
-        p.id !== relatedPostSearch.id ||
-        p.channelName !== relatedPostSearch.channelName,
+    return filterRanked(
+      results.filter(
+        (p) => p.id !== related.id || p.channelName !== related.channelName,
+      ),
     )
-    return filterRanked(otherPosts)
   }
 
   // Semantic search — bounded at 50 by the RAG call.
-  if (embeddingsEnabled && semanticQuery.trim()) {
-    const results = await searchSimilarPosts(semanticQuery, 50, {
+  const query = meaningQuery(view.ranking)
+  if (api.embeddingsEnabled && query.trim()) {
+    const results = await api.searchSimilarPosts(query, 50, {
       startDate,
       endDate,
       channels:
-        semanticSearchRespectsChannels && selectedChannels.length > 0
-          ? selectedChannels
+        view.respectsChannels && scopeChannelNames.length > 0
+          ? scopeChannelNames
           : undefined,
     })
     return filterRanked(results)
@@ -186,19 +169,19 @@ export async function computeScopedPosts(
   // cap seeded off the date range instead; that drift predates this change and
   // is tracked as P2 in `docs/discover-probe-queue-plan.md`, deliberately not
   // in this plan's scope.
-  return getPostsFeed({
-    channelNames: selectedChannels,
+  return api.getPostsFeed({
+    channelNames: scopeChannelNames,
     startDate,
     endDate,
-    keyword: searchText,
-    filter: postFilter,
-    viewMeasure: postViewOptions.viewMeasure,
-    maxPerChannel: postViewOptions.maxPostsPerChannel,
-    maxPerChannelMode: postViewOptions.maxPostsPerChannelMode,
-    sort: postViewOptions.postSortOrder,
-    groupByChannel: postViewOptions.groupByChannel,
+    keyword: view.keyword,
+    filter,
+    viewMeasure: view.viewMeasure,
+    maxPerChannel: view.maxPerChannel,
+    maxPerChannelMode: view.maxPerChannelMode,
+    sort: view.sort,
+    groupByChannel: view.groupByChannel,
     seed: 0,
     limit: SCOPED_POSTS_LIMIT,
-    selection: postSelection,
+    selection,
   })
 }

@@ -19,6 +19,7 @@ import { useApiStatus } from "@/hooks/useApiStatus"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useHistoryParams } from "@/hooks/useHistoryParams"
 import { useJobToggles } from "@/hooks/useJobToggles"
+import { useShownPostsFetch } from "@/hooks/usePostsView"
 import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
@@ -109,7 +110,8 @@ export function useCommandRegistry(): {
     autoSyncPauseUntil,
     setAutoSyncPauseUntil,
   } = useSync()
-  const { view: postsView, getScopedPosts } = usePostsViewState()
+  const { view: postsView } = usePostsViewState()
+  const getScopedPosts = useShownPostsFetch()
   const postsEdits = usePostsViewEdits()
   const {
     setSummary,

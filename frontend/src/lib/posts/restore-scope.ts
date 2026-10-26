@@ -106,7 +106,7 @@ export function workspaceFromScope(scope: FrozenScope): {
     selection: scope.selection
       ? // The generated read type leaves `filter` optional because the server
         // defaults it on input; it always emits one. The write direction is
-        // compiler-checked in `usePromptPosts.getScopeSubmission`.
+        // compiler-checked in `scopeSubmission`.
         (scope.selection as PostSelection)
       : scope.posts?.length
         ? // A ranked Artifact from before: those Posts, as the server reads it.

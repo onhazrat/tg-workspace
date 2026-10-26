@@ -158,10 +158,9 @@ describe("PVM-01: the Posts view apart from the Sync context (ADR-039)", () => {
   const SYNC = ["contexts/SyncContext.tsx", "SyncContextType"]
   const fields = ([file, name]: string[]) => interfaceFields(file, name)
 
-  it("the view context holds the view and the Action path", () => {
-    expect(fields(VIEW)).toEqual(
-      ["getPromptPostsInput", "getScopedPosts", "selectionEdit", "view"].sort(),
-    )
+  // The Action path is plain functions of the view (PVM-02), not members.
+  it("the view context holds the view", () => {
+    expect(fields(VIEW)).toEqual(["selectionEdit", "view"])
   })
 
   it("the edits are domain operations, not one setter per field", () => {

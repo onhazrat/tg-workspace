@@ -1364,7 +1364,7 @@
       "comment": "How long a keystroke waits before it reaches the view.",
       "expression": "300",
       "file": "frontend/src/contexts/PostsViewContext.tsx",
-      "line": 79,
+      "line": 74,
       "name": "POST_SEARCH_DEBOUNCE_MS",
       "value": 300
     },
@@ -1444,7 +1444,7 @@
       "comment": "One page of the infinite Posts feed.",
       "expression": "20",
       "file": "frontend/src/hooks/usePostsView.ts",
-      "line": 56,
+      "line": 58,
       "name": "FEED_PAGE_SIZE",
       "value": 20
     },
@@ -1716,7 +1716,7 @@
       "comment": "Ceiling on the non-semantic branch's fetch (A1c). The branch used to be unbounded: it paged a channel's whole history into the browser and filtered there. It is now one `POST /data/posts` call, and bounding it is only sound because the server **sorts before it limits** \u2014 so `limit: N` returns the first N of the same ordering the client pipeline produced, not an arbitrary N. The one caller that reaches this branch (`useEntityFlow`'s pick-post pool) takes `.slice(0, 100)` immediately, so 200 is generous. A caller that needs more than this should page the feed (`usePostsFeed`) rather than raise the number.",
       "expression": "200",
       "file": "frontend/src/lib/posts/scoped-posts.ts",
-      "line": 26,
+      "line": 29,
       "name": "SCOPED_POSTS_LIMIT",
       "value": 200
     },

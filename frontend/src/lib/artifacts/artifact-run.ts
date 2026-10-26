@@ -3,8 +3,14 @@
  * Chat, Tag run). No React, so they can be tested directly; the contexts keep
  * the state and the toasts.
  */
-import type { PostScopeQuery, PromptScope } from "@/api/data"
-import { meaningQuery, type PostsView } from "@/lib/posts/posts-view"
+import type { QueryClient } from "@tanstack/react-query"
+
+import {
+  dataPostsCounts,
+  type PostCountsResponse,
+  type PostFilteredRequest,
+} from "@/client"
+import { meaningQuery, type PostsView, postsRead } from "@/lib/posts/posts-view"
 
 /** What a run tells `withProvisionalRow` about the row it opened. */
 export interface ProvisionalRow {
@@ -79,22 +85,25 @@ export async function readStream(
   return { text, lastChunk }
 }
 
-export type PromptPostsInput = { scope: PromptScope }
-
-export interface PromptPosts {
-  postCount: number
-}
-
 /**
- * How many posts the Posts tab selects now, for the "no Posts selected" check
- * before an Artifact opens. The count is the server's: the selected Posts in
- * the window (PTR-05). The prompt itself reads the Artifact's Covered Posts.
+ * How many Posts the Posts tab selects now, for the "no Posts selected" check
+ * before an Artifact opens: the view's Scope counts read, the server's count
+ * of the selected Posts in the window (PTR-05). Fetched with no stale time,
+ * so a selection changed a moment ago is counted. The prompt itself reads the
+ * Artifact's Covered Posts.
  */
-export async function promptPosts(
-  input: PromptPostsInput,
-  channelNames: string[],
-  countPosts: (q: PostScopeQuery) => Promise<Record<string, number>>,
-): Promise<PromptPosts> {
-  const counts = await countPosts({ channelNames, ...input.scope })
-  return { postCount: Object.values(counts).reduce((sum, n) => sum + n, 0) }
+export async function selectedPostCount(
+  queryClient: QueryClient,
+  view: PostsView,
+  countPosts: (body: PostFilteredRequest) => Promise<PostCountsResponse> = (
+    body,
+  ) => dataPostsCounts({ body }),
+): Promise<number> {
+  const { queryKey, body } = postsRead(view, { kind: "scopeCounts" })
+  const { selected } = await queryClient.fetchQuery({
+    queryKey,
+    queryFn: () => countPosts(body as PostFilteredRequest),
+    staleTime: 0,
+  })
+  return Object.values(selected).reduce((sum, n) => sum + n, 0)
 }

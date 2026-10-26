@@ -2,7 +2,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import type React from "react"
 import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/api"
 import { watchSummaryAttempt } from "@/api/data"
 import {
   dataRecordSummaryFailure,
@@ -20,8 +19,8 @@ import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 import {
   errorText,
   type ProvisionalRow,
-  promptPosts,
   searchFilterExtra,
+  selectedPostCount,
   withMissingPosts,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
@@ -97,7 +96,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const { workspaceTabs, setSummarizing } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const { scrapeChannelsInParallel } = useSync()
-  const { view, getPromptPostsInput } = usePostsViewState()
+  const { view } = usePostsViewState()
   const { setChatMessages } = useChatContext()
   const { isOffline } = useApiStatus()
 
@@ -183,12 +182,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       (err: unknown) => err,
     )
     const names = selectedChannelNames()
-    const posts = await promptPosts(
-      await getPromptPostsInput(),
-      names,
-      api.getPostsCounts,
-    )
-    if (posts.postCount === 0) {
+    if ((await selectedPostCount(queryClient, view)) === 0) {
       toast.error(
         syncError ? errorText(syncError, NO_POSTS_MESSAGE) : NO_POSTS_MESSAGE,
       )
@@ -289,12 +283,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const copyPrompt = async (row: ProvisionalRow) => {
     const names = selectedChannelNames()
-    const posts = await promptPosts(
-      await getPromptPostsInput(),
-      names,
-      api.getPostsCounts,
-    )
-    if (posts.postCount === 0) {
+    if ((await selectedPostCount(queryClient, view)) === 0) {
       toast.error(NO_POSTS_MESSAGE)
       return
     }

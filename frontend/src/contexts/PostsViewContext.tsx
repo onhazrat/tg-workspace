@@ -21,7 +21,7 @@
  * test mounts it alone; `PostsViewProvider` wires those from the app.
  */
 
-import { type QueryClient, useQueryClient } from "@tanstack/react-query"
+import type { QueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import {
   createContext,
@@ -35,11 +35,9 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { api } from "@/api"
-import { dataPostsViewEstimate, type FrozenScope } from "@/client"
-import { queryKeys, VIEW_ESTIMATE_STALE_TIME } from "@/hooks/queryKeys"
+import type { FrozenScope } from "@/client"
+import { queryKeys } from "@/hooks/queryKeys"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
-import { type PromptPosts, usePromptPosts } from "@/hooks/usePromptPosts"
 import {
   emptyPostFilter,
   POST_FILTER_BOUNDS,
@@ -67,13 +65,10 @@ import {
   type RankingEdit,
 } from "@/lib/posts/posts-view"
 import { workspaceFromScope } from "@/lib/posts/restore-scope"
-import type { ScopedPostsDeps } from "@/lib/posts/scoped-posts"
 import type { WindowState } from "@/lib/scope/window"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { useData } from "./DataContext"
-import { useRAG } from "./RAGContext"
 import { useScope } from "./ScopeContext"
-import { useSettings } from "./SettingsContext"
 
 /** How long a keystroke waits before it reaches the view. */
 export const POST_SEARCH_DEBOUNCE_MS = 300
@@ -93,9 +88,6 @@ interface PostsViewContextType {
   /** The whole Posts view, no spotlight applied; `usePostsView` applies one. */
   view: PostsView
   selectionEdit: SelectionEdit
-  /** The Action path (PVM-02 replaces these with functions of `view`). */
-  getScopedPosts: PromptPosts["getScopedPosts"]
-  getPromptPostsInput: PromptPosts["getPromptPostsInput"]
 }
 
 /** Domain operations on the view, one identity for the provider's life. */
@@ -130,11 +122,6 @@ export interface PostsViewInputs {
   /** What `restore` reaches through the Channels' and the window's contexts. */
   setSelectedChannels: (channels: Set<string>) => void
   setFixedRange: (start: number, end: number) => void
-  embeddingsEnabled: boolean
-  searchSimilarPosts: ScopedPostsDeps["searchSimilarPosts"]
-  getPostsFeed: ScopedPostsDeps["getPostsFeed"]
-  lookupPosts: ScopedPostsDeps["lookupPosts"]
-  getViewEstimate: ScopedPostsDeps["getViewEstimate"]
 }
 
 const PostsViewContext = createContext<PostsViewContextType | undefined>(
@@ -297,22 +284,9 @@ export function PostsViewModule({
     ],
   )
 
-  const { getScopedPosts, getPromptPostsInput } = usePromptPosts({
-    view,
-    embeddingsEnabled: inputs.embeddingsEnabled,
-    searchSimilarPosts: inputs.searchSimilarPosts,
-    getPostsFeed: inputs.getPostsFeed,
-    lookupPosts: inputs.lookupPosts,
-    getViewEstimate: inputs.getViewEstimate,
-  })
   const state = useMemo<PostsViewContextType>(
-    () => ({
-      view,
-      selectionEdit: edit,
-      getScopedPosts,
-      getPromptPostsInput,
-    }),
-    [view, edit, getScopedPosts, getPromptPostsInput],
+    () => ({ view, selectionEdit: edit }),
+    [view, edit],
   )
 
   // The inputs an edit reaches, read when it runs so the edits never change.
@@ -387,13 +361,10 @@ function useSelectedChannelNames(): string[] {
   return useMemo(() => (joined ? joined.split("\n") : []), [joined])
 }
 
-/** The module wired to the app: the Channels, the window, the URL and the api. */
+/** The module wired to the app: the Channels, the window and the URL. */
 export function PostsViewProvider({ children }: { children: ReactNode }) {
   const { setSelectedChannels } = useData()
   const { startDate, endDate, windowKey, setFixedRange } = useScope()
-  const { embeddingsEnabled } = useSettings()
-  const { searchSimilarPosts } = useRAG()
-  const queryClient = useQueryClient()
   const { postFilter } = workspaceRoute.useSearch()
   const navigate = workspaceRoute.useNavigate()
   const setPostFilterText = useCallback(
@@ -403,15 +374,6 @@ export function PostsViewProvider({ children }: { children: ReactNode }) {
         replace: true,
       }),
     [navigate],
-  )
-  const getViewEstimate = useCallback(
-    () =>
-      queryClient.fetchQuery({
-        queryKey: queryKeys.viewEstimate,
-        queryFn: () => dataPostsViewEstimate(),
-        staleTime: VIEW_ESTIMATE_STALE_TIME,
-      }),
-    [queryClient],
   )
   return (
     <PostsViewModule
@@ -424,11 +386,6 @@ export function PostsViewProvider({ children }: { children: ReactNode }) {
         setPostFilterText,
         setSelectedChannels,
         setFixedRange,
-        embeddingsEnabled,
-        searchSimilarPosts,
-        getPostsFeed: api.getPostsFeed,
-        lookupPosts: api.lookupPosts,
-        getViewEstimate,
       }}
     >
       {children}
@@ -442,7 +399,7 @@ function required<T>(value: T | undefined, hook: string): T {
   return value
 }
 
-/** The view and the Action path; re-renders on every edit. */
+/** The view; re-renders on every edit. */
 export const usePostsViewState = (): PostsViewContextType =>
   required(useContext(PostsViewContext), "usePostsViewState")
 

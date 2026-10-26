@@ -129,9 +129,10 @@ describe("post scope transport", () => {
     // Each of these takes a channel selection, so none may be fetched with the
     // default (GET) method. Asserting on the call shape rather than mocking
     // fetch keeps this a source invariant, which is what actually regressed.
+    // `/posts/counts` left this file (PVM-02): the generated client's
+    // `dataPostsCounts` POSTs it, as the route declares.
     for (const path of [
       "/api/v1/data/posts",
-      "/api/v1/data/posts/counts",
       "/api/v1/data/discover/candidates",
     ]) {
       const index = data.indexOf(`"${path}"`)

@@ -34,6 +34,7 @@ import {
   rule,
 } from "@/lib/posts/post-selection"
 import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
+import { fetchShownPosts } from "@/lib/posts/scoped-posts"
 import type { WindowState } from "@/lib/scope/window"
 import { scopedStorage } from "@/lib/storage/scoped"
 import type { Post } from "@/types"
@@ -53,11 +54,6 @@ const INPUTS: Omit<PostsViewInputs, "postFilterText" | "setPostFilterText"> = {
   windowKey: LIVE,
   setSelectedChannels: NOOP,
   setFixedRange: NOOP,
-  embeddingsEnabled: false,
-  searchSimilarPosts: never,
-  getPostsFeed: never,
-  lookupPosts: never,
-  getViewEstimate: never,
 }
 
 function useModule() {
@@ -98,14 +94,15 @@ beforeEach(() => {
 })
 
 describe("identity across a provider re-render", () => {
-  test("the edits and the fetch for what the tab shows keep theirs", () => {
+  // What the fetch for what the tab shows depends on is `shownPostsKey`'s,
+  // a string of the view (PVM-02), so a view that holds still holds it still.
+  test("the edits and the view keep theirs", () => {
     const { result, rerender } = mount()
     const { edits, state } = result.current
 
     rerender()
 
     expect(result.current.edits).toBe(edits)
-    expect(result.current.state.getScopedPosts).toBe(state.getScopedPosts)
     expect(result.current.state.view).toBe(state.view)
   })
 })
@@ -276,13 +273,7 @@ describe("the ranking", () => {
 
   test("the search it keeps to reaches the fetch for what the tab shows", async () => {
     const asked: (string[] | undefined)[] = []
-    const { result } = mount({
-      embeddingsEnabled: true,
-      searchSimilarPosts: async (_query, _limit, options) => {
-        asked.push(options.channels)
-        return []
-      },
-    })
+    const { result } = mount()
     act(() => result.current.edits.setRanking({ respectsChannels: true }))
     act(() =>
       result.current.edits.setRanking({
@@ -290,7 +281,16 @@ describe("the ranking", () => {
       }),
     )
 
-    await result.current.state.getScopedPosts()
+    await fetchShownPosts(result.current.state.view, {
+      embeddingsEnabled: true,
+      searchSimilarPosts: async (_query, _limit, options) => {
+        asked.push(options.channels)
+        return []
+      },
+      getPostsFeed: never,
+      lookupPosts: never,
+      getViewEstimate: never,
+    })
 
     expect(asked).toEqual([CHANNELS])
   })

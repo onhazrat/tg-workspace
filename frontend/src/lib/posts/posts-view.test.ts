@@ -218,6 +218,39 @@ describe("postsRead", () => {
   })
 })
 
+describe("the Scope counts read, which the no-Posts-selected check fetches (PVM-02)", () => {
+  // The Scope's Channels, the window and the selection, and nothing a count
+  // ignores: no Post filter, keyword, cap, order, grouping or views measure.
+  test("its key and body", () => {
+    const view: PostsView = {
+      ...base,
+      channelNames: ["news"],
+      keyword: "rates",
+      sort: "oldest",
+      groupByChannel: true,
+      viewMeasure: "views",
+    }
+    expect(postsRead(view, { kind: "scopeCounts" })).toEqual({
+      queryKey: [
+        "postsCounts",
+        {
+          channelNames: ["durov", "news"],
+          window: { mode: "live", durationMs: 1_000_000, endGapMs: 0 },
+          selection: 1,
+        },
+      ],
+      body: {
+        channelNames: ["durov", "news"],
+        // The pair the window resolves to now, to the minute.
+        window: { mode: "fixed", start: 960_000, end: 1_980_000 },
+        selection: [
+          { kind: "pick", select: true, channelName: "news", postId: 1 },
+        ],
+      },
+    })
+  })
+})
+
 describe("scopeSubmission (PVM-02)", () => {
   // What every Action freezes: the Channels it names, the canonical window,
   // the order and the selection. Never the keyword, the Post filter, the cap

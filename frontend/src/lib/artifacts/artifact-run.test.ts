@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test"
-import type { PostScopeQuery } from "@/api/data"
+import { QueryClient } from "@tanstack/react-query"
+import { emptyPostFilter } from "@/lib/posts/post-filter"
 import { DEFAULT_SELECTION } from "@/lib/posts/post-selection"
+import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
 import {
   errorText,
-  promptPosts,
   readStream,
   searchFilterExtra,
+  selectedPostCount,
   withMissingPosts,
   withProvisionalRow,
 } from "./artifact-run"
@@ -115,25 +117,68 @@ it("readStream accumulates the text, reports it per chunk, and keeps the last ch
   expect(seen).toEqual(["Good", "Good day"])
 })
 
-describe("promptPosts", () => {
-  it("counts what the Posts tab selects, summing the server's per-channel counts", async () => {
-    const asked: PostScopeQuery[] = []
-    const result = await promptPosts(
-      { scope: { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION } },
-      ["a", "b"],
-      async (q) => {
-        asked.push(q)
-        return { a: 3, b: 4 }
+describe("selectedPostCount: the no-Posts-selected check (PVM-02)", () => {
+  const view: PostsView = {
+    scopeChannelNames: ["a", "b"],
+    channelNames: ["a"],
+    keyword: "",
+    ranking: NO_RANKING,
+    respectsChannels: false,
+    filter: emptyPostFilter(),
+    maxPerChannel: 0,
+    maxPerChannelMode: "ordered",
+    sort: "newest",
+    groupByChannel: false,
+    viewMeasure: "estimated",
+    startDate: 60_000,
+    endDate: 120_000,
+    windowKey: { mode: "fixed", start: 60_000, end: 120_000 },
+    selection: DEFAULT_SELECTION,
+    selectionRevision: 3,
+  }
+  const answer = (selected: Record<string, number>) => ({
+    counts: {},
+    selected,
+    selectedShown: {},
+    tooNewToJudge: 0,
+  })
+
+  it("sums the selected Posts of the view's Scope counts read", async () => {
+    const asked: unknown[] = []
+    const count = await selectedPostCount(
+      new QueryClient(),
+      view,
+      async (body) => {
+        asked.push(body)
+        return answer({ a: 3, b: 4 })
       },
     )
-    expect(result).toEqual({ postCount: 7 })
+    expect(count).toBe(7)
     expect(asked).toEqual([
       {
         channelNames: ["a", "b"],
-        startDate: 1,
-        endDate: 2,
+        window: { mode: "fixed", start: 60_000, end: 120_000 },
         selection: DEFAULT_SELECTION,
       },
     ])
+  })
+
+  it("no Posts selected is zero", async () => {
+    const count = await selectedPostCount(new QueryClient(), view, async () =>
+      answer({ a: 0, b: 0 }),
+    )
+    expect(count).toBe(0)
+  })
+
+  it("reads fresh: counts cached a moment ago are fetched again", async () => {
+    // The Posts reads hold their answers for a while; this check must not,
+    // or a selection changed just before a Generate is counted as it was.
+    const queryClient = new QueryClient()
+    const read = async () => answer({ a: 5 })
+    await selectedPostCount(queryClient, view, read)
+    const count = await selectedPostCount(queryClient, view, async () =>
+      answer({ a: 0 }),
+    )
+    expect(count).toBe(0)
   })
 })
