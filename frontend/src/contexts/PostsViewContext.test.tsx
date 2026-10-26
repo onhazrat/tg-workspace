@@ -7,13 +7,14 @@
  * router, the other providers or `mock.module`.
  */
 
-import { beforeEach, describe, expect, test } from "bun:test"
-import { act, renderHook } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { act, cleanup, render, renderHook } from "@testing-library/react"
 import { type ReactNode, useState } from "react"
 
 import {
   POST_FILTER_STORAGE_KEYS,
   POST_SEARCH_DEBOUNCE_MS,
+  type PostsViewEdits,
   type PostsViewInputs,
   PostsViewModule,
   usePostsKeyword,
@@ -110,6 +111,87 @@ describe("identity across a provider re-render", () => {
 })
 
 const settle = (ms: number) => new Promise((done) => setTimeout(done, ms))
+
+describe("who re-renders for a keystroke (the fan-out)", () => {
+  /**
+   * The point of three contexts. Before PVM-01 one context held the keyword
+   * and every sync, so a letter typed in the Posts search re-rendered every
+   * Channel card, Post card and the shell. A reader here counts its renders.
+   *
+   * The Sync context sits above this provider, so a sync-only reader sees a
+   * keystroke only if the module re-renders the children it was handed; the
+   * field pin in `architecture-invariants.test.ts` keeps Posts fields off the
+   * Sync context itself.
+   */
+  function fanOut() {
+    const renders = { sync: 0, edits: 0, searchBox: 0, view: 0 }
+    let edits: PostsViewEdits | undefined
+    function SyncOnlyReader() {
+      renders.sync++
+      return null
+    }
+    function EditsOnlyReader() {
+      renders.edits++
+      edits = usePostsViewEdits()
+      return null
+    }
+    function SearchBox() {
+      renders.searchBox++
+      return <input readOnly value={usePostsKeyword()} />
+    }
+    function ViewReader() {
+      renders.view++
+      return <span>{usePostsViewState().view.keyword}</span>
+    }
+    function Host() {
+      const [text, setText] = useState<string | undefined>()
+      return (
+        <PostsViewModule
+          inputs={{
+            ...INPUTS,
+            postFilterText: text,
+            setPostFilterText: setText,
+          }}
+        >
+          <SyncOnlyReader />
+          <EditsOnlyReader />
+          <SearchBox />
+          <ViewReader />
+        </PostsViewModule>
+      )
+    }
+    render(<Host />)
+    const reset = () => {
+      for (const key of Object.keys(renders) as (keyof typeof renders)[])
+        renders[key] = 0
+    }
+    reset()
+    const type = (keyword: string) =>
+      act(() => (edits as PostsViewEdits).setKeyword(keyword))
+    return { renders, reset, type }
+  }
+
+  afterEach(cleanup)
+
+  test("a keystroke re-renders the search box and nothing else", () => {
+    const { renders, type } = fanOut()
+
+    type("r")
+    type("ra")
+
+    expect(renders).toEqual({ sync: 0, edits: 0, searchBox: 2, view: 0 })
+  })
+
+  test("the debounce firing re-renders the view readers alone", async () => {
+    const { renders, reset, type } = fanOut()
+    type("rates")
+    reset()
+
+    await act(() => settle(POST_SEARCH_DEBOUNCE_MS + 50))
+
+    expect(renders).toEqual({ sync: 0, edits: 0, searchBox: 0, view: 1 })
+  })
+})
 
 const post = (id: number) =>
   ({ id, channelName: "alpha", text: `post ${id}`, timestamp: id }) as Post

@@ -133,6 +133,114 @@ describe("A3 + G2 — DataContext holds UI state, not server state", () => {
   })
 })
 
+/** The members of `interface <name> {`, as the DataContext pin reads them. */
+function interfaceFields(file: string, name: string): string[] {
+  const src = readFileSync(join(SRC, file), "utf8")
+  const start = src.indexOf(`interface ${name} {`)
+  if (start < 0) throw new Error(`${file} declares no interface ${name}`)
+  const body = src.slice(start, src.indexOf("\n}", start))
+  return [...body.matchAll(/^ {2}(\w+)[?]?:/gm)].map((m) => m[1]).sort()
+}
+
+describe("PVM-01: the Posts view apart from the Sync context (ADR-039)", () => {
+  /**
+   * `ScraperContext` held the Posts view and every sync behind one
+   * unmemoized 51-member value, so a letter typed in the Posts search
+   * re-rendered every Channel card, Post card and the shell, and a meaning
+   * search re-ran on every sync update. PVM-01 split it by job and by how
+   * often each part changes.
+   *
+   * Exact sets, so a failure names what was added. A new Posts view field is
+   * a field of the view and an edit; it never goes on the Sync context.
+   */
+  const VIEW = ["contexts/PostsViewContext.tsx", "PostsViewContextType"]
+  const EDITS = ["contexts/PostsViewContext.tsx", "PostsViewEditsContextType"]
+  const SYNC = ["contexts/SyncContext.tsx", "SyncContextType"]
+  const fields = ([file, name]: string[]) => interfaceFields(file, name)
+
+  it("the view context holds the view and the Action path", () => {
+    expect(fields(VIEW)).toEqual(
+      [
+        "getPromptPostsInput",
+        "getScopeSubmission",
+        "getScopedPosts",
+        "selectionEdit",
+        "view",
+      ].sort(),
+    )
+  })
+
+  it("the edits are domain operations, not one setter per field", () => {
+    expect(fields(EDITS)).toEqual(
+      [
+        "appendSelection",
+        "removeSelectionChip",
+        "replaceSelection",
+        "restore",
+        "setKeyword",
+        "setOrder",
+        "setPostFilter",
+        "setRanking",
+      ].sort(),
+    )
+  })
+
+  it("the Sync context syncs and follows, and nothing else", () => {
+    expect(fields(SYNC)).toEqual(
+      [
+        "addNewChannel",
+        "addToSyncQueue",
+        "autoSyncPauseUntil",
+        "consecutiveFailures",
+        "followDiscoverChannels",
+        "handleRecheckRestricted",
+        "handleScrapeAll",
+        "handleScrapeChannel",
+        "handleScrapeSelected",
+        "isProcessingQueue",
+        "runningSyncJobs",
+        "scrapeChannelsInParallel",
+        "scrapingChannels",
+        "setAutoSyncPauseUntil",
+        "setConsecutiveFailures",
+        "setScrapingChannels",
+        "stopSync",
+        "syncQueue",
+      ].sort(),
+    )
+  })
+
+  it("no Posts view field is on the Sync context", () => {
+    // Every name the Posts view or its contexts use, and the ones the old
+    // context spelled them with, so a field cannot come back renamed.
+    const posts = new Set([
+      ...interfaceFields("lib/posts/posts-view.ts", "PostsView"),
+      ...fields(VIEW),
+      ...fields(EDITS),
+      "postSearch",
+      "postFilter",
+      "postSelection",
+      "postSortOrder",
+      "postViewOptions",
+      "semanticSearchQuery",
+      "relatedPostSearch",
+      "handleFilterPosts",
+      "invalidatePostViews",
+    ])
+
+    expect(fields(SYNC).filter((field) => posts.has(field))).toEqual([])
+  })
+
+  it("the Sync context's value is memoized", () => {
+    // Unmemoized, every render of the provider (a tab switch, a Channel list
+    // reload) re-renders every Channel card, which reads it.
+    const src = readFileSync(join(SRC, SYNC[0]), "utf8")
+
+    expect(src).toMatch(/const value = useMemo<SyncContextType>\(/)
+    expect(src).toMatch(/<SyncContext\.Provider value=\{value\}>/)
+  })
+})
+
 describe("One declaration of the workspace tabs", () => {
   /**
    * `WORKSPACE_TABS` is the only place a tab is declared.
