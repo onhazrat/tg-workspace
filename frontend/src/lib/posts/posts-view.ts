@@ -20,9 +20,11 @@
  */
 
 import { postScopeBody, postsFeedBody, shownPostsBody } from "@/api/data"
+import type { ScopeSubmission } from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
-import type { WindowState } from "@/lib/scope/window"
+import { toWireWindow, type WindowState } from "@/lib/scope/window"
+import type { Post } from "@/types"
 import {
   type PostFilter,
   type PostNumber,
@@ -33,7 +35,35 @@ import type {
   PostSortOrder,
   ViewMeasure,
 } from "./post-pipeline"
-import type { PostSelection } from "./post-selection"
+import { type PostSelection, selectionBody } from "./post-selection"
+
+/**
+ * How the tab ranks what it shows: not at all, by a meaning query, or by a
+ * related Post. One value, so the two can never both be set.
+ */
+export type PostsRanking =
+  | { kind: "none" }
+  | { kind: "meaning"; query: string }
+  | { kind: "related"; post: Post }
+
+export const NO_RANKING: PostsRanking = { kind: "none" }
+
+/**
+ * One ranking edit: a new ranking, the Account's "respects Channels" choice
+ * for every meaning search, or both. What it leaves out it keeps.
+ */
+export type RankingEdit = {
+  ranking?: PostsRanking
+  respectsChannels?: boolean
+}
+
+/** What a meaning search asks for, or "" when none is running. */
+export const meaningQuery = (ranking: PostsRanking): string =>
+  ranking.kind === "meaning" ? ranking.query : ""
+
+/** What a related-Post search ranks by, or null. */
+export const relatedPost = (ranking: PostsRanking): Post | null =>
+  ranking.kind === "related" ? ranking.post : null
 
 /** What every Posts read is evaluated under, a Channel spotlight applied. */
 export interface PostsView {
@@ -41,8 +71,15 @@ export interface PostsView {
   scopeChannelNames: string[]
   /** What the tab shows: the selected Channels, or the spotlit one. */
   channelNames: string[]
-  /** Debounced once, in `usePostFilters`. */
+  /** Debounced once, in the Posts view module. */
   keyword: string
+  /** The reads that count or filter ignore it. */
+  ranking: PostsRanking
+  /**
+   * Whether a meaning search keeps to the selected Channels: the Account's
+   * choice, held while no search runs so the next one uses it.
+   */
+  respectsChannels: boolean
   filter: PostFilter
   maxPerChannel: number
   maxPerChannelMode: MaxPostsPerChannelMode
@@ -56,6 +93,36 @@ export interface PostsView {
   /** Moves on every selection edit. */
   selectionRevision: number
 }
+
+/** The order and cap, edited as one value. */
+export type PostsOrder = Pick<
+  PostsView,
+  | "sort"
+  | "groupByChannel"
+  | "viewMeasure"
+  | "maxPerChannel"
+  | "maxPerChannelMode"
+>
+
+/**
+ * The Scope an Action asks the server to freeze (AW-05): `channels`, the
+ * view's window, order and selection. It sends the canonical window, never
+ * the pair it currently resolves to: flattening a Live window in the browser
+ * is the clock skew AW-02 removed, reintroduced one layer up.
+ */
+export const scopeSubmission = (
+  view: PostsView,
+  channels: string[],
+): ScopeSubmission => ({
+  channels,
+  window: toWireWindow(view.windowKey),
+  viewMeasure: view.viewMeasure,
+  sort: view.sort,
+  groupByChannel: view.groupByChannel,
+  // The hand-written steps are the generated ones; the tree's ids ride
+  // along untouched, as they do on the feed.
+  selection: selectionBody(view.selection),
+})
 
 /**
  * The reads, each with its own inputs. The histograms read the uncapped view:

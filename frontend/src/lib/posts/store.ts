@@ -6,7 +6,7 @@ import type { Post } from "@/types"
  * Reads and writes for the `Post` aggregate.
  *
  * Bulk post reading left the browser in A1 — `api.getPostsFeed` serves the feed,
- * the prompt scope is assembled server-side, and `computeScopedPosts` runs in
+ * the prompt scope is assembled server-side, and `fetchShownPosts` runs in
  * SQL. What survives here is the narrow-lookup path: resolving *specific* posts
  * by natural key, which citations and RAG context assembly need.
  *

@@ -1,3 +1,9 @@
+/**
+ * The fetch for what the Posts tab shows, a function of the Posts view and
+ * the api it calls (PVM-02). Each test hands it a view literal and a fake
+ * api whose every call throws unless the test expects it.
+ */
+
 import { describe, expect, test } from "bun:test"
 
 import type { PostFeedQuery } from "@/api/data"
@@ -6,19 +12,18 @@ import {
   emptyPostFilter,
   type PostFilter,
 } from "@/lib/posts/post-filter"
-import {
-  applyPostViewPipeline,
-  type PostViewOptions,
-} from "@/lib/posts/post-pipeline"
+import { applyPostViewPipeline } from "@/lib/posts/post-pipeline"
 import {
   DEFAULT_SELECTION,
   type PostSelection,
   pick,
 } from "@/lib/posts/post-selection"
+import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
 import {
-  computeScopedPosts,
+  fetchShownPosts,
   SCOPED_POSTS_LIMIT,
-  type ScopedPostsDeps,
+  type ShownPostsApi,
+  shownPostsKey,
 } from "@/lib/posts/scoped-posts"
 import type { Post } from "@/types"
 
@@ -38,13 +43,37 @@ function makePost(
   }
 }
 
-const view: PostViewOptions = {
+const VIEW: PostsView = {
+  scopeChannelNames: ["alpha", "beta"],
+  channelNames: ["alpha", "beta"],
+  keyword: "",
+  ranking: NO_RANKING,
+  respectsChannels: false,
+  filter: emptyPostFilter(),
+  maxPerChannel: 0,
+  maxPerChannelMode: "ordered",
+  sort: "newest",
+  groupByChannel: false,
+  viewMeasure: "estimated",
+  startDate: 1000,
+  endDate: 9000,
+  windowKey: { mode: "live", durationMs: 8000, endGapMs: 0 },
+  selection: DEFAULT_SELECTION,
+  selectionRevision: 0,
+}
+
+/** The pipeline options `VIEW`'s order means, for the expected results. */
+const PIPELINE = {
   maxPostsPerChannel: 0,
   maxPostsPerChannelMode: "ordered",
   postSortOrder: "newest",
   groupByChannel: false,
-  viewMeasure: "estimated" as const,
-}
+  viewMeasure: "estimated",
+} as const
+
+const meaning = (query: string): Partial<PostsView> => ({
+  ranking: { kind: "meaning", query },
+})
 
 const persian = addPostFunnel(emptyPostFilter(), "language", "fa")
 
@@ -65,7 +94,7 @@ const flag = (p: Post): Post => ({ ...p, selected: true })
 
 /** The server lookup under an empty filter: every ranked Post it was asked for, flagged. */
 const flagged =
-  (posts: Post[]): ScopedPostsDeps["lookupPosts"] =>
+  (posts: Post[]): ShownPostsApi["lookupPosts"] =>
   async (refs) =>
     posts
       .filter((p) =>
@@ -73,20 +102,10 @@ const flagged =
       )
       .map(flag)
 
-/** A deps object with inert RAG/repository fns; individual tests override. */
-function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
+/** A fake api whose calls throw; individual tests override. */
+function fakeApi(overrides: Partial<ShownPostsApi> = {}): ShownPostsApi {
   return {
-    searchText: "",
-    semanticQuery: "",
-    relatedPostSearch: null,
     embeddingsEnabled: false,
-    selectedChannels: ["alpha", "beta"],
-    startDate: 1000,
-    endDate: 9000,
-    postFilter: emptyPostFilter(),
-    postSelection: DEFAULT_SELECTION,
-    postViewOptions: view,
-    semanticSearchRespectsChannels: false,
     searchSimilarPosts: async () => {
       throw new Error("searchSimilarPosts should not be called")
     },
@@ -101,39 +120,38 @@ function baseDeps(overrides: Partial<ScopedPostsDeps> = {}): ScopedPostsDeps {
   }
 }
 
-describe("computeScopedPosts", () => {
+const fetchShown = (over: Partial<PostsView>, api: ShownPostsApi) =>
+  fetchShownPosts({ ...VIEW, ...over }, api)
+
+describe("fetchShownPosts: the shown read", () => {
   /**
-   * The normal path no longer filters anything client-side (A1c) — it hands the
-   * scope to `POST /data/posts` and returns what comes back. So what these
-   * tests can still guarantee is the *translation*: that every piece of filter
-   * state reaches the server, under the right name, unmodified.
-   *
-   * The filtering itself is pinned server-side, where it now happens:
-   * `app/services/post_filters.py` documents the per-filter parity targets and
-   * `tests/api/test_posts_feed.py` exercises them.
+   * The normal path filters nothing client-side (A1c): it hands the view to
+   * `POST /data/posts` and returns what comes back. What these tests can
+   * guarantee is the translation, field by field. The filtering itself is
+   * pinned server-side (`tests/api/test_posts_feed.py`).
    */
-  test("normal path: hands the whole filter state to the server feed", async () => {
+  test("hands the whole view to the server feed", async () => {
     const fromServer = [makePost("alpha", 1, 100)]
     const calls: PostFeedQuery[] = []
-    const deps = baseDeps({
-      searchText: "Post",
-      postFilter: persian,
-      postViewOptions: {
-        maxPostsPerChannel: 7,
-        maxPostsPerChannelMode: "random",
-        postSortOrder: "most_views",
+    const result = await fetchShown(
+      {
+        keyword: "Post",
+        filter: persian,
+        maxPerChannel: 7,
+        maxPerChannelMode: "random",
+        sort: "most_views",
         groupByChannel: true,
-        viewMeasure: "views" as const,
+        viewMeasure: "views",
       },
-      getPostsFeed: async (query) => {
-        calls.push(query)
-        return fromServer
-      },
-    })
+      fakeApi({
+        getPostsFeed: async (query) => {
+          calls.push(query)
+          return fromServer
+        },
+      }),
+    )
 
-    const result = await computeScopedPosts(deps)
-
-    // Returned verbatim — no client-side post-processing survives.
+    // Returned verbatim: no client-side post-processing survives.
     expect(result).toBe(fromServer)
     expect(calls).toEqual([
       {
@@ -154,58 +172,90 @@ describe("computeScopedPosts", () => {
     ])
   })
 
-  test("normal path: the read is bounded", async () => {
+  test("the read is bounded", async () => {
     // The point of A1c. This branch used to page a channel's whole history
     // into the browser; a regression to an unbounded read would not change any
     // other assertion here, so it gets its own.
     let capturedLimit: number | undefined
-    const deps = baseDeps({
-      getPostsFeed: async (query) => {
-        capturedLimit = query.limit
-        return []
-      },
-    })
-
-    await computeScopedPosts(deps)
+    await fetchShown(
+      {},
+      fakeApi({
+        getPostsFeed: async (query) => {
+          capturedLimit = query.limit
+          return []
+        },
+      }),
+    )
 
     expect(capturedLimit).toBe(SCOPED_POSTS_LIMIT)
     expect(SCOPED_POSTS_LIMIT).toBeLessThanOrEqual(5000)
   })
 
-  test("semantic path: bounded at 50, RAG options honoured, view pipeline applied", async () => {
+  test("embeddings off: a meaning query falls through to the shown read", async () => {
+    const fromServer = [makePost("alpha", 1, 100)]
+    const result = await fetchShown(
+      meaning("crypto"),
+      fakeApi({ getPostsFeed: async () => fromServer }),
+    )
+
+    expect(result).toBe(fromServer)
+  })
+})
+
+describe("fetchShownPosts: a meaning search", () => {
+  test("respecting the Channels: bounded at 50, kept to them, the order applied", async () => {
     const ragResults = [makePost("alpha", 1, 100), makePost("beta", 2, 300)]
-    let capturedLimit: number | undefined
-    let capturedOptions: unknown
-    const deps = baseDeps({
-      embeddingsEnabled: true,
-      semanticQuery: "  crypto  ",
-      semanticSearchRespectsChannels: true,
-      searchSimilarPosts: async (_q, limit, options) => {
-        capturedLimit = limit
-        capturedOptions = options
-        return ragResults
-      },
-      lookupPosts: flagged(ragResults),
-    })
+    const asked: unknown[] = []
+    const result = await fetchShown(
+      { ...meaning("  crypto  "), respectsChannels: true },
+      fakeApi({
+        embeddingsEnabled: true,
+        searchSimilarPosts: async (query, limit, options) => {
+          asked.push([query, limit, options])
+          return ragResults
+        },
+        lookupPosts: flagged(ragResults),
+      }),
+    )
 
-    const result = await computeScopedPosts(deps)
-
-    expect(capturedLimit).toBe(50)
-    expect(capturedOptions).toEqual({
-      startDate: 1000,
-      endDate: 9000,
-      channels: ["alpha", "beta"],
-    })
-    // The view pipeline runs on the ranking, each Post flagged.
+    expect(asked).toEqual([
+      [
+        "  crypto  ",
+        50,
+        { startDate: 1000, endDate: 9000, channels: ["alpha", "beta"] },
+      ],
+    ])
+    // The order runs on the ranking, each Post flagged.
     expect(result).toEqual(
-      applyPostViewPipeline(ragResults.map(flag), view, {
+      applyPostViewPipeline(ragResults.map(flag), PIPELINE, {
         startDate: 1000,
         endDate: 9000,
       }),
     )
   })
 
-  test("semantic path: the Post filter reaches the ranked Posts through the server (PTR-03)", async () => {
+  test("not respecting the Channels: the window is sent and the Channels are not", async () => {
+    // The Channels are optional; the Analysis window is not (AW-01).
+    let capturedOptions: unknown
+    await fetchShown(
+      meaning("crypto"),
+      fakeApi({
+        embeddingsEnabled: true,
+        searchSimilarPosts: async (_q, _limit, options) => {
+          capturedOptions = options
+          return []
+        },
+      }),
+    )
+
+    expect(capturedOptions).toEqual({
+      startDate: 1000,
+      endDate: 9000,
+      channels: undefined,
+    })
+  })
+
+  test("the Post filter reaches the ranked Posts through the server (PTR-03)", async () => {
     const ranked = [
       makePost("alpha", 1, 100),
       makePost("alpha", 2, 200),
@@ -214,17 +264,16 @@ describe("computeScopedPosts", () => {
     ]
     const asked: { refs: unknown; filter: PostFilter; scope: unknown }[] = []
     const selection: PostSelection = [pick(false, ranked[3])]
-    const result = await computeScopedPosts(
-      baseDeps({
+    const result = await fetchShown(
+      {
+        ...meaning("crypto"),
+        filter: persian,
+        selection,
+        sort: "oldest",
+        groupByChannel: true,
+      },
+      fakeApi({
         embeddingsEnabled: true,
-        semanticQuery: "crypto",
-        postFilter: persian,
-        postSelection: selection,
-        postViewOptions: {
-          ...view,
-          postSortOrder: "oldest",
-          groupByChannel: true,
-        },
         searchSimilarPosts: async () => ranked,
         // The server answers in its own order; the ranking's set is kept.
         lookupPosts: async (refs, filter, scope) => {
@@ -254,7 +303,7 @@ describe("computeScopedPosts", () => {
     )
   })
 
-  test("semantic path: a views order reads the server's curve (PFB-03)", async () => {
+  test("a views order reads the server's curve (PFB-03)", async () => {
     const HOUR = 3_600_000
     const ranked = [
       // Settled at 5000, estimated from 2000 at 6h to 3663, too new at 1h.
@@ -272,12 +321,11 @@ describe("computeScopedPosts", () => {
       }),
     ]
     let asked = 0
-    const run = (over: Partial<typeof view>) =>
-      computeScopedPosts(
-        baseDeps({
+    const run = (over: Partial<PostsView>) =>
+      fetchShown(
+        { ...meaning("crypto"), ...over },
+        fakeApi({
           embeddingsEnabled: true,
-          semanticQuery: "crypto",
-          postViewOptions: { ...view, ...over },
           searchSimilarPosts: async () => ranked,
           lookupPosts: flagged(ranked),
           getViewEstimate: async () => {
@@ -288,112 +336,84 @@ describe("computeScopedPosts", () => {
       ).then((posts) => posts.map((p) => p.id))
 
     // The unjudged Post sorts last.
-    expect(await run({ postSortOrder: "fewest_views" })).toEqual([2, 1, 3])
+    expect(await run({ sort: "fewest_views" })).toEqual([2, 1, 3])
     expect(asked).toBe(1)
     // No views order: no curve is asked for.
     expect(await run({})).toEqual([3, 2, 1])
     // The raw measure never needs one either.
-    expect(
-      await run({ viewMeasure: "views", postSortOrder: "fewest_views" }),
-    ).toEqual([2, 1, 3])
+    expect(await run({ viewMeasure: "views", sort: "fewest_views" })).toEqual([
+      2, 1, 3,
+    ])
     expect(asked).toBe(1)
   })
+})
 
-  test("semantic path: the window is sent even when channels are not", async () => {
-    /**
-     * The channel scoping is still optional; the Analysis window is not
-     * (AW-01). This test used to assert the opposite — that both bounds were
-     * omitted — which was the control that let one Posts path mean all time
-     * while the rest of Scope meant a window.
-     */
-    let capturedOptions: unknown
-    const deps = baseDeps({
-      embeddingsEnabled: true,
-      semanticQuery: "crypto",
-      searchSimilarPosts: async (_q, _limit, options) => {
-        capturedOptions = options
-        return []
-      },
-    })
-
-    await computeScopedPosts(deps)
-
-    expect(capturedOptions).toEqual({
-      startDate: 1000,
-      endDate: 9000,
-      channels: undefined,
-    })
-  })
-
-  test("related path: excludes the seed post, bounded at 50", async () => {
+describe("fetchShownPosts: a find-related", () => {
+  test("excludes the Post it started from, bounded at 50, in the window", async () => {
     const seed = makePost("alpha", 1, 100)
     const ragResults = [
       seed,
       makePost("alpha", 1, 100), // same id+channel as seed → excluded
       makePost("beta", 2, 300),
     ]
-    let capturedLimit: number | undefined
-    let capturedOptions: unknown
-    const deps = baseDeps({
-      embeddingsEnabled: true,
-      relatedPostSearch: seed,
-      searchSimilarPosts: async (_q, limit, options) => {
-        capturedLimit = limit
-        capturedOptions = options
-        return ragResults
-      },
-      lookupPosts: flagged(ragResults),
-    })
-
-    const result = await computeScopedPosts(deps)
-
-    expect(capturedLimit).toBe(50)
-    // "More like this" passed no options at all before AW-01, so it searched
-    // every Post ever — the same defect as the removed ignore-window control,
-    // with nothing on screen admitting to it.
-    expect(capturedOptions).toEqual({ startDate: 1000, endDate: 9000 })
-    const expected = ragResults
-      .filter((p) => p.id !== seed.id || p.channelName !== seed.channelName)
-      .map(flag)
-    expect(result).toEqual(
-      applyPostViewPipeline(expected, view, {
-        startDate: 1000,
-        endDate: 9000,
+    const asked: unknown[] = []
+    const result = await fetchShown(
+      { ranking: { kind: "related", post: seed }, respectsChannels: true },
+      fakeApi({
+        embeddingsEnabled: true,
+        searchSimilarPosts: async (query, limit, options) => {
+          asked.push([query, limit, options])
+          return ragResults
+        },
+        lookupPosts: flagged(ragResults),
       }),
     )
+
+    // "More like this" passed no options at all before AW-01, so it searched
+    // every Post ever. It searches by the Post's text and never keeps to the
+    // Channels.
+    expect(asked).toEqual([
+      ["Post 1 from alpha", 50, { startDate: 1000, endDate: 9000 }],
+    ])
+    expect(result).toEqual([flag(makePost("beta", 2, 300))])
+  })
+})
+
+describe("shownPostsKey: what the fetch depends on (AW-04)", () => {
+  /**
+   * The feed's meaning search runs again when this moves, and only then. A
+   * Live window resolves to a new pair every minute and a selection edit
+   * reaches the ranked rows on its own, so neither may move it: a re-run
+   * repeats the search, and a failed one ends the Account's search.
+   */
+  const key = (over: Partial<PostsView>) =>
+    shownPostsKey({ ...VIEW, ...meaning("crypto"), ...over })
+
+  test("a new minute does not move it", () => {
+    expect(key({ startDate: 61_000, endDate: 69_000 })).toBe(key({}))
   })
 
-  test("embeddings off: semantic query falls through to the normal path", async () => {
-    const fromServer = [makePost("alpha", 1, 100)]
-    let ragCalled = false
-    const deps = baseDeps({
-      embeddingsEnabled: false,
-      semanticQuery: "crypto",
-      searchSimilarPosts: async () => {
-        ragCalled = true
-        return []
-      },
-      getPostsFeed: async () => fromServer,
-    })
-
-    const result = await computeScopedPosts(deps)
-
-    expect(ragCalled).toBe(false)
-    expect(result).toBe(fromServer)
+  test("nor does a selection edit", () => {
+    expect(
+      key({
+        selection: [pick(true, makePost("alpha", 1, 1))],
+        selectionRevision: 1,
+      }),
+    ).toBe(key({}))
   })
 
-  test("the semantic branches never touch the server feed", async () => {
-    // Semantic ranking is the one selection the server cannot derive from a
-    // scope, so those branches must stay on the RAG path. `baseDeps` throws
-    // from `getPostsFeed`, which is what makes this assertion real.
-    const found = [makePost("alpha", 1, 100)]
-    const deps = baseDeps({
-      embeddingsEnabled: true,
-      semanticQuery: "crypto",
-      searchSimilarPosts: async () => found,
-      lookupPosts: flagged(found),
-    })
-
-    expect((await computeScopedPosts(deps)).length).toBe(1)
+  test("a new ranking, the Channels choice, the filter, the order or the window does", () => {
+    const moves: Partial<PostsView>[] = [
+      meaning("rates"),
+      { ranking: { kind: "related", post: makePost("alpha", 2, 2) } },
+      { respectsChannels: true },
+      { scopeChannelNames: ["alpha"] },
+      { keyword: "rates" },
+      { filter: persian },
+      { sort: "oldest" },
+      { maxPerChannel: 3 },
+      { windowKey: { mode: "live", durationMs: 3000, endGapMs: 0 } },
+    ]
+    for (const over of moves) expect(key(over)).not.toBe(key({}))
   })
 })

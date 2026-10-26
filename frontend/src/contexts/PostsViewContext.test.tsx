@@ -1,0 +1,747 @@
+/**
+ * The Posts view module at its provider (PVM-01, ADR-039): what each edit
+ * does to the view, what survives a reload, and which identities hold still.
+ *
+ * The module is mounted with its inputs injected (`PostsViewModule`), the
+ * URL a `useState` standing in for `?postFilter=`, so nothing here needs a
+ * router, the other providers or `mock.module`.
+ */
+
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react"
+import { Profiler, type ReactNode, useState } from "react"
+import {
+  PostFilterBar,
+  PostsSearchBox,
+  postsViewControls,
+} from "@/components/PostFilter"
+import {
+  POST_FILTER_STORAGE_KEYS,
+  POST_SEARCH_DEBOUNCE_MS,
+  type PostsViewEdits,
+  type PostsViewInputs,
+  PostsViewModule,
+  usePostsKeyword,
+  usePostsViewEdits,
+  usePostsViewState,
+} from "@/contexts/PostsViewContext"
+import { SyncContext, useSync } from "@/contexts/SyncContext"
+import { useShownPosts } from "@/hooks/usePostsView"
+import {
+  addPostFunnel,
+  emptyPostFilter,
+  POST_FILTER_BOUNDS,
+  printPostFilter,
+} from "@/lib/posts/post-filter"
+import {
+  DEFAULT_SELECTION,
+  MAX_PICKS,
+  pick,
+  rule,
+} from "@/lib/posts/post-selection"
+import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
+import { fetchShownPosts, type ShownPostsApi } from "@/lib/posts/scoped-posts"
+import type { WindowState } from "@/lib/scope/window"
+import { scopedStorage } from "@/lib/storage/scoped"
+import type { Post } from "@/types"
+
+const LIVE: WindowState = { mode: "live", durationMs: 8000, endGapMs: 0 }
+const CHANNELS = ["alpha", "beta"]
+const never = async (): Promise<never> => {
+  throw new Error("not fetched in this test")
+}
+const NOOP = () => {}
+
+/** Module constants, as the real wiring hands down memoized values. */
+const INPUTS: Omit<PostsViewInputs, "postFilterText" | "setPostFilterText"> = {
+  selectedChannelNames: CHANNELS,
+  startDate: 1000,
+  endDate: 9000,
+  windowKey: LIVE,
+  setSelectedChannels: NOOP,
+  setFixedRange: NOOP,
+}
+
+function useModule() {
+  return {
+    state: usePostsViewState(),
+    edits: usePostsViewEdits(),
+    typed: usePostsKeyword(),
+  }
+}
+
+/** The provider under a fake URL, with `over` replacing any input. */
+function mount(over: Partial<PostsViewInputs> = {}, url?: string) {
+  const urls: (string | undefined)[] = []
+  function Wrapper({ children }: { children: ReactNode }) {
+    const [text, setText] = useState(url)
+    return (
+      <PostsViewModule
+        inputs={{
+          ...INPUTS,
+          postFilterText: text,
+          setPostFilterText: (next) => {
+            urls.push(next)
+            setText(next)
+          },
+          ...over,
+        }}
+      >
+        {children}
+      </PostsViewModule>
+    )
+  }
+  return { ...renderHook(useModule, { wrapper: Wrapper }), urls }
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  sessionStorage.clear()
+})
+
+describe("identity across a provider re-render", () => {
+  // What the fetch for what the tab shows depends on is `shownPostsKey`'s,
+  // a string of the view (PVM-02), so a view that holds still holds it still.
+  test("the edits and the view keep theirs", () => {
+    const { result, rerender } = mount()
+    const { edits, state } = result.current
+
+    rerender()
+
+    expect(result.current.edits).toBe(edits)
+    expect(result.current.state.view).toBe(state.view)
+  })
+
+  // Story 5: before PVM the fetch changed identity on every provider render,
+  // so a meaning search ran again on any sync update or minute tick.
+  test("a meaning search runs once, whatever else the provider does", async () => {
+    let searches = 0
+    const api: ShownPostsApi = {
+      embeddingsEnabled: true,
+      searchSimilarPosts: async () => {
+        searches++
+        return []
+      },
+      getPostsFeed: async () => [],
+      lookupPosts: never,
+      getViewEstimate: never,
+    }
+    let edits: PostsViewEdits | undefined
+    function Probe() {
+      edits = usePostsViewEdits()
+      useShownPosts(api, true)
+      return null
+    }
+    function Host({ startDate }: { startDate: number }) {
+      const [text, setText] = useState<string | undefined>()
+      return (
+        <PostsViewModule
+          inputs={{
+            ...INPUTS,
+            startDate,
+            endDate: startDate + 8000,
+            postFilterText: text,
+            setPostFilterText: setText,
+          }}
+        >
+          <Probe />
+        </PostsViewModule>
+      )
+    }
+    const { rerender } = render(<Host startDate={1000} />)
+    act(() =>
+      (edits as PostsViewEdits).setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+    await act(() => settle(0))
+    expect(searches).toBe(1)
+
+    rerender(<Host startDate={1000} />) // a parent re-render
+    rerender(<Host startDate={61_000} />) // a Live window's minute tick
+    act(() => {
+      ;(edits as PostsViewEdits).appendSelection([pick(true, post(1))])
+    })
+    await act(() => settle(0))
+
+    expect(searches).toBe(1)
+    cleanup()
+  })
+})
+
+const settle = (ms: number) => new Promise((done) => setTimeout(done, ms))
+
+describe("who re-renders for a keystroke (the fan-out)", () => {
+  /**
+   * The point of three contexts. Before PVM-01 one context held the keyword
+   * and every sync, so a letter typed in the Posts search re-rendered every
+   * Channel card, Post card, the whole filter bar and the shell. Each reader
+   * here counts its renders; the bar is the real one, fed from the view as
+   * `PostFilter` feeds it, with the real search box in its slot.
+   *
+   * The Sync context sits above this provider, as in `TgProviders`; the field
+   * pin in `architecture-invariants.test.ts` keeps Posts fields off it.
+   */
+  function fanOut() {
+    const renders = { sync: 0, edits: 0, searchBox: 0, view: 0, bar: 0 }
+    function SyncOnlyReader() {
+      renders.sync++
+      useSync()
+      return null
+    }
+    function EditsOnlyReader() {
+      renders.edits++
+      usePostsViewEdits()
+      return null
+    }
+    function ViewReader() {
+      renders.view++
+      return <span>{usePostsViewState().view.keyword}</span>
+    }
+    function Bar() {
+      renders.bar++
+      const { view } = usePostsViewState()
+      const edits = usePostsViewEdits()
+      const controls = postsViewControls(view, edits)
+      return (
+        <PostFilterBar
+          postSearch={view.keyword}
+          setPostSearch={edits.setKeyword}
+          controls={controls}
+          searchBox={
+            <Profiler id="search" onRender={() => renders.searchBox++}>
+              <PostsSearchBox controls={controls} embeddingsEnabled={false} />
+            </Profiler>
+          }
+          shownCount={0}
+          subtitle=""
+          tooNewToJudge={0}
+          windowControl={null}
+          facets={undefined}
+          channelLanguages={[]}
+          channelNames={CHANNELS}
+          onCountingPillOpenChange={NOOP}
+          estimationFloorHours={1}
+        />
+      )
+    }
+    function Host() {
+      const [text, setText] = useState<string | undefined>()
+      return (
+        <SyncContext.Provider value={SYNC}>
+          <PostsViewModule
+            inputs={{
+              ...INPUTS,
+              postFilterText: text,
+              setPostFilterText: setText,
+            }}
+          >
+            <SyncOnlyReader />
+            <EditsOnlyReader />
+            <ViewReader />
+            <Bar />
+          </PostsViewModule>
+        </SyncContext.Provider>
+      )
+    }
+    const type = (keyword: string) =>
+      fireEvent.change(screen.getByLabelText("Keyword search"), {
+        target: { value: keyword },
+      })
+    render(<Host />)
+    // The search box's first update renders it twice (the same-value draft
+    // sync on mount), so one keystroke is typed before counting.
+    type("x")
+    const reset = () => {
+      for (const key of Object.keys(renders) as (keyof typeof renders)[])
+        renders[key] = 0
+    }
+    reset()
+    return { renders, reset, type }
+  }
+
+  afterEach(cleanup)
+
+  test("a keystroke re-renders the search box and nothing else", () => {
+    const { renders, type } = fanOut()
+
+    type("r")
+    type("ra")
+
+    expect(renders).toEqual({
+      sync: 0,
+      edits: 0,
+      searchBox: 2,
+      view: 0,
+      bar: 0,
+    })
+  })
+
+  test("the debounce firing re-renders the view readers alone", async () => {
+    const { renders, reset, type } = fanOut()
+    type("rates")
+    reset()
+
+    await act(() => settle(POST_SEARCH_DEBOUNCE_MS + 50))
+
+    // The search box once more, as a child of the bar.
+    expect(renders).toEqual({
+      sync: 0,
+      edits: 0,
+      searchBox: 1,
+      view: 1,
+      bar: 1,
+    })
+  })
+})
+
+/** The Sync context's value; the readers here only subscribe to it. */
+const SYNC = {} as ReturnType<typeof useSync>
+
+const post = (id: number) =>
+  ({ id, channelName: "alpha", text: `post ${id}`, timestamp: id }) as Post
+
+describe("the keyword", () => {
+  test("the search box sees each keystroke; the view sees the last one, once", async () => {
+    const seen: string[] = []
+    const { result } = mount()
+    const record = () => {
+      const keyword = result.current.state.view.keyword
+      if (seen.at(-1) !== keyword) seen.push(keyword)
+    }
+    record()
+
+    for (const typed of ["r", "ra", "rat"]) {
+      act(() => result.current.edits.setKeyword(typed))
+      record()
+    }
+    expect(result.current.typed).toBe("rat")
+    await act(() => settle(POST_SEARCH_DEBOUNCE_MS + 50))
+    record()
+
+    expect(seen).toEqual(["", "rat"])
+  })
+})
+
+describe("the ranking", () => {
+  test("a related Post replaces a meaning query: never two at once", () => {
+    const { result } = mount()
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "related", post: post(3) },
+      }),
+    )
+
+    expect(result.current.state.view.ranking).toEqual({
+      kind: "related",
+      post: post(3),
+    })
+  })
+
+  test("a meaning search uses the Account's choice, made before it ran", () => {
+    const { result } = mount()
+    expect(result.current.state.view.respectsChannels).toBe(false)
+    act(() => result.current.edits.setRanking({ respectsChannels: true }))
+    expect(result.current.state.view.ranking).toEqual(NO_RANKING)
+
+    // As a Summary bullet or the palette starts one: the query alone.
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+
+    const { view } = result.current.state
+    expect(view.ranking).toEqual({ kind: "meaning", query: "rates" })
+    expect(view.respectsChannels).toBe(true)
+  })
+
+  test("the choice outlives the search it was made in", () => {
+    const { result } = mount()
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+        respectsChannels: true,
+      }),
+    )
+    act(() => result.current.edits.setRanking({ ranking: NO_RANKING }))
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "inflation" },
+      }),
+    )
+
+    expect(result.current.state.view.respectsChannels).toBe(true)
+  })
+
+  test("the search it keeps to reaches the fetch for what the tab shows", async () => {
+    const asked: (string[] | undefined)[] = []
+    const { result } = mount()
+    act(() => result.current.edits.setRanking({ respectsChannels: true }))
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+
+    await fetchShownPosts(result.current.state.view, {
+      embeddingsEnabled: true,
+      searchSimilarPosts: async (_query, _limit, options) => {
+        asked.push(options.channels)
+        return []
+      },
+      getPostsFeed: never,
+      lookupPosts: never,
+      getViewEstimate: never,
+    })
+
+    expect(asked).toEqual([CHANNELS])
+  })
+})
+
+/** The order and cap as the view holds them. */
+const orderOf = ({
+  sort,
+  groupByChannel,
+  viewMeasure,
+  maxPerChannel,
+  maxPerChannelMode,
+}: PostsView) => ({
+  sort,
+  groupByChannel,
+  viewMeasure,
+  maxPerChannel,
+  maxPerChannelMode,
+})
+
+describe("the order", () => {
+  test("is one value: an edit to one part keeps the rest", () => {
+    const { result } = mount()
+    act(() =>
+      result.current.edits.setOrder({ maxPerChannel: 5, sort: "oldest" }),
+    )
+    act(() => result.current.edits.setOrder({ groupByChannel: true }))
+
+    expect(orderOf(result.current.state.view)).toEqual({
+      sort: "oldest",
+      groupByChannel: true,
+      viewMeasure: "estimated",
+      maxPerChannel: 5,
+      maxPerChannelMode: "ordered",
+    })
+  })
+})
+
+/** An edit's answer, applied inside `act`. */
+function edit<T>(run: () => T): T {
+  let answer: T | undefined
+  act(() => {
+    answer = run()
+  })
+  return answer as T
+}
+
+const PERSIAN = addPostFunnel(emptyPostFilter(), "language", "fa")
+
+describe("the Post selection", () => {
+  test("Picks alone are the edit; the revision moves on each one", () => {
+    const { result } = mount()
+    const picks = [pick(true, post(1)), pick(true, post(2))]
+
+    expect(edit(() => result.current.edits.appendSelection(picks))).toBe(true)
+
+    expect(result.current.state.view.selection).toEqual([
+      ...DEFAULT_SELECTION,
+      ...picks,
+    ])
+    expect(result.current.state.view.selectionRevision).toBe(1)
+    expect(result.current.state.selectionEdit.picks).toEqual(picks)
+  })
+
+  test("a rule is not Picks: the feed refetches rather than patching", () => {
+    const { result } = mount()
+    act(() => {
+      result.current.edits.appendSelection([rule(false)])
+    })
+
+    expect(result.current.state.selectionEdit).toEqual({
+      revision: 1,
+      picks: null,
+    })
+  })
+
+  test("a refused append changes nothing and says so", () => {
+    const { result } = mount()
+    const tooMany = Array.from({ length: MAX_PICKS + 1 }, (_, i) =>
+      pick(true, post(i)),
+    )
+
+    expect(edit(() => result.current.edits.appendSelection(tooMany))).toBe(
+      false,
+    )
+    expect(result.current.state.view.selection).toEqual(DEFAULT_SELECTION)
+    expect(result.current.state.view.selectionRevision).toBe(0)
+  })
+
+  test("two appends in one tick each build on the other", () => {
+    const { result } = mount()
+    act(() => {
+      result.current.edits.appendSelection([pick(true, post(1))])
+      result.current.edits.appendSelection([pick(false, post(2))])
+    })
+
+    expect(result.current.state.view.selection).toEqual([
+      ...DEFAULT_SELECTION,
+      pick(true, post(1)),
+      pick(false, post(2)),
+    ])
+  })
+
+  test("removing a chip removes its steps; replacing replaces them all", () => {
+    const { result } = mount()
+    act(() => {
+      result.current.edits.appendSelection([pick(true, post(1))])
+    })
+    act(() => result.current.edits.removeSelectionChip({ start: 1, end: 2 }))
+    expect(result.current.state.view.selection).toEqual(DEFAULT_SELECTION)
+
+    act(() => result.current.edits.replaceSelection([rule(false)]))
+    expect(result.current.state.view.selection).toEqual([rule(false)])
+    expect(result.current.state.view.selectionRevision).toBe(3)
+  })
+
+  test("lasts for the browser session, and only there", () => {
+    const first = mount()
+    act(() => {
+      first.result.current.edits.appendSelection([pick(true, post(1))])
+    })
+    first.unmount()
+
+    expect(mount().result.current.state.view.selection).toEqual([
+      ...DEFAULT_SELECTION,
+      pick(true, post(1)),
+    ])
+    expect(JSON.stringify(localStorage)).not.toContain("postSelection")
+  })
+})
+
+describe("the Post filter, in the URL", () => {
+  test("is read from the link", () => {
+    const { result } = mount({}, "lang:fa")
+
+    expect(printPostFilter(result.current.state.view.filter)).toBe("lang:fa")
+  })
+
+  test("a link that does not parse shows every Post", () => {
+    const { result } = mount({}, "lang:(")
+
+    expect(result.current.state.view.filter.children).toEqual([])
+  })
+
+  test("an edit is written to the link, and an empty one leaves it", () => {
+    const { result, urls } = mount()
+    act(() => result.current.edits.setPostFilter(PERSIAN))
+    expect(printPostFilter(result.current.state.view.filter)).toBe("lang:fa")
+
+    act(() => result.current.edits.setPostFilter(emptyPostFilter()))
+    expect(urls).toEqual(["lang:fa", undefined])
+  })
+
+  test("one past the server's bounds is refused, not written", () => {
+    const { result, urls } = mount()
+    let deep = emptyPostFilter()
+    for (let i = 0; i <= POST_FILTER_BOUNDS.nodes; i++)
+      deep = addPostFunnel(deep, "language", `l${i}`)
+
+    act(() => result.current.edits.setPostFilter(deep))
+
+    expect(urls).toEqual([])
+  })
+})
+
+describe("restore", () => {
+  test("replaces every part of the view and clears the ranking", async () => {
+    const channels: Set<string>[] = []
+    const windows: [number, number][] = []
+    const { result } = mount({
+      setSelectedChannels: (next) => channels.push(next),
+      setFixedRange: (start, end) => windows.push([start, end]),
+    })
+    act(() => {
+      const { edits } = result.current
+      edits.setKeyword("old")
+      edits.setPostFilter(PERSIAN)
+      edits.setOrder({ maxPerChannel: 9, groupByChannel: true })
+      edits.appendSelection([pick(true, post(1))])
+      edits.setRanking({ ranking: { kind: "related", post: post(4) } })
+    })
+    const selection = [rule(false), pick(true, post(7))]
+
+    act(() =>
+      result.current.edits.restore({
+        start: 10,
+        end: 20,
+        channels: ["beta"],
+        keyword: "rates",
+        sort: "oldest",
+        viewMeasure: "views",
+        selection,
+      }),
+    )
+    await act(() => settle(POST_SEARCH_DEBOUNCE_MS + 50))
+
+    const { view } = result.current.state
+    expect(channels).toEqual([new Set(["beta"])])
+    expect(windows).toEqual([[10, 20]])
+    expect(view.keyword).toBe("rates")
+    expect(view.filter.children).toEqual([])
+    expect(orderOf(view)).toEqual({
+      sort: "oldest",
+      groupByChannel: false,
+      viewMeasure: "views",
+      maxPerChannel: 0,
+      maxPerChannelMode: "ordered",
+    })
+    expect(view.selection).toEqual(selection)
+    expect(view.ranking).toEqual(NO_RANKING)
+  })
+
+  test("the keyword arrives with the rest, not a debounce later (story 12)", () => {
+    const { result } = mount()
+    act(() => result.current.edits.setKeyword("old"))
+
+    act(() =>
+      result.current.edits.restore({
+        start: 10,
+        end: 20,
+        channels: ["beta"],
+        keyword: "rates",
+        sort: "oldest",
+      }),
+    )
+
+    const { view } = result.current.state
+    expect([view.keyword, view.sort]).toEqual(["rates", "oldest"])
+    expect(result.current.typed).toBe("rates")
+  })
+})
+
+describe("the order and cap, in per-Account browser storage", () => {
+  const stored = (key: keyof typeof POST_FILTER_STORAGE_KEYS) =>
+    scopedStorage.getItem(POST_FILTER_STORAGE_KEYS[key])
+  const store = (key: keyof typeof POST_FILTER_STORAGE_KEYS, value: string) =>
+    scopedStorage.setItem(POST_FILTER_STORAGE_KEYS[key], value)
+  const order = () => orderOf(mount().result.current.state.view)
+
+  test("defaults when nothing is stored", () => {
+    expect(order()).toEqual({
+      sort: "newest",
+      groupByChannel: false,
+      viewMeasure: "estimated",
+      maxPerChannel: 0,
+      maxPerChannelMode: "ordered",
+    })
+  })
+
+  test("an edit survives a remount", () => {
+    const first = mount()
+    act(() =>
+      first.result.current.edits.setOrder({
+        sort: "fewest_views",
+        groupByChannel: true,
+        viewMeasure: "views",
+        maxPerChannel: 9,
+        maxPerChannelMode: "random",
+      }),
+    )
+    first.unmount()
+
+    expect(order()).toEqual({
+      sort: "fewest_views",
+      groupByChannel: true,
+      viewMeasure: "views",
+      maxPerChannel: 9,
+      maxPerChannelMode: "random",
+    })
+  })
+
+  test("a hostile stored value falls back rather than reaching a request", () => {
+    // `NaN` would reach the feed as `maxPerChannel: NaN` and 422; so would a
+    // sort the server's FEED_SORTS does not know.
+    store("maxPerChannel", "not a number")
+    store("maxPerChannelMode", "alphabetical")
+    store("sortOrder", "relevance")
+    store("groupByChannel", "sideways")
+    store("viewMeasure", "likes")
+
+    expect(order()).toEqual({
+      sort: "newest",
+      groupByChannel: false,
+      viewMeasure: "estimated",
+      maxPerChannel: 0,
+      maxPerChannelMode: "ordered",
+    })
+  })
+
+  test("a negative cap falls back to 0", () => {
+    store("maxPerChannel", "-5")
+    expect(order().maxPerChannel).toBe(0)
+  })
+
+  test("an earlier bundle's `latest` and `channel_time` read as ordered, newest grouped (PFB-01)", () => {
+    store("maxPerChannelMode", "latest")
+    store("sortOrder", "channel_time")
+
+    expect(order()).toMatchObject({
+      sort: "newest",
+      groupByChannel: true,
+      maxPerChannelMode: "ordered",
+    })
+    // Written back in the new shape, so a remount reads it once.
+    expect([
+      stored("maxPerChannelMode"),
+      stored("sortOrder"),
+      stored("groupByChannel"),
+    ]).toEqual(["ordered", "newest", "true"])
+  })
+
+  test("a stored `time` reads as newest, ungrouped", () => {
+    store("sortOrder", "time")
+    expect(order()).toMatchObject({ sort: "newest", groupByChannel: false })
+  })
+
+  test("neither the keyword nor the ranking is stored", () => {
+    const { result } = mount()
+    act(() => {
+      result.current.edits.setKeyword("crypto")
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "crypto" },
+      })
+    })
+
+    expect(JSON.stringify(localStorage)).not.toContain("crypto")
+    expect(JSON.stringify(sessionStorage)).not.toContain("crypto")
+  })
+
+  test("exactly the five keys an earlier bundle used", () => {
+    expect(Object.values(POST_FILTER_STORAGE_KEYS).sort()).toEqual([
+      "postFilter_groupByChannel",
+      "postFilter_maxPerChannel",
+      "postFilter_maxPerChannelMode",
+      "postFilter_sortOrder",
+      "postFilter_viewMeasure",
+    ])
+  })
+})

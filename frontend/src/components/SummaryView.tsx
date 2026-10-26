@@ -5,8 +5,8 @@ import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { ArtifactScopeLine } from "@/components/ArtifactScopeLine"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
+import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import { useAiKeys } from "@/hooks/useAiKeys"
-import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
 import {
   useInvalidateSummaries,
   useSummariesHistory,
@@ -103,7 +103,7 @@ export const SummaryView: React.FC = () => {
     attempts,
     currentSummary?.model ?? "",
   )
-  const applyScope = useApplyArtifactScope()
+  const applyScope = usePostsViewEdits().restore
 
   const workspace = usePreviewWorkspace()
   const [pasteModalOpen, setPasteModalOpen] = useState(false)

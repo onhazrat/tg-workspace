@@ -84,8 +84,8 @@ import { publishShownChannels } from "@/lib/channels/shown-channels"
 import { sortChannelsForGrid } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
 import { useData } from "../contexts/DataContext"
-import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { useSync } from "../contexts/SyncContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 
@@ -141,7 +141,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     runningSyncJobs,
     stopSync,
     followDiscoverChannels,
-  } = useScraper()
+  } = useSync()
 
   const [channelSearch, setChannelSearch] = useState("")
   const [tagSearch, setTagSearch] = useState("")

@@ -3,7 +3,14 @@
  * Chat, Tag run). No React, so they can be tested directly; the contexts keep
  * the state and the toasts.
  */
-import type { PostScopeQuery, PromptScope } from "@/api/data"
+import type { QueryClient } from "@tanstack/react-query"
+
+import {
+  dataPostsCounts,
+  type PostCountsResponse,
+  type PostFilteredRequest,
+} from "@/client"
+import { meaningQuery, type PostsView, postsRead } from "@/lib/posts/posts-view"
 
 /** What a run tells `withProvisionalRow` about the row it opened. */
 export interface ProvisionalRow {
@@ -49,16 +56,14 @@ export const withMissingPosts = (
   missingPosts: number,
 ): { missingPosts?: number } => (missingPosts > 0 ? { missingPosts } : {})
 
-/** The Posts-tab filters a submission records beside its Scope; empty ones are left out. */
-export function searchFilterExtra(filters: {
-  postSearch: string
-  semanticSearchQuery: string
-  semanticSearchRespectsChannels: boolean
-}) {
+/** The Posts-tab searches a submission records beside its Scope; empty ones are left out. */
+export function searchFilterExtra(
+  view: Pick<PostsView, "keyword" | "ranking" | "respectsChannels">,
+) {
   return {
-    postSearch: filters.postSearch || undefined,
-    semanticSearchQuery: filters.semanticSearchQuery || undefined,
-    semanticSearchRespectsChannels: filters.semanticSearchRespectsChannels,
+    postSearch: view.keyword || undefined,
+    semanticSearchQuery: meaningQuery(view.ranking) || undefined,
+    semanticSearchRespectsChannels: view.respectsChannels,
   }
 }
 
@@ -80,22 +85,40 @@ export async function readStream(
   return { text, lastChunk }
 }
 
-export type PromptPostsInput = { scope: PromptScope }
+type CountPosts = (body: PostFilteredRequest) => Promise<PostCountsResponse>
 
-export interface PromptPosts {
-  postCount: number
+const countPostsOnServer: CountPosts = (body) => dataPostsCounts({ body })
+
+/**
+ * The selected Posts in the window per Channel: the view's Scope counts read,
+ * the server's count (PTR-05). Fetched with no stale time, so a selection
+ * changed a moment ago is counted. The "no Posts selected" check and Trim
+ * selection both read it.
+ */
+export async function selectedScopeCounts(
+  queryClient: QueryClient,
+  view: PostsView,
+  countPosts: CountPosts = countPostsOnServer,
+): Promise<Record<string, number>> {
+  const { queryKey, body } = postsRead(view, { kind: "scopeCounts" })
+  const { selected } = await queryClient.fetchQuery({
+    queryKey,
+    queryFn: () => countPosts(body as PostFilteredRequest),
+    staleTime: 0,
+  })
+  return selected
 }
 
 /**
- * How many posts the Posts tab selects now, for the "no Posts selected" check
- * before an Artifact opens. The count is the server's: the selected Posts in
- * the window (PTR-05). The prompt itself reads the Artifact's Covered Posts.
+ * How many Posts the Posts tab selects now, for the "no Posts selected" check
+ * before an Artifact opens. The prompt itself reads the Artifact's Covered
+ * Posts.
  */
-export async function promptPosts(
-  input: PromptPostsInput,
-  channelNames: string[],
-  countPosts: (q: PostScopeQuery) => Promise<Record<string, number>>,
-): Promise<PromptPosts> {
-  const counts = await countPosts({ channelNames, ...input.scope })
-  return { postCount: Object.values(counts).reduce((sum, n) => sum + n, 0) }
+export async function selectedPostCount(
+  queryClient: QueryClient,
+  view: PostsView,
+  countPosts: CountPosts = countPostsOnServer,
+): Promise<number> {
+  const selected = await selectedScopeCounts(queryClient, view, countPosts)
+  return Object.values(selected).reduce((sum, n) => sum + n, 0)
 }

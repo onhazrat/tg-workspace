@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test"
 
 import { type PostFilter, parsePostFilter } from "./post-filter"
-import { type PostsRead, type PostsView, postsRead } from "./posts-view"
+import {
+  NO_RANKING,
+  type PostsRead,
+  type PostsView,
+  postsRead,
+  scopeSubmission,
+} from "./posts-view"
 
 const filter = (src: string): PostFilter => {
   const parsed = parsePostFilter(src)
@@ -13,6 +19,8 @@ const base: PostsView = {
   scopeChannelNames: ["durov", "news"],
   channelNames: ["durov", "news"],
   keyword: "",
+  ranking: NO_RANKING,
+  respectsChannels: false,
   filter: filter("lang:fa"),
   maxPerChannel: 5,
   maxPerChannelMode: "ordered",
@@ -31,6 +39,10 @@ const changes = {
   scopeChannelNames: { scopeChannelNames: ["durov", "news", "rates"] },
   channelNames: { channelNames: ["news"] },
   keyword: { keyword: "rates" },
+  // No read sends it: a meaning search runs in the browser, and the reads
+  // that count or filter ignore it.
+  ranking: { ranking: { kind: "meaning", query: "rates" } },
+  respectsChannels: { respectsChannels: true },
   filter: { filter: filter("media:video") },
   maxPerChannel: { maxPerChannel: 0 },
   maxPerChannelMode: { maxPerChannelMode: "random" },
@@ -203,5 +215,88 @@ describe("postsRead", () => {
       expect(after.queryKey).not.toEqual(before.queryKey)
       expect(after.body).not.toEqual(before.body)
     }
+  })
+})
+
+describe("the Scope counts read, which the no-Posts-selected check fetches (PVM-02)", () => {
+  // The Scope's Channels, the window and the selection, and nothing a count
+  // ignores: no Post filter, keyword, cap, order, grouping or views measure.
+  test("its key and body", () => {
+    const view: PostsView = {
+      ...base,
+      channelNames: ["news"],
+      keyword: "rates",
+      sort: "oldest",
+      groupByChannel: true,
+      viewMeasure: "views",
+    }
+    expect(postsRead(view, { kind: "scopeCounts" })).toEqual({
+      queryKey: [
+        "postsCounts",
+        {
+          channelNames: ["durov", "news"],
+          window: { mode: "live", durationMs: 1_000_000, endGapMs: 0 },
+          selection: 1,
+        },
+      ],
+      body: {
+        channelNames: ["durov", "news"],
+        // The pair the window resolves to now, to the minute.
+        window: { mode: "fixed", start: 960_000, end: 1_980_000 },
+        selection: [
+          { kind: "pick", select: true, channelName: "news", postId: 1 },
+        ],
+      },
+    })
+  })
+})
+
+describe("scopeSubmission (PVM-02)", () => {
+  // What every Action freezes: the Channels it names, the canonical window,
+  // the order and the selection. Never the keyword, the Post filter, the cap
+  // or the ranking, which decide what the tab shows (ADR-026).
+  const view: PostsView = {
+    ...base,
+    keyword: "rates",
+    ranking: { kind: "meaning", query: "rates" },
+    filter: filter("media:video"),
+    sort: "oldest",
+    groupByChannel: true,
+    viewMeasure: "views",
+    windowKey: { mode: "live", durationMs: 3_600_000, endGapMs: 120_000 },
+  }
+
+  test("sends the Channels, the window, the order and the selection, field by field", () => {
+    expect(scopeSubmission(view, ["news", "durov"])).toEqual({
+      channels: ["news", "durov"],
+      window: { mode: "live", durationMinutes: 60, endGapMinutes: 2 },
+      viewMeasure: "views",
+      sort: "oldest",
+      groupByChannel: true,
+      selection: [
+        { kind: "pick", select: true, channelName: "news", postId: 1 },
+      ],
+    })
+  })
+
+  test("a Live window stays Live: the minute it resolves to is not sent", () => {
+    const later = { ...view, startDate: 7_000_000, endDate: 8_000_000 }
+    expect(scopeSubmission(later, ["news"]).window).toEqual({
+      mode: "live",
+      durationMinutes: 60,
+      endGapMinutes: 2,
+    })
+  })
+
+  test("a Fixed window is sent as its two ends", () => {
+    const fixed: PostsView = {
+      ...view,
+      windowKey: { mode: "fixed", start: 5, end: 9 },
+    }
+    expect(scopeSubmission(fixed, ["news"]).window).toEqual({
+      mode: "fixed",
+      start: 5,
+      end: 9,
+    })
   })
 })

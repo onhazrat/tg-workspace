@@ -21,14 +21,13 @@
  * The Post selection comes back as it was frozen (PTR-05). An Artifact made
  * before it has none; its keyword and cap covered what one select rule over
  * them covers, which is how the server reads such a Scope too.
+ *
+ * The Posts view module's `restore` edit puts it all back in one edit
+ * (PVM-01), and clears the ranking: a Semantic or related-Post Artifact's
+ * ranked Posts are its selection's Picks, not a search to run again.
  */
 
-import { useCallback } from "react"
-
 import type { FrozenScope } from "@/client"
-import { useData } from "@/contexts/DataContext"
-import { useScope } from "@/contexts/ScopeContext"
-import { useScraper } from "@/contexts/ScraperContext"
 import { append } from "@/lib/filter-tree"
 import {
   addPostFunnel,
@@ -107,7 +106,7 @@ export function workspaceFromScope(scope: FrozenScope): {
     selection: scope.selection
       ? // The generated read type leaves `filter` optional because the server
         // defaults it on input; it always emits one. The write direction is
-        // compiler-checked in `usePromptPosts.getScopeSubmission`.
+        // compiler-checked in `scopeSubmission`.
         (scope.selection as PostSelection)
       : scope.posts?.length
         ? // A ranked Artifact from before: those Posts, as the server reads it.
@@ -121,57 +120,4 @@ export function workspaceFromScope(scope: FrozenScope): {
           ? DEFAULT_SELECTION
           : [legacy],
   }
-}
-
-export function useApplyArtifactScope(): (scope: FrozenScope) => void {
-  const { setSelectedChannels } = useData()
-  const { setFixedRange } = useScope()
-  const {
-    setPostSearch,
-    setSemanticSearchQuery,
-    setRelatedPostSearch,
-    setPostFilter,
-    setViewMeasure,
-    setMaxPostsPerChannel,
-    setMaxPostsPerChannelMode,
-    setPostSortOrder,
-    setGroupByChannel,
-    replaceSelection,
-  } = useScraper()
-
-  return useCallback(
-    (scope: FrozenScope) => {
-      const next = workspaceFromScope(scope)
-      setSelectedChannels(next.channels)
-      setFixedRange(scope.start, scope.end)
-      setPostSearch(next.keyword)
-      setPostFilter(next.postFilter)
-      setViewMeasure(next.viewMeasure)
-      setMaxPostsPerChannel(next.maxPerChannel)
-      setMaxPostsPerChannelMode(next.maxPerChannelMode)
-      setPostSortOrder(next.sort)
-      setGroupByChannel(next.groupByChannel)
-      replaceSelection(next.selection)
-      // The ranked Post selection a Semantic or related-Post Artifact froze is
-      // not a filter, so there is nothing in the workspace to restore it into.
-      // Leaving a live semantic query running instead would mean the restored
-      // Scope selected Posts the Artifact's never did, so both are cleared.
-      setSemanticSearchQuery("")
-      setRelatedPostSearch(null)
-    },
-    [
-      setSelectedChannels,
-      setFixedRange,
-      setPostSearch,
-      setPostFilter,
-      setViewMeasure,
-      setMaxPostsPerChannel,
-      setMaxPostsPerChannelMode,
-      setPostSortOrder,
-      setGroupByChannel,
-      setSemanticSearchQuery,
-      setRelatedPostSearch,
-      replaceSelection,
-    ],
-  )
 }

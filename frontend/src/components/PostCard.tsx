@@ -1,7 +1,8 @@
 import type React from "react"
 import { useData } from "../contexts/DataContext"
-import { useScraper } from "../contexts/ScraperContext"
+import { usePostsViewEdits } from "../contexts/PostsViewContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { useSync } from "../contexts/SyncContext"
 import type { Post } from "../types"
 import { useSpotlight } from "./post-card/ChannelSpotlight"
 import { PostCardView } from "./post-card/PostCardView"
@@ -26,7 +27,8 @@ export const PostCard: React.FC<PostCardProps> = ({
   onToggleSelected,
 }) => {
   const { embeddingsEnabled } = useSettings()
-  const { setRelatedPostSearch, addNewChannel } = useScraper()
+  const { setRanking } = usePostsViewEdits()
+  const { addNewChannel } = useSync()
   const { channels } = useData()
   const translation = usePostTranslation(post)
   const { spotlight, enter } = useSpotlight()
@@ -60,7 +62,7 @@ export const PostCard: React.FC<PostCardProps> = ({
       onFindRelated={
         embeddingsEnabled
           ? () => {
-              setRelatedPostSearch(post)
+              setRanking({ ranking: { kind: "related", post } })
               window.scrollTo({ top: 0, behavior: "smooth" })
             }
           : undefined

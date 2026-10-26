@@ -11,8 +11,10 @@ import type { CommandContext, EntityFlowType } from "@/lib/commands/types"
 import {
   addPostFunnel,
   emptyPostFilter,
+  type PostFilter,
   printPostFilter,
 } from "@/lib/posts/post-filter"
+import type { PostsOrder, PostsView } from "@/lib/posts/posts-view"
 import type { Channel } from "@/types"
 
 const channel: Channel = { id: "c1", name: "news", startId: 42 }
@@ -62,26 +64,25 @@ describe("the post-filter commands add to the Post filter (PTR-03)", () => {
   const run = (id: string, ctx: CommandContext) =>
     commands.find((command) => command.id === id)?.run(ctx)
 
-  function filterContext(over: Partial<CommandContext> = {}) {
+  function filterContext(view: Partial<PostsView> = {}) {
     const writes: Record<string, unknown> = {}
     const ctx = {
-      postSearch: "",
-      postFilter: emptyPostFilter(),
-      postSortOrder: "newest",
-      groupByChannel: false,
-      setPostFilter: (
-        value: Parameters<CommandContext["setPostFilter"]>[0],
-      ) => {
-        writes.filter = printPostFilter(value)
+      postsView: {
+        keyword: "",
+        filter: emptyPostFilter(),
+        sort: "newest",
+        groupByChannel: false,
+        ...view,
       },
-      setPostSortOrder: (value: unknown) => {
-        writes.order = value
+      postsEdits: {
+        setPostFilter: (value: PostFilter) => {
+          writes.filter = printPostFilter(value)
+        },
+        setOrder: (patch: Partial<PostsOrder>) => {
+          if ("sort" in patch) writes.order = patch.sort
+          if ("groupByChannel" in patch) writes.grouped = patch.groupByChannel
+        },
       },
-      setGroupByChannel: (value: unknown) => {
-        writes.grouped = value
-      },
-      handleFilterPosts: async () => {},
-      ...over,
     } as unknown as CommandContext
     return { ctx, writes }
   }
@@ -89,12 +90,12 @@ describe("the post-filter commands add to the Post filter (PTR-03)", () => {
   test("a media command adds its Condition, joined with OR, and takes it out", async () => {
     const toastSpy = spyOn(toast, "success").mockImplementation(() => "")
     const photo = addPostFunnel(emptyPostFilter(), "media", "photo")
-    const adding = filterContext({ postFilter: photo })
+    const adding = filterContext({ filter: photo })
     await run("set-media-filter-video", adding.ctx)
     expect(adding.writes.filter).toBe("(media:photo or media:video)")
 
     const removing = filterContext({
-      postFilter: addPostFunnel(photo, "media", "video"),
+      filter: addPostFunnel(photo, "media", "video"),
     })
     await run("set-media-filter-photo", removing.ctx)
     expect(removing.writes.filter).toBe("media:video")
@@ -104,7 +105,7 @@ describe("the post-filter commands add to the Post filter (PTR-03)", () => {
   test("a Type command adds its Condition beside what the filter has", async () => {
     const toastSpy = spyOn(toast, "success").mockImplementation(() => "")
     const persian = addPostFunnel(emptyPostFilter(), "language", "fa")
-    const typed = filterContext({ postFilter: persian })
+    const typed = filterContext({ filter: persian })
     await run("set-forwarded-filter-original", typed.ctx)
     expect(typed.writes.filter).toBe("lang:fa and type:original")
     expect(

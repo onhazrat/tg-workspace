@@ -19,12 +19,18 @@ do not change.
 
 **Blocked by:** PVM-01.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The Scope submission is tested with a Posts view literal: the Channels, the canonical window (a Live window stays Live), the order and the selection body, field by field.
-- [ ] The fetch for what the tab shows is tested with a view literal and a fake api: the shown read, a meaning search with and without respecting the Channels, and a find-related.
-- [ ] The Posts view tests grow a case for the Scope counts read used by the check, pinning its key and body.
-- [ ] Generate and copy prompt with no Posts selected still refuse with the same message, and a selection changed just before is read fresh; covered at the AI context's existing seam.
-- [ ] No module names the prompt-posts input, the browser's prompt Scope type or the removed hook.
-- [ ] The full Playwright suite passes, run serially; only a mock that asserts the count request's body changes, if any does.
-- [ ] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
+- [x] The Scope submission is tested with a Posts view literal: the Channels, the canonical window (a Live window stays Live), the order and the selection body, field by field.
+- [x] The fetch for what the tab shows is tested with a view literal and a fake api: the shown read, a meaning search with and without respecting the Channels, and a find-related.
+- [x] The Posts view tests grow a case for the Scope counts read used by the check, pinning its key and body.
+- [x] Generate and copy prompt with no Posts selected still refuse with the same message, and a selection changed just before is read fresh; covered at the AI context's existing seam.
+- [x] No module names the prompt-posts input, the browser's prompt Scope type or the removed hook.
+- [x] The full Playwright suite passes, run serially; only a mock that asserts the count request's body changes, if any does.
+- [x] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
+
+## Comments
+
+- 2026-10-26: implemented on `claude/pvm-02` and merged into the integration branch `claude/pvm` as a fast-forward to 87c1af8d.
+  Playwright: 237/239 on a reseeded warm e2e DB; the two `reset-password` failures need a mailcatcher on :1080.
+- 2026-10-26 (review): the Discovery report path keeps its own Scope body, because its route takes no ScopeSubmission and the server is out of scope, so `scopeSubmission` covers Summary, Chat and Tag only.

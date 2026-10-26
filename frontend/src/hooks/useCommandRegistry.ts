@@ -1,15 +1,18 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
-import { dataPostsCounts, type PostFilteredRequest } from "@/client"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
 import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { useAI } from "@/contexts/AIContext"
 import { useChatContext } from "@/contexts/ChatContext"
 import { useData } from "@/contexts/DataContext"
+import {
+  usePostsViewEdits,
+  usePostsViewState,
+} from "@/contexts/PostsViewContext"
 import { useScope } from "@/contexts/ScopeContext"
-import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import { useSync } from "@/contexts/SyncContext"
 import { useUI } from "@/contexts/UIContext"
 import { useApiStatus } from "@/hooks/useApiStatus"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
@@ -20,6 +23,7 @@ import {
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
+import { selectedScopeCounts } from "@/lib/artifacts/artifact-run"
 import {
   addFunnel,
   emptyFilter,
@@ -41,9 +45,7 @@ import {
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
 import { SERVER_TABLE_NAMES } from "@/lib/data-transfer/tables"
 import { historyPaletteBinding } from "@/lib/history/history-params"
-import { postsRead } from "@/lib/posts/posts-view"
 import { useLoadDBStats } from "./useDBStats"
-import { usePostsView } from "./usePostsView"
 import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
 const workspaceRoute = getRouteApi("/_tg/")
@@ -105,22 +107,9 @@ export function useCommandRegistry(): {
     addToSyncQueue,
     autoSyncPauseUntil,
     setAutoSyncPauseUntil,
-    postSearch,
-    setPostSearch,
-    setSemanticSearchQuery,
-    setSemanticSearchRespectsChannels,
-    setRelatedPostSearch,
-    handleFilterPosts,
-    postFilter,
-    setPostFilter,
-    getScopedPosts,
-    setMaxPostsPerChannel,
-    setMaxPostsPerChannelMode,
-    postSortOrder,
-    setPostSortOrder,
-    groupByChannel,
-    setGroupByChannel,
-  } = useScraper()
+  } = useSync()
+  const { view: postsView } = usePostsViewState()
+  const postsEdits = usePostsViewEdits()
   const {
     setSummary,
     handleSummarize,
@@ -150,18 +139,11 @@ export function useCommandRegistry(): {
   // (PTR-05). Through the Scope counts' cache entry, fetched fresh so Trim
   // selection never acts on stale counts.
   const queryClient = useQueryClient()
-  const postsView = usePostsView(null)
   const getPostsInScopeCounts = useCallback(async (): Promise<
     Record<string, number>
   > => {
     if (selectedChannels.size === 0) return {}
-    const { queryKey, body } = postsRead(postsView, { kind: "scopeCounts" })
-    const counts = await queryClient.fetchQuery({
-      queryKey,
-      queryFn: () => dataPostsCounts({ body: body as PostFilteredRequest }),
-      staleTime: 0,
-    })
-    return counts.selected
+    return selectedScopeCounts(queryClient, postsView)
   }, [selectedChannels, postsView, queryClient])
 
   const context = useMemo<CommandContext>(
@@ -190,12 +172,8 @@ export function useCommandRegistry(): {
       palette,
       summariesHistory,
       postDateRange: { startDate, endDate },
-      postSearch,
-      setPostSearch,
-      setSemanticSearchQuery,
-      setSemanticSearchRespectsChannels,
-      setRelatedPostSearch,
-      handleFilterPosts,
+      postsView,
+      postsEdits,
       historySearchQuery,
       setHistorySearchQuery,
       setSummary,
@@ -285,15 +263,6 @@ export function useCommandRegistry(): {
         showChannelStartId: settings.showChannelStartId,
         setShowChannelStartId: settings.setShowChannelStartId,
       },
-      postFilter,
-      setPostFilter,
-      setMaxPostsPerChannel,
-      setMaxPostsPerChannelMode,
-      postSortOrder,
-      setPostSortOrder,
-      groupByChannel,
-      setGroupByChannel,
-      getScopedPosts,
       getPostsInScopeCounts,
       starredOnly,
       setStarredOnly,
@@ -316,11 +285,8 @@ export function useCommandRegistry(): {
       copySummaryPrompt,
       currentSummaryId,
       endDate,
-      getScopedPosts,
       getPostsInScopeCounts,
-      postFilter,
       getEffectiveGlobalStartTime,
-      handleFilterPosts,
       handleSummarize,
       handleScrapeAll,
       handleScrapeChannel,
@@ -333,9 +299,8 @@ export function useCommandRegistry(): {
       loadDBStats,
       loadHistory,
       palette,
-      postSearch,
-      postSortOrder,
-      groupByChannel,
+      postsView,
+      postsEdits,
       selectedChannels,
       openSetting,
       setActiveTab,
@@ -344,18 +309,9 @@ export function useCommandRegistry(): {
       setChatMessages,
       workspaceTabs,
       setDateRange,
-      setPostFilter,
-      setMaxPostsPerChannel,
-      setMaxPostsPerChannelMode,
-      setPostSortOrder,
-      setGroupByChannel,
       setHistorySearchQuery,
-      setPostSearch,
-      setRelatedPostSearch,
       setSelectedChannels,
       shownChannelNames,
-      setSemanticSearchQuery,
-      setSemanticSearchRespectsChannels,
       setStarredOnly,
       setSummary,
       settings,

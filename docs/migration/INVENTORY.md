@@ -69,7 +69,7 @@ FastAPI equivalents: `/api/v1/network/*`, `/api/v1/telegram/*` plus legacy `/api
 - `src/components/BotManagement.tsx`
 - `src/components/ChannelGrid.tsx`
 - `src/components/NetworkTelemetry.tsx`
-- `src/contexts/ScraperContext.tsx`
+- `src/contexts/SyncContext.tsx`
 
 ## Tests as specification
 

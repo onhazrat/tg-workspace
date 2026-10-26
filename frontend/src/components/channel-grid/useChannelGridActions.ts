@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { api } from "@/api"
 import { useData } from "@/contexts/DataContext"
-import { useScraper } from "@/contexts/ScraperContext"
+import { useSync } from "@/contexts/SyncContext"
 import { useLoadDBStats } from "@/hooks/useDBStats"
 import {
   useInvalidateSettingGroups,
@@ -29,7 +29,7 @@ export function useChannelGridActions(targets: ReadonlySet<string>) {
   const { channels, setChannels, setSelectedChannels, loadChannels } = useData()
   const loadDBStats = useLoadDBStats()
 
-  const { addToSyncQueue } = useScraper()
+  const { addToSyncQueue } = useSync()
 
   const [bulkTagInput, setBulkTagInput] = useState("")
   const [bulkRemoveTagInput, setBulkRemoveTagInput] = useState("")

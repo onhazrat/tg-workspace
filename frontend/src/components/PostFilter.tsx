@@ -32,7 +32,12 @@ import {
 } from "@/lib/posts/post-filter"
 import type { PostFacetsResponse } from "../client"
 import { useData } from "../contexts/DataContext"
-import { useScraper } from "../contexts/ScraperContext"
+import {
+  type PostsViewEdits,
+  usePostsKeyword,
+  usePostsViewEdits,
+  usePostsViewState,
+} from "../contexts/PostsViewContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import {
@@ -61,6 +66,13 @@ import type {
   ViewMeasure,
 } from "../lib/posts/post-pipeline"
 import { facetRule } from "../lib/posts/post-selection"
+import {
+  meaningQuery,
+  NO_RANKING,
+  type PostsRanking,
+  type PostsView,
+  relatedPost,
+} from "../lib/posts/posts-view"
 import type { Post } from "../types"
 import {
   PostFacetMenu,
@@ -73,7 +85,7 @@ import {
 import { PerChannelForm, Pill, pillClass } from "./PostFilterParts"
 import { useSpotlight } from "./post-card/ChannelSpotlight"
 
-/** What the bar reads and writes; `ScraperContext` provides all of it. */
+/** What the bar reads and writes; the Posts view module provides all of it. */
 export interface FilterBarControls {
   semanticSearchQuery: string
   setSemanticSearchQuery: (value: string) => void
@@ -96,8 +108,6 @@ export interface FilterBarControls {
 }
 
 interface PostFilterProps {
-  postSearch: string
-  setPostSearch: (val: string) => void
   /** How many Posts the filter shows, for the footer and the filter row. */
   shownCount: number
   /** The existing subtitle's qualifiers: the cap and grouping. */
@@ -109,8 +119,15 @@ interface PostFilterProps {
 }
 
 export interface PostFilterBarProps extends PostFilterProps {
+  /** The keyword the view applies, for the filter row. */
+  postSearch: string
+  setPostSearch: (val: string) => void
   controls: FilterBarControls
-  embeddingsEnabled: boolean
+  /**
+   * The search box, which alone reads the keyword as typed, so a keystroke
+   * re-renders it and not the bar (PVM review, story 1).
+   */
+  searchBox: React.ReactNode
   /** The Analysis window control, left of the search box. */
   windowControl: React.ReactNode
   /** Per-value counts and the window's total; `undefined` while none are known. */
@@ -132,19 +149,24 @@ export interface PostFilterBarProps extends PostFilterProps {
 /** The floor's default in `services/reach.py`, until the server's arrives. */
 const DEFAULT_ESTIMATION_FLOOR_HOURS = 1
 
+interface SearchBoxProps {
+  /** The keyword as typed. */
+  postSearch: string
+  setPostSearch: (value: string) => void
+  controls: FilterBarControls
+  embeddingsEnabled: boolean
+}
+
 /**
  * One search box for both kinds of search. Keyword filters as you type;
  * Meaning runs on Enter, and is offered only with semantic features on.
  */
-function SearchBox({
+export function SearchBox({
   postSearch,
   setPostSearch,
   controls,
   embeddingsEnabled,
-}: Pick<
-  PostFilterBarProps,
-  "postSearch" | "setPostSearch" | "controls" | "embeddingsEnabled"
->) {
+}: SearchBoxProps) {
   const {
     semanticSearchQuery,
     setSemanticSearchQuery,
@@ -324,14 +346,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
           <div className="flex lg:shrink-0">{props.windowControl}</div>
-          <div className="lg:flex-1">
-            <SearchBox
-              postSearch={postSearch}
-              setPostSearch={setPostSearch}
-              controls={s}
-              embeddingsEnabled={props.embeddingsEnabled}
-            />
-          </div>
+          <div className="lg:flex-1">{props.searchBox}</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -462,13 +477,81 @@ function useSpotlitWindowHistogram(query: WindowHistogramQuery) {
   return usePostWindowHistogram(query, useSpotlight().spotlight)
 }
 
+/** The search box over the keyword as typed: the one reader of it. */
+export function PostsSearchBox(
+  props: Omit<SearchBoxProps, "postSearch" | "setPostSearch">,
+) {
+  return (
+    <SearchBox
+      {...props}
+      postSearch={usePostsKeyword()}
+      setPostSearch={usePostsViewEdits().setKeyword}
+    />
+  )
+}
+
+/** The ranking and the "respects Channels" choice as the bar's controls. */
+function rankingControls(
+  view: Pick<PostsView, "ranking" | "respectsChannels">,
+  setRanking: PostsViewEdits["setRanking"],
+) {
+  const { ranking } = view
+  // Clearing one search leaves the other kind, as each control always did.
+  const clears = (kind: PostsRanking["kind"]) =>
+    ranking.kind === kind ? setRanking({ ranking: NO_RANKING }) : undefined
+  return {
+    semanticSearchQuery: meaningQuery(ranking),
+    setSemanticSearchQuery: (query: string) =>
+      query
+        ? setRanking({ ranking: { kind: "meaning", query } })
+        : clears("meaning"),
+    semanticSearchRespectsChannels: view.respectsChannels,
+    setSemanticSearchRespectsChannels: (respectsChannels: boolean) =>
+      setRanking({ respectsChannels }),
+    relatedPostSearch: relatedPost(ranking),
+    setRelatedPostSearch: (post: Post | null) =>
+      post
+        ? setRanking({ ranking: { kind: "related", post } })
+        : clears("related"),
+  }
+}
+
+/** The view's order and filter as the bar's controls. */
+const orderControls = (view: PostsView, edits: PostsViewEdits) => ({
+  postFilter: view.filter,
+  setPostFilter: edits.setPostFilter,
+  viewMeasure: view.viewMeasure,
+  setViewMeasure: (viewMeasure: ViewMeasure) => edits.setOrder({ viewMeasure }),
+  maxPostsPerChannel: view.maxPerChannel,
+  setMaxPostsPerChannel: (maxPerChannel: number) =>
+    edits.setOrder({ maxPerChannel }),
+  maxPostsPerChannelMode: view.maxPerChannelMode,
+  setMaxPostsPerChannelMode: (maxPerChannelMode: MaxPostsPerChannelMode) =>
+    edits.setOrder({ maxPerChannelMode }),
+  postSortOrder: view.sort,
+  setPostSortOrder: (sort: PostSortOrder) => edits.setOrder({ sort }),
+  groupByChannel: view.groupByChannel,
+  setGroupByChannel: (groupByChannel: boolean) =>
+    edits.setOrder({ groupByChannel }),
+})
+
+/** The Posts view and its edits as the bar's controls, before a spotlight. */
+export const postsViewControls = (
+  view: PostsView,
+  edits: PostsViewEdits,
+): FilterBarControls => ({
+  ...rankingControls(view, edits.setRanking),
+  ...orderControls(view, edits),
+})
+
 /** The bar wired to the workspace's state. */
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const spot = useSpotlight()
+  const { view } = usePostsViewState()
+  const edits = usePostsViewEdits()
   // A spotlight's tree is what the row shows and edits (PTR-04).
-  const scraper = useScraper()
   const { controls, keywordIgnored } = spotlitBar(
-    scraper,
+    postsViewControls(view, edits),
     spot.spotlight,
     spot.setFilter,
   )
@@ -479,7 +562,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   // The filter row says "N of M", and M is the window's total, so the counts
   // load while it is showing as well as while a dropdown is open.
   const rowShowing =
-    controls.postFilter.children.length > 0 || props.postSearch.trim() !== ""
+    controls.postFilter.children.length > 0 || view.keyword.trim() !== ""
   const facets = usePostFacets(openPillCount > 0 || rowShowing, spot.spotlight)
   const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
@@ -503,9 +586,16 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
     <PostValueHistogramContext.Provider value={useSpotlitValueHistogram}>
       <PostFilterBar
         {...props}
+        postSearch={view.keyword}
+        setPostSearch={edits.setKeyword}
         controls={controls}
+        searchBox={
+          <PostsSearchBox
+            controls={controls}
+            embeddingsEnabled={embeddingsEnabled}
+          />
+        }
         keywordIgnored={keywordIgnored}
-        embeddingsEnabled={embeddingsEnabled}
         windowControl={
           <WindowHistogramContext.Provider value={useSpotlitWindowHistogram}>
             <WindowOldestPostContext.Provider value={oldestPost}>
@@ -525,7 +615,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
           setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
         }
         onFacetTick={(facet, value, select) =>
-          scraper.appendSelection([
+          edits.appendSelection([
             facetRule(select, facet, value, spot.spotlight?.channel),
           ])
         }

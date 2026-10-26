@@ -12,7 +12,7 @@ import {
   pick,
   rule,
 } from "@/lib/posts/post-selection"
-import { workspaceFromScope } from "./useApplyArtifactScope"
+import { workspaceFromScope } from "./restore-scope"
 
 const window = { start: 1, end: 2 }
 

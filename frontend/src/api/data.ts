@@ -2,7 +2,6 @@ import type {
   ChatSessionSubmitRequest,
   DirectoryFollowSource,
   DirectoryViewRequest,
-  PostCountsResponse,
   SummarySubmitRequest,
   TagRunSubmitRequest,
 } from "../client"
@@ -104,19 +103,6 @@ export type PostFeedQuery = PostFilteredQuery & {
   selectedFirst?: boolean
   /** Only the selected Posts the filter shows, for copy and export (PTR-06). */
   onlySelected?: boolean
-}
-
-/**
- * What the Posts tab selects now, as the Action panel counts it before an
- * Artifact opens: the window, the Post selection and the order (PTR-05). The
- * `channels` list is passed beside it. The prompt never takes it: an AI route
- * names its Artifact and reads the Covered Posts that froze (ADR-038).
- */
-export type PromptScope = Pick<
-  PostFeedQuery,
-  "startDate" | "endDate" | "viewMeasure" | "sort" | "groupByChannel"
-> & {
-  selection: PostSelection
 }
 
 /**
@@ -674,16 +660,6 @@ export const dataApi = {
    * channels and would have run to roughly 13 KB at the ~1,070 channels a real
    * account holds — past what proxies and servers accept in a request line.
    */
-  getPostsCounts: (
-    params: PostFilteredQuery,
-  ): Promise<Record<string, number>> =>
-    // Just the selected map, which is what the AI paths size a selection by.
-    // The feed footer reads the whole answer through `dataPostsCounts`.
-    request<PostCountsResponse>("/api/v1/data/posts/counts", {
-      method: "POST",
-      body: JSON.stringify(postScopeBody(params)),
-    }).then((response) => response.selected),
-
   getTranslation: (channelName: string, postId: number, language: string) => {
     const qs = new URLSearchParams({
       channelName,

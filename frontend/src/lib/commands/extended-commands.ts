@@ -44,6 +44,7 @@ import type {
 } from "@/lib/commands/types"
 import { restartTorService, rotateTorIpNow } from "@/lib/network/tor-actions"
 import { POST_TYPE_VALUES } from "@/lib/posts/post-filter"
+import { NO_RANKING } from "@/lib/posts/posts-view"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { deleteSummary } from "@/lib/summaries/store"
@@ -368,10 +369,10 @@ export function buildExtendedCommands(): CommandDef[] {
         getValue: (ctx) => ctx.palette.searchResultsState?.query ?? "",
         apply: async (ctx, value) => {
           const query = value.trim()
-          ctx.setSemanticSearchQuery(query)
-          ctx.setPostSearch("")
-          ctx.setRelatedPostSearch(null)
-          await ctx.handleFilterPosts("")
+          ctx.postsEdits.setRanking({
+            ranking: query ? { kind: "meaning", query } : NO_RANKING,
+          })
+          ctx.postsEdits.setKeyword("")
         },
       },
       run: () => {},
@@ -387,10 +388,8 @@ export function buildExtendedCommands(): CommandDef[] {
       run: async (ctx, payload) => {
         const post = payload as import("@/types").Post | undefined
         if (!post) return
-        ctx.setRelatedPostSearch(post)
-        ctx.setSemanticSearchQuery("")
-        ctx.setPostSearch("")
-        await ctx.handleFilterPosts()
+        ctx.postsEdits.setRanking({ ranking: { kind: "related", post } })
+        ctx.postsEdits.setKeyword("")
         ctx.setActiveTab("posts")
         toast.success(
           `Showing posts related to @${post.channelName} #${post.id}`,
@@ -405,7 +404,6 @@ export function buildExtendedCommands(): CommandDef[] {
       group: "Posts",
       run: async (ctx) => {
         clearPostFilters(ctx)
-        await ctx.handleFilterPosts("")
         toast.success("Post filters cleared")
       },
     },
@@ -602,7 +600,6 @@ export function buildExtendedCommands(): CommandDef[] {
       group: "Posts",
       run: async (ctx) => {
         applyPostDateRangeHours(ctx, preset.hours)
-        await ctx.handleFilterPosts(ctx.postSearch)
         toast.success(`Date range set to ${preset.label.toLowerCase()}`)
       },
     })
@@ -650,10 +647,9 @@ export function buildExtendedCommands(): CommandDef[] {
       label: `Set Post Order → ${option.label}`,
       keywords: ["post", "order", "sort", option.value, option.label],
       group: "Posts",
-      getBadge: (ctx) => (ctx.postSortOrder === option.value ? "ON" : null),
+      getBadge: (ctx) => (ctx.postsView.sort === option.value ? "ON" : null),
       run: async (ctx) => {
-        ctx.setPostSortOrder(option.value)
-        void ctx.handleFilterPosts(ctx.postSearch)
+        ctx.postsEdits.setOrder({ sort: option.value })
         toast.success(`Post order: ${option.label}`)
       },
     })
@@ -665,13 +661,11 @@ export function buildExtendedCommands(): CommandDef[] {
     label: "Toggle Posts Grouped by Channel",
     keywords: ["post", "group", "channel", "grouped", "order"],
     group: "Posts",
-    getBadge: (ctx) => (ctx.groupByChannel ? "ON" : null),
+    getBadge: (ctx) => (ctx.postsView.groupByChannel ? "ON" : null),
     run: async (ctx) => {
-      ctx.setGroupByChannel(!ctx.groupByChannel)
-      void ctx.handleFilterPosts(ctx.postSearch)
-      toast.success(
-        ctx.groupByChannel ? "Posts ungrouped" : "Posts grouped by channel",
-      )
+      const grouped = ctx.postsView.groupByChannel
+      ctx.postsEdits.setOrder({ groupByChannel: !grouped })
+      toast.success(grouped ? "Posts ungrouped" : "Posts grouped by channel")
     },
   })
 

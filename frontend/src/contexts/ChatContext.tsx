@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -34,13 +35,15 @@ import {
   submitChatSession,
 } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
+import { scopeSubmission } from "@/lib/posts/posts-view"
 import { chatWithHistoryStream, generateChatStream } from "../services/ai"
 import type { ChatMessage, ChatMode, Post } from "../types"
 import { useData } from "./DataContext"
+import { invalidatePostsReads, usePostsViewState } from "./PostsViewContext"
 import { useRAG } from "./RAGContext"
 import { useScope } from "./ScopeContext"
-import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
+import { useSync } from "./SyncContext"
 import { useUI } from "./UIContext"
 
 interface ChatContextType {
@@ -83,14 +86,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const { startDate, endDate } = useScope()
   const { activeTab, currentChatSessionId, workspaceTabs } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
-  const {
-    scrapeChannelsInParallel,
-    postSearch,
-    semanticSearchQuery,
-    semanticSearchRespectsChannels,
-    handleFilterPosts,
-    getScopeSubmission,
-  } = useScraper()
+  const { scrapeChannelsInParallel } = useSync()
+  const queryClient = useQueryClient()
+  const { view } = usePostsViewState()
   const { searchSimilarPosts } = useRAG()
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -231,8 +229,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (stale.length === 0) return
     toast.info(`Syncing ${stale.length} channels to ensure up-to-date data...`)
     await scrapeChannelsInParallel(stale, "Pre-Chat Sync")
-    // Refresh the eager Posts-tab list so the UI reflects the sync.
-    handleFilterPosts()
+    invalidatePostsReads(queryClient)
   }
 
   /**
@@ -311,15 +308,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (send.sessionId) return
     await submitChatSession({
       id: sessionId,
-      scope: getScopeSubmission(selectedChannelNames),
+      scope: scopeSubmission(view, selectedChannelNames),
       language: aiLanguage,
       model: selectedModel,
       mode: chatMode,
-      extra: searchFilterExtra({
-        postSearch,
-        semanticSearchQuery,
-        semanticSearchRespectsChannels,
-      }),
+      extra: searchFilterExtra(view),
     })
     row.opened(sessionId)
   }

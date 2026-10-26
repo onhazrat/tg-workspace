@@ -28,8 +28,8 @@ import {
 import type { ColumnsMenu } from "@/components/directory/DirectoryBar"
 import type { BoostMode } from "@/components/directory/DirectoryBoost"
 import { useData } from "@/contexts/DataContext"
-import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
+import { useSync } from "@/contexts/SyncContext"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import {
   type ColumnChoices,
@@ -226,7 +226,7 @@ export function useDirectory() {
   const { view, patch } = useView()
   const searchBox = useDirectorySearchBox(view, patch)
   const { selectedChannels, channels } = useData()
-  const { followDiscoverChannels } = useScraper()
+  const { followDiscoverChannels } = useSync()
   const { directorySelectedFirst, setDirectorySelectedFirst } = useSettings()
   const queryClient = useQueryClient()
   const [ticked, setTicked] = useStoredList(TICKS_KEY)
