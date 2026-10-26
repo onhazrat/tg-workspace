@@ -33,3 +33,4 @@ do not change.
 
 - 2026-10-26: implemented on `claude/pvm-02` and merged into the integration branch `claude/pvm` as a fast-forward to 87c1af8d.
   Playwright: 237/239 on a reseeded warm e2e DB; the two `reset-password` failures need a mailcatcher on :1080.
+- 2026-10-26 (review): the Discovery report path keeps its own Scope body, because its route takes no ScopeSubmission and the server is out of scope, so `scopeSubmission` covers Summary, Chat and Tag only.

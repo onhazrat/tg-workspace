@@ -15,21 +15,22 @@ not the summary.** Open the file for the full list of what it checks and why.
 |---|---|---|
 | `frontend/src/types.conform.ts` | hand-written domain types match the server | compile error |
 | `frontend/src/api/client-split.conform.ts` | the two-client split, **in both directions** | compile error |
-| `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner; storage has exactly four owners; logout and stale-session clear the query cache; no Posts query key is built outside `postsRead` | test |
-| `frontend/src/lib/posts/posts-view.test.ts` | every Posts read's key moves exactly when its body does, except the three departures it lists (window by `windowKey`, selection by revision, filter by printed text; ADR-036) | test |
+| `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner; storage has exactly four owners; logout and stale-session clear the query cache; no Posts query key is built outside `postsRead`; the Posts view and Sync contexts keep their field sets, and the Sync value stays memoized (a source check) | test |
+| `frontend/src/contexts/PostsViewContext.test.tsx` | a keystroke re-renders the search box alone, not a Sync, edits or view reader or the filter bar; the edits keep their identity across a provider re-render, and a meaning search runs once through one, a minute tick and a Pick | test |
+| `frontend/src/lib/posts/posts-view.test.ts` | every Posts read's key moves exactly when its body does, but for the three departures it lists (ADR-036) | test |
 | `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |
 | `backend/tests/api/test_posts_view_guard.py` | no Posts or Discover route resolves part of a Posts view by hand (`view_of`, `resolve_posts_view`, ADR-036); no Action-path module (derived) builds its own Post read (ADR-038) | test |
-| `backend/tests/api/test_openapi_has_no_ticket_ids.py` | no ticket id (`TB-05`, `ticket 12`) in any OpenAPI `description` or `summary`, which ships as JSDoc in the generated client; ids go in a `#` comment | test |
-| `scripts/check_code_refs.py` | every backticked path.py::name reference outside dated records names something defined; a file path never names only a file the commit removes; checked at commit | hook |
+| `backend/tests/api/test_openapi_has_no_ticket_ids.py` | no ticket id in any OpenAPI `description` or `summary`, which ships as JSDoc in the generated client | test |
+| `scripts/check_code_refs.py` | every backticked path.py::name reference outside dated records names something defined, and no path names only a file the commit removes; at commit | hook |
 | `scripts/check_test_ids.py` | every literal test id a Playwright spec names is rendered by `frontend/src`, checked at commit | hook |
-| `scripts/generate_constants_catalog.py` | a module with a constant has a `CONSTANT_TOPICS` entry and no entry outlives its constant, at commit time, so a frontend-only change meets it before the backend suite | pre-commit hook |
+| `scripts/generate_constants_catalog.py` | a module with a constant has a `CONSTANT_TOPICS` entry and no entry outlives its constant, at commit | pre-commit hook |
 | `backend/tests/services/test_service_kinds.py` | every service module declares one of the five kinds | test |
 | `backend/tests/api/test_route_inventory.py` | declared routes are actually mounted | test |
 | `backend/tests/api/test_*_projection.py` | response key sets, no invented `null`s | test |
 | `backend/tests/services/test_photo_cache_lookup_cost.py` | image-cache lookups don't scan the directory, in **both** twin modules | test |
 | `backend/tests/services/test_summary_list_payload_cost.py` | listing summaries never opens the corpus table, **and the detail call does** | test |
 | `backend/tests/services/test_log_list_payload_cost.py` | log lists drop the bodies, the detail route keeps them, search still reaches them | test |
-| `backend/tests/services/test_sync_schedule_stats_narrowing.py` | the scheduler fetches stats only where they can change its answer, and **still fetches them where they can** | test |
+| `backend/tests/services/test_sync_schedule_stats_narrowing.py` | the scheduler fetches stats only, and **always**, where they can change its answer | test |
 | `backend/tests/services/test_sync_job_flush_cost.py` | job progress rides the flush interval; terminal states still write immediately | test |
 | `backend/tests/services/test_sync_meta_commit_cost.py` | the etag moves in the same transaction as the change it announces | test |
 | `backend/tests/jobs/test_auto_sync_session_scope.py` | the scheduler closes its planning transaction before syncing | test |
@@ -71,25 +72,25 @@ not the summary.** Open the file for the full list of what it checks and why.
 | `backend/tests/services/test_setting_group_and_job_scoping.py` | the group list reads through the seam and is **unfiltered** with the flag off; the lookup map stays unscoped and says why; the running-job read is the caller's; all three write doors refuse a foreign group in **both** flag states | test |
 | `backend/tests/services/test_setting_group_name_identity.py` | a duplicate group name is the route's 409 and never a `UniqueViolation`, in both flag states; two accounts may hold one name; the filter keeps no unowned leg and consults neither the flag nor `scoped_select` | test |
 | `backend/tests/services/test_auto_publish_scoping.py` | a foreign credential is refused **before** it is decrypted and answers as an absent one; a refusal reaches the publish log; the send is attributed to the Summary's owner | test |
-| `backend/tests/services/test_owner_backfill.py` | the migration's frozen table list is the one `SCOPES` derives; no unowned user-owned row survives it; a payload takes its parent's owner; a duplicate setting group is merged rather than stamped into a unique-index violation; a fresh install completes where a used deployment with no superuser is refused | test |
+| `backend/tests/services/test_owner_backfill.py` | the migration's frozen table list is the one `SCOPES` derives; no unowned user-owned row survives it; a payload takes its parent's owner; a duplicate setting group is merged, not stamped into a unique-index violation; a fresh install completes, a used deployment with no superuser is refused | test |
 | `backend/tests/services/test_superseded_columns.py` | the dropped columns are derived from `SCOPES` rather than listed; no module names one **or passes one as a constructor keyword** | test |
 | `backend/tests/services/test_follow_always_has_a_group.py` | the migration rescues a follow still holding NULL before the drop; the scraper skips a group-less follow instead of raising; a chat-id collision freezes **every** follower; `run_db` keeps the ParamSpec that checks its call sites | test |
 | `backend/tests/services/test_quota_ledger.py` | one Request per fetch however many attempts; only what reached Telegram; concurrent meters stay apart; nothing prunes the ledger | test |
-| `backend/tests/api/test_request_stats.py` | one Request per attempt that left, none for a full Lane; kind, Account, Lane and best-effort from the sync; pictures their own uncharged page; each Wasted cause; one chain across both retry layers; three tiers agree; the rollup replaces; Operator-only; no test in it records kind other unless it asks for `expects_other` | test |
+| `backend/tests/api/test_request_stats.py` | one Request per attempt that left, none for a full Lane; kind, Account, Lane and best-effort from the sync; pictures their own uncharged page; each Wasted cause; one chain across both retry layers; three tiers agree; the rollup replaces; Operator-only; kind other only where a test asks for `expects_other` | test |
 | `backend/tests/api/test_quota_usage_route.py` | `GET /quota/me` reports the ledger for the caller and nobody else | test |
 | `backend/tests/services/test_lane_selection.py` | the **real** enqueue picks the lane; the boundary is `>=`; zero is always best-effort and negative unlimited; a failed ledger read picks normal; no new path syncs outside the ladder | test |
 | `backend/tests/services/test_quota_ceilings.py` | a zero allowance degrades where a zero ceiling blocks and a negative one never does; the three layers resolve each number independently; a lift reaches one account, one Budget, one **day**; the refusal reaches the walk and not only the enqueue; an unreadable ledger refuses | test |
-| `backend/tests/deployment/test_tg_cleanup_inventory.py` | every `tg_*` table is truncated between tests or excused, in both directions; the failure it prevents is a **green** test in an unrelated module | test |
-| `backend/tests/deployment/test_claude_md_budget.py` | the root, backend and frontend `CLAUDE.md` and this file each stay inside their budget and cite no path that has moved; the root points at the other three; every `*Enforced:*` pointer is a row here; runs at commit too | test |
+| `backend/tests/deployment/test_tg_cleanup_inventory.py` | every `tg_*` table is truncated between tests or excused, in both directions | test |
+| `backend/tests/deployment/test_claude_md_budget.py` | the four agent docs stay in budget and cite no moved path; the root points at the other three; every `*Enforced:*` pointer is a row here; runs at commit | test |
 | `backend/tests/deployment/test_adr_index.py` | every ADR has a row in `docs/adr/README.md` and lives in `docs/adr/` | test |
-| `backend/tests/api/test_send_email_call_sites.py` | every `send_email` caller checks `emails_enabled` first, the pair rather than the site | test |
+| `backend/tests/api/test_send_email_call_sites.py` | every `send_email` caller checks `emails_enabled` first | test |
 | `backend/tests/api/test_approval_gate.py` | every data router requires an approved account; unknown routers fail, exemptions state a reason | test |
 | `backend/tests/api/test_registration.py` | signup answers identically for a taken and a free address, and never returns an account | test |
 | `backend/tests/core/test_permissions.py` | no stranded permission, no permission on the default role, seeded rows match the constants | test |
 | `backend/tests/deployment/test_edge_rate_limit.py` | the auth paths are rate limited at Traefik, and that router keeps its service, priority, and compression | test |
 | `backend/tests/services/test_ai_key_payment_rule.py` | each Artifact purpose resolves the caller's Key and each shared purpose the Operator's; a foreign Key id is refused before decrypt and answers as an absent one; every `get_provider` call site is declared **and** resolves a Key | test |
 | `backend/tests/services/test_llm_log_provenance.py` | a scheduled Summary spends the Key it stored; every refusal files a failed log row and none disables the schedule; no credential reaches a logged body | test |
-| `backend/tests/api/test_openai_compatible_provider.py` | the credential never reaches a URL; the model list is the endpoint's own answer; a provider with no catalogue falls back to free text where a rejected Key says so and loses its stamp; a dropdown re-render costs no outbound call | test |
+| `backend/tests/api/test_openai_compatible_provider.py` | the credential never reaches a URL; the model list is the endpoint's own answer; no catalogue falls back to free text; a rejected Key says so and loses its stamp; a dropdown re-render costs no outbound call | test |
 | pre-commit `generate-frontend-sdk` | the committed client matches the backend | hook |
 
 **A fix applied to one of two twin modules is half a fix.** `channel_photos.py` and

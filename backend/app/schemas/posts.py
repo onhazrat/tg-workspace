@@ -206,7 +206,8 @@ class PostWindowRequest(BaseModel):
     # would look correct and select by a clock the server cannot see. Omitted
     # means both sides open, which is the export and lookup reads — not a Scope
     # anybody selected. Language detection is *not* one of them: it sends a
-    # window like any other caller (the browser asks for a fixed lookback), and listing it here as an exception was simply wrong.
+    # window like any other caller (the browser asks for a fixed lookback),
+    # and listing it here as an exception was simply wrong.
     window: AnalysisWindowInput | None = None
 
     # A browser still on the previous bundle posts `media: "all"`, `sort:
