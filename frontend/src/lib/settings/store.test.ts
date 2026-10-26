@@ -207,7 +207,7 @@ describe("persistAppSettings", () => {
     const base = loadAppSettings(readerFromRecord({}))
     const { record, writer } = recordWriter()
     persistAppSettings(base, writer)
-    expect(Object.keys(record).length).toBe(appSettingKeys.length - 3)
+    expect(Object.keys(record).length).toBe(appSettingKeys.length - 5)
     expect(record.showChannelBio).toBe("true")
   })
 
@@ -218,14 +218,20 @@ describe("persistAppSettings", () => {
       selectedModel: "x",
       aiLanguage: "Persian",
       aiTemperature: 0.1,
+      includeChannelBio: true,
+      includeChannelTags: true,
     }
     const { record, writer } = recordWriter()
     persistAppSettings(next, writer, base)
     persistAppSettings(next, writer)
     expect(
-      ["selectedModel", "aiLanguage", "aiTemperature"].filter(
-        (k) => k in record,
-      ),
+      [
+        "selectedModel",
+        "aiLanguage",
+        "aiTemperature",
+        "includeChannelBio",
+        "includeChannelTags",
+      ].filter((k) => k in record),
     ).toEqual([])
   })
 })

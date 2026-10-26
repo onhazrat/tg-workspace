@@ -34,7 +34,6 @@ import {
   submitChatSession,
 } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
-import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { chatWithHistoryStream, generateChatStream } from "../services/ai"
 import type { ChatMessage, ChatMode, Post } from "../types"
 import { useData } from "./DataContext"
@@ -82,13 +81,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const { channels, selectedChannels } = useData()
   const loadHistory = useInvalidateChatSessions()
   const { startDate, endDate } = useScope()
-  const {
-    activeTab,
-    currentChatSessionId,
-    workspaceTabs,
-    includeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-  } = useUI()
+  const { activeTab, currentChatSessionId, workspaceTabs } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
     scrapeChannelsInParallel,
@@ -258,10 +251,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     const { stream, prompt, config, systemInstruction, missingPosts } =
       await generateChatStream(
         sessionId,
-        formatChannelsForPrompt(channels, selectedChannels, {
-          includeBio: includeChannelBioInPrompt,
-          includeTags: includeChannelTagsInPrompt,
-        }),
         aiLanguage,
         selectedModel,
         history,

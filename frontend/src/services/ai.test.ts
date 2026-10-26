@@ -7,10 +7,12 @@ import {
   chatWithHistoryStream,
   generateChatStream,
   generateTagStream,
+  getSummaryPrompt,
   getTagPrompt,
 } from "./ai"
 
 const original = {
+  summaryPrompt: api.summaryPrompt,
   tagStream: api.tagStream,
   tagPrompt: api.tagPrompt,
   chatStream: api.chatStream,
@@ -21,7 +23,6 @@ afterEach(() => {
 
 const tagBody = {
   tagRunId: "run-1",
-  channelsText: "",
   allTags: "news",
   tagMode: "add" as const,
   model: "m",
@@ -62,13 +63,25 @@ describe("the prompt routes are sent the Artifact's id, never a Scope", () => {
     expect(sent).toEqual([tagBody])
   })
 
-  test("a Chat turn names its Chat, with no Posts and no Scope", async () => {
+  test("a Summary prompt names its Summary and nothing else", async () => {
+    const sent: unknown[] = []
+    api.summaryPrompt = async (b) => {
+      sent.push(b)
+      return { prompt: "p", missingPosts: 0 }
+    }
+
+    await getSummaryPrompt("sum-1")
+
+    // The server describes the Channels from the Account's setting (AC-03).
+    expect(sent).toEqual([{ summaryId: "sum-1" }])
+  })
+
+  test("a Chat turn names its Chat, with no Posts, Scope or Channels", async () => {
     const sent: unknown[] = []
     api.chatStream = streamSending(sent, 2, ["a"]) as typeof api.chatStream
 
     const result = await generateChatStream(
       "chat-1",
-      "### news",
       "English",
       "m",
       [{ role: "user", text: "earlier" }],
@@ -81,7 +94,6 @@ describe("the prompt routes are sent the Artifact's id, never a Scope", () => {
     expect(sent).toEqual([
       {
         chatId: "chat-1",
-        channelsText: "### news",
         language: "English",
         model: "m",
         history: [{ role: "user", text: "earlier" }],

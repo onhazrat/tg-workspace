@@ -129,12 +129,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({
    * on a card — and merged back on here rather than exposed as their own context
    * field.
    *
-   * That keeps `channel.bio` working for every consumer unchanged: the card, and
-   * `format-channels-for-prompt` for the selected channels. The alternative, a
-   * `channelBios` map consumers read directly, would have meant a prompt silently
-   * losing bios if it were built before the map arrived — a quiet quality
-   * regression rather than a visible one. Here the only window is that a card's
-   * bio line appears a beat late, which is the same trade the stats split makes.
+   * That keeps `channel.bio` working for the card unchanged; prompts read bios
+   * on the server (AC-03). The only window is that a card's bio line appears a
+   * beat late, which is the same trade the stats split makes.
    */
   const channels = useMemo(() => {
     const bios = channelBiosQuery.data

@@ -23,7 +23,6 @@ import {
   buildBulkChannelTagUpdates,
   normalizeParsedTagSuggestions,
 } from "@/lib/channels/apply-tag-suggestions"
-import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
 import { parseTagResponse } from "@/lib/channels/parse-tag-response"
 import { bulkUpdateChannelTags } from "@/lib/channels/store"
 import { formatAllTagsForPrompt } from "@/lib/channels/tag-prompt"
@@ -81,13 +80,13 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { channels, selectedChannels, setChannels } = useData()
   const { getScopeSubmission } = useScraper()
-  const { selectedModel, aiTemperature } = useSettings()
   const {
-    activeTab,
-    workspaceTabs,
-    includeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-  } = useUI()
+    selectedModel,
+    aiTemperature,
+    includeChannelBio,
+    includeChannelTags,
+  } = useSettings()
+  const { activeTab, workspaceTabs } = useUI()
   const queryClient = useQueryClient()
 
   const [mode, setMode] = useState<TagMode>("add")
@@ -151,15 +150,11 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [selectedRun])
 
   /**
-   * What this tab adds to a Tag run's prompt: the Channel descriptions and
-   * the tags in use. The Posts are the run's Covered Posts, which the server
-   * reads from the run it names (ADR-038).
+   * What this tab adds to a Tag run's prompt: the tags in use. The Posts are
+   * the run's Covered Posts, which the server reads from the run it names
+   * (ADR-038), and it describes the Channels by the Account's setting (AC-03).
    */
   const buildPromptParts = () => ({
-    channelsText: formatChannelsForPrompt(channels, selectedChannels, {
-      includeBio: includeChannelBioInPrompt,
-      includeTags: includeChannelTagsInPrompt,
-    }),
     allTags: formatAllTagsForPrompt(channels),
   })
 
@@ -169,7 +164,6 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     parts: ReturnType<typeof buildPromptParts>,
   ) => ({
     tagRunId,
-    channelsText: parts.channelsText,
     allTags: parts.allTags,
     tagMode: mode,
     model: selectedModel,
@@ -196,8 +190,8 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     })
 
   const channelContextOptions = () => ({
-    includeBio: includeChannelBioInPrompt,
-    includeTags: includeChannelTagsInPrompt,
+    includeBio: includeChannelBio,
+    includeTags: includeChannelTags,
   })
 
   const copyTagPrompt = async () => {

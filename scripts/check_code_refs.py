@@ -15,8 +15,8 @@ removed modules, so outside a commit (in CI) only the `::name` half runs.
 The whole tree is read on every run, because the commit that breaks a
 reference is the one that changes the code it names, not the file that cites
 it. History is skipped: the PR archive, the ADRs, the tickets under
-`.scratch/` and the dated plans and audits in `docs/` record what was true when
-they were written.
+`.scratch/`, the dated plans and audits in `docs/` and the editor's plans in
+`.cursor/plans/` record what was true when they were written.
 """
 
 from __future__ import annotations
@@ -30,7 +30,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SKIPPED = re.compile(
-    r"^(\.scratch/|docs/pr-archive/|docs/adr/|docs/[^/]+-(plan|audit)\.md$"
+    r"^(\.scratch/|\.cursor/plans/|docs/pr-archive/|docs/adr/"
+    r"|docs/[^/]+-(plan|audit)\.md$"
     r"|frontend/src/client/"
     # This check and its test, whose examples name nothing on purpose.
     r"|scripts/check_code_refs\.py$|backend/tests/deployment/test_code_refs_hook\.py$)"

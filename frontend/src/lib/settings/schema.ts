@@ -257,6 +257,17 @@ export const appSettingsSpec = {
     section: "ai_prefs",
     persist: false,
   }),
+  // Whether prompts describe each Channel by its bio and the Account's tags
+  // (AC-03). The server reads them, so a scheduled regeneration gets the
+  // prompt Generate does; the old `prompt_includeChannel*` keys are not read.
+  includeChannelBio: booleanSetting("includeChannelBio", false, {
+    section: "ai_prefs",
+    persist: false,
+  }),
+  includeChannelTags: booleanSetting("includeChannelTags", false, {
+    section: "ai_prefs",
+    persist: false,
+  }),
   embeddingsEnabled: booleanSetting("embeddingsEnabled", false),
   embeddingsPaused: booleanSetting("embeddingsPaused", false),
   showChannelBio: booleanSetting("showChannelBio", true),

@@ -43,11 +43,12 @@ async function* wrapStream(
   }
 }
 
-/** The prompt the server builds from a Summary's Covered Posts (ADR-038). */
-export const getSummaryPrompt = (
-  summaryId: string,
-  channelsText: string,
-): Promise<ArtifactPrompt> => api.summaryPrompt({ summaryId, channelsText })
+/**
+ * The prompt the server builds from a Summary's Covered Posts (ADR-038), its
+ * Channels described by the Account's bio and tags setting (AC-03).
+ */
+export const getSummaryPrompt = (summaryId: string): Promise<ArtifactPrompt> =>
+  api.summaryPrompt({ summaryId })
 
 export const translateText = async (
   text: string,
@@ -99,7 +100,6 @@ export const generateEmbeddings = async (
  */
 export const generateChatStream = async (
   chatId: string,
-  channelsText: string,
   language: string,
   model: string,
   history: { role: "user" | "model"; text: string }[],
@@ -111,7 +111,6 @@ export const generateChatStream = async (
     const stream = api.chatStream(
       {
         chatId,
-        channelsText,
         language,
         model,
         history,

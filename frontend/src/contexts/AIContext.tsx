@@ -49,7 +49,6 @@ import {
   resolveCitedPosts,
 } from "@/lib/summaries/summary-run"
 import { useApiStatus } from "../hooks/useApiStatus"
-import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { getSummaryPrompt } from "../services/ai"
 import type { BotCredential, ChatDestination, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
@@ -93,12 +92,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   // (AW-05), and the one thing left that needs a boundary here is deciding
   // which channels to sync before generating.
   const { endDate } = useScope()
-  const {
-    workspaceTabs,
-    setSummarizing,
-    includeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-  } = useUI()
+  const { workspaceTabs, setSummarizing } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
     scrapeChannelsInParallel,
@@ -122,12 +116,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     channels
       .filter((channel) => selectedChannels.has(channel.name))
       .map((channel) => channel.name)
-
-  const channelsText = () =>
-    formatChannelsForPrompt(channels, selectedChannels, {
-      includeBio: includeChannelBioInPrompt,
-      includeTags: includeChannelTagsInPrompt,
-    })
 
   /** Sync the selected channels whose posts may not reach the window's end yet. */
   const syncStaleSelection = async () => {
@@ -178,12 +166,12 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   /**
-   * Build the opened Summary's prompt and keep it: the server reads the
-   * Covered Posts the submission froze (ADR-038); this tab adds only the
-   * Channel descriptions it formats. Returns the prompt.
+   * Build the opened Summary's prompt and keep it, for Copy Prompt: the
+   * server reads the Covered Posts the submission froze (ADR-038) and
+   * describes the Channels by the Account's setting (AC-03). Returns it.
    */
   const keepPrompt = async (id: string) => {
-    const { prompt, missingPosts } = await getSummaryPrompt(id, channelsText())
+    const { prompt, missingPosts } = await getSummaryPrompt(id)
     await saveSummary({
       id,
       promptText: prompt,
@@ -234,7 +222,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   /**
-   * Generate: open the Summary, build and store its prompt, start Attempt 1.
+   * Generate: open the Summary and start Attempt 1, which builds and stores
+   * its prompt on the server as Retry and the scheduler do (AC-03).
    *
    * The worker runs the Attempt (SFR-02, ADR-030); this tab only watches it,
    * so a closed tab or a sleeping laptop does not end it. The Summary opens
@@ -252,7 +241,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await loadHistory()
       if (syncError) throw syncError
-      await keepPrompt(newId)
       await startFirstAttempt(newId)
       workspaceTabs.createTab("summary", newId)
       setSummary(null)
