@@ -273,9 +273,8 @@ _SCHEMA_PREFIX = "#/components/schemas/"
 def _request_schemas() -> dict[str, dict[str, object]]:
     """Every schema a mounted operation accepts in its body, keyed by name.
 
-    Transitive: a model nested inside a request body is a request body too,
-    which is how `PromptScopeInput` — reachable only through the three AI
-    request models — is covered without being named.
+    Transitive: a model nested inside a request body is a request body too, so
+    a Scope nested in a request is covered without being named.
     """
     spec = app.openapi()
     components: dict[str, dict[str, object]] = spec["components"]["schemas"]
@@ -381,7 +380,6 @@ def test_every_scope_carrying_request_states_a_window() -> None:
         "PostFacetsRequest",
         "PostFilteredRequest",
         "RagSearchRequest",
-        "PromptScopeInput",
     )
     for name in names:
         assert name in schemas, f"{name} is no longer reachable from a mounted route"

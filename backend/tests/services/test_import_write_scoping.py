@@ -952,8 +952,14 @@ GATED_READS: dict[str, str] = {
         "Plans one Summary's Publication and writes nothing (SUMTAB-09); its "
         "send sibling takes `assert_owner_on_write`, because sending is a write."
     ),
-    "chat_sessions.get_chat_session": "Reads one chat session.",
-    "tag_runs.get_tag_run": "Reads one tag run.",
+    "chat_sessions.own_chat_session": (
+        "The Chat family's by-id read: the detail route and a Chat turn's "
+        "prompt (ADR-038). It writes nothing."
+    ),
+    "tag_runs.own_tag_run": (
+        "The Tag run family's by-id read: the detail route and a Tag run's "
+        "prompt (ADR-038). It writes nothing."
+    ),
     "discover_reports.get_report": "Reads one Discover report.",
     "logs.get_log": "Reads one log row in full.",
     "channels._visible_follow_job": (
