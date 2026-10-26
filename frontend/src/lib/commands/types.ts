@@ -174,8 +174,6 @@ export interface CommandContext {
     import("@/hooks/useWorkspaceTabs").WorkspaceTabs,
     "active" | "openTab" | "closeTab" | "reopenLastTab"
   >
-  /** Fetch the scoped, filtered posts on demand (for the post picker). */
-  getScopedPosts: () => Promise<import("@/types").Post[]>
   /** Per-channel in-scope post counts on demand (server-side when eligible). */
   getPostsInScopeCounts: () => Promise<Record<string, number>>
   starredOnly: boolean

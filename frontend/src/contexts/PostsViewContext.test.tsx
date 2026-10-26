@@ -21,6 +21,7 @@ import {
   usePostsViewEdits,
   usePostsViewState,
 } from "@/contexts/PostsViewContext"
+import { useShownPosts } from "@/hooks/usePostsView"
 import {
   addPostFunnel,
   emptyPostFilter,
@@ -34,7 +35,7 @@ import {
   rule,
 } from "@/lib/posts/post-selection"
 import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
-import { fetchShownPosts } from "@/lib/posts/scoped-posts"
+import { fetchShownPosts, type ShownPostsApi } from "@/lib/posts/scoped-posts"
 import type { WindowState } from "@/lib/scope/window"
 import { scopedStorage } from "@/lib/storage/scoped"
 import type { Post } from "@/types"
@@ -104,6 +105,62 @@ describe("identity across a provider re-render", () => {
 
     expect(result.current.edits).toBe(edits)
     expect(result.current.state.view).toBe(state.view)
+  })
+
+  // Story 5: before PVM the fetch changed identity on every provider render,
+  // so a meaning search ran again on any sync update or minute tick.
+  test("a meaning search runs once, whatever else the provider does", async () => {
+    let searches = 0
+    const api: ShownPostsApi = {
+      embeddingsEnabled: true,
+      searchSimilarPosts: async () => {
+        searches++
+        return []
+      },
+      getPostsFeed: async () => [],
+      lookupPosts: never,
+      getViewEstimate: never,
+    }
+    let edits: PostsViewEdits | undefined
+    function Probe() {
+      edits = usePostsViewEdits()
+      useShownPosts(api, true)
+      return null
+    }
+    function Host({ startDate }: { startDate: number }) {
+      const [text, setText] = useState<string | undefined>()
+      return (
+        <PostsViewModule
+          inputs={{
+            ...INPUTS,
+            startDate,
+            endDate: startDate + 8000,
+            postFilterText: text,
+            setPostFilterText: setText,
+          }}
+        >
+          <Probe />
+        </PostsViewModule>
+      )
+    }
+    const { rerender } = render(<Host startDate={1000} />)
+    act(() =>
+      (edits as PostsViewEdits).setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+    await act(() => settle(0))
+    expect(searches).toBe(1)
+
+    rerender(<Host startDate={1000} />) // a parent re-render
+    rerender(<Host startDate={61_000} />) // a Live window's minute tick
+    act(() => {
+      ;(edits as PostsViewEdits).appendSelection([pick(true, post(1))])
+    })
+    await act(() => settle(0))
+
+    expect(searches).toBe(1)
+    cleanup()
   })
 })
 

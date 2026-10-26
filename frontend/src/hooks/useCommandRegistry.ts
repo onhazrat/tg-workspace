@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
-import { dataPostsCounts, type PostFilteredRequest } from "@/client"
 import { useCommandPaletteContext } from "@/components/CommandPaletteProvider"
 import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { useAI } from "@/contexts/AIContext"
@@ -19,12 +18,12 @@ import { useApiStatus } from "@/hooks/useApiStatus"
 import { useGuidedTour } from "@/hooks/useGuidedTour"
 import { useHistoryParams } from "@/hooks/useHistoryParams"
 import { useJobToggles } from "@/hooks/useJobToggles"
-import { useShownPostsFetch } from "@/hooks/usePostsView"
 import {
   useInvalidateSettingGroups,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
+import { selectedScopeCounts } from "@/lib/artifacts/artifact-run"
 import {
   addFunnel,
   emptyFilter,
@@ -46,7 +45,6 @@ import {
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
 import { SERVER_TABLE_NAMES } from "@/lib/data-transfer/tables"
 import { historyPaletteBinding } from "@/lib/history/history-params"
-import { postsRead } from "@/lib/posts/posts-view"
 import { useLoadDBStats } from "./useDBStats"
 import { useInvalidateSummaries, useSummariesHistory } from "./useSummaries"
 
@@ -111,7 +109,6 @@ export function useCommandRegistry(): {
     setAutoSyncPauseUntil,
   } = useSync()
   const { view: postsView } = usePostsViewState()
-  const getScopedPosts = useShownPostsFetch()
   const postsEdits = usePostsViewEdits()
   const {
     setSummary,
@@ -146,13 +143,7 @@ export function useCommandRegistry(): {
     Record<string, number>
   > => {
     if (selectedChannels.size === 0) return {}
-    const { queryKey, body } = postsRead(postsView, { kind: "scopeCounts" })
-    const counts = await queryClient.fetchQuery({
-      queryKey,
-      queryFn: () => dataPostsCounts({ body: body as PostFilteredRequest }),
-      staleTime: 0,
-    })
-    return counts.selected
+    return selectedScopeCounts(queryClient, postsView)
   }, [selectedChannels, postsView, queryClient])
 
   const context = useMemo<CommandContext>(
@@ -272,7 +263,6 @@ export function useCommandRegistry(): {
         showChannelStartId: settings.showChannelStartId,
         setShowChannelStartId: settings.setShowChannelStartId,
       },
-      getScopedPosts,
       getPostsInScopeCounts,
       starredOnly,
       setStarredOnly,
@@ -295,7 +285,6 @@ export function useCommandRegistry(): {
       copySummaryPrompt,
       currentSummaryId,
       endDate,
-      getScopedPosts,
       getPostsInScopeCounts,
       getEffectiveGlobalStartTime,
       handleSummarize,

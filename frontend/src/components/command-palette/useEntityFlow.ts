@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { usePaletteListSelection } from "@/hooks/usePaletteListSelection"
+import { useShownPosts, useShownPostsApi } from "@/hooks/usePostsView"
 import { removeTagFromChannel } from "@/lib/channels/channel-tags"
 import {
   getExtendedEntityCandidates,
@@ -25,7 +26,7 @@ import {
   getEntityCandidates,
   runEntityChannelAction,
 } from "@/lib/commands/useChannelEntityFlow"
-import type { Channel, Post } from "@/types"
+import type { Channel } from "@/types"
 
 interface EntityPaletteControls {
   entityCommand: CommandDef | null
@@ -68,27 +69,17 @@ export function useEntityFlow({
 }: UseEntityFlowOptions) {
   const { entityCommand } = palette
   const [entityQuery, setEntityQuery] = useState("")
-  // The post picker's pool, fetched on demand when the pick-post flow opens —
-  // the first 100 scoped posts, rather than an eagerly-populated array.
-  const [pickPostPool, setPickPostPool] = useState<Post[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const isPickPostFlow = entityCommand?.entityFlow === "pick-post"
-
-  useEffect(() => {
-    if (!isPickPostFlow) {
-      setPickPostPool([])
-      return
-    }
-    let cancelled = false
-    context.getScopedPosts().then((posts) => {
-      if (!cancelled) setPickPostPool(posts.slice(0, 100))
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [isPickPostFlow, context.getScopedPosts])
+  // The post picker's pool, fetched while the pick-post flow is open: the
+  // first 100 Posts the tab shows, rather than an eagerly-populated array.
+  const { posts: shownPosts } = useShownPosts(
+    useShownPostsApi(),
+    isPickPostFlow,
+  )
+  const pickPostPool = useMemo(() => shownPosts.slice(0, 100), [shownPosts])
 
   const candidates = useMemo(() => {
     if (!entityCommand?.entityFlow) return []

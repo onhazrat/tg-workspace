@@ -85,25 +85,40 @@ export async function readStream(
   return { text, lastChunk }
 }
 
+type CountPosts = (body: PostFilteredRequest) => Promise<PostCountsResponse>
+
+const countPostsOnServer: CountPosts = (body) => dataPostsCounts({ body })
+
 /**
- * How many Posts the Posts tab selects now, for the "no Posts selected" check
- * before an Artifact opens: the view's Scope counts read, the server's count
- * of the selected Posts in the window (PTR-05). Fetched with no stale time,
- * so a selection changed a moment ago is counted. The prompt itself reads the
- * Artifact's Covered Posts.
+ * The selected Posts in the window per Channel: the view's Scope counts read,
+ * the server's count (PTR-05). Fetched with no stale time, so a selection
+ * changed a moment ago is counted. The "no Posts selected" check and Trim
+ * selection both read it.
  */
-export async function selectedPostCount(
+export async function selectedScopeCounts(
   queryClient: QueryClient,
   view: PostsView,
-  countPosts: (body: PostFilteredRequest) => Promise<PostCountsResponse> = (
-    body,
-  ) => dataPostsCounts({ body }),
-): Promise<number> {
+  countPosts: CountPosts = countPostsOnServer,
+): Promise<Record<string, number>> {
   const { queryKey, body } = postsRead(view, { kind: "scopeCounts" })
   const { selected } = await queryClient.fetchQuery({
     queryKey,
     queryFn: () => countPosts(body as PostFilteredRequest),
     staleTime: 0,
   })
+  return selected
+}
+
+/**
+ * How many Posts the Posts tab selects now, for the "no Posts selected" check
+ * before an Artifact opens. The prompt itself reads the Artifact's Covered
+ * Posts.
+ */
+export async function selectedPostCount(
+  queryClient: QueryClient,
+  view: PostsView,
+  countPosts: CountPosts = countPostsOnServer,
+): Promise<number> {
+  const selected = await selectedScopeCounts(queryClient, view, countPosts)
   return Object.values(selected).reduce((sum, n) => sum + n, 0)
 }

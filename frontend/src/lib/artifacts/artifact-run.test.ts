@@ -8,6 +8,7 @@ import {
   readStream,
   searchFilterExtra,
   selectedPostCount,
+  selectedScopeCounts,
   withMissingPosts,
   withProvisionalRow,
 } from "./artifact-run"
@@ -161,6 +162,15 @@ describe("selectedPostCount: the no-Posts-selected check (PVM-02)", () => {
         selection: DEFAULT_SELECTION,
       },
     ])
+  })
+
+  it("per Channel, as Trim selection reads them, from the same read", async () => {
+    const counts = await selectedScopeCounts(
+      new QueryClient(),
+      view,
+      async () => answer({ a: 3, b: 4 }),
+    )
+    expect(counts).toEqual({ a: 3, b: 4 })
   })
 
   it("no Posts selected is zero", async () => {
