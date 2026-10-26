@@ -111,6 +111,17 @@ repos:
         language: system
         files: ^frontend/(src|tests)/.*\.tsx?$|^scripts/check_test_ids\.py$
 
+      # A commit touching a guarded file or its test replays that guard's
+      # mutations from docs/agents/guard-mutations.json: each must still go
+      # red. Frontend only, because bun needs no database.
+      - id: guard-mutations
+        name: Guards still go red when broken
+        entry: python3 scripts/mutate.py docs/agents/guard-mutations.json
+        language: system
+        # Two processes would mutate the same file at once.
+        require_serial: true
+        files: ^(frontend/src/.*|docs/agents/guard-mutations\.json)$
+
       # The CLAUDE.md budget, pointers and guard-table coverage: file reads
       # only, so it runs at commit rather than ten minutes into the suite.
       - id: claude-md-budget

@@ -1,17 +1,21 @@
 """Mutation-check guards: break each rule, run its test, and expect red.
 
-    python3 scripts/mutate.py mutations.json
+    python3 scripts/mutate.py mutations.json [changed paths...]
 
 `mutations.json` is a list of `{"name", "file", "old", "new", "test"}`: in
 `file`, replace `old` (which must occur exactly once) with `new`, run the one
-`test` file, then restore `file` from git. `test` is repo-relative; a
+`test` file, then write `file` back as it was. `test` is repo-relative; a
 `frontend/` test runs under `bun test`, a `backend/` one under pytest.
 
-It refuses a tree with uncommitted changes to tracked files, because the
-restore is `git checkout -- <file>`, which would throw away work in that file.
-Commit first, as `CLAUDE.md` says. It ends with the `Mutation-checked:` line for
-the commit body when every mutation went red, and exits 1 when one stayed
-green or named no single place.
+Given changed paths, it replays only the mutations whose `file` or `test` is
+one of them, or all of them when the list itself changed: the pre-commit hook
+replays `docs/agents/guard-mutations.json` this way, so a commit that edits a
+guard or the code it guards proves the guard still goes red. A mutation whose
+`old` text is gone fails too, so a refactor that moves a guarded line has to
+update its mutation in the same diff.
+
+It ends with the `Mutation-checked:` line for the commit body when every
+mutation went red, and exits 1 when one stayed green or named no single place.
 """
 
 from __future__ import annotations
@@ -44,26 +48,29 @@ def mutated(text: str, old: str, new: str) -> str:
     return text.replace(old, new)
 
 
-def _git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=REPO, capture_output=True, text=True, check=True
-    ).stdout
+def selected(
+    mutations: list[dict[str, str]], registry: str, changed: list[str]
+) -> list[dict[str, str]]:
+    """The mutations a change touches; all of them with no list or a new registry."""
+    if not changed or registry in changed:
+        return mutations
+    return [m for m in mutations if m["file"] in changed or m["test"] in changed]
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
+    if len(argv) < 2:
         sys.stderr.write(__doc__ or "")
         return 2
-    if _git("status", "--porcelain", "--untracked-files=no").strip():
-        sys.stderr.write("Commit first: the restore would discard uncommitted work.\n")
-        return 2
-    mutations = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
+    registry = Path(argv[1]).resolve().relative_to(REPO).as_posix()
+    every = json.loads((REPO / registry).read_text(encoding="utf-8"))
+    mutations = selected(every, registry, argv[2:])
     red: list[str] = []
     failed = False
     for m in mutations:
         path = REPO / m["file"]
+        original = path.read_text(encoding="utf-8")
         try:
-            text = mutated(path.read_text(encoding="utf-8"), m["old"], m["new"])
+            text = mutated(original, m["old"], m["new"])
             cmd, cwd = command(m["test"])
         except ValueError as error:
             print(f"SKIPPED  {m['name']}: {error}")
@@ -73,14 +80,14 @@ def main(argv: list[str]) -> int:
         try:
             result = subprocess.run(cmd, cwd=REPO / cwd, capture_output=True)
         finally:
-            _git("checkout", "--", m["file"])
+            path.write_text(original, encoding="utf-8")
         if result.returncode:
             print(f"red      {m['name']}")
             red.append(m["name"])
         else:
             print(f"GREEN    {m['name']}: the test passed with the rule broken")
             failed = True
-    if not failed:
+    if mutations and not failed:
         print(f"\nMutation-checked: {'; '.join(red)} went red")
     return 1 if failed else 0
 
