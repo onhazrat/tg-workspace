@@ -88,7 +88,7 @@ class TagRunSubmitRequest(BaseModel):
     #: `completed` and `failed` are reachable only through the update door.
     status: TagRunStatus = "pending"
     model: str | None = None
-    post_count: int | None = Field(default=None, alias="postCount")
+    #: No `postCount`: a run records its refs' count (ADR-038).
     #: The small UI flags a new run starts with. Open for the reason
     #: `SummarySubmitRequest.extra` is.
     extra: dict[str, Any] = Field(default_factory=dict)

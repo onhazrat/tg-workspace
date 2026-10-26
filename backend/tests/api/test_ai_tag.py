@@ -128,6 +128,22 @@ def test_a_scope_or_posts_in_the_body_is_refused(client: TestClient) -> None:
         assert response.status_code == 422, stale
 
 
+def test_a_run_records_its_refs_count_and_refuses_one_from_the_browser(
+    client: TestClient,
+) -> None:
+    headers = get_superuser_token_headers(client)
+    _seed(("tg_a", 1), ("tg_a", 2))
+    body = {"id": str(uuid.uuid4()), "scope": {"channels": ["tg_a"], "window": WINDOW}}
+
+    refused = client.post(
+        f"{PREFIX}/data/tag-runs", headers=headers, json={**body, "postCount": 99}
+    )
+    opened = client.post(f"{PREFIX}/data/tag-runs", headers=headers, json=body)
+
+    assert refused.status_code == 422
+    assert opened.json()["postCount"] == 2
+
+
 def test_the_stream_sends_the_missing_count_before_the_runs_prompt(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

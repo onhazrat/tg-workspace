@@ -17,7 +17,6 @@ import {
   useSummariesHistory,
 } from "@/hooks/useSummaries"
 import { selectedAiKeyId } from "@/lib/aiKeys/selection"
-import { serverMinuteStart } from "@/lib/analysis-window"
 import {
   errorText,
   type ProvisionalRow,
@@ -42,7 +41,6 @@ import {
 import {
   attemptOutcome,
   checkPastedSummary,
-  countRegeneratedPosts,
   failureReport,
   NO_POSTS_MESSAGE,
   pastedSummaryRecord,
@@ -282,7 +280,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         temperature: aiTemperature,
       },
     })
-    if (started.error) throw new RecordedFailure(started.error)
+    if (started?.error) throw new RecordedFailure(started.error)
   }
 
   /** Show the Failed Summary's page, not the half-streamed buffer. */
@@ -452,20 +450,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     const range = regeneratedRange(opened)
     const summaryChannels = scopeChannels(opened)
     await syncSummaryChannels(summaryChannels, range.end, s.id)
-    // A regeneration applies no selection beyond the channels and the window,
-    // so the server builds its prompt from the derived Scope it froze.
-    const postCount = await countRegeneratedPosts(
-      summaryChannels,
-      range,
-      serverMinuteStart(),
-      api.getPostsCounts,
-    )
     // **The Key that pays is the live selection** — not the one the old
     // Summary stored (BYOK-03), so the successor records the Key it ran on.
     const successor = openedSuccessor(s, {
       id: newId,
-      postCount,
-      range,
       selectedAiKeyId: selectedAiKeyId(),
       now: Date.now(),
     })
@@ -473,17 +461,16 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // The chain moves to the successor, whatever its Attempt does.
     await saveSummary({ ...s, autoRegenerate: false })
     await loadHistory()
-    if (postCount > 0 && !(await runAttempt(s, newId))) return
-    const target = autoPublishTarget(
-      s,
-      postCount,
-      botCredentials,
-      chatDestinations,
-    )
+    if (!(await runAttempt(s, newId))) return
+    const target = autoPublishTarget(s, botCredentials, chatDestinations)
     if (target) await autoPublish(successor, target.bot, target.dest)
   }
 
-  /** Start the successor's Attempt and watch it; true when it succeeded. */
+  /**
+   * Start the successor's Attempt and watch it; true when it succeeded. The
+   * server decides from the Covered Posts whether there is anything to ask:
+   * with none it writes "No new posts found" and starts no Attempt (ADR-038).
+   */
   const runAttempt = async (s: Summary, id: string) => {
     const attempt = await dataStartSummaryAttempt({
       path: { summary_id: id },
@@ -493,6 +480,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         temperature: aiTemperature,
       },
     })
+    if (!attempt) {
+      await invalidateSummaryState(queryClient, id)
+      await loadHistory()
+      return false
+    }
     // Refused before the worker took it: already recorded on the Summary.
     if (attempt.error) throw new RecordedFailure(attempt.error)
     const outcome =

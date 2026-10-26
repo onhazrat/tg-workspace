@@ -8288,10 +8288,6 @@ export type TagRunSubmitRequest = {
      */
     model?: string | null;
     /**
-     * Postcount
-     */
-    postCount?: number | null;
-    /**
      * Extra
      */
     extra?: {
@@ -11625,9 +11621,11 @@ export type DataStartSummaryAttemptError = DataStartSummaryAttemptErrors[keyof D
 
 export type DataStartSummaryAttemptResponses = {
     /**
+     * Response Data-Start Summary Attempt
+     *
      * Successful Response
      */
-    200: SummaryAttemptResponse;
+    200: SummaryAttemptResponse | null;
 };
 
 export type DataStartSummaryAttemptResponse = DataStartSummaryAttemptResponses[keyof DataStartSummaryAttemptResponses];

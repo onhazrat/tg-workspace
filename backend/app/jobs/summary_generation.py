@@ -64,7 +64,12 @@ from app.services.ai_keys import (
 )
 from app.services.artifact_coverage import Coverage, posts_block
 from app.services.logs import upsert_llm_log
-from app.services.summaries import frozen_scope_of, own_summary, store_prompt
+from app.services.summaries import (
+    finish_without_posts,
+    frozen_scope_of,
+    own_summary,
+    store_prompt,
+)
 from app.services.summary_attempts import (
     ATTEMPT_NOT_RUNNING_DETAIL,
     ATTEMPT_RUNNING_DETAIL,
@@ -195,8 +200,11 @@ def start_attempt(
     key_id: str | None,
     temperature: float | None,
     scheduled: bool = False,
-) -> SummaryAttempt:
+) -> SummaryAttempt | None:
     """Start an Attempt and hand it to the worker; nothing is generated here.
+
+    `None` when the Summary's Scope covers no Posts: it is finished with the
+    "No new posts found" text instead, and no Attempt starts.
 
     The model and Key default to the last Attempt's. A refusal before any
     Provider is reached (no prompt can be built, the Key cannot be used) is
@@ -236,13 +244,18 @@ def start_attempt(
     if payload is None or payload.prompt_text is None:
         try:
             prompt, coverage = summary_prompt(session, summary, payload)
-            store_prompt(
-                session, summary, prompt, coverage.refs, missing=coverage.missing
-            )
-            # Kept even if the Key below is refused: "Use another AI" needs it.
-            session.commit()
         except HTTPException as exc:
             return refused(str(exc.detail), failure_kind(exc.status_code), None)
+        if not coverage.posts and not coverage.missing:
+            # A quiet window: the Summary says so and nothing is spent, for
+            # the scheduler and the browser's Regenerate alike (ADR-038).
+            finish_without_posts(session, summary)
+            touch_sync(session, "summaries", commit=False)
+            session.commit()
+            return None
+        store_prompt(session, summary, prompt, coverage.refs, missing=coverage.missing)
+        # Kept even if the Key below is refused: "Use another AI" needs it.
+        session.commit()
     try:
         _, key = _provider_for(session, user_id=summary.user_id, key_id=key_id)
     except Exception as exc:

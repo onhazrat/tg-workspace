@@ -4,13 +4,12 @@
  * the lookup and count calls are passed in.
  */
 import { ApiError } from "@/api/base"
-import type { AttemptFrame, PostScopeQuery } from "@/api/data"
+import type { AttemptFrame } from "@/api/data"
 import {
   isFailedSummary,
   isPendingSummary,
   resolvePastedSummaryModel,
 } from "@/constants"
-import { floorToMinute } from "@/lib/analysis-window"
 import { scopeRange } from "@/lib/scope/artifact-scope"
 import type { Post, Summary } from "@/types"
 import { extractCitedPosts, parseCitationRefs } from "./summary-model"
@@ -143,29 +142,4 @@ export function regeneratedRange(opened: Summary): {
   if (!range)
     throw new Error("The regenerated summary came back with no scope.")
   return range
-}
-
-/**
- * How many posts a regeneration covers.
- *
- * AW-02: the shifted window starts where the last Summary ended and runs into
- * the future, and `fixedWindow` holds its end to the server's current minute.
- * Inside the same minute that leaves start === end, which the server refuses,
- * so a regeneration that simply came round too soon would fail instead of
- * writing the "no new posts" note it always has. Asking is what is skipped
- * here, not the answer: the answer is zero.
- */
-export async function countRegeneratedPosts(
-  channelNames: string[],
-  range: { start: number; end: number },
-  serverMinute: number,
-  countPosts: (q: PostScopeQuery) => Promise<Record<string, number>>,
-): Promise<number> {
-  if (floorToMinute(range.start) >= serverMinute) return 0
-  const counts = await countPosts({
-    channelNames,
-    startDate: range.start,
-    endDate: range.end,
-  })
-  return Object.values(counts).reduce((sum, n) => sum + n, 0)
 }

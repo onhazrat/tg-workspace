@@ -101,6 +101,17 @@ def test_a_scope_in_the_body_is_refused(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_the_generate_route_that_took_a_scope_is_gone(client: TestClient) -> None:
+    """No path spends a Key over a Scope the browser states (ADR-038)."""
+    headers = get_superuser_token_headers(client)
+    response = client.post(
+        f"{PREFIX}/ai/summary",
+        headers=headers,
+        json={"scope": {"channels": ["tg_a"], "window": WINDOW}},
+    )
+    assert response.status_code in (404, 405)
+
+
 def test_summary_prompt_requires_auth(client: TestClient) -> None:
     response = client.post(f"{PREFIX}/ai/summary/prompt", json={"summaryId": "x"})
     assert response.status_code in (401, 403)

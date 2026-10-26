@@ -172,7 +172,7 @@ export function useSummaryAttempts(
           ...(choice && { model: choice.model, aiKeyId: choice.keyId }),
         },
       })
-      if (started.error) toast.error(started.error)
+      if (started?.error) toast.error(started.error)
     } catch (err: unknown) {
       toast.error(errorText(err, "The retry could not start."))
     }

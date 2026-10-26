@@ -335,7 +335,6 @@ def submit_tag_run(
     source: TagRunSource = "generated",
     status: TagRunStatus = "pending",
     model: str | None = None,
-    post_count: int | None = None,
     extra: dict[str, Any] | None = None,
     now_ms: int | None = None,
 ) -> dict[str, Any]:
@@ -360,7 +359,7 @@ def submit_tag_run(
         status=status,
         source=source,
         mode=mode,
-        post_count=post_count if post_count is not None else scope.scoped_post_count,
+        post_count=scope.scoped_post_count,
         model=model,
         created_at=now,
         updated_at_ms=now,

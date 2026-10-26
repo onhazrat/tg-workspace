@@ -229,6 +229,23 @@ def test_a_simulated_queue_delay_does_not_move_the_stored_boundaries(
     assert stored.scope["end"] == MINUTE
 
 
+def test_a_put_cannot_overwrite_the_post_count_the_refs_record(
+    client: TestClient, at_now: None
+) -> None:
+    """An Artifact records its refs' count; the browser's own count never lands."""
+    headers = _auth(client)
+    submitted = _submit(client, headers).json()
+
+    client.put(
+        f"{PREFIX}/summaries/{submitted['id']}",
+        json={"text": "the finished summary", "postCount": 12},
+        headers=headers,
+    )
+
+    stored, _ = _stored(submitted["id"])
+    assert stored.post_count == submitted["postCount"] != 12
+
+
 def test_a_second_submission_of_one_id_is_refused_rather_than_merged(
     client: TestClient, at_now: None
 ) -> None:

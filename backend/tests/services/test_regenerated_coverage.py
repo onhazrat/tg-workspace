@@ -236,3 +236,43 @@ def test_a_prompt_keeps_its_missing_post_count_and_a_successor_does_not(
         assert get_summary(check, summary_id, user_id=user.id)["missingPosts"] == 2
         assert successor is not None
         assert "missingPosts" not in get_summary(check, successor, user_id=user.id)
+
+
+def test_a_browser_regeneration_of_an_empty_window_says_so_as_the_scheduler_does(
+    session: Session, user: User
+) -> None:
+    """The server's Covered Posts decide emptiness for both doors (ADR-038).
+
+    The browser used to count the window itself and write its own "no new
+    posts" text and Post count over the server's.
+    """
+    predecessor, channel = _predecessor(session, user.id)
+    session.exec(delete(Post).where(col(Post.channel_name) == channel))
+    session.commit()
+    browser_id = f"sum-{uuid.uuid4().hex[:8]}"
+    submit_summary(
+        session,
+        user_id=user.id,
+        summary_id=browser_id,
+        derived_from=SummaryDerivation(summaryId=predecessor.id, mode="successor"),
+        # The browser opens its successor Failed, as Generate does.
+        extra={"status": "failed"},
+    )
+
+    started = summary_generation.start_attempt(
+        session, browser_id, user_id=user.id, model=None, key_id=None, temperature=None
+    )
+    scheduled_id = asyncio.run(
+        auto_summary._regenerate_one(session, predecessor, owner_id=user.id)
+    )
+
+    assert started is None
+    assert scheduled_id is not None
+    with Session(engine) as check:
+        browser = get_summary(check, browser_id, user_id=user.id)
+        scheduled = get_summary(check, scheduled_id, user_id=user.id)
+        assert browser["text"].startswith("No new posts found")
+        assert browser["text"] == scheduled["text"]
+        assert browser["postCount"] == 0
+        assert "status" not in browser
+        assert last_attempt(check, browser_id) is None

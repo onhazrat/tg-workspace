@@ -3679,7 +3679,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/SummaryAttemptResponse" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Data-Start Summary Attempt"
                 }
               }
             }
@@ -15586,10 +15590,6 @@
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
-          },
-          "postCount": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Postcount"
           },
           "extra": {
             "additionalProperties": true,

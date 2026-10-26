@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -76,9 +77,10 @@ DERIVED_SUMMARY_FIELDS = frozenset({"chat_message_count", "prompt_excerpt"})
 #: unreachable from a request at all — it is not on `SummaryUpsertRequest` and
 #: `known` below drops it — which is the same rule stated where it cannot be
 #: forgotten.
-MUTABLE_SUMMARY_FIELDS = frozenset(
-    {"text", "post_count", "language", "model", "timestamp"}
-)
+#: `post_count` is not here: an Artifact records its refs' count (ADR-038), and
+#: a browser's own count landing over it made the header disagree with the
+#: coverage wall.
+MUTABLE_SUMMARY_FIELDS = frozenset({"text", "language", "model", "timestamp"})
 
 # Matches truncatePreview's default in frontend/src/lib/commands/search-filters.ts.
 SUMMARY_PROMPT_EXCERPT_CHARS = 80
@@ -705,6 +707,32 @@ def store_prompt(
     summary.updated_at = utc_now()
     acting_owner.stamp(session, summary)
     session.add(summary)
+
+
+def finish_without_posts(session: Session, summary: Summary) -> None:
+    """Finish a Summary whose Scope covers no Posts; the caller commits.
+
+    A regeneration of a quiet window, from the scheduler or the browser alike
+    (ADR-038): it says so, records that it covered nothing, and spends nothing.
+    """
+    frozen = FrozenScope.from_stored(summary.scope)
+    if frozen is None:
+        raise ValueError("finish_without_posts needs a frozen Scope")
+    summary.text = (
+        f"No new posts found in the selected channels between "
+        f"{datetime.utcfromtimestamp(frozen.start / 1000).isoformat()} and "
+        f"{datetime.utcfromtimestamp(frozen.end / 1000).isoformat()}."
+    )
+    summary.scope = covering(frozen, ()).stored()
+    summary.post_count = 0
+    summary.extra = {
+        k: v for k, v in (summary.extra or {}).items() if k not in _UNFINISHED_KEYS
+    }
+    payload = apply_summary_payload(
+        session, summary.id, user_id=summary.user_id, updates={"cited_posts": {}}
+    )
+    refresh_summary_derived_columns(summary, payload)
+    note_write(session, summary)
 
 
 def finish_summary(

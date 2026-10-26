@@ -14,10 +14,8 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import Any
 
-from fastapi import HTTPException
 from sqlmodel import Session, col, select
 
 from app.core import acting_owner
@@ -26,7 +24,6 @@ from app.jobs.summary_generation import start_attempt
 from app.models_tg import Summary, utc_now
 from app.schemas.scope import FrozenScope
 from app.schemas.summaries import SummaryDerivation
-from app.services.artifact_coverage import covered_posts
 from app.services.channel_setting_groups import channel_is_frozen, load_groups_by_id
 from app.services.follows import followed_channels_for
 from app.services.logs import upsert_publish_log
@@ -39,12 +36,8 @@ from app.services.scraper_jobs import create_job, has_active_sync_job
 from app.services.summaries import (
     FAILED_STATUS,
     MISSING_POSTS_KEY,
-    apply_summary_payload,
-    covering,
     derived_scope,
     is_incomplete,
-    own_summary,
-    refresh_summary_derived_columns,
     submit_summary,
 )
 from app.services.sync_meta import touch_sync
@@ -262,6 +255,10 @@ async def _regenerate_one(
         "postSearch": extra.get("postSearch"),
         "semanticSearchQuery": extra.get("semanticSearchQuery"),
         "semanticSearchRespectsChannels": extra.get("semanticSearchRespectsChannels"),
+        # Failed until an Attempt finishes it, as Generate opens its Summary:
+        # a worker that never gets to it leaves it Failed, not blank. A quiet
+        # window clears it below, with the "No new posts found" text.
+        "status": FAILED_STATUS,
     }
     # Pending in this session, so `submit_summary`'s commit moves the chain to
     # the successor in the same transaction that opens it.
@@ -279,60 +276,31 @@ async def _regenerate_one(
         model=summary.model,
         extra=new_extra,
     )
-    successor = own_summary(session, new_id, user_id=owner_id, writing=True)
-    try:
-        empty = not covered_posts(session, derived, user_id=owner_id).posts
-    except HTTPException:
-        # Past a limit: `start_attempt` records the 413 as the Failed Attempt.
-        empty = False
-
-    if empty:
-        successor.text = (
-            f"No new posts found in the selected channels between "
-            f"{datetime.utcfromtimestamp(derived.start / 1000).isoformat()} and "
-            f"{datetime.utcfromtimestamp(derived.end / 1000).isoformat()}."
-        )
-        # Recorded, so the coverage wall says it covered nothing.
-        successor.scope = covering(derived, ()).stored()
-        successor.post_count = 0
-        payload = apply_summary_payload(
-            session, new_id, user_id=owner_id, updates={"cited_posts": {}}
-        )
-        refresh_summary_derived_columns(successor, payload)
-    else:
-        # Failed until an Attempt finishes it, as Generate opens its Summary:
-        # a worker that never gets to it leaves it Failed, not blank.
-        successor.extra = {**(successor.extra or {}), "status": FAILED_STATUS}
-    session.add(successor)
-    session.commit()
     touch_sync(session, "summaries")
-
-    if not empty:
-        # An unattended regeneration is still the owner's Artifact, so it is
-        # charged to the owner's Key and never to the Operator's, and it uses
-        # the Key the Account chose when it turned auto-regeneration on rather
-        # than whichever one happens to be newest at 4am (BYOK-03).
-        #
-        # `aiKeyId` rides `Summary.extra`, which `upsert_summary` fills from
-        # unrecognised keys in the request body — so it is **client-supplied and
-        # untrusted**, exactly like `publishBotId` two fields along.
-        # `start_attempt` checks it against the owner before `decrypt_token`
-        # for the reason multi-user-tenancy ticket 33 gives, and records a
-        # refusal as the successor's failed Attempt and a failed log row.
-        #
-        # It builds and stores the prompt, recording the Posts it covered.
-        # ponytail: the Covered Posts are read twice, above and there; pass
-        # the Coverage in if a chain's window ever makes that cost show.
-        start_attempt(
-            session,
-            new_id,
-            user_id=owner_id,
-            model=None,
-            key_id=extra.get("aiKeyId"),
-            temperature=None,
-            scheduled=True,
-        )
-
+    # An unattended regeneration is still the owner's Artifact, so it is
+    # charged to the owner's Key and never to the Operator's, and it uses
+    # the Key the Account chose when it turned auto-regeneration on rather
+    # than whichever one happens to be newest at 4am (BYOK-03).
+    #
+    # `aiKeyId` rides `Summary.extra`, which `upsert_summary` fills from
+    # unrecognised keys in the request body, so it is **client-supplied and
+    # untrusted**, exactly like `publishBotId` two fields along.
+    # `start_attempt` checks it against the owner before `decrypt_token`
+    # for the reason multi-user-tenancy ticket 33 gives, and records a
+    # refusal as the successor's failed Attempt and a failed log row.
+    #
+    # It builds and stores the prompt, recording the Posts it covered; with
+    # none, it writes the "No new posts found" text and starts no Attempt,
+    # exactly as for the browser's Regenerate (ADR-038).
+    start_attempt(
+        session,
+        new_id,
+        user_id=owner_id,
+        model=None,
+        key_id=extra.get("aiKeyId"),
+        temperature=None,
+        scheduled=True,
+    )
     return new_id
 
 

@@ -349,7 +349,7 @@ async def api_embeddings(
 ) -> EmbeddingResult:
     model = body.model or settings.EMBEDDING_MODEL
     provider, _ = _provider_for(session, user_id=None, purpose=Purpose.EMBED)
-    # Same as `/summary`: `EmbeddingResult` is already a Pydantic model.
+    # `EmbeddingResult` is already a Pydantic model.
     return await provider.embed(body.texts, model=model)
 
 
