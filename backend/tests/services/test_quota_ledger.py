@@ -50,7 +50,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.security import get_password_hash
 from app.models import User
-from app.models_tg import QuotaUsage
+from app.models_tg import QuotaUsage, RequestRecordRow
 from app.services import network
 from app.services.channel_setting_groups import SyncOperationMode
 from app.services.follows import get_operator_user_id
@@ -708,23 +708,24 @@ def test_an_ownerless_job_is_charged_to_the_operator(
 def test_a_bulk_follow_batch_charges_its_probes_to_manual_bulk(
     monkeypatch: pytest.MonkeyPatch, ledger_user: uuid.UUID
 ) -> None:
-    """The probe phase is one `t.me` fetch per handle, and a batch runs to hundreds.
+    """A Follow persists its charge and Requests without relying on a chained sync.
 
-    Mutation: drop the meter from `run_follow_job`. Bulk follow was the largest
-    manual source of Requests that nothing counted — the plan's Budget table
-    names "bulk follow" under `manual_bulk`, and only the sync it chains
-    afterwards was actually charged.
+    Mutation: drop the meter or its completion flush from `run_follow_job`.
+    Read the stored Requests without flushing them or chaining a sync.
     """
     from app.services import bulk_follow
 
+    async def fake_fetch(*_args: object, **_kwargs: object) -> str:
+        return "<html></html>"
+
     async def fake_probe(_job: object, result: object, **_kwargs: object) -> None:
-        request_meter.record_telegram_request()
-        await asyncio.sleep(0)
+        await network.fetch_with_retry(TELEGRAM_URL, retries=1)
         result.status = "skipped"  # type: ignore[attr-defined]
 
     async def noop(*_args: object, **_kwargs: object) -> None:
         return None
 
+    monkeypatch.setattr(network, "_fetch_once", fake_fetch)
     monkeypatch.setattr(bulk_follow, "_process_one_channel", fake_probe)
     monkeypatch.setattr(bulk_follow, "touch_follow_job", noop)
     monkeypatch.setattr(bulk_follow, "_chain_sync_job", noop)
@@ -743,6 +744,15 @@ def test_a_bulk_follow_batch_charges_its_probes_to_manual_bulk(
     assert len(rows) == 1
     assert rows[0].budget == Budget.MANUAL_BULK.value
     assert rows[0].requests == 5
+    with Session(engine) as session:
+        records = session.exec(
+            select(RequestRecordRow).where(RequestRecordRow.account_id == ledger_user)
+        ).all()
+        assert len(records) == 5
+        assert all(
+            r.charged and r.kind == "follow" and r.budget == Budget.MANUAL_BULK.value
+            for r in records
+        )
 
 
 def test_the_chained_sync_is_not_charged_to_the_follow_job(

@@ -80,6 +80,7 @@ import logging
 import time
 import uuid
 from collections import deque
+from functools import partial
 from typing import Any
 
 from sqlalchemy import text as sa_text
@@ -88,7 +89,6 @@ from sqlmodel import Session
 from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_meter import metered
 from app.core.request_recording import attributed
 from app.services import pgmq
 from app.services.directory_probe_usage import charge_probe_requests
@@ -109,7 +109,7 @@ from app.services.quota import (
     resolve_charge_owner,
     usage_for_user,
 )
-from app.services.request_stats import flush_recorded_requests
+from app.services.request_accounting import metered_work
 from app.services.scraper_jobs import (
     SyncJobState,
     claim_job,
@@ -911,20 +911,8 @@ async def _process_message(msg: pgmq.PgmqMessage, slot: SyncSlot) -> None:
                 msg.msg_id,
             )
             return
-        # One meter per message: the Requests this Channel actually made,
-        # accumulating into the same daily row as its siblings. Charged from a
-        # `finally` so a Channel that dies part-way still pays for the pages it
-        # fetched, which is the argument `run_sync_job` already made.
-        with metered() as meter:
-            try:
-                await _run_channel(job, channel_id, user_id, slot)
-            finally:
-                await asyncio.to_thread(
-                    charge_sync_job, user_id, job.sync_mode, meter.telegram_requests
-                )
-                # Beside the ledger write (RQS-01): a crash loses the Requests
-                # the ledger loses, and no more.
-                await asyncio.to_thread(flush_recorded_requests)
+        async with metered_work(partial(charge_sync_job, user_id, job.sync_mode)):
+            await _run_channel(job, channel_id, user_id, slot)
     finally:
         _in_flight.discard(key)
 
@@ -1037,17 +1025,8 @@ async def _process_probe_message(msg: pgmq.PgmqMessage) -> None:
 
     from app.jobs.discover_probe import probe_one_handle
 
-    with metered() as meter:
-        try:
-            await probe_one_handle(handle)
-        finally:
-            # From a `finally`, exactly as the sync path charges: a probe that
-            # raised still made the Requests it made, and losing them because
-            # the fetch ended badly under-reports precisely the traffic an
-            # Operator is watching for.
-            await asyncio.to_thread(charge_probe_requests, meter.telegram_requests)
-            # Beside the ledger write, as the sync's are (RQS-12).
-            await asyncio.to_thread(flush_recorded_requests)
+    async with metered_work(charge_probe_requests):
+        await probe_one_handle(handle)
 
 
 async def _handle_one(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) -> str:

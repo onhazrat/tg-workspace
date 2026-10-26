@@ -22,27 +22,11 @@ concurrency — the failure that never reproduces in a single-user test.
 
 **No meter active means no counting**, so counting is something a caller opts
 into rather than something every new call site has to remember to opt out of.
-Two metered blocks exist today: `sync_orchestrator.run_sync_job` and
-`bulk_follow.run_follow_job`. Everything else runs unmetered, and the list is
-worth being exact about, because "the rest is trivial" is how an uncounted
-caller stays uncounted:
-
-* Not `t.me` at all, so never counted wherever they run — the Bot API
-  (`publish.py`), thumbnail and avatar CDNs, proxy health checks.
-* Genuinely `t.me`, and uncharged on purpose: the handle probes in
-  `routes/telegram.py`, and `jobs/discover_probe.py`. Ticket 08 left the probe
-  sweep open — it is a *scheduled* job fetching the web view every tick, which
-  looks exactly like the background load the `auto_sync` Budget exists to
-  throttle — and **ticket 23 closed it as uncharged**, for two reasons that
-  point the same way. It does not enqueue onto a lane, so there is nothing for
-  the ladder to deprioritize: charging it would take Budget away from the
-  operator's own syncs and change nothing about the sweep. And
-  `DirectoryEntry` is corpus-scoped (see `services/tenancy.py`), so the
-  queue is deployment-wide work every account benefits from — billing one
-  account for it makes that account's Budget a proxy for deployment load, which
-  is what decision 16 split the three Budgets to stop. Deployment-wide load is
-  bounded by the proxy partition and the adaptive wait (tickets 13 and 14),
-  which is the tier that owns it.
+`services/request_accounting.py` owns the completion sequence for queued syncs,
+direct syncs, bulk Follows and Directory probes. Each caller chooses its tally:
+syncs and Follows charge the Account's Budget; Directory probes record deployment
+load in their separate tally. The Bot API, picture CDNs and proxy health checks
+never increment this meter; Request recording still counts every Telegram attempt.
 
 This lives in `core/` rather than `services/` for the reason `async_db.py` is a
 declared exception in `test_service_kinds.py`: it is infrastructure with no
@@ -85,8 +69,7 @@ def metered() -> Iterator[RequestMeter]:
 
     The token is reset on exit rather than the variable being set back to
     `None`: a nested block has to restore the *outer* meter, not clear the
-    slot. Nothing nests these today, but a meter that silently stopped counting
-    after an inner block closed would be found by nobody.
+    slot. An inner block's Requests belong to its own tally, not the outer one.
     """
     meter = RequestMeter()
     token = _active_meter.set(meter)

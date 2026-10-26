@@ -250,6 +250,7 @@ INVENTORY: dict[str, str] = {
     # SUMTAB-09: plans a Summary's Publication (publication_parts), sends it
     # (publish) and files its one publish log (logs).
     "publications.py": ORCHESTRATOR,
+    "request_accounting.py": ORCHESTRATOR,
     "settings_write.py": ORCHESTRATOR,
     # One workflow — an Admin operating a lane (ticket 12) — coordinating the
     # modules that own the pieces: `settings_store` for the paused set,

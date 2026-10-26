@@ -7,6 +7,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any, Literal
 
 from sqlmodel import Session
@@ -14,7 +15,6 @@ from sqlmodel import Session
 from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_meter import metered
 from app.core.request_recording import PageType, RequestKind, attributed, page
 from app.jobs.settings import (
     compute_effective_global_start_time_ms,
@@ -54,6 +54,7 @@ from app.services.quota import (
     assert_within_ceiling,
     charge_sync_job,
 )
+from app.services.request_accounting import metered_work
 from app.services.scraper import get_channel_info
 from app.services.telegram_web import (
     TelegramWebViewUnavailable,
@@ -754,17 +755,11 @@ async def run_follow_job(job: FollowJobState) -> None:
     ceiling exists for — the chained sync it would have queued is refused
     separately, by `enqueue_sync_job`.
     """
-    with metered() as meter:
+    user_uuid = uuid.UUID(job.user_id)
+    async with metered_work(partial(charge_sync_job, user_uuid, "bulk")):
         job.status = "running"
         await touch_follow_job(job)
 
-        # `uuid.UUID(job.user_id) if job.user_id else None` until ticket 21.
-        # `FollowJobState.user_id` is now a required `str`, so the else branch
-        # was dead by construction and alive in the type — which is what let a
-        # `None` reach `create_followed_channel` through `run_db`, whose
-        # `Callable[..., T]` signature checks nothing. Same shape as the
-        # auto-follow hole `/code-review` found in `sync_orchestrator.py`.
-        user_uuid = uuid.UUID(job.user_id)
         try:
             await run_db(assert_within_ceiling, user_uuid, Budget.MANUAL_BULK)
         except QuotaCeilingReached:
@@ -827,43 +822,38 @@ async def run_follow_job(job: FollowJobState) -> None:
             finally:
                 slot.release()
 
-        try:
-            await asyncio.gather(*[_run_one(r) for r in job.results])
+        await asyncio.gather(*[_run_one(r) for r in job.results])
 
-            if job.cancel_event.is_set():
-                job.status = "cancelled"
-                for r in job.results:
-                    if r.status in ("pending", "running"):
-                        r.status = "cancelled"
+        if job.cancel_event.is_set():
+            job.status = "cancelled"
+            for r in job.results:
+                if r.status in ("pending", "running"):
+                    r.status = "cancelled"
+        else:
+            syncable_names = [r.name for r in job.results if r.status == "added"]
+            try:
+                await _chain_sync_job(job, syncable_names, user_uuid)
+            except QuotaCeilingReached:
+                # Expected, not a fault: the probes ran and the follows
+                # landed, and the account hit its `manual_bulk` ceiling
+                # before the sync could be queued. A traceback at error
+                # level here would report a refusal as a crash, the same
+                # distinction `bulk_channels` and `auto_sync` make.
+                logger.info(
+                    "Follow job %s: at the manual_bulk ceiling, sync not queued",
+                    job.follow_job_id,
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Failed to chain sync job after follow job %s",
+                    job.follow_job_id,
+                )
+            if any(r.status == "error" for r in job.results) and not any(
+                r.status in ("added", "unavailable", "skipped") for r in job.results
+            ):
+                job.status = "failed"
             else:
-                syncable_names = [r.name for r in job.results if r.status == "added"]
-                try:
-                    await _chain_sync_job(job, syncable_names, user_uuid)
-                except QuotaCeilingReached:
-                    # Expected, not a fault: the probes ran and the follows
-                    # landed, and the account hit its `manual_bulk` ceiling
-                    # before the sync could be queued. A traceback at error
-                    # level here would report a refusal as a crash — the same
-                    # distinction `bulk_channels` and `auto_sync` make.
-                    logger.info(
-                        "Follow job %s: at the manual_bulk ceiling, sync not queued",
-                        job.follow_job_id,
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.exception(
-                        "Failed to chain sync job after follow job %s",
-                        job.follow_job_id,
-                    )
-                if any(r.status == "error" for r in job.results) and not any(
-                    r.status in ("added", "unavailable", "skipped") for r in job.results
-                ):
-                    job.status = "failed"
-                else:
-                    job.status = "completed"
+                job.status = "completed"
 
-            job.finished_at = int(time.time() * 1000)
-            await touch_follow_job(job)
-        finally:
-            # `finally` for the reason `run_sync_job` gives: the probes were
-            # made whether or not the batch finished tidily.
-            await run_db(charge_sync_job, user_uuid, "bulk", meter.telegram_requests)
+        job.finished_at = int(time.time() * 1000)
+        await touch_follow_job(job)

@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any, Literal, Protocol
 
 import httpx
@@ -19,7 +20,6 @@ from sqlmodel import Session, col, func, select
 from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_meter import metered
 from app.core.request_recording import (
     PageType,
     RequestKind,
@@ -93,7 +93,7 @@ from app.services.quota import (
     budget_for_sync_mode,
     charge_sync_job,
 )
-from app.services.request_stats import flush_recorded_requests
+from app.services.request_accounting import metered_work
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
@@ -2141,7 +2141,7 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     `charge_sync_job` swallows and logs its own errors, because an accounting
     write nobody reads yet must not turn a completed sync into a failed one.
     """
-    with metered() as meter:
+    async with metered_work(partial(charge_sync_job, user_id, job.sync_mode)):
         job.status = "running"
         await touch_job(job)
         # **Slots out of the one Partition, not a semaphore of this job's own**
@@ -2178,25 +2178,17 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
             finally:
                 slot.release()
 
-        try:
-            await asyncio.gather(*[_run_one(ch) for ch in job.channels.values()])
+        await asyncio.gather(*[_run_one(ch) for ch in job.channels.values()])
 
-            if job.cancel_event.is_set():
-                job.status = "cancelled"
-            elif all(c.status in ("success", "skipped") for c in job.channels.values()):
-                job.status = "completed"
-            elif any(c.status == "success" for c in job.channels.values()):
-                job.status = "completed"
-            else:
-                job.status = "failed"
+        if job.cancel_event.is_set():
+            job.status = "cancelled"
+        elif all(c.status in ("success", "skipped") for c in job.channels.values()):
+            job.status = "completed"
+        elif any(c.status == "success" for c in job.channels.values()):
+            job.status = "completed"
+        else:
+            job.status = "failed"
 
-            job.finished_at = int(time.time() * 1000)
-            await persist_job(job)
-            deactivate_job(job.job_id)
-        finally:
-            # In `finally` so a job that dies part-way is still charged for the
-            # pages it fetched first. The alternative rewards a crash.
-            await run_db(
-                charge_sync_job, user_id, job.sync_mode, meter.telegram_requests
-            )
-            await run_db(flush_recorded_requests)
+        job.finished_at = int(time.time() * 1000)
+        await persist_job(job)
+        deactivate_job(job.job_id)
