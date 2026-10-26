@@ -21,10 +21,10 @@ do not change.
 
 **Status:** ready-for-agent
 
-- [ ] The Scope submission is tested with a Posts view literal: the Channels, the canonical window (a Live window stays Live), the order and the selection body, field by field.
-- [ ] The fetch for what the tab shows is tested with a view literal and a fake api: the shown read, a meaning search with and without respecting the Channels, and a find-related.
-- [ ] The Posts view tests grow a case for the Scope counts read used by the check, pinning its key and body.
-- [ ] Generate and copy prompt with no Posts selected still refuse with the same message, and a selection changed just before is read fresh; covered at the AI context's existing seam.
-- [ ] No module names the prompt-posts input, the browser's prompt Scope type or the removed hook.
+- [x] The Scope submission is tested with a Posts view literal: the Channels, the canonical window (a Live window stays Live), the order and the selection body, field by field.
+- [x] The fetch for what the tab shows is tested with a view literal and a fake api: the shown read, a meaning search with and without respecting the Channels, and a find-related.
+- [x] The Posts view tests grow a case for the Scope counts read used by the check, pinning its key and body.
+- [x] Generate and copy prompt with no Posts selected still refuse with the same message, and a selection changed just before is read fresh; covered at the AI context's existing seam.
+- [x] No module names the prompt-posts input, the browser's prompt Scope type or the removed hook.
 - [ ] The full Playwright suite passes, run serially; only a mock that asserts the count request's body changes, if any does.
 - [ ] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
