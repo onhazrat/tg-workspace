@@ -73,5 +73,5 @@ a behaviour change and stops the PR.
 ## Out of scope
 
 - Collapsing the six Scope types (review candidate 7)
-- Moving the Posts view out of `ScraperContext`
+- Moving the Posts view out of `ScraperContext` (done by ADR-039, `docs/posts-view-module-plan.md`)
 - Any change to what a read returns

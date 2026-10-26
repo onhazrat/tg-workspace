@@ -363,7 +363,10 @@ _Avoid_: post filters (as part of the Scope), query, facet
 The Scope and the Post filter and order, resolved once for one Account: what
 the Posts tab shows and what its counts count. Every Posts read is answered
 from one, and each read says which parts it ignores; the facets ignore the Post
-filter, for instance, and the window histogram the per-Channel cap.
+filter, for instance, and the window histogram the per-Channel cap. A meaning
+search or a find-related is part of it too, because it changes what the tab
+shows: it ranks the Posts instead of ordering them, and a read that only counts
+or filters ignores it.
 _Avoid_: post view, view (alone; a View is what a View count counts)
 
 **Post selection**:
