@@ -39,7 +39,7 @@ pins and the fan-out test last. Commit before mutating each guard.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A provider test shows the edits and the fetch for what the tab shows keep their identity across a provider re-render; it fails against main and passes here.
 - [x] Provider tests cover each edit: the keyword debounced once, the ranking exclusive, the order as one value, the three selection edits and the revision they move, restore replacing the keyword, the Post filter, the order and the selection and clearing the ranking.
@@ -50,3 +50,9 @@ pins and the fan-out test last. Commit before mutating each guard.
 - [x] No reader names the scraper context; the command registry's context has two Posts fields; the shell reads no keyword.
 - [x] The full Playwright suite passes with no spec edited, run serially.
 - [x] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
+
+## Comments
+
+- 2026-10-26: implemented on `claude/pvm-01` and merged into the integration branch `claude/pvm` as a fast-forward to c0556df8.
+  The "respects Channels" choice was moved back into the Posts view module after review (7089aed3).
+  Playwright: 237/239 on a reseeded warm e2e DB; the two `reset-password` failures need a mailcatcher on :1080.
