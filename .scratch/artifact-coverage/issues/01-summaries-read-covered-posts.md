@@ -12,18 +12,18 @@ and Scope line. Spec: `.scratch/artifact-coverage/spec.md`; decisions: ADR-038 a
 
 **Status:** done
 
-- [ ] Written first, and red before any other change: a scheduled regeneration and a `derived_from` regeneration plus `start_attempt` of one predecessor build byte-identical prompts. It replaces the old autoregen scope-parity API test.
-- [ ] The Artifact coverage read model exists (declared in the service-kinds inventory) with `freeze` (moved from the Posts view's `freeze_selection`, every caller moved), `covered_posts`, and `posts_block` in the flat and the tag layout, owning the 10,000-Post and token 413s
-- [ ] Interface tests at the module: refs win over Selection rules (a Post synced into the window after the freeze is not read; a reordered views ranking keeps the frozen Posts); a derived or pre-PTR-05 Scope covers its window under select all; recorded order is kept; a reclaimed Post and an unfollowed Channel's Post each count as missing; both 413s. They replace the prompt-assembly service tests.
-- [ ] Generate and Retry build through the module; `PromptScope` and `_fetch_scoped_posts` are gone
-- [ ] The scheduler opens its successor with `submit_summary(derived_from=…, extra=…)`, carrying the chain's flags as today; with no Covered Posts it writes the "No new posts found" text and starts no Attempt; otherwise `start_attempt` builds and stores the prompt and records the refs. Its inline Post read and formatter are gone. A window past either limit ends Failed with the 413's reason.
-- [ ] `/ai/summary/prompt` takes `summaryId`, reads the Summary through the family's by-id read guard (its 404 for an absent or foreign id), refuses `scope` with a 422, and answers the Missing Post count beside the prompt; the browser's copy-prompt path sends the id
-- [ ] `POST /ai/summary` is deleted with its rows in the route inventories, the View-as spend list and the isolation probes; `bash scripts/route-guards.sh` passes; the client is regenerated
-- [ ] A Summary records `scopedPostCount` from its refs; the browser no longer submits `postCount`
-- [ ] `store_prompt` writes `extra.missingPosts` when above zero; a regeneration does not inherit it
-- [ ] The "N missing" chip shows after "N channels · N posts" in the Summary header and in the Summary's Scope line, absent at zero, explained on tap, and the explanation stays inside the viewport at phone width; a render test covers absent, present and tapped
-- [ ] The Posts view guard fails a Summary-path module (Summary generation, the scheduler's regeneration, Summaries) that names `resolve_posts_view`, `apply_analysis_window` or `select(Post)`; mutation-checked by restoring the scheduler's inline read, written into the commit body; a row in the guard table
-- [ ] Backend suite, backend lint, frontend unit tests and typecheck pass; Playwright mocks of `/ai/summary/prompt` follow the new body
+- [x] Written first, and red before any other change: a scheduled regeneration and a `derived_from` regeneration plus `start_attempt` of one predecessor build byte-identical prompts. It replaces the old autoregen scope-parity API test.
+- [x] The Artifact coverage read model exists (declared in the service-kinds inventory) with `freeze` (moved from the Posts view's `freeze_selection`, every caller moved), `covered_posts`, and `posts_block` in the flat and the tag layout, owning the 10,000-Post and token 413s
+- [x] Interface tests at the module: refs win over Selection rules (a Post synced into the window after the freeze is not read; a reordered views ranking keeps the frozen Posts); a derived or pre-PTR-05 Scope covers its window under select all; recorded order is kept; a reclaimed Post and an unfollowed Channel's Post each count as missing; both 413s. They replace the prompt-assembly service tests.
+- [x] Generate and Retry build through the module; `PromptScope` and `_fetch_scoped_posts` are gone
+- [x] The scheduler opens its successor with `submit_summary(derived_from=…, extra=…)`, carrying the chain's flags as today; with no Covered Posts it writes the "No new posts found" text and starts no Attempt; otherwise `start_attempt` builds and stores the prompt and records the refs. Its inline Post read and formatter are gone. A window past either limit ends Failed with the 413's reason.
+- [x] `/ai/summary/prompt` takes `summaryId`, reads the Summary through the family's by-id read guard (its 404 for an absent or foreign id), refuses `scope` with a 422, and answers the Missing Post count beside the prompt; the browser's copy-prompt path sends the id
+- [x] `POST /ai/summary` is deleted with its rows in the route inventories, the View-as spend list and the isolation probes; `bash scripts/route-guards.sh` passes; the client is regenerated
+- [x] A Summary records `scopedPostCount` from its refs; the browser no longer submits `postCount`
+- [x] `store_prompt` writes `extra.missingPosts` when above zero; a regeneration does not inherit it
+- [x] The "N missing" chip shows after "N channels · N posts" in the Summary header and in the Summary's Scope line, absent at zero, explained on tap, and the explanation stays inside the viewport at phone width; a render test covers absent, present and tapped
+- [x] The Posts view guard fails a Summary-path module (Summary generation, the scheduler's regeneration, Summaries) that names `resolve_posts_view`, `apply_analysis_window` or `select(Post)`; mutation-checked by restoring the scheduler's inline read, written into the commit body; a row in the guard table
+- [x] Backend suite, backend lint, frontend unit tests and typecheck pass; Playwright mocks of `/ai/summary/prompt` follow the new body
 
 ## Comments
 
