@@ -41,12 +41,12 @@ pins and the fan-out test last. Commit before mutating each guard.
 
 **Status:** ready-for-agent
 
-- [ ] A provider test shows the edits and the fetch for what the tab shows keep their identity across a provider re-render; it fails against main and passes here.
-- [ ] Provider tests cover each edit: the keyword debounced once, the ranking exclusive, the order as one value, the three selection edits and the revision they move, restore replacing the keyword, the Post filter, the order and the selection and clearing the ranking.
-- [ ] Storage round-trips are tested: the Post filter in the URL, the order and cap under their existing per-Account keys with the legacy fallbacks, the selection for the browser session.
-- [ ] A fan-out test mounts a sync-only reader, an edits-only reader and the search box under the provider: a keystroke re-renders only the search box, and only view readers re-render when the debounce fires.
-- [ ] The architecture invariants pin the field sets of the Posts view contexts and the Sync context, and fail a Posts view field on the Sync context.
-- [ ] Each guard is mutation-checked (a Posts field added to the Sync context, the Sync context's memo dropped, the defective dependency restored) and each check is written into the commit body as `Mutation-checked: <what you broke> went red`.
-- [ ] No reader names the scraper context; the command registry's context has two Posts fields; the shell reads no keyword.
+- [x] A provider test shows the edits and the fetch for what the tab shows keep their identity across a provider re-render; it fails against main and passes here.
+- [x] Provider tests cover each edit: the keyword debounced once, the ranking exclusive, the order as one value, the three selection edits and the revision they move, restore replacing the keyword, the Post filter, the order and the selection and clearing the ranking.
+- [x] Storage round-trips are tested: the Post filter in the URL, the order and cap under their existing per-Account keys with the legacy fallbacks, the selection for the browser session.
+- [x] A fan-out test mounts a sync-only reader, an edits-only reader and the search box under the provider: a keystroke re-renders only the search box, and only view readers re-render when the debounce fires.
+- [x] The architecture invariants pin the field sets of the Posts view contexts and the Sync context, and fail a Posts view field on the Sync context.
+- [x] Each guard is mutation-checked (a Posts field added to the Sync context, the Sync context's memo dropped, the defective dependency restored) and each check is written into the commit body as `Mutation-checked: <what you broke> went red`.
+- [x] No reader names the scraper context; the command registry's context has two Posts fields; the shell reads no keyword.
 - [ ] The full Playwright suite passes with no spec edited, run serially.
-- [ ] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
+- [x] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
