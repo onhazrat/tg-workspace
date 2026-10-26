@@ -8571,12 +8571,7 @@
       },
       "ChatRequest": {
         "properties": {
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels",
-            "default": []
-          },
+          "chatId": { "type": "string", "title": "Chatid" },
           "channelsText": {
             "type": "string",
             "title": "Channelstext",
@@ -8586,12 +8581,6 @@
             "type": "string",
             "title": "Poststext",
             "default": ""
-          },
-          "scope": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/PromptScopeInput" },
-              { "type": "null" }
-            ]
           },
           "language": {
             "type": "string",
@@ -8624,9 +8613,11 @@
             "title": "Aikeyid"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["message"],
-        "title": "ChatRequest"
+        "required": ["chatId", "message"],
+        "title": "ChatRequest",
+        "description": "One turn of a Chat: the server reads the Chat's Covered Posts."
       },
       "ChatSessionListItemResponse": {
         "properties": {
@@ -13169,67 +13160,6 @@
         "title": "PromptResponse",
         "description": "The assembled prompt, for the \"show me what you would send\" surfaces.\n\nShared by `/ai/summary/prompt` and `/ai/tag/prompt`: both assemble a prompt\nand neither runs a model, so they have one shape between them."
       },
-      "PromptScopeInput": {
-        "properties": {
-          "window": {
-            "anyOf": [
-              {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
-                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
-                ],
-                "discriminator": {
-                  "propertyName": "mode",
-                  "mapping": {
-                    "fixed": "#/components/schemas/FixedAnalysisWindow",
-                    "live": "#/components/schemas/LiveAnalysisWindow"
-                  }
-                }
-              },
-              { "type": "null" }
-            ],
-            "title": "Window"
-          },
-          "selection": {
-            "items": {
-              "oneOf": [
-                { "$ref": "#/components/schemas/SelectionRule-Input" },
-                { "$ref": "#/components/schemas/SelectionPick" }
-              ],
-              "discriminator": {
-                "propertyName": "kind",
-                "mapping": {
-                  "pick": "#/components/schemas/SelectionPick",
-                  "rule": "#/components/schemas/SelectionRule-Input"
-                }
-              }
-            },
-            "type": "array",
-            "title": "Selection"
-          },
-          "viewMeasure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
-            "title": "Viewmeasure",
-            "default": "estimated"
-          },
-          "sort": {
-            "type": "string",
-            "enum": ["newest", "oldest", "most_views", "fewest_views"],
-            "title": "Sort",
-            "default": "newest"
-          },
-          "groupByChannel": {
-            "type": "boolean",
-            "title": "Groupbychannel",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "PromptScopeInput",
-        "description": "A Posts-feed scope the backend resolves into the prompt's posts block,\ninstead of the client shipping a pre-built ``postsText``. Mirrors the\nfrontend feed query params."
-      },
       "ProxyHealthResponse": {
         "properties": {
           "badProxies": {
@@ -15471,26 +15401,11 @@
       },
       "TagRequest": {
         "properties": {
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
+          "tagRunId": { "type": "string", "title": "Tagrunid" },
           "channelsText": {
             "type": "string",
             "title": "Channelstext",
             "default": ""
-          },
-          "postsText": {
-            "type": "string",
-            "title": "Poststext",
-            "default": ""
-          },
-          "scope": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/PromptScopeInput" },
-              { "type": "null" }
-            ]
           },
           "allTags": {
             "type": "string",
@@ -15520,9 +15435,11 @@
             "title": "Tagsperchannelmax"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["channels"],
-        "title": "TagRequest"
+        "required": ["tagRunId"],
+        "title": "TagRequest",
+        "description": "A Tag run's prompt: the server reads the run's Covered Posts."
       },
       "TagResponse": {
         "properties": {

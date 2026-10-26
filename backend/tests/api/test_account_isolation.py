@@ -128,6 +128,15 @@ PROBED: dict[tuple[str, str], str] = {
     ("POST", f"{V1}/ai/summary/prompt"): (
         "a Summary's prompt built from its Covered Posts, named by id (ADR-038)"
     ),
+    ("POST", f"{V1}/ai/chat/stream"): (
+        "a Chat turn built from its Covered Posts, named by id (ADR-038)"
+    ),
+    ("POST", f"{V1}/ai/tag/prompt"): (
+        "a Tag run's prompt built from its Covered Posts, named by id (ADR-038)"
+    ),
+    ("POST", f"{V1}/ai/tag/stream"): (
+        "a Tag run's stream built from its Covered Posts, named by id (ADR-038)"
+    ),
     ("GET", f"{V1}/data/summaries/{{summary_id}}/attempts"): (
         "a Summary's Attempts read by id (SFR-01)"
     ),
@@ -619,13 +628,7 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
         "QUOTA_MANAGE lifts another account's ceiling; the id is the argument",
     ),
     # --- AI, RAG, network, telegram ------------------------------------------
-    ("POST", f"{V1}/ai/chat/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/embeddings"): (Reason.EXTERNAL, "provider call"),
-    ("POST", f"{V1}/ai/tag/prompt"): (
-        Reason.COVERED_ELSEWHERE,
-        "assembles from the caller's scope; test_artifact_coverage.py",
-    ),
-    ("POST", f"{V1}/ai/tag/stream"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/ai/translate"): (Reason.EXTERNAL, "provider call"),
     ("POST", f"{V1}/rag/embed"): (Reason.CORPUS, "embeddings key off Posts"),
     ("POST", f"{V1}/rag/search"): (
@@ -967,6 +970,40 @@ def test_a_foreign_summarys_prompt_is_not_found(
 
     assert response.status_code == 404, response.text[:200]
     assert response.json()["detail"] == "Summary not found"
+
+
+@pytest.mark.security
+@pytest.mark.parametrize(
+    ("family", "path", "body"),
+    [
+        (1, "/ai/chat/stream", {"chatId": "{id}", "message": "q"}),
+        (2, "/ai/tag/prompt", {"tagRunId": "{id}"}),
+        (2, "/ai/tag/stream", {"tagRunId": "{id}"}),
+    ],
+    ids=["chat-stream", "tag-prompt", "tag-stream"],
+)
+def test_a_foreign_artifacts_prompt_is_not_found(
+    client: TestClient,
+    alice: tuple[User, dict[str, str]],
+    bob: tuple[User, dict[str, str]],
+    family: int,
+    path: str,
+    body: dict[str, str],
+) -> None:
+    """ADR-038: a Chat turn and a Tag run's prompt name their Artifact, and
+    answer as its family does, before any Key is spent."""
+    _name, build, _url, detail, _list_url = FAMILIES[family]
+    row_id = f"iso-prompt-{uuid.uuid4()}"
+    _seed(build(row_id, alice[0].id))
+
+    response = client.post(
+        f"{V1}{path}",
+        json={k: v.format(id=row_id) for k, v in body.items()},
+        headers=bob[1],
+    )
+
+    assert response.status_code == 404, response.text[:200]
+    assert response.json()["detail"] == detail
 
 
 @pytest.mark.security

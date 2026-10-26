@@ -239,11 +239,19 @@ def get_chat_session(
     The transcript is fetched only after the parent's owner is accepted, so it
     stays unreachable for a foreign id.
     """
+    row = own_chat_session(session, chat_session_id, user_id=user_id)
+    return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))
+
+
+def own_chat_session(
+    session: Session, chat_session_id: str, *, user_id: uuid.UUID
+) -> ChatSession:
+    """The caller's Chat, or this family's 404: the by-id read guard."""
     row = session.get(ChatSession, chat_session_id)
     if row is None:
         raise HTTPException(status_code=404, detail=CHAT_SESSION_NOT_FOUND)
     assert_owner(row.user_id, user_id, detail=CHAT_SESSION_NOT_FOUND)
-    return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))
+    return row
 
 
 def apply_chat_session_payload(

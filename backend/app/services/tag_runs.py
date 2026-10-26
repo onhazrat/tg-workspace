@@ -85,7 +85,7 @@ def tag_run_to_camel(tag_run: TagRun) -> dict[str, Any]:
         "createdAt": tag_run.created_at,
         "updatedAt": tag_run.updated_at_ms,
         **(tag_run.extra or {}),
-        **scope_key(FrozenScope.from_stored(tag_run.scope, tag_run.scope_posts)),
+        **scope_key(frozen_scope_of(tag_run)),
     }
 
 
@@ -159,11 +159,21 @@ def get_tag_run(
     the family where a missing ownership check hands over somebody else's
     posts rather than their metadata.
     """
+    return tag_run_to_camel(own_tag_run(session, tag_run_id, user_id=user_id))
+
+
+def own_tag_run(session: Session, tag_run_id: str, *, user_id: uuid.UUID) -> TagRun:
+    """The caller's Tag run, or this family's 404: the by-id read guard."""
     row = session.get(TagRun, tag_run_id)
     if row is None:
         raise HTTPException(status_code=404, detail=TAG_RUN_NOT_FOUND)
     assert_owner(row.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
-    return tag_run_to_camel(row)
+    return row
+
+
+def frozen_scope_of(row: TagRun) -> FrozenScope | None:
+    """The Scope this Tag run was produced from, refs included, or `None`."""
+    return FrozenScope.from_stored(row.scope, row.scope_posts)
 
 
 #: Names a merge recognises and never writes (AW-06).

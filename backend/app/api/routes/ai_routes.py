@@ -15,7 +15,6 @@ from app.ai.models import (
     EmbedRequest,
     ModelInfo,
     ModelListRequest,
-    PromptScopeInput,
     SummaryPromptRequest,
     TagRequest,
     TranslateRequest,
@@ -29,7 +28,7 @@ from app.ai.registry import (
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
 from app.jobs.summary_generation import summary_prompt
-from app.models_tg import SummaryPayload
+from app.models_tg import ChatSessionPayload, SummaryPayload
 from app.prompts.summary import rtl_instruction
 from app.prompts.tagging import format_tag_prompt
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
@@ -38,7 +37,7 @@ from app.schemas.ai import (
     PromptResponse,
     TranslateResponse,
 )
-from app.schemas.scope import ScopeSubmission
+from app.schemas.scope import FrozenScope
 from app.services.ai_keys import (
     AI_KEY_REJECTED_DETAIL,
     Purpose,
@@ -46,11 +45,17 @@ from app.services.ai_keys import (
     record_validation,
     resolve_ai_key,
 )
-from app.services.artifact_coverage import Layout, freeze, posts_block
+from app.services.artifact_coverage import Layout, posts_block
+from app.services.chat_sessions import frozen_scope_of as chat_scope
+from app.services.chat_sessions import own_chat_session
 from app.services.summaries import own_summary
+from app.services.tag_runs import frozen_scope_of as tag_run_scope
+from app.services.tag_runs import own_tag_run
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
+
+_NO_SCOPE_DETAIL = "This Artifact records no Scope, so no prompt can be built."
 
 
 def _provider_for(
@@ -98,9 +103,16 @@ def _note_rejection(session: Session, key: ResolvedKey, exc: BaseException) -> b
 
 
 async def _sse_text(
-    chunks: AsyncIterator[str], session: Session, key: ResolvedKey
+    chunks: AsyncIterator[str],
+    session: Session,
+    key: ResolvedKey,
+    *,
+    missing_posts: int = 0,
 ) -> AsyncIterator[str]:
     """Frame a Provider's text stream as SSE for `sseTextStream`.
+
+    The first frame is the Missing Post count (ADR-038): how many of the
+    Artifact's Covered Posts the prompt left out, known before any text.
 
     A failure ends with an `error` frame and **never** with `[DONE]`, which the
     browser reads as a clean end: swallowing the exception into `[DONE]` once
@@ -109,6 +121,7 @@ async def _sse_text(
     say "an unexpected error occurred" about a model that was merely busy. The
     `error` frame keeps the rule and says why.
     """
+    yield f"data: {json.dumps({'missingPosts': missing_posts})}\n\n"
     try:
         async for chunk in chunks:
             yield f"data: {json.dumps({'text': chunk})}\n\n"
@@ -129,35 +142,42 @@ async def _sse_text(
     yield "data: [DONE]\n\n"
 
 
-def _resolve_posts_text(
+def _covered(
     session: Session,
+    scope: FrozenScope | None,
     *,
     user_id: uuid.UUID,
-    channels: list[str],
-    posts_text: str,
-    scope: PromptScopeInput | None,
-    tag_format: bool = False,
-) -> str:
-    """Prompt posts block: an explicit client-built ``postsText`` wins (the
-    semantic/related path, which the server cannot reproduce); otherwise the
-    backend resolves the scope itself. Tag prompts use the channel-grouped
-    chronological format, summary/chat the flat one.
+    layout: Layout,
+) -> tuple[list[str], str, int]:
+    """An Artifact's Channels, its posts block, and its Missing Post count.
 
-    Until AC-02 names the Artifact here as `/ai/summary/prompt` does, the
-    scope is frozen on the spot and read through the Artifact coverage module,
-    so the limits and the formatter are the ones every other prompt gets."""
-    if posts_text:
-        return posts_text
+    Read from what the Artifact froze, never from the request (ADR-038). An
+    Artifact opened before AW-06 records no Scope, so no prompt can be built.
+    """
     if scope is None:
-        return ""
-    if scope.window is None:
-        raise HTTPException(status_code=422, detail="A prompt's scope states a window.")
-    submission = ScopeSubmission.model_validate(
-        {**scope.model_dump(by_alias=True), "channels": channels}
+        raise HTTPException(status_code=422, detail=_NO_SCOPE_DETAIL)
+    text, coverage = posts_block(session, scope, user_id=user_id, layout=layout)
+    return list(scope.channels), text, coverage.missing
+
+
+def _tag_prompt(
+    session: Session, body: TagRequest, user_id: uuid.UUID
+) -> tuple[str, int]:
+    """A Tag run's prompt from its Covered Posts, and how many were missing."""
+    run = own_tag_run(session, body.tag_run_id, user_id=user_id)
+    channels, posts_text, missing = _covered(
+        session, tag_run_scope(run), user_id=user_id, layout="tag"
     )
-    frozen = freeze(session, submission, user_id=user_id)
-    layout: Layout = "tag" if tag_format else "flat"
-    return posts_block(session, frozen, user_id=user_id, layout=layout)[0]
+    prompt = format_tag_prompt(
+        channels=channels,
+        channels_text=body.channels_text,
+        posts_text=posts_text,
+        all_tags=body.all_tags,
+        tag_mode=body.tag_mode,
+        tags_per_channel_min=body.tags_per_channel_min,
+        tags_per_channel_max=body.tags_per_channel_max,
+    )
+    return prompt, missing
 
 
 def _default_for(models: list[ModelInfo]) -> str:
@@ -242,10 +262,26 @@ def api_summary_prompt(
     return PromptResponse(prompt=prompt, missingPosts=coverage.missing)
 
 
+# The Chat named, never a Scope: each turn reads the Chat's Covered Posts, so
+# changing the Posts tab leaves an open Chat about the Posts it started from
+# (ADR-038). Semantic mode's ranked `postsText` still wins. The Artifact is read
+# before a Key is resolved, so a foreign id is the family's 404 and spends
+# nothing.
 @router.post("/chat/stream")
 async def api_chat_stream(
     body: ChatRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
+    chat = own_chat_session(session, body.chat_id, user_id=current_user.id)
+    channels: list[str] = []
+    if body.posts_text:
+        posts_text, missing = body.posts_text, 0
+    else:
+        channels, posts_text, missing = _covered(
+            session,
+            chat_scope(chat, session.get(ChatSessionPayload, chat.id)),
+            user_id=current_user.id,
+            layout="flat",
+        )
     model = body.model or default_model()
     provider, ai_key = _provider_for(
         session,
@@ -255,16 +291,10 @@ async def api_chat_stream(
     )
     template = RAG_CHAT_PROMPT if body.rag_mode else CHAT_PROMPT
     system = template.format(
-        channels=(body.channels_text or "").strip() or ", ".join(body.channels),
+        channels=body.channels_text.strip() or ", ".join(channels),
         language=body.language,
         rtl_instruction=rtl_instruction(body.language),
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-        ),
+        posts_text=posts_text,
     )
 
     chunks = provider.stream(
@@ -275,37 +305,26 @@ async def api_chat_stream(
         history=body.history,
     )
     return StreamingResponse(
-        _sse_text(chunks, session, ai_key), media_type="text/event-stream"
+        _sse_text(chunks, session, ai_key, missing_posts=missing),
+        media_type="text/event-stream",
     )
 
 
+# The Tag run named, never a Scope: the prompt reads its Covered Posts by
+# Channel (ADR-038). A foreign or absent id is the family's 404.
 @router.post("/tag/prompt")
 def api_tag_prompt(
     body: TagRequest, session: SessionDep, current_user: CurrentUser
 ) -> PromptResponse:
-    prompt = format_tag_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-            tag_format=True,
-        ),
-        all_tags=body.all_tags,
-        tag_mode=body.tag_mode,
-        tags_per_channel_min=body.tags_per_channel_min,
-        tags_per_channel_max=body.tags_per_channel_max,
-    )
-    return PromptResponse(prompt=prompt)
+    prompt, missing = _tag_prompt(session, body, current_user.id)
+    return PromptResponse(prompt=prompt, missingPosts=missing)
 
 
 @router.post("/tag/stream")
 async def api_tag_stream(
     body: TagRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
+    prompt, missing = _tag_prompt(session, body, current_user.id)
     model = body.model or default_model()
     provider, ai_key = _provider_for(
         session,
@@ -313,28 +332,12 @@ async def api_tag_stream(
         purpose=Purpose.TAG,
         key_id=body.ai_key_id,
     )
-    prompt = format_tag_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-            tag_format=True,
-        ),
-        all_tags=body.all_tags,
-        tag_mode=body.tag_mode,
-        tags_per_channel_min=body.tags_per_channel_min,
-        tags_per_channel_max=body.tags_per_channel_max,
-    )
-
     return StreamingResponse(
         _sse_text(
             provider.stream(prompt, model=model, temperature=body.temperature),
             session,
             ai_key,
+            missing_posts=missing,
         ),
         media_type="text/event-stream",
     )

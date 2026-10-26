@@ -1,50 +1,9 @@
-from typing import Any
-
-from pydantic import BaseModel, Field, model_validator
-
-from app.schemas.analysis_window import AnalysisWindowInput
-from app.schemas.post_filter import PostSelection, select_all
-from app.schemas.scope import (
-    SortOrder,
-    ViewMeasure,
-    upgrade_legacy_submission,
-)
+from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
     role: str
     text: str
-
-
-class PromptScopeInput(BaseModel):
-    """A Posts-feed scope the backend resolves into the prompt's posts block,
-    instead of the client shipping a pre-built ``postsText``. Mirrors the
-    frontend feed query params."""
-
-    # AW-02: stated, not computed by the browser. See `PostScopeRequest`.
-    window: AnalysisWindowInput | None = None
-    # PTR-05 (ADR-026): the prompt reads the Post selection, in the order
-    # below, spelled as `ScopeSubmission` spells it so a value it refuses is
-    # refused here too rather than 200ing a prompt over a Scope nobody can
-    # record. The keyword and the cap are part of a Selection rule's filter.
-    selection: PostSelection = Field(default_factory=select_all)
-    view_measure: ViewMeasure = Field("estimated", alias="viewMeasure")
-    sort: SortOrder = "newest"
-    group_by_channel: bool = Field(False, alias="groupByChannel")
-
-    # The previous bundle's spelling, keyword and cap, for one release: see
-    # `PostScopeRequest` and `legacy_selection`.
-    @model_validator(mode="before")
-    @classmethod
-    def _upgrade_legacy_shape(cls, data: Any) -> Any:
-        return upgrade_legacy_submission(data)
-
-    # `extra="forbid"`: see `PostScopeRequest`. The blast radius is largest
-    # here. A stale client posting the pre-AW-02 pair would resolve to an
-    # unbounded window, and this path has no `limit` to bound it — it would
-    # assemble a prompt from every Post the account can see and bill it to the
-    # caller's own AI Key.
-    model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
 class ModelInfo(BaseModel):
@@ -108,10 +67,19 @@ class SummaryPromptRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    channels: list[str] = []
+    """One turn of a Chat: the server reads the Chat's Covered Posts."""
+
+    # `extra="forbid"`, as on `SummaryPromptRequest`: a stale tab still sending
+    # the old `scope` body is a 422 that one reload fixes, never a turn over
+    # the Posts tab's selection of today.
+    model_config = {"populate_by_name": True, "extra": "forbid"}
+
+    chat_id: str = Field(alias="chatId")
     channels_text: str = Field("", alias="channelsText")
+    #: Semantic mode only: the Posts a meaning search ranked for this question,
+    #: which the server cannot reproduce. When set, it wins over the Chat's
+    #: Covered Posts.
     posts_text: str = Field("", alias="postsText")
-    scope: PromptScopeInput | None = None
     language: str = "English"
     model: str | None = None
     temperature: float = 0.7
@@ -126,8 +94,6 @@ class ChatRequest(BaseModel):
     #: **Client-supplied and untrusted.** It is checked against the caller
     #: before the secret is decrypted; a foreign id answers as an absent one.
     ai_key_id: str | None = Field(default=None, alias="aiKeyId")
-
-    model_config = {"populate_by_name": True}
 
 
 class EmbedRequest(BaseModel):
@@ -144,10 +110,13 @@ class TranslateRequest(BaseModel):
 
 
 class TagRequest(BaseModel):
-    channels: list[str]
+    """A Tag run's prompt: the server reads the run's Covered Posts."""
+
+    # `extra="forbid"`: see `ChatRequest`.
+    model_config = {"populate_by_name": True, "extra": "forbid"}
+
+    tag_run_id: str = Field(alias="tagRunId")
     channels_text: str = Field("", alias="channelsText")
-    posts_text: str = Field("", alias="postsText")
-    scope: PromptScopeInput | None = None
     all_tags: str = Field("(none yet)", alias="allTags")
     tag_mode: str = Field("add", alias="tagMode")
     model: str | None = None
@@ -162,5 +131,3 @@ class TagRequest(BaseModel):
     ai_key_id: str | None = Field(default=None, alias="aiKeyId")
     tags_per_channel_min: int | None = Field(default=None, alias="tagsPerChannelMin")
     tags_per_channel_max: int | None = Field(default=None, alias="tagsPerChannelMax")
-
-    model_config = {"populate_by_name": True}

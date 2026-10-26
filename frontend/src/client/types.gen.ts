@@ -1368,12 +1368,14 @@ export type ChatMessage = {
 
 /**
  * ChatRequest
+ *
+ * One turn of a Chat: the server reads the Chat's Covered Posts.
  */
 export type ChatRequest = {
     /**
-     * Channels
+     * Chatid
      */
-    channels?: Array<string>;
+    chatId: string;
     /**
      * Channelstext
      */
@@ -1382,7 +1384,6 @@ export type ChatRequest = {
      * Poststext
      */
     postsText?: string;
-    scope?: PromptScopeInput | null;
     /**
      * Language
      */
@@ -5478,40 +5479,6 @@ export type PromptResponse = {
 };
 
 /**
- * PromptScopeInput
- *
- * A Posts-feed scope the backend resolves into the prompt's posts block,
- * instead of the client shipping a pre-built ``postsText``. Mirrors the
- * frontend feed query params.
- */
-export type PromptScopeInput = {
-    /**
-     * Window
-     */
-    window?: ({
-        mode: 'live';
-    } & LiveAnalysisWindow) | ({
-        mode: 'fixed';
-    } & FixedAnalysisWindow) | null;
-    /**
-     * Selection
-     */
-    selection?: Array<SelectionRuleInput | SelectionPick>;
-    /**
-     * Viewmeasure
-     */
-    viewMeasure?: 'views' | 'estimated';
-    /**
-     * Sort
-     */
-    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
-    /**
-     * Groupbychannel
-     */
-    groupByChannel?: boolean;
-};
-
-/**
  * ProxyHealthResponse
  *
  * Proxies currently marked bad by the pool.
@@ -8089,21 +8056,18 @@ export type TagRenameRequest = {
 
 /**
  * TagRequest
+ *
+ * A Tag run's prompt: the server reads the run's Covered Posts.
  */
 export type TagRequest = {
     /**
-     * Channels
+     * Tagrunid
      */
-    channels: Array<string>;
+    tagRunId: string;
     /**
      * Channelstext
      */
     channelsText?: string;
-    /**
-     * Poststext
-     */
-    postsText?: string;
-    scope?: PromptScopeInput | null;
     /**
      * Alltags
      */

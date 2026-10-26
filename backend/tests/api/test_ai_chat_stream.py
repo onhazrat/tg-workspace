@@ -2,28 +2,37 @@
 
 The Provider is a fake handed back from `_provider_for`, so who pays is not
 under test here (`test_ai_key_payment_rule.py` owns that). What is: the system
-prompt a chat is grounded in, and the one rule every stream route shares, that
-a failure must never end with the `[DONE]` frame the browser reads as success,
-and must end with an `error` frame saying why.
+prompt a chat is grounded in (the Chat's Covered Posts, ADR-038), and the one
+rule every stream route shares, that a failure must never end with the
+`[DONE]` frame the browser reads as success, and must end with an `error`
+frame saying why.
 """
 
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session, col, select
 
 from app.ai.models import ChatMessage
 from app.api.routes import ai_routes
 from app.core.config import settings
+from app.core.db import engine
 from app.main import app
+from app.models_tg import Post
 from app.services.ai_keys import ResolvedKey
+from tests.utils.tenancy import follow_channels
 from tests.utils.utils import get_superuser_token_headers
 
 URL = f"{settings.API_V1_STR}/ai/chat/stream"
+MINUTE = 60_000
+WINDOW = {"mode": "fixed", "start": 0, "end": 900 * MINUTE}
+MISSING_NONE = json.dumps({"missingPosts": 0})
 
 
 class _ProviderError(Exception):
@@ -64,25 +73,73 @@ def _frames(body: str) -> list[str]:
     return [line.removeprefix("data: ") for line in body.split("\n\n") if line]
 
 
-def test_a_chat_streams_its_chunks_then_done(
+def _open_chat(client: TestClient, channels: list[str]) -> str:
+    chat_id = str(uuid.uuid4())
+    opened = client.post(
+        f"{settings.API_V1_STR}/data/chat-sessions",
+        headers=get_superuser_token_headers(client),
+        json={"id": chat_id, "scope": {"channels": channels, "window": WINDOW}},
+    )
+    assert opened.status_code == 200, opened.text
+    return chat_id
+
+
+@pytest.fixture
+def chat_id(client: TestClient) -> str:
+    return _open_chat(client, [])
+
+
+def _seed(*posts: tuple[str, int]) -> None:
+    with Session(engine) as session:
+        for channel_name, post_id in posts:
+            session.add(
+                Post(
+                    channel_name=channel_name,
+                    post_id=post_id,
+                    text=f"{channel_name} post {post_id}",
+                    timestamp=post_id * MINUTE,
+                )
+            )
+        session.commit()
+        follow_channels(session, *{c for c, _ in posts})
+
+
+def test_a_turn_reads_the_chats_covered_posts(
     client: TestClient, provider: _FakeProvider
 ) -> None:
+    """Changing the Posts tab after the Chat opened changes nothing it reads.
+
+    The turn names the Chat, and nothing else about its Posts: a Post synced
+    into the window after the freeze is not read, and a reclaimed one is left
+    out and counted in the frame before the text.
+    """
+    _seed(("chan_a", 1), ("chan_a", 2), ("chan_b", 4))
+    chat_id = _open_chat(client, ["chan_a", "chan_b"])
+    with Session(engine) as session:
+        session.delete(session.exec(select(Post).where(col(Post.post_id) == 2)).one())
+        session.add(
+            Post(
+                channel_name="chan_a", post_id=3, text="too late", timestamp=3 * MINUTE
+            )
+        )
+        session.commit()
     history = [{"role": "user", "text": "earlier"}]
+
     r = client.post(
         URL,
         headers=get_superuser_token_headers(client),
         json={
+            "chatId": chat_id,
             "message": "what happened?",
-            "channels": ["chan_a", "chan_b"],
-            "postsText": "### chan_a\n- [ID 1] sample",
             "language": "Persian",
             "history": history,
         },
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers["content-type"].startswith("text/event-stream")
     assert _frames(r.text) == [
+        json.dumps({"missingPosts": 1}),
         json.dumps({"text": "one "}),
         json.dumps({"text": "two"}),
         "[DONE]",
@@ -92,8 +149,63 @@ def test_a_chat_streams_its_chunks_then_done(
     assert call["history"] == [ChatMessage(role="user", text="earlier")]
     system = call["system_instruction"]
     assert "### CHANNELS IN SCOPE\nchan_a, chan_b" in system
-    assert "### chan_a\n- [ID 1] sample" in system
+    assert "chan_a post 1" in system
+    assert "chan_b post 4" in system
+    assert "chan_a post 2" not in system
+    assert "too late" not in system
     assert "Right-to-Left" in system
+
+
+def test_a_semantic_turns_ranked_posts_win(
+    client: TestClient, provider: _FakeProvider
+) -> None:
+    """The server cannot reproduce a meaning search, so its Posts travel."""
+    _seed(("chan_a", 1))
+    chat_id = _open_chat(client, ["chan_a"])
+
+    r = client.post(
+        URL,
+        headers=get_superuser_token_headers(client),
+        json={
+            "chatId": chat_id,
+            "message": "q",
+            "postsText": "[chan_a] ID: 9\nranked",
+            "ragMode": True,
+        },
+    )
+
+    assert _frames(r.text)[0] == MISSING_NONE
+    system = provider.calls[0]["system_instruction"]
+    assert "[chan_a] ID: 9\nranked" in system
+    assert "chan_a post 1" not in system
+
+
+def test_an_absent_chat_is_not_found_and_spends_nothing(
+    client: TestClient, provider: _FakeProvider
+) -> None:
+    r = client.post(
+        URL,
+        headers=get_superuser_token_headers(client),
+        json={"chatId": "nope", "message": "q"},
+    )
+
+    assert r.status_code == 404
+    assert r.json()["detail"] == "Chat session not found"
+    assert provider.calls == []
+
+
+def test_a_scope_in_the_body_is_refused(
+    client: TestClient, provider: _FakeProvider, chat_id: str
+) -> None:
+    """A tab left open across the deploy fails clearly; one reload fixes it."""
+    for stale in ({"scope": {"window": WINDOW}}, {"channels": ["chan_a"]}):
+        r = client.post(
+            URL,
+            headers=get_superuser_token_headers(client),
+            json={"chatId": chat_id, "message": "q", **stale},
+        )
+        assert r.status_code == 422, stale
+    assert provider.calls == []
 
 
 @pytest.mark.parametrize(
@@ -101,13 +213,18 @@ def test_a_chat_streams_its_chunks_then_done(
     [(False, "### CHANNELS IN SCOPE"), (True, "RELEVANT POSTS:")],
 )
 def test_rag_mode_picks_the_retrieval_prompt(
-    client: TestClient, provider: _FakeProvider, rag_mode: bool, marker: str
+    client: TestClient,
+    provider: _FakeProvider,
+    chat_id: str,
+    rag_mode: bool,
+    marker: str,
 ) -> None:
     """**Mutation:** swap the two templates and both cases go red."""
     client.post(
         URL,
         headers=get_superuser_token_headers(client),
         json={
+            "chatId": chat_id,
             "message": "q",
             "channelsText": "chan_a (news)",
             "postsText": "p",
@@ -148,7 +265,7 @@ def test_a_provider_failure_mid_stream_never_sends_done(
     )
 
     assert "[DONE]" not in r.text
-    assert _frames(r.text)[0] == json.dumps({"text": "one "})
+    assert _frames(r.text)[:2] == [MISSING_NONE, json.dumps({"text": "one "})]
     assert noted == [("cred-1", "API key not valid")]
     assert "error" in json.loads(_frames(r.text)[-1])
 
@@ -251,5 +368,7 @@ def test_a_failure_nothing_answered_keeps_its_traceback(
 
 
 def client_post(url: str, body: dict[str, Any]) -> Any:
+    """A turn of a fresh Chat, with a server error answered rather than raised."""
     lenient = TestClient(app, raise_server_exceptions=False)
+    body = {"chatId": _open_chat(lenient, []), **body}
     return lenient.post(url, headers=get_superuser_token_headers(lenient), json=body)

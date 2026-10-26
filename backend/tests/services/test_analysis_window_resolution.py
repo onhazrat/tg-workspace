@@ -445,7 +445,7 @@ def _superuser(client: TestClient) -> dict[str, str]:
         ("/rag/search", {"query": "q", **LEGACY_PAIR}),
         (
             "/ai/tag/prompt",
-            {"channels": ["alpha"], "postsText": "", "scope": LEGACY_PAIR},
+            {"tagRunId": "any", "scope": LEGACY_PAIR},
         ),
     ],
 )
