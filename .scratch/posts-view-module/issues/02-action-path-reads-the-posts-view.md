@@ -26,5 +26,5 @@ do not change.
 - [x] The Posts view tests grow a case for the Scope counts read used by the check, pinning its key and body.
 - [x] Generate and copy prompt with no Posts selected still refuse with the same message, and a selection changed just before is read fresh; covered at the AI context's existing seam.
 - [x] No module names the prompt-posts input, the browser's prompt Scope type or the removed hook.
-- [ ] The full Playwright suite passes, run serially; only a mock that asserts the count request's body changes, if any does.
-- [ ] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
+- [x] The full Playwright suite passes, run serially; only a mock that asserts the count request's body changes, if any does.
+- [x] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
