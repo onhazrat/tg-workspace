@@ -172,6 +172,11 @@ test.describe("Quota", () => {
     await popover(page).getByRole("button", { name: "Bulk actions" }).click()
     await popover(page).getByLabel("Allowance").fill("0")
     await popover(page).getByLabel("Ceiling").fill("500")
+    // The portalled popover rides on its pill; once the page scrolls the pill
+    // off screen, scrolling the popover itself cannot bring it back.
+    await overrides(page)
+      .getByRole("button", { name: "Override" })
+      .scrollIntoViewIfNeeded()
     await popover(page).getByRole("button", { name: "Save override" }).click()
     const saved = overrides(page)
       .getByTestId("quota-overrides")
