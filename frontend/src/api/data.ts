@@ -6,7 +6,7 @@ import type {
   SummarySubmitRequest,
   TagRunSubmitRequest,
 } from "../client"
-import { type AnalysisWindowInput, fixedWindow } from "../lib/analysis-window"
+import { fixedWindow } from "../lib/analysis-window"
 import type {
   DiscoveryCandidate,
   DiscoveryScopeCounts,
@@ -107,28 +107,16 @@ export type PostFeedQuery = PostFilteredQuery & {
 }
 
 /**
- * A scope an AI endpoint resolves into its posts block server-side: the
- * window, the Post selection and the order (PTR-05). The `channels` list
- * travels at the request top level, so it is omitted here. Never the Post
- * filter, the keyword or the cap, which decide what the Posts tab shows and
- * reach an Action only inside a Selection rule (ADR-026).
+ * What the Posts tab selects now, as the Action panel counts it before an
+ * Artifact opens: the window, the Post selection and the order (PTR-05). The
+ * `channels` list is passed beside it. The prompt never takes it: an AI route
+ * names its Artifact and reads the Covered Posts that froze (ADR-038).
  */
 export type PromptScope = Pick<
   PostFeedQuery,
   "startDate" | "endDate" | "viewMeasure" | "sort" | "groupByChannel"
 > & {
   selection: PostSelection
-  /**
-   * A frozen window, sent verbatim instead of being derived from the pair
-   * (AW-05).
-   *
-   * An Artifact's producer runs *after* its Scope was frozen, and it has to
-   * select the Posts the record names. Re-deriving would put this browser's
-   * estimate of the server minute back in the path — `fixedWindow` clamps the
-   * end against it — so a late estimate would quietly narrow the window the
-   * Artifact claims it used.
-   */
-  window?: AnalysisWindowInput
 }
 
 /**
@@ -186,35 +174,6 @@ export function postsFeedBody(params: PostFeedQuery): Record<string, unknown> {
   if (params.limit != null) body.limit = params.limit
   if (params.offset != null) body.offset = params.offset
   return body
-}
-
-/**
- * A prompt scope shaped for a JSON request body (AW-02).
- *
- * The same conversion `postScopeBody` makes, for the scope the AI endpoints
- * resolve into their own posts block. Separate because the AI request puts the
- * scope in a nested `scope` object and carries its channels at the top level,
- * so the two bodies are not the same shape around the same window.
- */
-/**
- * A frozen Scope's boundaries, as a window to select by — verbatim (AW-05).
- *
- * Deliberately not `fixedWindow`, which floors and clamps against this
- * browser's estimate of the server minute. These two instants were already
- * resolved server-side; touching them again is how the skew comes back.
- */
-export function frozenWindow(scope: {
-  start: number
-  end: number
-}): AnalysisWindowInput {
-  return { mode: "fixed", start: scope.start, end: scope.end }
-}
-
-export function promptScopeBody(scope: PromptScope): Record<string, unknown> {
-  const { startDate, endDate, window: frozen, selection, ...rest } = scope
-  const window = frozen ?? fixedWindow(startDate, endDate)
-  const body = { ...rest, selection: selectionBody(selection) }
-  return window ? { ...body, window } : body
 }
 
 /**

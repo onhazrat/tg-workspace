@@ -23,6 +23,7 @@ import {
   type ProvisionalRow,
   promptPosts,
   searchFilterExtra,
+  withMissingPosts,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
 import { staleSelectedChannels } from "@/lib/chat-sessions/chat-turn"
@@ -188,7 +189,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     await saveSummary({
       id,
       promptText: prompt,
-      ...(missingPosts > 0 ? { missingPosts } : {}),
+      ...withMissingPosts(missingPosts),
     } as Summary)
     return prompt
   }

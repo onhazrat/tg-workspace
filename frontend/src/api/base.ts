@@ -233,6 +233,8 @@ export async function* sseTextStream(
   path: string,
   body: Record<string, unknown>,
   field: string,
+  /** Every frame, as parsed; how a caller reads a frame that carries no text. */
+  onFrame?: (frame: Record<string, unknown>) => void,
 ): AsyncGenerator<string> {
   const response = await fetchOk(path, {
     method: "POST",
@@ -247,6 +249,7 @@ export async function* sseTextStream(
       continue /* ignore malformed SSE chunks */
     }
     if (!parsed || typeof parsed !== "object") continue
+    onFrame?.(parsed)
     if (typeof parsed.error === "string") throw new Error(parsed.error)
     if (typeof parsed[field] === "string" && parsed[field])
       yield parsed[field] as string

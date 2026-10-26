@@ -3,10 +3,10 @@ import type { PostScopeQuery } from "@/api/data"
 import { DEFAULT_SELECTION } from "@/lib/posts/post-selection"
 import {
   errorText,
-  frozenScope,
   promptPosts,
   readStream,
   searchFilterExtra,
+  withMissingPosts,
   withProvisionalRow,
 } from "./artifact-run"
 
@@ -80,19 +80,9 @@ describe("withProvisionalRow", () => {
   })
 })
 
-describe("frozenScope", () => {
-  const scope = { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION }
-
-  it("selects by the frozen window, keeping the selection", () => {
-    expect(frozenScope(scope, { start: 10, end: 20 })).toEqual({
-      ...scope,
-      window: { mode: "fixed", start: 10, end: 20 },
-    })
-  })
-
-  it("leaves the scope alone with nothing frozen", () => {
-    expect(frozenScope(scope, null)).toBe(scope)
-  })
+it("withMissingPosts stores a count above zero and never a zero", () => {
+  expect(withMissingPosts(3)).toEqual({ missingPosts: 3 })
+  expect(withMissingPosts(0)).toEqual({})
 })
 
 it("searchFilterExtra drops empty filters but keeps the channel switch", () => {
@@ -126,7 +116,7 @@ it("readStream accumulates the text, reports it per chunk, and keeps the last ch
 })
 
 describe("promptPosts", () => {
-  it("sends the scope and sums the server's per-channel counts", async () => {
+  it("counts what the Posts tab selects, summing the server's per-channel counts", async () => {
     const asked: PostScopeQuery[] = []
     const result = await promptPosts(
       { scope: { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION } },
@@ -136,11 +126,7 @@ describe("promptPosts", () => {
         return { a: 3, b: 4 }
       },
     )
-    expect(result).toEqual({
-      scope: { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION },
-      postsText: "",
-      postCount: 7,
-    })
+    expect(result).toEqual({ postCount: 7 })
     expect(asked).toEqual([
       {
         channelNames: ["a", "b"],
@@ -149,22 +135,5 @@ describe("promptPosts", () => {
         selection: DEFAULT_SELECTION,
       },
     ])
-  })
-
-  it("counts inside the frozen window when there is one", async () => {
-    const asked: PostScopeQuery[] = []
-    const result = await promptPosts(
-      { scope: { startDate: 1, endDate: 2, selection: DEFAULT_SELECTION } },
-      ["a"],
-      async (q) => {
-        asked.push(q)
-        return {}
-      },
-      { start: 10, end: 20 },
-    )
-    const window = { mode: "fixed" as const, start: 10, end: 20 }
-    expect(result.scope?.window).toEqual(window)
-    expect(result.postCount).toBe(0)
-    expect(asked[0]).toMatchObject({ window })
   })
 })

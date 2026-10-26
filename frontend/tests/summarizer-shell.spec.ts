@@ -101,15 +101,18 @@ test.describe("TG Workspace shell", () => {
     const third = await seedTestChannel(page)
     const tagName = `bulk${Date.now()}`
 
+    // The prompt names its Tag run and never a Scope (ADR-038).
+    const tagPromptBodies: Record<string, unknown>[] = []
     await page.route("**/api/v1/ai/tag/prompt", async (route) => {
       if (route.request().method() !== "POST") {
         await route.continue()
         return
       }
+      tagPromptBodies.push(route.request().postDataJSON())
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ prompt: "tag prompt for e2e" }),
+        body: JSON.stringify({ prompt: "tag prompt for e2e", missingPosts: 0 }),
       })
     })
 
@@ -141,6 +144,9 @@ test.describe("TG Workspace shell", () => {
     await expect(
       page.getByText(/tag prompt copied/i, { exact: false }),
     ).toBeVisible({ timeout: 15_000 })
+    expect(tagPromptBodies).toHaveLength(1)
+    expect(tagPromptBodies[0]).toHaveProperty("tagRunId")
+    expect(tagPromptBodies[0]).not.toHaveProperty("scope")
 
     const pastePayload = JSON.stringify({
       [`@${first}`]: [tagName],

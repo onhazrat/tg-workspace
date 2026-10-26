@@ -1,5 +1,5 @@
 import { api } from "@/api"
-import type { PromptScope } from "@/api/data"
+import type { TagPromptBody } from "@/api/ai"
 import { saveEmbeddingLog } from "@/lib/logs/write"
 import type { EmbeddingLog } from "../types"
 
@@ -15,6 +15,22 @@ export interface LLMStreamResult {
   prompt: string
   config: { temperature: number }
   systemInstruction?: string
+  /**
+   * Covered Posts the prompt left out (ADR-038). The stream's first frame
+   * says, so read it once the stream has started; 0 until then.
+   */
+  missingPosts: () => number
+}
+
+/** Remember the Missing Post count a stream's first frame carries. */
+function missingPostsFrame() {
+  let missing = 0
+  return {
+    onFrame: (frame: Record<string, unknown>) => {
+      if (typeof frame.missingPosts === "number") missing = frame.missingPosts
+    },
+    read: () => missing,
+  }
 }
 
 async function* wrapStream(
@@ -76,34 +92,39 @@ export const generateEmbeddings = async (
   }
 }
 
+/**
+ * A Chat turn over the Chat's own Covered Posts: the server reads what the
+ * Chat froze, so the browser names it and sends no Posts (ADR-038).
+ */
 export const generateChatStream = async (
-  channels: string[],
+  chatId: string,
   channelsText: string,
-  postsText: string,
   language: string,
   model: string,
   history: { role: "user" | "model"; text: string }[],
   userMessage: string,
   temperature: number = 0.7,
-  scope?: PromptScope,
 ): Promise<LLMStreamResult> => {
   try {
-    const stream = api.chatStream({
-      channels,
-      channelsText,
-      postsText,
-      language,
-      model,
-      history,
-      message: userMessage,
-      temperature,
-      ragMode: false,
-      scope,
-    })
+    const missing = missingPostsFrame()
+    const stream = api.chatStream(
+      {
+        chatId,
+        channelsText,
+        language,
+        model,
+        history,
+        message: userMessage,
+        temperature,
+        ragMode: false,
+      },
+      missing.onFrame,
+    )
     return {
       stream: wrapStream(stream),
       prompt: userMessage,
       config: { temperature },
+      missingPosts: missing.read,
     }
   } catch (error: unknown) {
     throw new AIServiceError(
@@ -112,7 +133,9 @@ export const generateChatStream = async (
   }
 }
 
+/** A semantic Chat turn: the Posts a meaning search ranked travel with it. */
 export const chatWithHistoryStream = async (
+  chatId: string,
   contextPosts: {
     text: string
     channelName: string
@@ -134,7 +157,7 @@ export const chatWithHistoryStream = async (
 
   try {
     const stream = api.chatStream({
-      channels: [],
+      chatId,
       postsText,
       language,
       model,
@@ -147,6 +170,8 @@ export const chatWithHistoryStream = async (
       stream: wrapStream(stream),
       prompt: userMessage,
       config: { temperature },
+      // The ranked Posts travel with the turn, so none can go missing.
+      missingPosts: () => 0,
     }
   } catch (error: unknown) {
     throw new AIServiceError(
@@ -167,38 +192,22 @@ export const translateTextBatch = async (
   return result.translations
 }
 
-export const getTagPrompt = async (body: {
-  channels: string[]
-  channelsText: string
-  postsText: string
-  allTags: string
-  tagMode: "add" | "remove"
-  language: string
-  model: string
-  temperature?: number
-  scope?: PromptScope
-}): Promise<string> => {
-  const result = await api.tagPrompt(body)
-  return result.prompt
-}
+/** A Tag run's prompt from its Covered Posts, and how many were missing. */
+export const getTagPrompt = (
+  body: TagPromptBody,
+): Promise<{ prompt: string; missingPosts: number }> => api.tagPrompt(body)
 
-export const generateTagStream = async (body: {
-  channels: string[]
-  channelsText: string
-  postsText: string
-  allTags: string
-  tagMode: "add" | "remove"
-  language: string
-  model: string
-  temperature?: number
-  scope?: PromptScope
-}): Promise<LLMStreamResult> => {
+export const generateTagStream = async (
+  body: TagPromptBody,
+): Promise<LLMStreamResult> => {
   try {
-    const stream = api.tagStream(body)
+    const missing = missingPostsFrame()
+    const stream = api.tagStream(body, missing.onFrame)
     return {
       stream: wrapStream(stream),
-      prompt: `tag_mode=${body.tagMode}; channels=${body.channels.join(",")}`,
+      prompt: `tag_mode=${body.tagMode}; tagRun=${body.tagRunId}`,
       config: { temperature: body.temperature ?? 0.7 },
+      missingPosts: missing.read,
     }
   } catch (error: unknown) {
     throw new AIServiceError(

@@ -1524,7 +1524,7 @@
       "comment": "A channel synced within this long of the window's end counts as current.",
       "expression": "60_000",
       "file": "frontend/src/lib/chat-sessions/chat-turn.ts",
-      "line": 19,
+      "line": 20,
       "name": "SYNC_SLACK_MS",
       "value": 60000
     },

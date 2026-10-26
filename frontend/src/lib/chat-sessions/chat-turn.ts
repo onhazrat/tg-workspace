@@ -3,6 +3,7 @@
  * tested directly. `ChatContext` is the only caller; it keeps the streaming,
  * the saving and the state.
  */
+import { withMissingPosts } from "@/lib/artifacts/artifact-run"
 import type {
   Channel,
   ChatMessage,
@@ -65,8 +66,22 @@ export interface TurnResult {
   systemInstruction: string
   /** Semantic mode only: the posts the answer was grounded in. */
   sources?: Post[]
-  postCount: number
+  /**
+   * Semantic mode only: how many Posts it ranked. A turn over the Chat's
+   * Covered Posts leaves the count the Chat recorded at submission.
+   */
+  postCount?: number
+  /** Covered Posts this turn's prompt left out (ADR-038). */
+  missingPosts?: number
 }
+
+/** The answer's turn as the transcript keeps it. */
+export const answerTurn = (turn: TurnResult): ChatMessage => ({
+  role: "model",
+  text: turn.text,
+  sources: turn.sources,
+  ...withMissingPosts(turn.missingPosts ?? 0),
+})
 
 function totalTokens(chunk: unknown): number | undefined {
   const usage = (chunk as { usageMetadata?: { totalTokenCount?: number } })
@@ -123,13 +138,9 @@ export function chatSessionRecord(
 ): Partial<ChatSession> {
   return {
     id: sessionId,
-    postCount: turn.postCount,
+    ...(turn.postCount === undefined ? {} : { postCount: turn.postCount }),
     timestamp: now,
-    messages: [
-      ...history,
-      { role: "user", text: message },
-      { role: "model", text: turn.text, sources: turn.sources },
-    ],
+    messages: [...history, { role: "user", text: message }, answerTurn(turn)],
   }
 }
 

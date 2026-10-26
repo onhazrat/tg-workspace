@@ -1,7 +1,19 @@
 import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 
 import { request, sseTextStream } from "./base"
-import { type PromptScope, promptScopeBody } from "./data"
+
+/** Every frame of a stream; the first carries its Missing Post count. */
+type OnFrame = (frame: Record<string, unknown>) => void
+
+/** A Tag run named by id: the server reads its Covered Posts, never a Scope. */
+export type TagPromptBody = {
+  tagRunId: string
+  channelsText: string
+  allTags: string
+  tagMode: "add" | "remove"
+  model?: string
+  temperature?: number
+}
 
 /**
  * Stamp the paying Key onto an Artifact request (BYOK-01).
@@ -20,22 +32,6 @@ import { type PromptScope, promptScopeBody } from "./data"
 const withAiKey = (body: Record<string, unknown>): Record<string, unknown> => {
   const aiKeyId = selectedAiKeyId()
   return aiKeyId ? { ...body, aiKeyId } : body
-}
-
-/**
- * Convert a Scope's Analysis window to the wire form (AW-02).
- *
- * Here rather than at each call site for the same reason `withAiKey` is: the
- * three streams build their bodies in their contexts and hand over an opaque
- * bag, so this is the last place that still knows a `scope` is in there. A
- * body with no scope passes through untouched — the semantic and related paths
- * ship a pre-built `postsText` instead.
- */
-const withPromptScope = (
-  body: Record<string, unknown>,
-): Record<string, unknown> => {
-  const scope = body.scope as PromptScope | undefined
-  return scope ? { ...body, scope: promptScopeBody(scope) } : body
 }
 
 export const aiApi = {
@@ -69,35 +65,18 @@ export const aiApi = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
-  tagPrompt: (body: {
-    channels: string[]
-    channelsText: string
-    postsText: string
-    allTags: string
-    tagMode: "add" | "remove"
-    language: string
-    model?: string
-    temperature?: number
-    scope?: PromptScope
-  }) =>
-    request<{ prompt: string }>("/api/v1/ai/tag/prompt", {
+  /** A Tag run's prompt, read from its Covered Posts (ADR-038). */
+  tagPrompt: (body: TagPromptBody) =>
+    request<{ prompt: string; missingPosts: number }>("/api/v1/ai/tag/prompt", {
       method: "POST",
-      body: JSON.stringify(withPromptScope(body)),
+      body: JSON.stringify(body),
     }),
 
-  tagStream: (body: Record<string, unknown>) =>
-    sseTextStream(
-      "/api/v1/ai/tag/stream",
-      withAiKey(withPromptScope(body)),
-      "text",
-    ),
+  tagStream: (body: TagPromptBody, onFrame?: OnFrame) =>
+    sseTextStream("/api/v1/ai/tag/stream", withAiKey(body), "text", onFrame),
 
-  chatStream: (body: Record<string, unknown>) =>
-    sseTextStream(
-      "/api/v1/ai/chat/stream",
-      withAiKey(withPromptScope(body)),
-      "text",
-    ),
+  chatStream: (body: Record<string, unknown>, onFrame?: OnFrame) =>
+    sseTextStream("/api/v1/ai/chat/stream", withAiKey(body), "text", onFrame),
 
   embeddings: (texts: string[], model?: string) =>
     request<{ vectors: number[][]; dimensions: number }>(

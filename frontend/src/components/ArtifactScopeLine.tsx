@@ -29,12 +29,14 @@ interface ArtifactScopeLineProps {
   className?: string
 }
 
-export const ArtifactScopeLine: React.FC<ArtifactScopeLineProps> = ({
-  artifact,
-  missingPosts,
-  className,
-}) => {
-  const applyScope = useApplyArtifactScope()
+export const ArtifactScopeLine: React.FC<ArtifactScopeLineProps> = (props) => (
+  <ArtifactScopeLineView {...props} onUseScope={useApplyArtifactScope()} />
+)
+
+/** The line from props alone; `ArtifactScopeLine` adds the workspace action. */
+export const ArtifactScopeLineView: React.FC<
+  ArtifactScopeLineProps & { onUseScope: (scope: FrozenScope) => void }
+> = ({ artifact, missingPosts, className, onUseScope }) => {
   const scope = artifact?.scope
   const windowText = artifactWindowText(artifact)
 
@@ -69,7 +71,7 @@ export const ArtifactScopeLine: React.FC<ArtifactScopeLineProps> = ({
         size="sm"
         variant="secondary"
         data-testid="use-this-scope"
-        onClick={() => applyScope(scope)}
+        onClick={() => onUseScope(scope)}
       >
         Use this Scope
       </TgButton>

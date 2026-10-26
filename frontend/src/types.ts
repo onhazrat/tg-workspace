@@ -542,6 +542,11 @@ export type TagRun = AlwaysSent<
       tagsAdded: number
       tagsRemoved: number
     }
+    /**
+     * Covered Posts its prompt left out (ADR-038), written beside the
+     * `promptText` it describes. Absent at zero. Persisted in server `extra`.
+     */
+    missingPosts?: number
   }
 
 /**
@@ -554,6 +559,8 @@ export interface ChatMessage {
   role: "user" | "model"
   text: string
   sources?: Post[]
+  /** An answer's Covered Posts its prompt left out (ADR-038); absent at zero. */
+  missingPosts?: number
 }
 
 /**
