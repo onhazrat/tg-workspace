@@ -1,12 +1,5 @@
 import type React from "react"
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from "react"
-import { scopedStorage } from "@/lib/storage/scoped"
+import { createContext, type ReactNode, useContext, useState } from "react"
 import {
   useChatSessionParam,
   useSummaryParam,
@@ -35,10 +28,6 @@ interface UIContextType {
    * its own. A chat depends on its scope, not on a summary.
    */
   currentChatSessionId: string | null
-  includeChannelBioInPrompt: boolean
-  setIncludeChannelBioInPrompt: React.Dispatch<React.SetStateAction<boolean>>
-  includeChannelTagsInPrompt: boolean
-  setIncludeChannelTagsInPrompt: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined)
@@ -58,30 +47,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
    */
   const { summaryId: currentSummaryId } = useSummaryParam()
   const { chatSessionId: currentChatSessionId } = useChatSessionParam()
-  const [includeChannelBioInPrompt, setIncludeChannelBioInPrompt] =
-    useState<boolean>(() => {
-      if (typeof window === "undefined") return false
-      return scopedStorage.getItem("prompt_includeChannelBio") === "true"
-    })
-  const [includeChannelTagsInPrompt, setIncludeChannelTagsInPrompt] =
-    useState<boolean>(() => {
-      if (typeof window === "undefined") return false
-      return scopedStorage.getItem("prompt_includeChannelTags") === "true"
-    })
-
-  useEffect(() => {
-    scopedStorage.setItem(
-      "prompt_includeChannelBio",
-      String(includeChannelBioInPrompt),
-    )
-  }, [includeChannelBioInPrompt])
-
-  useEffect(() => {
-    scopedStorage.setItem(
-      "prompt_includeChannelTags",
-      String(includeChannelTagsInPrompt),
-    )
-  }, [includeChannelTagsInPrompt])
 
   return (
     <UIContext.Provider
@@ -95,10 +60,6 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setSummarizing,
         currentSummaryId,
         currentChatSessionId,
-        includeChannelBioInPrompt,
-        setIncludeChannelBioInPrompt,
-        includeChannelTagsInPrompt,
-        setIncludeChannelTagsInPrompt,
       }}
     >
       {children}

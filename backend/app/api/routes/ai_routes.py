@@ -11,13 +11,11 @@ from app.ai.base import LLMProvider
 from app.ai.failures import failure_detail, provider_code
 from app.ai.models import (
     ChatRequest,
-    CompletionResult,
     EmbeddingResult,
     EmbedRequest,
     ModelInfo,
     ModelListRequest,
-    PromptScopeInput,
-    SummaryRequest,
+    SummaryPromptRequest,
     TagRequest,
     TranslateRequest,
 )
@@ -29,15 +27,12 @@ from app.ai.registry import (
 )
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
-from app.prompts.summary import format_summary_prompt, rtl_instruction
-from app.prompts.tagging import format_tag_prompt
-from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
+from app.models_tg import SummaryPayload
 from app.schemas.ai import (
     ModelListResponse,
     PromptResponse,
     TranslateResponse,
 )
-from app.schemas.post_filter import to_steps
 from app.services.ai_keys import (
     AI_KEY_REJECTED_DETAIL,
     Purpose,
@@ -45,12 +40,9 @@ from app.services.ai_keys import (
     record_validation,
     resolve_ai_key,
 )
-from app.services.analysis_window import resolve_analysis_window
-from app.services.prompt_assembly import (
-    PromptScope,
-    assemble_posts_text,
-    assemble_tag_posts_text,
-)
+from app.services.artifact_coverage import MISSING_POSTS_KEY
+from app.services.artifact_prompts import chat_system_prompt, summary_prompt, tag_prompt
+from app.services.summaries import own_summary
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
@@ -101,9 +93,16 @@ def _note_rejection(session: Session, key: ResolvedKey, exc: BaseException) -> b
 
 
 async def _sse_text(
-    chunks: AsyncIterator[str], session: Session, key: ResolvedKey
+    chunks: AsyncIterator[str],
+    session: Session,
+    key: ResolvedKey,
+    *,
+    missing_posts: int = 0,
 ) -> AsyncIterator[str]:
     """Frame a Provider's text stream as SSE for `sseTextStream`.
+
+    The first frame is the Missing Post count (ADR-038): how many of the
+    Artifact's Covered Posts the prompt left out, known before any text.
 
     A failure ends with an `error` frame and **never** with `[DONE]`, which the
     browser reads as a clean end: swallowing the exception into `[DONE]` once
@@ -112,6 +111,7 @@ async def _sse_text(
     say "an unexpected error occurred" about a model that was merely busy. The
     `error` frame keeps the rule and says why.
     """
+    yield f"data: {json.dumps({MISSING_POSTS_KEY: missing_posts})}\n\n"
     try:
         async for chunk in chunks:
             yield f"data: {json.dumps({'text': chunk})}\n\n"
@@ -130,43 +130,6 @@ async def _sse_text(
         yield f"data: {json.dumps({'error': detail})}\n\n"
         return
     yield "data: [DONE]\n\n"
-
-
-def _resolve_posts_text(
-    session: Session,
-    *,
-    user_id: uuid.UUID,
-    channels: list[str],
-    posts_text: str,
-    scope: PromptScopeInput | None,
-    tag_format: bool = False,
-) -> str:
-    """Prompt posts block: an explicit client-built ``postsText`` wins (the
-    semantic/related path, which the server cannot reproduce); otherwise the
-    backend resolves the scope itself. Tag prompts use the channel-grouped
-    chronological format, summary/chat the flat one.
-
-    Background regeneration used to be in the first group too. It is not any
-    more — it applies no filters beyond the channels and the shifted window, so
-    it is fully expressible as a scope and now sends one (A1b, pinned by
-    ``tests/api/test_autoregen_scope_parity.py``)."""
-    if posts_text:
-        return posts_text
-    if scope is None:
-        return ""
-    window = resolve_analysis_window(scope.window)
-    prompt_scope = PromptScope(
-        channels=channels,
-        start_date=window.start,
-        end_date=window.end,
-        steps=to_steps(scope.selection),
-        view_measure=scope.view_measure,
-        sort=scope.sort,
-        group_by_channel=scope.group_by_channel,
-    )
-    if tag_format:
-        return assemble_tag_posts_text(session, prompt_scope, user_id=user_id)
-    return assemble_posts_text(session, prompt_scope, user_id=user_id)
 
 
 def _default_for(models: list[ModelInfo]) -> str:
@@ -232,64 +195,32 @@ async def api_list_models(
     return ModelListResponse(models=models, default=_default_for(models))
 
 
-@router.post("/summary")
-async def api_summary(
-    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
-) -> CompletionResult:
-    model = body.model or default_model()
-    provider, ai_key = _provider_for(
-        session,
-        user_id=current_user.id,
-        purpose=Purpose.SUMMARY,
-        key_id=body.ai_key_id,
-    )
-    prompt = format_summary_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        language=body.language,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-        ),
-    )
-    # Returned directly: `CompletionResult` is already a Pydantic model, and
-    # the old `.model_dump()` existed only to satisfy a `dict` annotation.
-    try:
-        return await provider.complete(
-            prompt, model=model, temperature=body.temperature
-        )
-    except Exception as exc:
-        if _note_rejection(session, ai_key, exc):
-            raise HTTPException(status_code=502, detail=AI_KEY_REJECTED_DETAIL) from exc
-        raise
-
-
+# The Summary named, never a Scope: the prompt reads its Covered Posts, the
+# same prompt Generate stores (ADR-038). A foreign or absent id is the
+# family's 404.
 @router.post("/summary/prompt")
 def api_summary_prompt(
-    body: SummaryRequest, session: SessionDep, current_user: CurrentUser
+    body: SummaryPromptRequest, session: SessionDep, current_user: CurrentUser
 ) -> PromptResponse:
-    prompt = format_summary_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        language=body.language,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-        ),
+    summary = own_summary(
+        session, body.summary_id, user_id=current_user.id, writing=False
     )
-    return PromptResponse(prompt=prompt)
+    prompt, coverage = summary_prompt(
+        session, summary, session.get(SummaryPayload, summary.id)
+    )
+    return PromptResponse(prompt=prompt, missing_posts=coverage.missing)
 
 
+# The Chat named, never a Scope: each turn reads the Chat's Covered Posts, so
+# changing the Posts tab leaves an open Chat about the Posts it started from
+# (ADR-038). Semantic mode's ranked `postsText` still wins. The Artifact is read
+# before a Key is resolved, so a foreign id is the family's 404 and spends
+# nothing.
 @router.post("/chat/stream")
 async def api_chat_stream(
     body: ChatRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
+    system, missing = chat_system_prompt(session, body, user_id=current_user.id)
     model = body.model or default_model()
     provider, ai_key = _provider_for(
         session,
@@ -297,20 +228,6 @@ async def api_chat_stream(
         purpose=Purpose.CHAT,
         key_id=body.ai_key_id,
     )
-    template = RAG_CHAT_PROMPT if body.rag_mode else CHAT_PROMPT
-    system = template.format(
-        channels=(body.channels_text or "").strip() or ", ".join(body.channels),
-        language=body.language,
-        rtl_instruction=rtl_instruction(body.language),
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-        ),
-    )
-
     chunks = provider.stream(
         body.message,
         model=model,
@@ -319,37 +236,26 @@ async def api_chat_stream(
         history=body.history,
     )
     return StreamingResponse(
-        _sse_text(chunks, session, ai_key), media_type="text/event-stream"
+        _sse_text(chunks, session, ai_key, missing_posts=missing),
+        media_type="text/event-stream",
     )
 
 
+# The Tag run named, never a Scope: the prompt reads its Covered Posts by
+# Channel (ADR-038). A foreign or absent id is the family's 404.
 @router.post("/tag/prompt")
 def api_tag_prompt(
     body: TagRequest, session: SessionDep, current_user: CurrentUser
 ) -> PromptResponse:
-    prompt = format_tag_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-            tag_format=True,
-        ),
-        all_tags=body.all_tags,
-        tag_mode=body.tag_mode,
-        tags_per_channel_min=body.tags_per_channel_min,
-        tags_per_channel_max=body.tags_per_channel_max,
-    )
-    return PromptResponse(prompt=prompt)
+    prompt, missing = tag_prompt(session, body, user_id=current_user.id)
+    return PromptResponse(prompt=prompt, missing_posts=missing)
 
 
 @router.post("/tag/stream")
 async def api_tag_stream(
     body: TagRequest, session: SessionDep, current_user: CurrentUser
 ) -> StreamingResponse:
+    prompt, missing = tag_prompt(session, body, user_id=current_user.id)
     model = body.model or default_model()
     provider, ai_key = _provider_for(
         session,
@@ -357,28 +263,12 @@ async def api_tag_stream(
         purpose=Purpose.TAG,
         key_id=body.ai_key_id,
     )
-    prompt = format_tag_prompt(
-        channels=body.channels,
-        channels_text=body.channels_text,
-        posts_text=_resolve_posts_text(
-            session,
-            user_id=current_user.id,
-            channels=body.channels,
-            posts_text=body.posts_text,
-            scope=body.scope,
-            tag_format=True,
-        ),
-        all_tags=body.all_tags,
-        tag_mode=body.tag_mode,
-        tags_per_channel_min=body.tags_per_channel_min,
-        tags_per_channel_max=body.tags_per_channel_max,
-    )
-
     return StreamingResponse(
         _sse_text(
             provider.stream(prompt, model=model, temperature=body.temperature),
             session,
             ai_key,
+            missing_posts=missing,
         ),
         media_type="text/event-stream",
     )
@@ -390,7 +280,7 @@ async def api_embeddings(
 ) -> EmbeddingResult:
     model = body.model or settings.EMBEDDING_MODEL
     provider, _ = _provider_for(session, user_id=None, purpose=Purpose.EMBED)
-    # Same as `/summary`: `EmbeddingResult` is already a Pydantic model.
+    # `EmbeddingResult` is already a Pydantic model.
     return await provider.embed(body.texts, model=model)
 
 

@@ -230,7 +230,11 @@ export const SummaryView: React.FC = () => {
             </CitationRendererProvider>
           )}
           scopeLine={(artifact, className) => (
-            <ArtifactScopeLine artifact={artifact} className={className} />
+            <ArtifactScopeLine
+              artifact={artifact}
+              missingPosts={artifact.missingPosts}
+              className={className}
+            />
           )}
           cited={cited}
           workspace={workspace}

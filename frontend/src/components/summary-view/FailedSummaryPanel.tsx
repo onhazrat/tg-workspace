@@ -13,6 +13,7 @@ import {
 import { type ReactNode, useState } from "react"
 import { toast } from "sonner"
 import type { SummaryAttemptResponse } from "@/client"
+import { MissingPostsChip } from "@/components/MissingPostsChip"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgIconButton } from "@/components/ui/tg-icon-button"
 import { formatSummaryModelLabel } from "@/constants"
@@ -225,6 +226,10 @@ function FailedHeader({
       </div>
       <p className="mt-1 break-words text-sm text-app-ink/80">
         {summaryScopeLine(summary, zone)}
+        <MissingPostsChip
+          count={summary.missingPosts}
+          covered={summary.scope?.scopedPostCount}
+        />
       </p>
       <p className="mt-0.5 break-words text-xs text-app-ink/50">
         {formatSummaryModelLabel(summary.model)} · {summary.language} · started{" "}

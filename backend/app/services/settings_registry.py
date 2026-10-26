@@ -297,7 +297,15 @@ PUBLISHING_KEY = "publishing"
 #: SET-05's AI preferences. The field names are the frontend's `SettingsContext`
 #: keys, because the section is read and written in that shape.
 AI_PREFS_KEY = "ai_prefs"
-AI_PREF_FIELDS = frozenset({"selectedModel", "aiLanguage", "aiTemperature"})
+AI_PREF_FIELDS = frozenset(
+    {
+        "selectedModel",
+        "aiLanguage",
+        "aiTemperature",
+        "includeChannelBio",
+        "includeChannelTags",
+    }
+)
 
 USER_KEYS: dict[str, str] = {
     PUBLISHING_KEY: (
@@ -323,7 +331,10 @@ USER_KEYS: dict[str, str] = {
         "The model, language and temperature this account's Summaries, Chats "
         "and Tag runs use (SET-05). Personal because each account runs on its "
         "own Key and reads in its own language, and kept on the account rather "
-        "than in one browser so the choice follows it to every device."
+        "than in one browser so the choice follows it to every device. Also "
+        "whether their prompts describe each Channel by its bio and the "
+        "account's tags (AC-03): the scheduler builds a regeneration's prompt "
+        "with no browser in hand, so the switches have to be the account's."
     ),
 }
 

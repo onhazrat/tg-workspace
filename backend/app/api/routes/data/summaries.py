@@ -131,7 +131,6 @@ def submit_summary(
         derived_from=body.derived_from,
         language=body.language,
         model=body.model,
-        post_count=body.post_count,
         extra=body.extra,
     )
     touch_sync(session, "summaries")
@@ -217,13 +216,15 @@ def record_summary_failure(
 # SFR-02, ADR-030. Not `POST .../attempts`: that path is the list's, and a spend
 # path is classified before the safe-method shortcut, so the list would become a
 # spend too. In comments rather than docstrings, which ship in the client.
+# `null` when the Summary's Scope covers no Posts: it is finished with the "No
+# new posts found" text and no Attempt starts (ADR-038).
 @router.post("/summaries/{summary_id}/attempts/start")
 def start_summary_attempt(
     summary_id: str,
     body: SummaryAttemptStartRequest,
     session: SessionDep,
     current_user: CurrentUser,
-) -> SummaryAttemptResponse:
+) -> SummaryAttemptResponse | None:
     """Start generating this summary on the worker; watch it with the events stream."""
     attempt = start_attempt(
         session,
@@ -233,6 +234,8 @@ def start_summary_attempt(
         key_id=body.ai_key_id,
         temperature=body.temperature,
     )
+    if attempt is None:
+        return None
     return SummaryAttemptResponse.model_validate(attempt_to_camel(attempt))
 
 
@@ -355,7 +358,6 @@ def submit_tag_run(
         source=body.source,
         status=body.status,
         model=body.model,
-        post_count=body.post_count,
         extra=body.extra,
     )
     touch_sync(session, "tag_runs")

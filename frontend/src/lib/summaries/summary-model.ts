@@ -53,9 +53,6 @@ export function channelsNeedingSync(
   )
 }
 
-export const noPostsText = (startMs: number, endMs: number): string =>
-  `No new posts found in the selected channels between ${new Date(startMs).toLocaleString()} and ${new Date(endMs).toLocaleString()}.`
-
 /**
  * The Summary a regeneration writes: what the run produced plus the settings
  * carried over from `previous`. The frozen Scope is not here, because the
@@ -66,7 +63,6 @@ export function successorSummary(
   run: {
     id: string
     text: string
-    postCount: number
     citedPosts: Record<string, Post>
     /** The Key the run actually paid with, i.e. the live selection (BYOK-03). */
     selectedAiKeyId: string | null
@@ -78,7 +74,6 @@ export function successorSummary(
     text: run.text,
     language: previous.language,
     model: previous.model,
-    postCount: run.postCount,
     timestamp: run.now,
     autoRegenerate: true,
     // `previous.aiKeyId` is only the fallback for a Summary scheduled before
@@ -102,39 +97,26 @@ export function successorSummary(
 
 /**
  * A regeneration's successor as it is first saved: Failed until its Attempt
- * finishes it, as Generate opens its Summary, unless the window held no Posts
- * and the "no new posts" text already finished it.
+ * finishes it, as Generate opens its Summary. A window with no Posts is the
+ * server's to finish, with the "No new posts found" text (ADR-038).
  */
 export function openedSuccessor(
   previous: Summary,
-  run: {
-    id: string
-    postCount: number
-    range: { start: number; end: number }
-    selectedAiKeyId: string | null
-    now: number
-  },
+  run: { id: string; selectedAiKeyId: string | null; now: number },
 ): Summary {
-  const empty = run.postCount === 0
-  const successor = successorSummary(previous, {
-    id: run.id,
-    text: empty ? noPostsText(run.range.start, run.range.end) : "",
-    postCount: run.postCount,
-    citedPosts: {},
-    selectedAiKeyId: run.selectedAiKeyId,
-    now: run.now,
-  })
-  return empty ? successor : { ...successor, status: "failed" }
+  return {
+    ...successorSummary(previous, { ...run, text: "", citedPosts: {} }),
+    status: "failed",
+  }
 }
 
 /** Where a regenerated summary auto-publishes, or null when it should not. */
 export function autoPublishTarget(
   previous: Summary,
-  postCount: number,
   bots: BotCredential[],
   destinations: ChatDestination[],
 ): { bot: BotCredential; dest: ChatDestination } | null {
-  if (!previous.autoPublish || postCount === 0) return null
+  if (!previous.autoPublish) return null
   const bot = bots.find((b) => b.id === previous.publishBotId)
   const dest = destinations.find((d) => d.id === previous.publishChatId)
   return bot && dest ? { bot, dest } : null

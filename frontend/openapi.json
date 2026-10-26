@@ -1008,40 +1008,6 @@
         "security": [{ "OAuth2PasswordBearer": [] }]
       }
     },
-    "/api/v1/ai/summary": {
-      "post": {
-        "tags": ["ai"],
-        "summary": "Api Summary",
-        "operationId": "ai-api_summary",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/SummaryRequest" }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/CompletionResult" }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        },
-        "security": [{ "OAuth2PasswordBearer": [] }]
-      }
-    },
     "/api/v1/ai/summary/prompt": {
       "post": {
         "tags": ["ai"],
@@ -1050,7 +1016,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SummaryRequest" }
+              "schema": { "$ref": "#/components/schemas/SummaryPromptRequest" }
             }
           },
           "required": true
@@ -3713,7 +3679,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SummaryAttemptResponse"
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/SummaryAttemptResponse" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Data-Start Summary Attempt"
                 }
               }
             }
@@ -8605,27 +8575,11 @@
       },
       "ChatRequest": {
         "properties": {
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels",
-            "default": []
-          },
-          "channelsText": {
-            "type": "string",
-            "title": "Channelstext",
-            "default": ""
-          },
+          "chatId": { "type": "string", "title": "Chatid" },
           "postsText": {
             "type": "string",
             "title": "Poststext",
             "default": ""
-          },
-          "scope": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/PromptScopeInput" },
-              { "type": "null" }
-            ]
           },
           "language": {
             "type": "string",
@@ -8658,9 +8612,11 @@
             "title": "Aikeyid"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["message"],
-        "title": "ChatRequest"
+        "required": ["chatId", "message"],
+        "title": "ChatRequest",
+        "description": "One turn of a Chat: the server reads the Chat's Covered Posts."
       },
       "ChatSessionListItemResponse": {
         "properties": {
@@ -8804,17 +8760,6 @@
         "type": "object",
         "title": "ClearTableResponse",
         "description": "How many rows `DELETE /data/tables/{name}` removed."
-      },
-      "CompletionResult": {
-        "properties": {
-          "text": { "type": "string", "title": "Text" },
-          "prompt": { "type": "string", "title": "Prompt" },
-          "model": { "type": "string", "title": "Model" },
-          "provider": { "type": "string", "title": "Provider" }
-        },
-        "type": "object",
-        "required": ["text", "prompt", "model", "provider"],
-        "title": "CompletionResult"
       },
       "DbStatsResponse": {
         "properties": {
@@ -13203,72 +13148,16 @@
       },
       "PromptResponse": {
         "properties": {
-          "prompt": { "type": "string", "title": "Prompt", "default": "" }
+          "prompt": { "type": "string", "title": "Prompt", "default": "" },
+          "missingPosts": {
+            "type": "integer",
+            "title": "Missingposts",
+            "default": 0
+          }
         },
         "type": "object",
         "title": "PromptResponse",
         "description": "The assembled prompt, for the \"show me what you would send\" surfaces.\n\nShared by `/ai/summary/prompt` and `/ai/tag/prompt`: both assemble a prompt\nand neither runs a model, so they have one shape between them."
-      },
-      "PromptScopeInput": {
-        "properties": {
-          "window": {
-            "anyOf": [
-              {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/LiveAnalysisWindow" },
-                  { "$ref": "#/components/schemas/FixedAnalysisWindow" }
-                ],
-                "discriminator": {
-                  "propertyName": "mode",
-                  "mapping": {
-                    "fixed": "#/components/schemas/FixedAnalysisWindow",
-                    "live": "#/components/schemas/LiveAnalysisWindow"
-                  }
-                }
-              },
-              { "type": "null" }
-            ],
-            "title": "Window"
-          },
-          "selection": {
-            "items": {
-              "oneOf": [
-                { "$ref": "#/components/schemas/SelectionRule-Input" },
-                { "$ref": "#/components/schemas/SelectionPick" }
-              ],
-              "discriminator": {
-                "propertyName": "kind",
-                "mapping": {
-                  "pick": "#/components/schemas/SelectionPick",
-                  "rule": "#/components/schemas/SelectionRule-Input"
-                }
-              }
-            },
-            "type": "array",
-            "title": "Selection"
-          },
-          "viewMeasure": {
-            "type": "string",
-            "enum": ["views", "estimated"],
-            "title": "Viewmeasure",
-            "default": "estimated"
-          },
-          "sort": {
-            "type": "string",
-            "enum": ["newest", "oldest", "most_views", "fewest_views"],
-            "title": "Sort",
-            "default": "newest"
-          },
-          "groupByChannel": {
-            "type": "boolean",
-            "title": "Groupbychannel",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "PromptScopeInput",
-        "description": "A Posts-feed scope the backend resolves into the prompt's posts block,\ninstead of the client shipping a pre-built ``postsText``. Mirrors the\nfrontend feed query params."
       },
       "ProxyHealthResponse": {
         "properties": {
@@ -15085,10 +14974,6 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
           },
-          "postCount": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Postcount"
-          },
           "timestamp": {
             "type": "integer",
             "title": "Timestamp",
@@ -15112,51 +14997,15 @@
         "title": "SummaryListItemResponse",
         "description": "List projection, as `summary_to_camel_light` builds it.\n\nOmits the three corpus-sized fields \u2014 the list query never opens the table\nthey live in \u2014 and adds ``chatMessageCount``, which the service always\nsets. ``promptExcerpt`` is *not* declared: it appears only when the summary\nactually has prompt text, and declaring it would emit\n``\"promptExcerpt\": null`` for every summary that has none. It still reaches\nthe client through ``extra=\"allow\"``."
       },
-      "SummaryRequest": {
+      "SummaryPromptRequest": {
         "properties": {
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "channelsText": {
-            "type": "string",
-            "title": "Channelstext",
-            "default": ""
-          },
-          "postsText": {
-            "type": "string",
-            "title": "Poststext",
-            "default": ""
-          },
-          "scope": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/PromptScopeInput" },
-              { "type": "null" }
-            ]
-          },
-          "language": {
-            "type": "string",
-            "title": "Language",
-            "default": "English"
-          },
-          "model": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Model"
-          },
-          "temperature": {
-            "type": "number",
-            "title": "Temperature",
-            "default": 0.7
-          },
-          "aiKeyId": {
-            "anyOf": [{ "type": "string" }, { "type": "null" }],
-            "title": "Aikeyid"
-          }
+          "summaryId": { "type": "string", "title": "Summaryid" }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["channels"],
-        "title": "SummaryRequest"
+        "required": ["summaryId"],
+        "title": "SummaryPromptRequest",
+        "description": "Which Summary's prompt to build: the server reads its Covered Posts."
       },
       "SummaryResponse": {
         "properties": {
@@ -15170,10 +15019,6 @@
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
-          },
-          "postCount": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Postcount"
           },
           "timestamp": {
             "type": "integer",
@@ -15217,10 +15062,6 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
           },
-          "postCount": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Postcount"
-          },
           "extra": {
             "additionalProperties": true,
             "type": "object",
@@ -15246,10 +15087,6 @@
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
-          },
-          "postCount": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Postcount"
           },
           "timestamp": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -15558,27 +15395,7 @@
       },
       "TagRequest": {
         "properties": {
-          "channels": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Channels"
-          },
-          "channelsText": {
-            "type": "string",
-            "title": "Channelstext",
-            "default": ""
-          },
-          "postsText": {
-            "type": "string",
-            "title": "Poststext",
-            "default": ""
-          },
-          "scope": {
-            "anyOf": [
-              { "$ref": "#/components/schemas/PromptScopeInput" },
-              { "type": "null" }
-            ]
-          },
+          "tagRunId": { "type": "string", "title": "Tagrunid" },
           "allTags": {
             "type": "string",
             "title": "Alltags",
@@ -15607,9 +15424,11 @@
             "title": "Tagsperchannelmax"
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": ["channels"],
-        "title": "TagRequest"
+        "required": ["tagRunId"],
+        "title": "TagRequest",
+        "description": "A Tag run's prompt: the server reads the run's Covered Posts."
       },
       "TagResponse": {
         "properties": {
@@ -15756,10 +15575,6 @@
           "model": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Model"
-          },
-          "postCount": {
-            "anyOf": [{ "type": "integer" }, { "type": "null" }],
-            "title": "Postcount"
           },
           "extra": {
             "additionalProperties": true,

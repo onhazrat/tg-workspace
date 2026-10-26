@@ -371,7 +371,7 @@ def test_the_gate_answers_for_all_three_tiers() -> None:
     two behavioural tests on either side could both satisfy while the function
     had collapsed into one of them.
     """
-    spend_path = f"{V1}/ai/summary"
+    spend_path = f"{V1}/ai/chat/stream"
     write = f"{V1}/data/summaries/x"
 
     assert view_as_allows("POST", spend_path, mode=security.VIEW_AS_SPEND)
@@ -492,7 +492,7 @@ def test_a_read_only_session_hears_the_read_only_advice() -> None:
     Two instructions for one click is worse than one, so the spend string is
     reserved for the tier that can act on it.
     """
-    spend_path = f"{V1}/ai/summary"
+    spend_path = f"{V1}/ai/chat/stream"
     assert (
         view_as_refusal_detail(spend_path, mode=security.VIEW_AS_READ_ONLY)
         == VIEW_AS_READ_ONLY_DETAIL

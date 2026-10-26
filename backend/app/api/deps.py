@@ -147,8 +147,8 @@ class SpendableOperation(NamedTuple):
 #: The bar: the request reaches an outside party who bills the **target** for
 #: it. `POST /rag/search` and `POST /ai/embeddings` are not here although they
 #: are outbound AI calls, because ADR-016 puts them on the Operator Key.
-#: `POST /ai/summary/prompt` is not here although it sits beside one that is: it
-#: assembles a prompt and calls nobody.
+#: `POST /ai/summary/prompt` is not here: it assembles a prompt and calls
+#: nobody.
 #:
 #: `POST /ai/models` is here for the reason BYOK-02 made it a POST: it proxies
 #: the target's own Provider on their Key, so it is a spend that happens to look
@@ -156,9 +156,6 @@ class SpendableOperation(NamedTuple):
 #: safe-method shortcut in `view_as_allows`, so this stays true if it ever
 #: becomes a GET again.
 VIEW_AS_SPEND_PATHS: dict[str, SpendableOperation] = {
-    f"{settings.API_V1_STR}/ai/summary": SpendableOperation(
-        "ai_key", "generates a Summary on the target's AI Key (ADR-016)"
-    ),
     f"{settings.API_V1_STR}/data/summaries/{{summary_id}}/attempts/start": (
         SpendableOperation(
             "ai_key",

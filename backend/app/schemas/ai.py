@@ -16,7 +16,8 @@ Only the two genuinely-new wrapper shapes are declared here.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 from app.ai.models import ModelInfo
 
@@ -40,7 +41,14 @@ class PromptResponse(BaseModel):
     and neither runs a model, so they have one shape between them.
     """
 
+    # Camel-cased by rule rather than by a literal alias, so the wire name is
+    # `artifact_coverage.MISSING_POSTS_KEY` without a second spelling of it.
+    model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
+
     prompt: str = ""
+    #: Covered Posts the prompt left out: reclaimed, or of a Channel no longer
+    #: followed (ADR-038).
+    missing_posts: int = 0
 
 
 class TranslateResponse(BaseModel):

@@ -9,14 +9,13 @@ import {
   useState,
 } from "react"
 import { toast } from "sonner"
-import { api } from "@/api"
 import { queryKeys, SUMMARIZER_STALE_TIME } from "@/hooks/queryKeys"
 import { useTagRunParam } from "@/hooks/useArtifactParams"
 import {
   errorText,
-  frozenScope,
   type ProvisionalRow,
   readStream,
+  withMissingPosts,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
 import {
@@ -24,7 +23,6 @@ import {
   buildBulkChannelTagUpdates,
   normalizeParsedTagSuggestions,
 } from "@/lib/channels/apply-tag-suggestions"
-import { formatChannelsForPrompt } from "@/lib/channels/format-channels-for-prompt"
 import { parseTagResponse } from "@/lib/channels/parse-tag-response"
 import { bulkUpdateChannelTags } from "@/lib/channels/store"
 import { formatAllTagsForPrompt } from "@/lib/channels/tag-prompt"
@@ -81,14 +79,14 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { channels, selectedChannels, setChannels } = useData()
-  const { getPromptPostsInput, getScopeSubmission } = useScraper()
-  const { aiLanguage, selectedModel, aiTemperature } = useSettings()
+  const { getScopeSubmission } = useScraper()
   const {
-    activeTab,
-    workspaceTabs,
-    includeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-  } = useUI()
+    selectedModel,
+    aiTemperature,
+    includeChannelBio,
+    includeChannelTags,
+  } = useSettings()
+  const { activeTab, workspaceTabs } = useUI()
   const queryClient = useQueryClient()
 
   const [mode, setMode] = useState<TagMode>("add")
@@ -151,22 +149,26 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
     setSuggestions(selectedRun?.suggestions ?? {})
   }, [selectedRun])
 
-  const buildPromptParts = async () => {
-    const channelsText = formatChannelsForPrompt(channels, selectedChannels, {
-      includeBio: includeChannelBioInPrompt,
-      includeTags: includeChannelTagsInPrompt,
-    })
-    const allTags = formatAllTagsForPrompt(channels)
-    // The scope, always: the backend assembles the tag posts block from the
-    // Post selection (PTR-05).
-    const { scope } = await getPromptPostsInput()
-    const counts = await api.getPostsCounts({
-      channelNames: selectedChannelNames,
-      ...scope,
-    })
-    const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
-    return { channelsText, postsText: "", allTags, postCount, scope }
-  }
+  /**
+   * What this tab adds to a Tag run's prompt: the tags in use. The Posts are
+   * the run's Covered Posts, which the server reads from the run it names
+   * (ADR-038), and it describes the Channels by the Account's setting (AC-03).
+   */
+  const buildPromptParts = () => ({
+    allTags: formatAllTagsForPrompt(channels),
+  })
+
+  /** The opened run's prompt body: its id, never a Scope. */
+  const promptBody = (
+    tagRunId: string,
+    parts: ReturnType<typeof buildPromptParts>,
+  ) => ({
+    tagRunId,
+    allTags: parts.allTags,
+    tagMode: mode,
+    model: selectedModel,
+    temperature: aiTemperature,
+  })
 
   /**
    * Open the run at a frozen Scope, before the prompt is assembled (AW-06).
@@ -177,10 +179,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
    * a Live window the prompt was built from one window and the row recorded
    * another.
    */
-  const openTagRun = async (
-    postCount: number,
-    source: "generated" | "pasted",
-  ) =>
+  const openTagRun = async (source: "generated" | "pasted") =>
     submitTagRun({
       id: crypto.randomUUID(),
       scope: getScopeSubmission(selectedChannelNames),
@@ -188,12 +187,11 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       source,
       status: "pending",
       model: selectedModel,
-      postCount,
     })
 
   const channelContextOptions = () => ({
-    includeBio: includeChannelBioInPrompt,
-    includeTags: includeChannelTagsInPrompt,
+    includeBio: includeChannelBio,
+    includeTags: includeChannelTags,
   })
 
   const copyTagPrompt = async () => {
@@ -201,30 +199,21 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const { channelsText, postsText, allTags, postCount, scope } =
-      await buildPromptParts()
+    const parts = buildPromptParts()
     // Submission opens the row, so a prompt that never gets built has to take
     // it back — otherwise a failed copy litters History with a `pending` run
     // nobody can complete. The same compensation `AIContext` makes, for the
     // same reason.
-    const opened = await openTagRun(postCount, "pasted")
+    const opened = await openTagRun("pasted")
     try {
-      const prompt = await getTagPrompt({
-        channels: selectedChannelNames,
-        channelsText,
-        postsText,
-        allTags,
-        tagMode: mode,
-        language: aiLanguage,
-        model: selectedModel,
-        temperature: aiTemperature,
-        // Assemble by what the server froze, not by what the clock says now.
-        scope: frozenScope(scope, opened.scope),
-      })
+      const { prompt, missingPosts } = await getTagPrompt(
+        promptBody(opened.id, parts),
+      )
       const saved = await upsertTagRun({
         ...opened,
         promptText: prompt,
-        ...tagRunSnapshot(allTags, channelContextOptions()),
+        ...withMissingPosts(missingPosts),
+        ...tagRunSnapshot(parts.allTags, channelContextOptions()),
       })
       applySavedRun(saved)
       // Its tab opens without leaving Action, where the paste box is.
@@ -242,7 +231,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       toast.error("Select at least one channel first.")
       return
     }
-    const parts = await buildPromptParts()
+    const parts = buildPromptParts()
     setIsGenerating(true)
     // Opened before the first token is spent, and taken back if nothing comes
     // of it — see the note in `copyTagPrompt`.
@@ -257,22 +246,14 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   const runTagging = async (
-    parts: Awaited<ReturnType<typeof buildPromptParts>>,
+    parts: ReturnType<typeof buildPromptParts>,
     row: ProvisionalRow,
   ) => {
-    const opened = await openTagRun(parts.postCount, "generated")
+    const opened = await openTagRun("generated")
     row.opened(opened.id)
-    const { stream, prompt } = await generateTagStream({
-      channels: selectedChannelNames,
-      channelsText: parts.channelsText,
-      postsText: parts.postsText,
-      allTags: parts.allTags,
-      tagMode: mode,
-      language: aiLanguage,
-      model: selectedModel,
-      temperature: aiTemperature,
-      scope: frozenScope(parts.scope, opened.scope),
-    })
+    const { stream, prompt, missingPosts } = await generateTagStream(
+      promptBody(opened.id, parts),
+    )
     const { text: responseText } = await readStream(stream)
     const parsed = normalizeParsedTagSuggestions(
       parseTagResponse(responseText),
@@ -284,6 +265,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
       ...opened,
       status: "completed",
       promptText: prompt,
+      ...withMissingPosts(missingPosts()),
       responseText,
       suggestions: parsed,
       ...tagRunSnapshot(parts.allTags, channelContextOptions()),

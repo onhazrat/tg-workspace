@@ -14,6 +14,7 @@ import {
 import {
   chatTranscriptText,
   chatViewSections,
+  newestMissingPosts,
 } from "@/components/chat/chat-view-model"
 import { GoToActionEmptyState } from "@/components/history/GoToActionEmptyState"
 import { useChatContext } from "../contexts/ChatContext"
@@ -132,7 +133,10 @@ export const ChatView: React.FC = () => {
        */}
       {chatSession && (
         <div className="mb-4 shrink-0">
-          <ArtifactScopeLine artifact={chatSession} />
+          <ArtifactScopeLine
+            artifact={chatSession}
+            missingPosts={newestMissingPosts(chatMessages)}
+          />
         </div>
       )}
 

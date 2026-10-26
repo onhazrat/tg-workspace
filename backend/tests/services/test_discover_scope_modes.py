@@ -17,11 +17,13 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.models_tg import Post
+from app.schemas.scope import ScopeSubmission
+from app.services.artifact_coverage import freeze
 from app.services.discover import compute_discover_candidates
 from app.services.discover_reports import create_report
 from app.services.post_filters import Pick, PostScope, Rule, Step
 from app.services.post_selection import selection_clause
-from tests.utils.discover import report_scope
+from tests.utils.discover import ALL_TIME, report_scope
 from tests.utils.tenancy import ANY_READER, follow_channels
 
 
@@ -199,7 +201,11 @@ def test_post_ids_still_respect_the_date_range() -> None:
 
 
 def test_saved_report_reads_and_records_its_selection() -> None:
-    """The cap and its seed travel in the rule, and the report covers its Posts."""
+    """The cap and its seed travel in the rule, and the report covers its Posts.
+
+    Frozen as the route freezes it: the report scans the refs the freeze
+    recorded, never the rule applied a second time (ADR-038).
+    """
     selection = [
         {
             "kind": "rule",
@@ -207,11 +213,23 @@ def test_saved_report_reads_and_records_its_selection() -> None:
             "filter": {"maxPerChannel": 3, "maxPerChannelMode": "random", "seed": 42},
         }
     ]
+    start, end = ALL_TIME
     with Session(engine) as session:
         _seed_posts(session, count=10)
         report = create_report(
             session,
-            scope=report_scope(channels=["carrier"], selection=selection),
+            scope=freeze(
+                session,
+                ScopeSubmission.model_validate(
+                    {
+                        "channels": ["carrier"],
+                        "window": {"mode": "fixed", "start": start, "end": end},
+                        "selection": selection,
+                    }
+                ),
+                user_id=ANY_READER,
+                now_ms=end,
+            ),
             signals=None,
             user_id=ANY_READER,
         )

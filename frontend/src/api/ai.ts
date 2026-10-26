@@ -1,7 +1,15 @@
+import type {
+  ChatRequest,
+  PromptResponse,
+  SummaryPromptRequest,
+  TagRequest,
+} from "@/client"
 import { selectedAiKeyId } from "@/lib/aiKeys/selection"
 
-import { request, sseTextStream } from "./base"
-import { type PromptScope, promptScopeBody } from "./data"
+import { type OnFrame, request, sseTextStream } from "./base"
+
+/** An Artifact's prompt and how many Covered Posts it left out (ADR-038). */
+export type ArtifactPrompt = Required<PromptResponse>
 
 /**
  * Stamp the paying Key onto an Artifact request (BYOK-01).
@@ -17,25 +25,9 @@ import { type PromptScope, promptScopeBody } from "./data"
  * the account's most recent working Key, which is exactly right for the common
  * case of holding one.
  */
-const withAiKey = (body: Record<string, unknown>): Record<string, unknown> => {
+const withAiKey = <T extends object>(body: T): T => {
   const aiKeyId = selectedAiKeyId()
   return aiKeyId ? { ...body, aiKeyId } : body
-}
-
-/**
- * Convert a Scope's Analysis window to the wire form (AW-02).
- *
- * Here rather than at each call site for the same reason `withAiKey` is: the
- * three streams build their bodies in their contexts and hand over an opaque
- * bag, so this is the last place that still knows a `scope` is in there. A
- * body with no scope passes through untouched — the semantic and related paths
- * ship a pre-built `postsText` instead.
- */
-const withPromptScope = (
-  body: Record<string, unknown>,
-): Record<string, unknown> => {
-  const scope = body.scope as PromptScope | undefined
-  return scope ? { ...body, scope: promptScopeBody(scope) } : body
 }
 
 export const aiApi = {
@@ -62,49 +54,25 @@ export const aiApi = {
       body: JSON.stringify(aiKeyId ? { aiKeyId } : {}),
     }),
 
-  summaryPrompt: (body: {
-    channels: string[]
-    channelsText?: string
-    postsText: string
-    language: string
-    model?: string
-    temperature?: number
-    scope?: PromptScope
-  }) =>
-    request<{ prompt: string }>("/api/v1/ai/summary/prompt", {
+  /** A Summary's prompt, read from its Covered Posts (ADR-038). */
+  summaryPrompt: (body: SummaryPromptRequest) =>
+    request<ArtifactPrompt>("/api/v1/ai/summary/prompt", {
       method: "POST",
-      body: JSON.stringify(withPromptScope(body)),
+      body: JSON.stringify(body),
     }),
 
-  tagPrompt: (body: {
-    channels: string[]
-    channelsText: string
-    postsText: string
-    allTags: string
-    tagMode: "add" | "remove"
-    language: string
-    model?: string
-    temperature?: number
-    scope?: PromptScope
-  }) =>
-    request<{ prompt: string }>("/api/v1/ai/tag/prompt", {
+  /** A Tag run's prompt, read from its Covered Posts (ADR-038). */
+  tagPrompt: (body: TagRequest) =>
+    request<ArtifactPrompt>("/api/v1/ai/tag/prompt", {
       method: "POST",
-      body: JSON.stringify(withPromptScope(body)),
+      body: JSON.stringify(body),
     }),
 
-  tagStream: (body: Record<string, unknown>) =>
-    sseTextStream(
-      "/api/v1/ai/tag/stream",
-      withAiKey(withPromptScope(body)),
-      "text",
-    ),
+  tagStream: (body: TagRequest, onFrame?: OnFrame) =>
+    sseTextStream("/api/v1/ai/tag/stream", withAiKey(body), "text", onFrame),
 
-  chatStream: (body: Record<string, unknown>) =>
-    sseTextStream(
-      "/api/v1/ai/chat/stream",
-      withAiKey(withPromptScope(body)),
-      "text",
-    ),
+  chatStream: (body: ChatRequest, onFrame?: OnFrame) =>
+    sseTextStream("/api/v1/ai/chat/stream", withAiKey(body), "text", onFrame),
 
   embeddings: (texts: string[], model?: string) =>
     request<{ vectors: number[][]; dimensions: number }>(

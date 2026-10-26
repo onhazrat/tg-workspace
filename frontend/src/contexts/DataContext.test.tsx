@@ -164,10 +164,9 @@ describe("useData", () => {
 describe("DataContext bio merge", () => {
   /**
    * Bios are fetched separately from the channel list — 40% of its bytes — and
-   * merged back onto the channel objects here. Every consumer reads
-   * `channel.bio`: the card, and `format-channels-for-prompt` for the selected
-   * channels. If the merge stops happening, prompts quietly lose their bios,
-   * which is the failure this asserts against.
+   * merged back onto the channel objects here. The card reads `channel.bio`;
+   * if the merge stops happening, cards quietly lose their bios, which is the
+   * failure this asserts against.
    */
   it("puts bios back on the channels that have one", async () => {
     const { result } = mountWithChannels(["alpha", "beta"], {

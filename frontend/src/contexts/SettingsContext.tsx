@@ -68,6 +68,10 @@ interface SettingsContextType {
   setSyncFailureBackoffMinutes: (minutes: number) => void
   aiTemperature: number
   setAiTemperature: (temp: number) => void
+  includeChannelBio: boolean
+  setIncludeChannelBio: (on: boolean) => void
+  includeChannelTags: boolean
+  setIncludeChannelTags: (on: boolean) => void
   isRTL: boolean
   proxyEnabled: boolean
   setProxyEnabled: (enabled: boolean) => void

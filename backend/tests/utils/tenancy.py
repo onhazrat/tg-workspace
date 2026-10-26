@@ -133,3 +133,21 @@ def follow_channels(
             values={"setting_group_id": group.id},
         )
     session.commit()
+
+
+def follow_synced(session: Session, *channel_names: str, user_id: uuid.UUID) -> None:
+    """`follow_channels`, with each Channel synced far past any test window.
+
+    For a scheduled regeneration: it reads only Posts of Channels its owner
+    follows (ADR-038), and a followed Channel synced before the window would
+    send its freshness pass to the scraper.
+    """
+    from app.models_tg import Channel
+
+    follow_channels(session, *channel_names, user_id=user_id)
+    for name in channel_names:
+        channel = session.get(Channel, name)
+        assert channel is not None
+        channel.last_updated = 2**62
+        session.add(channel)
+    session.commit()

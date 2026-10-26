@@ -3,8 +3,7 @@
  * Chat, Tag run). No React, so they can be tested directly; the contexts keep
  * the state and the toasts.
  */
-import { frozenWindow, type PostScopeQuery, type PromptScope } from "@/api/data"
-import type { FrozenScope } from "@/client"
+import type { PostScopeQuery, PromptScope } from "@/api/data"
 
 /** What a run tells `withProvisionalRow` about the row it opened. */
 export interface ProvisionalRow {
@@ -43,16 +42,12 @@ export async function withProvisionalRow<T>(
 }
 
 /**
- * Select by what the server froze, not by what the clock says now: the Artifact
- * and its prompt have to name the same two instants. No frozen Scope is a row
- * opened before AW-06.
+ * The Missing Post count as an Artifact stores it, beside the prompt it
+ * describes (ADR-038): zero is never stored.
  */
-export function frozenScope(
-  scope: PromptScope,
-  frozen: FrozenScope | null | undefined,
-): PromptScope {
-  return frozen ? { ...scope, window: frozenWindow(frozen) } : scope
-}
+export const withMissingPosts = (
+  missingPosts: number,
+): { missingPosts?: number } => (missingPosts > 0 ? { missingPosts } : {})
 
 /** The Posts-tab filters a submission records beside its Scope; empty ones are left out. */
 export function searchFilterExtra(filters: {
@@ -88,28 +83,19 @@ export async function readStream(
 export type PromptPostsInput = { scope: PromptScope }
 
 export interface PromptPosts {
-  /** The backend builds the posts block from it. */
-  scope: PromptScope
-  /** Always empty: no posts cross the wire since PTR-05. */
-  postsText: string
   postCount: number
 }
 
 /**
- * The scope a prompt is built from, and how many posts it covers.
- *
- * The scope travels as it is, so no posts cross the wire, and the count is
- * the server's: the selected Posts in the window (PTR-05). `frozen` selects
- * the counted window when the Scope is already frozen.
+ * How many posts the Posts tab selects now, for the "no Posts selected" check
+ * before an Artifact opens. The count is the server's: the selected Posts in
+ * the window (PTR-05). The prompt itself reads the Artifact's Covered Posts.
  */
 export async function promptPosts(
   input: PromptPostsInput,
   channelNames: string[],
   countPosts: (q: PostScopeQuery) => Promise<Record<string, number>>,
-  frozen?: FrozenScope | null,
 ): Promise<PromptPosts> {
-  const scope = frozenScope(input.scope, frozen)
-  const counts = await countPosts({ channelNames, ...scope })
-  const postCount = Object.values(counts).reduce((sum, n) => sum + n, 0)
-  return { scope, postsText: "", postCount }
+  const counts = await countPosts({ channelNames, ...input.scope })
+  return { postCount: Object.values(counts).reduce((sum, n) => sum + n, 0) }
 }

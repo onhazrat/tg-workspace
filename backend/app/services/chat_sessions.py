@@ -23,7 +23,7 @@ from sqlmodel import Session, col, select
 from app.core import acting_owner
 from app.models_tg import ChatSession, ChatSessionPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
-from app.services.posts_view import freeze_selection
+from app.services.artifact_coverage import freeze
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -170,11 +170,11 @@ def _with_scope(
     The ordering argument lives on `schemas/scope.py::scope_key`, which is the
     one copy of it.
     """
-    out.update(scope_key(frozen_scope_of(row, payload)))
+    out.update(scope_key(chat_scope(row, payload)))
     return out
 
 
-def frozen_scope_of(
+def chat_scope(
     row: ChatSession, payload: ChatSessionPayload | None = None
 ) -> FrozenScope | None:
     """The Scope this Chat was produced from, refs included, or `None`."""
@@ -239,11 +239,19 @@ def get_chat_session(
     The transcript is fetched only after the parent's owner is accepted, so it
     stays unreachable for a foreign id.
     """
+    row = own_chat_session(session, chat_session_id, user_id=user_id)
+    return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))
+
+
+def own_chat_session(
+    session: Session, chat_session_id: str, *, user_id: uuid.UUID
+) -> ChatSession:
+    """The caller's Chat, or this family's 404: the by-id read guard."""
     row = session.get(ChatSession, chat_session_id)
     if row is None:
         raise HTTPException(status_code=404, detail=CHAT_SESSION_NOT_FOUND)
     assert_owner(row.user_id, user_id, detail=CHAT_SESSION_NOT_FOUND)
-    return chat_session_to_camel(row, session.get(ChatSessionPayload, chat_session_id))
+    return row
 
 
 def apply_chat_session_payload(
@@ -441,7 +449,7 @@ def submit_chat_session(
     if session.get(ChatSession, chat_session_id) is not None:
         raise HTTPException(status_code=409, detail="Chat session already exists")
 
-    scope = freeze_selection(session, submission, user_id=user_id, now_ms=now_ms)
+    scope = freeze(session, submission, user_id=user_id, now_ms=now_ms)
     row = ChatSession(
         id=chat_session_id,
         user_id=user_id,

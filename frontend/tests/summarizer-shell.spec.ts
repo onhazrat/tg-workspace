@@ -101,15 +101,18 @@ test.describe("TG Workspace shell", () => {
     const third = await seedTestChannel(page)
     const tagName = `bulk${Date.now()}`
 
+    // The prompt names its Tag run and never a Scope (ADR-038).
+    const tagPromptBodies: Record<string, unknown>[] = []
     await page.route("**/api/v1/ai/tag/prompt", async (route) => {
       if (route.request().method() !== "POST") {
         await route.continue()
         return
       }
+      tagPromptBodies.push(route.request().postDataJSON())
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ prompt: "tag prompt for e2e" }),
+        body: JSON.stringify({ prompt: "tag prompt for e2e", missingPosts: 0 }),
       })
     })
 
@@ -141,6 +144,9 @@ test.describe("TG Workspace shell", () => {
     await expect(
       page.getByText(/tag prompt copied/i, { exact: false }),
     ).toBeVisible({ timeout: 15_000 })
+    expect(tagPromptBodies).toHaveLength(1)
+    expect(tagPromptBodies[0]).toHaveProperty("tagRunId")
+    expect(tagPromptBodies[0]).not.toHaveProperty("scope")
 
     const pastePayload = JSON.stringify({
       [`@${first}`]: [tagName],
@@ -199,8 +205,9 @@ test.describe("TG Workspace shell", () => {
   })
 
   /**
-   * Generate files its prompt before the model is asked, so a failed run
-   * leaves a Failed Summary that keeps it and says why (SFR-01).
+   * A failed run leaves a Failed Summary that says why (SFR-01). The browser
+   * builds no prompt: starting the Attempt does, on the server, as Retry and
+   * the scheduler do (AC-03).
    *
    * Starting the Attempt is the only thing mocked, refusing before the
    * worker gets it (SFR-02), so the browser reports the failure to the real
@@ -208,7 +215,7 @@ test.describe("TG Workspace shell", () => {
    * (delete on failure) and the URL never names a Summary; drop the report
    * and it has no Attempt.
    */
-  test("a failed Generate leaves a Failed summary with its prompt and reason", async ({
+  test("a failed Generate leaves a Failed summary with its reason", async ({
     page,
   }) => {
     test.setTimeout(90_000)
@@ -230,9 +237,11 @@ test.describe("TG Workspace shell", () => {
         },
       }),
     )
-    await page.route("**/api/v1/ai/summary/prompt", (route) =>
-      route.fulfill({ json: { prompt: "summary prompt for e2e" } }),
-    )
+    const promptRequests: string[] = []
+    await page.route("**/api/v1/ai/summary/prompt", (route) => {
+      promptRequests.push(route.request().url())
+      return route.continue()
+    })
     await page.route("**/api/v1/data/summaries/*/attempts/start", (route) =>
       route.fulfill({ status: 503, json: { detail: overloaded } }),
     )
@@ -267,7 +276,7 @@ test.describe("TG Workspace shell", () => {
       }
     }, id)
     expect(stored.summary?.status).toBe("failed")
-    expect(stored.summary?.promptText).toBe("summary prompt for e2e")
+    expect(promptRequests).toEqual([])
     expect(stored.attempts).toHaveLength(1)
     expect(stored.attempts[0]).toMatchObject({
       outcome: "failed",

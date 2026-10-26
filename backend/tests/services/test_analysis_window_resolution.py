@@ -273,9 +273,8 @@ _SCHEMA_PREFIX = "#/components/schemas/"
 def _request_schemas() -> dict[str, dict[str, object]]:
     """Every schema a mounted operation accepts in its body, keyed by name.
 
-    Transitive: a model nested inside a request body is a request body too,
-    which is how `PromptScopeInput` — reachable only through the three AI
-    request models — is covered without being named.
+    Transitive: a model nested inside a request body is a request body too, so
+    a Scope nested in a request is covered without being named.
     """
     spec = app.openapi()
     components: dict[str, dict[str, object]] = spec["components"]["schemas"]
@@ -381,7 +380,6 @@ def test_every_scope_carrying_request_states_a_window() -> None:
         "PostFacetsRequest",
         "PostFilteredRequest",
         "RagSearchRequest",
-        "PromptScopeInput",
     )
     for name in names:
         assert name in schemas, f"{name} is no longer reachable from a mounted route"
@@ -444,13 +442,8 @@ def _superuser(client: TestClient) -> dict[str, str]:
         ("/data/discover/candidates", {"channelNames": ["alpha"], **LEGACY_PAIR}),
         ("/rag/search", {"query": "q", **LEGACY_PAIR}),
         (
-            "/ai/summary/prompt",
-            {
-                "channels": ["alpha"],
-                "postsText": "",
-                "language": "English",
-                "scope": LEGACY_PAIR,
-            },
+            "/ai/tag/prompt",
+            {"tagRunId": "any", "scope": LEGACY_PAIR},
         ),
     ],
 )
@@ -460,7 +453,7 @@ def test_a_stale_client_sending_the_legacy_pair_is_refused(
     """A tab open across the deploy must not read the whole corpus.
 
     422 and not 200: silently widening is the failure mode worth a test, and on
-    `/ai/summary/prompt` it would also assemble a prompt from every Post the
+    `/ai/tag/prompt` it would also assemble a prompt from every Post the
     account can see and bill it to the caller's own Key.
     """
     response = client.post(

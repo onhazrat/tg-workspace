@@ -70,6 +70,31 @@ const noteClass = "text-[11px] text-app-ink/50"
 const fieldClass =
   "h-8 min-w-0 flex-1 rounded-md border border-app-ink/15 bg-app-muted px-2 text-xs tabular-nums outline-none focus:border-app-ink/40"
 
+/** How many have no value, where the source can say. */
+function noValueCountOf(source: NumberSource): number | undefined {
+  if (source.kind === "read") return source.read?.noValue
+  return source.total === undefined
+    ? undefined
+    : source.total - source.values.length
+}
+
+/** What Add says a bound keeps: the read's own count, or the local tally. */
+function keptCount(
+  source: NumberSource,
+  bound: MetricBound,
+  noValueCount: number | undefined,
+): ReactNode {
+  if (source.kind === "read") return source.count?.(bound)
+  if (bound.none) {
+    return (
+      noValueCount !== undefined &&
+      ` · ${noValueCount.toLocaleString()} with no value`
+    )
+  }
+  const { values } = source
+  return ` · ${values.filter((v) => inBound(v, bound)).length.toLocaleString()} of ${values.length.toLocaleString()}`
+}
+
 export function NumberBoundEditor({
   label,
   unit,
@@ -137,20 +162,8 @@ export function NumberBoundEditor({
     setB(String(next.max ?? ""))
   }
 
-  const noValueCount =
-    source.kind === "read"
-      ? source.read?.noValue
-      : source.total === undefined
-        ? undefined
-        : source.total - source.values.length
-  const count = !bound
-    ? null
-    : !local
-      ? source.kind === "read" && source.count?.(bound)
-      : bound.none
-        ? noValueCount !== undefined &&
-          ` · ${noValueCount.toLocaleString()} with no value`
-        : ` · ${local.filter((v) => inBound(v, bound)).length.toLocaleString()} of ${local.length.toLocaleString()}`
+  const noValueCount = noValueCountOf(source)
+  const count = bound && keptCount(source, bound, noValueCount)
 
   const field = (name: string, value: string, set: (t: string) => void) => (
     <input

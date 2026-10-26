@@ -332,6 +332,11 @@ export interface Summary {
    * and readable, and a full Attempt clears it. Persisted in server `extra`.
    */
   incomplete?: boolean
+  /**
+   * Covered Posts its prompt left out: reclaimed, or of a Channel no longer
+   * followed (ADR-038). Absent at zero. Persisted in server `extra`.
+   */
+  missingPosts?: number
   /** Full prompt text saved when user copies for external AI (persisted in server `extra`). */
   promptText?: string
   /**
@@ -537,6 +542,11 @@ export type TagRun = AlwaysSent<
       tagsAdded: number
       tagsRemoved: number
     }
+    /**
+     * Covered Posts its prompt left out (ADR-038), written beside the
+     * `promptText` it describes. Absent at zero. Persisted in server `extra`.
+     */
+    missingPosts?: number
   }
 
 /**
@@ -549,6 +559,8 @@ export interface ChatMessage {
   role: "user" | "model"
   text: string
   sources?: Post[]
+  /** An answer's Covered Posts its prompt left out (ADR-038); absent at zero. */
+  missingPosts?: number
 }
 
 /**

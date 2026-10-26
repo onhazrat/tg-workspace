@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -22,7 +23,7 @@ from app.core import acting_owner
 from app.models_tg import Summary, SummaryPayload, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.summaries import DerivationMode, SummaryDerivation
-from app.services.posts_view import freeze_selection
+from app.services.artifact_coverage import MISSING_POSTS_KEY, freeze
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -76,9 +77,10 @@ DERIVED_SUMMARY_FIELDS = frozenset({"chat_message_count", "prompt_excerpt"})
 #: unreachable from a request at all — it is not on `SummaryUpsertRequest` and
 #: `known` below drops it — which is the same rule stated where it cannot be
 #: forgotten.
-MUTABLE_SUMMARY_FIELDS = frozenset(
-    {"text", "post_count", "language", "model", "timestamp"}
-)
+#: `post_count` is not here: an Artifact records its refs' count (ADR-038), and
+#: a browser's own count landing over it made the header disagree with the
+#: coverage wall.
+MUTABLE_SUMMARY_FIELDS = frozenset({"text", "language", "model", "timestamp"})
 
 # Matches truncatePreview's default in frontend/src/lib/commands/search-filters.ts.
 SUMMARY_PROMPT_EXCERPT_CHARS = 80
@@ -113,11 +115,11 @@ def _with_scope(
     conditional keys around it `scope` has no legacy wire shape to preserve, and
     the client has to render it either way.
     """
-    out.update(scope_key(frozen_scope_of(summary, payload)))
+    out.update(scope_key(summary_scope(summary, payload)))
     return out
 
 
-def frozen_scope_of(
+def summary_scope(
     summary: Summary, payload: SummaryPayload | None = None
 ) -> FrozenScope | None:
     """The Scope this Summary was made from, refs included, or `None`.
@@ -512,7 +514,6 @@ def submit_summary(
     derived_from: SummaryDerivation | None = None,
     language: str = "English",
     model: str | None = None,
-    post_count: int | None = None,
     extra: dict[str, Any] | None = None,
     now_ms: int | None = None,
 ) -> dict[str, Any]:
@@ -555,7 +556,7 @@ def submit_summary(
         assert_owner_on_write(predecessor.user_id, user_id, detail=SUMMARY_NOT_FOUND)
         scope = derived_scope(predecessor, derived_from.mode)
     elif submission is not None:
-        scope = freeze_selection(session, submission, user_id=user_id, now_ms=now_ms)
+        scope = freeze(session, submission, user_id=user_id, now_ms=now_ms)
     else:
         # `SummarySubmitRequest` requires exactly one, so a route cannot reach
         # this. A raise rather than an `assert`, because a service function is
@@ -570,7 +571,7 @@ def submit_summary(
         text="",
         language=language,
         model=model,
-        post_count=post_count if post_count is not None else scope.scoped_post_count,
+        post_count=scope.scoped_post_count,
         timestamp=int(utc_now().timestamp() * 1000),
         # Flags, verbatim. `status: pending` is **not** forced here: it means
         # "awaiting a response pasted from somewhere else", which is one
@@ -674,19 +675,26 @@ def store_prompt(
     summary: Summary,
     prompt: str,
     posts: Iterable[tuple[str, int]] = (),
+    *,
+    missing: int = 0,
 ) -> None:
     """Keep the prompt an Attempt is about to run; the caller commits.
 
     Stored before the Provider is asked, so a Failed Summary always has the
     prompt "Use another AI" copies (SFR-02). `posts` are the refs the prompt
     was built from, recorded only on a Scope that has none: a selection frozen
-    at submission is never rewritten.
+    at submission is never rewritten. `missing` is how many Covered Posts the
+    prompt left out (ADR-038), kept beside it so a Retry that reuses the
+    prompt reports the same count; zero is not stored.
     """
+    extra = {k: v for k, v in (summary.extra or {}).items() if k != MISSING_POSTS_KEY}
+    summary.extra = {**extra, MISSING_POSTS_KEY: missing} if missing else extra
     updates: dict[str, Any] = {"prompt_text": prompt}
     frozen = FrozenScope.from_stored(summary.scope)
     if frozen is not None and frozen.scoped_post_count is None:
         frozen = covering(frozen, posts)
         summary.scope = frozen.stored()
+        summary.post_count = frozen.scoped_post_count
         updates["scope_posts"] = frozen.stored_posts()
     payload = apply_summary_payload(
         session, summary.id, user_id=summary.user_id, updates=updates
@@ -695,6 +703,35 @@ def store_prompt(
     summary.updated_at = utc_now()
     acting_owner.stamp(session, summary)
     session.add(summary)
+
+
+def finish_without_posts(session: Session, summary: Summary) -> None:
+    """Finish a Summary whose Scope covers no Posts; the caller commits.
+
+    A regeneration of a quiet window, from the scheduler or the browser alike
+    (ADR-038): it says so, records that it covered nothing, and spends nothing.
+    """
+    frozen = FrozenScope.from_stored(summary.scope)
+    if frozen is None:
+        raise ValueError("finish_without_posts needs a frozen Scope")
+
+    def utc(ms: int) -> str:
+        return datetime.fromtimestamp(ms / 1000, UTC).replace(tzinfo=None).isoformat()
+
+    summary.text = (
+        f"No new posts found in the selected channels between "
+        f"{utc(frozen.start)} and {utc(frozen.end)}."
+    )
+    summary.scope = covering(frozen, ()).stored()
+    summary.post_count = 0
+    summary.extra = {
+        k: v for k, v in (summary.extra or {}).items() if k not in _UNFINISHED_KEYS
+    }
+    payload = apply_summary_payload(
+        session, summary.id, user_id=summary.user_id, updates={"cited_posts": {}}
+    )
+    refresh_summary_derived_columns(summary, payload)
+    note_write(session, summary)
 
 
 def finish_summary(

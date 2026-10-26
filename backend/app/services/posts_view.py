@@ -34,9 +34,6 @@ from sqlalchemy.orm import aliased
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post
-from app.schemas.post_filter import to_steps
-from app.schemas.scope import FrozenScope, ScopeSubmission
-from app.services.analysis_window import freeze_scope
 from app.services.follows import visible_channel_names
 from app.services.language import NOT_READ
 from app.services.post_filters import (
@@ -528,43 +525,6 @@ def selected_refs(
         )
     ).all()
     return [(name, post_id) for name, post_id in rows]
-
-
-def freeze_selection(
-    session: Session,
-    submission: ScopeSubmission,
-    *,
-    user_id: uuid.UUID,
-    now_ms: int | None = None,
-) -> FrozenScope:
-    """Freeze a submitted Scope with every Post its selection reached.
-
-    The door every Action submits through (PTR-05). The window is frozen
-    first, by `freeze_scope`, and the selection is applied over it once, so
-    the references an Artifact keeps are the Posts it covered at that minute
-    and inspecting it later never applies a rule to today's corpus.
-    """
-    frozen = freeze_scope(submission, now_ms=now_ms)
-    view = resolve_posts_view(
-        session,
-        user_id=user_id,
-        channel_names=frozen.channels or None,
-        start=frozen.start,
-        end=frozen.end,
-        view_measure=frozen.view_measure,
-        sort=frozen.sort,
-        steps=to_steps(submission.selection),
-    )
-    refs = selected_refs(session, view, group_by_channel=frozen.group_by_channel)
-    # ponytail: every reference in one JSON column, unbounded as ADR-026 says;
-    # a window of a million Posts stores a million refs. Bound it, or store a
-    # table of refs, if a deployment ever summarizes windows that size.
-    return FrozenScope.model_validate(
-        {
-            **frozen.stored(),
-            "posts": [{"channelName": c, "postId": p} for c, p in refs],
-        }
-    )
 
 
 # ---- A measure's spread (PTI-01) ------------------------------------------------

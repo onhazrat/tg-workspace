@@ -14,7 +14,7 @@ from app.core import acting_owner
 from app.models_tg import TagRun, utc_now
 from app.schemas.scope import FrozenScope, ScopeSubmission, scope_key
 from app.schemas.tag_runs import TagMode, TagRunSource, TagRunStatus
-from app.services.posts_view import freeze_selection
+from app.services.artifact_coverage import freeze
 from app.services.serialization import to_snake
 from app.services.tenancy import (
     assert_owner,
@@ -85,7 +85,7 @@ def tag_run_to_camel(tag_run: TagRun) -> dict[str, Any]:
         "createdAt": tag_run.created_at,
         "updatedAt": tag_run.updated_at_ms,
         **(tag_run.extra or {}),
-        **scope_key(FrozenScope.from_stored(tag_run.scope, tag_run.scope_posts)),
+        **scope_key(tag_run_scope(tag_run)),
     }
 
 
@@ -159,11 +159,21 @@ def get_tag_run(
     the family where a missing ownership check hands over somebody else's
     posts rather than their metadata.
     """
+    return tag_run_to_camel(own_tag_run(session, tag_run_id, user_id=user_id))
+
+
+def own_tag_run(session: Session, tag_run_id: str, *, user_id: uuid.UUID) -> TagRun:
+    """The caller's Tag run, or this family's 404: the by-id read guard."""
     row = session.get(TagRun, tag_run_id)
     if row is None:
         raise HTTPException(status_code=404, detail=TAG_RUN_NOT_FOUND)
     assert_owner(row.user_id, user_id, detail=TAG_RUN_NOT_FOUND)
-    return tag_run_to_camel(row)
+    return row
+
+
+def tag_run_scope(row: TagRun) -> FrozenScope | None:
+    """The Scope this Tag run was produced from, refs included, or `None`."""
+    return FrozenScope.from_stored(row.scope, row.scope_posts)
 
 
 #: Names a merge recognises and never writes (AW-06).
@@ -325,7 +335,6 @@ def submit_tag_run(
     source: TagRunSource = "generated",
     status: TagRunStatus = "pending",
     model: str | None = None,
-    post_count: int | None = None,
     extra: dict[str, Any] | None = None,
     now_ms: int | None = None,
 ) -> dict[str, Any]:
@@ -342,7 +351,7 @@ def submit_tag_run(
     if session.get(TagRun, tag_run_id) is not None:
         raise HTTPException(status_code=409, detail="Tag run already exists")
 
-    scope = freeze_selection(session, submission, user_id=user_id, now_ms=now_ms)
+    scope = freeze(session, submission, user_id=user_id, now_ms=now_ms)
     now = int(utc_now().timestamp() * 1000)
     tag_run = TagRun(
         id=tag_run_id,
@@ -350,7 +359,7 @@ def submit_tag_run(
         status=status,
         source=source,
         mode=mode,
-        post_count=post_count if post_count is not None else scope.scoped_post_count,
+        post_count=scope.scoped_post_count,
         model=model,
         created_at=now,
         updated_at_ms=now,

@@ -100,21 +100,19 @@ export async function seedArtifacts(page: Page): Promise<void> {
     "/api/v1/data/summaries",
     WIDE_SUMMARY_ID,
     WIDE_SUMMARY_CHANNELS,
-    {
-      model: "gemini-3-flash-preview",
-      postCount: 7,
-    },
+    { model: "gemini-3-flash-preview" },
   )
   await put(`/api/v1/data/summaries/${WIDE_SUMMARY_ID}`, {
+    postCount: 7,
     text: "Wide.",
     timestamp: now + 1000,
   })
 
   await submit("/api/v1/data/summaries", OPEN_SUMMARY_ID, ["alpha"], {
     model: "gemini-3-flash-preview",
-    postCount: 42,
   })
   await put(`/api/v1/data/summaries/${OPEN_SUMMARY_ID}`, {
+    postCount: 42,
     text: `# Weekly report\n\n${OPEN_SUMMARY_BODY}`,
     timestamp: now,
   })

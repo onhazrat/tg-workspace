@@ -47,11 +47,13 @@ from app.core.db import engine
 from app.core.secrets import encrypt_token
 from app.jobs import auto_summary, summary_generation
 from app.models import User
-from app.models_tg import AICredential, Post, PostEmbedding, Summary, utc_now
+from app.models_tg import AICredential, Channel, Post, PostEmbedding, Summary, utc_now
+from app.schemas.scope import FrozenScope
+from app.services.artifact_coverage import posts_block
 from app.services.discover import compute_discover_candidates
 from app.services.posts_view import count_shown, feed, resolve_posts_view
-from app.services.prompt_assembly import PromptScope, assemble_posts_text
 from tests.utils.scope import stored_scope
+from tests.utils.tenancy import follow_channels
 from tests.utils.user import create_random_user
 
 API = settings.API_V1_STR
@@ -283,11 +285,10 @@ def test_the_counts_agree_with_the_feed_on_the_boundary(
 def test_the_assembled_prompt_stops_before_the_end(
     session: Session, operator: User, channel: str
 ) -> None:
-    text = assemble_posts_text(
-        session,
-        PromptScope(channels=[channel], start_date=START, end_date=END),
-        user_id=operator.id,
+    scope = FrozenScope.model_validate(
+        {"channels": [channel], "start": START, "end": END}
     )
+    text, _ = posts_block(session, scope, user_id=operator.id)
 
     assert {post_id for post_id in SEEDED if f"ID: {post_id}\n" in text} == IN_WINDOW
 
@@ -421,8 +422,10 @@ def test_a_regenerated_summary_does_not_reclaim_its_predecessors_last_post(
     Post landing on that millisecond was summarised twice — counted in the
     Summary that closed at it and again in the one that opened there.
 
-    The Channel here is deliberately **not** followed, so the scheduler's
-    freshness pass finds nothing stale and the test never reaches the scraper.
+    The Channel is followed, because a regeneration reads only Posts of
+    Channels its owner follows (ADR-038), and synced past the window, so the
+    scheduler's freshness pass finds nothing stale and never reaches the
+    scraper.
     """
     name = f"aw01-regen-{uuid.uuid4().hex[:8]}"
     for post_id, ts in SEEDED.items():
@@ -434,6 +437,10 @@ def test_a_regenerated_summary_does_not_reclaim_its_predecessors_last_post(
                 timestamp=ts,
             )
         )
+    follow_channels(session, name, user_id=regen_owner.id)
+    channel = session.exec(select(Channel).where(col(Channel.name) == name)).one()
+    channel.last_updated = END * 2
+    session.add(channel)
     duration = END - START
     session.add(
         Summary(

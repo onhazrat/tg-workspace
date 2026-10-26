@@ -108,3 +108,30 @@ test("a second device keeps the Account's model, and switching Key still restore
   await page.getByLabel("AI key", { exact: true }).selectOption("k-spare")
   await expect(model).toContainText("spare/model")
 })
+
+test("the AI context switches are the Account's, never this browser's", async ({
+  page,
+}) => {
+  // The server describes each Channel by them, for the scheduler too (AC-03).
+  const held: Record<string, unknown> = { includeChannelTags: true }
+  const writes = await serveAiPrefs(page, held)
+
+  await page.goto("/")
+  await seedScopedStorage(page, { prompt_includeChannelBio: "true" })
+  await page.reload()
+
+  const pill = page.getByTestId("channel-ai-context")
+  await expect(pill).toHaveAttribute("data-active", "true", { timeout: 20_000 })
+  await pill.click()
+  const tags = page.getByRole("checkbox", { name: "Current tags" })
+  await expect(tags).toBeChecked()
+  // The browser's old switch is not read.
+  await expect(
+    page.getByRole("checkbox", { name: "Channel bio" }),
+  ).not.toBeChecked()
+
+  await tags.uncheck()
+  await expect.poll(() => writes.at(-1)?.includeChannelTags).toBe(false)
+  expect(held.includeChannelBio).toBe(false)
+  expect(await readScopedStorage(page, "prompt_includeChannelTags")).toBeNull()
+})

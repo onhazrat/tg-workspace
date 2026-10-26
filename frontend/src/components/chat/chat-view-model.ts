@@ -49,6 +49,13 @@ export function turnProseClass(
   return `prose prose-sm max-w-none ${invert} ${isRTL ? "text-right" : ""} ${face}`
 }
 
+/**
+ * What the Chat's Scope line counts as missing: its newest answer's count
+ * (ADR-038), since each turn reads the Covered Posts as they stand then.
+ */
+export const newestMissingPosts = (messages: ChatMessage[]): number =>
+  [...messages].reverse().find((m) => m.role === "model")?.missingPosts ?? 0
+
 /** The source a `[channel:id]` citation in a turn points at, if it has one. */
 export const citedSource = (
   sources: Post[] | undefined,

@@ -50,7 +50,6 @@ class SummaryResponse(BaseModel):
     text: str
     language: str = "English"
     model: str | None = None
-    post_count: int | None = Field(default=None, alias="postCount")
     timestamp: int = 0
     #: The Scope this summary was frozen at, or ``null`` on a row a legacy
     #: write door opened without one; the pre-AW-05 rows were deleted in AW-07
@@ -125,7 +124,6 @@ class SummarySubmitRequest(BaseModel):
     derived_from: SummaryDerivation | None = Field(default=None, alias="derivedFrom")
     language: str = "English"
     model: str | None = None
-    post_count: int | None = Field(default=None, alias="postCount")
     #: The small UI flags a new summary starts with (``sendMetadata``,
     #: ``aiKeyId``, ``postSearch``, …). Open for the same reason
     #: ``SummaryResponse`` is: they come and go, and an allowlist here would
@@ -171,7 +169,6 @@ class SummaryUpsertRequest(BaseModel):
     text: str | None = None
     language: str | None = None
     model: str | None = None
-    post_count: int | None = Field(default=None, alias="postCount")
     timestamp: int | None = None
 
     def to_service_body(self) -> dict[str, Any]:

@@ -135,6 +135,27 @@ describe("chatSessionRecord", () => {
       ],
     })
   })
+
+  it("keeps the answer's Missing Post count on the answer, and the Chat's count", () => {
+    const record = chatSessionRecord(
+      "s1",
+      [],
+      "q",
+      { ...turn, postCount: undefined, missingPosts: 2 },
+      100,
+    )
+    expect(record.messages?.at(-1)).toEqual({
+      role: "model",
+      text: "answer",
+      missingPosts: 2,
+    })
+    // A turn over the Covered Posts leaves the Chat's recorded count alone.
+    expect(record).not.toHaveProperty("postCount")
+    expect(
+      chatSessionRecord("s1", [], "q", { ...turn, missingPosts: 0 }, 1)
+        .messages?.[1],
+    ).toEqual({ role: "model", text: "answer" })
+  })
 })
 
 describe("transcriptLoad", () => {

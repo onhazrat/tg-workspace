@@ -1,12 +1,10 @@
 import { describe, expect, it, mock } from "bun:test"
 import { ApiError } from "@/api/base"
-import type { PostScopeQuery } from "@/api/data"
 import { PASTED_SUMMARY_MODEL } from "@/constants"
 import type { Post, Summary } from "@/types"
 import {
   attemptOutcome,
   checkPastedSummary,
-  countRegeneratedPosts,
   failureReport,
   followAttempt,
   pastedSummaryRecord,
@@ -210,39 +208,5 @@ describe("regeneratedRange", () => {
     expect(() => regeneratedRange(pending)).toThrow(
       "The regenerated summary came back with no scope.",
     )
-  })
-})
-
-describe("countRegeneratedPosts", () => {
-  const minute = 60_000
-  const range = { start: 10 * minute + 5, end: 20 * minute }
-
-  it("answers zero without asking when no minute has passed", async () => {
-    const count = await countRegeneratedPosts(
-      ["a"],
-      range,
-      10 * minute,
-      async () => {
-        throw new Error("the server refuses start === end")
-      },
-    )
-    expect(count).toBe(0)
-  })
-
-  it("sums the server's counts over the window otherwise", async () => {
-    const asked: PostScopeQuery[] = []
-    const count = await countRegeneratedPosts(
-      ["a", "b"],
-      range,
-      11 * minute,
-      async (q) => {
-        asked.push(q)
-        return { a: 2, b: 5 }
-      },
-    )
-    expect(count).toBe(7)
-    expect(asked).toEqual([
-      { channelNames: ["a", "b"], startDate: range.start, endDate: range.end },
-    ])
   })
 })

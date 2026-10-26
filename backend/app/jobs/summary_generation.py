@@ -53,8 +53,6 @@ from app.ai.registry import default_model, get_provider, is_credential_rejection
 from app.core import acting_owner, pg_notify
 from app.core.db import engine
 from app.models_tg import Summary, SummaryAttempt, SummaryPayload
-from app.prompts.summary import format_summary_prompt
-from app.schemas.post_filter import to_steps
 from app.schemas.summaries import AttemptKind, AttemptOutcome
 from app.services import pgmq
 from app.services.ai_keys import (
@@ -63,9 +61,14 @@ from app.services.ai_keys import (
     record_validation,
     resolve_ai_key,
 )
+from app.services.artifact_prompts import summary_prompt
 from app.services.logs import upsert_llm_log
-from app.services.prompt_assembly import PromptScope, assemble_posts
-from app.services.summaries import frozen_scope_of, own_summary, store_prompt
+from app.services.summaries import (
+    finish_without_posts,
+    own_summary,
+    store_prompt,
+    summary_scope,
+)
 from app.services.summary_attempts import (
     ATTEMPT_NOT_RUNNING_DETAIL,
     ATTEMPT_RUNNING_DETAIL,
@@ -112,7 +115,6 @@ DEFAULT_TEMPERATURE = 0.7
 RETRY_DELAY_SECONDS = 10.0
 MAX_RETRY_DELAY_SECONDS = 600.0
 #: Why an Attempt was refused before a Provider was reached.
-_LEGACY_SCOPE_DETAIL = "This Summary records no Scope, so no prompt can be built."
 _NO_PROMPT_DETAIL = "This Summary has no prompt to run."
 
 
@@ -160,36 +162,6 @@ def _session_as(owner: acting_owner.ActingOwner | None) -> Iterator[Session]:
         yield session
 
 
-def _prompt_from_scope(
-    session: Session, summary: Summary
-) -> tuple[str, list[tuple[str, int]]]:
-    """The prompt a Summary's frozen Scope reads, as Generate would build it.
-
-    For a Summary that never got as far as storing one: a passing sync or
-    network failure can then be retried as it is. A 413 from the assembly is
-    the token limit, and the caller records it as such. Returns the refs of
-    the Posts in it too, for a regeneration's Scope to record.
-    """
-    frozen = frozen_scope_of(summary)
-    if frozen is None:
-        raise HTTPException(status_code=422, detail=_LEGACY_SCOPE_DETAIL)
-    channels = list(frozen.channels)
-    scope = PromptScope(
-        channels=channels,
-        start_date=frozen.start,
-        end_date=frozen.end,
-        steps=to_steps(frozen.selection) if frozen.selection is not None else None,
-        view_measure=frozen.view_measure,
-        sort=frozen.sort,
-        group_by_channel=frozen.group_by_channel,
-    )
-    posts_text, posts = assemble_posts(session, scope, user_id=summary.user_id)
-    prompt = format_summary_prompt(
-        channels=channels, language=summary.language, posts_text=posts_text
-    )
-    return prompt, [(p["channelName"], p["id"]) for p in posts]
-
-
 def start_attempt(
     session: Session,
     summary_id: str,
@@ -199,8 +171,11 @@ def start_attempt(
     key_id: str | None,
     temperature: float | None,
     scheduled: bool = False,
-) -> SummaryAttempt:
+) -> SummaryAttempt | None:
     """Start an Attempt and hand it to the worker; nothing is generated here.
+
+    `None` when the Summary's Scope covers no Posts: it is finished with the
+    "No new posts found" text instead, and no Attempt starts.
 
     The model and Key default to the last Attempt's. A refusal before any
     Provider is reached (no prompt can be built, the Key cannot be used) is
@@ -239,11 +214,23 @@ def start_attempt(
     payload = session.get(SummaryPayload, summary.id)
     if payload is None or payload.prompt_text is None:
         try:
-            store_prompt(session, summary, *_prompt_from_scope(session, summary))
-            # Kept even if the Key below is refused: "Use another AI" needs it.
-            session.commit()
+            prompt, coverage = summary_prompt(session, summary, payload)
         except HTTPException as exc:
             return refused(str(exc.detail), failure_kind(exc.status_code), None)
+        scope = summary_scope(summary)
+        if not coverage.posts and scope is not None and scope.scoped_post_count is None:
+            # A regeneration's quiet window: its derived Scope records no Posts
+            # yet, and covers none. The Summary says so and nothing is spent,
+            # for the scheduler and the browser's Regenerate alike (ADR-038).
+            # A Scope with Posts on record is never rewritten this way, so a
+            # Retry cannot replace a finished report with this text.
+            finish_without_posts(session, summary)
+            touch_sync(session, "summaries", commit=False)
+            session.commit()
+            return None
+        store_prompt(session, summary, prompt, coverage.refs, missing=coverage.missing)
+        # Kept even if the Key below is refused: "Use another AI" needs it.
+        session.commit()
     try:
         _, key = _provider_for(session, user_id=summary.user_id, key_id=key_id)
     except Exception as exc:

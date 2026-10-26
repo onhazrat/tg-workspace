@@ -17,14 +17,12 @@ import {
   useSummariesHistory,
 } from "@/hooks/useSummaries"
 import { selectedAiKeyId } from "@/lib/aiKeys/selection"
-import { serverMinuteStart } from "@/lib/analysis-window"
 import {
   errorText,
-  frozenScope,
-  type PromptPosts,
   type ProvisionalRow,
   promptPosts,
   searchFilterExtra,
+  withMissingPosts,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
 import { staleSelectedChannels } from "@/lib/chat-sessions/chat-turn"
@@ -43,7 +41,6 @@ import {
 import {
   attemptOutcome,
   checkPastedSummary,
-  countRegeneratedPosts,
   failureReport,
   NO_POSTS_MESSAGE,
   pastedSummaryRecord,
@@ -52,7 +49,6 @@ import {
   resolveCitedPosts,
 } from "@/lib/summaries/summary-run"
 import { useApiStatus } from "../hooks/useApiStatus"
-import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { getSummaryPrompt } from "../services/ai"
 import type { BotCredential, ChatDestination, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
@@ -96,12 +92,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   // (AW-05), and the one thing left that needs a boundary here is deciding
   // which channels to sync before generating.
   const { endDate } = useScope()
-  const {
-    workspaceTabs,
-    setSummarizing,
-    includeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-  } = useUI()
+  const { workspaceTabs, setSummarizing } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
     scrapeChannelsInParallel,
@@ -125,12 +116,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     channels
       .filter((channel) => selectedChannels.has(channel.name))
       .map((channel) => channel.name)
-
-  const channelsText = () =>
-    formatChannelsForPrompt(channels, selectedChannels, {
-      includeBio: includeChannelBioInPrompt,
-      includeTags: includeChannelTagsInPrompt,
-    })
 
   /** Sync the selected channels whose posts may not reach the window's end yet. */
   const syncStaleSelection = async () => {
@@ -160,16 +145,14 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const openSummary = async (
     id: string,
     names: string[],
-    posts: PromptPosts,
     row: ProvisionalRow,
     extra: { status?: "pending" | "failed" },
   ) => {
-    const opened = await submitSummary({
+    await submitSummary({
       id,
       scope: getScopeSubmission(names),
       language: aiLanguage,
       model: selectedModel,
-      postCount: posts.postCount,
       extra: {
         ...searchFilterExtra({
           postSearch,
@@ -180,9 +163,21 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       },
     })
     row.opened(id)
-    // Select by what was frozen, not by what the clock says now — the
-    // Artifact and the prompt have to name the same two instants.
-    return frozenScope(posts.scope, opened.scope)
+  }
+
+  /**
+   * Build the opened Summary's prompt and keep it, for Copy Prompt: the
+   * server reads the Covered Posts the submission froze (ADR-038) and
+   * describes the Channels by the Account's setting (AC-03). Returns it.
+   */
+  const keepPrompt = async (id: string) => {
+    const { prompt, missingPosts } = await getSummaryPrompt(id)
+    await saveSummary({
+      id,
+      promptText: prompt,
+      ...withMissingPosts(missingPosts),
+    } as Summary)
+    return prompt
   }
 
   const handleSummarize = async () => {
@@ -215,7 +210,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // The empty Summary tab (or a new one), which the finished run fills.
     workspaceTabs.openTab("summary")
     try {
-      await streamSummary(names, posts, syncError)
+      await streamSummary(names, syncError)
     } catch (err: unknown) {
       console.error(err)
       toast.error(
@@ -227,7 +222,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   /**
-   * Generate: open the Summary, build and store its prompt, start Attempt 1.
+   * Generate: open the Summary and start Attempt 1, which builds and stores
+   * its prompt on the server as Retry and the scheduler do (AC-03).
    *
    * The worker runs the Attempt (SFR-02, ADR-030); this tab only watches it,
    * so a closed tab or a sleeping laptop does not end it. The Summary opens
@@ -237,32 +233,14 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
    * starts is reported here, with the HTTP status it carried, for the server
    * to classify (SFR-01); the server records every failure after that.
    */
-  const streamSummary = async (
-    names: string[],
-    posts: PromptPosts,
-    syncError: unknown,
-  ) => {
+  const streamSummary = async (names: string[], syncError: unknown) => {
     const newId = crypto.randomUUID()
     // The submission opens the row; failing here leaves nothing to keep.
-    const scope = await openSummary(newId, names, posts, KEEP_ROW, {
-      status: "failed",
-    })
+    await openSummary(newId, names, KEEP_ROW, { status: "failed" })
     setChatMessages([]) // Clear chat when new summary starts
     try {
       await loadHistory()
       if (syncError) throw syncError
-      // Built here rather than on the server when the selection came from a
-      // meaning search, whose Posts only this tab holds.
-      const pendingPrompt = await getSummaryPrompt(
-        names,
-        channelsText(),
-        posts.postsText,
-        aiLanguage,
-        selectedModel,
-        aiTemperature,
-        scope,
-      )
-      await saveSummary({ id: newId, promptText: pendingPrompt } as Summary)
       await startFirstAttempt(newId)
       workspaceTabs.createTab("summary", newId)
       setSummary(null)
@@ -290,7 +268,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         temperature: aiTemperature,
       },
     })
-    if (started.error) throw new RecordedFailure(started.error)
+    if (started?.error) throw new RecordedFailure(started.error)
   }
 
   /** Show the Failed Summary's page, not the half-streamed buffer. */
@@ -337,20 +315,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // awaiting a response from somewhere else, which is what `pending` has
     // always meant.
     const newId = crypto.randomUUID()
-    const scope = await openSummary(newId, names, posts, row, {
-      status: "pending",
-    })
-    const prompt = await getSummaryPrompt(
-      names,
-      channelsText(),
-      posts.postsText,
-      aiLanguage,
-      selectedModel,
-      aiTemperature,
-      scope,
-    )
-    await navigator.clipboard.writeText(prompt)
-    await saveSummary({ id: newId, promptText: prompt } as Summary)
+    await openSummary(newId, names, row, { status: "pending" })
+    await navigator.clipboard.writeText(await keepPrompt(newId))
     row.keep()
     workspaceTabs.createTab("summary", newId)
     setSummary(null)
@@ -472,20 +438,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     const range = regeneratedRange(opened)
     const summaryChannels = scopeChannels(opened)
     await syncSummaryChannels(summaryChannels, range.end, s.id)
-    // A regeneration applies no selection beyond the channels and the window,
-    // so the server builds its prompt from the derived Scope it froze.
-    const postCount = await countRegeneratedPosts(
-      summaryChannels,
-      range,
-      serverMinuteStart(),
-      api.getPostsCounts,
-    )
     // **The Key that pays is the live selection** — not the one the old
     // Summary stored (BYOK-03), so the successor records the Key it ran on.
     const successor = openedSuccessor(s, {
       id: newId,
-      postCount,
-      range,
       selectedAiKeyId: selectedAiKeyId(),
       now: Date.now(),
     })
@@ -493,17 +449,16 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     // The chain moves to the successor, whatever its Attempt does.
     await saveSummary({ ...s, autoRegenerate: false })
     await loadHistory()
-    if (postCount > 0 && !(await runAttempt(s, newId))) return
-    const target = autoPublishTarget(
-      s,
-      postCount,
-      botCredentials,
-      chatDestinations,
-    )
+    if (!(await runAttempt(s, newId))) return
+    const target = autoPublishTarget(s, botCredentials, chatDestinations)
     if (target) await autoPublish(successor, target.bot, target.dest)
   }
 
-  /** Start the successor's Attempt and watch it; true when it succeeded. */
+  /**
+   * Start the successor's Attempt and watch it; true when it succeeded. The
+   * server decides from the Covered Posts whether there is anything to ask:
+   * with none it writes "No new posts found" and starts no Attempt (ADR-038).
+   */
   const runAttempt = async (s: Summary, id: string) => {
     const attempt = await dataStartSummaryAttempt({
       path: { summary_id: id },
@@ -513,6 +468,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
         temperature: aiTemperature,
       },
     })
+    if (!attempt) {
+      await invalidateSummaryState(queryClient, id)
+      await loadHistory()
+      return false
+    }
     // Refused before the worker took it: already recorded on the Summary.
     if (attempt.error) throw new RecordedFailure(attempt.error)
     const outcome =

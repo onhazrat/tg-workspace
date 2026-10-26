@@ -10,7 +10,6 @@ import {
   autoPublishTarget,
   channelsNeedingSync,
   extractCitedPosts,
-  noPostsText,
   openedSuccessor,
   parseCitationRefs,
   successorSummary,
@@ -81,7 +80,6 @@ describe("regeneration", () => {
     const run = {
       id: "s2",
       text: "new",
-      postCount: 9,
       citedPosts: {},
       selectedAiKeyId: "live-key",
       now: 1234,
@@ -90,7 +88,6 @@ describe("regeneration", () => {
     expect(next).toMatchObject({
       id: "s2",
       text: "new",
-      postCount: 9,
       timestamp: 1234,
       autoRegenerate: true,
       aiKeyId: "live-key",
@@ -110,23 +107,19 @@ describe("regeneration", () => {
     ).toBe(true)
   })
 
-  it("opens a successor Failed until its Attempt ends, unless no Posts finished it", () => {
-    const run = {
+  it("opens a successor Failed until its Attempt ends, with no Post count", () => {
+    const opened = openedSuccessor(summary, {
       id: "s2",
-      postCount: 4,
-      range: { start: 0, end: 60_000 },
       selectedAiKeyId: null,
       now: 5,
-    }
-    const working = openedSuccessor(summary, run)
-    expect(working).toMatchObject({ id: "s2", text: "", status: "failed" })
-    expect(working.citedPosts).toEqual({})
-    const empty = openedSuccessor(summary, { ...run, postCount: 0 })
-    expect(empty.status).toBeUndefined()
-    expect(empty.text).toBe(noPostsText(0, 60_000))
+    })
+    expect(opened).toMatchObject({ id: "s2", text: "", status: "failed" })
+    expect(opened.citedPosts).toEqual({})
+    // The server records the refs' count; the browser never submits one.
+    expect("postCount" in opened).toBe(false)
   })
 
-  it("auto-publishes only when enabled, non-empty, and both ends still exist", () => {
+  it("auto-publishes only when enabled and both ends still exist", () => {
     const bots = [{ id: "b", name: "Bot" }] as BotCredential[]
     const dests = [{ id: "d", name: "Dest", chatId: "-1" }] as ChatDestination[]
     const s = {
@@ -135,17 +128,16 @@ describe("regeneration", () => {
       publishBotId: "b",
       publishChatId: "d",
     }
-    expect(autoPublishTarget(s, 5, bots, dests)).toEqual({
+    expect(autoPublishTarget(s, bots, dests)).toEqual({
       bot: bots[0],
       dest: dests[0],
     })
-    expect(autoPublishTarget(s, 0, bots, dests)).toBeNull()
     expect(
-      autoPublishTarget({ ...s, autoPublish: false }, 5, bots, dests),
+      autoPublishTarget({ ...s, autoPublish: false }, bots, dests),
     ).toBeNull()
-    expect(autoPublishTarget(s, 5, [], dests)).toBeNull()
+    expect(autoPublishTarget(s, [], dests)).toBeNull()
     expect(
-      autoPublishTarget({ ...s, publishChatId: "gone" }, 5, bots, dests),
+      autoPublishTarget({ ...s, publishChatId: "gone" }, bots, dests),
     ).toBeNull()
   })
 })

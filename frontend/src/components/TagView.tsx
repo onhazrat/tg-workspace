@@ -58,7 +58,9 @@ export const TagView: React.FC = () => {
         previewMode={previewMode}
         selectedCount={selectedChannels.size}
         selectedRun={selectedRun}
-        scopeLine={(run) => <ArtifactScopeLine artifact={run} />}
+        scopeLine={(run) => (
+          <ArtifactScopeLine artifact={run} missingPosts={run.missingPosts} />
+        )}
         emptyState={
           <GoToActionEmptyState
             what="tag run"

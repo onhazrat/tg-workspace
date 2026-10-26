@@ -104,14 +104,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setSelectedChannels,
   } = useData()
 
-  const {
-    summarizing,
-    includeChannelBioInPrompt,
-    setIncludeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-    setIncludeChannelTagsInPrompt,
-    setActiveTab,
-  } = useUI()
+  const { summarizing, setActiveTab } = useUI()
 
   const {
     sortBy,
@@ -133,6 +126,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
     setChannelGridGroupBySelection,
     channelActionLimit,
     setChannelActionLimit,
+    includeChannelBio,
+    setIncludeChannelBio,
+    includeChannelTags,
+    setIncludeChannelTags,
   } = settings
 
   const { isOffline } = useApiStatus()
@@ -534,10 +531,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             showSubscribers={showChannelSubscribers}
           />
           <AiContextPill
-            includeBio={includeChannelBioInPrompt}
-            onIncludeBioChange={setIncludeChannelBioInPrompt}
-            includeTags={includeChannelTagsInPrompt}
-            onIncludeTagsChange={setIncludeChannelTagsInPrompt}
+            includeBio={includeChannelBio}
+            onIncludeBioChange={setIncludeChannelBio}
+            includeTags={includeChannelTags}
+            onIncludeTagsChange={setIncludeChannelTags}
           />
           <SyncAllButton
             channels={channels}

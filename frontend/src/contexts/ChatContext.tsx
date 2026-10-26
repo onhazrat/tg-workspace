@@ -1,7 +1,6 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/api"
 import {
   useChatSessionQuery,
   useInvalidateChatSessions,
@@ -9,12 +8,12 @@ import {
 import {
   errorText,
   type ProvisionalRow,
-  promptPosts,
   readStream,
   searchFilterExtra,
   withProvisionalRow,
 } from "@/lib/artifacts/artifact-run"
 import {
+  answerTurn,
   chatErrorText,
   chatLLMLog,
   chatSessionRecord,
@@ -35,9 +34,8 @@ import {
   submitChatSession,
 } from "@/lib/chat-sessions/store"
 import { saveLLMLog } from "@/lib/logs/write"
-import { formatChannelsForPrompt } from "../lib/channels/format-channels-for-prompt"
 import { chatWithHistoryStream, generateChatStream } from "../services/ai"
-import type { ChatMessage, ChatMode, ChatSession, Post } from "../types"
+import type { ChatMessage, ChatMode, Post } from "../types"
 import { useData } from "./DataContext"
 import { useRAG } from "./RAGContext"
 import { useScope } from "./ScopeContext"
@@ -83,13 +81,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const { channels, selectedChannels } = useData()
   const loadHistory = useInvalidateChatSessions()
   const { startDate, endDate } = useScope()
-  const {
-    activeTab,
-    currentChatSessionId,
-    workspaceTabs,
-    includeChannelBioInPrompt,
-    includeChannelTagsInPrompt,
-  } = useUI()
+  const { activeTab, currentChatSessionId, workspaceTabs } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
   const {
     scrapeChannelsInParallel,
@@ -97,7 +89,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     semanticSearchQuery,
     semanticSearchRespectsChannels,
     handleFilterPosts,
-    getPromptPostsInput,
     getScopeSubmission,
   } = useScraper()
   const { searchSimilarPosts } = useRAG()
@@ -181,6 +172,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   /** Answer from the posts most similar to the question (RAG). */
   const answerFromSimilarPosts = async (
+    sessionId: string,
     userMessage: string,
     history: ChatMessage[],
   ): Promise<TurnResult> => {
@@ -210,6 +202,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     const { stream, prompt, config, systemInstruction } =
       await chatWithHistoryStream(
+        sessionId,
         sources,
         aiLanguage,
         selectedModel,
@@ -242,48 +235,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     handleFilterPosts()
   }
 
-  /** Answer from every post in the Analysis window the session froze. */
+  /**
+   * Answer from the Chat's own Covered Posts.
+   *
+   * The turn names the Chat and the server reads what it froze (ADR-038), so
+   * changing the Posts tab leaves an open Chat about the Posts it started
+   * from. The stream says how many of them could no longer be read.
+   */
   const answerFromScope = async (
+    sessionId: string,
     userMessage: string,
     history: ChatMessage[],
-    selectedChannelNames: string[],
-    frozen: ChatSession["scope"],
   ): Promise<TurnResult> => {
     await syncStaleSelection()
-    // Server-eligible → send the scope (backend assembles); semantic/related
-    // → client-built postsText. Refreshed after any pre-chat sync above.
-    //
-    // Select by what was frozen, not by what the clock says now — the Chat
-    // and its prompt have to name the same two instants. The counts go
-    // through the same value, or the number stored beside the answer
-    // describes a different window than the answer does.
-    const posts = await promptPosts(
-      await getPromptPostsInput(),
-      selectedChannelNames,
-      api.getPostsCounts,
-      frozen,
-    )
-    const { stream, prompt, config, systemInstruction } =
+    const { stream, prompt, config, systemInstruction, missingPosts } =
       await generateChatStream(
-        selectedChannelNames,
-        formatChannelsForPrompt(channels, selectedChannels, {
-          includeBio: includeChannelBioInPrompt,
-          includeTags: includeChannelTagsInPrompt,
-        }),
-        posts.postsText,
+        sessionId,
         aiLanguage,
         selectedModel,
         history,
         userMessage,
         aiTemperature,
-        posts.scope,
       )
     return {
       ...(await streamReply(stream)),
       prompt,
       config,
       systemInstruction: systemInstruction ?? "",
-      postCount: posts.postCount,
+      missingPosts: missingPosts(),
     }
   }
 
@@ -313,36 +292,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   /**
-   * The window the *row* records, opening the row first on the turn that
-   * creates the session.
+   * Open the row on the turn that creates the session, and never again.
    *
-   * Submit before a single token is spent (AW-06). The server resolves the
-   * Analysis window against its own current minute and stores the result, so
-   * model latency, a retry and this browser's clock cannot move the boundaries
-   * the finished Chat claims it used.
-   *
-   * On the turn that *creates* the session and never again, which matters more
-   * here than it does for a Summary: a conversation writes back after every
-   * turn and can easily outlive the Live window it started in, so before this
-   * the recorded window was whichever one the last message happened to land
-   * in. Assembling the prompt from live scope instead was the defect: a
-   * conversation held across a Live boundary answered later turns from a
-   * window its own record did not claim. `undefined` only for a session opened
-   * before AW-06, which AW-07 deletes.
-   *
-   * No explicit Post selection, deliberately. A semantic chat ranks Posts per
-   * *turn*, against the question being asked; the session's Scope is the
-   * window and filters that ranking ran inside, and `scopedPostCount` being
-   * null says exactly that.
+   * Submit before a single token is spent (AW-06). The server freezes the
+   * Analysis window against its own current minute and records the Covered
+   * Posts, so model latency, a retry and this browser's clock cannot move what
+   * the finished Chat claims it used. Every turn after reads those Covered
+   * Posts by naming the Chat (ADR-038), which matters more here than it does
+   * for a Summary: a conversation can easily outlive the Live window it
+   * started in, and it stays about the Posts it started from.
    */
-  const frozenSessionScope = async (
+  const openSession = async (
     send: ResolvedSend,
     sessionId: string,
     selectedChannelNames: string[],
     row: ProvisionalRow,
-  ): Promise<ChatSession["scope"]> => {
-    if (send.sessionId) return openedSession?.scope
-    const opened = await submitChatSession({
+  ): Promise<void> => {
+    if (send.sessionId) return
+    await submitChatSession({
       id: sessionId,
       scope: getScopeSubmission(selectedChannelNames),
       language: aiLanguage,
@@ -355,7 +322,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }),
     })
     row.opened(sessionId)
-    return opened.scope ?? openedSession?.scope
   }
 
   const runTurn = async (send: ResolvedSend, row: ProvisionalRow) => {
@@ -366,12 +332,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     const selectedChannelNames = channels
       .filter((channel) => selectedChannels.has(channel.name))
       .map((channel) => channel.name)
-    const frozen = await frozenSessionScope(
-      send,
-      sessionId,
-      selectedChannelNames,
-      row,
-    )
+    await openSession(send, sessionId, selectedChannelNames, row)
 
     const startTime = Date.now()
     setChatMessages([
@@ -379,7 +340,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       { role: "user", text: send.message },
       { role: "model", text: "" },
     ])
-    const turn = await answer(send, selectedChannelNames, frozen)
+    const turn = await answer(send, sessionId)
+    // The finished answer, with its Missing Post count for the Scope line.
+    setChatMessages((prev) => replaceLastTurn(prev, answerTurn(turn)))
     await recordTurn(send, sessionId, turn, startTime)
     row.keep()
     // Claim the id before publishing it, so the loader effect above treats
@@ -393,19 +356,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     await loadHistory()
   }
 
-  const answer = (
-    send: ResolvedSend,
-    selectedChannelNames: string[],
-    frozen: ChatSession["scope"],
-  ) =>
+  const answer = (send: ResolvedSend, sessionId: string) =>
     chatMode === "semantic"
-      ? answerFromSimilarPosts(send.message, send.history)
-      : answerFromScope(
-          send.message,
-          send.history,
-          selectedChannelNames,
-          frozen,
-        )
+      ? answerFromSimilarPosts(sessionId, send.message, send.history)
+      : answerFromScope(sessionId, send.message, send.history)
 
   const recordTurn = async (
     send: ResolvedSend,

@@ -107,6 +107,7 @@ from app.models_tg import (
 from app.services.ai_keys import AI_CREDENTIAL_NOT_FOUND
 from app.services.logs import LOG_HEAVY_COLUMNS, list_logs
 from tests.utils.scope import stored_scope
+from tests.utils.tenancy import follow_synced
 from tests.utils.user import create_random_user
 
 APP_ROOT = pathlib.Path(__file__).resolve().parents[2] / "app"
@@ -166,10 +167,9 @@ def _due_summary(
 ) -> Summary:
     """A Summary `_is_due` says is ready, over a Channel with one Post in range.
 
-    The Channel is deliberately **not followed**, so `_sync_channels_for_summary`
-    finds nothing stale and the test never reaches the scraper. The Post is
-    seeded directly because the corpus table is not follow-scoped on the read
-    `_regenerate_one` makes.
+    The Channel is followed and synced past the window, so
+    `_sync_channels_for_summary` finds nothing stale and the test never
+    reaches the scraper.
     """
     now = int(time.time() * 1000)
     channel = f"prov-{uuid.uuid4().hex[:8]}"
@@ -181,6 +181,7 @@ def _due_summary(
             timestamp=now - 1_800_000,
         )
     )
+    follow_synced(session, channel, user_id=owner)
     row = Summary(
         id=f"sum-{uuid.uuid4().hex[:8]}",
         user_id=owner,
@@ -433,6 +434,7 @@ def test_the_next_tick_derives_the_following_window_from_a_failed_successor(
     # One Post in each of the next two windows, so both ticks have work.
     for post_id, ts in ((1, now - 5 * hour // 2), (2, now - 3 * hour // 2)):
         session.add(Post(channel_name=channel, post_id=post_id, text="a", timestamp=ts))
+    follow_synced(session, channel, user_id=user.id)
     session.add(
         Summary(
             id=f"sum-{uuid.uuid4().hex[:8]}",

@@ -1368,21 +1368,18 @@ export type ChatMessage = {
 
 /**
  * ChatRequest
+ *
+ * One turn of a Chat: the server reads the Chat's Covered Posts.
  */
 export type ChatRequest = {
     /**
-     * Channels
+     * Chatid
      */
-    channels?: Array<string>;
-    /**
-     * Channelstext
-     */
-    channelsText?: string;
+    chatId: string;
     /**
      * Poststext
      */
     postsText?: string;
-    scope?: PromptScopeInput | null;
     /**
      * Language
      */
@@ -1584,28 +1581,6 @@ export type ClearTableResponse = {
      * Deleted
      */
     deleted?: number;
-};
-
-/**
- * CompletionResult
- */
-export type CompletionResult = {
-    /**
-     * Text
-     */
-    text: string;
-    /**
-     * Prompt
-     */
-    prompt: string;
-    /**
-     * Model
-     */
-    model: string;
-    /**
-     * Provider
-     */
-    provider: string;
 };
 
 /**
@@ -5493,40 +5468,10 @@ export type PromptResponse = {
      * Prompt
      */
     prompt?: string;
-};
-
-/**
- * PromptScopeInput
- *
- * A Posts-feed scope the backend resolves into the prompt's posts block,
- * instead of the client shipping a pre-built ``postsText``. Mirrors the
- * frontend feed query params.
- */
-export type PromptScopeInput = {
     /**
-     * Window
+     * Missingposts
      */
-    window?: ({
-        mode: 'live';
-    } & LiveAnalysisWindow) | ({
-        mode: 'fixed';
-    } & FixedAnalysisWindow) | null;
-    /**
-     * Selection
-     */
-    selection?: Array<SelectionRuleInput | SelectionPick>;
-    /**
-     * Viewmeasure
-     */
-    viewMeasure?: 'views' | 'estimated';
-    /**
-     * Sort
-     */
-    sort?: 'newest' | 'oldest' | 'most_views' | 'fewest_views';
-    /**
-     * Groupbychannel
-     */
-    groupByChannel?: boolean;
+    missingPosts?: number;
 };
 
 /**
@@ -7617,10 +7562,6 @@ export type SummaryListItemResponse = {
      */
     model?: string | null;
     /**
-     * Postcount
-     */
-    postCount?: number | null;
-    /**
      * Timestamp
      */
     timestamp?: number;
@@ -7633,38 +7574,15 @@ export type SummaryListItemResponse = {
 };
 
 /**
- * SummaryRequest
+ * SummaryPromptRequest
+ *
+ * Which Summary's prompt to build: the server reads its Covered Posts.
  */
-export type SummaryRequest = {
+export type SummaryPromptRequest = {
     /**
-     * Channels
+     * Summaryid
      */
-    channels: Array<string>;
-    /**
-     * Channelstext
-     */
-    channelsText?: string;
-    /**
-     * Poststext
-     */
-    postsText?: string;
-    scope?: PromptScopeInput | null;
-    /**
-     * Language
-     */
-    language?: string;
-    /**
-     * Model
-     */
-    model?: string | null;
-    /**
-     * Temperature
-     */
-    temperature?: number;
-    /**
-     * Aikeyid
-     */
-    aiKeyId?: string | null;
+    summaryId: string;
 };
 
 /**
@@ -7693,10 +7611,6 @@ export type SummaryResponse = {
      */
     model?: string | null;
     /**
-     * Postcount
-     */
-    postCount?: number | null;
-    /**
      * Timestamp
      */
     timestamp?: number;
@@ -7724,10 +7638,6 @@ export type SummarySubmitRequest = {
      * Model
      */
     model?: string | null;
-    /**
-     * Postcount
-     */
-    postCount?: number | null;
     /**
      * Extra
      */
@@ -7766,10 +7676,6 @@ export type SummaryUpsertRequest = {
      * Model
      */
     model?: string | null;
-    /**
-     * Postcount
-     */
-    postCount?: number | null;
     /**
      * Timestamp
      */
@@ -8142,21 +8048,14 @@ export type TagRenameRequest = {
 
 /**
  * TagRequest
+ *
+ * A Tag run's prompt: the server reads the run's Covered Posts.
  */
 export type TagRequest = {
     /**
-     * Channels
+     * Tagrunid
      */
-    channels: Array<string>;
-    /**
-     * Channelstext
-     */
-    channelsText?: string;
-    /**
-     * Poststext
-     */
-    postsText?: string;
-    scope?: PromptScopeInput | null;
+    tagRunId: string;
     /**
      * Alltags
      */
@@ -8376,10 +8275,6 @@ export type TagRunSubmitRequest = {
      * Model
      */
     model?: string | null;
-    /**
-     * Postcount
-     */
-    postCount?: number | null;
     /**
      * Extra
      */
@@ -9775,33 +9670,8 @@ export type AiApiListModelsResponses = {
 
 export type AiApiListModelsResponse = AiApiListModelsResponses[keyof AiApiListModelsResponses];
 
-export type AiApiSummaryData = {
-    body: SummaryRequest;
-    path?: never;
-    query?: never;
-    url: '/api/v1/ai/summary';
-};
-
-export type AiApiSummaryErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type AiApiSummaryError = AiApiSummaryErrors[keyof AiApiSummaryErrors];
-
-export type AiApiSummaryResponses = {
-    /**
-     * Successful Response
-     */
-    200: CompletionResult;
-};
-
-export type AiApiSummaryResponse = AiApiSummaryResponses[keyof AiApiSummaryResponses];
-
 export type AiApiSummaryPromptData = {
-    body: SummaryRequest;
+    body: SummaryPromptRequest;
     path?: never;
     query?: never;
     url: '/api/v1/ai/summary/prompt';
@@ -11739,9 +11609,11 @@ export type DataStartSummaryAttemptError = DataStartSummaryAttemptErrors[keyof D
 
 export type DataStartSummaryAttemptResponses = {
     /**
+     * Response Data-Start Summary Attempt
+     *
      * Successful Response
      */
-    200: SummaryAttemptResponse;
+    200: SummaryAttemptResponse | null;
 };
 
 export type DataStartSummaryAttemptResponse = DataStartSummaryAttemptResponses[keyof DataStartSummaryAttemptResponses];
