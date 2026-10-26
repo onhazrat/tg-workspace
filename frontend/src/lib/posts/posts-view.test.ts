@@ -19,6 +19,7 @@ const base: PostsView = {
   channelNames: ["durov", "news"],
   keyword: "",
   ranking: NO_RANKING,
+  respectsChannels: false,
   filter: filter("lang:fa"),
   maxPerChannel: 5,
   maxPerChannelMode: "ordered",
@@ -39,9 +40,8 @@ const changes = {
   keyword: { keyword: "rates" },
   // No read sends it: a meaning search runs in the browser, and the reads
   // that count or filter ignore it.
-  ranking: {
-    ranking: { kind: "meaning", query: "rates", respectsChannels: true },
-  },
+  ranking: { ranking: { kind: "meaning", query: "rates" } },
+  respectsChannels: { respectsChannels: true },
   filter: { filter: filter("media:video") },
   maxPerChannel: { maxPerChannel: 0 },
   maxPerChannelMode: { maxPerChannelMode: "random" },

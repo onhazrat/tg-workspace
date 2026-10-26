@@ -411,7 +411,7 @@ export function usePostsFeed(
         toast.error(
           `${errorText(error, "Search failed")}. Falling back to normal view.`,
         )
-        setRanking(NO_RANKING)
+        setRanking({ ranking: NO_RANKING })
       })
       .finally(() => {
         if (!cancelled) setClientLoading(false)

@@ -1364,7 +1364,7 @@
       "comment": "How long a keystroke waits before it reaches the view.",
       "expression": "300",
       "file": "frontend/src/contexts/PostsViewContext.tsx",
-      "line": 78,
+      "line": 79,
       "name": "POST_SEARCH_DEBOUNCE_MS",
       "value": 300
     },

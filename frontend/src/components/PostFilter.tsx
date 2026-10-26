@@ -475,46 +475,29 @@ function useSpotlitWindowHistogram(query: WindowHistogramQuery) {
   return usePostWindowHistogram(query, useSpotlight().spotlight)
 }
 
-/**
- * The ranking as the bar's controls. The checkbox answers for a meaning
- * search before one runs, so `respects` holds that answer until Enter.
- */
+/** The ranking and the "respects Channels" choice as the bar's controls. */
 function rankingControls(
-  ranking: PostsRanking,
+  view: Pick<PostsView, "ranking" | "respectsChannels">,
   setRanking: PostsViewEdits["setRanking"],
-  respects: boolean,
-  setRespects: (value: boolean) => void,
 ) {
-  const respectsNow = (current: PostsRanking) =>
-    current.kind === "meaning" ? current.respectsChannels : respects
+  const { ranking } = view
+  // Clearing one search leaves the other kind, as each control always did.
+  const clears = (kind: PostsRanking["kind"]) =>
+    ranking.kind === kind ? setRanking({ ranking: NO_RANKING }) : undefined
   return {
     semanticSearchQuery: meaningQuery(ranking),
     setSemanticSearchQuery: (query: string) =>
-      setRanking((current) =>
-        query
-          ? { kind: "meaning", query, respectsChannels: respectsNow(current) }
-          : current.kind === "meaning"
-            ? NO_RANKING
-            : current,
-      ),
-    semanticSearchRespectsChannels: respectsNow(ranking),
-    setSemanticSearchRespectsChannels: (value: boolean) => {
-      setRespects(value)
-      setRanking((current) =>
-        current.kind === "meaning"
-          ? { ...current, respectsChannels: value }
-          : current,
-      )
-    },
+      query
+        ? setRanking({ ranking: { kind: "meaning", query } })
+        : clears("meaning"),
+    semanticSearchRespectsChannels: view.respectsChannels,
+    setSemanticSearchRespectsChannels: (respectsChannels: boolean) =>
+      setRanking({ respectsChannels }),
     relatedPostSearch: relatedPost(ranking),
     setRelatedPostSearch: (post: Post | null) =>
-      setRanking((current) =>
-        post
-          ? { kind: "related", post }
-          : current.kind === "related"
-            ? NO_RANKING
-            : current,
-      ),
+      post
+        ? setRanking({ ranking: { kind: "related", post } })
+        : clears("related"),
   }
 }
 
@@ -543,11 +526,10 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const postSearch = usePostsKeyword()
   const { view } = usePostsViewState()
   const edits = usePostsViewEdits()
-  const [respects, setRespects] = React.useState(false)
   // A spotlight's tree is what the row shows and edits (PTR-04).
   const { controls, keywordIgnored } = spotlitBar(
     {
-      ...rankingControls(view.ranking, edits.setRanking, respects, setRespects),
+      ...rankingControls(view, edits.setRanking),
       ...orderControls(view, edits),
     },
     spot.spotlight,

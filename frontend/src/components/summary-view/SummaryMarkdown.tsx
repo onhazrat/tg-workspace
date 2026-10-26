@@ -7,7 +7,6 @@ import {
   type CitationRenderer,
   splitCitations,
 } from "@/lib/citations/replace-citations"
-import { meaningRanking } from "@/lib/posts/posts-view"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import { type PreviewWorkspace, usePreviewSheet } from "../PostPreview"
 import { SummaryCitation } from "./SummaryCitation"
@@ -97,7 +96,7 @@ const SearchableListItem: Components["li"] = ({ node, children, ...props }) => {
         e.stopPropagation()
         const query = relatedPostsQuery(extractText(children))
         if (query === null) return
-        setRanking(meaningRanking(query))
+        setRanking({ ranking: { kind: "meaning", query } })
         setActiveTab("posts")
       }}
       title={embeddingsEnabled ? "Click to find related posts" : undefined}

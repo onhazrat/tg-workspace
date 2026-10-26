@@ -15,7 +15,7 @@ async function applyPostSearchQuery(
   value: string,
 ): Promise<void> {
   ctx.postsEdits.setKeyword(value.trim())
-  ctx.postsEdits.setRanking(NO_RANKING)
+  ctx.postsEdits.setRanking({ ranking: NO_RANKING })
 }
 
 function applySummarySearchQuery(ctx: CommandContext, value: string): void {

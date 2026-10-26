@@ -62,7 +62,7 @@ export const PostCard: React.FC<PostCardProps> = ({
       onFindRelated={
         embeddingsEnabled
           ? () => {
-              setRanking({ kind: "related", post })
+              setRanking({ ranking: { kind: "related", post } })
               window.scrollTo({ top: 0, behavior: "smooth" })
             }
           : undefined

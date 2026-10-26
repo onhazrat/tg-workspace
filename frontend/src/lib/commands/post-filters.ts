@@ -20,7 +20,7 @@ export { MEDIA_KIND_OPTIONS }
 export function clearPostFilters(ctx: CommandContext): void {
   const edits = ctx.postsEdits
   edits.setKeyword("")
-  edits.setRanking(NO_RANKING)
+  edits.setRanking({ ranking: NO_RANKING })
   edits.setPostFilter(emptyPostFilter())
   edits.setOrder({
     maxPerChannel: 0,

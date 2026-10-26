@@ -64,6 +64,7 @@ import {
   type PostsOrder,
   type PostsRanking,
   type PostsView,
+  type RankingEdit,
 } from "@/lib/posts/posts-view"
 import { workspaceFromScope } from "@/lib/posts/restore-scope"
 import type { ScopedPostsDeps } from "@/lib/posts/scoped-posts"
@@ -103,9 +104,8 @@ interface PostsViewEditsContextType {
   setKeyword: (keyword: string) => void
   /** Refused with a toast past the server's bounds, or the URL would drop it. */
   setPostFilter: (filter: PostFilter) => void
-  setRanking: (
-    next: PostsRanking | ((current: PostsRanking) => PostsRanking),
-  ) => void
+  /** The ranking, the "respects Channels" choice, or both (`RankingEdit`). */
+  setRanking: (edit: RankingEdit) => void
   /** Any part of the order and cap; the rest is kept. */
   setOrder: (patch: Partial<PostsOrder>) => void
   /** Append steps; false, with a toast saying why, when a bound refuses. */
@@ -256,7 +256,9 @@ export function PostsViewModule({
 }) {
   const [keyword, setKeyword] = useState("")
   const debouncedKeyword = useDebouncedValue(keyword, POST_SEARCH_DEBOUNCE_MS)
-  const [ranking, setRanking] = useState<PostsRanking>(NO_RANKING)
+  const [ranking, setRankingState] = useState<PostsRanking>(NO_RANKING)
+  // Provider state, not stored: it outlives the search bar, not a reload.
+  const [respectsChannels, setRespectsChannels] = useState(false)
   const [order, setOrderState] = useState<PostsOrder>(readStoredOrder)
   useEffect(() => storeOrder(order), [order])
   const { selection, edit, edits: selectionEdits } = useSelection()
@@ -272,6 +274,7 @@ export function PostsViewModule({
       channelNames: selectedChannelNames,
       keyword: debouncedKeyword,
       ranking,
+      respectsChannels,
       filter,
       ...order,
       startDate,
@@ -284,6 +287,7 @@ export function PostsViewModule({
       selectedChannelNames,
       debouncedKeyword,
       ranking,
+      respectsChannels,
       filter,
       order,
       startDate,
@@ -329,6 +333,11 @@ export function PostsViewModule({
     }
     const setOrder = (patch: Partial<PostsOrder>) =>
       setOrderState((current) => ({ ...current, ...patch }))
+    const setRanking = (edit: RankingEdit) => {
+      if (edit.ranking) setRankingState(edit.ranking)
+      if (edit.respectsChannels !== undefined)
+        setRespectsChannels(edit.respectsChannels)
+    }
     return {
       setKeyword,
       setPostFilter,
@@ -349,7 +358,7 @@ export function PostsViewModule({
           groupByChannel: next.groupByChannel,
         })
         selectionEdits.replaceSelection(next.selection)
-        setRanking(NO_RANKING)
+        setRanking({ ranking: NO_RANKING })
       },
     }
   }, [selectionEdits])

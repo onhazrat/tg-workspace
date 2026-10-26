@@ -223,13 +223,13 @@ describe("the ranking", () => {
     const { result } = mount()
     act(() =>
       result.current.edits.setRanking({
-        kind: "meaning",
-        query: "rates",
-        respectsChannels: true,
+        ranking: { kind: "meaning", query: "rates" },
       }),
     )
     act(() =>
-      result.current.edits.setRanking({ kind: "related", post: post(3) }),
+      result.current.edits.setRanking({
+        ranking: { kind: "related", post: post(3) },
+      }),
     )
 
     expect(result.current.state.view.ranking).toEqual({
@@ -238,29 +238,61 @@ describe("the ranking", () => {
     })
   })
 
-  test("an update reads the ranking it replaces", () => {
+  test("a meaning search uses the Account's choice, made before it ran", () => {
+    const { result } = mount()
+    expect(result.current.state.view.respectsChannels).toBe(false)
+    act(() => result.current.edits.setRanking({ respectsChannels: true }))
+    expect(result.current.state.view.ranking).toEqual(NO_RANKING)
+
+    // As a Summary bullet or the palette starts one: the query alone.
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+
+    const { view } = result.current.state
+    expect(view.ranking).toEqual({ kind: "meaning", query: "rates" })
+    expect(view.respectsChannels).toBe(true)
+  })
+
+  test("the choice outlives the search it was made in", () => {
     const { result } = mount()
     act(() =>
       result.current.edits.setRanking({
-        kind: "meaning",
-        query: "rates",
+        ranking: { kind: "meaning", query: "rates" },
         respectsChannels: true,
       }),
     )
+    act(() => result.current.edits.setRanking({ ranking: NO_RANKING }))
     act(() =>
-      result.current.edits.setRanking((current) => ({
-        kind: "meaning",
-        query: "inflation",
-        respectsChannels:
-          current.kind === "meaning" && current.respectsChannels,
-      })),
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "inflation" },
+      }),
     )
 
-    expect(result.current.state.view.ranking).toEqual({
-      kind: "meaning",
-      query: "inflation",
-      respectsChannels: true,
+    expect(result.current.state.view.respectsChannels).toBe(true)
+  })
+
+  test("the search it keeps to reaches the fetch for what the tab shows", async () => {
+    const asked: (string[] | undefined)[] = []
+    const { result } = mount({
+      embeddingsEnabled: true,
+      searchSimilarPosts: async (_query, _limit, options) => {
+        asked.push(options.channels)
+        return []
+      },
     })
+    act(() => result.current.edits.setRanking({ respectsChannels: true }))
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+
+    await result.current.state.getScopedPosts()
+
+    expect(asked).toEqual([CHANNELS])
   })
 })
 
@@ -438,7 +470,7 @@ describe("restore", () => {
       edits.setPostFilter(PERSIAN)
       edits.setOrder({ maxPerChannel: 9, groupByChannel: true })
       edits.appendSelection([pick(true, post(1))])
-      edits.setRanking({ kind: "related", post: post(4) })
+      edits.setRanking({ ranking: { kind: "related", post: post(4) } })
     })
     const selection = [rule(false), pick(true, post(7))]
 
@@ -561,9 +593,7 @@ describe("the order and cap, in per-Account browser storage", () => {
     act(() => {
       result.current.edits.setKeyword("crypto")
       result.current.edits.setRanking({
-        kind: "meaning",
-        query: "crypto",
-        respectsChannels: false,
+        ranking: { kind: "meaning", query: "crypto" },
       })
     })
 

@@ -23,7 +23,6 @@ import {
   meaningQuery,
   type PostsView,
   relatedPost,
-  respectsChannels,
 } from "@/lib/posts/posts-view"
 import {
   computeScopedPosts,
@@ -76,6 +75,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     scopeChannelNames,
     keyword,
     ranking,
+    respectsChannels,
     filter,
     maxPerChannel,
     maxPerChannelMode,
@@ -91,7 +91,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
       searchText: keyword,
       semanticQuery: meaningQuery(ranking),
       relatedPostSearch: relatedPost(ranking),
-      semanticSearchRespectsChannels: respectsChannels(ranking),
+      semanticSearchRespectsChannels: respectsChannels,
       embeddingsEnabled,
       selectedChannels: scopeChannelNames,
       startDate,
@@ -116,6 +116,7 @@ export function usePromptPosts(deps: PromptPostsDeps): PromptPosts {
     scopeChannelNames,
     keyword,
     ranking,
+    respectsChannels,
     filter,
     maxPerChannel,
     maxPerChannelMode,

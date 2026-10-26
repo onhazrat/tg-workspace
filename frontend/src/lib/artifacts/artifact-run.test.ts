@@ -89,7 +89,8 @@ it("searchFilterExtra drops empty filters but keeps the channel switch", () => {
   expect(
     searchFilterExtra({
       keyword: "",
-      ranking: { kind: "meaning", query: "war", respectsChannels: false },
+      ranking: { kind: "meaning", query: "war" },
+      respectsChannels: false,
     }),
   ).toEqual({
     postSearch: undefined,

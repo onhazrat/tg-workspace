@@ -4,11 +4,7 @@
  * the state and the toasts.
  */
 import type { PostScopeQuery, PromptScope } from "@/api/data"
-import {
-  meaningQuery,
-  type PostsView,
-  respectsChannels,
-} from "@/lib/posts/posts-view"
+import { meaningQuery, type PostsView } from "@/lib/posts/posts-view"
 
 /** What a run tells `withProvisionalRow` about the row it opened. */
 export interface ProvisionalRow {
@@ -56,12 +52,12 @@ export const withMissingPosts = (
 
 /** The Posts-tab searches a submission records beside its Scope; empty ones are left out. */
 export function searchFilterExtra(
-  view: Pick<PostsView, "keyword" | "ranking">,
+  view: Pick<PostsView, "keyword" | "ranking" | "respectsChannels">,
 ) {
   return {
     postSearch: view.keyword || undefined,
     semanticSearchQuery: meaningQuery(view.ranking) || undefined,
-    semanticSearchRespectsChannels: respectsChannels(view.ranking),
+    semanticSearchRespectsChannels: view.respectsChannels,
   }
 }
 

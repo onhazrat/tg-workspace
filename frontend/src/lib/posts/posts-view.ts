@@ -42,26 +42,19 @@ import type { PostSelection } from "./post-selection"
  */
 export type PostsRanking =
   | { kind: "none" }
-  | { kind: "meaning"; query: string; respectsChannels: boolean }
+  | { kind: "meaning"; query: string }
   | { kind: "related"; post: Post }
 
 export const NO_RANKING: PostsRanking = { kind: "none" }
 
-/** Whether a meaning query keeps to the selected Channels; false otherwise. */
-export const respectsChannels = (ranking: PostsRanking): boolean =>
-  ranking.kind === "meaning" && ranking.respectsChannels
-
 /**
- * A meaning search for `query`, keeping whether the one it replaces kept to
- * the selected Channels.
+ * One ranking edit: a new ranking, the Account's "respects Channels" choice
+ * for every meaning search, or both. What it leaves out it keeps.
  */
-export const meaningRanking =
-  (query: string) =>
-  (current: PostsRanking): PostsRanking => ({
-    kind: "meaning",
-    query,
-    respectsChannels: respectsChannels(current),
-  })
+export type RankingEdit = {
+  ranking?: PostsRanking
+  respectsChannels?: boolean
+}
 
 /** What a meaning search asks for, or "" when none is running. */
 export const meaningQuery = (ranking: PostsRanking): string =>
@@ -81,6 +74,11 @@ export interface PostsView {
   keyword: string
   /** The reads that count or filter ignore it. */
   ranking: PostsRanking
+  /**
+   * Whether a meaning search keeps to the selected Channels: the Account's
+   * choice, held while no search runs so the next one uses it.
+   */
+  respectsChannels: boolean
   filter: PostFilter
   maxPerChannel: number
   maxPerChannelMode: MaxPostsPerChannelMode

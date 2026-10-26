@@ -81,6 +81,7 @@ const VIEW: PostsView = {
   channelNames: CHANNELS,
   keyword: "",
   ranking: NO_RANKING,
+  respectsChannels: false,
   filter: NO_FILTER,
   maxPerChannel: 0,
   maxPerChannelMode: "ordered",
@@ -170,7 +171,7 @@ describe("getPromptPostsInput", () => {
     const looked: unknown[] = []
     const shown = await render({
       embeddingsEnabled: true,
-      ranking: { kind: "meaning", query: "crypto", respectsChannels: false },
+      ranking: { kind: "meaning", query: "crypto" },
       filter: PERSIAN,
       selection: SELECTION,
       searchSimilarPosts: async () => ranked,

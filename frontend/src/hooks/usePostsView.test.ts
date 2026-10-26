@@ -9,7 +9,6 @@ const related = { id: 1 } as Post
 const meaning = (query: string): PostsRanking => ({
   kind: "meaning",
   query,
-  respectsChannels: false,
 })
 
 describe("isSemanticFeed", () => {

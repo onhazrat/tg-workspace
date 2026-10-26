@@ -44,7 +44,7 @@ import type {
 } from "@/lib/commands/types"
 import { restartTorService, rotateTorIpNow } from "@/lib/network/tor-actions"
 import { POST_TYPE_VALUES } from "@/lib/posts/post-filter"
-import { meaningRanking, NO_RANKING } from "@/lib/posts/posts-view"
+import { NO_RANKING } from "@/lib/posts/posts-view"
 import { scopeChannels } from "@/lib/scope/artifact-scope"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { deleteSummary } from "@/lib/summaries/store"
@@ -369,7 +369,9 @@ export function buildExtendedCommands(): CommandDef[] {
         getValue: (ctx) => ctx.palette.searchResultsState?.query ?? "",
         apply: async (ctx, value) => {
           const query = value.trim()
-          ctx.postsEdits.setRanking(query ? meaningRanking(query) : NO_RANKING)
+          ctx.postsEdits.setRanking({
+            ranking: query ? { kind: "meaning", query } : NO_RANKING,
+          })
           ctx.postsEdits.setKeyword("")
         },
       },
@@ -386,7 +388,7 @@ export function buildExtendedCommands(): CommandDef[] {
       run: async (ctx, payload) => {
         const post = payload as import("@/types").Post | undefined
         if (!post) return
-        ctx.postsEdits.setRanking({ kind: "related", post })
+        ctx.postsEdits.setRanking({ ranking: { kind: "related", post } })
         ctx.postsEdits.setKeyword("")
         ctx.setActiveTab("posts")
         toast.success(
