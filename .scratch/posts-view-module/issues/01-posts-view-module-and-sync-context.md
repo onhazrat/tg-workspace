@@ -48,5 +48,5 @@ pins and the fan-out test last. Commit before mutating each guard.
 - [x] The architecture invariants pin the field sets of the Posts view contexts and the Sync context, and fail a Posts view field on the Sync context.
 - [x] Each guard is mutation-checked (a Posts field added to the Sync context, the Sync context's memo dropped, the defective dependency restored) and each check is written into the commit body as `Mutation-checked: <what you broke> went red`.
 - [x] No reader names the scraper context; the command registry's context has two Posts fields; the shell reads no keyword.
-- [ ] The full Playwright suite passes with no spec edited, run serially.
+- [x] The full Playwright suite passes with no spec edited, run serially.
 - [x] Typecheck (build and tests), biome and `bun test src` pass; the CRAP ratchet holds.
