@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -714,10 +714,13 @@ def finish_without_posts(session: Session, summary: Summary) -> None:
     frozen = FrozenScope.from_stored(summary.scope)
     if frozen is None:
         raise ValueError("finish_without_posts needs a frozen Scope")
+
+    def utc(ms: int) -> str:
+        return datetime.fromtimestamp(ms / 1000, UTC).replace(tzinfo=None).isoformat()
+
     summary.text = (
         f"No new posts found in the selected channels between "
-        f"{datetime.utcfromtimestamp(frozen.start / 1000).isoformat()} and "
-        f"{datetime.utcfromtimestamp(frozen.end / 1000).isoformat()}."
+        f"{utc(frozen.start)} and {utc(frozen.end)}."
     )
     summary.scope = covering(frozen, ()).stored()
     summary.post_count = 0
