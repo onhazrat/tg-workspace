@@ -436,6 +436,22 @@ DECLARATIONS: tuple[Declaration, ...] = (
         min=0,
         max=1,
     ),
+    Declaration(
+        id="ai.yours.channelBio",
+        title="Channel bios in prompts",
+        description="Describe each Channel by its bio in Summary, Chat and Tag prompts.",
+        type="boolean",
+        key=AI_PREFS_KEY,
+        field="includeChannelBio",
+    ),
+    Declaration(
+        id="ai.yours.channelTags",
+        title="Channel tags in prompts",
+        description="Describe each Channel by your tags in Summary, Chat and Tag prompts.",
+        type="boolean",
+        key=AI_PREFS_KEY,
+        field="includeChannelTags",
+    ),
     _browser(
         "ai.browser.embeddings",
         "embeddingsEnabled",

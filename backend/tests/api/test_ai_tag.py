@@ -86,20 +86,35 @@ def test_the_prompt_reads_the_runs_covered_posts(client: TestClient) -> None:
     assert response.json()["missingPosts"] == 1
 
 
-def test_the_channel_descriptions_replace_the_bare_names(client: TestClient) -> None:
+def test_the_accounts_tags_setting_describes_the_channels(client: TestClient) -> None:
+    """The run's Channels by the Account's own tags, from its setting (AC-03)."""
     headers = get_superuser_token_headers(client)
-    tag_run_id = _open(client, headers, ["legacy_name"])
-
-    response = _prompt(
-        client,
-        headers,
-        tagRunId=tag_run_id,
-        channelsText="### scoped_channel\nCurrent tags: Politics",
+    _seed(("tg_a", 1))
+    tagged = client.post(
+        f"{PREFIX}/data/tags/channels",
+        headers=headers,
+        json={"name": "Politics", "handles": ["tg_a"]},
     )
+    assert tagged.status_code == 200, tagged.text
+    stored = client.put(
+        f"{PREFIX}/data/settings/ai_prefs",
+        headers=headers,
+        json={"includeChannelTags": True},
+    )
+    assert stored.status_code == 200, stored.text
+    tag_run_id = _open(client, headers, ["tg_a"])
+
+    response = _prompt(client, headers, tagRunId=tag_run_id)
 
     assert response.status_code == 200, response.text
-    assert "### scoped_channel" in response.json()["prompt"]
-    assert response.json()["missingPosts"] == 0
+    assert "### tg_a\nCurrent tags: Politics" in response.json()["prompt"]
+
+
+def test_channel_text_from_the_browser_is_refused(client: TestClient) -> None:
+    headers = get_superuser_token_headers(client)
+    tag_run_id = _open(client, headers, ["tg_a"])
+    response = _prompt(client, headers, tagRunId=tag_run_id, channelsText="### a")
+    assert response.status_code == 422
 
 
 def test_remove_mode_uses_remove_limits(client: TestClient) -> None:

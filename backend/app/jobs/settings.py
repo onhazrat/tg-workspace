@@ -177,6 +177,8 @@ def default_ai_prefs() -> dict[str, Any]:
         "selectedModel": settings.DEFAULT_AI_MODEL,
         "aiLanguage": settings.DEFAULT_AI_LANGUAGE,
         "aiTemperature": 0.7,
+        "includeChannelBio": False,
+        "includeChannelTags": False,
     }
 
 

@@ -16,17 +16,20 @@ import uuid
 from collections.abc import Iterator
 
 import pytest
-from sqlmodel import Session, col, delete
+from sqlmodel import Session, col, delete, select
 
 from app.core.db import engine
 from app.jobs import auto_summary, summary_generation
 from app.models import User
-from app.models_tg import Post, Summary, SummaryPayload
+from app.models_tg import Channel, Post, Summary, SummaryPayload
 from app.schemas.scope import ScopeSubmission
 from app.schemas.summaries import SummaryDerivation
 from app.services import artifact_coverage
+from app.services.settings_registry import AI_PREFS_KEY
 from app.services.summaries import get_summary, submit_summary
 from app.services.summary_attempts import last_attempt
+from app.services.tags import assign_tag
+from app.services.user_settings import put_user_setting
 from tests.utils.scope import stored_scope
 from tests.utils.tenancy import follow_channels
 from tests.utils.user import create_random_user
@@ -276,3 +279,50 @@ def test_a_browser_regeneration_of_an_empty_window_says_so_as_the_scheduler_does
         assert browser["postCount"] == 0
         assert "status" not in browser
         assert last_attempt(check, browser_id) is None
+
+
+def test_both_doors_describe_the_channels_by_the_accounts_bio_and_tags_setting(
+    session: Session, user: User
+) -> None:
+    """The Channels block is the server's, read from the Account's setting.
+
+    The browser used to send its own `channelsText` on Generate and nothing
+    on a regeneration, so the two prompts differed whenever a switch was on.
+    A Channel's tags are the Account's own, never another Account's.
+    """
+    predecessor, channel = _predecessor(session, user.id)
+    row = session.exec(select(Channel).where(col(Channel.name) == channel)).one()
+    row.bio = "  Daily wire news.  "
+    session.add(row)
+    other = create_random_user(session)
+    assign_tag(session, user_id=user.id, name="Politics", handles=[channel])
+    assign_tag(session, user_id=other.id, name="Foreign", handles=[channel])
+    session.commit()
+    put_user_setting(
+        session,
+        AI_PREFS_KEY,
+        {"includeChannelBio": True, "includeChannelTags": True},
+        user_id=user.id,
+    )
+    browser_id = f"sum-{uuid.uuid4().hex[:8]}"
+    submit_summary(
+        session,
+        user_id=user.id,
+        summary_id=browser_id,
+        derived_from=SummaryDerivation(summaryId=predecessor.id, mode="successor"),
+    )
+    summary_generation.start_attempt(
+        session, browser_id, user_id=user.id, model=None, key_id=None, temperature=None
+    )
+
+    scheduled_id = asyncio.run(
+        auto_summary._regenerate_one(session, predecessor, owner_id=user.id)
+    )
+
+    assert scheduled_id is not None
+    browser = _prompt_of(browser_id)
+    assert f"### {channel}\nBio: Daily wire news.\nCurrent tags: Politics" in browser
+    assert "Foreign" not in browser
+    assert _prompt_of(scheduled_id) == browser
+    session.exec(delete(User).where(col(User.id) == other.id))
+    session.commit()

@@ -24,7 +24,7 @@ from app.api.routes import ai_routes
 from app.core.config import settings
 from app.core.db import engine
 from app.main import app
-from app.models_tg import Post
+from app.models_tg import Channel, Post
 from app.services.ai_keys import ResolvedKey
 from tests.utils.tenancy import follow_channels
 from tests.utils.utils import get_superuser_token_headers
@@ -180,6 +180,37 @@ def test_a_semantic_turns_ranked_posts_win(
     assert "chan_a post 1" not in system
 
 
+def test_a_turn_describes_the_chats_channels_by_the_accounts_setting(
+    client: TestClient, provider: _FakeProvider
+) -> None:
+    """Semantic turns too: the Channels block is the server's (AC-03)."""
+    headers = get_superuser_token_headers(client)
+    _seed(("chan_a", 1))
+    with Session(engine) as session:
+        channel = session.exec(
+            select(Channel).where(col(Channel.name) == "chan_a")
+        ).one()
+        channel.bio = "Wire news"
+        session.add(channel)
+        session.commit()
+    stored = client.put(
+        f"{settings.API_V1_STR}/data/settings/ai_prefs",
+        headers=headers,
+        json={"includeChannelBio": True},
+    )
+    assert stored.status_code == 200, stored.text
+    chat_id = _open_chat(client, ["chan_a"])
+
+    client.post(
+        URL,
+        headers=headers,
+        json={"chatId": chat_id, "message": "q", "postsText": "p"},
+    )
+
+    system = provider.calls[0]["system_instruction"]
+    assert "### CHANNELS IN SCOPE\n### chan_a\nBio: Wire news" in system
+
+
 def test_an_absent_chat_is_not_found_and_spends_nothing(
     client: TestClient, provider: _FakeProvider
 ) -> None:
@@ -198,7 +229,11 @@ def test_a_scope_in_the_body_is_refused(
     client: TestClient, provider: _FakeProvider, chat_id: str
 ) -> None:
     """A tab left open across the deploy fails clearly; one reload fixes it."""
-    for stale in ({"scope": {"window": WINDOW}}, {"channels": ["chan_a"]}):
+    for stale in (
+        {"scope": {"window": WINDOW}},
+        {"channels": ["chan_a"]},
+        {"channelsText": "chan_a (news)"},
+    ):
         r = client.post(
             URL,
             headers=get_superuser_token_headers(client),
@@ -226,7 +261,6 @@ def test_rag_mode_picks_the_retrieval_prompt(
         json={
             "chatId": chat_id,
             "message": "q",
-            "channelsText": "chan_a (news)",
             "postsText": "p",
             "ragMode": rag_mode,
         },
@@ -234,9 +268,6 @@ def test_rag_mode_picks_the_retrieval_prompt(
 
     system = provider.calls[0]["system_instruction"]
     assert marker in system
-    if not rag_mode:
-        # The client's own description of the scope wins over the bare list.
-        assert "### CHANNELS IN SCOPE\nchan_a (news)" in system
 
 
 def test_a_provider_failure_mid_stream_never_sends_done(

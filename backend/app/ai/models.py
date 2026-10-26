@@ -61,9 +61,6 @@ class SummaryPromptRequest(BaseModel):
     model_config = {"populate_by_name": True, "extra": "forbid"}
 
     summary_id: str = Field(alias="summaryId")
-    #: The Channel descriptions the browser formats (bios, tags), in place of
-    #: the bare names; the Posts are never the browser's.
-    channels_text: str = Field("", alias="channelsText")
 
 
 class ChatRequest(BaseModel):
@@ -75,7 +72,6 @@ class ChatRequest(BaseModel):
     model_config = {"populate_by_name": True, "extra": "forbid"}
 
     chat_id: str = Field(alias="chatId")
-    channels_text: str = Field("", alias="channelsText")
     #: Semantic mode only: the Posts a meaning search ranked for this question,
     #: which the server cannot reproduce. When set, it wins over the Chat's
     #: Covered Posts.
@@ -116,7 +112,6 @@ class TagRequest(BaseModel):
     model_config = {"populate_by_name": True, "extra": "forbid"}
 
     tag_run_id: str = Field(alias="tagRunId")
-    channels_text: str = Field("", alias="channelsText")
     all_tags: str = Field("(none yet)", alias="allTags")
     tag_mode: str = Field("add", alias="tagMode")
     model: str | None = None

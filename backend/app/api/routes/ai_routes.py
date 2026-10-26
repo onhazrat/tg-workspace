@@ -206,10 +206,7 @@ def api_summary_prompt(
         session, body.summary_id, user_id=current_user.id, writing=False
     )
     prompt, coverage = summary_prompt(
-        session,
-        summary,
-        session.get(SummaryPayload, summary.id),
-        channels_text=body.channels_text,
+        session, summary, session.get(SummaryPayload, summary.id)
     )
     return PromptResponse(prompt=prompt, missing_posts=coverage.missing)
 

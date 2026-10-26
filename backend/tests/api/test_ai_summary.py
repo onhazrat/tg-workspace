@@ -13,7 +13,7 @@ from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.core.db import engine
-from app.models_tg import Post
+from app.models_tg import Channel, Post
 from tests.utils.tenancy import follow_channels
 from tests.utils.utils import get_superuser_token_headers
 
@@ -67,17 +67,48 @@ def test_the_prompt_reads_the_summarys_covered_posts(client: TestClient) -> None
     assert response.json()["missingPosts"] == 1
 
 
-def test_the_channel_descriptions_replace_the_bare_names(client: TestClient) -> None:
+def test_the_accounts_bio_setting_describes_the_channels(client: TestClient) -> None:
+    """The server reads the switch the settings route stores (AC-03)."""
     headers = get_superuser_token_headers(client)
-    summary_id = _open(client, headers, ["legacy_name"])
+    with Session(engine) as session:
+        follow_channels(session, "bio_a")
+        channel = session.exec(
+            select(Channel).where(col(Channel.name) == "bio_a")
+        ).one()
+        channel.bio = "Wire news"
+        session.add(channel)
+        session.commit()
+    summary_id = _open(client, headers, ["bio_a"])
+
+    def prompt() -> str:
+        response = client.post(
+            f"{PREFIX}/ai/summary/prompt",
+            headers=headers,
+            json={"summaryId": summary_id},
+        )
+        assert response.status_code == 200, response.text
+        return str(response.json()["prompt"])
+
+    assert "Bio: Wire news" not in prompt()
+    stored = client.put(
+        f"{PREFIX}/data/settings/ai_prefs",
+        headers=headers,
+        json={"includeChannelBio": True},
+    )
+    assert stored.status_code == 200, stored.text
+    assert "### bio_a\nBio: Wire news" in prompt()
+
+
+def test_channel_text_from_the_browser_is_refused(client: TestClient) -> None:
+    """The Channels block is the server's now; a stale tab's 422 is one reload."""
+    headers = get_superuser_token_headers(client)
+    summary_id = _open(client, headers, [])
     response = client.post(
         f"{PREFIX}/ai/summary/prompt",
         headers=headers,
-        json={"summaryId": summary_id, "channelsText": "### scoped_channel\nBio: b"},
+        json={"summaryId": summary_id, "channelsText": "### a\nBio: b"},
     )
-    assert response.status_code == 200, response.text
-    assert "### scoped_channel" in response.json()["prompt"]
-    assert "legacy_name" not in response.json()["prompt"]
+    assert response.status_code == 422
 
 
 def test_an_absent_summary_answers_summary_not_found(client: TestClient) -> None:

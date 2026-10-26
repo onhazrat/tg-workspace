@@ -8576,11 +8576,6 @@
       "ChatRequest": {
         "properties": {
           "chatId": { "type": "string", "title": "Chatid" },
-          "channelsText": {
-            "type": "string",
-            "title": "Channelstext",
-            "default": ""
-          },
           "postsText": {
             "type": "string",
             "title": "Poststext",
@@ -15004,12 +14999,7 @@
       },
       "SummaryPromptRequest": {
         "properties": {
-          "summaryId": { "type": "string", "title": "Summaryid" },
-          "channelsText": {
-            "type": "string",
-            "title": "Channelstext",
-            "default": ""
-          }
+          "summaryId": { "type": "string", "title": "Summaryid" }
         },
         "additionalProperties": false,
         "type": "object",
@@ -15406,11 +15396,6 @@
       "TagRequest": {
         "properties": {
           "tagRunId": { "type": "string", "title": "Tagrunid" },
-          "channelsText": {
-            "type": "string",
-            "title": "Channelstext",
-            "default": ""
-          },
           "allTags": {
             "type": "string",
             "title": "Alltags",

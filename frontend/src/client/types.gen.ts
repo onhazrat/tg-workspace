@@ -1377,10 +1377,6 @@ export type ChatRequest = {
      */
     chatId: string;
     /**
-     * Channelstext
-     */
-    channelsText?: string;
-    /**
      * Poststext
      */
     postsText?: string;
@@ -7587,10 +7583,6 @@ export type SummaryPromptRequest = {
      * Summaryid
      */
     summaryId: string;
-    /**
-     * Channelstext
-     */
-    channelsText?: string;
 };
 
 /**
@@ -8064,10 +8056,6 @@ export type TagRequest = {
      * Tagrunid
      */
     tagRunId: string;
-    /**
-     * Channelstext
-     */
-    channelsText?: string;
     /**
      * Alltags
      */

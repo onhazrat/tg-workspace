@@ -12,25 +12,63 @@ from __future__ import annotations
 
 import uuid
 
-from sqlmodel import Session
+from sqlmodel import Session, col, select
 
 from app.ai.models import ChatRequest, TagRequest
-from app.models_tg import ChatSessionPayload, Summary, SummaryPayload
+from app.models_tg import Channel, ChatSessionPayload, Summary, SummaryPayload
 from app.prompts.summary import format_summary_prompt, rtl_instruction
 from app.prompts.tagging import format_tag_prompt
 from app.prompts.templates import CHAT_PROMPT, RAG_CHAT_PROMPT
 from app.services.artifact_coverage import Coverage, posts_block, require_scope
 from app.services.chat_sessions import chat_scope, own_chat_session
+from app.services.settings_registry import AI_PREFS_KEY
 from app.services.summaries import summary_scope
 from app.services.tag_runs import own_tag_run, tag_run_scope
+from app.services.tags import tags_by_handle
+from app.services.telegram_web import normalize_handle
+from app.services.user_settings import get_user_setting
+
+
+def channels_block(session: Session, channels: list[str], *, user_id: uuid.UUID) -> str:
+    """How a prompt names its Channels, by the Account's bio and tags setting.
+
+    Built here, never in a browser, so the scheduler, which has no browser,
+    describes a regeneration's Channels as Generate does (AC-03). Both
+    switches off is the bare names; otherwise a `### name` section per
+    Channel with its bio and the Account's own tags, each when it has any.
+    """
+    prefs = get_user_setting(session, AI_PREFS_KEY, user_id=user_id)
+    include_bio = prefs.get("includeChannelBio") is True
+    include_tags = prefs.get("includeChannelTags") is True
+    if not channels or not (include_bio or include_tags):
+        return ", ".join(channels)
+    bios: dict[str, str] = {}
+    if include_bio:
+        rows = session.exec(
+            select(Channel.name, Channel.bio).where(col(Channel.name).in_(channels))
+        ).all()
+        bios = {name: (bio or "").strip() for name, bio in rows}
+    tags = (
+        tags_by_handle(session, user_id=user_id, handles=channels)
+        if include_tags
+        else {}
+    )
+    sections = []
+    for name in channels:
+        lines = [f"### {name}"]
+        if bios.get(name):
+            lines.append(f"Bio: {bios[name]}")
+        names = [tag["name"] for tag in tags.get(normalize_handle(name), [])]
+        if names:
+            lines.append(f"Current tags: {', '.join(names)}")
+        sections.append("\n".join(lines))
+    return "\n\n".join(sections)
 
 
 def summary_prompt(
     session: Session,
     summary: Summary,
     payload: SummaryPayload | None,
-    *,
-    channels_text: str = "",
 ) -> tuple[str, Coverage]:
     """The prompt a Summary's Covered Posts make, as Generate builds it.
 
@@ -41,9 +79,10 @@ def summary_prompt(
     """
     scope = require_scope(summary_scope(summary, payload))
     posts_text, coverage = posts_block(session, scope, user_id=summary.user_id)
+    channels = list(scope.channels)
     prompt = format_summary_prompt(
-        channels=list(scope.channels),
-        channels_text=channels_text,
+        channels=channels,
+        channels_text=channels_block(session, channels, user_id=summary.user_id),
         language=summary.language,
         posts_text=posts_text,
     )
@@ -60,18 +99,18 @@ def chat_system_prompt(
     ranked `postsText` wins: the server cannot reproduce a meaning search.
     """
     chat = own_chat_session(session, body.chat_id, user_id=user_id)
-    channels: list[str] = []
+    scope = chat_scope(chat, session.get(ChatSessionPayload, chat.id))
     if body.posts_text:
         posts_text, missing = body.posts_text, 0
     else:
-        scope = require_scope(
-            chat_scope(chat, session.get(ChatSessionPayload, chat.id))
+        posts_text, coverage = posts_block(
+            session, require_scope(scope), user_id=user_id
         )
-        posts_text, coverage = posts_block(session, scope, user_id=user_id)
-        channels, missing = list(scope.channels), coverage.missing
+        missing = coverage.missing
+    channels = list(scope.channels) if scope is not None else []
     template = RAG_CHAT_PROMPT if body.rag_mode else CHAT_PROMPT
     system = template.format(
-        channels=body.channels_text.strip() or ", ".join(channels),
+        channels=channels_block(session, channels, user_id=user_id),
         language=body.language,
         rtl_instruction=rtl_instruction(body.language),
         posts_text=posts_text,
@@ -86,9 +125,10 @@ def tag_prompt(
     run = own_tag_run(session, body.tag_run_id, user_id=user_id)
     scope = require_scope(tag_run_scope(run))
     posts_text, coverage = posts_block(session, scope, user_id=user_id, layout="tag")
+    channels = list(scope.channels)
     prompt = format_tag_prompt(
-        channels=list(scope.channels),
-        channels_text=body.channels_text,
+        channels=channels,
+        channels_text=channels_block(session, channels, user_id=user_id),
         posts_text=posts_text,
         all_tags=body.all_tags,
         tag_mode=body.tag_mode,

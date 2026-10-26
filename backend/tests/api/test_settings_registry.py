@@ -521,6 +521,8 @@ AI_DEFAULTS = {
     "selectedModel": settings.DEFAULT_AI_MODEL,
     "aiLanguage": settings.DEFAULT_AI_LANGUAGE,
     "aiTemperature": 0.7,
+    "includeChannelBio": False,
+    "includeChannelTags": False,
 }
 
 
@@ -608,9 +610,9 @@ def test_the_section_carries_the_deployments_defaults_not_the_frontend_build(
     monkeypatch.setattr(settings, "DEFAULT_AI_LANGUAGE", "German")
     value = client.get(AI_PREFS, headers=member[1]).json()["value"]
     assert value["defaults"] == {
+        **AI_DEFAULTS,
         "selectedModel": "operator/model",
         "aiLanguage": "German",
-        "aiTemperature": 0.7,
     }
     assert _rows(client, member[1])["ai.yours.model"]["default"] == "operator/model"
 
