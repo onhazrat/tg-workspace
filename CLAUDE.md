@@ -63,10 +63,12 @@ worth copying from it, are in `docs/agents/architecture-guards.md`.
 **Mutation-test every guard before trusting it.** A green suite proves nothing
 until you have watched it go red. This caught a false pass in six separate units
 of the simplification programme — including one guard that could not fail at all.
-Commit, then run `python3 scripts/mutate.py <mutations.json>`: it breaks each
-rule, runs its test, restores the file from git, and prints the
-`Mutation-checked: <what you broke> went red` line for the commit body, because
-a mutation leaves no diff and the reviewer reads only the diff and the log.
+Run `python3 scripts/mutate.py <mutations.json>`: it breaks each rule, runs its
+test, puts the file back, and prints the `Mutation-checked: <what you broke>
+went red` line for the commit body, because a mutation leaves no diff and the
+reviewer reads only the diff and the log. A frontend guard's mutations go in
+`docs/agents/guard-mutations.json`, which a hook replays on every commit that
+touches the guard or what it guards.
 
 ## Conventions
 

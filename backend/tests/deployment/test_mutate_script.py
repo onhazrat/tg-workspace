@@ -37,3 +37,14 @@ def test_a_mutation_names_exactly_one_place() -> None:
         mutate.mutated("a < b", ">", "<")
     with pytest.raises(ValueError, match="2 places"):
         mutate.mutated("a < b < c", "<", "<=")
+
+
+def test_a_change_replays_the_mutations_it_touches() -> None:
+    a = {"name": "a", "file": "frontend/src/a.ts", "test": "frontend/src/a.test.ts"}
+    b = {"name": "b", "file": "frontend/src/b.ts", "test": "frontend/src/b.test.ts"}
+    registry = "docs/agents/guard-mutations.json"
+    assert mutate.selected([a, b], registry, ["frontend/src/a.ts"]) == [a]
+    assert mutate.selected([a, b], registry, ["frontend/src/b.test.ts"]) == [b]
+    assert mutate.selected([a, b], registry, ["backend/app/main.py"]) == []
+    assert mutate.selected([a, b], registry, [registry]) == [a, b]
+    assert mutate.selected([a, b], registry, []) == [a, b]

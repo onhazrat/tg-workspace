@@ -8,6 +8,10 @@
 #                                               worktree's own ports in .env.worktree; add a
 #                                               "worktree-api" entry to .claude/launch.json
 #   bash scripts/worktree-setup.sh --teardown  drop both databases, remove .env.worktree
+#   bash scripts/worktree-setup.sh --reset-e2e rebuild the e2e database empty and seeded:
+#                                               the suite's channels pile up run after run
+#                                               until unrelated specs fail. Run the suite once
+#                                               to warm it, then judge the second run.
 #
 # Idempotent: a second run changes nothing. Run it from anywhere in the worktree.
 # The database name and the drop guard live in backend/scripts/worktree_db.py.
@@ -15,9 +19,9 @@ set -euo pipefail
 
 mode=${1:-setup}
 case "$mode" in
-  setup | --teardown) ;;
+  setup | --teardown | --reset-e2e) ;;
   *)
-    sed -n '2,10p' "$0" >&2
+    sed -n '2,14p' "$0" >&2
     exit 2
     ;;
 esac
@@ -40,6 +44,19 @@ if [ "$mode" = "--teardown" ]; then
   exit 0
 fi
 
+seed_e2e() {
+  uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db create "$e2e_db"
+  POSTGRES_DB="$e2e_db" uv run --quiet alembic upgrade head
+  POSTGRES_DB="$e2e_db" uv run --quiet python app/initial_data.py
+}
+
+if [ "$mode" = "--reset-e2e" ]; then
+  uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db drop "$e2e_db"
+  seed_e2e
+  echo "Reset $e2e_db. Run the suite once to warm it, then judge the second run."
+  exit 0
+fi
+
 if [ ! -e "$root/.env" ]; then
   if [ ! -f "$main/.env" ]; then
     echo "No .env in the main checkout ($main) to link." >&2
@@ -53,9 +70,7 @@ uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db create "$db"
 POSTGRES_DB="$db" uv run --quiet alembic upgrade head
 # The dev `app` may sit at another worktree's migration head, so Playwright's
 # API gets a database of its own, with the superuser auth.setup.ts logs in as.
-uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db create "$e2e_db"
-POSTGRES_DB="$e2e_db" uv run --quiet alembic upgrade head
-POSTGRES_DB="$e2e_db" uv run --quiet python app/initial_data.py
+seed_e2e
 read -r dev_port api_port < <(uv run --quiet python -W ignore::UserWarning -m scripts.worktree_db ports "$root")
 # playwright.config.ts reads this file over .env, so `bunx playwright test`
 # serves on the worktree's port and proxies to its own API.

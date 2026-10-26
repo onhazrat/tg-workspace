@@ -232,6 +232,28 @@ describe("PVM-01: the Posts view apart from the Sync context (ADR-039)", () => {
     expect(src).toMatch(/const value = useMemo<SyncContextType>\(/)
     expect(src).toMatch(/<SyncContext\.Provider value=\{value\}>/)
   })
+
+  it("the typed keyword has one reader, the search box", () => {
+    // The fan-out test mounts a copy of `PostFilter`'s wiring, so a read
+    // added to the real container would re-render the whole bar per
+    // keystroke with that test still green.
+    const calls = sourceFiles(SRC)
+      .filter((file) => !file.includes(".test."))
+      .flatMap((file) => {
+        const src = readFileSync(file, "utf8")
+        return [...src.matchAll(/usePostsKeyword\(\)/g)].map((m) => {
+          const owner = src
+            .slice(0, m.index)
+            .match(/function (\w+)/g)
+            ?.at(-1)
+          return `${rel(file)} ${owner}`
+        })
+      })
+
+    expect(calls).toEqual([
+      "src/components/PostFilter.tsx function PostsSearchBox",
+    ])
+  })
 })
 
 describe("One declaration of the workspace tabs", () => {

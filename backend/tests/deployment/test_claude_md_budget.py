@@ -54,6 +54,20 @@ Per `CLAUDE.md`, each assertion here was mutation-tested:
 * add an `*Enforced: ...*` marker with no table row -> the coverage test fails
 * delete a table row whose file is still cited -> the coverage test fails
 * list one guard twice -> the duplicate test fails
+* delete a frontend test row's last mutation -> the mutation coverage test fails
+
+## A row names a file, so a mutation names the guard
+
+A row is one file, and one file holds many guards. PVM-01 added two pins to
+`architecture-invariants.test.ts`, which already had a row, so coverage passed
+without a new one; PVM-02 then deleted the provider identity assertion from a
+file no marker named, and nothing went red until a code review. A guard that is
+a sentence in a table can be deleted by a diff that keeps the sentence. So each
+frontend test row keeps, in `docs/agents/guard-mutations.json`, the mutations
+that must turn it red, and the `guard-mutations` pre-commit hook replays a
+guard's mutations whenever a commit touches its file or its test. Backend rows
+are not covered yet: their tests need a database, which the hook and CI's
+pre-commit job do not have.
 
 ## Raising the budget
 
@@ -68,6 +82,7 @@ file every session pays for.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 
@@ -76,6 +91,7 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 ROOT_CLAUDE_MD = "CLAUDE.md"
 GUARDS_DOC = "docs/agents/architecture-guards.md"
+MUTATIONS = "docs/agents/guard-mutations.json"
 
 # (max lines, max bytes), sized against the 2026-10-20 split (root 97 lines /
 # 7,058 bytes, backend 78 / 24,586, frontend 12 / 2,442, guards 97 / 15,164)
@@ -100,7 +116,7 @@ _CITED_PATH = re.compile(
 
 # The `*Enforced: `a.py`, `b.py`.*` markers carrying each claim's pointer.
 _ENFORCED_BLOCK = re.compile(r"\*Enforced[^*]*\*")
-_ENFORCED_PATH = re.compile(r"`([A-Za-z0-9_./-]+\.py)`")
+_ENFORCED_PATH = re.compile(r"`([A-Za-z0-9_./-]+\.(?:py|tsx?))`")
 
 # A row of the guard table: `| <guard> | <what it enforces> | <kind> |`.
 _TABLE_ROW = re.compile(
@@ -129,9 +145,11 @@ def _guard_table_paths(text: str) -> list[str]:
 
 
 def _normalise(path: str) -> str:
-    """Prose cites `tests/api/x.py`; the table cites `backend/tests/api/x.py`."""
+    """Prose cites `tests/api/x.py` or `src/x.ts`; the table cites from the root."""
     if path.startswith(("backend/", "frontend/", "docs/", "scripts/")):
         return path
+    if path.startswith("src/"):
+        return f"frontend/{path}"
     return f"backend/{path}"
 
 
@@ -214,6 +232,25 @@ def test_every_enforced_pointer_in_the_prose_is_a_row_in_the_guard_table(
     assert not stranded, (
         "These guards are cited by an *Enforced:* marker but are not rows in "
         f"the guard table in {GUARDS_DOC}: " + ", ".join(stranded)
+    )
+
+
+def test_every_frontend_test_row_keeps_a_mutation(guards_doc: str) -> None:
+    """A frontend guard is a mutation that goes red, not a row that says so."""
+    mutations = json.loads(_read(MUTATIONS))
+    tested = {m["test"] for m in mutations}
+    rows = set(_guard_table_paths(guards_doc))
+    frontend_tests = {
+        path for path in rows if path.startswith("frontend/src/") and ".test." in path
+    }
+    unguarded = sorted(frontend_tests - tested)
+    assert not unguarded, (
+        f"These frontend guard tests have no mutation in {MUTATIONS}, so a diff "
+        "can delete what they assert and stay green: " + ", ".join(unguarded)
+    )
+    stray = sorted(tested - rows)
+    assert not stray, (
+        f"{MUTATIONS} replays tests the guard table does not list: " + ", ".join(stray)
     )
 
 

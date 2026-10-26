@@ -1,0 +1,93 @@
+[
+  {
+    "name": "server state added to DataContext",
+    "file": "frontend/src/contexts/DataContext.tsx",
+    "old": "interface DataContextType {\n  channels: Channel[]\n",
+    "new": "interface DataContextType {\n  summaries: unknown[]\n  channels: Channel[]\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "IndexedDB opened in the browser",
+    "file": "frontend/src/contexts/DataContext.tsx",
+    "old": "interface DataContextType {\n  channels: Channel[]\n",
+    "new": "const db = indexedDB\ninterface DataContextType {\n  channels: Channel[]\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "a fifth module naming localStorage",
+    "file": "frontend/src/contexts/DataContext.tsx",
+    "old": "interface DataContextType {\n  channels: Channel[]\n",
+    "new": "const leak = localStorage\ninterface DataContextType {\n  channels: Channel[]\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "the theme key declared twice",
+    "file": "frontend/src/contexts/DataContext.tsx",
+    "old": "interface DataContextType {\n  channels: Channel[]\n",
+    "new": "const THEME = \"vite-ui-theme\"\ninterface DataContextType {\n  channels: Channel[]\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "logout keeping the query cache",
+    "file": "frontend/src/hooks/useAuth.ts",
+    "old": "    queryClient.clear()\n",
+    "new": "",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "a stale session keeping the query cache",
+    "file": "frontend/src/api/base.ts",
+    "old": "  exitViewAs()\n  queryClient.clear()\n  if (!window.location.pathname.startsWith(\"/login\")) {",
+    "new": "  exitViewAs()\n  if (!window.location.pathname.startsWith(\"/login\")) {",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "a Chat session id from the clock",
+    "file": "frontend/src/contexts/ChatContext.tsx",
+    "old": "send.sessionId ?? crypto.randomUUID()",
+    "new": "send.sessionId ?? Date.now().toString()",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "a Posts field added to the Sync context",
+    "file": "frontend/src/contexts/SyncContext.tsx",
+    "old": "  syncQueue: { channel: Channel; source: string; resolve?: () => void }[]\n",
+    "new": "  postSearch: string\n  syncQueue: { channel: Channel; source: string; resolve?: () => void }[]\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "the Sync context's memo dropped",
+    "file": "frontend/src/contexts/SyncContext.tsx",
+    "old": "const value = useMemo<SyncContextType>(",
+    "new": "const value = identity<SyncContextType>(",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "the shown fetch re-run on every view (the defective dependency)",
+    "file": "frontend/src/hooks/usePostsView.ts",
+    "old": "  }, [enabled, key, shownApi, refresh])",
+    "new": "  }, [enabled, key, shownApi, refresh, view])",
+    "test": "frontend/src/contexts/PostsViewContext.test.tsx"
+  },
+  {
+    "name": "restore leaving the keyword to the debounce",
+    "file": "frontend/src/contexts/PostsViewContext.tsx",
+    "old": "        setDebouncedKeyword(next.keyword)\n",
+    "new": "",
+    "test": "frontend/src/contexts/PostsViewContext.test.tsx"
+  },
+  {
+    "name": "the filter bar reading the typed keyword",
+    "file": "frontend/src/components/PostFilter.tsx",
+    "old": "  const spot = useSpotlight()\n  const { view } = usePostsViewState()\n",
+    "new": "  const spot = useSpotlight()\n  usePostsKeyword()\n  const { view } = usePostsViewState()\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "the Scope counts key blind to the selection",
+    "file": "frontend/src/lib/posts/posts-view.ts",
+    "old": "          channelNames: names,\n          window,\n          selection: view.selectionRevision,\n",
+    "new": "          channelNames: names,\n          window,\n",
+    "test": "frontend/src/lib/posts/posts-view.test.ts"
+  }
+]

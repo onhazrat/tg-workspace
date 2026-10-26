@@ -103,3 +103,10 @@ def test_an_unbackticked_file_path_is_left_alone() -> None:
 def test_the_tree_has_no_dangling_reference() -> None:
     """The hook's own run, so a commit made with `--no-verify` still fails CI."""
     assert check_code_refs.main() == 0
+
+
+def test_the_locked_migration_records_are_history() -> None:
+    # PVM-01 had to rewrite `DECISIONS.md`, which `CLAUDE.md` calls locked, to
+    # drop a pointer to a file it deleted.
+    assert check_code_refs.SKIPPED.match("docs/migration/DECISIONS.md")
+    assert not check_code_refs.SKIPPED.match("docs/agents/architecture-guards.md")
