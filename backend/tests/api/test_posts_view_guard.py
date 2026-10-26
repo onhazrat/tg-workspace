@@ -25,8 +25,9 @@ a second time. So an Action-path module that names `resolve_posts_view`,
 read instead of asking `services/artifact_coverage.py` which Posts the
 Artifact covers.
 
-Mutation-checked by restoring the scheduler's inline Post read (AC-01), and by
-naming `resolve_posts_view` in the AI routes (AC-02).
+Mutation-checked by restoring the scheduler's inline Post read (AC-01), by
+naming `resolve_posts_view` in the AI routes (AC-02), and, once the Action path
+was derived, by a `select(Post)` in the start-Attempt route nobody listed.
 """
 
 from __future__ import annotations
