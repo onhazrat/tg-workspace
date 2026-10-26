@@ -6,7 +6,7 @@ import { ActionIconButton, ActionRow } from "@/components/action/ActionRow"
 import { TgButton } from "@/components/ui/tg-button"
 import { useAI } from "@/contexts/AIContext"
 import { useData } from "@/contexts/DataContext"
-import { useScraper } from "@/contexts/ScraperContext"
+import { useSync } from "@/contexts/SyncContext"
 import { useUI } from "@/contexts/UIContext"
 import { useSelectedAiKeyId } from "@/hooks/useAiKeys"
 import { useScopedPostCounts } from "@/hooks/usePostsView"
@@ -35,7 +35,7 @@ export function summaryActionsDisabled(state: {
 export const SummaryAction: React.FC = () => {
   const { channels } = useData()
   const { summarizing } = useUI()
-  const { scrapingChannels } = useScraper()
+  const { scrapingChannels } = useSync()
   const { handleSummarize, copySummaryPrompt } = useAI()
   const [copyingPrompt, setCopyingPrompt] = useState(false)
 

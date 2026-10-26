@@ -24,6 +24,7 @@ import {
   rule,
   selectionBody,
 } from "@/lib/posts/post-selection"
+import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
 import type { WindowState } from "@/lib/scope/window"
 import type { Post } from "@/types"
 
@@ -47,22 +48,12 @@ function post(id: number): Post {
 /*
  * Every default is a module constant rather than a fresh literal per call.
  *
- * `deps()` runs on every render, so a `new Set(...)` or an inline arrow here
- * would be a new identity each time and would defeat the memo the AW-04 block
- * below exists to check — the guard would fail against correct code and tell
- * you nothing about the dependency it is guarding. The real providers hand
- * these down from `useState`/`useCallback`, which is what this mirrors.
+ * `deps()` runs on every render, so a fresh array or arrow here would be a
+ * new identity each time and fake a changed view. The provider hands these
+ * down from state and memos, which is what this mirrors.
  */
-const SELECTED = new Set(["alpha"])
-const VIEW_OPTIONS: PromptPostsDeps["postViewOptions"] = {
-  maxPostsPerChannel: 0,
-  maxPostsPerChannelMode: "ordered",
-  postSortOrder: "newest",
-  groupByChannel: false,
-  viewMeasure: "estimated" as const,
-}
-// A constant for the reason `VIEW_OPTIONS` is one: the provider hands the tree
-// down from a memo, so a fresh one per render would fake a changed filter.
+const CHANNELS = ["alpha"]
+// A constant for the same reason: the provider parses the tree in a memo.
 const NO_FILTER = emptyPostFilter()
 const PERSIAN = addPostFunnel(emptyPostFilter(), "language", "fa")
 const SELECTION = [
@@ -85,29 +76,48 @@ const NO_ESTIMATE: PromptPostsDeps["getViewEstimate"] = async () => {
   throw new Error("getViewEstimate should not be called")
 }
 
-function deps(over: Partial<PromptPostsDeps> = {}): PromptPostsDeps {
+const VIEW: PostsView = {
+  scopeChannelNames: CHANNELS,
+  channelNames: CHANNELS,
+  keyword: "",
+  ranking: NO_RANKING,
+  filter: NO_FILTER,
+  maxPerChannel: 0,
+  maxPerChannelMode: "ordered",
+  sort: "newest",
+  groupByChannel: false,
+  viewMeasure: "estimated",
+  startDate: 1000,
+  endDate: 9000,
+  windowKey: LIVE_WINDOW,
+  selection: DEFAULT_SELECTION,
+  selectionRevision: 0,
+}
+
+type Over = Partial<PostsView> & Partial<Omit<PromptPostsDeps, "view">>
+
+function deps(over: Over = {}): PromptPostsDeps {
+  const {
+    embeddingsEnabled = false,
+    searchSimilarPosts = NO_SEARCH,
+    getPostsFeed = NO_FEED,
+    lookupPosts = NO_LOOKUP,
+    getViewEstimate = NO_ESTIMATE,
+    ...view
+  } = over
+  // A new view object every render, as the provider's memo makes one per
+  // change: what must hold still is decided by the fields, not the object.
   return {
-    selectedChannels: SELECTED,
-    startDate: 1000,
-    endDate: 9000,
-    windowKey: LIVE_WINDOW,
-    embeddingsEnabled: false,
-    debouncedPostSearch: "",
-    debouncedSemanticSearchQuery: "",
-    relatedPostSearch: null,
-    postFilter: NO_FILTER,
-    postSelection: DEFAULT_SELECTION,
-    postViewOptions: VIEW_OPTIONS,
-    semanticSearchRespectsChannels: false,
-    searchSimilarPosts: NO_SEARCH,
-    getPostsFeed: NO_FEED,
-    lookupPosts: NO_LOOKUP,
-    getViewEstimate: NO_ESTIMATE,
-    ...over,
+    view: { ...VIEW, ...view },
+    embeddingsEnabled,
+    searchSimilarPosts,
+    getPostsFeed,
+    lookupPosts,
+    getViewEstimate,
   }
 }
 
-function render(over: Partial<PromptPostsDeps> = {}) {
+function render(over: Over = {}) {
   return renderHook(() => usePromptPosts(deps(over))).result.current
 }
 
@@ -123,16 +133,14 @@ describe("getPromptPostsInput", () => {
     // ADR-026: the Post filter, the keyword and the cap decide what the tab
     // shows. A Summary covers the Post selection whatever they say.
     const input = await render({
-      debouncedPostSearch: "crypto",
-      postFilter: PERSIAN,
-      postSelection: SELECTION,
-      postViewOptions: {
-        maxPostsPerChannel: 7,
-        maxPostsPerChannelMode: "random",
-        postSortOrder: "most_views",
-        groupByChannel: true,
-        viewMeasure: "views" as const,
-      },
+      keyword: "crypto",
+      filter: PERSIAN,
+      selection: SELECTION,
+      maxPerChannel: 7,
+      maxPerChannelMode: "random",
+      sort: "most_views",
+      groupByChannel: true,
+      viewMeasure: "views",
     }).getPromptPostsInput()
 
     expect(input.scope).toEqual({
@@ -150,9 +158,8 @@ describe("getPromptPostsInput", () => {
     // for what the tab shows.
     const input = await render({
       embeddingsEnabled: true,
-      debouncedSemanticSearchQuery: "crypto",
-      relatedPostSearch: post(1),
-      postSelection: SELECTION,
+      ranking: { kind: "related", post: post(1) },
+      selection: SELECTION,
     }).getPromptPostsInput()
 
     expect(input.scope.selection).toBe(SELECTION)
@@ -163,9 +170,9 @@ describe("getPromptPostsInput", () => {
     const looked: unknown[] = []
     const shown = await render({
       embeddingsEnabled: true,
-      debouncedSemanticSearchQuery: "crypto",
-      postFilter: PERSIAN,
-      postSelection: SELECTION,
+      ranking: { kind: "meaning", query: "crypto", respectsChannels: false },
+      filter: PERSIAN,
+      selection: SELECTION,
       searchSimilarPosts: async () => ranked,
       lookupPosts: async (_refs, filter, scope) => {
         looked.push([filter, scope.selection])
@@ -191,11 +198,10 @@ describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () 
    * call happens. Both halves matter: a stable identity that also captured
    * stale boundaries would quietly keep fetching an older minute forever.
    */
-  function renderWithDeps(initial: Partial<PromptPostsDeps>) {
-    return renderHook(
-      (over: Partial<PromptPostsDeps>) => usePromptPosts(deps(over)),
-      { initialProps: initial },
-    )
+  function renderWithDeps(initial: Over) {
+    return renderHook((over: Over) => usePromptPosts(deps(over)), {
+      initialProps: initial,
+    })
   }
 
   test("a new minute does not mint a new callback", () => {
@@ -206,6 +212,24 @@ describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () 
     rerender({ startDate: 61_000, endDate: 69_000 })
 
     expect(result.current.getScopedPosts).toBe(first)
+  })
+
+  test("nor does a selection edit, which a meaning search must not re-run for", () => {
+    const { result, rerender } = renderWithDeps({})
+    const first = result.current.getScopedPosts
+
+    rerender({ selection: SELECTION, selectionRevision: 1 })
+
+    expect(result.current.getScopedPosts).toBe(first)
+  })
+
+  test("a new ranking does", () => {
+    const { result, rerender } = renderWithDeps({})
+    const first = result.current.getScopedPosts
+
+    rerender({ ranking: { kind: "related", post: post(2) } })
+
+    expect(result.current.getScopedPosts).not.toBe(first)
   })
 
   test("a new window does", () => {
@@ -240,15 +264,11 @@ describe("getScopedPosts keeps its identity while the minute moves (AW-04)", () 
 describe("getScopeSubmission", () => {
   test("the submission an Artifact freezes carries the selection and no Post filter", () => {
     const submission = render({
-      postFilter: PERSIAN,
-      postSelection: SELECTION,
-      postViewOptions: {
-        maxPostsPerChannel: 3,
-        maxPostsPerChannelMode: "ordered",
-        postSortOrder: "oldest",
-        groupByChannel: true,
-        viewMeasure: "estimated" as const,
-      },
+      filter: PERSIAN,
+      selection: SELECTION,
+      maxPerChannel: 3,
+      sort: "oldest",
+      groupByChannel: true,
     }).getScopeSubmission(["alpha"])
 
     expect(submission).toEqual({

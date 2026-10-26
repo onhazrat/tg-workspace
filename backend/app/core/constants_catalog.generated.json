@@ -1140,7 +1140,7 @@
       "comment": "The floor's default in `services/reach.py`, until the server's arrives.",
       "expression": "1",
       "file": "frontend/src/components/PostFilter.tsx",
-      "line": 133,
+      "line": 146,
       "name": "DEFAULT_ESTIMATION_FLOOR_HOURS",
       "value": 1
     },
@@ -1361,6 +1361,14 @@
       "value": 768
     },
     {
+      "comment": "How long a keystroke waits before it reaches the view.",
+      "expression": "300",
+      "file": "frontend/src/contexts/PostsViewContext.tsx",
+      "line": 78,
+      "name": "POST_SEARCH_DEBOUNCE_MS",
+      "value": 300
+    },
+    {
       "comment": "How long a typed field waits for the next keystroke before committing.",
       "expression": "400",
       "file": "frontend/src/contexts/ScopeContext.tsx",
@@ -1433,18 +1441,10 @@
       "value": 60000
     },
     {
-      "comment": "How long a keystroke waits before it reaches a query key.",
-      "expression": "300",
-      "file": "frontend/src/hooks/usePostFilters.ts",
-      "line": 54,
-      "name": "POST_SEARCH_DEBOUNCE_MS",
-      "value": 300
-    },
-    {
       "comment": "One page of the infinite Posts feed.",
       "expression": "20",
       "file": "frontend/src/hooks/usePostsView.ts",
-      "line": 47,
+      "line": 56,
       "name": "FEED_PAGE_SIZE",
       "value": 20
     },

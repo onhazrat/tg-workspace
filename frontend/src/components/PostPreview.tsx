@@ -13,7 +13,7 @@ import { ExternalLink, Loader2 } from "lucide-react"
 import { type ReactNode, useMemo, useState, useSyncExternalStore } from "react"
 import { MOBILE_BREAKPOINT } from "@/constants"
 import { useData } from "@/contexts/DataContext"
-import { useScraper } from "@/contexts/ScraperContext"
+import { useSync } from "@/contexts/SyncContext"
 import { cn } from "@/lib/utils"
 import type { Channel, Post } from "@/types"
 import { PostCardView } from "./post-card/PostCardView"
@@ -151,7 +151,7 @@ export interface PreviewWorkspace {
 /** The workspace's Channels, which a post card and an avatar read. */
 export function usePreviewWorkspace(): PreviewWorkspace {
   const { channels } = useData()
-  const { addNewChannel } = useScraper()
+  const { addNewChannel } = useSync()
   return useMemo(
     () => ({
       channel: (name: string) =>

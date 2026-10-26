@@ -13,7 +13,7 @@
  *
  * Deliberately a hook rather than a context: nothing outside the scrape
  * orchestration reads `runServerSync` or `waitSyncJob`, and `scrapingChannels`
- * reaches consumers through `ScraperContext` as it always has.
+ * reaches consumers through `SyncContext`.
  */
 
 import { useCallback, useState } from "react"

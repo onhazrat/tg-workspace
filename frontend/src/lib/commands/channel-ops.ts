@@ -7,17 +7,15 @@ import {
 } from "@/lib/channels/add-channel"
 import { deleteChannelByRecord } from "@/lib/channels/delete-channel"
 import type { CommandContext, CommandDef } from "@/lib/commands/types"
+import { NO_RANKING } from "@/lib/posts/posts-view"
 import type { Channel } from "@/types"
 
-function applyPostSearchQuery(
+async function applyPostSearchQuery(
   ctx: CommandContext,
   value: string,
 ): Promise<void> {
-  const query = value.trim()
-  ctx.setPostSearch(query)
-  ctx.setSemanticSearchQuery("")
-  ctx.setRelatedPostSearch(null)
-  return ctx.handleFilterPosts(query)
+  ctx.postsEdits.setKeyword(value.trim())
+  ctx.postsEdits.setRanking(NO_RANKING)
 }
 
 function applySummarySearchQuery(ctx: CommandContext, value: string): void {
@@ -133,7 +131,7 @@ const CHANNEL_OPS: ChannelOpDef[] = [
       id: "postSearchQuery",
       label: "Search posts",
       type: "text",
-      getValue: (ctx) => ctx.postSearch,
+      getValue: (ctx) => ctx.postsView.keyword,
       apply: (ctx, value) => applyPostSearchQuery(ctx, value),
     },
     run: () => {},

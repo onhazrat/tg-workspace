@@ -32,7 +32,12 @@ import {
 } from "@/lib/posts/post-filter"
 import type { PostFacetsResponse } from "../client"
 import { useData } from "../contexts/DataContext"
-import { useScraper } from "../contexts/ScraperContext"
+import {
+  type PostsViewEdits,
+  usePostsKeyword,
+  usePostsViewEdits,
+  usePostsViewState,
+} from "../contexts/PostsViewContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import {
@@ -61,6 +66,13 @@ import type {
   ViewMeasure,
 } from "../lib/posts/post-pipeline"
 import { facetRule } from "../lib/posts/post-selection"
+import {
+  meaningQuery,
+  NO_RANKING,
+  type PostsRanking,
+  type PostsView,
+  relatedPost,
+} from "../lib/posts/posts-view"
 import type { Post } from "../types"
 import {
   PostFacetMenu,
@@ -73,7 +85,7 @@ import {
 import { PerChannelForm, Pill, pillClass } from "./PostFilterParts"
 import { useSpotlight } from "./post-card/ChannelSpotlight"
 
-/** What the bar reads and writes; `ScraperContext` provides all of it. */
+/** What the bar reads and writes; the Posts view module provides all of it. */
 export interface FilterBarControls {
   semanticSearchQuery: string
   setSemanticSearchQuery: (value: string) => void
@@ -96,8 +108,6 @@ export interface FilterBarControls {
 }
 
 interface PostFilterProps {
-  postSearch: string
-  setPostSearch: (val: string) => void
   /** How many Posts the filter shows, for the footer and the filter row. */
   shownCount: number
   /** The existing subtitle's qualifiers: the cap and grouping. */
@@ -109,6 +119,9 @@ interface PostFilterProps {
 }
 
 export interface PostFilterBarProps extends PostFilterProps {
+  /** The keyword as typed. */
+  postSearch: string
+  setPostSearch: (val: string) => void
   controls: FilterBarControls
   embeddingsEnabled: boolean
   /** The Analysis window control, left of the search box. */
@@ -462,13 +475,81 @@ function useSpotlitWindowHistogram(query: WindowHistogramQuery) {
   return usePostWindowHistogram(query, useSpotlight().spotlight)
 }
 
+/**
+ * The ranking as the bar's controls. The checkbox answers for a meaning
+ * search before one runs, so `respects` holds that answer until Enter.
+ */
+function rankingControls(
+  ranking: PostsRanking,
+  setRanking: PostsViewEdits["setRanking"],
+  respects: boolean,
+  setRespects: (value: boolean) => void,
+) {
+  const respectsNow = (current: PostsRanking) =>
+    current.kind === "meaning" ? current.respectsChannels : respects
+  return {
+    semanticSearchQuery: meaningQuery(ranking),
+    setSemanticSearchQuery: (query: string) =>
+      setRanking((current) =>
+        query
+          ? { kind: "meaning", query, respectsChannels: respectsNow(current) }
+          : current.kind === "meaning"
+            ? NO_RANKING
+            : current,
+      ),
+    semanticSearchRespectsChannels: respectsNow(ranking),
+    setSemanticSearchRespectsChannels: (value: boolean) => {
+      setRespects(value)
+      setRanking((current) =>
+        current.kind === "meaning"
+          ? { ...current, respectsChannels: value }
+          : current,
+      )
+    },
+    relatedPostSearch: relatedPost(ranking),
+    setRelatedPostSearch: (post: Post | null) =>
+      setRanking((current) =>
+        post
+          ? { kind: "related", post }
+          : current.kind === "related"
+            ? NO_RANKING
+            : current,
+      ),
+  }
+}
+
+/** The view's order and filter as the bar's controls. */
+const orderControls = (view: PostsView, edits: PostsViewEdits) => ({
+  postFilter: view.filter,
+  setPostFilter: edits.setPostFilter,
+  viewMeasure: view.viewMeasure,
+  setViewMeasure: (viewMeasure: ViewMeasure) => edits.setOrder({ viewMeasure }),
+  maxPostsPerChannel: view.maxPerChannel,
+  setMaxPostsPerChannel: (maxPerChannel: number) =>
+    edits.setOrder({ maxPerChannel }),
+  maxPostsPerChannelMode: view.maxPerChannelMode,
+  setMaxPostsPerChannelMode: (maxPerChannelMode: MaxPostsPerChannelMode) =>
+    edits.setOrder({ maxPerChannelMode }),
+  postSortOrder: view.sort,
+  setPostSortOrder: (sort: PostSortOrder) => edits.setOrder({ sort }),
+  groupByChannel: view.groupByChannel,
+  setGroupByChannel: (groupByChannel: boolean) =>
+    edits.setOrder({ groupByChannel }),
+})
+
 /** The bar wired to the workspace's state. */
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const spot = useSpotlight()
+  const postSearch = usePostsKeyword()
+  const { view } = usePostsViewState()
+  const edits = usePostsViewEdits()
+  const [respects, setRespects] = React.useState(false)
   // A spotlight's tree is what the row shows and edits (PTR-04).
-  const scraper = useScraper()
   const { controls, keywordIgnored } = spotlitBar(
-    scraper,
+    {
+      ...rankingControls(view.ranking, edits.setRanking, respects, setRespects),
+      ...orderControls(view, edits),
+    },
     spot.spotlight,
     spot.setFilter,
   )
@@ -479,7 +560,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   // The filter row says "N of M", and M is the window's total, so the counts
   // load while it is showing as well as while a dropdown is open.
   const rowShowing =
-    controls.postFilter.children.length > 0 || props.postSearch.trim() !== ""
+    controls.postFilter.children.length > 0 || postSearch.trim() !== ""
   const facets = usePostFacets(openPillCount > 0 || rowShowing, spot.spotlight)
   const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
@@ -503,6 +584,8 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
     <PostValueHistogramContext.Provider value={useSpotlitValueHistogram}>
       <PostFilterBar
         {...props}
+        postSearch={postSearch}
+        setPostSearch={edits.setKeyword}
         controls={controls}
         keywordIgnored={keywordIgnored}
         embeddingsEnabled={embeddingsEnabled}
@@ -525,7 +608,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
           setOpenPillCount((n) => Math.max(0, n + (open ? 1 : -1)))
         }
         onFacetTick={(facet, value, select) =>
-          scraper.appendSelection([
+          edits.appendSelection([
             facetRule(select, facet, value, spot.spotlight?.channel),
           ])
         }

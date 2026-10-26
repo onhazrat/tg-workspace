@@ -6,10 +6,11 @@ import { TooltipProvider } from "@/components/ui/tg-tooltip"
 import { AIProvider } from "@/contexts/AIContext"
 import { ChatProvider } from "@/contexts/ChatContext"
 import { DataProvider } from "@/contexts/DataContext"
+import { PostsViewProvider } from "@/contexts/PostsViewContext"
 import { RAGProvider } from "@/contexts/RAGContext"
 import { ScopeProvider } from "@/contexts/ScopeContext"
-import { ScraperProvider } from "@/contexts/ScraperContext"
 import { SettingsProvider } from "@/contexts/SettingsContext"
+import { SyncProvider } from "@/contexts/SyncContext"
 import { TagProvider } from "@/contexts/TagContext"
 import { TranslationProvider } from "@/contexts/TranslationContext"
 import { UIProvider } from "@/contexts/UIContext"
@@ -27,23 +28,25 @@ export function TgProviders({ children }: { children: ReactNode }) {
         <UIProvider>
           <ScopeProvider>
             <RAGProvider>
-              <ScraperProvider>
-                <TagProvider>
-                  <ChatProvider>
-                    <AIProvider>
-                      <CommandPaletteProvider>
-                        <TranslationProvider>
-                          <TooltipProvider delay={500} closeDelay={300}>
-                            {children}
-                            <CommandPalette />
-                            <TgToaster richColors closeButton />
-                          </TooltipProvider>
-                        </TranslationProvider>
-                      </CommandPaletteProvider>
-                    </AIProvider>
-                  </ChatProvider>
-                </TagProvider>
-              </ScraperProvider>
+              <SyncProvider>
+                <PostsViewProvider>
+                  <TagProvider>
+                    <ChatProvider>
+                      <AIProvider>
+                        <CommandPaletteProvider>
+                          <TranslationProvider>
+                            <TooltipProvider delay={500} closeDelay={300}>
+                              {children}
+                              <CommandPalette />
+                              <TgToaster richColors closeButton />
+                            </TooltipProvider>
+                          </TranslationProvider>
+                        </CommandPaletteProvider>
+                      </AIProvider>
+                    </ChatProvider>
+                  </TagProvider>
+                </PostsViewProvider>
+              </SyncProvider>
             </RAGProvider>
           </ScopeProvider>
         </UIProvider>

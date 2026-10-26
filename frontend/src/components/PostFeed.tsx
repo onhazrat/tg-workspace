@@ -1,7 +1,8 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { LayoutGrid } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import {
   isSemanticFeed,
@@ -32,7 +33,11 @@ import {
 } from "@/lib/posts/selected-export"
 import { cn } from "@/lib/utils"
 import { useData } from "../contexts/DataContext"
-import { useScraper } from "../contexts/ScraperContext"
+import {
+  invalidatePostsReads,
+  usePostsViewEdits,
+  usePostsViewState,
+} from "../contexts/PostsViewContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { PostFeedResults } from "./PostFeedResults"
@@ -50,40 +55,24 @@ import { FeedPagingContext } from "./post-card/PhotoViewer"
 import { ReplyPreviewProvider } from "./post-card/ReplyParent"
 
 interface PostFeedProps {
-  postSearch: string
-  setPostSearch: (val: string) => void
   loadMoreRef: React.RefObject<HTMLDivElement | null>
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
 }
 
 export const PostFeed: React.FC<PostFeedProps> = ({
-  postSearch,
-  setPostSearch,
   loadMoreRef,
   scrollContainerRef,
 }) => {
-  const {
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-    groupByChannel,
-    invalidatePostViews,
-    postFilter,
-    semanticSearchQuery,
-    relatedPostSearch,
-    viewMeasure,
-    postSelection,
-    appendSelection,
-    removeSelectionChip,
-  } = useScraper()
+  const { view } = usePostsViewState()
+  const { appendSelection, removeSelectionChip } = usePostsViewEdits()
   const { embeddingsEnabled } = useSettings()
-  const { channels, selectedChannels } = useData()
-  const ranked = isSemanticFeed(
-    embeddingsEnabled,
-    relatedPostSearch,
-    semanticSearchQuery,
+  const { channels } = useData()
+  const ranked = isSemanticFeed(embeddingsEnabled, view.ranking)
+  const spotlightApi = useSpotlightState(
+    scrollContainerRef,
+    view.filter,
+    ranked,
   )
-  const spotlightApi = useSpotlightState(scrollContainerRef, postFilter, ranked)
   const { spotlight } = spotlightApi
   const [compact, setCompact] = useCompactPostGrid()
   const { counts, tooNewToJudge, selectedShown } = useShownPostCounts(spotlight)
@@ -136,22 +125,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   // What the filter shows, as a rule records it; in a spotlight that is the
   // spotlight's filter, so it means that Channel.
   const shownSnapshot = () => {
-    const view = spotlightView(spotlight, {
-      channelNames: [...selectedChannels],
-      keyword: postSearch,
-      filter: postFilter,
-      maxPerChannel: maxPostsPerChannel,
-      groupByChannel,
-    })
-    return snapshotOf({
-      filter: view.filter,
-      keyword: view.keyword,
-      sort: postSortOrder,
-      viewMeasure,
-      maxPerChannel: view.maxPerChannel,
-      maxPerChannelMode: maxPostsPerChannelMode,
-      seed: 0,
-    })
+    const shown = spotlightView(spotlight, view)
+    return snapshotOf({ ...shown, seed: 0 })
   }
   // Over what the filter shows, as a rule that reaches the next window too;
   // a ranking cannot be applied again, so its results are picked one by one.
@@ -195,16 +170,19 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   // Posts is the surface a Live window is watched on, so it is the surface that
   // refreshes on the minute. Mounted here rather than in the feed hook so the
   // count above refreshes with it (AW-04).
-  useLiveWindowRefresh(invalidatePostViews)
+  const queryClient = useQueryClient()
+  useLiveWindowRefresh(
+    useCallback(() => invalidatePostsReads(queryClient), [queryClient]),
+  )
 
   // A spotlight drops the cap and grouping, so the subtitle names neither.
   const subtitle = spotlight
     ? ""
     : feedSubtitle(
-        maxPostsPerChannel,
-        maxPostsPerChannelMode,
-        postSortOrder,
-        groupByChannel,
+        view.maxPerChannel,
+        view.maxPerChannelMode,
+        view.sort,
+        view.groupByChannel,
       )
 
   useEffect(() => {
@@ -239,8 +217,6 @@ export const PostFeed: React.FC<PostFeedProps> = ({
           className="space-y-6 pb-10"
         >
           <PostFilter
-            postSearch={postSearch}
-            setPostSearch={setPostSearch}
             shownCount={totalInScope}
             subtitle={subtitle}
             tooNewToJudge={tooNewToJudge}
@@ -259,7 +235,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
           <PostSelectionBar
             selected={selectedCount}
             total={windowTotal}
-            chips={selectionChips(postSelection)}
+            chips={selectionChips(view.selection)}
             ranked={ranked}
             onSelectAll={() => selectShown(true)}
             onDeselectAll={() => selectShown(false)}
@@ -300,7 +276,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
               posts={posts}
               showLoadMore={hasMore || isLoadingMore}
               loadMoreRef={loadMoreRef}
-              postSearch={postSearch}
+              postSearch={view.keyword}
               compact={compact}
               highlight={highlight}
               onToggleSelected={onToggleSelected}

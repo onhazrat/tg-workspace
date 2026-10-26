@@ -159,12 +159,9 @@ export interface CommandContext {
   settings: CommandSettingsSlice
   summariesHistory: SummaryListItem[]
   postDateRange?: { startDate: number; endDate: number }
-  postSearch: string
-  setPostSearch: (query: string) => void
-  setSemanticSearchQuery: (query: string) => void
-  setSemanticSearchRespectsChannels: (value: boolean) => void
-  setRelatedPostSearch: (post: Post | null) => void
-  handleFilterPosts: (searchText?: string) => Promise<void>
+  /** What the Posts tab shows (ADR-039), and the edits a command makes to it. */
+  postsView: import("@/lib/posts/posts-view").PostsView
+  postsEdits: import("@/contexts/PostsViewContext").PostsViewEdits
   historySearchQuery: string
   setHistorySearchQuery: (query: string) => void
   setSummary: (text: string | null) => void
@@ -177,19 +174,6 @@ export interface CommandContext {
     import("@/hooks/useWorkspaceTabs").WorkspaceTabs,
     "active" | "openTab" | "closeTab" | "reopenLastTab"
   >
-  /** What the Posts tab shows (PTR-03); a palette command adds a Condition. */
-  postFilter: import("@/lib/posts/post-filter").PostFilter
-  setPostFilter: (next: import("@/lib/posts/post-filter").PostFilter) => void
-  setMaxPostsPerChannel: (value: number) => void
-  setMaxPostsPerChannelMode: (
-    value: import("@/lib/posts/post-pipeline").MaxPostsPerChannelMode,
-  ) => void
-  postSortOrder: import("@/lib/posts/post-pipeline").PostSortOrder
-  setPostSortOrder: (
-    value: import("@/lib/posts/post-pipeline").PostSortOrder,
-  ) => void
-  groupByChannel: boolean
-  setGroupByChannel: (value: boolean) => void
   /** Fetch the scoped, filtered posts on demand (for the post picker). */
   getScopedPosts: () => Promise<import("@/types").Post[]>
   /** Per-channel in-scope post counts on demand (server-side when eligible). */

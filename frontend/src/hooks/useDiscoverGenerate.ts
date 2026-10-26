@@ -1,8 +1,8 @@
 import { useMemo } from "react"
 
 import { useData } from "@/contexts/DataContext"
+import { usePostsViewState } from "@/contexts/PostsViewContext"
 import { useScope } from "@/contexts/ScopeContext"
-import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
 import { useCreateDiscoverReportMutation } from "@/hooks/useDiscover"
@@ -17,8 +17,8 @@ import { useCreateDiscoverReportMutation } from "@/hooks/useDiscover"
  */
 export function useDiscoverGenerate() {
   const { selectedChannels } = useData()
-  const { postSelection, postSortOrder, groupByChannel, viewMeasure } =
-    useScraper()
+  const { selection, sort, groupByChannel, viewMeasure } =
+    usePostsViewState().view
   const { startDate, endDate } = useScope()
   const { discoverSignals } = useSettings()
   const { workspaceTabs } = useUI()
@@ -41,9 +41,9 @@ export function useDiscoverGenerate() {
       endDate,
       signals: discoverSignals,
       viewMeasure,
-      sort: postSortOrder,
+      sort,
       groupByChannel,
-      selection: postSelection,
+      selection,
     })
     // Its own tab, shown when this was started from Action (TABS-01).
     workspaceTabs.createTab("discover", report.id)

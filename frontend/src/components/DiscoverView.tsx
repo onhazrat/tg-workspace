@@ -46,8 +46,8 @@ import {
 } from "@/lib/posts/discover-report-view"
 import { removeFromSelection } from "@/lib/posts/discover-selection"
 import { useData } from "../contexts/DataContext"
-import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { useSync } from "../contexts/SyncContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
 
@@ -62,7 +62,7 @@ import { useApiStatus } from "../hooks/useApiStatus"
  */
 export const DiscoverView: React.FC = () => {
   const { selectedChannels } = useData()
-  const { followDiscoverChannels, scrapingChannels } = useScraper()
+  const { followDiscoverChannels, scrapingChannels } = useSync()
   const { setActiveTab } = useUI()
   const { isOffline } = useApiStatus()
   const {

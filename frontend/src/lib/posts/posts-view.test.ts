@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 
 import { type PostFilter, parsePostFilter } from "./post-filter"
-import { type PostsRead, type PostsView, postsRead } from "./posts-view"
+import {
+  NO_RANKING,
+  type PostsRead,
+  type PostsView,
+  postsRead,
+} from "./posts-view"
 
 const filter = (src: string): PostFilter => {
   const parsed = parsePostFilter(src)
@@ -13,6 +18,7 @@ const base: PostsView = {
   scopeChannelNames: ["durov", "news"],
   channelNames: ["durov", "news"],
   keyword: "",
+  ranking: NO_RANKING,
   filter: filter("lang:fa"),
   maxPerChannel: 5,
   maxPerChannelMode: "ordered",
@@ -31,6 +37,11 @@ const changes = {
   scopeChannelNames: { scopeChannelNames: ["durov", "news", "rates"] },
   channelNames: { channelNames: ["news"] },
   keyword: { keyword: "rates" },
+  // No read sends it: a meaning search runs in the browser, and the reads
+  // that count or filter ignore it.
+  ranking: {
+    ranking: { kind: "meaning", query: "rates", respectsChannels: true },
+  },
   filter: { filter: filter("media:video") },
   maxPerChannel: { maxPerChannel: 0 },
   maxPerChannelMode: { maxPerChannelMode: "random" },

@@ -45,7 +45,7 @@ import {
 import { generateTagStream, getTagPrompt } from "@/services/ai"
 import type { TagRun, TagRunSummary } from "@/types"
 import { useData } from "./DataContext"
-import { useScraper } from "./ScraperContext"
+import { usePostsViewState } from "./PostsViewContext"
 import { useSettings } from "./SettingsContext"
 import { useUI } from "./UIContext"
 
@@ -79,7 +79,7 @@ export const TagProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { channels, selectedChannels, setChannels } = useData()
-  const { getScopeSubmission } = useScraper()
+  const { getScopeSubmission } = usePostsViewState()
   const {
     selectedModel,
     aiTemperature,

@@ -360,9 +360,9 @@ Inverted layering: `backend/app/jobs/retention.py` imports `_touch_sync` from `b
   - Deprecate `frontend/src/client/` generated SDK for TG routes; use `frontend/src/api/` only.
   - Admin/template routes (`users`, `login`) may keep generated client temporarily — document split in `frontend/README.md`.
 - [ ] **Deduplicate sync/proxy logic**
-  - Single module: `frontend/src/lib/syncSettings.ts` — consumed by `ScraperContext.tsx`, `SettingsContext.tsx`.
+  - Single module: `frontend/src/lib/syncSettings.ts`, consumed by `SyncContext.tsx`, `SettingsContext.tsx`.
   - Proxy/tor flags: read from server settings only post-WS-E.
-- [ ] **Fix filter churn** — `frontend/src/contexts/ScraperContext.tsx`
+- [ ] **Fix filter churn**, `frontend/src/contexts/PostsViewContext.tsx`
   - Narrow `handleFilterPosts` deps; remove `useEffect(() => { handleFilterPosts(); }, [handleFilterPosts])` full re-run on every dep change.
   - Debounce semantic search filter updates.
 - [ ] **Single theme system** — pick one:

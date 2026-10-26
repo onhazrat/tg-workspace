@@ -23,8 +23,11 @@ import {
   type ViewEstimateResponse,
 } from "@/client"
 import { useData } from "@/contexts/DataContext"
+import {
+  usePostsViewEdits,
+  usePostsViewState,
+} from "@/contexts/PostsViewContext"
 import { useScope } from "@/contexts/ScopeContext"
-import { useScraper } from "@/contexts/ScraperContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { errorText } from "@/lib/artifacts/artifact-run"
@@ -34,7 +37,13 @@ import {
   spotlightView,
 } from "@/lib/posts/channel-spotlight"
 import type { PostNumber } from "@/lib/posts/post-filter"
-import { type PostsView, postsRead } from "@/lib/posts/posts-view"
+import {
+  meaningQuery,
+  NO_RANKING,
+  type PostsRanking,
+  type PostsView,
+  postsRead,
+} from "@/lib/posts/posts-view"
 import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
 import type { Post } from "@/types"
 import {
@@ -55,11 +64,10 @@ export const FEED_PAGE_SIZE = 20
  * the whole point, because the pages already loaded stay loaded and the Account
  * keeps their scroll.
  *
- * Call it from the surface that shows Posts, handing it that surface's refresh —
- * `ScraperContext.invalidatePostViews`, which covers the feed, the counts and
- * the Discover candidates, all three of which a moved window changes. The
- * refresh arrives as an argument rather than being read from the context here
- * so this can be tested against a spy and one provider.
+ * Call it from the surface that shows Posts, handing it that surface's refresh,
+ * `invalidatePostsReads`, which covers the feed, the counts and the Discover
+ * candidates, all three of which a moved window changes. The refresh arrives
+ * as an argument so this can be tested against a spy and one provider.
  *
  * ponytail: an invalidation refetches every loaded page of the infinite feed,
  * so a deeply scrolled tab costs one round trip per page per minute. Bound it
@@ -80,74 +88,16 @@ export function useLiveWindowRefresh(refresh: () => void): void {
   }, [liveTick, refresh])
 }
 
-function useSelectedChannelNames(): string[] {
-  const { channels, selectedChannels } = useData()
-  return useMemo(
-    () =>
-      channels
-        .filter((channel) => selectedChannels.has(channel.name))
-        .map((channel) => channel.name),
-    [channels, selectedChannels],
-  )
-}
-
 /**
- * The Posts view every Posts read is built from (ADR-036), gathered from the
- * contexts with `spotlight` applied. `postsRead` turns it into a read's key
- * and body.
+ * The Posts view every Posts read is built from (ADR-036), as the Posts view
+ * module builds it, with `spotlight` applied. `postsRead` turns it into a
+ * read's key and body.
  */
 export function usePostsView(spotlight: ChannelSpotlight | null): PostsView {
-  const { startDate, endDate, windowKey } = useScope()
-  const {
-    debouncedPostSearch,
-    postFilter,
-    maxPostsPerChannel,
-    maxPostsPerChannelMode,
-    postSortOrder,
-    groupByChannel,
-    viewMeasure,
-    postSelection,
-    selectionEdit,
-  } = useScraper()
-  const selected = useSelectedChannelNames()
-  const selectionRevision = selectionEdit.revision
+  const { view } = usePostsViewState()
   // One identity per view, so a callback built on it (the command registry's
   // in-scope counts) does not change on every render.
-  return useMemo(
-    () =>
-      spotlightView(spotlight, {
-        scopeChannelNames: selected,
-        channelNames: selected,
-        keyword: debouncedPostSearch,
-        filter: postFilter,
-        maxPerChannel: maxPostsPerChannel,
-        maxPerChannelMode: maxPostsPerChannelMode,
-        sort: postSortOrder,
-        groupByChannel,
-        viewMeasure,
-        startDate,
-        endDate,
-        windowKey,
-        selection: postSelection,
-        selectionRevision,
-      }),
-    [
-      spotlight,
-      selected,
-      debouncedPostSearch,
-      postFilter,
-      maxPostsPerChannel,
-      maxPostsPerChannelMode,
-      postSortOrder,
-      groupByChannel,
-      viewMeasure,
-      startDate,
-      endDate,
-      windowKey,
-      postSelection,
-      selectionRevision,
-    ],
-  )
+  return useMemo(() => spotlightView(spotlight, view), [spotlight, view])
 }
 
 /**
@@ -190,9 +140,9 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
   selectedShown: number
 } {
   const { selectedChannels } = useData()
-  const { semanticSearchQuery, getScopedPosts } = useScraper()
+  const { view, getScopedPosts } = usePostsViewState()
   const serverEligible =
-    !semanticSearchQuery.trim() && selectedChannels.size > 0
+    !meaningQuery(view.ranking).trim() && selectedChannels.size > 0
   // Which Posts the cap keeps, as the feed asks: the Venn counts those.
   const { queryKey, body } = postsRead(usePostsView(spotlight), {
     kind: "shownCounts",
@@ -244,15 +194,15 @@ export function usePostFacets(
   spotlight: ChannelSpotlight | null,
 ): PostFacetsResponse | undefined {
   const { selectedChannels } = useData()
-  const { semanticSearchQuery } = useScraper()
-  const { queryKey, body } = postsRead(usePostsView(spotlight), {
-    kind: "facets",
-  })
+  const view = usePostsView(spotlight)
+  const { queryKey, body } = postsRead(view, { kind: "facets" })
   const query = useQuery({
     queryKey,
     queryFn: () => dataPostsFacets({ body: body as PostFacetsRequest }),
     enabled:
-      enabled && !semanticSearchQuery.trim() && selectedChannels.size > 0,
+      enabled &&
+      !meaningQuery(view.ranking).trim() &&
+      selectedChannels.size > 0,
     staleTime: SUMMARIZER_STALE_TIME,
     placeholderData: (previous) => previous,
   })
@@ -319,7 +269,7 @@ export function usePostWindowHistogram(
 /**
  * The curve and settings an Estimated View count reads through, cached for an
  * hour: the curve is refitted daily and the settings change by hand. Shares
- * its cache entry with `ScraperContext.getViewEstimate`.
+ * its cache entry with the Posts view module's `getViewEstimate`.
  */
 export function useViewEstimate(): ViewEstimateResponse | undefined {
   return useQuery({
@@ -345,14 +295,16 @@ export interface PostsFeed {
 
 /**
  * Whether the feed takes the client RAG path instead of the server feed: only
- * with embeddings on, and only while a related-post or semantic search is set.
+ * with embeddings on, and only while the view is ranked.
  */
 export function isSemanticFeed(
   embeddingsEnabled: boolean,
-  relatedPostSearch: Post | null,
-  semanticQuery: string,
+  ranking: PostsRanking,
 ): boolean {
-  return embeddingsEnabled && (!!relatedPostSearch || !!semanticQuery.trim())
+  return (
+    embeddingsEnabled &&
+    (ranking.kind === "related" || !!meaningQuery(ranking).trim())
+  )
 }
 
 /**
@@ -361,7 +313,7 @@ export function isSemanticFeed(
  * `FEED_PAGE_SIZE` rows per page, more on scroll. When a semantic/related
  * search is active it keeps the client RAG path (≤50, no pagination), per the
  * agreed design. The query key encodes the scope + filters, so any change
- * refetches the first page; a completed sync invalidates it (see ScraperContext).
+ * refetches the first page; a completed sync invalidates it (see SyncContext).
  */
 export function usePostsFeed(
   spotlight: ChannelSpotlight | null,
@@ -374,23 +326,13 @@ export function usePostsFeed(
     selectedShownTotal?: number
   } = {},
 ): PostsFeed {
-  const {
-    debouncedSemanticSearchQuery,
-    setSemanticSearchQuery,
-    relatedPostSearch,
-    setRelatedPostSearch,
-    getScopedPosts,
-    selectionEdit,
-  } = useScraper()
+  const { getScopedPosts, selectionEdit } = usePostsViewState()
+  const { setRanking } = usePostsViewEdits()
   const queryClient = useQueryClient()
   const { embeddingsEnabled } = useSettings()
   const view = usePostsView(spotlight)
 
-  const semanticActive = isSemanticFeed(
-    embeddingsEnabled,
-    relatedPostSearch,
-    debouncedSemanticSearchQuery,
-  )
+  const semanticActive = isSemanticFeed(embeddingsEnabled, view.ranking)
 
   // The selection rides the body and not the key: an edit refreshes the
   // rows in place below (PTR-05). See `postsRead` for the window.
@@ -465,13 +407,11 @@ export function usePostsFeed(
       })
       .catch((error) => {
         if (cancelled) return
-        // Preserve the old handleFilterPosts fallback: on a failed
-        // semantic/related search, toast and clear the search that triggered it.
+        // On a failed meaning or related search, toast and end the search.
         toast.error(
           `${errorText(error, "Search failed")}. Falling back to normal view.`,
         )
-        if (relatedPostSearch) setRelatedPostSearch(null)
-        else setSemanticSearchQuery("")
+        setRanking(NO_RANKING)
       })
       .finally(() => {
         if (!cancelled) setClientLoading(false)
@@ -479,14 +419,7 @@ export function usePostsFeed(
     return () => {
       cancelled = true
     }
-  }, [
-    semanticActive,
-    getScopedPosts,
-    relatedPostSearch,
-    setRelatedPostSearch,
-    setSemanticSearchQuery,
-    ruleEdits,
-  ])
+  }, [semanticActive, getScopedPosts, setRanking, ruleEdits])
 
   if (semanticActive) {
     return {

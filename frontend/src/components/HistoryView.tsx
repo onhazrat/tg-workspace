@@ -21,7 +21,7 @@ import {
 } from "@/components/history/history-view-model"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { TgHeroEmptyState } from "@/components/ui/tg-segmented"
-import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
+import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import {
   useArtifactCounts,
   useArtifacts,
@@ -70,7 +70,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ openArtifact }) => {
   const { rows, query } = useArtifacts(params)
   const counts = useArtifactCounts(params).data
   const invalidate = useInvalidateArtifacts()
-  const applyScope = useApplyArtifactScope()
+  const applyScope = usePostsViewEdits().restore
   const bots = useBotsQuery().data
   const botList = bots?.credentials ?? []
   const destinations = bots?.destinations ?? []

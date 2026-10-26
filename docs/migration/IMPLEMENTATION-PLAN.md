@@ -35,7 +35,7 @@ From [TARGET-ARCHITECTURE.md](./TARGET-ARCHITECTURE.md) and ADRs:
 | **Log tables** | IndexedDB only (`publish_logs`, `sync_logs`, etc.) | Postgres models + API routes (missing today) |
 | **`user_id`** | Not present on TG tables | Nullable `user_id` on mutable tables ([DECISIONS.md #1](./DECISIONS.md)) |
 | **Bot tokens** | IndexedDB `bot_credentials`; sent per request | Encrypted in Postgres; auto-migrated on login ([DECISIONS.md #2, #3](./DECISIONS.md)) |
-| **Scrape orchestration** | `frontend/src/contexts/ScraperContext.tsx` + `App.tsx` 60 s poll | Server jobs; in-memory state Phase 4, `SyncJob` table pre-Phase 6 |
+| **Scrape orchestration** | `frontend/src/contexts/SyncContext.tsx` + `App.tsx` 60 s poll | Server jobs; in-memory state Phase 4, `SyncJob` table pre-Phase 6 |
 | **`resolveStartTimeToId`** | `frontend/src/services/telegram.ts` (client-side binary search) | Backend endpoint |
 | **RAG / embeddings** | `frontend/src/contexts/RAGContext.tsx` — local embed + search | Server `backend/app/api/routes/rag.py` + job backfill |
 | **Background jobs** | Browser intervals in `App.tsx`, `AIContext.tsx`, `RAGContext.tsx`, `TranslationContext.tsx` | `backend/app/jobs/scheduler.py` (placeholders today) |
@@ -147,7 +147,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 | API-first writes: POST/PUT to API, then update IndexedDB on success | `frontend/src/lib/repository.ts` |
 | On API failure: write IndexedDB, show toast/banner warning ([DECISION #4](./DECISIONS.md)) | `repository.ts`, shared `useApiStatus` hook |
 | Offline detection: health check on `App.tsx` mount + periodic poll | `frontend/src/App.tsx` |
-| When offline: disable sync, scrape, summary, publish actions; allow browse of cache ([DECISION #5](./DECISIONS.md)) | `ScraperContext.tsx`, `AIContext.tsx`, `ChannelGrid.tsx`, `SummaryView.tsx` |
+| When offline: disable sync, scrape, summary, publish actions; allow browse of cache ([DECISION #5](./DECISIONS.md)) | `SyncContext.tsx`, `AIContext.tsx`, `ChannelGrid.tsx`, `SummaryView.tsx` |
 | Read-through: compare local `updated_at` / etag with `sync-meta`; refetch stale resources | `repository.ts` |
 
 ### Testing
@@ -244,7 +244,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 
 | Task | Files |
 |------|-------|
-| Replace local `resolveStartTimeToId` with API call | `frontend/src/services/telegram.ts`, `frontend/src/contexts/ScraperContext.tsx` |
+| Replace local `resolveStartTimeToId` with API call | `frontend/src/services/telegram.ts`, `frontend/src/contexts/SyncContext.tsx` |
 | Remove `torControlPassword` param from resolver call | `telegram.ts` |
 
 ### Testing
@@ -265,7 +265,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 | Area | Status | Note |
 |------|--------|------|
 | Backend — `resolve_start_time_to_id` + endpoint | **Done** | `backend/app/services/scraper.py`, `POST /api/v1/telegram/resolve-start-time` (+ legacy alias) |
-| Frontend — API-backed resolver | **Done** | `frontend/src/services/telegram.ts`, `ScraperContext.tsx` |
+| Frontend, API-backed resolver | **Done** | `frontend/src/services/telegram.ts`, `SyncContext.tsx` |
 | Testing — resolver unit + API fixtures | **Done** | `backend/tests/api/test_resolve_start_time.py` |
 
 ---
@@ -289,8 +289,8 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 | Task | Files |
 |------|-------|
 | Remove 60 s auto-sync from `App.tsx` | `frontend/src/App.tsx` |
-| `ScraperContext.tsx` triggers server jobs; polls status | `ScraperContext.tsx` |
-| Disable scrape UI when offline ([DECISION #5](./DECISIONS.md)) | `ChannelGrid.tsx`, `ScraperContext.tsx` |
+| `SyncContext.tsx` triggers server jobs; polls status | `SyncContext.tsx` |
+| Disable scrape UI when offline ([DECISION #5](./DECISIONS.md)) | `ChannelGrid.tsx`, `SyncContext.tsx` |
 
 ### Testing
 
@@ -313,8 +313,8 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 | Backend — in-memory sync job registry | **Done** | `backend/app/services/scraper_jobs.py` |
 | Backend — sync orchestration + bulk post upsert | **Done** | `backend/app/services/sync_orchestrator.py`; `POST/GET/cancel` under `/api/v1/jobs/sync` (`jobs.py`) |
 | Backend — channel language on scrape | **Done** | `backend/app/services/language.py` (`langdetect>=1.0.9` in `backend/pyproject.toml`) |
-| Frontend — server job start + poll | **Done** | `ScraperContext.tsx`, `frontend/src/api/client.ts` |
-| Frontend — offline disables sync UI | **Done** | `useApiStatus.ts`, `ChannelGrid.tsx`, `ScraperContext.tsx` |
+| Frontend, server job start + poll | **Done** | `SyncContext.tsx`, `frontend/src/api/client.ts` |
+| Frontend, offline disables sync UI | **Done** | `useApiStatus.ts`, `ChannelGrid.tsx`, `SyncContext.tsx` |
 | Testing — sync job integration | **Done** | `backend/tests/api/test_sync_jobs.py`; full suite **97 passed**, 1 skipped (**98** collected, 2026-06-08) |
 | Frontend — remove tab-only scrape loop | **Partial** | `App.tsx` still runs 60 s client **trigger** when tab is open; scrape executes on server |
 
@@ -456,7 +456,7 @@ Phases 2, 3, 5, and 7 can overlap with the critical path where staffing allows. 
 | Task | Files |
 |------|-------|
 | Expand `frontend/src/api/` module (move logic from `client.ts`) | `frontend/src/api/client.ts` → `frontend/src/api/index.ts` + domain files |
-| Migrate direct `/api/*` callers | Per [INVENTORY.md](./INVENTORY.md): `telegram.ts`, `SettingsView.tsx`, `BotManagement.tsx`, `ChannelGrid.tsx`, `NetworkTelemetry.tsx`, `ScraperContext.tsx` |
+| Migrate direct `/api/*` callers | Per [INVENTORY.md](./INVENTORY.md): `telegram.ts`, `SettingsView.tsx`, `BotManagement.tsx`, `ChannelGrid.tsx`, `NetworkTelemetry.tsx`, `SyncContext.tsx` |
 | Keep `frontend/src/client/` for template admin routes (`/users`, `/items`) | Unchanged |
 | SSE helpers for summary/chat streams | `frontend/src/api/ai.ts` |
 

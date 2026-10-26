@@ -18,7 +18,7 @@ import type React from "react"
 import type { FrozenScope } from "@/client"
 import { MissingPostsChip } from "@/components/MissingPostsChip"
 import { TgButton } from "@/components/ui/tg-button"
-import { useApplyArtifactScope } from "@/hooks/useApplyArtifactScope"
+import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import { artifactWindowText } from "@/lib/scope/artifact-scope"
 
 interface ArtifactScopeLineProps {
@@ -30,7 +30,7 @@ interface ArtifactScopeLineProps {
 }
 
 export const ArtifactScopeLine: React.FC<ArtifactScopeLineProps> = (props) => (
-  <ArtifactScopeLineView {...props} onUseScope={useApplyArtifactScope()} />
+  <ArtifactScopeLineView {...props} onUseScope={usePostsViewEdits().restore} />
 )
 
 /** The line from props alone; `ArtifactScopeLine` adds the workspace action. */

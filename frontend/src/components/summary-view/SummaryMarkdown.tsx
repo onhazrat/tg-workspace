@@ -1,12 +1,13 @@
 import React from "react"
 import type { Components } from "react-markdown"
-import { useScraper } from "@/contexts/ScraperContext"
+import { usePostsViewEdits } from "@/contexts/PostsViewContext"
 import { useSettings } from "@/contexts/SettingsContext"
 import { useUI } from "@/contexts/UIContext"
 import {
   type CitationRenderer,
   splitCitations,
 } from "@/lib/citations/replace-citations"
+import { meaningRanking } from "@/lib/posts/posts-view"
 import type { CitedPost } from "@/lib/summaries/cited-posts"
 import { type PreviewWorkspace, usePreviewSheet } from "../PostPreview"
 import { SummaryCitation } from "./SummaryCitation"
@@ -71,7 +72,7 @@ const CitedParagraph: Components["p"] = ({
 
 /** A leaf bullet searches for related posts on click; a bullet holding a nested list renders as is. */
 const SearchableListItem: Components["li"] = ({ node, children, ...props }) => {
-  const { setSemanticSearchQuery } = useScraper()
+  const { setRanking } = usePostsViewEdits()
   const { setActiveTab } = useUI()
   const { embeddingsEnabled } = useSettings()
   const renderCitation = useCitationRenderer()
@@ -96,7 +97,7 @@ const SearchableListItem: Components["li"] = ({ node, children, ...props }) => {
         e.stopPropagation()
         const query = relatedPostsQuery(extractText(children))
         if (query === null) return
-        setSemanticSearchQuery(query)
+        setRanking(meaningRanking(query))
         setActiveTab("posts")
       }}
       title={embeddingsEnabled ? "Click to find related posts" : undefined}

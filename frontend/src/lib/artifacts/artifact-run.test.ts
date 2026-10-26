@@ -88,9 +88,8 @@ it("withMissingPosts stores a count above zero and never a zero", () => {
 it("searchFilterExtra drops empty filters but keeps the channel switch", () => {
   expect(
     searchFilterExtra({
-      postSearch: "",
-      semanticSearchQuery: "war",
-      semanticSearchRespectsChannels: false,
+      keyword: "",
+      ranking: { kind: "meaning", query: "war", respectsChannels: false },
     }),
   ).toEqual({
     postSearch: undefined,

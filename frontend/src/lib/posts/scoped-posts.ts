@@ -26,12 +26,9 @@ import type { PostSelection } from "./post-selection"
 export const SCOPED_POSTS_LIMIT = 200
 
 /**
- * Everything `computeScopedPosts` needs to reproduce today's
- * `ScraperContext.handleFilterPosts` post-selection, with no React/state
- * dependency. The three branches (related-post search, semantic search, the
- * normal date-range path) mirror `handleFilterPosts` exactly so that a lazy,
- * on-demand call returns the identical post set the eager `filteredPosts`
- * array would have held for the same inputs.
+ * Everything `computeScopedPosts` needs to fetch what the Posts tab shows,
+ * with no React/state dependency: the related-post search, the semantic
+ * search, or the normal date-range path.
  */
 export interface ScopedPostsDeps {
   /** Debounced free-text keyword filter (normal path only). */
@@ -87,10 +84,9 @@ export interface ScopedPostsDeps {
 
 /**
  * Fetch + filter the posts in the current scope, on demand. This is the pure
- * core shared by `ScraperContext.getScopedPosts` (which wires live state into
- * it) and its unit tests. It performs no state writes and surfaces errors to
- * the caller instead of toasting/falling back — those UI concerns stay in
- * `handleFilterPosts`.
+ * core behind the Posts view module's `getScopedPosts` (which wires the view
+ * into it) and its unit tests. It performs no state writes and surfaces
+ * errors to the caller, whose fallback is the feed's to choose.
  */
 export async function computeScopedPosts(
   deps: ScopedPostsDeps,

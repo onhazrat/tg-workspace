@@ -57,8 +57,8 @@ import {
   THEME_TOOLTIPS,
 } from "./components/workspace-shell/workspace-shell-model"
 import { useData } from "./contexts/DataContext"
-import { useScraper } from "./contexts/ScraperContext"
 import { useSettings } from "./contexts/SettingsContext"
+import { useSync } from "./contexts/SyncContext"
 import { useUI } from "./contexts/UIContext"
 import { useApiStatus } from "./hooks/useApiStatus"
 import { useGuidedTour } from "./hooks/useGuidedTour"
@@ -101,12 +101,7 @@ export default function App() {
     currentSummaryId,
   } = useUI()
 
-  const {
-    postSearch,
-    setPostSearch,
-    autoSyncPauseUntil,
-    setAutoSyncPauseUntil,
-  } = useScraper()
+  const { autoSyncPauseUntil, setAutoSyncPauseUntil } = useSync()
 
   const postsInScopeCounts = useScopedPostCounts()
   const postsInScopeTotal = Object.values(postsInScopeCounts).reduce(
@@ -253,8 +248,6 @@ export default function App() {
       view()
     ) : (
       <PostFeed
-        postSearch={postSearch}
-        setPostSearch={setPostSearch}
         loadMoreRef={loadMoreRef}
         scrollContainerRef={scrollContainerRef}
       />

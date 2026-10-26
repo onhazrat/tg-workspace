@@ -7,8 +7,8 @@ import {
 import { cardFace } from "@/lib/channels/card-zoom"
 import { upsertChannel } from "@/lib/channels/store"
 import { useData } from "../contexts/DataContext"
-import { useScraper } from "../contexts/ScraperContext"
 import { useSettings } from "../contexts/SettingsContext"
+import { useSync } from "../contexts/SyncContext"
 import { useUI } from "../contexts/UIContext"
 import type { Channel } from "../types"
 import { ChannelCardFace } from "./channel-card/ChannelCardFace"
@@ -51,7 +51,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
     setChannels,
     loadChannels,
   } = useData()
-  const { scrapingChannels, syncQueue, addToSyncQueue } = useScraper()
+  const { scrapingChannels, syncQueue, addToSyncQueue } = useSync()
   const { summarizing } = useUI()
   const settings = useSettings()
   const { data: settingGroups = [] } = useSettingGroupsQuery()

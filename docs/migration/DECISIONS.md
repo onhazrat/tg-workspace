@@ -91,7 +91,7 @@ These decisions resolve open questions from [TARGET-ARCHITECTURE.md](./TARGET-AR
 
 **Rationale:** IndexedDB already holds posts, channels, summaries, and embeddings. When the backend health check fails, the app should remain usable for read-only browsing of cached data. Mutating operations — channel sync, scrape, summary generation, publish — are disabled with clear UI affordances rather than queuing writes for later replay (deferred per ADR-003).
 
-**Affects:** Phase 1 — `frontend/src/lib/repository.ts`, `frontend/src/App.tsx`, `ScraperContext.tsx`, `AIContext.tsx`, connectivity indicator in the shell.
+**Affects:** Phase 1, `frontend/src/lib/repository.ts`, `frontend/src/App.tsx`, `SyncContext.tsx`, `AIContext.tsx`, connectivity indicator in the shell.
 
 ---
 

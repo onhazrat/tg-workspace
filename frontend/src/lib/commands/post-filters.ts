@@ -6,6 +6,7 @@ import {
   type PostType,
 } from "@/lib/posts/post-filter"
 import { MEDIA_KIND_OPTIONS, type MediaKind } from "@/lib/posts/post-media"
+import { NO_RANKING } from "@/lib/posts/posts-view"
 
 export const POST_DATE_RANGE_PRESETS = [
   { id: "24h", label: "Last 24 Hours", hours: 24 },
@@ -17,14 +18,16 @@ export { POST_ORDER_OPTIONS } from "@/lib/posts/post-filter-bar"
 export { MEDIA_KIND_OPTIONS }
 
 export function clearPostFilters(ctx: CommandContext): void {
-  ctx.setPostSearch("")
-  ctx.setSemanticSearchQuery("")
-  ctx.setRelatedPostSearch(null)
-  ctx.setPostFilter(emptyPostFilter())
-  ctx.setMaxPostsPerChannel(0)
-  ctx.setMaxPostsPerChannelMode("ordered")
-  ctx.setPostSortOrder("newest")
-  ctx.setGroupByChannel(false)
+  const edits = ctx.postsEdits
+  edits.setKeyword("")
+  edits.setRanking(NO_RANKING)
+  edits.setPostFilter(emptyPostFilter())
+  edits.setOrder({
+    maxPerChannel: 0,
+    maxPerChannelMode: "ordered",
+    sort: "newest",
+    groupByChannel: false,
+  })
 }
 
 export function applyPostDateRangeHours(
@@ -41,7 +44,7 @@ export const isFunnelled = (
   ctx: CommandContext,
   type: "type" | "media",
   value: PostType | MediaKind,
-): boolean => funnelledValues(ctx.postFilter, type).includes(value)
+): boolean => funnelledValues(ctx.postsView.filter, type).includes(value)
 
 /**
  * Add the Condition a Type or media command names to the Post filter, as the
@@ -54,11 +57,9 @@ export function togglePostFunnel(
   value: PostType | MediaKind,
 ): boolean {
   const on = !isFunnelled(ctx, type, value)
-  ctx.setPostFilter(
-    on
-      ? addPostFunnel(ctx.postFilter, type, value)
-      : removeFunnel(ctx.postFilter, type, value),
+  const { filter } = ctx.postsView
+  ctx.postsEdits.setPostFilter(
+    on ? addPostFunnel(filter, type, value) : removeFunnel(filter, type, value),
   )
-  void ctx.handleFilterPosts(ctx.postSearch)
   return on
 }

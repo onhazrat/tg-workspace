@@ -53,9 +53,10 @@ import { getSummaryPrompt } from "../services/ai"
 import type { BotCredential, ChatDestination, Summary } from "../types"
 import { useChatContext } from "./ChatContext"
 import { useData } from "./DataContext"
+import { invalidatePostsReads, usePostsViewState } from "./PostsViewContext"
 import { useScope } from "./ScopeContext"
-import { useScraper } from "./ScraperContext"
 import { useSettings } from "./SettingsContext"
+import { useSync } from "./SyncContext"
 import { useUI } from "./UIContext"
 
 interface AIContextType {
@@ -94,15 +95,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
   const { endDate } = useScope()
   const { workspaceTabs, setSummarizing } = useUI()
   const { aiLanguage, selectedModel, aiTemperature } = useSettings()
-  const {
-    scrapeChannelsInParallel,
-    postSearch,
-    semanticSearchQuery,
-    semanticSearchRespectsChannels,
-    handleFilterPosts,
-    getPromptPostsInput,
-    getScopeSubmission,
-  } = useScraper()
+  const { scrapeChannelsInParallel } = useSync()
+  const { view, getScopeSubmission, getPromptPostsInput } = usePostsViewState()
   const { setChatMessages } = useChatContext()
   const { isOffline } = useApiStatus()
 
@@ -128,8 +122,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     if (stale.length === 0) return
     toast.info(`Syncing ${stale.length} channels to ensure up-to-date data...`)
     await scrapeChannelsInParallel(stale, "Pre-Summary Sync")
-    // Refresh the eager Posts-tab list so the UI reflects the sync.
-    handleFilterPosts()
+    invalidatePostsReads(queryClient)
   }
 
   /**
@@ -154,11 +147,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
       language: aiLanguage,
       model: selectedModel,
       extra: {
-        ...searchFilterExtra({
-          postSearch,
-          semanticSearchQuery,
-          semanticSearchRespectsChannels,
-        }),
+        ...searchFilterExtra(view),
         ...extra,
       },
     })

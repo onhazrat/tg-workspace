@@ -23,6 +23,7 @@ import { postScopeBody, postsFeedBody, shownPostsBody } from "@/api/data"
 import { queryKeys } from "@/hooks/queryKeys"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import type { WindowState } from "@/lib/scope/window"
+import type { Post } from "@/types"
 import {
   type PostFilter,
   type PostNumber,
@@ -35,14 +36,51 @@ import type {
 } from "./post-pipeline"
 import type { PostSelection } from "./post-selection"
 
+/**
+ * How the tab ranks what it shows: not at all, by a meaning query, or by a
+ * related Post. One value, so the two can never both be set.
+ */
+export type PostsRanking =
+  | { kind: "none" }
+  | { kind: "meaning"; query: string; respectsChannels: boolean }
+  | { kind: "related"; post: Post }
+
+export const NO_RANKING: PostsRanking = { kind: "none" }
+
+/** Whether a meaning query keeps to the selected Channels; false otherwise. */
+export const respectsChannels = (ranking: PostsRanking): boolean =>
+  ranking.kind === "meaning" && ranking.respectsChannels
+
+/**
+ * A meaning search for `query`, keeping whether the one it replaces kept to
+ * the selected Channels.
+ */
+export const meaningRanking =
+  (query: string) =>
+  (current: PostsRanking): PostsRanking => ({
+    kind: "meaning",
+    query,
+    respectsChannels: respectsChannels(current),
+  })
+
+/** What a meaning search asks for, or "" when none is running. */
+export const meaningQuery = (ranking: PostsRanking): string =>
+  ranking.kind === "meaning" ? ranking.query : ""
+
+/** What a related-Post search ranks by, or null. */
+export const relatedPost = (ranking: PostsRanking): Post | null =>
+  ranking.kind === "related" ? ranking.post : null
+
 /** What every Posts read is evaluated under, a Channel spotlight applied. */
 export interface PostsView {
   /** The selected Channels, which the Scope covers whatever a spotlight shows. */
   scopeChannelNames: string[]
   /** What the tab shows: the selected Channels, or the spotlit one. */
   channelNames: string[]
-  /** Debounced once, in `usePostFilters`. */
+  /** Debounced once, in the Posts view module. */
   keyword: string
+  /** The reads that count or filter ignore it. */
+  ranking: PostsRanking
   filter: PostFilter
   maxPerChannel: number
   maxPerChannelMode: MaxPostsPerChannelMode
@@ -56,6 +94,16 @@ export interface PostsView {
   /** Moves on every selection edit. */
   selectionRevision: number
 }
+
+/** The order and cap, edited as one value. */
+export type PostsOrder = Pick<
+  PostsView,
+  | "sort"
+  | "groupByChannel"
+  | "viewMeasure"
+  | "maxPerChannel"
+  | "maxPerChannelMode"
+>
 
 /**
  * The reads, each with its own inputs. The histograms read the uncapped view:
