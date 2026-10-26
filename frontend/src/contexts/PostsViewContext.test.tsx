@@ -502,6 +502,25 @@ describe("restore", () => {
     expect(view.selection).toEqual(selection)
     expect(view.ranking).toEqual(NO_RANKING)
   })
+
+  test("the keyword arrives with the rest, not a debounce later (story 12)", () => {
+    const { result } = mount()
+    act(() => result.current.edits.setKeyword("old"))
+
+    act(() =>
+      result.current.edits.restore({
+        start: 10,
+        end: 20,
+        channels: ["beta"],
+        keyword: "rates",
+        sort: "oldest",
+      }),
+    )
+
+    const { view } = result.current.state
+    expect([view.keyword, view.sort]).toEqual(["rates", "oldest"])
+    expect(result.current.typed).toBe("rates")
+  })
 })
 
 describe("the order and cap, in per-Account browser storage", () => {

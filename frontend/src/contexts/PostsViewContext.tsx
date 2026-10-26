@@ -37,7 +37,6 @@ import { toast } from "sonner"
 
 import type { FrozenScope } from "@/client"
 import { queryKeys } from "@/hooks/queryKeys"
-import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import {
   emptyPostFilter,
   POST_FILTER_BOUNDS,
@@ -241,7 +240,16 @@ export function PostsViewModule({
   children: ReactNode
 }) {
   const [keyword, setKeyword] = useState("")
-  const debouncedKeyword = useDebouncedValue(keyword, POST_SEARCH_DEBOUNCE_MS)
+  // The view's keyword: the typed one once typing pauses, or at once for a
+  // restore, so a restored view never shows the old keyword (story 12).
+  const [debouncedKeyword, setDebouncedKeyword] = useState("")
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setDebouncedKeyword(keyword),
+      POST_SEARCH_DEBOUNCE_MS,
+    )
+    return () => clearTimeout(timer)
+  }, [keyword])
   const [ranking, setRankingState] = useState<PostsRanking>(NO_RANKING)
   // Provider state, not stored: it outlives the search bar, not a reload.
   const [respectsChannels, setRespectsChannels] = useState(false)
@@ -320,6 +328,7 @@ export function PostsViewModule({
         outside.current.setSelectedChannels(next.channels)
         outside.current.setFixedRange(scope.start, scope.end)
         setKeyword(next.keyword)
+        setDebouncedKeyword(next.keyword)
         setPostFilter(next.postFilter)
         setOrder({
           viewMeasure: next.viewMeasure,
