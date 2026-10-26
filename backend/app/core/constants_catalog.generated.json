@@ -348,7 +348,7 @@
       "comment": "How stale the worker's view of `cancel_requested` may be, in seconds. Small, because a person pressed Cancel and is watching; not zero, because the alternative is a `Session` per checkpoint per handle. See `_cancelled`.",
       "expression": "1.0",
       "file": "backend/app/services/bulk_follow.py",
-      "line": 511,
+      "line": 512,
       "name": "_CANCEL_POLL_SECONDS",
       "value": 1.0
     },
