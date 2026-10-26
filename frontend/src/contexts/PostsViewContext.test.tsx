@@ -8,9 +8,20 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { act, cleanup, render, renderHook } from "@testing-library/react"
-import { type ReactNode, useState } from "react"
-
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react"
+import { Profiler, type ReactNode, useState } from "react"
+import {
+  PostFilterBar,
+  PostsSearchBox,
+  postsViewControls,
+} from "@/components/PostFilter"
 import {
   POST_FILTER_STORAGE_KEYS,
   POST_SEARCH_DEBOUNCE_MS,
@@ -21,6 +32,7 @@ import {
   usePostsViewEdits,
   usePostsViewState,
 } from "@/contexts/PostsViewContext"
+import { SyncContext, useSync } from "@/contexts/SyncContext"
 import { useShownPosts } from "@/hooks/usePostsView"
 import {
   addPostFunnel,
@@ -170,58 +182,88 @@ describe("who re-renders for a keystroke (the fan-out)", () => {
   /**
    * The point of three contexts. Before PVM-01 one context held the keyword
    * and every sync, so a letter typed in the Posts search re-rendered every
-   * Channel card, Post card and the shell. A reader here counts its renders.
+   * Channel card, Post card, the whole filter bar and the shell. Each reader
+   * here counts its renders; the bar is the real one, fed from the view as
+   * `PostFilter` feeds it, with the real search box in its slot.
    *
-   * The Sync context sits above this provider, so a sync-only reader sees a
-   * keystroke only if the module re-renders the children it was handed; the
-   * field pin in `architecture-invariants.test.ts` keeps Posts fields off the
-   * Sync context itself.
+   * The Sync context sits above this provider, as in `TgProviders`; the field
+   * pin in `architecture-invariants.test.ts` keeps Posts fields off it.
    */
   function fanOut() {
-    const renders = { sync: 0, edits: 0, searchBox: 0, view: 0 }
-    let edits: PostsViewEdits | undefined
+    const renders = { sync: 0, edits: 0, searchBox: 0, view: 0, bar: 0 }
     function SyncOnlyReader() {
       renders.sync++
+      useSync()
       return null
     }
     function EditsOnlyReader() {
       renders.edits++
-      edits = usePostsViewEdits()
+      usePostsViewEdits()
       return null
-    }
-    function SearchBox() {
-      renders.searchBox++
-      return <input readOnly value={usePostsKeyword()} />
     }
     function ViewReader() {
       renders.view++
       return <span>{usePostsViewState().view.keyword}</span>
     }
+    function Bar() {
+      renders.bar++
+      const { view } = usePostsViewState()
+      const edits = usePostsViewEdits()
+      const controls = postsViewControls(view, edits)
+      return (
+        <PostFilterBar
+          postSearch={view.keyword}
+          setPostSearch={edits.setKeyword}
+          controls={controls}
+          searchBox={
+            <Profiler id="search" onRender={() => renders.searchBox++}>
+              <PostsSearchBox controls={controls} embeddingsEnabled={false} />
+            </Profiler>
+          }
+          shownCount={0}
+          subtitle=""
+          tooNewToJudge={0}
+          windowControl={null}
+          facets={undefined}
+          channelLanguages={[]}
+          channelNames={CHANNELS}
+          onCountingPillOpenChange={NOOP}
+          estimationFloorHours={1}
+        />
+      )
+    }
     function Host() {
       const [text, setText] = useState<string | undefined>()
       return (
-        <PostsViewModule
-          inputs={{
-            ...INPUTS,
-            postFilterText: text,
-            setPostFilterText: setText,
-          }}
-        >
-          <SyncOnlyReader />
-          <EditsOnlyReader />
-          <SearchBox />
-          <ViewReader />
-        </PostsViewModule>
+        <SyncContext.Provider value={SYNC}>
+          <PostsViewModule
+            inputs={{
+              ...INPUTS,
+              postFilterText: text,
+              setPostFilterText: setText,
+            }}
+          >
+            <SyncOnlyReader />
+            <EditsOnlyReader />
+            <ViewReader />
+            <Bar />
+          </PostsViewModule>
+        </SyncContext.Provider>
       )
     }
+    const type = (keyword: string) =>
+      fireEvent.change(screen.getByLabelText("Keyword search"), {
+        target: { value: keyword },
+      })
     render(<Host />)
+    // The search box's first update renders it twice (the same-value draft
+    // sync on mount), so one keystroke is typed before counting.
+    type("x")
     const reset = () => {
       for (const key of Object.keys(renders) as (keyof typeof renders)[])
         renders[key] = 0
     }
     reset()
-    const type = (keyword: string) =>
-      act(() => (edits as PostsViewEdits).setKeyword(keyword))
     return { renders, reset, type }
   }
 
@@ -233,7 +275,13 @@ describe("who re-renders for a keystroke (the fan-out)", () => {
     type("r")
     type("ra")
 
-    expect(renders).toEqual({ sync: 0, edits: 0, searchBox: 2, view: 0 })
+    expect(renders).toEqual({
+      sync: 0,
+      edits: 0,
+      searchBox: 2,
+      view: 0,
+      bar: 0,
+    })
   })
 
   test("the debounce firing re-renders the view readers alone", async () => {
@@ -243,9 +291,19 @@ describe("who re-renders for a keystroke (the fan-out)", () => {
 
     await act(() => settle(POST_SEARCH_DEBOUNCE_MS + 50))
 
-    expect(renders).toEqual({ sync: 0, edits: 0, searchBox: 0, view: 1 })
+    // The search box once more, as a child of the bar.
+    expect(renders).toEqual({
+      sync: 0,
+      edits: 0,
+      searchBox: 1,
+      view: 1,
+      bar: 1,
+    })
   })
 })
+
+/** The Sync context's value; the readers here only subscribe to it. */
+const SYNC = {} as ReturnType<typeof useSync>
 
 const post = (id: number) =>
   ({ id, channelName: "alpha", text: `post ${id}`, timestamp: id }) as Post

@@ -29,6 +29,7 @@ import {
   type FilterBarControls,
   PostFilterBar,
   type PostFilterBarProps,
+  SearchBox,
 } from "./PostFilter"
 import {
   PostValueHistogramContext,
@@ -78,21 +79,33 @@ function controls(
 
 function mount(
   over: Partial<FilterBarControls> = {},
-  props: Partial<PostFilterBarProps> = {},
+  {
+    embeddingsEnabled = false,
+    ...props
+  }: Partial<PostFilterBarProps> & { embeddingsEnabled?: boolean } = {},
   wrapper?: React.JSXElementConstructor<{ children: React.ReactNode }>,
 ) {
   const calls: Calls = []
   const opened: boolean[] = []
+  const setPostSearch = (value: string) => calls.push(["keyword", value])
+  const barControls = controls(calls, over)
   render(
     <PostFilterBar
       postSearch=""
-      setPostSearch={(value) => calls.push(["keyword", value])}
+      setPostSearch={setPostSearch}
       shownCount={1234}
       subtitle=""
       tooNewToJudge={0}
       estimationFloorHours={3}
-      controls={controls(calls, over)}
-      embeddingsEnabled={false}
+      controls={barControls}
+      searchBox={
+        <SearchBox
+          postSearch=""
+          setPostSearch={setPostSearch}
+          controls={barControls}
+          embeddingsEnabled={embeddingsEnabled}
+        />
+      }
       windowControl={<span>window</span>}
       facets={{
         total: 5000,

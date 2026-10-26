@@ -119,11 +119,15 @@ interface PostFilterProps {
 }
 
 export interface PostFilterBarProps extends PostFilterProps {
-  /** The keyword as typed. */
+  /** The keyword the view applies, for the filter row. */
   postSearch: string
   setPostSearch: (val: string) => void
   controls: FilterBarControls
-  embeddingsEnabled: boolean
+  /**
+   * The search box, which alone reads the keyword as typed, so a keystroke
+   * re-renders it and not the bar (PVM review, story 1).
+   */
+  searchBox: React.ReactNode
   /** The Analysis window control, left of the search box. */
   windowControl: React.ReactNode
   /** Per-value counts and the window's total; `undefined` while none are known. */
@@ -145,19 +149,24 @@ export interface PostFilterBarProps extends PostFilterProps {
 /** The floor's default in `services/reach.py`, until the server's arrives. */
 const DEFAULT_ESTIMATION_FLOOR_HOURS = 1
 
+interface SearchBoxProps {
+  /** The keyword as typed. */
+  postSearch: string
+  setPostSearch: (value: string) => void
+  controls: FilterBarControls
+  embeddingsEnabled: boolean
+}
+
 /**
  * One search box for both kinds of search. Keyword filters as you type;
  * Meaning runs on Enter, and is offered only with semantic features on.
  */
-function SearchBox({
+export function SearchBox({
   postSearch,
   setPostSearch,
   controls,
   embeddingsEnabled,
-}: Pick<
-  PostFilterBarProps,
-  "postSearch" | "setPostSearch" | "controls" | "embeddingsEnabled"
->) {
+}: SearchBoxProps) {
   const {
     semanticSearchQuery,
     setSemanticSearchQuery,
@@ -337,14 +346,7 @@ export const PostFilterBar: React.FC<PostFilterBarProps> = (props) => {
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
           <div className="flex lg:shrink-0">{props.windowControl}</div>
-          <div className="lg:flex-1">
-            <SearchBox
-              postSearch={postSearch}
-              setPostSearch={setPostSearch}
-              controls={s}
-              embeddingsEnabled={props.embeddingsEnabled}
-            />
-          </div>
+          <div className="lg:flex-1">{props.searchBox}</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -475,6 +477,19 @@ function useSpotlitWindowHistogram(query: WindowHistogramQuery) {
   return usePostWindowHistogram(query, useSpotlight().spotlight)
 }
 
+/** The search box over the keyword as typed: the one reader of it. */
+export function PostsSearchBox(
+  props: Omit<SearchBoxProps, "postSearch" | "setPostSearch">,
+) {
+  return (
+    <SearchBox
+      {...props}
+      postSearch={usePostsKeyword()}
+      setPostSearch={usePostsViewEdits().setKeyword}
+    />
+  )
+}
+
 /** The ranking and the "respects Channels" choice as the bar's controls. */
 function rankingControls(
   view: Pick<PostsView, "ranking" | "respectsChannels">,
@@ -520,18 +535,23 @@ const orderControls = (view: PostsView, edits: PostsViewEdits) => ({
     edits.setOrder({ groupByChannel }),
 })
 
+/** The Posts view and its edits as the bar's controls, before a spotlight. */
+export const postsViewControls = (
+  view: PostsView,
+  edits: PostsViewEdits,
+): FilterBarControls => ({
+  ...rankingControls(view, edits.setRanking),
+  ...orderControls(view, edits),
+})
+
 /** The bar wired to the workspace's state. */
 export const PostFilter: React.FC<PostFilterProps> = (props) => {
   const spot = useSpotlight()
-  const postSearch = usePostsKeyword()
   const { view } = usePostsViewState()
   const edits = usePostsViewEdits()
   // A spotlight's tree is what the row shows and edits (PTR-04).
   const { controls, keywordIgnored } = spotlitBar(
-    {
-      ...rankingControls(view, edits.setRanking),
-      ...orderControls(view, edits),
-    },
+    postsViewControls(view, edits),
     spot.spotlight,
     spot.setFilter,
   )
@@ -542,7 +562,7 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
   // The filter row says "N of M", and M is the window's total, so the counts
   // load while it is showing as well as while a dropdown is open.
   const rowShowing =
-    controls.postFilter.children.length > 0 || postSearch.trim() !== ""
+    controls.postFilter.children.length > 0 || view.keyword.trim() !== ""
   const facets = usePostFacets(openPillCount > 0 || rowShowing, spot.spotlight)
   const estimate = useViewEstimate()
   const channelLanguages = React.useMemo(
@@ -566,11 +586,16 @@ export const PostFilter: React.FC<PostFilterProps> = (props) => {
     <PostValueHistogramContext.Provider value={useSpotlitValueHistogram}>
       <PostFilterBar
         {...props}
-        postSearch={postSearch}
+        postSearch={view.keyword}
         setPostSearch={edits.setKeyword}
         controls={controls}
+        searchBox={
+          <PostsSearchBox
+            controls={controls}
+            embeddingsEnabled={embeddingsEnabled}
+          />
+        }
         keywordIgnored={keywordIgnored}
-        embeddingsEnabled={embeddingsEnabled}
         windowControl={
           <WindowHistogramContext.Provider value={useSpotlitWindowHistogram}>
             <WindowOldestPostContext.Provider value={oldestPost}>

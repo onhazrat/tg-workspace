@@ -87,7 +87,8 @@ const FOLLOW_API = {
   streamFollowJobEvents,
 }
 
-const SyncContext = createContext<SyncContextType | undefined>(undefined)
+/** Exported so a render test can provide a value without the providers. */
+export const SyncContext = createContext<SyncContextType | undefined>(undefined)
 
 /** Recheck Restricted has no Stop sync button, so its job is not held. */
 const STOP_BUTTON: Partial<Record<ManualSyncMode, StoppableSync>> = {

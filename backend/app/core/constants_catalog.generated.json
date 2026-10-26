@@ -1140,7 +1140,7 @@
       "comment": "The floor's default in `services/reach.py`, until the server's arrives.",
       "expression": "1",
       "file": "frontend/src/components/PostFilter.tsx",
-      "line": 146,
+      "line": 150,
       "name": "DEFAULT_ESTIMATION_FLOOR_HOURS",
       "value": 1
     },
