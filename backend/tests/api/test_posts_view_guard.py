@@ -18,12 +18,15 @@ Read from the source, so a bare import fails too and the line is reported.
 The prompts a Summary gets were built four ways: Generate and Retry applied
 the frozen Selection rules to today's corpus, and the scheduler read every
 Post of the predecessor's Channels with a raw `select(Post)`, no Follow
-scoping, no limits and its own formatter. So a Summary-path module that names
-`resolve_posts_view`, `apply_analysis_window` or `select(Post)` fails: it is
-building its own Post read instead of asking `services/artifact_coverage.py`
-which Posts the Artifact covers.
+scoping, no limits and its own formatter. Chat turns and Tag runs read the
+Posts tab's selection of today, and a Discovery report resolved its selection
+a second time. So an Action-path module that names `resolve_posts_view`,
+`apply_analysis_window` or `select(Post)` fails: it is building its own Post
+read instead of asking `services/artifact_coverage.py` which Posts the
+Artifact covers.
 
-Mutation-checked by restoring the scheduler's inline Post read.
+Mutation-checked by restoring the scheduler's inline Post read (AC-01), and by
+naming `resolve_posts_view` in the AI routes (AC-02).
 """
 
 from __future__ import annotations
@@ -53,12 +56,16 @@ RESOLVERS = frozenset(
 
 APP = DATA_ROUTES.parents[2]
 
-#: The Summary path: generation, the scheduler's regeneration, Summaries.
-#: The AI routes, Discovery reports, Chat sessions and Tag runs join once they
-#: stop taking a Scope from the browser.
+#: Every Action path: Summary generation, the scheduler's regeneration, the AI
+#: routes, Discovery reports, Chat sessions, Tag runs and Summaries. The
+#: Discover aggregate's own window code (`services/discover.py`) is not one.
 ACTION_PATH = (
     "jobs/summary_generation.py",
     "jobs/auto_summary.py",
+    "api/routes/ai_routes.py",
+    "services/discover_reports.py",
+    "services/chat_sessions.py",
+    "services/tag_runs.py",
     "services/summaries.py",
 )
 

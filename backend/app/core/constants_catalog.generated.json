@@ -316,7 +316,7 @@
       "comment": "A generous fetch-safety bound, so a pathological Scope never materialises a giant result. The token budget is the real user-facing limit.",
       "expression": "10000",
       "file": "backend/app/services/artifact_coverage.py",
-      "line": 56,
+      "line": 57,
       "name": "MAX_PROMPT_POSTS",
       "value": 10000
     },
@@ -660,7 +660,7 @@
       "comment": "",
       "expression": "100",
       "file": "backend/app/services/discover_reports.py",
-      "line": 52,
+      "line": 51,
       "name": "DEFAULT_REPORT_PAGE_SIZE",
       "value": 100
     },
@@ -668,7 +668,7 @@
       "comment": "",
       "expression": "1000",
       "file": "backend/app/services/discover_reports.py",
-      "line": 53,
+      "line": 52,
       "name": "MAX_REPORT_PAGE_SIZE",
       "value": 1000
     },

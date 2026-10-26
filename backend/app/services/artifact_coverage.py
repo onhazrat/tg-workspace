@@ -3,7 +3,8 @@
 A read model. An Artifact freezes its Scope with every Post its Post selection
 reached (`freeze`), and every prompt it gets reads those Covered Posts back
 (`covered_posts`, `posts_block`), whoever builds it: Generate, Retry, the
-scheduler, or a copied prompt. Re-applying the Selection rules to today's
+scheduler, a Chat turn, a Tag run, or a copied prompt. A Discovery report
+scans by the same refs (`refs_predicate`). Re-applying the Selection rules to today's
 corpus instead would read Posts synced in after the freeze, or a views ranking
 that moved since, while the coverage wall still lists the original Posts.
 
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from fastapi import HTTPException
-from sqlalchemy import tuple_
+from sqlalchemy import ColumnElement, tuple_
 from sqlmodel import Session, col, select
 
 from app.models_tg import Post
@@ -167,6 +168,26 @@ def covered_posts(
     found = {(p.channel_name, p.post_id): p for p in session.exec(stmt).all()}
     posts = [post_to_camel(found[ref]) for ref in dict.fromkeys(refs) if ref in found]
     return Coverage(posts, missing=len(set(refs)) - len(found))
+
+
+def refs_predicate(scope: FrozenScope) -> ColumnElement[bool] | None:
+    """A `Post` predicate matching exactly the Covered Posts on record.
+
+    What a Discovery report scans by, so it reads the Posts it records as
+    covered instead of resolving its selection a second time. `None` for a
+    Scope with no refs on record, which covers its window: the caller's own
+    window predicate is then the whole answer.
+    """
+    if scope.scoped_post_count is None:
+        return None
+    if scope.posts is None and scope.scoped_post_count:
+        raise ValueError("refs_predicate needs the Scope's refs loaded")
+    # ponytail: one IN over every ref, as unbounded as the refs column itself;
+    # join a VALUES list or a refs table if a report over a huge window plans
+    # slowly.
+    return tuple_(col(Post.channel_name), col(Post.post_id)).in_(
+        [(r.channel_name, r.post_id) for r in scope.posts or []]
+    )
 
 
 def posts_block(

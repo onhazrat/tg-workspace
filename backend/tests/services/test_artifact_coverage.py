@@ -194,3 +194,25 @@ def test_a_block_over_the_token_budget_is_a_413(
             artifact_coverage.posts_block(session, _window(["a"]), user_id=ANY_READER)
         assert excinfo.value.status_code == 413
         assert "token" in str(excinfo.value.detail).lower()
+
+
+def _scanned(session: Session, scope: FrozenScope) -> set[tuple[str, int]]:
+    predicate = artifact_coverage.refs_predicate(scope)
+    stmt = select(Post.channel_name, Post.post_id)
+    if predicate is not None:
+        stmt = stmt.where(predicate)
+    return {(c, p) for c, p in session.exec(stmt).all()}
+
+
+def test_the_report_predicate_matches_exactly_the_refs() -> None:
+    """A Discovery report scans the Posts it records as covered, no others."""
+    with Session(engine) as session:
+        for channel, post_id in (("a", 1), ("a", 2), ("b", 1), ("b", 2)):
+            _post(session, channel, post_id)
+        session.commit()
+
+        # The same post id in another Channel is another Post.
+        assert _scanned(session, _refs(("a", 1), ("b", 2))) == {("a", 1), ("b", 2)}
+        assert _scanned(session, _refs()) == set()
+        # No refs on record: the window covers it, and the caller scans that.
+        assert artifact_coverage.refs_predicate(_window(["a"])) is None

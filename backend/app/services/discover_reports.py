@@ -34,13 +34,12 @@ from sqlmodel import Session, col
 
 from app.core import acting_owner
 from app.models_tg import DiscoverReport, utc_now
-from app.schemas.post_filter import to_steps
 from app.schemas.scope import FrozenScope
+from app.services.artifact_coverage import refs_predicate
 from app.services.channel_directory import enqueue_handles, probe_map
 from app.services.discover import SignalKind, compute_discover_candidates
 from app.services.dismissals import dismissed_handles
 from app.services.follows import visible_channel_names
-from app.services.posts_view import resolve_posts_view
 from app.services.serialization import model_to_camel
 from app.services.telegram_web import normalize_handle
 from app.services.tenancy import (
@@ -436,8 +435,8 @@ def create_report(
     `signals` stays an argument because it is not Scope: it picks which kinds of
     signal the report describes, not which Posts it reads.
     """
-    # The selection the Scope froze, applied over its frozen window (PTR-05).
-    # A Scope without one, from before, covered the whole window.
+    # The Posts the Scope froze as covered, never its selection applied again
+    # (ADR-038). A Scope without refs, from before, covers the whole window.
     result = compute_discover_candidates(
         session,
         user_id=user_id,
@@ -445,14 +444,7 @@ def create_report(
         start_date=scope.start,
         end_date=scope.end,
         signals=signals,
-        selected=resolve_posts_view(
-            session,
-            user_id=user_id,
-            channel_names=list(scope.channels) or None,
-            start=scope.start,
-            end=scope.end,
-            steps=None if scope.selection is None else to_steps(scope.selection),
-        ).selected,
+        selected=refs_predicate(scope),
     )
 
     report = DiscoverReport(
