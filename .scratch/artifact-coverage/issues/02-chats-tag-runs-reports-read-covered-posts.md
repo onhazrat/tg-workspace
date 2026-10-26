@@ -10,7 +10,7 @@ from. Missing Posts are left out and counted, and a Chat's or Tag run's Scope li
 
 **Blocked by:** AC-01 (the Artifact coverage module and the chip)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] `/ai/chat/stream` takes `chatId`, and `/ai/tag/prompt` and `/ai/tag/stream` take `tagRunId`; each reads the Artifact through its family's by-id read guard (its 404 for an absent or foreign id), refuses `scope` with a 422, and builds the posts block through the module in the flat (Chat) or tag (Tag run) layout; Semantic Chat's `postsText` still wins
 - [ ] Each route answers the Missing Post count: a field on the tag prompt response, an event before the text on both streams
@@ -22,3 +22,8 @@ from. Missing Posts are left out and counted, and a Chat's or Tag run's Scope li
 - [ ] The guard widens to the AI routes, Discovery reports, Chat sessions and Tag runs; mutation-checked by naming `resolve_posts_view` in the AI routes, written into the commit body
 - [ ] `backend/CLAUDE.md` says the Action path reads through the Artifact coverage module
 - [ ] Backend suite, backend lint, frontend unit tests and typecheck pass; Playwright mocks of the chat and tag routes follow the new bodies
+
+## Comments
+
+- 2026-10-26: implemented on `ac-02-chats-tags-reports-covered-posts` and merged into the integration branch in 90c1523b (fast-forward).
+  Also: `ChatRequest` and `TagRequest` refuse the old `channels` field, and `TagRequest` refuses `postsText`. No `/ai/chat/stream` Playwright mock existed to update.
