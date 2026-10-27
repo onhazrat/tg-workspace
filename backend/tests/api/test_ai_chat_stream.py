@@ -20,11 +20,11 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
 
 from app.ai.models import ChatMessage
-from app.api.routes import ai_routes
 from app.core.config import settings
 from app.core.db import engine
 from app.main import app
 from app.models_tg import Channel, Post
+from app.services import ai_execution
 from app.services.ai_keys import ResolvedKey
 from tests.utils.tenancy import follow_channels
 from tests.utils.utils import get_superuser_token_headers
@@ -65,7 +65,7 @@ def provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[_FakeProvider]:
     key = ResolvedKey(
         provider="gemini", api_key="sk-secret-123", credential_id="cred-1"
     )
-    monkeypatch.setattr(ai_routes, "_provider_for", lambda *_a, **_k: (fake, key))
+    monkeypatch.setattr(ai_execution, "_provider_for", lambda *_a, **_k: (fake, key))
     yield fake
 
 
@@ -284,11 +284,11 @@ def test_a_provider_failure_mid_stream_never_sends_done(
     provider.fail_after = True
     noted: list[tuple[str | None, str]] = []
 
-    def note(_session: Any, key: ResolvedKey, exc: BaseException) -> bool:
+    def note(key: ResolvedKey, exc: BaseException) -> bool:
         noted.append((key.credential_id, str(exc)))
         return True
 
-    monkeypatch.setattr(ai_routes, "_note_rejection", note)
+    monkeypatch.setattr(ai_execution, "_note_rejection", note)
 
     r = client_post(
         URL,

@@ -243,6 +243,7 @@ INVENTORY: dict[str, str] = {
     "telegram_html.py": PURE_TRANSFORM,
     "telegram_web.py": PURE_TRANSFORM,
     # 5. Orchestrator — owns one workflow, coordinates the other four.
+    "ai_execution.py": ORCHESTRATOR,
     "bulk_channels.py": ORCHESTRATOR,
     "bulk_follow.py": ORCHESTRATOR,
     "data_import_export.py": ORCHESTRATOR,

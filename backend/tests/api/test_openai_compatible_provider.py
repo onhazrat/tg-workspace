@@ -461,7 +461,7 @@ def test_the_listing_is_the_providers_answer_and_keeps_its_key_set(
     async def _list(**_kwargs: object) -> list[ModelInfo]:
         return [ModelInfo(id="m-1", label="M 1", provider=OPENAI_COMPATIBLE)]
 
-    monkeypatch.setattr("app.api.routes.ai_routes.list_models_cached", _list)
+    monkeypatch.setattr("app.services.ai_execution.list_models_cached", _list)
 
     body = client.post(f"{V1}/ai/models", json={}, headers=headers).json()
 
@@ -498,7 +498,7 @@ def test_the_default_is_a_model_this_provider_actually_offers(
             ModelInfo(id="zzz", label="zzz", provider=OPENAI_COMPATIBLE),
         ]
 
-    monkeypatch.setattr("app.api.routes.ai_routes.list_models_cached", _list)
+    monkeypatch.setattr("app.services.ai_execution.list_models_cached", _list)
 
     body = client.post(f"{V1}/ai/models", json={}, headers=headers).json()
 
@@ -525,7 +525,7 @@ def test_a_default_the_provider_does_offer_is_kept(
             ModelInfo(id=deployment_default, label="d", provider="gemini"),
         ]
 
-    monkeypatch.setattr("app.api.routes.ai_routes.list_models_cached", _list)
+    monkeypatch.setattr("app.services.ai_execution.list_models_cached", _list)
 
     body = client.post(f"{V1}/ai/models", json={}, headers=headers).json()
 
@@ -553,7 +553,7 @@ def test_an_endpoint_serving_no_catalogue_falls_back_to_free_text(
     async def _boom(**_kwargs: object) -> list[ModelInfo]:
         raise OpenAICompatibleError(404, "not found")
 
-    monkeypatch.setattr("app.api.routes.ai_routes.list_models_cached", _boom)
+    monkeypatch.setattr("app.services.ai_execution.list_models_cached", _boom)
 
     response = client.post(f"{V1}/ai/models", json={}, headers=headers)
 
@@ -578,7 +578,7 @@ def test_a_rejected_key_says_so_rather_than_answering_empty(
     async def _rejected(**_kwargs: object) -> list[ModelInfo]:
         raise OpenAICompatibleError(401, "Invalid Authentication")
 
-    monkeypatch.setattr("app.api.routes.ai_routes.list_models_cached", _rejected)
+    monkeypatch.setattr("app.services.ai_execution.list_models_cached", _rejected)
 
     response = client.post(f"{V1}/ai/models", json={}, headers=headers)
 
