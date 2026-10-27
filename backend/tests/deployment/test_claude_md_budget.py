@@ -96,12 +96,14 @@ MUTATIONS = "docs/agents/guard-mutations.json"
 # (max lines, max bytes), sized against the 2026-10-20 split (root 97 lines /
 # 7,058 bytes, backend 78 / 24,586, frontend 12 / 2,442, guards 97 / 15,164)
 # with a little room for a genuinely new invariant. See "Raising the budget"
-# above before touching these.
+# above before touching these. Raised on 2026-10-27 for the
+# `test_request_accounting.py` guard, which arrived with both files at their
+# ceilings and so went unlisted, as the split warned.
 BUDGETS: dict[str, tuple[int, int]] = {
     ROOT_CLAUDE_MD: (110, 8_000),
-    "backend/CLAUDE.md": (90, 27_000),
+    "backend/CLAUDE.md": (90, 27_100),
     "frontend/CLAUDE.md": (20, 3_000),
-    GUARDS_DOC: (115, 17_000),
+    GUARDS_DOC: (115, 17_200),
 }
 
 # The files the root must name, so every harness finds them and not only the

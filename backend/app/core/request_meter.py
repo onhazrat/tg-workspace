@@ -23,10 +23,20 @@ concurrency — the failure that never reproduces in a single-user test.
 **No meter active means no counting**, so counting is something a caller opts
 into rather than something every new call site has to remember to opt out of.
 `services/request_accounting.py` owns the completion sequence for queued syncs,
-direct syncs, bulk Follows and Directory probes. Each caller chooses its tally:
-syncs and Follows charge the Account's Budget; Directory probes record deployment
-load in their separate tally. The Bot API, picture CDNs and proxy health checks
-never increment this meter; Request recording still counts every Telegram attempt.
+direct syncs, bulk Follows and Directory probes. Each caller chooses its tally.
+Syncs and Follows charge the Account's Budget. Directory probes record deployment
+load in their own tally, never a Budget, for the reasons ADR-014 gives. Everything
+else runs unmetered, and the list is worth being exact about, because "the rest
+is trivial" is how an uncounted caller stays uncounted:
+
+* Not `t.me` at all, so never counted wherever they run: the Bot API, picture
+  CDNs and proxy health checks.
+* Genuinely `t.me`, and uncharged on purpose: the handle routes in
+  `api/routes/telegram.py` (`/scrape`, `/channel-info`, `/resolve-start-time`).
+  They spend the deployment's proxies, not an Account's Budget, and
+  `api/deps.py` says why, route by route.
+
+Request recording still counts every Telegram attempt, metered or not.
 
 This lives in `core/` rather than `services/` for the reason `async_db.py` is a
 declared exception in `test_service_kinds.py`: it is infrastructure with no
