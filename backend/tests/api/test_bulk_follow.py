@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -35,7 +36,7 @@ FAKE_PARTITION_WIDTH = 2
 
 
 @pytest.fixture(autouse=True)
-def _worker(monkeypatch: pytest.MonkeyPatch) -> None:
+def _worker(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> Generator[None]:
     """Stand in for the sync worker, which is not running in this process.
 
     `POST /channels/bulk-follow` used to `asyncio.create_task(run_follow_job)`
@@ -64,8 +65,29 @@ def _worker(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("app.api.routes.data.channels.request_follow_job_run", run_here)
 
+    yield
+
+    # The module-scoped client's loop outlives the test, and so would a job:
+    # its row reaches a terminal status before `metered_work` charges the
+    # ledger and flushes the Request buffer on the way out. Left running, that
+    # write met the teardown TRUNCATE and deadlocked it (CI run 40484556500,
+    # `test_bulk_follow_cancel`). So every stand-in job finishes here, first.
+    unfinished = client.portal.call(_unfinished_standin_tasks)
+    assert not unfinished, f"{len(unfinished)} follow job(s) outlived the test"
+
 
 _standin_tasks: set[asyncio.Task[None]] = set()
+
+#: Long enough for `test_bulk_follow_cancel`'s probe, which sleeps 5s when the
+#: cancel lands after it started.
+STANDIN_DRAIN_SECONDS = 10.0
+
+
+async def _unfinished_standin_tasks() -> set[asyncio.Task[None]]:
+    if not _standin_tasks:
+        return set()
+    _, pending = await asyncio.wait(_standin_tasks, timeout=STANDIN_DRAIN_SECONDS)
+    return pending
 
 
 def _auth(client: TestClient) -> dict[str, str]:
