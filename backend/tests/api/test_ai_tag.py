@@ -15,10 +15,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
 
-from app.api.routes import ai_routes
 from app.core.config import settings
 from app.core.db import engine
 from app.models_tg import Post
+from app.services import ai_execution
 from app.services.ai_keys import ResolvedKey
 from tests.utils.tenancy import follow_channels
 from tests.utils.utils import get_superuser_token_headers
@@ -178,7 +178,7 @@ def test_the_stream_sends_the_missing_count_before_the_runs_prompt(
 
     key = ResolvedKey(provider="gemini", api_key="k", credential_id=None)
     monkeypatch.setattr(
-        ai_routes, "_provider_for", lambda *_a, **_k: (_Provider(), key)
+        ai_execution, "_provider_for", lambda *_a, **_k: (_Provider(), key)
     )
 
     streamed = client.post(
@@ -198,7 +198,7 @@ def test_a_foreign_run_is_not_found_and_spends_nothing(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        ai_routes, "_provider_for", lambda *_a, **_k: pytest.fail("spent a Key")
+        ai_execution, "_provider_for", lambda *_a, **_k: pytest.fail("spent a Key")
     )
     response = client.post(
         f"{PREFIX}/ai/tag/stream",

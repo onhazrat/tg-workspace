@@ -44,7 +44,7 @@ AI_CREDENTIAL_NOT_FOUND = "AI key not found"
 AI_KEY_MISSING_DETAIL = "No AI key saved. Add one in Settings to create summaries."
 
 #: The Provider refused this Key on a call that was going to be made anyway.
-#: Raised by the call site (`api/routes/ai_routes.py`), never by
+#: Raised by the call site (`services/ai_execution.py`), never by
 #: `resolve_ai_key` — a stored Key is tried rather than pre-judged, because a
 #: NULL `last_validated` means "never successfully checked" and cannot
 #: distinguish a revoked key from a save-time timeout.
@@ -120,8 +120,8 @@ ACCOUNT_PAID = frozenset({Purpose.SUMMARY, Purpose.CHAT, Purpose.TAG, Purpose.MO
 #: door stayed open. Here the open door charges the Operator for an Artifact,
 #: which is the one thing this feature exists to stop, and it does it silently.
 AI_KEY_CALLERS: dict[str, str] = {
-    "app/api/routes/ai_routes.py": (
-        "the Artifact routes — summary, chat and tag stream on the caller's "
+    "app/services/ai_execution.py": (
+        "request-driven AI execution: chat, tag and model listing on the caller's "
         "Key; the embed and translate endpoints are the shared work, on the "
         "Operator's"
     ),

@@ -133,6 +133,7 @@ def test_the_action_path_is_found_from_the_doors() -> None:
         "jobs/auto_summary.py",
         "api/routes/ai_routes.py",
         "services/artifact_prompts.py",
+        "services/ai_execution.py",
         "services/discover_reports.py",
         "services/chat_sessions.py",
         "services/tag_runs.py",
