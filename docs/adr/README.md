@@ -50,3 +50,4 @@ The locked migration decisions of June 2026 sit outside this series, in
 | [ADR-038](./ADR-038-prompts-read-covered-posts.md) | An Artifact's prompt reads its Covered Posts, and counts the Missing ones, extending ADR-026 |
 | [ADR-039](./ADR-039-posts-view-apart-from-its-edits.md) | The browser keeps one Posts view, apart from its edits, extending ADR-036 |
 | [ADR-040](./ADR-040-request-kinds-can-be-disabled.md) | An Operator can disable a Request kind, losslessly, refused at entry and at `fetch_with_retry` |
+| [ADR-041](./ADR-041-accounted-work.md) | Accounted work: one context attributes and pays, extending ADR-035 |
