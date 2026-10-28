@@ -61,7 +61,7 @@ export const withKey = (label: string, action: Action, on: boolean) =>
 export const keyTitle = (label: string, action: Action, on: boolean) =>
   on ? withKey(label, action, true) : undefined
 
-/** `x` in each list's own word (CONTEXT.md): Tick, select, Pick. */
+/** `x` in each list's own word (GLOSSARY.md): Tick, select, Pick. */
 const TICK_LABEL: Partial<Record<ListId, string>> = {
   channels: "select or deselect",
   posts: "pick or unpick",

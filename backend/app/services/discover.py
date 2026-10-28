@@ -110,7 +110,7 @@ def is_the_mention(handle: str, post_id: int | None, mentions: set[str]) -> bool
     does, so it is the mention and makes no `link` of its own: a masked "read
     here" or a bare `t.me/foo` beside `@foo` collapses too, which is the same
     Post naming the same Channel. A link to one exact Post names something the
-    mention does not, and stays. See the **Reference** entry in `CONTEXT.md`.
+    mention does not, and stays. See the **Reference** entry in `GLOSSARY.md`.
     """
     return post_id is None and handle in mentions
 

@@ -4,7 +4,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`CONTEXT.md`** at the repo root: the glossary. It holds no implementation detail.
+- **`GLOSSARY.md`** at the repo root: the glossary. It holds no implementation detail.
 - **`docs/adr/`**: the ADRs, `ADR-001` onwards, indexed in `docs/adr/README.md`. Read the ones that touch the area you're about to work in.
 - **`docs/migration/DECISIONS.md`**: locked migration decisions, marked *"do not revisit without explicit stakeholder sign-off"*. Read it the same way you read an ADR, and treat a contradiction with it as a conflict to surface rather than override.
 - **`CLAUDE.md`** at the repo root: architecture and the enforced guards. Its "Architecture guards" table says which rules are enforced by a failing test or a compile error and which are only prose.
@@ -15,11 +15,11 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 
 This is a **single-context** repo. The root `package.json` declares a `frontend` workspace, but that
 splits the backend from the frontend of one product; both halves share the vocabulary in the single
-root `CONTEXT.md`.
+root `GLOSSARY.md`.
 
 ```
 /
-├── CONTEXT.md                          ← the glossary
+├── GLOSSARY.md                         ← the glossary
 ├── CLAUDE.md                           ← architecture + enforced guards
 ├── docs/adr/
 │   ├── README.md                       ← the ADR index
@@ -33,7 +33,7 @@ root `CONTEXT.md`.
 
 ## Use the glossary's vocabulary
 
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids: each entry carries an explicit *Avoid* list, and those are the words not to reach for.
+When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `GLOSSARY.md`. Don't drift to synonyms the glossary explicitly avoids: each entry carries an explicit *Avoid* list, and those are the words not to reach for.
 
 If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 

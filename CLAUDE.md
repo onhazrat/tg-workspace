@@ -100,4 +100,4 @@ The five canonical labels, unchanged, recorded as a `Status:` line in each issue
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` at the root, ADRs in `docs/adr/`, the locked `DECISIONS.md` in `docs/migration/`. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` at the root, ADRs in `docs/adr/`, the locked `DECISIONS.md` in `docs/migration/`. See `docs/agents/domain.md`.
