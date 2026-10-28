@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Seven deployment Settings, one per switchable kind, declared in the settings registry under Background jobs, each with an `.env` default (enabled unless `.env` says otherwise), stored in the deployment settings table with the moment each was disabled. Changing one needs the Jobs manage Permission and takes effect without a restart.
 - [x] One function answers whether a kind is enabled, and every gate below reads it.
@@ -19,3 +19,7 @@
 - [x] A guard fails when any `RequestKind` other than `other` is not switchable or is not refused at the chokepoint.
 - [x] Seam 1 tests, against Telegram faked at `network._fetch_once`: the chokepoint per kind, each entry point, holding and release, the mid-walk requeue, the waiting reason, the two independence cases, `.env` defaults, runtime change, permission refusal and the runtime config. Each new test and the guard mutation-checked, named in the commit body.
 - [x] Route inventories, permission checks, settings declaration and table-split guards, the request-recording guard and the full backend suite pass.
+
+## Comments
+
+- 2026-10-28: done on `claude/rkd-01`, fast-forwarded into `claude/request-kinds` at 7b4b2601. For RKD-02: no frontend hook reads `/jobs/runtime-config` yet; each `requestKinds` entry carries `kind`, `label`, `enabled`, `disabledSince` (epoch ms) and `refusal`. Left for the code review: a held job keeps its owner busy so the auto-sync tick skips that owner (as a paused lane already does), and releasing a held walk's claim logs a misleading "non-terminal state pending" warning.
