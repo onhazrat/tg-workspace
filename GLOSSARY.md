@@ -430,6 +430,16 @@ Budget and every statistic about Telegram load is counted in. One sync makes
 anywhere from one Request to dozens, so a sync is never the unit.
 _Avoid_: call, fetch, hit, scrape
 
+**Request kind**:
+The work a Request was made for: auto sync, manual bulk, manual single, a bulk
+follow's handle checks, a Directory probe, a handle check, or a Bot API call.
+A picture belongs to the work that fetched it. An Operator can disable a Request
+kind on a deployment, and then nothing of that kind leaves for Telegram there:
+new work of that kind is refused, and work already queued waits until the kind
+is enabled again. Pausing a Queue lane is different: a paused lane still takes
+new work and only holds it.
+_Avoid_: request type, source, origin, mode
+
 **Budget**:
 An Account's daily allowance of Requests, of one of three kinds: auto sync,
 manual bulk, manual single. Spending past it makes the work best-effort rather
