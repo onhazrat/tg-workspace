@@ -45,6 +45,11 @@ from app.models_tg import SyncJob as SyncJobRow
 from app.services.follows import get_operator_user_id
 from app.services.network_settings import get_network_setting_row
 from app.services.scraper_jobs import clear_jobs_for_tests
+from app.services.sync_lanes import (
+    DISCOVER_PROBE_LANE,
+    DRAIN_ORDER,
+    MANUAL_SINGLE_NORMAL_LANE,
+)
 from tests.utils.scope import stored_scope
 from tests.utils.setting_groups import freeze_channels_except, upsert_sync_test_channel
 from tests.utils.tenancy import ANY_READER
@@ -115,6 +120,20 @@ def test_trigger_unknown_job(client: TestClient) -> None:
     headers = _auth(client)
     r = client.post(f"{PREFIX}/not-a-job/trigger", headers=headers)
     assert r.status_code == 404
+
+
+def test_lanes_lists_every_lane_including_the_non_sync_ones(
+    client: TestClient,
+) -> None:
+    """The probe lane has no Budget or tier, and must not 500 the whole list."""
+    r = client.get(f"{PREFIX}/lanes", headers=_auth(client))
+    assert r.status_code == 200
+    lanes = {entry["lane"]: entry for entry in r.json()["lanes"]}
+    assert list(lanes) == list(DRAIN_ORDER)
+    assert lanes[DISCOVER_PROBE_LANE]["budget"] is None
+    assert lanes[DISCOVER_PROBE_LANE]["tier"] is None
+    assert lanes[MANUAL_SINGLE_NORMAL_LANE]["budget"] == "manual_single"
+    assert lanes[MANUAL_SINGLE_NORMAL_LANE]["tier"] == "normal"
 
 
 @patch("app.jobs.auto_sync.enqueue_sync_job", new_callable=AsyncMock)
