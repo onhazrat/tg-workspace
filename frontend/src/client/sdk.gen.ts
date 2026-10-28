@@ -2399,7 +2399,7 @@ export const jobsUpdateSchedulerJob = <ThrowOnError extends boolean = true>(opti
 /**
  * List Sync Lanes
  *
- * The six lanes, in drain order, with their depth and paused state.
+ * Every lane, in drain order, with its depth and paused state.
  */
 export const jobsListSyncLanes = <ThrowOnError extends boolean = true>(options?: Options<JobsListSyncLanesData, ThrowOnError>): RequestResult<JobsListSyncLanesResponses, unknown, ThrowOnError, 'data'> => (options?.client ?? client).get<JobsListSyncLanesResponses, unknown, ThrowOnError, 'data'>({
     responseStyle: 'data',
