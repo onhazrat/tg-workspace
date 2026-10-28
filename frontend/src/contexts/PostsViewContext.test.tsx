@@ -9,6 +9,11 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query"
+import {
   act,
   cleanup,
   fireEvent,
@@ -23,6 +28,7 @@ import {
   postsViewControls,
 } from "@/components/PostFilter"
 import {
+  invalidatePostsReads,
   POST_FILTER_STORAGE_KEYS,
   POST_SEARCH_DEBOUNCE_MS,
   type PostsViewEdits,
@@ -33,7 +39,6 @@ import {
   usePostsViewState,
 } from "@/contexts/PostsViewContext"
 import { SyncContext, useSync } from "@/contexts/SyncContext"
-import { useShownPosts } from "@/hooks/usePostsView"
 import {
   addPostFunnel,
   emptyPostFilter,
@@ -46,8 +51,12 @@ import {
   pick,
   rule,
 } from "@/lib/posts/post-selection"
-import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
-import { fetchShownPosts, type ShownPostsApi } from "@/lib/posts/scoped-posts"
+import {
+  NO_RANKING,
+  type PostsView,
+  rankingQuery,
+} from "@/lib/posts/posts-view"
+import { fetchRanking, type RankingApi } from "@/lib/posts/scoped-posts"
 import type { WindowState } from "@/lib/scope/window"
 import { scopedStorage } from "@/lib/storage/scoped"
 import type { Post } from "@/types"
@@ -67,6 +76,7 @@ const INPUTS: Omit<PostsViewInputs, "postFilterText" | "setPostFilterText"> = {
   windowKey: LIVE,
   setSelectedChannels: NOOP,
   setFixedRange: NOOP,
+  semanticSearch: true,
 }
 
 function useModule() {
@@ -107,7 +117,7 @@ beforeEach(() => {
 })
 
 describe("identity across a provider re-render", () => {
-  // What the fetch for what the tab shows depends on is `shownPostsKey`'s,
+  // What the fetch for what the tab shows depends on is `rankingKey`'s,
   // a string of the view (PVM-02), so a view that holds still holds it still.
   test("the edits and the view keep theirs", () => {
     const { result, rerender } = mount()
@@ -120,39 +130,45 @@ describe("identity across a provider re-render", () => {
   })
 
   // Story 5: before PVM the fetch changed identity on every provider render,
-  // so a meaning search ran again on any sync update or minute tick.
+  // so a meaning search ran again on any sync update or minute tick. Since
+  // PRM-01 it is one cached query, which a sync's or a Live minute's
+  // invalidation of the Posts reads does not reach either (story 11).
   test("a meaning search runs once, whatever else the provider does", async () => {
     let searches = 0
-    const api: ShownPostsApi = {
-      embeddingsEnabled: true,
+    const api: RankingApi = {
       searchSimilarPosts: async () => {
         searches++
         return []
       },
-      getPostsFeed: async () => [],
       lookupPosts: never,
       getViewEstimate: never,
     }
+    const queryClient = new QueryClient()
     let edits: PostsViewEdits | undefined
+    // Two readers, as the feed and the shown counts both read it.
     function Probe() {
       edits = usePostsViewEdits()
-      useShownPosts(api, true)
+      const { view } = usePostsViewState()
+      useQuery(rankingQuery(view, api))
+      useQuery(rankingQuery(view, api))
       return null
     }
     function Host({ startDate }: { startDate: number }) {
       const [text, setText] = useState<string | undefined>()
       return (
-        <PostsViewModule
-          inputs={{
-            ...INPUTS,
-            startDate,
-            endDate: startDate + 8000,
-            postFilterText: text,
-            setPostFilterText: setText,
-          }}
-        >
-          <Probe />
-        </PostsViewModule>
+        <QueryClientProvider client={queryClient}>
+          <PostsViewModule
+            inputs={{
+              ...INPUTS,
+              startDate,
+              endDate: startDate + 8000,
+              postFilterText: text,
+              setPostFilterText: setText,
+            }}
+          >
+            <Probe />
+          </PostsViewModule>
+        </QueryClientProvider>
       )
     }
     const { rerender } = render(<Host startDate={1000} />)
@@ -166,6 +182,7 @@ describe("identity across a provider re-render", () => {
 
     rerender(<Host startDate={1000} />) // a parent re-render
     rerender(<Host startDate={61_000} />) // a Live window's minute tick
+    act(() => invalidatePostsReads(queryClient)) // a sync, a minute, an AI run
     act(() => {
       ;(edits as PostsViewEdits).appendSelection([pick(true, post(1))])
     })
@@ -396,18 +413,70 @@ describe("the ranking", () => {
       }),
     )
 
-    await fetchShownPosts(result.current.state.view, {
-      embeddingsEnabled: true,
+    await fetchRanking(result.current.state.view, {
       searchSimilarPosts: async (_query, _limit, options) => {
         asked.push(options.channels)
         return []
       },
-      getPostsFeed: never,
       lookupPosts: never,
       getViewEstimate: never,
     })
 
     expect(asked).toEqual([CHANNELS])
+  })
+
+  // PRM-01, story 16 and 17: a Ranking exists only while the Account has
+  // Semantic search on, and switching it off ends the search for good.
+  test("the Semantic search Setting off ends it, and on again restores none", () => {
+    // Every render's Ranking, so one that saw it with the Setting off shows.
+    const seen: string[] = []
+    let edits: PostsViewEdits | undefined
+    function Probe() {
+      edits = usePostsViewEdits()
+      seen.push(usePostsViewState().view.ranking.kind)
+      return null
+    }
+    function Host({ semanticSearch }: { semanticSearch: boolean }) {
+      const [text, setText] = useState<string | undefined>()
+      return (
+        <PostsViewModule
+          inputs={{
+            ...INPUTS,
+            semanticSearch,
+            postFilterText: text,
+            setPostFilterText: setText,
+          }}
+        >
+          <Probe />
+        </PostsViewModule>
+      )
+    }
+    const { rerender } = render(<Host semanticSearch />)
+    act(() =>
+      (edits as PostsViewEdits).setRanking({
+        ranking: { kind: "meaning", query: "rates" },
+      }),
+    )
+    expect(seen.at(-1)).toBe("meaning")
+
+    seen.length = 0
+    rerender(<Host semanticSearch={false} />)
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every((kind) => kind === "none")).toBe(true)
+
+    rerender(<Host semanticSearch />)
+    expect(seen.at(-1)).toBe("none")
+    cleanup()
+  })
+
+  test("a blank meaning query is no Ranking", () => {
+    const { result } = mount()
+    act(() =>
+      result.current.edits.setRanking({
+        ranking: { kind: "meaning", query: "   " },
+      }),
+    )
+    expect(result.current.state.view.ranking).toEqual(NO_RANKING)
   })
 })
 

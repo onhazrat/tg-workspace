@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { usePaletteListSelection } from "@/hooks/usePaletteListSelection"
-import { useShownPosts, useShownPostsApi } from "@/hooks/usePostsView"
+import { usePickPool } from "@/hooks/usePostsView"
 import { removeTagFromChannel } from "@/lib/channels/channel-tags"
 import {
   getExtendedEntityCandidates,
@@ -75,11 +75,7 @@ export function useEntityFlow({
   const isPickPostFlow = entityCommand?.entityFlow === "pick-post"
   // The post picker's pool, fetched while the pick-post flow is open: the
   // first 100 Posts the tab shows, rather than an eagerly-populated array.
-  const { posts: shownPosts } = useShownPosts(
-    useShownPostsApi(),
-    isPickPostFlow,
-  )
-  const pickPostPool = useMemo(() => shownPosts.slice(0, 100), [shownPosts])
+  const pickPostPool = usePickPool(isPickPostFlow)
 
   const candidates = useMemo(() => {
     if (!entityCommand?.entityFlow) return []

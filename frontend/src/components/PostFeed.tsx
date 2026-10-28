@@ -5,7 +5,6 @@ import type React from "react"
 import { useCallback, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import {
-  isSemanticFeed,
   useLiveWindowRefresh,
   usePostFacets,
   usePostsFeed,
@@ -26,6 +25,7 @@ import {
   selectionChips,
   snapshotOf,
 } from "@/lib/posts/post-selection"
+import { isRanked } from "@/lib/posts/posts-view"
 import {
   limitNote,
   postLinks,
@@ -38,7 +38,6 @@ import {
   usePostsViewEdits,
   usePostsViewState,
 } from "../contexts/PostsViewContext"
-import { useSettings } from "../contexts/SettingsContext"
 import { useUI } from "../contexts/UIContext"
 import { PostFeedResults } from "./PostFeedResults"
 import { PostFilter } from "./PostFilter"
@@ -65,9 +64,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 }) => {
   const { view } = usePostsViewState()
   const { appendSelection, removeSelectionChip } = usePostsViewEdits()
-  const { embeddingsEnabled } = useSettings()
   const { channels } = useData()
-  const ranked = isSemanticFeed(embeddingsEnabled, view.ranking)
+  const ranked = isRanked(view)
   const spotlightApi = useSpotlightState(
     scrollContainerRef,
     view.filter,

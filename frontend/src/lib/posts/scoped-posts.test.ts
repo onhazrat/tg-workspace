@@ -1,12 +1,11 @@
 /**
- * The fetch for what the Posts tab shows, a function of the Posts view and
- * the api it calls (PVM-02). Each test hands it a view literal and a fake
- * api whose every call throws unless the test expects it.
+ * The Ranking's fetch, a function of the Posts view and the api it calls
+ * (PVM-02, PRM-01). Each test hands it a view literal and a fake api whose
+ * every call throws unless the test expects it.
  */
 
 import { describe, expect, test } from "bun:test"
 
-import type { PostFeedQuery } from "@/api/data"
 import {
   addPostFunnel,
   emptyPostFilter,
@@ -20,10 +19,9 @@ import {
 } from "@/lib/posts/post-selection"
 import { NO_RANKING, type PostsView } from "@/lib/posts/posts-view"
 import {
-  fetchShownPosts,
-  SCOPED_POSTS_LIMIT,
-  type ShownPostsApi,
-  shownPostsKey,
+  fetchRanking,
+  type RankingApi,
+  rankingKey,
 } from "@/lib/posts/scoped-posts"
 import type { Post } from "@/types"
 
@@ -94,7 +92,7 @@ const flag = (p: Post): Post => ({ ...p, selected: true })
 
 /** The server lookup under an empty filter: every ranked Post it was asked for, flagged. */
 const flagged =
-  (posts: Post[]): ShownPostsApi["lookupPosts"] =>
+  (posts: Post[]): RankingApi["lookupPosts"] =>
   async (refs) =>
     posts
       .filter((p) =>
@@ -103,14 +101,10 @@ const flagged =
       .map(flag)
 
 /** A fake api whose calls throw; individual tests override. */
-function fakeApi(overrides: Partial<ShownPostsApi> = {}): ShownPostsApi {
+function fakeApi(overrides: Partial<RankingApi> = {}): RankingApi {
   return {
-    embeddingsEnabled: false,
     searchSimilarPosts: async () => {
       throw new Error("searchSimilarPosts should not be called")
-    },
-    getPostsFeed: async () => {
-      throw new Error("getPostsFeed should not be called")
     },
     lookupPosts: async () => {
       throw new Error("lookupPosts should not be called")
@@ -120,96 +114,16 @@ function fakeApi(overrides: Partial<ShownPostsApi> = {}): ShownPostsApi {
   }
 }
 
-const fetchShown = (over: Partial<PostsView>, api: ShownPostsApi) =>
-  fetchShownPosts({ ...VIEW, ...over }, api)
+const fetchShown = (over: Partial<PostsView>, api: RankingApi) =>
+  fetchRanking({ ...VIEW, ...over }, api)
 
-describe("fetchShownPosts: the shown read", () => {
-  /**
-   * The normal path filters nothing client-side (A1c): it hands the view to
-   * `POST /data/posts` and returns what comes back. What these tests can
-   * guarantee is the translation, field by field. The filtering itself is
-   * pinned server-side (`tests/api/test_posts_feed.py`).
-   */
-  test("hands the whole view to the server feed", async () => {
-    const fromServer = [makePost("alpha", 1, 100)]
-    const calls: PostFeedQuery[] = []
-    const result = await fetchShown(
-      {
-        keyword: "Post",
-        filter: persian,
-        maxPerChannel: 7,
-        maxPerChannelMode: "random",
-        sort: "most_views",
-        groupByChannel: true,
-        viewMeasure: "views",
-      },
-      fakeApi({
-        getPostsFeed: async (query) => {
-          calls.push(query)
-          return fromServer
-        },
-      }),
-    )
-
-    // Returned verbatim: no client-side post-processing survives.
-    expect(result).toBe(fromServer)
-    expect(calls).toEqual([
-      {
-        channelNames: ["alpha", "beta"],
-        startDate: 1000,
-        endDate: 9000,
-        keyword: "Post",
-        filter: persian,
-        viewMeasure: "views",
-        maxPerChannel: 7,
-        maxPerChannelMode: "random",
-        sort: "most_views",
-        groupByChannel: true,
-        seed: 0,
-        limit: SCOPED_POSTS_LIMIT,
-        selection: DEFAULT_SELECTION,
-      },
-    ])
-  })
-
-  test("the read is bounded", async () => {
-    // The point of A1c. This branch used to page a channel's whole history
-    // into the browser; a regression to an unbounded read would not change any
-    // other assertion here, so it gets its own.
-    let capturedLimit: number | undefined
-    await fetchShown(
-      {},
-      fakeApi({
-        getPostsFeed: async (query) => {
-          capturedLimit = query.limit
-          return []
-        },
-      }),
-    )
-
-    expect(capturedLimit).toBe(SCOPED_POSTS_LIMIT)
-    expect(SCOPED_POSTS_LIMIT).toBeLessThanOrEqual(5000)
-  })
-
-  test("embeddings off: a meaning query falls through to the shown read", async () => {
-    const fromServer = [makePost("alpha", 1, 100)]
-    const result = await fetchShown(
-      meaning("crypto"),
-      fakeApi({ getPostsFeed: async () => fromServer }),
-    )
-
-    expect(result).toBe(fromServer)
-  })
-})
-
-describe("fetchShownPosts: a meaning search", () => {
+describe("fetchRanking: a meaning search", () => {
   test("respecting the Channels: bounded at 50, kept to them, the order applied", async () => {
     const ragResults = [makePost("alpha", 1, 100), makePost("beta", 2, 300)]
     const asked: unknown[] = []
     const result = await fetchShown(
       { ...meaning("  crypto  "), respectsChannels: true },
       fakeApi({
-        embeddingsEnabled: true,
         searchSimilarPosts: async (query, limit, options) => {
           asked.push([query, limit, options])
           return ragResults
@@ -240,7 +154,6 @@ describe("fetchShownPosts: a meaning search", () => {
     await fetchShown(
       meaning("crypto"),
       fakeApi({
-        embeddingsEnabled: true,
         searchSimilarPosts: async (_q, _limit, options) => {
           capturedOptions = options
           return []
@@ -273,7 +186,6 @@ describe("fetchShownPosts: a meaning search", () => {
         groupByChannel: true,
       },
       fakeApi({
-        embeddingsEnabled: true,
         searchSimilarPosts: async () => ranked,
         // The server answers in its own order; the ranking's set is kept.
         lookupPosts: async (refs, filter, scope) => {
@@ -325,7 +237,6 @@ describe("fetchShownPosts: a meaning search", () => {
       fetchShown(
         { ...meaning("crypto"), ...over },
         fakeApi({
-          embeddingsEnabled: true,
           searchSimilarPosts: async () => ranked,
           lookupPosts: flagged(ranked),
           getViewEstimate: async () => {
@@ -348,7 +259,7 @@ describe("fetchShownPosts: a meaning search", () => {
   })
 })
 
-describe("fetchShownPosts: a find-related", () => {
+describe("fetchRanking: a find-related", () => {
   test("excludes the Post it started from, bounded at 50, in the window", async () => {
     const seed = makePost("alpha", 1, 100)
     const ragResults = [
@@ -360,7 +271,6 @@ describe("fetchShownPosts: a find-related", () => {
     const result = await fetchShown(
       { ranking: { kind: "related", post: seed }, respectsChannels: true },
       fakeApi({
-        embeddingsEnabled: true,
         searchSimilarPosts: async (query, limit, options) => {
           asked.push([query, limit, options])
           return ragResults
@@ -379,7 +289,7 @@ describe("fetchShownPosts: a find-related", () => {
   })
 })
 
-describe("shownPostsKey: what the fetch depends on (AW-04)", () => {
+describe("rankingKey: what the fetch depends on (AW-04)", () => {
   /**
    * The feed's meaning search runs again when this moves, and only then. A
    * Live window resolves to a new pair every minute and a selection edit
@@ -387,7 +297,7 @@ describe("shownPostsKey: what the fetch depends on (AW-04)", () => {
    * repeats the search, and a failed one ends the Account's search.
    */
   const key = (over: Partial<PostsView>) =>
-    shownPostsKey({ ...VIEW, ...meaning("crypto"), ...over })
+    rankingKey({ ...VIEW, ...meaning("crypto"), ...over })
 
   test("a new minute does not move it", () => {
     expect(key({ startDate: 61_000, endDate: 69_000 })).toBe(key({}))
