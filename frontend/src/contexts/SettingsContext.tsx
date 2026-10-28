@@ -44,7 +44,7 @@ import { hasSession, scopedStorage } from "@/lib/storage/scoped"
 import { isRTLLanguage } from "@/lib/utils"
 import type { GlobalStartTimeMode, GlobalStartTimeValue } from "@/types"
 
-interface SettingsContextType {
+export interface SettingsContextType {
   /**
    * Re-read the section a settings key lives in, after a write made elsewhere
    * (the Settings page's registry write, SET-02). What it reads is what the
