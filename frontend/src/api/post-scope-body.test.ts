@@ -68,8 +68,8 @@ describe("postScopeBody", () => {
       start: HOUR_AGO,
       end: MINUTE_AGO,
     })
-    expect(body.startDate).toBeUndefined()
-    expect(body.endDate).toBeUndefined()
+    expect("startDate" in body).toBe(false)
+    expect("endDate" in body).toBe(false)
   })
 
   /**

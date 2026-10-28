@@ -2,6 +2,8 @@ import type {
   ChatSessionSubmitRequest,
   DirectoryFollowSource,
   DirectoryViewRequest,
+  PostFeedRequest,
+  PostFilteredRequest,
   SummarySubmitRequest,
   TagRunSubmitRequest,
 } from "../client"
@@ -116,10 +118,8 @@ export type PostFeedQuery = PostFilteredQuery & {
  * Defaults are omitted rather than sent explicitly, so the body stays as small
  * as the scope actually is.
  */
-export function postScopeBody(
-  params: PostFilteredQuery,
-): Record<string, unknown> {
-  const body: Record<string, unknown> = {}
+export function postScopeBody(params: PostFilteredQuery): PostFilteredRequest {
+  const body: PostFilteredRequest = {}
   if (params.channelNames?.length) body.channelNames = params.channelNames
   const window = fixedWindow(params.startDate, params.endDate)
   if (window) body.window = window
@@ -140,7 +140,7 @@ export function postScopeBody(
  * shows, so the counts can say how many of those are selected (PTR-06). The
  * cap mode and seed only mean anything alongside a cap, so they follow it.
  */
-export function shownPostsBody(params: PostFeedQuery): Record<string, unknown> {
+export function shownPostsBody(params: PostFeedQuery): PostFilteredRequest {
   const body = postScopeBody(params)
   if (params.maxPerChannel != null && params.maxPerChannel > 0) {
     if (params.maxPerChannelMode)
@@ -152,8 +152,8 @@ export function shownPostsBody(params: PostFeedQuery): Record<string, unknown> {
 }
 
 /** `shownPostsBody` plus the feed's grouping, its parts and its page. */
-export function postsFeedBody(params: PostFeedQuery): Record<string, unknown> {
-  const body = shownPostsBody(params)
+export function postsFeedBody(params: PostFeedQuery): PostFeedRequest {
+  const body: PostFeedRequest = shownPostsBody(params)
   if (params.groupByChannel) body.groupByChannel = true
   if (params.selectedFirst) body.selectedFirst = true
   if (params.onlySelected) body.onlySelected = true
@@ -179,7 +179,7 @@ export type DiscoverScopeQuery = Pick<
 function discoverScopeBody(
   params: DiscoverScopeQuery,
 ): Record<string, unknown> {
-  const body = postScopeBody(params)
+  const body: Record<string, unknown> = postScopeBody(params)
   // `channelNames` is required server-side, so send it even when empty rather
   // than letting `postScopeBody`'s omit-empty rule drop it into a 422.
   body.channelNames = params.channelNames ?? []
@@ -494,7 +494,7 @@ export const dataApi = {
     dataApi.getPostsFeedBody(postsFeedBody(params)),
 
   /** The same page, for a body `postsRead` built (PV-02). */
-  getPostsFeedBody: (body: Record<string, unknown>) =>
+  getPostsFeedBody: (body: PostFeedRequest) =>
     request<Post[]>("/api/v1/data/posts", {
       method: "POST",
       body: JSON.stringify(body),

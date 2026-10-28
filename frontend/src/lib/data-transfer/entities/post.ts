@@ -73,7 +73,7 @@ export async function fetchAllPostsFromServer(
   onProgress: (fetched: number) => void = () => {},
   // Injected rather than imported so this is testable without `mock.module`,
   // which is process-wide in Bun and would contaminate every other file that
-  // imports `@/api`. Same pattern as `fetchShownPosts`.
+  // imports `@/api`. Same pattern as `fetchRanking`.
   fetchPage: typeof api.getPostsFeed = api.getPostsFeed,
 ): Promise<Post[]> {
   const posts: Post[] = []

@@ -1,13 +1,24 @@
 import { describe, expect, test } from "bun:test"
 
+import type { Post } from "@/types"
 import { type PostFilter, parsePostFilter } from "./post-filter"
 import {
+  feedQuery,
+  isRanked,
   NO_RANKING,
+  PICK_POOL_LIMIT,
+  type PostsRanking,
   type PostsRead,
   type PostsView,
+  postsQuery,
   postsRead,
+  rankingQuery,
   scopeSubmission,
+  servedBy,
+  withSemanticSearch,
 } from "./posts-view"
+import type { RankingApi } from "./scoped-posts"
+import { EXPORT_LIMIT } from "./selected-export"
 
 const filter = (src: string): PostFilter => {
   const parsed = parsePostFilter(src)
@@ -74,6 +85,16 @@ const reads: [string, PostsRead, Field[]][] = [
   [
     "feed, selected first",
     { kind: "feed", selectedFirst: true },
+    [...shown, "groupByChannel", "selection"],
+  ],
+  [
+    "pick-post list",
+    { kind: "pickPool" },
+    [...shown, "groupByChannel", "selection"],
+  ],
+  [
+    "selected shown Posts",
+    { kind: "selectedShown" },
     [...shown, "groupByChannel", "selection"],
   ],
   ["shown counts", { kind: "shownCounts" }, [...shown, "selection"]],
@@ -162,7 +183,8 @@ describe("postsRead", () => {
         const revision = moved(base, { ...base, selectionRevision: 2 }, read)
         // The feed keys no revision at all: an edit patches or refetches the
         // loaded pages, where a new key would drop the Account to the top.
-        const keyed = reads && read.kind !== "feed"
+        // The pick-post list lists Posts, whichever are selected.
+        const keyed = reads && read.kind !== "feed" && read.kind !== "pickPool"
         expect(revision).toEqual({ key: keyed, body: false })
       })
 
@@ -215,6 +237,114 @@ describe("postsRead", () => {
       expect(after.queryKey).not.toEqual(before.queryKey)
       expect(after.body).not.toEqual(before.body)
     }
+  })
+})
+
+describe("the two reads built from the feed's body (PRM-01)", () => {
+  test("the pick-post list is the feed's first 100", () => {
+    expect(postsRead(base, { kind: "pickPool" }).body).toEqual({
+      ...postsRead(base, { kind: "feed" }).body,
+      limit: PICK_POOL_LIMIT,
+    })
+    expect(PICK_POOL_LIMIT).toBe(100)
+  })
+
+  test("the selected shown Posts are the feed's selected ones, to the export limit", () => {
+    expect(postsRead(base, { kind: "selectedShown" }).body).toEqual({
+      ...postsRead(base, { kind: "feed" }).body,
+      onlySelected: true,
+      limit: EXPORT_LIMIT,
+    })
+  })
+})
+
+describe("which source serves each read (PRM-01)", () => {
+  /**
+   * The table that would have caught the find-related bug: the shown counts
+   * asked the server during a find-related, because one hook decided "ranked"
+   * by the meaning query alone. Every read asks `servedBy`, and every server
+   * query is off exactly when the Ranking serves its read.
+   */
+  const related: Post = {
+    id: 7,
+    channelName: "news",
+    text: "rates rise",
+    date: "2026-10-28T00:00:00Z",
+    timestamp: 1_500_000,
+  }
+  const rankings: Record<string, PostsRanking> = {
+    none: NO_RANKING,
+    meaning: { kind: "meaning", query: "rates" },
+    related: { kind: "related", post: related },
+  }
+  const selections: Record<string, Partial<PostsView>> = {
+    empty: { selection: [], selectionRevision: 4 },
+    some: { selection: base.selection, selectionRevision: 5 },
+  }
+  const everyRead: PostsRead[] = [
+    { kind: "feed" },
+    { kind: "shownCounts" },
+    { kind: "scopeCounts" },
+    { kind: "facets" },
+    { kind: "valueHistogram", measure: "views" },
+    {
+      kind: "windowHistogram",
+      query: { extentStart: 0, extentEnd: 9, buckets: 3, unfiltered: true },
+    },
+    { kind: "pickPool" },
+    { kind: "selectedShown" },
+  ]
+  // What the tab shows and its count; nothing that only counts or filters.
+  const reached = new Set(["feed", "shownCounts", "pickPool", "selectedShown"])
+  const api: RankingApi = {
+    searchSimilarPosts: async () => [],
+    lookupPosts: async () => [],
+    getViewEstimate: async () => {
+      throw new Error("not read")
+    },
+  }
+
+  for (const [rankingName, ranking] of Object.entries(rankings))
+    for (const semanticSearch of [true, false])
+      for (const [selectionName, selection] of Object.entries(selections))
+        test(`${rankingName}, Semantic search ${semanticSearch ? "on" : "off"}, selection ${selectionName}`, () => {
+          const view: PostsView = {
+            ...base,
+            ...selection,
+            ranking: withSemanticSearch(ranking, semanticSearch),
+          }
+          const ranked = rankingName !== "none" && semanticSearch
+          expect(isRanked(view)).toBe(ranked)
+
+          for (const read of everyRead) {
+            const by = ranked && reached.has(read.kind) ? "ranking" : "server"
+            expect([read.kind, servedBy(view, read)]).toEqual([read.kind, by])
+            const enabled =
+              read.kind === "feed"
+                ? feedQuery(view, false).enabled
+                : postsQuery(view, read).enabled
+            expect([read.kind, enabled]).toEqual([read.kind, by === "server"])
+          }
+
+          const search = rankingQuery(view, api)
+          expect(search.enabled).toBe(ranked)
+          expect(search.retry).toBe(false)
+          // One cache entry for every read the Ranking serves, whatever the
+          // selection and the minute: neither runs the search again.
+          const other = { ...view, ...selections.some, selectionRevision: 9 }
+          const tick = { ...view, startDate: 1_060_000, endDate: 2_060_000 }
+          expect(rankingQuery(other, api).queryKey).toEqual(search.queryKey)
+          expect(rankingQuery(tick, api).queryKey).toEqual(search.queryKey)
+        })
+
+  test("no Channels selected: no server read runs", () => {
+    const view = { ...base, scopeChannelNames: [], channelNames: [] }
+    for (const read of everyRead)
+      if (read.kind !== "feed")
+        expect([read.kind, postsQuery(view, read).enabled]).toEqual([
+          read.kind,
+          false,
+        ])
   })
 })
 

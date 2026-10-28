@@ -63,10 +63,10 @@
     "test": "frontend/src/lib/architecture-invariants.test.ts"
   },
   {
-    "name": "the shown fetch re-run on every view (the defective dependency)",
-    "file": "frontend/src/hooks/usePostsView.ts",
-    "old": "  }, [enabled, key, shownApi, refresh])",
-    "new": "  }, [enabled, key, shownApi, refresh, view])",
+    "name": "the Ranking searched again on every minute (the window's pair in its key)",
+    "file": "frontend/src/lib/posts/scoped-posts.ts",
+    "old": "  const { startDate, endDate, selection, selectionRevision, ...rest } = view\n",
+    "new": "  const { selection, selectionRevision, ...rest } = view\n",
     "test": "frontend/src/contexts/PostsViewContext.test.tsx"
   },
   {
@@ -89,5 +89,61 @@
     "old": "          channelNames: names,\n          window,\n          selection: view.selectionRevision,\n",
     "new": "          channelNames: names,\n          window,\n",
     "test": "frontend/src/lib/posts/posts-view.test.ts"
+  },
+  {
+    "name": "a hook naming a Posts read endpoint",
+    "file": "frontend/src/hooks/usePostsView.ts",
+    "old": "import { api } from \"@/api\"\n",
+    "new": "import { api } from \"@/api\"\nconst count = api.getPostsFeedBody\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "the no-Posts-selected check calling the counts itself",
+    "file": "frontend/src/lib/artifacts/artifact-run.ts",
+    "old": "type CountPosts = (body: PostFilteredRequest) => Promise<PostCountsResponse>\n",
+    "new": "type CountPosts = (body: PostFilteredRequest) => Promise<PostCountsResponse>\nconst onServer: CountPosts = (body) => dataPostsCounts({ body })\n",
+    "test": "frontend/src/lib/architecture-invariants.test.ts"
+  },
+  {
+    "name": "the shown counts back on the server during a find-related",
+    "file": "frontend/src/lib/posts/posts-view.ts",
+    "old": "  isRanked(view) && RANKED_READS.has(read.kind) ? \"ranking\" : \"server\"\n",
+    "new": "  isRanked(view) &&\n  RANKED_READS.has(read.kind) &&\n  !(read.kind === \"shownCounts\" && view.ranking.kind === \"related\")\n    ? \"ranking\"\n    : \"server\"\n",
+    "test": "frontend/src/lib/posts/posts-view.test.ts"
+  },
+  {
+    "name": "the facets off during a meaning search",
+    "file": "frontend/src/lib/posts/posts-view.ts",
+    "old": "    enabled:\n      servedBy(view, read) === \"server\" && channelsOf(view, read).length > 0,\n",
+    "new": "    enabled:\n      servedBy(view, read) === \"server\" &&\n      channelsOf(view, read).length > 0 &&\n      !(read.kind === \"facets\" && view.ranking.kind === \"meaning\"),\n",
+    "test": "frontend/src/lib/posts/posts-view.test.ts"
+  },
+  {
+    "name": "the Ranking's key inside the invalidated set",
+    "file": "frontend/src/hooks/queryKeys.ts",
+    "old": "    [\"postsSelectedShown\"],\n    [\"discoverCandidates\"],\n",
+    "new": "    [\"postsSelectedShown\"],\n    [\"discoverCandidates\"],\n    [\"postsRanking\"],\n",
+    "test": "frontend/src/contexts/PostsViewContext.test.tsx"
+  },
+  {
+    "name": "the Ranking retried on failure",
+    "file": "frontend/src/lib/posts/posts-view.ts",
+    "old": "    retry: false,\n",
+    "new": "",
+    "test": "frontend/src/lib/posts/posts-view.test.ts"
+  },
+  {
+    "name": "the Semantic search Setting not folded into the view",
+    "file": "frontend/src/contexts/PostsViewContext.tsx",
+    "old": "  const ranking = withSemanticSearch(storedRanking, semanticSearch)\n",
+    "new": "  const ranking = storedRanking\n",
+    "test": "frontend/src/contexts/PostsViewContext.test.tsx"
+  },
+  {
+    "name": "switching Semantic search on restoring the old Ranking",
+    "file": "frontend/src/contexts/PostsViewContext.tsx",
+    "old": "    if (!semanticSearch && storedRanking.kind !== \"none\")\n      setRankingState(NO_RANKING)\n",
+    "new": "",
+    "test": "frontend/src/contexts/PostsViewContext.test.tsx"
   }
 ]
