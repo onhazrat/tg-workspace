@@ -115,11 +115,13 @@ describe("a Setting a panel shows (RKD-02)", () => {
       "jobs.deployment.requestKinds",
       "jobs.deployment.other",
     ])
-    expect(ids("Directory probe")).toEqual(["jobs.deployment.requestKinds"])
+    expect(ids("probeRequestsEnabled")).toEqual([
+      "jobs.deployment.requestKinds",
+    ])
   })
 
   test("without the panel's Permission it stays a row", () => {
-    expect(ids("Directory probe", { ...jobs, permissions: [] })).toEqual([
+    expect(ids("probeRequestsEnabled", { ...jobs, permissions: [] })).toEqual([
       "jobs.deployment.probeRequestsEnabled",
     ])
   })
