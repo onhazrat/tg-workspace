@@ -14,6 +14,7 @@ from app.api.main import api_router
 from app.api.routes.data.admin import EXPORT_ROWS_HEADER
 from app.core.config import settings
 from app.core.db import engine, init_db
+from app.core.request_recording import RequestKindDisabled
 from app.core.startup_checks import run_startup_checks
 from app.jobs.request_stats import start_request_flusher, stop_request_flusher
 from app.jobs.scheduler import (
@@ -76,6 +77,17 @@ app = FastAPI(
 )
 
 app.add_middleware(APIKeyMiddleware)
+
+#: The one status every route refuses a disabled Request kind with (RKD-01).
+#: 409: the request is fine and the caller may make it; the deployment's state
+#: says no until an Operator enables the kind again.
+KIND_DISABLED_STATUS = 409
+
+
+@app.exception_handler(RequestKindDisabled)
+async def refuse_disabled_kind(_request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=KIND_DISABLED_STATUS, content={"detail": str(exc)})
+
 
 # Inside CORS but outside everything else, so the measured span is the whole
 # application: a request rejected by the API key middleware is still timed, and

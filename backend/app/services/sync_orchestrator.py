@@ -22,7 +22,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import (
     PageType,
-    RequestKind,
+    RequestKindDisabled,
     attributed,
     page,
     sync_run,
@@ -87,13 +87,13 @@ from app.services.proxy_pool import (
     get_partition,
 )
 from app.services.quota import (
-    Budget,
     QuotaCeilingReached,
     assert_within_ceiling,
     budget_for_sync_mode,
     charge_sync_job,
 )
 from app.services.request_accounting import metered_work
+from app.services.request_kinds import REQUEST_KIND_BY_BUDGET
 from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
@@ -240,16 +240,6 @@ def _existing_post_ids(
     return set(rows)
 
 
-#: The kind of work a sync's Requests are recorded under (RQS-01). From the
-#: Budget, which derives totally from the sync mode, so a new mode cannot reach
-#: the record without first being given a Budget.
-REQUEST_KIND_BY_BUDGET: dict[Budget, RequestKind] = {
-    Budget.AUTO_SYNC: RequestKind.AUTO,
-    Budget.MANUAL_BULK: RequestKind.BULK,
-    Budget.MANUAL_SINGLE: RequestKind.SINGLE,
-}
-
-
 async def _scrape_page_with_retry(
     channel_name: str,
     *,
@@ -288,6 +278,9 @@ async def _scrape_page_with_retry(
             )
             response["fullRequest"] = request_body
             return response
+        except RequestKindDisabled:
+            # Not Telegram failing: the walk is held, never retried (RKD-01).
+            raise
         except Exception as exc:  # noqa: BLE001
             is_rate_limit = (
                 isinstance(exc, httpx.HTTPStatusError)
@@ -2088,6 +2081,14 @@ async def _sync_claimed_channel(
         ch_state.new_latest_id = walk.final_latest_id or None
         await touch_job(job, ch_state)
 
+    except RequestKindDisabled:
+        # Held, not failed (RKD-01): no finaliser runs, so no backoff, no sync
+        # log and no cursor write. The Posts already fetched are stored, and
+        # the walk resumes from the cursors once the kind is enabled.
+        ch_state.status = "pending"
+        await touch_job(job, ch_state)
+        raise
+
     except SyncScrapeError as exc:
         await run_db(
             _finalize_channel_scrape_error,
@@ -2175,6 +2176,11 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
                 # difference between a pinned walk and a silently shared proxy.
                 with bound_to(slot):
                     await sync_single_channel(job, ch_state, user_id=user_id, slot=slot)
+            except RequestKindDisabled as exc:
+                # No lane to hold it on: this sync is skipped (RKD-01).
+                ch_state.status = "skipped"
+                ch_state.error = str(exc)
+                await touch_job(job, ch_state)
             finally:
                 slot.release()
 

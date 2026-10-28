@@ -22,10 +22,11 @@ from app.jobs.settings import load_reach_settings, write_setting_field
 from app.schemas.settings_registry import SettingRow
 from app.services import rbac
 from app.services.reach import reach_settings_from
+from app.services.request_kinds import record_switch_times
 from app.services.setting_declarations import Declaration, declaration
 from app.services.settings_configuration import configuration_lock
 from app.services.settings_page import is_visible, lock_reason, row_for
-from app.services.settings_registry import REACH_KEY
+from app.services.settings_registry import REACH_KEY, REQUEST_KINDS_KEY
 from app.services.sync_meta import touch_sync
 
 #: The 404 for an id nobody declared and for one the caller may not see alike,
@@ -103,4 +104,6 @@ def update_setting(
     write_setting_field(
         session, decl.key, decl.field, value, reset=reset, user_id=user_id
     )
+    if decl.key == REQUEST_KINDS_KEY:
+        record_switch_times(session)
     return row_for(session, user_id, decl)

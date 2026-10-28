@@ -71,6 +71,10 @@ SETTLING_CURVE_RUNTIME_KEY = "settling_curve_runtime"
 #: the catalog have to agree on it.
 REQUEST_ROLLUP_KEY = "request_rollup"
 
+#: RKD-01's switches, one per Request kind, and when each was disabled. Named
+#: here because the aggregate, the catalog and the guard have to agree on it.
+REQUEST_KINDS_KEY = "request_kinds"
+
 #: Deployment scheduler policy: how often the tick runs, how many channels it
 #: syncs at once, how long it waits after a failure. One answer per deployment
 #: — the scheduler is a single process (see `test_worker_count.py`), so a
@@ -264,6 +268,13 @@ GLOBAL_KEYS: dict[str, str] = {
         "policy because Reach is computed over the corpus every Follower "
         "shares: a per-account settling age would give one Channel two Reach "
         "values depending on who asked."
+    ),
+    REQUEST_KINDS_KEY: (
+        "Which kinds of Telegram work the deployment may do, and since when "
+        "each one is off (RKD-01, ADR-040). Deployment policy: the switch "
+        "speaks for every Account's work and the deployment's standing with "
+        "Telegram, so a per-account copy would be a switch one account could "
+        "flip back for everybody."
     ),
     SYNC_LANES_KEY: (
         "Which sync lanes an Admin has paused (ticket 12). A lane is a queue "

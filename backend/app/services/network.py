@@ -20,7 +20,15 @@ from stem.control import Controller
 
 from app.core.config import settings
 from app.core.request_meter import record_telegram_request
-from app.core.request_recording import Cause, Page, lane_label, page_for_fetch
+from app.core.request_recording import (
+    Cause,
+    Page,
+    RequestKind,
+    RequestKindDisabled,
+    current_kind,
+    lane_label,
+    page_for_fetch,
+)
 from app.services.network_settings import DIRECT_EGRESS_KEY, normalize_proxy_url
 from app.services.proxy_pacing import (
     FetchOutcome,
@@ -524,6 +532,24 @@ def _record_wasted(
     )
 
 
+async def _refuse_disabled_kind() -> None:
+    """Refuse an attempt whose kind the Operator disabled (RKD-01, ADR-040).
+
+    Called first in `fetch_with_retry`, before the page is opened, the pace
+    waited or a Lane taken, so the refused attempt is not a Request: nothing
+    records it, charges it or retries it. Work with no attribution is `other`
+    and is never refused. Imported here, not at the top: `request_kinds`
+    reaches `quota`, whose imports lead back to this module.
+    """
+    from app.services.request_kinds import is_kind_enabled
+
+    kind = current_kind()
+    if kind is not RequestKind.OTHER and not await asyncio.to_thread(
+        is_kind_enabled, kind
+    ):
+        raise RequestKindDisabled(kind)
+
+
 async def fetch_with_retry(
     url: str,
     *,
@@ -568,6 +594,7 @@ async def fetch_with_retry(
     Collapsing them is the bug this ticket fixed.
     """
     global _tor_request_counter
+    await _refuse_disabled_kind()
     effective_retries = (
         retries if retries is not None else settings.NETWORK_FETCH_RETRIES
     )

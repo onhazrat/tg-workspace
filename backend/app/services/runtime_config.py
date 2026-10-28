@@ -26,6 +26,7 @@ from app.services.network_settings import (
     resolve_proxy_concurrency,
 )
 from app.services.proxy_pool import configure_proxy_pool, get_proxy_pool
+from app.services.request_kinds import switches as request_kind_switches
 from app.services.scraper_jobs import get_active_sync_job_summary
 
 
@@ -270,4 +271,5 @@ def build_runtime_config(
         "jobs": _jobs_runtime_payload(session),
         "constants": _constants_payload(),
         "activeSyncJob": active_sync_job,
+        "requestKinds": request_kind_switches(),
     }

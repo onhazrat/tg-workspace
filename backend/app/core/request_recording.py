@@ -60,6 +60,42 @@ class RequestKind(StrEnum):
     OTHER = "other"
 
 
+#: Every kind an Operator can disable (RKD-01, ADR-040). `other` is the bug
+#: bucket: switching it off would hide an attribution bug, not stop work.
+SWITCHABLE_KINDS: tuple[RequestKind, ...] = tuple(
+    kind for kind in RequestKind if kind is not RequestKind.OTHER
+)
+
+#: What a person reads for each switchable kind; the Requests tab's labels.
+KIND_LABELS: dict[RequestKind, str] = {
+    RequestKind.AUTO: "Auto sync",
+    RequestKind.BULK: "Manual bulk",
+    RequestKind.SINGLE: "Manual single",
+    RequestKind.FOLLOW: "Follow",
+    RequestKind.PROBE: "Directory probe",
+    RequestKind.HANDLE: "Handle check",
+    RequestKind.BOT_API: "Bot API",
+}
+
+
+def kind_refusal(kind: RequestKind) -> str:
+    """The one message a refusal of a disabled kind reads, wherever it is met."""
+    return f"{KIND_LABELS[kind]} is disabled on this deployment"
+
+
+class RequestKindDisabled(Exception):
+    """Work of a kind the Operator disabled (RKD-01, ADR-040).
+
+    Raised before an attempt leaves, so it is not a Request and not a network
+    error: a caller that retries network errors must not retry this, and a
+    sync that meets it is held, not failed.
+    """
+
+    def __init__(self, kind: RequestKind) -> None:
+        super().__init__(kind_refusal(kind))
+        self.kind = kind
+
+
 class PageType(StrEnum):
     POSTS = "posts"
     MEDIA = "media"
@@ -311,12 +347,15 @@ _sync: contextvars.ContextVar[SyncRun | None] = contextvars.ContextVar(
 def sync_run() -> Iterator[SyncRun]:
     """One sync of the Channel attributed around it; set `failed` before it ends.
 
-    An exception leaving the block fails the sync.
+    An exception leaving the block fails the sync, except a disabled kind's
+    refusal: that sync is held and resumes later (RKD-01).
     """
     run = SyncRun(_attribution.get())
     token = _sync.set(run)
     try:
         yield run
+    except RequestKindDisabled:
+        raise
     except Exception:
         run.failed = True
         raise
@@ -331,6 +370,11 @@ def drain() -> list[RequestRecord]:
     with _buffer_lock:
         taken, _buffer = _buffer, []
     return taken
+
+
+def current_kind() -> RequestKind:
+    """The kind of work the Requests made here would be recorded under."""
+    return _attribution.get().kind
 
 
 @contextmanager
