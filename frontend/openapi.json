@@ -13717,7 +13717,7 @@
         "type": "object",
         "required": ["kind", "label", "enabled", "disabledSince", "refusal"],
         "title": "RequestKindSwitch",
-        "description": "One Request kind's switch (RKD-01): the UI greys out what it refuses."
+        "description": "One Request kind's switch: the UI greys out what it refuses."
       },
       "RequestRecord": {
         "properties": {

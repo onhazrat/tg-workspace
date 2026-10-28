@@ -137,8 +137,9 @@ class ActiveSyncJobSummary(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+# RKD-01.
 class RequestKindSwitch(BaseModel):
-    """One Request kind's switch (RKD-01): the UI greys out what it refuses."""
+    """One Request kind's switch: the UI greys out what it refuses."""
 
     kind: str
     label: str

@@ -6161,7 +6161,7 @@ export type RequestBreakdownResponse = {
 /**
  * RequestKindSwitch
  *
- * One Request kind's switch (RKD-01): the UI greys out what it refuses.
+ * One Request kind's switch: the UI greys out what it refuses.
  */
 export type RequestKindSwitch = {
     /**
