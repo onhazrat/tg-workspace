@@ -160,6 +160,60 @@ export interface WaitSyncJobIO {
 export const SYNC_TIMED_OUT_MESSAGE = "Sync job timed out"
 
 /**
+ * A wait's deadline that stops while the job is held (RKD-01). Held work has
+ * no lifetime, so time a job spends with a `waitingReason` never counts
+ * against `timeoutMs`, and `onExpire` cannot fire until the hold clears.
+ * `see` takes each status as it arrives.
+ */
+export function holdableDeadline(timeoutMs: number, onExpire: () => void) {
+  let left = timeoutMs
+  let since = Date.now()
+  let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(
+    onExpire,
+    left,
+  )
+  return {
+    see(status: SyncJobStatus) {
+      const now = Date.now()
+      if (timer !== undefined) left -= now - since
+      clearTimeout(timer)
+      since = now
+      timer = status.waitingReason ? undefined : setTimeout(onExpire, left)
+    },
+    /** Whether the time not held has run out. */
+    expired: () => timer !== undefined && Date.now() - since >= left,
+    stop: () => clearTimeout(timer),
+  }
+}
+
+/**
+ * Poll a job to a terminal state, cancelling it once `timeoutMs` of time not
+ * held has passed. The fallback when the event stream fails.
+ */
+export async function pollSyncJob(
+  io: Pick<WaitSyncJobIO, "getStatus" | "cancel" | "apply" | "timeoutMs"> & {
+    pollMs: number
+  },
+  jobId: string,
+): Promise<SyncJobStatus> {
+  // Asked on each round rather than timed, so it needs no expiry of its own.
+  const deadline = holdableDeadline(io.timeoutMs, () => {})
+  try {
+    while (!deadline.expired()) {
+      const status = await io.getStatus(jobId)
+      deadline.see(status)
+      io.apply(status)
+      if (isTerminalSyncStatus(status.status)) return status
+      await new Promise((resolve) => setTimeout(resolve, io.pollMs))
+    }
+  } finally {
+    deadline.stop()
+  }
+  await io.cancel(jobId)
+  throw new Error(SYNC_TIMED_OUT_MESSAGE)
+}
+
+/**
  * Follow a job to a terminal state over its event stream.
  *
  * A stream that ends before the job does is settled by one status read. A
@@ -172,11 +226,14 @@ export async function waitSyncJob(
   jobId: string,
 ): Promise<SyncJobStatus> {
   const abortController = new AbortController()
-  const timeoutId = setTimeout(() => abortController.abort(), io.timeoutMs)
+  const deadline = holdableDeadline(io.timeoutMs, () => abortController.abort())
   try {
     const terminal = await followUntilTerminal(
       io.subscribe(jobId, abortController.signal),
-      io.apply,
+      (status) => {
+        deadline.see(status)
+        io.apply(status)
+      },
     )
     if (terminal) return terminal
     const finalStatus = await io.getStatus(jobId)
@@ -193,7 +250,7 @@ export async function waitSyncJob(
     )
     return io.pollFallback(jobId)
   } finally {
-    clearTimeout(timeoutId)
+    deadline.stop()
   }
 }
 
