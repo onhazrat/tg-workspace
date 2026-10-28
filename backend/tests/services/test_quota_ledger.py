@@ -545,7 +545,6 @@ def _run_job(
     monkeypatch.setattr(sync_orchestrator, "sync_single_channel", fake_sync_channel)
     monkeypatch.setattr(sync_orchestrator, "touch_job", noop)
     monkeypatch.setattr(sync_orchestrator, "persist_job", noop)
-    monkeypatch.setattr(sync_orchestrator, "deactivate_job", lambda _job_id: None)
     # The Partition, stubbed, because `run_sync_job` takes Slots out of it
     # rather than sizing a semaphore of its own since ADR-012. Four wide, which
     # is what the `_load_sync_job_concurrency` stub this replaced returned — the
