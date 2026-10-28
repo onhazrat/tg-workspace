@@ -2,8 +2,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { BulkResync } from "@/components/settings-page/panels"
+import { PublishPanel } from "@/components/summary-view/PublishPanel"
 import { queryKeys } from "@/hooks/queryKeys"
 import { queryClient } from "@/lib/queryClient"
+import type { BotCredential, ChatDestination } from "@/types"
 import { kindRefusalNow, refusalOf, sinceLabel } from "./useRequestKinds"
 
 afterEach(() => {
@@ -58,4 +60,48 @@ test("Reset and sync is greyed out with the refusal while bulk is off", async ()
   queryClient.setQueryData(queryKeys.runtimeConfig, { requestKinds: switches })
   await waitFor(() => expect(button().hasAttribute("disabled")).toBe(true))
   expect(button().getAttribute("title")).toBe(BULK_OFF)
+})
+
+test("Publish is greyed out with the refusal while the Bot API is off", async () => {
+  const BOT_OFF = "Bot API is disabled on this deployment"
+  queryClient.setQueryData(queryKeys.runtimeConfig, {
+    requestKinds: [
+      {
+        kind: "botApi",
+        label: "Bot API",
+        enabled: false,
+        disabledSince: null,
+        refusal: BOT_OFF,
+      },
+    ],
+  })
+  const noop = () => {}
+  const done = async () => {}
+  render(
+    <PublishPanel
+      bots={[{ id: "b1", name: "Bot" }] as BotCredential[]}
+      destinations={
+        [{ id: "d1", chatId: "c1", name: "Desk" }] as ChatDestination[]
+      }
+      plan={{ parts: [], limit: 4096, partial: null } as never}
+      options={{ includeMetadata: false, metadataInFirstPart: false }}
+      metadataText=""
+      onOptionsChange={noop}
+      onSaveMetadataText={done}
+      onSaveOmittedRows={done}
+      publishing={{
+        citationStyle: "numbered",
+        linkPreviews: false,
+        timeZone: "UTC",
+      }}
+      publishingCustomized={false}
+      onPublishingChange={noop}
+      onPublishingReset={noop}
+      onOpenSettings={noop}
+      onPublish={done}
+    />,
+  )
+  const publish = screen.getByRole("button", { name: /^Publish \d/ })
+  await waitFor(() => expect(publish.hasAttribute("disabled")).toBe(true))
+  expect(publish.getAttribute("title")).toBe(BOT_OFF)
 })
