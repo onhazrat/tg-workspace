@@ -89,7 +89,7 @@ from sqlmodel import Session
 from app.core import pg_notify
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_recording import attributed
+from app.core.request_recording import RequestKindDisabled, attributed
 from app.services import pgmq
 from app.services.directory_probe_usage import charge_probe_requests
 from app.services.proxy_pacing import PACE_MAX_MS
@@ -110,6 +110,7 @@ from app.services.quota import (
     usage_for_user,
 )
 from app.services.request_accounting import metered_work
+from app.services.request_kinds import held_lanes
 from app.services.scraper_jobs import (
     SyncJobState,
     claim_job,
@@ -518,9 +519,14 @@ class _LaneBuffers:
         through `drain_sync_lanes` for that reason.
         """
         await self._refresh_pauses()
+        # A lane is held while it is paused **or** its kind is disabled
+        # (RKD-01). Read every call, not on the pause interval: right after a
+        # refusal the switch is fresh, and the refused lane must not be read
+        # again until it is enabled.
+        held = self._paused | await asyncio.to_thread(held_lanes)
         ready: set[str] = set()
         for lane in group:
-            if lane in self._paused:
+            if lane in held:
                 # Checked before the buffer, not after: a lane paused mid-drain
                 # may already have messages claimed into its buffer, and serving
                 # those is the lane continuing to drain. They are handed back
@@ -1075,6 +1081,10 @@ async def _handle_one_inner(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) ->
                 await _process_message(msg, slot)
         else:
             await _process_probe_message(msg)
+    except RequestKindDisabled:
+        # Its kind was disabled mid-way: back on its lane, held until enabled.
+        await asyncio.to_thread(_requeue, lane, msg)
+        return "held"
     except Exception:
         # Do not archive: leave it on the queue so PGMQ redelivers it once
         # `vt` lapses, up to `SYNC_QUEUE_MAX_READ_COUNT` reads.
@@ -1109,6 +1119,19 @@ async def _handle_one_inner(lane: str, msg: pgmq.PgmqMessage, slot: SyncSlot) ->
 def _paused_lanes() -> set[str]:
     with Session(engine) as session:
         return paused_lanes(session)
+
+
+def _requeue(lane: str, msg: pgmq.PgmqMessage) -> None:
+    """Return a refused message to its lane as a new one (RKD-01).
+
+    Sent fresh rather than made visible again, so a hold costs it none of its
+    `SYNC_QUEUE_MAX_READ_COUNT` redeliveries: a kind switched off and on a few
+    times must not exhaust the work it held.
+    """
+    with Session(engine) as session:
+        pgmq.send(session, lane, msg.message)
+        pgmq.archive(session, lane, msg.msg_id)
+        session.commit()
 
 
 def _hand_back(lane: str, msg: pgmq.PgmqMessage) -> None:

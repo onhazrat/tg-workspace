@@ -59,6 +59,7 @@ from app.core.request_recording import (
     Cause,
     PageType,
     RequestKind,
+    RequestKindDisabled,
     attributed,
     page,
 )
@@ -76,6 +77,7 @@ from app.services.network_settings import (
     resolve_proxy_concurrency,
 )
 from app.services.pgmq import queue_length
+from app.services.request_kinds import is_kind_enabled
 from app.services.scraper import get_channel_info, private_channel_info
 from app.services.sync_lanes import DISCOVER_PROBE_LANE
 from app.services.telegram_web import (
@@ -233,6 +235,9 @@ async def _fetch_and_store(
             "samples": [],
         }
         error = str(exc)
+    except RequestKindDisabled:
+        # No answer at all, so no verdict: the probe goes back on its lane.
+        raise
     except Exception as exc:  # noqa: BLE001
         error = str(exc)
 
@@ -269,6 +274,9 @@ async def probe_one_handle(handle: str) -> str:
             tor_auto_rotate=tor_auto_rotate,
             tor_rotation_threshold=tor_rotation_threshold,
         )
+    except RequestKindDisabled:
+        # Held, not failed: the consumer puts it back on the lane (RKD-01).
+        raise
     except Exception:  # noqa: BLE001
         logger.exception("Discover probe failed for @%s", handle)
         return "unknown"
@@ -283,6 +291,10 @@ async def run_discover_probe_sweep() -> dict[str, Any]:
     before the verdicts are. The verdicts themselves are rows the report read
     already joins, which is why that was never the interesting number.
     """
+    if not await run_db(is_kind_enabled, RequestKind.PROBE):
+        # Scheduled or triggered alike: the lane must not grow while probes
+        # are disabled (RKD-01). The harvest sweep is not gated.
+        return {"skipped": True, "reason": "probe requests disabled"}
     if _sweep_lock.locked():
         return {"skipped": True, "reason": "sweep already running"}
 

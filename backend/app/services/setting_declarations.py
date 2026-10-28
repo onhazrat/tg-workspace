@@ -1028,6 +1028,7 @@ CONSTANT_TOPICS: dict[str, str] = {
     "backend/app/services/publication_parts.py": "publishing",
     "backend/app/services/quota.py": "quota",
     "backend/app/services/reach.py": "reach",
+    "backend/app/services/request_kinds.py": "jobs",
     "backend/app/services/request_stats.py": "quota",
     "backend/app/services/scraper_jobs.py": "sync",
     "backend/app/services/search_text.py": "sync",

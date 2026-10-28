@@ -262,6 +262,13 @@
     },
     {
       "default": true,
+      "name": "JOBS_AUTO_REQUESTS_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
       "name": "JOBS_AUTO_SUMMARY_ENABLED_DEFAULT",
       "required": false,
       "scope": "backend_runtime",
@@ -270,6 +277,20 @@
     {
       "default": true,
       "name": "JOBS_AUTO_SYNC_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_BOT_API_REQUESTS_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_BULK_REQUESTS_ENABLED_DEFAULT",
       "required": false,
       "scope": "backend_runtime",
       "sensitive": false
@@ -297,7 +318,35 @@
     },
     {
       "default": true,
+      "name": "JOBS_FOLLOW_REQUESTS_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_HANDLE_REQUESTS_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_PROBE_REQUESTS_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
       "name": "JOBS_RETENTION_ENABLED_DEFAULT",
+      "required": false,
+      "scope": "backend_runtime",
+      "sensitive": false
+    },
+    {
+      "default": true,
+      "name": "JOBS_SINGLE_REQUESTS_ENABLED_DEFAULT",
       "required": false,
       "scope": "backend_runtime",
       "sensitive": false

@@ -257,6 +257,10 @@ INVENTORY: dict[str, str] = {
     # modules that own the pieces: `settings_store` for the paused set,
     # `pgmq` for the messages, `scraper_jobs` for the jobs a purge cancels.
     "sync_lane_control.py": ORCHESTRATOR,
+    # RKD-01: reads the Request kind switches for every gate and stamps when
+    # one went off, through `settings_store`, the row's only writer. The shape
+    # `sync_lane_control` has for the paused lanes beside it.
+    "request_kinds.py": ORCHESTRATOR,
 }
 
 #: Modules that do not fit a kind, and why. Adding to this needs a reason.

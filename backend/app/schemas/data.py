@@ -74,6 +74,8 @@ class BulkFollowJobStatusResponse(BaseModel):
     failed: int
     results: list[FollowChannelResultResponse]
     sync_job_id: str | None = Field(None, alias="syncJobId")
+    #: Why the follows got no first sync, when manual bulk is disabled (RKD-01).
+    sync_skipped: str | None = Field(None, alias="syncSkipped")
     created_at: int = Field(..., alias="createdAt")
     finished_at: int | None = Field(None, alias="finishedAt")
 

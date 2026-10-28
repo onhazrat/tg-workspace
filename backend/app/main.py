@@ -23,6 +23,7 @@ from app.jobs.scheduler import (
 )
 from app.middleware.api_key import APIKeyMiddleware
 from app.middleware.timing import TimingMiddleware
+from app.services.request_kinds import KIND_DISABLED_STATUS
 from app.services.scraper_jobs import (
     start_progress_subscriber,
     stop_progress_subscriber,
@@ -77,11 +78,6 @@ app = FastAPI(
 )
 
 app.add_middleware(APIKeyMiddleware)
-
-#: The one status every route refuses a disabled Request kind with (RKD-01).
-#: 409: the request is fine and the caller may make it; the deployment's state
-#: says no until an Operator enables the kind again.
-KIND_DISABLED_STATUS = 409
 
 
 @app.exception_handler(RequestKindDisabled)

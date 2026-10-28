@@ -48,6 +48,7 @@ from app.jobs.settings import (
     default_media,
     default_translation,
 )
+from app.services import request_kinds
 from app.services.network_settings import NETWORK_UI_KEYS
 from app.services.quota import Budget, quota_settings_field
 from app.services.reach import REACH_SETTING_FIELDS
@@ -66,6 +67,7 @@ from app.services.settings_page import (
 from app.services.settings_registry import (
     AI_PREF_FIELDS,
     GLOBAL_KEYS,
+    REQUEST_KINDS_KEY,
     RETENTION_POLICY_FIELDS,
     RETENTION_PREF_FIELDS,
     SYNC_POLICY_FIELDS,
@@ -92,6 +94,7 @@ FIELD_INVENTORY: dict[str, frozenset[str]] = {
     "publishing": frozenset(_default_publishing()),
     "ai_prefs": AI_PREF_FIELDS,
     "network": NETWORK_UI_KEYS,
+    REQUEST_KINDS_KEY: request_kinds.STORED_FIELDS,
     "quota": frozenset(
         quota_settings_field(budget, kind)
         for budget in Budget

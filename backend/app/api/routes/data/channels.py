@@ -13,13 +13,14 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, require_kind_enabled
 from app.api.http_cache import json_response_with_etag
 from app.core import pg_notify
 from app.core.config import settings
+from app.core.request_recording import RequestKind
 from app.models import User
 from app.schemas.channels import (
     BulkChannelTagsResponse,
@@ -249,7 +250,12 @@ DISMISSED_FOLLOW_DETAIL = (
 )
 
 
-@router.post("/channels/bulk-follow", response_model=BulkFollowStartResponse)
+@router.post(
+    "/channels/bulk-follow",
+    response_model=BulkFollowStartResponse,
+    # Refused before the first handle check while `follow` is off (RKD-01).
+    dependencies=[Depends(require_kind_enabled(RequestKind.FOLLOW))],
+)
 async def start_bulk_follow(
     body: BulkFollowRequest,
     session: SessionDep,

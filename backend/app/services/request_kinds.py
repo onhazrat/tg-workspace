@@ -60,12 +60,25 @@ REQUEST_KIND_BY_BUDGET: dict[Budget, RequestKind] = {
 #: How stale this process's copy of the switches may be.
 RECHECK_SECONDS = 5.0
 
+#: The one status every route refuses a disabled kind with, set in `app.main`.
+#: 409: the request is well formed and the caller may make it; the
+#: deployment's state says no until an Operator enables the kind again.
+KIND_DISABLED_STATUS = 409
+
 _cached: tuple[float, dict[str, Any]] | None = None
 
 
 def disabled_at_field(kind: RequestKind) -> str:
     """The row's field holding when `kind` was disabled, as epoch ms."""
     return f"{kind.value}DisabledAt"
+
+
+#: Every field the `request_kinds` row stores: a switch and its stamp per kind.
+STORED_FIELDS: frozenset[str] = frozenset(
+    field
+    for kind in SWITCHABLE_KINDS
+    for field in (kind.value, disabled_at_field(kind))
+)
 
 
 def kind_for_sync_mode(sync_mode: Any) -> RequestKind:

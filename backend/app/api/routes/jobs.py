@@ -36,6 +36,11 @@ from app.services.channel_setting_groups import (
 )
 from app.services.follows import followed_channels_for
 from app.services.quota import QuotaCeilingReached
+from app.services.request_kinds import (
+    assert_kind_enabled,
+    kind_for_sync_mode,
+    waiting_reason,
+)
 from app.services.runtime_config import build_runtime_config
 from app.services.scraper_jobs import (
     SyncJobState,
@@ -330,6 +335,8 @@ async def start_sync_job(
 ) -> StartSyncJobResponse:
     operator_id = current_user.id
     sync_mode = body.resolved_sync_mode
+    # Before the job exists, so a disabled kind leaves nothing behind (RKD-01).
+    assert_kind_enabled(kind_for_sync_mode(sync_mode))
     entries = _resolve_sync_entries(session, body.channel_ids, operator_id, sync_mode)
     if not entries:
         raise HTTPException(
@@ -373,8 +380,19 @@ def get_sync_job_status(
     job_id: str, session: SessionDep, current_user: CurrentUser
 ) -> SyncJobStatusResponse:
     job = _visible_job(get_job(job_id), session, current_user)
-    data = job.to_camel()
-    return SyncJobStatusResponse(**data)
+    return SyncJobStatusResponse(**_progress(job))
+
+
+def _progress(job: SyncJobState) -> dict[str, Any]:
+    """A job's progress as SSE and the reconnect read both send it.
+
+    The waiting reason is read when the progress is, not stored on the job: it
+    names a switch, so it clears the moment the kind is enabled (RKD-01).
+    """
+    return {
+        **job.to_camel(),
+        "waitingReason": waiting_reason(job.sync_mode, job.status),
+    }
 
 
 def _sync_status_changed(
@@ -412,7 +430,7 @@ async def sync_job_events(
             if current_job is None:
                 break
 
-            snapshot = current_job.to_camel()
+            snapshot = _progress(current_job)
             now_ms = time.monotonic() * 1000
             status_changed = _sync_status_changed(last_snapshot, snapshot)
             should_send = (
