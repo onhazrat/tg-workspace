@@ -2,7 +2,7 @@
 
 **What to build:** Every piece of work that reaches Telegram opens one Accounted work: a queued Channel's sync, a direct sync job, a bulk Follow, a Directory probe, a handle check or a Bot API call. That one module names whose Requests they are and what pays for them, and it pays once when the work ends. The quota ledger and the recorded Requests then come from one charge decision and carry the same resolved Account, so the Requests tab and the Budgets agree by construction. Handle checks and Bot API calls name the Account that asked. Then, picking an Account in the Requests tab also shows the Uncharged Requests it asked for, while the Accounts facet and the comparison still count spend. Land it as two commits in order: the behaviour-neutral refactor first, then the Requests tab change.
 
-**Blocked by:** None (can start immediately).
+**Blocked by:** RKD-01, by agreed order: both rewrite the Request attribution and its callers, and ACW-01 rebases onto RKD-01 and keeps its tests green (spec, Further notes).
 
 **Status:** ready-for-agent
 
