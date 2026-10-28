@@ -7836,6 +7836,10 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Syncjobid"
           },
+          "syncSkipped": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Syncskipped"
+          },
           "createdAt": { "type": "integer", "title": "Createdat" },
           "finishedAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -13699,6 +13703,22 @@
         "title": "RequestBreakdownResponse",
         "description": "Totals by kind and by Channel for one range, in UTC."
       },
+      "RequestKindSwitch": {
+        "properties": {
+          "kind": { "type": "string", "title": "Kind" },
+          "label": { "type": "string", "title": "Label" },
+          "enabled": { "type": "boolean", "title": "Enabled" },
+          "disabledSince": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Disabledsince"
+          },
+          "refusal": { "type": "string", "title": "Refusal" }
+        },
+        "type": "object",
+        "required": ["kind", "label", "enabled", "disabledSince", "refusal"],
+        "title": "RequestKindSwitch",
+        "description": "One Request kind's switch (RKD-01): the UI greys out what it refuses."
+      },
       "RequestRecord": {
         "properties": {
           "id": { "type": "string", "format": "uuid", "title": "Id" },
@@ -13992,6 +14012,11 @@
               { "$ref": "#/components/schemas/ActiveSyncJobSummary" },
               { "type": "null" }
             ]
+          },
+          "requestKinds": {
+            "items": { "$ref": "#/components/schemas/RequestKindSwitch" },
+            "type": "array",
+            "title": "Requestkinds"
           }
         },
         "type": "object",
@@ -14005,7 +14030,8 @@
           "network",
           "jobs",
           "retention",
-          "constants"
+          "constants",
+          "requestKinds"
         ],
         "title": "RuntimeConfigResponse"
       },
@@ -15112,6 +15138,10 @@
           "finishedAt": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
             "title": "Finishedat"
+          },
+          "waitingReason": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Waitingreason"
           }
         },
         "type": "object",
