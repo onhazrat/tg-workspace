@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from "react"
 
 import type { JobStatusEntry } from "@/api/jobs"
-import type { ActionLimit } from "@/lib/channels/selection-regions"
 import type {
   Channel,
   ChannelStats,
@@ -196,88 +195,26 @@ export interface CommandContext {
   setSelectedSettingGroup: (groupId: string) => void
 }
 
-import type { Theme } from "@/components/theme-provider"
+import type { SettingsContextType } from "@/contexts/SettingsContext"
 
-export interface CommandSettingsSlice {
-  channelActionLimit: ActionLimit
-  setChannelActionLimit: (limit: ActionLimit) => void
-  theme: Theme
-  setTheme: (theme: Theme) => void
-  aiLanguage: string
-  setAiLanguage: (language: string) => void
-  selectedModel: string
-  setSelectedModel: (model: string) => void
-  regularSyncIntervalMinutes: number
-  setRegularSyncIntervalMinutes: (interval: number) => void
-  dynamicSyncEnabledDefault: boolean
-  setDynamicSyncEnabledDefault: (enabled: boolean) => void
-  dynamicSyncExpectedPostsDefault: number
-  setDynamicSyncExpectedPostsDefault: (posts: number) => void
-  syncFailureBackoffMinutes: number
-  setSyncFailureBackoffMinutes: (minutes: number) => void
-  aiTemperature: number
-  setAiTemperature: (temp: number) => void
-  proxyEnabled: boolean
-  setProxyEnabled: (enabled: boolean) => void
-  defaultProxyUrls: string
-  setDefaultProxyUrls: (urls: string) => void
-  proxyDefaultConcurrency: number
-  setProxyDefaultConcurrency: (slots: number) => void
-  proxyConcurrencyOverrides: Record<string, number>
-  setProxyConcurrencyOverrides: (overrides: Record<string, number>) => void
-  torEnabled: boolean
-  setTorEnabled: (enabled: boolean) => void
-  torMode: "auto" | "custom"
-  setTorMode: (mode: "auto" | "custom") => void
-  torProxyUrls: string
-  setTorProxyUrls: (urls: string) => void
-  torRotationStrategy: "sequential" | "random"
-  setTorRotationStrategy: (strategy: "sequential" | "random") => void
-  torControlEnabled: boolean
-  setTorControlEnabled: (enabled: boolean) => void
-  torControlPort: number
-  setTorControlPort: (port: number) => void
-  torAutoRotate: boolean
-  setTorAutoRotate: (enabled: boolean) => void
-  torRotationThreshold: number
-  setTorRotationThreshold: (threshold: number) => void
-  embeddingsEnabled: boolean
-  setEmbeddingsEnabled: (enabled: boolean) => void
-  embeddingsPaused: boolean
-  setEmbeddingsPaused: (paused: boolean) => void
-  translationEnabled: boolean
-  setTranslationEnabled: (enabled: boolean) => void
-  autoTranslate: boolean
-  setAutoTranslate: (enabled: boolean) => void
-  translationModel: string
-  setTranslationModel: (model: string) => void
-  translationTargetLanguage: string
-  setTranslationTargetLanguage: (language: string) => void
-  postRetentionDays: number
-  setPostRetentionDays: (days: number) => void
-  logRetentionDays: number
-  setLogRetentionDays: (days: number) => void
-  globalStartTimeMode: "retention" | "relative" | "absolute"
-  setGlobalStartTimeMode: (mode: "retention" | "relative" | "absolute") => void
-  globalStartTimeValue: number | string | null
-  setGlobalStartTimeValue: (val: number | string | null) => void
-  showChannelBio: boolean
-  setShowChannelBio: (show: boolean) => void
-  showChannelSubscribers: boolean
-  setShowChannelSubscribers: (show: boolean) => void
-  showChannelTelegramChatId: boolean
-  setShowChannelTelegramChatId: (show: boolean) => void
-  showChannelPhotos: boolean
-  setShowChannelPhotos: (show: boolean) => void
-  showChannelVideos: boolean
-  setShowChannelVideos: (show: boolean) => void
-  showChannelFiles: boolean
-  setShowChannelFiles: (show: boolean) => void
-  showChannelLinks: boolean
-  setShowChannelLinks: (show: boolean) => void
-  showChannelStartId: boolean
-  setShowChannelStartId: (show: boolean) => void
-}
+/** The Settings command code reads; registry commands use `settings-schema.ts`. */
+export type CommandSettingsSlice = Pick<
+  SettingsContextType,
+  | "theme"
+  | "setTheme"
+  | "channelActionLimit"
+  | "setChannelActionLimit"
+  | "embeddingsEnabled"
+  | "globalStartTimeMode"
+  | "proxyEnabled"
+  | "defaultProxyUrls"
+  | "torEnabled"
+  | "torMode"
+  | "torProxyUrls"
+  | "torAutoRotate"
+  | "torRotationThreshold"
+  | "torControlPort"
+>
 
 export interface RankedCommand {
   command: CommandDef
