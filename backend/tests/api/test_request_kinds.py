@@ -57,7 +57,11 @@ from app.services import network, pgmq, publish, scraper_jobs, sync_orchestrator
 from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
 from app.services.request_stats import flush_recorded_requests
-from app.services.scraper_jobs import clear_jobs_for_tests, create_job
+from app.services.scraper_jobs import (
+    clear_jobs_for_tests,
+    create_job,
+    has_active_sync_job,
+)
 from app.services.sync_lanes import (
     AUTO_SYNC_NORMAL_LANE,
     DISCOVER_PROBE_LANE,
@@ -1065,3 +1069,35 @@ def test_a_late_echo_of_its_own_progress_cannot_rewind_a_sync_run(
         return job.job_id
 
     assert _job(client, h, client.portal.call(_run))["status"] == "completed"
+
+
+def test_a_sync_run_that_fails_early_gives_up_its_claim(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    """A claimed job that never reaches its end must not stay active.
+
+    Otherwise `has_active_sync_job` answers yes for good and every auto-summary
+    tick after it is skipped. Mutation: release the claim only at the end of
+    `run_sync_job` rather than in its `finally`.
+    """
+    h = superuser_token_headers
+    _follow(client, h, CHANNEL)
+    me = client.get(f"{API}/users/me", headers=h).json()["id"]
+
+    async def _no_partition() -> Any:
+        raise RuntimeError("no partition")
+
+    monkeypatch.setattr(sync_orchestrator, "get_partition", _no_partition)
+
+    async def _run() -> None:
+        job = await create_job(
+            channel_entries=[(_channel().id, CHANNEL)], source="Test", user_id=me
+        )
+        with pytest.raises(RuntimeError):
+            await run_sync_job(job, uuid.UUID(me))
+
+    client.portal.call(_run)
+
+    assert not has_active_sync_job()
