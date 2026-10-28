@@ -12,7 +12,7 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
-from app.core.request_recording import RequestKind
+from app.core.request_recording import RequestKind, kind_refusal
 from app.jobs.settings import load_sync_settings, save_sync_settings
 from app.jobs.sync_queue import enqueue_sync_job
 from app.models_tg import Channel
@@ -276,7 +276,7 @@ async def run_auto_sync() -> dict[str, Any]:
     """
     if not await run_db(is_kind_enabled, RequestKind.AUTO):
         # Before any job exists, so a disabled kind files nothing (RKD-01).
-        return {"skipped": True, "reason": "auto_disabled"}
+        return {"skipped": True, "reason": kind_refusal(RequestKind.AUTO)}
     now = int(time.time() * 1000)
     plans: list[_OwnerPlan] = []
     checked = 0

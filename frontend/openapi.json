@@ -13703,10 +13703,31 @@
         "title": "RequestBreakdownResponse",
         "description": "Totals by kind and by Channel for one range, in UTC."
       },
+      "RequestKind": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "bulk",
+          "single",
+          "follow",
+          "probe",
+          "handle",
+          "botApi",
+          "other"
+        ],
+        "title": "RequestKind",
+        "description": "The work a Request was made for. Stored, so the values are a format."
+      },
       "RequestKindSwitch": {
         "properties": {
-          "kind": { "type": "string", "title": "Kind" },
+          "kind": { "$ref": "#/components/schemas/RequestKind" },
           "label": { "type": "string", "title": "Label" },
+          "settingId": { "type": "string", "title": "Settingid" },
+          "lanes": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Lanes"
+          },
           "enabled": { "type": "boolean", "title": "Enabled" },
           "disabledSince": {
             "anyOf": [{ "type": "integer" }, { "type": "null" }],
@@ -13715,7 +13736,15 @@
           "refusal": { "type": "string", "title": "Refusal" }
         },
         "type": "object",
-        "required": ["kind", "label", "enabled", "disabledSince", "refusal"],
+        "required": [
+          "kind",
+          "label",
+          "settingId",
+          "lanes",
+          "enabled",
+          "disabledSince",
+          "refusal"
+        ],
         "title": "RequestKindSwitch",
         "description": "One Request kind's switch: the UI greys out what it refuses."
       },

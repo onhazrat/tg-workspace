@@ -6159,19 +6159,31 @@ export type RequestBreakdownResponse = {
 };
 
 /**
+ * RequestKind
+ *
+ * The work a Request was made for. Stored, so the values are a format.
+ */
+export type RequestKind = 'auto' | 'bulk' | 'single' | 'follow' | 'probe' | 'handle' | 'botApi' | 'other';
+
+/**
  * RequestKindSwitch
  *
  * One Request kind's switch: the UI greys out what it refuses.
  */
 export type RequestKindSwitch = {
-    /**
-     * Kind
-     */
-    kind: string;
+    kind: RequestKind;
     /**
      * Label
      */
     label: string;
+    /**
+     * Settingid
+     */
+    settingId: string;
+    /**
+     * Lanes
+     */
+    lanes: Array<string>;
     /**
      * Enabled
      */

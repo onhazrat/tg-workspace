@@ -400,7 +400,8 @@ def _sync_status_changed(
 ) -> bool:
     if previous is None:
         return True
-    if previous.get("status") != current.get("status"):
+    # A held job's reason sets and clears with no step of its own (RKD-01).
+    if any(previous.get(k) != current.get(k) for k in ("status", "waitingReason")):
         return True
     prev_channels = {
         ch["channelId"]: ch["status"] for ch in previous.get("channels", [])

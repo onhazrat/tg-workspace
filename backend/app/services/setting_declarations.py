@@ -34,7 +34,7 @@ from app.jobs.translation_batch import TRANSLATION_LANGUAGE_CODES
 from app.schemas.settings_registry import SettingRowType
 from app.services.network_settings import PROXY_CONCURRENCY_MAX, PROXY_CONCURRENCY_MIN
 from app.services.publication_parts import CITATION_STYLES
-from app.services.request_kinds import KIND_ENV, disabled_at_field
+from app.services.request_kinds import KIND_ENV, disabled_at_field, setting_id
 from app.services.settings_registry import (
     AI_PREFS_KEY,
     DIRECTORY_COLUMNS_KEY,
@@ -893,7 +893,7 @@ DECLARATIONS: tuple[Declaration, ...] = (
     # Jobs routes rather than by `settings:manage`.
     *(
         Declaration(
-            id=f"jobs.deployment.{kind.value}RequestsEnabled",
+            id=setting_id(kind),
             title=f"Telegram work: {KIND_LABELS[kind]}",
             description=(
                 f"Whether {KIND_LABELS[kind]} work may reach Telegram. Off, new "

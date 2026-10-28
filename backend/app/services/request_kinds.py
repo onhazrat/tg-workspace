@@ -68,6 +68,11 @@ KIND_DISABLED_STATUS = 409
 _cached: tuple[float, dict[str, Any]] | None = None
 
 
+def setting_id(kind: RequestKind) -> str:
+    """The Setting that is `kind`'s switch."""
+    return f"jobs.deployment.{kind.value}RequestsEnabled"
+
+
 def disabled_at_field(kind: RequestKind) -> str:
     """The row's field holding when `kind` was disabled, as epoch ms."""
     return f"{kind.value}DisabledAt"
@@ -122,6 +127,11 @@ def assert_kind_enabled(kind: RequestKind) -> None:
         raise RequestKindDisabled(kind)
 
 
+def lanes_of(kind: RequestKind) -> list[str]:
+    """The Queue lanes holding `kind`'s queued work, in drain order."""
+    return [lane for lane in DRAIN_ORDER if kind_for_lane(lane) is kind]
+
+
 def held_lanes() -> frozenset[str]:
     """The lanes the consumer holds because their kind is disabled."""
     stored = _stored()
@@ -139,12 +149,18 @@ def waiting_reason(sync_mode: Any, status: str) -> str | None:
 
 
 def switches() -> list[dict[str, Any]]:
-    """Every switch for the runtime config: on or off, since when, its refusal."""
+    """Every switch for the runtime config, with what the UI derives from it.
+
+    On or off, since when and its refusal, plus its Setting id and its lanes,
+    so a new kind needs no frontend edit.
+    """
     stored = _stored()
     return [
         {
             "kind": kind.value,
             "label": KIND_LABELS[kind],
+            "settingId": setting_id(kind),
+            "lanes": lanes_of(kind),
             "enabled": _enabled(stored, kind),
             "disabledSince": stored.get(disabled_at_field(kind)),
             "refusal": kind_refusal(kind),
@@ -153,19 +169,18 @@ def switches() -> list[dict[str, Any]]:
     ]
 
 
-def record_switch_times(session: Session) -> None:
-    """Stamp when each disabled kind went off, and clear an enabled one's stamp.
+def record_switch_time(session: Session, kind: RequestKind) -> None:
+    """Stamp when `kind` went off, or clear its stamp when it came on.
 
-    Run after a switch is written. A kind that is off by `.env` and was never
-    written has no stamp: nobody can say since when.
+    Run after `kind`'s switch is written, and for that kind alone. A kind that
+    is off by `.env` and was never written has no stamp, since nobody can say
+    since when.
     """
     stored = get_global_setting(session, REQUEST_KINDS_KEY)
-    now_ms = int(time.time() * 1000)
-    for kind in SWITCHABLE_KINDS:
-        field = disabled_at_field(kind)
-        if _enabled(stored, kind):
-            stored.pop(field, None)
-        else:
-            stored.setdefault(field, now_ms)
+    field = disabled_at_field(kind)
+    if _enabled(stored, kind):
+        stored.pop(field, None)
+    else:
+        stored.setdefault(field, int(time.time() * 1000))
     replace_global_setting(session, REQUEST_KINDS_KEY, stored)
     forget()

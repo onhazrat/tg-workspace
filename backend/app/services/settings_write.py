@@ -18,11 +18,12 @@ from pydantic import JsonValue
 from sqlmodel import Session
 
 from app.core.permissions import Permission
+from app.core.request_recording import RequestKind
 from app.jobs.settings import load_reach_settings, write_setting_field
 from app.schemas.settings_registry import SettingRow
 from app.services import rbac
 from app.services.reach import reach_settings_from
-from app.services.request_kinds import record_switch_times
+from app.services.request_kinds import record_switch_time
 from app.services.setting_declarations import Declaration, declaration
 from app.services.settings_configuration import configuration_lock
 from app.services.settings_page import is_visible, lock_reason, row_for
@@ -105,5 +106,5 @@ def update_setting(
         session, decl.key, decl.field, value, reset=reset, user_id=user_id
     )
     if decl.key == REQUEST_KINDS_KEY:
-        record_switch_times(session)
+        record_switch_time(session, RequestKind(decl.field))
     return row_for(session, user_id, decl)

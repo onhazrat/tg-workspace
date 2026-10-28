@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app import crud
+from app.api.routes import jobs as jobs_routes
 from app.core import request_meter
 from app.core.config import settings
 from app.core.db import engine
@@ -363,10 +364,15 @@ def test_the_runtime_config_carries_each_switch_and_since_when(
     assert by_kind["auto"] == {
         "kind": "auto",
         "label": "Auto sync",
+        "settingId": "jobs.deployment.autoRequestsEnabled",
+        "lanes": ["auto_sync_normal", "auto_sync_best_effort"],
         "enabled": True,
         "disabledSince": None,
         "refusal": "Auto sync is disabled on this deployment",
     }
+
+    assert by_kind["probe"]["lanes"] == ["discover_probe_background"]
+    assert by_kind["botApi"]["lanes"] == []
 
     _enable(client, superuser_token_headers, RequestKind.PROBE)
     config = client.get(
@@ -375,6 +381,29 @@ def test_the_runtime_config_carries_each_switch_and_since_when(
     probe = next(s for s in config["requestKinds"] if s["kind"] == "probe")
     assert probe["enabled"] is True
     assert probe["disabledSince"] is None
+
+
+def test_writing_one_switch_stamps_that_switch_alone(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+) -> None:
+    """Mutation: stamp every disabled kind in `record_switch_time`, not the one written.
+
+    A kind off by `.env` and never written has no "since": stamping it at the
+    first write of another switch would date it to that write.
+    """
+    monkeypatch.setattr(settings, "JOBS_PROBE_REQUESTS_ENABLED_DEFAULT", False)
+
+    _disable(client, superuser_token_headers, RequestKind.HANDLE)
+
+    config = client.get(
+        f"{API}/jobs/runtime-config", headers=superuser_token_headers
+    ).json()
+    by_kind = {s["kind"]: s for s in config["requestKinds"]}
+    assert by_kind["probe"]["enabled"] is False
+    assert by_kind["probe"]["disabledSince"] is None
+    assert by_kind["handle"]["disabledSince"] is not None
 
 
 # --------------------------------------------------------------------------
@@ -465,6 +494,30 @@ def test_reset_and_sync_is_refused_before_it_clears_anything(
         kept = session.exec(select(Post).where(Post.channel_name == CHANNEL)).all()
     assert [post.text for post in kept] == ["kept"]
     assert _sync_jobs() == 0
+
+
+def test_a_one_channel_reset_is_manual_single_work(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """Its Requests are recorded as `single`, so `single` gates it, not `bulk`.
+
+    The card's Reset and sync greys out on the same kind (S6 of the RKD
+    review). Mutation: gate a one-Channel reset on `bulk`.
+    """
+    h = superuser_token_headers
+    _follow(client, h, CHANNEL)
+    body = {"confirm": True, "channelIds": [_channel().id]}
+
+    _disable(client, h, RequestKind.SINGLE)
+    r = client.post(f"{API}/data/channels/bulk-reset-sync", json=body, headers=h)
+    _assert_refused(r, "Manual single")
+
+    _enable(client, h, RequestKind.SINGLE)
+    _disable(client, h, RequestKind.BULK)
+    r = client.post(f"{API}/data/channels/bulk-reset-sync", json=body, headers=h)
+    assert r.status_code == 200, r.text
 
 
 def test_a_bulk_follow_is_refused_before_its_first_handle_check(
@@ -575,6 +628,35 @@ def test_the_auto_sync_tick_files_no_job_while_auto_sync_is_off(
     _enable(client, superuser_token_headers, RequestKind.AUTO)
     assert client.portal.call(run_auto_sync).get("skipped") is not True
     assert _sync_jobs() == 1
+
+
+def test_a_held_manual_sync_does_not_keep_its_owner_from_auto_sync(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """One disabled kind never stops another (story 29).
+
+    A held job is still pending, and a pending job keeps its owner busy, so
+    without the exception the tick would skip this owner for as long as
+    `single` stays off. Mutation: count a held job as busy in
+    `active_sync_job_owners`.
+    """
+    h = superuser_token_headers
+    _queue_a_single_sync(client, h)
+    _disable(client, h, RequestKind.SINGLE)
+    with Session(engine) as session:
+        channel = session.get(Channel, CHANNEL)
+        assert channel is not None
+        channel.next_regular_sync_at = int(time.time() * 1000) - 1_000
+        session.add(channel)
+        session.commit()
+
+    result = client.portal.call(run_auto_sync)
+
+    assert result.get("skipped") is not True, result
+    assert _sync_jobs() == 2
+    assert _queued(AUTO_SYNC_NORMAL_LANE) == 1
 
 
 def _queue_handle(handle: str) -> None:
@@ -782,33 +864,51 @@ def test_a_probe_refused_mid_way_goes_back_on_the_probe_lane(
 # --------------------------------------------------------------------------
 
 
-def _first_event(client: TestClient, headers: dict[str, str], job_id: str) -> Any:
-    with client.stream(
-        "GET", f"{API}/jobs/sync/{job_id}/events", headers=headers
-    ) as stream:
-        for line in stream.iter_lines():
-            if line.startswith("data: "):
-                return json.loads(line.removeprefix("data: "))
-    raise AssertionError("the stream sent nothing")
+def _events(stream: Any) -> Iterator[Any]:
+    for line in stream.iter_lines():
+        if line.startswith("data: "):
+            yield json.loads(line.removeprefix("data: "))
 
 
 def test_a_held_job_reports_why_it_waits_and_clears_on_enable(
+    monkeypatch: pytest.MonkeyPatch,
     client: TestClient,
     superuser_token_headers: dict[str, str],
     telegram: FakeTelegram,
 ) -> None:
-    """Mutation: drop `waitingReason` from `_progress`."""
+    """An open stream sees the reason set, then cleared on enable at once.
+
+    The stream wakes often but resends an unchanged job only once per
+    throttle, set far above the wait here, so the cleared reason arrives early
+    only if a reason change counts as a change. Mutations: drop
+    `waitingReason` from `_progress`; or from `_sync_status_changed`.
+    """
     h = superuser_token_headers
     job_id = _queue_a_single_sync(client, h)
     _disable(client, h, RequestKind.SINGLE)
+    throttle_s = 5.0
+    monkeypatch.setattr(settings, "SYNC_JOB_SSE_THROTTLE_MS", int(throttle_s * 1000))
+
+    async def _poll(_job: Any, *, seen_seq: int, timeout_s: float) -> int:
+        await _real_sleep(0.05)
+        return seen_seq
+
+    monkeypatch.setattr(jobs_routes, "wait_job_update", _poll)
 
     reason = "Manual single is disabled on this deployment"
     assert _job(client, h, job_id)["waitingReason"] == reason
-    assert _first_event(client, h, job_id)["waitingReason"] == reason
+    with client.stream("GET", f"{API}/jobs/sync/{job_id}/events", headers=h) as s:
+        events = _events(s)
+        assert next(events)["waitingReason"] == reason
 
-    _enable(client, h, RequestKind.SINGLE)
+        _enable(client, h, RequestKind.SINGLE)
+        enabled_at = time.monotonic()
+        cleared = next(events)
+
+    assert cleared["waitingReason"] is None
+    assert cleared["status"] == "pending"
+    assert time.monotonic() - enabled_at < throttle_s / 2, "waited for the throttle"
     assert _job(client, h, job_id)["waitingReason"] is None
-    assert _first_event(client, h, job_id)["waitingReason"] is None
     _drain(client)
     assert _job(client, h, job_id)["status"] == "completed"
 

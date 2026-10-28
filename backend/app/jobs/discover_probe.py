@@ -61,6 +61,7 @@ from app.core.request_recording import (
     RequestKind,
     RequestKindDisabled,
     attributed,
+    kind_refusal,
     page,
 )
 from app.services.async_db import run_db
@@ -294,7 +295,7 @@ async def run_discover_probe_sweep() -> dict[str, Any]:
     if not await run_db(is_kind_enabled, RequestKind.PROBE):
         # Scheduled or triggered alike: the lane must not grow while probes
         # are disabled (RKD-01). The harvest sweep is not gated.
-        return {"skipped": True, "reason": "probe requests disabled"}
+        return {"skipped": True, "reason": kind_refusal(RequestKind.PROBE)}
     if _sweep_lock.locked():
         return {"skipped": True, "reason": "sweep already running"}
 
