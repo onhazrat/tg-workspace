@@ -78,7 +78,7 @@ class Purpose(StrEnum):
     """What an AI call is for, which is what decides who pays for it.
 
     An enum rather than a boolean, because the rule is a *classification* and a
-    seventh purpose has to be classified rather than defaulted. `CONTEXT.md`'s
+    seventh purpose has to be classified rather than defaulted. `GLOSSARY.md`'s
     Artifact definition is doing the work: a durable output somebody
     deliberately asked for is charged to whoever asked; the rest is the
     deployment's.
