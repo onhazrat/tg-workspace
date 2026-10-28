@@ -115,10 +115,17 @@ export async function channelHasTag(
  * Deselect every Channel. Row 2 shows its clear button only while something
  * is selected (CTB-01), so this clicks it only then.
  */
+/**
+ * Clear the Channel selection from the Channels tab. Waits for the selection
+ * bar to show one of its two states first: checked before the bar renders,
+ * "no Clear button" reads as "nothing selected" and the selection survives.
+ */
 export async function clearChannelSelection(page: Page) {
   const clear = page.getByRole("button", { name: "Clear selection" })
+  const none = page.getByTestId("channel-selection-summary")
+  await expect(clear.or(none)).toBeVisible()
   if (await clear.isVisible()) await clear.click()
-  await expect(clear).toHaveCount(0)
+  await expect(none).toBeVisible()
 }
 
 export async function gotoWorkspace(page: Page, tab = "summary") {
