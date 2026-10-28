@@ -446,6 +446,15 @@ transport fault), or it went somewhere other than the web view (a picture from
 the CDN, a Bot API call). It still counts as Telegram load.
 _Avoid_: free request, unmetered request
 
+**Accounted work**:
+One piece of work whose Requests are attributed and paid for together: a queued
+Channel's sync, a direct sync job, a bulk Follow, a Directory probe, a handle
+check, a Bot API call. It names whose Requests they are and what pays for them
+(an Account's Budget, the Directory's probe tally, or nothing), and pays once,
+when it ends. Uncharged work still names the Account that asked, when one did.
+Accounted work never opens inside other accounted work.
+_Avoid_: metered block, meter, charge point
+
 **Wasted Request**:
 A Request whose answer told the app nothing it could keep: one that failed, was
 turned away by Telegram or answered with an error, and a probe of a handle that
