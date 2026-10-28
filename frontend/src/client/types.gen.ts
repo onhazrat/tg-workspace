@@ -7716,7 +7716,7 @@ export type SyncJobStatusResponse = {
 /**
  * SyncLaneEntry
  *
- * One of the six sync lanes, as an Admin sees it.
+ * One lane, as an Admin sees it. A non-sync lane has no Budget or tier.
  */
 export type SyncLaneEntry = {
     /**
@@ -7726,11 +7726,11 @@ export type SyncLaneEntry = {
     /**
      * Budget
      */
-    budget: string;
+    budget: string | null;
     /**
      * Tier
      */
-    tier: string;
+    tier: string | null;
     /**
      * Queued
      */

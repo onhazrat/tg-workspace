@@ -6281,7 +6281,7 @@
       "get": {
         "tags": ["jobs"],
         "summary": "List Sync Lanes",
-        "description": "The six lanes, in drain order, with their depth and paused state.",
+        "description": "Every lane, in drain order, with its depth and paused state.",
         "operationId": "jobs-list_sync_lanes",
         "responses": {
           "200": {
@@ -15121,15 +15121,21 @@
       "SyncLaneEntry": {
         "properties": {
           "lane": { "type": "string", "title": "Lane" },
-          "budget": { "type": "string", "title": "Budget" },
-          "tier": { "type": "string", "title": "Tier" },
+          "budget": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Budget"
+          },
+          "tier": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Tier"
+          },
           "queued": { "type": "integer", "title": "Queued" },
           "paused": { "type": "boolean", "title": "Paused" }
         },
         "type": "object",
         "required": ["lane", "budget", "tier", "queued", "paused"],
         "title": "SyncLaneEntry",
-        "description": "One of the six sync lanes, as an Admin sees it."
+        "description": "One lane, as an Admin sees it. A non-sync lane has no Budget or tier."
       },
       "SyncLaneListResponse": {
         "properties": {
