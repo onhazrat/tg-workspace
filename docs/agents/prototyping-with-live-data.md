@@ -68,6 +68,7 @@ container is recreated. Save it outside the repo as `tunnel.sh` and start it wit
 while true; do
   ip=$(ssh -o BatchMode=yes -o ConnectTimeout=20 <host> \
     "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' <db-container>")
+  if [ -z "$ip" ]; then echo "$(date) no ip, retrying"; sleep 5; continue; fi
   ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
       -o ServerAliveCountMax=3 -N -L 5433:"$ip":5432 <host>
   echo "$(date) tunnel exited $?"; sleep 5
@@ -78,8 +79,17 @@ done
   after it. The loop keeps a long session up, and `nohup` keeps it past the agent's
   background-command limit. Where the agent has a preview tool, a launch configuration
   (`.claude/launch.json`, gitignored) running the same loop works too.
+- **A wedged tunnel stays up.** Over a relayed Tailscale link the `-L` ssh can live on while every
+  connection through it times out, and `ServerAlive` never notices. The sign is `psql` failing
+  with "timeout expired" while the ssh process runs. Kill the `-L` ssh (`pkill -f "ssh .*-L
+  5433:"`), and the loop reconnects; then restart the prototype API, whose pooled connections
+  hang on the dead link (a pre-ping hangs with them). The IP lookup can hang too, behind
+  Tailscale SSH's check; the guard above keeps a killed lookup from forwarding to no host.
+  `tailscale ping <host>` saying "via peer-relay" at hundreds of milliseconds explains a slow
+  session.
 - `~/.pgpass` gets a line for `localhost:5433:<database>:<role>:<password>`, so nothing else needs
-  the password.
+  the password. Connect with `-h localhost`, as the line says: `-h 127.0.0.1` matches no line and
+  asks for a password.
 - **Ad-hoc queries** go through `psql`, which on macOS comes from Homebrew's `libpq`. It is
   keg-only, so call it by its full path (or add its `bin` to `PATH`), and pass the parallel-workers
   setting (see the next section) through the environment:
@@ -108,7 +118,8 @@ In a worktree, which has no `.env`, start it as the `.env` pitfall below says.
   segment", and so does any parallel query of the app's running at the same moment. Check the
   database log after a heavy query.
 - **A small connection pool**, well under the role's connection limit across every prototype API
-  you run at once.
+  you run at once: `DB_POOL_SIZE=5` and `DB_MAX_OVERFLOW=0`. Three ran out when a page fired
+  several prototype reads at once during a slow spell.
 - **One statement per request.** Over a tunnel each round trip costs ~0.2 s or more, and a large
   response costs more than the query: fold counts, facets and snippets into one statement, and
   keep heavy fields (bios, Post text) out of list responses.
@@ -193,6 +204,14 @@ example.
 - Write the design down (glossary, ADRs, spec, tickets) and send it to `main` as a docs PR. The
   prototype code is never promoted as is. Push the snapshot **before** opening that PR, so the
   docs link it from their first commit; a docs PR that merges first needs a second PR for the link.
+- **Write the docs in the prototype's own worktree**, even while it serves the prototype: the
+  dev server and the prototype API never read `GLOSSARY.md`, `docs/` or `.scratch/`. Commit them
+  there with `--no-verify` like the rest, then build the docs commit the way the snapshot is
+  built, on `origin/main` from a temporary index and the diff of those paths alone
+  (`git diff --binary origin/main HEAD -- GLOSSARY.md docs .scratch/<feature>`). Run the repo's
+  hooks on those files (`cd backend && uv run prek run --files <paths>`), scan the added lines
+  as for the snapshot, push the commit as its own branch and open the PR from it. A second
+  worktree is the wrong tool here: the session's worktree hook refuses writes into it.
 
 ## 7. Cleaning up
 
