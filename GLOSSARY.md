@@ -156,24 +156,26 @@ A Channel that both a Seed and the Channel being judged cite. Many Shared
 children mean the two point their readers at the same places.
 _Avoid_: common target, shared link
 
-**Tick**:
-A Directory entry marked for a bulk action. In the Directory list any entry can
-be ticked, followed or not, for Follow, Dismiss or Tag, or as Seeds. In a
-Discovery report only a Candidate not yet followed can be ticked, for Follow or
-Dismiss. Ticks are kept per browser and never travel in a link.
-_Avoid_: selection (the Channels tab's), check, mark
+**Directory selection**:
+The Directory entries an Account has selected for a bulk action. In the
+Directory list any entry can be selected, followed or not, for Follow, Dismiss
+or Tag, or as Seeds. In a Discovery report only a Candidate not yet followed
+can be selected, for Follow or Dismiss. It is kept per browser, never travels in
+a link, and never reaches the Scope.
+_Avoid_: tick, ticked, selection (unqualified), check, mark
 
 **All matching**:
 Every Directory entry the current view shows, held as the view rather than as
-entries. It stands in for Ticks in a bulk action when a view shows too many to
-tick, but it cannot be Seeds or Follow, and it ends when the view changes.
+entries. It stands in for the Directory selection in a bulk action when a view
+shows too many to select, but it cannot be Seeds or Follow, and it ends when the
+view changes.
 _Avoid_: select all, bulk selection, all ticked
 
 **Seed**:
 A Channel that a Shared parent or Shared child Condition compares the Directory
-with. The Seeds come from one place, chosen with the Condition: the Channels
-ticked in the Directory, the Channels selected on the Channels tab, every
-followed Channel, a Tag, or handles typed in. All but typed handles are read
+with. The Seeds come from one place, chosen with the Condition: the Directory
+selection, the Channel selection, every followed Channel, a Tag, a Setting
+group, or handles typed in. All but typed handles are read
 afresh, so the Condition follows them as they change.
 _Avoid_: pick, picked Channel (a Pick is a Post), anchor, source
 
@@ -188,8 +190,17 @@ A name an Account puts on a Channel, whether or not it follows it. A Channel
 can carry many Tags and a Tag many Channels; the Account sees only its own.
 Tags describe the Channel as the Account sees it, so unfollowing keeps them and
 following again brings them back. A Tag is how an Account names a group of
-Channels to filter by, or to compare others with.
+Channels to filter by, or to compare others with. Renaming a Tag onto another
+Tag's name merges the two, and a merge cannot be undone.
 _Avoid_: list, set, pick set, label, collection
+
+**Tag use**:
+An Account's deliberate act naming one of its Tags on a tab: selecting or
+filtering by it, its Channels as Seeds included, or putting it on or taking it
+off a Channel by hand. A Tag run is not a Tag use. Each tab lists Tags in order
+of its own Tag uses, recent ones counting most. Renaming a Tag keeps its Tag
+uses; they end with the Tag, so a new Tag of the same name starts with none.
+_Avoid_: usage, frecency, popularity, recent Tags
 
 **First sync**:
 The sync queued for a Channel when an Account creates a Follow on it, whether
@@ -203,6 +214,13 @@ When a Channel's most recent successful sync finished. It belongs to the
 Channel, not to a Follow, so every Follower sees the same one. A Channel that
 has never synced has no Last sync, which is not the same as an old one.
 _Avoid_: last updated, freshness, last scraped
+
+**Last post**:
+When the newest Post known for a Channel was published: from the Posts the
+workspace keeps for a followed Channel, and from its sample for a Directory
+entry. No Last post means none is known, which for a followed Channel can also
+mean retention removed them.
+_Avoid_: last activity, latest post time, freshness
 
 **Post**:
 One message scraped from a Channel.
@@ -236,7 +254,7 @@ Account's preference.
 _Avoid_: target language, translation target
 
 **Scope**:
-The slice of Posts an operation runs over: selected Channels (the Hidden
+The slice of Posts an operation runs over: the Channel selection (the Hidden
 selection included) × an Analysis window × the Post selection, read in the
 Posts tab's order, optionally grouped by Channel. The Post filter is not part of
 it: what the Posts tab shows and what an operation covers are separate
@@ -283,13 +301,14 @@ _Avoid_: padding, lag, delay, end offset
 
 **Setting group**:
 A named set of sync settings an Account's Follows share. Every Follow belongs
-to exactly one, and one of an Account's Setting groups is its default.
+to exactly one, and one of an Account's Setting groups is its default. It is
+not a Tag: in the Directory it matches only followed entries.
 _Avoid_: group (unqualified, where parentheses could be meant), profile, preset
 
 **Channel filter**:
 An expression that decides which followed Channels are shown: Conditions joined
 by AND and OR, negated with NOT, and nested in parentheses to any depth. It is
-not part of the Scope and never changes which Channels are selected. The Post
+not part of the Scope and never changes the Channel selection. The Post
 filter is its counterpart on the Posts tab.
 _Avoid_: channel query, channel search, facet
 
@@ -305,7 +324,7 @@ Setting group, a Language, a bound on a number such as Reach or
 subscribers, or a Time bound. In a Post filter: a Type (Is a reply and Has a reply among them), a media
 kind, a Language, a Channel, or a bound on a View count, an Estimated View
 count, Channel posts in window or Channel posts in filtered window. In a Directory filter: a
-Tag, a Language, part of the handle or name, the followability verdict, being followed
+Tag, a Setting group, a Language, part of the handle or name, the followability verdict, being followed
 or dismissed, a citation, a bound on a number such as Reach or subscribers, or
 a Time bound. Anything with no value for that number or moment fails a bound on
 it, and a separate Condition asks whether it has one.
@@ -314,8 +333,8 @@ chip
 
 **Time bound**:
 A Condition in a Directory filter or a Channel filter on one of an entry's
-moments, such as a Directory entry's last Post or when the Directory found it,
-or when a followed Channel was last updated or followed. Like an Analysis
+moments, such as its Last post or when the Directory found it, or a followed
+Channel's Last sync or when it was followed. Like an Analysis
 window it is either Live, its ends fixed offsets from the current time that may
 point back or ahead, or Fixed, its ends exact instants; unlike one, either end
 may be left open, and it decides only which entries are shown. The Logs tab
@@ -343,9 +362,21 @@ _Avoid_: histogram, distribution, chart
 The followed Channels that pass the Channel filter and the search box.
 _Avoid_: visible, filtered, matching
 
+**Channel selection**:
+The followed Channels an Account has selected on the Channels tab. With the
+Analysis window and the Post selection it makes the Scope, so it is the only
+selection that decides what an Artifact covers.
+_Avoid_: selection (unqualified), checked Channels, picked Channels
+
+**Requests selection**:
+The Channel rows the Requests tab counts. A row taken out of it leaves every
+total and chart on the tab and stays listed, to be selected again; it reaches
+no other tab.
+_Avoid_: left out, picked rows, selection (unqualified)
+
 **Hidden selection**:
-The selected Channels that are not Shown Channels. They stay selected, and the
-Scope includes them. The Channels tab can limit its own actions (edits, sync,
+The Channels in the Channel selection that are not Shown Channels. They stay
+selected, and the Scope includes them. The Channels tab can limit its own actions (edits, sync,
 trim, rank) to the Shown Channels, so that nothing changes on a Channel the
 Account cannot see; that limit reaches no other tab.
 _Avoid_: invisible selection, filtered-out selection
@@ -709,8 +740,8 @@ _Avoid_: shortcuts mode, vim mode, hotkeys
 **Highlight**:
 The one item in a tab's list that Keyboard mode is on: a Post, a Channel, a
 Directory entry, a Candidate or an Artifact. Each tab keeps its own. It marks
-where the next key acts and changes nothing; a Tick, a Pick and the Channels
-tab's selection are what keys change, not what the Highlight is.
+where the next key acts and changes nothing; the Directory selection, a Pick and
+the Channel selection are what keys change, not what the Highlight is.
 _Avoid_: focus (that is Focus mode), cursor, ring, selection
 
 **Tools**:
