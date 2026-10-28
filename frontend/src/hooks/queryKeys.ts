@@ -101,6 +101,19 @@ export const queryKeys = {
     ["postsWindowHistogram", scope] as const,
   /** The infinite Posts feed, keyed on scope + filters + cap + sort. */
   postsFeed: (scope: unknown) => ["postsFeed", scope] as const,
+  /** Every feed's pages, which a selection edit patches or refetches. */
+  postsFeeds: ["postsFeed"] as const,
+  /** The command palette's Find related Posts list: the feed's first 100. */
+  postsPickPool: (scope: unknown) => ["postsPickPool", scope] as const,
+  /** The selected Posts the feed shows, for Copy links and Export Markdown. */
+  postsSelectedShown: (scope: unknown) =>
+    ["postsSelectedShown", scope] as const,
+  /**
+   * A Ranking's results, by what its search depends on (PRM-01). Not in
+   * `postViews`: a sync or a Live minute must not search again (AW-04).
+   */
+  postsRanking: (key: string) => ["postsRanking", key] as const,
+  postsRankings: ["postsRanking"] as const,
   /**
    * The prefixes of every read over the Posts a sync adds to, which
    * `invalidatePostViews` refetches. Each must match its factory above.
@@ -111,6 +124,8 @@ export const queryKeys = {
     ["postsFacets"],
     ["postsValueHistogram"],
     ["postsWindowHistogram"],
+    ["postsPickPool"],
+    ["postsSelectedShown"],
     ["discoverCandidates"],
   ] as const,
   /**

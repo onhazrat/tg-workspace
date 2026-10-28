@@ -4,32 +4,22 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { toast } from "sonner"
 
 import { api } from "@/api"
 import {
-  dataPostsCounts,
-  dataPostsFacets,
-  dataPostsValueHistogram,
   dataPostsViewEstimate,
-  dataPostsWindowHistogram,
-  type PostFacetsRequest,
   type PostFacetsResponse,
-  type PostFilteredRequest,
-  type PostValueHistogramRequest,
   type PostValueHistogramResponse,
-  type PostWindowHistogramRequest,
   type ViewEstimateResponse,
 } from "@/client"
-import { useData } from "@/contexts/DataContext"
 import {
   usePostsViewEdits,
   usePostsViewState,
 } from "@/contexts/PostsViewContext"
 import { useRAG } from "@/contexts/RAGContext"
 import { useScope } from "@/contexts/ScopeContext"
-import { useSettings } from "@/contexts/SettingsContext"
 import type { WindowHistogramQuery } from "@/lib/analysis-window"
 import { errorText } from "@/lib/artifacts/artifact-run"
 import { buildPostsInScopeCounts } from "@/lib/channels/sort-channels-for-grid"
@@ -39,27 +29,19 @@ import {
 } from "@/lib/posts/channel-spotlight"
 import type { PostNumber } from "@/lib/posts/post-filter"
 import {
-  meaningQuery,
+  feedQuery,
+  fetchSelectedShown,
+  isRanked,
   NO_RANKING,
-  type PostsRanking,
+  PICK_POOL_LIMIT,
   type PostsView,
-  postsRead,
+  postsQuery,
+  rankingQuery,
+  servedBy,
 } from "@/lib/posts/posts-view"
-import {
-  fetchShownPosts,
-  type ShownPostsApi,
-  shownPostsKey,
-} from "@/lib/posts/scoped-posts"
-import { EXPORT_LIMIT } from "@/lib/posts/selected-export"
+import type { RankingApi } from "@/lib/posts/scoped-posts"
 import type { Post } from "@/types"
-import {
-  queryKeys,
-  SUMMARIZER_STALE_TIME,
-  VIEW_ESTIMATE_STALE_TIME,
-} from "./queryKeys"
-
-/** One page of the infinite Posts feed. */
-export const FEED_PAGE_SIZE = 20
+import { queryKeys, VIEW_ESTIMATE_STALE_TIME } from "./queryKeys"
 
 /**
  * Refresh the Posts views when a Live window has moved (AW-04).
@@ -110,35 +92,30 @@ export function usePostsView(spotlight: ChannelSpotlight | null): PostsView {
  * Per-channel counts of the Posts an Action covers: the selected Posts in the
  * window (PTR-05). The Scope's, so the Post filter is not in it: a Summary
  * covers the Post selection whatever the tab shows (ADR-026). Server-side
- * even during a meaning search, which changes what the tab shows and not the
- * selection. Replaces the render-time reads of the eager `filteredPosts`
- * array in App/SummaryAction/ChannelCard/ChannelGrid.
+ * even during a Ranking, which changes what the tab shows and not the
+ * selection.
  */
 export function useScopedPostCounts(): Record<string, number> {
-  const { selectedChannels } = useData()
-  const { queryKey, body } = postsRead(usePostsView(null), {
-    kind: "scopeCounts",
-  })
-  const enabled = selectedChannels.size > 0
-  const query = useQuery({
-    queryKey,
-    queryFn: () => dataPostsCounts({ body: body as PostFilteredRequest }),
-    enabled,
-    staleTime: SUMMARIZER_STALE_TIME,
-    placeholderData: (previous) => previous,
-  })
-  return (enabled && query.data?.selected) || NO_COUNTS
+  const options = postsQuery(usePostsView(null), { kind: "scopeCounts" })
+  const query = useQuery(options)
+  return (options.enabled && query.data?.selected) || NO_COUNTS
 }
 
 const NO_COUNTS: Record<string, number> = {}
+const NO_SHOWN_COUNTS = {
+  counts: NO_COUNTS,
+  tooNewToJudge: 0,
+  selectedShown: 0,
+}
+const NO_POSTS: Post[] = []
 
 /**
  * What the Posts tab shows under the Post filter: per-channel counts, how
  * many Posts an Estimated views bound hid for being too new to judge (PFB-03,
  * PTR-03), and how many of the shown Posts the Post selection selects, which
  * is the Adjust selection Venn's middle region (PTR-06). One request for all
- * three, which follows a spotlight. A meaning search has no server count: it
- * counts the Posts `useShownPosts` fetches, which no spotlight narrows, and
+ * three, which follows a spotlight. While ranked it counts the ranked Posts
+ * the Post filter kept, for a find-related as for a meaning search, and
  * reports none too new.
  */
 export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
@@ -146,31 +123,18 @@ export function useShownPostCounts(spotlight: ChannelSpotlight | null): {
   tooNewToJudge: number
   selectedShown: number
 } {
-  const { selectedChannels } = useData()
-  const { view } = usePostsViewState()
-  const serverEligible =
-    !meaningQuery(view.ranking).trim() && selectedChannels.size > 0
-  // Which Posts the cap keeps, as the feed asks: the Venn counts those.
-  const { queryKey, body } = postsRead(usePostsView(spotlight), {
-    kind: "shownCounts",
-  })
-  const query = useQuery({
-    queryKey,
-    queryFn: () => dataPostsCounts({ body: body as PostFilteredRequest }),
-    enabled: serverEligible,
-    staleTime: SUMMARIZER_STALE_TIME,
-    placeholderData: (previous) => previous,
-  })
-
-  // Client fallback for the semantic/related path.
-  const shown = useShownPosts(useShownPostsApi(), !serverEligible)
-  const clientCounts = useMemo(
-    () => buildPostsInScopeCounts(shown.posts),
-    [shown.posts],
+  const view = usePostsView(spotlight)
+  const options = postsQuery(view, { kind: "shownCounts" })
+  const query = useQuery(options)
+  const ranking = useRanking()
+  const rankedCounts = useMemo(
+    () => buildPostsInScopeCounts(ranking.data ?? NO_POSTS),
+    [ranking.data],
   )
 
-  if (!serverEligible)
-    return { counts: clientCounts, tooNewToJudge: 0, selectedShown: 0 }
+  if (servedBy(view, { kind: "shownCounts" }) === "ranking")
+    return { counts: rankedCounts, tooNewToJudge: 0, selectedShown: 0 }
+  if (!options.enabled) return NO_SHOWN_COUNTS
   return {
     counts: query.data?.counts ?? {},
     tooNewToJudge: query.data?.tooNewToJudge ?? 0,
@@ -185,29 +149,16 @@ const sum = (counts: Record<string, number> | undefined) =>
  * How many Posts in the window have each Type, media kind and Language, and
  * how many there are, for the dropdowns and the filter row (PTR-03), with how
  * many of each value the Post selection selects for the ticks (PTR-06).
- * Filters aside; a spotlight's window is its Channel's, so "N of M" reads
- * against it. Server-side, and only while `enabled` and the feed is the
- * server's: a meaning search's ranked Posts are not a scope the server can
- * count.
+ * Filters aside, and the Ranking aside: they describe the window, so they
+ * stay during either kind. A spotlight's window is its Channel's, so "N of M"
+ * reads against it. Fetched only while `enabled`.
  */
 export function usePostFacets(
   enabled: boolean,
   spotlight: ChannelSpotlight | null,
 ): PostFacetsResponse | undefined {
-  const { selectedChannels } = useData()
-  const view = usePostsView(spotlight)
-  const { queryKey, body } = postsRead(view, { kind: "facets" })
-  const query = useQuery({
-    queryKey,
-    queryFn: () => dataPostsFacets({ body: body as PostFacetsRequest }),
-    enabled:
-      enabled &&
-      !meaningQuery(view.ranking).trim() &&
-      selectedChannels.size > 0,
-    staleTime: SUMMARIZER_STALE_TIME,
-    placeholderData: (previous) => previous,
-  })
-  return query.data
+  const options = postsQuery(usePostsView(spotlight), { kind: "facets" })
+  return useQuery({ ...options, enabled: enabled && options.enabled }).data
 }
 
 /**
@@ -223,20 +174,13 @@ export function usePostValueHistogram(
   /** Bin only this range, on the scale first drawn (TB-04). */
   zoom?: { lo: number; hi: number; log: boolean } | null,
 ): PostValueHistogramResponse | undefined {
-  const view = usePostsView(spotlight)
-  const { queryKey, body } = postsRead(view, {
-    kind: "valueHistogram",
-    measure,
-    zoom,
-  })
-  return useQuery({
-    queryKey,
-    queryFn: () =>
-      dataPostsValueHistogram({ body: body as PostValueHistogramRequest }),
-    enabled: view.channelNames.length > 0,
-    staleTime: SUMMARIZER_STALE_TIME,
-    placeholderData: (previous) => previous,
-  }).data
+  return useQuery(
+    postsQuery(usePostsView(spotlight), {
+      kind: "valueHistogram",
+      measure,
+      zoom,
+    }),
+  ).data
 }
 
 /**
@@ -248,29 +192,15 @@ export function usePostWindowHistogram(
   query: WindowHistogramQuery,
   spotlight: ChannelSpotlight | null,
 ): number[] | undefined {
-  const view = usePostsView(spotlight)
-  const { queryKey, body } = postsRead(view, { kind: "windowHistogram", query })
-  const channelNames = query.unfiltered
-    ? view.scopeChannelNames
-    : view.channelNames
-  return useQuery({
-    queryKey,
-    queryFn: async () =>
-      (
-        await dataPostsWindowHistogram({
-          body: body as PostWindowHistogramRequest,
-        })
-      ).counts,
-    enabled: channelNames.length > 0,
-    staleTime: SUMMARIZER_STALE_TIME,
-    placeholderData: (previous) => previous,
-  }).data
+  return useQuery(
+    postsQuery(usePostsView(spotlight), { kind: "windowHistogram", query }),
+  ).data
 }
 
 /**
  * The curve and settings an Estimated View count reads through, cached for an
  * hour: the curve is refitted daily and the settings change by hand. Shares
- * its cache entry with `useShownPostsApi`'s `getViewEstimate`.
+ * its cache entry with `useRankingApi`'s `getViewEstimate`.
  */
 export function useViewEstimate(): ViewEstimateResponse | undefined {
   return useQuery(VIEW_ESTIMATE_QUERY).data
@@ -283,67 +213,52 @@ const VIEW_ESTIMATE_QUERY = {
 }
 
 /**
- * What `fetchShownPosts` calls, one identity while the embeddings switch and
+ * What the Ranking's fetch calls, one identity while the vector search and
  * the query client hold still.
  */
-export function useShownPostsApi(): ShownPostsApi {
-  const { embeddingsEnabled } = useSettings()
+function useRankingApi(): RankingApi {
   const { searchSimilarPosts } = useRAG()
   const queryClient = useQueryClient()
   return useMemo(
     () => ({
-      embeddingsEnabled,
       searchSimilarPosts,
-      getPostsFeed: api.getPostsFeed,
       lookupPosts: api.lookupPosts,
       getViewEstimate: () => queryClient.fetchQuery(VIEW_ESTIMATE_QUERY),
     }),
-    [embeddingsEnabled, searchSimilarPosts, queryClient],
+    [searchSimilarPosts, queryClient],
   )
 }
 
 /**
- * What the Posts tab shows under the Posts view (no spotlight), fetched while
- * `enabled`: again when `shownPostsKey` or `refresh` moves, and never for a
- * render, a new minute of a Live window or a selection edit, so a meaning
- * search runs once per query (AW-04, story 5). The feed's ranked path and the
- * counts' fallback read it.
+ * The Ranking's results, from its one cached query (`rankingQuery`): the
+ * feed, the shown counts and the pick-post list read the same entry, so a
+ * meaning search runs once per query and comes back free while fresh. No
+ * spotlight, so all three share the key. Off while not ranked, or while
+ * `enabled` is false.
  */
-export function useShownPosts(
-  shownApi: ShownPostsApi,
-  enabled: boolean,
-  refresh = 0,
-) {
-  const { view } = usePostsViewState()
-  const key = shownPostsKey(view)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<unknown>(null)
-  useEffect(() => {
-    if (!enabled) {
-      setPosts([])
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    fetchShownPosts(view, shownApi)
-      .then((shown) => {
-        if (!cancelled) setPosts(shown)
-      })
-      .catch((failure) => {
-        if (!cancelled) setError(failure)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-    // `view` is read when the key moves, not a dependency: see above.
-  }, [enabled, key, shownApi, refresh])
-  return { posts, setPosts, loading, error }
+export function useRanking(enabled = true) {
+  const options = rankingQuery(usePostsView(null), useRankingApi())
+  return useQuery({ ...options, enabled: enabled && options.enabled })
+}
+
+/**
+ * The command palette's Find related Posts list, fetched while `open`: the
+ * first 100 Posts the tab shows. While ranked, the Ranking's cached Posts;
+ * otherwise the feed's own request.
+ */
+export function usePickPool(open: boolean): Post[] {
+  const view = usePostsView(null)
+  const ranked = servedBy(view, { kind: "pickPool" }) === "ranking"
+  const ranking = useRanking(open)
+  const options = postsQuery(view, { kind: "pickPool" })
+  const server = useQuery({ ...options, enabled: open && options.enabled })
+  return useMemo(
+    () =>
+      ranked
+        ? (ranking.data ?? NO_POSTS).slice(0, PICK_POOL_LIMIT)
+        : (server.data ?? NO_POSTS),
+    [ranked, ranking.data, server.data],
+  )
 }
 
 export interface PostsFeed {
@@ -361,26 +276,10 @@ export interface PostsFeed {
 }
 
 /**
- * Whether the feed takes the client RAG path instead of the server feed: only
- * with embeddings on, and only while the view is ranked.
- */
-export function isSemanticFeed(
-  embeddingsEnabled: boolean,
-  ranking: PostsRanking,
-): boolean {
-  return (
-    embeddingsEnabled &&
-    (ranking.kind === "related" || !!meaningQuery(ranking).trim())
-  )
-}
-
-/**
- * The Posts-tab feed. For the normal path it pages the server feed
- * (`POST /data/posts` with filters + cap + sort) via an infinite query — only
- * `FEED_PAGE_SIZE` rows per page, more on scroll. When a semantic/related
- * search is active it keeps the client RAG path (≤50, no pagination), per the
- * agreed design. The query key encodes the scope + filters, so any change
- * refetches the first page; a completed sync invalidates it (see SyncContext).
+ * The Posts-tab feed: two queries behind `isRanked`, one of them off. Not
+ * ranked, it pages the server feed `FEED_PAGE_SIZE` Posts at a time; ranked,
+ * it shows the Ranking's results (at most 50, no paging). A completed sync
+ * invalidates the server feed (see SyncContext) and never the Ranking.
  */
 export function usePostsFeed(
   spotlight: ChannelSpotlight | null,
@@ -396,40 +295,12 @@ export function usePostsFeed(
   const { selectionEdit } = usePostsViewState()
   const { setRanking } = usePostsViewEdits()
   const queryClient = useQueryClient()
-  const { embeddingsEnabled } = useSettings()
   const view = usePostsView(spotlight)
+  const ranked = isRanked(view)
+  const rankingApi = useRankingApi()
 
-  const semanticActive = isSemanticFeed(embeddingsEnabled, view.ranking)
-
-  // The selection rides the body and not the key: an edit refreshes the
-  // rows in place below (PTR-05). See `postsRead` for the window.
-  const feed = postsRead(view, { kind: "feed", selectedFirst })
-  const infinite = useInfiniteQuery({
-    queryKey: feed.queryKey,
-    queryFn: ({ pageParam }) =>
-      api.getPostsFeedBody({
-        ...feed.body,
-        limit: FEED_PAGE_SIZE,
-        offset: pageParam,
-      }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.length < FEED_PAGE_SIZE
-        ? undefined
-        : allPages.length * FEED_PAGE_SIZE,
-    enabled: !semanticActive,
-    staleTime: SUMMARIZER_STALE_TIME,
-  })
-
-  // Moves when an edit other than Picks needs the ranked Posts flagged again.
-  const [ruleEdits, setRuleEdits] = useState(0)
-  // Client RAG path for semantic/related search.
-  const {
-    posts: clientPosts,
-    setPosts: setClientPosts,
-    loading: clientLoading,
-    error: clientError,
-  } = useShownPosts(useShownPostsApi(), semanticActive, ruleEdits)
+  const infinite = useInfiniteQuery(feedQuery(view, selectedFirst))
+  const ranking = useRanking()
 
   // A selection edit, after the render that carries it, so a refetch reads
   // the new selection. Picks reach only their own Posts, so their rows are
@@ -440,9 +311,12 @@ export function usePostsFeed(
     seenEdit.current = selectionEdit.revision
     // Under Selected first a Pick moves its Post between the two parts, so
     // the pages are refetched or the next offset would skip and repeat one.
-    if (!selectionEdit.picks || (selectedFirst && !semanticActive)) {
-      queryClient.invalidateQueries({ queryKey: ["postsFeed"] })
-      setRuleEdits((n) => n + 1)
+    if (!selectionEdit.picks || (selectedFirst && !ranked)) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.postsFeeds })
+      // ponytail: runs the vector search again with the lookup, though only
+      // the lookup's flags change; split the two into cached steps if this
+      // edit while ranked shows up in the search costs.
+      queryClient.invalidateQueries({ queryKey: queryKeys.postsRankings })
       return
     }
     const flags = new Map(
@@ -457,52 +331,50 @@ export function usePostsFeed(
         return selected === undefined ? p : { ...p, selected }
       })
     queryClient.setQueriesData<InfiniteData<Post[]>>(
-      { queryKey: ["postsFeed"] },
+      { queryKey: queryKeys.postsFeeds },
       (data) => data && { ...data, pages: data.pages.map(patch) },
     )
-    setClientPosts(patch)
-  }, [selectionEdit, queryClient, selectedFirst, semanticActive])
+    queryClient.setQueriesData<Post[]>(
+      { queryKey: queryKeys.postsRankings },
+      (data) => data && patch(data),
+    )
+  }, [selectionEdit, queryClient, selectedFirst, ranked])
 
   // On a failed meaning or related search, toast and end the search.
   useEffect(() => {
-    if (!clientError) return
+    if (!ranking.error) return
     toast.error(
-      `${errorText(clientError, "Search failed")}. Falling back to normal view.`,
+      `${errorText(ranking.error, "Search failed")}. Falling back to normal view.`,
     )
     setRanking({ ranking: NO_RANKING })
-  }, [clientError, setRanking])
+  }, [ranking.error, setRanking])
 
-  if (semanticActive) {
+  const selectedShown = async () => {
+    const posts = await fetchSelectedShown(queryClient, view, rankingApi)
+    return { posts, total: ranked ? posts.length : selectedShownTotal }
+  }
+
+  if (ranked) {
+    const rankedPosts = ranking.data ?? NO_POSTS
     return {
       // The ranked Posts are here already, so the switch sorts them here,
       // stably, by the flag the server set (PTR-06).
       posts: selectedFirst
-        ? [...clientPosts].sort(
+        ? [...rankedPosts].sort(
             (a, b) => Number(!!b.selected) - Number(!!a.selected),
           )
-        : clientPosts,
-      isInitialLoading: clientLoading && clientPosts.length === 0,
+        : rankedPosts,
+      isInitialLoading: ranking.isLoading,
       hasMore: false,
       loadMore: () => {},
       isLoadingMore: false,
-      fetchSelectedShown: async () => {
-        const shown = clientPosts.filter((p) => p.selected)
-        return { posts: shown, total: shown.length }
-      },
+      fetchSelectedShown: selectedShown,
     }
   }
 
   return {
-    fetchSelectedShown: async () => ({
-      posts: await api.getPostsFeedBody({
-        ...postsRead(view, { kind: "feed" }).body,
-        onlySelected: true,
-        limit: EXPORT_LIMIT,
-        offset: 0,
-      }),
-      total: selectedShownTotal,
-    }),
-    posts: infinite.data?.pages.flat() ?? [],
+    fetchSelectedShown: selectedShown,
+    posts: infinite.data?.pages.flat() ?? NO_POSTS,
     isInitialLoading: infinite.isLoading,
     hasMore: infinite.hasNextPage,
     loadMore: () => {

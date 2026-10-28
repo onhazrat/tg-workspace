@@ -1380,7 +1380,7 @@
       "comment": "How long a keystroke waits before it reaches the view.",
       "expression": "300",
       "file": "frontend/src/contexts/PostsViewContext.tsx",
-      "line": 73,
+      "line": 76,
       "name": "POST_SEARCH_DEBOUNCE_MS",
       "value": 300
     },
@@ -1396,7 +1396,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 167,
+      "line": 182,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
@@ -1455,14 +1455,6 @@
       "line": 19,
       "name": "REFRESH_MS",
       "value": 60000
-    },
-    {
-      "comment": "One page of the infinite Posts feed.",
-      "expression": "20",
-      "file": "frontend/src/hooks/usePostsView.ts",
-      "line": 62,
-      "name": "FEED_PAGE_SIZE",
-      "value": 20
     },
     {
       "comment": "",
@@ -1729,12 +1721,20 @@
       "value": 50
     },
     {
-      "comment": "Ceiling on the non-semantic branch's fetch (A1c). The branch used to be unbounded: it paged a channel's whole history into the browser and filtered there. It is now one `POST /data/posts` call, and bounding it is only sound because the server **sorts before it limits** \u2014 so `limit: N` returns the first N of the same ordering the client pipeline produced, not an arbitrary N. The one caller that reaches this branch (`useEntityFlow`'s pick-post pool) takes `.slice(0, 100)` immediately, so 200 is generous. A caller that needs more than this should page the feed (`usePostsFeed`) rather than raise the number.",
-      "expression": "200",
-      "file": "frontend/src/lib/posts/scoped-posts.ts",
-      "line": 29,
-      "name": "SCOPED_POSTS_LIMIT",
-      "value": 200
+      "comment": "One page of the infinite Posts feed.",
+      "expression": "20",
+      "file": "frontend/src/lib/posts/posts-view.ts",
+      "line": 208,
+      "name": "FEED_PAGE_SIZE",
+      "value": 20
+    },
+    {
+      "comment": "",
+      "expression": "100",
+      "file": "frontend/src/lib/posts/posts-view.ts",
+      "line": 210,
+      "name": "PICK_POOL_LIMIT",
+      "value": 100
     },
     {
       "comment": "",

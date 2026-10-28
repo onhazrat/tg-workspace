@@ -5,12 +5,13 @@
  */
 import type { QueryClient } from "@tanstack/react-query"
 
+import type { PostCountsResponse, PostFilteredRequest } from "@/client"
 import {
-  dataPostsCounts,
-  type PostCountsResponse,
-  type PostFilteredRequest,
-} from "@/client"
-import { meaningQuery, type PostsView, postsRead } from "@/lib/posts/posts-view"
+  meaningQuery,
+  type PostsView,
+  postsQuery,
+  postsRead,
+} from "@/lib/posts/posts-view"
 
 /** What a run tells `withProvisionalRow` about the row it opened. */
 export interface ProvisionalRow {
@@ -87,8 +88,6 @@ export async function readStream(
 
 type CountPosts = (body: PostFilteredRequest) => Promise<PostCountsResponse>
 
-const countPostsOnServer: CountPosts = (body) => dataPostsCounts({ body })
-
 /**
  * The selected Posts in the window per Channel: the view's Scope counts read,
  * the server's count (PTR-05). Fetched with no stale time, so a selection
@@ -98,12 +97,14 @@ const countPostsOnServer: CountPosts = (body) => dataPostsCounts({ body })
 export async function selectedScopeCounts(
   queryClient: QueryClient,
   view: PostsView,
-  countPosts: CountPosts = countPostsOnServer,
+  countPosts?: CountPosts,
 ): Promise<Record<string, number>> {
-  const { queryKey, body } = postsRead(view, { kind: "scopeCounts" })
+  const read = { kind: "scopeCounts" } as const
+  const { queryKey, queryFn } = postsQuery(view, read)
+  const { body } = postsRead(view, read)
   const { selected } = await queryClient.fetchQuery({
     queryKey,
-    queryFn: () => countPosts(body as PostFilteredRequest),
+    queryFn: countPosts ? () => countPosts(body) : queryFn,
     staleTime: 0,
   })
   return selected
@@ -117,7 +118,7 @@ export async function selectedScopeCounts(
 export async function selectedPostCount(
   queryClient: QueryClient,
   view: PostsView,
-  countPosts: CountPosts = countPostsOnServer,
+  countPosts?: CountPosts,
 ): Promise<number> {
   const selected = await selectedScopeCounts(queryClient, view, countPosts)
   return Object.values(selected).reduce((sum, n) => sum + n, 0)

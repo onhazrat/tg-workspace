@@ -15,7 +15,7 @@ not the summary.** Open the file for the full list of what it checks and why.
 |---|---|---|
 | `frontend/src/types.conform.ts` | hand-written domain types match the server | compile error |
 | `frontend/src/api/client-split.conform.ts` | the two-client split, **in both directions** | compile error |
-| `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner; storage has four owners; logout and a stale session clear the query cache; Posts query keys only in `postsRead`; the Posts view and Sync contexts keep their fields, the Sync value memoized | test |
+| `frontend/src/lib/architecture-invariants.test.ts` | no browser DB; `DataContext` stays small; one theme owner; storage has four owners; logout and stale sessions clear the cache; Posts read keys and endpoints only in `posts-view.ts`; Posts view and Sync contexts keep their fields, Sync value memoized | test |
 | `frontend/src/contexts/PostsViewContext.test.tsx` | a keystroke re-renders the search box alone, not a Sync, edits or view reader or the filter bar; the edits keep their identity across a provider re-render, and a meaning search runs once through one, a minute tick and a Pick | test |
 | `frontend/src/lib/posts/posts-view.test.ts` | every Posts read's key moves exactly when its body does, but for the three departures it lists (ADR-036) | test |
 | `backend/tests/api/test_route_module_hygiene.py` | no models in route modules; handlers annotate returns | test |

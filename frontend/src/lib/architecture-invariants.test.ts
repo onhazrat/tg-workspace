@@ -676,3 +676,40 @@ describe("CTB-04 — the action limit reaches no other tab", () => {
     ).toEqual([])
   })
 })
+
+describe("PRM-01: one module names the Posts read endpoints", () => {
+  /**
+   * Five places once decided whether the Posts tab was ranked, four ways, and
+   * each hook paired its read with an endpoint and cast the body itself. So a
+   * find-related's count was the whole filter's while the feed showed at most
+   * 50 Posts, and a meaning search ran its vector search twice per query.
+   *
+   * `posts-view.ts` now answers, for every read of what the tab shows, which
+   * source serves it, its key, its typed body and its query options. The
+   * hooks run what it returns. This holds the next hook to that: only the
+   * module, and the hand-written client that declares the feed's call, may
+   * name an endpoint a Posts read is answered from.
+   *
+   * The lookup is not on the list: Cited Posts, the RAG results and a
+   * Discover candidate resolve Posts through it too. The Ranking's use of it
+   * goes through `scoped-posts.ts`, which `rankingQuery` alone runs. The
+   * palette's keyword search and the data export page the feed through
+   * `getPostsFeed`; they share the endpoint, not the Posts view.
+   */
+  const ENDPOINT =
+    /\b(?:getPostsFeedBody|dataPostsCounts|dataPostsFacets|dataPostsValueHistogram|dataPostsWindowHistogram)\b/
+  const OWNERS = ["src/api/data.ts", "src/lib/posts/posts-view.ts"]
+
+  it("is named only by the Posts read module", () => {
+    const namers = sourceFiles(SRC)
+      .filter((f) => !/\.test\.tsx?$/.test(f))
+      .filter((f) => ENDPOINT.test(readFileSync(f, "utf8")))
+      .map(rel)
+    expect(
+      namers.sort(),
+      "Build a Posts read with postsQuery, feedQuery or rankingQuery from " +
+        "lib/posts/posts-view.ts, so its source, key, body and enabled rule " +
+        "are decided in one place.",
+    ).toEqual(OWNERS)
+  })
+})

@@ -15,7 +15,8 @@
  * Storage does not move: the Post filter in `?postFilter=` (PTR-03), the
  * order and cap in per-Account browser storage under their old keys, the
  * selection for the browser session (PTR-05). The keyword and the ranking
- * survive no reload.
+ * survive no reload, and the ranking not the Semantic search Setting going
+ * off: the view has none while it is off, and switching it on restores none.
  *
  * `PostsViewModule` takes everything it reads from outside as `inputs`, so a
  * test mounts it alone; `PostsViewProvider` wires those from the app.
@@ -62,12 +63,14 @@ import {
   type PostsRanking,
   type PostsView,
   type RankingEdit,
+  withSemanticSearch,
 } from "@/lib/posts/posts-view"
 import { workspaceFromScope } from "@/lib/posts/restore-scope"
 import type { WindowState } from "@/lib/scope/window"
 import { scopedStorage } from "@/lib/storage/scoped"
 import { useData } from "./DataContext"
 import { useScope } from "./ScopeContext"
+import { useSettings } from "./SettingsContext"
 
 /** How long a keystroke waits before it reaches the view. */
 export const POST_SEARCH_DEBOUNCE_MS = 300
@@ -121,6 +124,8 @@ export interface PostsViewInputs {
   /** What `restore` reaches through the Channels' and the window's contexts. */
   setSelectedChannels: (channels: Set<string>) => void
   setFixedRange: (start: number, end: number) => void
+  /** The Semantic search Setting; off, the view has no Ranking. */
+  semanticSearch: boolean
 }
 
 const PostsViewContext = createContext<PostsViewContextType | undefined>(
@@ -250,7 +255,15 @@ export function PostsViewModule({
     )
     return () => clearTimeout(timer)
   }, [keyword])
-  const [ranking, setRankingState] = useState<PostsRanking>(NO_RANKING)
+  const [storedRanking, setRankingState] = useState<PostsRanking>(NO_RANKING)
+  const { semanticSearch } = inputs
+  // Derived as the view is built, so no render sees a Ranking with the
+  // Setting off; cleared as well, so switching it on restores nothing.
+  const ranking = withSemanticSearch(storedRanking, semanticSearch)
+  useEffect(() => {
+    if (!semanticSearch && storedRanking.kind !== "none")
+      setRankingState(NO_RANKING)
+  }, [semanticSearch, storedRanking])
   // Provider state, not stored: it outlives the search bar, not a reload.
   const [respectsChannels, setRespectsChannels] = useState(false)
   const [order, setOrderState] = useState<PostsOrder>(readStoredOrder)
@@ -313,7 +326,10 @@ export function PostsViewModule({
     const setOrder = (patch: Partial<PostsOrder>) =>
       setOrderState((current) => ({ ...current, ...patch }))
     const setRanking = (edit: RankingEdit) => {
-      if (edit.ranking) setRankingState(edit.ranking)
+      // A blank meaning query is no Ranking, so `isRanked` needs no trim.
+      const blank =
+        edit.ranking?.kind === "meaning" && !edit.ranking.query.trim()
+      if (edit.ranking) setRankingState(blank ? NO_RANKING : edit.ranking)
       if (edit.respectsChannels !== undefined)
         setRespectsChannels(edit.respectsChannels)
     }
@@ -374,6 +390,7 @@ function useSelectedChannelNames(): string[] {
 export function PostsViewProvider({ children }: { children: ReactNode }) {
   const { setSelectedChannels } = useData()
   const { startDate, endDate, windowKey, setFixedRange } = useScope()
+  const { embeddingsEnabled } = useSettings()
   const { postFilter } = workspaceRoute.useSearch()
   const navigate = workspaceRoute.useNavigate()
   const setPostFilterText = useCallback(
@@ -395,6 +412,7 @@ export function PostsViewProvider({ children }: { children: ReactNode }) {
         setPostFilterText,
         setSelectedChannels,
         setFixedRange,
+        semanticSearch: embeddingsEnabled,
       }}
     >
       {children}

@@ -332,8 +332,6 @@ export function parsePostFilter(src: string): PostFilter | null {
  * shape is the tree's own, ids included; the server reads `kind`, `op`, `not`
  * and `cond` and refuses anything else.
  */
-export function postFilterBody(
-  filter: PostFilter,
-): FilterNode<PostCond> | undefined {
+export function postFilterBody(filter: PostFilter): PostFilter | undefined {
   return isEmptyPostFilter(filter) ? undefined : filter
 }
