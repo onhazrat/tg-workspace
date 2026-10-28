@@ -121,7 +121,9 @@ export function TelegramWorkTable({
                   </span>
                   {!s.enabled && (
                     <span className="block text-[10px] text-amber-600">
-                      off{s.disabledSince && ` since ${sinceLabel(s.disabledSince)}`}
+                      off
+                      {s.disabledSince &&
+                        ` since ${sinceLabel(s.disabledSince)}`}
                     </span>
                   )}
                 </td>

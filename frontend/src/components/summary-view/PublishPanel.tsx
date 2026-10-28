@@ -9,6 +9,7 @@ import type {
 } from "@/client"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgToggle } from "@/components/ui/tg-toggle"
+import { useKindRefusal } from "@/hooks/useRequestKinds"
 import { CITATION_STYLES, type CitationStyle } from "@/lib/settings/schema"
 import { cn } from "@/lib/utils"
 import type { BotCredential, ChatDestination, PublishingOptions } from "@/types"
@@ -94,6 +95,7 @@ function PublishTarget(p: PublishPanelProps) {
   const [pickedBot, setBotId] = useState("")
   const [pickedDest, setDestId] = useState("")
   const [sending, setSending] = useState(false)
+  const refusal = useKindRefusal("botApi")
   // A lone one is chosen whenever it arrives, the query answering after mount
   // included; a pick made by hand wins.
   const botId = pickedBot || loneId(p.bots)
@@ -126,7 +128,8 @@ function PublishTarget(p: PublishPanelProps) {
       </div>
       <TgButton
         variant="primary"
-        disabled={!botId || !dest || !p.plan}
+        disabled={!botId || !dest || !p.plan || !!refusal}
+        title={refusal ?? undefined}
         loading={sending}
         loadingLabel="Sending…"
         onClick={publish}

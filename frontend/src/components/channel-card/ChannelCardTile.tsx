@@ -4,6 +4,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tg-tooltip"
+import { useKindRefusal } from "@/hooks/useRequestKinds"
 import { shortcut } from "@/lib/keyboard/key-list"
 import { useKeyTitle } from "@/lib/keyboard/mode"
 import type { Channel } from "@/types"
@@ -45,7 +46,12 @@ export function ChannelCardTile({
   onToggleSelected: (shift: boolean) => void
   onSync: () => void
 }) {
-  const { label: syncLabel, ...sync } = syncButtonProps(channel, busy, onSync)
+  const { label: syncLabel, ...sync } = syncButtonProps(
+    channel,
+    busy,
+    onSync,
+    useKindRefusal("single"),
+  )
   const selectTitle = useKeyTitle(selectLabel(channel.name, isSelected), "tick")
   const syncTitle = useKeyTitle(syncLabel, "sync")
   return (

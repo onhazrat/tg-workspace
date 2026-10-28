@@ -95,11 +95,13 @@ export function syncButtonProps(
   channel: Channel,
   busy: boolean,
   onSync: () => void,
+  /** Why the deployment refuses a manual single sync (RKD-02), if it does. */
+  refusal: string | null = null,
 ) {
   return {
     ...shortcut("sync"),
     label: channel.isUnavailableOnWebView ? "Recheck" : "Sync",
-    disabled: busy || !channelAllows(channel, "individual"),
+    disabled: busy || !!refusal || !channelAllows(channel, "individual"),
     onClick: (event: { stopPropagation: () => void }) => {
       event.stopPropagation()
       onSync()

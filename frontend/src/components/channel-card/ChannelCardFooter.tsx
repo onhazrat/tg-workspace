@@ -1,6 +1,7 @@
 import { Edit2, RefreshCw } from "lucide-react"
 import { useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
+import { useKindRefusal } from "@/hooks/useRequestKinds"
 import { disabledReason } from "@/lib/channels/sync-permissions"
 import {
   type LastSyncState,
@@ -177,7 +178,8 @@ function SyncButton({
   busy: boolean
   onSync: () => void
 }) {
-  const { label, ...sync } = syncButtonProps(channel, busy, onSync)
+  const refusal = useKindRefusal("single")
+  const { label, ...sync } = syncButtonProps(channel, busy, onSync, refusal)
   const keyboard = useKeyboardMode()
   return (
     <Tooltip>
@@ -193,7 +195,8 @@ function SyncButton({
       </TooltipTrigger>
       <TooltipContent>
         <p>
-          {disabledReason(channel, "individual") ??
+          {refusal ??
+            disabledReason(channel, "individual") ??
             withKey("Manual sync resets auto-sync timers", "sync", keyboard)}
         </p>
       </TooltipContent>

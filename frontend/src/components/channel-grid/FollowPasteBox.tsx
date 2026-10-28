@@ -3,6 +3,7 @@ import { useState } from "react"
 import type { FollowJobStatus } from "@/api"
 import { HandlePasteBox } from "@/components/HandlePasteBox"
 import { pillClass } from "@/components/PostFilterParts"
+import { useKindRefusal } from "@/hooks/useRequestKinds"
 import type { PastedHandle } from "@/lib/channels/paste-handles"
 import type { ChannelSettingGroup } from "@/types"
 
@@ -30,6 +31,7 @@ export function FollowPasteBox({
 }: FollowPasteBoxProps) {
   const [pickedGroupId, setPickedGroupId] = useState<string>()
   const [progress, setProgress] = useState<FollowJobStatus | null>(null)
+  const refusal = useKindRefusal("follow")
   const groupId =
     pickedGroupId ??
     (settingGroups.find((group) => group.isDefault) ?? settingGroups[0])?.id
@@ -50,7 +52,9 @@ export function FollowPasteBox({
         <button
           type="button"
           id="tour-add-channel"
-          className={pillClass(false)}
+          disabled={!!refusal}
+          title={refusal ?? undefined}
+          className={`${pillClass(false)} disabled:opacity-40`}
         >
           <Plus size={12} /> Follow
         </button>

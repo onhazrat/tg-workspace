@@ -15,6 +15,7 @@ import type { JobStatusEntry } from "@/api/jobs"
 import { TgButton } from "@/components/ui/tg-button"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { useData } from "@/contexts/DataContext"
+import { useKindRefusal } from "@/hooks/useRequestKinds"
 import { APP_VERSION } from "@/lib/app-version"
 import { QUOTA_READ_ANY } from "@/lib/permissions"
 import {
@@ -64,6 +65,7 @@ export function BulkResync({
 }) {
   const [asking, setAsking] = useState(false)
   const [running, setRunning] = useState(false)
+  const refusal = useKindRefusal("bulk")
   const run = async () => {
     setRunning(true)
     try {
@@ -82,7 +84,13 @@ export function BulkResync({
   }
   return (
     <>
-      <TgButton variant="secondary" size="sm" onClick={() => setAsking(true)}>
+      <TgButton
+        variant="secondary"
+        size="sm"
+        disabled={!!refusal}
+        title={refusal ?? undefined}
+        onClick={() => setAsking(true)}
+      >
         Reset and sync all channels
       </TgButton>
       <TgConfirmDialog

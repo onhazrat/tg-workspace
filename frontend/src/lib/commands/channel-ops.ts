@@ -1,5 +1,5 @@
 import { toast } from "sonner"
-
+import { kindRefusalNow } from "@/hooks/useRequestKinds"
 import {
   addChannelByName,
   normalizeChannelHandle,
@@ -55,7 +55,11 @@ const CHANNEL_OPS: ChannelOpDef[] = [
     keywords: ["channel", "add", "follow", "subscribe", "single", "one"],
     group: "Channels",
     closeOnApply: false,
-    disabled: offlineDisabled("Server offline — cannot fetch channel info"),
+    disabled: (ctx) => {
+      const refusal = kindRefusalNow("handle")
+      if (refusal) return { disabled: true, reason: refusal }
+      return offlineDisabled("Server offline — cannot fetch channel info")(ctx)
+    },
     editorField: {
       id: "channelHandle",
       label: "Channel handle",

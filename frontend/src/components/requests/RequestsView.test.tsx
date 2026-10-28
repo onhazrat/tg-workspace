@@ -2,7 +2,7 @@
  * The Requests tab's view (RQS-03), props only, held in a harness that keeps
  * the tab-wide filter the way `RequestsTab` does.
  */
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, test } from "bun:test"
 import {
   cleanup,
   fireEvent,
@@ -185,11 +185,44 @@ describe("RequestsView", () => {
       "",
       "–",
       "14%",
+      "–",
     ])
     expect(channelHeaders()).not.toContain("Idle")
     fireEvent.click(chip("Wasted"))
     const useful = chip("Useful")
     expect(useful.hasAttribute("disabled")).toBe(true)
+  })
+
+  test("Status reads On or Off, keeps a disabled kind with no Requests as a zero row, and opens the switches", () => {
+    const seen: RequestsFilter[] = []
+    const opened = mock(() => {})
+    const sw = (kind: string, label: string, enabled: boolean) => ({
+      kind,
+      label,
+      enabled,
+      disabledSince: enabled ? null : Date.parse("2026-10-01T10:32:00"),
+      refusal: `${label} is disabled on this deployment`,
+    })
+    render(
+      <Harness
+        seen={seen}
+        switches={[
+          sw("auto", "Auto sync", true),
+          sw("probe", "Directory probe", false),
+          sw("botApi", "Bot API", false),
+        ]}
+        onOpenSwitches={opened}
+      />,
+    )
+    expect(cells(kindRow("Auto sync")).at(-1)).toBe("On")
+    expect(cells(kindRow("Directory probe")).at(-1)).toBe("Off since 10:32")
+    expect(cells(kindRow("Bot API")).slice(1, 3)).toEqual([
+      "Bot APIuncharged",
+      "0",
+    ])
+    fireEvent.click(within(kindRow("Bot API")).getByRole("button"))
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(seen).toEqual([])
   })
 
   test("the Accounts facet counts each one's charged Requests, and picking two compares them", () => {

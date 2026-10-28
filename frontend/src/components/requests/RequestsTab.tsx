@@ -125,7 +125,10 @@ function OperatorRequests() {
         onOpenSwitches={() =>
           navigate({
             to: "/",
-            search: { tab: "settings", setting: "jobs.deployment.requestKinds" },
+            search: {
+              tab: "settings",
+              setting: "jobs.deployment.requestKinds",
+            },
           })
         }
       />
