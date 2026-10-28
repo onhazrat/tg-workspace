@@ -59,13 +59,13 @@ class UpdateJobRequest(BaseModel):
 
 # Ticket 12.
 class SyncLaneEntry(BaseModel):
-    """One of the six sync lanes, as an Admin sees it."""
+    """One lane, as an Admin sees it. A non-sync lane has no Budget or tier."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     lane: str
-    budget: str
-    tier: str
+    budget: str | None
+    tier: str | None
     queued: int
     paused: bool
 

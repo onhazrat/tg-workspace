@@ -51,7 +51,7 @@ from app.services.sync_lane_control import (
     require_lane,
     set_lane_paused,
 )
-from app.services.sync_lanes import lane_budget, lane_tier
+from app.services.sync_lanes import is_sync_lane, lane_budget, lane_tier
 from app.services.tenancy import assert_owner, assert_owner_on_write
 
 _TERMINAL_SYNC_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -247,10 +247,12 @@ def update_scheduler_job(
 
 
 def _lane_entry(depth: LaneDepth) -> SyncLaneEntry:
+    # A non-sync lane has no Budget or tier, and `lane_budget` raises on one.
+    sync = is_sync_lane(depth.lane)
     return SyncLaneEntry(
         lane=depth.lane,
-        budget=lane_budget(depth.lane).value,
-        tier=lane_tier(depth.lane),
+        budget=lane_budget(depth.lane).value if sync else None,
+        tier=lane_tier(depth.lane) if sync else None,
         queued=depth.queued,
         paused=depth.paused,
     )
@@ -271,7 +273,7 @@ def _known_lane(lane: str) -> str:
 
 @router.get("/lanes", dependencies=SCHEDULER_ONLY, response_model=SyncLaneListResponse)
 def list_sync_lanes(session: SessionDep, _current_user: CurrentUser) -> Any:
-    """The six lanes, in drain order, with their depth and paused state."""
+    """Every lane, in drain order, with its depth and paused state."""
     return SyncLaneListResponse(lanes=[_lane_entry(d) for d in lane_depths(session)])
 
 
