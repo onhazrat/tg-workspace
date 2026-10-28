@@ -1,7 +1,6 @@
 import { Edit2, RefreshCw } from "lucide-react"
 import { useState } from "react"
 import { RelativeTime } from "@/components/RelativeTime"
-import { useKindRefusal } from "@/hooks/useRequestKinds"
 import { disabledReason } from "@/lib/channels/sync-permissions"
 import {
   type LastSyncState,
@@ -20,7 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tg-tooltip"
 import {
   channelSyncStatus,
   parseStartId,
-  syncButtonProps,
+  useSyncButtonProps,
 } from "./channel-card-status"
 
 /** Green on schedule, amber due, red late or never, grey when nothing is expected. */
@@ -178,8 +177,7 @@ function SyncButton({
   busy: boolean
   onSync: () => void
 }) {
-  const refusal = useKindRefusal("single")
-  const { label, ...sync } = syncButtonProps(channel, busy, onSync, refusal)
+  const { label, refusal, ...sync } = useSyncButtonProps(channel, busy, onSync)
   const keyboard = useKeyboardMode()
   return (
     <Tooltip>

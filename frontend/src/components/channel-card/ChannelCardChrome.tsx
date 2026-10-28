@@ -77,8 +77,9 @@ export function ChannelCardActions({
   const freezeLabel = channel.isFrozen
     ? "Unfreeze Channel"
     : "Freeze Channel (Stop Syncing)"
-  // Reset and sync is bulk work, refused while `bulk` is off (RKD-02).
-  const refusal = useKindRefusal("bulk")
+  // One Channel's reset is recorded as `single` work, so the server refuses
+  // it while `single` is off (RKD-02), whatever `bulk` says.
+  const refusal = useKindRefusal("single")
   const resetLabel =
     refusal ?? disabledReason(channel, "reset") ?? "Reset & Sync from beginning"
   const keyboard = useKeyboardMode()

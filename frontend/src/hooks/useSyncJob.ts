@@ -90,6 +90,17 @@ export interface SyncJob {
   stopSync: (kind: StoppableSync) => Promise<void>
 }
 
+/**
+ * Why a held job waits (RKD-01), its kind being disabled. Shown while the
+ * server sets it, so the sync does not look hung, and gone once it clears.
+ */
+function sayWhyItWaits(status: SyncJobStatus) {
+  const id = `sync-waiting-${status.jobId}`
+  if (status.waitingReason)
+    toast.info(status.waitingReason, { id, duration: Number.POSITIVE_INFINITY })
+  else toast.dismiss(id)
+}
+
 export function useSyncJob(deps: SyncJobDeps): SyncJob {
   const {
     isOffline,
@@ -119,6 +130,7 @@ export function useSyncJob(deps: SyncJobDeps): SyncJob {
     (status: SyncJobStatus) => {
       setScrapingChannels((prev) => mergeScrapingChannels(prev, status))
       setIsRateLimited(hasRateLimitError(status))
+      sayWhyItWaits(status)
     },
     [setIsRateLimited],
   )

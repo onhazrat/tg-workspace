@@ -248,6 +248,15 @@ describe("followSummary", () => {
     )
   })
 
+  test("a first sync skipped because manual bulk is off says the follows wait for auto sync (RKD-02)", () => {
+    const off = "Manual bulk is disabled on this deployment"
+    expect(followSummary(status({ added: 2, syncSkipped: off }))).toEqual({
+      message:
+        "Follow finished: 2 added. First sync skipped (Manual bulk is disabled on this deployment); they wait for auto sync.",
+      level: "success",
+    })
+  })
+
   test("nothing to report at all is a plain success", () => {
     expect(followSummary(status({}))).toEqual({
       message: "Follow finished",

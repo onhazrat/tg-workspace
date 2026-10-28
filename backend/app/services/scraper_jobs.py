@@ -722,7 +722,7 @@ def active_sync_job_owners() -> set[uuid.UUID]:
 def _held(sync_mode: str) -> bool:
     """A job of a disabled kind waits on held lanes, so it keeps nobody busy.
 
-    Otherwise one disabled kind would stop another (RKD-01): a held manual
+    Otherwise one disabled kind would stop another (RKD-01). A held manual
     sync would make the auto tick skip its owner for as long as it waits.
     """
     return not is_kind_enabled(kind_for_sync_mode(sync_mode))

@@ -20,20 +20,10 @@ import { BarToggle } from "@/components/channel-grid/ChannelBarControls"
 import { kindColor, Swatch } from "@/components/requests/parts"
 import { TgConfirmDialog } from "@/components/ui/tg-confirm-dialog"
 import { queryKeys } from "@/hooks/queryKeys"
-import {
-  refreshRequestKinds,
-  sinceLabel,
-  useRequestKinds,
-} from "@/hooks/useRequestKinds"
-import { fmt, pct } from "@/lib/requests/breakdown"
+import { refreshRequestKinds, useRequestKinds } from "@/hooks/useRequestKinds"
+import { fmt, pct, sinceLabel } from "@/lib/requests/breakdown"
+import { DAY_MS } from "@/lib/scope/window"
 import { extractErrorMessage } from "@/utils"
-
-const DAY_MS = 24 * 3600_000
-
-/** The Setting each kind's switch is. */
-export function switchSettingId(kind: string): string {
-  return `jobs.deployment.${kind}RequestsEnabled`
-}
 
 /** What a person meets once the kind is off: the spec's entry-point table. */
 const WHEN_OFF: Record<string, string> = {
@@ -47,25 +37,15 @@ const WHEN_OFF: Record<string, string> = {
   botApi: "Publish is greyed out; an auto-publish files a failed log.",
 }
 
-/** The kind of work a lane's messages are; lanes only hold syncs and probes. */
-export function laneKind(lane: SyncLaneEntry): string | null {
-  if (lane.lane === "discover_probe_background") return "probe"
-  const byBudget: Record<string, string> = {
-    auto_sync: "auto",
-    manual_bulk: "bulk",
-    manual_single: "single",
-  }
-  return byBudget[lane.budget ?? ""] ?? null
-}
-
-/** Messages queued now, summed per kind over its lanes. */
+/** Messages queued now, summed per kind over the lanes its switch names. */
 export function queuedByKind(
+  switches: readonly RequestKindSwitch[],
   lanes: readonly SyncLaneEntry[],
 ): Record<string, number> {
   const out: Record<string, number> = {}
-  for (const lane of lanes) {
-    const kind = laneKind(lane)
-    if (kind) out[kind] = (out[kind] ?? 0) + lane.queued
+  for (const s of switches) {
+    const held = lanes.filter((lane) => s.lanes.includes(lane.lane))
+    if (held.length) out[s.kind] = held.reduce((n, l) => n + l.queued, 0)
   }
   return out
 }
@@ -91,7 +71,7 @@ export function TelegramWorkTable({
   switches: readonly RequestKindSwitch[]
   lastDay: Record<string, number>
   queued: Record<string, number>
-  onSet: (kind: string, enabled: boolean) => void
+  onSet: (s: RequestKindSwitch, enabled: boolean) => void
 }) {
   const [asking, setAsking] = useState<RequestKindSwitch | null>(null)
   const total = switches.reduce((n, s) => n + (lastDay[s.kind] ?? 0), 0)
@@ -142,9 +122,7 @@ export function TelegramWorkTable({
                     label={s.enabled ? "On" : "Off"}
                     title={`${s.label} enabled`}
                     testId={`telegram-work-${s.kind}`}
-                    onClick={() =>
-                      s.enabled ? setAsking(s) : onSet(s.kind, true)
-                    }
+                    onClick={() => (s.enabled ? setAsking(s) : onSet(s, true))}
                   />
                 </td>
               </tr>
@@ -169,7 +147,7 @@ export function TelegramWorkTable({
         confirmLabel="Disable"
         confirmTestId="telegram-work-confirm"
         onConfirm={() => {
-          if (asking) onSet(asking.kind, false)
+          if (asking) onSet(asking, false)
           setAsking(null)
         }}
       />
@@ -204,10 +182,10 @@ export function TelegramWork() {
     queryFn: () => jobsListSyncLanes(),
     refetchInterval: 15_000,
   })
-  const set = async (kind: string, enabled: boolean) => {
+  const set = async (s: RequestKindSwitch, enabled: boolean) => {
     try {
       await settingsUpdateSetting({
-        path: { setting_id: switchSettingId(kind) },
+        path: { setting_id: s.settingId },
         body: { value: enabled },
       })
       await refreshRequestKinds()
@@ -220,8 +198,8 @@ export function TelegramWork() {
     <TelegramWorkTable
       switches={switches}
       lastDay={lastDay}
-      queued={queuedByKind(lanes.data?.lanes ?? [])}
-      onSet={(kind, enabled) => void set(kind, enabled)}
+      queued={queuedByKind(switches, lanes.data?.lanes ?? [])}
+      onSet={(s, enabled) => void set(s, enabled)}
     />
   )
 }

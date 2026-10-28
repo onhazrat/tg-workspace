@@ -93,10 +93,14 @@ export function followSummary(status: FollowJobStatus): {
   )
     .filter(([count]) => count > 0)
     .map(([count, label]) => `${count} ${label}`)
-  const message =
+  const finished =
     parts.length > 0
       ? `Follow finished: ${parts.join(", ")}`
       : "Follow finished"
+  // With manual bulk off (RKD-01) the follows stand, unsynced until auto sync.
+  const message = status.syncSkipped
+    ? `${finished}. First sync skipped (${status.syncSkipped}); they wait for auto sync.`
+    : finished
   if (status.added > 0) return { message, level: "success" }
   if (status.failed > 0) return { message, level: "error" }
   if (status.unavailable > 0) return { message, level: "warning" }

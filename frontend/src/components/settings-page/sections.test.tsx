@@ -11,6 +11,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
+import type { RequestKindSwitch } from "@/client"
 import type { Row } from "./model"
 import { Item, lastPassed } from "./SettingsPage"
 import {
@@ -90,6 +91,11 @@ describe("buildSections", () => {
 })
 
 describe("a Setting a panel shows (RKD-02)", () => {
+  // The runtime config names each switch's Setting; the panel shows those.
+  const PROBE = {
+    kind: "probe",
+    settingId: "jobs.deployment.probeRequestsEnabled",
+  } as RequestKindSwitch
   const jobs = {
     topics: [{ id: "jobs", title: "Background jobs" }],
     rows: [
@@ -102,6 +108,7 @@ describe("a Setting a panel shows (RKD-02)", () => {
       row({ id: "jobs.deployment.other", title: "Other", topic: "jobs" }),
     ],
     permissions: ["jobs:manage"],
+    kinds: [PROBE],
   } as unknown as Parameters<typeof buildSections>[0]
   const ids = (q: string, reg = jobs) =>
     buildSections(reg, q, ALL, new Set()).flatMap((s) => [
@@ -128,12 +135,16 @@ describe("a Setting a panel shows (RKD-02)", () => {
 
   test("a link to it lands on the panel", () => {
     expect(
-      linkTarget("jobs.deployment.probeRequestsEnabled", ["jobs:manage"]),
+      linkTarget(
+        "jobs.deployment.probeRequestsEnabled",
+        ["jobs:manage"],
+        [PROBE],
+      ),
     ).toBe("jobs.deployment.requestKinds")
-    expect(linkTarget("jobs.deployment.other", ["jobs:manage"])).toBe(
+    expect(linkTarget("jobs.deployment.other", ["jobs:manage"], [PROBE])).toBe(
       "jobs.deployment.other",
     )
-    expect(linkTarget(undefined, [])).toBeUndefined()
+    expect(linkTarget(undefined, [], [])).toBeUndefined()
   })
 })
 

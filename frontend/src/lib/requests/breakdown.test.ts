@@ -18,6 +18,7 @@ import {
   type Outcome,
   rangeText,
   requestsRange,
+  sinceLabel,
   statTotals,
 } from "./breakdown"
 
@@ -404,5 +405,19 @@ describe("the Accounts (RQS-05)", () => {
       "follow",
       "other",
     ])
+  })
+})
+
+describe("since when a kind is off (RKD-02)", () => {
+  const now = Date.parse("2026-10-28T18:00:00")
+
+  test("today reads as a 24-hour clock alone", () => {
+    expect(sinceLabel(Date.parse("2026-10-28T15:04:00"), now)).toBe("15:04")
+  })
+
+  test("an earlier day reads with its date, so it is not taken for today", () => {
+    const label = sinceLabel(Date.parse("2026-10-27T15:04:00"), now)
+    expect(label).toContain("27")
+    expect(label).toEndWith(", 15:04")
   })
 })

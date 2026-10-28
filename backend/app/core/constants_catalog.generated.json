@@ -1332,7 +1332,7 @@
       "comment": "The topic or row a link names, and how long it stays highlighted.",
       "expression": "2500",
       "file": "frontend/src/components/settings-page/sections.ts",
-      "line": 46,
+      "line": 48,
       "name": "FLASH_MS",
       "value": 2500
     },

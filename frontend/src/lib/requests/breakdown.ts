@@ -535,6 +535,22 @@ export function rangeText(start: number, end: number): string {
 /** Thousands with commas. */
 export const fmt = (n: number) => n.toLocaleString("en-US")
 
+/**
+ * When a kind went off (RKD-02). "10:32" today, and with its day before that,
+ * since a bare time would read as today's.
+ */
+export function sinceLabel(at: number, now = Date.now()): string {
+  const when = new Date(at)
+  const time = when.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+  if (when.toDateString() === new Date(now).toDateString()) return time
+  const day = when.toLocaleDateString([], { day: "numeric", month: "short" })
+  return `${day}, ${time}`
+}
+
 /** A share as a percentage: one decimal under 10%. */
 export const pct = (part: number) =>
   `${(100 * part).toFixed(part < 0.1 ? 1 : 0)}%`

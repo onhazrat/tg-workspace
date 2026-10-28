@@ -2,6 +2,7 @@ import { toast } from "sonner"
 
 import { api } from "@/api"
 import { JOB_LABELS, SERVER_JOB_IDS } from "@/hooks/useJobToggles"
+import { gatedBy } from "@/hooks/useRequestKinds"
 import {
   backfillSyncChannel,
   bulkBackfillPartialHistoryChannels,
@@ -93,7 +94,7 @@ export function buildExtendedCommands(): CommandDef[] {
         }
         return `Reset & sync @${channel.name}? Clears local posts and re-backfills from ID ${channel.startId ?? 1}.`
       },
-      disabled: (ctx) => {
+      disabled: gatedBy("single", (ctx) => {
         const offline = offlineDisabled("Server offline")(ctx)
         if (offline.disabled) return offline
         if (!ctx.channels.some((channel) => channelAllows(channel, "reset"))) {
@@ -103,7 +104,7 @@ export function buildExtendedCommands(): CommandDef[] {
           }
         }
         return { disabled: false }
-      },
+      }),
       run: async (ctx, payload) => {
         const channel =
           (payload as Channel | undefined) ??
@@ -138,7 +139,7 @@ export function buildExtendedCommands(): CommandDef[] {
         }
         return `Fix partial history for @${channel.name}? Resumes backfill toward the retention window without clearing stored posts.`
       },
-      disabled: partialHistoryDisabled,
+      disabled: gatedBy("single", partialHistoryDisabled),
       run: async (ctx, payload) => {
         const channel =
           (payload as Channel | undefined) ??
@@ -309,7 +310,7 @@ export function buildExtendedCommands(): CommandDef[] {
         const count = filterPartialHistoryChannels(ctx.channels).length
         return `Fix partial history for ${count} channel(s)? Resumes backfill toward the retention window without clearing stored posts.`
       },
-      disabled: partialHistoryDisabled,
+      disabled: gatedBy("bulk", partialHistoryDisabled),
       run: async (ctx) => {
         await bulkBackfillPartialHistoryChannels(ctx)
       },
@@ -323,7 +324,7 @@ export function buildExtendedCommands(): CommandDef[] {
       requiresConfirmation: true,
       confirmDescription:
         "Clear stored posts and re-backfill ALL channels from the latest page backward to the retention window?",
-      disabled: (ctx) => {
+      disabled: gatedBy("bulk", (ctx) => {
         const offline = offlineDisabled("Server offline")(ctx)
         if (offline.disabled) return offline
         if (
@@ -335,7 +336,7 @@ export function buildExtendedCommands(): CommandDef[] {
           }
         }
         return { disabled: false }
-      },
+      }),
       run: async (ctx) => {
         await bulkResetSyncAllChannels(ctx)
       },

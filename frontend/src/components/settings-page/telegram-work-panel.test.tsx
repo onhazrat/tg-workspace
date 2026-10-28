@@ -7,20 +7,24 @@ import {
   screen,
   within,
 } from "@testing-library/react"
-import type { RequestKindSwitch, SyncLaneEntry } from "@/client"
+import type { RequestKind, RequestKindSwitch, SyncLaneEntry } from "@/client"
 import { queuedByKind, TelegramWorkTable } from "./telegram-work-panel"
 
 afterEach(cleanup)
 
 const sw = (
-  kind: string,
+  kind: RequestKind,
   label: string,
   enabled = true,
+  lanes: string[] = [],
 ): RequestKindSwitch => ({
   kind,
   label,
+  settingId: `jobs.deployment.${kind}RequestsEnabled`,
+  lanes,
   enabled,
-  disabledSince: enabled ? null : Date.parse("2026-10-28T10:32:00"),
+  // Today, so the label is the time alone.
+  disabledSince: enabled ? null : new Date().setHours(10, 32, 0, 0),
   refusal: `${label} is disabled on this deployment`,
 })
 
@@ -30,7 +34,7 @@ const SWITCHES = [
   sw("botApi", "Bot API", false),
 ]
 
-function table(onSet = mock((_kind: string, _on: boolean) => {})) {
+function table(onSet = mock((_s: RequestKindSwitch, _on: boolean) => {})) {
   render(
     <TelegramWorkTable
       switches={SWITCHES}
@@ -79,18 +83,22 @@ describe("TelegramWorkTable", () => {
       '"Directory probe is disabled on this deployment"',
     )
     fireEvent.click(screen.getByTestId("telegram-work-confirm"))
-    expect(onSet.mock.calls).toEqual([["probe", false]])
+    expect(onSet.mock.calls.map(([s, on]) => [s.kind, on])).toEqual([
+      ["probe", false],
+    ])
   })
 
   test("enabling applies at once", () => {
     const onSet = table()
     fireEvent.click(within(row("Bot API")).getByRole("button"))
     expect(screen.queryByRole("dialog")).toBeNull()
-    expect(onSet.mock.calls).toEqual([["botApi", true]])
+    expect(onSet.mock.calls.map(([s, on]) => [s.kind, on])).toEqual([
+      ["botApi", true],
+    ])
   })
 })
 
-test("queued sums each kind's lanes; lanes of no kind are left out", () => {
+test("queued sums the lanes each switch names; a lane no switch names is left out", () => {
   const lane = (
     name: string,
     budget: string | null,
@@ -103,12 +111,23 @@ test("queued sums each kind's lanes; lanes of no kind are left out", () => {
     paused: false,
   })
   expect(
-    queuedByKind([
-      lane("auto_sync_normal", "auto_sync", 2),
-      lane("auto_sync_best_effort", "auto_sync", 1),
-      lane("manual_single_normal", "manual_single", 0),
-      lane("discover_probe_background", null, 40),
-      lane("something_else", null, 9),
-    ]),
+    queuedByKind(
+      [
+        sw("auto", "Auto sync", true, [
+          "auto_sync_normal",
+          "auto_sync_best_effort",
+        ]),
+        sw("single", "Manual single", true, ["manual_single_normal"]),
+        sw("probe", "Directory probe", true, ["discover_probe_background"]),
+        sw("botApi", "Bot API"),
+      ],
+      [
+        lane("auto_sync_normal", "auto_sync", 2),
+        lane("auto_sync_best_effort", "auto_sync", 1),
+        lane("manual_single_normal", "manual_single", 0),
+        lane("discover_probe_background", null, 40),
+        lane("something_else", null, 9),
+      ],
+    ),
   ).toEqual({ auto: 3, single: 0, probe: 40 })
 })

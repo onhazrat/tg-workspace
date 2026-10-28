@@ -322,6 +322,8 @@ export type FollowJobStatus = {
   failed: number
   results: FollowChannelResult[]
   syncJobId: string | null
+  /** Why the follows got no first sync: manual bulk is disabled (RKD-01). */
+  syncSkipped?: string | null
   createdAt: number
   finishedAt: number | null
 }

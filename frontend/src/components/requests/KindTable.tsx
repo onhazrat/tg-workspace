@@ -1,12 +1,12 @@
 import type React from "react"
 import type { RequestKindSwitch } from "@/client"
-import { sinceLabel } from "@/hooks/useRequestKinds"
 import {
   fmt,
   type KindRow,
   type Outcome,
   outcomeShare,
   pct,
+  sinceLabel,
 } from "@/lib/requests/breakdown"
 import { kindColor, OutcomeBar, Swatch } from "./parts"
 
@@ -19,14 +19,14 @@ export const td = "px-3 py-1.5 tabular-nums max-sm:px-1.5"
  * `other` has no switch, so a dash.
  */
 export function KindStatus({
-  s,
+  kindSwitch,
   onOpen,
 }: {
-  s: RequestKindSwitch | undefined
+  kindSwitch: RequestKindSwitch | undefined
   onOpen: () => void
 }) {
-  if (!s) return <span className="text-app-ink/30">–</span>
-  if (s.enabled) return <span className="text-app-ink/40">On</span>
+  if (!kindSwitch) return <span className="text-app-ink/30">–</span>
+  if (kindSwitch.enabled) return <span className="text-app-ink/40">On</span>
   return (
     <button
       type="button"
@@ -37,7 +37,10 @@ export function KindStatus({
         onOpen()
       }}
     >
-      Off{s.disabledSince ? ` since ${sinceLabel(s.disabledSince)}` : ""}
+      Off
+      {kindSwitch.disabledSince
+        ? ` since ${sinceLabel(kindSwitch.disabledSince)}`
+        : ""}
     </button>
   )
 }
@@ -142,7 +145,7 @@ export function KindTable({
               <td className={`${td} text-right`}>{share("wasted", r)}</td>
               <td className="px-3 py-1.5 text-[11px] max-sm:px-1.5">
                 <KindStatus
-                  s={switches.find((s) => s.kind === r.kind.id)}
+                  kindSwitch={switches.find((s) => s.kind === r.kind.id)}
                   onOpen={onOpenSwitches}
                 />
               </td>

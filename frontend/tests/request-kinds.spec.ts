@@ -49,12 +49,11 @@ async function mockSwitches(page: Page, off: Record<string, number>) {
   await page.route("**/api/v1/jobs/runtime-config", async (route: Route) => {
     const response = await route.fetch()
     const body = await response.json()
-    const requestKinds = KINDS.map(([kind, label]) => ({
-      kind,
-      label,
-      enabled: !(kind in off),
-      disabledSince: off[kind] ?? null,
-      refusal: `${label} is disabled on this deployment`,
+    // The server's own switches (their Setting ids and lanes), set as `off` says.
+    const requestKinds = body.requestKinds.map((s: { kind: string }) => ({
+      ...s,
+      enabled: !(s.kind in off),
+      disabledSince: off[s.kind] ?? null,
     }))
     await route.fulfill({ response, json: { ...body, requestKinds } })
   })

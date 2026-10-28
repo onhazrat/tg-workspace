@@ -142,3 +142,39 @@ describe("useSyncJob Stop sync", () => {
     await act(() => run)
   })
 })
+
+test("a held job says why it waits while the server says so, and stops once it clears (RKD-02)", async () => {
+  const REASON = "Manual bulk is disabled on this deployment"
+  let release = () => {}
+  const enabled = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let reads = 0
+  spies.push(
+    spyOn(api, "startSyncJob").mockResolvedValue({ jobId: "job-1" } as never),
+    spyOn(api, "getSyncJobStatus").mockImplementation(async (jobId) => {
+      reads += 1
+      if (reads > 1) await enabled
+      return {
+        jobId,
+        status: reads > 1 ? "completed" : "pending",
+        channels: [],
+        waitingReason: reads > 1 ? null : REASON,
+      } as never
+    }),
+    spyOn(console, "warn").mockImplementation(() => {}),
+  )
+  const info = spyOn(toast, "info").mockImplementation(() => "")
+  const dismiss = spyOn(toast, "dismiss").mockImplementation(() => "")
+  spies.push(info, dismiss)
+  const { result } = renderHook(() => useSyncJob(deps))
+  const run = start(result)
+
+  await waitFor(() =>
+    expect(info).toHaveBeenCalledWith(REASON, expect.anything()),
+  )
+  expect(dismiss).not.toHaveBeenCalled()
+  release()
+  await act(() => run)
+  expect(dismiss).toHaveBeenCalledWith("sync-waiting-job-1")
+})

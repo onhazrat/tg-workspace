@@ -4,6 +4,8 @@
  */
 import { getRouteApi } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
+import type { RequestKindSwitch } from "@/client"
+import { useRequestKinds } from "@/hooks/useRequestKinds"
 import {
   elementId,
   type Filters,
@@ -46,7 +48,10 @@ const HIDDEN_SCOPES: readonly Scope[] = ["env", "code"]
 const FLASH_MS = 2500
 
 export function buildSections(
-  registry: Pick<SettingsRegistry, "rows" | "topics" | "permissions">,
+  registry: Pick<SettingsRegistry, "rows" | "topics" | "permissions"> & {
+    /** The Request kind switches, whose Settings a panel shows (RKD-02). */
+    kinds?: readonly RequestKindSwitch[]
+  },
   query: string,
   filters: Filters,
   unfolded: ReadonlySet<string>,
@@ -58,7 +63,10 @@ export function buildSections(
   )
   const hits = filterRows(registry.rows, query, filters)
   // A row a panel shows is found through the panel, never listed twice.
-  const rows = hits.filter((r) => !absorbingPanel(r.id, registry.permissions))
+  const kinds = registry.kinds ?? []
+  const rows = hits.filter(
+    (r) => !absorbingPanel(r.id, registry.permissions, kinds),
+  )
   // A panel holds no value, so a filter on values or an operator hides it.
   const panels =
     filters.modifiedOnly ||
@@ -69,7 +77,7 @@ export function buildSections(
       : visiblePanels(registry.permissions).filter(
           (p) =>
             panelMatches(p, parsed.text) ||
-            hits.some((r) => p.absorbs?.includes(r.id)),
+            hits.some((r) => p.absorbs?.(kinds).includes(r.id)),
         )
   const out: Section[] = []
   for (const topic of registry.topics) {
@@ -127,8 +135,9 @@ export function landingFor(
 export function linkTarget(
   asked: string | undefined,
   permissions: readonly string[],
+  kinds: readonly RequestKindSwitch[],
 ): string | undefined {
-  return (asked && absorbingPanel(asked, permissions)?.id) || asked
+  return (asked && absorbingPanel(asked, permissions, kinds)?.id) || asked
 }
 
 /**
@@ -146,6 +155,7 @@ function scrollToId(id: string, block: ScrollLogicalPosition): () => void {
 
 export function useSettingsPage() {
   const registry = useSettingsRegistry()
+  const kinds = useRequestKinds()
   const { setting, section } = workspaceRoute.useSearch()
   const [query, setQuery] = useState("")
   const [filters, setFilters] = useState<Filters>({
@@ -156,8 +166,8 @@ export function useSettingsPage() {
   const [unfolded, setUnfolded] = useState<Set<string>>(new Set())
 
   const sections = useMemo(
-    () => buildSections(registry, query, filters, unfolded),
-    [registry, query, filters, unfolded],
+    () => buildSections({ ...registry, kinds }, query, filters, unfolded),
+    [registry, kinds, query, filters, unfolded],
   )
 
   const totals = useMemo(
@@ -175,6 +185,7 @@ export function useSettingsPage() {
   const target = linkTarget(
     setting ?? sectionTopic(section),
     registry.permissions,
+    kinds,
   )
   const loaded = !registry.isLoading
   useEffect(() => {

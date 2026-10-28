@@ -11,7 +11,7 @@ import {
   within,
 } from "@testing-library/react"
 import { useState } from "react"
-import type { RequestBreakdownResponse } from "@/client"
+import type { RequestBreakdownResponse, RequestKind } from "@/client"
 import {
   initialRequestsFilter,
   type RequestsFilter,
@@ -196,11 +196,14 @@ describe("RequestsView", () => {
   test("Status reads On or Off, keeps a disabled kind with no Requests as a zero row, and opens the switches", () => {
     const seen: RequestsFilter[] = []
     const opened = mock(() => {})
-    const sw = (kind: string, label: string, enabled: boolean) => ({
+    const sw = (kind: RequestKind, label: string, enabled: boolean) => ({
       kind,
       label,
+      settingId: `jobs.deployment.${kind}RequestsEnabled`,
+      lanes: [],
       enabled,
-      disabledSince: enabled ? null : Date.parse("2026-10-01T10:32:00"),
+      // Today, so the label is the time alone.
+      disabledSince: enabled ? null : new Date().setHours(10, 32, 0, 0),
       refusal: `${label} is disabled on this deployment`,
     })
     render(
