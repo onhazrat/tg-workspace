@@ -98,6 +98,7 @@ from app.services.scraper import get_channel_info, scrape_channel_page
 from app.services.scraper_jobs import (
     ChannelSyncState,
     SyncJobState,
+    claim_job,
     deactivate_job,
     persist_job,
     touch_job,
@@ -2142,6 +2143,10 @@ async def run_sync_job(job: SyncJobState, user_id: uuid.UUID | None) -> None:
     `charge_sync_job` swallows and logs its own errors, because an accounting
     write nobody reads yet must not turn a completed sync into a failed one.
     """
+    # This process runs the job, so its own progress notifications coming back
+    # are echoes. Unclaimed, a late echo of "pending" could land between the
+    # terminal status below and its write, and the row would stay `pending`.
+    claim_job(job)
     async with metered_work(partial(charge_sync_job, user_id, job.sync_mode)):
         job.status = "running"
         await touch_job(job)

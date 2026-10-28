@@ -53,7 +53,7 @@ from app.models_tg import (
     Summary,
     SyncJob,
 )
-from app.services import network, pgmq, publish
+from app.services import network, pgmq, publish, scraper_jobs, sync_orchestrator
 from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
 from app.services.request_stats import flush_recorded_requests
@@ -1027,3 +1027,41 @@ def test_a_sync_run_outside_the_lanes_skips_a_disabled_kind(
     assert job["status"] == "completed"
     assert job["channels"][0]["status"] == "skipped"
     assert job["channels"][0]["error"] == "Auto sync is disabled on this deployment"
+
+
+def test_a_late_echo_of_its_own_progress_cannot_rewind_a_sync_run(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    telegram: FakeTelegram,
+) -> None:
+    """The race behind a one-off failure of the test above under load.
+
+    `run_sync_job` hears its own progress notifications back. Unless it claims
+    the job, a slow echo of the job's creation ("pending") landing between the
+    terminal status and its write rewinds the row to `pending` for good. The
+    echo is delivered at exactly that moment here. Mutation: drop the
+    `claim_job` call from `run_sync_job`.
+    """
+    h = superuser_token_headers
+    _follow(client, h, CHANNEL)
+    me = client.get(f"{API}/users/me", headers=h).json()["id"]
+    real = sync_orchestrator.persist_job
+
+    async def _echo_then_persist(job: Any, *args: Any) -> None:
+        if job.status == "completed":
+            await scraper_jobs.apply_progress_event(
+                {"jobId": job.job_id, "jobStatus": "pending"}
+            )
+        await real(job, *args)
+
+    monkeypatch.setattr(sync_orchestrator, "persist_job", _echo_then_persist)
+
+    async def _run() -> str:
+        job = await create_job(
+            channel_entries=[(_channel().id, CHANNEL)], source="Test", user_id=me
+        )
+        await run_sync_job(job, uuid.UUID(me))
+        return job.job_id
+
+    assert _job(client, h, client.portal.call(_run))["status"] == "completed"
