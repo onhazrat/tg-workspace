@@ -668,7 +668,7 @@ class require_permission:  # noqa: N801 — reads as a dependency at call sites
         return current_user
 
 
-class require_kind_enabled:  # noqa: N801 — reads as a dependency at call sites
+class require_kind_enabled:  # noqa: N801 (reads as a dependency)
     """A route dependency refusing work of a disabled Request kind (RKD-01).
 
     Runs before the handler, so a route whose body turns every failure into a
