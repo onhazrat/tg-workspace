@@ -186,11 +186,9 @@ test("a disabled kind's actions are greyed out with its refusal", async ({
   const off = Object.fromEntries(KINDS.map(([kind]) => [kind, SINCE]))
   await mockSwitches(page, off)
   const name = `rkd${Date.now()}`
-  await gotoWorkspace(page, "summary")
+  await gotoWorkspace(page, "channels")
+  // Leaves the Channels tab searched down to it.
   await seedTestChannel(page, name)
-
-  await page.goto("/?tab=channels")
-  await page.getByPlaceholder("Search channels...").fill(name)
   const card = page.locator(`[data-channel-name="${name}"]`)
   await expect(card.getByRole("button", { name: "Sync" })).toBeDisabled()
   const syncAll = page.getByRole("button", { name: "Sync all" })
@@ -214,9 +212,9 @@ test("a disabled kind's actions are greyed out with its refusal", async ({
   await page.keyboard.press("Escape")
 
   await page.goto("/?tab=settings&setting=sync.yours.resyncAll")
-  const reset = page.getByRole("button", {
-    name: "Reset and sync all channels",
-  })
+  const reset = page
+    .locator("#setting-sync-yours-resyncAll")
+    .getByRole("button", { name: "Reset and sync all channels" })
   await expect(reset).toBeDisabled()
   await expect(reset).toHaveAttribute(
     "title",
