@@ -229,6 +229,8 @@ export interface Channel {
   oldestStoredPostTimestamp?: number
   settingGroupId?: string
   settingGroupName?: string
+  /** PROTOTYPE (channel-tags-usage): copied from the stats, for the moment. */
+  lastPostAt?: number
 }
 
 export interface ChannelSettingGroup {
@@ -467,6 +469,8 @@ type AlwaysSent<T, K extends keyof T> = Required<Pick<T, K>>
 
 export type ChannelStats = ChannelStatsResponse & {
   latestId?: number
+  /** PROTOTYPE (channel-tags-usage): the newest stored Post, epoch ms. */
+  lastPostAt?: number | null
 }
 
 export interface SyncQueueItem {

@@ -14,6 +14,20 @@ import {
   dataGetDirectoryPosts,
   dataGetDirectoryWhy,
 } from "@/client"
+import {
+  funnelledTags,
+  setTagFunnels,
+  toggleTagFunnel,
+} from "@/components/channel-tags-prototype/directory-tag-funnel"
+import {
+  bumpTagUse,
+  byUsage,
+  canManage,
+  tagOrder,
+  useProtoVariant,
+  useTagUsage,
+} from "@/components/channel-tags-prototype/store"
+import { TagFacet } from "@/components/channel-tags-prototype/TagFacet"
 import { DirectoryBar } from "@/components/directory/DirectoryBar"
 import type { BoostMode } from "@/components/directory/DirectoryBoost"
 import { DirectoryBulkBar } from "@/components/directory/DirectoryBulkBar"
@@ -324,7 +338,30 @@ export function DirectoryView() {
   const d = useDirectory()
   const { view, patch, list } = d
   const shown = listSummary(list.data, list.isFetching, d.yours.source)
-  const { tags, tagging, choices } = useDirectoryTags()
+  const { tags, tagging: loadedTagging, choices } = useDirectoryTags()
+  // PROTOTYPE (channel-tags-usage): variant 0 is main, untouched.
+  const [variant] = useProtoVariant()
+  const manage = canManage(variant)
+  const order = tagOrder(variant)
+  const usage = useTagUsage(variant, "directory")
+  const orderedTags = order
+    ? byUsage(
+        tags.tags,
+        usage,
+        (t) => t.name,
+        (t) => t.channels,
+      )
+    : tags.tags
+  const tagging: Tagging = order
+    ? {
+        tags: orderedTags,
+        onTag: (name, handles) => {
+          bumpTagUse("directory", name)
+          loadedTagging.onTag(name, handles)
+        },
+        onUntag: loadedTagging.onUntag,
+      }
+    : loadedTagging
   const internals = seesInternals(d.columnsMenu.catalogue)
   const vocabulary = directoryVocabulary(
     shown.languages,
@@ -407,20 +444,47 @@ export function DirectoryView() {
         onClearAll={d.clearAll}
         phone={phone}
         onAdd={d.addHandles}
+        tagsMenu={
+          manage && (
+            <TagFacet
+              tab="directory"
+              variant={variant}
+              testId="directory-tags-facet"
+              scope={null}
+              members={(handles) => [...handles]}
+              selected={new Set([...d.ticks].map((h) => h.toLowerCase()))}
+              onSelect={(ids, on) => {
+                const these = new Set(ids)
+                d.setTicks(
+                  on
+                    ? [...d.ticks, ...ids]
+                    : [...d.ticks].filter((h) => !these.has(h.toLowerCase())),
+                )
+              }}
+              funnelled={funnelledTags(d.filter)}
+              onFunnel={(id, on) =>
+                d.setFilter(toggleTagFunnel(d.filter, id, on))
+              }
+              onClearFunnels={() => d.setFilter(setTagFunnels(d.filter, []))}
+            />
+          )
+        }
       />
       {list.error && (
         <p className="mb-2 text-xs text-red-500">
           {errorText(list.error, "The Directory did not load.")}
         </p>
       )}
-      <div className="mb-2 flex justify-end gap-2">
-        <TagsMenu
-          tags={tags.tags}
-          onTick={(name) => void tags.tickTag(name, d.setTicks)}
-          onRename={(name, to) => void tags.rename(name, to)}
-          onDelete={(name) => void tags.remove(name)}
-        />
-      </div>
+      {!manage && (
+        <div className="mb-2 flex justify-end gap-2">
+          <TagsMenu
+            tags={tags.tags}
+            onTick={(name) => void tags.tickTag(name, d.setTicks)}
+            onRename={(name, to) => void tags.rename(name, to)}
+            onDelete={(name) => void tags.remove(name)}
+          />
+        </div>
+      )}
       <DirectoryBulkBar
         whole={whole}
         onTickAll={() => void d.tickAll(total)}

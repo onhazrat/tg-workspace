@@ -1,5 +1,6 @@
 import { Edit2, RefreshCw } from "lucide-react"
 import { useState } from "react"
+import { isB, useVariant } from "@/components/channel-tags-prototype/store"
 import { RelativeTime } from "@/components/RelativeTime"
 import { disabledReason } from "@/lib/channels/sync-permissions"
 import {
@@ -61,6 +62,13 @@ export function ChannelCardFooter({
   onSync: () => void
 }) {
   const now = useNow()
+  // PROTOTYPE (channel-tags-usage, B): the newest stored Post, beside Synced.
+  const lastPost = isB(useVariant()) && channel.lastPostAt
+  const lastPostLine = lastPost ? (
+    <p className="truncate text-[9px] text-app-ink/45">
+      Last post <RelativeTime timestamp={lastPost} />
+    </p>
+  ) : null
   const slots = syncSlots(channel, now)
   const state = lastSyncState(channel, now)
   const status = channelSyncStatus(channel)
@@ -84,6 +92,7 @@ export function ChannelCardFooter({
           <p className="truncate text-[9px] text-app-ink/45">
             {nextSyncText(slots)}
           </p>
+          {lastPostLine}
         </div>
         <SyncButton
           channel={channel}
@@ -125,6 +134,7 @@ export function ChannelCardFooter({
           ) : (
             <p className="text-[9px] text-app-ink/45">{nextSyncText(slots)}</p>
           )}
+          {lastPostLine}
         </div>
       </div>
 

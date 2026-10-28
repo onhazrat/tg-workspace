@@ -32,6 +32,8 @@ export type ChannelCond =
   | { type: "uncharged" }
   /** A number on the whole row, or with `kind` on that kind of work alone. */
   | { type: "measure"; measure: Measure; kind?: string; bound: MetricBound }
+  /** PROTOTYPE (channel-tags-usage): a Channel in the reader's Tag. */
+  | { type: "tag"; value: string }
 export type ChannelFilter = FilterTree<ChannelCond>
 export type MeasureCond = Extract<ChannelCond, { type: "measure" }>
 
@@ -102,11 +104,17 @@ export const keepRow =
     filter: ChannelFilter,
     hiddenKinds: ReadonlySet<string>,
     hiddenOutcomes: ReadonlySet<Outcome>,
+    /** A Tag's handles, lowercased; undefined while loading, which stands aside. */
+    tagHandles?: (tag: string) => ReadonlySet<string> | undefined,
   ) =>
   (r: ChannelRow) =>
     evalTree(filter, (c) => {
       if (c.type === "kind") return r.kinds.has(c.value)
       if (c.type === "uncharged") return r.aggregate
+      if (c.type === "tag") {
+        const handles = tagHandles?.(c.value)
+        return handles === undefined || handles.has(r.key.toLowerCase())
+      }
       return (
         outcomeHidden(c.measure, hiddenOutcomes) ||
         (c.kind !== undefined && hiddenKinds.has(c.kind)) ||
@@ -116,11 +124,13 @@ export const keepRow =
 
 /** A Condition's chip. */
 export const condLabel = (c: ChannelCond) =>
-  c.type === "kind"
-    ? kindMeta(c.value).label
-    : c.type === "uncharged"
-      ? "Uncharged rows"
-      : `${measureLabel(c.measure, c.kind)} ${boundText(c.bound)}${measureMeta(c.measure).unit ?? ""}`
+  c.type === "tag"
+    ? `Tag ${c.value}`
+    : c.type === "kind"
+      ? kindMeta(c.value).label
+      : c.type === "uncharged"
+        ? "Uncharged rows"
+        : `${measureLabel(c.measure, c.kind)} ${boundText(c.bound)}${measureMeta(c.measure).unit ?? ""}`
 
 /** Why a Condition stands aside, for its chip; undefined while it applies. */
 export function staleReason(

@@ -1,4 +1,5 @@
-import { Languages, Layers, Search, Tag } from "lucide-react"
+import { getRouteApi } from "@tanstack/react-router"
+import { Languages, Layers, Search, Settings, Tag } from "lucide-react"
 import { motion } from "motion/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -21,6 +22,18 @@ import { channelGridGates } from "@/components/channel-grid/channel-grid-gates"
 import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
+import {
+  bumpTagUse,
+  byUsage,
+  canManage,
+  isB,
+  mergeText,
+  renameTagUse,
+  tagOrder,
+  usageHint,
+  useProtoVariant,
+  useTagUsage,
+} from "@/components/channel-tags-prototype/store"
 import { requestSpotlight } from "@/components/post-card/ChannelSpotlight"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScope } from "@/contexts/ScopeContext"
@@ -29,6 +42,7 @@ import {
   useCreateSettingGroup,
   useSettingGroupsQuery,
 } from "@/hooks/useSettingGroups"
+import { useTags } from "@/hooks/useTags"
 import { useWorkspaceGroupParams } from "@/hooks/useWorkspaceGroupParams"
 import { bulkTagSuggestions } from "@/lib/channels/bulk-tag-suggestions"
 import { cardFace } from "@/lib/channels/card-zoom"
@@ -83,11 +97,17 @@ import { sortSettingGroupsForDisplay } from "@/lib/channels/setting-groups"
 import { publishShownChannels } from "@/lib/channels/shown-channels"
 import { sortChannelsForGrid } from "@/lib/channels/sort-channels-for-grid"
 import { applyTrimChannelSelection } from "@/lib/channels/trim-selected-channels"
+import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
+import { sameTag } from "@/lib/directory/directory-tags"
+import { appendAnd, newId } from "@/lib/filter-tree"
+import { DAY_MS } from "@/lib/scope/window"
 import { useData } from "../contexts/DataContext"
 import { useSettings } from "../contexts/SettingsContext"
 import { useSync } from "../contexts/SyncContext"
 import { useUI } from "../contexts/UIContext"
 import { useApiStatus } from "../hooks/useApiStatus"
+
+const workspaceRoute = getRouteApi("/_tg/")
 
 type ChannelGridProps = {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
@@ -97,12 +117,32 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   scrollContainerRef,
 }) => {
   const {
-    channels,
+    channels: loadedChannels,
     isInitialChannelsLoading,
     channelStats,
     selectedChannels,
     setSelectedChannels,
   } = useData()
+
+  // PROTOTYPE (channel-tags-usage): variant 0 is main, untouched.
+  const [variant] = useProtoVariant()
+  const proto = variant !== "0"
+  const manage = canManage(variant)
+  const order = tagOrder(variant)
+  const usage = useTagUsage(variant, "channels")
+  const tagStore = useTags()
+  const navigate = workspaceRoute.useNavigate()
+  // The Last post moment reads the Channel, so copy it over from the stats.
+  const channels = useMemo(
+    () =>
+      proto
+        ? loadedChannels.map((c) => ({
+            ...c,
+            lastPostAt: channelStats[c.name]?.lastPostAt ?? undefined,
+          }))
+        : loadedChannels,
+    [proto, loadedChannels, channelStats],
+  )
 
   const { summarizing, setActiveTab } = useUI()
 
@@ -406,11 +446,22 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   const tagRows = useMemo<FacetRow[]>(
     () => [
-      ...visibleTags.map((tag) => ({
-        id: tag,
-        label: tag,
-        names: getChannelNamesWithTag(channels, tag),
-      })),
+      ...(() => {
+        const rows = visibleTags.map((tag) => ({
+          id: tag,
+          label: tag,
+          hint: order ? usageHint(usage(tag)) : undefined,
+          names: getChannelNamesWithTag(channels, tag),
+        }))
+        return order
+          ? byUsage(
+              rows,
+              usage,
+              (r) => r.label,
+              (r) => r.names.length,
+            )
+          : rows
+      })(),
       ...pseudoTagChips.map((chip) => ({
         id: chip.id,
         label: chip.label,
@@ -418,7 +469,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         names: chip.channelNames,
       })),
     ],
-    [channels, pseudoTagChips, visibleTags],
+    [channels, pseudoTagChips, visibleTags, order, usage],
   )
 
   const languageRows = useMemo<FacetRow[]>(
@@ -494,6 +545,23 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             rows={groupRows}
             onCreate={createSettingGroup}
             {...facet("group")}
+            rowAction={
+              proto
+                ? {
+                    icon: <Settings size={11} />,
+                    label: (row) => `Open ${row.label}'s settings`,
+                    onClick: (row) =>
+                      navigate({
+                        search: (prev) => ({
+                          ...prev,
+                          tab: "settings",
+                          setting: "sync.yours.settingGroups",
+                          settingGroup: row.id,
+                        }),
+                      }),
+                  }
+                : undefined
+            }
           />
           <ChannelFacetMenu
             icon={<Tag size={12} />}
@@ -502,7 +570,40 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             testId="channel-tags"
             rows={tagRows}
             search={{ value: tagSearch, onChange: setTagSearch }}
+            freezeOrder={isB(variant)}
             {...facet("tag")}
+            {...(order && {
+              onToggleSelect: (row: FacetRow) => {
+                bumpTagUse("channels", row.id)
+                toggleRowSelection(row)
+              },
+              onFunnel: (id: string, on: boolean) => {
+                if (on) bumpTagUse("channels", id)
+                facet("tag").onFunnel(id, on)
+              },
+            })}
+            manage={
+              manage
+                ? {
+                    can: (row) =>
+                      !row.explanation && !isVirtualGroupTag(row.id),
+                    onRename: (id, to) => {
+                      renameTagUse("channels", id, to)
+                      void tagStore.rename(id, to)
+                    },
+                    onDelete: (id) => void tagStore.remove(id),
+                    mergeText: isB(variant)
+                      ? (id, to) => mergeText(tagStore.tags, id, to)
+                      : undefined,
+                    deleteText: (row) => {
+                      const n =
+                        tagStore.tags.find((t) => sameTag(t.name, row.id))
+                          ?.channels ?? row.total
+                      return `"${row.label}" is on ${n} channel${n === 1 ? "" : "s"}, followed or not; deleting it takes it off every one.`
+                    },
+                  }
+                : undefined
+            }
           />
           {allLanguages.length > 0 && (
             <ChannelFacetMenu
@@ -517,6 +618,50 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           <ChannelMetricMenu
             conditions={menuConditions}
             data={metricData}
+            presets={
+              isB(variant)
+                ? [
+                    {
+                      label: "No post in 30 days",
+                      onPick: () => {
+                        // Last post over 30 days ago, or none stored at all.
+                        const withOld = appendAnd(channelFilter, {
+                          type: "time",
+                          moment: "last_post_at",
+                          mode: "live",
+                          end: -30 * DAY_MS,
+                        })
+                        const old = withOld.children.at(-1)
+                        if (!old) return
+                        setChannelFilter({
+                          ...withOld,
+                          children: [
+                            ...withOld.children.slice(0, -1),
+                            {
+                              kind: "group",
+                              id: newId(),
+                              op: "or",
+                              children: [
+                                old,
+                                {
+                                  kind: "atom",
+                                  id: newId(),
+                                  cond: {
+                                    type: "time",
+                                    moment: "last_post_at",
+                                    mode: "fixed",
+                                    none: true,
+                                  },
+                                },
+                              ],
+                            },
+                          ],
+                        })
+                      },
+                    },
+                  ]
+                : undefined
+            }
             onAdd={(cond) =>
               setChannelFilter(append(channelFilter, "root", cond))
             }
@@ -588,7 +733,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           onMove={() => void actions.applyBulkMoveToGroup()}
           tagInput={actions.bulkTagInput}
           onTagInputChange={actions.setBulkTagInput}
-          onAddTag={actions.handleBulkAddTag}
+          onAddTag={() => {
+            if (order) bumpTagUse("channels", actions.bulkTagInput.trim())
+            return actions.handleBulkAddTag()
+          }}
           removeTagInput={actions.bulkRemoveTagInput}
           onRemoveTagInputChange={actions.setBulkRemoveTagInput}
           onRemoveTag={actions.handleBulkRemoveTag}

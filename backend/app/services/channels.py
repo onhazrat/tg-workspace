@@ -345,11 +345,14 @@ def compute_channel_stats_batch(
     timestamps_by_channel = _fetch_recent_timestamps_by_channel(session, channel_names)
     out: dict[str, dict[str, Any]] = {}
     for name, agg in aggregates.items():
+        recent = timestamps_by_channel.get(name, [])
         out[name] = {
             "count": agg["count"],
             "minId": agg["minId"],
             "maxId": agg["maxId"],
-            "velocity": _velocity_from_timestamps(timestamps_by_channel.get(name, [])),
+            "velocity": _velocity_from_timestamps(recent),
+            # Oldest first, so the newest Post is the last one.
+            "lastPostAt": recent[-1] if recent else None,
         }
     return out
 

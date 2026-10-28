@@ -6,6 +6,7 @@ import {
   BarSearch,
   MenuRowLabel,
 } from "@/components/BarPopover"
+import { isProto } from "@/components/channel-tags-prototype/store"
 import { pillClass } from "@/components/PostFilterParts"
 import type { Cond, MetricAtom, TimeAtom } from "@/lib/channels/channel-filter"
 import {
@@ -35,7 +36,10 @@ export function ChannelMetricMenu({
   conditions,
   data,
   onAdd,
+  presets,
 }: {
+  /** PROTOTYPE (channel-tags-usage, B): one-click filters at the top. */
+  presets?: { label: string; onPick: () => void }[]
   /** The number and Time bound Conditions anywhere in the Channel filter. */
   conditions: (MetricAtom | TimeAtom)[]
   data: MetricData
@@ -101,6 +105,24 @@ export function ChannelMetricMenu({
             onChange={setQuery}
             placeholder="Search criteria..."
           />
+          {presets && presets.length > 0 && (
+            <>
+              <BarHeading>Presets</BarHeading>
+              {presets.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => {
+                    preset.onPick()
+                    onOpenChange(false)
+                  }}
+                  className={rowClass}
+                >
+                  <MenuRowLabel icon={Clock} label={preset.label} />
+                </button>
+              ))}
+            </>
+          )}
           <BarHeading>Filter by</BarHeading>
           {METRICS.filter((m) => matches(m.label)).map((m) => (
             <button
@@ -123,7 +145,9 @@ export function ChannelMetricMenu({
             </button>
           ))}
           <BarHeading>Times</BarHeading>
-          {CHANNEL_MOMENTS.filter((m) => matches(m.label)).map((m) => (
+          {CHANNEL_MOMENTS.filter(
+            (m) => (isProto() || m.key !== "last_post_at") && matches(m.label),
+          ).map((m) => (
             <button
               key={m.key}
               type="button"

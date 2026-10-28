@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 
 import { usersReadUserMe } from "@/client"
+import { ChannelTagsSwitcher } from "@/components/channel-tags-prototype/PrototypeSwitcher"
 import { isLoggedIn } from "@/hooks/useAuth"
 import { syncServerClock } from "@/lib/analysis-window"
 import { queryClient } from "@/lib/queryClient"
@@ -10,7 +11,12 @@ import { queryClient } from "@/lib/queryClient"
  * does the two things that shell did on the way in.
  */
 export const Route = createFileRoute("/_tg")({
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <Outlet />
+      <ChannelTagsSwitcher />
+    </>
+  ),
   beforeLoad: async () => {
     if (!isLoggedIn()) {
       throw redirect({ to: "/login" })

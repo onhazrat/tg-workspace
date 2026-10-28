@@ -1,4 +1,7 @@
 import { useState } from "react"
+import { useVariant } from "@/components/channel-tags-prototype/store"
+import { useTagHandles } from "@/components/channel-tags-prototype/tag-handles"
+import { atoms } from "@/lib/filter-tree"
 import {
   type ChannelRow,
   type ChannelSort,
@@ -27,7 +30,32 @@ import { kindColor, OutcomeBar, Swatch } from "./parts"
  * leaves the whole tab but stays listed here, faded, to be picked again.
  * A row click opens its own Requests (RQS-10).
  */
-export function ChannelTable({
+type ChannelTableProps = Omit<
+  Parameters<typeof ChannelTableBody>[0],
+  "tagHandles"
+>
+
+export function ChannelTable(props: ChannelTableProps) {
+  return useVariant() === "0" ? (
+    <ChannelTableBody {...props} />
+  ) : (
+    <ChannelTableWithTags {...props} />
+  )
+}
+
+/** PROTOTYPE (channel-tags-usage): fetches the funnelled Tags' handles. */
+function ChannelTableWithTags(props: ChannelTableProps) {
+  const tagHandles = useTagHandles([
+    ...new Set(
+      atoms(props.filter).flatMap((a) =>
+        a.cond.type === "tag" ? [a.cond.value] : [],
+      ),
+    ),
+  ])
+  return <ChannelTableBody {...props} tagHandles={tagHandles} />
+}
+
+function ChannelTableBody({
   rows,
   hiddenOutcomes,
   hiddenKinds,
@@ -36,7 +64,10 @@ export function ChannelTable({
   leftOut,
   onLeftOut,
   onOpen,
+  tagHandles,
 }: {
+  /** PROTOTYPE: the funnelled Tags' handles; absent in variant 0. */
+  tagHandles?: (tag: string) => ReadonlySet<string> | undefined
   rows: ChannelRow[]
   hiddenOutcomes: ReadonlySet<Outcome>
   hiddenKinds: ReadonlySet<string>
@@ -62,7 +93,7 @@ export function ChannelTable({
     search,
     sort,
     direction,
-    keepRow(filter, hiddenKinds, hiddenOutcomes),
+    keepRow(filter, hiddenKinds, hiddenOutcomes, tagHandles),
   )
   const max = Math.max(
     0,
@@ -119,6 +150,8 @@ export function ChannelTable({
         }
         hiddenKinds={hiddenKinds}
         hiddenOutcomes={hiddenOutcomes}
+        leftOut={leftOut}
+        onLeftOut={onLeftOut}
       />
       <table className="mt-1 w-full table-fixed text-[12px]">
         <thead>

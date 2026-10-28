@@ -495,6 +495,8 @@ export type DirectoryBarProps = {
   phone?: boolean
   /** Add to Directory (DADD), shown to a reader who sees the internals. */
   onAdd?: DirectoryAddBoxProps["onAdd"]
+  /** PROTOTYPE (channel-tags-usage): the Tags dropdown, after Language. */
+  tagsMenu?: React.ReactNode
 }
 
 export function DirectoryBar(p: DirectoryBarProps) {
@@ -545,6 +547,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
         }
         onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "language"))}
       />
+      {p.tagsMenu}
       <ConditionPicker
         vocabulary={p.vocabulary}
         onPick={(cond) => p.onFilter(appendAnd(p.filter, cond))}

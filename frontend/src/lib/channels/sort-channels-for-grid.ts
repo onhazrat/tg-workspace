@@ -6,6 +6,7 @@ export type ChannelGridSortOption =
   | "total_posts"
   | "posts_in_scope"
   | "last_updated"
+  | "last_post"
   | "channel_id"
   | "channel_name"
   | "followed_at"
@@ -20,6 +21,7 @@ export const CHANNEL_GRID_SORT_LABELS: Record<ChannelGridSortOption, string> = {
   total_posts: "Total Posts",
   posts_in_scope: "Posts in Scope",
   last_updated: "Last Updated",
+  last_post: "Last Post",
   channel_id: "Channel ID",
   channel_name: "Channel Name",
   followed_at: "Followed At",
@@ -108,6 +110,10 @@ const SORT_COMPARATORS: Record<ChannelGridSortOption, ChannelComparator> = {
   posts_in_scope: (a, b, { postsInScopeCounts }) =>
     (postsInScopeCounts[a.name] ?? 0) - (postsInScopeCounts[b.name] ?? 0),
   last_updated: (a, b) => (a.lastUpdated || 0) - (b.lastUpdated || 0),
+  // PROTOTYPE (channel-tags-usage): a Channel with no stored Post sorts as 0.
+  last_post: (a, b, { channelStats }) =>
+    (channelStats[a.name]?.lastPostAt ?? 0) -
+    (channelStats[b.name]?.lastPostAt ?? 0),
   followed_at: (a, b) => (a.followedAt || 0) - (b.followedAt || 0),
   channel_id: (a, b) => (a.startId || 0) - (b.startId || 0),
   channel_name: (a, b) =>

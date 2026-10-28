@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { BarHeading, BarPopover } from "@/components/BarPopover"
+import { isProto } from "@/components/channel-tags-prototype/store"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { pillClass } from "@/components/PostFilterParts"
 import { TgButton } from "@/components/ui/tg-button"
@@ -35,6 +36,13 @@ const SORT_OPTIONS: { value: ChannelGridSortOption; label: string }[] = [
   { value: "subscribers", label: "Subscribers" },
 ]
 
+// PROTOTYPE (channel-tags-usage): Last synced says what writes it; Last post is new.
+const PROTO_SORT_OPTIONS: typeof SORT_OPTIONS = [
+  { value: "last_updated", label: "Last synced" },
+  { value: "last_post", label: "Last post" },
+  ...SORT_OPTIONS.slice(1),
+]
+
 /** The Channels tab's Sort menu; Subscribers only when the setting shows them. */
 export function SortMenu({
   sortBy,
@@ -51,7 +59,7 @@ export function SortMenu({
 }) {
   return (
     <SortPicker
-      options={SORT_OPTIONS.filter(
+      options={(isProto() ? PROTO_SORT_OPTIONS : SORT_OPTIONS).filter(
         (option) => showSubscribers || option.value !== "subscribers",
       )}
       value={sortBy}

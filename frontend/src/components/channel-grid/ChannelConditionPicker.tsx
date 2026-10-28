@@ -1,4 +1,5 @@
 import { Clock, Hash, Languages, Layers, Tag } from "lucide-react"
+import { isProto } from "@/components/channel-tags-prototype/store"
 import type {
   ConditionOption,
   PickerVocabulary,
@@ -72,7 +73,9 @@ export function channelVocabulary(
       },
       {
         heading: "Times",
-        entries: CHANNEL_MOMENTS.map((m) => ({
+        entries: CHANNEL_MOMENTS.filter(
+          (m) => isProto() || m.key !== "last_post_at",
+        ).map((m) => ({
           kind: "editor" as const,
           id: `time:${m.key}`,
           label: m.label,

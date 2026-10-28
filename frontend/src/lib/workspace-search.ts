@@ -55,6 +55,8 @@ export type WorkspaceSearch = {
   summary?: string
   chatSession?: string
   tagRun?: string
+  /** PROTOTYPE (channel-tags-usage): the variant the floating bar shows. */
+  variant?: string
 } & DirectoryParams &
   HistorySearch
 
@@ -68,6 +70,7 @@ const ID_PARAMS = [
   "summary",
   "chatSession",
   "tagRun",
+  "variant",
 ] as const
 
 function trimmedString(value: unknown): string | undefined {

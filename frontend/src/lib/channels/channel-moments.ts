@@ -2,11 +2,13 @@
  * The moments a Channel filter Time bound tests (TB-03, ADR-033): every
  * timestamp a followed Channel carries. The key is the URL form's word.
  */
+import { isProto } from "@/components/channel-tags-prototype/store"
 import type { Channel } from "@/types"
 
 export type ChannelMomentKey =
   | "followed_at"
   | "updated_at"
+  | "last_post_at"
   | "sync_start_at"
   | "oldest_post_at"
   | "next_regular_sync_at"
@@ -31,9 +33,22 @@ export const CHANNEL_MOMENTS: ChannelMoment[] = [
   },
   {
     key: "updated_at",
-    label: "Last update",
-    description: "When its name, photo and counters were last refreshed.",
+    // PROTOTYPE (channel-tags-usage): named for what writes it, a finished sync.
+    get label() {
+      return isProto() ? "Last synced" : "Last update"
+    },
+    get description() {
+      return isProto()
+        ? "When a sync of it last finished."
+        : "When its name, photo and counters were last refreshed."
+    },
     value: (c) => c.lastUpdated ?? null,
+  },
+  {
+    key: "last_post_at",
+    label: "Last post",
+    description: "When its newest stored Post was published.",
+    value: (c) => c.lastPostAt ?? null,
   },
   {
     key: "sync_start_at",
