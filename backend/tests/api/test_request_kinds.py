@@ -555,6 +555,14 @@ def test_the_auto_sync_tick_files_no_job_while_auto_sync_is_off(
 ) -> None:
     """Mutation: drop the kind check from `run_auto_sync`."""
     _follow(client, superuser_token_headers, CHANNEL)
+    # A new follow's deadline is an interval away, so make it due by schedule
+    # rather than lean on the partial-history pass, which CI did not take.
+    with Session(engine) as session:
+        channel = session.get(Channel, CHANNEL)
+        assert channel is not None
+        channel.next_regular_sync_at = int(time.time() * 1000) - 1_000
+        session.add(channel)
+        session.commit()
     _disable(client, superuser_token_headers, RequestKind.AUTO)
 
     result = client.portal.call(run_auto_sync)
