@@ -2,6 +2,7 @@ import { Users } from "lucide-react"
 import { lazy, Suspense } from "react"
 import type {
   RequestBreakdownResponse,
+  RequestKindSwitch,
   RequestSpreadResponse,
   RequestTrendResponse,
 } from "@/client"
@@ -24,6 +25,7 @@ import {
   rangeText,
   statTotals,
   toggled,
+  withDisabledKinds,
 } from "@/lib/requests/breakdown"
 import { pickKind } from "@/lib/requests/channel-filter"
 import { DAY_MS } from "@/lib/scope/window"
@@ -63,6 +65,8 @@ export function RequestsView({
   error,
   phone = false,
   onOpenRow,
+  switches = [],
+  onOpenSwitches = () => {},
 }: {
   filter: RequestsFilter
   onFilter: (update: FilterUpdate) => void
@@ -84,6 +88,10 @@ export function RequestsView({
   error?: unknown
   phone?: boolean
   onOpenRow: (row: ChannelRow) => void
+  /** The Request kind switches, for the kind table's Status (RKD-02). */
+  switches?: readonly RequestKindSwitch[]
+  /** Opens the Telegram work panel, from a kind's Status. */
+  onOpenSwitches?: () => void
 }) {
   const { hiddenKinds, hiddenOutcomes } = filter
   const totals =
@@ -221,7 +229,13 @@ export function RequestsView({
               </Suspense>
             )}
             <KindTable
-              {...kindRows(breakdown.byKind, hiddenKinds, hiddenOutcomes)}
+              {...kindRows(
+                withDisabledKinds(breakdown.byKind, switches),
+                hiddenKinds,
+                hiddenOutcomes,
+              )}
+              switches={switches}
+              onOpenSwitches={onOpenSwitches}
               hiddenOutcomes={hiddenOutcomes}
               onToggleKind={(kind) =>
                 onFilter({ hiddenKinds: toggled(hiddenKinds, kind) })

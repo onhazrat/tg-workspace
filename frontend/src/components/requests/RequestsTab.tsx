@@ -4,6 +4,7 @@
  * the tab opens. The tab-wide state lives here, as one `RequestsFilter`.
  */
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import {
   requestsReadRequestBreakdown,
@@ -13,6 +14,7 @@ import {
 import { useSettingsRegistry } from "@/components/settings-page/registry"
 import { queryKeys } from "@/hooks/queryKeys"
 import { useIsMobile } from "@/hooks/useMobile"
+import { useRequestKinds } from "@/hooks/useRequestKinds"
 import {
   type ChannelRow,
   initialRequestsFilter,
@@ -103,6 +105,8 @@ function OperatorRequests() {
   const spread = useSpread(filter)
   const phone = useIsMobile()
   const [opened, setOpened] = useState<ChannelRow | null>(null)
+  const switches = useRequestKinds()
+  const navigate = useNavigate()
   return (
     <>
       <RequestsView
@@ -117,6 +121,13 @@ function OperatorRequests() {
         error={all.error ?? shown.error ?? listed.error ?? trend.error}
         phone={phone}
         onOpenRow={setOpened}
+        switches={switches}
+        onOpenSwitches={() =>
+          navigate({
+            to: "/",
+            search: { tab: "settings", setting: "jobs.deployment.requestKinds" },
+          })
+        }
       />
       <RequestsSheet
         row={opened}

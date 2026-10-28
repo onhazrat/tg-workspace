@@ -1,4 +1,6 @@
 import type React from "react"
+import type { RequestKindSwitch } from "@/client"
+import { sinceLabel } from "@/hooks/useRequestKinds"
 import {
   fmt,
   type KindRow,
@@ -11,6 +13,34 @@ import { kindColor, OutcomeBar, Swatch } from "./parts"
 export const th =
   "px-3 py-2 text-left font-normal text-[11px] uppercase tracking-wider text-app-ink/50 max-sm:px-1.5"
 export const td = "px-3 py-1.5 tabular-nums max-sm:px-1.5"
+
+/**
+ * A kind's switch (RKD-02): On, or Off since when with a way to the switch.
+ * `other` has no switch, so a dash.
+ */
+export function KindStatus({
+  s,
+  onOpen,
+}: {
+  s: RequestKindSwitch | undefined
+  onOpen: () => void
+}) {
+  if (!s) return <span className="text-app-ink/30">–</span>
+  if (s.enabled) return <span className="text-app-ink/40">On</span>
+  return (
+    <button
+      type="button"
+      title="Change it in Settings, Telegram work"
+      className="text-amber-700 underline"
+      onClick={(e) => {
+        e.stopPropagation()
+        onOpen()
+      }}
+    >
+      Off{s.disabledSince ? ` since ${sinceLabel(s.disabledSince)}` : ""}
+    </button>
+  )
+}
 
 /**
  * By kind of work (RQS-03): a Show box per kind, its Requests and share, the
@@ -26,6 +56,8 @@ export function KindTable({
   picked = [],
   onPickKind = () => {},
   chips,
+  switches = [],
+  onOpenSwitches = () => {},
 }: {
   rows: KindRow[]
   max: number
@@ -36,6 +68,8 @@ export function KindTable({
   onPickKind?: (kind: string) => void
   /** The outcome chips, in the heading. */
   chips: React.ReactNode
+  switches?: readonly RequestKindSwitch[]
+  onOpenSwitches?: () => void
 }) {
   const share = (o: Outcome, r: KindRow) => outcomeShare(hiddenOutcomes, o, r)
   return (
@@ -63,6 +97,7 @@ export function KindTable({
             </th>
             <th className={`${th} text-right`}>Idle</th>
             <th className={`${th} text-right`}>Wasted</th>
+            <th className={th}>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -105,6 +140,12 @@ export function KindTable({
               </td>
               <td className={`${td} text-right`}>{share("idle", r)}</td>
               <td className={`${td} text-right`}>{share("wasted", r)}</td>
+              <td className="px-3 py-1.5 text-[11px] max-sm:px-1.5">
+                <KindStatus
+                  s={switches.find((s) => s.kind === r.kind.id)}
+                  onOpen={onOpenSwitches}
+                />
+              </td>
             </tr>
           ))}
         </tbody>

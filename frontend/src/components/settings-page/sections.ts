@@ -14,7 +14,12 @@ import {
   type Scope,
   sectionTopic,
 } from "./model"
-import { type Panel, panelMatches, visiblePanels } from "./panels"
+import {
+  absorbingPanel,
+  type Panel,
+  panelMatches,
+  visiblePanels,
+} from "./panels"
 import { type SettingsRegistry, useSettingsRegistry } from "./registry"
 
 export interface ScopeGroup {
@@ -51,7 +56,9 @@ export function buildSections(
   const askedForHidden = [filters.scope, parsed.filters.scope].some(
     (s) => s === "env" || s === "code",
   )
-  const rows = filterRows(registry.rows, query, filters)
+  const hits = filterRows(registry.rows, query, filters)
+  // A row a panel shows is found through the panel, never listed twice.
+  const rows = hits.filter((r) => !absorbingPanel(r.id, registry.permissions))
   // A panel holds no value, so a filter on values or an operator hides it.
   const panels =
     filters.modifiedOnly ||
@@ -59,8 +66,10 @@ export function buildSections(
     filters.scope !== "all" ||
     query.includes("@")
       ? []
-      : visiblePanels(registry.permissions).filter((p) =>
-          panelMatches(p, parsed.text),
+      : visiblePanels(registry.permissions).filter(
+          (p) =>
+            panelMatches(p, parsed.text) ||
+            hits.some((r) => p.absorbs?.includes(r.id)),
         )
   const out: Section[] = []
   for (const topic of registry.topics) {
@@ -114,6 +123,14 @@ export function landingFor(
   }
 }
 
+/** What a link lands on: a Setting a panel shows lands on the panel. */
+export function linkTarget(
+  asked: string | undefined,
+  permissions: readonly string[],
+): string | undefined {
+  return (asked && absorbingPanel(asked, permissions)?.id) || asked
+}
+
 /**
  * Scrolls to `id` now and again while the panels above it load, so a link
  * still lands once their content has pushed the row down. Returns a cancel.
@@ -155,7 +172,10 @@ export function useSettingsPage() {
   // `?setting=<id>` scrolls to a row, panel or topic and flashes it; an old
   // `?section=` lands on the topic that holds what it showed.
   const [flash, setFlash] = useState<string | null>(null)
-  const target = setting ?? sectionTopic(section)
+  const target = linkTarget(
+    setting ?? sectionTopic(section),
+    registry.permissions,
+  )
   const loaded = !registry.isLoading
   useEffect(() => {
     if (!target || !loaded) return

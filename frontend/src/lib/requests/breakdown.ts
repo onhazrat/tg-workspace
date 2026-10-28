@@ -178,6 +178,35 @@ export interface KindRow extends Tally {
   share: number | null
 }
 
+/**
+ * `byKind` with a zero row for each disabled kind it lacks (RKD-02): a kind
+ * with no Requests in the range would otherwise vanish exactly when it is off.
+ */
+export function withDisabledKinds(
+  byKind: readonly RequestTotals[],
+  switches: readonly { kind: string; enabled: boolean }[],
+): RequestTotals[] {
+  const missing = switches.filter(
+    (s) => !s.enabled && !byKind.some((r) => r.kind === s.kind),
+  )
+  return [
+    ...byKind,
+    ...missing.map((s) => ({
+      kind: s.kind,
+      requests: 0,
+      useful: 0,
+      idle: 0,
+      wasted: 0,
+      charged: 0,
+      newPosts: 0,
+      repeatedPosts: 0,
+      syncs: 0,
+      failedSyncs: 0,
+      ledgerOnly: 0,
+    })),
+  ]
+}
+
 /** The kind table, busiest first, and the busiest shown kind for the bars. */
 export function kindRows(
   byKind: readonly RequestTotals[],

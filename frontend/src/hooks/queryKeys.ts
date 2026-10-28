@@ -171,6 +171,10 @@ export const queryKeys = {
   myQuota: () => ["myQuota"] as const,
   /** The deployment's Budget defaults and every per-account override. */
   quotaLimits: () => ["quotaLimits"] as const,
+  /** The runtime config, read for its Request kind switches (RKD-02). */
+  runtimeConfig: ["runtimeConfig"] as const,
+  /** Every Queue lane's depth, for the Telegram work panel (RKD-02). */
+  syncLanes: ["syncLanes"] as const,
 } as const
 
 export const SUMMARIZER_STALE_TIME = env.queryStaleTimeMs

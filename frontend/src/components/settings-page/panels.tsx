@@ -29,6 +29,7 @@ import { Proxies, TorActions } from "./network-panels"
 import { Overrides, Usage, Users } from "./operator-panels"
 import { Bots, Destinations } from "./publishing-panels"
 import { SettingGroups } from "./setting-groups-panel"
+import { switchSettingId, TelegramWork } from "./telegram-work-panel"
 
 export interface Panel {
   id: string
@@ -38,6 +39,8 @@ export interface Panel {
   keywords: string
   /** The Permission that shows it; none means every Account. */
   permission?: string
+  /** Setting ids it shows, so they are not rows of their own. */
+  absorbs?: readonly string[]
   render: () => React.ReactNode
 }
 
@@ -314,6 +317,25 @@ export const PANELS: Panel[] = [
     render: () => <JobRuns />,
   },
   {
+    id: "jobs.deployment.requestKinds",
+    topic: "jobs",
+    title: "Telegram work",
+    description:
+      "Disable a kind of Request on this deployment. New work of that kind is refused; queued work waits until it is on again.",
+    keywords: "request kind disable enable directory crawl probe sync bot",
+    permission: "jobs:manage",
+    absorbs: [
+      "auto",
+      "bulk",
+      "single",
+      "follow",
+      "probe",
+      "handle",
+      "botApi",
+    ].map(switchSettingId),
+    render: () => <TelegramWork />,
+  },
+  {
     id: "operator.deployment.users",
     topic: "operator",
     title: "Users",
@@ -348,6 +370,14 @@ export function visiblePanels(permissions: readonly string[]): Panel[] {
   return PANELS.filter(
     (p) => !p.permission || permissions.includes(p.permission),
   )
+}
+
+/** The panel showing Setting `id`, when one this Account sees does. */
+export function absorbingPanel(
+  id: string,
+  permissions: readonly string[],
+): Panel | undefined {
+  return visiblePanels(permissions).find((p) => p.absorbs?.includes(id))
 }
 
 /** Whether a panel matches the search: words only, operators exclude it. */
