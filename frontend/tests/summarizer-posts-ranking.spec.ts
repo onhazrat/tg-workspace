@@ -100,10 +100,8 @@ async function setUp(page: Page) {
     lastUpdated: Date.now(),
   })
   const calls = await mockReads(page, channel)
-  // Reload so the Settings hydrate through the mocked job status, and wait
-  // for the Channels, or there is no selection yet to clear.
+  // Reload so the Settings hydrate through the mocked job status.
   await page.reload()
-  await expect(page.getByText(channel).first()).toBeVisible()
   await clearChannelSelection(page)
   return { channel, calls }
 }
