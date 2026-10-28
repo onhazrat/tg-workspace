@@ -1,6 +1,7 @@
 /** A disabled Request kind greys out what would start it (RKD-02). */
 import { afterEach, describe, expect, test } from "bun:test"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { ChannelCardActions } from "@/components/channel-card/ChannelCardChrome"
 import { BulkResync } from "@/components/settings-page/panels"
 import { PublishPanel } from "@/components/summary-view/PublishPanel"
 import { queryKeys } from "@/hooks/queryKeys"
@@ -60,6 +61,21 @@ test("Reset and sync is greyed out with the refusal while bulk is off", async ()
   queryClient.setQueryData(queryKeys.runtimeConfig, { requestKinds: switches })
   await waitFor(() => expect(button().hasAttribute("disabled")).toBe(true))
   expect(button().getAttribute("title")).toBe(BULK_OFF)
+})
+
+test("a card's Reset and sync is greyed out, named by the refusal", async () => {
+  render(
+    <ChannelCardActions
+      channel={{ id: "c1", name: "durov", tags: [], lastUpdated: 0 }}
+      busy={false}
+      onToggleFreeze={() => {}}
+      onResetAndSync={() => {}}
+      onRemove={() => {}}
+    />,
+  )
+  queryClient.setQueryData(queryKeys.runtimeConfig, { requestKinds: switches })
+  const reset = await screen.findByLabelText(BULK_OFF)
+  expect(reset.hasAttribute("disabled")).toBe(true)
 })
 
 test("Publish is greyed out with the refusal while the Bot API is off", async () => {
