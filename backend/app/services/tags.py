@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 from sqlalchemy import BigInteger, Float, Select, Uuid, func, literal
 from sqlalchemy import cast as cast_
@@ -455,7 +455,16 @@ def _end_uses(session: Session, *, user_id: uuid.UUID, keys: set[str]) -> None:
     )
 
 
-TagOrderRow = tuple[str, int, int, float, int | None]
+class TagOrderRow(NamedTuple):
+    name: str
+    #: Its channels in the scope.
+    channels: int
+    #: How many of those are selected.
+    selected: int
+    #: Its Tag use score on the tab.
+    score: float
+    #: Its last use on the tab (ms), if any.
+    last_used_at: int | None
 
 
 def tag_order(
@@ -511,6 +520,6 @@ def tag_order(
         .order_by(func.lower(first_name))
     )
     return [
-        (name, int(count), int(chosen), float(score), last)
+        TagOrderRow(name, int(count), int(chosen), float(score), last)
         for name, count, chosen, score, last in session.execute(statement).all()
     ]
