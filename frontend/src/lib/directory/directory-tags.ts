@@ -4,10 +4,7 @@
  * case-insensitive name comparison.
  */
 import type { TagResponse } from "@/client"
-import {
-  isVirtualGroupTag,
-  toVirtualGroupTagName,
-} from "@/lib/channels/virtual-group-tags"
+import { isVirtualGroupTag } from "@/lib/channels/virtual-group-tags"
 import { type DirectoryCond, namedTag } from "./directory-filter"
 
 /** Put a Tag on handles or take it off: a row, the panel and the bulk bar. */
@@ -17,10 +14,10 @@ export type Tagging = {
   onUntag: (name: string, handles: string[]) => void
 }
 
-/** What "In the Tag" can name: the Account's Tags and its Setting groups' (DFP-04). */
+/** What "In the Tag" and "In the Setting group" can name (DFP-04, TGU-04). */
 export type TagChoices = {
   tags: TagResponse[]
-  /** Setting group names; each is the Tag `group:<name>`. */
+  /** The Account's Setting group names. */
   groups: string[]
   /** Until both lists arrive, no Tag is known to be missing. */
   loaded: boolean
@@ -30,33 +27,32 @@ export type TagChoices = {
 export const sameTag = (a: string, b: string) =>
   a.trim().toLowerCase() === b.trim().toLowerCase()
 
-/**
- * Every name "In the Tag" and a Seed source can take: the listed Tags, then
- * each Setting group the list leaves out because it has no followed Channel.
- */
-export function tagNames(choices: TagChoices): string[] {
-  const listed = choices.tags.map((t) => t.name)
-  const groups = choices.groups
-    .map(toVirtualGroupTagName)
-    .filter((g) => !listed.some((name) => sameTag(name, g)))
-  return [...listed, ...groups]
-}
+/** Every name "In the Tag" and a Tag Seed source can take: no `group:` one. */
+export const tagNames = (choices: TagChoices): string[] =>
+  ownTags(choices.tags).map((t) => t.name)
 
 /** The Tags a person can put on or take off: a `group:` one is derived. */
 export const ownTags = (tags: TagResponse[]) =>
   tags.filter((t) => !isVirtualGroupTag(t.name))
 
+/** The Setting group a Condition names, as In the group or as its Seeds. */
+function namedGroup(cond: DirectoryCond): string | undefined {
+  if (cond.type === "group") return cond.name
+  if ("seeds" in cond && cond.seeds.kind === "group") return cond.seeds.name
+  return undefined
+}
+
 /**
- * Why a Condition naming a Tag matches nothing: the reader has no Tag of that
- * name, as In the Tag or as its Seeds (DFP-05).
+ * Why a Condition naming a Tag or a Setting group matches nothing: the reader
+ * has none of that name, as In the Tag or the group or as its Seeds (DFP-05).
  */
 export function staleTag(cond: DirectoryCond, choices: TagChoices) {
-  const name = namedTag(cond)
-  if (name === undefined || !choices.loaded) return undefined
-  const known = isVirtualGroupTag(name)
-    ? choices.groups.some((g) => sameTag(toVirtualGroupTagName(g), name))
-    : choices.tags.some((t) => sameTag(t.name, name))
-  return known
-    ? undefined
-    : `You have no Tag named "${name}", so this matches nothing`
+  if (!choices.loaded) return undefined
+  const tag = namedTag(cond)
+  if (tag !== undefined && !choices.tags.some((t) => sameTag(t.name, tag)))
+    return `You have no Tag named "${tag}", so this matches nothing`
+  const group = namedGroup(cond)
+  if (group !== undefined && !choices.groups.some((g) => sameTag(g, group)))
+    return `You have no Setting group named "${group}", so this matches nothing`
+  return undefined
 }

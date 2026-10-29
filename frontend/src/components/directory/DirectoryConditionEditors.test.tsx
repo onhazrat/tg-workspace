@@ -42,6 +42,8 @@ const choice = (name: RegExp) =>
   screen.getByRole("radio", { name }) as HTMLInputElement
 const tagPicker = () =>
   screen.getByRole("combobox", { name: "Tag" }) as HTMLSelectElement
+const groupPicker = () =>
+  screen.getByRole("combobox", { name: "Setting group" }) as HTMLSelectElement
 
 const submit = () => screen.getByRole("button", { name: /^(Add|Update)/ })
 
@@ -158,14 +160,32 @@ describe("Cited by @x and Cites @x", () => {
       />,
     )
     fireEvent.click(choice(/A Tag/))
-    expect([...tagPicker().options].map((o) => o.value)).toEqual([
-      "News",
-      "group:Morning",
-    ])
-    fireEvent.change(tagPicker(), { target: { value: "group:Morning" } })
+    expect([...tagPicker().options].map((o) => o.value)).toEqual(["News"])
     fireEvent.click(submit())
     expect(got).toEqual([
-      { type: "cites", seeds: { kind: "tag", name: "group:Morning" } },
+      { type: "cites", seeds: { kind: "tag", name: "News" } },
+    ])
+  })
+
+  test("a Setting group is a live source of its own, sent by name (TGU-04)", () => {
+    const got: DirectoryCond[] = []
+    render(
+      <HandlesEditor
+        type="citedby"
+        sets={sets}
+        tags={{ ...tags, groups: ["Morning", "Slow"] }}
+        onSubmit={(c) => got.push(c)}
+      />,
+    )
+    fireEvent.click(choice(/A Setting group/))
+    expect([...groupPicker().options].map((o) => o.value)).toEqual([
+      "Morning",
+      "Slow",
+    ])
+    fireEvent.change(groupPicker(), { target: { value: "Slow" } })
+    fireEvent.click(submit())
+    expect(got).toEqual([
+      { type: "citedby", seeds: { kind: "group", name: "Slow" } },
     ])
   })
 
@@ -386,14 +406,37 @@ describe("Shared parents and Shared children (DIR-07)", () => {
         tags={tags}
         start={{
           type: "parents",
-          seeds: { kind: "tag", name: "group:Morning" },
+          seeds: { kind: "tag", name: "News" },
           min: 2,
         }}
         onSubmit={() => {}}
       />,
     )
     expect(choice(/A Tag/).checked).toBe(true)
-    expect(tagPicker().value).toBe("group:Morning")
+    expect(tagPicker().value).toBe("News")
+  })
+
+  test("a Setting group choice reopens on its group and sends it (TGU-04)", () => {
+    const got: DirectoryCond[] = []
+    render(
+      <SharedEditor
+        type="parents"
+        sets={sets}
+        tags={{ ...tags, groups: ["Morning", "Slow"] }}
+        start={{
+          type: "parents",
+          seeds: { kind: "group", name: "Slow" },
+          min: 2,
+        }}
+        onSubmit={(c) => got.push(c)}
+      />,
+    )
+    expect(choice(/A Setting group/).checked).toBe(true)
+    expect(groupPicker().value).toBe("Slow")
+    fireEvent.click(submit())
+    expect(got).toEqual([
+      { type: "parents", seeds: { kind: "group", name: "Slow" }, min: 2 },
+    ])
   })
 
   test("Shared children says Seeds nobody follows find little", () => {

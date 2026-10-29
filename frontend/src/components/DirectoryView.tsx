@@ -400,7 +400,7 @@ export function DirectoryView() {
     const cond = firstShared(d.filter, relation)
     if (!cond) return null
     const seeds = seedForms(cond.seeds).wire(d.sets)
-    return "tag" in seeds ? seeds : seeds.handles
+    return "handles" in seeds ? seeds.handles : seeds
   }
   return (
     <div className="pt-4" data-testid="directory-view">

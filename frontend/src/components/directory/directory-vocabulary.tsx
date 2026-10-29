@@ -12,6 +12,7 @@ import {
   Hash,
   Inbox,
   Languages,
+  Layers,
   type LucideIcon,
   Shapes,
   ShieldAlert,
@@ -69,6 +70,7 @@ const ICON: Record<DirectoryCond["type"], LucideIcon> = {
   language: Languages,
   name: Type,
   tag: Tag,
+  group: Layers,
   flag: CircleDot,
   mine: Inbox,
   citedby: CornerDownLeft,
@@ -224,6 +226,15 @@ export function directoryVocabulary(
             current: (c) => (c.type === "tag" ? c.name : undefined),
           },
           {
+            kind: "list",
+            id: "group",
+            label: "In the Setting group",
+            icon: Layers,
+            options: tags.groups.map((name) => ({ id: name, label: name })),
+            make: (name) => ({ type: "group", name }),
+            current: (c) => (c.type === "group" ? c.name : undefined),
+          },
+          {
             kind: "editor",
             id: "name",
             label: "Name contains",
@@ -341,8 +352,8 @@ export function directoryVocabulary(
         ? `measure-${c.measure}`
         : c.type === "time"
           ? `time-${c.moment}`
-          : c.type === "tag"
-            ? `tag-${c.name}`
+          : c.type === "tag" || c.type === "group"
+            ? `${c.type}-${c.name}`
             : "value" in c
               ? `${c.type}-${c.value}`
               : "seeds" in c

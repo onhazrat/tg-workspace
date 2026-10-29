@@ -14,6 +14,8 @@
  * the Tag, which the server resolves against the reader's own Tags. DFP-05
  * lets a Tag be the Seeds of all four: `parents:"tag:news 3"`,
  * `citedby:"tag:news"`; the old word `picked` still reads as `ticked`.
+ * TGU-04 adds `group:"Slow"`, In the Setting group, a Seed source too
+ * (`parents:"group:Slow"`); an old `tag:"group:Slow"` reads as it.
  * DPF adds `status:unavailable`, `kind:bot`, `error:"timeout"` and Time
  * bounds: `last_post_at -7d..` (Live, signed from now), `refresh_due_at
  * now..+2d`, `checked_at 2026-10-01T00:00Z..` (Fixed, a UTC instant), either
@@ -108,6 +110,8 @@ export type DirectoryCond =
   | DirectoryMeasureCond
   /** In the reader's Tag of this name; one they do not have matches nothing. */
   | { type: "tag"; name: string }
+  /** The reader's Follows in their Setting group of this name (TGU-04). */
+  | { type: "group"; name: string }
   /** The verdict or the kind is exactly `value` (DPF). */
   | { type: "is"; field: IsField; value: string }
   /** The last error contains `value`, case-insensitive (DPF). */
@@ -123,10 +127,14 @@ export type DirectoryCond =
 export type SeedSource =
   | { kind: LiveSource }
   | { kind: "tag"; name: string }
+  | { kind: "group"; name: string }
   | { kind: "handles"; handles: string[] }
 export type LiveSource = "ticked" | "selection" | "follows"
 /** Cited by and Cites take fixed handles or a Tag; the editor fills the handles. */
-export type FixedSeeds = Extract<SeedSource, { kind: "tag" | "handles" }>
+export type FixedSeeds = Extract<
+  SeedSource,
+  { kind: "tag" | "group" | "handles" }
+>
 /** Each live source's handles as they are now. */
 export type SeedSets = Record<LiveSource, string[]>
 
@@ -380,9 +388,13 @@ const LIVE_LABEL: Record<LiveSource, string> = {
 const atHandles = (handles: string[]) => handles.map((h) => `@${h}`).join(", ")
 
 const TAG_SEEDS = "tag:"
+const GROUP_SEEDS = "group:"
 
 /** The Seeds as the wire takes them. */
-export type WireSeeds = { handles: string[] } | { tag: string }
+export type WireSeeds =
+  | { handles: string[] }
+  | { tag: string }
+  | { group: string }
 
 /** One Seed source in each of the forms the Directory writes it. */
 type SeedForms = {
@@ -424,6 +436,12 @@ const SEED_FORMS: { [K in SeedKind]: (seeds: SeedOf<K>) => SeedForms } = {
     text: `${TAG_SEEDS}${name}`,
     id: `tag-${name}`,
     wire: () => ({ tag: name }),
+  }),
+  group: ({ name }) => ({
+    label: `the Setting group ${name}`,
+    text: `${GROUP_SEEDS}${name}`,
+    id: `group-${name}`,
+    wire: () => ({ group: name }),
   }),
   ticked: liveSeeds,
   selection: liveSeeds,
@@ -489,6 +507,8 @@ export function directoryConditionLabel(
       return `Name contains "${cond.value}"`
     case "tag":
       return `In the Tag ${cond.name}`
+    case "group":
+      return `In the Setting group ${cond.name}`
     case "flag":
       return FLAG_LABEL[cond.value]
     case "mine": {
@@ -528,7 +548,8 @@ function condText(cond: DirectoryCond): string {
     case "name":
       return `name:${quote(cond.value)}`
     case "tag":
-      return `tag:${quote(cond.name)}`
+    case "group":
+      return `${cond.type}:${quote(cond.name)}`
     case "flag":
       return `is:${cond.value}`
     case "mine": {
@@ -542,7 +563,9 @@ function condText(cond: DirectoryCond): string {
     case "children": {
       const words = [seedForms(cond.seeds).text]
       // A Tag name ending in a number would read back as the minimum.
-      const ambiguous = cond.seeds.kind === "tag" && TRAILING_MIN.test(words[0])
+      const ambiguous =
+        (cond.seeds.kind === "tag" || cond.seeds.kind === "group") &&
+        TRAILING_MIN.test(words[0])
       if (cond.min !== SHARED_MIN || ambiguous) words.push(String(cond.min))
       return `${cond.type}:${quote(words.join(" "))}`
     }
@@ -608,11 +631,25 @@ const SOURCES: Record<string, LiveSource> = {
   picked: "ticked",
 }
 
-/** `tag:<name>` or handles; `null` for no name or no handle. */
+/**
+ * `tag:<name>`'s or `group:<name>`'s value as a Tag or a Setting group: an old
+ * `group:` Tag is the group (TGU-04). `null` for no name.
+ */
+function namedCond(
+  type: "tag" | "group",
+  text: string,
+): { type: "tag" | "group"; name: string } | null {
+  const old = type === "tag" && text.toLowerCase().startsWith(GROUP_SEEDS)
+  const name = old ? text.slice(GROUP_SEEDS.length).trim() : text
+  return name.trim() ? { type: old ? "group" : type, name } : null
+}
+
+/** `tag:<name>`, `group:<name>` or handles; `null` for no name or no handle. */
 function fixedSeeds(text: string): FixedSeeds | null {
-  if (text.startsWith(TAG_SEEDS)) {
-    const name = text.slice(TAG_SEEDS.length).trim()
-    return name ? { kind: "tag", name } : null
+  for (const type of ["tag", "group"] as const) {
+    if (!text.startsWith(`${type}:`)) continue
+    const named = namedCond(type, text.slice(type.length + 1).trim())
+    return named && { kind: named.type, name: named.name }
   }
   const handles = parseHandles(text)
   return handles.length ? { kind: "handles", handles } : null
@@ -663,7 +700,10 @@ const DIRECTORY_TEXT: TextVocabulary<DirectoryCond> = {
     if (prefix === "name" || prefix === undefined)
       return { type: "name", value: text }
     if (prefix === "lang") return { type: "language", value: text }
-    if (prefix === "tag" && text.trim()) return { type: "tag", name: text }
+    if (prefix === "tag" || prefix === "group") {
+      const cond = namedCond(prefix, text)
+      if (cond) return cond
+    }
     if (prefix === "is" && FLAGS.has(text))
       return { type: "flag", value: text as DirectoryFlag }
     if (

@@ -451,12 +451,24 @@ describe("a Tag Condition (DFP-04)", () => {
     },
   )
 
-  test("a Tag the reader has, or a Setting group's, is an ordinary chip", () => {
+  test("a Tag or a Setting group the reader has is an ordinary chip", () => {
     mount({ text: 'tag:news and tag:"group:slow feed"', vocabulary })
-    const chips = ["In the Tag news", "In the Tag group:slow feed"].map(
+    const chips = ["In the Tag news", "In the Setting group slow feed"].map(
       (name) => screen.getByRole("button", { name }),
     )
     expect(chips.map((c) => c.getAttribute("data-stale"))).toEqual([null, null])
+  })
+
+  test("a Setting group the reader lacks is struck through (TGU-04)", () => {
+    mount({ text: 'group:gone and citedby:"group:Fast"', vocabulary })
+    for (const name of [
+      "In the Setting group gone",
+      "Cited by the Setting group Fast",
+    ]) {
+      const chip = screen.getByRole("button", { name })
+      expect(chip.getAttribute("data-stale")).toBe("true")
+      expect(chip.getAttribute("title")).toContain("no Setting group")
+    }
   })
 
   test("a Tag the reader lacks keeps its chip, struck through, and says why", () => {
@@ -494,13 +506,17 @@ describe("a Tag Condition (DFP-04)", () => {
     expect(chip.getAttribute("data-stale")).toBeNull()
   })
 
-  test("the Filters picker offers each Tag and Setting group by name", () => {
+  test("the Filters picker offers each Tag, and each Setting group apart", () => {
     const calls = mount({ text: "", vocabulary })
     fireEvent.click(screen.getByTestId("directory-filters"))
     fireEvent.click(screen.getByText("In the Tag"))
-    expect(screen.getByText("group:Slow Feed")).toBeTruthy()
+    expect(screen.queryByText("group:Slow Feed")).toBeNull()
     fireEvent.click(screen.getByText("News"))
     expect(calls.filters).toEqual(["tag:News"])
+    fireEvent.click(screen.getByTestId("directory-filters"))
+    fireEvent.click(screen.getByText("In the Setting group"))
+    fireEvent.click(screen.getByText("Slow Feed"))
+    expect(calls.filters).toEqual(["tag:News", 'group:"Slow Feed"'])
   })
 })
 
