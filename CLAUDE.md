@@ -50,6 +50,7 @@ Full stack via Docker: `docker compose watch` (frontend :5173, API :8000, Swagge
 ## Testing & migrations
 
 - **pytest never touches the dev database.** `tests/conftest.py` points it at `app_test` (once: `createdb app_test && cd backend && POSTGRES_DB=app_test uv run alembic upgrade head`), or in a worktree at the `app_test_<worktree>` that `bash scripts/worktree-setup.sh` creates and `--teardown` drops. Each test truncates `tg_*` tables.
+- Run `cd backend && uv run prek run --all-files` (seconds) before the full backend suite (~11 min): it catches stale generated catalogs, dangling doc references and em dashes that otherwise surface only at the suite's end or at commit.
 - After changing any model, generate an Alembic revision and commit it; migrations live in `backend/app/alembic/versions/`.
 - Maintenance/backfill scripts live in `backend/scripts/` (run with `uv run python backend/scripts/<name>.py`, usually `--dry-run` first) — indexed in `development.md`.
 

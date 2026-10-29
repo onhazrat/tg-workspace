@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from bs4 import BeautifulSoup
@@ -46,4 +47,5 @@ def test_parse_channel_meta_bio_preserves_line_breaks_from_fixture() -> None:
     )
     assert "\n\n" in meta["bio"]
     assert "Disclaimer:" in meta["bio"]
-    assert "reuters.com" in meta["bio"]
+    # A search, not `in`: CodeQL reads `"host" in text` as a URL check.
+    assert re.search(r"reuters\.com", meta["bio"])

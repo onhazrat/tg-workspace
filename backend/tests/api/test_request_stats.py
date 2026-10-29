@@ -20,7 +20,6 @@ import asyncio
 import logging
 import threading
 import time
-import types
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -37,11 +36,11 @@ from app.core.config import Settings, settings
 from app.core.db import engine
 from app.core.request_recording import RequestKind, attributed, page_for_fetch
 from app.jobs import request_stats as request_stats_jobs
-from app.jobs import retention
+from app.jobs import retention, sync_queue
 from app.jobs.discover_probe import run_discover_probe_sweep
 from app.jobs.retention import run_retention_cleanup
 from app.jobs.sync_queue import enqueue_sync_job
-from app.models_tg import DirectoryEntry, RequestRecordRow, SyncJob, utc_now
+from app.models_tg import Channel, DirectoryEntry, RequestRecordRow, SyncJob, utc_now
 from app.services import network, request_stats
 from app.services.bulk_follow import run_follow_job_by_id
 from app.services.channel_directory import enqueue_handles
@@ -53,11 +52,12 @@ from app.services.request_stats import (
     roll_up_request_totals,
 )
 from app.services.scraper_jobs import clear_jobs_for_tests, create_job, get_job
-from app.services.sync_lanes import DISCOVER_PROBE_LANE
+from app.services.sync_lanes import DISCOVER_PROBE_LANE, DRAIN_ORDER
 from app.services.telegram_web import (
     TelegramChannelPrivate,
     TelegramWebViewUnavailable,
 )
+from tests.utils.sleep import asyncio_without_sleep
 
 API = settings.API_V1_STR
 CHANNEL = "rqschannel"
@@ -144,7 +144,7 @@ def telegram(monkeypatch: pytest.MonkeyPatch) -> FakeTelegram:
     monkeypatch.setattr(
         network,
         "asyncio",
-        types.SimpleNamespace(**{**vars(asyncio), "sleep": _no_sleep}),
+        asyncio_without_sleep(_no_sleep),
     )
     monkeypatch.setattr(settings, "SYNC_RETRY_BACKOFF_BASE_MS", 0)
     return fake
@@ -179,6 +179,38 @@ def _follow(client: TestClient, headers: dict[str, str], channel: str) -> None:
     assert r.status_code == 200, r.text
 
 
+def _stuck(job: Any) -> str:
+    """What a job that never finished was doing: its Channels, the lanes, the worker.
+
+    A bare "never finished" cannot tell a lost ring (a message still queued,
+    the consumer idle) from a walk that hung (a Channel `running`) from a
+    worker that died (no consumer task). This says which.
+    """
+    if job is not None and not isinstance(job, dict):
+        job = {"status": job.status, "channels": list(job.channels.values())}
+    channels = [
+        (c["channelName"], c["status"], c.get("error"))
+        if isinstance(c, dict)
+        else (c.channel_name, c.status, c.error)
+        for c in (job or {}).get("channels") or []
+    ]
+    with Session(engine) as session:
+        lanes = {lane: queue_length(session, lane) for lane in DRAIN_ORDER}
+        claims = [
+            (c.name, c.sync_claimed_by)
+            for c in session.exec(select(Channel)).all()
+            if c.sync_claimed_by
+        ]
+    queued = {lane: n for lane, n in lanes.items() if n} or "nothing"
+    consumer = sync_queue._lane_consumer._task
+    alive = consumer is not None and not consumer.done()
+    return (
+        f"job {(job or {}).get('status')}, channels {channels}, queued {queued}, "
+        f"claims {claims or 'none'}, in flight {sorted(sync_queue._in_flight)}, "
+        f"lane consumer {'running' if alive else 'not running'}"
+    )
+
+
 def _sync(
     client: TestClient,
     headers: dict[str, str],
@@ -193,13 +225,7 @@ def _sync(
     )
     assert r.status_code == 200, r.text
     job_id = r.json()["jobId"]
-    deadline = time.time() + 20
-    while time.time() < deadline:
-        job = client.get(f"{API}/jobs/sync/{job_id}", headers=headers).json()
-        if job["status"] in ("completed", "failed", "cancelled"):
-            return dict(job)
-        time.sleep(0.05)
-    raise AssertionError(f"sync {job_id} never finished")
+    return _wait_for(client, headers, f"{API}/jobs/sync/{job_id}")
 
 
 def _today() -> tuple[str, str]:
@@ -1016,7 +1042,7 @@ def _wait_for(client: TestClient, headers: dict[str, str], url: str) -> dict[str
         if job["status"] in ("completed", "failed", "cancelled"):
             return dict(job)
         time.sleep(0.05)
-    raise AssertionError(f"{url} never finished")
+    raise AssertionError(f"{url} never finished; {_stuck(job)}")
 
 
 def _bulk_follow(
@@ -1522,7 +1548,7 @@ def _ownerless_sync(client: TestClient, headers: dict[str, str], channel: str) -
         "failed",
         "cancelled",
     ):
-        assert time.time() < deadline, f"sync {job_id} never finished"
+        assert time.time() < deadline, f"sync {job_id} never finished; {_stuck(job)}"
         time.sleep(0.05)
 
 
@@ -1771,6 +1797,9 @@ def test_a_charge_with_no_account_is_the_operators(
     telegram.script(_first_page(), _page_html(CHANNEL, [100]))
     _follow(client, superuser_token_headers, CHANNEL)
     _ownerless_sync(client, superuser_token_headers, CHANNEL)
+    # The worker's exit flush can land after the job reads finished; write
+    # the buffer first, or a late flush puts an Account back after the clear.
+    flush_recorded_requests()
     with Session(engine) as session:
         session.execute(sa_update(RequestRecordRow).values(account_id=None))
         session.commit()

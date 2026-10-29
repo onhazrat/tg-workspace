@@ -89,6 +89,13 @@ repos:
         language: system
         files: ^backend/app/.*\.py$|^backend/app/core/constants_catalog\.generated\.json$|^frontend/src/.*\.(ts|tsx)$|^scripts/generate_constants_catalog\.py$
 
+      - id: crap-baseline-touch
+        name: Reminder for a CRAP baseline file
+        entry: python3 scripts/crap/baseline_touch.py
+        language: system
+        verbose: true
+        files: ^backend/app/.*\.py$|^frontend/src/.*\.(ts|tsx)$
+
       - id: check-em-dashes
         name: No em dash in an added line
         entry: python3 scripts/check_em_dashes.py

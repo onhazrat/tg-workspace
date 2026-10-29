@@ -169,6 +169,23 @@ def distinct_due_values(
     return [row.v for row in rows]
 
 
+def _queue_table(session: Session, queue_name: str) -> str:
+    """`q_<queue>` for a queue PGMQ knows, its name read back from `pgmq.meta`.
+
+    A table name cannot be a bound parameter, so it is formatted into the SQL.
+    Taking it from the database rather than the argument keeps any name PGMQ
+    did not create out of the statement, which is also the form CodeQL's
+    sql-injection query accepts: a lane name reaches here from a route path.
+    """
+    known = session.execute(
+        text("SELECT queue_name FROM pgmq.meta WHERE queue_name = :queue"),
+        {"queue": queue_name},
+    ).scalar_one_or_none()
+    if known is None:
+        raise ValueError(f"no PGMQ queue named {queue_name!r}")
+    return f"q_{known}"
+
+
 def queued_messages(session: Session, queue_name: str) -> list[PgmqMessage]:
     """Every message still on the queue, claimed or not, oldest first.
 
@@ -178,10 +195,10 @@ def queued_messages(session: Session, queue_name: str) -> list[PgmqMessage]:
     due ones — a purge that skipped them would leave them to be redelivered
     onto a lane the operator has just emptied.
     """
-    qtable = f"q_{queue_name}"
+    qtable = _queue_table(session, queue_name)
     rows = session.execute(
         text(
-            f'SELECT msg_id, read_ct, message FROM pgmq."{qtable}" ORDER BY msg_id'  # noqa: S608 — queue_name is our own constant, never user input
+            f'SELECT msg_id, read_ct, message FROM pgmq."{qtable}" ORDER BY msg_id'  # noqa: S608 - the name comes from pgmq.meta, see `_queue_table`
         )
     ).all()
     return [
@@ -247,9 +264,9 @@ def delete(session: Session, queue_name: str, msg_id: int) -> bool:
 
 def queue_length(session: Session, queue_name: str) -> int:
     """Messages currently due or in flight — for tests and diagnostics."""
-    qtable = f"q_{queue_name}"
+    qtable = _queue_table(session, queue_name)
     return int(
         session.execute(
-            text(f'SELECT count(*) FROM pgmq."{qtable}"')  # noqa: S608 — queue_name is our own constant, never user input
+            text(f'SELECT count(*) FROM pgmq."{qtable}"')  # noqa: S608 - the name comes from pgmq.meta, see `_queue_table`
         ).scalar_one()
     )

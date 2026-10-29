@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from app.services.scraper import resolve_start_time_to_id, scrape_channel
+from tests.utils.sleep import asyncio_without_sleep
 
 _PAGE = """
 <html><body>
@@ -61,7 +62,7 @@ def test_resolver_probes_pass_the_known_latest_id() -> None:
         with (
             patch("app.services.scraper.get_channel_info", channel_info),
             patch("app.services.scraper._fetch_post_at_url", probe),
-            patch("app.services.scraper.asyncio.sleep", AsyncMock()),
+            patch("app.services.scraper.asyncio", asyncio_without_sleep(AsyncMock())),
         ):
             return await resolve_start_time_to_id("ch", 5_000)
 

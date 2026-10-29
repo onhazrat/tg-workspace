@@ -131,6 +131,24 @@ def _clean_tg_tables_after_test() -> Generator[None]:
     purge_all_sync_lanes()
 
 
+@pytest.fixture(autouse=True)
+def _clean_proxy_state() -> Generator[None]:
+    """Cooldown and pace are `network`'s module state, reset around every test.
+
+    A soft block widens the direct egress's pace, and a later test's fetches
+    then serve that wait on real sleeps: a combined run once sat at 0% CPU for
+    over ten minutes. In a guard it is a lie both ways, a stale cooldown
+    passing a 404 guard and a stale pace passing a widening guard.
+    """
+    from app.services import network
+
+    network._bad_proxies.clear()
+    network.reset_proxy_pacing_for_tests()
+    yield
+    network._bad_proxies.clear()
+    network.reset_proxy_pacing_for_tests()
+
+
 @pytest.fixture
 def tg_test_channel() -> Generator:
     """Create a channel for the current test and delete it (and dependents) afterward.
