@@ -116,3 +116,93 @@ def test_a_use_counts_on_its_own_tab(
     assert _scores(client, operator, "directory") == {"News": 0, "World": 1}
     assert _scores(client, operator, "requests") == {"News": 0, "World": 0}
     assert _use(client, operator, "posts", "News").status_code == 422
+
+
+def test_each_use_halves_every_14_days(
+    client: TestClient, accounts: tuple[Headers, Headers], clock: list[int]
+) -> None:
+    operator, _ = accounts
+    _add(client, operator, "old", "a_one")
+    _use(client, operator, "channels", "old")
+    clock[0] += 14 * DAY_MS
+    assert _scores(client, operator, "channels") == {"old": 0.5}
+    _use(client, operator, "channels", "old")
+    clock[0] += 14 * DAY_MS
+    assert _scores(client, operator, "channels") == {"old": 0.75}
+
+
+def test_only_the_50_newest_uses_are_kept(
+    client: TestClient, accounts: tuple[Headers, Headers], clock: list[int]
+) -> None:
+    operator, _ = accounts
+    _add(client, operator, "busy", "a_one")
+    _add(client, operator, "other", "a_one")
+    for _ in range(55):
+        _use(client, operator, "channels", "busy")
+        clock[0] += 1
+    _use(client, operator, "channels", "other")
+    _use(client, operator, "directory", "busy")
+    assert _scores(client, operator, "channels") == {"busy": 50, "other": 1}
+    assert _scores(client, operator, "directory") == {"busy": 1, "other": 0}
+
+
+def test_a_rename_carries_uses_on_every_tab_and_a_merge_adds_them(
+    client: TestClient, accounts: tuple[Headers, Headers], clock: list[int]
+) -> None:
+    operator, _ = accounts
+    _add(client, operator, "typo", "a_one")
+    _add(client, operator, "World", "a_two")
+    _use(client, operator, "channels", "typo")
+    _use(client, operator, "directory", "typo")
+    clock[0] += 1
+    _use(client, operator, "channels", "World")
+
+    client.patch(TAGS, json={"name": "typo", "to": "Fixed"}, headers=operator)
+    assert _scores(client, operator, "channels") == {"Fixed": 1, "World": 1}
+    assert _scores(client, operator, "directory") == {"Fixed": 1, "World": 0}
+
+    client.patch(TAGS, json={"name": "fixed", "to": "world"}, headers=operator)
+    assert _scores(client, operator, "channels") == {"World": 2}
+    assert _scores(client, operator, "directory") == {"World": 1}
+
+
+def test_uses_end_with_the_tag(
+    client: TestClient, accounts: tuple[Headers, Headers]
+) -> None:
+    operator, _ = accounts
+    for name in ("deleted", "untagged", "replaced"):
+        _add(client, operator, name, "tg_followed", "a_two")
+        _use(client, operator, "channels", name)
+    client.request("DELETE", TAGS, json={"name": "deleted"}, headers=operator)
+    # Untagged from one Channel, then the last.
+    for handle in ("a_two", "tg_followed"):
+        client.request(
+            "DELETE",
+            f"{TAGS}/channels",
+            json={"name": "untagged", "handles": [handle]},
+            headers=operator,
+        )
+        if handle == "a_two":
+            assert _scores(client, operator, "channels")["untagged"] == 1
+    # The Channels tab's bulk Tag edit, a Tag run's path too, replaces a list.
+    client.request(
+        "DELETE",
+        f"{TAGS}/channels",
+        json={"name": "replaced", "handles": ["a_two"]},
+        headers=operator,
+    )
+    bulk = client.patch(
+        f"{settings.API_V1_STR}/data/channels/bulk-tags",
+        json={"updates": [{"channelId": "tg_followed", "tags": [{"name": "fresh"}]}]},
+        headers=operator,
+    )
+    assert bulk.status_code == 200, bulk.text
+
+    for name in ("deleted", "untagged", "replaced"):
+        _add(client, operator, name, "a_one")
+    assert _scores(client, operator, "channels") == {
+        "deleted": 0,
+        "fresh": 0,
+        "replaced": 0,
+        "untagged": 0,
+    }

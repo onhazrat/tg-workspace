@@ -110,14 +110,18 @@ def replace_channel_tags(
     case collapse to the first, which is "the name as first written".
     """
     key = normalize_handle(handle)
-    session.execute(
-        sa_delete(Tag).where(col(Tag.user_id) == user_id, col(Tag.handle) == key)
+    removed = session.execute(
+        sa_delete(Tag)
+        .where(col(Tag.user_id) == user_id, col(Tag.handle) == key)
+        .returning(col(Tag.tag_key))
     )
+    old_keys = set(removed.scalars().all())
     add_tags(
         session,
         user_id=user_id,
         rows=[{"handle": key, **tag} for tag in normalize_channel_tags(tags)],
     )
+    _end_uses(session, user_id=user_id, keys=old_keys)
 
 
 def add_tags(
@@ -300,6 +304,7 @@ def unassign_tag(
             col(Tag.handle).in_(keys),
         )
     )
+    _end_uses(session, user_id=user_id, keys={tag_key(name)})
     return int(cast(Any, removed).rowcount)
 
 
@@ -337,6 +342,8 @@ def rename_tag(
         .where(col(Tag.user_id) == user_id, col(Tag.tag_key).in_({old, new}))
         .values(tag_key=new, name=spelling)
     )
+    if old != new:
+        _move_uses(session, user_id=user_id, old=old, new=new)
     return spelling, len(handles_for_tag(session, user_id=user_id, name=spelling))
 
 
@@ -353,6 +360,7 @@ def delete_tag(session: Session, *, user_id: uuid.UUID, name: str) -> int | None
             col(Tag.user_id) == user_id, col(Tag.tag_key) == tag_key(name)
         )
     )
+    _end_uses(session, user_id=user_id, keys={tag_key(name)})
     return removed
 
 
@@ -421,6 +429,33 @@ def record_use(session: Session, *, user_id: uuid.UUID, tab: str, name: str) -> 
     )
     session.execute(sa_delete(TagUse).where(*mine, col(TagUse.used_at) < oldest_kept))
     return int(cast(Any, inserted).rowcount)
+
+
+def _move_uses(session: Session, *, user_id: uuid.UUID, old: str, new: str) -> None:
+    """A rename's uses, on every tab, become `new`'s; a merge adds them."""
+    moved = sa_select(
+        col(TagUse.user_id), col(TagUse.tab), literal(new), col(TagUse.used_at)
+    ).where(col(TagUse.user_id) == user_id, col(TagUse.tag_key) == old)
+    session.execute(
+        pg_insert(TagUse)
+        .from_select(["user_id", "tab", "tag_key", "used_at"], moved)
+        .on_conflict_do_nothing()
+    )
+    _end_uses(session, user_id=user_id, keys={old})
+
+
+def _end_uses(session: Session, *, user_id: uuid.UUID, keys: set[str]) -> None:
+    """Delete the uses of each of `keys` no Channel carries any more."""
+    if not keys:
+        return
+    carried = _mine(user_id).where(col(Tag.tag_key) == col(TagUse.tag_key)).exists()
+    session.execute(
+        sa_delete(TagUse).where(
+            col(TagUse.user_id) == user_id,
+            col(TagUse.tag_key).in_(keys),
+            ~carried,
+        )
+    )
 
 
 TagOrderRow = tuple[str, int, int, float, int | None]
