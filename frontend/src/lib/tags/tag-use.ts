@@ -4,11 +4,12 @@
  * the Tag, then by name. The server keeps the uses and their decayed score;
  * this module only orders by it and words the rename and delete warnings.
  */
+import type { TagUseRequest } from "@/client"
 import { sameTag } from "@/lib/directory/directory-tags"
 import { atoms, type BaseCond, type FilterNode } from "@/lib/filter-tree"
 
-/** The tabs that keep their own Tag uses. */
-export type TagTab = "channels" | "directory" | "requests"
+/** The tabs that keep their own Tag uses, as the API takes them. */
+export type TagTab = TagUseRequest["tab"]
 
 /** Highest Tag use score first, then most channels, then by name. */
 export function byTagUse<T>(
