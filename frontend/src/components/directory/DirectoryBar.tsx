@@ -497,6 +497,8 @@ export type DirectoryBarProps = {
   onAdd?: DirectoryAddBoxProps["onAdd"]
   /** The Tags dropdown (TGU-03), after Language. */
   tagsMenu?: ReactNode
+  /** The Groups dropdown (TGU-04), after Tags. */
+  groupsMenu?: ReactNode
 }
 
 export function DirectoryBar(p: DirectoryBarProps) {
@@ -548,6 +550,7 @@ export function DirectoryBar(p: DirectoryBarProps) {
         onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "language"))}
       />
       {p.tagsMenu}
+      {p.groupsMenu}
       <ConditionPicker
         vocabulary={p.vocabulary}
         onPick={(cond) => p.onFilter(appendAnd(p.filter, cond))}

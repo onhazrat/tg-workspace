@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useGroupRows } from "@/components/filter-tree/GroupsDropdown"
 import { useTagHandles } from "@/hooks/useTags"
 import { recordTagUse } from "@/hooks/useTagUses"
 import { funnelledValues } from "@/lib/filter-tree"
@@ -62,12 +63,13 @@ export function ChannelTable({
   const sort = kept ? chosenSort : "total"
   const direction = kept ? chosenDirection : "desc"
   const tagHandles = useTagHandles(funnelledValues(filter, "tag"))
+  const groupHandles = useGroupHandles()
   const listed = listChannels(
     rows,
     search,
     sort,
     direction,
-    keepRow(filter, hiddenKinds, hiddenOutcomes, tagHandles),
+    keepRow(filter, hiddenKinds, hiddenOutcomes, tagHandles, groupHandles),
   )
   /** Every filter change, from any control, records the Tags it adds. */
   const filterAndRecord = (next: ChannelFilter) => {
@@ -328,4 +330,11 @@ function YieldCell({ row }: { row: ChannelRow }) {
       {none ? "–" : yieldText(row.posts / row.total)}
     </td>
   )
+}
+
+/** Each Setting group's followed handles by id, lowercased (TGU-04). */
+function useGroupHandles(): (id: string) => ReadonlySet<string> | undefined {
+  const groups = useGroupRows(null)
+  const byId = new Map(groups.map((g) => [g.id, new Set(g.handles)]))
+  return (id) => byId.get(id)
 }

@@ -6,6 +6,12 @@ import {
   FilterRow,
   type FilterVocabulary,
 } from "@/components/filter-tree/FilterRow"
+import {
+  type GroupRow,
+  GroupsDropdown,
+  useGroupRows,
+  useOpenSettingGroup,
+} from "@/components/filter-tree/GroupsDropdown"
 import { SortPicker } from "@/components/filter-tree/SortPicker"
 import { TagsDropdown } from "@/components/filter-tree/TagsDropdown"
 import { TgInput } from "@/components/ui/tg-input"
@@ -82,12 +88,14 @@ export function ChannelBar(p: ChannelBarProps) {
   const groups = criteria(kinds, p.hiddenOutcomes)
   const values = useMeasureValues(p.rows)
   const tagNames = useRequestsTagNames()
+  const groupRows = useGroupRows(null)
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 px-3 pt-2">
         <SearchBox value={p.search} onChange={p.onSearch} />
         <KindsFacet {...p} kinds={kinds} />
         <RequestsTags {...p} />
+        <RequestsGroups {...p} />
         <BarToggle
           on={switchOn(p.filter, isUncharged, true)}
           label="Hide uncharged"
@@ -131,7 +139,7 @@ export function ChannelBar(p: ChannelBarProps) {
       <FilterRow
         filter={p.filter}
         onChange={p.onFilter}
-        vocabulary={vocabulary(p, kinds, groups, values, tagNames)}
+        vocabulary={vocabulary(p, kinds, groups, values, tagNames, groupRows)}
         testId="requests-filter"
         search={p.search}
         shownCount={p.shown}
@@ -236,6 +244,41 @@ function RequestsTags(p: ChannelBarProps) {
   )
 }
 
+/** The Groups dropdown (TGU-04): selecting a Setting group puts its rows back
+ * in the Requests selection; its funnel is the Setting group Condition. */
+function RequestsGroups(p: ChannelBarProps) {
+  const openSettingGroup = useOpenSettingGroup()
+  const channels = p.rows.filter((r) => !r.aggregate)
+  const scoped = useGroupRows(channels.map((r) => r.key))
+  return (
+    <GroupsDropdown
+      testId="requests-groups"
+      tickHint="Unselecting takes out, the funnel shows only"
+      groups={scoped}
+      selected={
+        new Set(
+          channels
+            .filter((r) => !p.leftOut.has(r.id))
+            .map((r) => r.key.toLowerCase()),
+        )
+      }
+      onSelect={(handles, on) =>
+        p.onLeftOut(selectHandles(p.leftOut, p.rows, handles, on))
+      }
+      funnelled={funnelledValues(p.filter, "group")}
+      onFunnel={(value, on) =>
+        p.onFilter(
+          on
+            ? addFunnel(p.filter, { type: "group", value })
+            : removeFunnel(p.filter, "group", value),
+        )
+      }
+      onClearFunnels={() => p.onFilter(clearFunnels(p.filter, "group"))}
+      onOpen={openSettingGroup}
+    />
+  )
+}
+
 /** The Tag names "In the Tag" offers, in the Requests tab's Tag use order. */
 function useRequestsTagNames() {
   const tags = useTags().tags.filter((t) => !isVirtualGroupTag(t.name))
@@ -276,7 +319,10 @@ function vocabulary(
   groups: CriteriaGroup[],
   values: MeasureValues,
   tagNames: string[],
+  settingGroups: GroupRow[],
 ): FilterVocabulary<ChannelCond> {
+  const groupName = (id: string) =>
+    settingGroups.find((g) => g.id === id)?.name ?? id
   return {
     sections: [
       {
@@ -290,6 +336,15 @@ function vocabulary(
             options: tagNames.map((name) => ({ id: name, label: name })),
             make: (value) => ({ type: "tag", value }),
             current: (c) => (c.type === "tag" ? c.value : undefined),
+          },
+          {
+            kind: "list",
+            id: "group",
+            label: "In the Setting group",
+            icon: Layers,
+            options: settingGroups.map((g) => ({ id: g.id, label: g.name })),
+            make: (value) => ({ type: "group", value }),
+            current: (c) => (c.type === "group" ? c.value : undefined),
           },
         ],
       },
@@ -343,14 +398,14 @@ function vocabulary(
     ],
     entryOf: (c) =>
       c.type === "measure" ? `${c.kind ?? ""}|${c.measure}` : c.type,
-    label: condLabel,
+    label: (c) => condLabel(c, groupName),
     icon: (c) =>
       c.type === "measure" ? Gauge : c.type === "tag" ? Tag : Layers,
     chipId: (c) =>
       c.type === "measure"
         ? `${c.kind ?? "row"}-${c.measure}`
-        : c.type === "tag"
-          ? `tag-${c.value}`
+        : c.type === "tag" || c.type === "group"
+          ? `${c.type}-${c.value}`
           : c.type === "kind"
             ? c.value
             : "uncharged",

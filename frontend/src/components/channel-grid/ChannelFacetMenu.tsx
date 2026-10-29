@@ -47,6 +47,7 @@ export function ChannelFacetMenu({
   manage?: React.ComponentProps<typeof FacetMenu>["manage"]
   rowAction?: React.ComponentProps<typeof FacetMenu>["rowAction"]
   freezeOrder?: boolean
+  tickHint?: string
 }) {
   const byId = new Map(rows.map((row) => [row.id, row]))
   const counted: FacetMenuRow[] = rows.map((row) => {

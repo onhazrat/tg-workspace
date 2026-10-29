@@ -50,6 +50,27 @@ describe("the Directory's Tag funnel", () => {
     expect(clearTagFunnels(filter)).toBe(filter)
   })
 
+  test("a Setting group funnel is its own OR group beside the Tags' (TGU-04)", () => {
+    const tags = toggleTagFunnel(
+      toggleTagFunnel(parse("lang:fa"), "News", true),
+      "Tech",
+      true,
+    )
+    const one = toggleTagFunnel(tags, "Slow", true, "group")
+    const two = toggleTagFunnel(one, "Fast", true, "group")
+    expect(printDirectoryFilter(two)).toBe(
+      "lang:fa and (tag:News or tag:Tech) and (group:Slow or group:Fast)",
+    )
+    expect(funnelledTags(two, "group")).toEqual(["Slow", "Fast"])
+    expect(funnelledTags(two)).toEqual(["News", "Tech"])
+    expect(printDirectoryFilter(clearTagFunnels(two, "group"))).toBe(
+      "lang:fa and (tag:News or tag:Tech)",
+    )
+    expect(
+      printDirectoryFilter(toggleTagFunnel(two, "slow", false, "group")),
+    ).toBe("lang:fa and (tag:News or tag:Tech) and group:Fast")
+  })
+
   test("an OR filter is wrapped before a funnel joins it with AND", () => {
     const or = parse("lang:fa or lang:en")
     expect(funnelledTags(or)).toEqual([])

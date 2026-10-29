@@ -29,6 +29,11 @@ import {
   type MeasureEditorRender,
   type MomentEditorRender,
 } from "@/components/directory/directory-vocabulary"
+import {
+  GroupsDropdown,
+  useGroupRows,
+  useOpenSettingGroup,
+} from "@/components/filter-tree/GroupsDropdown"
 import { NumberBoundEditor } from "@/components/filter-tree/NumberBoundEditor"
 import { TagsDropdown } from "@/components/filter-tree/TagsDropdown"
 import { useZoomState } from "@/components/SpreadZoom"
@@ -60,7 +65,7 @@ import {
   funnelledTags,
   toggleTagFunnel,
 } from "@/lib/directory/directory-tag-funnel"
-import type { Tagging } from "@/lib/directory/directory-tags"
+import { sameTag, type Tagging } from "@/lib/directory/directory-tags"
 import {
   chooseSort,
   type DirectoryViewRequest,
@@ -84,6 +89,39 @@ function withHandles(
   const these = new Set(handles)
   const kept = [...ticks].filter((h) => !these.has(h.toLowerCase()))
   return on ? [...kept, ...handles] : kept
+}
+
+/**
+ * The Groups dropdown (TGU-04): selecting a Setting group adds its followed
+ * channels to the Directory selection; its funnel is the `group:` Condition.
+ */
+function DirectoryGroups(p: {
+  ticks: ReadonlySet<string>
+  onTicks: (ticks: string[]) => void
+  filter: DirectoryFilter
+  onFilter: (filter: DirectoryFilter) => void
+}) {
+  const groups = useGroupRows(null)
+  const openSettingGroup = useOpenSettingGroup()
+  const idOf = (name: string) => groups.find((g) => sameTag(g.name, name))?.id
+  const nameOf = (id: string) => groups.find((g) => g.id === id)?.name ?? id
+  return (
+    <GroupsDropdown
+      testId="directory-groups-facet"
+      tickHint="Select adds its channels, the funnel shows only"
+      groups={groups}
+      selected={new Set([...p.ticks].map((h) => h.toLowerCase()))}
+      onSelect={(handles, on) => p.onTicks(withHandles(p.ticks, handles, on))}
+      funnelled={funnelledTags(p.filter, "group").flatMap(
+        (name) => idOf(name) ?? [],
+      )}
+      onFunnel={(id, on) =>
+        p.onFilter(toggleTagFunnel(p.filter, nameOf(id), on, "group"))
+      }
+      onClearFunnels={() => p.onFilter(clearTagFunnels(p.filter, "group"))}
+      onOpen={openSettingGroup}
+    />
+  )
 }
 
 /** The filter without its bounds on `measure`, a measure or a moment, which
@@ -446,6 +484,14 @@ export function DirectoryView() {
               setFilter(toggleTagFunnel(d.filter, name, on))
             }
             onClearFunnels={() => setFilter(clearTagFunnels(d.filter))}
+          />
+        }
+        groupsMenu={
+          <DirectoryGroups
+            ticks={d.ticks}
+            onTicks={d.setTicks}
+            filter={d.filter}
+            onFilter={setFilter}
           />
         }
       />

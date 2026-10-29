@@ -22,6 +22,10 @@ import { FollowPasteBox } from "@/components/channel-grid/FollowPasteBox"
 import { useChannelGridActions } from "@/components/channel-grid/useChannelGridActions"
 import { useChannelGridSortState } from "@/components/channel-grid/useChannelGridSortState"
 import { useChannelTagUse } from "@/components/channel-grid/useChannelTagUse"
+import {
+  settingGroupGear,
+  useOpenSettingGroup,
+} from "@/components/filter-tree/GroupsDropdown"
 import { requestSpotlight } from "@/components/post-card/ChannelSpotlight"
 import { TgInput } from "@/components/ui/tg-input"
 import { useScope } from "@/contexts/ScopeContext"
@@ -148,6 +152,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   const [channelSearch, setChannelSearch] = useState("")
   const [tagSearch, setTagSearch] = useState("")
   const { channelFilterText, setChannelFilterText } = useWorkspaceGroupParams()
+  const openSettingGroup = useOpenSettingGroup()
 
   const { data: settingGroups = [] } = useSettingGroupsQuery()
   const createSettingGroup = useCreateSettingGroup()
@@ -519,6 +524,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             rows={groupRows}
             onCreate={createSettingGroup}
             {...facet("group")}
+            rowAction={settingGroupGear(openSettingGroup)}
           />
           <ChannelFacetMenu
             icon={<Tag size={12} />}

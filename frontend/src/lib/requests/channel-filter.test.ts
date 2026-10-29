@@ -168,3 +168,49 @@ describe("the Channel table's Tag Condition (TGU-03)", () => {
     expect(condLabel(tag("Bank"))).toBe("Tag Bank")
   })
 })
+
+describe("the Channel table's Setting group Condition (TGU-04)", () => {
+  const members: Record<string, ReadonlySet<string>> = {
+    "g-slow": new Set(["news"]),
+    "g-fast": new Set(["tech", "quiet"]),
+  }
+  const keptWith = (filter: ReturnType<typeof emptyChannelFilter>) =>
+    rows
+      .filter(
+        keepRow(
+          filter,
+          none,
+          none,
+          () => undefined,
+          (id) => members[id],
+        ),
+      )
+      .map((r) => r.key)
+      .sort()
+  const group = (value: string) => ({ type: "group" as const, value })
+
+  test("keeps the rows of the reader's Follows in the group; two mean either", () => {
+    const slow = addFunnel(emptyChannelFilter(), group("g-slow"))
+    expect(keptWith(slow)).toEqual(["news"])
+    expect(keptWith(addFunnel(slow, group("g-fast")))).toEqual([
+      "news",
+      "quiet",
+      "tech",
+    ])
+  })
+
+  test("stands aside until the group is known", () => {
+    expect(keptWith(addFunnel(emptyChannelFilter(), group("g-new")))).toEqual([
+      "news",
+      "probe",
+      "quiet",
+      "tech",
+    ])
+  })
+
+  test("its chip names the group", () => {
+    expect(condLabel(group("g-slow"), (id) => `${id}!`)).toBe(
+      "Setting group g-slow!",
+    )
+  })
+})
