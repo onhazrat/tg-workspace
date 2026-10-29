@@ -134,6 +134,14 @@ DFP-05 (a Tag as the Seeds of Cited by and Cites, and their 500-handle cap):
 * resolve the Tag by its name as sent, not case-folded -> the same
 * cap the handles at 499 or 501 -> the 500-handle case
 * accept handles and a Tag together, or neither -> the same
+
+TGU-04 (a Setting group as a Condition and a Seed source, each the reader's
+Follows filed in it; an old `tag:"group:..."` link reads the same):
+
+* read the group Condition as a Tag of its bare name -> the Setting group case
+* ignore a group sent as the Seeds -> the same
+* accept a group and a Tag together -> the same
+* "Why it's here" ignoring a group's Seeds -> the same
 """
 
 from __future__ import annotations

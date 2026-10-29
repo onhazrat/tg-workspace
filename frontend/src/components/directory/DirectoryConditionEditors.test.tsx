@@ -33,7 +33,11 @@ const sets = {
   follows: ["f1", "f2", "f3"],
 }
 const tags: TagChoices = {
-  tags: [{ name: "News", channels: 4 }],
+  // The Tag list route still answers a Setting group as a `group:` Tag.
+  tags: [
+    { name: "News", channels: 4 },
+    { name: "group:Morning", channels: 1 },
+  ],
   groups: ["Morning"],
   loaded: true,
 }
