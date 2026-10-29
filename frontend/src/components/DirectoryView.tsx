@@ -61,9 +61,9 @@ import {
 } from "@/lib/directory/directory-filter"
 import { mineWindow } from "@/lib/directory/directory-panel"
 import {
-  clearTagFunnels,
-  funnelledTags,
-  toggleTagFunnel,
+  clearNamedFunnels,
+  funnelledNames,
+  toggleNamedFunnel,
 } from "@/lib/directory/directory-tag-funnel"
 import { sameTag, type Tagging } from "@/lib/directory/directory-tags"
 import {
@@ -112,13 +112,13 @@ function DirectoryGroups(p: {
       groups={groups}
       selected={new Set([...p.ticks].map((h) => h.toLowerCase()))}
       onSelect={(handles, on) => p.onTicks(withHandles(p.ticks, handles, on))}
-      funnelled={funnelledTags(p.filter, "group").flatMap(
+      funnelled={funnelledNames(p.filter, "group").flatMap(
         (name) => idOf(name) ?? [],
       )}
       onFunnel={(id, on) =>
-        p.onFilter(toggleTagFunnel(p.filter, nameOf(id), on, "group"))
+        p.onFilter(toggleNamedFunnel(p.filter, nameOf(id), on, "group"))
       }
-      onClearFunnels={() => p.onFilter(clearTagFunnels(p.filter, "group"))}
+      onClearFunnels={() => p.onFilter(clearNamedFunnels(p.filter, "group"))}
       onOpen={openSettingGroup}
     />
   )
@@ -479,11 +479,11 @@ export function DirectoryView() {
             onSelect={(handles, on) =>
               d.setTicks(withHandles(d.ticks, handles, on))
             }
-            funnelled={funnelledTags(d.filter)}
+            funnelled={funnelledNames(d.filter, "tag")}
             onFunnel={(name, on) =>
-              setFilter(toggleTagFunnel(d.filter, name, on))
+              setFilter(toggleNamedFunnel(d.filter, name, on, "tag"))
             }
-            onClearFunnels={() => setFilter(clearTagFunnels(d.filter))}
+            onClearFunnels={() => setFilter(clearNamedFunnels(d.filter, "tag"))}
           />
         }
         groupsMenu={

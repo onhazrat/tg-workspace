@@ -6,9 +6,9 @@
 import { describe, expect, test } from "bun:test"
 import { parseDirectoryFilter, printDirectoryFilter } from "./directory-filter"
 import {
-  clearTagFunnels,
-  funnelledTags,
-  toggleTagFunnel,
+  clearNamedFunnels,
+  funnelledNames,
+  toggleNamedFunnel,
 } from "./directory-tag-funnel"
 
 const parse = (text: string) => {
@@ -19,63 +19,65 @@ const parse = (text: string) => {
 
 describe("the Directory's Tag funnel", () => {
   test("one Tag joins the top-level AND; a second makes them either one", () => {
-    const one = toggleTagFunnel(parse("lang:fa"), "News", true)
+    const one = toggleNamedFunnel(parse("lang:fa"), "News", true, "tag")
     expect(printDirectoryFilter(one)).toBe("lang:fa and tag:News")
-    const two = toggleTagFunnel(one, "Tech", true)
+    const two = toggleNamedFunnel(one, "Tech", true, "tag")
     expect(printDirectoryFilter(two)).toBe("lang:fa and (tag:News or tag:Tech)")
-    expect(funnelledTags(two)).toEqual(["News", "Tech"])
-    const three = toggleTagFunnel(two, "Art", true)
-    expect(funnelledTags(three)).toEqual(["News", "Tech", "Art"])
+    expect(funnelledNames(two, "tag")).toEqual(["News", "Tech"])
+    const three = toggleNamedFunnel(two, "Art", true, "tag")
+    expect(funnelledNames(three, "tag")).toEqual(["News", "Tech", "Art"])
   })
 
   test("a funnelled Tag, in any case, is not added twice", () => {
-    const one = toggleTagFunnel(parse("lang:fa"), "News", true)
-    expect(toggleTagFunnel(one, "news", true)).toBe(one)
+    const one = toggleNamedFunnel(parse("lang:fa"), "News", true, "tag")
+    expect(toggleNamedFunnel(one, "news", true, "tag")).toBe(one)
   })
 
   test("unfunnelling takes the Tag out and unwraps a group of one", () => {
-    const two = toggleTagFunnel(
-      toggleTagFunnel(parse("lang:fa"), "News", true),
+    const two = toggleNamedFunnel(
+      toggleNamedFunnel(parse("lang:fa"), "News", true, "tag"),
       "Tech",
       true,
+      "tag",
     )
-    const back = toggleTagFunnel(two, "news", false)
+    const back = toggleNamedFunnel(two, "news", false, "tag")
     expect(printDirectoryFilter(back)).toBe("lang:fa and tag:Tech")
-    expect(printDirectoryFilter(clearTagFunnels(two))).toBe("lang:fa")
+    expect(printDirectoryFilter(clearNamedFunnels(two, "tag"))).toBe("lang:fa")
   })
 
   test("a Tag inside the Filters' own parentheses is not a funnel", () => {
     const filter = parse("lang:fa and not tag:News")
-    expect(funnelledTags(filter)).toEqual([])
-    expect(clearTagFunnels(filter)).toBe(filter)
+    expect(funnelledNames(filter, "tag")).toEqual([])
+    expect(clearNamedFunnels(filter, "tag")).toBe(filter)
   })
 
   test("a Setting group funnel is its own OR group beside the Tags' (TGU-04)", () => {
-    const tags = toggleTagFunnel(
-      toggleTagFunnel(parse("lang:fa"), "News", true),
+    const tags = toggleNamedFunnel(
+      toggleNamedFunnel(parse("lang:fa"), "News", true, "tag"),
       "Tech",
       true,
+      "tag",
     )
-    const one = toggleTagFunnel(tags, "Slow", true, "group")
-    const two = toggleTagFunnel(one, "Fast", true, "group")
+    const one = toggleNamedFunnel(tags, "Slow", true, "group")
+    const two = toggleNamedFunnel(one, "Fast", true, "group")
     expect(printDirectoryFilter(two)).toBe(
       "lang:fa and (tag:News or tag:Tech) and (group:Slow or group:Fast)",
     )
-    expect(funnelledTags(two, "group")).toEqual(["Slow", "Fast"])
-    expect(funnelledTags(two)).toEqual(["News", "Tech"])
-    expect(printDirectoryFilter(clearTagFunnels(two, "group"))).toBe(
+    expect(funnelledNames(two, "group")).toEqual(["Slow", "Fast"])
+    expect(funnelledNames(two, "tag")).toEqual(["News", "Tech"])
+    expect(printDirectoryFilter(clearNamedFunnels(two, "group"))).toBe(
       "lang:fa and (tag:News or tag:Tech)",
     )
     expect(
-      printDirectoryFilter(toggleTagFunnel(two, "slow", false, "group")),
+      printDirectoryFilter(toggleNamedFunnel(two, "slow", false, "group")),
     ).toBe("lang:fa and (tag:News or tag:Tech) and group:Fast")
   })
 
   test("an OR filter is wrapped before a funnel joins it with AND", () => {
     const or = parse("lang:fa or lang:en")
-    expect(funnelledTags(or)).toEqual([])
-    expect(printDirectoryFilter(toggleTagFunnel(or, "News", true))).toBe(
-      "(lang:fa or lang:en) and tag:News",
-    )
+    expect(funnelledNames(or, "tag")).toEqual([])
+    expect(
+      printDirectoryFilter(toggleNamedFunnel(or, "News", true, "tag")),
+    ).toBe("(lang:fa or lang:en) and tag:News")
   })
 })

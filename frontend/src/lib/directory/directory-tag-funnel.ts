@@ -52,24 +52,23 @@ function funnelAtoms(filter: DirectoryFilter, type: Funnel): NamedAtom[] {
   )
 }
 
-export const funnelledTags = (
+/** The Tag or Setting group names the funnel holds. */
+export const funnelledNames = (
   filter: DirectoryFilter,
-  type: Funnel = "tag",
+  type: Funnel,
 ): string[] => funnelAtoms(filter, type).map((a) => a.cond.name)
 
 const without = (filter: DirectoryFilter, drop: NamedAtom[]) =>
   drop.reduce((f, atom) => removeNode(f, atom.id), filter)
 
-export const clearTagFunnels = (
-  filter: DirectoryFilter,
-  type: Funnel = "tag",
-) => without(filter, funnelAtoms(filter, type))
+export const clearNamedFunnels = (filter: DirectoryFilter, type: Funnel) =>
+  without(filter, funnelAtoms(filter, type))
 
-export function toggleTagFunnel(
+export function toggleNamedFunnel(
   filter: DirectoryFilter,
   name: string,
   on: boolean,
-  type: Funnel = "tag",
+  type: Funnel,
 ): DirectoryFilter {
   const same = funnelAtoms(filter, type).filter((a) =>
     sameTag(a.cond.name, name),
