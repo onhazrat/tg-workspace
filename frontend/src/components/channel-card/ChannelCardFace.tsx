@@ -193,6 +193,7 @@ export function ChannelCardFace({
           channel={channel}
           showStartId={face.startId}
           showStatus={face.syncStatus}
+          lastPostAt={stats?.lastPostAt}
           detailed={face.detailed}
           isScraping={isScraping}
           busy={busy}
