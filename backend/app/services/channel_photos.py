@@ -63,6 +63,22 @@ def _safe_channel_id(channel_id: str) -> str:
     return re.sub(r"[^\w.-]", "_", channel_id)
 
 
+def _cache_file(channel_id: str, suffix: str) -> Path:
+    """`channel_id`'s file with `suffix` in the cache directory, never outside it.
+
+    `_safe_channel_id` already turns every separator into `_`. The check below
+    says so in the form CodeQL's path-injection query recognises, a normalised
+    path tested against its root, because a route hands this its channel id.
+    """
+    root = os.path.normpath(_photo_dir())
+    path = os.path.normpath(
+        os.path.join(root, f"{_safe_channel_id(channel_id)}{suffix}")
+    )
+    if not path.startswith(root + os.sep):
+        raise ValueError(f"channel id {channel_id!r} leaves the photo cache")
+    return Path(path)
+
+
 def channel_photo_api_path(channel_id: str) -> str:
     return f"{settings.API_V1_STR}/telegram/channel-photo/{channel_id}"
 
@@ -76,7 +92,7 @@ def has_cached_photo(channel_id: str) -> bool:
 
 
 def _meta_path(channel_id: str) -> Path:
-    return _photo_dir() / f"{_safe_channel_id(channel_id)}{_META_SUFFIX}"
+    return _cache_file(channel_id, _META_SUFFIX)
 
 
 def _read_meta(channel_id: str) -> dict[str, Any] | None:
@@ -100,10 +116,8 @@ def _find_image_path(channel_id: str) -> Path | None:
     against 16,276 files, 30 of the 33 seconds a channel list took. Only
     `_IMAGE_EXTS` can ever be written, so probe those directly.
     """
-    safe = _safe_channel_id(channel_id)
-    directory = _photo_dir()
     for ext in _IMAGE_EXTS:
-        path = directory / f"{safe}{ext}"
+        path = _cache_file(channel_id, ext)
         if path.is_file():
             return path
     return None
@@ -122,12 +136,10 @@ def read_cached_photo(channel_id: str) -> tuple[bytes, str] | None:
 
 
 def delete_cached_photo(channel_id: str) -> None:
-    safe = _safe_channel_id(channel_id)
-    directory = _photo_dir()
     # `_META_SUFFIX` is listed explicitly: the glob this replaced matched it too,
     # so dropping it would leave the sidecar behind on every delete.
     for suffix in (*_IMAGE_EXTS, _META_SUFFIX):
-        path = directory / f"{safe}{suffix}"
+        path = _cache_file(channel_id, suffix)
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -200,8 +212,6 @@ async def cache_channel_photo(
         return has_cached_photo(channel_id)
 
     ext = _EXT_BY_CONTENT_TYPE.get(content_type.lower(), _DEFAULT_EXT)
-    safe = _safe_channel_id(channel_id)
-    directory = _photo_dir()
 
     # Only the *other* extensions need clearing; the image and its meta are
     # overwritten below. The glob this replaced deleted the meta too, just to
@@ -210,9 +220,9 @@ async def cache_channel_photo(
         if stale_ext == ext:
             continue
         with suppress(OSError):
-            (directory / f"{safe}{stale_ext}").unlink(missing_ok=True)
+            _cache_file(channel_id, stale_ext).unlink(missing_ok=True)
 
-    image_path = directory / f"{safe}{ext}"
+    image_path = _cache_file(channel_id, ext)
     image_path.write_bytes(content)
     _meta_path(channel_id).write_text(
         json.dumps({"sourceUrl": source_url, "contentType": content_type}),
