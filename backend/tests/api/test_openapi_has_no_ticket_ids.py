@@ -10,18 +10,27 @@ broken again by TB-05, so it is a test now.
 Keep the id in a `#` comment above the decorator or the class instead; the
 comment stays in the source and never reaches the schema.
 
-`UTF-16` matches the id shape and is a fact about encodings, so it is excused.
+`TICKET_ID` comes from `scripts/check_client_ticket_ids.py`, the commit hook
+that reads the generated client for the same leak in seconds.
 Mutation watched: put `(ticket 12)` back into `SyncLaneEntry`'s docstring.
 """
 
 from __future__ import annotations
 
-import re
+import importlib.util
+import pathlib
 from typing import Any
 
 from app.main import app
 
-TICKET_ID = re.compile(r"\b(?!UTF-)[A-Z]{2,6}-\d{2}\b|(?i:\bticket \d+)")
+_SCRIPT = (
+    pathlib.Path(__file__).resolve().parents[3] / "scripts/check_client_ticket_ids.py"
+)
+_spec = importlib.util.spec_from_file_location("check_client_ticket_ids", _SCRIPT)
+assert _spec is not None and _spec.loader is not None
+_hook = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_hook)
+TICKET_ID = _hook.TICKET_ID
 
 
 def _leaks(node: Any, path: str) -> list[str]:
@@ -51,3 +60,9 @@ def test_the_pattern_catches_both_spellings() -> None:
     assert TICKET_ID.search("the editor (TB-05)")
     assert TICKET_ID.search("Ticket 24 added it")
     assert not TICKET_ID.search("in UTF-16 code units, per ADR-022")
+
+
+def test_the_hook_reads_only_comment_lines() -> None:
+    """The commit hook flags a JSDoc line and leaves code alone."""
+    client = "/**\n * Lists Tags (TGU-02).\n */\nexport type Kind = 'AB-12'\n"
+    assert _hook.leaks(client) == [(2, "TGU-02")]
