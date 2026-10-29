@@ -1420,7 +1420,7 @@
       "comment": "The Settling curve is refitted daily and the reach settings change by hand, so an hour-old copy is as good as a fresh one (PFB-03).",
       "expression": "60 * 60 * 1000",
       "file": "frontend/src/hooks/queryKeys.ts",
-      "line": 188,
+      "line": 190,
       "name": "VIEW_ESTIMATE_STALE_TIME",
       "value": 3600000
     },
@@ -1492,7 +1492,7 @@
       "comment": "The most handles one Tag request carries: the server's cap on a bulk write's handles, a trust boundary it keeps. A Tag is not capped, so a longer list goes in batches of this size.",
       "expression": "10_000",
       "file": "frontend/src/hooks/useTags.ts",
-      "line": 32,
+      "line": 35,
       "name": "TAG_BATCH",
       "value": 10000
     },
@@ -1780,7 +1780,7 @@
       "comment": "Rows the Requests tab's Channel table shows first.",
       "expression": "25",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 333,
+      "line": 351,
       "name": "FIRST_CHANNELS",
       "value": 25
     },
@@ -1788,7 +1788,7 @@
       "comment": "Rows each \"Show more\" adds to the Requests tab's Channel table.",
       "expression": "50",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 335,
+      "line": 353,
       "name": "MORE_CHANNELS",
       "value": 50
     },
@@ -1796,7 +1796,7 @@
       "comment": "Steps on the violet Account ramp, `--account-1` to `--account-4`.",
       "expression": "4",
       "file": "frontend/src/lib/requests/breakdown.ts",
-      "line": 483,
+      "line": 501,
       "name": "ACCOUNT_STEPS",
       "value": 4
     },
