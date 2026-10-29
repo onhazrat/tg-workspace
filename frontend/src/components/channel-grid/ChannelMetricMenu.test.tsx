@@ -36,8 +36,11 @@ const followedAgo = (days: number): TimeAtom => ({
   },
 })
 
+let presets = 0
+
 function mount(conditions: (MetricAtom | TimeAtom)[] = []) {
   const added: Cond[] = []
+  presets = 0
   render(
     <ChannelMetricMenu
       conditions={conditions}
@@ -47,6 +50,7 @@ function mount(conditions: (MetricAtom | TimeAtom)[] = []) {
         moments: () => [Date.now() - 2 * DAY, Date.now() - 20 * DAY],
       }}
       onAdd={(cond) => added.push(cond)}
+      onNoPostIn30Days={() => presets++}
     />,
   )
   return added
@@ -55,6 +59,21 @@ function mount(conditions: (MetricAtom | TimeAtom)[] = []) {
 const button = () => screen.getByTestId("channel-filters")
 
 describe("ChannelMetricMenu", () => {
+  test("opens on a Presets section; No post in 30 days applies and closes (TGU-01)", () => {
+    mount()
+    fireEvent.click(button())
+    const preset = screen.getByRole("button", { name: "No post in 30 days" })
+    const [firstHeading] = screen.getAllByText(/^(Presets|Filter by)$/)
+    expect(firstHeading.textContent).toBe("Presets")
+    expect(
+      firstHeading.compareDocumentPosition(preset) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    fireEvent.click(preset)
+    expect(presets).toBe(1)
+    expect(screen.queryByText("Presets")).toBeNull()
+  })
+
   test("counts the number Conditions and fills in when one is set", () => {
     mount()
     expect(button().textContent?.trim()).toBe("Filters")

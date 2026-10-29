@@ -29,17 +29,20 @@ const rowClass =
  * The Filters dropdown (CTB-02): every number criterion with its bounds in
  * the Channel filter, then every moment under Times (TB-03), a search over
  * them, and picking one opens its editor. Adding always makes a new
- * Condition, so one criterion can be bound twice.
+ * Condition, so one criterion can be bound twice. A Presets section opens it
+ * with "No post in 30 days" (TGU-01).
  */
 export function ChannelMetricMenu({
   conditions,
   data,
   onAdd,
+  onNoPostIn30Days,
 }: {
   /** The number and Time bound Conditions anywhere in the Channel filter. */
   conditions: (MetricAtom | TimeAtom)[]
   data: MetricData
   onAdd: (cond: Cond) => void
+  onNoPostIn30Days: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<MetricKey | ChannelMomentKey | null>(
@@ -101,6 +104,17 @@ export function ChannelMetricMenu({
             onChange={setQuery}
             placeholder="Search criteria..."
           />
+          <BarHeading>Presets</BarHeading>
+          <button
+            type="button"
+            onClick={() => {
+              onNoPostIn30Days()
+              onOpenChange(false)
+            }}
+            className={rowClass}
+          >
+            <MenuRowLabel icon={Clock} label="No post in 30 days" />
+          </button>
           <BarHeading>Filter by</BarHeading>
           {METRICS.filter((m) => matches(m.label)).map((m) => (
             <button

@@ -49,6 +49,7 @@ import {
   filterNames,
   funnelledValues,
   type MetricAtom,
+  noPostIn30Days,
   parseChannelFilter,
   printChannelFilter,
   removeFunnel,
@@ -556,6 +557,9 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             data={metricData}
             onAdd={(cond) =>
               setChannelFilter(append(channelFilter, "root", cond))
+            }
+            onNoPostIn30Days={() =>
+              setChannelFilter(noPostIn30Days(channelFilter))
             }
           />
           <SortMenu
