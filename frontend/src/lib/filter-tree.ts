@@ -347,7 +347,7 @@ const isFunnelOr = <C extends BaseCond>(node: FilterNode<C>, type: string) =>
   )
 
 /** The filter as a plain AND root, wrapping it when it is an OR or negated. */
-function andRoot<C extends BaseCond>(filter: FilterTree<C>): FilterTree<C> {
+export function andRoot<C extends BaseCond>(filter: FilterTree<C>): FilterTree<C> {
   if (filter.children.length === 0) return emptyTree()
   if (!filter.not && (filter.op === "and" || filter.children.length === 1)) {
     return { ...filter, op: "and" }
