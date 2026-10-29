@@ -19,8 +19,11 @@ from app.schemas.tags import (
     TagDeleteRequest,
     TagHandlesRequest,
     TagHandlesResponse,
+    TagOrderRequest,
+    TagOrderResponse,
     TagRenameRequest,
     TagResponse,
+    TagUseRequest,
 )
 from app.services import tags
 from app.services.channel_tags import reject_reserved_virtual_group_tags
@@ -106,6 +109,39 @@ def rename_tag(
     _commit(session)
     name, count = renamed
     return TagResponse(name=name, channels=count)
+
+
+# TGU-02, ADR-042: Tag uses order each tab's Tag lists.
+@router.post("/tags/uses")
+def record_tag_use(
+    body: TagUseRequest, session: SessionDep, current_user: CurrentUser
+) -> TagChangeResponse:
+    """Record one use of a Tag on a tab; nothing for a Tag the caller lacks."""
+    changed = tags.record_use(
+        session, user_id=current_user.id, tab=body.tab, name=body.name
+    )
+    session.commit()
+    return TagChangeResponse(changed=changed)
+
+
+@router.post("/tags/order")
+def read_tag_order(
+    body: TagOrderRequest, session: SessionDep, current_user: CurrentUser
+) -> list[TagOrderResponse]:
+    """Each of the caller's Tags by name: its channels in the scope, how many
+    of those are selected, and its Tag use score and last use on the tab."""
+    return [
+        TagOrderResponse(
+            name=name, channels=count, selected=chosen, score=score, last_used_at=last
+        )
+        for name, count, chosen, score, last in tags.tag_order(
+            session,
+            user_id=current_user.id,
+            tab=body.tab,
+            scope=body.scope,
+            selected=body.selected,
+        )
+    ]
 
 
 @router.delete("/tags")

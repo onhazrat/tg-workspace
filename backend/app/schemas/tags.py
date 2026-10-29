@@ -6,11 +6,11 @@ name may hold a "/" or anything else, and has no length cap.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.directory import DirectoryTargets
+from app.schemas.directory import DirectoryTargets, Handle
 
 TagName = Annotated[str, Field(min_length=1)]
 
@@ -61,6 +61,50 @@ class TagRenameRequest(BaseModel):
     to: TagName
 
     _names = field_validator("name", "to")(_not_blank)
+
+
+#: The tabs that keep their own Tag uses (ADR-042), a closed set.
+TagTab = Literal["channels", "directory", "requests"]
+
+#: The most handles a Tag order read takes in its scope or its selection.
+MAX_ORDER_HANDLES = 100_000
+
+
+class TagUseRequest(BaseModel):
+    """One Tag use: the Account named this Tag on this tab."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tab: TagTab
+    name: TagName
+
+    _name = field_validator("name")(_not_blank)
+
+
+class TagOrderRequest(BaseModel):
+    """What a tab's Tags dropdown reads when it opens: its tab, the handles it
+    lists (`None` for every Channel, as the Directory's) and the selected ones."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tab: TagTab
+    scope: list[Handle] | None = Field(None, max_length=MAX_ORDER_HANDLES)
+    selected: list[Handle] = Field(
+        default_factory=list, max_length=MAX_ORDER_HANDLES
+    )
+
+
+class TagOrderResponse(BaseModel):
+    """One of the Account's Tags on a tab: its channels in the scope, how many
+    of those are selected, its Tag use score and its last use (ms), if any."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    channels: int
+    selected: int
+    score: float
+    last_used_at: int | None = Field(alias="lastUsedAt")
 
 
 class TagDeleteRequest(BaseModel):
