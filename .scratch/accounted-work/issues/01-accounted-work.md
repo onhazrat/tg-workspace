@@ -27,7 +27,7 @@ Parent spec: `.scratch/accounted-work/spec.md`, effort ACW. ADR-041 records the 
 - [ ] Picking Accounts keeps their Charged Requests and the Uncharged Requests they asked for, in the one shared filter every Requests endpoint reads. The Charged filter still narrows on top of it. Probes and Account-less handle checks stay out of a picked Account.
 - [ ] The Accounts facet and the comparison table still count Charged Requests.
 - [ ] The footer no longer says picking Accounts hides Uncharged Requests. It says what picking keeps.
-- [ ] The Bot API kind's colour is re-validated against the violet Account ramp with the dataviz palette validator, moved to a free slot if it fails, and the unit test pinning the old reasoning is updated.
+- [ ] The Bot API kind's colour is re-validated against the violet Account ramp with the dataviz palette validator, moved to a free slot if it fails, and the unit test pinning the old reasoning is updated. *Decided 2026-10-29: stays violet.* It fails beside `--account-2` (normal-vision dE 5.2), and the one free slot, red, fails beside `--outcome-wasted` (dE 4.8), which shares every kind row. No chart holds Bot API and an Account colour, so the Operator chose violet; the CSS note and the unit test say why.
 - [ ] The Requests endpoints' description of `accounts` states the new rule, and the generated client is regenerated.
 - [ ] Seam 2 tests: the endpoint test for picking Accounts flips to include the Account's Uncharged Requests and exclude probes; the breakdown unit tests cover the facet still counting spend; the Requests tab Playwright journey over the mocked API checks the footer and an Account's Uncharged Requests; a render test covers any component that gains a branch.
 

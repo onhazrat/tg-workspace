@@ -105,9 +105,13 @@
   --viz-axis: #898781;
   /*
    * Accounts (RQS-05): a four-step violet ramp, dark to light (oklch C 0.16,
-   * h 295). Bot API is violet too (slot 7), but they never meet: picking
-   * Accounts hides every Uncharged Request, Bot API's among them, and the
-   * comparison's columns are the charged kinds (COMPARE_KINDS).
+   * h 295). Bot API is violet too (slot 7), and fails beside --account-2
+   * (normal-vision dE 5.2), but no chart holds both: Account colours paint
+   * only the Accounts facet and the comparison, whose columns are the charged
+   * kinds (COMPARE_KINDS). Picking Accounts does show their Bot API calls,
+   * in the kind table, where nothing is Account-coloured. The free slot 8
+   * (red) was tried and fails beside --outcome-wasted (dE 4.8), which shares
+   * every kind row (ACW-01).
    */
   --account-1: #563199;
   --account-2: #7553bd;

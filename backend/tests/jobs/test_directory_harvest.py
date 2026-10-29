@@ -763,25 +763,25 @@ def test_the_tally_is_on_neither_retention_inventory() -> None:
 
 
 def test_draining_the_probe_lane_lands_on_the_deployment_tally() -> None:
-    """The consumer meters, and the total reaches the table an Operator reads.
+    """The consumer tallies, and the total reaches the table an Operator reads.
 
-    The meter is the same `core/request_meter.py` the sync path uses, so the two
-    numbers are in the same unit — Requests to the Telegram web view, counted
-    inside `fetch_with_retry` — rather than one being requests and the other
+    The tally counts by the same charge rule the sync path uses, so the two
+    numbers are in the same unit, Requests to the Telegram web view, recorded
+    inside `fetch_with_retry`, rather than one being requests and the other
     being probes.
 
     Driven through `_process_probe_message` rather than through
-    `probe_one_handle`, because the metering is a property of *draining the
+    `probe_one_handle`, because the tally is a property of *draining the
     lane*: the probe function is also called by tests and by the recheck path,
     and only the lane knows a message is being consumed.
     """
-    from app.core.request_meter import record_telegram_request
     from app.jobs.sync_queue import _process_probe_message
     from app.services import pgmq
+    from tests.utils.requests import answered_request
 
     async def _probe(handle: str) -> str:
-        record_telegram_request()
-        record_telegram_request()
+        answered_request()
+        answered_request()
         return "ok"
 
     msg = pgmq.PgmqMessage(msg_id=1, read_ct=1, message={"handle": "metered"})
@@ -800,12 +800,12 @@ def test_a_probe_that_raises_still_pays_for_what_it_fetched() -> None:
     Operator is watching for: a crawl going wrong is a crawl whose fetches are
     failing.
     """
-    from app.core.request_meter import record_telegram_request
     from app.jobs.sync_queue import _process_probe_message
     from app.services import pgmq
+    from tests.utils.requests import answered_request
 
     async def _explode(handle: str) -> str:
-        record_telegram_request()
+        answered_request()
         raise RuntimeError("proxy died mid-walk")
 
     msg = pgmq.PgmqMessage(msg_id=2, read_ct=1, message={"handle": "doomed"})

@@ -80,7 +80,6 @@ import logging
 import time
 import uuid
 from collections import deque
-from functools import partial
 from typing import Any
 
 from sqlalchemy import text as sa_text
@@ -91,7 +90,6 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.request_recording import RequestKindDisabled, attributed
 from app.services import pgmq
-from app.services.directory_probe_usage import charge_probe_requests
 from app.services.proxy_pacing import PACE_MAX_MS
 from app.services.proxy_pool import (
     SyncSlot,
@@ -104,12 +102,11 @@ from app.services.quota import (
     QuotaCeilingReached,
     assert_within_ceiling,
     budget_for_sync_mode,
-    charge_sync_job,
     resolve_budget_limits,
     resolve_charge_owner,
     usage_for_user,
 )
-from app.services.request_accounting import metered_work
+from app.services.request_accounting import Probe, Sync, accounted_work
 from app.services.request_kinds import held_lanes
 from app.services.scraper_jobs import (
     SyncJobState,
@@ -917,7 +914,7 @@ async def _process_message(msg: pgmq.PgmqMessage, slot: SyncSlot) -> None:
                 msg.msg_id,
             )
             return
-        async with metered_work(partial(charge_sync_job, user_id, job.sync_mode)):
+        async with accounted_work(Sync(user_id, job.sync_mode, job.job_id)):
             await _run_channel(job, channel_id, user_id, slot)
     finally:
         _in_flight.discard(key)
@@ -1000,7 +997,7 @@ def _release_claimed_messages() -> None:
 async def _process_probe_message(msg: pgmq.PgmqMessage) -> None:
     """One Discover handle probe, on the Slot its caller already holds.
 
-    **Metered, and charged to nobody** (ticket 04). Those are two statements and
+    **Tallied, and charged to nobody** (ticket 04). Those are two statements and
     only the first one changed. Ticket 23 left probes off every account's quota
     ledger because the verdict is corpus-scoped — there is no account to bill,
     and billing one would make its Budget a proxy for deployment load, which is
@@ -1010,13 +1007,14 @@ async def _process_probe_message(msg: pgmq.PgmqMessage) -> None:
     What changed is that ticket 04's harvest sweep feeds this lane from stored
     Posts, so probe traffic became something that runs unprompted instead of
     something an Operator triggered. An uncounted crawler is one you hear about
-    from Telegram's response codes rather than from a dashboard, so the same
-    meter `_process_message` uses now runs here and the total lands in
-    `tg_directory_probe_usage`, which is a tally and not a limit.
+    from Telegram's response codes rather than from a dashboard, so this opens
+    a `Probe`'s Accounted work, counted by the same charge rule as a sync, and
+    the total lands in `tg_directory_probe_usage`, which is a tally and not a
+    limit (`directory_probe_usage.charge_probe_requests`).
 
-    The meter reads zero when the probe never reached Telegram — a queued handle
+    The tally reads zero when the probe never reached Telegram, a queued handle
     whose row was resolved in the meantime, or a fetch that failed before the
-    request went out — and `charge_probe_requests` writes nothing for a zero.
+    request went out, and nothing is written for a zero.
 
     It holds a Slot it did not ask for, and that is accepted rather than
     designed around (ADR-012 D13). `drain_sync_lanes` takes a Slot *before* it
@@ -1031,7 +1029,7 @@ async def _process_probe_message(msg: pgmq.PgmqMessage) -> None:
 
     from app.jobs.discover_probe import probe_one_handle
 
-    async with metered_work(charge_probe_requests):
+    async with accounted_work(Probe(handle)):
         await probe_one_handle(handle)
 
 

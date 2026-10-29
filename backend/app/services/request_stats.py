@@ -55,7 +55,7 @@ from app.models_tg import (
     SyncJob,
     utc_now,
 )
-from app.services.quota import Budget, resolve_charge_owner, usage_rows
+from app.services.quota import Budget, usage_rows
 from app.services.settings_registry import REQUEST_ROLLUP_KEY
 from app.services.settings_store import get_global_setting, put_global_setting
 from app.services.tenancy import unscoped_select
@@ -80,7 +80,7 @@ _flush_lock = threading.Lock()
 def flush_recorded_requests() -> int:
     """Write every buffered Request. Blocking: callers on the loop use a thread.
 
-    Swallows its own failure, as `quota.charge_sync_job` does: a stats write
+    Swallows its own failure, as `quota.charge_budget` does: a stats write
     must not fail the sync it measures. The records it held are lost, which is
     the gap ADR-035 accepts for a crash.
     """
@@ -308,8 +308,9 @@ def _recorded_charges(session: Session, day: date) -> Counter[tuple[Any, str]]:
     The ledger charges a job once, as it ends, so a Request is counted on the
     day its job finished, even made the day before: a sync across midnight
     is no mismatch. A Request whose job never recorded its end is counted on
-    its own day. An Account that is null or gone is billed to the Operator,
-    as `charge_sync_job` does.
+    its own day. Each record already names the Account its Accounted work
+    resolved to pay (ADR-041), the Operator for one that was gone, so nothing
+    is resolved here.
     """
     start = datetime.combine(day, datetime.min.time())
     at = col(RequestRecordRow.at)
@@ -328,8 +329,7 @@ def _recorded_charges(session: Session, day: date) -> Counter[tuple[Any, str]]:
     charges: Counter[tuple[Any, str]] = Counter()
     for account_id, budget, job_id, made_on, n in rows:
         if ended.get(job_id, made_on) == day:
-            owner = resolve_charge_owner(session, account_id)
-            charges[(owner, str(budget))] += int(n)
+            charges[(account_id, str(budget))] += int(n)
     return charges
 
 
@@ -356,7 +356,10 @@ def _job_days(session: Session, ids: set[str]) -> dict[str | None, date]:
 def check_request_ledger(day: date) -> int:
     """Compare a closed UTC day's charged Requests with the quota ledger.
 
-    Per Account and Budget. Logs one warning naming every pair that differs,
+    The canary for swallowed charge writes (ADR-041): the records and the
+    ledger come from one charge decision under one Account, so the only way
+    they part is a ledger write that failed and was logged and dropped. Per
+    Account and Budget. Logs one warning naming every pair that differs,
     carrying the metric, and returns the total difference; a clean day logs
     nothing and returns 0. Each Request counts on the day its job was charged
     (`_recorded_charges`), so a sync across midnight matches on both days.
@@ -379,7 +382,8 @@ def check_request_ledger(day: date) -> int:
         # ponytail: the metric rides the log record, as there is no metrics
         # backend; a counter belongs there once one exists.
         logger.warning(
-            "Requests: %s's charged Requests differ from the ledger: %s",
+            "Requests: %s's charged Requests differ from the ledger, so a "
+            "charge write was swallowed: %s",
             day.isoformat(),
             "; ".join(
                 f"{account} {budget} recorded {r}, ledger {booked}"
@@ -539,17 +543,19 @@ def _owner(model: Tier) -> Any:
 def _filtered(query: Any, model: Tier, picked: Picked) -> Any:
     """The tab's filters, the same on every tier and on every endpoint.
 
-    Picking Accounts keeps their charged Requests alone: no Account pays for
-    an Uncharged one, even one made for its sync (RQS-05). A Channel left out
+    Picking Accounts keeps their Charged Requests and the Uncharged ones they
+    asked for, a handle check or a refused attempt of their sync (RQS-05 as
+    ADR-041 amends it). A Charged row reads its Account as the ledger bills
+    it; an Uncharged one as recorded, so a probe or a check that names nobody
+    stays out. The Accounts facet still counts spend alone. A Channel left out
     takes its own row with it, never an aggregate row's Requests that name its
     handle: a Handle check of it stays a Handle check (RQS-04).
     """
     if picked.charged != "all":
         query = query.where(col(model.charged).is_(picked.charged == "charged"))
     if picked.accounts:
-        query = query.where(
-            col(model.charged).is_(True), _owner(model).in_(picked.accounts)
-        )
+        asker = case((col(model.charged), _owner(model)), else_=col(model.account_id))
+        query = query.where(asker.in_(picked.accounts))
     channel = _totals_channel(model)
     if picked.left_out:
         query = query.where(channel.is_(None) | channel.not_in(picked.left_out))

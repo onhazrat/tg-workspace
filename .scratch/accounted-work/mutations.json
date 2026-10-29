@@ -1,0 +1,163 @@
+[
+  {
+    "name": "count every attempt that reached the network",
+    "file": "backend/app/core/request_recording.py",
+    "old": "        paid = web_view and answered\n",
+    "new": "        paid = True\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_sync_charges_its_modes_budget_and_records_the_same"
+  },
+  {
+    "name": "mark a picture Charged",
+    "file": "backend/app/core/request_recording.py",
+    "old": "        paid = web_view and answered\n",
+    "new": "        paid = answered\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_sync_charges_its_modes_budget_and_records_the_same"
+  },
+  {
+    "name": "drop the exit flush",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "                await run_db(charge, tally.requests)\n                await run_db(flush_recorded_requests)\n",
+    "new": "                await run_db(charge, tally.requests)\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_sync_charges_its_modes_budget_and_records_the_same"
+  },
+  {
+    "name": "pay a Follow from another Budget",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "kind, budget = RequestKind.FOLLOW, Budget.MANUAL_BULK",
+    "new": "kind, budget = RequestKind.FOLLOW, Budget.AUTO_SYNC",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_follow_charges_manual_bulk_as_one_batch"
+  },
+  {
+    "name": "give a probe a Budget",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "kind=RequestKind.PROBE, channel=normalize_handle(work.handle)\n",
+    "new": "kind=RequestKind.PROBE, channel=normalize_handle(work.handle), budget=\"auto_sync\"\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_probe_pays_into_the_probe_tally_and_no_budget"
+  },
+  {
+    "name": "count the tally only on Charged records",
+    "file": "backend/app/core/request_recording.py",
+    "old": "        if paid and tally is not None:\n",
+    "new": "        if paid and who.budget is not None and tally is not None:\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_probe_pays_into_the_probe_tally_and_no_budget"
+  },
+  {
+    "name": "give uncharged work a Budget",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "kind=work.kind, account_id=work.account_id, channel=work.channel\n",
+    "new": "kind=work.kind, account_id=work.account_id, channel=work.channel, budget=\"manual_bulk\"\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_uncharged_work_names_the_asking_account_as_given_and_pays_nothing"
+  },
+  {
+    "name": "keep the raw Account on the records",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "kind=kind, account_id=payer, budget=budget.value",
+    "new": "kind=kind, account_id=work.account_id, budget=budget.value",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_deleted_account_is_charged_to_the_operator_on_both_sides"
+  },
+  {
+    "name": "charge the Account as given, with no second resolution",
+    "file": "backend/app/services/quota.py",
+    "old": "            owner_id = resolve_charge_owner(session, user_id)\n            if owner_id is None:\n                # No account exists at all. Inventing one",
+    "new": "            owner_id = user_id\n            if owner_id is None:\n                # No account exists at all. Inventing one",
+    "test": "backend/tests/services/test_request_accounting.py::test_a_failed_entry_read_still_charges_the_resolved_account_at_exit"
+  },
+  {
+    "name": "pay only when the work completes",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "            finally:\n                await run_db(charge, tally.requests)",
+    "new": "            except BaseException:\n                raise\n            else:\n                await run_db(charge, tally.requests)",
+    "test": "backend/tests/services/test_request_accounting.py::test_work_that_stops_still_pays_for_what_it_made"
+  },
+  {
+    "name": "charge at least one Request whatever the count",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "await run_db(charge, tally.requests)",
+    "new": "await run_db(charge, tally.requests or 1)",
+    "test": "backend/tests/services/test_request_accounting.py::test_work_with_no_charged_request_writes_no_ledger_row"
+  },
+  {
+    "name": "share one tally between all work",
+    "file": "backend/app/core/request_recording.py",
+    "old": "    tally = Tally()\n    token = _tally.set(tally)",
+    "new": "    tally = globals().setdefault(\"_shared_tally\", Tally())\n    token = _tally.set(tally)",
+    "test": "backend/tests/services/test_request_accounting.py::test_concurrent_work_keeps_separate_tallies_shared_by_its_tasks"
+  },
+  {
+    "name": "set the attribution without resetting it on exit",
+    "file": "backend/app/core/request_recording.py",
+    "old": "    try:\n        yield\n    finally:\n        _attribution.reset(token)",
+    "new": "    try:\n        yield\n    finally:\n        pass",
+    "test": "backend/tests/services/test_request_accounting.py::test_work_stops_counting_once_it_ends"
+  },
+  {
+    "name": "allow nesting",
+    "file": "backend/app/services/request_accounting.py",
+    "old": "    if outer is not None:\n",
+    "new": "    if False:\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_opening_accounted_work_inside_accounted_work_raises"
+  },
+  {
+    "name": "set kind outside Accounted work (the guard)",
+    "file": "backend/app/services/bulk_follow.py",
+    "old": "attributed(channel=result.name)",
+    "new": "attributed(channel=result.name, kind=RequestKind.FOLLOW)",
+    "test": "backend/tests/services/test_request_accounting.py::test_only_accounted_work_sets_kind_account_budget_or_job"
+  },
+  {
+    "name": "ignore accounts",
+    "file": "backend/app/services/request_stats.py",
+    "old": "    if picked.accounts:\n        asker",
+    "new": "    if False:\n        asker",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "drop a picked Account's Uncharged Requests",
+    "file": "backend/app/services/request_stats.py",
+    "old": "else_=col(model.account_id))",
+    "new": "else_=None)",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "keep Uncharged Requests that name no Account",
+    "file": "backend/app/services/request_stats.py",
+    "old": "else_=col(model.account_id))",
+    "new": "else_=_owner(model))",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "count Uncharged Requests in byAccount",
+    "file": "backend/app/services/request_stats.py",
+    "old": "        if is_charged and account is not None:\n",
+    "new": "        if account is not None:\n",
+    "test": "backend/tests/api/test_request_stats.py::test_picking_accounts_keeps_their_charged_and_the_uncharged_they_asked_for"
+  },
+  {
+    "name": "say picking hides Uncharged again",
+    "file": "frontend/src/components/requests/RequestsView.tsx",
+    "old": "What they spent, and the Uncharged Requests they asked for",
+    "new": "Uncharged hidden, because no Account pays for it",
+    "test": "frontend/src/components/requests/RequestsView.test.tsx"
+  },
+  {
+    "name": "drop Uncharged rows from the picked totals",
+    "file": "frontend/src/lib/requests/breakdown.ts",
+    "old": "    if (!hiddenKinds.has(row.kind))\n      addTo(t, { ...row, total: row.requests }, hiddenOutcomes)",
+    "new": "    if (!hiddenKinds.has(row.kind) && row.charged > 0)\n      addTo(t, { ...row, total: row.requests }, hiddenOutcomes)",
+    "test": "frontend/src/lib/requests/breakdown.test.ts"
+  },
+  {
+    "name": "copy an Attribution with a new kind outside Accounted work (the guard)",
+    "file": "backend/app/jobs/sync_queue.py",
+    "old": "from app.core.request_recording import RequestKindDisabled, attributed\n",
+    "new": "from app.core.request_recording import RequestKindDisabled, attributed\nfrom dataclasses import replace\n_X = lambda a: replace(a, kind=None)  # noqa: E731\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_only_accounted_work_sets_kind_account_budget_or_job"
+  },
+  {
+    "name": "set the attribution's ContextVar outside Accounted work (the guard)",
+    "file": "backend/app/jobs/sync_queue.py",
+    "old": "from app.core.request_recording import RequestKindDisabled, attributed\n",
+    "new": "from app.core.request_recording import RequestKindDisabled, _attribution, attributed\n",
+    "test": "backend/tests/services/test_request_accounting.py::test_only_accounted_work_sets_kind_account_budget_or_job"
+  }
+]

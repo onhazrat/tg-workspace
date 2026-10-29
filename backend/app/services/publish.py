@@ -13,12 +13,13 @@ from typing import Any
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.core.request_recording import RequestKind, attributed
+from app.core.request_recording import RequestKind
 from app.core.secrets import decrypt_token
 from app.models_tg import BotCredential
 from app.services.credentials import BOT_CREDENTIAL_NOT_FOUND
 from app.services.network import fetch_with_retry, parse_telegram_entities
 from app.services.publication_parts import PublishingSettings, build_parts
+from app.services.request_accounting import Uncharged, accounted_work
 from app.services.settings_registry import PUBLISHING_KEY
 from app.services.tenancy import may_act_on
 from app.services.user_settings import get_user_setting
@@ -172,8 +173,9 @@ async def send_parts(
             # Off unless the Account or the Summary turned them on: a cited Post's card under
             # every Part is noise in the channel (SUMTAB-08).
             payload["link_preview_options"] = {"is_disabled": True}
-        # A Bot API call (RQS-14), whether a person or the scheduler publishes.
-        with attributed(kind=RequestKind.BOT_API):
+        # A Bot API call (RQS-14), whether a person or the scheduler publishes,
+        # named for the Account publishing: the target under View-as.
+        async with accounted_work(Uncharged(RequestKind.BOT_API, acting_user_id)):
             data, telem = await fetch_with_retry(
                 target,
                 retries=settings.TELEGRAM_API_RETRIES,

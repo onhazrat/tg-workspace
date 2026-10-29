@@ -1,6 +1,6 @@
 """Postgres `LISTEN`/`NOTIFY` as a process-crossing wakeup (ticket 10).
 
-In `core/` rather than `services/` for the reason `request_meter.py` is:
+In `core/` rather than `services/` for the reason `request_recording.py` is:
 infrastructure with no domain in it. This module knows about channels, payloads
 and one dedicated connection. What a payload *means* is decided by its caller
 (`services/scraper_jobs.py` for sync-job progress), which is what keeps the

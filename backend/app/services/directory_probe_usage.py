@@ -107,7 +107,7 @@ def charge_probe_requests(requests: int) -> None:
     The lane consumer's exit path, factored out here so this module — not
     `jobs/sync_queue.py` — owns what happens when the write fails.
 
-    Swallows its own failures, for the reason `quota.charge_sync_job` does: this
+    Swallows its own failures, for the reason `quota.charge_budget` does: this
     runs after the probe has finished and its verdict is committed, so raising
     would turn a recorded verdict into a failed message to report an accounting
     problem. The cost of the swallow is bounded and worth stating — one

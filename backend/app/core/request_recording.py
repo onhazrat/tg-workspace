@@ -1,21 +1,29 @@
 """Records every Request the app makes to Telegram (RQS-01, ADR-035).
 
-The quota meter (`core/request_meter.py`) counts the attempts a Budget pays
-for. This records **every attempt that reached the network**, on any Telegram
+This records **every attempt that reached the network**, on any Telegram
 host, with what the Requests tab needs to say where it went: which kind of work
 made it, the Account, the Channel, the Lane, the page type, how long it took and
-whether it was Useful, Idle or Wasted.
+whether it was Useful, Idle or Wasted. It also counts what the work pays for
+(ADR-041): the tally beside the attribution.
 
-Two things meet here, the same two the meter joins. `network.fetch_with_retry`
-knows an attempt happened and how it ended; the sync knows whose work it was
-and, after the page is applied, whether it brought anything new. They meet
-through `contextvars`, for the meter's reason: a parameter threaded through the
-scraper into the HTTP client would be read by nobody on the way.
+Two things meet here. `network.fetch_with_retry` knows an attempt happened and
+how it ended; the work knows whose it was and, after the page is applied,
+whether it brought anything new. They meet through `contextvars`, because a
+parameter threaded through the scraper into the HTTP client would be read by
+nobody on the way, and because two syncs for two Accounts overlap routinely:
+`asyncio` copies the context into each task, so the tasks one piece of work
+spawns share its attribution and tally while work beside it keeps its own.
 
-* **Attribution** (`attributed`) is set by the work: kind, Account, Budget,
-  Channel, best-effort. Nested blocks refine the outer one, so the lane consumer
-  can say "best-effort" and the sync below it say which Channel. Work that sets
-  none records kind "other".
+* **Attribution** (`attributed`) says whose work the Requests are: kind,
+  Account, Budget, Channel, best-effort, job. Kind, Account, Budget and job are
+  set only by `services/request_accounting.py` when it opens Accounted work, so
+  the record and the ledger cannot name two different payers (a guard walks the
+  AST for it). Anyone may refine the Channel and best-effort inside open work.
+  Work that sets nothing records kind "other".
+* **The tally** (`tallied`) counts the attempts the work pays for, under the one
+  charge rule in `Page.record`: an answered web view attempt. With a Budget that
+  is exactly the records marked Charged; a probe counts by the same rule into
+  the Directory's tally, with no Budget. No tally open means nothing counts.
 * **A page** (`page`) is one page fetch, across `fetch_with_retry`'s own
   retries and the outer retries of the code that asked for the page. Its
   attempts share a chain id (the first attempt's id) and an attempt number.
@@ -26,7 +34,8 @@ scraper into the HTTP client would be read by nobody on the way.
 Closed records go into a buffer for this process, which
 `services/request_stats.flush_recorded_requests` drains into the database: in
 the `finally` that writes the ledger, every few seconds, and on shutdown. Kept
-in `core/` with no database in it, for the reason the meter is.
+in `core/` because it is infrastructure with no database and no domain in it,
+the reason `async_db.py` is a declared exception in `test_service_kinds.py`.
 """
 
 from __future__ import annotations
@@ -148,6 +157,19 @@ class Attribution:
 
 
 @dataclass
+class Tally:
+    """The attempts one piece of Accounted work pays for. See `tallied`.
+
+    Mutable and shared on purpose: the `ContextVar` holds a reference, so a
+    child task counting into it counts into its parent's work. Rebinding the
+    variable to a fresh value instead would give each task its own count and
+    the work would pay for nothing.
+    """
+
+    requests: int = 0
+
+
+@dataclass
 class RequestRecord:
     """One Request, as `tg_request_records` stores it."""
 
@@ -222,15 +244,21 @@ class Page:
         if self.chain_id is None:
             self.chain_id = record_id
         self.attempts += 1
+        # The one charge rule (ticket 08, ADR-041): an answered web view
+        # attempt is paid for, a 404, a 429 and a soft block included.
+        # Pictures, Bot API calls and transport faults are not. With a Budget
+        # it is Charged, and the tally counts exactly those records; a probe's
+        # tally counts by the same rule with no Budget.
+        paid = web_view and answered
+        tally = _tally.get()
+        if paid and tally is not None:
+            tally.requests += 1
         record = RequestRecord(
             id=record_id,
             at=at,
             latency_ms=latency_ms,
             kind=who.kind.value,
-            # The ledger's rule (ticket 08): an answered web view attempt of
-            # work charged to a Budget. Pictures, transport faults and
-            # unbudgeted work are Uncharged.
-            charged=web_view and answered and who.budget is not None,
+            charged=paid and who.budget is not None,
             account_id=who.account_id,
             budget=who.budget,
             best_effort=who.best_effort,
@@ -279,6 +307,9 @@ _attribution: contextvars.ContextVar[Attribution] = contextvars.ContextVar(
 )
 _page: contextvars.ContextVar[Page | None] = contextvars.ContextVar(
     "tg_request_page", default=None
+)
+_tally: contextvars.ContextVar[Tally | None] = contextvars.ContextVar(
+    "tg_request_tally", default=None
 )
 
 _buffer: list[RequestRecord] = []
@@ -387,7 +418,12 @@ def attributed(
     best_effort: bool | None = None,
     job_id: str | None = None,
 ) -> Iterator[None]:
-    """Attribute the Requests made inside this block, refining any outer block."""
+    """Attribute the Requests made inside this block, refining any outer block.
+
+    Outside `services/request_accounting.py` only `channel` and `best_effort`
+    may be passed: kind, Account, Budget and job belong to the Accounted work
+    that pays (ADR-041). `tests/services/test_request_accounting.py` guards it.
+    """
     current = _attribution.get()
     token = _attribution.set(
         replace(
@@ -404,6 +440,17 @@ def attributed(
         yield
     finally:
         _attribution.reset(token)
+
+
+@contextmanager
+def tallied() -> Iterator[Tally]:
+    """Count the attempts the work inside this block pays for. See `Tally`."""
+    tally = Tally()
+    token = _tally.set(tally)
+    try:
+        yield tally
+    finally:
+        _tally.reset(token)
 
 
 @contextmanager

@@ -45,9 +45,9 @@ import pytest
 from sqlmodel import Session, col, select
 from sqlmodel import delete as sa_delete
 
-from app.core import request_meter
 from app.core.config import settings
 from app.core.db import engine
+from app.core.request_recording import tallied
 from app.core.security import get_password_hash
 from app.models import User
 from app.models_tg import QuotaUsage, RequestRecordRow
@@ -64,6 +64,7 @@ from app.services.quota import (
 )
 from app.services.telegram_web import TelegramWebViewUnavailable
 from tests.utils.partition import direct_partition
+from tests.utils.requests import answered_request
 
 TELEGRAM_URL = "https://t.me/s/somechannel"
 NOT_TELEGRAM_URL = "https://api.telegram.org/bot123/sendMessage"
@@ -73,82 +74,6 @@ DAY = date(2026, 8, 25)
 async def _no_sleep(_seconds: float) -> None:
     """Retries here are about *what gets counted*, not about waiting for it."""
     return None
-
-
-# --------------------------------------------------------------------------
-# The meter
-# --------------------------------------------------------------------------
-
-
-def test_counting_outside_a_metered_block_is_a_no_op() -> None:
-    """Mutation: raise instead of returning when no meter is active.
-
-    Most callers of `fetch_with_retry` are not a sync — the Bot API publish
-    path, a proxy health check, a thumbnail fetch from a route. They run with no
-    meter and must not care that the meter exists.
-    """
-    request_meter.record_telegram_request()  # must not raise
-
-
-def test_a_meter_counts_the_calls_made_inside_it() -> None:
-    with request_meter.metered() as meter:
-        request_meter.record_telegram_request()
-        request_meter.record_telegram_request()
-    assert meter.telegram_requests == 2
-
-
-def test_a_meter_stops_counting_once_its_block_ends() -> None:
-    """Mutation: set the ContextVar without resetting it on exit.
-
-    A meter that outlives its block charges the next job for the last one's
-    work, and the symptom is a number that is merely too big — the kind of wrong
-    nobody spots without being told what to expect.
-    """
-    with request_meter.metered() as meter:
-        request_meter.record_telegram_request()
-    request_meter.record_telegram_request()
-    assert meter.telegram_requests == 1
-
-
-def test_two_concurrent_meters_do_not_share_a_count() -> None:
-    """Mutation: hoist the meter to a module-level global.
-
-    Two syncs for two accounts run concurrently in one process today, and will
-    run in one worker after ticket 10. A shared counter charges each of them for
-    the other's requests, and does it only under concurrency — the failure that
-    never reproduces in a single-user test.
-    """
-
-    async def job(n: int) -> int:
-        with request_meter.metered() as meter:
-            for _ in range(n):
-                request_meter.record_telegram_request()
-                await asyncio.sleep(0)
-            return meter.telegram_requests
-
-    async def _run() -> list[int]:
-        return list(await asyncio.gather(job(3), job(7)))
-
-    assert asyncio.run(_run()) == [3, 7]
-
-
-def test_a_meter_reaches_the_tasks_a_job_spawns() -> None:
-    """Mutation: read the meter from a local instead of the ContextVar.
-
-    `run_sync_job` opens one meter and then gathers a task per channel. A meter
-    that did not reach those tasks would record zero for every sync, which reads
-    exactly like "nobody synced anything".
-    """
-
-    async def one_channel() -> None:
-        request_meter.record_telegram_request()
-
-    async def _run() -> int:
-        with request_meter.metered() as meter:
-            await asyncio.gather(*[one_channel() for _ in range(4)])
-            return meter.telegram_requests
-
-    assert asyncio.run(_run()) == 4
 
 
 # --------------------------------------------------------------------------
@@ -171,12 +96,12 @@ def _count_one_fetch(
     retries: int = 1,
     expect_raises: type[BaseException] | None = None,
 ) -> int:
-    """Run one `fetch_with_retry` under a meter and return what it counted."""
+    """Run one `fetch_with_retry` under a tally and return what it counted."""
     monkeypatch.setattr(network, "_fetch_once", fetch_once)
     monkeypatch.setattr(network.asyncio, "sleep", _no_sleep)
 
     async def _run() -> int:
-        with request_meter.metered() as meter:
+        with tallied() as tally:
             if expect_raises is not None:
                 with pytest.raises(expect_raises):
                     await network.fetch_with_retry(
@@ -184,7 +109,7 @@ def _count_one_fetch(
                     )
             else:
                 await network.fetch_with_retry(url, retries=retries, initial_delay_ms=0)
-            return meter.telegram_requests
+            return tally.requests
 
     return asyncio.run(_run())
 
@@ -520,10 +445,10 @@ def _run_job(
     channels: int = 3,
     fail: bool = False,
 ) -> None:
-    """Drive `run_sync_job` with the channel sync replaced by a metered stub.
+    """Drive `run_sync_job` with the channel sync replaced by a stub.
 
     The stub sits where the real channel sync sits, so everything between the
-    meter opening and the charge is exercised for real. Faking the HTTP
+    Accounted work opening and the charge is exercised for real. Faking the HTTP
     underneath keeps the test about the wiring rather than about the scraper.
     """
     from app.services import sync_orchestrator
@@ -533,7 +458,7 @@ def _run_job(
         _job: object, ch_state: ChannelSyncState, **_kwargs: object
     ) -> None:
         for _ in range(requests_per_channel):
-            request_meter.record_telegram_request()
+            answered_request()
             await asyncio.sleep(0)
         if fail:
             raise RuntimeError("sync blew up")
@@ -709,7 +634,7 @@ def test_a_bulk_follow_batch_charges_its_probes_to_manual_bulk(
 ) -> None:
     """A Follow persists its charge and Requests without relying on a chained sync.
 
-    Mutation: drop the meter or its completion flush from `run_follow_job`.
+    Mutation: drop the Accounted work or its completion flush from `run_follow_job`.
     Read the stored Requests without flushing them or chaining a sync.
     """
     from app.services import bulk_follow
@@ -752,55 +677,6 @@ def test_a_bulk_follow_batch_charges_its_probes_to_manual_bulk(
             r.charged and r.kind == "follow" and r.budget == Budget.MANUAL_BULK.value
             for r in records
         )
-
-
-def test_the_chained_sync_is_not_charged_to_the_follow_job(
-    monkeypatch: pytest.MonkeyPatch, ledger_user: uuid.UUID
-) -> None:
-    """Nested meters must not double-count, and must not cross-count.
-
-    Mutation: make `metered()` set the ContextVar back to `None` on exit rather
-    than resetting the token. `run_follow_job` wraps a block that spawns
-    `run_sync_job`, which opens a meter of its own — the inner one has to
-    restore the outer, not clear it, or the follow job stops counting its own
-    remaining probes.
-    """
-    from app.services import bulk_follow
-
-    async def probe_then_nested_sync(
-        _job: object, result: object, **_kwargs: object
-    ) -> None:
-        request_meter.record_telegram_request()
-        # Stands in for the chained sync job: its own meter, its own count.
-        with request_meter.metered() as inner:
-            request_meter.record_telegram_request()
-            request_meter.record_telegram_request()
-            assert inner.telegram_requests == 2
-        # The outer meter must still be the one in force here.
-        request_meter.record_telegram_request()
-        result.status = "skipped"  # type: ignore[attr-defined]
-
-    async def noop(*_args: object, **_kwargs: object) -> None:
-        return None
-
-    monkeypatch.setattr(bulk_follow, "_process_one_channel", probe_then_nested_sync)
-    monkeypatch.setattr(bulk_follow, "touch_follow_job", noop)
-    monkeypatch.setattr(bulk_follow, "_chain_sync_job", noop)
-    monkeypatch.setattr(bulk_follow, "_load_effective_start_time", lambda _uid: 0)
-    monkeypatch.setattr(bulk_follow, "_load_proxy_concurrency", lambda _uid: (1, {}))
-
-    job = bulk_follow.FollowJobState(
-        follow_job_id=f"follow-{uuid.uuid4().hex[:8]}",
-        results=[bulk_follow.FollowChannelResult(name="ch0")],
-        user_id=str(ledger_user),
-    )
-
-    asyncio.run(bulk_follow.run_follow_job(job))
-
-    rows = _rows_for(ledger_user)
-    assert len(rows) == 1
-    # Two from the outer block; the inner meter's two went nowhere near it.
-    assert rows[0].requests == 2
 
 
 # --------------------------------------------------------------------------

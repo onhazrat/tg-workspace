@@ -307,23 +307,43 @@ def resolve_charge_owner(
 def charge_sync_job(
     user_id: uuid.UUID | None, sync_mode: SyncOperationMode, requests: int
 ) -> None:
-    """Charge one completed sync job. Opens its own session; safe to call bare.
+    """Charge one completed sync job to its sync mode's Budget. See `charge_budget`.
 
-    The orchestrator's exit path, factored out so it can run through `run_db` in
-    a worker thread and so this module — not `sync_orchestrator.py` — owns the
-    decision about what happens when there is nobody to charge.
+    The Budget is resolved inside the `try`: `budget_for_sync_mode` raises for
+    a mode nobody mapped, and that must be logged and dropped like any other
+    charge failure, never carried into the caller's `finally`. The log line
+    names the `sync_mode`, because resolving the Budget is what failed.
+    """
+    try:
+        budget = budget_for_sync_mode(sync_mode)
+    except Exception:
+        logger.exception(
+            "Quota: failed to charge %s Requests for %s (sync_mode=%s)",
+            requests,
+            user_id,
+            sync_mode,
+        )
+        return
+    charge_budget(user_id, budget, requests)
 
-    Swallows its own failures deliberately — **all** of them, including the
-    Budget lookup, which is why nothing here is resolved outside the `try`.
-    Ticket 23 revisited the swallow rather than inheriting it. This runs after the sync has finished and its Posts are
-    committed, so raising would turn a completed sync into a failed one to
-    report an accounting problem. Now that the numbers gate a lane, the cost of
-    the swallow is bounded and worth stating: one message's Requests go
+
+def charge_budget(user_id: uuid.UUID | None, budget: Budget, requests: int) -> None:
+    """Charge completed work's Requests to `budget`. Opens its own session.
+
+    The exit path of Accounted work (`services/request_accounting.py`),
+    factored out so it can run through `run_db` in a worker thread and so this
+    module owns the decision about what happens when there is nobody to charge.
+
+    Swallows its own failures deliberately. Ticket 23 revisited the swallow
+    rather than inheriting it. This runs after the work has finished and its
+    Posts are committed, so raising would turn a completed sync into a failed
+    one to report an accounting problem. Now that the numbers gate a lane, the
+    cost of the swallow is bounded and worth stating: one message's Requests go
     unbilled, the account stays on the normal tier marginally longer than it
     earned, and the next charge succeeds. Under-billing repeatedly needs the
     database to be persistently unreachable, and by then the enqueue read, the
-    lane read and the sync itself have all stopped too. The log line names the
-    `sync_mode` as well as the count, so the unbilled work is attributable.
+    lane read and the sync itself have all stopped too. The daily ledger check
+    (`request_stats.check_request_ledger`) is the canary for a swallowed write.
     """
     if requests <= 0:
         return
@@ -338,21 +358,13 @@ def charge_sync_job(
                     "Quota: %s Requests unattributed, no account to charge", requests
                 )
                 return
-            charge_requests(
-                session, owner_id, budget_for_sync_mode(sync_mode), requests
-            )
+            charge_requests(session, owner_id, budget, requests)
     except Exception:
-        # `sync_mode` rather than the Budget, because resolving the Budget is
-        # itself one of the things that can fail here — `budget_for_sync_mode`
-        # raises for a mode nobody mapped — and a log line that raises while
-        # reporting a failure would carry it out of this `except` and into the
-        # `finally` in `sync_queue._process_message` that called us. The mapping
-        # is one line away in this module, so naming the mode names the Budget.
         logger.exception(
-            "Quota: failed to charge %s Requests for %s (sync_mode=%s)",
+            "Quota: failed to charge %s Requests for %s (budget=%s)",
             requests,
             user_id,
-            sync_mode,
+            budget.value,
         )
 
 

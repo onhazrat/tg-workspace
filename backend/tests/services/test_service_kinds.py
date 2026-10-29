@@ -98,7 +98,7 @@ INVENTORY: dict[str, str] = {
     # alone, and built wholesale by its `fill_citations`.
     "post_references.py": AGGREGATE,
     # Owns `tg_quota_usage` (ticket 08) and is its only writer. The counting
-    # itself is not here — `core/request_meter.py` does that, because a
+    # itself is not here; `core/request_recording.py` tallies it, because a
     # ContextVar tally has no table and no domain in it.
     "quota.py": AGGREGATE,
     # Owns `tg_request_records` (RQS-01, ADR-035) and is its only writer. The

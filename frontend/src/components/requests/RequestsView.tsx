@@ -168,10 +168,10 @@ export function RequestsView({
             </span>
             {filter.accounts.length > 0 && (
               <span
-                data-testid="requests-uncharged-hidden"
+                data-testid="requests-accounts-kept"
                 className="text-app-ink/50"
               >
-                Uncharged hidden, because no Account pays for it
+                What they spent, and the Uncharged Requests they asked for
               </span>
             )}
             {filter.leftOut.size > 0 && (

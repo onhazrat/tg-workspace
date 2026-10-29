@@ -63,6 +63,7 @@ from app.services.quota import (
     Budget,
     budget_allowance,
     charge_requests,
+    charge_sync_job,
 )
 from app.services.scraper_jobs import (
     active_sync_job_owners,
@@ -490,7 +491,7 @@ def test_the_ledger_row_the_selector_reads_is_the_one_the_charge_writes(
     file only ever looks at its own half.
     """
     _pin_allowance(monkeypatch, Budget.MANUAL_BULK, 10)
-    sync_queue.charge_sync_job(spender, MODE_FOR_BUDGET[Budget.MANUAL_BULK], 10)
+    charge_sync_job(spender, MODE_FOR_BUDGET[Budget.MANUAL_BULK], 10)
 
     with Session(engine) as session:
         rows = list(

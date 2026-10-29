@@ -1,6 +1,6 @@
 {
   "backend/app/services/network.py::fetch_with_retry": {
-    "score": 35.84,
-    "reason": "The retry loop decides both proxy pacing and the quota charge per attempt; its uncovered lines are the local-Tor rotation and the unreachable exhaustion raise."
+    "score": 32.6,
+    "reason": "The retry loop decides proxy pacing and records every attempt for the one charge rule in Page.record; its uncovered lines are the local-Tor rotation and the unreachable exhaustion raise."
   }
 }
