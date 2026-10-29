@@ -200,9 +200,88 @@ def test_uses_end_with_the_tag(
 
     for name in ("deleted", "untagged", "replaced"):
         _add(client, operator, name, "a_one")
+    # A Tag run tags through the same route and records no use.
     assert _scores(client, operator, "channels") == {
         "deleted": 0,
         "fresh": 0,
         "replaced": 0,
         "untagged": 0,
     }
+
+
+def test_the_order_counts_a_scope_and_a_selection_and_no_setting_group(
+    client: TestClient, accounts: tuple[Headers, Headers]
+) -> None:
+    operator, _ = accounts
+    _add(client, operator, "News", "a_one", "a_two", "@A_Three")
+    _add(client, operator, "late", "a_three")
+
+    def counts(**kw: Any) -> dict[str, tuple[int, int]]:
+        rows = _order(client, operator, "directory", **kw)
+        return {name: (row["channels"], row["selected"]) for name, row in rows.items()}
+
+    # `tg_followed` sits in a Setting group, whose `group:` Tag is not a Tag here.
+    assert counts() == {"late": (1, 0), "News": (3, 0)}
+    assert counts(selected=["A_ONE", "a_three", "never"]) == {
+        "late": (1, 1),
+        "News": (3, 2),
+    }
+    assert counts(scope=["a_one", "a_two"], selected=["a_one", "a_three"]) == {
+        "late": (0, 0),
+        "News": (2, 1),
+    }
+
+
+@pytest.mark.parametrize("enforced", [True, False])
+def test_one_account_never_sees_or_moves_another_accounts_uses(
+    client: TestClient,
+    accounts: tuple[Headers, Headers],
+    monkeypatch: pytest.MonkeyPatch,
+    enforced: bool,
+) -> None:
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "TENANCY_ENFORCED", enforced)
+    operator, other = accounts
+    _add(client, other, "shared", "a_one", "a_two")
+    _add(client, other, "theirs", "a_one")
+    _use(client, other, "channels", "shared")
+    _add(client, operator, "shared", "a_one")
+
+    # A Tag the caller lacks records nothing, though another Account has it.
+    assert _use(client, operator, "channels", "theirs").json() == {"changed": 0}
+    assert _order(client, operator, "channels", selected=["a_two"]) == {
+        "shared": {
+            "name": "shared",
+            "channels": 1,
+            "selected": 0,
+            "score": 0,
+            "lastUsedAt": None,
+        }
+    }
+    _use(client, operator, "channels", "shared")
+    client.patch(TAGS, json={"name": "shared", "to": "mine"}, headers=operator)
+    client.request("DELETE", TAGS, json={"name": "mine"}, headers=operator)
+    assert _scores(client, other, "channels") == {"shared": 1, "theirs": 0}
+
+
+def test_view_as_reads_the_targets_order_and_records_nothing(
+    client: TestClient, accounts: tuple[Headers, Headers]
+) -> None:
+    operator, other = accounts
+    _add(client, other, "theirs", "a_one")
+    _use(client, other, "requests", "theirs")
+    me = client.get(f"{settings.API_V1_STR}/users/me", headers=other).json()
+    session = client.post(f"{settings.API_V1_STR}/view-as/{me['id']}", headers=operator)
+    assert session.status_code == 200, session.text
+    viewing = {"Authorization": f"Bearer {session.json()['accessToken']}"}
+    try:
+        assert _scores(client, viewing, "requests") == {"theirs": 1}
+        assert _use(client, viewing, "requests", "theirs").status_code == 403
+        assert _scores(client, other, "requests") == {"theirs": 1}
+    finally:
+        from app.models_view_as import ViewAsSession
+
+        with Session(engine) as db:
+            db.exec(delete(ViewAsSession))
+            db.commit()

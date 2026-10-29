@@ -8083,6 +8083,56 @@ export type TagHandlesResponse = {
 };
 
 /**
+ * TagOrderRequest
+ *
+ * What a tab's Tags dropdown reads when it opens: its tab, the handles it
+ * lists (`None` for every Channel, as the Directory's) and the selected ones.
+ */
+export type TagOrderRequest = {
+    /**
+     * Tab
+     */
+    tab: 'channels' | 'directory' | 'requests';
+    /**
+     * Scope
+     */
+    scope?: Array<string> | null;
+    /**
+     * Selected
+     */
+    selected?: Array<string>;
+};
+
+/**
+ * TagOrderResponse
+ *
+ * One of the Account's Tags on a tab: its channels in the scope, how many
+ * of those are selected, its Tag use score and its last use (ms), if any.
+ */
+export type TagOrderResponse = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Channels
+     */
+    channels: number;
+    /**
+     * Selected
+     */
+    selected: number;
+    /**
+     * Score
+     */
+    score: number;
+    /**
+     * Lastusedat
+     */
+    lastUsedAt: number | null;
+};
+
+/**
  * TagRenameRequest
  *
  * Rename a Tag on every Channel; onto a name the Account has, the two merge.
@@ -8333,6 +8383,22 @@ export type TagRunSubmitRequest = {
     extra?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * TagUseRequest
+ *
+ * One Tag use: the Account named this Tag on this tab.
+ */
+export type TagUseRequest = {
+    /**
+     * Tab
+     */
+    tab: 'channels' | 'directory' | 'requests';
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -11420,6 +11486,58 @@ export type DataAddTagChannelsResponses = {
 };
 
 export type DataAddTagChannelsResponse = DataAddTagChannelsResponses[keyof DataAddTagChannelsResponses];
+
+export type DataRecordTagUseData = {
+    body: TagUseRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tags/uses';
+};
+
+export type DataRecordTagUseErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataRecordTagUseError = DataRecordTagUseErrors[keyof DataRecordTagUseErrors];
+
+export type DataRecordTagUseResponses = {
+    /**
+     * Successful Response
+     */
+    200: TagChangeResponse;
+};
+
+export type DataRecordTagUseResponse = DataRecordTagUseResponses[keyof DataRecordTagUseResponses];
+
+export type DataReadTagOrderData = {
+    body: TagOrderRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data/tags/order';
+};
+
+export type DataReadTagOrderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DataReadTagOrderError = DataReadTagOrderErrors[keyof DataReadTagOrderErrors];
+
+export type DataReadTagOrderResponses = {
+    /**
+     * Response Data-Read Tag Order
+     *
+     * Successful Response
+     */
+    200: Array<TagOrderResponse>;
+};
+
+export type DataReadTagOrderResponse = DataReadTagOrderResponses[keyof DataReadTagOrderResponses];
 
 export type DataListSummariesData = {
     body?: never;

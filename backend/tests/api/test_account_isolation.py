@@ -458,6 +458,12 @@ EXCUSED: dict[tuple[str, str], tuple[Reason, str]] = {
     ("DELETE", f"{DATA}/tags/channels"): (Reason.COVERED_ELSEWHERE, "same file"),
     ("PATCH", f"{DATA}/tags"): (Reason.COVERED_ELSEWHERE, "same file"),
     ("DELETE", f"{DATA}/tags"): (Reason.COVERED_ELSEWHERE, "same file"),
+    # TGU-02: Tag uses, keyed by the caller like the Tags themselves.
+    ("POST", f"{DATA}/tags/uses"): (
+        Reason.COVERED_ELSEWHERE,
+        "keyed by the caller; test_tag_uses.py, both flag states",
+    ),
+    ("POST", f"{DATA}/tags/order"): (Reason.COVERED_ELSEWHERE, "same file"),
     # --- logs ----------------------------------------------------------------
     ("GET", f"{DATA}/logs/{{log_type}}"): (
         Reason.COVERED_ELSEWHERE,

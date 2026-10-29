@@ -3355,6 +3355,80 @@
         }
       }
     },
+    "/api/v1/data/tags/uses": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Record Tag Use",
+        "description": "Record one use of a Tag on a tab; nothing for a Tag the caller lacks.",
+        "operationId": "data-record_tag_use",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagUseRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TagChangeResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
+    "/api/v1/data/tags/order": {
+      "post": {
+        "tags": ["data"],
+        "summary": "Read Tag Order",
+        "description": "Each of the caller's Tags by name: its channels in the scope, how many\nof those are selected, and its Tag use score and last use on the tab.",
+        "operationId": "data-read_tag_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagOrderRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "$ref": "#/components/schemas/TagOrderResponse" },
+                  "type": "array",
+                  "title": "Response Data-Read Tag Order"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "OAuth2PasswordBearer": [] }]
+      }
+    },
     "/api/v1/data/summaries": {
       "get": {
         "tags": ["data"],
@@ -15447,6 +15521,53 @@
         "title": "TagHandlesResponse",
         "description": "The handles carrying a Tag; none for a Tag the Account does not have."
       },
+      "TagOrderRequest": {
+        "properties": {
+          "tab": {
+            "type": "string",
+            "enum": ["channels", "directory", "requests"],
+            "title": "Tab"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+                "type": "array",
+                "maxItems": 100000
+              },
+              { "type": "null" }
+            ],
+            "title": "Scope"
+          },
+          "selected": {
+            "items": { "type": "string", "maxLength": 256, "minLength": 1 },
+            "type": "array",
+            "maxItems": 100000,
+            "title": "Selected"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["tab"],
+        "title": "TagOrderRequest",
+        "description": "What a tab's Tags dropdown reads when it opens: its tab, the handles it\nlists (`None` for every Channel, as the Directory's) and the selected ones."
+      },
+      "TagOrderResponse": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "channels": { "type": "integer", "title": "Channels" },
+          "selected": { "type": "integer", "title": "Selected" },
+          "score": { "type": "number", "title": "Score" },
+          "lastUsedAt": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lastusedat"
+          }
+        },
+        "type": "object",
+        "required": ["name", "channels", "selected", "score", "lastUsedAt"],
+        "title": "TagOrderResponse",
+        "description": "One of the Account's Tags on a tab: its channels in the scope, how many\nof those are selected, its Tag use score and its last use (ms), if any."
+      },
       "TagRenameRequest": {
         "properties": {
           "name": { "type": "string", "minLength": 1, "title": "Name" },
@@ -15652,6 +15773,21 @@
         "required": ["id", "scope"],
         "title": "TagRunSubmitRequest",
         "description": "Body for `POST /data/tag-runs` \u2014 opens a tag run at a frozen Scope."
+      },
+      "TagUseRequest": {
+        "properties": {
+          "tab": {
+            "type": "string",
+            "enum": ["channels", "directory", "requests"],
+            "title": "Tab"
+          },
+          "name": { "type": "string", "minLength": 1, "title": "Name" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["tab", "name"],
+        "title": "TagUseRequest",
+        "description": "One Tag use: the Account named this Tag on this tab."
       },
       "TelegramSegmentResponse": {
         "properties": {

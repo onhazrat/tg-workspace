@@ -89,16 +89,12 @@ class TagOrderRequest(BaseModel):
 
     tab: TagTab
     scope: list[Handle] | None = Field(None, max_length=MAX_ORDER_HANDLES)
-    selected: list[Handle] = Field(
-        default_factory=list, max_length=MAX_ORDER_HANDLES
-    )
+    selected: list[Handle] = Field(default_factory=list, max_length=MAX_ORDER_HANDLES)
 
 
 class TagOrderResponse(BaseModel):
     """One of the Account's Tags on a tab: its channels in the scope, how many
     of those are selected, its Tag use score and its last use (ms), if any."""
-
-    model_config = ConfigDict(populate_by_name=True)
 
     name: str
     channels: int

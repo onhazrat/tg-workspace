@@ -413,7 +413,8 @@ def record_use(session: Session, *, user_id: uuid.UUID, tab: str, name: str) -> 
             ).where(owned),
         )
         .on_conflict_do_nothing()
-    )
+        .returning(col(TagUse.used_at))
+    ).all()
     mine = (
         col(TagUse.user_id) == user_id,
         col(TagUse.tab) == tab,
@@ -428,7 +429,7 @@ def record_use(session: Session, *, user_id: uuid.UUID, tab: str, name: str) -> 
         .scalar_subquery()
     )
     session.execute(sa_delete(TagUse).where(*mine, col(TagUse.used_at) < oldest_kept))
-    return int(cast(Any, inserted).rowcount)
+    return len(inserted)
 
 
 def _move_uses(session: Session, *, user_id: uuid.UUID, old: str, new: str) -> None:

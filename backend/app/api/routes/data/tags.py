@@ -132,7 +132,7 @@ def read_tag_order(
     of those are selected, and its Tag use score and last use on the tab."""
     return [
         TagOrderResponse(
-            name=name, channels=count, selected=chosen, score=score, last_used_at=last
+            name=name, channels=count, selected=chosen, score=score, lastUsedAt=last
         )
         for name, count, chosen, score, last in tags.tag_order(
             session,

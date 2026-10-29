@@ -177,11 +177,13 @@ def test_the_split_did_not_change_the_route_count() -> None:
     logged, for the Logged editor's spread; and **117** with the History
     redesign's `GET /artifacts/counts` and `GET /artifacts/spread`, the bar's
     Kind and Status counts and the time filter's spread, siblings of the list
-    rather than more of its answer because the list stays a bare array.
+    rather than more of its answer because the list stays a bare array; and
+    **119** with TGU-02's `POST /tags/uses` and `POST /tags/order`, recording a
+    Tag use and reading each Tag's order and counts on a tab.
     """
     data_routes = {
         (m, p) for m, p in _mounted_routes() if p.startswith("/api/v1/data/")
     }
-    assert len(data_routes) == 117, (
-        f"expected 117 /data endpoints, found {len(data_routes)}"
+    assert len(data_routes) == 119, (
+        f"expected 119 /data endpoints, found {len(data_routes)}"
     )

@@ -313,6 +313,14 @@
       "value": 50
     },
     {
+      "comment": "The most handles a Tag order read takes in its scope or its selection.",
+      "expression": "100000",
+      "file": "backend/app/schemas/tags.py",
+      "line": 70,
+      "name": "MAX_ORDER_HANDLES",
+      "value": 100000
+    },
+    {
       "comment": "A generous fetch-safety bound, so a pathological Scope never materialises a giant result. The token budget is the real user-facing limit.",
       "expression": "10000",
       "file": "backend/app/services/artifact_coverage.py",
@@ -1095,6 +1103,22 @@
       "line": 30,
       "name": "MAX_TAG_RUN_PAGE_SIZE",
       "value": 1000
+    },
+    {
+      "comment": "A use counts 1 now, 0.5 after 14 days, 0.25 after 28.",
+      "expression": "14 * 86400000",
+      "file": "backend/app/services/tags.py",
+      "line": 386,
+      "name": "HALF_LIFE_MS",
+      "value": 1209600000
+    },
+    {
+      "comment": "The newest uses kept per Account, tab and Tag. Bounds the table without a retention job; older uses weigh under 0.1% by then.",
+      "expression": "50",
+      "file": "backend/app/services/tags.py",
+      "line": 389,
+      "name": "MAX_USES",
+      "value": 50
     },
     {
       "comment": "How long after publication a Post's sightings are kept.",
